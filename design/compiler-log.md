@@ -4545,3 +4545,42 @@ unconditional `return` loses exactly the two call-arm refusals in
 `tests/golden/errors/a_box_where_a_value_is_expected.kso` — ``told`` at 19:19
 and ``length`` at 17:17 — and leaves the four the BinOp, Index and Field arms
 raise independently. Six refusals before, six after.
+
+**The table answers before the binder set does, and the guard nothing could
+fail.** DONE. Searched the log, the archive and design/ for a prior entry on
+`yields_box`'s lookup order and on coverage for the shadowing guard: there is
+none.
+
+`yields_box` asked two hashes of the same name — is it locally bound, then does
+the returns table hold it as a box — and asked them in that order. A name the
+table does not hold, or holds as something other than a box, is not a box
+whoever bound it, so the shadowing question only has to be asked of the few
+names that come back boxed. Boxed names are rare; locally bound names asked at
+these arms are not as common as the old order assumed.
+
+    compile_instructions   50,516,758 -> 50,437,442  (−79,316 / −0.1570%)
+    entry_instructions    169,706,205 -> 169,234,614  (−471,591 / −0.2779%)
+    summed                220,222,963 -> 219,672,056  (−550,907)
+
+With the argument test above, this branch has now paid back 1,574,678 of its
++4,549,526 excess over main, 34.6%. Welfare 67.55402761 -> 67.55887; the floor
+still has to move for the rest.
+
+**The guard had no coverage anywhere, and writing the fixture found a
+divergence.** Deleting `&& !bound.contains(name)` from both arms leaves the
+whole golden suite green: eleven tests, error corpus included, and lib/json
+still compiles. The check was load-bearing and nothing could fail if it went.
+`tests/golden/micro/a_bound_name_is_its_binding_not_the_group_it_spells.kso`
+closes that: `fn doubled args` multiplies its own parameter, an import makes
+the bare `args` reach `os/args`, and without the guard the line is refused.
+Watched red — the corpus fails on that sample alone under the deletion.
+
+The fixture was first written to cover both arms and the second half would not
+run. `fn sized random n` with `random n` in the body dispatches to
+`math/random`, not to the parameter, so the program answers `<io>` where the
+effect check has already decided the parameter wins. The bare name and the call
+head disagree: `args` as a value is the parameter, `random n` as a call is the
+import. That predates this pass — nothing here can change dispatch — and it
+means the call-head arm of the guard declines a refusal the program would have
+earned. It is written into the fixture's header rather than pinned, because
+which side is right is a language question.

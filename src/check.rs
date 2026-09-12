@@ -753,14 +753,23 @@ fn check_box_where_value(
             Expr::App { args, piped: true, .. } => {
                 args.first().is_some_and(|a| yields_box(a, returns, bound, boxed, any_boxed))
             }
+            // THE TABLE ANSWERS BEFORE THE BINDER SET DOES, and both are a hash
+            // of the same name. A name the table does not hold, or holds as
+            // something other than a box, is not a box whoever bound it — so
+            // the shadowing question is asked only of the few names that come
+            // back boxed. Asking the binder set first paid its hash on every
+            // name in every expression to short-circuit the locals, and the
+            // locals are the common case only in the arms this pass walks past.
             Expr::App { head, args, piped: false, .. } if any_boxed => match head.as_ref() {
-                Expr::Ident(name, _) if !bound.contains(name.as_str()) => {
+                Expr::Ident(name, _) => {
                     returns.get(&(name.as_str(), args.len())).is_some_and(|(s, _)| boxed(*s))
+                        && !bound.contains(name.as_str())
                 }
                 _ => false,
             },
-            Expr::Ident(name, _) if any_boxed && !bound.contains(name.as_str()) => {
+            Expr::Ident(name, _) if any_boxed => {
                 returns.get(&(name.as_str(), 0)).is_some_and(|(s, _)| boxed(*s))
+                    && !bound.contains(name.as_str())
             }
             Expr::Seq(..) | Expr::Join { .. } => true,
             _ => false,
