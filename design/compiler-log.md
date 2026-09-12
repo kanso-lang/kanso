@@ -4584,3 +4584,43 @@ import. That predates this pass — nothing here can change dispatch — and it
 means the call-head arm of the guard declines a refusal the program would have
 earned. It is written into the fixture's header rather than pinned, because
 which side is right is a language question.
+
+**The binder set is built on first ask, and most declarations never ask.**
+DONE. Searched the log, the archive and design/ for a prior entry on the effect
+pass's binder walk: the entry above is the only one, and it refuted a different
+hypothesis about the same walk.
+
+The walk is a second full traversal of every declaration's body. `bound_in_expr`
+visits every expression to find the names lambdas introduce, and the only reader
+is the shadowing test — which the entry above moved behind the returns table, so
+it now runs for the few names the table holds as a box. Filling the set at the
+first of those asks answers that ask with exactly the set the eager build would
+have handed over, because the fill happens before the answer rather than after.
+
+The walk was priced by running it twice on an otherwise unchanged binary:
+169,800,207 against 169,234,614, so one walk is **565,593** instructions of the
+entry compile. The lazy fill recovers 516,408 of that, 91%.
+
+    compile_instructions   50,437,442 -> 50,451,376  (+13,934 / +0.0276%)
+    entry_instructions    169,234,614 -> 168,718,206  (−516,408 / −0.3052%)
+    summed                219,672,056 -> 219,169,582  (−502,474)
+    compile_allocs            29,374 -> 29,374        (unchanged)
+    compile_peak_bytes       774,660 -> 774,660       (unchanged)
+
+**The module row rises, and the reason is that it had nothing to save.** The
+module corpus imports std/json, std/list, std/testing and std/text and no
+effect-bearing module, so `any_boxed` is false there and the eager walk was
+already skipped for every declaration. What the module row pays is the
+measurement itself: `site` takes a `&dyn Fn` where it took a `&HashSet`, a fat
+pointer instead of a thin one, on every expression in the corpus. The first cut
+constructed that closure per EXPRESSION and read +21,363; hoisting it to once
+per declaration brought it to +13,934. The entry corpus, which does name
+effects, pays the same and saves the walk, so the sum falls by 502,474 — a 37:1
+trade, and the objective sums the two rows.
+
+Across this branch the pass has now paid back 2,077,152 of its +4,549,526
+excess over main, 45.7%. The floor still has to move for the rest.
+
+Watched red: with the fill never taken (`if b.loaded != i` to `if false`) the
+set stays empty, `shadows` answers false everywhere, and the micro fixture above
+fails on that sample alone.

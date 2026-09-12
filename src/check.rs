@@ -700,8 +700,8 @@ fn check_none_exhaustive(
 /// position. Only what is provable: a group whose joined return set holds
 /// the description bit and no value bit, a `.>` step over such a subject,
 /// or a wall.
-fn check_box_where_value(
-    program: &Program,
+fn check_box_where_value<'p>(
+    program: &'p Program,
     inference: &crate::infer::Inference,
     diags: &mut Vec<Diagnostic>,
 ) {
@@ -744,14 +744,14 @@ fn check_box_where_value(
     fn yields_box(
         e: &Expr,
         returns: &crate::hash::Map<(&str, usize), (Set, u64)>,
-        bound: &HashSet<&str>,
+        shadows: &dyn Fn(&str) -> bool,
         boxed: &dyn Fn(Set) -> bool,
         any_boxed: bool,
     ) -> bool {
         match e {
             // a `.>` step answers the chain its subject opened
             Expr::App { args, piped: true, .. } => {
-                args.first().is_some_and(|a| yields_box(a, returns, bound, boxed, any_boxed))
+                args.first().is_some_and(|a| yields_box(a, returns, shadows, boxed, any_boxed))
             }
             // THE TABLE ANSWERS BEFORE THE BINDER SET DOES, and both are a hash
             // of the same name. A name the table does not hold, or holds as
@@ -763,13 +763,13 @@ fn check_box_where_value(
             Expr::App { head, args, piped: false, .. } if any_boxed => match head.as_ref() {
                 Expr::Ident(name, _) => {
                     returns.get(&(name.as_str(), args.len())).is_some_and(|(s, _)| boxed(*s))
-                        && !bound.contains(name.as_str())
+                        && !shadows(name.as_str())
                 }
                 _ => false,
             },
             Expr::Ident(name, _) if any_boxed => {
                 returns.get(&(name.as_str(), 0)).is_some_and(|(s, _)| boxed(*s))
-                    && !bound.contains(name.as_str())
+                    && !shadows(name.as_str())
             }
             Expr::Seq(..) | Expr::Join { .. } => true,
             _ => false,
@@ -803,8 +803,41 @@ fn check_box_where_value(
             at,
         ));
     };
-    let site = |e: &Expr, bound: &HashSet<&str>, diags: &mut Vec<Diagnostic>| {
-        let is_box = |e: &Expr| yields_box(e, &returns, bound, &boxed, any_boxed);
+    // THE BINDER SET IS BUILT ON FIRST ASK, and most declarations never ask.
+    // It is a second full traversal of the body -- `bound_in_expr` walks every
+    // expression to find the names lambdas and bindings introduce -- and its
+    // only reader is the shadowing test, which now sits behind the returns
+    // table and so runs for the few names the table holds as a box. Filling on
+    // the first of those asks answers it with the same set the eager build
+    // would have handed over, because the fill happens before the answer; a
+    // declaration that never names a box pays one walk over its body instead
+    // of two.
+    struct Binders<'b> {
+        loaded: usize,
+        set: HashSet<&'b str>,
+    }
+    let binders: std::cell::RefCell<Binders<'p>> =
+        std::cell::RefCell::new(Binders { loaded: usize::MAX, set: HashSet::default() });
+    let shadows = |i: usize, name: &str| -> bool {
+        let mut b = binders.borrow_mut();
+        if b.loaded != i {
+            let decl = &program.fns[i];
+            let set = &mut b.set;
+            set.clear();
+            for param in &decl.params {
+                for_each_param_name(param, &mut |n| {
+                    set.insert(n);
+                });
+            }
+            for stmt in &decl.body {
+                bound_in_stmt(stmt, set);
+            }
+            b.loaded = i;
+        }
+        b.set.contains(name)
+    };
+    let site = |e: &Expr, shadow: &dyn Fn(&str) -> bool, diags: &mut Vec<Diagnostic>| {
+        let is_box = |e: &Expr| yields_box(e, &returns, shadow, &boxed, any_boxed);
         match e {
             Expr::BinOp { op, lhs, rhs, .. } => {
                 for side in [lhs, rhs] {
@@ -867,19 +900,8 @@ fn check_box_where_value(
         }
     };
     let mut stack: Vec<&Expr> = Vec::new();
-    let mut bound: HashSet<&str> = HashSet::default();
-    for decl in &program.fns {
-        if any_boxed {
-            bound.clear();
-            for param in &decl.params {
-                for_each_param_name(param, &mut |n| {
-                    bound.insert(n);
-                });
-            }
-            for stmt in &decl.body {
-                bound_in_stmt(stmt, &mut bound);
-            }
-        }
+    for (i, decl) in program.fns.iter().enumerate() {
+        let shadow = |n: &str| shadows(i, n);
         for stmt in &decl.body {
             let e = match stmt {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
@@ -887,7 +909,7 @@ fn check_box_where_value(
             stack.clear();
             stack.push(e);
             while let Some(cur) = stack.pop() {
-                site(cur, &bound, diags);
+                site(cur, &shadow, diags);
                 crate::for_each_child(cur, |c| stack.push(c));
             }
         }
