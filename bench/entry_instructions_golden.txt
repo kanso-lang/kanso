@@ -169,4 +169,12 @@
 # share -- 85% of the summed fall against the module row's 15% -- and by a
 # larger fraction, because both savings are per declaration and the entry
 # corpus holds more of them.
-entry_instructions=156385625
+# 2026-09-12 (a name is a type only where a cheap test says it could be):
+# 156,385,625 -> 155,743,367, a FALL of 642,258 (-0.4107%). See
+# bench/compile_instructions_golden.txt. The entry row carries 72% of the
+# summed fall, its usual share for a per-identifier saving, but by a SMALLER
+# fraction than the module row for the first time since these rows were
+# minted: the entry corpus asks the map more often and rejects a smaller
+# proportion of those asks (78.0% against the module corpus's 91.5%), so the
+# filter earns less per ask there.
+entry_instructions=155743367
