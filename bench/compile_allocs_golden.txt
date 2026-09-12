@@ -345,4 +345,4 @@
 # constructions that built it are a word. All four compile rows fall together
 # and this one falls furthest in relative terms, which is what a change that
 # deletes a declaration rather than reshaping one looks like.
-compile_allocs=29396
+compile_allocs=29386

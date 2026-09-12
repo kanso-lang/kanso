@@ -138,4 +138,4 @@
 # 2026-09-11 (a validated string knows its length): 164,324,373 -> 164,342,505,
 # a rise of 18,132 (+0.0110%). The same layout move as the other two compile
 # rows; see bench/compile_instructions_golden.txt.
-library_instructions=170286677
+library_instructions=169284150

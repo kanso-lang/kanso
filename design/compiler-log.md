@@ -4344,6 +4344,20 @@ rustc but reads a delta that carries:
     compile_instructions  51,679,441 -> 51,403,565   -275,876   -0.534%
     binary sha            8655e4c48e8a -> a81dbd7e5b03
 
+CI read four rows on 23dd9733, and they are what the goldens now carry. The
+entry and library paths fall harder than the module path, which is the shape to
+expect: the pass walks every call site in the merged program, and the entry
+corpus names ten imports where the compile corpus names four.
+
+    compile_allocs         29,396 ->      29,386          -10   -0.0340%
+    compile_instructions   50,824,229 ->  50,544,369  -279,860   -0.5507%
+    entry_instructions    170,001,743 -> 168,998,559 -1,003,184   -0.5901%
+    library_instructions  170,286,677 -> 169,284,150 -1,002,527   -0.5887%
+
+`compile_peak_bytes` held, every runtime vein held, and `emitted` held. The
+objective's compile term is the first two summed: 220,825,972 -> 219,542,928,
+-1,283,044.
+
 **Watched red first, in both directions.** The errors corpus fixture
 `a_box_where_a_value_is_expected` exercises the mask on both sides in one
 program: `fn told 0` / `fn told 1` take literal patterns, so position zero does
