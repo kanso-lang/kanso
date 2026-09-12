@@ -274,23 +274,60 @@ pub fn infer(program: &Program) -> Inference {
     // anything: `f 1 none` catches a none at position two for a 1 alone, so
     // it says nothing about what the arm below it can be handed there.
     let mut shadow: Vec<Set> = vec![0; at as usize];
+    // WHAT AN ARM TAKES IS A RUNNING TOTAL, so each arm reads what the arms
+    // above it have taken and then folds in its own, rather than re-deriving
+    // the union from the top of the group. Asking it afresh per position read
+    // every earlier arm's whole parameter list once per position of the arm
+    // being answered, which is the group's length times two arities of work
+    // for an answer that grows by one arm at a time.
+    //
+    // And whether an arm settles a position does not depend on the position
+    // except in one way: it settles pos when every OTHER parameter accepts
+    // anything. So count the parameters that do not, once per arm. None of
+    // them and it settles everywhere; exactly one and it settles only there;
+    // two or more and it settles nowhere.
+    //
+    // A GROUP OF ONE IS SKIPPED WHOLE, and that is what makes the running
+    // total pay. Most groups are one arm: they shadow nothing, their entries
+    // are the zeros the vector already holds, and the first cut of this loop
+    // counted their parameters anyway — which cost 294,981 instructions more
+    // than the derivation it replaced, because the work it saves is in the
+    // groups nobody has and the work it adds is in the groups everybody has.
+    // The first arm of a real group reads zeros for the same reason, and the
+    // last one's contribution is read by nobody below it.
+    let mut taken: Vec<Set> = Vec::new();
     for (start, end) in groups.values().copied() {
-        for k in start as usize..end as usize {
-            let i = group_members[k];
-            let arity = program.fns[i].params.len();
-            for pos in 0..arity {
-                let mut taken: Set = 0;
-                for &above in &group_members[start as usize..k] {
-                    let params = &program.fns[above].params;
-                    let caught = params.get(pos).map_or(0, pattern_catches);
-                    let settles = params.iter().enumerate().all(|(q, pat)| {
-                        q == pos || matches!(pat, Pattern::Var(..) | Pattern::Wildcard(..))
-                    });
-                    if caught != 0 && settles {
-                        taken |= caught;
-                    }
+        let (start, end) = (start as usize, end as usize);
+        if end - start < 2 {
+            continue;
+        }
+        taken.clear();
+        taken.resize(program.fns[group_members[start]].params.len(), 0);
+        for (k, &i) in group_members[start..end].iter().enumerate() {
+            let params = &program.fns[i].params;
+            if k > 0 {
+                let at = param_starts[i] as usize;
+                for (pos, held) in taken.iter().enumerate().take(params.len()) {
+                    shadow[at + pos] = *held;
                 }
-                shadow[param_starts[i] as usize + pos] = taken;
+            }
+            if k + 1 == end - start {
+                break;
+            }
+            let mut loose = 0usize;
+            let mut only = usize::MAX;
+            for (q, pat) in params.iter().enumerate() {
+                if !matches!(pat, Pattern::Var(..) | Pattern::Wildcard(..)) {
+                    loose += 1;
+                    only = q;
+                }
+            }
+            if loose == 0 {
+                for (pos, pat) in params.iter().enumerate() {
+                    taken[pos] |= pattern_catches(pat);
+                }
+            } else if loose == 1 {
+                taken[only] |= pattern_catches(&params[only]);
             }
         }
     }
