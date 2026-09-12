@@ -4181,3 +4181,61 @@ thing that was wrong.
 This is independent of the effect-type sequence. The appendix has been wrong
 since #1364 landed, which is why it lands on its own rather than behind the
 plain dot becoming an application.
+
+## 2026-09-12 — a declaration's callees deduplicated by range, and a scan whose answer was thrown away
+
+Two changes in `src/infer.rs`, both compile-cost paydown, off main at 0b828f66.
+
+**The dead scan.** `ident_set`'s fallthrough arm walked `program.fns` twice
+with the same predicate. The first walk collected each matching declaration's
+parameter count into `arities`; the next statement was `let _ = arities;`,
+which is why no lint ever objected to a vector with no reader. Deleting it left
+the second walk — the one that widens those parameters to TOP — doing the work
+alone. Summed −102,197 (−0.0472%) on this container. Dead since abefb574, the
+original whole-program inference commit.
+
+**The range sort.** `callee_first` gathers every name a declaration's body
+mentions into a `Vec<&str>`, sorts it, deduplicates it, and looks each survivor
+up in `by_name` to append that group's members to `flat`. The sort compares
+strings, so it is an insertion sort's worth of `memcmp` per declaration, 1,437
+times; and it sorted every local, parameter and builtin in the body as well,
+only for the lookup afterwards to find nothing and drop them. The lookup now
+runs first and the sort is over the `(u32, u32)` ranges. Summed −3,518,791
+(−1.6255%).
+
+Together, against main: 216,579,492 → 212,958,504, −3,620,995 (−1.6719%).
+
+**The order of `flat` changes, and that was the thing to check.** Ranges come
+out in `by_name`'s iteration order where the old sort put members in name
+order, so the depth-first walk that reads `flat` visits a declaration's callees
+differently and the fixpoint reaches its least fixed point by another route.
+kanso#1338's entry recorded the hazard: when a fixpoint's visit order moves, a
+measured delta sizes the change rather than bounding it, because some of the
+delta may be the new order getting lucky. Two readings say it bounds it here.
+`front_end_visits` moved 22,727 → 22,724 — three visits in 22,727, 0.013% — so
+essentially none of the 3.5M is the reordering. And `emitted_code` AGREED: the
+compiler wrote byte-identical code across the change, so the answers did not
+move at all, only the route to them. The full release suite is green at 58 test
+binaries and 0 failures.
+
+**A correction to this session's own attribution.** The lead came from reading
+`Name == str` comparisons under `eval_expr` in a callgrind profile as the
+`ident_set` scan. They are not. One of the two identical walks is worth 22,534
+on the module row, not the ~244,000 that reading projected. The real memcmp
+attribution on the module corpus, 1,632,475 total or 3.24%: 234,504 in
+`check_merged_after_aliases`, 232,600 direct under `eval_expr`, 187,811 in
+`insertion_sort_shift_left` under `infer::infer` — which is the sort this entry
+is about, and the only one of the three that got paid down. The other two
+stand.
+
+**One shape built, measured and declined.** Asking `by_name` from inside
+`gather`, so the names are never collected and the `Vec<&str>` disappears
+entirely, measured 213,532,569 summed — 574,065 instructions WORSE than keeping
+the two buffers. It is the same number of lookups either way; threading the
+table and the buffer down through the recursion costs more than the one
+allocation it saves. Reverted, and the reason is written beside the buffer it
+would have removed. The revert re-measured byte-identical to the reading before
+it, which is one more sitting for this harness being deterministic.
+
+The five host-keyed veins — `machine_code`, `compile_allocs` and the three
+instruction rows — refuse to compare on this container, so CI measures them.
