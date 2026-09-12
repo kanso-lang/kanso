@@ -218,9 +218,11 @@ decimal places and leaves nothing to ship into.
 
 So the fall is two counters and no others: +4,549,526 compile instructions
 (+2.13%) worth 0.04024, and +24 compile allocations worth 0.00096. The run
-side did not move at all. There is no compile-side engineering that holds this
-floor, and the shape that comes closest sits on the boundary rather than above
-it. The floor edit is not a shortcut around work that could be done instead.
+side did not move at all. Among the shapes tried to that date there was no
+compile-side engineering that held this floor, and the one that came closest
+sat on the boundary rather than above it. **That sentence is superseded by the
+2026-09-12 update at the end of this entry, which measures one that clears it
+with room to spare.**
 
 **Options.**
 
@@ -251,6 +253,36 @@ this is a harness permission rather than a design question, and it is the only
 thing standing between two of your rulings and main. 2 works and costs you a
 minute per PR. 3 is a real argument about the weights and should be made about
 the weights, not reached by leaving the branches parked.
+
+**Update, 2026-09-12 — a fifth option, and it may retire the other four.**
+
+The claim above that no compile-side engineering holds this floor was true of
+the shapes tried by 2026-09-11 and is not true now. Sixteen whole-program
+checks in src/check.rs each walk the expression tree themselves. Ablated
+together on `claude/go-to-town-m0dicm` they cost 36,348,088 instructions, 16.5%
+of the whole compile. A bare walk of every expression with no per-node work at
+all — added as a seventeenth and measured on its own — costs 1,147,185
+(module 264,491, entry 882,694).
+
+kanso#487 fuses those sixteen walks into one. Fifteen descents at that measured
+price is about 17.2 million instructions, against a combined ask of 6,829,872
+for both blocked builds. It is a ceiling rather than a forecast: some of the
+sixteen recurse instead of using a stack, some skip synthetic declarations, and
+a fused walk still has to reach each check at each node. But it is measured, it
+is two and a half times the size of the thing it would pay for, and nothing
+about it needs a ruling.
+
+5. Grant a third branch for kanso#487. If the fusion lands anywhere near its
+   ceiling, both builds clear the floor on their own and no hand edit happens
+   at all. It costs a branch and a round of building; it does not ask you to
+   decide anything about the objective.
+
+**Revised recommendation:** 5, with 1 or 2 as the fallback if the fusion comes
+in far under its ceiling. The reason to prefer it is not that the floor edit is
+wrong — the clause is settled and has been walked three times — but that the
+floor would not need to move at all, and an objective that never had to be
+paid off is worth more than a clause invoked a fourth time. What 5 needs from
+you is only the branch; the measurement is done and the work is ordinary.
 
 ## Open, not blocking
 
