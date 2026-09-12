@@ -4317,3 +4317,95 @@ the usual direction for this box.
 
 The welfare question in the entry above stands with a smaller number in it,
 and CI prices it.
+---
+
+## 2026-09-11 — the ledger forked onto feature branches, and the queue's three language rows wait on one branch
+
+**design/pending-gavels.md had an empty Blocking section on main while two
+entries existed.** Both were written, both followed the file's rules, and
+neither was ever merged: "Where the box wraps under the pure-fallibility
+rider" sat on local/pure-fallible, and "The reconstruction the 2026-09-07
+ruling ordered has two usable phases" sat on four branches at once. The file's
+own header names this exact failure -- "Edits to this file ride small,
+promptly-merged PRs, never a feature branch, so the ledger cannot fork" -- and
+it happened anyway, because a feature branch is where the measurement that
+raised the question was taken.
+
+Clay read STATUS.md, saw "Blocking right now: nothing", and was told by this
+session that two things waited on him, cited by session task number. A task
+number resolves nowhere outside the session that made it, which the file's
+rules also say. So for a day there was nothing he could look up and nothing he
+could rule.
+
+Only one of the two comes back. The reconstruction entry was ruled on
+2026-09-10 -- "Rows 15..390 stay unscored", option (1), closing with "Nothing
+further is owed on this entry; it leaves the ledger with this ruling" -- so
+the branches carrying it hold a pre-ruling snapshot and it stays out. The
+box-wrapping entry is carried here verbatim, with its citation, its
+measurements and its recommendation intact.
+
+**The three "Ruled, unbuilt" rows are one design and are blocked on one
+thing.** The effect type, the pure-fallibility rider that rides with it, and
+the book chapter that waits on both are built or buildable; what they lack is
+a branch. This session may push to claude/go-to-town-m0dicm alone, kanso#1369
+is sitting on it, and #1369 cannot merge because staging
+bench/welfare_floor.json is refused by the harness as a CI bypass. The rows
+stay, with this sentence as the blocker.
+
+**kq's half is done and waits on nobody.** The gavel ends the automatic bind,
+and kq had 25 plain-dot effect binds that break under it. They are respelt
+`.>` on kq's claude/go-to-town-m0dicm (baec530), watched red first -- the
+plain-dot compiler dies at kq's `== build ==` step on `length takes a list,
+string, or map, not <io>`, after the ten unit tests pass -- and green
+afterwards on that compiler and on today's, so kanso CI keeps a buildable kq
+to clone through the transition.
+
+The search that reported both trees clean was `^\s*\. [a-z_]`, anchored to
+line start, and not one of kq's 25 sites begins a line. It found zero, and the
+conclusion "the failing site is kq's source" was drawn from it anyway.
+Unanchored, ` \. ` finds all of them, in main.kso, query/cli.kso and the three
+bench gates.
+
+**The exhaustiveness rule's compile cost cannot be optimised away, measured.**
+Before accepting the floor move on #1369, two ablations were run to see whether
+the rise could be given back instead. Both on this container, callgrind,
+`kanso::main` inclusive, `./kanso check compile_corpus` in
+/tmp/kanso-compile-ir under the gate's own pinned GLIBC_TUNABLES and `env -i`:
+
+    branch as it stands                 50,959,782
+    a could_yield_none prefilter        50,920,876   -38,906
+    check_none_exhaustive's walk gone   50,472,794   -486,988
+
+The module row has to fall about 1,130,000 to reach main's 49,097,584. So
+skipping the callee lookup on arguments that cannot yield none buys 3.4% of the
+rise, and deleting the rule's whole traversal buys 43%. The prefilter was
+proved behaviour-identical first -- golden 11/11, error corpus and micro corpus
+across the engines -- and is still not worth landing at that size. Both are
+reverted.
+
+The entry that shipped the rule says what is left is "the check's own walk and
+the shadow load". These numbers split that: the walk's lookups are 38,906 of
+it, its traversal 486,988 in total, and the remaining ~643,000 is the keyed map
+build and the shadow load. The rule needs all three, which is why the fall
+stands rather than being bought back.
+
+## 2026-09-12 — the formatting appendix knew two continuation forms and there are five
+
+kanso#1364 minted `.>`, `.!` and `.?`, and each is legal at the head of a
+continuation line. The evidence was already in the corpus rather than in a
+fixture written to argue this: `tests/golden/micro/a_chain_step_names_its_
+channel.kso` wraps a `json/decode` onto three continuation lines headed
+`.>`, `.!` and `.?`, and `kanso check` answers ok on it. Appendix C said
+"there are exactly two continuation
+forms ... `.` for a data-flow pipe, and `>>` for a pure sequence", and its
+closing summary of the whole law repeated the pair. Both name all five now.
+
+A third sentence introduced the wrap_pipe panel as "wrapped onto `.`
+continuation lines" where the panel holds one `.` line and one `.>` line; it
+no longer counts them. That mixed spelling inside one chain is on main and is
+left alone here: changing the sample moves a golden, and the sentence was the
+thing that was wrong.
+
+This is independent of the effect-type sequence. The appendix has been wrong
+since #1364 landed, which is why it lands on its own rather than behind the
+plain dot becoming an application.

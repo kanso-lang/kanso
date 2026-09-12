@@ -7,7 +7,9 @@ is stale — say so.
 ## Waiting on Clay
 
 The decisions live in design/pending-gavels.md — the single ledger; this file
-only indexes it. **Blocking right now: nothing.** The reconstruction coverage
+only indexes it. **Blocking right now: one** — where the box wraps under the pure-fallibility
+rider, filed 2026-09-11 after it spent a day written on a feature branch and
+nowhere else. The reconstruction coverage
 question was ruled on 2026-09-10, taking cloud's recommendation: rows 15..390
 stay unscored on the run terms, the eight-phase half stays built, and
 re-measuring the old commits is filed as a lead with a feasibility probe in
@@ -35,7 +37,7 @@ kanso — sat here and was bounced on 2026-08-29: a performance question with no
 surface area is the implementer's, per the ledger's own charter, and the log
 carries the research mandate it left with.
 
-**Two questions are waiting** — none blocking. Two more left the ledger on
+**Three questions are waiting** — one blocking. Two more left the ledger on
 2026-09-05 in the same sitting as the compile row: machine-code size gets no
 term in welfare, and `.text` stays in its own exact vein. Counted from the ledger, which is the only place that count is true;
 this file said fourteen in one paragraph and sixteen in another until the
@@ -319,8 +321,8 @@ else. Chains that tested for `none` after an effect migrate.
     checked from here on two days and both refused by the tooling
   - whether an err gains readers a lambda callback can use
 
-**Two questions wait in `design/pending-gavels.md`** — zero blocking, two
-open — each with a recommendation. Counted from the ledger on 2026-09-09 by
+**Three questions wait in `design/pending-gavels.md`** — one blocking, two
+open — each with a recommendation. Counted from the ledger on 2026-09-11 by
 reading its `###` headings, which is what this line has always claimed to do
 and had stopped doing TWICE. On 2026-09-05 it said nineteen while the ledger
 held three; fifteen had been gaveled and had left the file as the lifecycle
