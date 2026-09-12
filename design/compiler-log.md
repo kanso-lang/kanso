@@ -4092,3 +4092,30 @@ walk's block without reaching that gate — which is exactly what keeps
 Error corpus 204 fixtures byte-identical, golden suite 11/11, clippy and fmt
 clean. Round one is deliberately red on the six host-keyed compile veins; this
 container refuses all of them and CI is the host of record.
+
+**Round two — CI's rows, and the container under-read this one by half.**
+
+    module   45,522,524 ->  44,888,539    -633,985  -1.3927%
+    entry   151,534,916 -> 149,925,203  -1,609,713  -1.0623%
+    library 152,261,219 -> 150,211,345  -2,049,874  -1.3463%
+    summed  197,057,440 -> 194,813,742  -2,243,698  -1.1386%
+
+`compile_allocs` 29,335 -> 29,323, a fall of 12: the old driver built a bound
+set per declaration to decide which head names were locally shadowed, and the
+fused walk reads the one `check_per_node` already keeps. `compile_memory` is
+byte-identical. Welfare 67.73 -> 67.75, banked in the same commit; seven
+`data-golden` spans on compiler.html regenerated, all three page gates green.
+
+The container projected -314,725 on the module row and CI reads 633,985 — a
+ratio of 2.01, where the two rounds before it read 1.04 and 0.88. Three points
+spanning 0.88 to 2.01 say the offset between the two hosts is not a ratio to
+correct for; it is noise the size of the effect being measured. The previous
+entry's "the two hosts do not agree to a fixed ratio" was right and too mild.
+
+The entry row takes 71.7% of the summed fall against 76.0%, 76.1% and 78.0%
+for the two folds before it. And this row and the library row part by 0.2840
+percentage points, against 0.0035 and 0.0015 — the widest a fold has split
+them. Both readings say the same thing: the entry and library corpora hold
+different mixes of call sites in bodies, and this check keys on exactly those,
+where the earlier folds' savings were keyed to nodes and could not see the
+difference.
