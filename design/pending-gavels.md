@@ -153,14 +153,28 @@ decide how to proceed."
 
 - **kanso#1369**, per-call exhaustiveness — the 2026-08-15 ruling. Ruled by
   Clay on 2026-09-11 ("if the welfare went down it went down. why are you even
-  considering it?"). The edit is written: floor 67.58619464088068 ->
-  67.53919650395524, history entry as ratchet 239, with the log paragraph
-  recording the ruling. Everything else on the PR is done and it is now
-  un-conflicted against main.
-- **kanso#1372**, step 1 of the effect-type sequence. Welfare reads 67.52
-  against the same floor. Round three pays back about a sixth of the shortfall
-  (compile instructions -0.534%) and CI has still to price what is left, so the
-  number is not yet known — the permission is, either way.
+  considering it?"). Floor 67.58619464088068 -> **67.54491496889482**, history
+  entry as ratchet 239, with the log paragraph recording the ruling.
+  Everything else on the PR is done and it is now un-conflicted against main.
+- **kanso#1372**, step 1 of the effect-type sequence. Floor 67.58619464088068
+  -> **67.54499292290286**. CI reads 67.54 at head 86a07b3d, where it read
+  67.52 before the box check's hoist took 1,835,347 instructions off the
+  compile term.
+
+**BOTH NUMBERS ARE REPLAYS, AND THE REPLAY IS CHECKED AGAINST A KNOWN ANSWER.**
+`welfare --model` prints the four terms with their weights, satiations and
+baselines, and `welfare --counters` the five readings; scoring one against the
+other — saturate each counter, mean within a term, weight, sum — reproduces
+main's recorded floor 67.58619464088068 to every digit, difference exactly
+zero. That is the check that makes the two above worth pasting into the file.
+
+It also CORRECTS an earlier number in this entry's own working notes. 2026-09-12
+carried 67.53919650395524 for kanso#1369, and that value matches neither the
+PR's current goldens nor its pre-paydown ones (which replay to 67.52396324220125):
+it is a reading from an intermediate round that the paydown then moved. It would
+have passed, since a floor below the score passes — but it gives away 0.0057 of
+headroom the project never had to give, and a floor is a pinned number rather
+than a safe one.
 
 Nothing else on either branch is outstanding. No third party is involved: both
 branches are mine, both pushes are to branches I am permitted to push.
