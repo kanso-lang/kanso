@@ -4214,9 +4214,14 @@ through `held` and rescued with `.?`. The error fixture above. The eleven
 runtime fixtures, rewritten, and the pre-change binary's answers on the
 micro fixture and the error fixture are the watched-red half.
 
-**Owed.** The `<t>effect` spelling, which the canonical-spacing rule refuses
-today; ch04 and ch05, per the ledger's "The book teaches the boundary
-language"; and the drop question the gavel filed.
+**Owed.** Two things: the `<t>effect` spelling, which the canonical-spacing
+rule refuses today, and ch04 and ch05, per the ledger's "The book teaches the
+boundary language". NOT the drop question — a draft of this paragraph listed
+it as a third, and the same 2026-08-29 sitting had already closed it, in the
+archive's "gavel: the drop question closes — explicitness IS the guarantee".
+It closed by declining to mint anything: an unused binding is already a
+compile error, so a dropped effect is already unspellable, and Clay ruled the
+premise backwards. "No new checker rule and no io-edge rule is minted."
 
 ---
 
