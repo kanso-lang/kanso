@@ -782,8 +782,6 @@ fn ident_set<'a>(ctx: &mut Ctx<'a>, name: &'a str, env: &mut Env<'a>) -> Set {
                 };
                 return ctx.returns[i] | deferred;
             }
-            let arities: Vec<usize> =
-                ctx.program.fns.iter().filter(|d| d.name == name).map(|d| d.params.len()).collect();
             for (i, decl) in ctx.program.fns.iter().enumerate() {
                 if decl.name == name {
                     for p in 0..decl.params.len() {
@@ -791,7 +789,6 @@ fn ident_set<'a>(ctx: &mut Ctx<'a>, name: &'a str, env: &mut Env<'a>) -> Set {
                     }
                 }
             }
-            let _ = arities;
             FN
         }
     }
