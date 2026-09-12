@@ -1193,4 +1193,13 @@
 # the container's offset: the two branches cut work out of the same walks, so
 # the second to land collects less than it did alone. A delta measured against
 # a base that has since moved is a reading of that base, not of the change.
-compile_instructions=46998377
+# 2026-09-12 (a name is a type only where a cheap test says it could be):
+# 46,998,377 -> 46,753,954, a FALL of 244,423 (-0.5201%). `ident_set` and
+# `eval_call` each asked `type_names` whether the identifier under them names a
+# declared type, and seven asks in eight are a SipHash spent on the answer no.
+# A 256-bit filter over first byte, last byte and length stands in front of the
+# map; a clear bit is proof of absence and a set bit still goes to the map, so
+# no answer moves. The container projected -148,797 on this row, so CI reads a
+# fall 1.64x larger. As with kanso#1376's round, the offset is not a constant
+# and is not a correction to apply -- it is why the rows are CI's to write.
+compile_instructions=46753954
