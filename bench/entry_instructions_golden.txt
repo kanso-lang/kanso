@@ -163,4 +163,10 @@
 # See bench/compile_instructions_golden.txt. The entry row carries three
 # quarters of the fall because the entry corpus is the larger compile, and
 # the saving is per declaration.
-entry_instructions=158169260
+# 2026-09-12 (a declaration's callees deduplicated by range, and a dead scan):
+# 158,169,260 -> 156,385,625, a FALL of 1,783,635 (-1.1277%). See
+# bench/compile_instructions_golden.txt. The entry row again carries the larger
+# share -- 85% of the summed fall against the module row's 15% -- and by a
+# larger fraction, because both savings are per declaration and the entry
+# corpus holds more of them.
+entry_instructions=156385625

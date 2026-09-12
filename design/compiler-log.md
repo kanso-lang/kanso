@@ -4395,3 +4395,19 @@ branch was in flight and takes the same corpora down by 5,407,312 on CI's
 reading, so the two paydowns do not stack arithmetically — they touch
 `src/check.rs` and `src/infer.rs` and neither calls the other, but the summed
 total this entry quotes is the older baseline. The landed rows are CI's.
+
+CI's sitting, on top of kanso#1374: compile_allocs 29,338 -> 29,341 (+3),
+compile_instructions 47,310,638 -> 46,998,377 (-0.6601%), entry_instructions
+158,169,260 -> 156,385,625 (-1.1277%), library_instructions 158,447,681 ->
+157,092,747 (-0.8552%). Summed compile term -2,095,896 (-1.0200%). Four veins
+red in round one and not five: `machine_code` agreed, which it had to -- no
+emitter was touched -- and so did `compile_memory`, where the three-visit move
+this entry describes sits inside a row the branch had already regenerated.
+
+The -3,620,995 quoted above and the -2,095,896 CI read are both true and they
+are not the same measurement. The first is this change against main as it stood
+at 0b828f66; the second is it against main with kanso#1374 in. Both branches
+cut work out of the whole-program walks, so whichever lands second collects
+less. This is the ordinary shape of a queue and not an error in either reading
+-- but a delta is a fact about a pair of trees, and quoting one against a base
+that has since moved is the mistake to avoid.

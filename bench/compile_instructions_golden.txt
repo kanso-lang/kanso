@@ -1180,4 +1180,17 @@
 # than projected, where the previous round's projection ran 2.53% high in the
 # other direction. The offset is not a constant and is not a correction to
 # apply -- it is why the rows are CI's to write.
-compile_instructions=47310638
+# 2026-09-12 (a declaration's callees deduplicated by range, and a dead scan):
+# 47,310,638 -> 46,998,377, a FALL of 312,261 (-0.6601%). `callee_first` built
+# `flat` by walking every gathered name and appending its whole dispatch group,
+# so a name written twice in one body appended twice; the ranges are sorted and
+# deduplicated first. And `ident_set`'s fallthrough collected a vector of
+# arities it then threw away -- dead since the pass was written, and invisible
+# to every lint because the binding was consumed by `let _ =`.
+#
+# The container projected these two at -3,620,995 summed against main BEFORE
+# kanso#1374 landed. CI reads -2,095,896 summed on top of it. The gap is not
+# the container's offset: the two branches cut work out of the same walks, so
+# the second to land collects less than it did alone. A delta measured against
+# a base that has since moved is a reading of that base, not of the change.
+compile_instructions=46998377
