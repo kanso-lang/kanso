@@ -4129,3 +4129,44 @@ backwards on every name resolution and looked like the other half of this lead.
 It is not: 17,055 calls walking 42,930 entries on the module corpus, 56,501
 walking 150,032 on the entry corpus — under three entries a call. No
 discriminator is worth building in front of that. DONE, not open.
+
+## 2026-09-12 — a dispatch group's catch mask is the same answer every visit
+
+Searched the log, the archive and design/ before filing: `pattern_catches`
+appears in the 2026-08-19 entry that introduced the pass-through rule and in
+kanso#1229's arity work, and neither asks how often the fold over it runs.
+
+**The fold.** `eval_call`, for every call to a declared group, walks the
+group's arms once per ARGUMENT POSITION and ORs `pattern_catches` over the
+pattern at that position:
+
+    let caught = ctx.group_members[start..end].iter().fold(0, |acc, &i| {
+        acc | ctx.program.fns[i].params.get(pos).map_or(0, pattern_catches)
+    });
+
+The result depends on the declarations and on nothing the fixpoint changes.
+`program.fns` is fixed before inference starts and `pattern_catches` is a pure
+function of one pattern, so this is the same mask every time — once per
+argument of every call, on every round of the fixpoint. Callgrind put
+`Iter::fold` under `eval_expr` at 716,879 instructions on the module corpus,
+1.49% of the compile, and it is nearly all this.
+
+**What shipped.** One `Vec<Set>` built beside `group_members`, a row per group
+and a column per parameter position. A `groups` value grows a third word for
+the row's start, which is the only reason the other three read sites changed at
+all (they take `..` or `_`). The fold becomes an index.
+
+    module  47,467,069 -> 46,797,142    -669,927  -1.4114%
+    entry  158,096,940 -> 156,221,601  -1,875,339  -1.1862%
+    summed 205,564,009 -> 203,018,743  -2,545,266  -1.2381%
+
+Measured on top of kanso#1378. The fall is 3.6x the profile's attribution of
+the fold itself, which is the shape to expect: the profile names the `fold`
+symbol, and removing it also removes the slice bounds work, the `params.get`
+per arm, and the call into `pattern_catches` that the inclusive figure counts
+under its own name.
+
+**No fixture.** The mask the table holds is the mask the fold computed, over
+the same arms in the same order, and `pattern_catches` reads no state. Every
+diagnostic in the 201-fixture error corpus is byte-identical, and the emitted
+code with it. There is nothing here a program could observe.
