@@ -1168,4 +1168,16 @@
 # absolute gap is the container's known high offset carrying through.
 # compile_allocs did NOT move, and the job's own vein summary says so: these
 # changes reorder tests and share frames, they allocate nothing new.
-compile_instructions=47846337
+# 2026-09-12 (the shadow set deferred, on top of the five paydowns):
+# 47,846,337 -> 47,310,638, a further FALL of 535,699 (-1.1197%), and
+# 49,097,584 -> 47,310,638 against main, a FALL of 1,786,946 (-3.6395%).
+# `arity_at` reads a declaration's bound names only to SUPPRESS a diagnostic,
+# and the walk that collects them ran before the walk that might need one. It
+# is built now only when something was pushed to suppress, which on a program
+# that compiles is never.
+# The container projected -1,834,916 across the module and entry rows summed
+# where CI reads -2,270,845: CI's fall is the LARGER by 435,929, 23.8% more
+# than projected, where the previous round's projection ran 2.53% high in the
+# other direction. The offset is not a constant and is not a correction to
+# apply -- it is why the rows are CI's to write.
+compile_instructions=47310638

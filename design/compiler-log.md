@@ -4254,3 +4254,79 @@ The gain lands unratcheted -- `welfare --set` is refused by this session's
 permission classifier -- so the floor stays and kanso#1369 and kanso#1372 are
 free to spend the headroom. This takes 5,407,312 of the 7,325,192 those two
 need, 73.8%; the rest is about 0.016 welfare and still Clay's.
+
+## 2026-09-12 — the fusion dropped diagnostics, and the unratcheted gain was a blocker not a gift
+
+Two corrections to the entry above, both found by CI rather than by me.
+
+THE FUSION DROPPED DIAGNOSTICS. `check_per_node` put three checks on one
+descent, and two of them -- `check_boolean_equality` and
+`check_none_in_collections` -- had been running AFTER inference. The descent
+runs before it, in front of the `if !diags.is_empty()` guard that returns
+without ever calling `infer`. So a program whose only fault was `b == true`
+returned from that guard and skipped every check after it: the boolean naming
+rule, the call arities, the field-existence check, the literal-argument check,
+silently. Two lines were enough to show it -- `pub fn silly b / b == true`
+reports two diagnostics on main and reported one on the branch.
+
+The guard exists for one reason, written beside it: inference indexes an
+`if`'s three children and must not run over a shape with fewer. That is
+`if_arity_at`'s guarantee alone. It reads the arity answer back off the
+diagnostic's kind now and retains only that, and `rotate_left` puts the walk's
+other two answers back at the END, where `check_boolean_equality` used to
+push. This route hands diagnostics back in push order -- only the gated return
+sorts -- so where a check pushes is what a reader sees, and the first cut of
+the fix left them in front and turned `tests/errors_module.rs` red on the
+order alone.
+
+WHAT COULD NOT SEE IT. Not the flat error corpus: all 201 fixtures stayed
+green through the whole regression. `comparing_to_a_boolean_literal`,
+`none_in_list` and `none_in_map` each carry exactly ONE diagnostic, and a
+fixture with one diagnostic cannot see a suppression. `errors_module` caught
+it, on a module tree whose library carries two faults -- a different test
+target, which is why the local `--test golden` run said nothing. Two fixtures
+close the gap, one per question the walk asks beside the guard, and under the
+exact pre-fix gate they read 1 against a golden of 2 while `none_in_list`
+reads 1 against 1. That third row is the finding.
+
+A mutation is not a proof unless it is the right mutation. The first attempt
+flipped the gate but left the `retain`, so it returned an EMPTY vector -- a
+worse bug than the original -- and the fixture went red for a compounded
+reason. Redone against the gate as it actually stood.
+
+THE SHADOW SET, DEFERRED. Off the callgrind attribution rather than a guess:
+`arity_at` reads a declaration's bound names only to SUPPRESS a diagnostic,
+and collecting them walks every parameter and statement before the walk that
+might need one. Built now only when something was pushed to suppress. CI:
+compile_instructions -535,699, entry -1,735,146, library -1,736,636,
+compile_allocs -12.
+
+Three shapes that would reach the filter -- a binding beside a declaration in
+the same file, a binding shadowing a builtin, a binding shadowing a
+declaration in a SIBLING file -- are all refused earlier by the shadow check
+with `X is already a declaration`. The third is the one `arity_at`'s own
+comment anticipates. That is recorded, not claimed: three probes are not a
+proof of deadness, and the change does not rest on one. It is safe because the
+filter is preserved verbatim and only its input is built later.
+
+THE CONTAINER'S OFFSET IS NOT A CONSTANT. The entry above called it "the
+container's known high offset carrying through" at 2.53% high. This round the
+container projected -1,834,916 across the module and entry rows summed where
+CI read -2,270,845 -- LOW by 435,929, 23.8%. Two rounds, two directions. It is
+not a correction to apply; it is why the rows are CI's to write.
+
+AND THE UNRATCHETED GAIN IS A BLOCKER, NOT HEADROOM. The entry above says the
+gain "lands unratcheted ... so the floor stays and kanso#1369 and kanso#1372
+are free to spend the headroom." That is wrong. `the_undoctored_goldens_hold_
+the_floor` fails a rise that nobody banks -- "welfare 67.63 floor 67.59 ...
+the gain is not held" -- so the PR cannot merge until `welfare --set` runs,
+and the headroom is not released to anything. The refusal of `--set` by this
+session's permission classifier is therefore a merge blocker on kanso#1374
+rather than a footnote in its body, and it has gone to Clay.
+
+The arithmetic those two PRs were measured against also moves: kanso#1374 now
+takes the compile term from 213,158,055 to 205,479,898, a fall of 7,678,157,
+where the figure quoted above for what kanso#1369 and kanso#1372 need was
+7,325,192. On compile instructions alone that is now more than covered.
+Whether either goes green is a welfare question over five counters and has not
+been recomputed here.

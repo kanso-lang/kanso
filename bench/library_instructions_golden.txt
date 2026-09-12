@@ -142,4 +142,11 @@
 # 164,342,505 -> 160,184,317, a FALL of 4,158,188 (-2.5302%). The same three
 # fusions and two necessary conditions; see
 # bench/compile_instructions_golden.txt.
-library_instructions=160184317
+# 2026-09-12 (the shadow set deferred, on top of the five paydowns):
+# 160,184,317 -> 158,447,681, a further FALL of 1,736,636 (-1.0842%), and
+# 164,342,505 -> 158,447,681 against main, a FALL of 5,894,824 (-3.5868%).
+# See bench/compile_instructions_golden.txt. This row and the entry row fall
+# within 1,490 instructions and 0.0009 percentage points of each other, which
+# is what a per-declaration saving looks like on two routes that differ only
+# in how they were entered.
+library_instructions=158447681
