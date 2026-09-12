@@ -1930,9 +1930,35 @@ fn check_named_per_node(
             .collect(),
         rewritten,
     };
+    // THE SHADOW SET IS BUILT ONLY WHEN THERE IS SOMETHING TO SHADOW.
+    //
+    // `arity_at`'s one use of the declaration's bound names is to SUPPRESS a
+    // diagnostic: a local binding that shadows a declared group means the
+    // call is not that group's. Walking the parameters and every statement to
+    // collect those names costs the compile corpus 286,809 instructions, and
+    // on a program that compiles it suppresses nothing, because a program
+    // that compiles raises no arity diagnostic to suppress.
+    //
+    // So the walk runs without the set and says what it would say, each
+    // stretch of diagnostics one call pushed remembered with the name it was
+    // about; the set is built only if that list is non-empty. Same answers,
+    // and a clean declaration never builds it.
     let mut bound: HashSet<&str> = HashSet::default();
+    let mut shadowable: Vec<(usize, usize, &str)> = Vec::new();
     for decl in &program.fns {
         if decl.synthetic {
+            continue;
+        }
+        let own = !crate::ast::has_slash(&decl.name);
+        shadowable.clear();
+        for stmt in &decl.body {
+            match stmt {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
+                    named_walk(expr, &named, own, diags, &mut shadowable)
+                }
+            }
+        }
+        if shadowable.is_empty() {
             continue;
         }
         bound.clear();
@@ -1944,12 +1970,11 @@ fn check_named_per_node(
         for stmt in &decl.body {
             bound_in_stmt(stmt, &mut bound);
         }
-        let own = !crate::ast::has_slash(&decl.name);
-        for stmt in &decl.body {
-            match stmt {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
-                    named_walk(expr, &named, &bound, own, diags)
-                }
+        // highest first, so an earlier stretch's indices still address the
+        // diagnostics it named
+        for (from, to, name) in shadowable.iter().rev() {
+            if bound.contains(name) {
+                diags.drain(*from..*to);
             }
         }
     }
@@ -1965,16 +1990,20 @@ struct Named<'a> {
     rewritten: &'a crate::Rewrites,
 }
 
-fn named_walk(
-    e: &Expr,
+fn named_walk<'a>(
+    e: &'a Expr,
     named: &Named<'_>,
-    bound: &HashSet<&str>,
     own: bool,
     diags: &mut Vec<Diagnostic>,
+    shadowable: &mut Vec<(usize, usize, &'a str)>,
 ) {
     if let Expr::App { head, args, .. } = e {
         if let Expr::Ident(name, span) = &**head {
-            arity_at(name, *span, args.len(), named, bound, diags);
+            let from = diags.len();
+            arity_at(name, *span, args.len(), named, diags);
+            if diags.len() > from {
+                shadowable.push((from, diags.len(), name.as_str()));
+            }
             // Each of these two answered nothing on a program with no
             // foreign types or no typesets, and said so by returning before
             // its walk began. The walk is shared now, so the emptiness test
@@ -1988,7 +2017,7 @@ fn named_walk(
     if own && !named.annotating.is_empty() {
         typeset_at(e, &named.annotating, diags);
     }
-    crate::for_each_child(e, |child| named_walk(child, named, bound, own, diags));
+    crate::for_each_child(e, |child| named_walk(child, named, own, diags, shadowable));
 }
 
 /// Hands each name a pattern binds to `f`, in the order the pattern spells
@@ -2058,23 +2087,13 @@ fn bound_in_expr<'a>(e: &'a Expr, out: &mut HashSet<&'a str>) {
 
 /// A call's argument count against the arms that could answer it.
 /// A call's argument count against the arms that could answer it.
-fn arity_at(
-    name: &str,
-    span: Span,
-    argc: usize,
-    named: &Named<'_>,
-    bound: &HashSet<&str>,
-    diags: &mut Vec<Diagnostic>,
-) {
+fn arity_at(name: &str, span: Span, argc: usize, named: &Named<'_>, diags: &mut Vec<Diagnostic>) {
     // Bare names count too. No binding may shadow a declaration —
     // `adder = ...` beside `fn adder` is a name error — so a bare
     // name matching a declared group is that group, and the per-file
     // pass sees only one file of a module, which leaves every call
     // to a sibling file unchecked.
     let known = named.arities.get(name);
-    if bound.contains(name) {
-        return;
-    }
     if let Some(count) = named.fields.get(name) {
         if argc != *count {
             diags.push(Diagnostic::new(
