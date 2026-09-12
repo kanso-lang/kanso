@@ -827,6 +827,16 @@ fn check_box_where_value(
                     }
                     return;
                 }
+                // NOTHING TO SAY UNLESS AN ARGUMENT IS A BOX, and asking that is a
+                // match on the argument where asking the table is a hash of the
+                // callee's name. A call whose arguments are literals, arithmetic
+                // or field reads answers no on the match alone, so the table is
+                // consulted only where a refusal is actually in question. The
+                // second walk over the arguments below costs a few compares on
+                // the sites that reach it, which are the rare ones.
+                if !args.iter().any(&is_box) {
+                    return;
+                }
                 // one lookup for the whole call: whether the name is a group,
                 // and which of its positions bind anything
                 let found = returns.get(&(name.as_str(), args.len())).copied();

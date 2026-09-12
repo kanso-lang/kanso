@@ -4503,3 +4503,45 @@ The flag reports and cannot ratchet, which is what the file's existing
 `asking_what_was_scored_does_not_move_the_floor` exists to hold for
 `--counters`; `--score` reads the same value the banner does and writes
 nothing.
+
+**A call asks its arguments before it asks the table, and the binder walk was
+not the cost.** DONE. Searched the log, the archive and design/ for a prior
+entry on `check_box_where_value`'s per-site cost: there is none.
+
+The effect-type pass walks every expression in every declaration and asks, at
+each call site, whether an argument is a box where a value is wanted. It asked
+by hashing the callee's name into the returns table first, then looking at the
+arguments. A call whose arguments are literals, arithmetic or field reads can
+never be refused, and there are a great many more of those than there are box
+arguments, so the hash was paid on almost every call in the corpus to learn
+nothing. Asking the arguments first is a match on an enum; the table is now
+consulted only where a refusal is actually in question.
+
+    compile_instructions   50,766,270 -> 50,516,758  (−249,512 / −0.4915%)
+    entry_instructions    170,480,464 -> 169,706,205  (−774,259 / −0.4542%)
+    summed                221,246,734 -> 220,222,963  (−1,023,771)
+    compile_allocs            29,374 -> 29,374        (unchanged)
+
+Both rows read at container levels, which sit about 0.8% above CI's on every
+compile vein. The summed fall is 22.5% of this branch's +4,549,526 excess over
+main. Welfare 67.54499292 -> 67.55402761, closing 21.9% of the 0.04120172 gap
+to the floor; 0.03216703 still stands and the floor still has to move for it.
+
+**The binder walk was the hypothesis and it was wrong.** Before building this,
+the per-declaration walk that collects bound names looked like the cost: it
+runs once per declaration whenever any group returns a box, and it is a second
+full traversal of the body. Ablating it — `if any_boxed {` to `if false {` —
+read 50,773,306 against the 50,766,270 baseline, slightly WORSE. A lazy or
+on-demand binder set would have gained nothing at all. One build, before any
+design.
+
+Where the cost actually is: `check_box_where_value` is 862,916 instructions of
+the module compile (50,766,270 with it, 49,903,354 with the whole pass ablated),
+which is essentially the entire module-side rise this branch carries. The entry
+compile carries the other 82% of the excess and is not this function.
+
+The guard is load-bearing and was watched red: replacing it with an
+unconditional `return` loses exactly the two call-arm refusals in
+`tests/golden/errors/a_box_where_a_value_is_expected.kso` — ``told`` at 19:19
+and ``length`` at 17:17 — and leaves the four the BinOp, Index and Field arms
+raise independently. Six refusals before, six after.
