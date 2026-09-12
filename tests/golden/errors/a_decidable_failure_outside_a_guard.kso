@@ -1,0 +1,11 @@
+# A divisor that IS the literal zero is decidable by reading, so it is refused
+# where it is written rather than left to fail at run time. The guarded case is
+# the other half and lives in examples/logical_ops.kso, where `2 < 1 and 1 / 0
+# < 9` compiles: `and` is an `if`, a branch may be unreachable, and refusing
+# one would refuse a program that runs.
+#
+# Nothing pinned this half. The refusal moved into the per-node walk in the
+# change that added this fixture, carried by a flag that turns off under an
+# `if`'s branches, and the whole error corpus stayed byte-identical -- because
+# the corpus had no case for it either way.
+pub play = print "{10 / 0}"

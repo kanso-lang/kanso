@@ -3717,3 +3717,85 @@ backwards on every name resolution and looked like the other half of this lead.
 It is not: 17,055 calls walking 42,930 entries on the module corpus, 56,501
 walking 150,032 on the entry corpus — under three entries a call. No
 discriminator is worth building in front of that. DONE, not open.
+
+## 2026-09-12 — the decidable check joins the one descent, and the rule that kept it out was about the wrong thing
+
+`check_merged_after_aliases` is 34.64% of the entry-corpus compile inclusive
+and 4.93% exclusive, and the profile says why: SEVEN separate whole-program
+expression walks, each entered once per declaration, visiting the same nodes.
+`for_each_child` inclusive under each, on `kanso check entry_corpus/main.kso`:
+
+    named_walk         2,638x   1,791,359
+    shapes_walk        2,618x   1,333,580
+    literal_walk_expr  2,638x   1,306,073
+    field_reads_expr   2,630x   1,087,632
+    per_node_walk      2,638x     881,059
+    decidable_walk     2,410x     748,969
+    BuildScan::expr    2,632x     743,211
+                                ---------
+                                7,891,883   5.00% of 157,728,439
+
+`check_per_node`'s own doc comment already knew: it prices a bare descent at
+1,147,185 over the compile corpus and the entry corpus together, and says every
+check that joins stops paying one. Six of the seven are still separate.
+
+**The rule that kept this one out was about the wrong thing.** The same comment
+named `check_decidable_failures` as the counter-example that could not join,
+because it PRUNES — taking only the condition of an `if` and refusing to look
+at the branches, since a guarded branch may be unreachable and refusing it
+would refuse a program that runs. That is a reason to stop ASKING at the
+branches. It is not a reason to stop WALKING them, and `shapes_walk` beside it
+already carried `raised: bool` for exactly that shape. The check joins as
+`decidable_failure_at` under a `decidable` flag the walk turns off for an
+`if`'s two branches and leaves on for its condition. The rule in the comment is
+rewritten to say what it actually excludes: a question about something other
+than the node.
+
+**The head, caught by reading rather than by a test.** `for_each_child` hands an
+`App` its head first and then its arguments in order, so the fused `if` arm
+descends into the head explicitly. Writing only the three arguments would have
+silently stopped asking the other three questions about it.
+
+**Watched red, both halves.** Pass `decidable` instead of `false` to the two
+branches and `examples/logical_ops.kso` is refused — `error[value]: division by
+zero` at `2 < 1 and 1 / 0 < 9`, a program that runs; restored, it prints again.
+And nothing pinned the other half: no fixture in the 203-case error corpus held
+a literal `1 / 0`, guarded or not, so the refusal itself was unpinned. That gap
+closes here with
+`tests/golden/errors/a_decidable_failure_outside_a_guard.kso`, which goes red
+the moment `decidable_failure_at` leaves the walk.
+
+**The whole error corpus is byte-identical across the change.** The refusal's
+diagnostics move in push order — out of position 15 of the sequence and into
+the walk's block, which `rotate_left(walked)` sends to the back — and not one
+fixture moves, because none carries a decidable failure beside another
+diagnostic. `diag::render` does not sort, so this was worth checking rather
+than assuming.
+
+**Container reading**, `kanso::main` inclusive under callgrind, pinned
+tunables, against main at 025c703f:
+
+    module  47,467,069 -> 47,317,375   -149,694  -0.3154%
+    entry  158,096,940 -> 157,558,081   -538,859  -0.3408%
+    summed 205,564,009 -> 204,875,456   -688,553  -0.3349%
+
+**The descent figure is a ceiling and this realises 60% of it.** 688,553 of
+1,147,185. What comes off is the traversal: the per-declaration re-entry, the
+statement loop, the child enumeration. What stays is the per-node question
+work, which is the same work asked from a different place, plus the flag and
+the `if` test the fused walk now carries at every node. A session sizing the
+remaining six walks from the 1,147,185 alone will be about 40% high.
+
+**A stale count corrected on the way.** `tests/golden.rs` said TWENTY-THREE
+fixtures gain the loader's ` (module …)` suffix and carry a second golden.
+There were 41. The count is removed rather than re-pinned: nothing reads it,
+and `ls tests/golden/errors/*.imported.stderr | wc -l` answers it truthfully.
+
+**OPEN: six walks left, and they are not all this cheap.** `decidable_walk`
+was the one whose visitor took `(expr, diags)` and nothing else. The other six
+carry tables — `field_reads_expr` a scan, a local map and an `Open`,
+`literal_walk_expr` four tables, `named_walk` a `Named` and a shadowing
+vector — so joining them means the fused walk carries those pointers through
+every node, which is the cost the `check_per_node` comment already warns about
+for a single extra vector. Each is worth roughly what this one was worth and
+each needs its own measurement.
