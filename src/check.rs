@@ -946,12 +946,21 @@ pub fn check_arm_ties(program: &Program, diags: &mut Vec<Diagnostic>) {
                 // the tie has a winner and there is nothing to report. Without
                 // this the check is pairwise, and a covering arm the author
                 // already wrote is invisible to it.
-                let settled = overlap
+                //
+                // THE CHEAP TEST COMES FIRST. The scan below reads every other
+                // arm of the group and compares each one's parameters twice,
+                // and it can only change the answer for a pair that already
+                // conflicts. It used to be computed for every OVERLAPPING
+                // pair, which is most of them — two arms of equal rank in
+                // every position overlap and neither is stricter anywhere, so
+                // the scan ran and said nothing.
+                let conflicting = overlap && a_stricter && b_stricter;
+                let settled = conflicting
                     && arms.iter().enumerate().any(|(k, c)| {
                         let c = &program.fns[*c as usize];
                         k != i && k != j && covers(c, a, &compare) && covers(c, b, &compare)
                     });
-                if overlap && a_stricter && b_stricter && !settled {
+                if conflicting && !settled {
                     diags.push(Diagnostic::new(
                         "dispatch",
                         format!(
