@@ -166,6 +166,26 @@ than answering it; or pushed to main, which skips CI, the only gate this
 project has. CLAUDE.md forbids the second and third by name and the first is
 the same move in a different tool.
 
+**The fourth option is closed, and closed by measurement.** The obvious way
+out is to stop needing the floor: pay the compile cost back until welfare
+holds on its own. kanso#1372's round three did some of that — the box check's
+two keyed maps folded into one, -275,876 instructions, -0.534% — and the
+question is whether more of the same could finish the job. It cannot, and the
+ceiling is readable rather than guessed.
+
+CI priced `check_box_where_value` at +1,726,645 on the module compile and
++5,941,272 on the entry compile: +7,667,917 on a compile term that went
+213,158,055 -> 220,825,972. Holding the floor needs roughly -7.2M back. After
+the paydown, `check_merged_after_aliases` — the frame the pass is inlined
+into, measured on this container with callgrind — costs 2,616,386
+instructions, 5.04% of the module compile, and it carries the pre-existing
+merged check as well as the new pass.
+
+So closing the gap means removing essentially all of the pass, and the pass
+IS the ruling. The same holds for kanso#1369, whose own paydown already
+recovered 34.5% of its rise and left the rest in the check's own walk. There
+is no third structure to find; the cost is the rule being enforced.
+
 **Options.**
 
 1. Add a Bash permission rule allowing `git add bench/welfare_floor.json` (or
