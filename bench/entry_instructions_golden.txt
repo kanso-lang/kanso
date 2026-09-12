@@ -197,4 +197,10 @@
 # summed fall, the same share it carried on the pre-#1382 base and the same the
 # fold-decidable round read, which is what a saving priced per call site looks
 # like on a corpus whose declaration mix has not moved.
-entry_instructions=152299279
+# 2026-09-12 (the shapes walk joins the one descent too, re-measured on the
+# catch-mask base):
+# 152,299,279 -> 151,534,916, a FALL of 764,363 (-0.5019%). See
+# bench/compile_instructions_golden.txt. The entry row carries 76.0% of the
+# summed fall, against 76.1% for the same diff on the pre-catch-mask base --
+# the share a saving keyed to nodes takes here, twice.
+entry_instructions=151534916

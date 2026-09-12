@@ -3953,19 +3953,30 @@ time — iterate `program.fns`, skip synthetic, take each statement's expression
 descend — so `err_as_value_at` and `call_shaped_at` ride the descent that was
 already happening now.
 
-**CI's rows, on the base this branch was opened against** — kanso#1381 landed
-underneath while it was in flight, so these are a reading of the same change
-against a base that has moved, and the goldens this branch lands carry CI's
-second sitting rather than this one:
+**CI's rows**, on the post-catch-mask base the goldens carry:
 
-    module   46,347,735 ->  46,109,174   -238,561  -0.5147%
-    entry   154,371,750 -> 153,612,583   -759,167  -0.4918%
-    library 155,103,784 -> 154,346,192   -757,592  -0.4884%
-    summed  200,719,485 -> 199,721,757   -997,728  -0.4971%
+    module   45,763,446 ->  45,522,524   -240,922  -0.5265%
+    entry   152,299,279 -> 151,534,916   -764,363  -0.5019%
+    library 153,023,863 -> 152,261,219   -762,644  -0.4984%
+    summed  198,062,725 -> 197,057,440 -1,005,285  -0.5076%
 
-Welfare read 67.70734 against that base. `compile_allocs` and
+Welfare 67.72201 -> 67.73111, banked. `compile_allocs` and
 `compile_peak_bytes` are byte-identical: the fold moves where work happens and
 allocates nothing new.
+
+**This fold and the catch mask are additive, and that is a fact about a pair
+rather than about folding a walk.** kanso#1381 landed underneath while this
+was in flight, so the same diff has been measured twice. Against the
+pre-catch-mask base CI read -238,561 on the module row and -997,728 summed; on
+top of it, -240,922 and -1,005,285. The summed figures part by 7,557
+instructions, 0.76%.
+
+kanso#1381's body records the same result against kanso#1382's fold, to
+0.067%, and says in terms not to read it as a rule. It is right not to. The
+THIRD pair, the catch mask against the LITERAL walk's fold, loses 441,481
+instructions — 16% of that fold — when the two are stacked. Three pairs, two
+additive and one not. Every one was measured on the base it lands on, and that
+is the only reason any of it is known.
 
 **The two tables cost less than the comment feared.** `check_per_node`'s doc
 comment warns that a joining check makes the fused walk carry its state through
@@ -3989,7 +4000,7 @@ another. `diag::render` does not sort, so this was worth checking rather than
 assuming.
 
 **The container's offset went the other way this round.** It projected -273,196
-on the module row and CI reads 0.873 of that; #1382's round it read 1.04x. The
+on the module row and CI reads 0.88 of that; #1382's round it read 1.04x. The
 two hosts do not agree to a fixed ratio, so a compile delta is projected from
 CI or it takes the red round.
 

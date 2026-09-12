@@ -180,4 +180,10 @@
 # 0.0015 percentage points, the closest they have run: both routes merge the
 # same library and call into it the same way, and there is nothing left for the
 # two entrances to differ over on a per-call-site saving.
-library_instructions=153023863
+# 2026-09-12 (the shapes walk joins the one descent too, re-measured on the
+# catch-mask base):
+# 153,023,863 -> 152,261,219, a FALL of 762,644 (-0.4984%). See
+# bench/compile_instructions_golden.txt. This row and the entry row part by
+# 0.0035 percentage points. Both routes walk the same bodies and the saving is
+# per node, so there is nothing for the two entrances to differ over.
+library_instructions=152261219
