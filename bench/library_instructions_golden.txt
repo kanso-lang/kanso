@@ -166,4 +166,10 @@
 # 156,463,912 -> 155,663,482, a FALL of 800,430 (-0.5116%). See
 # bench/compile_instructions_golden.txt. This row and the entry row part by
 # 0.0096 percentage points, the closest they have ever run.
-library_instructions=155663482
+# 2026-09-12 (the decidable check joins the one descent):
+# 155,663,482 -> 155,103,784, a FALL of 559,698 (-0.3596%). See
+# bench/compile_instructions_golden.txt. This row and the entry row part by
+# 0.0018 percentage points, closer than last round's 0.0096 and the closest
+# they have run. Both routes walk the same bodies and the saving is per node,
+# so there is nothing left for the two entrances to differ over.
+library_instructions=155103784

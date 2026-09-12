@@ -224,12 +224,20 @@ pub fn check(program: &mut Program, require_entry: bool) -> Vec<Diagnostic> {
 /// 1,147,185 instructions, measured with a walk that does no per-node work
 /// at all, and every check added here stops paying one.
 ///
-/// WHAT MAY JOIN. A check belongs here when it descends into every child and
-/// its per-node question is a function of the node alone. `check_decidable_
-/// failures` is the counter-example and stays where it is: it PRUNES, taking
-/// only the condition of an `if` and refusing to look at the branches,
-/// because a guarded branch may be unreachable and refusing it would refuse
-/// a program that runs.
+/// WHAT MAY JOIN. A check belongs here when its per-node question is a
+/// function of the node alone. It need not descend into every child: a check
+/// that visits fewer nodes joins by carrying a flag, and the walk keeps
+/// descending for everybody else. `check_decidable_failures` was written up
+/// here as the counter-example that could not join, on the grounds that it
+/// PRUNES — taking only the condition of an `if`, because a guarded branch
+/// may be unreachable and refusing it would refuse a program that runs. That
+/// is a reason to stop ASKING at the branches, not a reason to stop walking
+/// them, and `shapes_walk` already carried `raised` for the same shape. It
+/// joined as `decidable_failure_at` under a `decidable` flag.
+///
+/// What still cannot join is a question about something other than the node:
+/// a check that needs its own bindings in scope, or one whose answer depends
+/// on where in the declaration it is standing.
 ///
 /// ORDER. The diagnostics interleave now where they used to arrive in
 /// check-sized runs, and that is safe because every route sorts by span
@@ -260,16 +268,40 @@ fn check_per_node(program: &Program, diags: &mut Vec<Diagnostic>) {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
                 Stmt::Set { value, .. } => value,
             };
-            per_node_walk(expr, diags);
+            per_node_walk(expr, true, diags);
         }
     }
 }
 
-fn per_node_walk(expr: &Expr, diags: &mut Vec<Diagnostic>) {
+fn per_node_walk(expr: &Expr, decidable: bool, diags: &mut Vec<Diagnostic>) {
     if_arity_at(expr, diags);
     boolean_equality_at(expr, diags);
     none_in_collections_at(expr, diags);
-    crate::for_each_child(expr, |child| per_node_walk(child, diags));
+    if decidable {
+        decidable_failure_at(expr, diags);
+    }
+    // An `if` guards its branches, and `and`/`or` are written as one — so a
+    // branch may be unreachable, and a decidable failure inside one is not a
+    // failure the program will meet. examples/logical_ops.kso demonstrates
+    // exactly that: `2 < 1 and 1 / 0 < 9` never divides. The condition itself
+    // is unguarded. The other three questions are about the node alone and
+    // keep descending into all three children, which is why the flag turns
+    // off here rather than the walk stopping.
+    if let Expr::App { head, args, .. } = expr {
+        if matches!(head.as_ref(), Expr::Ident(name, _) if name == "if") && args.len() == 3 {
+            // `for_each_child` hands an `App` its head first and then its
+            // arguments in order, and the three node-alone questions were
+            // asked in exactly that order before this arm existed. It says so
+            // here rather than descending only into the arguments, which would
+            // silently stop asking them about the head.
+            per_node_walk(head, decidable, diags);
+            per_node_walk(&args[0], decidable, diags);
+            per_node_walk(&args[1], false, diags);
+            per_node_walk(&args[2], false, diags);
+            return;
+        }
+    }
+    crate::for_each_child(expr, |child| per_node_walk(child, decidable, diags));
 }
 
 fn if_arity_at(expr: &Expr, diags: &mut Vec<Diagnostic>) {
@@ -1704,7 +1736,6 @@ pub fn check_merged_after_aliases(
     check_literal_arguments(program, &mut diags);
     check_effect_discarded(program, &returns, &mut diags);
     check_wall_operands(program, &returns, &mut diags);
-    check_decidable_failures(program, &mut diags);
     check_discarded_value(program, &returns, &mut diags);
     check_shapes_per_node(program, &mut diags);
     // This route hands its diagnostics back in push order — only the gated
@@ -4133,22 +4164,11 @@ fn flatten_join<'a>(e: &'a Expr, out: &mut Vec<&'a Expr>) {
 /// conversion whose argument IS a literal that does not parse. A divisor that
 /// arrives as a parameter cannot be decided here and is left alone — refusing
 /// what it cannot read would be worse than the bug.
-fn check_decidable_failures(program: &Program, diags: &mut Vec<Diagnostic>) {
-    for decl in &program.fns {
-        if decl.synthetic {
-            continue;
-        }
-        for stmt in &decl.body {
-            match stmt {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
-                    decidable_walk(expr, diags)
-                }
-            }
-        }
-    }
-}
-
-fn decidable_walk(e: &Expr, diags: &mut Vec<Diagnostic>) {
+///
+/// The descent is `per_node_walk`'s, which carries a flag saying whether the
+/// node is reached unguarded; see the rule there for why a guarded branch is
+/// not asked.
+fn decidable_failure_at(e: &Expr, diags: &mut Vec<Diagnostic>) {
     if let Expr::BinOp { op, rhs, span, .. } = e {
         if matches!(*op, "/" | "%") && matches!(rhs.as_ref(), Expr::Int(n, _) if n.is_zero()) {
             let named = match *op {
@@ -4163,18 +4183,6 @@ fn decidable_walk(e: &Expr, diags: &mut Vec<Diagnostic>) {
             unparseable_conversion(name, args, diags);
         }
     }
-    // An `if` guards its branches, and `and`/`or` are written as one — so a
-    // branch may be unreachable and refusing it would refuse a program that
-    // runs. examples/logical_ops.kso demonstrates exactly that: `2 < 1 and
-    // 1 / 0 < 9` never divides. The condition itself is unguarded and stays
-    // in the walk.
-    if let Expr::App { head, args, .. } = e {
-        if matches!(head.as_ref(), Expr::Ident(name, _) if name == "if") && args.len() == 3 {
-            decidable_walk(&args[0], diags);
-            return;
-        }
-    }
-    crate::for_each_child(e, |child| decidable_walk(child, diags));
 }
 
 /// `to_int` and `to_float` given a literal that will not parse.
