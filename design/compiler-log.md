@@ -4310,3 +4310,52 @@ thing that was wrong.
 This is independent of the effect-type sequence. The appendix has been wrong
 since #1364 landed, which is why it lands on its own rather than behind the
 plain dot becoming an application.
+
+## 2026-09-12 — the box check's second map hashed the same name again
+
+Searched the log, the archive and design/ before filing: the two-maps-on-one-key
+shape appears in the 2026-09-11 entry for kanso#1369, which found it in the
+exhaustiveness pass and collapsed it. Nothing had looked for the same shape in
+`check_box_where_value`, which is the pass kanso#1372 adds.
+
+**What it was.** The pass built two tables and both keys started with the
+declaration's name:
+
+    returns: Map<(&str, usize), Set>
+    binds:   Map<(&str, usize, usize), bool>
+
+`returns` answers what a group's arms return; `binds` answers whether the group
+binds anything at one position. So the name was hashed once per PARAMETER to
+build the second table and once per ARGUMENT to read it, on top of the hash the
+same call site already paid for the return set. A call of arity three cost four
+hashes of one string where it needed one.
+
+**What it is now.** One table, `Map<(&str, usize), (Set, u64)>`: the per-position
+bool is a bitmask beside the set. Building is one hash a declaration, reading is
+one hash a call site. A position past the mask's width reads as BINDING, the
+under-refusing direction — the same choice kanso#1369 made for its own mask, and
+for the same reason: a refusal this pass cannot justify is worse than one it
+declines to make. The widest group in lib/ takes five parameters against a width
+of sixty-four.
+
+**The measurement.** Read in this container, which counts high against CI's
+rustc but reads a delta that carries:
+
+    compile_instructions  51,679,441 -> 51,403,565   -275,876   -0.534%
+    binary sha            8655e4c48e8a -> a81dbd7e5b03
+
+**Watched red first, in both directions.** The errors corpus fixture
+`a_box_where_a_value_is_expected` exercises the mask on both sides in one
+program: `fn told 0` / `fn told 1` take literal patterns, so position zero does
+not bind and the call is refused; `fn held e` takes a Var, so it binds and the
+call is not. Building the mask with the bit never set makes `held` gain a
+refusal it should not have. Removing the pattern test, so every position sets
+its bit, loses the `told` refusal entirely. Both were run and read before the
+change was restored.
+
+**What it does NOT do.** It does not pay for the pass. `check_box_where_value`
+costs the compile rows about 3.5% and this returns about a sixth of the welfare
+that costs: the compile term's saturating factor moves from 0.8588 to 0.8595,
+worth roughly 0.011 points against a 0.07 shortfall. The floor still moves by
+hand under the 2026-08-25 language clause, and the entry it moves under names
+this paydown, so a reader can see what was tried before the floor moved.

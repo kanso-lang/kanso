@@ -706,16 +706,27 @@ fn check_box_where_value(
     diags: &mut Vec<Diagnostic>,
 ) {
     use crate::infer::{Set, DESC, FAIL, THUNK, TOP};
-    let mut returns: crate::hash::Map<(&str, usize), Set> =
-        crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
-    let mut binds: crate::hash::Map<(&str, usize, usize), bool> =
+    // ONE MAP, NOT TWO. Both keys began with the declaration's name, so the
+    // second hashed that string once per PARAMETER to build and once per
+    // ARGUMENT to read, on top of the hash the same call site already paid for
+    // the return set. The per-position bool sits in a bitmask beside the set
+    // now: one hash per declaration to build it, one per call site to read it.
+    //
+    // A position past the mask's width reads as BINDING, which is the
+    // under-refusing direction — the same choice kanso#1369 made for the
+    // exhaustiveness mask, and for the same reason: a refusal this pass cannot
+    // justify is worse than one it declines to make. The widest group in lib/
+    // takes five parameters against a width of sixty-four.
+    let mut returns: crate::hash::Map<(&str, usize), (Set, u64)> =
         crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
     for (i, d) in program.fns.iter().enumerate() {
         let key = (d.name.as_str(), d.params.len());
-        *returns.entry(key).or_insert(0) |= inference.returns[i];
-        for (pos, param) in d.params.iter().enumerate() {
-            let anything = matches!(param, Pattern::Var(..) | Pattern::Wildcard(..));
-            *binds.entry((d.name.as_str(), d.params.len(), pos)).or_insert(false) |= anything;
+        let slot = returns.entry(key).or_insert((0, 0));
+        slot.0 |= inference.returns[i];
+        for (pos, param) in d.params.iter().enumerate().take(64) {
+            if matches!(param, Pattern::Var(..) | Pattern::Wildcard(..)) {
+                slot.1 |= 1u64 << pos;
+            }
         }
     }
     let values = TOP & !FAIL & !THUNK & !DESC;
@@ -725,7 +736,7 @@ fn check_box_where_value(
     // its spelling; `fn either ... args` reads its own list, not `os/args`
     fn yields_box(
         e: &Expr,
-        returns: &crate::hash::Map<(&str, usize), Set>,
+        returns: &crate::hash::Map<(&str, usize), (Set, u64)>,
         bound: &HashSet<&str>,
         boxed: &dyn Fn(Set) -> bool,
     ) -> bool {
@@ -736,12 +747,12 @@ fn check_box_where_value(
             }
             Expr::App { head, args, piped: false, .. } => match head.as_ref() {
                 Expr::Ident(name, _) if !bound.contains(name.as_str()) => {
-                    returns.get(&(name.as_str(), args.len())).is_some_and(|s| boxed(*s))
+                    returns.get(&(name.as_str(), args.len())).is_some_and(|(s, _)| boxed(*s))
                 }
                 _ => false,
             },
             Expr::Ident(name, _) if !bound.contains(name.as_str()) => {
-                returns.get(&(name.as_str(), 0)).is_some_and(|s| boxed(*s))
+                returns.get(&(name.as_str(), 0)).is_some_and(|(s, _)| boxed(*s))
             }
             Expr::Seq(..) | Expr::Join { .. } => true,
             _ => false,
@@ -808,15 +819,18 @@ fn check_box_where_value(
                     }
                     return;
                 }
-                let group = returns.contains_key(&(name.as_str(), args.len()));
-                if !group && !reads_value(name.as_str()) {
+                // one lookup for the whole call: whether the name is a group,
+                // and which of its positions bind anything
+                let found = returns.get(&(name.as_str(), args.len())).copied();
+                if found.is_none() && !reads_value(name.as_str()) {
                     return;
                 }
+                let binds = found.map_or(0, |(_, b)| b);
                 for (pos, arg) in args.iter().enumerate() {
                     if !is_box(arg) {
                         continue;
                     }
-                    if group && *binds.get(&(name.as_str(), args.len(), pos)).unwrap_or(&false) {
+                    if found.is_some() && (pos >= 64 || binds & (1u64 << pos) != 0) {
                         continue;
                     }
                     refuse(diags, &format!("`{name}`"), arg.span());
