@@ -166,4 +166,10 @@
 # 156,463,912 -> 155,663,482, a FALL of 800,430 (-0.5116%). See
 # bench/compile_instructions_golden.txt. This row and the entry row part by
 # 0.0096 percentage points, the closest they have ever run.
-library_instructions=155663482
+# 2026-09-12 (a dispatch group's catch mask is decided once):
+# 155,663,482 -> 153,583,013, a FALL of 2,080,469 (-1.3365%). See
+# bench/compile_instructions_golden.txt. This row and the entry row part by
+# 0.0018 percentage points, the same distance they ran earlier today. Both
+# routes merge the same library and call into it the same way, so a saving
+# priced per call site reaches them alike.
+library_instructions=153583013

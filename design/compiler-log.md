@@ -3805,6 +3805,26 @@ symbol, and removing it also removes the slice bounds work, the `params.get`
 per arm, and the call into `pattern_catches` that the inclusive figure counts
 under its own name.
 
+**CI's rows**, on the post-#1379 base this branch carries, are the ones the
+goldens hold:
+
+    module   46,504,130 ->  45,919,030    -585,100  -1.2582%
+    entry   154,931,615 -> 152,858,179  -2,073,436  -1.3383%
+    library 155,663,482 -> 153,583,013  -2,080,469  -1.3365%
+    summed  201,435,745 -> 198,777,209  -2,658,536  -1.3198%
+
+    compile_allocs   29,327 ->  29,335          +8  +0.0273%
+
+CI reads 1.04x the container's -2,545,266 summed, the same ratio the
+fold-decidable round read on this same day from a different change. Two
+readings do not make a constant, and the offset has been anywhere from
+0.8% to 1.6x across the rounds these rows have seen. The entry row carries
+78.0% of the summed fall and the entry and library rows part by 0.0018
+percentage points, which is the shape of a saving priced per call site on two
+routes that merge the same library. The eight allocations are the table,
+built once per module the compile corpus holds. Welfare 67.69189 -> 67.71555,
+banked.
+
 **No fixture.** The mask the table holds is the mask the fold computed, over
 the same arms in the same order, and `pattern_catches` reads no state. Every
 diagnostic in the 201-fixture error corpus is byte-identical, and the emitted

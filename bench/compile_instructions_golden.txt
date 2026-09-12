@@ -1211,4 +1211,17 @@
 # inference at all. The container projected -1,092,217 summed against CI's
 # -1,061,576, within 2.9% -- the closest the two hosts have agreed on a compile
 # delta, and no reason to expect the next one to.
-compile_instructions=46504130
+# 2026-09-12 (a dispatch group's catch mask is decided once):
+# 46,504,130 -> 45,919,030, a FALL of 585,100 (-1.2582%). `eval_call` walked a
+# group's arms once per argument position and ORed `pattern_catches` over the
+# pattern found there, on every round of the fixpoint. `program.fns` is fixed
+# before inference starts and `pattern_catches` reads no state, so every one of
+# those folds returned the answer the first had. A table built beside
+# `group_members` -- a row per group, a column per position -- turns the fold
+# into an index. It costs 8 allocations, in bench/compile_allocs_golden.txt.
+#
+# The container projected -669,927 on this row from a pre-#1379 base; CI reads
+# -585,100 from a post-#1379 one. Summed with the entry row the container had
+# -2,545,266 and CI reads -2,658,536, 1.04x -- the same ratio the fold-decidable
+# round read on the same day, which is a second reading rather than a rule.
+compile_instructions=45919030

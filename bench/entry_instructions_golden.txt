@@ -183,4 +183,10 @@
 # summed fall at almost exactly the module row's fraction, which is what a
 # saving keyed to declarations looks like when both routes merge the same
 # library.
-entry_instructions=154931615
+# 2026-09-12 (a dispatch group's catch mask is decided once):
+# 154,931,615 -> 152,858,179, a FALL of 2,073,436 (-1.3383%). See
+# bench/compile_instructions_golden.txt. The entry row carries 78.0% of the
+# summed fall, the same share as the fold-decidable round earlier today, and
+# here it is the larger fraction of the two: the saving is per call site and
+# the entry corpus holds more of them per declaration.
+entry_instructions=152858179
