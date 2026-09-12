@@ -138,4 +138,8 @@
 # 2026-09-11 (a validated string knows its length): 164,324,373 -> 164,342,505,
 # a rise of 18,132 (+0.0110%). The same layout move as the other two compile
 # rows; see bench/compile_instructions_golden.txt.
-library_instructions=164342505
+# 2026-09-12 (five compile-cost paydowns in the whole-program checks):
+# 164,342,505 -> 160,184,317, a FALL of 4,158,188 (-2.5302%). The same three
+# fusions and two necessary conditions; see
+# bench/compile_instructions_golden.txt.
+library_instructions=160184317

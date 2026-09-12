@@ -150,4 +150,11 @@
 # 2026-09-11 (a validated string knows its length): 164,041,672 -> 164,060,471,
 # a rise of 18,799 (+0.0115%). The same layout move as the other two compile
 # rows; see bench/compile_instructions_golden.txt.
-entry_instructions=164060471
+# 2026-09-12 (five compile-cost paydowns in the whole-program checks):
+# 164,060,471 -> 159,904,406, a FALL of 4,156,065 (-2.5333%). The same three
+# fusions and two necessary conditions; see
+# bench/compile_instructions_golden.txt. The three compile rows fall together
+# and by nearly the same fraction, which is what a per-declaration check looks
+# like when every route runs it -- the same signature the 2026-09-10 rise had,
+# in the other direction.
+entry_instructions=159904406

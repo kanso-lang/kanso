@@ -1155,4 +1155,17 @@
 # a rise of 5,700 (+0.0116%). src/runtime.c is carried in the compiler, so its
 # bytes and the layout under them move when it changes; the front end does no
 # more work. The entry and library rows rise by the same fraction.
-compile_instructions=49097584
+# 2026-09-12 (five compile-cost paydowns in the whole-program checks):
+# 49,097,584 -> 47,846,337, a FALL of 1,251,247 (-2.5475%). Three fusions gave
+# the checks in src/check.rs one descent apiece where they had taken one each,
+# and two of them then stopped asking an expensive question they could answer
+# for free: check_literal_arguments tests whether any argument IS a literal
+# before it hashes the callee's name three times, and check_arm_ties asks
+# whether a pair actually conflicts before scanning the group for an arm that
+# settles it. The conditions are worth more than the fusions, 3,151,837 against
+# 2,325,362. Container projected -5,477,199 across the module and entry rows
+# summed where CI reads -5,407,312: the same 2.53% either way, and the 69,887
+# absolute gap is the container's known high offset carrying through.
+# compile_allocs did NOT move, and the job's own vein summary says so: these
+# changes reorder tests and share frames, they allocate nothing new.
+compile_instructions=47846337
