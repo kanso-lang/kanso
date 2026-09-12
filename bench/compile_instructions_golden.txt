@@ -1229,6 +1229,10 @@
 # that, 62%: the traversal comes off, the per-node question work stays where it
 # was, and the fused walk now carries a flag and an `if` test at every node.
 # Sizing the six remaining walks at 1,147,185 apiece will read about 60% high.
+# 2026-09-12 (the shapes walk joins the one descent too) -- SUPERSEDED, see
+# below: this branch read 46,347,735 -> 46,109,174 on the pre-catch-mask base,
+# and that base has since moved. The fold stands; the row it lands is measured
+# again beneath the entry after it.
 # 2026-09-12 (a dispatch group's catch mask is decided once):
 # 46,347,735 -> 45,763,446, a FALL of 584,289 (-1.2607%). `eval_call` walked a
 # group's arms once per argument position and ORed `pattern_catches` over the
@@ -1247,4 +1251,29 @@
 # interacted and did not: the fold removes a traversal of the expression tree
 # and the table removes a recomputation inside `eval_call`, and they do not
 # share work. Do not read this as a rule -- it is one pair, measured twice.
-compile_instructions=45763446
+# 2026-09-12 (the shapes walk joins the one descent too, re-measured on the
+# catch-mask base):
+# 45,763,446 -> 45,522,524, a FALL of 240,922 (-0.5265%).
+# The second of the seven whole-program walks `check_merged_after_aliases`
+# runs over the same nodes. `check_shapes_per_node`'s driver was
+# `check_per_node`'s loop written a second time -- iterate `program.fns`, skip
+# synthetic, take each statement's expression, descend -- so `err_as_value_at`
+# and `call_shaped_at` ride the descent that was already happening now.
+#
+# The fused walk carries two tables it did not before: the arity map, built
+# once over the whole program, and the bound set, cleared and refilled per
+# declaration. `check_per_node`'s doc comment warns that a joining check makes
+# the fused walk carry its state through every node and names a single extra
+# vector as the cost to weigh. Two tables still pay.
+#
+# THIS FOLD AND THE CATCH MASK ARE ADDITIVE. CI read this same diff at
+# -238,561 on this row and -997,728 summed with entry, against the pre-catch-
+# mask base; on top of it the rows are -240,922 and -1,005,285. The summed
+# figures part by 7,557 instructions, 0.76%. That is the second such pair --
+# the catch mask and kanso#1382's fold parted by 0.067% -- and the third pair
+# measured, the catch mask against the LITERAL walk's fold, is NOT additive
+# and loses 16%. So the property belongs to a pair, not to the family, and
+# every pair is measured on the base it lands on.
+#
+# The container projected -273,196 on this row and CI reads 0.88 of that.
+compile_instructions=45522524

@@ -259,27 +259,65 @@ pub fn check(program: &mut Program, require_entry: bool) -> Vec<Diagnostic> {
 /// declaration to answer a question asked once per compile, and the reading
 /// that says what that costs is CI's, since this row moves with the layout.
 fn check_per_node(program: &Program, diags: &mut Vec<Diagnostic>) {
+    let mut arities: crate::hash::Map<&str, usize> =
+        crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
+    for decl in &program.fns {
+        let widest = arities.entry(decl.name.as_str()).or_insert(0);
+        *widest = (*widest).max(decl.params.len());
+    }
+    for decl in &program.types {
+        if !decl.members.is_empty() {
+            continue;
+        }
+        let takes = match decl.parent {
+            Some(_) => 1,
+            None => decl.fields.len(),
+        };
+        let widest = arities.entry(decl.name.as_str()).or_insert(0);
+        *widest = (*widest).max(takes);
+    }
+    let mut bound: crate::hash::Set<&str> = Default::default();
     for decl in &program.fns {
         if decl.synthetic {
             continue;
+        }
+        bound.clear();
+        for p in &decl.params {
+            collect_pattern_names(p, &mut bound);
+        }
+        for stmt in &decl.body {
+            if let Stmt::Bind { pattern, .. } = stmt {
+                collect_pattern_names(pattern, &mut bound);
+            }
         }
         for stmt in &decl.body {
             let expr = match stmt {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
                 Stmt::Set { value, .. } => value,
             };
-            per_node_walk(expr, true, diags);
+            per_node_walk(expr, &arities, &bound, true, true, diags);
         }
     }
 }
 
-fn per_node_walk(expr: &Expr, decidable: bool, diags: &mut Vec<Diagnostic>) {
+fn per_node_walk(
+    expr: &Expr,
+    arities: &crate::hash::Map<&str, usize>,
+    bound: &crate::hash::Set<&str>,
+    decidable: bool,
+    raised: bool,
+    diags: &mut Vec<Diagnostic>,
+) {
     if_arity_at(expr, diags);
     boolean_equality_at(expr, diags);
     none_in_collections_at(expr, diags);
     if decidable {
         decidable_failure_at(expr, diags);
     }
+    if raised {
+        err_as_value_at(expr, diags);
+    }
+    call_shaped_at(expr, arities, bound, diags);
     // An `if` guards its branches, and `and`/`or` are written as one — so a
     // branch may be unreachable, and a decidable failure inside one is not a
     // failure the program will meet. examples/logical_ops.kso demonstrates
@@ -288,20 +326,26 @@ fn per_node_walk(expr: &Expr, decidable: bool, diags: &mut Vec<Diagnostic>) {
     // keep descending into all three children, which is why the flag turns
     // off here rather than the walk stopping.
     if let Expr::App { head, args, .. } = expr {
-        if matches!(head.as_ref(), Expr::Ident(name, _) if name == "if") && args.len() == 3 {
-            // `for_each_child` hands an `App` its head first and then its
-            // arguments in order, and the three node-alone questions were
-            // asked in exactly that order before this arm existed. It says so
-            // here rather than descending only into the arguments, which would
-            // silently stop asking them about the head.
-            per_node_walk(head, decidable, diags);
-            per_node_walk(&args[0], decidable, diags);
-            per_node_walk(&args[1], false, diags);
-            per_node_walk(&args[2], false, diags);
-            return;
+        if let Expr::Ident(name, _) = head.as_ref() {
+            if name == "if" && args.len() == 3 {
+                per_node_walk(head, arities, bound, decidable, true, diags);
+                per_node_walk(&args[0], arities, bound, decidable, true, diags);
+                per_node_walk(&args[1], arities, bound, false, true, diags);
+                per_node_walk(&args[2], arities, bound, false, true, diags);
+                return;
+            }
+            if name == "err" && !args.is_empty() {
+                per_node_walk(head, arities, bound, decidable, false, diags);
+                for arg in args {
+                    per_node_walk(arg, arities, bound, decidable, true, diags);
+                }
+                return;
+            }
         }
     }
-    crate::for_each_child(expr, |child| per_node_walk(child, decidable, diags));
+    crate::for_each_child(expr, |child| {
+        per_node_walk(child, arities, bound, decidable, true, diags)
+    });
 }
 
 fn if_arity_at(expr: &Expr, diags: &mut Vec<Diagnostic>) {
@@ -364,58 +408,6 @@ fn said_plainly(op: &str, word: &str) -> String {
 /// value, and a list element that looks like a call. They are next to each
 /// other in the run above and stay in that order here, so nothing about
 /// which diagnostic comes first changes.
-fn check_shapes_per_node(program: &Program, diags: &mut Vec<Diagnostic>) {
-    let mut arities: crate::hash::Map<&str, usize> =
-        crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
-    for decl in &program.fns {
-        let widest = arities.entry(decl.name.as_str()).or_insert(0);
-        *widest = (*widest).max(decl.params.len());
-    }
-    // A constructor applies like anything else, so `[point 3 4]` is the same
-    // ambiguity as `[f x]` and wants the same sentence. Without this the map
-    // holds only functions, the arity reads zero, and the check walks past —
-    // which is why `[want 7]` answered a list of two rather than a diagnostic.
-    // A typeset never constructs, and a subtype takes exactly its one value.
-    for decl in &program.types {
-        if !decl.members.is_empty() {
-            continue;
-        }
-        let takes = match decl.parent {
-            Some(_) => 1,
-            None => decl.fields.len(),
-        };
-        let widest = arities.entry(decl.name.as_str()).or_insert(0);
-        *widest = (*widest).max(takes);
-    }
-    // One set, cleared per declaration. Opening a fresh one each time was an
-    // allocation per declaration in each of the three passes that do this,
-    // and the capacity it had just grown to went with it.
-    let mut bound: crate::hash::Set<&str> = Default::default();
-    for decl in &program.fns {
-        if decl.synthetic {
-            continue;
-        }
-        // A name bound here is this scope's, whatever a function elsewhere is
-        // called: sha256 binds `first` and `list/first` is not what it means.
-        bound.clear();
-        for p in &decl.params {
-            collect_pattern_names(p, &mut bound);
-        }
-        for stmt in &decl.body {
-            if let Stmt::Bind { pattern, .. } = stmt {
-                collect_pattern_names(pattern, &mut bound);
-            }
-        }
-        for stmt in &decl.body {
-            let expr = match stmt {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
-                Stmt::Set { value, .. } => value,
-            };
-            shapes_walk(expr, &arities, &bound, true, diags);
-        }
-    }
-}
-
 fn collect_pattern_names<'a>(p: &'a Pattern, out: &mut crate::hash::Set<&'a str>) {
     match p {
         Pattern::Var(name, _) => {
@@ -438,35 +430,6 @@ fn collect_pattern_names<'a>(p: &'a Pattern, out: &mut crate::hash::Set<&'a str>
             }
         }
         _ => {}
-    }
-}
-
-/// `raised` is false for exactly one node: the head of a call that HAS
-/// arguments and is spelled `err`. That head is the raise itself, which is
-/// the one mention naming a line of its own, and the separate walk this
-/// replaces expressed the same exception by declining to descend into it.
-fn shapes_walk(
-    expr: &Expr,
-    arities: &crate::hash::Map<&str, usize>,
-    bound: &crate::hash::Set<&str>,
-    raised: bool,
-    diags: &mut Vec<Diagnostic>,
-) {
-    if raised {
-        err_as_value_at(expr, diags);
-    }
-    call_shaped_at(expr, arities, bound, diags);
-    match expr {
-        Expr::App { head, args, .. }
-            if !args.is_empty()
-                && matches!(head.as_ref(), Expr::Ident(name, _) if name == "err") =>
-        {
-            shapes_walk(head, arities, bound, false, diags);
-            for arg in args {
-                shapes_walk(arg, arities, bound, true, diags);
-            }
-        }
-        _ => crate::for_each_child(expr, |child| shapes_walk(child, arities, bound, true, diags)),
     }
 }
 
@@ -1737,7 +1700,6 @@ pub fn check_merged_after_aliases(
     check_effect_discarded(program, &returns, &mut diags);
     check_wall_operands(program, &returns, &mut diags);
     check_discarded_value(program, &returns, &mut diags);
-    check_shapes_per_node(program, &mut diags);
     // This route hands its diagnostics back in push order — only the gated
     // return above sorts — so where a check pushes is what a reader sees.
     // The walk ran first and its two non-gating questions belong where the
