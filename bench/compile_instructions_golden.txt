@@ -1229,4 +1229,23 @@
 # that, 62%: the traversal comes off, the per-node question work stays where it
 # was, and the fused walk now carries a flag and an `if` test at every node.
 # Sizing the six remaining walks at 1,147,185 apiece will read about 60% high.
-compile_instructions=46347735
+# 2026-09-12 (the shapes walk joins the one descent too):
+# 46,347,735 -> 46,109,174, a FALL of 238,561 (-0.5147%).
+# The second of the seven whole-program walks `check_merged_after_aliases`
+# runs over the same nodes. `check_shapes_per_node`'s driver was
+# `check_per_node`'s loop written a second time -- iterate `program.fns`, skip
+# synthetic, take each statement's expression, descend -- so `err_as_value_at`
+# and `call_shaped_at` ride the descent that was already happening now.
+#
+# The fused walk carries two tables it did not before: the arity map, built
+# once over the whole program, and the bound set, cleared and refilled per
+# declaration. `check_per_node`'s doc comment warns that a joining check makes
+# the fused walk carry its state through every node, and names a single extra
+# vector as the cost to weigh. Two tables still pay: this row falls 1.53x last
+# round's 156,395, and the summed fall of 997,728 is 1.39x its 716,260. The
+# warning is about a real cost and this measurement bounds it.
+#
+# The container projected -273,196 on this row and CI reads 0.873 of that,
+# where last round CI read 1.04x the container's projection. Two rounds, two
+# offsets in opposite directions: project from CI or take the red round.
+compile_instructions=46109174

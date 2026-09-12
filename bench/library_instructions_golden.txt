@@ -172,4 +172,10 @@
 # 0.0018 percentage points, closer than last round's 0.0096 and the closest
 # they have run. Both routes walk the same bodies and the saving is per node,
 # so there is nothing left for the two entrances to differ over.
-library_instructions=155103784
+# 2026-09-12 (the shapes walk joins the one descent too):
+# 155,103,784 -> 154,346,192, a FALL of 757,592 (-0.4884%). See
+# bench/compile_instructions_golden.txt. This row and the entry row part by
+# 0.0033 percentage points against last round's 0.0018. Both routes walk the
+# same bodies and the saving is per node, so there is nothing for the two
+# entrances to differ over and the gap is measurement.
+library_instructions=154346192

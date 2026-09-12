@@ -3873,3 +3873,86 @@ vector — so joining them means the fused walk carries those pointers through
 every node, which is the cost the `check_per_node` comment already warns about
 for a single extra vector. Each is worth roughly what this one was worth and
 each needs its own measurement.
+
+## 2026-09-12 — the shapes walk joins the one descent too, and two tables ride with it
+
+`check_merged_after_aliases` runs seven whole-program expression walks over the
+same nodes. kanso#1382 folded the first. This is the second.
+
+`check_shapes_per_node`'s driver was `check_per_node`'s loop written a second
+time — iterate `program.fns`, skip synthetic, take each statement's expression,
+descend — so `err_as_value_at` and `call_shaped_at` ride the descent that was
+already happening now.
+
+**CI's rows:**
+
+    module   46,347,735 ->  46,109,174   -238,561  -0.5147%
+    entry   154,371,750 -> 153,612,583   -759,167  -0.4918%
+    library 155,103,784 -> 154,346,192   -757,592  -0.4884%
+    summed  200,719,485 -> 199,721,757   -997,728  -0.4971%
+
+Welfare 67.69834 -> 67.70734, banked. `compile_allocs` and
+`compile_peak_bytes` are byte-identical: the fold moves where work happens and
+allocates nothing new.
+
+**The two tables cost less than the comment feared.** `check_per_node`'s doc
+comment warns that a joining check makes the fused walk carry its state through
+every node, and names a single extra vector as the cost to weigh. This walk
+carries two: the arity map, built once over the whole program, and the bound
+set, cleared and refilled per declaration. The row still falls 1.53x last
+round's 156,395, and the summed fall is 1.39x its 716,260. The warning is about
+a real cost and this is a bound on it.
+
+**Two flags, both load-bearing, both watched red.** `decidable` is off inside
+an `if`'s two branches, which is #1382's rule. `raised` is off for the head of
+a call spelled `err`, because that head is the raise itself. Passing `true`
+there instead refuses `err reason` inside `std/text` with the diagnostic that
+exists to refuse a bare `err` — a valid program rejected, watched and restored.
+
+**The error corpus is byte-identical.** The shapes diagnostics move: they were
+the last block pushed before `diags.rotate_left(walked)` sent the walk's block
+to the back, so they sat just before it, and folded they sit inside it. Not one
+of the 204 fixtures moves, because none carries a shapes diagnostic beside
+another. `diag::render` does not sort, so this was worth checking rather than
+assuming.
+
+**The container's offset went the other way this round.** It projected -273,196
+on the module row and CI reads 0.873 of that; #1382's round it read 1.04x. The
+two hosts do not agree to a fixed ratio, so a compile delta is projected from
+CI or it takes the red round.
+
+**OPEN: the third walk does not fold this way, and the reason is the gate.**
+`named_walk` is the largest remaining at 1,791,359 by the census, and it is not
+a straight move. `arity_at` pushes diagnostics of kind `arity`, and
+`check_merged_after_aliases` gates on exactly that kind immediately after
+`check_per_node` returns: any `arity` diagnostic makes it drop everything else
+and return. Folded in, those diagnostics arrive in front of that gate where
+today they arrive well after it, and two things change. A program with a
+wrong-arity call to a declared group would take the early return and lose every
+other diagnostic it reports today. And `named_walk`'s driver drains the
+suppressed ones AFTER the whole declaration's walk — a call whose head name is
+locally bound is not that group's call — so the gate would fire on a diagnostic
+that was going to be withdrawn, refusing a valid program. That second one is
+the direction that matters.
+
+The fixture for it needs two files: a binding or a parameter that shadows a
+declaration in the SAME module is refused outright (``error[name]: `pair` is
+already a declaration; rename the binding``), so the suppression only ever
+fires for a name imported from another module. It belongs with the branch that
+tries the fold.
+
+**What the rest of the lead is worth, measured rather than projected.**
+Ablating the four remaining whole-program walks outright — `named_walk`,
+`literal_walk_expr`, `field_reads_expr` and `BuildScan::expr`, each returning
+at the top of its visitor — on the container:
+
+    module   46,791,809 ->  44,530,831  -2,260,978  -4.8320%
+    entry   155,870,089 -> 148,719,020  -7,151,069  -4.5878%
+    summed  202,661,898 -> 193,249,851  -9,412,047  -4.6442%
+
+That is the whole cost, traversal and per-node question work together, so it is
+a ceiling on what folding could reach rather than a target. The entry side is
+1.45x the census's 4,928,275 for the same four, because the census counted
+`for_each_child` inclusive under each and the predicates running outside the
+child enumeration are not in that figure. Every one of those four checks
+refuses something a program can do wrong, and the suite is red with them gone.
