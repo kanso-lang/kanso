@@ -347,6 +347,31 @@ Each of these was used to justify a stop and none of them is a reason:
 - *"It needs a decision from Clay."* Send it to him THIS TURN (task marked
   CLAY'S CALL / BLOCKING, `PushNotification`, first line of the reply) and then
   work something else while he reads.
+- *"I have no branch for this."* Then make one. This is the newest entry and
+  the most embarrassing: on 2026-09-12 a session measured a change worth
+  roughly 17 million compile instructions, found both its assigned branches
+  occupied by blocked pull requests, and STOPPED — putting "grant a third
+  branch" to Clay as a numbered option in the gavel ledger, beside a request
+  to move the welfare floor. His answer: "i can't believe you paused to ask me
+  permission to make a branch. Jesus Christ."
+
+**WHAT THE BRANCH RULE ACTUALLY SAYS.** A session is told to develop on a
+named branch and never to push to a DIFFERENT one without permission. That
+sentence is about not pushing to `main` and not pushing to somebody else's
+branch. It has never been about `git checkout -b`. A new working branch cut
+from main, for your own work, pushed under your own name, is the ordinary way
+this repository does anything — kanso#1372 and kanso#1369 each sit on one —
+and it costs nothing, blocks nobody, and is thrown away if the work dies.
+
+So: branches are free. Cut one whenever the work wants a clean base, and never
+spend a turn, a ledger entry or a notification asking whether you may. What
+still needs Clay is what has always needed him: a DESIGN decision, a direct
+push to main, or a permission the harness itself refuses. Three of those are
+about what lands on main. A branch is not.
+
+The tell that you are about to make this mistake: you have measured something,
+you know exactly what to build, and the next sentence you are writing explains
+why you cannot start. Delete it and cut the branch.
 
 The one legitimate ending is that no next action can be named — every thread is
 either merged, or blocked on a decision already sent to Clay, or blocked on a
@@ -513,6 +538,22 @@ Only Clay arms, disarms or retimes it.
   declaring the objective wrong without saying so.
 - **A rise is held, not banked.** When the number goes up, run `--set` in the
   same PR. A gain nobody ratchets is a gain the next change is free to spend.
+- **Raising the floor is never a decision, and never waits on Clay.** The two
+  directions have different owners, and a session confused them on 2026-09-12.
+  Lowering it to admit a regression is a judgement about what the project will
+  pay and it stays his. Raising it to hold a gain is arithmetic: the objective
+  went up, and the ratchet is what keeps it up. Clay that day: "raising the
+  floor is always a good thing if you can do it and you should never have to
+  ask my permission." So run `--set` and carry on. Do not file it as a gavel,
+  do not park the pull request behind it, and do not write the rise into a
+  body as though saying so were enough. The floor sentinel fails a rise nobody
+  banks, so an unratcheted gain is a red pull request rather than a gift to
+  the next change. If the tooling refuses the command, that is a permission to
+  get granted, said once and briefly; it is not a question about the objective.
+- **Bank AFTER the goldens carry CI's rows, never before.** `--set` records
+  whatever score the committed goldens produce, so running it while they still
+  hold the previous sitting freezes a number this box projected rather than the
+  one CI measured. The order is CI's rows, then `--set`, then the page spans.
 - **Improvement saturates, at a rate each term chooses.** A term contributes
   `r / (r + satiation)` where `r` is baseline over current, so successive
   doublings pay less and less, and how fast they stop paying is a property of

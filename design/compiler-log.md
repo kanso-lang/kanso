@@ -20,756 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-08 (fifth) — the entry path compiles and nothing counted it
-
-Searched the log, the archive and design/ before filing: `compile_parsed_entry`
-appears in the 2026-09-08 entries for kanso#1324, #1325 and #1326 and in
-kanso#1329's revert, and every one of them measures it on a corpus that lived in
-a session's temporary directory. None of them asks why there is no vein.
-
-**The two compiles.** `kanso check <directory>` is a module and goes through
-`compile_module_inner`. `kanso check <file>` with a top-level expression is an
-entry and goes through `compile_parsed_entry`, which merges the imports itself
-and runs its own whole-program check at src/lib.rs:160. Proved by probe, not by
-reading: an `eprintln!` at the entry site fires once for
-`bench/entry_corpus/main.kso` and not at all for `kanso check
-bench/compile_corpus`.
-
-Every compile gate in the tree checks a directory. So the call at line 160 was
-watched by nothing, and `KANSO_PHASES` cannot separate the two — `load_dependencies`
-compiles each import through the module path, so a phase report over an entry is
-the union of both.
-
-**What that cost.** kanso#1326 projected a RISE of 629 from this container and CI
-read a FALL of 367. kanso#1324 and #1325 landed on numbers no CI job could
-reproduce. Two further findings — the synthetic-twin skip below and kanso#1329's
-reverted reorder — were measured and could not be landed against anything.
-
-**The vein.** `bench/entry_corpus/main.kso` names ten imports and uses each,
-following bench/compile_corpus's rule that a workload is named rather than
-inherited; it imports ten where the compile corpus imports four, because the
-entry path's own work is the merge and the check over everything the imports
-bring and a corpus with one small import measures mostly the module path
-underneath it. `scripts/gates/entry_instructions.sh` counts it the way
-`compile_instructions.sh` counts its own — same box, same emptied environment,
-same pinned tunables, same `kanso::main` anchor — and every reason for those is
-left in the original rather than restated.
-
-`bench/entry_instructions_golden.txt` opened holding zero, because the row is
-CI's and this container reads high against CI's rustc. Round one was red on
-purpose and CI answered **163,886,731**, on binary sha 3c53d0acdbcb — the same
-sha that counted `compile_instructions=48,757,859` in the same job, so both
-rows answer for one build. The container had projected 165,183,406 from the
-same recipe minus the host check: 1,296,675 high, or +0.79%, which is the
-offset already recorded between rustc 1.94.1 here and CI's 1.98.1. The
-projection was right about the size and could not have been recorded as a row.
-
-**And the trend gate did not walk the new golden.** Found by asking which
-files in bench/ `scripts/trend_gate/trend_gate.kso` names, which its own
-comments say is the only method that has ever found one of these. The list has
-been short five times: three cost goldens nobody entered, then readbench —
-whose golden the gate could not see while two of its rows were welfare terms —
-then livebench, then the consolidated run program. This would have been the
-sixth, in the very PR that exists because a compile the gates could not see
-went unpriced.
-
-Two files in bench/ are unwalked and one of them belongs that way:
-`bench/compile_libraries_golden.txt` holds five sonames rather than counters
-and its own gate diffs it byte for byte. So the excuse list is one line long,
-and `tests/every_counter_golden_is_walked_by_the_trend_gate.rs` reads bench/
-off disk, asks the gate which files it names, and fails on anything neither
-walked nor excused. Its three assertions were each watched red: dropping the
-entry golden from the gate names it in the failure; an excuse for a file that
-is not there fires the second; an excuse for a golden the gate already walks
-fires the third. Finding this by hand a sixth time was not a plan.
-
-**The ratchet row separates the two veins, measured.** The mutation asks the
-entry's whole-program check twice. In the box:
-
-    entry_instructions   165,183,406 -> 190,382,616   +25,199,210  (+15.25%)
-    compile_instructions  49,162,592 ->  49,162,592   byte-identical
-
-A vein whose defects another vein already catches would not be worth its
-callgrind run. This one is worth it: the compile row cannot move for a defect on
-this path however much work it does.
-
-**MEASURED, NOT SHIPPED — the synthetic-twin skip.** `enroll_bare` gives every
-exported declaration of an imported module a twin under its short name, cloning
-the whole declaration, body and all. On the entry corpus that is 145 of 882
-declarations and 155 of 1,035 statements, and the whole-program check walks both
-copies. It is visible as a defect only under kanso#1329's reshape, where six
-error fixtures reported one diagnostic twice at the same line AND the same
-column — `field_missing/play` and its twin `play`, both at span 4 of the same
-file, each answering `check_field_exists` once. The module path has not had this
-since kanso#1328: `canonicalize_bare_aliases` takes the twins out before the
-check there, which is why `compile_instructions` reads synthetic=0 and this whole
-thread is invisible to it.
-
-Skipping synthetic declarations in the three checks that are pure body walks —
-`check_build_blocks`, `check_none_in_collections`, `check_field_exists` — was
-built and measured in the box:
-
-    entry_instructions   165,183,406 -> 164,922,557   -260,849  (-0.1579%)
-    compile_instructions  49,162,592 ->  49,170,337     +7,745  (+0.0158%)
-
-The entry row falls 34 times what the compile row rises, and the compile row's
-rise is the branch itself plus layout — the module path has no twins to skip.
-**Welfare reads the compile row and not the entry row**, so by the objective as
-it stands today this change is a small loss. That is a question about the
-objective's inputs rather than about the change, and it is not settled here: the
-skip is left out of this PR, and what lands is the vein it would be measured
-against. Recorded as OPEN.
-
-The remaining 0.85% of kanso#1329's reverted reorder is inference, which is 22.6%
-of the entry compile against `check_merged`'s 38.3%. `infer` indexes declarations
-positionally — `vec![0; program.fns.len()]`, groups by index — so it does not take
-a `continue`, and skipping the twins there is a different change from this one.
-
-- **DONE** — the entry vein: corpus, gate, golden with CI's row, CI step and
-  summary row, ratchet row, sweep membership, the trend gate's own list and
-  the spec that keeps it honest. The derivations in
-  `tests/the_compile_sweep_names_every_compile_gate.rs` walked past
-  `bench/entry_*` and now do not, and `the_compile_row_holds_one_value` covers
-  both instruction goldens rather than one, because the one-row-one-value ruling
-  is about the shape of a row and not about a filename.
-- **OPEN** — the synthetic-twin skip, measured above, held on the objective
-  question: should welfare's compile term read the entry path as well as the
-  module path? Two compiles, one term.
-- **OPEN** — the twins inside `infer`, worth most of the remaining 0.85%.
-
-## 2026-09-08 — the corpus change banked a six-point fall, and the precedent says it should not have
-
-Clay, reading the published chart on kanso-lang.dev/numbers: why didn't the new
-corpus ruling go retroactive, so there is no drop? The answer is that kanso#1321
-left the three compile baselines where they were, and the score fell 6.29 points
-for a change that touched no compiler code.
-
-    2026-09-08 01:53   welfare 66.0241 -> 59.7360      #1321
-    compile_instructions   19,316,962 -> 52,603,220
-    compile_allocs             11,613 ->     31,596
-    compile_peak_bytes        375,222 ->    789,740
-
-**The reason #1321 gives.** "The baselines those three are divided by were taken
-on lib/json and are left where they are: the index has an arbitrary origin and
-only its direction and the size of its moves mean anything, so re-deriving a
-historical compiler's cost on a corpus that did not exist then would buy
-nothing. This is a change of origin, not a regression."
-
-**The origin is arbitrary; the move is not.** That sentence is the argument
-against leaving it. A reader of the chart sees a six-point fall, and a fall is
-what the index says a change made worse. CLAUDE.md is explicit: "Moving the
-floor to accommodate a change while leaving the weights alone is declaring the
-objective wrong without saying so."
-
-**Re-deriving history was never what the precedent asks for.** It asks for one
-measured factor per row, taken on the same head under both definitions -- which
-#1321 already measured and recorded. Scaling each baseline by its own factor
-restores each ratio exactly:
-
-    row                     factor   ratio left as-is   ratio re-based   before
-    compile_instructions    2.7232         1.0753           2.9282       2.9282
-    compile_allocs          2.7207         1.9658           5.3483       5.3483
-    compile_peak_bytes      2.1047         1.0373           2.1833       2.1833
-
-    baselines: 56,563,967 -> 154,032,855 · 62,110 -> 168,985 · 819,217 -> 1,724,228
-
-Every ratio returns to the digit it held before the corpus moved, so the score
-does not move and the chart is flat across the change.
-
-**Three precedents, all in this repository.** The archive: "RE-BASELINED THE
-SAME WAY #729 WAS: `basket_allocs` scaled by exactly the factor", and
-"RE-BASELINED SO IT BANKS NOTHING, the same method as #729 and #741." The floor
-file's own history at 73.53: "the compile row counts the compiler's own frame;
-the baseline is re-based by the same 465,864." And at 84.51, scanbench entering
-the corpus: "The score does not move on entry, by design."
-
-**What is not in dispute.** #1321 is right that a term measured on a library
-moves whenever that library changes its imports, and the fixed corpus is the
-ruling of 2026-09-08. Nothing here argues against the corpus. The question is
-only whether the change of measurement banks a fall, and the answer this
-project has given three times is that it does not.
-
-**OPEN, and cloud's**, since the baselines and the floor are code. Two readings
-are available and both were taken on the changeover head, so no re-measurement
-is needed. If the fall is kept deliberately, that is a claim about the weights,
-which CLAUDE.md says is settled before the floor moves rather than after.
-
-## 2026-09-08 (second) — the compile term read one compile out of two
-
-Searched the log, the archive and design/ before filing: the re-basing precedent
-is the 2026-09-05 entry for kanso#1242 and the archive's #729 and #741; the entry
-vein opened in kanso#1330, whose own entry above closes with this as an OPEN
-question — "should welfare's compile term read the entry path as well as the
-module path? Two compiles, one term." This answers it.
-
-**The term summed one path.** `kanso check <directory>` takes
-`compile_module_inner`; `kanso check <file>` with a top-level expression takes
-`compile_parsed_entry`, which merges the imports itself and runs its own
-whole-program check. Every `kanso run` takes the second, and nothing counted it
-until kanso#1330. The compile term now adds the two rows:
-
-    compile_instructions   48,757,859 + 163,886,731 = 212,644,590
-
-**The baseline moves with it, so the score does not.** The entry vein has no
-reading at this objective's epoch, because its corpus did not exist then, so its
-baseline is imputed at the ratio the module row holds:
-
-    r = 154,032,855 / 48,757,859 = 3.1591390221
-    entry baseline    163,886,731 * r = 517,740,967
-    summed baseline   154,032,855 + 517,740,967 = 671,773,822
-    summed ratio      671,773,822 / 212,644,590 = 3.1591390216
-
-The preservation is algebraic — `(cb + ec*r) / (cc + ec) = r` for any `ec` — and
-it was measured rather than trusted: welfare reads 66.29 against a floor of 66.29
-before and after.
-
-**What the shape of the change turned out to be.** The plan recorded for this
-work said it was one line in `bench/objective_sources.txt`, and that was wrong.
-welfare does not build its counters from that file; it reads the goldens itself,
-in `fn measured` and a reader chain, and objective_sources is the LINK that the
-trend gate's `shifted?` and `tests/the_objective_reads_what_the_gate_watches.rs`
-replay. Both halves are needed and they are different files. The spec was watched
-red before it passed: with the second key removed it reports `compile_instructions
-reads 212644590 from welfare and 48757859 from compile_instructions`.
-
-Two smaller things the edit forced. The compile veins now reach `measured` as one
-list rather than as four positional arguments, because a fourth `compile[4]!` at
-the call site overflows the 80-column rule by three characters; the next golden
-to join is now one list entry and one binding. And the binding is `ent`, because
-`entry` is bare-enrolled from an import and the resolver refuses to shadow it.
-
-**golden_prose needed the same golden and would not have said so.** Its
-`golden_for` answers for `decode`, `encode` and `compile` and returns `[]` for
-any other family, so a page span written `data-golden="entry.entry_instructions"`
-resolves against an empty golden — a span nothing watches, which is the exact
-failure that gate was widened to fix in kanso#1047. The entry row joins the
-`compile` family instead, whose own comment already licenses it: the key names do
-not collide.
-
-**Still to ship: the twin skip.** kanso#1330 measured it and deliberately left it
-out, because the objective could see the module row's +7,745 and not the entry
-row's −260,849. Under the sum it is a fall of 253,104, −0.1190%. It is a separate
-change because it moves two goldens whose values are CI's, and this one moves no
-counter at all.
-
-## 2026-09-08 (third) — the twin skip ships, now that the objective can see it
-
-Searched the log, the archive and design/ before filing: this thread is the OPEN
-item at the end of the kanso#1330 entry above ("the synthetic-twin skip, measured
-above, held on the objective question"), and the entry above that, for kanso#1331,
-answered the question it was held on. The archive's prior art is `enroll_bare`
-and `canonicalize_bare_aliases` in the kanso#1328 entry. Nothing else is new.
-
-`enroll_bare` clones every exported declaration of an imported module under its
-short name — body and all, `synthetic = true`. On `bench/entry_corpus` that is
-145 of 882 declarations and 155 of 1,035 statements. Three checks in
-`check_merged` are pure body walks and were the only three of sixteen that read
-those clones: `check_build_blocks`, `check_none_in_collections` and
-`check_field_exists`. Thirteen others already skip them. These three now do too.
-
-CI's rows, which are the ones this vein may hold:
-
-    entry_instructions   163,886,731 -> 163,612,976   -273,755  (-0.1671%)
-    compile_instructions  48,757,859 ->  48,761,165     +3,306  (+0.0068%)
-
-Under kanso#1331's summed compile term that is
-
-    212,644,590 -> 212,374,141   -270,449  (-0.1272%)
-
-and welfare moves 66.2874470488728 -> 66.28984813328917, banked in this PR.
-
-**compile_instructions RISES to 48,761,165 and that is the change's own doing.**
-The module path has had no twins to skip since kanso#1328 put
-`canonicalize_bare_aliases` in front of the check there, so the walk does the
-same work and now pays for a test that can never say yes; src/check.rs is the
-compiler, so its bytes and the layout under them move with the edit as well.
-The row is traded against the entry row's fall, which is 83 times it.
-
-**The container projected the deltas and got the digits wrong in both
-directions**, which is the kanso#1326 lesson again. It read 165,183,406 ->
-164,922,557 for the entry row (-260,849) against CI's -273,755, and +7,745 for
-the module row against CI's +3,306. Sign and order of magnitude carried across
-rustc 1.94.1 here and 1.98.1 there; nothing finer did. Both rows are copied out
-of the job log.
-
-The compile row rises because the module path has no twins left to skip — since
-kanso#1328 `canonicalize_bare_aliases` deletes them before the check there — so
-what that row records is the branch itself plus layout. Under kanso#1331's summed
-term the entry row's fall is 34 times it, and the trade lands the right way up.
-
-A twin's body IS the original's body under a second name, and both copies are in
-the same merged program, so a twin can answer nothing the original answers
-differently. That is why no diagnostic moves. The doubling was visible once, under
-kanso#1329's reverted reorder: six error fixtures reported one diagnostic twice at
-the same line and the same column, `field_missing/play` and its twin `play`. On
-current main the dependency's own compile refuses first, so the second copy never
-reaches a reader — which is why this change has counters and no fixture.
-
-`infer` is deliberately not given the skip. It indexes declarations positionally
-(`vec![0; program.fns.len()]`, groups by index), so a `continue` misaligns it.
-That is the rest of kanso#1329's reverted reorder and stays open.
-
-## 2026-09-08 (fourth) — a compile left its IR behind, and the guard for it read the litter
-
-Searched the log, the archive and design/ before filing: the archive names
-`cached_program_binary` once, in the entry that introduced the per-pid IR path
-after concurrent builds segfaulted inside clang. Nothing records the leak, and
-nothing else in the tree measures what a `kanso run` leaves in the temp
-directory.
-
-`kanso run` caches its binary under a hash of the IR and `runtime.c`. On a miss
-it writes the IR to `kanso_run_<key>_<pid>.ll`, hands that to clang, and renames
-the staging binary into place. The `.ll` was never removed. One cold run in an
-isolated TMPDIR leaves four files and exactly one of them is a leak:
-
-    kanso_run_<key>                     185 KB   the binary cache, intentional
-    kanso_run_<key>_<pid>.ll             42 KB   THE LEAK, one per cache MISS
-    kanso_runtime_dev_<hash>.c          415 KB   content-keyed, shared, bounded
-    kanso_runtime_dev_<hash>.o          258 KB   likewise
-
-At 42 KB a miss this reached about 112,000 files in one long-lived container,
-which is the whole of a session's disk allowance, and it was the true cause of
-four "spec failures" chased as real during kanso#1330. The staging path needs no
-removal because `rename` consumes it.
-
-**The obvious fix blinds a real guard, which is why this took two attempts.**
-`tests/concurrent_build.rs::two_builds_of_one_program_do_not_share_a_file`
-proved that two concurrent builds are handed different paths BY FINDING THE
-LEFTOVER `.ll` AND READING A PID OUT OF ITS NAME. Delete the file and the guard
-has nothing to look at; the first draft of this change shipped the removal, the
-guard went green on an empty set, and the whole thing was backed out. A guard
-resting on a bug fails the moment the bug is fixed.
-
-So the guard now watches during the build rather than counting what is left. The
-IR is written before clang starts and removed after it returns, and a cold run of
-that fixture is ~133 ms with ~100 ms of that window, against a one-millisecond
-poll. It cannot pass vacuously: seeing no IR file at all is a failure with its
-own sentence, because "the race never happened" and "the race happened and was
-safe" must not look alike.
-
-**Why the sibling is not enough on its own**, measured rather than assumed. With
-the pid stripped back out of the path, this guard caught the defect in 10
-sittings of 10 and again in 5 of 5 after the rebase, where
-`many_builds_of_one_program_all_answer` caught it in 9 of 10 — it passed once
-with the bug in place, because whether two processes actually overlap on the
-file is the race, and the race is not owed to anyone. One of the two is a
-corruption that may or may not happen; this one is the decision that allows it.
-
-No counter moves. `kanso run`'s temp handling is not on any measured path: the
-compile veins run `kanso check`, which never reaches `cached_program_binary`.
-
-## 2026-09-08 (fifth) — the entry reorder re-derived, and the alias pass refuses a valid program
-
-Searched the log, the archive and design/ before filing: the 2026-09-08 entry
-"the entry path's reorder costs a diagnostic, and is reverted" is this same
-change, and the entry after it records the vein that now measures it. The
-archive's `canonicalize_bare_aliases` entries are about what the pass costs, not
-about when it runs. What neither has is the failure set as it stands today.
-
-**DECLINED, a second time, on wider grounds than the first.** Hoisting
-`canonicalize_types` and `canonicalize_bare_aliases` out of
-`compile_parsed_entry`'s success arm is worth, on 9ec9f7e9 in this box:
-
-    entry_instructions   164,922,557 -> 163,362,291   -1,560,266  (-0.9461%)
-    compile_instructions  49,170,337 ->  49,170,337            0
-
-against kanso#1329's -1,674,396 (-1.0136%) for the same edit a few merges
-earlier. The module row is byte-identical here, which is what a
-`compile_parsed_entry`-only edit should read; CI has not been asked, so that is
-a projection.
-
-**The failure set has moved since the revert.** `scripts/module_differential`
-reads 0 wrong on 9ec9f7e9 and 2 wrong with the reorder, and only one of the two
-is the one kanso#1329 recorded:
-
-    a call from the entry at the wrong arity
-      error[arity]: no 2-argument arm of `m/one` (arms take 1)
-      where the program says `one`
-
-    a type and a function sharing a name
-      expected it to compile; got
-      error[opacity]: `m/thing` is foreign -- only `m` builds a `thing`
-
-The sibling-arity case kanso#1329 also lost now passes. In its place is a
-program that compiled before the reorder and does not compile after it, which is
-a worse thing than a diagnostic quoting the wrong spelling. `m/b.kso` declares
-`pub fn thing _`, the entry writes `print "{thing 0}"`, and the answer should be
-`m/thing 0`.
-
-**Both objections are the alias pass, not the type pass.** Moving
-`canonicalize_bare_aliases` alone and leaving `canonicalize_types` in the success
-arm leaves the differential at the same 2 wrong, and reads slightly BETTER than
-moving both:
-
-    entry_instructions   164,922,557 -> 163,353,361   -1,569,196  (-0.9515%)
-
-8,930 better than the pair, because the alias pass deletes the twins before
-`canonicalize_types` walks them rather than after. `thing` in `print "{thing 0}"` is a CALL, so the alias pass rewrites it to
-`m/thing` like any other bare name, and the opacity check then reads a qualified
-name as a foreign type construction. One pass, one mechanism, two checks that
-read a name after something else has rewritten it.
-
-**What would make it shippable**, stated more narrowly than kanso#1329 could:
-`check_merged`'s opacity and arity checks have to see the spelling the program
-used. The obvious inverse map from `aliases` is unsound -- it is keyed by name,
-so it would also rewrite the diagnostic for a call the user really did write
-qualified. The per-site record was then built as a probe and measured, and it is
-affordable:
-
-    alias-only reorder, no record   163,353,361
-    with the per-site record        163,380,706   +27,345
-
-1.7% of the prize, leaving -1,541,851 (-0.9349%) against 164,922,557. And the
-27,345 is not the recording. THE PASS REWRITES NOTHING ON ANY MEASURED CORPUS: a
-counter at the rewrite site reads 0 sites on bench/entry_corpus, 0 on
-bench/compile_corpus and 0 on lib/json, against 1 on the `m/thing` fixture that
-draws the opacity refusal. The vector never allocates, so what the 27,345 buys is
-an extra parameter carried through a recursive walk over every expression in the
-program, and a shape that hangs the recorder off a walker rather than threading
-it should cost less. Two things a real implementation must handle that the probe
-did not: the reader half in check.rs, and the second caller of the same walker at
-src/lib.rs:2616, which walks with the door map.
-
-**And the two readers want different things, which reading `foreign_constructions`
-settles.** Its own comment states the invariant the reorder breaks, at
-check.rs:1847: "A qualified name can never be a local binding, so unlike the
-arity walk beside it this needs no shadowing set: the slash IS the foreignness."
-That holds only while every slash in the merged program was written by a person.
-After the alias pass has run a slash also means the pass put one there, and the
-check fires on `m/thing 0` -- a call of an imported function -- as though it were
-a construction of the imported type of the same name. So opacity does not want a
-spelling to quote. It wants to SKIP a head the pass rewrote, because that head
-was never a construction. Arity is the one that wants the spelling. One record,
-two uses, and a fix that handed both readers the old name would leave the opacity
-refusal exactly where it is.
-
-This is not a gavel: the
-substance was ruled in kanso#1120, a diagnostic names what the import writes, and
-which mechanism satisfies it is the implementer's.
-
-**How this came to be built twice, since the answer is a process one.** The task
-list carried it as BUILT AND PROVEN with a full `cargo test` behind it. The
-kanso#1329 entry names that exact evidence as worthless here --
-`scripts/module_differential` is a kanso program run by the diagnostics-
-differential CI job and `cargo test` never invokes it -- so the suite was green
-both times and said nothing both times. The filing search caught it before the
-branch was pushed, which is what the search is for.
-
-- **DECLINED** — the entry path's alias-pass reorder, in any shape that leaves a
-  check reading a rewritten name. Re-measured, re-refused, and this time the
-  opacity refusal is on the record beside the arity one.
-- **OPEN** — the pre-canonical spelling for `check_merged`'s two name-reading
-  checks. Worth -1,569,196 on the entry row in the alias-only shape, and
-  -1,541,851 with the per-site record that makes it sound. What is unbuilt is
-  the reader half: the two checks in check.rs that have to consult the record
-  instead of the node, and a fixture for each.
-- **OPEN, unchanged** — the twins inside `infer`, which is the other half of the
-  reorder's value and is blocked on a different thing: `infer` indexes
-  declarations positionally, and a group keyed by (name, arity) is a dispatch
-  group, so the twin is what lets a bare name resolve.
-
-## 2026-09-08 — the welfare column spans four measurement epochs and the rewrite scores them on one ruler
-
-Clay, reading kanso-lang.dev/numbers after kanso#1331 landed: "I still have
-no clear accounting of why the welfare went down and the website still does
-not look great." The account, read off the rewritten column on
-origin/perf-history:
-
-    2026-09-06 11:26   91.57 -> 58.96   -32.62   #1284  one consolidated run program
-    2026-09-08 01:53   70.03 -> 67.75    -2.27   #1321  the compile corpus is named
-    2026-09-08 10:17   67.91 -> 66.29    -1.63   #1331  the compile term sums both compiles
-
-None of the three is the compiler getting worse. Each is a change in what is
-measured, and the column still steps at each one because
-`scripts/welfare_rescore` scores every row against the single baseline the
-floor file holds today.
-
-**The mechanism.** The rewrite exists so the column is "rewritten under one
-formula whenever the formula moves, which is what makes two points on it
-comparable" (docs/numbers.html). One formula does make rows comparable when
-the WEIGHTS move. It does not when the MEASUREMENT moves, because the counters
-change magnitude while the baseline does not. Today's compile baseline is
-671,773,822, and the rows it divides come from four epochs:
-
-    epoch                           compile_instructions   ratio    term
-    lib/json, one compile                 19,316,962       34.78   0.9858
-    compile_corpus, one compile           52,603,220       12.77   0.9623
-    compile_corpus, module row            48,757,859       13.78   0.9650
-    compile_corpus, both summed          212,644,590        3.16   0.8634
-
-Adjacent epochs differ by a factor that is the workload and never the
-compiler, and the term falls across each boundary by that factor. The -2.27
-and the -1.63 are those two falls, weighted. #1331 re-based the floor so the
-row it wrote is right; it could not re-base the rows before it, because the
-rewrite has no notion of an epoch to re-base them to.
-
-**The run side is the same disease and the larger cliff.** #1284 re-based the
-run counters to parity at the changeover, so every row before it scores its
-run terms against a baseline it never carried. Clay ruled the repair on
-2026-09-07: share-weighted phases, renormalised over the phases a row carries,
-based at row 70 (2026-08-10), and the ruling closes with "the rewrite is
-cloud's." As of this entry, `scripts/` holds no share-weighted reconstruction.
-The -32.62 on the chart is that ruling unbuilt.
-
-**What makes the column flat across a change of measurement.** The rewrite
-needs an epoch table: for each change of measurement, the head it happened at
-and the per-row factor measured there. The corpus move's factors are already
-recorded in the floor file (2.7232, 2.7207, 2.1047) and the summing's is
-computed in kanso#1331. A row is then scored against the baseline scaled to its
-own epoch, which is one re-basing per epoch, applied in the rewrite rather than
-only in the floor file. It is what the three floor-file precedents did by hand
-for the current row, done for every row.
-
-**OPEN, cloud's, two items.** Build the 2026-09-07 ruling for the run side.
-Apply the same per-epoch scaling to the compile side's two changes of
-measurement. Until both land, the chart shows the history of what was measured
-rather than the history of the compiler, and no reader can tell which.
-
-## 2026-09-08 (sixth) — the pre-canonical spelling, and the entry reorder ships
-
-Searched the log, the archive and design/ before filing: the entry above
-("the entry reorder re-derived") is this thread's own, and leaves exactly this
-as OPEN with the recorder measured and the reader half unbuilt. kanso#1329
-records the first revert, kanso#1328 the module path's reorder, kanso#1120 the
-ruling both readers have to satisfy. This builds what that OPEN item names.
-
-**The reorder ships, with the two readers that make it honest.**
-`canonicalize_bare_aliases` runs in front of `check_merged` on the entry path
-now, so the whole-program check no longer walks the synthetic twins the pass is
-about to delete. `canonicalize_types` stays in the success arm, which is the
-cheaper of the two shapes by 8,930 instructions.
-
-The pass returns a `Rewrites` — line and column to the bare name it replaced —
-and `check_merged_after_aliases` hands it to the two checks that read a call's
-name. Every other caller runs the pass after the check and passes an empty
-record, where both readers behave as they always did.
-
-**The two readers want different things, and that is the whole finding.**
-
-    check.rs arity (two sites)   quotes the recorded bare name
-    foreign_constructions        SKIPS a head the pass rewrote
-
-Arity is a wording question and kanso#1120 settles it: the diagnostic names what
-the import writes. Opacity is not. Its own comment states the invariant, at
-check.rs:1847 — "A qualified name can never be a local binding, so unlike the
-arity walk beside it this needs no shadowing set: the slash IS the foreignness."
-That holds only while every slash was written by a person. After the pass, a
-slash also means the pass put one there, and the check fires on a call of an
-imported function as though it were a construction of the imported type of the
-same name. No wording of that message is right; the site is not a construction
-at all.
-
-**On scripts/module_differential: 0 wrong, from the 2 wrong the reorder cost
-before.** Both objections are gone, and both readers were watched red on their
-own:
-
-    opacity skip disabled   1 wrong -- `m/thing` is foreign, on a program that compiles
-    arity spelling disabled 1 wrong -- quotes `m/one` where the source says `one`
-
-Each mutation loses exactly its own fixture and no other, so neither reader is
-dead code and neither is doing the other's work.
-
-**What it costs, in this box.**
-
-    entry_instructions   164,922,557 -> 163,499,802   -1,422,755  (-0.8627%)
-    compile_instructions  49,170,337 ->  49,207,870      +37,533  (+0.0763%)
-    summed                214,092,894 -> 212,707,672  -1,385,222  (-0.6470%)
-
-The module row rises for the same reason kanso#1332's did: the path pays for
-something it cannot use. Its record is always empty, and what it pays is a
-parameter carried through `arity_walk_expr` and `foreign_constructions`'s walk,
-both recursive over every expression. Neither lookup runs on a clean module
-compile -- the arity one sits inside the refusal branch and the opacity one
-behind a name being in the foreign set -- so the cost is the threading, not the
-reading. Under kanso#1331's summed compile term the trade is 38 to 1 in favour,
-and the sum is what the objective reads.
-
-Against the reorder measured WITHOUT the readers (163,353,361), the readers cost
-the entry row 146,320. The probe in the entry above put the recorder alone at
-27,345; the rest is the two further walkers now carrying the same parameter.
-
-These are container numbers and none of them is a row. CI counts both compile
-veins, and this branch expects a deliberate red first round for exactly that.
-**CI's rows, and what the container got wrong about them.**
-
-    entry_instructions   163,612,976 -> 162,170,772   -1,442,204  (-0.8814%)
-    compile_instructions  48,761,165 ->  48,791,172      +30,007  (+0.0615%)
-    summed               212,374,141 -> 210,961,944   -1,412,197  (-0.6650%)
-
-Welfare 66.2898 -> 66.30, ratcheted in the same change.
-
-The container projected -1,422,755 and +37,533. Sign and order right on both,
-digits wrong on both, and the two errors ran the same way: it UNDERSTATED the
-entry fall by 19,449 and OVERSTATED the module rise by 7,526. Its standing
-offset is +0.8% on the LEVEL of each row, so the naive expectation was that it
-would overstate a fall; a level offset between toolchains does not carry to a
-delta, and this pair is the demonstration. Under the summed term the trade is
-48 to 1 in favour, against the 38 to 1 the container projected.
-
-
-**The module path had both defects live, and nothing in the tree asked it.**
-kanso#1328 moved the same pass in front of the same check on the module path
-three days before this, and handed the check nothing. So on main today:
-
-    kanso check <a module>   opacity REFUSES a program that compiles
-    kanso check <a module>   arity quotes `m/one` where the source says `one`
-
-Reduced, that is a module whose sibling declares `pub type thing` beside
-`pub fn thing _`, importing it and calling `thing 0`. The entry-path form of
-exactly that program is c7 in scripts/module_differential, and it was watched
-through both reverts of the entry reorder; the module form had no case at all,
-so the sweep read 0 wrong on a defect it could not see. The fix is the entry
-path's, and both programs go into the sweep as c26 and c27 -- watched red on the
-pre-fix compiler for the two messages above, verbatim, before they went green.
-
-Threading the module path costs almost nothing because it was already paying:
-`check_merged` built an empty `Rewrites` on every call, and the change replaces
-that construction with the real one. Entry +121, compile +63 against the
-readings in the table above, both already folded in.
-
-**And the third path is now watched before it moves.** `kanso check` on a single
-library file takes `compile_library`, which still checks before it canonicalizes
--- so both readers are right there today. c28 and c29 say so, and they were
-watched red by making exactly the reorder the OPEN item below proposes for that
-path: both go wrong together, with the same two messages. `compile_one` carries
-a byte-identical block, so the mutation is one edit applied twice and the two
-paths answer as one.
-
-**What this says about where a defect gets found.** The reorder was reverted
-twice on the entry path for objections the sweep caught within a round, because
-the entry path had cases. The same reorder shipped on the module path and its
-two objections sat for three days. The corpus decides what a sweep can see, and
-a path with no case in it reads clean whatever it does.
-
-- **DONE** — the OPEN item the entry above filed. The reorder, the record, both
-  readers, both mutations, and the differential back to 0 wrong.
-- **OPEN, and now priced** — src/lib.rs:348 and :425 still check before
-  canonicalizing. compile_one is reached only from `compile_repl`
-  (src/repl.rs:290) and compile_library only from `kanso check <a library
-  file>`. Both merge `dep_program`, so both see the twins, and both would break
-  the way the entry path did -- they were never blocked on a measurement, they
-  were blocked on this.
-
-  Measured on this box, on `kanso check bench/compile_corpus/compile_corpus.kso`
-  with the reorder and the record applied to both sites:
-
-      library_instructions   50,244,948 -> 48,681,802   -1,563,146  (-3.111%)
-
-  Larger in proportion than the entry path's -0.8627%, on a path no vein
-  watches. The differential stays 29 cases 0 wrong through it, which is what
-  says the record makes the reorder correct there and not merely cheaper; c28
-  and c29 go red on the same edit with the record left out. The baseline
-  reproduced to the instruction on a second run. What is owed before it ships
-  is the vein, since a fall nothing counts is a fall nothing keeps.
-- **OPEN, unchanged** — the twins inside `infer`, the other half of the
-  reorder's value. `infer` indexes declarations positionally and a group keyed
-  by (name, arity) is a dispatch group, so the twin is what lets a bare name
-  resolve.
-
----
-
-## 2026-09-08 (seventh) — the third compile path gets a row
-
-`kanso check` routes a single file by its content and the three routes are
-three different compiles. A directory is a module and takes
-`compile_module_inner`, which is what `bench/compile_corpus` and
-`compile_instructions` watch. A file with bare statements is an entry and takes
-`compile_parsed_entry`, which `bench/entry_corpus` and `entry_instructions`
-have watched since kanso#1330. A file of definitions alone is a library and
-takes `compile_library` — and nothing in the tree counted it.
-
-That path is not a corner. `kanso test` takes it on every run, and so does
-`kanso check` on any single file that is not an entry, which is most files
-here.
-
-`bench/library_corpus/library_corpus.kso` names ten imports and uses each, the
-shape `bench/entry_corpus` has and for the same reason: `compile_library`
-merges the dependency program and runs its own whole-program check over
-everything the imports bring, so a corpus with one small import would measure
-mostly the work underneath it. The directory is named to the same length as
-`compile_corpus`, because the count tracks the length of the path the compiler
-is handed at about 160 instructions a character.
-
-The container projected 165,589,540 and CI wrote the row: **164,253,088**, on
-binary sha 9bc8f829af68 in the job that also counted
-compile_instructions=48,791,172 and entry_instructions=162,170,772, so all
-three answer for one build. The projection is 1,336,452 high, +0.8136%, which
-lands on the offset the other two rows already carry between this box's rustc
-1.94.1 and CI's 1.98.1. Only CI may write the row, and the reason is that
-offset.
-
-CI's summary named exactly one failing vein and eighteen green, which is what
-round one was for.
-
-**A CORRECTION, made the round after the claim.** This entry and round two's
-commit message both said the ratchet job proved `library_ir` on the runner.
-Read the job log: it did not, and could not have. The ratchet's second pass is
-`ratchet -- touched origin/main`, which selects only rows patching a file the
-branch changed, and it reported
-
-    ratchet: 1 rows patch a file this branch changed
-      the ratchet (every gate has a mutation that turns it red)
-
--- one row, the ratchet's own. This branch touches ci.yml, CLAUDE.md, three
-gate scripts, the ratchet, the trend gate, a spec, the log and two new bench
-files, and no `src/`; `the_library_program_is_checked_twice.sh` patches
-`src/lib.rs`, so the touched guard correctly passed it over. What CI did run is
-the first pass, `every mutation still matches the source it patches`, which
-does read the new mutation's anchor against `src/lib.rs` and found it. So the
-anchor holds on the runner and the row's provability there is untested; it was
-proved in the container, 165,589,540 -> 190,698,277. The next change to
-`src/lib.rs` -- the reorder -- is the branch that will select this row and
-prove it on CI.
-
-**THE SPEC PREDICTED ITS OWN FAILURE MODE AND THIS IS THE INSTANCE.**
-`tests/the_compile_sweep_names_every_compile_gate.rs` derives the sweep's list
-from goldens matching `bench/compile_*` and `bench/entry_*`, and its own doc
-comment says: *a prefix list is exactly the shape that goes stale when a vein
-is added under a new name.* `bench/library_instructions_golden.txt` matches
-neither prefix, so both derivations in that file walked straight past it and
-the sweep would have looked like coverage while missing the newest vein. Both
-are widened here, in the commit that adds the vein.
-
-The trend gate's own coverage spec did NOT have that hole:
-`tests/every_counter_golden_is_walked_by_the_trend_gate.rs` reads `bench/` off
-disk and keys on `contains("golden")`, so it went red the moment the file
-existed and named what was missing. Two coverage specs over the same tree, one
-keyed on a prefix and one on a substring, and only the substring one survived a
-new name.
-
-A third coverage spec found the other half of the same gap. The ratchet keeps a
-`host_bound` list of the gates that count under callgrind, so that a runner the
-golden does not name is reported as unproven rather than credited as a
-regression, and `tests/a_host_bound_gate_is_reported_not_credited.rs` derives
-that list from the gates that actually run the tool. It went red naming `sh
-scripts/gates/library_instructions.sh` as soon as the gate existed. Three specs
-over one tree: the substring-keyed pair spoke, the prefix-keyed one did not.
-
-The mutation is `the_library_program_is_checked_twice.sh`, the library twin of
-the entry one, and its anchor takes two steps rather than one:
-`let merged_diags = check::check_merged(&program, false);` appears twice in
-`src/lib.rs` because `compile_one` carries a byte-identical block, so the
-function is found by its signature and the duplicate goes in at the first such
-call after it. What it proves is the argument for the row: the same edit leaves
-`compile_instructions` and `entry_instructions` green. It rides in the ratchet
-as `library_ir`, beside `compile_ir` and `entry_ir`.
-
-Proved rather than assumed, in the order the rule asks for: it applies (two
-calls become three, and the third is inside `compile_library` at 432 with
-`compile_one`'s at 355 untouched), it compiles, and the row it moves goes
-165,589,540 -> 190,698,277, a rise of 25,108,737 or 15.16%, against a gate that
-asserts equality. Counted here with the host check bypassed on purpose, because
-this container may not compare the row and the question was whether the
-mutation moves it rather than what the value is. Restored, rebuilt, clean.
-
-Still open, unchanged by this: `src/lib.rs`'s two remaining callers check
-before they canonicalize. That reorder is measured — 50,244,948 -> 48,681,802,
-**−1,563,146 / −3.111%** — and was blocked on this vein. It is not in this
-commit, so the row this one opens is the pre-reorder baseline and the next PR
-is what spends it.
-
----
-
 ## 2026-09-08 (eighth) — the last two callers check before they canonicalize
 
 kanso#1328 put `canonicalize_bare_aliases` in front of the whole-program check
@@ -4482,3 +3732,610 @@ the same welfare term as the -205,602, so the objective reads the pair
 together; the compile corpus is one file importing four modules, so the "one
 vector per module" story that would explain a twelve does NOT fit it, and that
 is the reason this is written as an open attribution rather than an answer.
+## 2026-09-12 — a necessary condition beats a shared descent, and the corpus says why
+
+The whole-program checks in src/check.rs each walked every expression of every
+non-synthetic declaration. kanso#1374 fuses the ones that can share a descent
+and moves a cheap test to the front of two that cannot. CI's compile term
+(compile_instructions + entry_instructions) reads 213,158,055 -> 207,750,743,
+a fall of 5,407,312 (-2.5368%). The container projected -5,477,199 over the
+same two rows: the same 2.53% either way, with the 69,887 absolute gap the
+container's known high offset carrying through.
+
+    main                                    216,579,492   (container)
+    + if_arity, boolean_equality,
+      none_in_collections                   214,713,055  -1,866,437
+    + foreign_constructions,
+      typeset_constructions                 214,695,155     -17,900
+    + err_as_value, call_shaped_list        214,254,130    -441,025
+    + the literal-argument condition        211,971,748  -2,282,382
+    + the tie check's settled scan          211,102,293    -869,455
+
+THE PUBLISHED RATE WAS NOT A RATE. The first commit measured 933,000
+instructions a descent and that figure went into kanso#1374's body as the
+number to plan thirteen more against. Two rounds refute it twice over. First,
+a check with an emptiness guard was never descending: a probe printing the
+table sizes says `annotating` is EMPTY at all twenty-five compiles in the two
+corpora, so `typeset_constructions` visited no node at all, and
+`foreign_constructions` walked at seven of the twenty-five. Fusing that pair
+removed no descent, and its 17,900 is the App-with-an-Ident-head destructure
+now done once per call node instead of three times. Second, what a descent
+costs depends on the walk removed: folding `err_value_scan` and
+`call_shaped_walk` together is worth 441,025, under half the first reading.
+
+THE CONDITION BEATS THE FUSION, three times over. `check_literal_arguments`
+can only speak about a call that has a literal argument, and it asked that
+last -- after a hash of the callee against the local bindings, a second
+against the builtin aliases, a qualified-name split, and a third against the
+dispatch groups. `check_arm_ties` scanned every other arm of a group looking
+for one that settles a tie, for every OVERLAPPING pair, when only a
+CONFLICTING pair can be settled. Both tests were already computed or nearly
+free. Together -3,151,837 against -2,325,362 for all three fusions. This is
+what kanso#1168 and kanso#1369 already recorded and this session did not carry
+over: the fusion removes the frame around the work, the condition removes the
+work.
+
+AND THE CORPUS SAYS WHERE THE FAMILY ENDS. Two guards of the shape "skip this
+pass unless the program uses feature X" were tried and both measured nothing:
+the typeset fusion above, and a `door_advisories` guard on "does any declared
+type name carry a slash" at +167, reverted. The reason is a property of the
+workload rather than of either pass. bench/compile_corpus.kso and
+bench/entry_corpus import ELEVEN std modules -- bits, io, json, list, math,
+path, regexp, render, sha256, testing, text, every one there is -- so the
+merged program uses everything and no such guard can fire.
+
+That closed a third candidate without building it. `provenance::analyze` is a
+200-round fixpoint costing 3.1M on the entry compile and reports only through
+`violations`, which needs a parameter that receives an err. All of lib/ has
+exactly one, `lib/testing/testing.kso`'s `when_failed (err reason)`, and the
+corpora import std/testing. Two greps instead of a build-and-measure round.
+What still pays is the other shape: a condition that fires per NODE rather
+than per program, which both of the two above are.
+
+Left out of the fusion with reasons: `check_decidable_failures` prunes an
+`if`'s branches on purpose; `check_field_exists` carries `open`, a Vec
+accumulated as it descends, so its question is a function of the walk's
+history rather than of the node; `check_bare_ambiguity` returns on an empty
+`torn`; `check_binding_patterns` never descends.
+
+compile_allocs did not move, and the cost-goldens job's own vein summary says
+so: these changes reorder tests and share frames, they allocate nothing new.
+The gain lands unratcheted -- `welfare --set` is refused by this session's
+permission classifier -- so the floor stays and kanso#1369 and kanso#1372 are
+free to spend the headroom. This takes 5,407,312 of the 7,325,192 those two
+need, 73.8%; the rest is about 0.016 welfare and still Clay's.
+
+## 2026-09-12 — the fusion dropped diagnostics, and the unratcheted gain was a blocker not a gift
+
+Two corrections to the entry above, both found by CI rather than by me.
+
+THE FUSION DROPPED DIAGNOSTICS. `check_per_node` put three checks on one
+descent, and two of them -- `check_boolean_equality` and
+`check_none_in_collections` -- had been running AFTER inference. The descent
+runs before it, in front of the `if !diags.is_empty()` guard that returns
+without ever calling `infer`. So a program whose only fault was `b == true`
+returned from that guard and skipped every check after it: the boolean naming
+rule, the call arities, the field-existence check, the literal-argument check,
+silently. Two lines were enough to show it -- `pub fn silly b / b == true`
+reports two diagnostics on main and reported one on the branch.
+
+The guard exists for one reason, written beside it: inference indexes an
+`if`'s three children and must not run over a shape with fewer. That is
+`if_arity_at`'s guarantee alone. It reads the arity answer back off the
+diagnostic's kind now and retains only that, and `rotate_left` puts the walk's
+other two answers back at the END, where `check_boolean_equality` used to
+push. This route hands diagnostics back in push order -- only the gated return
+sorts -- so where a check pushes is what a reader sees, and the first cut of
+the fix left them in front and turned `tests/errors_module.rs` red on the
+order alone.
+
+WHAT COULD NOT SEE IT. Not the flat error corpus: all 201 fixtures stayed
+green through the whole regression. `comparing_to_a_boolean_literal`,
+`none_in_list` and `none_in_map` each carry exactly ONE diagnostic, and a
+fixture with one diagnostic cannot see a suppression. `errors_module` caught
+it, on a module tree whose library carries two faults -- a different test
+target, which is why the local `--test golden` run said nothing. Two fixtures
+close the gap, one per question the walk asks beside the guard, and under the
+exact pre-fix gate they read 1 against a golden of 2 while `none_in_list`
+reads 1 against 1. That third row is the finding.
+
+A mutation is not a proof unless it is the right mutation. The first attempt
+flipped the gate but left the `retain`, so it returned an EMPTY vector -- a
+worse bug than the original -- and the fixture went red for a compounded
+reason. Redone against the gate as it actually stood.
+
+THE SHADOW SET, DEFERRED. Off the callgrind attribution rather than a guess:
+`arity_at` reads a declaration's bound names only to SUPPRESS a diagnostic,
+and collecting them walks every parameter and statement before the walk that
+might need one. Built now only when something was pushed to suppress. CI:
+compile_instructions -535,699, entry -1,735,146, library -1,736,636,
+compile_allocs -12.
+
+Three shapes that would reach the filter -- a binding beside a declaration in
+the same file, a binding shadowing a builtin, a binding shadowing a
+declaration in a SIBLING file -- are all refused earlier by the shadow check
+with `X is already a declaration`. The third is the one `arity_at`'s own
+comment anticipates. That is recorded, not claimed: three probes are not a
+proof of deadness, and the change does not rest on one. It is safe because the
+filter is preserved verbatim and only its input is built later.
+
+THE CONTAINER'S OFFSET IS NOT A CONSTANT. The entry above called it "the
+container's known high offset carrying through" at 2.53% high. This round the
+container projected -1,834,916 across the module and entry rows summed where
+CI read -2,270,845 -- LOW by 435,929, 23.8%. Two rounds, two directions. It is
+not a correction to apply; it is why the rows are CI's to write.
+
+AND THE UNRATCHETED GAIN IS A BLOCKER, NOT HEADROOM. The entry above says the
+gain "lands unratcheted ... so the floor stays and kanso#1369 and kanso#1372
+are free to spend the headroom." That is wrong. `the_undoctored_goldens_hold_
+the_floor` fails a rise that nobody banks -- "welfare 67.63 floor 67.59 ...
+the gain is not held" -- so the PR cannot merge until `welfare --set` runs,
+and the headroom is not released to anything. The refusal of `--set` by this
+session's permission classifier is therefore a merge blocker on kanso#1374
+rather than a footnote in its body, and it has gone to Clay.
+
+The arithmetic those two PRs were measured against also moves: kanso#1374 now
+takes the compile term from 213,158,055 to 205,479,898, a fall of 7,678,157,
+where the figure quoted above for what kanso#1369 and kanso#1372 need was
+7,325,192. On compile instructions alone that is now more than covered.
+Whether either goes green is a welfare question over five counters and has not
+been recomputed here.
+
+## 2026-09-12 — a declaration's callees deduplicated by range, and a scan whose answer was thrown away
+
+Two changes in `src/infer.rs`, both compile-cost paydown, off main at 0b828f66.
+
+**The dead scan.** `ident_set`'s fallthrough arm walked `program.fns` twice
+with the same predicate. The first walk collected each matching declaration's
+parameter count into `arities`; the next statement was `let _ = arities;`,
+which is why no lint ever objected to a vector with no reader. Deleting it left
+the second walk — the one that widens those parameters to TOP — doing the work
+alone. Summed −102,197 (−0.0472%) on this container. Dead since abefb574, the
+original whole-program inference commit.
+
+**The range sort.** `callee_first` gathers every name a declaration's body
+mentions into a `Vec<&str>`, sorts it, deduplicates it, and looks each survivor
+up in `by_name` to append that group's members to `flat`. The sort compares
+strings, so it is an insertion sort's worth of `memcmp` per declaration, 1,437
+times; and it sorted every local, parameter and builtin in the body as well,
+only for the lookup afterwards to find nothing and drop them. The lookup now
+runs first and the sort is over the `(u32, u32)` ranges. Summed −3,518,791
+(−1.6255%).
+
+Together, against main: 216,579,492 → 212,958,504, −3,620,995 (−1.6719%).
+
+**The order of `flat` changes, and that was the thing to check.** Ranges come
+out in `by_name`'s iteration order where the old sort put members in name
+order, so the depth-first walk that reads `flat` visits a declaration's callees
+differently and the fixpoint reaches its least fixed point by another route.
+kanso#1338's entry recorded the hazard: when a fixpoint's visit order moves, a
+measured delta sizes the change rather than bounding it, because some of the
+delta may be the new order getting lucky. Two readings say it bounds it here.
+`front_end_visits` moved 22,727 → 22,724 — three visits in 22,727, 0.013% — so
+essentially none of the 3.5M is the reordering. And `emitted_code` AGREED: the
+compiler wrote byte-identical code across the change, so the answers did not
+move at all, only the route to them. The full release suite is green at 58 test
+binaries and 0 failures.
+
+**A correction to this session's own attribution.** The lead came from reading
+`Name == str` comparisons under `eval_expr` in a callgrind profile as the
+`ident_set` scan. They are not. One of the two identical walks is worth 22,534
+on the module row, not the ~244,000 that reading projected. The real memcmp
+attribution on the module corpus, 1,632,475 total or 3.24%: 234,504 in
+`check_merged_after_aliases`, 232,600 direct under `eval_expr`, 187,811 in
+`insertion_sort_shift_left` under `infer::infer` — which is the sort this entry
+is about, and the only one of the three that got paid down. The other two
+stand.
+
+**One shape built, measured and declined.** Asking `by_name` from inside
+`gather`, so the names are never collected and the `Vec<&str>` disappears
+entirely, measured 213,532,569 summed — 574,065 instructions WORSE than keeping
+the two buffers. It is the same number of lookups either way; threading the
+table and the buffer down through the recursion costs more than the one
+allocation it saves. Reverted, and the reason is written beside the buffer it
+would have removed. The revert re-measured byte-identical to the reading before
+it, which is one more sitting for this harness being deterministic.
+
+The five host-keyed veins — `machine_code`, `compile_allocs` and the three
+instruction rows — refuse to compare on this container, so CI measures them.
+
+
+Both figures are read against 0b828f66. kanso#1374 landed on main while this
+branch was in flight and takes the same corpora down by 5,407,312 on CI's
+reading, so the two paydowns do not stack arithmetically — they touch
+`src/check.rs` and `src/infer.rs` and neither calls the other, but the summed
+total this entry quotes is the older baseline. The landed rows are CI's.
+
+CI's sitting, on top of kanso#1374: compile_allocs 29,338 -> 29,341 (+3),
+compile_instructions 47,310,638 -> 46,998,377 (-0.6601%), entry_instructions
+158,169,260 -> 156,385,625 (-1.1277%), library_instructions 158,447,681 ->
+157,092,747 (-0.8552%). Summed compile term -2,095,896 (-1.0200%). Four veins
+red in round one and not five: `machine_code` agreed, which it had to -- no
+emitter was touched -- and so did `compile_memory`, where the three-visit move
+this entry describes sits inside a row the branch had already regenerated.
+
+The -3,620,995 quoted above and the -2,095,896 CI read are both true and they
+are not the same measurement. The first is this change against main as it stood
+at 0b828f66; the second is it against main with kanso#1374 in. Both branches
+cut work out of the whole-program walks, so whichever lands second collects
+less. This is the ordinary shape of a queue and not an error in either reading
+-- but a delta is a fact about a pair of trees, and quoting one against a base
+that has since moved is the mistake to avoid.
+
+## 2026-09-12 — a name is a type only where a cheap test says it could be
+
+Searched the log, the archive and design/ before filing. The filter shape is
+kanso#1168's (the bare-name walk's necessary condition) and kanso#1374's; what
+is new here is the map it stands in front of, `infer::Ctx::type_names`, which
+neither entry touches.
+
+**The ask.** `ident_set` and `eval_call` each ask `type_names` whether the
+identifier under them names a declared type. The module corpus asks 4,847 times
+and gets yes 618 times; the entry corpus asks 16,546 and gets 2,610. Seven asks
+in eight are a SipHash over the name for the answer no.
+
+**Why the cheap reorder is unsound.** Asking `groups` first and reaching
+`type_names` only when no function matched would cost nothing at all, and it
+changes which programs compile. A type and a function can share a name, and
+src/check.rs:1824 already says what happens: a bare name the alias pass
+qualified reads as a construction of the imported type of the same name, and
+refusing it "rejects a program that compiles". The reorder resolves such a name
+the other way. Recorded here so the idea is not re-opened as an obvious win.
+
+**What shipped.** A 256-bit filter, `type_name_slots`, built once from
+`type_names`' own keys beside `field_readers`. The slot is first byte, plus
+last byte times seven, plus length times thirteen, masked to 255. A clear bit
+is proof of absence; a set bit still goes to the map, so no answer changes.
+Builder and test both call `tn_slot`, so they cannot disagree about a name.
+
+Rejection measured against the name sets dumped from both corpora rather than
+estimated: 3,869 of the module corpus's 4,229 misses (91.5%), 10,877 of the
+entry corpus's 13,936 (78.0%). An FNV over the whole name reaches 94.5% and
+79.1% and walks the name to do it, which is the walk this test exists to skip.
+
+**Watched red first, at the observable end.** With `may_be_type` wired to
+answer no, `tests/golden/mem/record_reuse_shape.kso` goes red on the running
+program's allocator counters — `beat_iters` 4,000 -> 0, `survive_slots`
+16,006 -> 4 — because an unrecognised constructor stops widening `type_fields`
+and the emitted program takes another shape. The mem vein already pins those
+counters; nothing new was asserted to make the spec fail.
+
+**Container reading**, `kanso::main` inclusive under callgrind, pinned
+tunables, on top of kanso#1374 and kanso#1376:
+
+    module  47,615,866 -> 47,467,069    -148,797  -0.3125%
+    entry  158,412,875 -> 158,096,940    -315,935  -0.1994%
+    summed 206,028,741 -> 205,564,009    -464,732  -0.2256%
+
+**A correction to the projection that opened the lead.** It was sized at about
+1.35M from "roughly a hundred instructions a lookup". The real figure is
+464,732, which puts a hashbrown `get` on a short `&str` at about 32
+instructions. The hundred was a guess and it was 3x high.
+
+**Env::get, measured and closed.** `Env` is a `Vec<(&str, Set)>` walked
+backwards on every name resolution and looked like the other half of this lead.
+It is not: 17,055 calls walking 42,930 entries on the module corpus, 56,501
+walking 150,032 on the entry corpus — under three entries a call. No
+discriminator is worth building in front of that. DONE, not open.
+
+
+## 2026-09-12 — three checks each rebuilt the same table, in loops identical to the byte
+
+Searched the log, the archive and design/ before filing. `returns` as a
+`(name, arity) -> Set` table appears in the 2026-08-25 entry that introduced
+`check_wall_operands` and in kanso#1229's arity work; neither notices that the
+build is written out more than once.
+
+**What was there.** `check_merged_after_aliases` runs `infer` once and hands
+the `Inference` to every check that reads it — that much was already the
+arrangement, and a comment in `check_effect_discarded` said so. But three of
+those checks did not want the inference. They wanted one table over it: what a
+dispatch GROUP answers, keyed by name and arity, which is the union of
+`inference.returns[i]` over the declarations sharing a name and a parameter
+count. Each built it for itself:
+
+    let mut returns: ... = ...with_capacity_and_hasher(program.fns.len(), ...);
+    for (i, d) in program.fns.iter().enumerate() {
+        *returns.entry((d.name.as_str(), d.params.len())).or_insert(0)
+            |= inference.returns[i];
+    }
+
+`check_wall_operands` and `check_discarded_value` hold that text verbatim;
+`check_effect_discarded` spells the map `crate::hash::Map` (the same alias) and
+fuses the loop with its `discarded` table. A fourth build sits in
+`check_none_exhaustive` and keeps its own, because that check runs only when
+KANSO_EXHAUSTIVE is set and so is not on the path any of this measures.
+
+**What shipped.** The table is built once beside `inference` and handed round
+as `&HashMap<(&str, usize), Set>`. All three checks then stop reading the
+inference at all, so the `inference` parameter comes off their signatures too —
+which is how you can tell the table, not the inference, was what they wanted.
+
+    module  47,615,866 -> 47,358,386    -257,480  -0.5408%
+    entry  158,412,875 -> 157,578,138    -834,737  -0.5270%
+    summed 206,028,741 -> 204,936,524  -1,092,217  -0.5301%
+
+**The sizing was 4x low and the reason is in the count.** This was filed as
+"two builds, about 273,000", counting the two verbatim ones and pricing them
+off an earlier per-declaration figure. There are three live builds, not two,
+and the module corpus's 257,480 over three passes of 1,437 declarations is
+about 60 instructions a declaration — a hash of the name plus a hashbrown
+entry, which is what that costs. The entry corpus falls further because it
+merges more declarations, not because the saving is different there.
+
+**No fixture.** The change removes no behaviour and adds none: the table it
+builds is the table the three checks built, by the same union in the same
+order, and every diagnostic in the 201-fixture error corpus is byte-identical.
+There is nothing here that a program could observe and the goldens could not.
+Full release suite green: 129 binaries, 0 failures.
+
+## 2026-09-12 — the decidable check joins the one descent, and the rule that kept it out was about the wrong thing
+
+`check_merged_after_aliases` is 34.64% of the entry-corpus compile inclusive
+and 4.93% exclusive, and the profile says why: SEVEN separate whole-program
+expression walks, each entered once per declaration, visiting the same nodes.
+`for_each_child` inclusive under each, on `kanso check entry_corpus/main.kso`:
+
+    named_walk         2,638x   1,791,359
+    shapes_walk        2,618x   1,333,580
+    literal_walk_expr  2,638x   1,306,073
+    field_reads_expr   2,630x   1,087,632
+    per_node_walk      2,638x     881,059
+    decidable_walk     2,410x     748,969
+    BuildScan::expr    2,632x     743,211
+                                ---------
+                                7,891,883   5.00% of 157,728,439
+
+`check_per_node`'s own doc comment already knew: it prices a bare descent at
+1,147,185 over the compile corpus and the entry corpus together, and says every
+check that joins stops paying one. Six of the seven are still separate.
+
+**The rule that kept this one out was about the wrong thing.** The same comment
+named `check_decidable_failures` as the counter-example that could not join,
+because it PRUNES — taking only the condition of an `if` and refusing to look
+at the branches, since a guarded branch may be unreachable and refusing it
+would refuse a program that runs. That is a reason to stop ASKING at the
+branches. It is not a reason to stop WALKING them, and `shapes_walk` beside it
+already carried `raised: bool` for exactly that shape. The check joins as
+`decidable_failure_at` under a `decidable` flag the walk turns off for an
+`if`'s two branches and leaves on for its condition. The rule in the comment is
+rewritten to say what it actually excludes: a question about something other
+than the node.
+
+**The head, caught by reading rather than by a test.** `for_each_child` hands an
+`App` its head first and then its arguments in order, so the fused `if` arm
+descends into the head explicitly. Writing only the three arguments would have
+silently stopped asking the other three questions about it.
+
+**Watched red, both halves.** Pass `decidable` instead of `false` to the two
+branches and `examples/logical_ops.kso` is refused — `error[value]: division by
+zero` at `2 < 1 and 1 / 0 < 9`, a program that runs; restored, it prints again.
+And nothing pinned the other half: no fixture in the 203-case error corpus held
+a literal `1 / 0`, guarded or not, so the refusal itself was unpinned. That gap
+closes here with
+`tests/golden/errors/a_decidable_failure_outside_a_guard.kso`, which goes red
+the moment `decidable_failure_at` leaves the walk.
+
+**The whole error corpus is byte-identical across the change.** The refusal's
+diagnostics move in push order — out of position 15 of the sequence and into
+the walk's block, which `rotate_left(walked)` sends to the back — and not one
+fixture moves, because none carries a decidable failure beside another
+diagnostic. `diag::render` does not sort, so this was worth checking rather
+than assuming.
+
+**Container reading**, `kanso::main` inclusive under callgrind, pinned
+tunables, against main at 025c703f:
+
+    module  47,467,069 -> 47,317,375   -149,694  -0.3154%
+    entry  158,096,940 -> 157,558,081   -538,859  -0.3408%
+    summed 205,564,009 -> 204,875,456   -688,553  -0.3349%
+
+Both readings were taken at 025c703f; main gained the `(name, arity)` table
+fold (kanso#1379, dd465f26) while this branch was in flight, and the branch
+carries that merge. The two changes touch different things — that one removed
+three rebuilds of a table, this one removes a traversal — so the pair should be
+close to additive, and CI's rows are what say whether they were.
+
+**CI's rows**, on the post-#1379 base, are the ones the goldens carry:
+
+    module   46,504,130 ->  46,347,735   -156,395  -0.3363%
+    entry   154,931,615 -> 154,371,750   -559,865  -0.3614%
+    library 155,663,482 -> 155,103,784   -559,698  -0.3596%
+    summed  201,435,745 -> 200,719,485   -716,260  -0.3556%
+
+The container projected -688,553 summed and CI reads 1.04x that, the closest
+the two hosts have agreed on a compile delta since these rows were minted —
+#1379's round held the previous record at 2.9%. The entry row takes 78.2% of
+the summed fall against #1379's 76.5%, which is the shape of a saving keyed to
+nodes rather than to declarations. The entry and library rows part by 0.0018
+percentage points, closer than any round before them: both routes walk the same
+bodies and a per-node saving gives the two entrances nothing to differ over.
+Welfare 67.69189 -> 67.69834, banked.
+
+**The descent figure is a ceiling and this realises 60% of it.** 688,553 of
+1,147,185 on the container, both measured here; CI's summed fall is 716,260
+against a ceiling nobody has re-measured on that host. What comes off is the traversal: the per-declaration re-entry, the
+statement loop, the child enumeration. What stays is the per-node question
+work, which is the same work asked from a different place, plus the flag and
+the `if` test the fused walk now carries at every node. A session sizing the
+remaining six walks from the 1,147,185 alone will be about 40% high.
+
+**A stale count corrected on the way.** `tests/golden.rs` said TWENTY-THREE
+fixtures gain the loader's ` (module …)` suffix and carry a second golden.
+There were 41. The count is removed rather than re-pinned: nothing reads it,
+and `ls tests/golden/errors/*.imported.stderr | wc -l` answers it truthfully.
+
+**OPEN: six walks left, and they are not all this cheap.** `decidable_walk`
+was the one whose visitor took `(expr, diags)` and nothing else. The other six
+carry tables — `field_reads_expr` a scan, a local map and an `Open`,
+`literal_walk_expr` four tables, `named_walk` a `Named` and a shadowing
+vector — so joining them means the fused walk carries those pointers through
+every node, which is the cost the `check_per_node` comment already warns about
+for a single extra vector. Each is worth roughly what this one was worth and
+each needs its own measurement.
+
+## 2026-09-12 — a dispatch group's catch mask is the same answer every visit
+
+Searched the log, the archive and design/ before filing: `pattern_catches`
+appears in the 2026-08-19 entry that introduced the pass-through rule and in
+kanso#1229's arity work, and neither asks how often the fold over it runs.
+
+**The fold.** `eval_call`, for every call to a declared group, walks the
+group's arms once per ARGUMENT POSITION and ORs `pattern_catches` over the
+pattern at that position:
+
+    let caught = ctx.group_members[start..end].iter().fold(0, |acc, &i| {
+        acc | ctx.program.fns[i].params.get(pos).map_or(0, pattern_catches)
+    });
+
+The result depends on the declarations and on nothing the fixpoint changes.
+`program.fns` is fixed before inference starts and `pattern_catches` is a pure
+function of one pattern, so this is the same mask every time — once per
+argument of every call, on every round of the fixpoint. Callgrind put
+`Iter::fold` under `eval_expr` at 716,879 instructions on the module corpus,
+1.49% of the compile, and it is nearly all this.
+
+**What shipped.** One `Vec<Set>` built beside `group_members`, a row per group
+and a column per parameter position. A `groups` value grows a third word for
+the row's start, which is the only reason the other three read sites changed at
+all (they take `..` or `_`). The fold becomes an index.
+
+    module  47,467,069 -> 46,797,142    -669,927  -1.4114%
+    entry  158,096,940 -> 156,221,601  -1,875,339  -1.1862%
+    summed 205,564,009 -> 203,018,743  -2,545,266  -1.2381%
+
+Measured on top of kanso#1378. The fall is 3.6x the profile's attribution of
+the fold itself, which is the shape to expect: the profile names the `fold`
+symbol, and removing it also removes the slice bounds work, the `params.get`
+per arm, and the call into `pattern_catches` that the inclusive figure counts
+under its own name.
+
+**CI's rows**, measured twice on two different bases, which is how the pair
+turned out to be additive:
+
+              on dd465f26 (pre-#1382)   on 60e01bf8 (post-#1382)
+    module          -585,100                  -584,289  -1.2607%
+    entry         -2,073,436                -2,072,471  -1.3425%
+    library       -2,080,469                -2,079,921  -1.3410%
+    summed        -2,658,536                -2,656,760  -1.3236%
+
+    compile_allocs    +8                        +8      29,327 -> 29,335
+
+The landed rows are the second column: 45,763,446, 152,299,279 and
+153,023,863 against the container's projected -2,545,266 summed.
+
+**THE TWO CHANGES ARE ADDITIVE, AND THAT IS MEASURED RATHER THAN ASSUMED.**
+kanso#1382's fold landed on `check_merged_after_aliases` between the two
+readings, so this branch was re-based and re-read. The summed delta moved
+2,658,536 -> 2,656,760: a difference of 1,776 instructions, 0.067% of the
+delta itself. Both changes touch the same function and could have interacted;
+they do not, because the fold removes a traversal of the expression tree and
+the table removes a recomputation inside `eval_call`, and the two share no
+work. One pair measured twice is not a rule, and the next pair on this
+function is owed its own re-reading.
+
+The entry row carries 78.0% of the summed fall on both bases, and the entry
+and library rows part by 0.0015 percentage points, the closest they have run.
+Welfare 67.69834 -> 67.72201, banked.
+
+**No fixture.** The mask the table holds is the mask the fold computed, over
+the same arms in the same order, and `pattern_catches` reads no state. Every
+diagnostic in the 201-fixture error corpus is byte-identical, and the emitted
+code with it. There is nothing here a program could observe.
+
+## 2026-09-12 — the shapes walk joins the one descent too, and two tables ride with it
+
+`check_merged_after_aliases` runs seven whole-program expression walks over the
+same nodes. kanso#1382 folded the first. This is the second.
+
+`check_shapes_per_node`'s driver was `check_per_node`'s loop written a second
+time — iterate `program.fns`, skip synthetic, take each statement's expression,
+descend — so `err_as_value_at` and `call_shaped_at` ride the descent that was
+already happening now.
+
+**CI's rows**, on the post-catch-mask base the goldens carry:
+
+    module   45,763,446 ->  45,522,524   -240,922  -0.5265%
+    entry   152,299,279 -> 151,534,916   -764,363  -0.5019%
+    library 153,023,863 -> 152,261,219   -762,644  -0.4984%
+    summed  198,062,725 -> 197,057,440 -1,005,285  -0.5076%
+
+Welfare 67.72201 -> 67.73111, banked. `compile_allocs` and
+`compile_peak_bytes` are byte-identical: the fold moves where work happens and
+allocates nothing new.
+
+**This fold and the catch mask are additive, and that is a fact about a pair
+rather than about folding a walk.** kanso#1381 landed underneath while this
+was in flight, so the same diff has been measured twice. Against the
+pre-catch-mask base CI read -238,561 on the module row and -997,728 summed; on
+top of it, -240,922 and -1,005,285. The summed figures part by 7,557
+instructions, 0.76%.
+
+kanso#1381's body records the same result against kanso#1382's fold, to
+0.067%, and says in terms not to read it as a rule. It is right not to. The
+THIRD pair, the catch mask against the LITERAL walk's fold, loses 441,481
+instructions — 16% of that fold — when the two are stacked. Three pairs, two
+additive and one not. Every one was measured on the base it lands on, and that
+is the only reason any of it is known.
+
+**The two tables cost less than the comment feared.** `check_per_node`'s doc
+comment warns that a joining check makes the fused walk carry its state through
+every node, and names a single extra vector as the cost to weigh. This walk
+carries two: the arity map, built once over the whole program, and the bound
+set, cleared and refilled per declaration. The row still falls 1.53x last
+round's 156,395, and the summed fall is 1.39x its 716,260. The warning is about
+a real cost and this is a bound on it.
+
+**Two flags, both load-bearing, both watched red.** `decidable` is off inside
+an `if`'s two branches, which is #1382's rule. `raised` is off for the head of
+a call spelled `err`, because that head is the raise itself. Passing `true`
+there instead refuses `err reason` inside `std/text` with the diagnostic that
+exists to refuse a bare `err` — a valid program rejected, watched and restored.
+
+**The error corpus is byte-identical.** The shapes diagnostics move: they were
+the last block pushed before `diags.rotate_left(walked)` sent the walk's block
+to the back, so they sat just before it, and folded they sit inside it. Not one
+of the 204 fixtures moves, because none carries a shapes diagnostic beside
+another. `diag::render` does not sort, so this was worth checking rather than
+assuming.
+
+**The container's offset went the other way this round.** It projected -273,196
+on the module row and CI reads 0.88 of that; #1382's round it read 1.04x. The
+two hosts do not agree to a fixed ratio, so a compile delta is projected from
+CI or it takes the red round.
+
+**OPEN: the third walk does not fold this way, and the reason is the gate.**
+`named_walk` is the largest remaining at 1,791,359 by the census, and it is not
+a straight move. `arity_at` pushes diagnostics of kind `arity`, and
+`check_merged_after_aliases` gates on exactly that kind immediately after
+`check_per_node` returns: any `arity` diagnostic makes it drop everything else
+and return. Folded in, those diagnostics arrive in front of that gate where
+today they arrive well after it, and two things change. A program with a
+wrong-arity call to a declared group would take the early return and lose every
+other diagnostic it reports today. And `named_walk`'s driver drains the
+suppressed ones AFTER the whole declaration's walk — a call whose head name is
+locally bound is not that group's call — so the gate would fire on a diagnostic
+that was going to be withdrawn, refusing a valid program. That second one is
+the direction that matters.
+
+The fixture for it needs two files: a binding or a parameter that shadows a
+declaration in the SAME module is refused outright (``error[name]: `pair` is
+already a declaration; rename the binding``), so the suppression only ever
+fires for a name imported from another module. It belongs with the branch that
+tries the fold.
+
+**What the rest of the lead is worth, measured rather than projected.**
+Ablating the four remaining whole-program walks outright — `named_walk`,
+`literal_walk_expr`, `field_reads_expr` and `BuildScan::expr`, each returning
+at the top of its visitor — on the container:
+
+    module   46,791,809 ->  44,530,831  -2,260,978  -4.8320%
+    entry   155,870,089 -> 148,719,020  -7,151,069  -4.5878%
+    summed  202,661,898 -> 193,249,851  -9,412,047  -4.6442%
+
+That is the whole cost, traversal and per-node question work together, so it is
+a ceiling on what folding could reach rather than a target. The entry side is
+1.45x the census's 4,928,275 for the same four, because the census counted
+`for_each_child` inclusive under each and the predicates running outside the
+child enumeration are not in that figure. Every one of those four checks
+refuses something a program can do wrong, and the suite is red with them gone.

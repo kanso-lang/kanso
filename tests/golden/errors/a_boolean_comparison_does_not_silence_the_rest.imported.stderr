@@ -1,0 +1,2 @@
+error[naming]: `silly` answers only true or false: name it `silly?` (module a_boolean_comparison_does_not_silence_the_rest)
+error[name]: comparing to `true` asks a question the value already answers — write the value itself (module a_boolean_comparison_does_not_silence_the_rest)

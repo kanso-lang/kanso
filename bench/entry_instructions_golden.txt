@@ -161,4 +161,57 @@
 # 2026-09-12, the same two paydowns. 167,038,742 -> 166,387,431, -651,311
 # (-0.390%), which is the same fraction the module row moved -- the
 # signature these two rows have had on every change that reaches both.
-entry_instructions=166387431
+# 2026-09-12 (five compile-cost paydowns in the whole-program checks):
+# 164,060,471 -> 159,904,406, a FALL of 4,156,065 (-2.5333%). The same three
+# fusions and two necessary conditions; see
+# bench/compile_instructions_golden.txt. The three compile rows fall together
+# and by nearly the same fraction, which is what a per-declaration check looks
+# like when every route runs it -- the same signature the 2026-09-10 rise had,
+# in the other direction.
+# 2026-09-12 (the shadow set deferred, on top of the five paydowns):
+# 159,904,406 -> 158,169,260, a further FALL of 1,735,146 (-1.0851%), and
+# 164,060,471 -> 158,169,260 against main, a FALL of 5,891,211 (-3.5909%).
+# See bench/compile_instructions_golden.txt. The entry row carries three
+# quarters of the fall because the entry corpus is the larger compile, and
+# the saving is per declaration.
+# 2026-09-12 (a declaration's callees deduplicated by range, and a dead scan):
+# 158,169,260 -> 156,385,625, a FALL of 1,783,635 (-1.1277%). See
+# bench/compile_instructions_golden.txt. The entry row again carries the larger
+# share -- 85% of the summed fall against the module row's 15% -- and by a
+# larger fraction, because both savings are per declaration and the entry
+# corpus holds more of them.
+# 2026-09-12 (a name is a type only where a cheap test says it could be):
+# 156,385,625 -> 155,743,367, a FALL of 642,258 (-0.4107%). See
+# bench/compile_instructions_golden.txt. The entry row carries 72% of the
+# summed fall, its usual share for a per-identifier saving, but by a SMALLER
+# fraction than the module row for the first time since these rows were
+# minted: the entry corpus asks the map more often and rejects a smaller
+# proportion of those asks (78.0% against the module corpus's 91.5%), so the
+# filter earns less per ask there.
+# 2026-09-12 (three checks each rebuilt the same (name, arity) table):
+# 155,743,367 -> 154,931,615, a FALL of 811,752 (-0.5212%). See
+# bench/compile_instructions_golden.txt. The entry row carries 76.5% of the
+# summed fall at almost exactly the module row's fraction, which is what a
+# saving keyed to declarations looks like when both routes merge the same
+# library.
+# 2026-09-12 (the decidable check joins the one descent):
+# 154,931,615 -> 154,371,750, a FALL of 559,865 (-0.3614%). See
+# bench/compile_instructions_golden.txt. The entry row carries 78.2% of the
+# summed fall against last round's 76.5%, and by the larger fraction of the
+# two rows, which is what a saving keyed to nodes rather than to declarations
+# looks like: the entry corpus holds more expression nodes per declaration.
+# 2026-09-12 (the shapes walk joins the one descent too) -- SUPERSEDED, see
+# below: 154,371,750 -> 153,612,583 was read on the pre-catch-mask base.
+# 2026-09-12 (a dispatch group's catch mask is decided once):
+# 154,371,750 -> 152,299,279, a FALL of 2,072,471 (-1.3425%). See
+# bench/compile_instructions_golden.txt. The entry row carries 78.0% of the
+# summed fall, the same share it carried on the pre-#1382 base and the same the
+# fold-decidable round read, which is what a saving priced per call site looks
+# like on a corpus whose declaration mix has not moved.
+# 2026-09-12 (the shapes walk joins the one descent too, re-measured on the
+# catch-mask base):
+# 152,299,279 -> 151,534,916, a FALL of 764,363 (-0.5019%). See
+# bench/compile_instructions_golden.txt. The entry row carries 76.0% of the
+# summed fall, against 76.1% for the same diff on the pre-catch-mask base --
+# the share a saving keyed to nodes takes here, twice.
+entry_instructions=151534916

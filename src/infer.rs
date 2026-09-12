@@ -92,12 +92,26 @@ struct Ctx<'a> {
     /// take one and leave `ctx` free to be borrowed mutably while it walks
     /// the arms — where holding the group itself meant cloning its `Vec` on
     /// every call the pass inferred, 2,693 heap blocks on `lib/json`.
-    groups: HashMap<(&'a str, usize), (u32, u32)>,
+    groups: HashMap<(&'a str, usize), (u32, u32, u32)>,
     group_members: Vec<usize>,
+    /// For each dispatch group and each parameter position, the union of what
+    /// that position's patterns CATCH -- `pattern_catches` folded over the
+    /// group's arms. It depends on the declarations and on nothing the
+    /// fixpoint changes, so it was the same answer every visit: `eval_call`
+    /// re-folded it once per argument of every call, on every round. The
+    /// third word of a `groups` value is where this group's row starts.
+    caught: Vec<Set>,
     /// What a desc-valued local would yield to a bind, tracked through one
     /// binding level so `x = os/read_file p` then `x . f` gives f the STR.
     yields: HashMap<&'a str, Set>,
     type_names: HashMap<&'a str, usize>,
+    /// A 256-bit necessary condition for `type_names` holding a name, so the
+    /// common answer — no — costs a byte load and a bit test instead of a
+    /// hash. Every identifier in a body asks that map, and it is a type only
+    /// where the program constructs or names one: 4,229 of 4,847 asks on the
+    /// module corpus miss, and 13,936 of 16,546 on the entry corpus. The slot
+    /// is `tn_slot`, which both sides call, so the two cannot disagree.
+    type_name_slots: [u64; 4],
     params: Vec<Set>,
     param_starts: Vec<u32>,
     /// Per parameter, beside `params`: the bits an arm EARLIER in its group
@@ -163,6 +177,43 @@ pub mod work {
 /// destructure that type. Before this index existed a field growing marked
 /// EVERY function dirty, and lib/json spent three extra full sweeps of 407
 /// functions to let seven of them move.
+/// Where a name sits in the type-name filter. First byte, last byte and
+/// length — the three the miss distribution separates on. Whole-name hashing
+/// rejects 94.5% of the module corpus's misses against this one's 91.5% and
+/// costs a walk of the name to do it, which is the hash this test exists to
+/// avoid. An empty name takes slot 0 like any other, so the builder and the
+/// reader agree by construction rather than by a matching guard.
+#[inline]
+fn tn_slot(name: &str) -> usize {
+    let b = name.as_bytes();
+    match b.is_empty() {
+        true => 0,
+        false => {
+            (b[0] as usize).wrapping_add((b[b.len() - 1] as usize) * 7).wrapping_add(b.len() * 13)
+                & 255
+        }
+    }
+}
+
+/// The filter over a set of type names. Public so a spec can build one from
+/// the same names the compiler does and check it admits every one of them.
+pub fn type_name_slots<'a>(names: impl Iterator<Item = &'a str>) -> [u64; 4] {
+    let mut out = [0u64; 4];
+    for name in names {
+        let h = tn_slot(name);
+        out[h >> 6] |= 1u64 << (h & 63);
+    }
+    out
+}
+
+/// Whether `name` could be in a map whose filter is `slots`. A false answer
+/// is proof of absence; a true answer still needs the map.
+#[inline]
+pub fn may_be_type(slots: &[u64; 4], name: &str) -> bool {
+    let h = tn_slot(name);
+    slots[h >> 6] & (1u64 << (h & 63)) != 0
+}
+
 fn ctor_types(pat: &Pattern, type_names: &HashMap<&str, usize>, out: &mut Vec<usize>) {
     if let Pattern::Ctor { ty, fields, .. } = pat {
         if let Some(&i) = type_names.get(ty.as_str()) {
@@ -221,16 +272,20 @@ pub fn infer(program: &Program) -> Inference {
     // only to be flattened on the next line. The counting pass of #1161: count
     // per group, turn the counts into starts, then place each declaration at
     // its group's cursor. Arms come out in declaration order either way.
-    let mut groups: HashMap<(&str, usize), (u32, u32)> =
+    let mut groups: HashMap<(&str, usize), (u32, u32, u32)> =
         HashMap::with_capacity_and_hasher(program.fns.len(), Default::default());
     for decl in &program.fns {
-        groups.entry((decl.name.as_str(), decl.params.len())).or_insert((0, 0)).1 += 1;
+        groups.entry((decl.name.as_str(), decl.params.len())).or_insert((0, 0, 0)).1 += 1;
     }
     let mut at = 0;
-    for slot in groups.values_mut() {
+    // `caught_at` runs alongside: one Set per parameter position per group,
+    // and a group's arity is the second half of its own key.
+    let mut caught_at = 0;
+    for (key, slot) in groups.iter_mut() {
         let count = slot.1;
-        *slot = (at, at);
+        *slot = (at, at, caught_at);
         at += count;
+        caught_at += key.1 as u32;
     }
     let mut group_members: Vec<usize> = vec![0; program.fns.len()];
     for (i, decl) in program.fns.iter().enumerate() {
@@ -240,8 +295,21 @@ pub fn infer(program: &Program) -> Inference {
         group_members[slot.1 as usize] = i;
         slot.1 += 1;
     }
+    // Fold `pattern_catches` over each group's arms, once. The fixpoint reads
+    // this where it used to walk the arms per argument of every call.
+    let mut caught: Vec<Set> = vec![0; caught_at as usize];
+    for (key, &(start, end, base)) in groups.iter() {
+        for pos in 0..key.1 {
+            let mut acc = 0;
+            for &i in &group_members[start as usize..end as usize] {
+                acc |= program.fns[i].params.get(pos).map_or(0, pattern_catches);
+            }
+            caught[base as usize + pos] = acc;
+        }
+    }
     let type_names: HashMap<&str, usize> =
         program.types.iter().enumerate().map(|(i, t)| (t.name.as_str(), i)).collect();
+    let type_name_slots = type_name_slots(type_names.keys().copied());
     let field_readers = field_readers(program, &type_names);
     let defers_into_containers = program.fns.iter().any(|d| {
         fn mentions(expr: &Expr, name: &str) -> bool {
@@ -296,7 +364,7 @@ pub fn infer(program: &Program) -> Inference {
     // The first arm of a real group reads zeros for the same reason, and the
     // last one's contribution is read by nobody below it.
     let mut taken: Vec<Set> = Vec::new();
-    for (start, end) in groups.values().copied() {
+    for (start, end, _) in groups.values().copied() {
         let (start, end) = (start as usize, end as usize);
         if end - start < 2 {
             continue;
@@ -345,8 +413,10 @@ pub fn infer(program: &Program) -> Inference {
         field_readers,
         groups,
         group_members,
+        caught,
         yields: HashMap::default(),
         type_names,
+        type_name_slots,
         params: vec![0; program.fns.iter().map(|d| d.params.len()).sum()],
         param_starts,
         shadow,
@@ -497,6 +567,14 @@ fn callee_first(program: &Program) -> Vec<usize> {
     // same size and shape every time round. Reused, it grows once to the
     // largest declaration and stays there.
     let mut names: Vec<&str> = Vec::new();
+    // The buffer one step further on: the ranges those names resolve to, reused
+    // for the same reason. The two stay separate on purpose. Asking `by_name`
+    // from inside `gather` instead, so that this is the only buffer and the
+    // names are never collected at all, measured 574,065 instructions WORSE on
+    // the summed corpus — it is the same number of lookups either way, and
+    // threading the table and the buffer down through the recursion costs more
+    // than the one allocation it saves. Built, measured, reverted.
+    let mut ranges: Vec<(u32, u32)> = Vec::new();
     for decl in &program.fns {
         names.clear();
         for stmt in &decl.body {
@@ -505,13 +583,34 @@ fn callee_first(program: &Program) -> Vec<usize> {
                 Stmt::Set { value, .. } => gather(value, &mut names),
             }
         }
-        names.sort_unstable();
-        names.dedup();
-        starts.push(flat.len() as u32);
+        // A mention is deduplicated by the range it names, not by its own
+        // bytes. Sorting the names meant a string comparison per step of an
+        // insertion sort, run once per declaration, over every local and
+        // builtin the body mentions as well as the names that resolve — the
+        // lookup below drops those before the sort ever sees them.
+        //
+        // The same declarations reach `flat` — one name means one range and two
+        // names mean two — but no longer in the same ORDER, since ranges are
+        // handed out in `by_name`'s iteration order where the old sort put them
+        // in name order. Neither order means anything: the only reader is the
+        // depth-first walk below, which takes this slice as the set of a
+        // declaration's callees and guards every node with `state`, and the
+        // fixpoint it orders is monotone, so a different visit order reaches
+        // the same least fixed point by a different route. It is the round
+        // count and the dirty sets that move, not the answers — and on the
+        // compile corpus the visit count moved by three in 22,727, with
+        // `emitted_code` byte-identical across the change.
+        ranges.clear();
         for name in &names {
-            if let Some(&(start, end)) = by_name.get(name) {
-                flat.extend_from_slice(&members[start as usize..end as usize]);
+            if let Some(&slot) = by_name.get(name) {
+                ranges.push(slot);
             }
+        }
+        ranges.sort_unstable();
+        ranges.dedup();
+        starts.push(flat.len() as u32);
+        for &(start, end) in &ranges {
+            flat.extend_from_slice(&members[start as usize..end as usize]);
         }
     }
     starts.push(flat.len() as u32);
@@ -832,13 +931,15 @@ fn ident_set<'a>(ctx: &mut Ctx<'a>, name: &'a str, env: &mut Env<'a>) -> Set {
         "args" | "stdin" | "now" => DESC,
         _ => {
             // a zero-field type's bare mention is its marker value
-            if let Some(i) = ctx.type_names.get(name) {
+            if let Some(i) =
+                may_be_type(&ctx.type_name_slots, name).then(|| ctx.type_names.get(name)).flatten()
+            {
                 if ctx.program.types[*i].fields.is_empty() {
                     return REC;
                 }
             }
             // constant mention evaluates; fn mention is a value (params go TOP)
-            if let Some(&(start, _)) = ctx.groups.get(&(name, 0)) {
+            if let Some(&(start, ..)) = ctx.groups.get(&(name, 0)) {
                 let i = ctx.group_members[start as usize];
                 mark_reader(ctx, i);
                 // A constant naming itself inside its own body hands over its
@@ -852,8 +953,6 @@ fn ident_set<'a>(ctx: &mut Ctx<'a>, name: &'a str, env: &mut Env<'a>) -> Set {
                 };
                 return ctx.returns[i] | deferred;
             }
-            let arities: Vec<usize> =
-                ctx.program.fns.iter().filter(|d| d.name == name).map(|d| d.params.len()).collect();
             for (i, decl) in ctx.program.fns.iter().enumerate() {
                 if decl.name == name {
                     for p in 0..decl.params.len() {
@@ -861,7 +960,6 @@ fn ident_set<'a>(ctx: &mut Ctx<'a>, name: &'a str, env: &mut Env<'a>) -> Set {
                     }
                 }
             }
-            let _ = arities;
             FN
         }
     }
@@ -982,7 +1080,10 @@ fn eval_call<'a>(
     if name == "print" {
         return DESC | (arg_sets[0] & FAIL) | piped_bits;
     }
-    if let Some(&idx) = ctx.type_names.get(name.as_str()) {
+    if let Some(&idx) = may_be_type(&ctx.type_name_slots, name.as_str())
+        .then(|| ctx.type_names.get(name.as_str()))
+        .flatten()
+    {
         // constructing a declared type: grow each field's set by this arg's,
         // dropping failures (a failing arg makes construction propagate, so the
         // field itself only ever holds the successful value's type)
@@ -1006,18 +1107,15 @@ fn eval_call<'a>(
         let fails: Set = arg_sets.iter().fold(0, |acc, s| acc | (s & FAIL));
         return REC | fails | piped_bits;
     }
-    if let Some(&(start, end)) = ctx.groups.get(&(name.as_str(), args.len())) {
-        let (start, end) = (start as usize, end as usize);
+    if let Some(&(start, end, caught_at)) = ctx.groups.get(&(name.as_str(), args.len())) {
+        let (start, end, caught_at) = (start as usize, end as usize, caught_at as usize);
         let mut out: Set = 0;
         // pass-through: a failure in arg `pos` reaches the result only when no arm
         // catches it there. an arm whose pattern is `none`/`(err _)` handles that
         // failure (e.g. `_is_ws none -> false`), so it must not contaminate the
         // result — that spurious `none` is what kept scanner positions off `int`.
         for (pos, arg) in arg_sets.iter().enumerate() {
-            let caught = ctx.group_members[start..end].iter().fold(0, |acc, &i| {
-                acc | ctx.program.fns[i].params.get(pos).map_or(0, pattern_catches)
-            });
-            out |= (arg & FAIL) & !caught;
+            out |= (arg & FAIL) & !ctx.caught[caught_at + pos];
         }
         for k in start..end {
             let i = ctx.group_members[k];
@@ -1061,7 +1159,7 @@ fn call_yield(ctx: &Ctx<'_>, i: usize) -> Set {
 /// The declarations `name` dispatches over at this arity, joined. `None` when
 /// the name is a builtin or anything else the program did not declare.
 fn group_yield<'a>(ctx: &mut Ctx<'a>, name: &'a str, arity: usize) -> Option<Set> {
-    let (start, end) = *ctx.groups.get(&(name, arity))?;
+    let (start, end, _) = *ctx.groups.get(&(name, arity))?;
     let mut out: Set = 0;
     for k in start as usize..end as usize {
         let i = ctx.group_members[k];

@@ -1,0 +1,4 @@
+error[value]: division by zero
+  --> tests/golden/errors/a_decidable_failure_outside_a_guard.kso:11:23
+  11 | pub play = print "{10 / 0}"
+                             ^

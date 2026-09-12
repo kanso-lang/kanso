@@ -1,0 +1,8 @@
+error[naming]: `silly` answers only true or false: name it `silly?`
+  --> a_boolean_comparison_does_not_silence_the_rest.kso:1:4
+   1 | fn silly b
+          ^
+error[name]: comparing to `true` asks a question the value already answers — write the value itself
+  --> a_boolean_comparison_does_not_silence_the_rest.kso:2:5
+   2 |   b == true
+           ^

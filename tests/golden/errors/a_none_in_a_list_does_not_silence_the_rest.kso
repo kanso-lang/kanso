@@ -1,0 +1,4 @@
+fn silly? n
+  [n none 3]
+
+pub play = print "{silly? 1}"
