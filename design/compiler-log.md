@@ -4073,3 +4073,59 @@ cut work out of the whole-program walks, so whichever lands second collects
 less. This is the ordinary shape of a queue and not an error in either reading
 -- but a delta is a fact about a pair of trees, and quoting one against a base
 that has since moved is the mistake to avoid.
+
+## 2026-09-12 — a name is a type only where a cheap test says it could be
+
+Searched the log, the archive and design/ before filing. The filter shape is
+kanso#1168's (the bare-name walk's necessary condition) and kanso#1374's; what
+is new here is the map it stands in front of, `infer::Ctx::type_names`, which
+neither entry touches.
+
+**The ask.** `ident_set` and `eval_call` each ask `type_names` whether the
+identifier under them names a declared type. The module corpus asks 4,847 times
+and gets yes 618 times; the entry corpus asks 16,546 and gets 2,610. Seven asks
+in eight are a SipHash over the name for the answer no.
+
+**Why the cheap reorder is unsound.** Asking `groups` first and reaching
+`type_names` only when no function matched would cost nothing at all, and it
+changes which programs compile. A type and a function can share a name, and
+src/check.rs:1824 already says what happens: a bare name the alias pass
+qualified reads as a construction of the imported type of the same name, and
+refusing it "rejects a program that compiles". The reorder resolves such a name
+the other way. Recorded here so the idea is not re-opened as an obvious win.
+
+**What shipped.** A 256-bit filter, `type_name_slots`, built once from
+`type_names`' own keys beside `field_readers`. The slot is first byte, plus
+last byte times seven, plus length times thirteen, masked to 255. A clear bit
+is proof of absence; a set bit still goes to the map, so no answer changes.
+Builder and test both call `tn_slot`, so they cannot disagree about a name.
+
+Rejection measured against the name sets dumped from both corpora rather than
+estimated: 3,869 of the module corpus's 4,229 misses (91.5%), 10,877 of the
+entry corpus's 13,936 (78.0%). An FNV over the whole name reaches 94.5% and
+79.1% and walks the name to do it, which is the walk this test exists to skip.
+
+**Watched red first, at the observable end.** With `may_be_type` wired to
+answer no, `tests/golden/mem/record_reuse_shape.kso` goes red on the running
+program's allocator counters — `beat_iters` 4,000 -> 0, `survive_slots`
+16,006 -> 4 — because an unrecognised constructor stops widening `type_fields`
+and the emitted program takes another shape. The mem vein already pins those
+counters; nothing new was asserted to make the spec fail.
+
+**Container reading**, `kanso::main` inclusive under callgrind, pinned
+tunables, on top of kanso#1374 and kanso#1376:
+
+    module  47,615,866 -> 47,467,069    -148,797  -0.3125%
+    entry  158,412,875 -> 158,096,940    -315,935  -0.1994%
+    summed 206,028,741 -> 205,564,009    -464,732  -0.2256%
+
+**A correction to the projection that opened the lead.** It was sized at about
+1.35M from "roughly a hundred instructions a lookup". The real figure is
+464,732, which puts a hashbrown `get` on a short `&str` at about 32
+instructions. The hundred was a guess and it was 3x high.
+
+**Env::get, measured and closed.** `Env` is a `Vec<(&str, Set)>` walked
+backwards on every name resolution and looked like the other half of this lead.
+It is not: 17,055 calls walking 42,930 entries on the module corpus, 56,501
+walking 150,032 on the entry corpus — under three entries a call. No
+discriminator is worth building in front of that. DONE, not open.
