@@ -4477,3 +4477,29 @@ identical ten imports and are the same measurement.
 
 Against main the compile term now stands at +4,549,526 rather than +6,384,873,
 so 28.7% of the fall is recovered and the floor still has to move for the rest.
+
+**Two implementations that agreed exactly were reported as disagreeing, and
+the fault was rounding a rounded number.** DONE. Searched the log, the archive
+and design/ for a prior entry on the score comparison: there is none.
+`the_score_says_what_it_was_made_of` has compared welfare's banner against the
+rescorer's column since the column was minted, and has been wrong at a boundary
+the whole time without anything reaching one.
+
+The hoist above put welfare at 67.54499292290286, which is 67.5450 in the four
+places the history column carries and 67.54 in the two the banner prints. The
+spec read the column, rounded it to two, and got 67.55. Anything in
+[67.5445, 67.5450) reads that way; nothing had landed there before. The macos
+job failed on two targets rather than one for this reason, and the first
+reading of that job here called them one cause, which was wrong.
+
+`welfare --score` prints the column's own precision and the spec compares the
+two as they are written. That is a hundred times tighter than what it replaced
+rather than looser: perturbing the rescorer's satiation by one part in ten
+thousand now reads 67.5432 against 67.5450 and turns the spec red, where the
+old two-place comparison rounded both to 67.54 and passed. Watched both ways —
+red on the real defect before the fix, red on the injected drift after it.
+
+The flag reports and cannot ratchet, which is what the file's existing
+`asking_what_was_scored_does_not_move_the_floor` exists to hold for
+`--counters`; `--score` reads the same value the banner does and writes
+nothing.
