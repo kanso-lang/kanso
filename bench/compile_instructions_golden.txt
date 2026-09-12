@@ -1276,4 +1276,28 @@
 # every pair is measured on the base it lands on.
 #
 # The container projected -273,196 on this row and CI reads 0.88 of that.
-compile_instructions=45522524
+#
+# 2026-09-12 (the literal-argument check joins the one descent):
+# 45,522,524 -> 44,888,539, a FALL of 633,985 (-1.3927%). The third of the
+# seven whole-program walks in `check_merged_after_aliases` to fold.
+# `literal_walk_expr` asked of every call whether a literal argument sits where
+# the declared group takes something else, and its driver was `check_per_node`'s
+# loop written a third time. The two are one loop now and the check's tables
+# ride in the `PerNode` struct the shapes fold introduced.
+#
+# THE CONTAINER UNDER-READ THIS ROW BY HALF. It projected -314,725 and CI reads
+# 633,985, a ratio of 2.01. The two prior rounds read 1.04 and 0.88. Three
+# points now span 0.88 to 2.01, so the offset between the two hosts is not a
+# ratio to correct for at all -- it is noise the size of the effect. A compile
+# delta is projected from CI or it takes the red round; the sentence in the
+# entry above saying the hosts "do not agree to a fixed ratio" was right and
+# understated how far.
+#
+# This is also the fold whose stacking is NOT additive. Against the pre-catch-
+# mask base it was worth -2,767,937 summed; on top of kanso#1381 it is
+# -2,326,456 -- 441,481 lost, 16% of the fold. The catch mask decides a
+# dispatch group's mask once instead of per call and `literal_argument_at` asks
+# about the same call sites, so whichever lands second collects less. The two
+# pairs before it were additive to 0.067% and 0.76% and said nothing about
+# this one.
+compile_instructions=44888539

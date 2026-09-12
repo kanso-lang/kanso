@@ -4039,3 +4039,83 @@ a ceiling on what folding could reach rather than a target. The entry side is
 `for_each_child` inclusive under each and the predicates running outside the
 child enumeration are not in that figure. Every one of those four checks
 refuses something a program can do wrong, and the suite is red with them gone.
+
+## 2026-09-12 — the literal-argument check joins the one descent, and stacking these folds is not additive
+
+`check_merged_after_aliases` runs seven whole-program expression walks over the
+same nodes. #1382 folded the first, #1383 the second. This is the third that
+can move: `literal_walk_expr`, which asks of every call whether a literal
+argument sits where the declared group takes something else. Its driver was
+`check_per_node`'s loop written a third time — iterate `program.fns`, skip
+synthetic, take each statement's expression, descend — and the two are one loop
+now.
+
+The tables the check needs ride in the same `PerNode` struct the last fold
+introduced. It grew two fields: `groups`, the literal-group table, and `types`.
+Both are built once over the whole program, as they were before.
+
+**The measurement, on the container against #1383's head:**
+
+    module   45,488,806 ->  45,174,081    -314,725
+    entry   151,905,787 -> 150,841,086  -1,064,701
+    summed  197,394,593 -> 196,015,167  -1,379,426  -0.6988%
+
+**Stacking is not additive, and this is the counter-example #1381's body asked
+for.** Three pairs were measured on this box:
+
+    catch mask + decidable fold  (#1381+#1382)   additive to 0.067%
+    catch mask + shapes fold     (#1381+#1383)   additive to 0.76% (7,557)
+    catch mask + literal fold    (#1381+#1384)   -441,481 lost, 16% of the fold
+
+Read on the pre-catch-mask base this fold was worth -2,767,937. Rebased onto
+#1381 it is worth -2,326,456. The catch mask decides a dispatch group's mask
+once instead of per call, and `literal_argument_at` asks about the same calls;
+the work each removes overlaps, so the second one to land collects less. The
+first two pairs happen not to overlap and say nothing about the third. A fold's
+value is therefore a property of the base it lands on, and projecting one from
+another branch's reading is wrong by up to a sixth.
+
+**The census is not a reliable estimator either.** The shapes fold realised 65%
+of its census on this container; the literal fold realised 128% on the
+post-#1381 base and 161% on the pre-#1381 one. What the census misses is the
+driver — the per-declaration re-entry, the statement loop, and a
+`for_each_param_name` taking a `&mut dyn FnMut` per parameter over 1,437
+declarations. The census counts `for_each_child` inclusive under a visitor and
+cannot see the loop that calls it.
+
+**The arity gate is not disturbed.** `check_merged_after_aliases` drops every
+other diagnostic and returns as soon as `check_per_node` has pushed one of kind
+`arity`. `literal_argument_at` pushes kind `type`, so it arrives inside the
+walk's block without reaching that gate — which is exactly what keeps
+`named_walk` out, and why this one goes in.
+
+Error corpus 204 fixtures byte-identical, golden suite 11/11, clippy and fmt
+clean. Round one is deliberately red on the six host-keyed compile veins; this
+container refuses all of them and CI is the host of record.
+
+**Round two — CI's rows, and the container under-read this one by half.**
+
+    module   45,522,524 ->  44,888,539    -633,985  -1.3927%
+    entry   151,534,916 -> 149,925,203  -1,609,713  -1.0623%
+    library 152,261,219 -> 150,211,345  -2,049,874  -1.3463%
+    summed  197,057,440 -> 194,813,742  -2,243,698  -1.1386%
+
+`compile_allocs` 29,335 -> 29,323, a fall of 12: the old driver built a bound
+set per declaration to decide which head names were locally shadowed, and the
+fused walk reads the one `check_per_node` already keeps. `compile_memory` is
+byte-identical. Welfare 67.73 -> 67.75, banked in the same commit; seven
+`data-golden` spans on compiler.html regenerated, all three page gates green.
+
+The container projected -314,725 on the module row and CI reads 633,985 — a
+ratio of 2.01, where the two rounds before it read 1.04 and 0.88. Three points
+spanning 0.88 to 2.01 say the offset between the two hosts is not a ratio to
+correct for; it is noise the size of the effect being measured. The previous
+entry's "the two hosts do not agree to a fixed ratio" was right and too mild.
+
+The entry row takes 71.7% of the summed fall against 76.0%, 76.1% and 78.0%
+for the two folds before it. And this row and the library row part by 0.2840
+percentage points, against 0.0035 and 0.0015 — the widest a fold has split
+them. Both readings say the same thing: the entry and library corpora hold
+different mixes of call sites in bodies, and this check keys on exactly those,
+where the earlier folds' savings were keyed to nodes and could not see the
+difference.
