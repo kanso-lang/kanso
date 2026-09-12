@@ -4164,6 +4164,49 @@ their goldens: the runtime work is the same because the test those defines
 carried always answered the same way. The host-keyed compile rows are
 CI's to measure; parser.rs and check.rs both change.
 
+**CI's sitting.** The four programs that lost emitted code lost retired
+instructions and machine code with them, and the other ten are
+byte-identical in all three veins — the same four, three ways, which is
+what one per-program test going away looks like:
+
+    escapebench  work     85,558,106 -> 85,558,078     text 57,922 -> 57,490
+    indexbench   work      3,265,849 -> 3,265,819      text 62,162 -> 61,730
+    scanbench    work    587,488,506 -> 587,488,450    text 159,842 -> 158,930
+    runbench     work  2,252,446,969 -> 2,252,446,915  text 247,474 -> 247,026
+
+The falls are tens of instructions because the test ran once per program
+rather than inside a loop. The compile rows RISE, and that is the refusal's
+own cost: check_box_where_value is a new whole-program pass reading infer's
+return sets.
+
+    compile_instructions    49,097,584 -> 50,824,229   +1,726,645  +3.5167%
+    entry_instructions     164,060,471 -> 170,001,743  +5,941,272  +3.6214%
+    library_instructions   164,342,505 -> 170,286,677  +5,944,172  +3.6166%
+    compile_allocs              29,350 -> 29,396              +46  +0.1567%
+
+compile_peak_bytes holds at 774,660. The objective's compile term is the
+module and entry rows summed: 213,158,055 -> 220,825,972, +3.5970%.
+
+**So welfare falls 67.59 -> 67.52, and the floor is Clay's to move.** Every
+term that moved is a compile term, the fall is 0.07, and the 2026-08-25
+language clause is what has covered a ruled feature's compile cost three
+times before (#1355, #1356, #1359). The hand edit that clause calls for is
+refused in this session by the permission classifier, exactly as on #1369,
+so this branch and that one now wait on the same permission.
+
+**The differential the plain dot broke, and the three it hid.**
+`scripts/effects_differential` writes its 31 programs as source strings,
+and 25 of their effect binds were spelt with the plain dot — so with the
+dot an application they stopped binding and 15 of the 31 went wrong. They
+are respelt `.>` here, the same respell kq#102 made and this change already
+made in the fixtures. Three of the 31 kept passing and are respelt too:
+`(_ -> 7) (io/write "")` happens to answer what the bind answered, so
+`re_enter`, `computed` and `group_of_binds` were green for the wrong
+reason and had stopped testing what they are named for. The step's failure
+also SKIPPED `dispatch_differential`, `module_differential` and
+`diagnostic_coverage`, which had therefore never run on this branch; all
+three are green (22 cases, 36 modules, 319 diagnostics).
+
 **Spec.** `tests/golden/micro/a_plain_dot_hands_the_box_over.kso` on native
 and the oracle: `math/random 6 . held` rendered as `held <io>`, the same
 box bound with `.>` after the plain step, and a missing file's read handed
