@@ -140,7 +140,27 @@ front_end_rounds=62
 # own algorithm and so are the same on every host, which is why the number is
 # written down rather than left for CI -- but the file's other row is host-
 # keyed, so round one confirms it and CI's sitting is what stands.
-front_end_visits=22727
+# 2026-09-12 (the range sort, kanso#1376): front_end_visits 22,727 -> 22,724,
+# a FALL of 3, or 0.0132%; rounds hold at 62.
+#
+# `callee_first` deduplicates a declaration's mentions by the RANGE each name
+# resolves to instead of by the name's own bytes, so `flat` is built in the
+# order `by_name` hands ranges out where it used to be built in name order.
+# That is a different order for the depth-first walk that reads it, so the
+# fixpoint reaches the same least fixed point by a different route.
+#
+# THREE VISITS is the whole of that difference, and it is the number worth
+# recording. The change is worth 3,518,791 summed compile instructions on this
+# container, and the worry was that a reordered fixpoint had simply got lucky
+# — the hazard kanso#1338's entry recorded for the twin skip, where a moved
+# visit order meant the delta sized rather than bounded the change. Here it
+# does bound it: 3 visits in 22,727 is 0.013%, so essentially none of the fall
+# is the new order and essentially all of it is the sort that is gone.
+#
+# `emitted_code` AGREED across the change, which is the same finding from the
+# other end: the compiler wrote byte-identical code, so the answers did not
+# move, only the route to them.
+front_end_visits=22724
 # 2026-08-31 (the AST's identifiers are inline names): 728,030 -> 713,606, a
 # fall of 14,424, or 1.98%. Banked. The peak falls with the traffic because a
 # short name's bytes now live inside the AST node the allocator already gave
