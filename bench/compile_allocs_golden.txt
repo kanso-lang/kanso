@@ -345,4 +345,15 @@
 # constructions that built it are a word. All four compile rows fall together
 # and this one falls furthest in relative terms, which is what a change that
 # deletes a declaration rather than reshaping one looks like.
-compile_allocs=29350
+#
+# 2026-09-12 (the shadow set deferred): 29,350 -> 29,338, a FALL of 12
+# (-0.0409%). The set of a declaration's bound names is a HashSet, and the
+# twelve are its first allocations on the declarations that now never build
+# it. A CORRECTION to the round before this one: that round's notes said the
+# five paydowns could not move this row because reordering tests and sharing
+# frames allocates nothing new, and CI agreed. Deferring a set is a different
+# shape -- it stops allocating something old -- and this row is where that
+# shows up. The row moved for the reason the earlier note ruled out, which is
+# the point: the note was right about those five changes and not about the
+# family.
+compile_allocs=29338

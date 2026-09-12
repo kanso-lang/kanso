@@ -138,4 +138,15 @@
 # 2026-09-11 (a validated string knows its length): 164,324,373 -> 164,342,505,
 # a rise of 18,132 (+0.0110%). The same layout move as the other two compile
 # rows; see bench/compile_instructions_golden.txt.
-library_instructions=164342505
+# 2026-09-12 (five compile-cost paydowns in the whole-program checks):
+# 164,342,505 -> 160,184,317, a FALL of 4,158,188 (-2.5302%). The same three
+# fusions and two necessary conditions; see
+# bench/compile_instructions_golden.txt.
+# 2026-09-12 (the shadow set deferred, on top of the five paydowns):
+# 160,184,317 -> 158,447,681, a further FALL of 1,736,636 (-1.0842%), and
+# 164,342,505 -> 158,447,681 against main, a FALL of 5,894,824 (-3.5868%).
+# See bench/compile_instructions_golden.txt. This row and the entry row fall
+# within 1,490 instructions and 0.0009 percentage points of each other, which
+# is what a per-declaration saving looks like on two routes that differ only
+# in how they were entered.
+library_instructions=158447681
