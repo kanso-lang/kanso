@@ -233,6 +233,19 @@ it. The floor edit is not a shortcut around work that could be done instead.
    2026-08-25 clause has a size threshold it has never had, and would send both
    rulings back to be rebuilt at a compile cost they do not have.
 
+**A fourth option, and the reason it is needed.** This file's own header says
+edits to it ride small, promptly-merged PRs and never a feature branch, so the
+ledger cannot fork. This entry breaks that rule and cannot avoid it from here.
+It lives on `claude/go-to-town-m0dicm`, which carries kanso#1369's whole build
+and cannot merge until the permission above is granted — so the entry asking
+for the permission reaches main only after the permission is given. kanso#1370
+cleaned up a fork of exactly this shape on 2026-09-11.
+
+4. Grant a third branch for ledger-only edits. This entry then lands on main in
+   a small PR of its own, and the next session reads it whether or not the two
+   builds have moved. It is the smallest of the four asks and it is the one
+   that fixes how you hear about the others.
+
 **Recommendation:** 1. The clause is settled and has been walked three times;
 this is a harness permission rather than a design question, and it is the only
 thing standing between two of your rulings and main. 2 works and costs you a
