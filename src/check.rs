@@ -490,20 +490,15 @@ fn call_shaped_at(
 
 fn check_effect_discarded(
     program: &Program,
-    inference: &crate::infer::Inference,
+    returns: &HashMap<(&str, usize), crate::infer::Set>,
     diags: &mut Vec<Diagnostic>,
 ) {
     use crate::infer::DESC;
-    // inference is handed in: one pass serves every check that reads it
 
-    let mut returns: crate::hash::Map<(&str, usize), crate::infer::Set> =
-        crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
     // a position every arm throws away
     let mut discarded: crate::hash::Map<(&str, usize, usize), bool> =
         crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
-    for (i, d) in program.fns.iter().enumerate() {
-        let key = (d.name.as_str(), d.params.len());
-        *returns.entry(key).or_insert(0) |= inference.returns[i];
+    for d in &program.fns {
         for (pos, param) in d.params.iter().enumerate() {
             let wildcard = matches!(param, Pattern::Wildcard(_));
             let slot = discarded.entry((d.name.as_str(), d.params.len(), pos)).or_insert(true);
@@ -1683,6 +1678,18 @@ pub fn check_merged_after_aliases(
         return diags;
     }
     let inference = crate::phase::watched("infer", || crate::infer::infer(program));
+    // What a dispatch group answers, keyed by name and arity. Three checks
+    // below asked this and each built it for itself, in loops identical to
+    // the byte; inference is handed round for exactly this reason and the
+    // table over it should be too. A fourth build sits in
+    // `check_none_exhaustive`, which runs only under KANSO_EXHAUSTIVE and so
+    // keeps its own.
+    let mut returns: HashMap<(&str, usize), crate::infer::Set> =
+        HashMap::with_capacity_and_hasher(program.fns.len(), Default::default());
+    for (i, d) in program.fns.iter().enumerate() {
+        *returns.entry((d.name.as_str(), d.params.len())).or_insert(0) |= inference.returns[i];
+    }
+    let returns = returns;
     check_constants(program, &mut diags);
     check_constant_cycles(program, &mut diags);
     check_predicates(program, &inference, &mut diags);
@@ -1695,10 +1702,10 @@ pub fn check_merged_after_aliases(
     check_overlapping_arms(program, &mut diags);
     check_field_exists(program, &mut diags);
     check_literal_arguments(program, &mut diags);
-    check_effect_discarded(program, &inference, &mut diags);
-    check_wall_operands(program, &inference, &mut diags);
+    check_effect_discarded(program, &returns, &mut diags);
+    check_wall_operands(program, &returns, &mut diags);
     check_decidable_failures(program, &mut diags);
-    check_discarded_value(program, &inference, &mut diags);
+    check_discarded_value(program, &returns, &mut diags);
     check_shapes_per_node(program, &mut diags);
     // This route hands its diagnostics back in push order — only the gated
     // return above sorts — so where a check pushes is what a reader sees.
@@ -3908,15 +3915,10 @@ fn moved_to_os(name: &str) -> String {
 /// which those are. An operand it cannot judge is left alone.
 fn check_wall_operands(
     program: &Program,
-    inference: &crate::infer::Inference,
+    returns: &HashMap<(&str, usize), crate::infer::Set>,
     diags: &mut Vec<Diagnostic>,
 ) {
     use crate::infer::{DESC, ERR};
-    let mut returns: HashMap<(&str, usize), crate::infer::Set> =
-        HashMap::with_capacity_and_hasher(program.fns.len(), Default::default());
-    for (i, d) in program.fns.iter().enumerate() {
-        *returns.entry((d.name.as_str(), d.params.len())).or_insert(0) |= inference.returns[i];
-    }
 
     // An err is a legitimate operand — propagating one is what the wall does
     // when a side fails — so only a side that can be neither an effect nor a
@@ -4054,15 +4056,10 @@ fn check_wall_operands(
 /// group's join naming `&`, an operator the author never wrote.
 fn check_discarded_value(
     program: &Program,
-    inference: &crate::infer::Inference,
+    returns: &HashMap<(&str, usize), crate::infer::Set>,
     diags: &mut Vec<Diagnostic>,
 ) {
     use crate::infer::{DESC, ERR};
-    let mut returns: HashMap<(&str, usize), crate::infer::Set> =
-        HashMap::with_capacity_and_hasher(program.fns.len(), Default::default());
-    for (i, d) in program.fns.iter().enumerate() {
-        *returns.entry((d.name.as_str(), d.params.len())).or_insert(0) |= inference.returns[i];
-    }
 
     // A construction answers its own type and nothing else, so it is refused
     // wherever a call that can only answer a value is. A typeset is a

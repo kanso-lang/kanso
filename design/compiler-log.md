@@ -3718,6 +3718,57 @@ It is not: 17,055 calls walking 42,930 entries on the module corpus, 56,501
 walking 150,032 on the entry corpus — under three entries a call. No
 discriminator is worth building in front of that. DONE, not open.
 
+
+## 2026-09-12 — three checks each rebuilt the same table, in loops identical to the byte
+
+Searched the log, the archive and design/ before filing. `returns` as a
+`(name, arity) -> Set` table appears in the 2026-08-25 entry that introduced
+`check_wall_operands` and in kanso#1229's arity work; neither notices that the
+build is written out more than once.
+
+**What was there.** `check_merged_after_aliases` runs `infer` once and hands
+the `Inference` to every check that reads it — that much was already the
+arrangement, and a comment in `check_effect_discarded` said so. But three of
+those checks did not want the inference. They wanted one table over it: what a
+dispatch GROUP answers, keyed by name and arity, which is the union of
+`inference.returns[i]` over the declarations sharing a name and a parameter
+count. Each built it for itself:
+
+    let mut returns: ... = ...with_capacity_and_hasher(program.fns.len(), ...);
+    for (i, d) in program.fns.iter().enumerate() {
+        *returns.entry((d.name.as_str(), d.params.len())).or_insert(0)
+            |= inference.returns[i];
+    }
+
+`check_wall_operands` and `check_discarded_value` hold that text verbatim;
+`check_effect_discarded` spells the map `crate::hash::Map` (the same alias) and
+fuses the loop with its `discarded` table. A fourth build sits in
+`check_none_exhaustive` and keeps its own, because that check runs only when
+KANSO_EXHAUSTIVE is set and so is not on the path any of this measures.
+
+**What shipped.** The table is built once beside `inference` and handed round
+as `&HashMap<(&str, usize), Set>`. All three checks then stop reading the
+inference at all, so the `inference` parameter comes off their signatures too —
+which is how you can tell the table, not the inference, was what they wanted.
+
+    module  47,615,866 -> 47,358,386    -257,480  -0.5408%
+    entry  158,412,875 -> 157,578,138    -834,737  -0.5270%
+    summed 206,028,741 -> 204,936,524  -1,092,217  -0.5301%
+
+**The sizing was 4x low and the reason is in the count.** This was filed as
+"two builds, about 273,000", counting the two verbatim ones and pricing them
+off an earlier per-declaration figure. There are three live builds, not two,
+and the module corpus's 257,480 over three passes of 1,437 declarations is
+about 60 instructions a declaration — a hash of the name plus a hashbrown
+entry, which is what that costs. The entry corpus falls further because it
+merges more declarations, not because the saving is different there.
+
+**No fixture.** The change removes no behaviour and adds none: the table it
+builds is the table the three checks built, by the same union in the same
+order, and every diagnostic in the 201-fixture error corpus is byte-identical.
+There is nothing here that a program could observe and the goldens could not.
+Full release suite green: 129 binaries, 0 failures.
+
 ## 2026-09-12 — a dispatch group's catch mask is the same answer every visit
 
 Searched the log, the archive and design/ before filing: `pattern_catches`
