@@ -197,4 +197,12 @@
 # bench/compile_instructions_golden.txt. This row and the entry row part by
 # 0.0035 percentage points. Both routes walk the same bodies and the saving is
 # per node, so there is nothing for the two entrances to differ over.
-library_instructions=152261219
+# 2026-09-12 (the literal-argument check joins the one descent):
+# 152,261,219 -> 150,211,345, a FALL of 2,049,874 (-1.3463%). See
+# bench/compile_instructions_golden.txt. This row and the entry row part by
+# 0.2840 percentage points, the WIDEST they have run on one of these folds
+# against 0.0035 and 0.0015 before it. The library corpus is definitions alone
+# and the entry corpus runs statements, and this check keys on call sites in
+# bodies: the two corpora hold different mixes of those, which the earlier
+# folds' per-node savings could not see.
+library_instructions=150211345

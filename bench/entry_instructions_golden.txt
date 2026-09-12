@@ -214,4 +214,12 @@
 # bench/compile_instructions_golden.txt. The entry row carries 76.0% of the
 # summed fall, against 76.1% for the same diff on the pre-catch-mask base --
 # the share a saving keyed to nodes takes here, twice.
-entry_instructions=151534916
+# 2026-09-12 (the literal-argument check joins the one descent):
+# 151,534,916 -> 149,925,203, a FALL of 1,609,713 (-1.0623%). See
+# bench/compile_instructions_golden.txt. The entry row carries 71.7% of the
+# summed fall, against 76.0% and 76.1% for the shapes fold and 78.0% for the
+# decidable one. The share drifts down because this check's per-node question
+# is cheap where its per-declaration driver was not, so more of the saving
+# sits in the module row's declaration count than in the entry row's node
+# count.
+entry_instructions=149925203
