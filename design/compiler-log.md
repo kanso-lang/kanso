@@ -4137,3 +4137,26 @@ line start, and not one of kq's 25 sites begins a line. It found zero, and the
 conclusion "the failing site is kq's source" was drawn from it anyway.
 Unanchored, ` \. ` finds all of them, in main.kso, query/cli.kso and the three
 bench gates.
+
+**The exhaustiveness rule's compile cost cannot be optimised away, measured.**
+Before accepting the floor move on #1369, two ablations were run to see whether
+the rise could be given back instead. Both on this container, callgrind,
+`kanso::main` inclusive, `./kanso check compile_corpus` in
+/tmp/kanso-compile-ir under the gate's own pinned GLIBC_TUNABLES and `env -i`:
+
+    branch as it stands                 50,959,782
+    a could_yield_none prefilter        50,920,876   -38,906
+    check_none_exhaustive's walk gone   50,472,794   -486,988
+
+The module row has to fall about 1,130,000 to reach main's 49,097,584. So
+skipping the callee lookup on arguments that cannot yield none buys 3.4% of the
+rise, and deleting the rule's whole traversal buys 43%. The prefilter was
+proved behaviour-identical first -- golden 11/11, error corpus and micro corpus
+across the engines -- and is still not worth landing at that size. Both are
+reverted.
+
+The entry that shipped the rule says what is left is "the check's own walk and
+the shadow load". These numbers split that: the walk's lookups are 38,906 of
+it, its traversal 486,988 in total, and the remaining ~643,000 is the keyed map
+build and the shadow load. The rule needs all three, which is why the fall
+stands rather than being bought back.
