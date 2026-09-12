@@ -4409,3 +4409,53 @@ thing that was wrong.
 This is independent of the effect-type sequence. The appendix has been wrong
 since #1364 landed, which is why it lands on its own rather than behind the
 plain dot becoming an application.
+
+## 2026-09-12 — the exhaustiveness rule pays down two of its three costs
+
+kanso#1369 is built and blocked on the floor, and while it waits the pass it
+adds is the largest single compile cost on either open branch. Two changes,
+each measured on its own, on the branch rather than on main.
+
+**A call asks its arguments before it asks the returns table.** The walk
+consulted the table at every call site with an identifier head, and that
+lookup hashes the callee's name where the none question is a match on the
+argument's shape. Most call sites hand over literals, arithmetic or field
+reads and answer no on the match alone. Summed 220,373,766 -> 220,182,802,
+-190,962 (-0.0867%). The same shape kanso#1372's round four found in the
+effect check; the three early returns are the same three conditions
+reordered, so no diagnostic moves.
+
+**The shadow table accumulates instead of re-deriving.** It said, for every
+arm and every position, what every arm above takes there, walking each
+earlier arm's whole parameter list once per position. The answer grows by one
+arm at a time, so each arm now reads the running total and folds in its own,
+and whether an arm settles a position is one count of its parameters rather
+than one scan per position. Summed 220,182,802 -> 220,117,045, -65,757.
+
+The interesting part of that second one is the first cut, which measured
+294,981 WORSE. Skipping single-arm groups is what makes it pay: the work the
+running total saves lives in long groups, which are rare, and the per-arm
+count it adds lands on every group, and most groups are one arm. The entry
+of 2026-09-11 above put the keyed map build and the shadow load together at
+about 643,000; this pays down the build side of that pair and leaves the
+load, which measures 610 and is not worth a shape.
+
+**A figure that is available and does not ship.** Isolating either loop by
+ablation needs the mask in `widen_param` ablated too, or the shadow values
+move and the fixpoint moves with them. Under that barrier the old build
+reads 984,991 and the new one 440,448 — and those are not the change's
+delta, because `black_box` there changes how the whole of infer inlines, and
+that function's inlining already carries a pinned attribute and a measurement
+saying why. The shipping numbers above are end-to-end with the mask live and
+the two tables proven identical.
+
+Watched red first against the derivation rather than a downstream effect:
+the old loop was kept beside the new one and the two tables asserted equal
+over the whole compile corpus, where the table holds dozens of live entries.
+An off-by-one letting an arm read its own contribution trips it on the first
+module. The scaffold is removed; golden 11/11.
+
+The whole pass, ablated, is 2,500,754 of the branch's compile cost and the
+shadow machinery another 985,601, against roughly 3.9M the branch carries at
+container levels. What is left of that is the traversal, which is kanso#487's
+and not this pass's alone.
