@@ -363,4 +363,11 @@
 # than rebuilt, so the three are its growth steps over the whole compile and
 # not a per-declaration cost. The dead scan removed in the same branch
 # allocated nothing, so none of the three is its.
-compile_allocs=29341
+#
+# 2026-09-12 (three checks each rebuilt the same (name, arity) table): 29,341
+# -> 29,327, a FALL of 14 (-0.0477%). Three checks each built their own
+# `(name, arity) -> Set` map over `inference.returns`; the table is built once
+# now and handed round. Fourteen rather than three, because the row counts the
+# whole compile and `check_merged_after_aliases` runs once per module the
+# directory holds, not once per compile.
+compile_allocs=29327

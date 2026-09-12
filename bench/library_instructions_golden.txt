@@ -162,4 +162,8 @@
 # within 0.0104 percentage points of each other after last round's 0.2725,
 # which is what a saving keyed to identifiers rather than to declarations looks
 # like: both routes walk the same bodies.
-library_instructions=156463912
+# 2026-09-12 (three checks each rebuilt the same (name, arity) table):
+# 156,463,912 -> 155,663,482, a FALL of 800,430 (-0.5116%). See
+# bench/compile_instructions_golden.txt. This row and the entry row part by
+# 0.0096 percentage points, the closest they have ever run.
+library_instructions=155663482
