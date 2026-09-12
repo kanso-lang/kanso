@@ -356,4 +356,11 @@
 # shows up. The row moved for the reason the earlier note ruled out, which is
 # the point: the note was right about those five changes and not about the
 # family.
-compile_allocs=29338
+#
+# 2026-09-12 (a declaration's callees deduplicated by range): 29,338 -> 29,341,
+# a RISE of 3 (+0.0102%). `callee_first` gained a second scratch vector, the
+# ranges the gathered names resolve to. It is cleared per declaration rather
+# than rebuilt, so the three are its growth steps over the whole compile and
+# not a per-declaration cost. The dead scan removed in the same branch
+# allocated nothing, so none of the three is its.
+compile_allocs=29341

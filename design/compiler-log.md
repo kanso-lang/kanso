@@ -20,344 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-08 (fifth) — the entry path compiles and nothing counted it
-
-Searched the log, the archive and design/ before filing: `compile_parsed_entry`
-appears in the 2026-09-08 entries for kanso#1324, #1325 and #1326 and in
-kanso#1329's revert, and every one of them measures it on a corpus that lived in
-a session's temporary directory. None of them asks why there is no vein.
-
-**The two compiles.** `kanso check <directory>` is a module and goes through
-`compile_module_inner`. `kanso check <file>` with a top-level expression is an
-entry and goes through `compile_parsed_entry`, which merges the imports itself
-and runs its own whole-program check at src/lib.rs:160. Proved by probe, not by
-reading: an `eprintln!` at the entry site fires once for
-`bench/entry_corpus/main.kso` and not at all for `kanso check
-bench/compile_corpus`.
-
-Every compile gate in the tree checks a directory. So the call at line 160 was
-watched by nothing, and `KANSO_PHASES` cannot separate the two — `load_dependencies`
-compiles each import through the module path, so a phase report over an entry is
-the union of both.
-
-**What that cost.** kanso#1326 projected a RISE of 629 from this container and CI
-read a FALL of 367. kanso#1324 and #1325 landed on numbers no CI job could
-reproduce. Two further findings — the synthetic-twin skip below and kanso#1329's
-reverted reorder — were measured and could not be landed against anything.
-
-**The vein.** `bench/entry_corpus/main.kso` names ten imports and uses each,
-following bench/compile_corpus's rule that a workload is named rather than
-inherited; it imports ten where the compile corpus imports four, because the
-entry path's own work is the merge and the check over everything the imports
-bring and a corpus with one small import measures mostly the module path
-underneath it. `scripts/gates/entry_instructions.sh` counts it the way
-`compile_instructions.sh` counts its own — same box, same emptied environment,
-same pinned tunables, same `kanso::main` anchor — and every reason for those is
-left in the original rather than restated.
-
-`bench/entry_instructions_golden.txt` opened holding zero, because the row is
-CI's and this container reads high against CI's rustc. Round one was red on
-purpose and CI answered **163,886,731**, on binary sha 3c53d0acdbcb — the same
-sha that counted `compile_instructions=48,757,859` in the same job, so both
-rows answer for one build. The container had projected 165,183,406 from the
-same recipe minus the host check: 1,296,675 high, or +0.79%, which is the
-offset already recorded between rustc 1.94.1 here and CI's 1.98.1. The
-projection was right about the size and could not have been recorded as a row.
-
-**And the trend gate did not walk the new golden.** Found by asking which
-files in bench/ `scripts/trend_gate/trend_gate.kso` names, which its own
-comments say is the only method that has ever found one of these. The list has
-been short five times: three cost goldens nobody entered, then readbench —
-whose golden the gate could not see while two of its rows were welfare terms —
-then livebench, then the consolidated run program. This would have been the
-sixth, in the very PR that exists because a compile the gates could not see
-went unpriced.
-
-Two files in bench/ are unwalked and one of them belongs that way:
-`bench/compile_libraries_golden.txt` holds five sonames rather than counters
-and its own gate diffs it byte for byte. So the excuse list is one line long,
-and `tests/every_counter_golden_is_walked_by_the_trend_gate.rs` reads bench/
-off disk, asks the gate which files it names, and fails on anything neither
-walked nor excused. Its three assertions were each watched red: dropping the
-entry golden from the gate names it in the failure; an excuse for a file that
-is not there fires the second; an excuse for a golden the gate already walks
-fires the third. Finding this by hand a sixth time was not a plan.
-
-**The ratchet row separates the two veins, measured.** The mutation asks the
-entry's whole-program check twice. In the box:
-
-    entry_instructions   165,183,406 -> 190,382,616   +25,199,210  (+15.25%)
-    compile_instructions  49,162,592 ->  49,162,592   byte-identical
-
-A vein whose defects another vein already catches would not be worth its
-callgrind run. This one is worth it: the compile row cannot move for a defect on
-this path however much work it does.
-
-**MEASURED, NOT SHIPPED — the synthetic-twin skip.** `enroll_bare` gives every
-exported declaration of an imported module a twin under its short name, cloning
-the whole declaration, body and all. On the entry corpus that is 145 of 882
-declarations and 155 of 1,035 statements, and the whole-program check walks both
-copies. It is visible as a defect only under kanso#1329's reshape, where six
-error fixtures reported one diagnostic twice at the same line AND the same
-column — `field_missing/play` and its twin `play`, both at span 4 of the same
-file, each answering `check_field_exists` once. The module path has not had this
-since kanso#1328: `canonicalize_bare_aliases` takes the twins out before the
-check there, which is why `compile_instructions` reads synthetic=0 and this whole
-thread is invisible to it.
-
-Skipping synthetic declarations in the three checks that are pure body walks —
-`check_build_blocks`, `check_none_in_collections`, `check_field_exists` — was
-built and measured in the box:
-
-    entry_instructions   165,183,406 -> 164,922,557   -260,849  (-0.1579%)
-    compile_instructions  49,162,592 ->  49,170,337     +7,745  (+0.0158%)
-
-The entry row falls 34 times what the compile row rises, and the compile row's
-rise is the branch itself plus layout — the module path has no twins to skip.
-**Welfare reads the compile row and not the entry row**, so by the objective as
-it stands today this change is a small loss. That is a question about the
-objective's inputs rather than about the change, and it is not settled here: the
-skip is left out of this PR, and what lands is the vein it would be measured
-against. Recorded as OPEN.
-
-The remaining 0.85% of kanso#1329's reverted reorder is inference, which is 22.6%
-of the entry compile against `check_merged`'s 38.3%. `infer` indexes declarations
-positionally — `vec![0; program.fns.len()]`, groups by index — so it does not take
-a `continue`, and skipping the twins there is a different change from this one.
-
-- **DONE** — the entry vein: corpus, gate, golden with CI's row, CI step and
-  summary row, ratchet row, sweep membership, the trend gate's own list and
-  the spec that keeps it honest. The derivations in
-  `tests/the_compile_sweep_names_every_compile_gate.rs` walked past
-  `bench/entry_*` and now do not, and `the_compile_row_holds_one_value` covers
-  both instruction goldens rather than one, because the one-row-one-value ruling
-  is about the shape of a row and not about a filename.
-- **OPEN** — the synthetic-twin skip, measured above, held on the objective
-  question: should welfare's compile term read the entry path as well as the
-  module path? Two compiles, one term.
-- **OPEN** — the twins inside `infer`, worth most of the remaining 0.85%.
-
-## 2026-09-08 — the corpus change banked a six-point fall, and the precedent says it should not have
-
-Clay, reading the published chart on kanso-lang.dev/numbers: why didn't the new
-corpus ruling go retroactive, so there is no drop? The answer is that kanso#1321
-left the three compile baselines where they were, and the score fell 6.29 points
-for a change that touched no compiler code.
-
-    2026-09-08 01:53   welfare 66.0241 -> 59.7360      #1321
-    compile_instructions   19,316,962 -> 52,603,220
-    compile_allocs             11,613 ->     31,596
-    compile_peak_bytes        375,222 ->    789,740
-
-**The reason #1321 gives.** "The baselines those three are divided by were taken
-on lib/json and are left where they are: the index has an arbitrary origin and
-only its direction and the size of its moves mean anything, so re-deriving a
-historical compiler's cost on a corpus that did not exist then would buy
-nothing. This is a change of origin, not a regression."
-
-**The origin is arbitrary; the move is not.** That sentence is the argument
-against leaving it. A reader of the chart sees a six-point fall, and a fall is
-what the index says a change made worse. CLAUDE.md is explicit: "Moving the
-floor to accommodate a change while leaving the weights alone is declaring the
-objective wrong without saying so."
-
-**Re-deriving history was never what the precedent asks for.** It asks for one
-measured factor per row, taken on the same head under both definitions -- which
-#1321 already measured and recorded. Scaling each baseline by its own factor
-restores each ratio exactly:
-
-    row                     factor   ratio left as-is   ratio re-based   before
-    compile_instructions    2.7232         1.0753           2.9282       2.9282
-    compile_allocs          2.7207         1.9658           5.3483       5.3483
-    compile_peak_bytes      2.1047         1.0373           2.1833       2.1833
-
-    baselines: 56,563,967 -> 154,032,855 · 62,110 -> 168,985 · 819,217 -> 1,724,228
-
-Every ratio returns to the digit it held before the corpus moved, so the score
-does not move and the chart is flat across the change.
-
-**Three precedents, all in this repository.** The archive: "RE-BASELINED THE
-SAME WAY #729 WAS: `basket_allocs` scaled by exactly the factor", and
-"RE-BASELINED SO IT BANKS NOTHING, the same method as #729 and #741." The floor
-file's own history at 73.53: "the compile row counts the compiler's own frame;
-the baseline is re-based by the same 465,864." And at 84.51, scanbench entering
-the corpus: "The score does not move on entry, by design."
-
-**What is not in dispute.** #1321 is right that a term measured on a library
-moves whenever that library changes its imports, and the fixed corpus is the
-ruling of 2026-09-08. Nothing here argues against the corpus. The question is
-only whether the change of measurement banks a fall, and the answer this
-project has given three times is that it does not.
-
-**OPEN, and cloud's**, since the baselines and the floor are code. Two readings
-are available and both were taken on the changeover head, so no re-measurement
-is needed. If the fall is kept deliberately, that is a claim about the weights,
-which CLAUDE.md says is settled before the floor moves rather than after.
-
-## 2026-09-08 (second) — the compile term read one compile out of two
-
-Searched the log, the archive and design/ before filing: the re-basing precedent
-is the 2026-09-05 entry for kanso#1242 and the archive's #729 and #741; the entry
-vein opened in kanso#1330, whose own entry above closes with this as an OPEN
-question — "should welfare's compile term read the entry path as well as the
-module path? Two compiles, one term." This answers it.
-
-**The term summed one path.** `kanso check <directory>` takes
-`compile_module_inner`; `kanso check <file>` with a top-level expression takes
-`compile_parsed_entry`, which merges the imports itself and runs its own
-whole-program check. Every `kanso run` takes the second, and nothing counted it
-until kanso#1330. The compile term now adds the two rows:
-
-    compile_instructions   48,757,859 + 163,886,731 = 212,644,590
-
-**The baseline moves with it, so the score does not.** The entry vein has no
-reading at this objective's epoch, because its corpus did not exist then, so its
-baseline is imputed at the ratio the module row holds:
-
-    r = 154,032,855 / 48,757,859 = 3.1591390221
-    entry baseline    163,886,731 * r = 517,740,967
-    summed baseline   154,032,855 + 517,740,967 = 671,773,822
-    summed ratio      671,773,822 / 212,644,590 = 3.1591390216
-
-The preservation is algebraic — `(cb + ec*r) / (cc + ec) = r` for any `ec` — and
-it was measured rather than trusted: welfare reads 66.29 against a floor of 66.29
-before and after.
-
-**What the shape of the change turned out to be.** The plan recorded for this
-work said it was one line in `bench/objective_sources.txt`, and that was wrong.
-welfare does not build its counters from that file; it reads the goldens itself,
-in `fn measured` and a reader chain, and objective_sources is the LINK that the
-trend gate's `shifted?` and `tests/the_objective_reads_what_the_gate_watches.rs`
-replay. Both halves are needed and they are different files. The spec was watched
-red before it passed: with the second key removed it reports `compile_instructions
-reads 212644590 from welfare and 48757859 from compile_instructions`.
-
-Two smaller things the edit forced. The compile veins now reach `measured` as one
-list rather than as four positional arguments, because a fourth `compile[4]!` at
-the call site overflows the 80-column rule by three characters; the next golden
-to join is now one list entry and one binding. And the binding is `ent`, because
-`entry` is bare-enrolled from an import and the resolver refuses to shadow it.
-
-**golden_prose needed the same golden and would not have said so.** Its
-`golden_for` answers for `decode`, `encode` and `compile` and returns `[]` for
-any other family, so a page span written `data-golden="entry.entry_instructions"`
-resolves against an empty golden — a span nothing watches, which is the exact
-failure that gate was widened to fix in kanso#1047. The entry row joins the
-`compile` family instead, whose own comment already licenses it: the key names do
-not collide.
-
-**Still to ship: the twin skip.** kanso#1330 measured it and deliberately left it
-out, because the objective could see the module row's +7,745 and not the entry
-row's −260,849. Under the sum it is a fall of 253,104, −0.1190%. It is a separate
-change because it moves two goldens whose values are CI's, and this one moves no
-counter at all.
-
-## 2026-09-08 (third) — the twin skip ships, now that the objective can see it
-
-Searched the log, the archive and design/ before filing: this thread is the OPEN
-item at the end of the kanso#1330 entry above ("the synthetic-twin skip, measured
-above, held on the objective question"), and the entry above that, for kanso#1331,
-answered the question it was held on. The archive's prior art is `enroll_bare`
-and `canonicalize_bare_aliases` in the kanso#1328 entry. Nothing else is new.
-
-`enroll_bare` clones every exported declaration of an imported module under its
-short name — body and all, `synthetic = true`. On `bench/entry_corpus` that is
-145 of 882 declarations and 155 of 1,035 statements. Three checks in
-`check_merged` are pure body walks and were the only three of sixteen that read
-those clones: `check_build_blocks`, `check_none_in_collections` and
-`check_field_exists`. Thirteen others already skip them. These three now do too.
-
-CI's rows, which are the ones this vein may hold:
-
-    entry_instructions   163,886,731 -> 163,612,976   -273,755  (-0.1671%)
-    compile_instructions  48,757,859 ->  48,761,165     +3,306  (+0.0068%)
-
-Under kanso#1331's summed compile term that is
-
-    212,644,590 -> 212,374,141   -270,449  (-0.1272%)
-
-and welfare moves 66.2874470488728 -> 66.28984813328917, banked in this PR.
-
-**compile_instructions RISES to 48,761,165 and that is the change's own doing.**
-The module path has had no twins to skip since kanso#1328 put
-`canonicalize_bare_aliases` in front of the check there, so the walk does the
-same work and now pays for a test that can never say yes; src/check.rs is the
-compiler, so its bytes and the layout under them move with the edit as well.
-The row is traded against the entry row's fall, which is 83 times it.
-
-**The container projected the deltas and got the digits wrong in both
-directions**, which is the kanso#1326 lesson again. It read 165,183,406 ->
-164,922,557 for the entry row (-260,849) against CI's -273,755, and +7,745 for
-the module row against CI's +3,306. Sign and order of magnitude carried across
-rustc 1.94.1 here and 1.98.1 there; nothing finer did. Both rows are copied out
-of the job log.
-
-The compile row rises because the module path has no twins left to skip — since
-kanso#1328 `canonicalize_bare_aliases` deletes them before the check there — so
-what that row records is the branch itself plus layout. Under kanso#1331's summed
-term the entry row's fall is 34 times it, and the trade lands the right way up.
-
-A twin's body IS the original's body under a second name, and both copies are in
-the same merged program, so a twin can answer nothing the original answers
-differently. That is why no diagnostic moves. The doubling was visible once, under
-kanso#1329's reverted reorder: six error fixtures reported one diagnostic twice at
-the same line and the same column, `field_missing/play` and its twin `play`. On
-current main the dependency's own compile refuses first, so the second copy never
-reaches a reader — which is why this change has counters and no fixture.
-
-`infer` is deliberately not given the skip. It indexes declarations positionally
-(`vec![0; program.fns.len()]`, groups by index), so a `continue` misaligns it.
-That is the rest of kanso#1329's reverted reorder and stays open.
-
-## 2026-09-08 (fourth) — a compile left its IR behind, and the guard for it read the litter
-
-Searched the log, the archive and design/ before filing: the archive names
-`cached_program_binary` once, in the entry that introduced the per-pid IR path
-after concurrent builds segfaulted inside clang. Nothing records the leak, and
-nothing else in the tree measures what a `kanso run` leaves in the temp
-directory.
-
-`kanso run` caches its binary under a hash of the IR and `runtime.c`. On a miss
-it writes the IR to `kanso_run_<key>_<pid>.ll`, hands that to clang, and renames
-the staging binary into place. The `.ll` was never removed. One cold run in an
-isolated TMPDIR leaves four files and exactly one of them is a leak:
-
-    kanso_run_<key>                     185 KB   the binary cache, intentional
-    kanso_run_<key>_<pid>.ll             42 KB   THE LEAK, one per cache MISS
-    kanso_runtime_dev_<hash>.c          415 KB   content-keyed, shared, bounded
-    kanso_runtime_dev_<hash>.o          258 KB   likewise
-
-At 42 KB a miss this reached about 112,000 files in one long-lived container,
-which is the whole of a session's disk allowance, and it was the true cause of
-four "spec failures" chased as real during kanso#1330. The staging path needs no
-removal because `rename` consumes it.
-
-**The obvious fix blinds a real guard, which is why this took two attempts.**
-`tests/concurrent_build.rs::two_builds_of_one_program_do_not_share_a_file`
-proved that two concurrent builds are handed different paths BY FINDING THE
-LEFTOVER `.ll` AND READING A PID OUT OF ITS NAME. Delete the file and the guard
-has nothing to look at; the first draft of this change shipped the removal, the
-guard went green on an empty set, and the whole thing was backed out. A guard
-resting on a bug fails the moment the bug is fixed.
-
-So the guard now watches during the build rather than counting what is left. The
-IR is written before clang starts and removed after it returns, and a cold run of
-that fixture is ~133 ms with ~100 ms of that window, against a one-millisecond
-poll. It cannot pass vacuously: seeing no IR file at all is a failure with its
-own sentence, because "the race never happened" and "the race happened and was
-safe" must not look alike.
-
-**Why the sibling is not enough on its own**, measured rather than assumed. With
-the pid stripped back out of the path, this guard caught the defect in 10
-sittings of 10 and again in 5 of 5 after the rebase, where
-`many_builds_of_one_program_all_answer` caught it in 9 of 10 — it passed once
-with the bug in place, because whether two processes actually overlap on the
-file is the race, and the race is not owed to anyone. One of the two is a
-corruption that may or may not happen; this one is the decision that allows it.
-
-No counter moves. `kanso run`'s temp handling is not on any measured path: the
-compile veins run `kanso check`, which never reaches `cached_program_binary`.
-
 ## 2026-09-08 (fifth) — the entry reorder re-derived, and the alias pass refuses a valid program
 
 Searched the log, the archive and design/ before filing: the 2026-09-08 entry
@@ -4330,3 +3992,84 @@ where the figure quoted above for what kanso#1369 and kanso#1372 need was
 7,325,192. On compile instructions alone that is now more than covered.
 Whether either goes green is a welfare question over five counters and has not
 been recomputed here.
+
+## 2026-09-12 — a declaration's callees deduplicated by range, and a scan whose answer was thrown away
+
+Two changes in `src/infer.rs`, both compile-cost paydown, off main at 0b828f66.
+
+**The dead scan.** `ident_set`'s fallthrough arm walked `program.fns` twice
+with the same predicate. The first walk collected each matching declaration's
+parameter count into `arities`; the next statement was `let _ = arities;`,
+which is why no lint ever objected to a vector with no reader. Deleting it left
+the second walk — the one that widens those parameters to TOP — doing the work
+alone. Summed −102,197 (−0.0472%) on this container. Dead since abefb574, the
+original whole-program inference commit.
+
+**The range sort.** `callee_first` gathers every name a declaration's body
+mentions into a `Vec<&str>`, sorts it, deduplicates it, and looks each survivor
+up in `by_name` to append that group's members to `flat`. The sort compares
+strings, so it is an insertion sort's worth of `memcmp` per declaration, 1,437
+times; and it sorted every local, parameter and builtin in the body as well,
+only for the lookup afterwards to find nothing and drop them. The lookup now
+runs first and the sort is over the `(u32, u32)` ranges. Summed −3,518,791
+(−1.6255%).
+
+Together, against main: 216,579,492 → 212,958,504, −3,620,995 (−1.6719%).
+
+**The order of `flat` changes, and that was the thing to check.** Ranges come
+out in `by_name`'s iteration order where the old sort put members in name
+order, so the depth-first walk that reads `flat` visits a declaration's callees
+differently and the fixpoint reaches its least fixed point by another route.
+kanso#1338's entry recorded the hazard: when a fixpoint's visit order moves, a
+measured delta sizes the change rather than bounding it, because some of the
+delta may be the new order getting lucky. Two readings say it bounds it here.
+`front_end_visits` moved 22,727 → 22,724 — three visits in 22,727, 0.013% — so
+essentially none of the 3.5M is the reordering. And `emitted_code` AGREED: the
+compiler wrote byte-identical code across the change, so the answers did not
+move at all, only the route to them. The full release suite is green at 58 test
+binaries and 0 failures.
+
+**A correction to this session's own attribution.** The lead came from reading
+`Name == str` comparisons under `eval_expr` in a callgrind profile as the
+`ident_set` scan. They are not. One of the two identical walks is worth 22,534
+on the module row, not the ~244,000 that reading projected. The real memcmp
+attribution on the module corpus, 1,632,475 total or 3.24%: 234,504 in
+`check_merged_after_aliases`, 232,600 direct under `eval_expr`, 187,811 in
+`insertion_sort_shift_left` under `infer::infer` — which is the sort this entry
+is about, and the only one of the three that got paid down. The other two
+stand.
+
+**One shape built, measured and declined.** Asking `by_name` from inside
+`gather`, so the names are never collected and the `Vec<&str>` disappears
+entirely, measured 213,532,569 summed — 574,065 instructions WORSE than keeping
+the two buffers. It is the same number of lookups either way; threading the
+table and the buffer down through the recursion costs more than the one
+allocation it saves. Reverted, and the reason is written beside the buffer it
+would have removed. The revert re-measured byte-identical to the reading before
+it, which is one more sitting for this harness being deterministic.
+
+The five host-keyed veins — `machine_code`, `compile_allocs` and the three
+instruction rows — refuse to compare on this container, so CI measures them.
+
+
+Both figures are read against 0b828f66. kanso#1374 landed on main while this
+branch was in flight and takes the same corpora down by 5,407,312 on CI's
+reading, so the two paydowns do not stack arithmetically — they touch
+`src/check.rs` and `src/infer.rs` and neither calls the other, but the summed
+total this entry quotes is the older baseline. The landed rows are CI's.
+
+CI's sitting, on top of kanso#1374: compile_allocs 29,338 -> 29,341 (+3),
+compile_instructions 47,310,638 -> 46,998,377 (-0.6601%), entry_instructions
+158,169,260 -> 156,385,625 (-1.1277%), library_instructions 158,447,681 ->
+157,092,747 (-0.8552%). Summed compile term -2,095,896 (-1.0200%). Four veins
+red in round one and not five: `machine_code` agreed, which it had to -- no
+emitter was touched -- and so did `compile_memory`, where the three-visit move
+this entry describes sits inside a row the branch had already regenerated.
+
+The -3,620,995 quoted above and the -2,095,896 CI read are both true and they
+are not the same measurement. The first is this change against main as it stood
+at 0b828f66; the second is it against main with kanso#1374 in. Both branches
+cut work out of the whole-program walks, so whichever lands second collects
+less. This is the ordinary shape of a queue and not an error in either reading
+-- but a delta is a fact about a pair of trees, and quoting one against a base
+that has since moved is the mistake to avoid.

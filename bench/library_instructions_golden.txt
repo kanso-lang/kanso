@@ -149,4 +149,11 @@
 # within 1,490 instructions and 0.0009 percentage points of each other, which
 # is what a per-declaration saving looks like on two routes that differ only
 # in how they were entered.
-library_instructions=158447681
+# 2026-09-12 (a declaration's callees deduplicated by range, and a dead scan):
+# 158,447,681 -> 157,092,747, a FALL of 1,354,934 (-0.8552%). See
+# bench/compile_instructions_golden.txt. This row and the entry row have fallen
+# together on every round since they were minted; here they part by 0.2725
+# percentage points, the widest gap yet. The library route checks a file of
+# definitions where the entry route checks statements too, so a saving that
+# scales with declarations reaches them in different proportion.
+library_instructions=157092747
