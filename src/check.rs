@@ -731,6 +731,13 @@ fn check_box_where_value(
     }
     let values = TOP & !FAIL & !THUNK & !DESC;
     let boxed = |s: Set| s & DESC != 0 && s & values == 0;
+    // WHETHER ANY NAME IN THE PROGRAM ANSWERS A BOX. When none does, a name
+    // and a call can never be one, so the two arms below that ask the table
+    // answer no without asking -- and the binder set those arms consult is
+    // never read, so it is never built either. What is left is the chain,
+    // which the expression says on its own. A program that never names an
+    // effect pays a walk instead of a walk plus a set.
+    let any_boxed = returns.values().any(|(s, _)| boxed(*s));
     // a name the declaration binds itself — a parameter, a binding, a
     // lambda's parameter — is that binding, whatever declaration shares
     // its spelling; `fn either ... args` reads its own list, not `os/args`
@@ -739,19 +746,20 @@ fn check_box_where_value(
         returns: &crate::hash::Map<(&str, usize), (Set, u64)>,
         bound: &HashSet<&str>,
         boxed: &dyn Fn(Set) -> bool,
+        any_boxed: bool,
     ) -> bool {
         match e {
             // a `.>` step answers the chain its subject opened
             Expr::App { args, piped: true, .. } => {
-                args.first().is_some_and(|a| yields_box(a, returns, bound, boxed))
+                args.first().is_some_and(|a| yields_box(a, returns, bound, boxed, any_boxed))
             }
-            Expr::App { head, args, piped: false, .. } => match head.as_ref() {
+            Expr::App { head, args, piped: false, .. } if any_boxed => match head.as_ref() {
                 Expr::Ident(name, _) if !bound.contains(name.as_str()) => {
                     returns.get(&(name.as_str(), args.len())).is_some_and(|(s, _)| boxed(*s))
                 }
                 _ => false,
             },
-            Expr::Ident(name, _) if !bound.contains(name.as_str()) => {
+            Expr::Ident(name, _) if any_boxed && !bound.contains(name.as_str()) => {
                 returns.get(&(name.as_str(), 0)).is_some_and(|(s, _)| boxed(*s))
             }
             Expr::Seq(..) | Expr::Join { .. } => true,
@@ -787,7 +795,7 @@ fn check_box_where_value(
         ));
     };
     let site = |e: &Expr, bound: &HashSet<&str>, diags: &mut Vec<Diagnostic>| {
-        let is_box = |e: &Expr| yields_box(e, &returns, bound, &boxed);
+        let is_box = |e: &Expr| yields_box(e, &returns, bound, &boxed, any_boxed);
         match e {
             Expr::BinOp { op, lhs, rhs, .. } => {
                 for side in [lhs, rhs] {
@@ -842,14 +850,16 @@ fn check_box_where_value(
     let mut stack: Vec<&Expr> = Vec::new();
     let mut bound: HashSet<&str> = HashSet::default();
     for decl in &program.fns {
-        bound.clear();
-        for param in &decl.params {
-            for_each_param_name(param, &mut |n| {
-                bound.insert(n);
-            });
-        }
-        for stmt in &decl.body {
-            bound_in_stmt(stmt, &mut bound);
+        if any_boxed {
+            bound.clear();
+            for param in &decl.params {
+                for_each_param_name(param, &mut |n| {
+                    bound.insert(n);
+                });
+            }
+            for stmt in &decl.body {
+                bound_in_stmt(stmt, &mut bound);
+            }
         }
         for stmt in &decl.body {
             let e = match stmt {

@@ -4406,3 +4406,57 @@ map's value type, the group members threaded through it, and the arm that lets
 `e:<int>effect` take a box. The spelling amends the pass this PR introduces, so
 the order is fixed by the code rather than by a golden, and the section stays
 behind the floor.
+
+**The box check asks a question the program has already answered, and skipping
+it is 43% of the pass.** DONE. Searched the log, the archive and design/ for a
+prior entry on `check_box_where_value`'s cost: there is none — the pass landed
+in kanso#1372's step 1 and nothing had priced it.
+
+The pass is the whole of this branch's welfare fall, and the fall is entirely
+the compile term. Against main, runbench moves 54 instructions of 2.25 billion,
+both peak terms and `compile_allocs` are flat within 36, and the two compile
+instruction rows carry all of it: `compile_instructions` 49,097,584 ->
+50,544,369 and `entry_instructions` 164,060,471 -> 168,998,559, summing
++6,384,873 on the objective's compile term. Gating the pass behind an
+environment variable and measuring both ways in the box puts its whole cost at
+1,491,247 on the module corpus against CI's +1,446,785, so the pass IS the rise
+and its own cost is the ceiling on recovering it.
+
+Where it goes, by profile diff of the two runs: 587,749 in the walk's own
+`site` loop, 367,382 in `for_each_child`, 314,707 in the binder set
+(`HashSet::insert` building it and `contains_key` reading it), 75,689 in
+`memcmp` under those hashes, 73,455 building the returns table, 51,740 in
+`for_each_param_name`. The binder set and its lookups are a quarter of the
+pass, and they exist for two arms of `yields_box` that ask whether a name or a
+call head answers a box. When no declaration in the program answers one, that
+table lookup is false for every entry by construction, so both arms answer no
+without asking — and the set they consult is then never read, so the second
+walk of every body that builds it is never taken either. What survives is the
+chain, which the expression says on its own.
+
+`any_boxed` is that question, asked once over the returns table. On the module
+corpus the pass falls 1,491,247 -> 849,940 and the compile reads 51,403,565 ->
+50,766,270 (−637,295); on the entry corpus 171,792,376 -> 170,483,527
+(−1,308,849). Summed, 1,946,144 of the 6,384,873 — 30% of the fall, measured in
+the box; CI has still to price it and the goldens here are CI's to write.
+
+The remaining 70% is the walk itself, and it is not reachable the same way: the
+check has to visit every expression to find a chain in a value position, and
+after the hoist that walk is what is left. Two shapes were measured and are
+NOT worth carrying. Skipping the synthetic twins, which thirteen other checks
+in check.rs do, reads +26,323 rather than a saving — the twins' bodies are
+shared but they are not where this pass spends. And narrowing the walk to
+declarations that contain a chain needs a walk to answer, which is the walk.
+
+Behaviour is unchanged by construction rather than by measurement: the guarded
+arms return exactly what the table would have returned, and the set is read
+only from inside them. `tests/golden/errors/a_box_where_a_value_is_expected`
+takes the other branch — `os/args` and `math/random` answer boxes — and all six
+of its refusals still fire. Ratchet row `box_check_hoist` with mutation
+`the_box_check_asks_when_nothing_answers_a_box`: answering `any_boxed` `true`
+puts the module corpus back to 51,467,472 (+701,202), and the gate asserts
+equality, so it turns red.
+
+This does NOT take the branch green. The floor still has to move, by less; the
+ledger's "The welfare floor cannot be staged from this session" is unchanged
+and still the blocker.
