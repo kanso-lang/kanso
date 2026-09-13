@@ -4754,6 +4754,31 @@ anyway. The three moves are a thousandth of a per cent each and go into the
 goldens as measured. The objective's compile term is the first two summed:
 197,610,914 -> 197,612,694, a rise of 1,780.
 
+**A THIRD reader, and the one CLAUDE.md warns about by name.**
+`bench/compile_golden.txt` and `bench/compile_golden_modules.txt` are read only
+by `tests/compile_cost.rs`, so no file under scripts/gates names them and the
+sweep's own derivation walks past them. Round one regenerated the emitted vein
+and stopped; `all_compile.sh` runs the cargo test as a hand-named step and that
+is what caught it. All six programs move identically: 16 fewer lines and 8
+fewer branches each, with `calls`, `defines`, `rounds` and `visits`
+byte-identical.
+
+    recursion    lines 1223 -> 1207   branches 78 -> 70
+    dispatch     lines 1215 -> 1199   branches 77 -> 69
+    guards       lines 1208 -> 1192   branches 78 -> 70
+    records      lines 1264 -> 1248   branches 81 -> 73
+    build_block  lines 1189 -> 1173   branches 73 -> 65
+    module       lines 5310 -> 5294   branches 446 -> 438
+
+**The two branch counters disagree, and both are right.** `bench/emitted_golden
+.txt` held its `branches` byte-identical while this vein's falls by eight per
+program. They count different things, which is checkable rather than arguable:
+`tests/compile_cost.rs:86` counts `br i1 ` and sees only CONDITIONAL branches,
+so eight gates removed is eight fewer; `scripts/gates/emitted_code.sh:23`
+counts `^  br ` and `^  switch` and sees every branch, so the unconditional
+`br label` standing where the conditional one stood keeps the count. A session
+reading only one of them would conclude the other was wrong.
+
 **Welfare 67.99 -> 68.08, banked here.** The run term pays for the compile
 term's 1,780 several thousand times over, which is the trade the weights are
 for.

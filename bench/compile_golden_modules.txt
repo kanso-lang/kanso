@@ -40,4 +40,4 @@
 # `none` arm no longer inherits the none, so its parameter set settles sooner
 # and the fixpoint re-dirties fewer declarations. Six more lines to write and
 # less work to decide them.
-module lines=5310 calls=754 branches=446 defines=101 rounds=6 visits=2511
+module lines=5294 calls=754 branches=438 defines=101 rounds=6 visits=2511
