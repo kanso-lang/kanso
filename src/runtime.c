@@ -77,6 +77,22 @@ typedef struct { long long cap; long long used; } KBuf;
    KBuf-headed buffer this value may extend at its frontier. */
 typedef struct { long long len; const unsigned char* data; long long cap; } KBytes;
 
+/* `cap` carries the room and the regime in one field, and the regime rides in
+   BIT 0 rather than in the sign. Bit 0 is free because every capacity this
+   field ever holds comes from k_b_append_grow's `2 * (len + n)`, clamped up to
+   64 -- always even. Reading the room is then one `and` where stripping a sign
+   was a `neg` and a `cmovs`, and the emitter inlines that read at ninety-three
+   sites: on the run program they cost 18,024,553 instructions, 0.86%.
+
+   0 is still a borrowed view, so `cap != 0` reads as it always did. A set bit
+   marks arena storage, which the innermost rewind reclaims wholesale; a clear
+   bit on a non-zero cap marks malloc, which this file frees by hand. That is
+   the one question the sign used to answer, and `k_bytes_malloced` is now the
+   only place that asks it. */
+static inline int k_bytes_malloced(const KBytes* b) {
+    return b->cap != 0 && !(b->cap & 1);
+}
+
 /* Lazy v1 (design/lazy-v1-plan.md): a conditionally-demanded binding's
    pending computation. RC'd, malloc-backed, recycled through a free list --
    never the beat arenas, so a pending thunk can't pin a rewindable region.
@@ -1597,7 +1613,7 @@ static int k_interior_survives(KValue v, const void* p, KMark* m) {
         }
         case K_BYTES: {
             KBytes* b = (KBytes*)p;
-            return b->cap > 0 || k_survives_x(b->data, m);
+            return k_bytes_malloced(b) || k_survives_x(b->data, m);
         }
         case K_LIST: {
             KList* l = (KList*)p;
@@ -7330,7 +7346,7 @@ static KValue k_utf8_finish(KValue bv, const char* origin) {
     long long chars;
     KValue bad = k_utf8_bad((const char*)b->data, b->len, origin, &chars);
     if (bad.tag == K_ERR) return bad;
-    long long bcap = b->cap < 0 ? -b->cap : b->cap;
+    long long bcap = b->cap & ~1LL;
     if (bcap && b->len < bcap) {
         KBuf* buf = ((KBuf*)b->data) - 1;
         if (buf->used == b->len) {
@@ -7338,7 +7354,7 @@ static KValue k_utf8_finish(KValue bv, const char* origin) {
             buf->used = bcap;
             /* a malloc-backed chunk now belongs to a string that dies at
                the innermost rewind; register it so that rewind frees it */
-            if (b->cap > 0 && k_beat_depth > 0 && k_beat_depth <= K_BEAT_MAX) {
+            if (k_bytes_malloced(b) && k_beat_depth > 0 && k_beat_depth <= K_BEAT_MAX) {
                 int d = k_beat_depth - 1;
                 if (k_chunkreg_n[d] < 256) {
                     k_chunkreg[d][k_chunkreg_n[d]++] = ((KBuf*)b->data) - 1;
@@ -7981,7 +7997,7 @@ static KValue k_b_append_into(KValue acc, KValue x, int mutate) {
     if (x.tag == K_INT) {
         long long alen = a->len;
         long long acap0 = a->cap;
-        long long bcap = acap0 < 0 ? -acap0 : acap0;
+        long long bcap = acap0 & ~1LL;
         unsigned char* data = (unsigned char*)a->data;
         if (bcap) {
             KBuf* bbuf = ((KBuf*)data) - 1;
@@ -8031,7 +8047,7 @@ static __attribute__((noinline)) KValue k_b_append_wide(KValue acc, KBytes* a,
    of a bytes value it never boxed. */
 static inline KValue k_b_append_range(KValue acc, KBytes* a, const unsigned char* src,
                                       long long n, int mutate) {
-    long long acap = a->cap < 0 ? -a->cap : a->cap;
+    long long acap = a->cap & ~1LL;
     if (acap) {
         KBuf* buf = ((KBuf*)a->data) - 1;
         if (buf->used == a->len && a->len + n <= acap) {
@@ -8094,7 +8110,7 @@ static __attribute__((noinline)) KValue k_b_append_grow(KValue acc, KBytes* a,
     long long marked;
     if (dies) {
         buf = k_alloc(sizeof(KBuf) + (size_t)cap);
-        marked = -cap;
+        marked = cap | 1;
     } else {
         buf = malloc(sizeof(KBuf) + (size_t)cap);
         if (!buf) { fputs("out of memory\n", stderr); exit(1); }
@@ -8117,10 +8133,11 @@ static __attribute__((noinline)) KValue k_b_append_grow(KValue acc, KBytes* a,
     if (a->len) memcpy(data, a->data, (size_t)a->len);
     k_copy_short((char*)data + a->len, (const char*)src, n);
     if (mutate) {
-        /* A builder's cap is positive only for buffers made here, which is
-           what makes this free safe: uniqueness is proven at mut sites, so
-           no other header shares the storage being released. */
-        if (a->cap > 0) {
+        /* Only a buffer made here, from malloc, carries a clear bit 0 over a
+           non-zero cap, which is what makes this free safe: uniqueness is
+           proven at mut sites, so no other header shares the storage being
+           released. */
+        if (k_bytes_malloced(a)) {
             KBuf* old = ((KBuf*)a->data) - 1;
             if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) {
                 k_stat_bytes_freed++;
@@ -8191,7 +8208,7 @@ KValue k_b_append_rendered(KValue acc, KValue v, long long mutate) {
     long long n = k_render_number(v, buf);
     k_stat_append_rendered++;
     KBytes* a = k_as_bytes(acc);
-    long long acap = a->cap < 0 ? -a->cap : a->cap;
+    long long acap = a->cap & ~1LL;
     if (acap) {
         KBuf* kb = ((KBuf*)a->data) - 1;
         /* A number is at most 24 bytes (`-1.7976931348623157e308`), and buf

@@ -5143,3 +5143,75 @@ main's values and CI measures the delta again; carrying the old delta forward
 by arithmetic would have written a rise where CI reads a fall.
 
 Welfare 68.03 -> 68.07, banked with `--set` in the same round.
+
+## 2026-09-13 (seventh) — the regime a bytes value's storage came from moves out of the sign and into bit 0
+
+`KBytes.cap` answers two questions with one field: how much room the buffer has,
+and which allocator it came from. The second used to live in the SIGN — negative
+meant arena storage the innermost rewind reclaims, positive meant malloc — so
+every read of the first was a `neg` and a `cmovs`, and the emitter inlines that
+read at five sites that reach ninety-three copies in the linked run program.
+Callgrind puts those pairs at 26,676,580 instructions, 1.2691% of runbench, of
+which the KBytes share is 0.8575%; KBuf's 33 sites carry the other 0.3746% and
+are not in this change.
+
+The regime now rides in bit 0. Reading the room is `cap & ~1LL`, one `and`; the
+emitter writes `%capa = and i64 %cap, -2` where it wrote a subtract, a compare
+and a select. Zero is still a borrowed view, so `cap != 0` reads as it always
+did, and one new inline function — `k_bytes_malloced` — is the only place that
+asks which allocator a buffer came from.
+
+    runbench   2,102,067,766 -> 2,084,434,456   -17,633,310  (-0.8388%)
+
+**Why bit 0 is free, and the reason I nearly wrote down instead.** Four structs
+in src/runtime.c have a field called `cap` and they have four different sign
+conventions. KBuf's is a power of two — `k_buf_class` is `ctzll(cap) - 2` — and
+for a moment that looked like the property in play. It is not this one's.
+KBytes.cap is EVEN, because the only place a non-zero one is born is
+`k_b_append_grow`, which sets `2 * (a->len + n)` and clamps it up to 64. Both
+halves are even. Every other writer sets zero.
+
+**Five reads converted, and there were six.** `k_b_append_into`'s single-byte
+fast path keeps its own copy of the magnitude read, and with the other five
+converted it read an arena-backed capacity of C|1 as C+1 — one byte more than
+the buffer holds, stored past the frontier, and a different growth point after
+it. The whole spec suite passed with that in: eleven tests, 242 seconds, the
+micro corpus, the error corpus, the differential sweeps, the mem vein. What said
+so was the cost-golden sweep. `alloc_bytes` moved on four veins — encode
++2,259,200 with held_peak_bytes +4,218, oneshot +4, live +1,600, run +360 —
+with every allocation COUNT byte-identical on all twelve. More bytes out of the
+same number of allocations is a growth reaching a different size, which is what
+an off-by-one in a capacity looks like from outside. The clean base agreed with
+all twelve, so the move was the branch's.
+
+**The emitted half cannot move a counter, and that is why this looked like an
+emitter-neutral edit.** Every inlined fast path bails to the runtime call when
+`k_stats_on != 0`, so a counting run never executes the five sites the emitter
+writes. Only the runtime half is visible to the veins. An emitter change that is
+wrong in the same way would be invisible to all twelve, which is worth knowing
+before the next one.
+
+Two guards ship with it. `tests/a_bytes_capacity_leaves_bit_zero_free.rs` lifts
+the growth formula and `k_bytes_malloced` out of src/runtime.c, compiles them,
+and sweeps 300 (len, n) pairs asserting the capacity is even, that the room
+reads back whole from both regime spellings, and that neither regime answers the
+other's question; its second half scans the file and allows exactly ONE
+sign-stripping capacity expression, `k_buf_cap`, which belongs to a different
+struct. Watched red both ways: the formula written `2 * (a->len + n) + 1` fails
+the sweep at the first pair, and restoring the byte fast path's sign read names
+src/runtime.c:8000 — the defect that actually happened.
+`tests/golden/mem/three_storage_regimes_share_one_append.kso` drives a borrowed
+view, a malloc-backed accumulator and an arena-backed builder through the same
+append door, and pins the counters that separate them (append_fast 61,094,
+append_grow 907, bytes_malloc 7, bytes_freed 5, beat_iters 300). Flipping the
+regime bit's polarity does not move it — it kills it, `free(): invalid pointer`,
+arena storage handed to the C allocator.
+
+Recorded against the fixture rather than claimed for it: that fixture does NOT
+catch the six-reads defect, and cannot. The off-by-one shifts an arena growth by
+two bytes, `k_alloc` rounds every request up to sixteen, and a delta of two can
+never cross a boundary that rounding does not already absorb. The four cost
+goldens caught it because their interleavings put the growth somewhere the
+rounding does not hide. The lifted spec is the guard that would have caught it
+first, which is why it scans the whole file rather than the five sites the
+change edited.

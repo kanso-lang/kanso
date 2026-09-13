@@ -1,0 +1,57 @@
+# A bytes value carries its capacity and the regime that capacity came from in
+# one field, and the in-place append reads both on its hot path. There are
+# three regimes and this drives all of them through the same door.
+#
+#   viewed     a borrowed view. `bytes` of a literal points into the program's
+#              own text and owns no buffer, so its capacity is zero and the
+#              first append cannot land in place.
+#   carried    malloc-backed. The accumulator is threaded through a tail
+#              recursion with nothing else in the body, so no beat is
+#              bracketed and every growth takes malloc. bytes_malloc counts
+#              those buffers and bytes_freed the ones the mutating append
+#              released.
+#   filled     arena-backed. The outer body allocates a temporary the
+#              innermost rewind reclaims, so that loop IS bracketed, and a
+#              bytes buffer dying at the rewind is cut from the arena rather
+#              than from malloc. bytes_malloc does not count these, which is
+#              what tells the two owned regimes apart.
+#
+# `filled` appends 200 bytes one at a time onto a one-byte seed, which walks
+# each arena-backed buffer from its first growth to exactly full and one byte
+# past. That boundary is the point of the fixture: a capacity read that adds
+# the regime bit to the room instead of masking it off admits one byte more
+# than the buffer holds, writes it past the frontier, and moves append_fast
+# and append_grow together. Both were watched.
+#
+# The counters are the pin. append_fast is the store into spare room,
+# append_grow the reallocation, bytes_malloc and bytes_freed the malloc
+# regime. Flipping the regime bit's polarity moves 900 arena grows into
+# bytes_malloc.
+import "std/text"
+
+fn carried acc 0
+  acc
+
+fn carried acc n
+  carried (text/append acc (65 + n % 26)) (n - 1)
+
+fn filled acc 0
+  acc
+
+fn filled acc n
+  filled (text/append acc (65 + n % 26)) (n - 1)
+
+fn scratched total 0
+  total
+
+fn scratched total n
+  junk = "k{n % 17}"
+  scratch = filled (text/bytes "s") 200
+  scratched (total + length scratch + length junk) (n - 1)
+
+pub play =
+  viewed = text/append (text/bytes "view") 33
+  built = carried (text/bytes "a") 2000
+  print "viewed: {text/utf8 viewed}"
+  print "carried: {length built}"
+  print "scratched: {scratched 0 300}"
