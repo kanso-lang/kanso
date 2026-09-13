@@ -233,4 +233,7 @@
 # 2026-09-13 (the effect type): 147,756,205 -> 149,755,117, a RISE of
 # 1,998,912 (+1.3529%). The entry corpus names ten imports against the
 # module corpus's four, so the same per-declaration check costs it more.
-entry_instructions=152090185
+# 2026-09-13 (the runtime's counter sites): 152,090,185 -> 152,111,514, a RISE
+# of 21,329 (+0.0140%). The same layout move as the module row, on a compile
+# three and a third times the size.
+entry_instructions=152111514

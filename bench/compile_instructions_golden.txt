@@ -1360,4 +1360,12 @@
 # 533,709 (+1.2065%). The rule's own cost, after the four paydown rounds
 # this branch already spent on it. Ruled 2026-08-29; the floor moves to
 # admit it rather than the feature going.
-compile_instructions=45522509
+# 2026-09-13 (the runtime's counter sites): 45,522,509 -> 45,529,923, a RISE of
+# 7,414 (+0.0163%). `kanso check lib/json` stops before codegen and cannot run
+# a runtime gate, so this is the layout vein this file's own warning names:
+# src/codegen.rs and src/main.rs both change (counters_wanted() becomes a
+# function both halves ask, and cached_runtime_object keys on it), and their
+# bytes move the compiler's own layout. compile_allocs and compile_memory are
+# byte-identical, which is what a change with no allocation consequence should
+# look like.
+compile_instructions=45529923

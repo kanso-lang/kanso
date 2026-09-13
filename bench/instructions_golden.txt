@@ -423,19 +423,32 @@
 # benchmarks pay and collect differently for it. runbench, the objective's
 # run term, does not move.
 #
-jsonbench 1403800690
-encodebench 3791840471
-oneshot 20630775
-basket 34325224
-widebench 34274920
-deepbench 376926218
-escapebench 83131054
-pendbench 219500201
-indexbench 3265392
-scanbench 534892515
-digestbench 9880198
-readbench 4630971
-livebench 3228886663
+# 2026-09-13 (the runtime's twenty-seven counter sites leave a shipped
+# binary): ALL FOURTEEN ROWS FALL. runbench 2,141,642,566 -> 2,128,867,999, a
+# fall of 12,774,567 (-0.5965%); deepbench -1.4709% and scanbench -1.1258% are
+# the largest, indexbench -96 the smallest. Each of the twenty-seven sites is
+# one `K_COUNTING &&` in front of the `k_stats_on` test, a constant 0 in a
+# shipped build, so the whole condition folds away. This is the other half of
+# the split kanso#1393 began; that PR took the emitter's eight.
+#
+# The container projected -13,187,834 on runbench and CI reads 0.9687 of it.
+# That is the ratio to expect from this box, and it is worth writing down: the
+# delta is a fixed number of tests per run rather than anything that scales, so
+# the two hosts differ only in what a test costs them.
+#
+jsonbench 1394485059
+encodebench 3778345357
+oneshot 20499188
+basket 34285873
+widebench 34066831
+deepbench 371382179
+escapebench 82969017
+pendbench 219476888
+indexbench 3265296
+scanbench 528870249
+digestbench 9837152
+readbench 4629745
+livebench 3215435236
 # 2026-09-06 (the run program joins): `runbench 3043743748` is a NEW row and
 # nothing regressed to make it appear. It is the program Clay's gavel that day
 # made the objective's whole run-speed term, and the thirteen rows above it
@@ -493,4 +506,4 @@ livebench 3228886663
 #
 # The uniform -8 across six rows is one instruction on a path each program
 # takes eight times, and the four flat rows never take it at all.
-runbench 2141642566
+runbench 2128867999

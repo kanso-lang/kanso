@@ -217,4 +217,7 @@
 # 2026-09-13 (the effect type): 148,091,856 -> 150,092,130, a RISE of
 # 2,000,274 (+1.3507%). `check_box_where_value` runs in the shared checks,
 # so this row moves with the entry row to within 0.0022 points.
-library_instructions=152460583
+# 2026-09-13 (the runtime's counter sites): 152,460,583 -> 152,481,754, a RISE
+# of 21,171 (+0.0139%). The same layout move again; the library and entry rows
+# track each other to three significant figures, as they should.
+library_instructions=152481754

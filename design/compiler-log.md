@@ -4888,3 +4888,50 @@ removed, which is why it runs the programs.
 The counters sweep agrees: every one of the twelve cost veins and the lazy
 tier is byte-identical, because each of those gates measures the counting
 binary, where the gates are all still there.
+
+**CI's sitting, and the two things round one found.** All fourteen work rows
+fall and all fourteen .text rows fall:
+
+    runbench     2,141,642,566 -> 2,128,867,999   -12,774,567  (-0.5965%)
+    deepbench      376,926,218 ->   371,382,179    -5,544,039  (-1.4709%)
+    scanbench      534,892,515 ->   528,870,249    -6,022,266  (-1.1258%)
+    indexbench       3,265,392 ->     3,265,296           -96  (-0.0029%)
+    runbench .text     313,682 ->       308,978        -4,704
+
+deepbench and scanbench carry the largest falls because they call hardest, and
+indexbench the smallest because it barely allocates. The .text spread, 1,600 to
+4,704 bytes, is which arms a program's own code makes reachable in a runtime
+that is linked into all of them.
+
+The container projected -13,187,834 on runbench and CI read 0.9687 of it. The
+delta is a fixed number of tests per run rather than anything that scales with
+the workload, so the two hosts differ only in what a test costs them, and that
+ratio is the one to expect from this box.
+
+The three compile rows RISE, 0.0139% to 0.0163%. `kanso check lib/json` stops
+before codegen and cannot run a runtime gate, so this is the layout vein: both
+`src/codegen.rs` and `src/main.rs` change, and their bytes move the compiler's
+own layout. `compile_allocs` and `compile_memory` are byte-identical.
+
+Welfare 68.08 -> 68.12, banked with `--set` in the same round. A rise is
+arithmetic rather than a decision.
+
+**Round one was red twice, and both were mine.** The ratchet went STALE on `an
+allocation counter gated by two branches`: its sed searched for
+`if (__builtin_expect(k_stats_on > 0, 0)) {` and the gate now reads
+`K_COUNTING && k_stats_on > 0`, so the patch matched nothing and the mutation
+could not turn its gate red. Only the anchor moved; what the mutation proves is
+unchanged. That is the third time in this repository a mutation has gone stale
+because the line it anchors on was rewritten under it, and the detector each
+time was the ratchet itself rather than anybody noticing.
+
+`kq specs` died at its cost-goldens step, which is this change working. kq
+builds `./kq` with `--release` and then runs `KANSO_COUNTERS=1 ./kq` to diff
+three cost goldens, and `ci.yml` does the same for `publish_numbers`; under
+kanso#1393 alone it got a block that was mostly right, and under this it gets
+the refusal. kq is the caller the hazard was about, found by the refusal rather
+than by reading. kanso-lang/kq#104 builds both with `--counters` -- and had to
+bump kq's pin with them, because `--counters` does not exist at 08dc714d and
+was minted by kanso#1393. kanso's own `kq specs` job never saw that, because it
+clones kq at HEAD and builds it with the PR's compiler rather than with the
+pin.
