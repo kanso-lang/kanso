@@ -4852,45 +4852,40 @@ pendbench, indexbench, scanbench, livebench) are CI's to report; round one is
 deliberately red on `bench/instructions_golden.txt`.
 
 
-**What CI read, twice, against two different bases — and the answer held.** The
-first sitting was taken against main at 5982c60a, before kanso#1372 landed the
-effect type. #1372 moved the run
-goldens itself — runbench 2,252,446,969 -> 2,252,446,915, a fall of 54, and
-.text 247,474 -> 247,026 — so the absolute numbers below are this change's
-effect in isolation and are NOT what the committed goldens now hold. The
-branch was merged with the new main and the goldens reset to it, so CI
-re-measures on the current base and the final sitting is the one that lands.
-The two were not composed by arithmetic: a different library changes what
-inlines, and two deltas measured on different trees do not add. So CI measured
-the change again on the merged tree, and that second sitting is what the goldens
-now carry:
+**What CI read, three times, against three different bases.** The first sitting
+was taken against main at 5982c60a, before kanso#1372 landed the effect type;
+the second against 12e73890 after it; the third against 047efca9 after
+kanso#1369 landed the exhaustiveness rule and changed `lib/list`, `lib/regexp`
+and `hako/remote`. Only the third is in the goldens. The three were never
+composed by arithmetic — a different library changes what inlines, and deltas
+measured on different trees do not add — which is why each base change cost a
+full re-measure rather than a subtraction.
 
 ```
-                  against 5982c60a     against 12e73890 (landed)
-runbench            −63,128,569          −63,128,542
-percentage           −2.8027%             −2.8027%
-widebench            +32,011              +32,011
-readbench            +2                   +2
-.text total          +6.22%               +6.22%
+                  vs 5982c60a      vs 12e73890      vs 047efca9 (landed)
+runbench          −63,128,569      −63,128,542      −57,470,167
+percentage         −2.8027%         −2.8027%         −2.5515%
+widebench            +32,011          +32,011          +16,019
+readbench                 +2               +2               +2
+.text total          +6.2209%         +6.2209%         +7.3629%
 ```
 
-The deltas agree to five significant figures across a base change that moved the
-library itself, which is worth recording: the inline threshold's effect is a
-property of the link, and it did not interact with the effect type. That is a
-result, not a foregone conclusion — it is exactly the kind of composition that
-could have failed, which is why it was measured rather than assumed.
+The first two agree to five significant figures and the third does not, and
+that is the finding rather than an inconvenience. kanso#1372 moved the library
+without changing what the linker could inline; kanso#1369 added arms to three
+shipped modules, and those moved it. Nine per cent of the win went with them.
+A threshold's effect is a property of the program it is applied to, and the two
+sittings that agreed were the coincidence.
 
-runbench **2,252,446,915 -> 2,189,318,373**, a fall of
-63,128,542 (−2.8027%) — a better result than the container's −2.0149%, and the
-reason the two numbers may not be subtracted from one another. The full sitting,
-twelve of fourteen work rows falling:
+runbench **2,252,446,915 -> 2,194,976,748**, a fall of 57,470,167 (−2.5515%).
+The full third sitting, twelve of fourteen work rows falling:
 
 ```
-jsonbench    1,468,801,090 -> 1,436,924,442   −31,876,648  −2.1702%
-encodebench  3,932,651,503 -> 3,860,465,718   −72,185,785  −1.8356%
-oneshot         21,616,888 ->     21,081,074      −535,814  −2.4787%
+jsonbench    1,468,801,090 -> 1,449,421,842   −19,379,248  −1.3194%
+encodebench  3,958,779,263 -> 3,882,689,256   −76,090,007  −1.9221%
+oneshot         21,616,888 ->     21,164,390      −452,498  −2.0933%
 basket          34,698,668 ->     34,693,472        −5,196  −0.0150%
-widebench       35,316,107 ->     35,348,118       +32,011  +0.0906%
+widebench       35,202,913 ->     35,218,932       +16,019  +0.0455%
 deepbench      387,474,235 ->    378,118,216    −9,356,019  −2.4146%
 escapebench     85,558,078 ->     85,537,054       −21,024  −0.0246%
 pendbench      221,912,236 ->    221,101,809      −810,427  −0.3652%
@@ -4898,18 +4893,19 @@ indexbench       3,265,819 ->      3,265,392          −427  −0.0131%
 scanbench      587,488,450 ->    562,456,145   −25,032,305  −4.2609%
 digestbench     10,426,549 ->     10,199,161      −227,388  −2.1809%
 readbench        4,630,969 ->      4,630,971            +2  +0.0000%
-livebench    3,450,423,659 -> 3,320,889,129  −129,534,530  −3.7542%
-runbench     2,252,446,915 -> 2,189,318,373   −63,128,542  −2.8027%
+livebench    3,450,423,659 -> 3,320,972,422  −129,451,237  −3.7517%
+runbench     2,252,446,915 -> 2,194,976,748   −57,470,167  −2.5515%
 ```
 
 **The rows that got worse, each named with the value it landed on.** Two work
-rows rise: `work_widebench` **35,348,118** (+32,011, +0.0906%) and
+rows rise: `work_widebench` **35,218,932** (+16,019, +0.0455%) and
 `work_readbench` **4,630,971** (+2). The `text` vein rises with them, to
-**1,645,468**. The objective weighs the sum and the sum went up, so none of the
+**1,664,396**. The objective weighs the sum and the sum went up, so none of the
 three is a decision to defend on its own, but a rise that nobody names is the
 thing this log exists to catch. widebench is the larger of the two work rows,
 and its cause is the same as its .text rise: a wider inline threshold
-specialises more call sites and a few of them were better off shared.
+specialises more call sites and a few of them were better off shared. It is
+half what the second sitting read, which is the base change again.
 
 **A CORRECTION to this entry.** The trend gate refused it for a naming miss. It
 wants each worsened counter written with the key its golden uses, and the entry
@@ -4924,19 +4920,19 @@ paragraph below named the four pre-kanso#1372 rows, and the welfare pair read
 kanso#1372 moved every one of them. Each figure in this entry is now read off
 the committed goldens and the committed floor.
 
-Eleven of fourteen .text rows rise, the vein `text` totalling
-1,549,100 -> **1,645,468** (+96,368, +6.2209%) — less than the +9.8% projected from runbench.ll alone, because most
+Twelve of fourteen .text rows rise, the vein `text` totalling
+1,550,252 -> **1,664,396** (+114,144, +7.3629%) — less than the +9.8% projected from runbench.ll alone, because most
 benchmarks link less of the library than the run program does:
 
 ```
-jsonbench    100,050 -> 103,058  +3.01%      escapebench  57,490 ->  57,298  −0.33%
-encodebench  120,962 -> 128,034  +5.85%      pendbench    92,034 ->  94,786  +2.99%
-oneshot      111,922 -> 114,482  +2.29%      indexbench   61,730 ->  61,170  −0.91%
-basket       114,082 -> 118,258  +3.66%      scanbench   158,930 -> 182,386 +14.76%
-widebench    126,226 -> 133,890  +6.07%      digestbench 111,362 -> 114,098  +2.46%
+jsonbench     99,874 -> 106,530  +6.66%      escapebench  57,490 ->  57,298  −0.33%
+encodebench  122,322 -> 129,778  +6.10%      pendbench    92,034 ->  94,786  +2.99%
+oneshot      111,746 -> 117,970  +5.57%      indexbench   61,730 ->  61,170  −0.91%
+basket       114,082 -> 118,258  +3.66%      scanbench   158,946 -> 182,402 +14.76%
+widebench    126,690 -> 135,682  +7.10%      digestbench 111,362 -> 114,098  +2.46%
 deepbench     76,354 ->  82,402  +7.92%      readbench    58,434 ->  58,434   0.00%
-                                             livebench   112,498 -> 115,426  +2.60%
-                                             runbench    247,026 -> 281,746 +14.06%
+                                             livebench   112,322 -> 119,554  +6.44%
+                                             runbench    246,866 -> 286,034 +15.87%
 ```
 
 Machine-code size has no welfare term — Clay ruled that on 2026-09-05 — so
@@ -4951,12 +4947,12 @@ read by clang at link time, long after the compiler has finished writing. The
 three veins that can see a linker flag are work, machine code, and nothing else.
 
 **The compile side is untouched and that is not a coincidence.** compile_allocs
-29,338, compile_instructions 44,767,714, entry_instructions 149,755,117,
-library_instructions 150,092,130 — all four AGREED with their goldens. The flag
+29,473, compile_instructions 45,523,131, entry_instructions 152,087,783,
+library_instructions 152,459,094 — all four AGREED with their goldens. The flag
 is on `release_clang`, which links benchmark binaries; `kanso check` never
 reaches it.
 
-**Welfare 67.754 -> 67.9598**, banked with `--set` in this same commit. The gain is
+**Welfare 67.7149 -> 67.9019**, banked with `--set` in this same commit. The gain is
 run_instructions', which satiates late (2.0) and carries the objective's whole
 run-speed term.
 
@@ -5011,14 +5007,12 @@ pointer.
 
 **A THIRD CORRECTION, and a third sitting.** kanso#1369 landed on main while
 this branch sat in CI, and it changed `lib/list`, `lib/regexp` and
-`hako/remote` — three files the run program links. Every work and .text figure
-in the two tables above was measured against 12e73890, which no longer has a
-tree behind it. They stay written down because they are what the second sitting
-read, and because the pair of sittings is the evidence that the effect is
-stable across a base change; the goldens in this commit are main's, so CI is
-measuring the third sitting now and the numbers it returns replace both tables.
-Composing the old delta onto the new base by arithmetic would be the error this
-entry has already recorded once: a different library changes what inlines.
+`hako/remote` — three files the run program links. Both tables above now carry
+the third sitting, measured by CI against 047efca9; the second sitting's
+numbers survive only in the three-column comparison, where they are the point.
+Composing the old delta onto the new base by arithmetic would have been the
+error this entry already recorded once, and it would have been wrong by
+5,658,375 instructions on runbench alone.
 
 The twelve allocation veins and the lazy tier were re-read on the merged tree
 and every one agrees byte for byte. Neither an exhaustiveness rule nor a linker

@@ -423,19 +423,19 @@
 # benchmarks pay and collect differently for it. runbench, the objective's
 # run term, does not move.
 #
-jsonbench 1468801090
-encodebench 3958779263
-oneshot 21616888
-basket 34698668
-widebench 35202913
-deepbench 387474235
-escapebench 85558078
-pendbench 221912236
-indexbench 3265819
-scanbench 587488450
-digestbench 10426549
-readbench 4630969
-livebench 3450423659
+jsonbench 1449421842
+encodebench 3882689256
+oneshot 21164390
+basket 34693472
+widebench 35218932
+deepbench 378118216
+escapebench 85537054
+pendbench 221101809
+indexbench 3265392
+scanbench 562456145
+digestbench 10199161
+readbench 4630971
+livebench 3320972422
 # 2026-09-06 (the run program joins): `runbench 3043743748` is a NEW row and
 # nothing regressed to make it appear. It is the program Clay's gavel that day
 # made the objective's whole run-speed term, and the thirteen rows above it
@@ -493,4 +493,4 @@ livebench 3450423659
 #
 # The uniform -8 across six rows is one instruction on a path each program
 # takes eight times, and the four flat rows never take it at all.
-runbench 2252446915
+runbench 2194976748
