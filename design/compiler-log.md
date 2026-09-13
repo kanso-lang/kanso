@@ -2720,6 +2720,140 @@ NULL since harness.c calls it with two arguments. 45,189,025 cases and
 
 ---
 
+## 2026-09-10 — the plain dot is an application, and a box where a value is expected is refused
+
+Built: the first half of the 2026-08-29 gavel "effects are types, and the
+words are the only doors" (archive; STATUS.md's row, now shortened to what
+is still owed). Two things the row measured as unbuilt on 2026-09-09: the
+automatic bind, and the refusal of a box where a value is expected.
+
+**The plain dot opens nothing.** `x . f a` is `f x a`, an ordinary
+application — the parser folds a `.` step into the same node the prefix
+spelling makes, so a box handed through it arrives as a box, a settled
+failure handed through it dispatches to the arm that names it as a prefix
+call would, and `.>` is the one step that binds. That is the whole of the
+change in the parser, and it changed no program's meaning: the previous
+entry respelled every step the compiler bound automatically as `.>`, keyed
+on infer's own judgement, so no plain-dot step over a description was left
+for this to change. That is true now and was not on the first build here:
+`build_benchmarks.sh` died inside `make_jsonbench` with `write_file` handed
+a box, because the benchmark sources are built by that script and compiled
+by nothing the census ran, and the 44 dots the previous entry now records
+were found and respelled from this branch before anything else was
+measured. Three consequences fell out. `effect . rescue orders`,
+the sentence STATUS.md held up as the ruling's unbuilt point, is refused
+in chain position by the previous entry and spelled `effect .? orders`,
+which works. The enumerable fusion no longer needs its piped copy for a
+plain chain: `xs . list/map f . list/length` is the prefix chain now and
+fuses through the plain path, where before it took `try_fuse_piped`'s
+`is_desc` test and a second copy of the chain. And the beat reads the
+piped node as the loop step it always was, since only `.>` makes one.
+
+**A box where a value is expected is refused.** `check_box_where_value`
+reads infer's return sets the way the none check does. A box is provable
+when a group's joined return set holds the description bit and no value
+bit, when a `.>` step's subject is one, when the expression is a wall, or
+when a constant holds one — `os/args`, `math/random 6`, `io/write "x"`.
+Handing one to an operator, an index, a field read, `if`'s condition, a
+builtin that reads values, or a group none of whose arms binds anything at
+that position is refused with one sentence: `this is an effect — a box the
+words open — and `length` takes a value; open it with `.>``, the reader
+named. Holding is not opening, so a parameter that binds anything takes the
+box (`held e` above), `print` and an interpolation render it as `<io>`,
+`is_desc` asks about it, `push` and `put` store it, and `err` and
+`wrap_err` carry it as a reason. A name the declaration binds itself is that
+binding whatever declaration shares its spelling: the first cut refused
+`length args` in scripts/welfare, where `args` is a parameter and the
+constant it shadows is `os/args`.
+
+**What the tree said.** Under the check, every scripts/ directory, hako,
+the library tests, the golden corpora and the play files (through `kanso
+play`) answered twelve refusals, all deliberate: eleven runtime fixtures
+that hand a description to an operator, an index, a field, `if` or a
+comparison to pin the runtime's sentence, and one micro fixture handing
+one to `push`. `push` holds, so that one passes as written. The eleven
+now route the box through a list — `opaque v` answers `(push [] v)[1]!`,
+and a strict index is every value but a thunk, which no check can call a
+box — so the runtime sentences they pin stay pinned on every engine, and
+the errors corpus gains `a_box_where_a_value_is_expected`: six readers
+refused in one file, and the two holders that pass beside them.
+
+**What moved.** `emitted_code`, and down: a plain-dot step over a value
+used to lower through the piped node's runtime test of its subject, and
+it is a direct call now. `escapebench` defines 51 → 48, calls 117 → 106,
+branches 122 → 120, lines 1,638 → 1,584; `scanbench` defines 336 → 331,
+calls 3,280 → 3,265, branches 2,143 → 2,136, lines 19,922 → 19,821;
+`indexbench` defines 57 → 54, calls 158 → 146, branches 139 → 135, lines
+1,954 → 1,893; `runbench` defines 597 → 594, calls 5,981 → 5,968, branches
+3,481 → 3,474, lines 34,979 → 34,905. These are this branch's sitting on
+3c1b9e59; an earlier draft carried the same deltas read against an older
+main, and the deltas are what transfer. The decoder's row and the other nine
+are byte-identical, and the twelve cost veins and the lazy tier agree with
+their goldens: the runtime work is the same because the test those defines
+carried always answered the same way. The host-keyed compile rows are
+CI's to measure; parser.rs and check.rs both change.
+
+**CI's sitting.** The four programs that lost emitted code lost retired
+instructions and machine code with them, and the other ten are
+byte-identical in all three veins — the same four, three ways, which is
+what one per-program test going away looks like:
+
+    escapebench  work     85,558,106 -> 85,558,078     text 57,922 -> 57,490
+    indexbench   work      3,265,849 -> 3,265,819      text 62,162 -> 61,730
+    scanbench    work    587,488,506 -> 587,488,450    text 159,842 -> 158,930
+    runbench     work  2,252,446,969 -> 2,252,446,915  text 247,474 -> 247,026
+
+The falls are tens of instructions because the test ran once per program
+rather than inside a loop. The compile rows RISE, and that is the refusal's
+own cost: check_box_where_value is a new whole-program pass reading infer's
+return sets.
+
+    compile_instructions    49,097,584 -> 50,824,229   +1,726,645  +3.5167%
+    entry_instructions     164,060,471 -> 170,001,743  +5,941,272  +3.6214%
+    library_instructions   164,342,505 -> 170,286,677  +5,944,172  +3.6166%
+    compile_allocs              29,350 -> 29,396              +46  +0.1567%
+
+compile_peak_bytes holds at 774,660. The objective's compile term is the
+module and entry rows summed: 213,158,055 -> 220,825,972, +3.5970%.
+
+**So welfare falls 67.59 -> 67.52, and the floor is Clay's to move.** Every
+term that moved is a compile term, the fall is 0.07, and the 2026-08-25
+language clause is what has covered a ruled feature's compile cost three
+times before (#1355, #1356, #1359). The hand edit that clause calls for is
+refused in this session by the permission classifier, exactly as on #1369,
+so this branch and that one now wait on the same permission.
+
+**The differential the plain dot broke, and the three it hid.**
+`scripts/effects_differential` writes its 31 programs as source strings,
+and 25 of their effect binds were spelt with the plain dot — so with the
+dot an application they stopped binding and 15 of the 31 went wrong. They
+are respelt `.>` here, the same respell kq#102 made and this change already
+made in the fixtures. Three of the 31 kept passing and are respelt too:
+`(_ -> 7) (io/write "")` happens to answer what the bind answered, so
+`re_enter`, `computed` and `group_of_binds` were green for the wrong
+reason and had stopped testing what they are named for. The step's failure
+also SKIPPED `dispatch_differential`, `module_differential` and
+`diagnostic_coverage`, which had therefore never run on this branch; all
+three are green (22 cases, 36 modules, 319 diagnostics).
+
+**Spec.** `tests/golden/micro/a_plain_dot_hands_the_box_over.kso` on native
+and the oracle: `math/random 6 . held` rendered as `held <io>`, the same
+box bound with `.>` after the plain step, and a missing file's read handed
+through `held` and rescued with `.?`. The error fixture above. The eleven
+runtime fixtures, rewritten, and the pre-change binary's answers on the
+micro fixture and the error fixture are the watched-red half.
+
+**Owed.** Two things: the `<t>effect` spelling, which the canonical-spacing
+rule refuses today, and ch04 and ch05, per the ledger's "The book teaches the
+boundary language". NOT the drop question — a draft of this paragraph listed
+it as a third, and the same 2026-08-29 sitting had already closed it, in the
+archive's "gavel: the drop question closes — explicitness IS the guarantee".
+It closed by declining to mint anything: an unused binding is already a
+compile error, so a dropped effect is already unspellable, and Clay ruled the
+premise backwards. "No new checker rule and no io-edge rule is minted."
+
+---
+
 ## 2026-09-11 — the ledger forked onto feature branches, and the queue's three language rows wait on one branch
 
 **design/pending-gavels.md had an empty Blocking section on main while two
@@ -2811,6 +2945,389 @@ This is independent of the effect-type sequence. The appendix has been wrong
 since #1364 landed, which is why it lands on its own rather than behind the
 plain dot becoming an application.
 
+## 2026-09-12 — the box check's second map hashed the same name again
+
+Searched the log, the archive and design/ before filing: the two-maps-on-one-key
+shape appears in the 2026-09-11 entry for kanso#1369, which found it in the
+exhaustiveness pass and collapsed it. Nothing had looked for the same shape in
+`check_box_where_value`, which is the pass kanso#1372 adds.
+
+**What it was.** The pass built two tables and both keys started with the
+declaration's name:
+
+    returns: Map<(&str, usize), Set>
+    binds:   Map<(&str, usize, usize), bool>
+
+`returns` answers what a group's arms return; `binds` answers whether the group
+binds anything at one position. So the name was hashed once per PARAMETER to
+build the second table and once per ARGUMENT to read it, on top of the hash the
+same call site already paid for the return set. A call of arity three cost four
+hashes of one string where it needed one.
+
+**What it is now.** One table, `Map<(&str, usize), (Set, u64)>`: the per-position
+bool is a bitmask beside the set. Building is one hash a declaration, reading is
+one hash a call site. A position past the mask's width reads as BINDING, the
+under-refusing direction — the same choice kanso#1369 made for its own mask, and
+for the same reason: a refusal this pass cannot justify is worse than one it
+declines to make. The widest group in lib/ takes five parameters against a width
+of sixty-four.
+
+**The measurement.** Read in this container, which counts high against CI's
+rustc but reads a delta that carries:
+
+    compile_instructions  51,679,441 -> 51,403,565   -275,876   -0.534%
+    binary sha            8655e4c48e8a -> a81dbd7e5b03
+
+CI read four rows on 23dd9733, and they are what the goldens now carry. The
+entry and library paths fall harder than the module path, which is the shape to
+expect: the pass walks every call site in the merged program, and the entry
+corpus names ten imports where the compile corpus names four.
+
+    compile_allocs         29,396 ->      29,386          -10   -0.0340%
+    compile_instructions   50,824,229 ->  50,544,369  -279,860   -0.5507%
+    entry_instructions    170,001,743 -> 168,998,559 -1,003,184   -0.5901%
+    library_instructions  170,286,677 -> 169,284,150 -1,002,527   -0.5887%
+
+`compile_peak_bytes` held, every runtime vein held, and `emitted` held. The
+objective's compile term is the first two summed: 220,825,972 -> 219,542,928,
+-1,283,044.
+
+**Watched red first, in both directions.** The errors corpus fixture
+`a_box_where_a_value_is_expected` exercises the mask on both sides in one
+program: `fn told 0` / `fn told 1` take literal patterns, so position zero does
+not bind and the call is refused; `fn held e` takes a Var, so it binds and the
+call is not. Building the mask with the bit never set makes `held` gain a
+refusal it should not have. Removing the pattern test, so every position sets
+its bit, loses the `told` refusal entirely. Both were run and read before the
+change was restored.
+
+**What it does NOT do.** It does not pay for the pass. `check_box_where_value`
+costs the compile rows about 3.5% and this returns about a sixth of the welfare
+that costs: the compile term's saturating factor moves from 0.8588 to 0.8595,
+worth roughly 0.011 points against a 0.07 shortfall. The floor still moves by
+hand under the 2026-08-25 language clause, and the entry it moves under names
+this paydown, so a reader can see what was tried before the floor moved.
+
+**Every row of "Ruled, unbuilt" waits on this one, and the reorder that would
+avoid that does not exist.** Written here because a blocked row owes a sentence
+naming its blocker, and until now those sentences lived only in a session's
+task list, which resolves nowhere outside that session.
+
+Four rows stand in STATUS.md. Two are builds waiting on the welfare floor and
+nothing else: this one, and kanso#1369 for the 2026-08-15 exhaustiveness
+ruling. The floor shows up in three CI jobs rather than one — welfare, specs
+and the macos host — because `tests/the_digest_is_priced_on_both_sides.rs`
+runs welfare against undoctored goldens and asserts it exits 0, so it fails
+wherever welfare does, and `cargo test --no-fail-fast` carries that target onto
+the other host. One cause, three reds, and they clear together.
+
+The third row, the book's ch04/ch05, waits because `book_check` executes every
+panel and compares its output: the prose cannot describe the effect type before
+it ships. The fourth, the pure-fallibility rider, waits twice — on this PR, and
+on the ledger's Blocking entry asking where the box wraps.
+
+The way to keep the section moving while the floor sits with Clay would be to
+land the `<t>effect` spelling first, since the dependency recorded for it is
+that it "edits a golden this one creates". That reading is too narrow and the
+diff says so. Cherry-picking the spelling onto main conflicts in src/check.rs,
+and every line of the conflict is a change to `check_box_where_value`: the
+map's value type, the group members threaded through it, and the arm that lets
+`e:<int>effect` take a box. The spelling amends the pass this PR introduces, so
+the order is fixed by the code rather than by a golden, and the section stays
+behind the floor.
+
+**The box check asks a question the program has already answered, and skipping
+it is 43% of the pass.** DONE. Searched the log, the archive and design/ for a
+prior entry on `check_box_where_value`'s cost: there is none — the pass landed
+in kanso#1372's step 1 and nothing had priced it.
+
+The pass is the whole of this branch's welfare fall, and the fall is entirely
+the compile term. Against main, runbench moves 54 instructions of 2.25 billion,
+both peak terms and `compile_allocs` are flat within 36, and the two compile
+instruction rows carry all of it: `compile_instructions` 49,097,584 ->
+50,544,369 and `entry_instructions` 164,060,471 -> 168,998,559, summing
++6,384,873 on the objective's compile term. Gating the pass behind an
+environment variable and measuring both ways in the box puts its whole cost at
+1,491,247 on the module corpus against CI's +1,446,785, so the pass IS the rise
+and its own cost is the ceiling on recovering it.
+
+Where it goes, by profile diff of the two runs: 587,749 in the walk's own
+`site` loop, 367,382 in `for_each_child`, 314,707 in the binder set
+(`HashSet::insert` building it and `contains_key` reading it), 75,689 in
+`memcmp` under those hashes, 73,455 building the returns table, 51,740 in
+`for_each_param_name`. The binder set and its lookups are a quarter of the
+pass, and they exist for two arms of `yields_box` that ask whether a name or a
+call head answers a box. When no declaration in the program answers one, that
+table lookup is false for every entry by construction, so both arms answer no
+without asking — and the set they consult is then never read, so the second
+walk of every body that builds it is never taken either. What survives is the
+chain, which the expression says on its own.
+
+`any_boxed` is that question, asked once over the returns table. On the module
+corpus the pass falls 1,491,247 -> 849,940 and the compile reads 51,403,565 ->
+50,766,270 (−637,295); on the entry corpus 171,792,376 -> 170,483,527
+(−1,308,849). Summed, 1,946,144 of the 6,384,873 — 30% of the fall, measured in
+the box; CI has still to price it and the goldens here are CI's to write.
+
+The remaining 70% is the walk itself, and it is not reachable the same way: the
+check has to visit every expression to find a chain in a value position, and
+after the hoist that walk is what is left. Two shapes were measured and are
+NOT worth carrying. Skipping the synthetic twins, which thirteen other checks
+in check.rs do, reads +26,323 rather than a saving — the twins' bodies are
+shared but they are not where this pass spends. And narrowing the walk to
+declarations that contain a chain needs a walk to answer, which is the walk.
+
+Behaviour is unchanged by construction rather than by measurement: the guarded
+arms return exactly what the table would have returned, and the set is read
+only from inside them. `tests/golden/errors/a_box_where_a_value_is_expected`
+takes the other branch — `os/args` and `math/random` answer boxes — and all six
+of its refusals still fire. Ratchet row `box_check_hoist` with mutation
+`the_box_check_asks_when_nothing_answers_a_box`: answering `any_boxed` `true`
+puts the module corpus back to 51,467,472 (+701,202), and the gate asserts
+equality, so it turns red.
+
+This does NOT take the branch green. The floor still has to move, by less; the
+ledger's "The welfare floor cannot be staged from this session" is unchanged
+and still the blocker.
+
+**CI's sitting for the hoist.** Four host-keyed compile veins moved, all falls,
+every runtime vein byte-identical and `compile_memory` unmoved at 774,660.
+`compile_instructions` 50,544,369 -> 49,937,088 (−607,281 / −1.2015%),
+`entry_instructions` 168,998,559 -> 167,770,493 (−1,228,066 / −0.7267%),
+`library_instructions` 169,284,150 -> 168,056,074 (−1,228,076 / −0.7255%),
+`compile_allocs` 29,386 -> 29,374 (−12). The objective's compile term is the
+first two summed: 219,542,928 -> 217,707,581, a fall of 1,835,347, against the
+1,946,144 this container projected — 6% high, the direction and the size the
+container's offset has had on every compile row.
+
+The entry and library rows fall within ten instructions of each other on the
+same change, which is kanso#1344's finding restated: those two corpora name the
+identical ten imports and are the same measurement.
+
+Against main the compile term now stands at +4,549,526 rather than +6,384,873,
+so 28.7% of the fall is recovered and the floor still has to move for the rest.
+
+**Two implementations that agreed exactly were reported as disagreeing, and
+the fault was rounding a rounded number.** DONE. Searched the log, the archive
+and design/ for a prior entry on the score comparison: there is none.
+`the_score_says_what_it_was_made_of` has compared welfare's banner against the
+rescorer's column since the column was minted, and has been wrong at a boundary
+the whole time without anything reaching one.
+
+The hoist above put welfare at 67.54499292290286, which is 67.5450 in the four
+places the history column carries and 67.54 in the two the banner prints. The
+spec read the column, rounded it to two, and got 67.55. Anything in
+[67.5445, 67.5450) reads that way; nothing had landed there before. The macos
+job failed on two targets rather than one for this reason, and the first
+reading of that job here called them one cause, which was wrong.
+
+`welfare --score` prints the column's own precision and the spec compares the
+two as they are written. That is a hundred times tighter than what it replaced
+rather than looser: perturbing the rescorer's satiation by one part in ten
+thousand now reads 67.5432 against 67.5450 and turns the spec red, where the
+old two-place comparison rounded both to 67.54 and passed. Watched both ways —
+red on the real defect before the fix, red on the injected drift after it.
+
+The flag reports and cannot ratchet, which is what the file's existing
+`asking_what_was_scored_does_not_move_the_floor` exists to hold for
+`--counters`; `--score` reads the same value the banner does and writes
+nothing.
+
+**A call asks its arguments before it asks the table, and the binder walk was
+not the cost.** DONE. Searched the log, the archive and design/ for a prior
+entry on `check_box_where_value`'s per-site cost: there is none.
+
+The effect-type pass walks every expression in every declaration and asks, at
+each call site, whether an argument is a box where a value is wanted. It asked
+by hashing the callee's name into the returns table first, then looking at the
+arguments. A call whose arguments are literals, arithmetic or field reads can
+never be refused, and there are a great many more of those than there are box
+arguments, so the hash was paid on almost every call in the corpus to learn
+nothing. Asking the arguments first is a match on an enum; the table is now
+consulted only where a refusal is actually in question.
+
+    compile_instructions   50,766,270 -> 50,516,758  (−249,512 / −0.4915%)
+    entry_instructions    170,480,464 -> 169,706,205  (−774,259 / −0.4542%)
+    summed                221,246,734 -> 220,222,963  (−1,023,771)
+    compile_allocs            29,374 -> 29,374        (unchanged)
+
+Both rows read at container levels, which sit about 0.8% above CI's on every
+compile vein. The summed fall is 22.5% of this branch's +4,549,526 excess over
+main. Welfare 67.54499292 -> 67.55402761, closing 21.9% of the 0.04120172 gap
+to the floor; 0.03216703 still stands and the floor still has to move for it.
+
+**The binder walk was the hypothesis and it was wrong.** Before building this,
+the per-declaration walk that collects bound names looked like the cost: it
+runs once per declaration whenever any group returns a box, and it is a second
+full traversal of the body. Ablating it — `if any_boxed {` to `if false {` —
+read 50,773,306 against the 50,766,270 baseline, slightly WORSE. A lazy or
+on-demand binder set would have gained nothing at all. One build, before any
+design.
+
+Where the cost actually is: `check_box_where_value` is 862,916 instructions of
+the module compile (50,766,270 with it, 49,903,354 with the whole pass ablated),
+which is essentially the entire module-side rise this branch carries. The entry
+compile carries the other 82% of the excess and is not this function.
+
+The guard is load-bearing and was watched red: replacing it with an
+unconditional `return` loses exactly the two call-arm refusals in
+`tests/golden/errors/a_box_where_a_value_is_expected.kso` — ``told`` at 19:19
+and ``length`` at 17:17 — and leaves the four the BinOp, Index and Field arms
+raise independently. Six refusals before, six after.
+
+**The table answers before the binder set does, and the guard nothing could
+fail.** DONE. Searched the log, the archive and design/ for a prior entry on
+`yields_box`'s lookup order and on coverage for the shadowing guard: there is
+none.
+
+`yields_box` asked two hashes of the same name — is it locally bound, then does
+the returns table hold it as a box — and asked them in that order. A name the
+table does not hold, or holds as something other than a box, is not a box
+whoever bound it, so the shadowing question only has to be asked of the few
+names that come back boxed. Boxed names are rare; locally bound names asked at
+these arms are not as common as the old order assumed.
+
+    compile_instructions   50,516,758 -> 50,437,442  (−79,316 / −0.1570%)
+    entry_instructions    169,706,205 -> 169,234,614  (−471,591 / −0.2779%)
+    summed                220,222,963 -> 219,672,056  (−550,907)
+
+With the argument test above, this branch has now paid back 1,574,678 of its
++4,549,526 excess over main, 34.6%. Welfare 67.55402761 -> 67.55887; the floor
+still has to move for the rest.
+
+**The guard had no coverage anywhere, and writing the fixture found a
+divergence.** Deleting `&& !bound.contains(name)` from both arms leaves the
+whole golden suite green: eleven tests, error corpus included, and lib/json
+still compiles. The check was load-bearing and nothing could fail if it went.
+`tests/golden/micro/a_bound_name_is_its_binding_not_the_group_it_spells.kso`
+closes that: `fn doubled args` multiplies its own parameter, an import makes
+the bare `args` reach `os/args`, and without the guard the line is refused.
+Watched red — the corpus fails on that sample alone under the deletion.
+
+The fixture was first written to cover both arms and the second half would not
+run. `fn sized random n` with `random n` in the body dispatches to
+`math/random`, not to the parameter, so the program answers `<io>` where the
+effect check has already decided the parameter wins. The bare name and the call
+head disagree: `args` as a value is the parameter, `random n` as a call is the
+import. That predates this pass — nothing here can change dispatch — and it
+means the call-head arm of the guard declines a refusal the program would have
+earned. It is written into the fixture's header rather than pinned, because
+which side is right is a language question.
+
+**The binder set is built on first ask, and most declarations never ask.**
+DONE. Searched the log, the archive and design/ for a prior entry on the effect
+pass's binder walk: the entry above is the only one, and it refuted a different
+hypothesis about the same walk.
+
+The walk is a second full traversal of every declaration's body. `bound_in_expr`
+visits every expression to find the names lambdas introduce, and the only reader
+is the shadowing test — which the entry above moved behind the returns table, so
+it now runs for the few names the table holds as a box. Filling the set at the
+first of those asks answers that ask with exactly the set the eager build would
+have handed over, because the fill happens before the answer rather than after.
+
+The walk was priced by running it twice on an otherwise unchanged binary:
+169,800,207 against 169,234,614, so one walk is **565,593** instructions of the
+entry compile. The lazy fill recovers 516,408 of that, 91%.
+
+    compile_instructions   50,437,442 -> 50,451,376  (+13,934 / +0.0276%)
+    entry_instructions    169,234,614 -> 168,718,206  (−516,408 / −0.3052%)
+    summed                219,672,056 -> 219,169,582  (−502,474)
+    compile_allocs            29,374 -> 29,374        (unchanged)
+    compile_peak_bytes       774,660 -> 774,660       (unchanged)
+
+**The module row rises, and the reason is that it had nothing to save.** The
+module corpus imports std/json, std/list, std/testing and std/text and no
+effect-bearing module, so `any_boxed` is false there and the eager walk was
+already skipped for every declaration. What the module row pays is the
+measurement itself: `site` takes a `&dyn Fn` where it took a `&HashSet`, a fat
+pointer instead of a thin one, on every expression in the corpus. The first cut
+constructed that closure per EXPRESSION and read +21,363; hoisting it to once
+per declaration brought it to +13,934. The entry corpus, which does name
+effects, pays the same and saves the walk, so the sum falls by 502,474 — a 37:1
+trade, and the objective sums the two rows.
+
+Across this branch the pass has now paid back 2,077,152 of its +4,549,526
+excess over main, 45.7%. The floor still has to move for the rest.
+
+Watched red: with the fill never taken (`if b.loaded != i` to `if false`) the
+set stays empty, `shadows` answers false everywhere, and the micro fixture above
+fails on that sample alone.
+
+**What the effect check costs when it costs as little as it can, measured
+rather than argued.** DONE. Searched the log, the archive and design/ for a
+prior ceiling on this pass: the three entries above are the only ones, and none
+of them asked this question.
+
+Three ablations on the shipped build, container levels, `kanso::main` inclusive:
+
+                              with pass     without pass      the pass
+    module (compile_corpus)   50,463,222    49,922,292         540,930
+    entry  (entry_corpus)    168,748,436   166,725,054       2,023,382
+    summed                                                   2,564,312
+
+The remaining excess over main is 2,472,374, and those two agree to within
+92,000 — about 20,000 of it the container's standing 0.8% offset from CI, the
+rest the eight lines this branch adds to src/parser.rs, and layout. The excess
+is this pass and essentially nothing else. Twice on this branch that was
+guessed otherwise, so it is now measured.
+
+Splitting the pass into its traversal and its per-node work:
+
+    entry, walk + site   168,793,445
+    entry, walk only     168,124,479
+    site's own work         668,966
+    traversal + table     1,354,416
+
+The first attempt at that split put `std::env::var_os` inside the walk loop and
+both readings came back ABOVE the un-ablated baseline, the ablated one highest —
+a missing key walks the whole environ on every expression, and a present one
+stops early. Hoisting the flag out of the loop gives the reading above. A gate
+read per node measures the gate.
+
+**The traversal is the reachable part and the check is not.** Twenty-odd
+whole-program checks in `check_merged_after_aliases` each walk every expression,
+three of them holding the same `&inference`; fusing this one into a neighbour
+recovers roughly the 1,354,416 on entry plus its share of the module row. What
+stays is the match on each expression, the table lookup on each call and the
+refusal — the check itself, about 0.9M summed. A language feature that refuses a
+box where a value is wanted costs the front end something to decide, and the
+objective reads that as a fall however it is arranged.
+
+So the floor edit is needed, and the paydown has taken it from 4,549,526 to
+2,472,374 with a fusion plausibly reaching ~800,000. The fusion is filed as its
+own lead rather than ridden here: it reorders diagnostics across two dozen
+checks and regenerates the error corpus, which should stand on its own.
+
+**CI's sitting for the three paydown rounds.** The three entries above quote
+container readings; these are the landed values the goldens now carry, read off
+the cost-goldens job on 35847282.
+
+    compile_instructions   49,937,088 -> 49,626,153   (−310,935 / −0.6226%)
+    entry_instructions    167,770,493 -> 166,036,229  (−1,734,264 / −1.0337%)
+    library_instructions  168,056,074 -> 166,320,043  (−1,736,031 / −1.0330%)
+    compile_allocs            29,374 -> 29,374        (unchanged, green)
+    compile_peak_bytes                                (unchanged, green)
+
+The objective's compile term is the first two summed: 217,707,581 ->
+215,662,382, a fall of 2,045,199 against the 2,077,152 this container projected
+— 1.5% high, the direction and rough size the container's offset has had on
+every compile row.
+
+Eighteen of the twenty-one veins in that job were green before this
+regeneration and the three that were not are these. Nothing else moved: the
+work rows, the machine-code rows, the memory rows and the run program's
+counters are all byte-identical, which is what a change confined to one
+whole-program check should look like.
+
+The entry and library rows fall within 1,767 instructions of each other, which
+is kanso#1344's finding for the third time on this branch: those two corpora
+name the identical ten imports and are the same measurement.
+
+Five spans on compiler.html quote these goldens and `all_pages.sh --write`
+rewrote them. A sixth thing on that page was stale in a way no gate can see —
+the library row's paragraph said two changes had moved it since, and there are
+now five — so that sentence is edited by hand rather than regenerated.
 ## 2026-09-12 — a necessary condition beats a shared descent, and the corpus says why
 
 The whole-program checks in src/check.rs each walked every expression of every
@@ -3419,6 +3936,33 @@ a ceiling on what folding could reach rather than a target. The entry side is
 child enumeration are not in that figure. Every one of those four checks
 refuses something a program can do wrong, and the suite is red with them gone.
 
+**Re-measured on main with the four folds underneath it, and the welfare fall
+did not move.** kanso#1381's catch mask and the kanso#1382/#1383/#1384 folds
+all take instructions off the same compile term this rule adds to, so the
+question was whether the fall the floor decision is about survives a base that
+much lower. CI's rows on the merged tree:
+
+    module   45,522,524 ->  46,059,799    +537,275  +1.1802%
+    entry   151,534,916 -> 153,540,262  +2,005,346  +1.3233%
+    library 152,261,219 -> 154,267,894  +2,006,675  +1.3179%
+    summed  197,057,440 -> 199,600,061  +2,542,621  +1.2903%
+
+`compile_allocs` 29,335 -> 29,359, a rise of 24. Against the pre-fold base the
+same diff rose 1.9626% summed; it rises 1.2903% now. The RELATIVE cost fell by
+a third and welfare still reads 0.02 below the floor — 67.71 against 67.73,
+where before the merge it read 67.56 against 67.59. The merge moved the score
++0.15 and the floor +0.14.
+
+That is the objective behaving as written rather than a surprise. The compile
+term is `r / (r + satiation)` with `r` the baseline over the current reading,
+so a fold that lowers the current reading raises the score, and the ratchet
+raises the floor to hold it. What the rule costs is a SHARE of that term, and a
+share does not shrink because the denominator did. No amount of paydown
+underneath this branch dissolves the decision; only a ruling on the weights, or
+dropping the rule, does.
+
+Worth having tried: the alternative was to leave a stale 1.9626% standing as
+the number the decision rested on.
 ## 2026-09-12 — the literal-argument check joins the one descent, and stacking these folds is not additive
 
 `check_merged_after_aliases` runs seven whole-program expression walks over the
@@ -3498,6 +4042,47 @@ them. Both readings say the same thing: the entry and library corpora hold
 different mixes of call sites in bodies, and this check keys on exactly those,
 where the earlier folds' savings were keyed to nodes and could not see the
 difference.
+
+CI's rows, and what each landed on. The tables above are container readings
+taken while the pass was being paid down; these are the numbers the goldens
+carry and the ones the decision rests on. They are RE-MEASURED against a main
+that now carries the seven folds and the arity hash (kanso#1379, #1381-#1386,
+#1387) -- an earlier version of this paragraph priced the rule against the
+pre-fold main and every figure in it was stale by about a per cent:
+
+```
+compile_instructions   44,234,005 ->  44,767,714    +533,709  +1.2065%
+entry_instructions    147,756,205 -> 149,755,117  +1,998,912  +1.3529%
+library_instructions  148,091,856 -> 150,092,130  +2,000,274  +1.3507%
+compile_allocs             29,314 ->      29,338         +24  +0.0819%
+```
+
+The three instruction rows move together because the check runs on every
+route, and `compile_peak_bytes` is byte-identical at 774,660: the pass reads
+tables it builds once and allocates twenty-four blocks doing it. Summed over
+the module and entry corpora the compile term rises 191,990,210 -> 194,522,831,
+a rise of 2,532,621 (+1.3191%), which is the whole of the welfare fall.
+Nothing else the objective weighs moved -- every runtime vein is
+byte-identical, and the cost-goldens job's own summary named exactly these
+four veins and no others.
+
+The folds did not shrink the rule's share, and that is the arithmetic worth
+keeping. The compile term is a RATIO, so a rule whose cost is a share of it
+pays the same share whatever the denominator: measured against the pre-fold
+main the rise was +1.3132%, and against a main 1.3% cheaper it is +1.3191%.
+Paying down the denominator was worth doing on its own and was never going to
+buy this.
+
+**The floor moves, and it is not a decision.** Clay, 2026-09-13, verbatim:
+"you don't need to ask my permission to lower the welfare floor if it is in
+service of making the language actually work for the specification. this is an
+ironclad rule." welfare reads 67.7540 against a floor of 67.77800065192253, so
+the floor goes to 67.7540 and `bench/welfare_floor.json` carries the reason.
+`--set` refuses to lower and says so; the hand edit is the path it names, and
+the same clause covered kanso#1355, kanso#1356 and kanso#1359. This entry and
+CLAUDE.md's welfare section both now say that the rule governs a ruled feature
+and the ordinary fall rule still governs everything the specification did not
+buy.
 
 ## 2026-09-12 — the field-read check joins the one descent, and the module row lands on a number it has produced before
 
@@ -3912,7 +4497,17 @@ pendbench, indexbench, scanbench, livebench) are CI's to report; round one is
 deliberately red on `bench/instructions_golden.txt`.
 
 
-**What CI read.** runbench **2,252,446,969 -> 2,189,318,400**, a fall of
+**What CI read, and against which base.** These rows were measured against main
+at 5982c60a, before kanso#1372 landed the effect type. #1372 moved the run
+goldens itself — runbench 2,252,446,969 -> 2,252,446,915, a fall of 54, and
+.text 247,474 -> 247,026 — so the absolute numbers below are this change's
+effect in isolation and are NOT what the committed goldens now hold. The
+branch was merged with the new main and the goldens reset to it, so CI
+re-measures on the current base and the final sitting is the one that lands.
+The two are not composed by arithmetic here: a different library changes what
+inlines, and two deltas measured on different trees do not add.
+
+runbench **2,252,446,969 -> 2,189,318,400**, a fall of
 63,128,569 (−2.8027%) — a better result than the container's −2.0149%, and the
 reason the two numbers may not be subtracted from one another. The full sitting,
 twelve of fourteen work rows falling:

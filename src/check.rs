@@ -840,6 +840,232 @@ fn check_none_exhaustive(
     }
 }
 
+/// A box where a value is expected. An effect is `<t>effect`, the unresolved
+/// outcome of an operation, and the three words are its only doors (the
+/// 2026-08-29 gavel): holding one is fine, so a parameter that binds
+/// anything takes it, and so does `print`, which renders it as `<io>`. What
+/// is refused is handing one to something that reads the value inside —
+/// an operator, an index, a field read, `if`'s condition, a builtin that
+/// takes values, or a group none of whose arms binds anything at that
+/// position. Only what is provable: a group whose joined return set holds
+/// the description bit and no value bit, a `.>` step over such a subject,
+/// or a wall.
+fn check_box_where_value<'p>(
+    program: &'p Program,
+    inference: &crate::infer::Inference,
+    diags: &mut Vec<Diagnostic>,
+) {
+    use crate::infer::{Set, DESC, FAIL, THUNK, TOP};
+    // ONE MAP, NOT TWO. Both keys began with the declaration's name, so the
+    // second hashed that string once per PARAMETER to build and once per
+    // ARGUMENT to read, on top of the hash the same call site already paid for
+    // the return set. The per-position bool sits in a bitmask beside the set
+    // now: one hash per declaration to build it, one per call site to read it.
+    //
+    // A position past the mask's width reads as BINDING, which is the
+    // under-refusing direction — the same choice kanso#1369 made for the
+    // exhaustiveness mask, and for the same reason: a refusal this pass cannot
+    // justify is worse than one it declines to make. The widest group in lib/
+    // takes five parameters against a width of sixty-four.
+    let mut returns: crate::hash::Map<(&str, usize), (Set, u64)> =
+        crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
+    for (i, d) in program.fns.iter().enumerate() {
+        let key = (d.name.as_str(), d.params.len());
+        let slot = returns.entry(key).or_insert((0, 0));
+        slot.0 |= inference.returns[i];
+        for (pos, param) in d.params.iter().enumerate().take(64) {
+            if matches!(param, Pattern::Var(..) | Pattern::Wildcard(..)) {
+                slot.1 |= 1u64 << pos;
+            }
+        }
+    }
+    let values = TOP & !FAIL & !THUNK & !DESC;
+    let boxed = |s: Set| s & DESC != 0 && s & values == 0;
+    // WHETHER ANY NAME IN THE PROGRAM ANSWERS A BOX. When none does, a name
+    // and a call can never be one, so the two arms below that ask the table
+    // answer no without asking -- and the binder set those arms consult is
+    // never read, so it is never built either. What is left is the chain,
+    // which the expression says on its own. A program that never names an
+    // effect pays a walk instead of a walk plus a set.
+    let any_boxed = returns.values().any(|(s, _)| boxed(*s));
+    // a name the declaration binds itself — a parameter, a binding, a
+    // lambda's parameter — is that binding, whatever declaration shares
+    // its spelling; `fn either ... args` reads its own list, not `os/args`
+    fn yields_box(
+        e: &Expr,
+        returns: &crate::hash::Map<(&str, usize), (Set, u64)>,
+        shadows: &dyn Fn(&str) -> bool,
+        boxed: &dyn Fn(Set) -> bool,
+        any_boxed: bool,
+    ) -> bool {
+        match e {
+            // a `.>` step answers the chain its subject opened
+            Expr::App { args, piped: true, .. } => {
+                args.first().is_some_and(|a| yields_box(a, returns, shadows, boxed, any_boxed))
+            }
+            // THE TABLE ANSWERS BEFORE THE BINDER SET DOES, and both are a hash
+            // of the same name. A name the table does not hold, or holds as
+            // something other than a box, is not a box whoever bound it — so
+            // the shadowing question is asked only of the few names that come
+            // back boxed. Asking the binder set first paid its hash on every
+            // name in every expression to short-circuit the locals, and the
+            // locals are the common case only in the arms this pass walks past.
+            Expr::App { head, args, piped: false, .. } if any_boxed => match head.as_ref() {
+                Expr::Ident(name, _) => {
+                    returns.get(&(name.as_str(), args.len())).is_some_and(|(s, _)| boxed(*s))
+                        && !shadows(name.as_str())
+                }
+                _ => false,
+            },
+            Expr::Ident(name, _) if any_boxed => {
+                returns.get(&(name.as_str(), 0)).is_some_and(|(s, _)| boxed(*s))
+                    && !shadows(name.as_str())
+            }
+            Expr::Seq(..) | Expr::Join { .. } => true,
+            _ => false,
+        }
+    }
+    // the builtins that read a value. The words take the box; `print` and an
+    // interpolation render it; `is_desc` asks about it; `push` and `put`
+    // store it, which is holding; `err` and `wrap_err` carry it as a reason
+    let reads_value = |name: &str| {
+        BUILTINS.contains(&name)
+            && !matches!(
+                name,
+                "annotate"
+                    | "bind"
+                    | "rescue"
+                    | "print"
+                    | "is_desc"
+                    | "push"
+                    | "put"
+                    | "err"
+                    | "wrap_err"
+            )
+    };
+    let refuse = |diags: &mut Vec<Diagnostic>, who: &str, at: Span| {
+        diags.push(Diagnostic::new(
+            "effect",
+            format!(
+                "this is an effect — a box the words open — and {who} takes a value; \
+                 open it with `.>`"
+            ),
+            at,
+        ));
+    };
+    // THE BINDER SET IS BUILT ON FIRST ASK, and most declarations never ask.
+    // It is a second full traversal of the body -- `bound_in_expr` walks every
+    // expression to find the names lambdas and bindings introduce -- and its
+    // only reader is the shadowing test, which now sits behind the returns
+    // table and so runs for the few names the table holds as a box. Filling on
+    // the first of those asks answers it with the same set the eager build
+    // would have handed over, because the fill happens before the answer; a
+    // declaration that never names a box pays one walk over its body instead
+    // of two.
+    struct Binders<'b> {
+        loaded: usize,
+        set: HashSet<&'b str>,
+    }
+    let binders: std::cell::RefCell<Binders<'p>> =
+        std::cell::RefCell::new(Binders { loaded: usize::MAX, set: HashSet::default() });
+    let shadows = |i: usize, name: &str| -> bool {
+        let mut b = binders.borrow_mut();
+        if b.loaded != i {
+            let decl = &program.fns[i];
+            let set = &mut b.set;
+            set.clear();
+            for param in &decl.params {
+                for_each_param_name(param, &mut |n| {
+                    set.insert(n);
+                });
+            }
+            for stmt in &decl.body {
+                bound_in_stmt(stmt, set);
+            }
+            b.loaded = i;
+        }
+        b.set.contains(name)
+    };
+    let site = |e: &Expr, shadow: &dyn Fn(&str) -> bool, diags: &mut Vec<Diagnostic>| {
+        let is_box = |e: &Expr| yields_box(e, &returns, shadow, &boxed, any_boxed);
+        match e {
+            Expr::BinOp { op, lhs, rhs, .. } => {
+                for side in [lhs, rhs] {
+                    if is_box(side) {
+                        refuse(diags, &format!("`{op}`"), side.span());
+                    }
+                }
+            }
+            Expr::Index { base, index, .. } => {
+                if is_box(base) {
+                    refuse(diags, "an index", base.span());
+                }
+                if is_box(index) {
+                    refuse(diags, "an index", index.span());
+                }
+            }
+            Expr::Field { base, name, .. } => {
+                if is_box(base) {
+                    refuse(diags, &format!("`.{name}`"), base.span());
+                }
+            }
+            Expr::App { head, args, piped: false, .. } => {
+                let Expr::Ident(name, _) = head.as_ref() else { return };
+                if name == "if" {
+                    if let Some(cond) = args.first() {
+                        if is_box(cond) {
+                            refuse(diags, "`if`", cond.span());
+                        }
+                    }
+                    return;
+                }
+                // NOTHING TO SAY UNLESS AN ARGUMENT IS A BOX, and asking that is a
+                // match on the argument where asking the table is a hash of the
+                // callee's name. A call whose arguments are literals, arithmetic
+                // or field reads answers no on the match alone, so the table is
+                // consulted only where a refusal is actually in question. The
+                // second walk over the arguments below costs a few compares on
+                // the sites that reach it, which are the rare ones.
+                if !args.iter().any(&is_box) {
+                    return;
+                }
+                // one lookup for the whole call: whether the name is a group,
+                // and which of its positions bind anything
+                let found = returns.get(&(name.as_str(), args.len())).copied();
+                if found.is_none() && !reads_value(name.as_str()) {
+                    return;
+                }
+                let binds = found.map_or(0, |(_, b)| b);
+                for (pos, arg) in args.iter().enumerate() {
+                    if !is_box(arg) {
+                        continue;
+                    }
+                    if found.is_some() && (pos >= 64 || binds & (1u64 << pos) != 0) {
+                        continue;
+                    }
+                    refuse(diags, &format!("`{name}`"), arg.span());
+                }
+            }
+            _ => {}
+        }
+    };
+    let mut stack: Vec<&Expr> = Vec::new();
+    for (i, decl) in program.fns.iter().enumerate() {
+        let shadow = |n: &str| shadows(i, n);
+        for stmt in &decl.body {
+            let e = match stmt {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
+            };
+            stack.clear();
+            stack.push(e);
+            while let Some(cur) = stack.pop() {
+                site(cur, &shadow, diags);
+                crate::for_each_child(cur, |c| stack.push(c));
+            }
+        }
+    }
+}
+
 /// A lookup answers "not found" with a none, so a collection that could
 /// hold one would make every lenient read ambiguous. A record field is
 /// different: it is known to exist, so a none there means the value is
@@ -1746,6 +1972,7 @@ pub fn check_merged_after_aliases(
     if std::env::var("KANSO_EXHAUSTIVE").is_ok() {
         check_none_exhaustive(program, &inference, &mut diags);
     }
+    check_box_where_value(program, &inference, &mut diags);
     if require_entry {
         check_entry(program, &mut diags);
     }

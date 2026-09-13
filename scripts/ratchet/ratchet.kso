@@ -397,6 +397,18 @@ compile_ir = row
   (breaking "compile_ir_unwatched")
   release
 
+# The same gate, a second row, for the box check's hoist. compile_ir's own
+# mutation stops the vein being read at all; this one leaves the vein alone
+# and asks whether it can still see one pass doing work it can prove is
+# pointless. The two answer different questions about the same number.
+box_check_hoist = row
+  "a whole-program check that asks a question the program already answered"
+  false
+  "sh scripts/gates/compile_instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_box_check_asks_when_nothing_answers_a_box")
+  release
+
 # The same shape for the ENTRY path, which the row above cannot reach: it
 # checks a directory, and a directory takes compile_module_inner. The mutation
 # asks the entry's whole-program check twice, and the two rows separate
@@ -1193,7 +1205,7 @@ rows_b1d2 = text/concat rows_b1d [compile_ir compile_ir_host entry_ir]
 
 rows_b1d3 = text/concat rows_b1d2 [library_ir]
 
-rows_b1e0 = text/concat rows_b1d3 [compile_ir_one_value]
+rows_b1e0 = text/concat rows_b1d3 [compile_ir_one_value box_check_hoist]
 
 rows_b1e1 = text/concat rows_b1e0 [host_measures]
 

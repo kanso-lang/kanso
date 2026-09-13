@@ -4,13 +4,15 @@
 # no record declaring `nope`, is a name error and never reaches the runtime —
 # so reading the emitter says this site is unreachable and running a program
 # says it is not.
+# The check refuses a provable box here now (the errors corpus pins that
+# sentence), so the box travels through a list, where nothing can prove it.
 import "std/io"
 
 type cell
   n
 
 pub fn opaque v
-  v
+  (push [] v)[1]!
 
 d = io/write "a\n" >> io/write "b\n"
 

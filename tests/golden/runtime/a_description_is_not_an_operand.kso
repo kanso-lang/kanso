@@ -3,10 +3,12 @@
 # both other engines refused. A silent wrong answer rather than a divergent
 # sentence, which is why the three-engine walk was the only thing that could
 # have found it.
+# The check refuses a provable box here now (the errors corpus pins that
+# sentence), so the box travels through a list, where nothing can prove it.
 import "std/io"
 
 pub fn opaque v
-  v
+  (push [] v)[1]!
 
 d = io/write "a\n" >> io/write "b\n"
 

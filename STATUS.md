@@ -92,10 +92,36 @@ not audited.
 
 ### Effects are types, and the words are the only doors (2026-08-29)
 
-The archive entry of that name. No `<t>effect` type exists; a `.` over an io
-still binds automatically, so `effect . rescue orders` parses and its handler
-never runs. Owes: the type, the refusal of a box where a value is expected,
-the end of the automatic bind, and ch04/ch05 moving with it.
+The archive entry of that name. Built on 2026-09-10: the automatic bind is
+gone (`x . f` is `f x`, and a box handed through the plain dot stays a box),
+and a provable box handed to something that reads the value inside is
+refused at check. Owes: the `<t>effect` spelling (`e:<int>effect` is refused
+by the canonical-spacing rule today) and ch04/ch05 moving with it (the
+ledger's "The book teaches the boundary language").
+
+It does NOT owe the drop question. The same 2026-08-29 sitting closed it —
+the archive's "gavel: the drop question closes — explicitness IS the
+guarantee" — and closed it by DECLINING to mint anything: an unused binding
+is already a compile error, so a dropped effect is already unspellable, and
+Clay ruled the premise backwards. "No new checker rule and no io-edge rule
+is minted." An earlier draft of this row carried it as owed.
+
+**Blocked on the welfare floor, 2026-09-12.** The build is kanso#1372. Three
+of its jobs are red — welfare, specs and the macos host — and all three are
+one cause: welfare reads 67.52 against a floor of 67.58619464088068, and
+`tests/the_digest_is_priced_on_both_sides.rs` runs welfare against undoctored
+goldens and asserts it exits 0, so it fails wherever welfare does. The hand
+edit to bench/welfare_floor.json is refused by the session's permission
+classifier; design/pending-gavels.md carries it under Blocking as "The welfare
+floor cannot be staged from this session", with the evidence and the options.
+The floor moves and all three go green together.
+
+The spelling cannot land ahead of it. Cherry-picking the `<t>effect` commit
+onto main conflicts in src/check.rs, and every line of that conflict is a
+change to `check_box_where_value`, the pass kanso#1372 introduces: the
+spelling rewrites that map's value type, threads the group's members through
+it, and adds the arm that lets `e:<int>effect` take a box. The two land in
+order, so the sequence cannot be reordered around the floor.
 
 ### Pure fallibility is boxed too (2026-08-31)
 
@@ -104,6 +130,14 @@ answer includes an err yields `<t>effect`, io or not; `foo["bar"]!` answers a
 box; `foo["bar"]` stays the data form. Rides with the effect type above and
 is listed so the one-line `foo["bar"]! .? (e -> "anonymous")` form the gavel
 promises is visible as owed.
+
+**Blocked twice, 2026-09-12.** It rides on the effect type above, which waits
+on the floor. And where the box wraps is itself unruled: the ledger's Blocking
+entry "Where the box wraps under the pure-fallibility rider" asks whether the
+box is every err-carrying answer (738 of lib's 770 declarations) or the `!`
+name (71), with the price of each measured. Nothing builds until that is
+ruled, and a ruling alone does not unblock it — the effect type has to land
+first either way.
 
 ### Exhaustiveness on arm match, without the flag (recorded 2026-08-15; the language since its first days)
 
@@ -114,10 +148,22 @@ arm has always been the way the language works." The flag comes out; the
 group-level return set the campaign's last report blamed is the
 implementer's to sharpen.
 
+**Blocked on the welfare floor, 2026-09-12.** The build is kanso#1369, and the
+floor is its only red job — the kq failure that sat beside it was a stale
+coordinated branch in kq, fixed on 2026-09-12 and green since. Clay ruled the
+fall accepted on 2026-09-11: "if the welfare went down it went down. why are
+you even considering it?" The edit recording that ruling is the one the
+classifier refuses, under the same Blocking entry as the row above.
+
 ### The book teaches the boundary language (queued P1, 2026-08-26)
 
 Held in the ledger's "Open, not blocking" until the effect type exists; the
 row is here so the dependency is visible from the list cloud reads.
+
+**Blocked, 2026-09-12.** `book_check` executes every panel and compares its
+output, so ch04/ch05 cannot describe the effect type before it ships. The
+prose is written and verified on a local branch against kanso#1372's round
+four; it lands when the row above does.
 
 ## In flight
 

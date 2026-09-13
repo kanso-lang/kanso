@@ -1,0 +1,16 @@
+# A parameter shadows whatever declaration shares its spelling, and the effect
+# check has to agree. `os/args` answers a box where it is declared, and an
+# import makes the bare `args` reach it; here `args` is this group's own
+# parameter, so `args * 2` multiplies an integer. A check that asks the returns
+# table without asking what the declaration binds refuses this valid line.
+#
+# The CALL head is a different question and is not pinned here: `random n`
+# inside `fn sized random n` dispatches to `math/random` rather than to the
+# parameter, so the shadowing the effect check assumes for a call is not the
+# shadowing the program gets. That divergence predates this pass.
+import "std/os"
+
+fn doubled args
+  args * 2
+
+pub play = print (doubled 21)
