@@ -4944,3 +4944,36 @@ between them and a call can move the buffer, so only the escape pairs (`\`
 then `n`, `"`, `t`, `r`, `\`) are genuinely back-to-back, and those run about
 100,000 times each — roughly 0.27% of runbench for a much larger change. Left
 on the table with its number.
+
+**CI's sitting, on the post-kanso#1400 base.** Four work rows fall and ten are
+byte-identical, jsonbench among them: encodebench 3,692,200,106 ->
+3,641,023,306 (−51,176,800 / −1.3861%), livebench 3,143,851,726 ->
+3,115,992,526 (−27,859,200 / −0.8861%), runbench 2,009,290,191 ->
+2,003,021,871 (−6,268,320 / −0.3120%), oneshot −69,648. The two pure-encode
+benchmarks fall four and three times harder in proportion than runbench, which
+is the ladder's own distribution: the sites paying it are the encoder's, the
+decoder does not append single literal bytes, and jsonbench — the decode alone
+— does not move at all.
+
+CI's runbench delta is −6,268,320, which is the container's PRE-#1400 reading
+to the instruction and fourteen off its post-#1400 one. Three measurements of
+a two-instruction reorder on two hosts across a merge, spanning fourteen
+instructions in total.
+
+Six .text rows fall and none rises: widebench −288, encodebench −144, oneshot
+and livebench −128 each, runbench −112, jsonbench −32; eight identical.
+
+**The three compile rows split, and the split is the point.** On the pre-#1400
+base all three ROSE (+1,656, +3,970, +3,563). On this base
+`compile_instructions` FALLS 420 (46,105,350 -> 46,104,930) and
+`library_instructions` FALLS 312 (154,371,207 -> 154,370,895), while
+`entry_instructions` rises 1,225 (153,612,462 -> 153,613,687). Same source
+change, opposite signs on two rows of three, and nothing about the compiler's
+decisions differs: `compile_allocs` is 30,273 on both bases and
+`compile_memory` is byte-identical on both. That is the layout vein behaving
+exactly as CLAUDE.md describes it — the row moves with the bytes of the
+compiler and the layout under them, so what else is in the binary changes its
+sign. A branch that reads one of these rows as evidence about its own change
+is reading the linker.
+
+Welfare 68.50 -> 68.52, banked here.

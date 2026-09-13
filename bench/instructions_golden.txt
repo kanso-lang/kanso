@@ -437,8 +437,8 @@
 # the two hosts differ only in what a test costs them.
 #
 jsonbench 1250438261
-encodebench 3692200106
-oneshot 19362320
+encodebench 3641023306
+oneshot 19292672
 basket 34281871
 widebench 33078691
 deepbench 371382179
@@ -448,7 +448,7 @@ indexbench 3265296
 scanbench 528870249
 digestbench 9837152
 readbench 4629745
-livebench 3143851726
+livebench 3115992526
 # 2026-09-06 (the run program joins): `runbench 3043743748` is a NEW row and
 # nothing regressed to make it appear. It is the program Clay's gavel that day
 # made the objective's whole run-speed term, and the thirteen rows above it
@@ -506,4 +506,4 @@ livebench 3143851726
 #
 # The uniform -8 across six rows is one instruction on a path each program
 # takes eight times, and the four flat rows never take it at all.
-runbench 2009290191
+runbench 2003021871
