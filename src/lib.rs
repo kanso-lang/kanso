@@ -2496,19 +2496,41 @@ fn ambient_imports(imports: &mut Vec<ast::Import>) {
 /// of the declaration it was cloned from: dropping one as a duplicate of its
 /// own original cost a million-frame accumulating recursion its loop.
 fn collapse_diamonds(program: &mut ast::Program) {
-    let mut fns = crate::hash::Set::default();
-    program.fns.retain(|f| {
-        fns.insert((
-            canon_id(&f.file),
-            f.name.clone(),
-            f.params.len(),
-            f.span.line,
-            f.span.col,
-            f.synthetic,
-        ))
-    });
-    let mut types = crate::hash::Set::default();
-    program.types.retain(|t| types.insert((t.name.clone(), t.span.line, t.span.col)));
+    // The keys BORROW the names, the way `prune_unused_getters` does and for
+    // the same reason: a `retain` needs the program mutably, so a set holding
+    // `&str` into it cannot outlive the closure, and the mask is what carries
+    // the answer across. Owning them cost a `String` allocation per
+    // declaration and per type, for keys that are read once and dropped.
+    let keep: Vec<bool> = {
+        let mut fns: crate::hash::Set<(u32, &str, usize, u32, u32, bool)> =
+            crate::hash::Set::default();
+        program
+            .fns
+            .iter()
+            .map(|f| {
+                fns.insert((
+                    canon_id(&f.file),
+                    f.name.as_str(),
+                    f.params.len(),
+                    f.span.line,
+                    f.span.col,
+                    f.synthetic,
+                ))
+            })
+            .collect()
+    };
+    let mut mask = keep.into_iter();
+    program.fns.retain(|_| mask.next().unwrap_or(true));
+    let keep: Vec<bool> = {
+        let mut types: crate::hash::Set<(&str, u32, u32)> = crate::hash::Set::default();
+        program
+            .types
+            .iter()
+            .map(|t| types.insert((t.name.as_str(), t.span.line, t.span.col)))
+            .collect()
+    };
+    let mut mask = keep.into_iter();
+    program.types.retain(|_| mask.next().unwrap_or(true));
 }
 
 /// Load and qualify every imported module, recursively.
