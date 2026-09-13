@@ -1,0 +1,12 @@
+import "std/os"
+
+fn ignore _
+  1
+
+fn double x
+  x * 2
+
+pub play =
+  ignore (os/read_file! "a.txt")
+  double 21
+  print "done"

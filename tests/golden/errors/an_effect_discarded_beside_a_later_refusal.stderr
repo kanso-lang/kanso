@@ -1,0 +1,12 @@
+error[effect]: `ignore` reads none of what it is handed here, so this effect never happens — hand it back, or give `ignore` a name for it
+  --> an_effect_discarded_beside_a_later_refusal.kso:10:11
+  10 |   ignore (os/read_file! "a.txt")
+                 ^
+error[unused]: this value is never used: a non-final line binds a name, or is an effect joining the group
+  --> an_effect_discarded_beside_a_later_refusal.kso:10:3
+  10 |   ignore (os/read_file! "a.txt")
+         ^
+error[unused]: this value is never used: a non-final line binds a name, or is an effect joining the group
+  --> an_effect_discarded_beside_a_later_refusal.kso:11:3
+  11 |   double 21
+         ^
