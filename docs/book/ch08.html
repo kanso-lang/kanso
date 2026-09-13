@@ -258,6 +258,9 @@ err at 1: unexpected character `?`</code></pre>
 <span class="k">fn</span> <span class="f">hex_alpha</span> c
   <span class="f">if</span> (<span class="n">96</span> <span class="o">&lt;</span> c and c <span class="o">&lt;</span> <span class="n">103</span>) (c <span class="o">-</span> <span class="n">87</span>) (<span class="f">hex_upper</span> c)
 
+<span class="k">fn</span> <span class="f">hex_digit</span> none
+  <span class="f">err</span> <span class="s">"unexpected end of input"</span>
+
 <span class="k">fn</span> <span class="f">hex_digit</span> c
   <span class="f">if</span> (<span class="n">47</span> <span class="o">&lt;</span> c and c <span class="o">&lt;</span> <span class="n">58</span>) (c <span class="o">-</span> <span class="n">48</span>) (<span class="f">hex_alpha</span> c)
 
@@ -358,6 +361,9 @@ err at 1: unexpected character `?`</code></pre>
 
 <span class="k">fn</span> <span class="f">mark_step</span> _ <span class="n">101</span> _ _
   <span class="f">true</span>
+
+<span class="k">fn</span> <span class="f">mark_step</span> _ none _ _
+  <span class="f">false</span>
 
 <span class="k">fn</span> <span class="f">mark_step</span> cs _ p q
   <span class="f">mark_from</span> cs (p <span class="o">+</span> <span class="n">1</span>) q

@@ -140,6 +140,13 @@ front_end_rounds=62
 # own algorithm and so are the same on every host, which is why the number is
 # written down rather than left for CI -- but the file's other row is host-
 # keyed, so round one confirms it and CI's sitting is what stands.
+# 2026-09-11 (a none reaches a group with no arm for it): front_end_visits
+# 22,727 -> 22,452, a FALL of 275 (-1.2100%); front_end_rounds unchanged at 62.
+# The inference narrowing that ships with the rule subtracts, from each arm's
+# parameter, the bits an arm above it names at that position, so a parameter
+# settles on a smaller set and the fixpoint re-dirties fewer declarations.
+# Visits is not a welfare term; it is watched here because it counts the
+# compiler's own algorithm and reads the same on every host.
 # 2026-09-12 (the range sort, kanso#1376): front_end_visits 22,727 -> 22,724,
 # a FALL of 3, or 0.0132%; rounds hold at 62.
 #
@@ -160,7 +167,12 @@ front_end_rounds=62
 # `emitted_code` AGREED across the change, which is the same finding from the
 # other end: the compiler wrote byte-identical code, so the answers did not
 # move, only the route to them.
-front_end_visits=22724
+# 2026-09-13: the merge left this file carrying front_end_visits from main and
+# compile_peak_bytes from this branch, which is a file that agrees with neither
+# tree. The branch's own reading is 22,449 -- the inference narrowing subtracts
+# the bits an arm above names, so a parameter settles on a smaller set and the
+# fixpoint re-dirties fewer declarations. rounds unchanged at 62.
+front_end_visits=22449
 # 2026-08-31 (the AST's identifiers are inline names): 728,030 -> 713,606, a
 # fall of 14,424, or 1.98%. Banked. The peak falls with the traffic because a
 # short name's bytes now live inside the AST node the allocator already gave
@@ -227,4 +239,7 @@ front_end_visits=22724
 # type it did not, so a nullary in an arm is a cheaper emit and a slightly
 # longer inference. The two go opposite ways on purpose and the welfare
 # objective weighs only the peak.
-compile_peak_bytes=774660
+# 2026-09-11 (a none that reaches a group with no arm for it is refused):
+# 774,660 -> 777,126, a rise of 2,466 (+0.3184%). The shadow table is held
+# beside the parameter sets for the whole of inference, one Set per parameter.
+compile_peak_bytes=777126

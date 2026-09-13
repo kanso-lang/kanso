@@ -3341,11 +3341,16 @@ impl<'a> Backend<'a> {
             // switch reads as `none`, so a group that writes `fn kind 256` would
             // send a read past the end of a byte string to that arm — an arm no
             // byte can ever reach. The boxed tree below is immune, because it
-            // tests the tag before it looks at the payload, and the divergence was
-            // real: `kind cs[3]` on a two-byte string answered "a byte that cannot
-            // be" on native against the interpreter's "some other byte". A literal
-            // outside 0..255 keeps its group on the boxed path, where it stays
-            // dead the way the oracle says it is.
+            // tests the tag before it looks at the payload. A literal outside
+            // 0..255 keeps its group on the boxed path, where it stays dead the
+            // way the oracle says it is.
+            //
+            // The divergence this was found by is no longer reachable: it needed
+            // a group with a 256 arm and no `none` arm, and the exhaustiveness
+            // check refuses that call now. What remains is the group carrying
+            // both, where dropping this clause writes `i64 256` twice into one
+            // switch and clang refuses the module. Either way the guard is what
+            // keeps the two apart; tests/a_byte_arm_no_byte_can_reach.rs pins it.
             let raw_switchable = self.is_byte_disc(name, arity, disc)
                 && nullary_cases.iter().all(|(t, _)| *t == K_NONE)
                 && int_cases

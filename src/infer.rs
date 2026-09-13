@@ -114,6 +114,14 @@ struct Ctx<'a> {
     type_name_slots: [u64; 4],
     params: Vec<Set>,
     param_starts: Vec<u32>,
+    /// Per parameter, beside `params`: the bits an arm EARLIER in its group
+    /// takes first at that position, so they never arrive here. Dispatch is
+    /// in source order, so `insisted path none` answers every none handed to
+    /// `insisted` at position one and the arm below it sees a string. Without
+    /// this the arm below inherits the none it can never be given, and hands
+    /// it back as its own answer: `os/read_file!` read as an answer that
+    /// could be a none, all the way down to whatever the caller did with it.
+    shadow: Vec<Set>,
     returns: Vec<Set>,
     /// Per declaration: what a description this one answers hands the
     /// continuation bound to it. `returns` says what calling it produces;
@@ -330,6 +338,67 @@ pub fn infer(program: &Program) -> Inference {
         at += d.params.len() as u32;
     }
     param_starts.push(at);
+    // An earlier arm settles a position only when its OTHER positions accept
+    // anything: `f 1 none` catches a none at position two for a 1 alone, so
+    // it says nothing about what the arm below it can be handed there.
+    let mut shadow: Vec<Set> = vec![0; at as usize];
+    // WHAT AN ARM TAKES IS A RUNNING TOTAL, so each arm reads what the arms
+    // above it have taken and then folds in its own, rather than re-deriving
+    // the union from the top of the group. Asking it afresh per position read
+    // every earlier arm's whole parameter list once per position of the arm
+    // being answered, which is the group's length times two arities of work
+    // for an answer that grows by one arm at a time.
+    //
+    // And whether an arm settles a position does not depend on the position
+    // except in one way: it settles pos when every OTHER parameter accepts
+    // anything. So count the parameters that do not, once per arm. None of
+    // them and it settles everywhere; exactly one and it settles only there;
+    // two or more and it settles nowhere.
+    //
+    // A GROUP OF ONE IS SKIPPED WHOLE, and that is what makes the running
+    // total pay. Most groups are one arm: they shadow nothing, their entries
+    // are the zeros the vector already holds, and the first cut of this loop
+    // counted their parameters anyway — which cost 294,981 instructions more
+    // than the derivation it replaced, because the work it saves is in the
+    // groups nobody has and the work it adds is in the groups everybody has.
+    // The first arm of a real group reads zeros for the same reason, and the
+    // last one's contribution is read by nobody below it.
+    let mut taken: Vec<Set> = Vec::new();
+    for (start, end, _) in groups.values().copied() {
+        let (start, end) = (start as usize, end as usize);
+        if end - start < 2 {
+            continue;
+        }
+        taken.clear();
+        taken.resize(program.fns[group_members[start]].params.len(), 0);
+        for (k, &i) in group_members[start..end].iter().enumerate() {
+            let params = &program.fns[i].params;
+            if k > 0 {
+                let at = param_starts[i] as usize;
+                for (pos, held) in taken.iter().enumerate().take(params.len()) {
+                    shadow[at + pos] = *held;
+                }
+            }
+            if k + 1 == end - start {
+                break;
+            }
+            let mut loose = 0usize;
+            let mut only = usize::MAX;
+            for (q, pat) in params.iter().enumerate() {
+                if !matches!(pat, Pattern::Var(..) | Pattern::Wildcard(..)) {
+                    loose += 1;
+                    only = q;
+                }
+            }
+            if loose == 0 {
+                for (pos, pat) in params.iter().enumerate() {
+                    taken[pos] |= pattern_catches(pat);
+                }
+            } else if loose == 1 {
+                taken[only] |= pattern_catches(&params[only]);
+            }
+        }
+    }
     let mut ctx = Ctx {
         defers_into_containers,
         program,
@@ -350,6 +419,7 @@ pub fn infer(program: &Program) -> Inference {
         type_name_slots,
         params: vec![0; program.fns.iter().map(|d| d.params.len()).sum()],
         param_starts,
+        shadow,
         returns: vec![0; program.fns.len()],
         decl_yields: vec![0; program.fns.len()],
         type_fields: program.types.iter().map(|t| vec![0; t.fields.len()]).collect(),
@@ -924,8 +994,16 @@ fn mark_reader(ctx: &mut Ctx<'_>, decl: usize) {
     ctx.readers[at] |= 1u64 << (ctx.current_index % 64);
 }
 
+// PINNED INLINE, measured rather than assumed. This is three lines and every
+// caller is a hot fixpoint site, and LLVM inlined it at all of them until the
+// shadow load below was added — after which it outlined, and the profile read
+// 584,011 instructions against a main that spent none here under this name.
+// That figure is the call, not the mask: forcing the inline back leaves the
+// load in place and the row falls by most of it.
+#[inline(always)]
 fn widen_param(ctx: &mut Ctx<'_>, decl: usize, param: usize, set: Set) {
     let at = ctx.param_starts[decl] as usize + param;
+    let set = set & !ctx.shadow[at];
     if ctx.params[at] | set != ctx.params[at] {
         ctx.params[at] |= set;
         ctx.changed = true;

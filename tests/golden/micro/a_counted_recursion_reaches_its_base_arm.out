@@ -2,6 +2,6 @@ base
 step 3
 step -1
 step x
-step <none>
+step nothing
 no arm: unexpected end of input
 55

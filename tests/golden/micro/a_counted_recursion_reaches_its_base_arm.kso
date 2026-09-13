@@ -2,8 +2,10 @@
 # generic tail. the native backend switches on the literal here — it used to
 # want two of them before it would — so this is where a base case wired to the
 # wrong arm, or a non-int sent to the base, shows up. `none` is the case the two
-# paths could differ on: the cascade's generic arm accepts it, and so must the
-# switch's default.
+# paths could differ on, and under the exhaustiveness rule it is written as an
+# arm: the switch gets a case for it and the cascade an arm, and the two must
+# answer the same thing. Before the rule it was the generic tail that caught a
+# none, which is the shape the check refuses now.
 import "std/json"
 
 fn said (err r)
@@ -11,6 +13,9 @@ fn said (err r)
 
 fn step 0
   "base"
+
+fn step none
+  "step nothing"
 
 fn step n
   "step {n}"

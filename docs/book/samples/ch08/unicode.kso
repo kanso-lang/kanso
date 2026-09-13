@@ -11,6 +11,9 @@ fn decode_u s
 fn hex_alpha c
   if (96 < c and c < 103) (c - 87) (hex_upper c)
 
+fn hex_digit none
+  err "unexpected end of input"
+
 fn hex_digit c
   if (47 < c and c < 58) (c - 48) (hex_alpha c)
 

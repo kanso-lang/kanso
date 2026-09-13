@@ -194,7 +194,15 @@
 # branches and twenty-six lines are what an arm costs where a call stood. The
 # same shape in oneshot and livebench, which decode too, and nowhere else.
 # Measured on the merged tree over origin/main ef2f4ea4.
+# 2026-09-11 (a none reaches a group with no arm for it): the decoder loses 16
+# calls, 24 branches and 109 lines, defines held. The exhaustiveness rule ships
+# with an inference narrowing — an arm below a `none` arm no longer inherits
+# the none it can never be handed — and a parameter that has lost its none bit
+# is a scrutinee the emitter can prove, so the switch arms lose their none test
+# and the sites lose the force in front of it. Banked. The eleven other
+# programs are in bench/emitted_golden_others.txt and eight of them move the
+# same way.
 defines=142
-calls=1226
-branches=819
-lines=9272
+calls=1210
+branches=795
+lines=9163

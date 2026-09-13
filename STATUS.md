@@ -37,7 +37,7 @@ kanso — sat here and was bounced on 2026-08-29: a performance question with no
 surface area is the implementer's, per the ledger's own charter, and the log
 carries the research mandate it left with.
 
-**Three questions are waiting** — one blocking. Two more left the ledger on
+**Four questions are waiting** — two blocking. Two more left the ledger on
 2026-09-05 in the same sitting as the compile row: machine-code size gets no
 term in welfare, and `.text` stays in its own exact vein. Counted from the ledger, which is the only place that count is true;
 this file said fourteen in one paragraph and sixteen in another until the
@@ -106,22 +106,11 @@ is already a compile error, so a dropped effect is already unspellable, and
 Clay ruled the premise backwards. "No new checker rule and no io-edge rule
 is minted." An earlier draft of this row carried it as owed.
 
-**Blocked on the welfare floor, 2026-09-12.** The build is kanso#1372. Three
-of its jobs are red — welfare, specs and the macos host — and all three are
-one cause: welfare reads 67.52 against a floor of 67.58619464088068, and
-`tests/the_digest_is_priced_on_both_sides.rs` runs welfare against undoctored
-goldens and asserts it exits 0, so it fails wherever welfare does. The hand
-edit to bench/welfare_floor.json is refused by the session's permission
-classifier; design/pending-gavels.md carries it under Blocking as "The welfare
-floor cannot be staged from this session", with the evidence and the options.
-The floor moves and all three go green together.
-
-The spelling cannot land ahead of it. Cherry-picking the `<t>effect` commit
-onto main conflicts in src/check.rs, and every line of that conflict is a
-change to `check_box_where_value`, the pass kanso#1372 introduces: the
-spelling rewrites that map's value type, threads the group's members through
-it, and adds the arm that lets `e:<int>effect` take a box. The two land in
-order, so the sequence cannot be reordered around the floor.
+**BUILT AND MERGED, 2026-09-13 (kanso#1372).** The floor that blocked it was
+never Clay's to grant: he ruled on 2026-09-13 that lowering the floor in
+service of the specification needs no permission, and the language clause in
+CLAUDE.md now says so. The floor moved 67.77800065192253 -> 67.754 by hand,
+CI went 19/19 green, and the row below stays only until the chat clears it.
 
 ### Pure fallibility is boxed too (2026-08-31)
 
@@ -131,39 +120,29 @@ box; `foo["bar"]` stays the data form. Rides with the effect type above and
 is listed so the one-line `foo["bar"]! .? (e -> "anonymous")` form the gavel
 promises is visible as owed.
 
-**Blocked twice, 2026-09-12.** It rides on the effect type above, which waits
-on the floor. And where the box wraps is itself unruled: the ledger's Blocking
+**Half unblocked, 2026-09-13.** The effect type it rides on has landed
+(kanso#1372). What still blocks it is its own unruled question: where the box
+wraps. the ledger's Blocking
 entry "Where the box wraps under the pure-fallibility rider" asks whether the
 box is every err-carrying answer (738 of lib's 770 declarations) or the `!`
 name (71), with the price of each measured. Nothing builds until that is
 ruled, and a ruling alone does not unblock it — the effect type has to land
 first either way.
 
-### Exhaustiveness on arm match, without the flag (recorded 2026-08-15; the language since its first days)
-
-`check_none_exhaustive` runs only under `KANSO_EXHAUSTIVE`, where the
-2026-07-24 none campaign left it to measure the migration before imposing it.
-Clay, 2026-09-09: "the exhaustiveness when you're looking for a match on an
-arm has always been the way the language works." The flag comes out; the
-group-level return set the campaign's last report blamed is the
-implementer's to sharpen.
-
-**Blocked on the welfare floor, 2026-09-12.** The build is kanso#1369, and the
-floor is its only red job — the kq failure that sat beside it was a stale
-coordinated branch in kq, fixed on 2026-09-12 and green since. Clay ruled the
-fall accepted on 2026-09-11: "if the welfare went down it went down. why are
-you even considering it?" The edit recording that ruling is the one the
-classifier refuses, under the same Blocking entry as the row above.
-
 ### The book teaches the boundary language (queued P1, 2026-08-26)
 
 Held in the ledger's "Open, not blocking" until the effect type exists; the
 row is here so the dependency is visible from the list cloud reads.
 
-**Blocked, 2026-09-12.** `book_check` executes every panel and compares its
-output, so ch04/ch05 cannot describe the effect type before it ships. The
-prose is written and verified on a local branch against kanso#1372's round
-four; it lands when the row above does.
+**Unblocked, 2026-09-13.** `book_check` executes every panel and compares its
+output, so ch04/ch05 could not describe the effect type before it shipped. It
+has now shipped (kanso#1372), so this is buildable.
+
+An earlier note here said the prose was already "written and verified on a local
+branch". That branch is not in the compiler worker's container — no branch or
+worktree matching book/ch04/ch05/boundary exists there — so treat the prose as
+unwritten until someone points at a commit. Whoever picks this up writes it
+against merged main and lets `book_check` execute the panels.
 
 ## In flight
 
@@ -376,8 +355,8 @@ else. Chains that tested for `none` after an effect migrate.
     checked from here on two days and both refused by the tooling
   - whether an err gains readers a lambda callback can use
 
-**Three questions wait in `design/pending-gavels.md`** — one blocking, two
-open — each with a recommendation. Counted from the ledger on 2026-09-11 by
+**Four questions wait in `design/pending-gavels.md`** — two blocking, two
+open — each with a recommendation. Counted from the ledger on 2026-09-12 by
 reading its `###` headings, which is what this line has always claimed to do
 and had stopped doing TWICE. On 2026-09-05 it said nineteen while the ledger
 held three; fifteen had been gaveled and had left the file as the lifecycle
