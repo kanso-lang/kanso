@@ -239,6 +239,20 @@ pub fn has_slash(name: &str) -> bool {
     first_slash(name).is_some()
 }
 
+/// The effect type, `<t>effect`: the unresolved outcome of an operation,
+/// which will be a `t` or a failure. The parser folds the spelling into the
+/// name as written, so the yield stays readable and every engine asks this
+/// one question of it. At run time a box is a box whatever it will yield,
+/// so two effect types with different yields are one shape to dispatch.
+pub fn is_effect_type(ty: &str) -> bool {
+    ty.starts_with('<') && ty.ends_with(">effect")
+}
+
+/// What an effect type says it yields: `int` for `<int>effect`.
+pub fn effect_yield(ty: &str) -> Option<&str> {
+    ty.strip_prefix('<').and_then(|rest| rest.strip_suffix(">effect"))
+}
+
 /// The MODULE a qualified name names, and the rest: `json/decode` is
 /// `("json", "decode")`, and `std/net/http/get` is `("std", "net/http/get")`.
 /// A qualifier is the first segment where an owner is everything before the

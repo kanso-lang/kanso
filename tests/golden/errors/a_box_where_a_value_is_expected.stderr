@@ -1,24 +1,36 @@
+error[effect]: this is an effect — a box the words open — and `length` takes a value; open it with `.>`
+  --> a_box_where_a_value_is_expected.kso:35:20
+  35 |   >> print (length loaded)
+                          ^
+error[effect]: this is an effect — a box the words open — and `length` takes a value; open it with `.>`
+  --> a_box_where_a_value_is_expected.kso:34:21
+  34 |   >> print (length (load "flavors.txt"))
+                           ^
+error[effect]: this is an effect — a box the words open — and `length` takes a value; open it with `.>`
+  --> a_box_where_a_value_is_expected.kso:33:21
+  33 |   >> print (length (os/read_file "flavors.txt"))
+                           ^
 error[effect]: this is an effect — a box the words open — and `==` takes a value; open it with `.>`
-  --> a_box_where_a_value_is_expected.kso:22:13
-  22 |   >> print (math/random 6 == 3)
+  --> a_box_where_a_value_is_expected.kso:30:13
+  30 |   >> print (math/random 6 == 3)
                    ^
 error[effect]: this is an effect — a box the words open — and an index takes a value; open it with `.>`
-  --> a_box_where_a_value_is_expected.kso:21:12
-  21 |   >> print os/args[1]
+  --> a_box_where_a_value_is_expected.kso:29:12
+  29 |   >> print os/args[1]
                   ^
 error[effect]: this is an effect — a box the words open — and `if` takes a value; open it with `.>`
-  --> a_box_where_a_value_is_expected.kso:20:16
-  20 |   >> print (if os/args 1 2)
+  --> a_box_where_a_value_is_expected.kso:28:16
+  28 |   >> print (if os/args 1 2)
                       ^
 error[effect]: this is an effect — a box the words open — and `told` takes a value; open it with `.>`
-  --> a_box_where_a_value_is_expected.kso:19:19
-  19 |   >> print (told (math/random 2))
+  --> a_box_where_a_value_is_expected.kso:27:19
+  27 |   >> print (told (math/random 2))
                          ^
 error[effect]: this is an effect — a box the words open — and `+` takes a value; open it with `.>`
-  --> a_box_where_a_value_is_expected.kso:18:13
-  18 |   >> print (math/random 6 + 1)
+  --> a_box_where_a_value_is_expected.kso:26:13
+  26 |   >> print (math/random 6 + 1)
                    ^
 error[effect]: this is an effect — a box the words open — and `length` takes a value; open it with `.>`
-  --> a_box_where_a_value_is_expected.kso:17:17
-  17 |   print (length os/args)
+  --> a_box_where_a_value_is_expected.kso:25:17
+  25 |   print (length os/args)
                        ^

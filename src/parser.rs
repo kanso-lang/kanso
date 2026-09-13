@@ -1718,6 +1718,25 @@ impl<'a> P<'a> {
     already produce, so nothing downstream learns a new shape: `[]int`
     becomes `int[]`, and `map[string int]` keeps its brackets. */
     fn parse_type_expr(&mut self) -> Result<Name, Diagnostic> {
+        // The effect type names its yield in front: `<int>effect`. The
+        // parameter is any type expression, so `<[]int>effect` and
+        // `<<int>effect>effect` read without a second rule.
+        if matches!(self.peek(), Some(Tok::Op("<"))) {
+            self.pos += 1;
+            let inner = self.parse_type_expr()?;
+            match self.peek() {
+                Some(Tok::Op(">")) => self.pos += 1,
+                _ => return Err(self.err("expected `>` — an effect is `<T>effect`".to_string())),
+            }
+            let (head, _) = self.expect_ident("a type")?;
+            if head != "effect" {
+                return Err(self.err(format!(
+                    "`<{inner}>` says what an effect yields, and only `effect` takes a \
+                     yield — `<{inner}>effect`"
+                )));
+            }
+            return Ok(Name::new(&format!("<{inner}>effect")));
+        }
         if matches!(self.peek(), Some(Tok::LBracket)) {
             self.pos += 1;
             match self.peek() {
@@ -1728,6 +1747,9 @@ impl<'a> P<'a> {
             return Ok(Name::new(&format!("{inner}[]")));
         }
         let (mut ty, _) = self.expect_ident("a type")?;
+        if ty == "effect" {
+            return Err(self.err("an effect names what it yields: `<int>effect`".to_string()));
+        }
         if ty == "map" && matches!(self.peek(), Some(Tok::LBracket)) {
             self.pos += 1;
             let key = self.parse_type_expr()?;

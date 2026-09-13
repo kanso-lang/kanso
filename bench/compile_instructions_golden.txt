@@ -1360,4 +1360,11 @@
 # 533,709 (+1.2065%). The rule's own cost, after the four paydown rounds
 # this branch already spent on it. Ruled 2026-08-29; the floor moves to
 # admit it rather than the feature going.
-compile_instructions=45522509
+# 2026-09-13 (the `<t>effect` spelling): 45,522,509 -> 46,111,185, a RISE of
+# 588,676 (+1.2932%). CI's sitting on the merged base carrying kanso#1393.
+# The spelling adds a lexer run recogniser keyed the way `slice_marker` is,
+# and the box check gains the tail walk -- a group whose joined set does not
+# say it answers a box is decided by reading its arms' tails, which a set-only
+# check could not do. Ruled 2026-08-29; the floor moves to admit it rather
+# than the feature going.
+compile_instructions=46111185

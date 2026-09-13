@@ -1,0 +1,3 @@
+import "std/os"
+
+pub play = print (length (os/read_file! "flavors.txt"))

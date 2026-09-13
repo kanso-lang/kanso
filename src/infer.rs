@@ -707,6 +707,7 @@ fn bind_pattern<'a>(
                 "string" => STR,
                 "bool" => BOOL,
                 "err" => ERR,
+                t if is_effect_type(t) => DESC,
                 t if t.ends_with("[]") => LIST,
                 t if t.contains('[') => MAP,
                 _ => REC,
@@ -1319,10 +1320,40 @@ pub fn builtin_set(name: &str, args: &[Set]) -> Set {
         // a worded chain step answers a description when its subject is one,
         // and whatever its callback answers when the subject has settled
         "bind" | "rescue" | "annotate" => TOP,
-        "read_file" | "read_bytes" | "write" | "write_err" | "write_file" | "make_dir"
-        | "sleep" | "random" | "env" | "exists" | "is_dir" | "list_dir" | "now" | "run"
-        | "start" | "kill" | "listen" | "net_port" | "accept" | "net_read" | "net_write"
-        | "net_close" => DESC | fails,
+        n if is_effect_builtin(n) => DESC | fails,
         _ => TOP,
     }
+}
+
+/// The builtins that answer a description: the effects, by their bare name
+/// or with the `builtin_` prefix the standard library calls them by. The
+/// three nullary ones — `args`, `stdin`, `now` — are read as mentions.
+pub fn is_effect_builtin(name: &str) -> bool {
+    matches!(
+        name.strip_prefix("builtin_").unwrap_or(name),
+        "read_file"
+            | "read_bytes"
+            | "write"
+            | "write_err"
+            | "write_file"
+            | "make_dir"
+            | "sleep"
+            | "random"
+            | "env"
+            | "exists"
+            | "is_dir"
+            | "list_dir"
+            | "now"
+            | "run"
+            | "start"
+            | "kill"
+            | "listen"
+            | "net_port"
+            | "accept"
+            | "net_read"
+            | "net_write"
+            | "net_close"
+            | "args"
+            | "stdin"
+    )
 }

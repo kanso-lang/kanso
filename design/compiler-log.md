@@ -2526,6 +2526,173 @@ premise backwards. "No new checker rule and no io-edge rule is minted."
 
 ---
 
+## 2026-09-10 — the effect type is spellable: `<t>effect` on all three engines
+
+Built: the second half of the 2026-08-29 gavel "effects are types, and the
+words are the only doors" (archive), after the plain-dot entry above built
+the first. The ruling names the type `<int>effect` — the unresolved outcome
+of an operation, an int or a failure — and says a parameter declared
+`e:<config>effect` takes the box as data. Until today the spelling was
+refused by the canonical-spacing rule before any pass saw it, and no pass
+had a type to see: the ledger's book entry measured that on 2026-09-08 and
+held ch04 and ch05 on it.
+
+**The spelling.** In a type expression the yield comes first, in angle
+brackets, and `effect` is the head: `<int>effect`, `<[]string>effect`,
+`<<int>effect>effect`. The parser folds it into the name as written, so a
+diagnostic quotes it back as spelled and every engine asks one predicate of
+it. Bare `effect` is refused — `an effect names what it yields:
+`<int>effect`` — and a yield in front of any other head is refused with the
+slice spelling offered, since `<int>list` is what a Go reader writes first.
+The spelling is tight: the brackets hug the yield and the head hugs the
+closing bracket, and the lexer reads the run from the colon an annotation
+starts with (over a slice prefix on the way), because `<` anywhere else is
+the comparison and takes a space on each side. `e:<int> effect` and
+`e:<int effect` are refused with the spacing rule's own sentence.
+
+**What the engines do with it.** A box is a box whatever it will yield, so
+an annotation `<t>effect` matches a description and nothing else: the
+oracle's `type_match_depth` answers a `Value::Desc` at depth zero, native
+tests the `K_DESC` tag through `k_check_tag` and takes the tag switch when
+the arm can, and the page's `rt_check_type` gains code 10. Two effect types
+are one shape at dispatch, whatever they yield — the checker's overlap and
+same-shape comparisons say so — because nothing at run time can read what
+an unrun box will hold. Infer seeds the parameter with the description bit,
+so the box-where-value check reads a `.>` over it as a bind, and an arm that
+names the effect type takes a box handed to its position: `shape
+(math/random 6)` reaches `shape _:<int>effect` where before the check said
+`shape` takes a value. The yield inside is checked as a type — `<banana>effect`
+is refused with the sentence a bare `banana` gets — and no literal reaches an
+effect-typed arm.
+
+**What the tree said.** Nothing in the tree spelled the type, so nothing
+moved: the runtime cost veins, the lazy tier and the emitted rows are
+byte-identical, and the compile rows are CI's to measure, since the lexer,
+the parser, the checker, infer and all three back ends change.
+
+**Spec.** `tests/golden/micro/an_effect_type_names_its_yield.kso` on all
+three engines: a two-arm group told apart by the annotation alone, a box
+handed to an effect-typed parameter and opened inside it with `.>`. The
+previous binary refuses the file at the spacing rule, which is the watched
+red. Four error fixtures pin the four refusals: bare `effect`, a yield in
+front of `list`, the loose spelling, and a yield that names no type.
+
+**The drop question was already ruled, and the measurement agrees with it.**
+An earlier draft of this build filed it to the ledger as an open question.
+It is not one: the same 2026-08-29 sitting closed it, in the archive's
+"gavel: the drop question closes — explicitness IS the guarantee", and
+closed it by declining to mint anything. Clay ruled the premise backwards —
+"the fact that you have to explicitly call e.g. bind makes it all the more
+obvious that effects can't be dropped" — because an unused binding is
+already a compile error. Measured on both engines today, which is the record
+this entry keeps: a box a function answers is handed to its caller as data;
+when that caller is the executor — `play`'s tail, or a `>>` step — it runs;
+a box stored in a list or rendered in an interpolation is data and never
+runs; a box bound and never used is refused as an unused binding. So the
+only box that goes silently unrun is one carried into a container and never
+opened, which is the ruling's own reading of the box as data. No new rule is
+minted here either.
+
+**The next row, sized.** The 2026-08-31 rider "pure fallibility is boxed
+too" rides with this type and is the row after it, so its cost was read off
+the tree today, since the box-where-value check of the previous entry is
+what will refuse each site once an insist answers a box. `foo["bar"]!`
+stands at 723 sites: 104 in lib, 394 in scripts, 55 in hako, 137 in the
+test corpus, 22 in bench and 11 on the pages. The two bang declarations,
+`read_file!` and `read_bytes!`, are called at 56 more, and `err` is raised
+on five lines of lib. Each site sits in a declaration that has to choose
+under the rider: bind the box and answer a box of its own, or rescue it and
+answer data. Infer's reading of the railway bounds where the first choice
+ends: 3,801 declarations across the tree carry an err in their answer set,
+738 of lib's 770 (regexp 280, json 159, list 143, text 49, http 42, sha256
+37), where only 71 lib declarations raise or insist themselves. The other
+667 are fallible by handing an argument through, which is the propagation
+the rider retires. The number moves the schedule and not the ruling: a
+respell of that size is the build, library by library, with the check
+naming each site as it goes.
+
+**A group whose every arm ends in a box answers a box, and the set could
+not say so.** The check of the previous entry reads a group's joined set and
+refuses a box where the set holds the description bit and no value bit.
+`os/read_file` is `builtin_read_file path .> (r -> found path r)`, and a `.>`
+step's set carries the callback's answer beside the description bit, because
+that is where a yield rides — so `length (os/read_file p)` read as a value,
+checked ok, and died at run time with `chars takes a string`. Found while
+sizing ch05's sample. The check now reads each group's tails as well: a group
+whose every arm ends in a `.>` over a box, a `>>`, a join, an effect builtin
+or a call of a group that answers one is a box, followed through the callee's
+own tail so a wrapper of a wrapper is seen; a group still being decided
+answers no, which refuses nothing. Whether a tail's head is a name the arm
+binds is asked of the arm itself rather than of a set built per declaration:
+a tail asks once or twice, and a set for each of the tree's declarations is
+an allocation apiece. The error fixture gains three lines — the library
+function, a wrapper around it, a constant bound to the wrapper — and reads
+six refusals on the compiler before this change, nine after. Two vectors join
+the compile, the member links and the states; CI's host-keyed rows say what
+the walk costs.
+
+**Re-picked onto merged main, and the short circuit had to widen.** This
+change was written against the previous entry's first shape and landed three
+days after it, so the pick met a `check_box_where_value` that kanso#1328's
+descendants had reworked: the returns table holds three fields, the binder
+set fills on first ask rather than eagerly, and `yields_box` carries an
+`any_boxed` flag that answers no for a program in which no group is a box.
+Every conflict was that drift, and each took main's side; the spelling's own
+hunks -- the annotated-parameter arm in the table build, the two effect types
+one shape at dispatch, the literal refusal, the yield read as a type, the
+same-shape comparison -- merged untouched.
+
+The tail walk is what the two shapes disagree about, and it decided the one
+edit that is neither side's. `any_boxed` was
+`returns.values().any(|(s, _, _)| boxed(*s))`, and `boxed` means the
+description bit with no value bit -- which is exactly what a wrapper like
+`os/read_file` is NOT, since its set carries the callback's answer beside the
+bit. The short circuit was therefore asking a condition the walk does not
+need, and a program holding only wrapper-shaped io would have skipped the
+walk that exists to find it. It now asks for the description bit alone: one
+AND either way, admitting a superset, so no refusal the narrow gate makes is
+lost.
+
+**And no program distinguishes the two gates today, which is worth writing
+down rather than claiming otherwise.** The narrow gate was built and run
+against the error fixture and against `length (os/read_file p)` on a tree
+importing nothing else: nine refusals and the refusal, same as the wide one.
+The reason is structural. A user program cannot reach an effect builtin --
+`builtin_read_file` answers ``is internal to the standard library -- import
+its module`` -- so the only door to a box is a lib module, and every lib
+module that wraps a builtin also declares a group whose set is the
+description bit alone, which turns the narrow gate on for the whole program.
+The wide gate is therefore a claim about what the walk needs, not a recovered
+refusal, and it is written here as that. What would break the narrow one is a
+future module of wrappers with no bare effect beside them; nothing in lib is
+that today.
+
+**CI's sitting, and the floor.** Measured on the base carrying kanso#1393,
+after the branch was re-cut onto merged main and every golden re-read from
+CI rather than composed onto the new base by arithmetic:
+
+    compile_allocs         29,473 ->      30,273    +800  (+2.7144%)
+    compile_instructions   45,522,509 ->  46,111,185  +588,676  (+1.2932%)
+    entry_instructions     152,090,185 -> 153,623,844  +1,533,659  (+1.0084%)
+    library_instructions   152,460,583 -> 154,382,827  +1,922,244  (+1.2608%)
+
+The runtime side is byte-identical: every one of the fourteen work rows, the
+.text vein, the twelve cost goldens and the lazy tier agree, because nothing
+here runs at run time. The library row pays the most of the three compile
+rows, which is what a file of definitions alone should do -- the tail walk
+runs on every declaration with no statements to dilute it.
+
+Welfare 68.0810 -> 68.0295, a fall of 0.0515, and the floor moves by exactly
+that. This is a ruled language feature, so the drop is recorded and taken
+rather than asked about, under Clay's 2026-09-13 ironclad rule: "you don't
+need to ask my permission to lower the welfare floor if it is in service of
+making the language actually work for the specification."
+
+**Owed.** ch04 and ch05, per the ledger's "The book teaches the boundary
+language", and compiler.html's entry 23 with them, in one pass.
+
+---
+
 ## 2026-09-11 — the ledger forked onto feature branches, and the queue's three language rows wait on one branch
 
 **design/pending-gavels.md had an empty Blocking section on main while two

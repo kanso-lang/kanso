@@ -615,6 +615,9 @@ impl<'a> WasmBackend<'a> {
     }
 
     fn type_code(&self, ty: &str) -> Result<i64, String> {
+        if crate::ast::is_effect_type(ty) {
+            return Ok(10);
+        }
         if ty.ends_with("[]") {
             return Ok(4);
         }
