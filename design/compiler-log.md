@@ -4213,3 +4213,74 @@ The entry and module rows part by 0.011 percentage points here, where the
 literal fold's round parted them by 0.330. That fold keyed on call sites, which
 the two corpora hold in different proportions; this one keys on dot-reads,
 which they hold in nearly the same one.
+
+## 2026-09-12 — the block-born check joins the one descent, and it was never a per-node question
+
+The fifth and last of the foldable walks in `check_merged_after_aliases`.
+kanso#1382 folded the decidable check, kanso#1383 the shapes walk, kanso#1384
+the literal-argument check, kanso#1385 the field-read check. `BuildScan` is
+gone with this one, and `check_per_node`'s descent does its work.
+
+The shape is different from the four before it, and the difference is the
+finding. `BuildScan::expr` held NO per-node predicate at all. Every diagnostic
+the check produced came from `wrote_a_field`, called from `body`; `expr`
+existed only to locate the statement lists nested inside expressions — a
+`build`, an `if` arm, a guard's remainder. So this fold is not a question
+joining a descent. It is three arms running ordered statement work at nodes the
+fused walk already reaches.
+
+`body` splits in two. `before` is the field write's refusal, and it must be
+asked against `born` as it stands at that statement and ahead of the value's
+own descent, which is what reading a statement list in order buys. `after` is
+the binding's birth and the write's record, both of which read the value the
+statement has just walked. `types` leaves the struct entirely: `PerNode`
+already carries the same `HashMap<&str, &TypeDecl>`, built once for the whole
+program, where `BuildScan` built a second copy of it.
+
+Measured on this container, `kanso::main` inclusive under callgrind with pinned
+tunables, against kanso#1385's head read on the same box path — both readings
+repeated and identical to the instruction:
+
+```
+module   45,174,081 ->  44,898,856    -275,225  -0.6093%
+entry   150,841,086 -> 149,962,557    -878,529  -0.5824%
+summed  196,015,167 -> 194,861,413  -1,153,754  -0.5886%
+```
+
+Ablating `check_build_blocks` outright on merged main — no walk, no tables, no
+diagnostics — reads `-1,193,288` summed. The fold recovers 96.7% of that. The
+four folds before it realised between 57% and 75% of their own census figures,
+and the gap is the same fact that made this one structurally different: where
+they left a predicate behind and removed only a traversal, this check WAS a
+traversal, so removing the traversal removed nearly all of it.
+
+The error corpus is byte-identical. That is worth a sentence, because the
+ordering genuinely moves: `check_build_blocks` used to push before
+`diags.rotate_left(walked)` sent the fused walk's block to the back, so its
+diagnostics arrived ahead of the walk's; folded, they sit inside that block.
+`diag::render` does not sort on this route. No fixture in the corpus carries a
+build diagnostic beside another, so none of the 204 moves.
+
+## OPEN: two of seven mutations stay green, for two different reasons
+
+Five of seven mutations turn the corpus red: the build arm opening with nothing
+born, its `before`, its `after`, the `if`-arm block arm existing at all, and
+the top level asking `before`. Two do not.
+
+Removing `conditional += 1` from the block arm is a CORPUS GAP. The counter is
+live and the arm is reachable —
+`tests/golden/errors/a_field_write_inside_an_if_arm.kso` exercises it — but no
+fixture distinguishes a field whose birth was recorded inside an arm from one
+recorded outside, which is the only thing the counter changes. The fixture that
+would close it reads a field an arm conditionally wrote, binds the result, and
+writes through the binding: refused today, accepted with the counter gone.
+
+Removing the guard arm's `after` looks like the `and`/`or` arm kanso#1385
+recorded as unreachable, and for a parser reason rather than a corpus one. A
+guard's remainder can only carry this bookkeeping if the guard sits INSIDE a
+build, and the parser refuses `return X if C` in a build body in every spelling
+tried — leading the body, following a binding, or following a field write, each
+answered with "a `return` sits with the bindings, before the effect chain". That
+is three spellings, not the census kanso#1385 did over `Expr::BinOp`'s
+construction sites, so it is evidence and not proof. The arm stays; what it
+needs is the census.
