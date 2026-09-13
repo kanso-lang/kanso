@@ -10,6 +10,33 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <sys/wait.h>
+
+/* Whether this runtime object carries its twenty-seven counter sites. The
+   `-DKANSO_COUNTERS_BUILD` comes from the caller, so `cached_runtime_object`
+   keys on it; an object built one way handed to a build that wanted the other
+   is a binary whose counters are half there.
+
+   Each of the twenty-seven asks this before it asks `k_stats_on`. In a
+   counting build that is a constant 1 and the test reads exactly as it did;
+   in a shipped build it is a constant 0 and the compiler folds the whole
+   condition away, which is worth 13,187,834 instructions on the run program
+   (0.6159%) and 2,944 bytes of .text, measured by compiling this file both
+   ways and linking the same IR against each.
+
+   It sits this high up because `k_stats_dump` reads it too, and a macro used
+   before it is defined is a build error rather than a wrong answer -- which is
+   how the first cut of the refusal below was caught.
+
+   `k_stats_on` itself stays defined either way. The emitted IR declares it
+   `external global` in both builds -- the shipped one just has no reader
+   left -- and removing the definition would be a link error rather than a
+   saving. */
+#ifdef KANSO_COUNTERS_BUILD
+#define K_COUNTING 1
+#else
+#define K_COUNTING 0
+#endif
+
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <fcntl.h>
@@ -481,6 +508,22 @@ static void k_stats_on_signal(int sig) {
 static long long k_perm_live = 0, k_perm_peak = 0;
 
 static void k_stats_dump(void) {
+    /* A shipped binary has no counters to report, and the dangerous answer is
+       not zero -- it is a block that looks right. The runtime's own sites are
+       what this function prints, and they are compiled out here while the
+       emitted fast paths were already gone, so every row a runtime site owns
+       would read correctly and the ones an inlined path owns would not. On
+       escapebench that was push_mut_fast 0 against 3,000 and push_mut_slow
+       12,000 against 1,200,000, with twenty-odd rows agreeing either way: a
+       reader has no reason to distrust the two that do not. So say so and
+       print nothing. */
+    if (!K_COUNTING) {
+        fprintf(stderr,
+            "counters: this binary was built without them, so there is "
+            "nothing to report.\nbuild it with `kanso build --counters` "
+            "and run that.\n");
+        return;
+    }
     fprintf(stderr, "allocs=%lld\n", k_stat_allocs);
     fprintf(stderr, "alloc_bytes=%lld\n", k_stat_alloc_bytes);
     fprintf(stderr, "arena_blocks=%lld\n", k_stat_blocks);
@@ -604,7 +647,7 @@ static inline __attribute__((always_inline)) void* k_alloc(size_t n) {
        at every inlined allocation, one of them for the -1 the switch has
        not held since the constructor above began setting it: 7.3 million
        allocations a run on the run program, one instruction each. */
-    if (__builtin_expect(k_stats_on > 0, 0)) {
+    if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) {
         k_stat_allocs++;
         k_stat_alloc_bytes += (long long)n;
     }
@@ -805,7 +848,7 @@ static long long k_chunkreg_spill[K_BEAT_MAX];
 
 static void k_chunkreg_flush(int d) {
     for (int i = 0; i < k_chunkreg_n[d]; i++) {
-        if (__builtin_expect(k_stats_on > 0, 0)) {
+        if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) {
             k_stat_bytes_freed++;
             k_stat_held_live -= (long long)sizeof(KBuf) + k_chunkreg[d][i]->cap;
         }
@@ -1396,7 +1439,7 @@ static void* k_ten_alloc(size_t n) {
         k_ten_blocks[d] = nb;
         k_ten_mask |= 1ull << d;
         b = nb;
-        if (__builtin_expect(k_stats_on > 0, 0)) k_stat_ten_blocks++;
+        if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) k_stat_ten_blocks++;
     }
     void* out = b->data + b->used;
     b->used += n;
@@ -1466,7 +1509,7 @@ static void k_ten_release(long long d) {
         free(b->data);
         free(b);
         b = next;
-        if (__builtin_expect(k_stats_on > 0, 0)) k_stat_ten_frees++;
+        if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) k_stat_ten_frees++;
     }
     k_ten_blocks[d] = NULL;
     k_ten_bytes[d] = 0;
@@ -1532,7 +1575,7 @@ static size_t k_copy_size(KValue v, KMark* m);
    about, which keeps the walk pruning at everything that has not left. */
 static int k_slots_survive(const KValue* slots, long long n, KMark* m) {
     for (long long i = 0; i < n; i++) {
-        if (__builtin_expect(k_stats_on > 0, 0)) k_stat_survive_slots++;
+        if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) k_stat_survive_slots++;
         /* the cell survives, but what it captured may not — only the copy
            walk can answer that, so a thunk slot is never shareable as-is */
         if (slots[i].tag == K_THUNK) return 0;
@@ -2261,7 +2304,7 @@ KValue k_cohort_pop(KValue r) {
        buffers themselves the peak — the dance transiently holds the copy
        twice on top of the garbage it frees */
     if ((long long)(2 * survivor) > grown || survivor > cap) {
-        if (__builtin_expect(k_stats_on > 0, 0)) k_stat_cohort_kept++;
+        if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) k_stat_cohort_kept++;
         k_beat_depth--;
         k_chunkreg_migrate(k_beat_depth);
         k_viewreg_migrate(k_beat_depth);
@@ -2658,7 +2701,7 @@ static char k_ascii_ready[128];
    the zero-copy finish, a deep copy that shares — assign `data` themselves
    and are unaffected. */
 static inline __attribute__((always_inline)) KStr* k_str_alloc(long long len) {
-    if (__builtin_expect(k_stats_on > 0, 0))
+    if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0))
         k_stat_sh_str += (long long)((sizeof(KStr) + (size_t)len + 1 + 15) & ~(size_t)15);
     if (len > 2147483647LL) k_die("string too long");
     KStr* s = k_alloc(sizeof(KStr) + (size_t)len + 1);
@@ -2885,7 +2928,7 @@ KValue k_rec(long long type_id, long long n, KValue* args) {
        through the existing slots, so the fields live immediately after the
        header rather than in a second allocation. The deep copier builds its
        own storage and assigns `fields` itself, which stays correct. */
-    if (__builtin_expect(k_stats_on > 0, 0))
+    if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0))
         k_stat_sh_rec += (long long)((sizeof(KRec) + sizeof(KValue) * (size_t)n + 15) & ~(size_t)15);
     KRec* r = k_alloc(sizeof(KRec) + sizeof(KValue) * (size_t)n);
     r->type_id = type_id;
@@ -2977,7 +3020,7 @@ KValue k_b_str_builder(KValue sv) {
     char* base = malloc((size_t)(K_STR_HEAD + cap + 1));
     if (!base) { fputs("out of memory\n", stderr); exit(1); }
     char* room = base + K_STR_HEAD;
-    if (__builtin_expect(k_stats_on > 0, 0)) {
+    if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) {
         k_stat_allocs++;
         k_stat_alloc_bytes += cap + 1;
         k_stat_bytes_malloc++;
@@ -3018,7 +3061,7 @@ KValue k_concat_arr_mut(long long n, const KValue* parts) {
         char* base = malloc((size_t)(K_STR_HEAD + cap + 1));
         if (!base) { fputs("out of memory\n", stderr); exit(1); }
         char* room = base + K_STR_HEAD;
-        if (__builtin_expect(k_stats_on > 0, 0)) {
+        if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) {
             k_stat_allocs++;
             k_stat_alloc_bytes += cap + 1;
             k_stat_bytes_malloc++;
@@ -6022,7 +6065,7 @@ static KValue* k_buf_perm(long long cap) {
     k_perm_live += (long long)(sizeof(KBuf) + sizeof(KValue) * (size_t)cap);
     if (k_perm_live > k_perm_peak) k_perm_peak = k_perm_live;
     if (!b) { fputs("out of memory\n", stderr); exit(1); }
-    if (__builtin_expect(k_stats_on > 0, 0)) {
+    if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) {
         k_stat_allocs++;
         k_stat_alloc_bytes += (long long)(sizeof(KBuf) + sizeof(KValue) * (size_t)cap);
         k_stat_bytes_malloc++;
@@ -6057,10 +6100,10 @@ static KValue* k_buf(long long cap) {
         KBuf* b = k_buf_free[c];
         k_buf_free[c] = (KBuf*)(intptr_t)b->used;
         b->used = 0;
-        if (__builtin_expect(k_stats_on > 0, 0)) k_stat_buf_reuse++;
+        if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) k_stat_buf_reuse++;
         return (KValue*)(b + 1);
     }
-    if (__builtin_expect(k_stats_on > 0, 0))
+    if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0))
         k_stat_sh_buf += (long long)((sizeof(KBuf) + sizeof(KValue) * (size_t)cap + 15) & ~(size_t)15);
     KBuf* b = k_alloc(sizeof(KBuf) + sizeof(KValue) * cap);
     b->cap = cap;
@@ -6080,7 +6123,7 @@ static void k_permreg_flush_held(int d) {
         if (!*slot) continue;
         KBuf* b = k_buf_of(*slot);
         if (b->cap >= 0) continue;
-        if (__builtin_expect(k_stats_on > 0, 0)) k_stat_bytes_freed++;
+        if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) k_stat_bytes_freed++;
         k_perm_live -= (long long)(sizeof(KBuf) + sizeof(KValue) * (size_t)(-b->cap));
         free(b);
         *slot = NULL;
@@ -6427,15 +6470,15 @@ static int k_msort_cmp(const void* pa, const void* pb) {
    there is paid for by every map to serve the few that are read. One slot
    in front of the buffer is paid only by those few. */
 static KValue* k_view_alloc(long long cap) {
-    if (__builtin_expect(k_stats_on > 0, 0)) k_stat_view_allocs++;
+    if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) k_stat_view_allocs++;
     char* raw = malloc(sizeof(KValue) + sizeof(KValue) * 2 * (size_t)cap);
     if (!raw) { fputs("out of memory\n", stderr); exit(1); }
-    if (__builtin_expect(k_stats_on > 0, 0)) {
+    if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) {
         k_stat_allocs++;
         k_stat_alloc_bytes += (long long)(sizeof(KValue) + sizeof(KValue) * 2 * (size_t)cap);
     }
     *(long long*)raw = cap;
-    if (__builtin_expect(k_stats_on > 0, 0)) {
+    if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) {
         k_stat_held_live += (long long)(sizeof(KValue) + sizeof(KValue) * 2 * (size_t)cap);
         if (k_stat_held_live > k_stat_held_peak) k_stat_held_peak = k_stat_held_live;
     }
@@ -6447,7 +6490,7 @@ static long long k_view_cap(KValue* view) {
 }
 
 static void k_view_free(KValue* view) {
-    if (__builtin_expect(k_stats_on > 0, 0)) {
+    if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) {
         k_stat_view_frees++;
         long long cap = k_view_cap(view);
         k_stat_held_live -= (long long)(sizeof(KValue) + sizeof(KValue) * 2 * (size_t)cap);
@@ -6682,7 +6725,7 @@ KValue k_b_put(KValue mv, KValue key, KValue val) {
     k_check_map_key(key);
     KMap* m = k_as_map(mv);
     KBuf* buf = k_buf_of(m->pairs);
-    if (__builtin_expect(k_stats_on > 0, 0)) k_stat_sh_map += (long long)sizeof(KMap);
+    if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) k_stat_sh_map += (long long)sizeof(KMap);
     KMap* out = k_alloc(sizeof(KMap));
     KValue ov; ov.tag = K_MAP; ov.payload = k_ptr(out);
     out->sorted = NULL;
@@ -6742,7 +6785,7 @@ KValue k_b_entries(KValue mv) {
             items[i] = k_rec(0, 2, fields);
             continue;
         }
-        if (__builtin_expect(k_stats_on > 0, 0)) k_stat_sh_rec += (long long)slot;
+        if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) k_stat_sh_rec += (long long)slot;
         KRec* r = (KRec*)(block + slot * (size_t)i);
         r->type_id = 0;
         r->nfields = 2;
@@ -6766,7 +6809,7 @@ static long k_cp_len(unsigned char b) {
 }
 
 static KValue k_bytes_view(const unsigned char* data, long long len) {
-    if (__builtin_expect(k_stats_on > 0, 0)) k_stat_sh_bytes += (long long)sizeof(KBytes);
+    if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) k_stat_sh_bytes += (long long)sizeof(KBytes);
     KBytes* b = k_alloc(sizeof(KBytes));
     b->len = len;
     b->data = data;
@@ -7624,7 +7667,7 @@ static KValue k_b_push_grow(KValue lv, KList* l, KValue item, int mutate) {
            collection, and one of ours is released outright. */
         if (k_buf_of(l->items)->cap < 0) {
             KBuf* ob = k_buf_of(l->items);
-            if (__builtin_expect(k_stats_on > 0, 0)) k_stat_bytes_freed++;
+            if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) k_stat_bytes_freed++;
             k_perm_live -= (long long)(sizeof(KBuf) + sizeof(KValue) * (size_t)(-ob->cap));
             free(ob);
         } else
@@ -7667,7 +7710,7 @@ KValue k_b_push_mut(KValue lv, KValue item) {
     KList* l = k_as_list(lv);
     KBuf* buf = k_buf_of(l->items);
     if (buf->used == l->len && l->len < k_buf_cap(buf)) {
-        if (__builtin_expect(k_stats_on > 0, 0)) {
+        if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) {
             if (k_born_this_beat(l)) k_stat_push_mut_fast++;
             else k_stat_push_mut_slow++;
         }
@@ -7677,7 +7720,7 @@ KValue k_b_push_mut(KValue lv, KValue item) {
         l->len++;
         return lv;
     }
-    if (__builtin_expect(k_stats_on > 0, 0)) k_stat_push_mut_slow++;
+    if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) k_stat_push_mut_slow++;
     return k_b_push_grow(lv, l, item, 1);
 }
 
@@ -7903,7 +7946,7 @@ KValue k_b_find2(KValue cs, KValue from, KValue a, KValue b) {
    claims its frontier exactly as list push does, so a fold of appends is
    amortized linear while every intermediate value stays a real value. */
 static KValue k_bytes_owned(long long len, const unsigned char* data, long long cap) {
-    if (__builtin_expect(k_stats_on > 0, 0)) k_stat_sh_bytes += (long long)sizeof(KBytes);
+    if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) k_stat_sh_bytes += (long long)sizeof(KBytes);
     KBytes* b = k_alloc(sizeof(KBytes));
     b->len = len;
     b->data = data;
@@ -8055,7 +8098,7 @@ static __attribute__((noinline)) KValue k_b_append_grow(KValue acc, KBytes* a,
     } else {
         buf = malloc(sizeof(KBuf) + (size_t)cap);
         if (!buf) { fputs("out of memory\n", stderr); exit(1); }
-        if (__builtin_expect(k_stats_on > 0, 0)) {
+        if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) {
             k_stat_allocs++;
             k_stat_alloc_bytes += (long long)(sizeof(KBuf) + (size_t)cap);
             k_stat_bytes_malloc++;
@@ -8079,7 +8122,7 @@ static __attribute__((noinline)) KValue k_b_append_grow(KValue acc, KBytes* a,
            no other header shares the storage being released. */
         if (a->cap > 0) {
             KBuf* old = ((KBuf*)a->data) - 1;
-            if (__builtin_expect(k_stats_on > 0, 0)) {
+            if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) {
                 k_stat_bytes_freed++;
                 k_stat_held_live -= (long long)sizeof(KBuf) + old->cap;
             }

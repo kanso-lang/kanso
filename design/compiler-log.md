@@ -4827,3 +4827,64 @@ same answer a round later.
 counting object linked into the counting binaries, which is a second object in
 the cached-runtime key rather than a second flag on the emitter.
 
+
+---
+
+## 2026-09-13 (fifth) — the runtime's twenty-seven counter sites, and what a shipped binary says when asked for counters
+
+The entry above split the emitter's eight `k_stats_on` gates out of a shipped
+binary and left the runtime's own twenty-seven, naming them as the other
+13,187,834 instructions. This is them, and it is also the answer to the hazard
+that entry opened and could not close.
+
+**The sites.** `runtime.c` gains one macro, `K_COUNTING`, defined 1 under
+`-DKANSO_COUNTERS_BUILD` and 0 without, and each of the twenty-seven reads it
+before it reads `k_stats_on`. In a counting build that is a constant 1 and the
+test reads exactly as it did; in a shipped build it is a constant 0 and the
+whole condition folds away. The flag comes from the caller, so
+`cached_runtime_object` keys on it: an object built one way handed to a build
+that wanted the other is a binary whose counters are half there, which is the
+same reason the key already carries the closure convention.
+
+`counters_wanted()` moves out of the emitter's one call site into a function
+both halves ask, because a counting runtime linked against gate-free IR, or
+the reverse, is exactly the failure the key exists to prevent.
+
+**Measured on the base carrying the emitter half**, merged main at 7b9844fe,
+both readings on this container:
+
+    runbench  2,115,255,600 -> 2,102,067,766   −13,187,834  (−0.6235%)
+    .text           313,650 ->      310,082        −3,568
+
+The absolute figure is the one the entry above predicted to the instruction,
+which it could be because the delta is a fixed number of tests per run rather
+than anything that varies with the workload. CI measures its own rows; this
+host's glibc and clang do not match the goldens' measured-on line, so the
+instructions gate refuses to compare and is right to.
+
+**A shipped binary asked for counters says it cannot and prints nothing.**
+That is the hazard: with only the emitter half shipped, the runtime still
+counted and the inlined fast paths did not, so the block printed was mostly
+right. On escapebench `push_mut_fast` read 0 against 3,000 and
+`push_mut_slow` 12,000 against 1,200,000, with twenty-odd rows agreeing
+either way. A reader has no reason to distrust the two that do not, which is
+what makes a mostly-right block worse than a refusal. `k_stats_dump` now
+tests `K_COUNTING` first and writes two lines to stderr naming
+`kanso build --counters` as the thing to do instead.
+
+`k_stats_on` itself stays defined in both builds. The emitted IR declares it
+`external global` either way, so removing the definition would be a link
+error rather than a saving.
+
+**The spec runs both binaries.** `tests/a_shipped_binary_refuses_to_report_
+counters.rs` builds one sample twice, with and without `--counters`, sets
+`KANSO_COUNTERS` at RUN time on each, and reads stderr: the counting one must
+still carry `push_mut_fast=` and `allocs=`, the shipped one must say it was
+built without them and must print neither row. Watched red with the refusal
+deleted, where it failed on the full counter block the shipped binary then
+printed. A spec asserting this off the source would pass with the refusal
+removed, which is why it runs the programs.
+
+The counters sweep agrees: every one of the twelve cost veins and the lazy
+tier is byte-identical, because each of those gates measures the counting
+binary, where the gates are all still there.

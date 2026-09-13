@@ -834,6 +834,14 @@ fn cached_runtime_object(profile: &str, opt: &[&str]) -> std::io::Result<std::pa
     // miscompile, so it goes in the key.
     let preserve = closure_convention() == kanso::codegen::ClosureConvention::PreserveNone;
     preserve.hash(&mut hasher);
+    // The same reason, for the same kind of reason: whether the runtime carries
+    // its twenty-seven counter gates is a `-D` the caller decides, not a fact
+    // in the source, so an object built one way must not be handed to a build
+    // that wanted the other. A shipped binary linked against a counting runtime
+    // pays for gates it can never reach; a counting binary linked against a
+    // gate-free one reports zeros and the goldens all move at once.
+    let counting = kanso::codegen::counters_wanted();
+    counting.hash(&mut hasher);
     let key = hasher.finish();
     let object = std::env::temp_dir().join(format!("kanso_runtime_{profile}_{key:016x}.o"));
     if object.exists() {
@@ -850,9 +858,14 @@ fn cached_runtime_object(profile: &str, opt: &[&str]) -> std::io::Result<std::pa
         true => &["-DKANSO_PRESERVE_NONE", "-Werror=unknown-attributes"],
         false => &[],
     };
+    let counters: &[&str] = match counting {
+        true => &["-DKANSO_COUNTERS_BUILD"],
+        false => &[],
+    };
     let status = std::process::Command::new("clang")
         .args(opt)
         .args(convention)
+        .args(counters)
         .args(if cfg!(target_arch = "x86_64") { &["-mssse3"][..] } else { &[][..] })
         .arg("-c")
         .arg(&c_path)
