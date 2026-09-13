@@ -5143,3 +5143,93 @@ main's values and CI measures the delta again; carrying the old delta forward
 by arithmetic would have written a rise where CI reads a fall.
 
 Welfare 68.03 -> 68.07, banked with `--set` in the same round.
+
+## 2026-09-13 (eighth) — a byte index builds an option and the dispatch takes it straight back apart
+
+A non-strict byte index on bytes — `cs[p]` — emits a diamond. The in-range
+arm builds `insertvalue %KValue { i64 0, undef }, byte, 1`, the miss arm is
+the constant `{ i64 4, i64 0 }`, and a phi merges them. When that value goes
+straight into a dispatch whose arms are byte literals, the crossing at
+`src/codegen.rs:2164` collapsed the box back to one i64:
+
+    %tag     = extractvalue %KValue %box, 0
+    %payload = extractvalue %KValue %box, 1
+    %isnone  = icmp eq i64 %tag, 4
+    %raw     = select i1 %isnone, i64 256, i64 %payload
+
+The comment above those four lines said "the box `at` built and this unbox
+fold away in the caller". They do not, and the reason is specific: the box is
+a phi over a STRUCT. LLVM will not sink an `extractvalue` into a phi's
+predecessors, so `%tag` is not a phi of two constants that SimplifyCFG can
+fold — it is an extract of one. All four survive to machine code, on a path
+that runs once per input byte.
+
+In `d_json/scan_4` they are 0x24aa0 `mov $0x4,%r15d`, 0x24abe
+`xor %r15d,%r15d`, 0x24ad2 `cmp $0x4,%r15` and 0x24ad6 `cmove %rbx,%rax`:
+four of the fifteen instructions that function runs per byte, 3,482,622
+times.
+
+So the index emits the same merge as an i64 alongside the box —
+`phi i64 [ %wide, %load ], [ 256, %miss ]` — and records it on the function
+builder; the crossing takes the raw form when it exists. The box goes unread
+and the dead-code pass removes it. Where no byte discriminator consumes the
+index the extra phi is dead and costs nothing, which is why this needs no
+analysis of who the consumer is.
+
+    runbench   2,102,158,436 -> 2,052,562,011   -49,596,425  (-2.3594%)
+
+Container A/B, same worktree, same host, callgrind both sides, the patched
+side read twice on two separate builds and identical to the instruction.
+
+**Four sites, and all four are in the hottest decode functions.** An IR census
+over the linked run program finds the exact shape — a `%KValue` phi with a
+constant-tag incoming, then the extract pair, the `icmp eq 4` and the
+`select` — in `d_json/scan_4`, `d_json/str_char_4`, `d_json/string_scan_3` and
+`d_json/parse_value_2`. That the whole 2.36% comes from four sites is the
+scale the per-function profile predicted: those four are 16.3%, 5.6% and 5.2%
+of runbench between them, and each pays the four instructions per byte rather
+than per call.
+
+`tests/golden/micro/a_byte_index_hands_the_dispatch_a_raw_byte.kso` drives a
+byte in range, the first and last positions, and both ways of being off the
+end, through a group with byte arms and a `none` arm. Watched red: with the
+miss edge carrying 0 instead of 256 the none arm misroutes and the fixture
+answers `byte 0 at 4` where it owes `none at 4`. 256 is the sentinel because
+no byte can be 256, and the fixture is what says the miss edge really carries
+it.
+
+**Eight crossings of ten, and the two that got away are a forced index.**
+The count here was wrong twice before the emitted golden settled it, and the
+way it was wrong is worth more than the number. A multi-line regex over the
+IR — phi, extract, extract, icmp, select, each on the next line — found FOUR
+occurrences, and four is what the first draft of this entry claimed. That
+regex requires ADJACENCY, and in six of the ten the lines are separated by
+other instructions, so it saw fewer than half. The instruction-kind histogram
+cannot miss them, and it is what the emitted golden was reading all along:
+
+    runbench    extractvalue -16   icmp -8   select -8   phi +33   = +1 line
+    widebench   extractvalue -16   icmp -8   select -8   phi +16   = -16 lines
+
+Eight conversions, four lines each, is the -32; the +33 and +16 are one phi
+per non-strict byte index, most of them dead. Base runbench.ll has TEN
+crossings taking the select path and the patched one has TWO.
+
+Those two are `d_json/array_step_3` and `d_json/obj_value_4`, and they are
+missed conversions rather than a different shape. In both the index result
+passes through `k_force_fast` before it reaches the crossing, so the operand
+the crossing is holding is the force's result and the lookup finds nothing
+under that name. Threading the raw form through the force is the obvious
+next move and is NOT in this change, because it wants its own measurement.
+
+`emitted_lines` lands on 9,148, a rise of one on the decoder, and
+`emitted_other_lines` lands on 132,848, a fall of twenty-nine across the
+thirteen beside it. The rise is named rather than defended: one phi per
+non-strict byte index is written whether a byte discriminator reads it or
+not, and in a program with 33 indexes and 8 conversions that arithmetic
+lands one line above where it started. The same edit falls by sixteen on
+encodebench and widebench, which write half as many indexes.
+
+The twelve cost veins and the lazy tier AGREE, which is the right answer
+rather than a silence: this removes instructions and allocates nothing
+differently, so no allocation counter has anything to say about it. The work
+vein is where it shows, and that vein is measured on CI.

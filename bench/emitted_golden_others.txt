@@ -165,10 +165,21 @@
 # More code written, much less allocated: pendbench allocates 79.86% fewer
 # blocks for its 103 extra lines. Measured on the merged tree over origin/main
 # ef2f4ea4.
-encodebench defines=186 calls=1632 branches=1002 lines=11164
-oneshot defines=142 calls=1203 branches=784 lines=9076
+# 2026-09-13 (a byte index hands the dispatch a raw byte): six of the fourteen
+# rows move and eight are byte-identical; defines, calls and branches hold on
+# all fourteen. The four that rise by one line -- oneshot 9,076 -> 9,077,
+# livebench 9,193 -> 9,194, runbench 34,757 -> 34,758, and the decoder in the
+# file beside this one -- decode json, so they carry 33 non-strict byte
+# indexes against eight converted crossings: +33 phis, -32 lines of unboxing.
+# The two that FALL by sixteen -- encodebench 11,164 -> 11,148 and widebench
+# 12,146 -> 12,130 -- convert the same eight crossings with only sixteen index
+# sites, so the arithmetic lands the other way. Same edit, opposite signs, and
+# the sign is a property of how many byte indexes a program writes rather than
+# of the change. Banked as the price of runbench -2.3594%.
+encodebench defines=186 calls=1632 branches=1002 lines=11148
+oneshot defines=142 calls=1203 branches=784 lines=9077
 basket defines=143 calls=1265 branches=808 lines=8053
-widebench defines=202 calls=1823 branches=1093 lines=12146
+widebench defines=202 calls=1823 branches=1093 lines=12130
 deepbench defines=117 calls=841 branches=595 lines=5965
 escapebench defines=48 calls=106 branches=120 lines=1568
 pendbench defines=132 calls=1192 branches=679 lines=7019
@@ -176,5 +187,5 @@ scanbench defines=330 calls=3260 branches=2133 lines=19782
 indexbench defines=54 calls=146 branches=135 lines=1877
 digestbench defines=198 calls=1527 branches=923 lines=10096
 readbench defines=62 calls=166 branches=152 lines=2181
-livebench defines=143 calls=1227 branches=798 lines=9193
-runbench defines=593 calls=5947 branches=3447 lines=34757
+livebench defines=143 calls=1227 branches=798 lines=9194
+runbench defines=593 calls=5947 branches=3447 lines=34758
