@@ -246,4 +246,7 @@ front_end_visits=22437
 # 2026-09-11 (a none that reaches a group with no arm for it is refused):
 # 774,660 -> 777,126, a rise of 2,466 (+0.3184%). The shadow table is held
 # beside the parameter sets for the whole of inference, one Set per parameter.
-compile_peak_bytes=777126
+# 2026-09-13 (kanso#1415): 777,126 -> 776,055, a fall of 1,071 (-0.1378%).
+# The qualified-name join: an exactly-sized `String` holds no slack where a
+# grown one rounds up, and the names the loader mints are live at the peak.
+compile_peak_bytes=776055

@@ -4599,3 +4599,20 @@ same formatting machinery this entry is about, reached from `format!` calls
 elsewhere. The lexer's 4,407 are the `String`s the AST needs, which
 kanso#1033 declined interning at 365 conversion sites. No other single owner
 holds more than a per cent.
+
+
+**CI's rows.** The container's box reads about 0.8% high on these veins and the
+projection was 5,410,533 summed; CI's sitting on the base kanso#1413 left reads:
+
+    module    44,994,843 -> 44,301,309    -693,534 (-1.5414%)
+    entry    150,030,446 -> 147,706,790  -2,323,656 (-1.5488%)
+    library  150,868,905 -> 148,544,439  -2,324,466 (-1.5407%)
+    summed   345,894,194 -> 340,552,538  -5,341,656 (-1.5443%)
+
+compile_allocs 30,207 -> 29,169 (−1,038, −3.4363%) and compile_peak_bytes
+777,126 -> 776,055 (−1,071, −0.1378%): an exactly-sized `String` holds no slack
+where a grown one rounds up, and these names are live at the peak. The
+container projected 776,055 for the peak and CI read the same number.
+
+Runtime did not move: `work:success` on the same run, runbench 2,003,021,871,
+identical to its golden. Floor 68.56 -> 68.64.
