@@ -4189,3 +4189,27 @@ smallest. `named_walk` is the largest remaining at 1,791,359 and stays out:
 `arity_at` pushes diagnostics of kind `arity`, and `check_merged_after_aliases`
 gates on that kind immediately after `check_per_node`, so folding it would put
 those diagnostics in front of their own early return.
+
+CI's rows, written in round two:
+
+```
+module   44,888,539 ->  44,564,895    -323,644  -0.7210%
+entry   149,925,203 -> 148,827,747  -1,097,456  -0.7320%
+library 150,211,345 -> 149,164,244  -1,047,101  -0.6971%
+summed  194,813,742 -> 193,392,642  -1,421,100  -0.7295%
+```
+
+`compile_allocs` 29,323 -> 29,317, a fall of six; `compile_peak_bytes` and the
+front end's rounds and visits byte-identical. Welfare 67.75 -> 67.77, banked in
+the same commit; seven `data-golden` spans on compiler.html regenerated.
+
+The container projected -1,379,426 summed and CI reads 1.030 of that, the
+closest the two hosts have come across four folds after 1.04, 0.88 and 2.01.
+Three of the four are near one and the fourth is not, which is why the previous
+entry called the offset noise rather than a ratio. A fourth point near one does
+not make it one.
+
+The entry and module rows part by 0.011 percentage points here, where the
+literal fold's round parted them by 0.330. That fold keyed on call sites, which
+the two corpora hold in different proportions; this one keys on dot-reads,
+which they hold in nearly the same one.

@@ -194,4 +194,7 @@
 # and the entry corpus runs statements, and this check keys on call sites in
 # bodies: the two corpora hold different mixes of those, which the earlier
 # folds' per-node savings could not see.
-library_instructions=150211345
+# 2026-09-12 (the field-read check joins the one descent): 150,211,345 ->
+# 149,164,244, a fall of 1,047,101 (-0.6971%). The same fold, on the library
+# route.
+library_instructions=149164244
