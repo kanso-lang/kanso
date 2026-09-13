@@ -4544,3 +4544,13 @@ the skip buys only the per-node work. The mutation still turns the gate red by
 a hundred thousand instructions, so it still does its job; what it proves is
 just smaller. Rewritten with the new numbers and the reason they fell, because
 a mutation's prose is the only place that reasoning is recorded.
+
+**CI's rows, and the floor.** The compile gates refuse on this container, so
+round one went deliberately red on all four and CI measured them:
+compile_instructions 45,251,941 -> 44,994,843 (−257,098 / −0.5681%),
+entry_instructions 150,873,629 -> 150,030,446 (−843,183 / −0.5589%),
+library_instructions 151,715,592 -> 150,868,905 (−846,687 / −0.5581%), summed
+−1,946,968 (−0.5597%). compile_allocs 30,224 -> 30,207. The box's own box
+projected −1,978,104 summed and CI read 0.9843 of it, the closest agreement of
+the six folds so far. Runtime did not move: `work:success` on the same run,
+runbench 2,003,021,871, identical to its golden. Floor 68.55 -> 68.56.
