@@ -4525,8 +4525,8 @@ property of the link, and it did not interact with the effect type. That is a
 result, not a foregone conclusion — it is exactly the kind of composition that
 could have failed, which is why it was measured rather than assumed.
 
-runbench **2,252,446,969 -> 2,189,318,400**, a fall of
-63,128,569 (−2.8027%) — a better result than the container's −2.0149%, and the
+runbench **2,252,446,915 -> 2,189,318,373**, a fall of
+63,128,542 (−2.8027%) — a better result than the container's −2.0149%, and the
 reason the two numbers may not be subtracted from one another. The full sitting,
 twelve of fourteen work rows falling:
 
@@ -4537,37 +4537,49 @@ oneshot         21,616,888 ->     21,081,074      −535,814  −2.4787%
 basket          34,698,668 ->     34,693,472        −5,196  −0.0150%
 widebench       35,316,107 ->     35,348,118       +32,011  +0.0906%
 deepbench      387,474,235 ->    378,118,216    −9,356,019  −2.4146%
-escapebench     85,558,106 ->     85,537,081       −21,025  −0.0246%
+escapebench     85,558,078 ->     85,537,054       −21,024  −0.0246%
 pendbench      221,912,236 ->    221,101,809      −810,427  −0.3652%
-indexbench       3,265,849 ->      3,265,422          −427  −0.0131%
-scanbench      587,488,506 ->    562,456,201   −25,032,305  −4.2609%
+indexbench       3,265,819 ->      3,265,392          −427  −0.0131%
+scanbench      587,488,450 ->    562,456,145   −25,032,305  −4.2609%
 digestbench     10,426,549 ->     10,199,161      −227,388  −2.1809%
 readbench        4,630,969 ->      4,630,971            +2  +0.0000%
 livebench    3,450,423,659 -> 3,320,889,129  −129,534,530  −3.7542%
-runbench     2,252,446,969 -> 2,189,318,400   −63,128,569  −2.8027%
+runbench     2,252,446,915 -> 2,189,318,373   −63,128,542  −2.8027%
 ```
 
 **The rows that got worse, each named with the value it landed on.** Two work
-rows rise: **widebench 35,348,118** (+32,011, +0.0906%) and **readbench
-4,630,971** (+2). Neither is a decision to defend on its own — the objective
-weighs the sum, and the sum went up — but a rise that nobody names is the thing
-this log exists to catch. widebench is the larger of the two and its cause is
-the same as its .text rise: a wider inline threshold specialises more call sites
-and a few of them were better off shared.
+rows rise: `work_widebench` **35,348,118** (+32,011, +0.0906%) and
+`work_readbench` **4,630,971** (+2). The `text` vein rises with them, to
+**1,645,468**. The objective weighs the sum and the sum went up, so none of the
+three is a decision to defend on its own, but a rise that nobody names is the
+thing this log exists to catch. widebench is the larger of the two work rows,
+and its cause is the same as its .text rise: a wider inline threshold
+specialises more call sites and a few of them were better off shared.
 
-Eleven of fourteen .text rows rise, the vein totalling 1,551,324 -> 1,647,884
-(+6.22%) — less than the +9.8% projected from runbench.ll alone, because most
+**A CORRECTION to this entry.** The trend gate refused it for a naming miss. It
+wants each worsened counter written with the key its golden uses, and the entry
+said `widebench` and `readbench` where the goldens say `work_widebench` and
+`work_readbench`, and gave no value at all for `text`. Fixing that turned up a
+second fault the gate could not see. Both tables above had kept the sitting
+taken against 5982c60a, so escapebench, indexbench, scanbench and runbench read
+a few dozen instructions off on each side of the arrow, the .text vein totalled
+1,551,324 -> 1,647,884 rather than 1,549,100 -> 1,645,468, and the compile
+paragraph below named the four pre-kanso#1372 rows. kanso#1372 moved every one
+of them. Each figure in this entry is now read off the committed goldens.
+
+Eleven of fourteen .text rows rise, the vein `text` totalling
+1,549,100 -> **1,645,468** (+96,368, +6.2209%) — less than the +9.8% projected from runbench.ll alone, because most
 benchmarks link less of the library than the run program does:
 
 ```
-jsonbench    100,050 -> 103,058  +3.01%      escapebench  57,922 ->  57,730  −0.33%
+jsonbench    100,050 -> 103,058  +3.01%      escapebench  57,490 ->  57,298  −0.33%
 encodebench  120,962 -> 128,034  +5.85%      pendbench    92,034 ->  94,786  +2.99%
-oneshot      111,922 -> 114,482  +2.29%      indexbench   62,162 ->  61,618  −0.88%
-basket       114,082 -> 118,258  +3.66%      scanbench   159,842 -> 183,314 +14.68%
+oneshot      111,922 -> 114,482  +2.29%      indexbench   61,730 ->  61,170  −0.91%
+basket       114,082 -> 118,258  +3.66%      scanbench   158,930 -> 182,386 +14.76%
 widebench    126,226 -> 133,890  +6.07%      digestbench 111,362 -> 114,098  +2.46%
 deepbench     76,354 ->  82,402  +7.92%      readbench    58,434 ->  58,434   0.00%
                                              livebench   112,498 -> 115,426  +2.60%
-                                             runbench    247,474 -> 282,354 +14.09%
+                                             runbench    247,026 -> 281,746 +14.06%
 ```
 
 Machine-code size has no welfare term — Clay ruled that on 2026-09-05 — so
@@ -4582,8 +4594,8 @@ read by clang at link time, long after the compiler has finished writing. The
 three veins that can see a linker flag are work, machine code, and nothing else.
 
 **The compile side is untouched and that is not a coincidence.** compile_allocs
-29,314, compile_instructions 44,234,005, entry_instructions 147,756,205,
-library_instructions 148,091,856 — all four AGREED with their goldens. The flag
+29,338, compile_instructions 44,767,714, entry_instructions 149,755,117,
+library_instructions 150,092,130 — all four AGREED with their goldens. The flag
 is on `release_clang`, which links benchmark binaries; `kanso check` never
 reaches it.
 
