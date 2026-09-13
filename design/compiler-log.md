@@ -4844,3 +4844,27 @@ a `none` arm), which is the check doing its job on the way to the fixture.
 itself: with the miss edge carrying 0 instead of 256 it answers `byte 0 at 4`
 and `byte 0 at 0` where it owes `none at 4` and `none at 0`. Eleven of eleven
 golden tests pass with it in.
+
+**CI's sitting**, on the branch re-cut onto merged main (63fa87a1). Four work
+rows fall and ten are byte-identical: runbench 2,034,936,773 -> 2,009,290,191
+(−25,646,582 / −1.2603%), jsonbench 1,272,616,210 -> 1,250,438,261
+(−22,177,949 / −1.7427%), oneshot and livebench −147,852 each. This container
+projected −24,697,356 on runbench and CI read 1.0384 of it — the same
+direction and size #1398 saw, where the container also under-read the fall.
+
+jsonbench falls HARDER than runbench in proportion, 1.74% against 1.26%, and
+that is where the change lives: the two crossings the sunk collapse converted
+are `d_json/array_step_3` and `d_json/obj_value_4`, both in the decoder.
+
+The .text vein splits: runbench −272 and digestbench −16 fall, while
+jsonbench, oneshot and livebench each RISE 16. Nine rows are identical. The
+three compile rows all rise as the emitter writes the speculative collapse
+whether or not a reader takes it — `compile_instructions` 46,103,965 ->
+46,105,350 (+1,385), `entry_instructions` 153,609,608 -> 153,612,462 (+2,854),
+`library_instructions` 154,368,086 -> 154,371,207 (+3,121) — and `compile_allocs` (30,273) and
+`compile_memory` are byte-identical, so nothing about the compile's shape
+changed, only how much it writes.
+
+Welfare 68.40361950943213 -> 68.50, banked in this pull request. The runtime
+fall buys the compile rise with a tenth of a point to spare; five page spans
+quoting the moved compile goldens were rewritten by `golden_prose --write`.
