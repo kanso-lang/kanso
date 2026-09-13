@@ -412,4 +412,16 @@
 # This is a ruled language feature -- the 2026-08-29 sitting minted the
 # effect type -- and its cost is admitted by lowering the floor, under Clay's
 # 2026-09-13 ironclad rule.
-compile_allocs=30273
+#
+# 2026-09-13 (kanso#1405, the digit test asked in place). The change is a
+# LIBRARY change -- lib/*.kso is include_str!'d into the compiler -- so all
+# four of these move. CI's sitting, against the rows this file held before:
+#   compile_allocs        30,273 ->      30,258   (-15)
+#   compile_instructions  46,104,930 ->  46,072,247  (-32,683, -0.0709%)
+#   entry_instructions    153,613,687 -> 153,586,146 (-27,541, -0.0179%)
+#   library_instructions  154,370,895 -> 154,378,731 (+7,836,  +0.0051%)
+# Three fall and the library row rises; the source is eight lines shorter and
+# one binding lighter, and the library row is the layout vein reacting to a
+# compiler whose bytes moved. Runtime did NOT move: `work:success` on the same
+# run, runbench 2,003,021,871, identical to its golden.
+compile_allocs=30258

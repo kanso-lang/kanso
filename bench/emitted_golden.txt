@@ -220,5 +220,5 @@
 # else. Banked as the price of runbench -2.3594%.
 defines=142
 calls=1210
-branches=795
-lines=9143
+branches=793
+lines=9142
