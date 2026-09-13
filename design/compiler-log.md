@@ -2667,6 +2667,27 @@ refusal, and it is written here as that. What would break the narrow one is a
 future module of wrappers with no bare effect beside them; nothing in lib is
 that today.
 
+**CI's sitting, and the floor.** Measured on the base carrying kanso#1393,
+after the branch was re-cut onto merged main and every golden re-read from
+CI rather than composed onto the new base by arithmetic:
+
+    compile_allocs         29,473 ->      30,273    +800  (+2.7144%)
+    compile_instructions   45,522,509 ->  46,111,185  +588,676  (+1.2932%)
+    entry_instructions     152,090,185 -> 153,623,844  +1,533,659  (+1.0084%)
+    library_instructions   152,460,583 -> 154,382,827  +1,922,244  (+1.2608%)
+
+The runtime side is byte-identical: every one of the fourteen work rows, the
+.text vein, the twelve cost goldens and the lazy tier agree, because nothing
+here runs at run time. The library row pays the most of the three compile
+rows, which is what a file of definitions alone should do -- the tail walk
+runs on every declaration with no statements to dilute it.
+
+Welfare 68.0810 -> 68.0295, a fall of 0.0515, and the floor moves by exactly
+that. This is a ruled language feature, so the drop is recorded and taken
+rather than asked about, under Clay's 2026-09-13 ironclad rule: "you don't
+need to ask my permission to lower the welfare floor if it is in service of
+making the language actually work for the specification."
+
 **Owed.** ch04 and ch05, per the ledger's "The book teaches the boundary
 language", and compiler.html's entry 23 with them, in one pass.
 

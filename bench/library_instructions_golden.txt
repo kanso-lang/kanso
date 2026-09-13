@@ -217,4 +217,9 @@
 # 2026-09-13 (the effect type): 148,091,856 -> 150,092,130, a RISE of
 # 2,000,274 (+1.3507%). `check_box_where_value` runs in the shared checks,
 # so this row moves with the entry row to within 0.0022 points.
-library_instructions=152460583
+# 2026-09-13 (the `<t>effect` spelling): 152,460,583 -> 154,382,827, a RISE
+# of 1,922,244 (+1.2608%). The library path pays it too, and pays the most of
+# the three: a file of definitions alone is all declarations, so the tail walk
+# runs on every one of them with no statements to dilute it.
+# Ruled 2026-08-29; admitted by the floor under the language clause.
+library_instructions=154382827
