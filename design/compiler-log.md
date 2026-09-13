@@ -5168,8 +5168,16 @@ Three fall and the library row rises, which is the layout vein behaving as
 CLAUDE.md describes it. The change stands on that and on eight fewer source
 lines, not on the runtime figure it was built for.
 
-Welfare is NOT banked here; the floor is ratcheted in the round after this
-sitting lands, per the order in CLAUDE.md.
+**The floor is banked, and that was the round CI asked for.** With the four
+goldens carrying CI's rows, the welfare job read 68.52 against a floor of
+68.5198 and failed the PR: the objective went up and nobody held it, which is
+a red pull request rather than a gift to the next change. `--set` ran on the
+committed goldens, in the order CLAUDE.md gives — CI's rows first, then the
+ratchet, then the page spans — and the floor is 68.51979544326865 ->
+68.52093722983558, ratchet 261. The three page gates agree afterwards:
+golden_prose 0 drifted, page_drift 1/3, prose_check 0 tells. The whole rise is
+the compile term; the run term did not move at all, which is the correction
+above stated as a number.
 
 ## 2026-09-13 (fifteenth) — the instruction vein counts a byte of memcpy as an instruction
 
