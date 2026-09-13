@@ -4609,13 +4609,39 @@ run-speed term.
 under the new threshold, the frame is 192,992,914 — 8.82% of the program, down
 from 9.64%, so the threshold took about 22M of frame directly and 45M in total:
 inlining's second-order optimisations are roughly half the win. `k_map_sorted`
-and `entry_onto` have left the profile entirely. What remains sits in the
-`tailcc` mutual tail cycle (`string_at` musttails into `str_chars_3` and
-`string_scan_3`, which call back). That cycle is NOT ceilinged — no measurement
-in this log bounds what its frames are worth, and a first draft of this entry
-claimed one by conflating it with the 2026-09-02 byte-arm guard ceiling, which
-is a jsonbench figure about a different question entirely. So it stays an open
-lead rather than a closed one. What IS settled is that the obvious lever does
+and `entry_onto` have left the profile entirely.
+
+**Where it actually sits, measured rather than guessed.** An earlier draft of
+this paragraph said the residual sits in the `tailcc` mutual tail cycle. A
+per-instruction profile of the linked binary, with every address mapped to its
+opcode through `objdump`, says otherwise, and the frame total reproduces to
+2,791 instructions (192,995,705 against 192,992,914) so the two readings are of
+the same thing. Two of the cycle's four members — `str_chars_3` and
+`string_scan_3` — are not in the profile at all: the wider threshold inlined
+them away. Of the two that survive, `string_at_4` carries 13,832,389 frame
+instructions, 7.2% of the program's 193M, and it is the THIRD owner rather than
+the first. The frame is spread:
+
+```
+d_json/encode_onto_2   30,952,350   8.3% of its own 372,343,104
+d_json/value_for_3     22,114,451   9.0% of its own 244,520,545
+d_json/string_at_4     13,832,389  17.1% of its own  80,843,551
+d_json/obj_key_start_4 10,760,607   6.8% of its own 158,344,918
+k_b_at                  8,970,000  14.5% of its own  61,798,244
+k_b_utf8_slice_raw      8,614,980  16.5% of its own  52,188,939
+```
+
+The four big decode and encode drivers spend 6–9% of their own instructions on
+the frame, which is what a large function that spills its callee-saved
+registers costs. The interesting column is the second one: five small hot
+functions — `string_at_4`, `k_b_utf8_slice_raw`, `k_b_append_rendered` (17.0%),
+`number_done_4` (15.9%) and `k_b_at` — each spend about one instruction in six
+on prologue and epilogue, and threshold 1000 did not inline any of them. Those
+five hold 39.4M of frame between them. Whether a targeted `alwaysinline` on
+that shortlist buys part of threshold 5000's extra 1.93% without its 56% of
+code is an open lead, and it is a different question from the cycle.
+
+What IS settled about the cycle is that the obvious lever does
 not reach it: `preserve_none` cannot be swapped in for `tailcc` here.
 src/codegen.rs records that a `musttail` call may cross an arity or a type only
 under `tailcc`, and this cycle does exactly that — a
