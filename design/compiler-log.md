@@ -4783,6 +4783,28 @@ reading only one of them would conclude the other was wrong.
 term's 1,780 several thousand times over, which is the trade the weights are
 for.
 
+**A HAZARD THIS CHANGE CREATES, found by running it and not yet closed.**
+A shipped binary run under `KANSO_COUNTERS=1` still prints a counter block,
+because the runtime's twenty-seven sites are untouched and only the emitted
+eight are gone. It is not a block of zeros and it does not say anything is
+missing: every row the runtime owns is right, and the two the emitter owns are
+wrong. escapebench, shipped against counting, on this box:
+
+    push_mut_fast        0  against      3,000
+    push_mut_slow   12,000  against  1,200,000
+
+Twenty-odd rows agreeing is what makes it dangerous — a reader has no reason to
+distrust the two that do not. The cost goldens are safe because every gate
+reads the `-counters` binary, so nothing in CI is wrong today; what is exposed
+is anybody measuring by hand, which is how this was found.
+
+The fix belongs in the runtime half rather than here. There the runtime object
+is already built twice, so `int k_counters_built = K_COUNTING;` is a line in
+runtime.c that `k_stats_dump` reads to refuse, and it costs no emitted IR at
+all. Closing it here would mean the emitter defining a global, which is one
+more line in every program, another sitting of the work and text rows, and the
+same answer a round later.
+
 **OPEN.** The runtime's own twenty-seven sites are the other 13,187,834
 (0.6159%) and are untouched. They would want `runtime.c` compiled twice and the
 counting object linked into the counting binaries, which is a second object in
