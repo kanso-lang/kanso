@@ -1402,4 +1402,10 @@
 # statements and nodes in the same order, and share one walk now. Runtime did
 # NOT move: `work:success` on the same run, runbench 2,003,021,871, identical
 # to its golden.
-compile_instructions=45251941
+# 2026-09-13 (kanso#1413): compile_instructions 45,251,941 -> 44,994,843, a
+# FALL of 257,098 (-0.5681%). The box question joins the second fused descent:
+# check_box_where_value walked every declaration, statement and node that
+# check_after_infer was already walking, and asked its questions on that walk
+# now. Runtime did NOT move: `work:success` on the same run, runbench
+# 2,003,021,871, identical to its golden.
+compile_instructions=44994843

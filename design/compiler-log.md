@@ -4453,6 +4453,107 @@ compile_memory, machine_code, emitted_code and compile_libraries all AGREED.
 Runtime is untouched: `work:success`, runbench 2,003,021,871, identical to its
 golden. Welfare 68.5446 -> 68.5543, banked, ratchet 263. Seven `data-golden`
 spans on docs/compiler.html rewritten.
+## 2026-09-13 — ch04 names the type its plumbing hands around, and a branch STATUS.md said was gone
+
+`<t>effect` shipped in kanso#1395 and ch05 teaches it properly: an effect has a
+type, the compiler infers it, a parameter can be declared `e:<string>effect`,
+and the refusal a boxed value earns is a panel. ch04 reaches the same machinery
+nine sections earlier — "the two failures" opens by pointing `os/read_file!` at
+`version.txt` and piping the answer with `.>` — and it named nothing. It called
+the value "a description of the read" and asked the reader to take the plumbing
+on credit for two pages, which is the right instruction and leaves the reader
+without a word for the thing on the page in front of them. One clause names it.
+
+This is the live remainder of the ruling STATUS.md carries as "The book teaches
+the boundary language" (queued P1, 2026-08-26). kanso#1392 gave ch05 the three
+chain words and the three fused spellings, kanso#1394 gave ch04 its rescue
+collision and its boundary panel, kanso#1406 gave ch05 `done`. Measured on
+merged main before this change: ch05 names `<t>effect` twice and carries
+twenty-two chain-operator spellings; ch04 carried ten of the operators and zero
+of the type.
+
+**And the branch that row says does not exist is in the container.**
+STATUS.md's note reads "That branch is not in the compiler worker's container —
+no branch or worktree matching book/ch04/ch05/boundary exists there — so treat
+the prose as unwritten until someone points at a commit." `claude/book-effect-type`
+is checked out at `/tmp/wt-book`, tip `d540fe3a`, with three real commits under
+two merges of main. The conclusion the note draws is right and the reason is
+wrong: every file that branch adds is already on main. `boxed.kso`,
+`boxed_check.out`, `fused.kso` and `fused.out` are all in
+`docs/book/samples/ch05/` on `origin/main`, and its ch05 prose landed through
+kanso#1392 and kanso#1395. A `git diff origin/main...HEAD` on it reads as 71
+insertions across twelve files, which is what made it look live; that is a
+three-dot diff against a stale merge base. Two-dot against current main it is
+ninety-six files and six thousand deletions BEHIND. The branch is superseded,
+not pending, and nothing is owed to it.
+
+## 2026-09-13 — the box question joins the second descent, and the splice gap a third time
+
+DONE. `check_box_where_value` was the last of the four checks that walked the
+whole program after inference for itself. It asks on the same descent now.
+Four questions share one walk over the declarations, the statements and the
+nodes: the effect one, the wall one, this one, and exhaustiveness.
+
+Its tables are the heaviest of the four and they move whole: the group table
+carrying a return set, a member chain and a binds-anything mask; the tail
+walk that decides whether a group answers a box by following its arms'
+last statements; the lazily-filled binder set behind the shadowing test. None
+of that changes. What goes is the second `for decl in &program.fns` loop and
+the second `Vec<&Expr>` worklist under it.
+
+The binder set is the one piece that has to be rebuilt per declaration rather
+than once: `shadows(i, name)` is asked of THIS declaration and fills on the
+first ask, so the closure the walk hands to `site` is made inside the
+declaration loop. Everything else is built once above it.
+
+THE SPLICE GAP IS NOW THREE FOR THREE. Move the box answers from after the
+exhaustiveness answers to beside the wall's, and all 465 error fixtures stayed
+green — the same thing kanso#1409 found for the effect answers and kanso#1411
+for the wall's. Nothing in the corpus held a box refusal beside another
+post-inference one. `a_box_refused_after_an_earlier_exhaustiveness` closes it:
+one program with one of each, watched red under that exact move (the two lines
+swap), then green. Three folds, three fixtures, one shape of gap — a corpus
+organised by what a check refuses has nothing that pins the ORDER two checks
+refuse in, and the fused descent is what makes that order a property of one
+line rather than of the call sequence.
+
+Container, main-against-main this time — both binaries let valgrind read
+`kanso::main`, which kanso#1411's baseline did not. Module 45,884,046 ->
+45,622,817 (−261,229 / −0.5693%), entry 152,981,263 -> 152,124,687 (−856,576 /
+−0.5599%), library 153,824,934 -> 152,964,635 (−860,299 / −0.5593%), summed
+−1,978,104 (−0.5609%). The six folds that measured this way read 0.98 to 0.996
+of CI.
+
+The runtime sweep agrees with its goldens and the full suite is green.
+
+**And the fold made the ratchet's own mutation stale, in both halves.** CI's
+ratchet job went red on `1 mutations no longer apply` — `the_box_check_asks_
+when_nothing_answers_a_box`, the mutation that proves the cost-goldens job can
+see the box question's `any_boxed` skip. It greps for
+`let any_boxed = returns.values()...` and the fold renamed that map to `groups`,
+because `check_after_infer` already had a `returns` parameter. The anchor is
+repointed.
+
+The comment above it was stale in a way the grep could not catch. It said the
+skip is worth 637,295 instructions on the module corpus and 1,308,849 on the
+entry corpus, "43% of what the whole pass costs". Re-measured on this branch:
++103,180 and +114,497. A factor of six. Both readings were right when taken —
+while `check_box_where_value` was a pass of its own the skip bought its entire
+traversal, and now that the question rides a descent somebody else is making
+the skip buys only the per-node work. The mutation still turns the gate red by
+a hundred thousand instructions, so it still does its job; what it proves is
+just smaller. Rewritten with the new numbers and the reason they fell, because
+a mutation's prose is the only place that reasoning is recorded.
+
+**CI's rows, and the floor.** The compile gates refuse on this container, so
+round one went deliberately red on all four and CI measured them:
+compile_instructions 45,251,941 -> 44,994,843 (−257,098 / −0.5681%),
+entry_instructions 150,873,629 -> 150,030,446 (−843,183 / −0.5589%),
+library_instructions 151,715,592 -> 150,868,905 (−846,687 / −0.5581%), summed
+−1,946,968 (−0.5597%). compile_allocs 30,224 -> 30,207. The box's own box
+projected −1,978,104 summed and CI read 0.9843 of it, the closest agreement of
+the six folds so far. Runtime did not move: `work:success` on the same run,
+runbench 2,003,021,871, identical to its golden. Floor 68.55 -> 68.56.
 ## 2026-09-13 — the advisory union that had nothing to union, and the pre-size that cost more than it saved
 
 `advisory::name_types` answers "which types can this name be" by unioning the

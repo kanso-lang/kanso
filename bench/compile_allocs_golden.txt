@@ -431,4 +431,7 @@
 # apart. Seventeen allocations is the net, and the container could not see it:
 # the three instruction rows were read there as PROGRAM TOTALS because valgrind
 # would not read that binary's symbols, and this row is not in that reading.
-compile_allocs=30224
+# 2026-09-13 (kanso#1413): compile_allocs 30,224 -> 30,207, a fall of 17. The
+# box question joins the second fused descent; the seventeen are the per-pass
+# scratch its own traversal built and the shared descent does not.
+compile_allocs=30207
