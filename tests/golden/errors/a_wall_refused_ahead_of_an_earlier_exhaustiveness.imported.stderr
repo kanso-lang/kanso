@@ -1,0 +1,2 @@
+error[type]: `>>` sequences two effects, and this side answers a plain value — bind it with `.` if you want what it answers (module a_wall_refused_ahead_of_an_earlier_exhaustiveness)
+error[exhaustive]: this can be a none and `double` has no arm for it — resolve it here, or give `double` a `none` arm (in a_wall_refused_ahead_of_an_earlier_exhaustiveness.kso) (module a_wall_refused_ahead_of_an_earlier_exhaustiveness)
