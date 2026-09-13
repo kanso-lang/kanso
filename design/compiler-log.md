@@ -4261,7 +4261,7 @@ diagnostics arrived ahead of the walk's; folded, they sit inside that block.
 `diag::render` does not sort on this route. No fixture in the corpus carries a
 build diagnostic beside another, so none of the 204 moves.
 
-## OPEN: two of seven mutations stay green, for two different reasons
+## Two of seven mutations stayed green, for two different reasons
 
 Five of seven mutations turn the corpus red: the build arm opening with nothing
 born, its `before`, its `after`, the `if`-arm block arm existing at all, and
@@ -4278,22 +4278,32 @@ conditionally, so the field is not proved born and the write through it is
 refused. Watched both ways — the fixture is red today and the program compiles
 with the counter removed.
 
-Removing the guard arm's `after` looks like the `and`/`or` arm kanso#1385
-recorded as unreachable, and for a parser reason rather than a corpus one. The
-census is done and it gets part of the way. `Expr::Guard` has exactly ONE
-construction site, `parser.rs:866` inside `parse_body`, and `parse_build_body`
-never calls `parse_body` — it reads each line with `parse_stmt` and hands
-blocks to `parse_block_construct` — so a build body's own statements are never
-a guard. What the census does NOT close is the nested route: an `if` arm inside
-a build does go through `parse_body`, and the fused walk carries `born` into
-it, so a guard there would reach the arm with the bookkeeping live.
+Removing the guard arm's `after` leaves the corpus green because the arm is
+UNREACHABLE, like the `and`/`or` arm kanso#1385 recorded, and the proof is the
+parser's.
 
-Four spellings were tried on that route and the parser refused all four with
-"a `return` sits with the bindings, before the effect chain" — the guard
-leading a build body, following a binding in one, following a field write in
-one, and leading an `if` arm inside one. The arm's `after` can only matter when
-the guard's remainder binds a name a later `Set` writes through, and a `Set`
-after a guard is what every one of those four spellings tried to write. That is
-a census plus four spellings and still not a proof, because the lead rule the
-parser is applying was not read closely enough to say it forbids the shape in
-general. The arm stays, and this is where the next reader picks it up.
+`Expr::Guard` has exactly one construction site: `parser.rs:866`, inside
+`parse_body`. `parse_build_body` never calls `parse_body` — it reads each line
+with `parse_stmt` and hands blocks to `parse_block_construct` — so a build
+body's own statements are never a guard. That leaves the nested route, and
+`parse_body`'s own stray check closes it. The leading run is a maximal prefix
+of returns and binds, each carrying the deeper lines beneath it; the check that
+follows it,
+
+```rust
+if let Some(stray) = body[lead_end..].iter().find(|l| is_return(l)) {
+```
+
+scans FLAT. It does not skip deeper indents the way the lead scan does, so a
+`return` at any depth below a line that is neither a return nor a bind is
+refused with "a `return` sits with the bindings, before the effect chain". A
+`build` header is never either of those — `q = build ...` is refused outright
+with "`build` answers nothing to bind `q` to" — so the lead run always breaks
+at or before a build, and every `return X if C` anywhere inside that build is a
+stray.
+
+Four spellings confirm it from the other side: the guard leading a build body,
+following a binding in one, following a field write in one, and leading an `if`
+arm inside one, each refused at the `return` line itself. The arm stays as
+documentation of a shape the walk would otherwise have to think about; it costs
+one match arm, the same trade kanso#1385 made for `and`/`or`.
