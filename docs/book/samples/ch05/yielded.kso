@@ -1,0 +1,14 @@
+import "std/os"
+
+fn name done
+  "done"
+
+fn name none
+  "none"
+
+fn report yield
+  print "the write yielded {yield}"
+    >> print "an arm named {name yield} caught it"
+    >> print "yield == none is {yield == none}"
+
+pub play = os/write_file "receipt.txt" "one taiyaki" .> report

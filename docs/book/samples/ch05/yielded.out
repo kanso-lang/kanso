@@ -1,0 +1,3 @@
+the write yielded <done>
+an arm named done caught it
+yield == none is false
