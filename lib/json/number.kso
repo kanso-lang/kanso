@@ -5,8 +5,8 @@ import "std/text"
 # past. The mark rides along with the scan now, so each number's bytes are
 # read once. It rides as a boolean argument rather than in a record beside
 # the end position, because a record here is an allocation per number.
-fn scan cs start p marked
-  scan_at cs cs[p] start p marked
+fn scan cs start p m
+  scan_at cs cs[p] start p m
 
 # float marks: . E e
 fn scan_at cs 46 start p _
@@ -19,18 +19,25 @@ fn scan_at cs 101 start p _
   scan cs start (p + 1) true
 
 # the signs a number may carry, which say nothing about its kind
-fn scan_at cs 43 start p marked
-  scan cs start (p + 1) marked
+fn scan_at cs 43 start p m
+  scan cs start (p + 1) m
 
-fn scan_at cs 45 start p marked
-  scan cs start (p + 1) marked
+fn scan_at cs 45 start p m
+  scan cs start (p + 1) m
 
-fn scan_at cs none start p marked
-  number_done cs start p marked
+fn scan_at cs none start p m
+  number_done cs start p m
 
-fn scan_at cs c start p marked
-  digit = 47 < c and c < 58
-  if digit (scan cs start (p + 1) marked) (number_done cs start p marked)
+# The digit test is written INTO the `if` rather than bound to a name first.
+# A bound boolean is a value: the emitter materialises the comparison as a
+# tagged true-or-false and the `if` takes it apart again, which is three
+# instructions -- `mov $3` / `sbb $0` / `cmp $2` -- on every byte of every
+# number. Asked in place, `emit_cond` walks the `and` and branches off the
+# flags. That is 9,608,940 instructions of runbench, 0.4795%. The mark is
+# spelled `m` here only so the line fits eighty columns; the emitter learning
+# to see through a once-used binding would give the longer name back.
+fn scan_at cs c start p m
+  if (47 < c and c < 58) (scan cs start (p + 1) m) (number_done cs start p m)
 
 fn number_done cs start p true
   parsed p (number_ok start (text/to_float (text/slice cs start (p - 1))))

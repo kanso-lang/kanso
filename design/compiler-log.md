@@ -5026,6 +5026,192 @@ the list goes red; taking the call out of `instructions.sh` drops it off and the
 list goes red; removing `bound_a` from the list goes red without either script
 moving.
 
+## 2026-09-13 (fourteenth) — the digit test built a boolean and took it apart, three instructions on every byte of every number
+
+`d_json/scan_4` is 4.65% of runbench — 93,099,402 instructions over only 113
+addresses — and unlike the functions above it in the profile it is not per-call
+work. Four equal-trip groups at about three million trips each sit in one
+contiguous run, 0x24a40 to 0x24a8c. That is the loop over the bytes of a JSON
+number, and twenty instructions in it cost 63M, 3.14% of the program.
+
+Six of the twenty were this:
+
+    0x24a64  3,062,862  add    $0xd0,%al      ; b - '0'
+    0x24a66  3,062,862  cmp    $0xa,%al       ; carry set iff it is a digit
+    0x24a68  3,062,862  mov    $0x3,%eax      ; <-- the flag becomes a value
+    0x24a6d  3,062,862  sbb    $0x0,%rax      ;     2 if digit, 3 if not
+    0x24a71  3,062,862  cmp    $0x2,%rax      ; <-- and a flag again
+    0x24a75  3,062,862  jne    24ab1
+
+The middle three carry the answer of `cmp $0xa,%al` across to the `jne`, which
+`jb` would have taken straight off the flags. The source said
+
+    digit = 47 < c and c < 58
+    if digit (scan cs start (p + 1) marked) (number_done cs start p marked)
+
+and `emit_cond` never saw the comparison. It walks an `and` and branches off
+the flags — its own comment says so, and kanso#1271 shipped that — but only
+when the condition IS the expression. Here the condition is a bound NAME, and
+`f.lookup` gives back an SSA operand rather than the expression behind it, so
+the emitter fell through to taking a value apart. In the IR the tell is one
+line:
+
+    %t80 = icmp slt i64 %t78, %t79
+    %t81 = select i1 %t80, %KValue { i64 2, i64 0 }, %KValue { i64 3, i64 0 }
+
+The first comparison of the `and` branches on its i1; the last one, whose value
+the binding holds, is materialised.
+
+Asked in place the select is gone and the loop branches off the flags. Measured
+by copying both runbench binaries into one directory and counting each there,
+because the exec path shifts a count by fourteen (the thirteenth entry):
+
+    baseline  2,003,781,671
+    in place  1,994,172,731   -9,608,940, -0.4795%
+
+Output byte-identical, and the whole suite green on all three engines, 454
+passed. The disassembly predicted 9,188,586 from the three instructions alone;
+the extra 420,354 is the register pressure the materialisation cost around
+them.
+
+THE NAME IS THE PRICE. `marked` had to become `m` for the line to fit eighty
+columns, and that formatting rule is why the binding was written in the first
+place. The file already calls its other parameters `cs`, `p`, `bs` and `n`, so
+the short name is in keeping — but the durable fix is the emitter seeing
+through a once-used binding, and that would give the longer name back. It needs
+either the binding's expression kept where `emit_cond` can reach it or a
+front-end rewrite that inlines a single-use condition; `lookup` returning an
+operand is the whole obstacle.
+
+AND THE CENSUS SAYS THAT FIX BUYS NOTHING HERE — but the first census was
+wrong, and the way it was wrong is the finding.
+
+Sweeping every `.kso` under lib, std, scripts, bench and hako for a binding
+whose value is a comparison, `and`, `or` or `not` and whose name is an `if`
+condition within eight lines returns seven sites: this line, its twin in
+`bench/jsonbench/jsonbench/number.kso` (the frozen decoder jsonbench compiles,
+a control that stays as it is — its counters are byte-identical here, as they
+should be), three that bind `list/find` where the name holds an option a reader
+needs, and two in `hako/hako/update.kso` where the name is read twice, so a
+once-used rule would not fire, and which no benchmark compiles.
+
+That sweep filtered on the operator and so could not see `blank = ws? c`, which
+stands EIGHT times in `lib/json/value.kso` on the decoder's busiest paths —
+`array_delim` alone is 4.13% of runbench. Dropping the filter finds them, and
+the disassembly looks like the same defect: at 0x29200 sit `mov $0x2,%edi` /
+`cmp $0x2,%rdi` / `jne`, and at 0x292b9 `mov $0x3,%edi` / `cmp $0x2,%rdi` /
+`je`, two flags turned into a value and back.
+
+NEITHER BLOCK EVER RUNS. A callgrind profile taken with `--dump-instr=yes`,
+parsed so its self costs reconcile to the program total exactly
+(1,994,172,731, every function agreeing with `callgrind_annotate`), gives all
+six addresses a count of zero. The `jae` at 0x291fe is taken on all 672,606
+trips: the input has no whitespace between array elements, so the arm the
+binding sits in is never entered. Reading a cost off a disassembly is what
+this was — the instructions are in the binary and they cost nothing, and the
+same profile says `array_delim` is not a loop at all but 122 instructions of
+per-call work spread over 492 addresses, the hottest reached 943,569 times.
+
+MEASURED, AND IT IS NOT. All eight rewritten to ask in place, as
+`if (ws? c) ...`, build a runbench byte-identical to main's — md5
+034613928ffe1a3ef39424e0c8b92353 on both sides — and `emitted_code` AGREED. `ws?` is a group over the byte
+returning literal `true` and `false`, so the condition is a CALL, and
+`emit_cond` has nothing to walk: a callee hands back a tagged value whether or
+not the caller names it. The binding is free. What `emit_cond` can walk is an
+`and` of comparisons, which is why the line above it paid and these eight do
+not. The eight fewer source lines move one vein, `front_end_visits` 22,449 ->
+22,359, which is not a welfare term, and the change is declined — the name
+`blank` says what the test means.
+
+So the emitter learning to see through a once-used binding is worth the name it
+gives back and nothing measurable on this tree, and the shape worth teaching it
+next is the other one: a group whose arms are all boolean literals, whose
+switch could jump straight to the `if`'s targets instead of building a tag for
+a compare to take apart. That is where the six instructions at 0x29200 and
+0x292b9 live, and no source spelling reaches them.
+
+Two compile veins moved and both are regenerated here. The emitted goldens lose
+two branches and one line in every program that carries the number scanner —
+the decoder 795 -> 793 branches and 9,143 -> 9,142 lines, oneshot 784 -> 782
+and 9,072 -> 9,071, livebench 798 -> 796 and 9,189 -> 9,188, runbench 3,447 ->
+3,445 and 34,789 -> 34,788 — which is the materialisation leaving. front_end
+visits fall 22,449 -> 22,437, twelve fewer expressions for the front end to
+walk on each round it is dirty; rounds hold at 62. Every runtime counter and
+the lazy tier are byte-identical: this removes instructions, not events.
+
+## CORRECTION: the 9.6M does not reproduce on CI, and the change is a compile win
+
+CI read `work:success` on this branch — runbench 2,003,021,871, identical to
+its golden, every one of the fourteen work rows unmoved. The −9,608,940 above
+is real on this container and is a property of its LLVM, not of the compiler:
+rustc here is 1.94.1 against CI's 1.98.1, and CI's backend evidently already
+folds the materialised boolean that this container's leaves standing. The
+emitted IR still loses the branches on both — CI's own `runbench defines=593
+calls=5943 branches=3445 lines=34788` matches the regenerated golden exactly —
+so the select is gone from the IR and the machine code was already without it.
+
+The lesson is the one this repo keeps relearning about host-keyed veins, in a
+direction it had not hit before: a RUNTIME row can be host-keyed too, not by
+the fourteen-instruction exec-path offset kanso#1404 fixes, but by which
+optimiser saw the IR. A container measurement of a codegen-shaped change sizes
+what THIS toolchain does with it, and CI is the only authority on what ships.
+
+What lands, then, is compile-side and small. All four compile veins move
+because `lib/*.kso` is `include_str!`'d into the compiler:
+
+    compile_allocs        30,273 ->      30,258   (-15)
+    compile_instructions  46,104,930 ->  46,072,247  (-32,683, -0.0709%)
+    entry_instructions    153,613,687 -> 153,586,146 (-27,541, -0.0179%)
+    library_instructions  154,370,895 -> 154,378,731 (+7,836,  +0.0051%)
+
+Three fall and the library row rises, which is the layout vein behaving as
+CLAUDE.md describes it. The change stands on that and on eight fewer source
+lines, not on the runtime figure it was built for.
+
+**The floor is banked, and that was the round CI asked for.** With the four
+goldens carrying CI's rows, the welfare job read 68.52 against a floor of
+68.5198 and failed the PR: the objective went up and nobody held it, which is
+a red pull request rather than a gift to the next change. `--set` ran on the
+committed goldens, in the order CLAUDE.md gives — CI's rows first, then the
+ratchet, then the page spans — and the floor is 68.51979544326865 ->
+68.52093722983558, ratchet 261. The three page gates agree afterwards:
+golden_prose 0 drifted, page_drift 1/3, prose_check 0 tells. The whole rise is
+the compile term; the run term did not move at all, which is the correction
+above stated as a number.
+
+## 2026-09-13 (fifteenth) — the instruction vein counts a byte of memcpy as an instruction
+
+Chasing a lead off the runbench profile turned up something about the profile
+itself. `__memcpy_avx_unaligned_erms` is 38,690,280 of runbench's 1,994,172,731
+— 1.940% — and 27,194,862 of that sits on ONE address, 0x188d87. An address
+that hot is either a loop body or something counted oddly. It is the second:
+
+    188d84:  sub    %rdi,%rcx
+    188d87:  rep movsb %ds:(%rsi),%es:(%rdi)
+    188d89:  vmovdqu %ymm0,(%r8)
+
+Callgrind simulates a `rep`-prefixed string instruction one iteration at a
+time, so `rep movsb` costs one Ir per BYTE moved. The arithmetic closes it:
+instrumenting `k_b_append_grow`'s copy says runbench moves 24,964,380 bytes
+through it in 1,080 copies, largest 138,756, and the profile's call edge from
+that function into memcpy reads 24,342,225 Ir. That is 1.026 bytes per
+instruction — the count is the byte count.
+
+WHAT THIS MEANS FOR READING THE VEIN. ERMS moves tens of bytes a cycle, so
+memcpy's real share of runbench is a small fraction of the 1.940% the profile
+shows, and a lead ranked by Ir that lands on memcpy is a mirage. That is how
+this one died: `k_b_append_grow` looked like 24.3M instructions, 63% of all
+memcpy and 1.22% of the program, and it is 25 MB of copying that the hardware
+does in about a millisecond. Growth is already geometric — `cap = 2 * (a->len +
+n)` — so 25 MB against 1,080 copies is amortised doubling behaving exactly as
+it should, and there is nothing to fix.
+
+The objective is not wrong, and nothing here asks to change it. Its run term is
+deterministic, comparable between two trees, and that is what a ratchet needs.
+But a change that trades work for bytes moved, or bytes moved for work, is
+scored on a scale where one byte weighs one instruction, and the two are not
+worth the same. Read a memcpy row as bytes, and price a change against it
+knowing that.
 ## 2026-09-13 (sixteenth) — ch05 never said what an effect hands back
 
 `done` was ruled at the 2026-08-26 sitting and built in kanso#1363: a
