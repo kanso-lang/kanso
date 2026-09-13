@@ -214,4 +214,7 @@
 # 2026-09-13 (Arities::of reads the slot it is about to write): 148,288,999 ->
 # 148,091,856, a fall of 197,143 (-0.1329%). `check_named_per_node` runs on
 # every route, so this row moves with the other two.
-library_instructions=148091856
+# 2026-09-13 (the effect type): 148,091,856 -> 150,092,130, a RISE of
+# 2,000,274 (+1.3507%). `check_box_where_value` runs in the shared checks,
+# so this row moves with the entry row to within 0.0022 points.
+library_instructions=150092130

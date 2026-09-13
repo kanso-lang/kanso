@@ -4666,21 +4666,44 @@ difference.
 
 CI's rows, and what each landed on. The tables above are container readings
 taken while the pass was being paid down; these are the numbers the goldens
-carry and the ones the decision rests on:
+carry and the ones the decision rests on. They are RE-MEASURED against a main
+that now carries the seven folds and the arity hash (kanso#1379, #1381-#1386,
+#1387) -- an earlier version of this paragraph priced the rule against the
+pre-fold main and every figure in it was stale by about a per cent:
 
 ```
-compile_instructions   44,888,539 ->  45,428,226    +539,687  +1.2023%
-entry_instructions    149,925,203 -> 151,943,865  +2,018,662  +1.3464%
-library_instructions  150,211,345 -> 152,228,069  +2,016,724  +1.3426%
-compile_allocs             29,323 ->      29,347         +24  +0.0818%
+compile_instructions   44,234,005 ->  44,767,714    +533,709  +1.2065%
+entry_instructions    147,756,205 -> 149,755,117  +1,998,912  +1.3529%
+library_instructions  148,091,856 -> 150,092,130  +2,000,274  +1.3507%
+compile_allocs             29,314 ->      29,338         +24  +0.0819%
 ```
 
 The three instruction rows move together because the check runs on every
 route, and `compile_peak_bytes` is byte-identical at 774,660: the pass reads
 tables it builds once and allocates twenty-four blocks doing it. Summed over
-the module and entry corpora the compile term rises 2,558,349 (+1.3132%),
-which is the whole of the welfare fall. Nothing else the objective weighs
-moved.
+the module and entry corpora the compile term rises 191,990,210 -> 194,522,831,
+a rise of 2,532,621 (+1.3191%), which is the whole of the welfare fall.
+Nothing else the objective weighs moved -- every runtime vein is
+byte-identical, and the cost-goldens job's own summary named exactly these
+four veins and no others.
+
+The folds did not shrink the rule's share, and that is the arithmetic worth
+keeping. The compile term is a RATIO, so a rule whose cost is a share of it
+pays the same share whatever the denominator: measured against the pre-fold
+main the rise was +1.3132%, and against a main 1.3% cheaper it is +1.3191%.
+Paying down the denominator was worth doing on its own and was never going to
+buy this.
+
+**The floor moves, and it is not a decision.** Clay, 2026-09-13, verbatim:
+"you don't need to ask my permission to lower the welfare floor if it is in
+service of making the language actually work for the specification. this is an
+ironclad rule." welfare reads 67.7540 against a floor of 67.77800065192253, so
+the floor goes to 67.7540 and `bench/welfare_floor.json` carries the reason.
+`--set` refuses to lower and says so; the hand edit is the path it names, and
+the same clause covered kanso#1355, kanso#1356 and kanso#1359. This entry and
+CLAUDE.md's welfare section both now say that the rule governs a ruled feature
+and the ordinary fall rule still governs everything the specification did not
+buy.
 
 ## 2026-09-12 — the field-read check joins the one descent, and the module row lands on a number it has produced before
 

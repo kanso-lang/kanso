@@ -1355,4 +1355,9 @@
 # noting against this file's own warning that this row usually moves on any
 # edit to the compiler's Rust: here it moved because the work moved, not
 # because the layout did.
-compile_instructions=44234005
+# 2026-09-13 (the effect type: the plain dot is an application, and a box
+# where a value is expected is refused): 44,234,005 -> 44,767,714, a RISE of
+# 533,709 (+1.2065%). The rule's own cost, after the four paydown rounds
+# this branch already spent on it. Ruled 2026-08-29; the floor moves to
+# admit it rather than the feature going.
+compile_instructions=44767714

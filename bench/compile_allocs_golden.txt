@@ -400,4 +400,9 @@
 # fall of 3. `BuildScan` loses its `types` field -- `PerNode` already carries
 # that table -- and the struct is built once per program either way, so three
 # is the whole of it. compile_peak_bytes is byte-identical at 774,660.
-compile_allocs=29314
+# 2026-09-13 (the effect type): 29,314 -> 29,338, a RISE of 24 --
+# `check_box_where_value`'s one table per module. `compile_peak_bytes` is
+# byte-identical at 774,660, so the pass allocates a table and nothing that
+# grows with the program. This is a ruled language feature and its cost is
+# admitted by lowering the floor, under Clay's 2026-09-13 ironclad rule.
+compile_allocs=29338
