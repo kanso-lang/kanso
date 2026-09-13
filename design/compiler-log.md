@@ -4564,3 +4564,85 @@ process's stack for libc to walk before main, and the check is direct —
 relinking the control as `bin_zz` gives a byte-identical binary reading
 2,162,482,820 against 2,162,482,834. So −14 meant NO CHANGE, and every figure
 in this entry is taken at matched name lengths.
+
+## 2026-09-13 (third) — the inline threshold goes to 2000, and the container over-projected the win by 70%
+
+**DONE.** kanso#1389 put `-mllvm -inline-threshold=1000` on `release_clang`,
+eight days after the frame cost that motivated it was first measured. This
+raises the same knob to 2000.
+
+The value was measured rather than reasoned, because the ladder is not
+monotone. On `runbench.ll` in this container, every step read against the 1000
+that kanso#1389 shipped:
+
+    1250   -0.9473%
+    1500   -0.8295%    worse than 1250, and +10,336 bytes of .text to be worse
+    2000   -2.0948%
+    3000   -2.3746%
+
+1500 loses to 1250 while costing more code. A ladder with that shape cannot be
+walked by choosing a direction and following it, so each rung was linked and
+counted. 2000 is where the return per byte flattens: 3000 buys a further
+0.2798% for roughly nineteen thousand more bytes.
+
+**CI read 59% of the projection, and the projection has missed in both
+directions now.** This container projected runbench 2,187,039,574 ->
+2,141,224,420, a fall of 45,815,154 (−2.0948%). CI measured 2,194,976,748 ->
+2,168,019,757, a fall of 26,956,991 (−1.2281%). Eight days earlier the same
+pair of boxes disagreed the other way: the container read −2.0149% for the
+1000 and CI read −2.5515%. Each reading is correct for the box that took it. An inline threshold changes
+what every later pass in the pipeline is handed, and those passes are a
+different clang build on a different chip in the two places. This vein has no host key,
+so the rows here are CI's and the container's numbers are only ever a
+projection of the sign.
+
+CI's sitting, against 6c385e2d:
+
+    jsonbench    1,449,421,842 -> 1,413,392,590  -36,029,252  -2.4858%
+    scanbench      562,456,145 ->    538,401,061  -24,055,084  -4.2768%
+    runbench     2,194,976,748 ->  2,168,019,757  -26,956,991  -1.2281%
+    digestbench     10,199,161 ->      9,903,103     -296,058  -2.9028%
+    widebench       35,218,932 ->     34,386,921     -832,011  -2.3624%
+    oneshot         21,164,390 ->     20,924,668     -239,722  -1.1327%
+    deepbench      378,118,216 ->    376,926,218   -1,191,998  -0.3152%
+    basket          34,693,472 ->     34,590,226     -103,246  -0.2976%
+    encodebench  3,882,689,256 ->  3,882,553,572     -135,684  -0.0035%
+    livebench    3,320,972,422 ->  3,320,922,225      -50,197  -0.0015%
+    pendbench      221,101,809 ->    221,102,601         +792  +0.0004%
+    escapebench, indexbench, readbench byte-identical
+
+Ten of the fourteen fall, three hold to the instruction, and one rises. The
+row that rises is `work_pendbench`, which landed on **221,102,601** — 792
+instructions, four ten-thousandths of a per cent, and the only worsened row in
+the vein.
+
+`.text` is the price, and it also came in under projection. The sum across the
+fourteen binaries landed on **1,783,980**, up 119,584 from 1,664,396
+(+7.1848%), against the +13.2% that `runbench.ll` alone projected. runbench
+itself takes 286,034 -> 315,522 (+10.3093%); jsonbench, oneshot and livebench
+each take roughly nineteen thousand bytes; basket, escapebench, indexbench and
+readbench do not move at all, and pendbench and digestbench each lose a
+handful. A binary that links less of the library has less to inline. Machine-
+code size carries no welfare term by the 2026-09-05 gavel, and the vein stays
+exact so the growth is watched rather than scored.
+
+No allocation counter moved. `all_counters.sh` reads the twelve cost goldens
+and the lazy tier and every one agrees byte for byte, which is the expected
+answer — a linker flag cannot change how often the allocator is called — and is
+written down because a sweep that is run and not reported is a sweep nobody can
+check. The four compile rows are identical too (`compile_allocs` 29,473,
+`compile_instructions` 45,523,131, `entry_instructions` 152,087,783,
+`library_instructions` 152,459,094): `kanso check` stops before codegen, so the
+release link is not on that path at all.
+
+Welfare 67.90189170478736 -> 67.99163092139815, banked. The run term is the
+only one that moved and it moved the right way, so the trade the objective sees
+is a 1.2281% fall in run instructions against a `.text` growth it does not
+weigh. The objective is blind to machine-code size by the 2026-09-05 gavel, so
+the +7.1848% is a real cost the score cannot express. It is the gavel that
+makes this an acceptable trade, and the score only confirms the half of it the
+gavel left weighable.
+
+**OPEN.** 3000 reads −2.3746% in this container and was not taken, on the
+byte-per-instruction argument above. If `.text` ever gains a welfare term the
+argument changes shape and both rungs want re-measuring on CI rather than here.
