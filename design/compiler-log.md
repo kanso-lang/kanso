@@ -4497,15 +4497,33 @@ pendbench, indexbench, scanbench, livebench) are CI's to report; round one is
 deliberately red on `bench/instructions_golden.txt`.
 
 
-**What CI read, and against which base.** These rows were measured against main
-at 5982c60a, before kanso#1372 landed the effect type. #1372 moved the run
+**What CI read, twice, against two different bases — and the answer held.** The
+first sitting was taken against main at 5982c60a, before kanso#1372 landed the
+effect type. #1372 moved the run
 goldens itself — runbench 2,252,446,969 -> 2,252,446,915, a fall of 54, and
 .text 247,474 -> 247,026 — so the absolute numbers below are this change's
 effect in isolation and are NOT what the committed goldens now hold. The
 branch was merged with the new main and the goldens reset to it, so CI
 re-measures on the current base and the final sitting is the one that lands.
-The two are not composed by arithmetic here: a different library changes what
-inlines, and two deltas measured on different trees do not add.
+The two were not composed by arithmetic: a different library changes what
+inlines, and two deltas measured on different trees do not add. So CI measured
+the change again on the merged tree, and that second sitting is what the goldens
+now carry:
+
+```
+                  against 5982c60a     against 12e73890 (landed)
+runbench            −63,128,569          −63,128,542
+percentage           −2.8027%             −2.8027%
+widebench            +32,011              +32,011
+readbench            +2                   +2
+.text total          +6.22%               +6.22%
+```
+
+The deltas agree to five significant figures across a base change that moved the
+library itself, which is worth recording: the inline threshold's effect is a
+property of the link, and it did not interact with the effect type. That is a
+result, not a foregone conclusion — it is exactly the kind of composition that
+could have failed, which is why it was measured rather than assumed.
 
 runbench **2,252,446,969 -> 2,189,318,400**, a fall of
 63,128,569 (−2.8027%) — a better result than the container's −2.0149%, and the

@@ -413,19 +413,19 @@
 # delta to within eight instructions. deepbench +384,001, widebench +47,946,
 # basket +25,949, and four rows move by less than a hundred: indexbench +63,
 # digestbench +34, scanbench +28, escapebench +1. Measured on CI.
-jsonbench 1468801090
-encodebench 3932651503
-oneshot 21616888
-basket 34698668
-widebench 35316107
-deepbench 387474235
-escapebench 85558078
-pendbench 221912236
-indexbench 3265819
-scanbench 587488450
-digestbench 10426549
-readbench 4630969
-livebench 3450423659
+jsonbench 1436924442
+encodebench 3860465718
+oneshot 21081074
+basket 34693472
+widebench 35348118
+deepbench 378118216
+escapebench 85537054
+pendbench 221101809
+indexbench 3265392
+scanbench 562456145
+digestbench 10199161
+readbench 4630971
+livebench 3320889129
 # 2026-09-06 (the run program joins): `runbench 3043743748` is a NEW row and
 # nothing regressed to make it appear. It is the program Clay's gavel that day
 # made the objective's whole run-speed term, and the thirteen rows above it
@@ -483,4 +483,4 @@ livebench 3450423659
 #
 # The uniform -8 across six rows is one instruction on a path each program
 # takes eight times, and the four flat rows never take it at all.
-runbench 2252446915
+runbench 2189318373
