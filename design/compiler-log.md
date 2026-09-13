@@ -4728,3 +4728,32 @@ layout shifts under it: here the row moved because the work moved, and the
 layout held still enough to leave `.text` byte-identical.
 
 Welfare 67.77569149595541 -> 67.77800065192253, banked in the same commit.
+
+**What CI landed, and what the rule costs.** The rule shipped in kanso#1369 on
+merged main. Six veins moved, and every one that got worse is named here with
+the value it landed on, because the trend gate reads this file and nothing else:
+
+```
+compile_allocs         29,338 ->      29,473      +135  +0.4602%
+compile_instructions   44,767,714 -> 45,523,131  +755,417  +1.6874%
+entry_instructions    149,755,117 -> 152,087,783 +2,332,666  +1.5576%
+library_instructions  150,092,130 -> 152,459,094 +2,366,964  +1.5770%
+```
+
+`compile_memory` agreed and the fourteen work rows agreed: the rule costs the
+front end and costs the run program nothing, which is what a check should do.
+
+**The emitted and machine-code veins moved too, and that is the library, not the
+check.** Making the rule unconditional means the shipped library has to satisfy
+it, so `lib/list`, `lib/regexp` and `hako/remote` gained arms. Those arms are
+compiled, so `emitted` and `.text` move with them. runbench's emitted line count
+goes 34,905 -> 34,773 and its `.text` 247,026 -> 246,866: both FALL, because the
+added arms replaced fall-through paths the emitter had been expanding. That
+direction was not predicted and is worth recording — the obvious expectation is
+that more source means more code.
+
+**The floor drops 67.754 -> 67.7149**, by hand, under Clay's 2026-09-13 ironclad
+rule: lowering it in service of the specification is never his call. The
+container projected the fall at 0.01 and CI read 0.04, so the projection was
+four times light — a reminder that the compile rows are a CI-host measurement
+and the container's are not a substitute for them.

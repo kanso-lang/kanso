@@ -1360,4 +1360,4 @@
 # 533,709 (+1.2065%). The rule's own cost, after the four paydown rounds
 # this branch already spent on it. Ruled 2026-08-29; the floor moves to
 # admit it rather than the feature going.
-compile_instructions=44767714
+compile_instructions=45523131
