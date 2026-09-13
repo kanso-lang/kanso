@@ -1,0 +1,39 @@
+# A non-strict byte index answers a byte in range and none off the end, so it
+# builds a two-field option. When the value goes straight into a dispatch whose
+# arms are byte literals and `none`, that option is taken apart again at the
+# door — and the emitter used to write the taking-apart as an extractvalue
+# pair, an icmp and a select, four instructions on the hot path of every
+# decoder loop. The index now merges the two arms as one i64 (the byte, or 256
+# for none) and the dispatch reads that.
+#
+# The two spellings have to agree about every case: a byte in range, the first
+# and last positions, and both ways of being off the end. 256 is the sentinel
+# the crossing uses, and no byte can be 256, which is what makes it free -- but
+# only if the miss edge really carries it. Written against the printed answers
+# rather than against the emitted IR, because the IR is the current shape and
+# the answers are the contract.
+import "std/text"
+
+fn kind src p
+  at_byte src[p] p
+
+fn at_byte 65 _
+  "A"
+
+fn at_byte 66 _
+  "B"
+
+fn at_byte none p
+  "none at {p}"
+
+fn at_byte c p
+  "byte {c} at {p}"
+
+cs = text/bytes "AB0"
+
+pub play =
+  print "{kind cs 1}"
+  >> print "{kind cs 2}"
+  >> print "{kind cs 3}"
+  >> print "{kind cs 4}"
+  >> print "{kind cs 0}"

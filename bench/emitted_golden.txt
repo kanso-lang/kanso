@@ -209,7 +209,16 @@
 # Two lines a site, five sites, every program that links the runtime prelude.
 # The uniformity is the check: a program that moved by anything other than ten
 # would mean a site the emitter writes conditionally, and none does.
+# 2026-09-13 (a byte index hands the dispatch a raw byte): lines 9,137 ->
+# 9,138, and defines, calls and branches hold. A non-strict byte index feeding
+# a byte-discriminated dispatch used to have its two-field box taken apart at
+# the door -- two extractvalues, an `icmp eq 4` and a `select 256`. The index
+# emits the merge as an i64 beside the box now and the door takes that. Eight
+# such crossings convert here, which is -32 lines, against one phi per
+# non-strict byte index, which is +33. No call and no branch moves, and that
+# is the check: this swaps four lines for one at each site and adds nothing
+# else. Banked as the price of runbench -2.3594%.
 defines=142
 calls=1210
 branches=795
-lines=9137
+lines=9138
