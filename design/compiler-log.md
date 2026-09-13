@@ -4564,8 +4564,10 @@ second fault the gate could not see. Both tables above had kept the sitting
 taken against 5982c60a, so escapebench, indexbench, scanbench and runbench read
 a few dozen instructions off on each side of the arrow, the .text vein totalled
 1,551,324 -> 1,647,884 rather than 1,549,100 -> 1,645,468, and the compile
-paragraph below named the four pre-kanso#1372 rows. kanso#1372 moved every one
-of them. Each figure in this entry is now read off the committed goldens.
+paragraph below named the four pre-kanso#1372 rows, and the welfare pair read
+67.78 -> 67.98 where main's floor is 67.754 and `--score` says 67.9598.
+kanso#1372 moved every one of them. Each figure in this entry is now read off
+the committed goldens and the committed floor.
 
 Eleven of fourteen .text rows rise, the vein `text` totalling
 1,549,100 -> **1,645,468** (+96,368, +6.2209%) — less than the +9.8% projected from runbench.ll alone, because most
@@ -4599,7 +4601,7 @@ library_instructions 150,092,130 — all four AGREED with their goldens. The fla
 is on `release_clang`, which links benchmark binaries; `kanso check` never
 reaches it.
 
-**Welfare 67.78 -> 67.98**, banked with `--set` in this same commit. The gain is
+**Welfare 67.754 -> 67.9598**, banked with `--set` in this same commit. The gain is
 run_instructions', which satiates late (2.0) and carries the objective's whole
 run-speed term.
 
