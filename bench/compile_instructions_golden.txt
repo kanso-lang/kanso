@@ -1315,6 +1315,44 @@
 # about the same call sites, so whichever lands second collects less. The two
 # pairs before it were additive to 0.067% and 0.76% and said nothing about
 # this one.
-# 2026-09-13 (the effect type, re-measured on main with all five folds in):
-# 44,888,539 -> 45,428,226, a RISE of 539,687 (+1.2023%). The rule's own cost.
-compile_instructions=45428226
+# 2026-09-12 (the field-read check joins the one descent): 44,888,539 ->
+# 44,564,895, a fall of 323,644 (-0.7210%). `field_reads`'s whole-program walk
+# is gone; the per-node half rides the descent `check_per_node` was already
+# making, and the per-statement half is called from the fused walk's
+# `Expr::Build` arm. The container projected -314,725 on this row and CI reads
+# 1.028 of that -- the closest the two hosts have come across four folds, after
+# 1.04, 0.88 and 2.01. Three of those four are near one and the fourth is not,
+# which is why the previous entry called the offset noise rather than a ratio:
+# a fourth point near one does not make it one.
+# 2026-09-13 (the block-born check joins the one descent): 44,564,895 ->
+# 44,291,724, a fall of 273,171 (-0.6130%). The fifth and last of the foldable
+# whole-program walks. `BuildScan::expr` held no per-node predicate at all --
+# the check WAS a traversal -- so `check_build_blocks` is gone outright and the
+# scan's bookkeeping is called from the fused walk's `Expr::Build`,
+# `Expr::Block` and `Expr::Guard` arms, where the walk already stood.
+#
+# The container projected -275,225 and CI reads 0.9925 of it, the closest of
+# the five rounds after 1.04, 0.88, 2.01 and 1.028. Four of five now sit within
+# 3% of one and the fifth is off by a factor of two, which is the same reading
+# as before: the offset is noise the size of the effect, and a compile delta is
+# projected from CI or it takes the red round. A fifth point near one does not
+# make it one.
+#
+# `named_walk` is the only whole-program walk left and it does not fold this
+# way. `arity_at` pushes diagnostics of kind `arity`, and
+# `check_merged_after_aliases` gates on exactly that kind immediately after
+# `check_per_node` returns; folding would put those diagnostics in front of
+# their own gate.
+# 2026-09-13 (Arities::of reads the slot it is about to write): 44,291,724 ->
+# 44,234,005, a fall of 57,719 (-0.1303%). The second walk read a name's range
+# with `get` and bumped it with `get_mut` -- two hashes of one string, where
+# the slot the first returns is the slot the second wanted. One `get_mut` does
+# both.
+#
+# The container projected -60,888 and CI reads 0.9480 of it. `machine_code`,
+# `compile_memory` and `compile_allocs` all AGREED, which is what a refactor
+# with no allocation and no layout consequence should look like -- and worth
+# noting against this file's own warning that this row usually moves on any
+# edit to the compiler's Rust: here it moved because the work moved, not
+# because the layout did.
+compile_instructions=44234005

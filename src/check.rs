@@ -266,6 +266,43 @@ struct PerNode<'a> {
     groups: LiteralGroups<'a>,
     types: HashMap<&'a str, &'a TypeDecl>,
     builtins: HashMap<(&'a str, usize), &'a str>,
+    scan: FieldScan<'a>,
+}
+
+/// What the fused walk knows about where it is standing. Three independent
+/// answers, each turned off by a different shape, so they travel together
+/// rather than as three arguments.
+#[derive(Clone, Copy)]
+struct Flags {
+    /// A decidable failure inside a guarded branch is not one the program
+    /// meets. Off inside an `if`'s two arms.
+    decidable: bool,
+    /// `err` raises, and the head of the call that raises is not a bare
+    /// mention. Off for that head alone.
+    raised: bool,
+    /// A read the program may never perform does not join a run of reads on
+    /// one value. Off inside a lambda, an `if` arm, a guard's early exit and
+    /// the right operand of `and`/`or`.
+    certain: bool,
+}
+
+/// The per-declaration state the walk carries, cleared and refilled once per
+/// declaration rather than allocated per node.
+struct DeclState<'a> {
+    /// Names the declaration binds — parameters and top-level binds.
+    bound: crate::hash::Set<&'a str>,
+    /// Locals whose type is plain to read off the initialiser.
+    local: HashMap<&'a str, &'a str>,
+    /// The fields each value has been read for, accumulated as the walk goes
+    /// and judged when the declaration ends. This is the vector
+    /// `check_per_node`'s doc comment warned about carrying.
+    open: Open<'a>,
+    /// What the block-born rule has proved, carried through the same descent.
+    /// Unlike the three above it is NOT cleared per declaration: the cohort is
+    /// one table for the whole program, exactly as the block-born check kept
+    /// it, and `born` is None outside a `build` and restored by the arm that
+    /// opened one.
+    build: BuildScan<'a>,
 }
 
 fn check_per_node(program: &Program, diags: &mut Vec<Diagnostic>) {
@@ -293,78 +330,215 @@ fn check_per_node(program: &Program, diags: &mut Vec<Diagnostic>) {
         // Borrowed: the map is keyed by an owned name, and looking one up
         // needed a String built from the callee at every call expression.
         builtins: crate::inline::aliases(program),
+        scan: FieldScan {
+            program,
+            // an err answers its three readers whatever the program declares
+            declared: program
+                .types
+                .iter()
+                .flat_map(|t| t.fields.iter().map(|(f, _, _)| f.as_str()))
+                .chain(crate::ast::ERR_READERS)
+                .collect(),
+            plain: program
+                .types
+                .iter()
+                .filter(|t| t.parent.is_none() && t.members.is_empty() && !t.fields.is_empty())
+                .map(|t| (t.name.as_str(), t.fields.iter().map(|(f, _, _)| f.as_str()).collect()))
+                .collect(),
+        },
     };
-    let mut bound: crate::hash::Set<&str> = Default::default();
+    let mut state = DeclState {
+        bound: Default::default(),
+        local: HashMap::default(),
+        open: Vec::new(),
+        build: BuildScan { born: None, cohort: Cohort::default(), conditional: 0 },
+    };
     for decl in &program.fns {
         if decl.synthetic {
             continue;
         }
-        bound.clear();
+        state.bound.clear();
+        state.local.clear();
+        state.open.clear();
         for p in &decl.params {
-            collect_pattern_names(p, &mut bound);
+            collect_pattern_names(p, &mut state.bound);
         }
         for stmt in &decl.body {
             if let Stmt::Bind { pattern, .. } = stmt {
-                collect_pattern_names(pattern, &mut bound);
+                collect_pattern_names(pattern, &mut state.bound);
             }
         }
+        // Two parameter forms name their type without any inference at all.
+        // An annotation says it outright, and a constructor pattern's
+        // as-binding is whatever dispatch matched — `r@(rect w h)` reached
+        // this arm because the value IS a rect.
+        for pattern in &decl.params {
+            let named = match pattern {
+                Pattern::Annotated { name, ty, .. } => Some((name.as_str(), ty.as_str())),
+                Pattern::Ctor { ty, whole: Some(b), .. } => Some((b.0.as_str(), ty.as_str())),
+                _ => None,
+            };
+            if let Some((bind, ty)) = named {
+                if let Some((known, _)) = tables.scan.plain.get_key_value(ty) {
+                    state.local.insert(bind, known);
+                }
+            }
+        }
+        let flags = Flags { decidable: true, raised: true, certain: true };
         for stmt in &decl.body {
             let expr = match stmt {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
                 Stmt::Set { value, .. } => value,
             };
-            per_node_walk(expr, &tables, &bound, true, true, diags);
+            state.build.before(stmt, diags);
+            per_node_walk(expr, &tables, &mut state, flags, diags);
+            field_reads_after(stmt, &tables.scan, &mut state.open, diags);
+            state.build.after(stmt, &tables.types);
+            // Statements are walked in order, so a rebinding of the same name
+            // replaces the entry rather than confusing it.
+            if let Stmt::Bind { pattern: Pattern::Var(n, _), expr } = stmt {
+                match type_in_hand(expr, &tables.scan.plain) {
+                    Some(ty) => state.local.insert(n.as_str(), ty),
+                    None => state.local.remove(n.as_str()),
+                };
+            }
+        }
+        for (base, seen) in &state.open {
+            judge_cooccurrence(base, seen, program, diags);
         }
     }
 }
 
-fn per_node_walk(
-    expr: &Expr,
-    tables: &PerNode,
-    bound: &crate::hash::Set<&str>,
-    decidable: bool,
-    raised: bool,
+fn per_node_walk<'a>(
+    expr: &'a Expr,
+    tables: &PerNode<'a>,
+    state: &mut DeclState<'a>,
+    flags: Flags,
     diags: &mut Vec<Diagnostic>,
 ) {
     if_arity_at(expr, diags);
     boolean_equality_at(expr, diags);
     none_in_collections_at(expr, diags);
-    if decidable {
+    if flags.decidable {
         decidable_failure_at(expr, diags);
     }
-    if raised {
+    if flags.raised {
         err_as_value_at(expr, diags);
     }
-    call_shaped_at(expr, &tables.arities, bound, diags);
-    literal_argument_at(expr, tables, bound, diags);
-    // An `if` guards its branches, and `and`/`or` are written as one — so a
-    // branch may be unreachable, and a decidable failure inside one is not a
-    // failure the program will meet. examples/logical_ops.kso demonstrates
-    // exactly that: `2 < 1 and 1 / 0 < 9` never divides. The condition itself
-    // is unguarded. The other three questions are about the node alone and
-    // keep descending into all three children, which is why the flag turns
-    // off here rather than the walk stopping.
-    if let Expr::App { head, args, .. } = expr {
-        if let Expr::Ident(name, _) = head.as_ref() {
-            if name == "if" && args.len() == 3 {
-                per_node_walk(head, tables, bound, decidable, true, diags);
-                per_node_walk(&args[0], tables, bound, decidable, true, diags);
-                per_node_walk(&args[1], tables, bound, false, true, diags);
-                per_node_walk(&args[2], tables, bound, false, true, diags);
-                return;
-            }
-            if name == "err" && !args.is_empty() {
-                per_node_walk(head, tables, bound, decidable, false, diags);
-                for arg in args {
-                    per_node_walk(arg, tables, bound, decidable, true, diags);
+    call_shaped_at(expr, &tables.arities, &state.bound, diags);
+    literal_argument_at(expr, tables, &state.bound, diags);
+    field_read_at(expr, &tables.scan, &state.local, &mut state.open, flags.certain, diags);
+    // Every child of every arm below is exactly what `for_each_child` yields
+    // for that shape, in the same order. The arms exist to turn a flag off for
+    // some of those children, never to change which children are walked: an
+    // arm that dropped one would take the other seven questions with it.
+    let down = |f: Flags| Flags { raised: true, ..f };
+    match expr {
+        // A build block runs its statements, so a binding inside one ends the
+        // run of reads that belonged to the name's previous value, and a field
+        // write is refused unless the target was born here. Both are
+        // bookkeeping the STATEMENT owes, and both land between the statements
+        // rather than inside the descent. The block opens with nothing born.
+        Expr::Build(stmts, _) => {
+            let outer = state.build.born.replace(HashMap::default());
+            for stmt in stmts {
+                state.build.before(stmt, diags);
+                let inner = match stmt {
+                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
+                    Stmt::Set { value, .. } => value,
+                };
+                per_node_walk(inner, tables, state, down(flags), diags);
+                if flags.certain {
+                    field_reads_after(stmt, &tables.scan, &mut state.open, diags);
                 }
-                return;
+                state.build.after(stmt, &tables.types);
             }
+            state.build.born = outer;
+            return;
         }
+        // An `if` arm and the remainder below a guard are statement lists too,
+        // and they carry whatever build they sit in. A write made in an arm
+        // may not have happened, so `conditional` takes the field's proof away
+        // rather than supplying one. Until the block-born rule reached these a
+        // field write in one was checked by nobody: outside a build it ran and
+        // mutated a value the language calls immutable, and after a guard line
+        // `emit_fn_body` reached an `unreachable!` reading "`set` parses only
+        // inside `build`", which is this rule stated where it could not be
+        // enforced.
+        Expr::Block(stmts, _) => {
+            let outer = state.build.born.clone();
+            state.build.conditional += 1;
+            for stmt in stmts {
+                state.build.before(stmt, diags);
+                let inner = match stmt {
+                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
+                    Stmt::Set { value, .. } => value,
+                };
+                per_node_walk(inner, tables, state, down(flags), diags);
+                state.build.after(stmt, &tables.types);
+            }
+            state.build.conditional -= 1;
+            state.build.born = outer;
+            return;
+        }
+        // A lambda may never be called, so a read inside it is not certain.
+        Expr::Lambda { body, .. } => {
+            per_node_walk(body, tables, state, Flags { certain: false, ..down(flags) }, diags);
+            return;
+        }
+        // An `if` guards its branches, and `and`/`or` are written as one — so
+        // a branch may be unreachable, and a decidable failure inside one is
+        // not a failure the program will meet. examples/logical_ops.kso
+        // demonstrates exactly that: `2 < 1 and 1 / 0 < 9` never divides. The
+        // condition itself is unguarded. The other questions are about the
+        // node alone and keep descending into all three children, which is why
+        // the flags turn off here rather than the walk stopping.
+        Expr::App { head, args, .. }
+            if matches!(head.as_ref(), Expr::Ident(n, _) if n == "if") && args.len() == 3 =>
+        {
+            let arm = Flags { decidable: false, certain: false, ..down(flags) };
+            per_node_walk(head, tables, state, down(flags), diags);
+            per_node_walk(&args[0], tables, state, down(flags), diags);
+            per_node_walk(&args[1], tables, state, arm, diags);
+            per_node_walk(&args[2], tables, state, arm, diags);
+            return;
+        }
+        // The head of a call spelled `err` is the raise itself, not a bare
+        // mention of it.
+        Expr::App { head, args, .. }
+            if matches!(head.as_ref(), Expr::Ident(n, _) if n == "err") && !args.is_empty() =>
+        {
+            per_node_walk(head, tables, state, Flags { raised: false, ..flags }, diags);
+            for arg in args {
+                per_node_walk(arg, tables, state, down(flags), diags);
+            }
+            return;
+        }
+        Expr::Guard { cond, early, rest, .. } => {
+            let taken = Flags { certain: false, ..down(flags) };
+            per_node_walk(cond, tables, state, down(flags), diags);
+            per_node_walk(early, tables, state, taken, diags);
+            let outer = state.build.born.clone();
+            for stmt in rest {
+                state.build.before(stmt, diags);
+                let inner = match stmt {
+                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
+                    Stmt::Set { value, .. } => value,
+                };
+                per_node_walk(inner, tables, state, taken, diags);
+                state.build.after(stmt, &tables.types);
+            }
+            state.build.born = outer;
+            return;
+        }
+        Expr::BinOp { op, lhs, rhs, .. } if flags.certain && (*op == "and" || *op == "or") => {
+            per_node_walk(lhs, tables, state, down(flags), diags);
+            per_node_walk(rhs, tables, state, Flags { certain: false, ..down(flags) }, diags);
+            return;
+        }
+        _ => {}
     }
-    crate::for_each_child(expr, |child| {
-        per_node_walk(child, tables, bound, decidable, true, diags)
-    });
+    crate::for_each_child(expr, |child| per_node_walk(child, tables, state, down(flags), diags));
 }
 
 fn if_arity_at(expr: &Expr, diags: &mut Vec<Diagnostic>) {
@@ -1537,96 +1711,6 @@ fn check_predicates(
     }
 }
 
-/// `x.name` where no record type anywhere declares `name` cannot succeed at
-/// any runtime, so it is a compile error rather than a failure the program
-/// has to reach. Reading a field a *particular* record lacks stays a runtime
-/// error, since only the value knows its type.
-fn check_field_exists(program: &Program, diags: &mut Vec<Diagnostic>) {
-    let scan = FieldScan {
-        program,
-        // an err answers its three readers whatever the program declares
-        declared: program
-            .types
-            .iter()
-            .flat_map(|t| t.fields.iter().map(|(f, _, _)| f.as_str()))
-            .chain(crate::ast::ERR_READERS)
-            .collect(),
-        plain: program
-            .types
-            .iter()
-            .filter(|t| t.parent.is_none() && t.members.is_empty() && !t.fields.is_empty())
-            .map(|t| (t.name.as_str(), t.fields.iter().map(|(f, _, _)| f.as_str()).collect()))
-            .collect(),
-    };
-    for decl in &program.fns {
-        // enroll_bare clones every exported declaration of an import under
-        // its short name -- body and all, synthetic = true -- so an entry
-        // program carries a twin of each. On bench/entry_corpus that is 145
-        // of 882 declarations and 155 of 1,035 statements. The module path
-        // deletes the twins before this runs, because kanso#1328 moved
-        // canonicalize_bare_aliases in front of check_merged there; the entry
-        // path in compile_parsed_entry still checks first, so both copies are
-        // walked and every diagnostic they carry is reported twice at the
-        // same line AND the same column.
-        //
-        // This walk reads bodies only. A twin IS the original's body under a
-        // second name, so it can answer nothing the original answers
-        // differently, and skipping it changes no diagnostic the module path
-        // does not already suppress by deleting the clone.
-        //
-        // Thirteen other checks in this file already skip synthetic
-        // declarations. These three were the outliers.
-        //
-        // `infer` is deliberately NOT given this skip: it indexes
-        // declarations positionally, so a `continue` would misalign it. That
-        // is the rest of kanso#1329's reverted reorder and a different change.
-        if decl.synthetic {
-            continue;
-        }
-        // Locals whose initialiser is a bare construction, so the type in
-        // hand is known without inference: `p = point 1 2` and then `p.z`.
-        // Statements are walked in order, so a rebinding of the same name
-        // replaces the entry rather than confusing it.
-        let mut local: HashMap<&str, &str> = HashMap::default();
-        // Two parameter forms name their type without any inference at all.
-        // An annotation says it outright, and a constructor pattern's
-        // as-binding is whatever dispatch matched — `r@(rect w h)` reached
-        // this arm because the value IS a rect. Neither needs the
-        // whole-program fixpoint, which is why they come before it.
-        for pattern in &decl.params {
-            let named = match pattern {
-                Pattern::Annotated { name, ty, .. } => Some((name.as_str(), ty.as_str())),
-                Pattern::Ctor { ty, whole: Some(bound), .. } => {
-                    Some((bound.0.as_str(), ty.as_str()))
-                }
-                _ => None,
-            };
-            // A name the type table does not hold is a typeset or a subtype,
-            // and answers nothing here.
-            if let Some((bind, ty)) = named {
-                if let Some((known, _)) = scan.plain.get_key_value(ty) {
-                    local.insert(bind, known);
-                }
-            }
-        }
-        // Empty until a body reads a field off a name, and most bodies never
-        // do, so this costs a compile nothing where there is nothing to say.
-        let mut open: Open = Vec::new();
-        for stmt in &decl.body {
-            field_reads(stmt, &scan, &local, &mut open, diags);
-            if let Stmt::Bind { pattern: Pattern::Var(n, _), expr } = stmt {
-                match type_in_hand(expr, &scan.plain) {
-                    Some(ty) => local.insert(n.as_str(), ty),
-                    None => local.remove(n.as_str()),
-                };
-            }
-        }
-        for (base, seen) in &open {
-            judge_cooccurrence(base, seen, program, diags);
-        }
-    }
-}
-
 /// The record type this expression hands back, when that is plain to read off
 /// the expression itself. Anything else answers `None` and the read stays as
 /// it was.
@@ -1745,27 +1829,16 @@ fn judge_cooccurrence(
     diags.push(Diagnostic::new("name", message, span));
 }
 
-/// One walk of a statement answers both questions a field read raises.
-///
-/// The first is whether the field exists at all, which is asked wherever the
-/// read appears. The second is whether the fields read off one value can
-/// belong to one record, which may only pool reads that run whenever the body
-/// runs — so the walk carries `certain` and stops recording under the shapes
-/// that defer. Two walks were measured before this was one: a second traversal
-/// of every body cost 317,523 front-end instructions on lib/json, a module
-/// with no field reads at all.
-fn field_reads<'a>(
+/// The open-list bookkeeping a statement owes AFTER its expression has been
+/// walked. Split from the walk because it is the half that is about the
+/// STATEMENT rather than about a node: a caller that already descends into
+/// the expression for its own reasons needs this half and not the other.
+fn field_reads_after<'a>(
     stmt: &'a Stmt,
     scan: &FieldScan<'a>,
-    local: &HashMap<&'a str, &'a str>,
     open: &mut Open<'a>,
     diags: &mut Vec<Diagnostic>,
 ) {
-    let expr = match stmt {
-        Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
-        Stmt::Set { value, .. } => value,
-    };
-    field_reads_expr(expr, scan, local, open, true, diags);
     match stmt {
         // The initialiser is read before the name it binds changes meaning,
         // and from there on the name is a different value.
@@ -1789,12 +1862,14 @@ fn field_reads<'a>(
     }
 }
 
-/// Three shapes defer evaluation, so a read inside one may never happen: a
-/// lambda, which may never be called; the two arms of an `if` or a guard, of
-/// which one is taken; and the right operand of `and` or `or`, which the left
-/// may already have decided. The walk still enters them, because a field no
-/// type declares is wrong wherever it is written — it just stops pooling.
-fn field_reads_expr<'a>(
+/// A field read, asked of one node. The walk that carries it decides whether
+/// the read is CERTAIN — a read the program may never perform does not join a
+/// run of reads on one value, and three shapes defer evaluation: a lambda,
+/// which may never be called; the arms of an `if` or a guard, of which one is
+/// taken; and the right operand of `and`/`or`, which the left may already have
+/// decided. The walk still enters them, because a field no type declares is
+/// wrong wherever it is written — it just stops pooling.
+fn field_read_at<'a>(
     e: &'a Expr,
     scan: &FieldScan<'a>,
     local: &HashMap<&'a str, &'a str>,
@@ -1802,74 +1877,19 @@ fn field_reads_expr<'a>(
     certain: bool,
     diags: &mut Vec<Diagnostic>,
 ) {
-    match e {
-        Expr::Field { base, name, span } => {
-            if !scan.declared.contains(name.as_str()) {
-                diags.push(Diagnostic::new(
-                    "name",
-                    format!("no record type has a field `{name}`"),
-                    *span,
-                ));
-            } else if let Some(ty) = base_type(base, &scan.plain, local) {
-                if !scan.plain[ty].contains(name.as_str()) {
-                    diags.push(Diagnostic::new(
-                        "name",
-                        format!("`{ty}` has no field `{name}`"),
-                        *span,
-                    ));
-                }
-            }
-            if certain {
-                if let Expr::Ident(b, _) = base.as_ref() {
-                    note_read(open, b.as_str(), name.as_str(), *span);
-                }
-            }
-            field_reads_expr(base, scan, local, open, certain, diags);
-            return;
+    let Expr::Field { base, name, span } = e else { return };
+    if !scan.declared.contains(name.as_str()) {
+        diags.push(Diagnostic::new("name", format!("no record type has a field `{name}`"), *span));
+    } else if let Some(ty) = base_type(base, &scan.plain, local) {
+        if !scan.plain[ty].contains(name.as_str()) {
+            diags.push(Diagnostic::new("name", format!("`{ty}` has no field `{name}`"), *span));
         }
-        // A build block runs its statements, so a binding inside one ends the
-        // run of reads that belonged to the name's previous value.
-        Expr::Build(stmts, _) if certain => {
-            for stmt in stmts {
-                field_reads(stmt, scan, local, open, diags);
-            }
-            return;
-        }
-        Expr::Lambda { body, .. } => {
-            field_reads_expr(body, scan, local, open, false, diags);
-            return;
-        }
-        Expr::App { head, args, .. }
-            if certain
-                && matches!(head.as_ref(), Expr::Ident(n, _) if n == "if")
-                && args.len() == 3 =>
-        {
-            field_reads_expr(&args[0], scan, local, open, true, diags);
-            for arm in &args[1..] {
-                field_reads_expr(arm, scan, local, open, false, diags);
-            }
-            return;
-        }
-        Expr::Guard { cond, early, rest, .. } if certain => {
-            field_reads_expr(cond, scan, local, open, true, diags);
-            field_reads_expr(early, scan, local, open, false, diags);
-            for stmt in rest {
-                let inner = match stmt {
-                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
-                    Stmt::Set { value, .. } => value,
-                };
-                field_reads_expr(inner, scan, local, open, false, diags);
-            }
-            return;
-        }
-        Expr::BinOp { op, lhs, rhs, .. } if certain && (*op == "and" || *op == "or") => {
-            field_reads_expr(lhs, scan, local, open, true, diags);
-            field_reads_expr(rhs, scan, local, open, false, diags);
-            return;
-        }
-        _ => {}
     }
-    crate::for_each_child(e, |child| field_reads_expr(child, scan, local, open, certain, diags));
+    if certain {
+        if let Expr::Ident(b, _) = base.as_ref() {
+            note_read(open, b.as_str(), name.as_str(), *span);
+        }
+    }
 }
 
 /// The type of the value this field read is reading from, when the checker can
@@ -1934,13 +1954,11 @@ pub fn check_merged_after_aliases(
     check_constant_cycles(program, &mut diags);
     check_predicates(program, &inference, &mut diags);
     check_arm_ties(program, &mut diags);
-    check_build_blocks(program, &mut diags);
     check_sub_parents(program, &mut diags);
     check_bare_ambiguity(program, &mut diags);
     check_named_per_node(program, rewritten, &mut diags);
     check_binding_patterns(program, &mut diags);
     check_overlapping_arms(program, &mut diags);
-    check_field_exists(program, &mut diags);
     check_effect_discarded(program, &returns, &mut diags);
     check_wall_operands(program, &returns, &mut diags);
     check_discarded_value(program, &returns, &mut diags);
@@ -2111,12 +2129,15 @@ impl<'a> Arities<'a> {
         }
         let mut flat: Vec<usize> = vec![0; program.fns.len()];
         for decl in &program.fns {
-            let key = decl.name.as_str();
-            let (start, end) = *ranges.get(key).expect("every name was counted");
+            // One hash of the name, not two: the read and the bump were a
+            // `get` and a `get_mut` of the same key, and the slot the first
+            // returns is the slot the second wanted.
+            let slot = ranges.get_mut(decl.name.as_str()).expect("every name was counted");
+            let (start, end) = *slot;
             let arity = decl.params.len();
             if !flat[start as usize..end as usize].contains(&arity) {
                 flat[end as usize] = arity;
-                ranges.get_mut(key).expect("every name was counted").1 = end + 1;
+                slot.1 = end + 1;
             }
         }
         Arities { ranges, flat }
@@ -2680,26 +2701,6 @@ fn dedup_join(mut names: Vec<String>) -> String {
     names.join(", ")
 }
 
-/// Values born before the block stay immutable, which is what keeps every
-/// cycle inside one birth cohort.
-fn check_build_blocks(program: &Program, diags: &mut Vec<Diagnostic>) {
-    let mut scan = BuildScan {
-        types: program.types.iter().map(|t| (t.name.as_str(), t)).collect(),
-        born: None,
-        cohort: Cohort::default(),
-        conditional: 0,
-        diags,
-    };
-    for decl in &program.fns {
-        // The synthetic twin's body is the original's; see the long note in
-        // check_field_exists.
-        if decl.synthetic {
-            continue;
-        }
-        scan.body(&decl.body);
-    }
-}
-
 /// One value the walk has proved born in the enclosing `build`, by its index
 /// in the cohort. A name holds one; so does a field or an element the walk
 /// has followed.
@@ -2813,58 +2814,69 @@ fn getter_of(name: &str) -> Option<&str> {
 /// calls; a method on this struct captures one. Carrying the state as free
 /// variables instead cost 7,602 retired instructions in the callback alone on
 /// `kanso check lib/json`, measured.
-struct BuildScan<'a, 'd> {
-    types: HashMap<&'a str, &'a TypeDecl>,
+struct BuildScan<'a> {
     born: Option<HashMap<&'a str, Born>>,
     cohort: Cohort<'a>,
     /// How many `if` arms enclose the statement being read. A write made in
     /// one may not have happened, so it takes the field's proof away rather
     /// than supplying one.
     conditional: usize,
-    diags: &'d mut Vec<Diagnostic>,
 }
 
-impl<'a> BuildScan<'a, '_> {
-    /// A statement list, in order. A binding proves a name born the statements
-    /// below it may write, so the map grows as the walk goes, and a write above
-    /// the binding that gives it is refused — which is what reading in order
-    /// buys.
-    fn body(&mut self, stmts: &'a [Stmt]) {
-        for stmt in stmts {
-            match stmt {
-                Stmt::Bind { pattern, expr } => {
-                    self.expr(expr);
-                    if self.born.is_some() {
-                        let birth = self.born_of(expr);
-                        self.bind(pattern, birth);
-                    }
-                }
-                Stmt::Expr(expr) => self.expr(expr),
-                Stmt::Set { target, field, value, span } => {
-                    self.wrote_a_field(target, field, *span);
-                    self.expr(value);
-                    let of = self.born.as_ref().and_then(|b| b.get(target.as_str()).copied());
-                    if let Some(of) = of {
-                        let value = if self.conditional > 0 { None } else { self.born_of(value) };
-                        self.cohort.write(of, field.as_str(), value);
-                    }
-                }
-            }
+impl<'a> BuildScan<'a> {
+    /// The half of a statement that runs BEFORE the descent into its
+    /// expression. Only a field write has one, and it is the refusal itself:
+    /// `wrote_a_field` reads `born` as it stands at this statement, which is
+    /// what reading a statement list in order buys, and it must be asked
+    /// before the value is walked so the diagnostics come out in source order.
+    fn before(&mut self, stmt: &'a Stmt, diags: &mut Vec<Diagnostic>) {
+        if let Stmt::Set { target, field, span, .. } = stmt {
+            self.wrote_a_field(target, field, *span, diags);
         }
     }
 
-    fn wrote_a_field(&mut self, target: &str, field: &str, span: Span) {
+    /// The half that runs AFTER it. A binding proves a name born the
+    /// statements below it may write, so the map grows as the walk goes; a
+    /// write records what the field now holds. Both read the value the
+    /// statement just walked, so neither can run before it.
+    fn after(&mut self, stmt: &'a Stmt, types: &HashMap<&'a str, &'a TypeDecl>) {
+        match stmt {
+            Stmt::Bind { pattern, expr } => {
+                if self.born.is_some() {
+                    let birth = self.born_of(expr, types);
+                    self.bind(pattern, birth, types);
+                }
+            }
+            Stmt::Set { target, field, value, .. } => {
+                let of = self.born.as_ref().and_then(|b| b.get(target.as_str()).copied());
+                if let Some(of) = of {
+                    let value =
+                        if self.conditional > 0 { None } else { self.born_of(value, types) };
+                    self.cohort.write(of, field.as_str(), value);
+                }
+            }
+            Stmt::Expr(_) => {}
+        }
+    }
+
+    fn wrote_a_field(
+        &mut self,
+        target: &str,
+        field: &str,
+        span: Span,
+        diags: &mut Vec<Diagnostic>,
+    ) {
         match &self.born {
             // writing a field is the one mutation the language has, and it
             // lives in a build block only
-            None => self.diags.push(Diagnostic::new(
+            None => diags.push(Diagnostic::new(
                 "build",
                 format!(
                     "`{target}.{field} = ...` writes a field, and only a `build` block may do that"
                 ),
                 span,
             )),
-            Some(born) if !born.contains_key(target) => self.diags.push(Diagnostic::new(
+            Some(born) if !born.contains_key(target) => diags.push(Diagnostic::new(
                 "build",
                 format!(
                     "`{target}.{field} = ...` writes only block-born values: \
@@ -2880,7 +2892,12 @@ impl<'a> BuildScan<'a, '_> {
     /// The names a pattern binds take the birth of what it took apart: the
     /// whole value for a plain name, a field's for a constructor pattern's
     /// positions.
-    fn bind(&mut self, pattern: &'a Pattern, birth: Option<Born>) {
+    fn bind(
+        &mut self,
+        pattern: &'a Pattern,
+        birth: Option<Born>,
+        types: &HashMap<&'a str, &'a TypeDecl>,
+    ) {
         match pattern {
             Pattern::Var(name, _) | Pattern::Annotated { name, .. } => {
                 let born = self.born.as_mut().expect("a binding inside a build");
@@ -2905,13 +2922,13 @@ impl<'a> BuildScan<'a, '_> {
                         }
                     }
                 }
-                let declared = self.types.get(ty.as_str()).copied();
+                let declared = types.get(ty.as_str()).copied();
                 for (i, sub) in fields.iter().enumerate() {
                     let inner = match (birth, declared.and_then(|t| t.fields.get(i))) {
                         (Some(birth), Some((field, _, _))) => self.cohort.field(birth, field),
                         _ => None,
                     };
-                    self.bind(sub, inner);
+                    self.bind(sub, inner, types);
                 }
             }
             Pattern::IntLit(..)
@@ -2923,13 +2940,13 @@ impl<'a> BuildScan<'a, '_> {
     }
 
     /// The cohort entry an expression's value is proved to be, if any.
-    fn born_of(&mut self, expr: &'a Expr) -> Option<Born> {
+    fn born_of(&mut self, expr: &'a Expr, types: &HashMap<&'a str, &'a TypeDecl>) -> Option<Born> {
         match expr {
             Expr::Ident(name, _) => self.born.as_ref()?.get(name.as_str()).copied(),
             Expr::App { head, args, .. } => match head.as_ref() {
                 Expr::Ident(name, _) if name == "if" && args.len() == 3 => {
-                    let left = self.born_of(&args[1]);
-                    let right = self.born_of(&args[2]);
+                    let left = self.born_of(&args[1], types);
+                    let right = self.born_of(&args[2], types);
                     Some(self.cohort.either(left?, right?))
                 }
                 // The module route rewrites `x.name` to its getter before
@@ -2937,17 +2954,17 @@ impl<'a> BuildScan<'a, '_> {
                 // read arrives in both spellings.
                 Expr::Ident(name, _) if args.len() == 1 && getter_of(name.as_str()).is_some() => {
                     let field = getter_of(name.as_str())?;
-                    let base = self.born_of(&args[0])?;
+                    let base = self.born_of(&args[0], types)?;
                     self.cohort.field(base, field)
                 }
                 // A call that merely returns a record may hand back something
                 // older; a constructor makes the record here, and its fields
                 // hold what its arguments were.
                 Expr::Ident(name, _) => {
-                    let decl = *self.types.get(name.as_str())?;
+                    let decl = *types.get(name.as_str())?;
                     let mut fields = Vec::new();
                     for ((field, _, _), arg) in decl.fields.iter().zip(args) {
-                        if let Some(birth) = self.born_of(arg) {
+                        if let Some(birth) = self.born_of(arg, types) {
                             fields.push((field.as_str(), birth));
                         }
                     }
@@ -2956,33 +2973,33 @@ impl<'a> BuildScan<'a, '_> {
                 _ => None,
             },
             Expr::Field { base, name, .. } => {
-                let base = self.born_of(base)?;
+                let base = self.born_of(base, types)?;
                 self.cohort.field(base, name)
             }
             Expr::Index { base, .. } => {
-                let base = self.born_of(base)?;
+                let base = self.born_of(base, types)?;
                 self.cohort.element(base)
             }
             Expr::List(items, _) => {
-                let shared = self.shared(items.iter());
+                let shared = self.shared(items.iter(), types);
                 Some(self.cohort.made(Vec::new(), shared))
             }
             Expr::MapLit(entries, _) => {
-                let shared = self.shared(entries.iter().map(|(_, value)| value));
+                let shared = self.shared(entries.iter().map(|(_, value)| value), types);
                 Some(self.cohort.made(Vec::new(), shared))
             }
-            Expr::Upcast { expr, .. } => self.born_of(expr),
+            Expr::Upcast { expr, .. } => self.born_of(expr, types),
             Expr::Block(stmts, _) => {
                 let outer = self.born.clone();
                 let mut last = None;
                 for stmt in stmts {
                     match stmt {
                         Stmt::Bind { pattern, expr } => {
-                            let birth = self.born_of(expr);
-                            self.bind(pattern, birth);
+                            let birth = self.born_of(expr, types);
+                            self.bind(pattern, birth, types);
                             last = None;
                         }
-                        Stmt::Expr(expr) => last = self.born_of(expr),
+                        Stmt::Expr(expr) => last = self.born_of(expr, types),
                         Stmt::Set { .. } => last = None,
                     }
                 }
@@ -2995,51 +3012,20 @@ impl<'a> BuildScan<'a, '_> {
 
     /// What every element of a literal shares: born only when each one is,
     /// and an empty literal has nothing to share.
-    fn shared(&mut self, items: impl Iterator<Item = &'a Expr>) -> Option<Born> {
+    fn shared(
+        &mut self,
+        items: impl Iterator<Item = &'a Expr>,
+        types: &HashMap<&'a str, &'a TypeDecl>,
+    ) -> Option<Born> {
         let mut shared = None;
         for item in items {
-            let birth = self.born_of(item)?;
+            let birth = self.born_of(item, types)?;
             shared = Some(match shared {
                 Some(so_far) => self.cohort.either(so_far, birth),
                 None => birth,
             });
         }
         shared
-    }
-
-    fn expr(&mut self, expr: &'a Expr) {
-        match expr {
-            // a `build` opens the one scope a field write may live in, and it
-            // opens it with nothing born
-            Expr::Build(stmts, _) => {
-                let outer = self.born.replace(HashMap::default());
-                self.body(stmts);
-                self.born = outer;
-            }
-            // An `if` arm and the remainder below a guard are statement lists
-            // too, and they carry whatever build they sit in. Until this walk
-            // reached them a field write in one was checked by nobody: outside
-            // a build it ran and mutated a value the language calls immutable,
-            // and after a guard line the native backend did not even get that
-            // far — `emit_fn_body` reached an `unreachable!` reading "`set`
-            // parses only inside `build`", which is this rule stated as an
-            // invariant somewhere that could not enforce it.
-            Expr::Block(stmts, _) => {
-                let outer = self.born.clone();
-                self.conditional += 1;
-                self.body(stmts);
-                self.conditional -= 1;
-                self.born = outer;
-            }
-            Expr::Guard { cond, early, rest, .. } => {
-                self.expr(cond);
-                self.expr(early);
-                let outer = self.born.clone();
-                self.body(rest);
-                self.born = outer;
-            }
-            _ => crate::for_each_child(expr, |child| self.expr(child)),
-        }
     }
 }
 

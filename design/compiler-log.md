@@ -4681,3 +4681,327 @@ tables it builds once and allocates twenty-four blocks doing it. Summed over
 the module and entry corpora the compile term rises 2,558,349 (+1.3132%),
 which is the whole of the welfare fall. Nothing else the objective weighs
 moved.
+
+## 2026-09-12 — the field-read check joins the one descent, and the module row lands on a number it has produced before
+
+`check_merged_after_aliases` ran seven whole-program expression walks. kanso#1382
+folded the first, kanso#1383 the second, kanso#1384 the third. This is the
+fourth, and the largest of them on this host.
+
+`field_reads` did two different jobs in one function. Per NODE it asks whether a
+dot-read reaches a field, and whether the record it reaches is certain — that
+half is a question `check_per_node` was already at the node to ask. Per
+STATEMENT it does ordered bookkeeping: a bind closes the runs its pattern binds
+and calls `judge_cooccurrence`, a set notes a read. Ordered work cannot ride a
+descent that visits children in whatever order `for_each_child` hands them over,
+so the two halves are now two functions. `field_read_at` joins the fused walk.
+`field_reads_after` stays a statement loop and is called from the fused walk's
+`Expr::Build` arm, where the statements it needs are.
+
+The fused walk carries a third flag with the two it already had. `decidable` is
+off inside an `if`'s branches (kanso#1382). `raised` is off for the head of a
+call spelled `err` (kanso#1383). `certain` is off wherever the record a read
+reaches is not settled: inside a lambda, inside either arm of an `if`, in a
+guard's early and rest, and to the right of an `and` or an `or`. Three flags,
+three shapes that turn them off, and no shape turns off more than one.
+
+Measured against merged main. Container, `kanso::main` inclusive under callgrind, pinned tunables, read twice
+on the same box path with two builds identical to the instruction:
+
+```
+module   45,488,806 ->  45,174,081    -314,725  -0.6919%
+entry   151,905,787 -> 150,841,086  -1,064,701  -0.7009%
+summed  197,394,593 -> 196,015,167  -1,379,426  -0.6988%
+```
+
+The module row's fall is 314,725, which is the figure the previous entry
+records as this container's projection for the literal fold on the same row.
+Two different changes, one host, the same count. The candidate reason is that
+the module corpus is small enough for the removed DRIVER — the outer loop over
+declarations and the recursion setup — to dominate a fold's saving there, where
+the predicates the two folds move differ; the entry rows, 1,064,701 against
+1,609,713, would then be where the predicates show. That is a hypothesis and
+nothing here tests it. Both readings are exact counts and both repeated.
+
+Six mutations against `tests/golden/errors/uncertain_reads_are_not_counted.kso`,
+whose six legal declarations each read a field somewhere the record is not
+settled and whose seventh, `both_certain`, is refused. Five of the six turn the
+fixture red. The sixth cannot: the `Expr::BinOp` arm for `and` and `or` is
+unreachable, because `parse_and` and `parse_or` build `logical_if(...)` — an
+`Expr::App` with head `if` — so the walk never meets an `and` as a BinOp and the
+`if` arm is what clears `certain` to its right. Proved twice: by census over
+every `Expr::BinOp` construction site in the parser (`parse_cmp`, `parse_bits`,
+`parse_add`, `parse_mul`, and trmc's two, filtered to `+` and `*`), and in
+isolation, with a fixture holding only an `and` that stays legal, goes red under
+the `if`-arm mutation, and is legal again restored.
+
+The error corpus is byte-identical otherwise. `diag::render` does not sort, and
+`diags.rotate_left(walked)` sends the fused walk's block to the back, so a
+fixture carrying a field diagnostic beside another would move; none does.
+
+`sh scripts/gates/all_counters.sh`: the twelve runtime cost veins and the lazy
+tier agree. `sh scripts/gates/all_compile.sh`: `emitted_code`,
+`compile_libraries` and `compile_cost` AGREED; the six host-keyed rows are
+refused on this container and are CI's to write. `cargo clippy --release
+--all-targets` and `cargo fmt --check` clean, full release suite green after
+`scripts/build_wasm.sh`.
+
+`BuildScan::expr` is the fifth and last foldable walk, census 743,211, the
+smallest. `named_walk` is the largest remaining at 1,791,359 and stays out:
+`arity_at` pushes diagnostics of kind `arity`, and `check_merged_after_aliases`
+gates on that kind immediately after `check_per_node`, so folding it would put
+those diagnostics in front of their own early return.
+
+CI's rows, written in round two:
+
+```
+module   44,888,539 ->  44,564,895    -323,644  -0.7210%
+entry   149,925,203 -> 148,827,747  -1,097,456  -0.7320%
+library 150,211,345 -> 149,164,244  -1,047,101  -0.6971%
+summed  194,813,742 -> 193,392,642  -1,421,100  -0.7295%
+```
+
+`compile_allocs` 29,323 -> 29,317, a fall of six; `compile_peak_bytes` and the
+front end's rounds and visits byte-identical. Welfare 67.75 -> 67.77, banked in
+the same commit; seven `data-golden` spans on compiler.html regenerated.
+
+The container projected -1,379,426 summed and CI reads 1.030 of that, the
+closest the two hosts have come across four folds after 1.04, 0.88 and 2.01.
+Three of the four are near one and the fourth is not, which is why the previous
+entry called the offset noise rather than a ratio. A fourth point near one does
+not make it one.
+
+The entry and module rows part by 0.011 percentage points here, where the
+literal fold's round parted them by 0.330. That fold keyed on call sites, which
+the two corpora hold in different proportions; this one keys on dot-reads,
+which they hold in nearly the same one.
+
+## 2026-09-12 — the block-born check joins the one descent, and it was never a per-node question
+
+The fifth and last of the foldable walks in `check_merged_after_aliases`.
+kanso#1382 folded the decidable check, kanso#1383 the shapes walk, kanso#1384
+the literal-argument check, kanso#1385 the field-read check. `BuildScan` is
+gone with this one, and `check_per_node`'s descent does its work.
+
+The shape is different from the four before it, and the difference is the
+finding. `BuildScan::expr` held NO per-node predicate at all. Every diagnostic
+the check produced came from `wrote_a_field`, called from `body`; `expr`
+existed only to locate the statement lists nested inside expressions — a
+`build`, an `if` arm, a guard's remainder. So this fold is not a question
+joining a descent. It is three arms running ordered statement work at nodes the
+fused walk already reaches.
+
+`body` splits in two. `before` is the field write's refusal, and it must be
+asked against `born` as it stands at that statement and ahead of the value's
+own descent, which is what reading a statement list in order buys. `after` is
+the binding's birth and the write's record, both of which read the value the
+statement has just walked. `types` leaves the struct entirely: `PerNode`
+already carries the same `HashMap<&str, &TypeDecl>`, built once for the whole
+program, where `BuildScan` built a second copy of it.
+
+Measured on this container, `kanso::main` inclusive under callgrind with pinned
+tunables, against kanso#1385's head read on the same box path — both readings
+repeated and identical to the instruction:
+
+```
+module   45,174,081 ->  44,898,856    -275,225  -0.6093%
+entry   150,841,086 -> 149,962,557    -878,529  -0.5824%
+summed  196,015,167 -> 194,861,413  -1,153,754  -0.5886%
+```
+
+Ablating `check_build_blocks` outright on merged main — no walk, no tables, no
+diagnostics — reads `-1,193,288` summed. The fold recovers 96.7% of that. The
+four folds before it realised between 57% and 75% of their own census figures,
+and the gap is the same fact that made this one structurally different: where
+they left a predicate behind and removed only a traversal, this check WAS a
+traversal, so removing the traversal removed nearly all of it.
+
+The error corpus is byte-identical. That is worth a sentence, because the
+ordering genuinely moves: `check_build_blocks` used to push before
+`diags.rotate_left(walked)` sent the fused walk's block to the back, so its
+diagnostics arrived ahead of the walk's; folded, they sit inside that block.
+`diag::render` does not sort on this route. No fixture in the corpus carries a
+build diagnostic beside another, so none of the 204 moves.
+
+Two of the seven mutations stayed green, for two different reasons. Five of
+them turn the corpus red: the build arm opening with nothing
+born, its `before`, its `after`, the `if`-arm block arm existing at all, and
+the top level asking `before`. Two do not.
+
+Removing `conditional += 1` from the block arm WAS a corpus gap, and this
+branch closes it. The counter is live and the arm is reachable —
+`tests/golden/errors/a_field_write_inside_an_if_arm.kso` exercises it — but no
+fixture distinguished a field whose birth was recorded inside an arm from one
+recorded outside, which is the only thing the counter changes.
+`a_birth_recorded_inside_an_if_arm.kso` does: both arms answer `outer` so the
+`if`'s value is born, but `outer.link` was filled only in the arm that ran
+conditionally, so the field is not proved born and the write through it is
+refused. Watched both ways — the fixture is red today and the program compiles
+with the counter removed.
+
+Removing the guard arm's `after` leaves the corpus green because the arm is
+UNREACHABLE, like the `and`/`or` arm kanso#1385 recorded, and the proof is the
+parser's.
+
+`Expr::Guard` has exactly one construction site: `parser.rs:866`, inside
+`parse_body`. `parse_build_body` never calls `parse_body` — it reads each line
+with `parse_stmt` and hands blocks to `parse_block_construct` — so a build
+body's own statements are never a guard. That leaves the nested route, and
+`parse_body`'s own stray check closes it. The leading run is a maximal prefix
+of returns and binds, each carrying the deeper lines beneath it; the check that
+follows it,
+
+```rust
+if let Some(stray) = body[lead_end..].iter().find(|l| is_return(l)) {
+```
+
+scans FLAT. It does not skip deeper indents the way the lead scan does, so a
+`return` at any depth below a line that is neither a return nor a bind is
+refused with "a `return` sits with the bindings, before the effect chain". A
+`build` header is never either of those — `q = build ...` is refused outright
+with "`build` answers nothing to bind `q` to" — so the lead run always breaks
+at or before a build, and every `return X if C` anywhere inside that build is a
+stray.
+
+Four spellings confirm it from the other side: the guard leading a build body,
+following a binding in one, following a field write in one, and leading an `if`
+arm inside one, each refused at the `return` line itself. The arm stays as
+documentation of a shape the walk would otherwise have to think about; it costs
+one match arm, the same trade kanso#1385 made for `and`/`or`.
+
+CI's rows, round two:
+
+```
+module   44,564,895 ->  44,291,724    -273,171  -0.6130%
+entry   148,827,747 -> 147,951,808    -875,939  -0.5886%
+library 149,164,244 -> 148,288,999    -875,245  -0.5868%
+summed  193,392,642 -> 192,243,532  -1,149,110  -0.5942%
+```
+
+`compile_allocs` falls 3, from 29,317 to 29,314 — `BuildScan` loses its `types`
+field and is built once per program either way. `compile_peak_bytes` is
+byte-identical at 774,660, and the twelve runtime cost veins and the lazy tier
+do not move: the fold is in the front end and emits the same code. Welfare
+67.77 -> 67.78, banked.
+
+The container projected -1,153,754 summed and CI reads 0.9960 of it, the
+closest of the five folds after 1.04, 0.88, 2.01 and 1.028 on the module row.
+Four of those five now sit within 3% of one. That does not make the offset a
+ratio — one point off by a factor of two is what "noise the size of the effect"
+looks like, and the reading kanso#1384 wrote down stands: a compile delta is
+projected from CI or it takes the red round.
+
+`named_walk` is the only whole-program walk left in
+`check_merged_after_aliases`, and it does not fold this way. `arity_at` pushes
+diagnostics of kind `arity`; the function gates on exactly that kind
+immediately after `check_per_node` returns, with a `retain` and an early
+return. Folding would put those diagnostics in front of their own gate, where a
+wrong-arity call to a declared group would take the early return and lose every
+other diagnostic the program reports today — and `named_walk`'s driver drains
+its suppressed diagnostics after the whole declaration's walk, so the gate
+would fire on one that was going to be withdrawn. That second one refuses a
+valid program. The fixture for it needs two modules, because a binding
+shadowing a declaration in the same module is already refused outright, so it
+belongs with the branch that tries the fold rather than with this one.
+## 2026-09-13 — the sixth walk is the wrong target, and the measurement says where the money is
+
+Five folds landed in two days: kanso#1382 the decidable check, kanso#1383 the
+shapes walk, kanso#1384 the literal-argument check, kanso#1385 the field-read
+check, kanso#1386 the block-born check. Each entry closed by naming
+`named_walk` as the one left, at a census figure of 1,791,359, and saying the
+arity gate puts it out of reach. Before building the way around that gate I
+measured what the fold would actually buy. It is the smallest of the six, and
+the check's cost is somewhere else.
+
+Four readings on merged main plus the block-born fold, `kanso::main` inclusive
+under callgrind with pinned tunables, module and entry corpora summed:
+
+```
+full                                194,861,413
+tables built, walk skipped          191,131,486
+walk runs, three predicates no-op   192,298,663
+check_named_per_node gone outright  189,839,799
+```
+
+Which decomposes the whole check, 5,021,614 (2.577% of the compile):
+
+```
+table construction   1,291,687   25.7%
+traversal            1,167,177   23.2%
+per-node predicates  2,562,750   51.0%
+```
+
+**A fold removes the traversal and nothing else.** 1,167,177 is the ceiling,
+and the four folds that left a predicate behind realised 57% to 75% of their
+own figures, so the fold is worth roughly 0.67M to 0.88M summed — the smallest
+of the six, against a gate whose doc comment records a bug where sharing it
+silently skipped every check after. The census's 1,791,359 was the walk's
+inclusive cost under `for_each_child`, which carries the predicates it calls;
+it was never the fold's figure.
+
+The table slice is hazard-free and it is almost entirely one function.
+`Arities::of` reads 1,345,353 inclusive on the entry corpus alone — more than
+the summed table figure, because the ablation deltas carry allocator and layout
+effects the per-function reading does not.
+
+It is called **18 times** on one entry compile, against one call to
+`check_file_shadow`. `check_merged_after_aliases` runs per module, so the
+entry corpus's seventeen dependencies plus the entry itself each rebuild every
+table the check needs, over their own merged program. 74,742 instructions a
+call.
+
+That is the shape to look at next, and it is bigger than the fold: the five
+folds each removed a traversal that was running eighteen times, which is why
+they paid what they did. What has not been asked is whether the per-module
+rebuild is necessary — each module's merged namespace is genuinely different,
+so this is not a free deduplication, and kanso#1003 already withdrew one claim
+that the per-dependency merged check was redundant. The question here is
+narrower: whether the TABLES a module's check needs can be derived from its
+dependencies' rather than rebuilt from the merged program.
+
+`Arities::of` also hashes each declaration name up to three times: once to
+count, once to read the range back, and once more through `get_mut` when the
+arity is new. The last two are a `get` and a `get_mut` of the same key, and the
+slot the first returns is the slot the second wanted. Collapsing them:
+
+```
+module   44,898,856 ->  44,837,968     -60,888  -0.1356%
+entry   149,962,557 -> 149,755,885    -206,672  -0.1378%
+summed  194,861,413 -> 194,593,853    -267,560  -0.1373%
+```
+
+One hash per declaration, 267,560 instructions — a quarter of what the whole
+fold could reach, for six lines and no gate to think about. That is the shape
+of the rest of this: the check is re-entered eighteen times, so anything per
+declaration is paid eighteen times over.
+
+The fold is not refused, it is ranked: it is the smallest remaining and the
+only one carrying a gate hazard, so it goes behind the table work rather than
+in front of it. What ships here is the hash collapse; the rest is four
+ablations and one call count, and they say where to look next.
+
+CI's rows for the collapse, measured on merged main rather than this
+container:
+
+```
+module   44,291,724 ->  44,234,005    -57,719  -0.1303%
+entry   147,951,808 -> 147,756,205   -195,603  -0.1322%
+library 148,288,999 -> 148,091,856   -197,143  -0.1329%
+summed  192,243,532 -> 191,990,210   -253,322  -0.1318%
+```
+
+The container projected -267,560 summed and CI reads 0.9468 of it. Across six
+rounds the ratio now runs 1.04, 0.88, 2.01, 1.028, 0.9960, 0.9468 — five
+within 6% of one and a sixth off by a factor of two, which is the reading
+those entries have carried all along: a compile delta is projected from CI or
+it takes the red round.
+
+Three veins moved and three did not. `machine_code`, `compile_memory` and
+`compile_allocs` all agreed, which is what a refactor that changes neither
+what is allocated nor how much code is emitted should look like. That is worth
+one sentence against `bench/compile_instructions_golden.txt`'s own warning
+that this row usually moves on any edit to the compiler's Rust because the
+layout shifts under it: here the row moved because the work moved, and the
+layout held still enough to leave `.text` byte-identical.
+
+Welfare 67.77569149595541 -> 67.77800065192253, banked in the same commit.
