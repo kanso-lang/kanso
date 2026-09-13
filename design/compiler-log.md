@@ -4949,6 +4949,23 @@ either the binding's expression kept where `emit_cond` can reach it or a
 front-end rewrite that inlines a single-use condition; `lookup` returning an
 operand is the whole obstacle.
 
+AND THE CENSUS SAYS THAT FIX BUYS NOTHING HERE. A sweep of every `.kso` under
+lib, std, scripts, bench and hako for a binding whose value is a comparison,
+`and`, `or` or `not` and whose name is the condition of an `if` within the next
+eight lines returns seven sites. One is this line. One is the same line in
+`bench/jsonbench/jsonbench/number.kso`, the frozen decoder jsonbench compiles,
+which is a control and stays as it is — its counters are byte-identical here,
+as they should be. Three of the remaining five bind `list/find`, so the name
+holds an option a reader needs and the comparison against `none` is the real
+question. The last two are in `hako/hako/update.kso`, where `mine` is read on
+two lines, so a once-used rule would not fire on it, and hako is in no
+benchmark.
+
+So the emitter learning to see through a once-used binding is worth the name it
+gives back and nothing measurable on this tree. It is a language-quality change
+for programs nobody has written yet, and it is recorded here at that size
+rather than as a performance lead.
+
 Two compile veins moved and both are regenerated here. The emitted goldens lose
 two branches and one line in every program that carries the number scanner —
 the decoder 795 -> 793 branches and 9,143 -> 9,142 lines, oneshot 784 -> 782
