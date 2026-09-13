@@ -436,11 +436,11 @@
 # delta is a fixed number of tests per run rather than anything that scales, so
 # the two hosts differ only in what a test costs them.
 #
-jsonbench 1394485059
-encodebench 3778345357
-oneshot 20499188
-basket 34285873
-widebench 34066831
+jsonbench 1392055809
+encodebench 3693122957
+oneshot 20306435
+basket 34281871
+widebench 34114831
 deepbench 371382179
 escapebench 82969017
 pendbench 219476888
@@ -448,7 +448,7 @@ indexbench 3265296
 scanbench 528870249
 digestbench 9837152
 readbench 4629745
-livebench 3215435236
+livebench 3144795841
 # 2026-09-06 (the run program joins): `runbench 3043743748` is a NEW row and
 # nothing regressed to make it appear. It is the program Clay's gavel that day
 # made the objective's whole run-speed term, and the thirteen rows above it
@@ -506,4 +506,4 @@ livebench 3215435236
 #
 # The uniform -8 across six rows is one instruction on a path each program
 # takes eight times, and the four flat rows never take it at all.
-runbench 2128867999
+runbench 2111374474

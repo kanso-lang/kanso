@@ -202,8 +202,15 @@
 # and the sites lose the force in front of it. Banked. The eleven other
 # programs are in bench/emitted_golden_others.txt and eight of them move the
 # same way.
-# 2026-09-13 (a byte index hands the dispatch a raw byte): lines 9,147 ->
-# 9,148, and defines, calls and branches hold. A non-strict byte index feeding
+# 2026-09-13 (the regime rides in bit 0 of a bytes capacity): -10 lines in
+# every one of the fourteen rows, and defines, calls and branches hold in all
+# of them. The emitter's five append fast paths each wrote a `sub`, an `icmp`
+# and a `select` to strip a sign off the capacity; each writes one `and` now.
+# Two lines a site, five sites, every program that links the runtime prelude.
+# The uniformity is the check: a program that moved by anything other than ten
+# would mean a site the emitter writes conditionally, and none does.
+# 2026-09-13 (a byte index hands the dispatch a raw byte): lines 9,137 ->
+# 9,138, and defines, calls and branches hold. A non-strict byte index feeding
 # a byte-discriminated dispatch used to have its two-field box taken apart at
 # the door -- two extractvalues, an `icmp eq 4` and a `select 256`. The index
 # emits the merge as an i64 beside the box now and the door takes that. Eight
@@ -214,4 +221,4 @@
 defines=142
 calls=1210
 branches=795
-lines=9148
+lines=9138

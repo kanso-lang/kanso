@@ -137,9 +137,7 @@ fast:
   %data = load ptr, ptr %datap
   %capp = getelementptr i8, ptr %b, i64 16
   %cap = load i64, ptr %capp
-  %capneg = sub i64 0, %cap
-  %isneg = icmp slt i64 %cap, 0
-  %capa = select i1 %isneg, i64 %capneg, i64 %cap
+  %capa = and i64 %cap, -2
   %owned = icmp ne i64 %cap, 0
   br i1 %owned, label %fr, label %slow
 fr:
@@ -209,9 +207,7 @@ bfast:
   %data = load ptr, ptr %datap
   %capp = getelementptr i8, ptr %b, i64 16
   %cap = load i64, ptr %capp
-  %capneg = sub i64 0, %cap
-  %isneg = icmp slt i64 %cap, 0
-  %capa = select i1 %isneg, i64 %capneg, i64 %cap
+  %capa = and i64 %cap, -2
   %owned = icmp ne i64 %cap, 0
   br i1 %owned, label %bfr, label %slow
 bfr:
@@ -256,9 +252,7 @@ sfast:
   %sadata = load ptr, ptr %sdatap
   %scapp = getelementptr i8, ptr %sb, i64 16
   %scap = load i64, ptr %scapp
-  %scapneg = sub i64 0, %scap
-  %sisneg = icmp slt i64 %scap, 0
-  %scapa = select i1 %sisneg, i64 %scapneg, i64 %scap
+  %scapa = and i64 %scap, -2
   %sowned = icmp ne i64 %scap, 0
   br i1 %sowned, label %sfr, label %slow
 sfr:
@@ -355,9 +349,7 @@ bfast:
   %data = load ptr, ptr %datap
   %capp = getelementptr i8, ptr %b, i64 16
   %cap = load i64, ptr %capp
-  %capneg = sub i64 0, %cap
-  %isneg = icmp slt i64 %cap, 0
-  %capa = select i1 %isneg, i64 %capneg, i64 %cap
+  %capa = and i64 %cap, -2
   %owned = icmp ne i64 %cap, 0
   br i1 %owned, label %bfr, label %slow
 bfr:
@@ -439,9 +431,7 @@ qrange:
   %qadata = load ptr, ptr %qadp
   %qcapp = getelementptr i8, ptr %qb, i64 16
   %qcap = load i64, ptr %qcapp
-  %qcapneg = sub i64 0, %qcap
-  %qisneg = icmp slt i64 %qcap, 0
-  %qcapa = select i1 %qisneg, i64 %qcapneg, i64 %qcap
+  %qcapa = and i64 %qcap, -2
   %qowned = icmp ne i64 %qcap, 0
   br i1 %qowned, label %qfr, label %qslow
 qfr:
