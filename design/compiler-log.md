@@ -4646,3 +4646,83 @@ gavel left weighable.
 **OPEN.** 3000 reads −2.3746% in this container and was not taken, on the
 byte-per-instruction argument above. If `.text` ever gains a welfare term the
 argument changes shape and both rungs want re-measuring on CI rather than here.
+
+## 2026-09-13 (fourth) — a binary nobody is going to count is built without the counters
+
+**BUILT.** Every inlined fast path the emitter writes — the byte append, the
+whole-string append, the list push, the map insert, five more — begins by
+loading `k_stats_on` and branching. The shortcut bypasses the runtime call that
+would have counted, so when counting is on it has to bail. When counting is off,
+which is every run that is not a cost golden, the load and the branch are paid
+for a question whose answer was fixed before `main`.
+
+`kanso build --counters` keeps the gates. A plain build strips them.
+
+**What it is worth, measured three ways that agree.** First by patching the
+eight `load i32, ptr @k_stats_on` lines in `runbench.ll` to a constant and
+relinking with the shipped recipe, control and variant at matched binary-name
+lengths:
+
+    control (both gates live)     2,141,315,030          -   0.0000%   .text      +0
+    emitted eight folded          2,115,346,210 -25,968,820  -1.2128%   .text  -2,048
+    runtime twenty-seven folded   2,128,127,196 -13,187,834  -0.6159%   .text  -2,944
+    both folded                   2,102,158,376 -39,156,654  -1.8286%   .text  -4,992
+
+The control reads 2,141,315,030, which is the shipped `runbench` to the
+instruction, so the harness is the real link. The two halves are exactly
+additive in instructions and in bytes, and stdout is byte-identical in all
+three variants.
+
+Second by a static join: the disassembly's 607 instructions at 303 `k_stats_on`
+sites, weighted by their own execution counts out of the callgrind dump, sum to
+37,740,165. The measurement came in above that because folding also lets LLVM
+simplify around the branch.
+
+Third by this change itself, which is the emitted half and nothing else:
+
+    --counters   2,141,315,030   .text 315,698
+    default      2,115,346,210   .text 313,650
+                  -25,968,820      -1.2128%      .text -2,048
+
+The compiler reproduces the hand-patched figure exactly. THIS CONTAINER'S
+NUMBERS; CI measures its own and they go in a second round, because the
+instructions gate refuses to compare a row measured on another glibc.
+
+**Two ways out that do not work, so nobody spends the afternoon again.**
+`!invariant.load` on the eight loads is arguably sound — `k_stats_on` is written
+once, before any emitted code runs — and it does CSE them. It measures WORSE:
++1,875,636 (+0.0877%) and 288 bytes MORE `.text`. Keeping the value live costs
+more than the reload saved.
+
+And the gate cannot simply be deleted with the fast path counting for itself.
+`k_b_append_into`'s in-place arm does `k_stat_append_fast++` unguarded, so that
+counter is free — but the emitted fast path also takes its 32-byte header from
+the arena, where the slow path's `k_bytes_owned` reaches `k_alloc` and
+increments `k_stat_allocs` and `k_stat_alloc_bytes` UNDER the gate. Dropping the
+gate blinds two counters the cost goldens pin. Keeping them exact means three
+unconditional read-modify-writes against the gate's two instructions.
+
+**Two readers of the same programs, and repointing one was not enough.** The
+twelve `*_counters.sh` gates name their program, and `all_counters.sh` has its
+own `vein:program:golden` table naming it again. Repointing only the gates left
+the sweep running the bare, gate-free binaries under `KANSO_COUNTERS=1`, and it
+reported all twelve veins moved at once. The `.mem` vein had the same shape and
+a different cause: `tests/golden.rs` drives a build through the library with
+`KANSO_COUNTERS` already set in the child's environment and no way to pass a
+flag. So a build running under `KANSO_COUNTERS` keeps the gates as well — a
+process that is itself counting is going to count what it builds.
+
+`sh scripts/gates/all_counters.sh` now reads: the twelve cost veins and the
+lazy tier agree with their goldens. No counter moved.
+
+**What it costs.** `build_benchmarks.sh` builds twelve of the fourteen
+benchmarks twice. deepbench and indexbench have no counter gate — their rows
+live in the instructions vein — so they are built once. That is twelve extra
+release links in the cost-goldens job, and CI wall time is not a welfare term,
+so the objective cannot see the price. It is written here instead.
+
+**OPEN.** The runtime's own twenty-seven sites are the other 13,187,834
+(0.6159%) and are untouched. They would want `runtime.c` compiled twice and the
+counting object linked into the counting binaries, which is a second object in
+the cached-runtime key rather than a second flag on the emitter.
+
