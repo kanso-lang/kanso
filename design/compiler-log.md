@@ -5338,7 +5338,7 @@ under that name. Threading the raw form through the force is the obvious
 next move and is NOT in this change, because it wants its own measurement.
 
 `emitted_lines` lands on 9,138, a rise of one on the decoder, and
-`emitted_other_lines` lands on 132,708, a fall of twenty-nine across the
+`emitted_other_lines` lands on 132,718, a fall of twenty-nine across the
 thirteen beside it. The rise is named rather than defended: one phi per
 non-strict byte index is written whether a byte discriminator reads it or
 not, and in a program with 33 indexes and 8 conversions that arithmetic
