@@ -4891,3 +4891,137 @@ so the cwd cannot simply be pinned either. A row that is a property of the
 binary rather than of the checkout needs both the exec path and the input
 staged at fixed paths, and that is a larger piece of work than this entry
 settles.
+
+## 2026-09-13 (thirteenth) — the instruction goldens were a property of the checkout path, and now they are a property of the binary
+
+The twelfth entry diagnosed this and stopped there, because the obvious remedy
+was refuted. This is the remedy that works.
+
+### What was wrong
+
+`bench/instructions_golden.txt` is exact by design — "a rise is a regression to
+explain and a fall is a win to bank". It was also, silently, keyed to where the
+tree sat. The count of a byte-identical binary is periodic with period four and
+amplitude fourteen in the length of the path it is exec'd from: indexbench
+reads 3,226,048 at full-path lengths 25, 29, 33 and 37 and 3,226,062 at every
+other length between.
+
+CI's cost-goldens job runs from `/home/runner/work/kanso/kanso`, so the goldens
+mean "measured from twenty-nine characters" and nothing said so. The nightly
+ratchet reads the same gate from `/tmp/kanso-ratchet-base`, six characters
+shorter, and eleven of its fourteen rows disagreed by exactly +/-14 while three
+agreed — grouped perfectly by the benchmark's NAME length, which is what gave
+the mechanism away. Twenty-eight ratchet rows share that gate and none of them
+had ever been proved.
+
+### Why the obvious fix is not the fix
+
+Exec'ing every benchmark through one fixed absolute path is not enough.
+`digestbench` run from `/tmp/kanso-ir/digestbench` with only the working
+directory changed still read 10,060,595 against 10,060,609, three reads each,
+stable. The working directory matters too, and it cannot simply be pointed
+somewhere neutral: eight of the fourteen open an input relative to it and
+answer in about 225,000 instructions from anywhere else. Run from an empty
+directory they say so out loud —
+
+    cannot read bench/large.json: no such file
+
+— and the list is short. `bench/large.json` for jsonbench, encodebench,
+oneshot, readbench, livebench and runbench; `bench/wide.json` for widebench;
+`bench/digest_input.txt` for digestbench. The other six open nothing.
+
+### What ships
+
+`scripts/gates/instructions.sh` copies the fourteen binaries and those three
+files into `/tmp/kanso-ir` and measures from there, so the exec path and the
+working directory are both constant and the row is a property of the binary.
+
+Measured on three benchmarks that sit in different phases, from two trees
+thirteen and twenty-eight characters long:
+
+    bench          TODAY from A   TODAY from B  differ | STAGED A  STAGED B  differ
+    oneshot          19,287,398     19,287,412      14 | 19,287,398  19,287,398   0
+    escapebench      82,939,084     82,939,098      14 | 82,939,084  82,939,084   0
+    digestbench      10,060,595     10,060,609      14 | 10,060,595  10,060,595   0
+
+escapebench opens no file, digestbench does, and both stop moving.
+
+NO GOLDEN CHANGES. `/tmp/kanso-ir` is thirteen characters and the repo root is
+twenty-nine; both are 1 mod 4, so the staged reading is the repo-root reading.
+Checked rather than argued: indexbench and digestbench read 3,226,062 and
+10,060,595 from a twenty-nine-character tree and the same two numbers staged.
+
+### The check, and the draft of it that could not fail
+
+`scripts/gates/path_independence.sh` runs indexbench and digestbench from four
+source trees whose names differ by one character each and refuses if any row
+moves. It is a step in the cost-goldens job, ahead of every comparison.
+
+The first draft used TWO trees, fifteen and thirty-one characters. It passed
+with the staging taken out — the swing has period four and sixteen is 0 mod 4,
+so both sat in the same phase and the check could not fail. Four consecutive
+lengths cover every phase, so the refusal does not depend on having guessed the
+period right. Watched red on that version, with the staging removed:
+
+    ::error::indexbench read 3226062 3226048 3226062 3226062 from four trees
+    ::error::digestbench read 10060595 10060609 10060609 10060609 from four trees
+
+and green with it restored.
+
+### What CI said about the first push, and two repairs
+
+The step went red having printed nothing at all. The whole of the job log for
+it was `Process completed with exit code 127`.
+
+127 is a shell saying a command was not there. valgrind is installed inside the
+step named "how much work", and this new step runs ahead of it, so valgrind was
+not on PATH — and because a callgrind total is read off stderr, the gate sends
+stderr to a file, which is where `valgrind: not found` went. Reproduced here by
+renaming the binary in a copy of the script: exit 127, no output, the message
+sitting in `/tmp/ir.pi`.
+
+The install is now its own step ahead of both, and the gate reads its own
+failures out loud: an empty count prints the captured file and says which
+benchmark and which tree it was measuring.
+
+    ::error::no instruction count came back for indexbench run from /tmp/kanso-pi.
+    ::error::What the run said, in full:
+    ::error::    env: 'valgrind_absent': No such file or directory
+
+The second repair is a diagnostic bug the first push carried. `rc` was both the
+per-benchmark verdict and the job's, so indexbench going red printed the error
+block for digestbench too, over four readings that agreed. The comment in the
+script promises that either one going red names which half broke, and one
+variable could not keep that. Watched with a stub that moves indexbench and
+holds digestbench still: indexbench named, digestbench reported clean, the job
+still red.
+
+The rest of the run is what the change predicted. `work:success` — the fourteen
+staged rows matched the golden exactly, so `/tmp/kanso-ir` and the repo root do
+sit in the same phase and no golden needed regenerating.
+
+### A third repair: the new gate is the first callgrind gate that reads no golden
+
+`specs` and `the other host` were both red on one spec,
+`a_host_bound_gate_is_reported_not_credited`. Its property is that the ratchet's
+`host_bound` list — gates whose red the baseline reports rather than fails on —
+holds exactly the gates that count instructions under callgrind. The list is
+pinned to a property of the gates instead of to anyone's judgement, because an
+entry excusing a gate that is not silicon-bound turns a real failure into a
+note. `path_independence.sh` runs callgrind, so the list and the property came
+apart the moment it landed.
+
+Declaring it host-bound would have been the wrong repair. The four gates on the
+list diff their counts against numbers a different machine wrote down, which is
+why a foreign runner reddens them whatever the mutation did. This one counts one
+binary from four tree depths and asks the four readings to agree with EACH
+OTHER; every runner in the pool answers it the same way, and a red here is
+always a real red.
+
+So the property gained its second half: a gate is host-bound when it counts
+instructions under callgrind AND compares them against a recorded golden, which
+it says by calling `host_gate.sh`. Watched three ways before it passed — giving
+`path_independence.sh` a `host_gate.sh` call puts it on the right-hand side and
+the list goes red; taking the call out of `instructions.sh` drops it off and the
+list goes red; removing `bound_a` from the list goes red without either script
+moving.
