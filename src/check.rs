@@ -774,14 +774,152 @@ fn call_shaped_at(
     }
 }
 
-fn check_effect_discarded(
-    program: &Program,
-    returns: &HashMap<(&str, usize), crate::infer::Set>,
-    diags: &mut Vec<Diagnostic>,
-) {
-    use crate::infer::DESC;
+/// The tables the two questions below read. Each check built its own and then
+/// walked the whole program for itself; they are asked on one descent now, so
+/// the tables travel together.
+struct AfterInfer<'a, 'r> {
+    /// `check_effect_discarded`: a position every arm throws away.
+    discarded: crate::hash::Map<(&'a str, usize, usize), bool>,
+    /// `check_none_exhaustive`: a group's joined return set beside the
+    /// positions some arm names a none at, one bit each. Two facts about the
+    /// same group live in one entry so a call site pays ONE hash of the name:
+    /// a separate (name, arity, position) map cost a string hash per PARAMETER
+    /// to build and another per ARGUMENT to read, and both keys start with the
+    /// name. A position past the mask's width reads as handled, the
+    /// under-refusing direction, and nothing in the tree is close: the widest
+    /// group in lib/ takes five.
+    nones: crate::hash::Map<(&'a str, usize), (crate::infer::Set, u64)>,
+    /// What a dispatch group answers, built once by the caller and handed
+    /// round. A fourth build used to sit in `check_none_exhaustive` and still
+    /// does, as `nones`: its entry carries a SECOND fact beside the set, so
+    /// reading this table instead would leave it hashing the name a second
+    /// time for the mask, at every call site.
+    returns: &'r HashMap<(&'a str, usize), crate::infer::Set>,
+}
 
-    // a position every arm throws away
+/// An effect handed to a position every arm throws away never happens.
+fn effect_discarded_at(e: &Expr, tables: &AfterInfer, diags: &mut Vec<Diagnostic>) {
+    use crate::infer::DESC;
+    let Expr::App { head, args, piped: false, .. } = e else { return };
+    let Expr::Ident(name, _) = head.as_ref() else { return };
+    if !tables.returns.contains_key(&(name.as_str(), args.len())) {
+        return;
+    }
+    let describes = |e: &Expr| -> bool {
+        let Expr::App { head, args, piped: false, .. } = e else { return false };
+        let Expr::Ident(name, _) = head.as_ref() else { return false };
+        tables.returns.get(&(name.as_str(), args.len())).is_some_and(|s| s & DESC != 0)
+    };
+    for (pos, arg) in args.iter().enumerate() {
+        if !describes(arg) {
+            continue;
+        }
+        if !tables.discarded.get(&(name.as_str(), args.len(), pos)).copied().unwrap_or(false) {
+            continue;
+        }
+        diags.push(Diagnostic::new(
+            "effect",
+            format!(
+                "`{name}` reads none of what it is handed here, so this effect \
+                 never happens — hand it back, or give `{name}` a name for it"
+            ),
+            arg.span(),
+        ));
+    }
+}
+
+/// The gavel makes a receiver responsible for a none it can be handed, and
+/// lets the caller discharge that by resolving first. The report belongs at
+/// the argument, because that is the line an author edits.
+fn none_exhaustive_at(e: &Expr, tables: &AfterInfer, owner: &str, diags: &mut Vec<Diagnostic>) {
+    use crate::infer::NONE;
+    let Expr::App { head, args, piped: false, .. } = e else { return };
+    let Expr::Ident(name, _) = head.as_ref() else { return };
+    // A getter is synthesized from a field read, so nobody can give it
+    // an arm, and the play route checks before the read is rewritten
+    // into one while the module route checks after: `xs[i].x` would be
+    // refused through an import and run direct. A field read of a none
+    // stays the runtime's sentence on every route.
+    if crate::ast::getter_field(name).is_some() {
+        return;
+    }
+    // only what is provable: a lenient read, a literal none, or a call whose
+    // group's return set carries one. A set holding every value bit is the
+    // unknown, and the unknown carries the none bit with the rest: a field
+    // read through a variable (`m.to` is TOP in infer) and a strict index
+    // (`xs[i]!` is every value but a thunk) both answer it, so a group that
+    // hands either back would read as proof of a none it never produces.
+    // Unknown is not proof.
+    let values = crate::infer::TOP & !crate::infer::FAIL & !crate::infer::THUNK;
+    let unknown = |s: crate::infer::Set| s & values == values;
+    let yields_none = |e: &Expr| -> bool {
+        match e {
+            Expr::Index { strict: false, .. } => true,
+            Expr::Ident(name, _) => name == "none",
+            Expr::App { head, args, piped: false, .. } => match head.as_ref() {
+                Expr::Ident(name, _) => tables
+                    .nones
+                    .get(&(name.as_str(), args.len()))
+                    .is_some_and(|&(s, _)| s & NONE != 0 && !unknown(s)),
+                _ => false,
+            },
+            _ => false,
+        }
+    };
+    // THE CHEAP TESTS COME FIRST, and asking the table is not one of
+    // them: the lookup hashes the callee's name, where a none question
+    // about an argument is a match on the argument's own shape. A call
+    // whose arguments are literals, arithmetic or field reads answers no
+    // on the match alone and never touches the table, which is most of
+    // them. The second walk over the arguments below costs a few compares
+    // on the sites that reach it, and those are the rare ones.
+    if !args.iter().any(&yields_none) {
+        return;
+    }
+    let Some(&(_, named)) = tables.nones.get(&(name.as_str(), args.len())) else { return };
+    for (pos, arg) in args.iter().enumerate() {
+        if !yields_none(arg) {
+            continue;
+        }
+        if named & (1u64 << pos.min(63)) != 0 {
+            continue;
+        }
+        // an absolute path built from the binary's location tells a
+        // reader nothing; the module name is what they searched for. A
+        // file outside lib/ is named by its own name: the corpus stages
+        // a fixture into a temporary directory before it runs, and a
+        // golden that quoted the staging path would pin that run's
+        // temporary directory rather than the diagnostic.
+        let short = owner
+            .rsplit_once("/lib/")
+            .map(|(_, m)| m)
+            .or_else(|| owner.rsplit_once('/').map(|(_, f)| f))
+            .unwrap_or(owner);
+        diags.push(Diagnostic::new(
+            "exhaustive",
+            format!(
+                "this can be a none and `{name}` has no arm for it — resolve it \
+                 here, or give `{name}` a `none` arm (in {short})"
+            ),
+            arg.span(),
+        ));
+    }
+}
+
+/// The two questions inference makes answerable, asked on ONE descent.
+///
+/// Each used to walk the whole program for itself, over the same declarations,
+/// the same statements and the same nodes, in the same order. The answers go
+/// into two vectors rather than one because this route hands diagnostics back
+/// in push order and the two checks pushed from either side of the fused
+/// walk's rotation; the caller splices each where its own check used to push.
+fn check_after_infer(
+    program: &Program,
+    inference: &crate::infer::Inference,
+    returns: &HashMap<(&str, usize), crate::infer::Set>,
+    effect_diags: &mut Vec<Diagnostic>,
+    none_diags: &mut Vec<Diagnostic>,
+) {
     let mut discarded: crate::hash::Map<(&str, usize, usize), bool> =
         crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
     for d in &program.fns {
@@ -792,78 +930,7 @@ fn check_effect_discarded(
         }
     }
 
-    let describes = |e: &Expr| -> bool {
-        let Expr::App { head, args, piped: false, .. } = e else { return false };
-        let Expr::Ident(name, _) = head.as_ref() else { return false };
-        returns.get(&(name.as_str(), args.len())).is_some_and(|s| s & DESC != 0)
-    };
-
-    let walk = |e: &Expr, diags: &mut Vec<Diagnostic>| {
-        let Expr::App { head, args, piped: false, .. } = e else { return };
-        let Expr::Ident(name, _) = head.as_ref() else { return };
-        if !returns.contains_key(&(name.as_str(), args.len())) {
-            return;
-        }
-        for (pos, arg) in args.iter().enumerate() {
-            if !describes(arg) {
-                continue;
-            }
-            if !discarded.get(&(name.as_str(), args.len(), pos)).copied().unwrap_or(false) {
-                continue;
-            }
-            diags.push(Diagnostic::new(
-                "effect",
-                format!(
-                    "`{name}` reads none of what it is handed here, so this effect \
-                     never happens — hand it back, or give `{name}` a name for it"
-                ),
-                arg.span(),
-            ));
-        }
-    };
-
-    // One worklist for the whole program rather than one per statement, which
-    // keeps the capacity a long declaration earned instead of doubling up from
-    // nothing at the next one. The `clear` is what makes that safe: the loop
-    // below happens to drain the stack every time, but nothing tests that it
-    // does — a mutation that leaves items behind keeps the whole error corpus
-    // green — so the reuse does not rest on it.
-    let mut stack: Vec<&Expr> = Vec::new();
-    for decl in &program.fns {
-        for stmt in &decl.body {
-            let e = match stmt {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
-            };
-            stack.clear();
-            stack.push(e);
-            while let Some(cur) = stack.pop() {
-                walk(cur, diags);
-                crate::for_each_child(cur, |c| stack.push(c));
-            }
-        }
-    }
-}
-
-/// The gavel makes a receiver responsible for a none it can be handed, and
-/// lets the caller discharge that by resolving first. The report belongs at
-/// the argument, because that is the line an author edits.
-fn check_none_exhaustive(
-    program: &Program,
-    inference: &crate::infer::Inference,
-    diags: &mut Vec<Diagnostic>,
-) {
-    use crate::infer::NONE;
-    // inference is handed in: one pass serves every check that reads it
-
-    // group -> its joined return set and the positions some arm names a none
-    // at, one bit per position. Two facts about the same group live in one
-    // entry so a call site pays ONE hash of the name: a separate
-    // (name, arity, position) map cost a string hash per PARAMETER to build
-    // and another per ARGUMENT to read, and both keys start with the name.
-    // A position past the mask's width reads as handled, the same under-
-    // refusing direction as the two below, and nothing in the tree is close:
-    // the widest group in lib/ takes five.
-    let mut returns: crate::hash::Map<(&str, usize), (crate::infer::Set, u64)> =
+    let mut nones: crate::hash::Map<(&str, usize), (crate::infer::Set, u64)> =
         crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
     for (i, d) in program.fns.iter().enumerate() {
         // Only an arm that NAMES a none handles one. A wildcard binds a
@@ -883,84 +950,12 @@ fn check_none_exhaustive(
                 named |= 1u64 << pos.min(63);
             }
         }
-        let entry = returns.entry((d.name.as_str(), d.params.len())).or_insert((0, 0));
+        let entry = nones.entry((d.name.as_str(), d.params.len())).or_insert((0, 0));
         entry.0 |= inference.returns[i];
         entry.1 |= named;
     }
 
-    // only what is provable: a lenient read, a literal none, or a call whose
-    // group's return set carries one. A set holding every value bit is the
-    // unknown, and the unknown carries the none bit with the rest: a field
-    // read through a variable (`m.to` is TOP in infer) and a strict index
-    // (`xs[i]!` is every value but a thunk) both answer it, so a group that
-    // hands either back would read as proof of a none it never produces.
-    // Unknown is not proof.
-    let values = crate::infer::TOP & !crate::infer::FAIL & !crate::infer::THUNK;
-    let unknown = |s: crate::infer::Set| s & values == values;
-    let yields_none = |e: &Expr| -> bool {
-        match e {
-            Expr::Index { strict: false, .. } => true,
-            Expr::Ident(name, _) => name == "none",
-            Expr::App { head, args, piped: false, .. } => match head.as_ref() {
-                Expr::Ident(name, _) => returns
-                    .get(&(name.as_str(), args.len()))
-                    .is_some_and(|&(s, _)| s & NONE != 0 && !unknown(s)),
-                _ => false,
-            },
-            _ => false,
-        }
-    };
-
-    let walk = |e: &Expr, diags: &mut Vec<Diagnostic>, owner: &str| {
-        let Expr::App { head, args, piped: false, .. } = e else { return };
-        let Expr::Ident(name, _) = head.as_ref() else { return };
-        // A getter is synthesized from a field read, so nobody can give it
-        // an arm, and the play route checks before the read is rewritten
-        // into one while the module route checks after: `xs[i].x` would be
-        // refused through an import and run direct. A field read of a none
-        // stays the runtime's sentence on every route.
-        if crate::ast::getter_field(name).is_some() {
-            return;
-        }
-        // THE CHEAP TESTS COME FIRST, and asking the table is not one of
-        // them: the lookup hashes the callee's name, where a none question
-        // about an argument is a match on the argument's own shape. A call
-        // whose arguments are literals, arithmetic or field reads answers no
-        // on the match alone and never touches the table, which is most of
-        // them. The second walk over the arguments below costs a few compares
-        // on the sites that reach it, and those are the rare ones.
-        if !args.iter().any(&yields_none) {
-            return;
-        }
-        let Some(&(_, named)) = returns.get(&(name.as_str(), args.len())) else { return };
-        for (pos, arg) in args.iter().enumerate() {
-            if !yields_none(arg) {
-                continue;
-            }
-            if named & (1u64 << pos.min(63)) != 0 {
-                continue;
-            }
-            // an absolute path built from the binary's location tells a
-            // reader nothing; the module name is what they searched for. A
-            // file outside lib/ is named by its own name: the corpus stages
-            // a fixture into a temporary directory before it runs, and a
-            // golden that quoted the staging path would pin that run's
-            // temporary directory rather than the diagnostic.
-            let short = owner
-                .rsplit_once("/lib/")
-                .map(|(_, m)| m)
-                .or_else(|| owner.rsplit_once('/').map(|(_, f)| f))
-                .unwrap_or(owner);
-            diags.push(Diagnostic::new(
-                "exhaustive",
-                format!(
-                    "this can be a none and `{name}` has no arm for it — resolve it \
-                     here, or give `{name}` a `none` arm (in {short})"
-                ),
-                arg.span(),
-            ));
-        }
-    };
+    let tables = AfterInfer { discarded, nones, returns };
 
     // One worklist for the whole program rather than one per statement, which
     // keeps the capacity a long declaration earned instead of doubling up from
@@ -977,7 +972,8 @@ fn check_none_exhaustive(
             stack.clear();
             stack.push(e);
             while let Some(cur) = stack.pop() {
-                walk(cur, diags, &decl.file);
+                effect_discarded_at(cur, &tables, effect_diags);
+                none_exhaustive_at(cur, &tables, &decl.file, none_diags);
                 crate::for_each_child(cur, |c| stack.push(c));
             }
         }
@@ -2226,7 +2222,13 @@ pub fn check_merged_after_aliases(
     diags.extend(named_diags);
     check_binding_patterns(program, &mut diags);
     check_overlapping_arms(program, &mut diags);
-    check_effect_discarded(program, &returns, &mut diags);
+    // The two questions inference makes answerable are asked on ONE descent,
+    // and their answers are spliced in where each check used to push: the
+    // effect answers here, the exhaustiveness answers after the rotation.
+    let mut effect_diags = Vec::new();
+    let mut none_diags = Vec::new();
+    check_after_infer(program, &inference, &returns, &mut effect_diags, &mut none_diags);
+    diags.append(&mut effect_diags);
     check_wall_operands(program, &returns, &mut diags);
     check_discarded_value(program, &returns, &mut diags);
     // This route hands its diagnostics back in push order — only the gated
@@ -2236,7 +2238,7 @@ pub fn check_merged_after_aliases(
     // was last of the run. Rotating the walk's answers to the back puts them
     // there and leaves both halves in their own order.
     diags.rotate_left(walked);
-    check_none_exhaustive(program, &inference, &mut diags);
+    diags.append(&mut none_diags);
     check_box_where_value(program, &inference, &mut diags);
     if require_entry {
         check_entry(program, &mut diags);
