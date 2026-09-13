@@ -126,6 +126,21 @@ ag_gate = "{ag_made} && cd /tmp/agsite && {ag_run} && {ag_check}"
 
 benchmarks = "sh scripts/gates/build_benchmarks.sh"
 
+# scripts/site_smoke reads docs/kanso.wasm, and kanso#1350 stopped committing
+# the blob. ci.yml's site job rebuilds it in the step before the gate; the
+# landing row set its worktree up with `release` alone, so from that day the
+# gate answered `cannot read docs/kanso.wasm: no such file` on the baseline
+# before any mutation was applied, and the ratchet reads a red gate as proof.
+# Read off ratchet run 33, 2026-09-13.
+#
+# The wasm32 TARGET was already on the box and is not the same thing:
+# scripts/ratchet/toolchain.sh installs it and says the browser rows' gates
+# rebuild the blob with it, which is true of browser_differential.sh -- that
+# script runs build_wasm.sh itself at line 9 -- and was never true of this one.
+# tests/the_ratchet_carries_what_its_gates_need.rs pins the difference, which
+# its install-line reader could not see.
+with_blob = "sh scripts/build_wasm.sh && cargo build --release"
+
 fn breaking name
   "sh scripts/ratchet/mutations/{name}.sh"
 
@@ -1132,7 +1147,7 @@ landing = row
   "./target/release/kanso run scripts/site_smoke"
   "site (landing sample and playground run in a browser)"
   (breaking "a_landing_sample_that_breaks_its_promise")
-  release
+  with_blob
 
 in_the_page = row
   "the engine in the page answering what no other engine answers"

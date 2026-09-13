@@ -4807,6 +4807,91 @@ is reading the linker.
 
 Welfare 68.50 -> 68.52, banked here.
 
+## 2026-09-13 (twelfth) — the nightly ratchet's baseline is red on two gates, and neither reason is a mutation
+
+Ratchet run 33 (scheduled, main at `1b51e688`) ended `ratchet: the baseline is
+not green`. The baseline pass reads every gate on an unmutated worktree before
+it applies anything, and a gate already red there proves nothing about any row
+that shares it. Two gates were red. They are unrelated and only one is fixed
+here.
+
+### site_smoke: the blob is built, not committed, and the ratchet never built it
+
+    ALREADY RED site (landing sample and playground run in a browser)
+      gate: ./target/release/kanso run scripts/site_smoke
+      error[endpoint]: unhandled err reached the executor:
+        "cannot read docs/kanso.wasm: no such file"
+
+kanso#1350 stopped committing `docs/kanso.wasm`. ci.yml's site job rebuilds it
+with `sh scripts/build_wasm.sh` in the step before the gate. The ratchet's
+`landing` row set its worktree up with `release` — `cargo build --release` —
+and nothing else, so from the day the blob left the tree that gate answered a
+missing file rather than a defect. The row has proved nothing since.
+
+The setup is now `with_blob`, which runs `build_wasm.sh` first. The sibling row
+`in_the_page` was never affected: `scripts/browser_differential.sh` runs
+`build_wasm.sh` itself at line 9.
+
+`scripts/ratchet/toolchain.sh` DOES install the wasm32 target, and says it is
+there because "the browser rows' gates rebuild docs/kanso.wasm". That sentence
+is true of `browser_differential.sh` and was never true of `site_smoke`.
+Installing a target is not building an artifact, and the gap between those two
+is exactly what nothing could see:
+`tests/the_ratchet_carries_what_its_gates_need.rs` reads INSTALL LINES —
+`apt-get install`, `rustup target add` — by construction, so a build step in
+ci.yml is outside its reach. It gains the artifact check, watched red on the
+unfixed tree and paired with the same commented-out-line trap the valgrind
+check carries.
+
+### instructions.sh: the row depends on where the tree is checked out
+
+The second gate is a diagnosis and not a fix. Eleven of fourteen work rows
+disagreed with the golden by exactly ±14 and three agreed exactly, and which
+is which is a function of the benchmark's NAME LENGTH with no exceptions:
+
+    name length   delta   rows
+        6           0     basket
+        7         +14     oneshot
+        8           0     runbench
+        9         -14     jsonbench deepbench livebench pendbench
+                          readbench scanbench widebench
+       10           0     indexbench
+       11         +14     digestbench encodebench escapebench
+
+The gate's own header has the mechanism: the kernel puts the exec path on the
+new process's stack and libc walks it before main. Measured directly here on
+one byte-identical binary, copied into directories whose length rises by one
+character at a time, the count is periodic with period four and amplitude
+fourteen — `/tmp/plen/aaaa`/indexbench reads 3,226,048 at a full path length
+of 25, 29, 33 and 37 and 3,226,062 at every other length between.
+
+That law plus two directory lengths reproduces all fourteen deltas exactly,
+zeros included. CI's cost-goldens job runs from the repo root,
+`/home/runner/work/kanso/kanso`, 29 characters. `scripts/ratchet/ratchet.kso`
+sets `base_dir = "/tmp/kanso-ratchet-base"`, 23. The six-character difference
+is a two-step phase shift, which sends rows whose length lands on the low
+phase up by fourteen, rows on the high phase down by fourteen, and leaves the
+rest alone. The header's closing sentence — "CI always runs from the repo
+root, so the goldens are consistent and this costs the gate nothing" — is
+false for the ratchet job, which is CI and does not.
+
+So the gate cannot be green in the ratchet's scratch worktree, and the 28 rows
+that share `sh scripts/gates/instructions.sh` have never been proved. The
+ratchet's own excuse for the refusal blames silicon — "its golden is exact
+counts and the pool is not one machine" — and a ±14 pattern grouped perfectly
+by filename length is not silicon.
+
+The obvious remedy is REFUTED here rather than shipped. Exec'ing every
+benchmark through one constant absolute path does not make the row
+path-independent: `digestbench` run from `/tmp/kanso-ir/digestbench` with only
+the working directory changed still reads 10,060,595 against 10,060,609, three
+times each, stable. Eight of the fourteen also read their input relative to the
+working directory and answer in about 225,000 instructions from anywhere else,
+so the cwd cannot simply be pinned either. A row that is a property of the
+binary rather than of the checkout needs both the exec path and the input
+staged at fixed paths, and that is a larger piece of work than this entry
+settles.
+
 ## 2026-09-13 (thirteenth) — the instruction goldens were a property of the checkout path, and now they are a property of the binary
 
 The twelfth entry diagnosed this and stopped there, because the obvious remedy
