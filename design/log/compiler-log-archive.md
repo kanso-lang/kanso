@@ -59734,3 +59734,174 @@ a compiler whose emitter grew: `compile_instructions` 48,746,192 ->
 with it, `text` 1,487,564 -> 1,494,508 summed over the fourteen binaries,
 6,944 bytes for the fused door and its fallback twin. Welfare 66.30 ->
 66.37, banked.
+## 2026-09-09 — read_file is text and read_bytes is bytes, on every engine
+
+**Built:** the 2026-08-29 ruling (archive, "gavel: read_file is text,
+read_bytes is bytes, per precedent"), after eleven days on the unbuilt list.
+`read_file` refuses a file whose bytes are not utf-8, with one sentence on
+all three engines: `cannot read {path}: the bytes are not text`. Until now
+native handed the bytes through as a string and the interpreter refused them
+with its own words, so the same program answered differently by engine.
+`read_bytes` is the other reader: it hands the bytes back as they are, and
+takes the same two doors as `read_file` — `read_bytes` answers
+`file_not_found` as data and `read_bytes!` insists. `write_file` and
+`net_write` accept bytes, so a program can read a binary and write it back
+or serve it.
+
+**Where the bytes go.** The http library's `rendered` interpolated the body
+into one string, which renders a bytes body as a list. The status line and
+headers are now a preamble, `delivered` writes a string body in one write
+and a bytes body in two, and the content-length is measured on `as_bytes`,
+which is a text body's utf-8 or a bytes body itself. The browser differential
+and the fingerprint script read `docs/kanso.wasm` through `read_bytes!`
+rather than through a text read that only worked because nothing checked.
+
+**Fixtures.** `tests/golden/micro/a_file_that_is_not_text.kso` reads a
+five-byte file — `ff fe 00 41 80`, the first byte one no utf-8 sequence
+begins with — both ways and prints the refusal and the five bytes; the
+harness runs it on both engines and through a release build.
+`tests/golden/runtime/read_bytes_takes_a_path_string.kso` pins the builtin's
+own refusal of a non-string path, reached through a binding the check cannot
+see through. The 63-entry arity table, the 59-name builtin list and the
+56-call codegen table each grew by one, and the descriptor tag is 30.
+
+**Two things found on the way.** A definition added to `std/os` above
+`insisted` moved the line four runtime goldens quote (`os.kso:113`), so the
+new readers sit below it. And a helper named `head` in `lib/net/http`
+collided with four parameters of that name; the check refuses the shadowing,
+which is the right answer, and the helper is `preamble`.
+
+**The emitted code moved, and the sweep saw it.** `all_compile.sh` read
+`emitted_code` MOVED on eight programs, every one that imports `std/os`: the
+decoder itself in `bench/emitted_golden.txt` (defines 140 -> 142, calls
+1,232 -> 1,236, lines 9,219 -> 9,245) and seven of the thirteen in
+`bench/emitted_golden_others.txt` — encodebench, oneshot, widebench,
+digestbench, readbench, livebench and runbench — each up two defines, four
+to six calls and 26 to 28 lines, with every branch count identical. The two
+defines are `read_bytes` and `read_bytes!`, which a program importing the
+module carries whether or not it calls them; none of the eight does. A rise
+on this vein is a regression to explain, and this is the explanation: the
+library grew two definitions and the emitter carries a module's every
+definition, as it did when lib/json dropped std/list and the veins halved.
+Both goldens are regenerated with their headers kept. The first reading of
+the sweep's output saw only the second file's diff and wrote that the
+decoder had not moved; the re-run after regenerating that file said
+otherwise, which is what the re-run is for.
+
+**Rulings weighed.** STATUS.md's "Ruled, unbuilt" list (kanso#1353) holds
+twelve rows. This is the smallest that touches every engine, and the one a
+reader hits first: the book's boundary chapter cannot describe two readers
+until both exist, and `read_file` handing bytes through on native while the
+interpreter refused them was a divergence the differential law forbids. The
+other eleven — effects as types, err readers, the fused chain operators,
+pure fallibility boxed, `done`, exhaustiveness without the flag, a
+qualified name as its module's declaration, records printing qualified,
+the backends' partial over a value, block-born as the whole cohort, and the
+boundary chapter — stay in the order the list gives them; the next build is
+taken from it.
+
+**Round three: the counter the local sweep never ran.** CI's cost-goldens
+job, once the runner's apt mirror stopped returning a mismatched index, read
+`utf8_bytes` up on eight runtime veins by the size of the input each reads:
+188,698 on the decoder, encode, oneshot, wide, read, live and run programs,
+8,192 on the digest. That is the ruling's own cost made visible. `read_file`
+validates every byte it hands back now, where native used to hand bytes
+through unread, and the counter that counts validated bytes counts the input
+file. The allocation counters beside it are byte-identical. The twelve cost
+goldens were regenerated with `all_counters.sh --write` on this branch, which
+the first two rounds skipped — the emitted sweep ran and the counter sweep did
+not, and CI found the difference. The retired-instruction rows CI measured are
+copied in: runbench 2,369,642,706 -> 2,369,917,628 (+274,922, +0.0116%), the
+decoder +274,897, encode +274,968, oneshot +274,897, read +274,804, live
++274,897, wide +90,524, digest +6,153; basket, deepbench, escapebench,
+pendbench, indexbench and scanbench read no file and hold to the instruction.
+That is 1.46 instructions a byte for the validator, the word-at-a-time arm the
+2026-09-07 entry measured. Every `.text` row rose too, 1,040 bytes on the
+eight readers and about 3,056 on the six that do not read, since the reader
+pair and the refusal are runtime code every program links. The compile rows:
+compile_instructions 48,749,059 -> 48,751,741, entry 162,051,772 ->
+162,061,812, library 162,846,242 -> 162,857,425, each the two definitions
+`std/os` gained. Welfare reads 66.3705 against a floor of 66.3715, a fall
+of 0.0009 that the gate's band holds; the floor is re-set to it with
+`--set` all the same, because the trend gate's pure-regression rule reads
+this branch as worse on twenty-six counters and better on none, and lets
+that through only when welfare_floor.json's history names the change that
+spent it. It is the differential-law exception welfare.kso states: a
+`read_file` that answers the same on three engines is not a trade.
+
+**Priced, row by row, for the trend gate.** The counters the branch moved and
+the values they landed on: `utf8_bytes` 11,164,198, `run_utf8_bytes`
+24,415,348, `encode_utf8_bytes` 75,741,068, `live_utf8_bytes` 75,741,068,
+`oneshot_utf8_bytes` 450,566, `wide_utf8_bytes` 289,183, `read_utf8_bytes`
+188,698, `digest_utf8_bytes` 8,192; `work_jsonbench` 1,485,334,799,
+`work_encodebench` 3,963,988,526, `work_oneshot` 21,737,118, `work_widebench`
+35,332,240, `work_digestbench` 10,426,549, `work_readbench` 4,561,941,
+`work_livebench` 3,481,899,703, `work_runbench` 2,369,917,628;
+`emitted_defines` 142, `emitted_calls` 1,236, `emitted_lines` 9,245,
+`emitted_other_defines` 2,353, `emitted_other_calls` 20,516,
+`emitted_other_lines` 133,241; `text` 1,523,196; `compile_instructions`
+48,751,741, `entry_instructions` 162,061,812, `library_instructions`
+162,857,425. Each is the validator, the two readers or the refusal, and the
+paragraph above says which.
+
+## 2026-09-09 — an err answers `.reason`, `.cause` and `.origin`, on every engine
+
+The 2026-08-29 gavel "an err has readers" (archive), built. STATUS.md had
+carried it as unbuilt since the sitting: `annotate e (err -> "config:
+{err.reason}")` — the gavels' own sample — was refused at check time with
+`no record type has a field reason`, and a callback holding an err could
+look at nothing inside it.
+
+**Built.** A field read desugars to a getter call, `Get_reason e`, as every
+field read does, so the reader lives where a getter is entered. Each engine's
+dispatcher answers an err at its ENTRY, before any arm is tried: the
+interpreter in `dispatch_loop_inner`, native in the prologue `emit_reader_hole`
+writes for both dispatcher shapes (`k_is_err` then `k_err_read`), the page
+with `rt_err_read` in `emit_dispatcher`. `reason` is the value the err was
+raised with; `cause` the err it wrapped, or none; `origin` the "{fn} at
+{file}:{line}" it was born at, or none for an executor-born one. The
+interpreter's `err_read` is the oracle and the wasm host calls it; native's
+`k_err_read` mirrors it arm for arm. The entry is the only place that works:
+a placeholder arm `(err Read)` matched a foreign err before the failure
+pass-through and would have answered the reason to `.cause`, and an
+own-hako err is one no arm may see, where a reader has to see both.
+
+**The group has to exist.** A read of a field no record declares resolves to
+no getter at all, so `desugar_field_reads` now synthesises one arm per reader
+field nobody declares. Synthesised per module, as the record getters are, it
+produced one identical arm in every module and the merge refused the overlap;
+it runs once over the merged program instead. The checker's declared-field
+set gains the three names so the read passes the `no record type has a field`
+fence, and a record reaching a reader group still gets the field error every
+getter gives.
+
+**Fixture.** `tests/golden/micro/an_err_has_readers.kso`, settled failures
+only, so the page runs it too: a plain err's reason, an annotated err's reason
+and its cause's reason, `.cause` of an unwrapped err (`<none>`), a cause read
+through a second `rescue`, the origin's function name on both, and json's
+decode failure read as `e.reason.reason` — the case where a reader and a
+record field share a name. Watched red on the checker first. The origin names
+the raising function qualified when the program is imported, so the fixture
+carries an `.imported.out` twin like the record-printing ones. Two things the
+fixture taught while it was being written: `print none` writes `<none>`, and a
+named group handed the err passes it through as ever, so the readers are
+applied inside the lambda and the group gets the piece.
+
+**Veins, CI's rows.** The readers sit at every dispatcher's entry and the
+checker's field set grew by three names, so the front end carries them:
+`compile_allocs` 29,606 -> 29,714 (+108), `compile_instructions` 48,751,741 ->
+48,820,126 (+68,385, +0.14%), `entry_instructions` 162,061,812 -> 162,734,847
+(+673,035, +0.42%), `library_instructions` 162,857,425 -> 163,022,357
+(+164,932, +0.10%). The compile peak (773,818), every runtime vein, the
+emitted, text and machine-code rows are byte-identical. Priced, row by row,
+for the trend gate: `compile_allocs` 29,714, `compile_instructions`
+48,820,126, `entry_instructions` 162,734,847, `library_instructions`
+163,022,357. Welfare reads 66.36 against the 66.37 floor, a fall of 0.01 the
+readers pay in compile cost with nothing offsetting it; the 2026-08-25 ruling's
+language clause applies, so the floor moves down to the reading, 66.3596,
+by hand in `bench/welfare_floor.json` with its history entry (`--set` refuses
+a fall of this size by design, and says the file is the door), and no
+optimisation rides along to hide the price.
+
+---
+
