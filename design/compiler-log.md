@@ -4419,3 +4419,23 @@ them. Both readings say the same thing: the entry and library corpora hold
 different mixes of call sites in bodies, and this check keys on exactly those,
 where the earlier folds' savings were keyed to nodes and could not see the
 difference.
+
+CI's rows, and what each landed on. The container tables above were taken
+while the rule was being paid down; these are the numbers the goldens carry:
+
+```
+compile_instructions   44,888,539 ->  45,642,466    +753,927  +1.6795%
+entry_instructions    149,925,203 -> 151,799,014  +1,873,811  +1.2498%
+library_instructions  150,211,345 -> 152,595,931  +2,384,586  +1.5875%
+compile_allocs             29,323 ->      29,458        +135  +0.4604%
+```
+
+The module row rises hardest of the three because the rule's per-call question
+is asked once per argument and the module corpus is the denser of the two in
+call sites; the entry and library rows part by 0.34 points for the same
+reason. `compile_allocs` gains 135 blocks, which is the shadow table: one
+`Vec` per group with a parameter an earlier arm already names. Summed over the
+module and entry corpora the compile term rises 2,627,738 (+1.3489%), and that
+is the whole of the welfare fall — `front_end_visits` FELL 22,724 -> 22,449
+because the narrowing re-dirties fewer declarations, and every runtime counter
+is byte-identical.
