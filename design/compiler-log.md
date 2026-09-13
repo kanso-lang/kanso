@@ -3825,9 +3825,10 @@ Welfare 67.77569149595541 -> 67.77800065192253, banked in the same commit.
 
 ## 2026-09-13 — one instruction in ten of the run program is a register save, and the inline threshold is the lever
 
-**SHIPPED, round one.** `release_clang` passes `-mllvm -inline-threshold=1000`,
-four times clang's default of 250. The rows CI lands are owed in round two;
-everything below is this container's, measured against a container baseline.
+**SHIPPED.** `release_clang` passes `-mllvm -inline-threshold=1000`, four times
+clang's default of 250. CI's rows are in the "What CI read" section at the
+bottom; everything before it is this container's, measured against a container
+baseline, and the two must not be compared across.
 
 **The finding.** runbench retires 2,232,013,849 instructions, of which the
 binary's own code (everything but libc) is 2,185,625,151. `push`, `pop`, `ret`
@@ -3844,8 +3845,8 @@ the instrumented run read 2,232,013,849, the same total to the digit.
 spreads its 298,748,819 self instructions over 588 distinct addresses, the
 hottest carrying 0.80%; `value_for` 233,828,199 over 491, hottest 1.49%;
 `obj_key_start` 151,499,007 over 217, hottest 0.52%. There is no loop to
-tighten — kanso#1306 said as much about two functions and this says it about
-the whole program. What there is instead is per-call overhead, and the
+tighten — the 2026-09-02 entry on the byte arm found the same thing about two
+functions, and this says it about the whole program. What there is instead is per-call overhead, and the
 functions paying most of it are small and hot rather than long:
 
 ```
@@ -3909,3 +3910,93 @@ exactly.
 eight benchmarks not measured here (oneshot, basket, widebench, deepbench,
 pendbench, indexbench, scanbench, livebench) are CI's to report; round one is
 deliberately red on `bench/instructions_golden.txt`.
+
+
+**What CI read.** runbench **2,252,446,969 -> 2,189,318,400**, a fall of
+63,128,569 (−2.8027%) — a better result than the container's −2.0149%, and the
+reason the two numbers may not be subtracted from one another. The full sitting,
+twelve of fourteen work rows falling:
+
+```
+jsonbench    1,468,801,090 -> 1,436,924,442   −31,876,648  −2.1702%
+encodebench  3,932,651,503 -> 3,860,465,718   −72,185,785  −1.8356%
+oneshot         21,616,888 ->     21,081,074      −535,814  −2.4787%
+basket          34,698,668 ->     34,693,472        −5,196  −0.0150%
+widebench       35,316,107 ->     35,348,118       +32,011  +0.0906%
+deepbench      387,474,235 ->    378,118,216    −9,356,019  −2.4146%
+escapebench     85,558,106 ->     85,537,081       −21,025  −0.0246%
+pendbench      221,912,236 ->    221,101,809      −810,427  −0.3652%
+indexbench       3,265,849 ->      3,265,422          −427  −0.0131%
+scanbench      587,488,506 ->    562,456,201   −25,032,305  −4.2609%
+digestbench     10,426,549 ->     10,199,161      −227,388  −2.1809%
+readbench        4,630,969 ->      4,630,971            +2  +0.0000%
+livebench    3,450,423,659 -> 3,320,889,129  −129,534,530  −3.7542%
+runbench     2,252,446,969 -> 2,189,318,400   −63,128,569  −2.8027%
+```
+
+**The rows that got worse, each named with the value it landed on.** Two work
+rows rise: **widebench 35,348,118** (+32,011, +0.0906%) and **readbench
+4,630,971** (+2). Neither is a decision to defend on its own — the objective
+weighs the sum, and the sum went up — but a rise that nobody names is the thing
+this log exists to catch. widebench is the larger of the two and its cause is
+the same as its .text rise: a wider inline threshold specialises more call sites
+and a few of them were better off shared.
+
+Eleven of fourteen .text rows rise, the vein totalling 1,551,324 -> 1,647,884
+(+6.22%) — less than the +9.8% projected from runbench.ll alone, because most
+benchmarks link less of the library than the run program does:
+
+```
+jsonbench    100,050 -> 103,058  +3.01%      escapebench  57,922 ->  57,730  −0.33%
+encodebench  120,962 -> 128,034  +5.85%      pendbench    92,034 ->  94,786  +2.99%
+oneshot      111,922 -> 114,482  +2.29%      indexbench   62,162 ->  61,618  −0.88%
+basket       114,082 -> 118,258  +3.66%      scanbench   159,842 -> 183,314 +14.68%
+widebench    126,226 -> 133,890  +6.07%      digestbench 111,362 -> 114,098  +2.46%
+deepbench     76,354 ->  82,402  +7.92%      readbench    58,434 ->  58,434   0.00%
+                                             livebench   112,498 -> 115,426  +2.60%
+                                             runbench    247,474 -> 282,354 +14.09%
+```
+
+Machine-code size has no welfare term — Clay ruled that on 2026-09-05 — so
+nothing here scores. The vein is exact all the same, which is the point: the
+growth is watched even though it is not paid for.
+
+**One prediction in the pull request was wrong, and CI corrected it.** Round one
+was opened expecting `emitted` to go red alongside `machine code` and `work`.
+It did not: `emitted` came back SUCCESS, and the emitted golden is byte-identical
+across the change. It counts what the COMPILER wrote, and the inline threshold is
+read by clang at link time, long after the compiler has finished writing. The
+three veins that can see a linker flag are work, machine code, and nothing else.
+
+**The compile side is untouched and that is not a coincidence.** compile_allocs
+29,314, compile_instructions 44,234,005, entry_instructions 147,756,205,
+library_instructions 148,091,856 — all four AGREED with their goldens. The flag
+is on `release_clang`, which links benchmark binaries; `kanso check` never
+reaches it.
+
+**Welfare 67.78 -> 67.98**, banked with `--set` in this same commit. The gain is
+run_instructions', which satiates late (2.0) and carries the objective's whole
+run-speed term.
+
+**What is left of the frame cost, and why it is not the next change.** Re-profiled
+under the new threshold, the frame is 192,992,914 — 8.82% of the program, down
+from 9.64%, so the threshold took about 22M of frame directly and 45M in total:
+inlining's second-order optimisations are roughly half the win. `k_map_sorted`
+and `entry_onto` have left the profile entirely. What remains sits in the
+`tailcc` mutual tail cycle (`string_at` musttails into `str_chars_3` and
+`string_scan_3`, which call back). That cycle is NOT ceilinged — no measurement
+in this log bounds what its frames are worth, and a first draft of this entry
+claimed one by conflating it with the 2026-09-02 byte-arm guard ceiling, which
+is a jsonbench figure about a different question entirely. So it stays an open
+lead rather than a closed one. What IS settled is that the obvious lever does
+not reach it: `preserve_none` cannot be swapped in for `tailcc` here.
+src/codegen.rs records that a `musttail` call may cross an arity or a type only
+under `tailcc`, and this cycle does exactly that — a
+`(KValue, i64, i64, i64) -> %parsed` function musttails into a
+`(KValue, i64, KValue)` one. Dropping `tailcc` for the cycle is therefore not a
+tuning question but a correctness one, and the same comment records why the
+convention is narrowed rather than universal: a non-tail `call tailcc` whose
+arguments do not all fit in registers is miscompiled on arm64. Call instructions are only 25,174,058 against
+193M of frame, which is 7.7 frame instructions per call: these are callee-saved
+register spills, not frame-pointer setup, and `-O3` already omits the frame
+pointer.
