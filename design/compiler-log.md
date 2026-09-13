@@ -4279,11 +4279,21 @@ refused. Watched both ways — the fixture is red today and the program compiles
 with the counter removed.
 
 Removing the guard arm's `after` looks like the `and`/`or` arm kanso#1385
-recorded as unreachable, and for a parser reason rather than a corpus one. A
-guard's remainder can only carry this bookkeeping if the guard sits INSIDE a
-build, and the parser refuses `return X if C` in a build body in every spelling
-tried — leading the body, following a binding, or following a field write, each
-answered with "a `return` sits with the bindings, before the effect chain". That
-is three spellings, not the census kanso#1385 did over `Expr::BinOp`'s
-construction sites, so it is evidence and not proof. The arm stays; what it
-needs is the census.
+recorded as unreachable, and for a parser reason rather than a corpus one. The
+census is done and it gets part of the way. `Expr::Guard` has exactly ONE
+construction site, `parser.rs:866` inside `parse_body`, and `parse_build_body`
+never calls `parse_body` — it reads each line with `parse_stmt` and hands
+blocks to `parse_block_construct` — so a build body's own statements are never
+a guard. What the census does NOT close is the nested route: an `if` arm inside
+a build does go through `parse_body`, and the fused walk carries `born` into
+it, so a guard there would reach the arm with the bookkeeping live.
+
+Four spellings were tried on that route and the parser refused all four with
+"a `return` sits with the bindings, before the effect chain" — the guard
+leading a build body, following a binding in one, following a field write in
+one, and leading an `if` arm inside one. The arm's `after` can only matter when
+the guard's remainder binds a name a later `Set` writes through, and a `Set`
+after a guard is what every one of those four spellings tried to write. That is
+a census plus four spellings and still not a proof, because the lead rule the
+parser is applying was not read closely enough to say it forbids the shape in
+general. The arm stays, and this is where the next reader picks it up.
