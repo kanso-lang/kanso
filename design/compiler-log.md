@@ -4486,3 +4486,49 @@ insertions across twelve files, which is what made it look live; that is a
 three-dot diff against a stale merge base. Two-dot against current main it is
 ninety-six files and six thousand deletions BEHIND. The branch is superseded,
 not pending, and nothing is owed to it.
+
+## 2026-09-13 — a qualified name is joined, not formatted
+
+The loader mints a canonical name by putting a module's qualifier, a slash and
+a declaration's name together, and fifteen sites in `src/lib.rs` did it with
+`format!`. A `{}` on a `&str` is not free: it goes out through `Display::fmt`,
+`Formatter::pad` and `write_str` into a string that starts empty and grows.
+Callgrind on the module corpus puts 1,175 `format_inner` calls in the whole
+compile and 712 of them inside `qualify`, at 611,799 instructions — 1.32% of
+the compile term for a concatenation whose three lengths are known before a
+byte is written.
+
+`ast::qualified` does one exactly-sized allocation and three copies.
+`bare_space`, which was the same shape with the bare-space mark in the middle,
+joins it. Measured on the gate's own box with the environment emptied,
+baseline binary against changed binary, all three corpora:
+
+    module   46,330,414 ->  45,629,252   (-701,162,   -1.5134%)
+    entry   153,908,707 -> 151,529,300   (-2,379,407, -1.5460%)
+    library 155,032,113 -> 152,702,149   (-2,329,964, -1.5029%)
+    summed  355,271,234 -> 349,860,701   (-5,410,533, -1.5229%)
+
+Read twice on two builds, identical to the instruction. That is larger than
+any of the six descent folds, and larger than the 1.32% `qualify` alone
+accounts for: `open_qualified_doors` has 150 of the calls, and two lines in
+the type loop were building the SAME string twice — once as the exports
+table's key, once as the declaration's new name. The second is a move of the
+first now.
+
+**What this does not touch.** The strings both shapes produce are
+byte-identical, so the whole error corpus, every differential sweep and every
+golden but the instruction veins are unmoved. That is the property the
+ratchet's new row watches: `the_qualified_name_goes_back_through_format`
+writes the helper's body back to `format!` and the module row rises 690,734
+(+1.5138%), the entry row 2,306,556 and the library row 2,273,585, with
+nothing else moving at all.
+
+**Where the rest of the compile's allocator time is.** The same profile puts
+malloc and free at 6,855,502 instructions over 30,232 allocations, 14.8% of
+the compile term at about 227 instructions an allocation. A third of those
+allocations are vectors growing (`grow_one` 5,817, `do_reserve_and_handle`
+4,730), and 3,642 of the second kind are `String as Write::write_str` — the
+same formatting machinery this entry is about, reached from `format!` calls
+elsewhere. The lexer's 4,407 are the `String`s the AST needs, which
+kanso#1033 declined interning at 365 conversion sites. No other single owner
+holds more than a per cent.
