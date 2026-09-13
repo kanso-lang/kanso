@@ -4730,6 +4730,34 @@ live in the instructions vein — so they are built once. That is twelve extra
 release links in the cost-goldens job, and CI wall time is not a welfare term,
 so the objective cannot see the price. It is written here instead.
 
+**CI's sitting.** The run program reads 2,168,019,757 -> 2,141,642,566, a fall
+of 26,377,191 (-1.2166%). This container projected -25,968,820 (-1.2128%) off
+the hand-patched link, so CI read 1.0157 times the projection, the closest the
+two have come in this log. Twelve of the fourteen work rows fall and the total
+is -226,928,501 (-1.8732%). deepbench, indexbench and readbench are flat:
+those three carry no emitted fast path, so there was no gate in them to strip.
+Machine code falls in eleven of fourteen, -8,288 bytes (-0.4646%).
+
+**CORRECTION, three rows I said could not move.** The commit that opened this
+branch said round one expects red on `work`, `machine code`, `emitted` and
+`text`. CI also turned three compile rows red:
+
+    compile_instructions     45,523,131 ->  45,522,509    -622   -0.0014%
+    entry_instructions      152,087,783 -> 152,090,185  +2,402   +0.0016%
+    library_instructions    152,459,094 -> 152,460,583  +1,489   +0.0010%
+
+`kanso check` stops before codegen, so no decision these rows count changed.
+What changed is src/codegen.rs, and src/codegen.rs is the compiler, so its
+bytes and the layout under them moved anyway. CLAUDE.md says this in as many
+words, and says not to write down that the row cannot move. I wrote it down
+anyway. The three moves are a thousandth of a per cent each and go into the
+goldens as measured. The objective's compile term is the first two summed:
+197,610,914 -> 197,612,694, a rise of 1,780.
+
+**Welfare 67.99 -> 68.08, banked here.** The run term pays for the compile
+term's 1,780 several thousand times over, which is the trade the weights are
+for.
+
 **OPEN.** The runtime's own twenty-seven sites are the other 13,187,834
 (0.6159%) and are untouched. They would want `runtime.c` compiled twice and the
 counting object linked into the counting binaries, which is a second object in
