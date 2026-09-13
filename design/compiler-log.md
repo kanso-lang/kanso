@@ -4409,3 +4409,82 @@ Welfare rose 0.01 and is banked in the same round, the goldens carrying CI's
 rows first: floor 68.52093722983558 -> 68.5353360462189, ratchet 262. Five
 `data-golden` spans on compiler.html quoting the compile rows were rewritten by
 `all_pages.sh --write`, and all three page gates agree afterwards.
+
+## 2026-09-13 — a second fused descent, and a linker coin-flip the compile veins cannot see past
+
+**DONE — the two post-inference questions join one walk (kanso#1409).**
+`check_effect_discarded` and `check_none_exhaustive` each walked the whole
+program for itself: the same declarations, the same statements, the same nodes,
+in the same order, each with its own `Vec<&Expr>` stack and its own
+`for_each_child`. They are asked on one descent now.
+
+**This is not the fold kanso#1382–#1408 built six times, and the difference is
+structural rather than stylistic.** Those six moved a check into
+`check_per_node`'s descent. These two cannot go there. Both read `inference`,
+and `check_merged_after_aliases` builds that AFTER `check_per_node` returns —
+and only once the arity gate has passed, because inference indexes an `if`'s
+branches and must never run over a shape the walk refused. Four checks still
+pay a descent of their own, and all four are on the far side of that gate:
+these two, `check_wall_operands` and `check_box_where_value`. So the remaining
+work is a SECOND fused walk rather than more of the first. This entry is that
+walk with the first two in it.
+
+Sized off the `#[inline(never)]` profile that answered kanso#1408's question:
+each of the four pays 180,936 instructions of `for_each_child` descent, the
+same figure to the instruction, which is exactly the part a shared walk
+removes.
+
+**The answers go into two vectors, and that is the whole care of the change.**
+This route hands diagnostics back in push order — only the arity-gated early
+return sorts — and the two checks pushed from either side of the fused walk's
+`diags.rotate_left(walked)`. One shared vector would move one of them. So
+`check_after_infer` returns both separately and the caller splices each where
+its own check used to push.
+
+**Measured** on the container, in the gate's box, one build each, both built
+from the same worktree so the toolchain state is identical. PROGRAM TOTALS
+rather than `kanso::main`, for the reason below:
+
+    vein      main          fold          delta
+    module     47,015,134    46,735,014   −280,120   (−0.5958%)
+    entry     155,535,350   154,624,501   −910,849   (−0.5856%)
+    library   156,349,297   155,461,319   −887,978   (−0.5679%)
+    summed    358,899,781   356,820,834  −2,078,947  (−0.5793%)
+
+**OPEN, and it is about the veins rather than about this change — valgrind
+cannot read the symbols of the binary this branch builds.** The compile gates
+read `kanso::main` inclusive. On this binary valgrind never prints
+`Reading syms from` for the executable at all, so every kanso frame comes back
+as a hex address and that row is unavailable. It is not transient: it survives
+a clean rebuild, it follows the bytes when the binary is copied under another
+name, and the base binary built minutes earlier in the same worktree and run
+from the same directory resolves 244 kanso frames.
+
+The cause is a linker layout difference and nothing else. `readelf -l` on the
+two binaries differs in exactly one place: `.relro_padding` sits inside the
+RELRO/data segment in main's binary and in the following segment in this one.
+The section table is otherwise identical, `.symtab` holds 6,687 entries, and
+`nm -C` finds `kanso::main` at 0x13ea80.
+
+Comparing PROGRAM TOTALS costs nothing here, because on the base binary the gap
+between totals and `kanso::main` is 469,781 / 470,606 / 470,527 across the three
+veins — flat to within 825 instructions — so the deltas are identical either
+way. What is worth watching is CI. `compile_instructions.sh` treats a missing
+`kanso::main` frame as a toolchain failure and halts the vein rather than
+pinning whatever the pipe returned, which is the right call and the reason the
+gate has that arm at all. But it means all three compile veins are hostage to
+where the linker puts one padding section, on any change, independent of what
+the change does. If CI's valgrind reads this binary the rows land normally. If
+it does not, that is the finding, and the gate's arm is what surfaced it.
+
+**The corpus could not see the ordering, and now it can.** Splicing both answer
+vectors at the END instead of at their own positions left all 465 error
+fixtures green. Not one of them paired an `effect` or `exhaustive` answer with
+a diagnostic from a check that pushes after it — the same gap kanso#1408 found
+on its own half, in a different place. `an_effect_discarded_beside_a_later_refusal`
+raises both: `ignore` throws away the effect it is handed, which
+`check_effect_discarded` refuses, and two non-final lines compute values nobody
+reads, which `check_discarded_value` refuses after it. Under exactly that
+mutation it goes red with the effect line rotated to the back — `unused /
+unused / effect` against `effect / unused / unused`.
+
