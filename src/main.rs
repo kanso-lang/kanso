@@ -768,9 +768,14 @@ fn release_clang(stem: &str, ll_path: &str) -> std::io::Result<std::process::Exi
         // between two measured ones may be assumed to lie between them.
         //
         // 2000 is taken because 3000 costs 40.5% of .text for a further
-        // 0.28%, where 2000 costs 13.2%. Machine-code size has no welfare
-        // term -- Clay ruled that on 2026-09-05 -- but `.text` keeps its own
-        // exact vein, so the growth is watched even though it is not scored.
+        // 0.28%, where 2000 costs 13.2%. Those are this container's ladder,
+        // taken by linking runbench.ll and counting; CI's own work row read
+        // -1.2281% for the same step, 59% of what the ladder projected, so
+        // the ladder orders the rungs and does not size them.
+        //
+        // Machine-code size has no welfare term -- Clay ruled that on
+        // 2026-09-05 -- but `.text` keeps its own exact vein, so the growth
+        // is watched even though it is not scored.
         .arg("-mllvm")
         .arg("-inline-threshold=2000")
         .args(if cfg!(target_arch = "x86_64") { &["-mssse3"][..] } else { &[][..] })
