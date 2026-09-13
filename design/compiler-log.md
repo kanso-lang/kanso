@@ -4492,3 +4492,22 @@ Container, main-against-main this time — both binaries let valgrind read
 of CI.
 
 The runtime sweep agrees with its goldens and the full suite is green.
+
+**And the fold made the ratchet's own mutation stale, in both halves.** CI's
+ratchet job went red on `1 mutations no longer apply` — `the_box_check_asks_
+when_nothing_answers_a_box`, the mutation that proves the cost-goldens job can
+see the box question's `any_boxed` skip. It greps for
+`let any_boxed = returns.values()...` and the fold renamed that map to `groups`,
+because `check_after_infer` already had a `returns` parameter. The anchor is
+repointed.
+
+The comment above it was stale in a way the grep could not catch. It said the
+skip is worth 637,295 instructions on the module corpus and 1,308,849 on the
+entry corpus, "43% of what the whole pass costs". Re-measured on this branch:
++103,180 and +114,497. A factor of six. Both readings were right when taken —
+while `check_box_where_value` was a pass of its own the skip bought its entire
+traversal, and now that the question rides a descent somebody else is making
+the skip buys only the per-node work. The mutation still turns the gate red by
+a hundred thousand instructions, so it still does its job; what it proves is
+just smaller. Rewritten with the new numbers and the reason they fell, because
+a mutation's prose is the only place that reasoning is recorded.
