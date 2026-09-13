@@ -5754,9 +5754,7 @@ impl<'a> Backend<'a> {
                 // it with an extractvalue pair, an icmp and a select. Nothing
                 // else reads it, so it costs nothing where it is unused.
                 let raw = f.tmp();
-                f.line(&format!(
-                    "{raw} = phi i64 [ {wide}, %{load} ], [ 256, %{miss_from} ]"
-                ));
+                f.line(&format!("{raw} = phi i64 [ {wide}, %{load} ], [ 256, %{miss_from} ]"));
                 f.raw_byte.insert(t.clone(), raw);
             }
             return t;
