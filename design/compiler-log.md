@@ -5440,3 +5440,28 @@ those five functions. The runtime rows are the reason to keep it: 3.6% off
 the run program against 3,408 bytes of text, on a vein Clay ruled out of
 welfare on 2026-09-05 precisely so it could be watched without being traded
 against.
+
+**A DEFECT IN THIS CHANGE'S OWN FIXTURE, and what it says about the rule it
+broke.** The fixture named its `kind` parameter `cs`, the same name as the
+module-level `cs = text/bytes "AB0"` four lines below it, and the loader
+refuses that: `` `cs` is already a declaration; rename the binding ``. So the
+program did not run. `micro_corpus_agrees_across_engines` compared "" against
+the golden and failed, on both engines, on this branch and on nothing else.
+
+The `.out` beside it was not written from the fixture. It was written from a
+hand-made probe: `kanso run` and `kanso play` both refuse a `pub play` module,
+so the body was transformed into bare statements in a scratch file, run, and
+the output copied across. The transformation dropped the parameter, which is
+where the collision lived, so the probe ran and the fixture never did. The
+same substitution is why the earlier watch-red proved nothing about the file
+that shipped.
+
+The parameter is `src` now, the program runs, and both engines print the
+golden. Watched red again, this time on the fixture itself: with the miss edge
+carrying 0 instead of 256 it answers `byte 0 at 4` and `byte 0 at 0` where it
+owes `none`. Eleven of eleven golden tests pass.
+
+CLAUDE.md has the rule this broke, in two places -- "enter where a user
+enters" and "watch it fail, for the right reason, before it passes". A probe
+standing in for the fixture satisfies neither, and it looks exactly like
+satisfying both.

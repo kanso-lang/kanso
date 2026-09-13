@@ -14,8 +14,8 @@
 # the answers are the contract.
 import "std/text"
 
-fn kind cs p
-  at_byte cs[p] p
+fn kind src p
+  at_byte src[p] p
 
 fn at_byte 65 _
   "A"
