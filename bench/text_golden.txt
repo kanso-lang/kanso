@@ -653,11 +653,11 @@
 # -1,600 the smallest. Machine-code size carries no welfare term (ruled
 # 2026-09-05); this vein is exact and watched on its own.
 #
-jsonbench text=121330
-encodebench text=131202
-oneshot text=131458
+jsonbench text=118274
+encodebench text=138914
+oneshot text=128402
 basket text=114338
-widebench text=140354
+widebench text=148066
 deepbench text=82690
 escapebench text=55634
 pendbench text=92210
@@ -665,11 +665,11 @@ indexbench text=59442
 scanbench text=194306
 digestbench text=111138
 readbench text=56418
-livebench text=133010
+livebench text=129954
 # 2026-09-10 (kanso#1362): the backends build the partial over a value. Every
 # one of the fourteen rows RISES, by 2,096 bytes on eight of them and 2,432 on
 # the other six: k_partial0..4 and the branch each of k_call0..4 gains are in
 # src/runtime.c, which is linked into every program. The 336-byte spread is the
 # arms a program's own dispatch makes reachable. Machine-code size carries no
 # welfare term (ruled 2026-09-05); this vein is exact and watched on its own.
-runbench text=308402
+runbench text=305554

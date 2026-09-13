@@ -254,4 +254,4 @@
 # compile_instructions came back the same to two instructions.
 #
 # compile_allocs (30,273) and compile_memory are byte-identical on both bases.
-entry_instructions=153614264
+entry_instructions=153609608

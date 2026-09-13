@@ -4563,3 +4563,213 @@ The `.text` vein totals 1,734,300 -> 1,731,932. Six programs fall — runbench
 call.
 
 Welfare 68.07 -> 68.13, banked with `--set` in this round.
+
+## 2026-09-13 (eighth) — a byte index builds an option and the dispatch takes it straight back apart
+
+A non-strict byte index on bytes — `cs[p]` — emits a diamond. The in-range
+arm builds `insertvalue %KValue { i64 0, undef }, byte, 1`, the miss arm is
+the constant `{ i64 4, i64 0 }`, and a phi merges them. When that value goes
+straight into a dispatch whose arms are byte literals, the crossing at
+`src/codegen.rs:2164` collapsed the box back to one i64:
+
+    %tag     = extractvalue %KValue %box, 0
+    %payload = extractvalue %KValue %box, 1
+    %isnone  = icmp eq i64 %tag, 4
+    %raw     = select i1 %isnone, i64 256, i64 %payload
+
+The comment above those four lines said "the box `at` built and this unbox
+fold away in the caller". They do not, and the reason is specific: the box is
+a phi over a STRUCT. LLVM will not sink an `extractvalue` into a phi's
+predecessors, so `%tag` is not a phi of two constants that SimplifyCFG can
+fold — it is an extract of one. All four survive to machine code, on a path
+that runs once per input byte.
+
+In `d_json/scan_4` they are 0x24aa0 `mov $0x4,%r15d`, 0x24abe
+`xor %r15d,%r15d`, 0x24ad2 `cmp $0x4,%r15` and 0x24ad6 `cmove %rbx,%rax`:
+four of the fifteen instructions that function runs per byte, 3,482,622
+times.
+
+So the index emits the same merge as an i64 alongside the box —
+`phi i64 [ %wide, %load ], [ 256, %miss ]` — and records it on the function
+builder; the crossing takes the raw form when it exists. The box goes unread
+and the dead-code pass removes it. Where no byte discriminator consumes the
+index the extra phi is dead and costs nothing, which is why this needs no
+analysis of who the consumer is.
+
+    runbench   2,102,158,436 -> 2,052,562,011   -49,596,425  (-2.3594%)
+
+Container A/B, same worktree, same host, callgrind both sides, the patched
+side read twice on two separate builds and identical to the instruction.
+
+**Four sites, and all four are in the hottest decode functions.** An IR census
+over the linked run program finds the exact shape — a `%KValue` phi with a
+constant-tag incoming, then the extract pair, the `icmp eq 4` and the
+`select` — in `d_json/scan_4`, `d_json/str_char_4`, `d_json/string_scan_3` and
+`d_json/parse_value_2`. That the whole 2.36% comes from four sites is the
+scale the per-function profile predicted: those four are 16.3%, 5.6% and 5.2%
+of runbench between them, and each pays the four instructions per byte rather
+than per call.
+
+`tests/golden/micro/a_byte_index_hands_the_dispatch_a_raw_byte.kso` drives a
+byte in range, the first and last positions, and both ways of being off the
+end, through a group with byte arms and a `none` arm. Watched red: with the
+miss edge carrying 0 instead of 256 the none arm misroutes and the fixture
+answers `byte 0 at 4` where it owes `none at 4`. 256 is the sentinel because
+no byte can be 256, and the fixture is what says the miss edge really carries
+it.
+
+**Eight crossings of ten, and the two that got away are a forced index.**
+The count here was wrong twice before the emitted golden settled it, and the
+way it was wrong is worth more than the number. A multi-line regex over the
+IR — phi, extract, extract, icmp, select, each on the next line — found FOUR
+occurrences, and four is what the first draft of this entry claimed. That
+regex requires ADJACENCY, and in six of the ten the lines are separated by
+other instructions, so it saw fewer than half. The instruction-kind histogram
+cannot miss them, and it is what the emitted golden was reading all along:
+
+    runbench    extractvalue -16   icmp -8   select -8   phi +33   = +1 line
+    widebench   extractvalue -16   icmp -8   select -8   phi +16   = -16 lines
+
+(Re-measured against merged main after kanso#1397 landed. The two changes are
+independent and the deltas are identical on the new base: runbench 34,747 ->
+34,748, widebench 12,136 -> 12,120.)
+
+Eight conversions, four lines each, is the -32; the +33 and +16 are one phi
+per non-strict byte index, most of them dead. Base runbench.ll has TEN
+crossings taking the select path and the patched one has TWO.
+
+Those two are `d_json/array_step_3` and `d_json/obj_value_4`, and they come
+off the OTHER index path. `emit_at` has two: a proven one, taken when the
+inference already knows the container is bytes and the key an int, and a
+general one that tests both tags at runtime and falls back to `k_b_at_fast`.
+This change puts the raw phi on the proven path only, so the general path's
+merge has no entry and the crossing there still writes the four.
+
+A first reading of those two blamed `k_force_fast`, which does sit between
+the merge and the crossing, and that reading was wrong twice over. The proven
+path records `INT | NONE` on its merge, a set with no THUNK bit, so
+`maybe_force` returns without emitting anything and no force is in the way of
+the eight this change converts. On the general path the force is there
+because that merge records NOTHING and every reader takes the default, which
+is TOP, which contains THUNK -- the same defect the comment at
+`src/codegen.rs:5644` records for the arithmetic phi and dates to 2026-09-07.
+
+And on that path the force is REAL, not an artefact of the missing set. The
+slow arm is `k_b_at`, whose list case answers `l->items[i - 1]`, which is any
+value the list holds and can be a thunk. So recording a narrow set there
+would be unsound, and threading the raw name through the force would be
+unsound with it.
+
+What would work is sinking the collapse into the slow predecessor: the fast
+arm's byte is already an i64, so the force, the extract pair, the `icmp` and
+the `select` all belong in the block that calls the runtime, leaving the hot
+arm with a phi and nothing else. That is a larger change than this one, it
+needs the crossing to be the merge's only reader, and it is not here. It
+wants its own measurement.
+
+`emitted_lines` lands on 9,138, a rise of one on the decoder, and
+`emitted_other_lines` lands on 132,718, a fall of twenty-nine across the
+thirteen beside it. The rise is named rather than defended: one phi per
+non-strict byte index is written whether a byte discriminator reads it or
+not, and in a program with 33 indexes and 8 conversions that arithmetic
+lands one line above where it started. The same edit falls by sixteen on
+encodebench and widebench, which write half as many indexes.
+
+The twelve cost veins and the lazy tier AGREE, which is the right answer
+rather than a silence: this removes instructions and allocates nothing
+differently, so no allocation counter has anything to say about it. The work
+vein is where it shows, and that vein is measured on CI.
+
+**CI's sitting.** Six of the fourteen work rows fall and eight are
+byte-identical:
+
+    runbench      2,111,374,474 -> 2,034,936,773   -76,437,701  (-3.6203%)
+    jsonbench     1,392,055,809 -> 1,272,616,210  -119,439,599  (-8.5801%)
+    oneshot          20,306,435 ->    19,510,172      -796,263  (-3.9212%)
+    widebench        34,114,831 ->    33,078,691    -1,036,140  (-3.0372%)
+    encodebench   3,693,122,957 -> 3,692,200,106      -922,851  (-0.0250%)
+    livebench     3,144,795,841 -> 3,143,999,578      -796,263  (-0.0253%)
+
+basket, deepbench, escapebench, pendbench, indexbench, scanbench,
+digestbench and readbench do not move a digit.
+
+The container projected -49,596,425 on runbench and CI read -76,437,701, a
+factor of 1.54. The offset usually runs the other way — this box has
+over-projected every compile row it has measured this fortnight — so a
+container A/B sizes this family of change rather than bounding it, in both
+directions. jsonbench was never A/B'd here at all, and it is the largest
+fall of the six.
+
+The three compile rows move a little, all down: compile_instructions
+46,106,555 -> 46,103,965 (-2,590), entry 153,614,264 -> 153,609,608 (-4,656),
+library 154,373,046 -> 154,368,086 (-4,960). compile_allocs and
+compile_peak_bytes are byte-identical. Welfare 68.13 -> 68.40, banked.
+
+**The machine code RISES, and the reason is not the one this change makes
+obvious.** `text` lands at 1,735,340 against 1,731,932, +3,408 (+0.1968%).
+Four rows fall — jsonbench, oneshot and livebench by 3,056 each, runbench by
+2,848 — and two rise by 7,712 apiece:
+
+    encodebench   131,202 -> 138,914   +7,712
+    widebench     140,354 -> 148,066   +7,712
+
+Those are the two whose emitted line counts FELL by sixteen, so the compiler
+wrote less and the linker produced more. Both directions reproduce on this
+box under its own clang (+7,216 on each, same two programs), which is what
+makes the next step possible: a symbol-size diff of the two encodebench
+binaries.
+
+Five functions that main's binary does not contain at all — every call site
+inlined, the out-of-line copy stripped — carry standalone symbols here:
+
+    d_encodebench/array_delim_4      +5,001
+    d_encodebench/parse_array_2      +2,936
+    d_encodebench/parse_number_2       +780
+    d_encodebench/parse_object_2       +754
+    d_encodebench/bad_value_char_2     +372
+
+against seven callers that shrink by 2,653 between them, `array_items_3`
+losing 1,314 and `parse_value_2` 511. Net +7,190, which is the whole move.
+
+The obvious cause is the dead phi: one extra `phi i64` per non-strict byte
+index, written whether a discriminator reads it or not, and an inline cost
+model that runs before the dead-code pass would read those as callee weight.
+**That is refuted.** Three of the five gained no phi at all, and
+`array_delim_4` — 5,001 of the 9,843 — has BYTE-IDENTICAL IR on the two
+trees, as does `array_items_3`, the caller that stopped inlining it. Neither
+function changed by a character.
+
+So the decision moved from outside both of them. LLVM's inliner walks a
+module bottom-up and the budget it spends at one call site is not available
+at the next, so editing `string_scan_3` and `parse_value_2` moved a decision
+in a function neither of them touches. The rise is real, it is named here,
+and the cause is the traversal rather than anything this change wrote into
+those five functions. The runtime rows are the reason to keep it: 3.6% off
+the run program against 3,408 bytes of text, on a vein Clay ruled out of
+welfare on 2026-09-05 precisely so it could be watched without being traded
+against.
+
+**A DEFECT IN THIS CHANGE'S OWN FIXTURE, and what it says about the rule it
+broke.** The fixture named its `kind` parameter `cs`, the same name as the
+module-level `cs = text/bytes "AB0"` four lines below it, and the loader
+refuses that: `` `cs` is already a declaration; rename the binding ``. So the
+program did not run. `micro_corpus_agrees_across_engines` compared "" against
+the golden and failed, on both engines, on this branch and on nothing else.
+
+The `.out` beside it was not written from the fixture. It was written from a
+hand-made probe: `kanso run` and `kanso play` both refuse a `pub play` module,
+so the body was transformed into bare statements in a scratch file, run, and
+the output copied across. The transformation dropped the parameter, which is
+where the collision lived, so the probe ran and the fixture never did. The
+same substitution is why the earlier watch-red proved nothing about the file
+that shipped.
+
+The parameter is `src` now, the program runs, and both engines print the
+golden. Watched red again, this time on the fixture itself: with the miss edge
+carrying 0 instead of 256 it answers `byte 0 at 4` and `byte 0 at 0` where it
+owes `none`. Eleven of eleven golden tests pass.
+
+CLAUDE.md has the rule this broke, in two places -- "enter where a user
+enters" and "watch it fail, for the right reason, before it passes". A probe
+standing in for the fixture satisfies neither, and it looks exactly like
+satisfying both.

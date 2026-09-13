@@ -1679,6 +1679,14 @@ struct FnEmit {
     lazy_cells: Vec<String>,
     /// Stack slots the body asked for, held back for the entry block.
     entry_allocas: Vec<String>,
+    /// A non-strict byte index builds a `%KValue` — the byte, or none — and a
+    /// byte discriminator immediately collapses it back to one i64. The box
+    /// is a phi over a struct, and LLVM will not sink the `extractvalue` into
+    /// the diamond's two arms, so the collapse survives to machine code as
+    /// four instructions on the hot path. This maps such a box to the raw
+    /// i64 phi emitted beside it, so the crossing can take the raw form and
+    /// leave the box for the dead-code pass.
+    raw_byte: crate::hash::Map<String, String>,
 }
 
 impl FnEmit {
@@ -1700,6 +1708,7 @@ impl FnEmit {
             arity: 0,
             lazy_cells: Vec::new(),
             entry_allocas: Vec::new(),
+            raw_byte: crate::hash::Map::default(),
         }
     }
 
@@ -2222,6 +2231,11 @@ impl<'a> Backend<'a> {
             // `e` is an `at`-on-bytes KValue (byte or none); hand it over as a
             // raw i64 — the byte value, or 256 for none. The box `at` built and
             // this unbox fold away in the caller, so a raw byte crosses the edge.
+            if let Some(raw) = f.raw_byte.get(e) {
+                // The index already merged the two arms as an i64; take that
+                // and the box goes unread.
+                return format!("i64 {raw}");
+            }
             let tag = f.tmp();
             f.line(&format!("{tag} = extractvalue %KValue {e}, 0"));
             let payload = f.tmp();
@@ -5724,6 +5738,15 @@ impl<'a> Backend<'a> {
                 "{t} = phi %KValue [ {hit}, %{load} ], [ {miss_value}, %{miss_from} ]"
             ));
             f.record(&t, if strict { INT | ERR } else { INT | NONE });
+            if !strict {
+                // The same merge as one i64: the byte, or 256 for none. A byte
+                // discriminator wants exactly this and would otherwise rebuild
+                // it with an extractvalue pair, an icmp and a select. Nothing
+                // else reads it, so it costs nothing where it is unused.
+                let raw = f.tmp();
+                f.line(&format!("{raw} = phi i64 [ {wide}, %{load} ], [ 256, %{miss_from} ]"));
+                f.raw_byte.insert(t.clone(), raw);
+            }
             return t;
         }
         let ct = inline_tag(f, container);
