@@ -5330,12 +5330,34 @@ Eight conversions, four lines each, is the -32; the +33 and +16 are one phi
 per non-strict byte index, most of them dead. Base runbench.ll has TEN
 crossings taking the select path and the patched one has TWO.
 
-Those two are `d_json/array_step_3` and `d_json/obj_value_4`, and they are
-missed conversions rather than a different shape. In both the index result
-passes through `k_force_fast` before it reaches the crossing, so the operand
-the crossing is holding is the force's result and the lookup finds nothing
-under that name. Threading the raw form through the force is the obvious
-next move and is NOT in this change, because it wants its own measurement.
+Those two are `d_json/array_step_3` and `d_json/obj_value_4`, and they come
+off the OTHER index path. `emit_at` has two: a proven one, taken when the
+inference already knows the container is bytes and the key an int, and a
+general one that tests both tags at runtime and falls back to `k_b_at_fast`.
+This change puts the raw phi on the proven path only, so the general path's
+merge has no entry and the crossing there still writes the four.
+
+A first reading of those two blamed `k_force_fast`, which does sit between
+the merge and the crossing, and that reading was wrong twice over. The proven
+path records `INT | NONE` on its merge, a set with no THUNK bit, so
+`maybe_force` returns without emitting anything and no force is in the way of
+the eight this change converts. On the general path the force is there
+because that merge records NOTHING and every reader takes the default, which
+is TOP, which contains THUNK -- the same defect the comment at
+`src/codegen.rs:5644` records for the arithmetic phi and dates to 2026-09-07.
+
+And on that path the force is REAL, not an artefact of the missing set. The
+slow arm is `k_b_at`, whose list case answers `l->items[i - 1]`, which is any
+value the list holds and can be a thunk. So recording a narrow set there
+would be unsound, and threading the raw name through the force would be
+unsound with it.
+
+What would work is sinking the collapse into the slow predecessor: the fast
+arm's byte is already an i64, so the force, the extract pair, the `icmp` and
+the `select` all belong in the block that calls the runtime, leaving the hot
+arm with a phi and nothing else. That is a larger change than this one, it
+needs the crossing to be the merge's only reader, and it is not here. It
+wants its own measurement.
 
 `emitted_lines` lands on 9,138, a rise of one on the decoder, and
 `emitted_other_lines` lands on 132,718, a fall of twenty-nine across the
