@@ -166,7 +166,25 @@ hojicha</code></pre>
 
 <p>look at that plan. the runtime can name the first step, but the rest is <code>&lt;continuation&gt;</code>—honest notation for "what happens next depends on a value i don't have yet." that's the difference between the wall and the bind dot in one screenshot: <code>&gt;&gt;</code> sequences io values that don't pass data (the plan lists every step up front), while <code>.&gt;</code> threads a value through, so later steps are functions waiting for input. together they are the complete vocabulary of "before" in kanso—everywhere else, order belongs to the runtime, which is chapter 06's whole subject.</p>
 
-<p>note what <code>count_lines</code> is: an ordinary pure function that takes a string. it doesn't know files exist, and nothing in its signature says "i get used near i/o." there's no <code>async</code> keyword to sprinkle through every caller, no effect type to declare—effectfulness travels in the value itself. a function that returns an io is effectful; a function that returns a string is not; and the same function can be piped from a file today and called on a literal in a test tomorrow.</p>
+<p>note what <code>count_lines</code> is: an ordinary pure function that takes a string. it doesn't know files exist, and nothing in its signature says "i get used near i/o." there's no <code>async</code> keyword to sprinkle through every caller and no annotation to write—effectfulness travels in the value itself. a function that returns an io is effectful; a function that returns a string is not; and the same function can be piped from a file today and called on a literal in a test tomorrow.</p>
+
+<p>that is not the same as saying effects are untyped. an effect has a type, <code>&lt;t&gt;effect</code>, and the compiler tracks it through your program without being told. you never write the name; it is inferred from the io values you touch, the way every other type in kanso is inferred. what it buys you is that the compiler knows which of your expressions is a box, so it can refuse one wherever the thing inside is what's wanted:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">boxed.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/os"</span>
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> (<span class="f">length</span> os/args)</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso check boxed.kso</div>
+    <pre><code><span class="k">error[effect]</span>: this is an effect &#8212; a box the words open &#8212; and `length` takes a value; open it with `.&gt;`
+  --&gt; boxed.kso:3:26
+   3 | pub play = print (length os/args)
+                                ^</code></pre>
+  </div>
+</div>
+
+<p><code>os/args</code> is an io, so <code>length</code> is being handed the box rather than the list inside it, and the compiler says so before the program runs. the same refusal covers <code>+</code>, <code>if</code>, an index, <code>==</code>, and any function of your own that wants a value. the fix is the operator you already know: <code>os/args .&gt; (a -&gt; print (length a))</code> opens the box and lets <code>length</code> see the list. this is the whole content of "the words are the only doors"&#8212;the dot applies, <code>.&gt;</code> opens, and nothing opens a box by accident.</p>
 
 <h2>holding an argument back</h2>
 
@@ -234,7 +252,7 @@ order <span class="o">=</span> <span class="s">"one taiyaki, extra custard"</spa
   </div>
 </div>
 
-<p>the round trip proves the sequencing: the read found the file because the wall put the write before it. one line of source holds both operators doing their one job each—<code>&gt;&gt;</code> orders two effects that share no data, <code>.</code> moves the read's result into <code>print</code>.</p>
+<p>the round trip proves the sequencing: the read found the file because the wall put the write before it. one line of source holds both operators doing their one job each—<code>&gt;&gt;</code> orders two effects that share no data, <code>.&gt;</code> moves the read's result into <code>print</code>.</p>
 
 <p><code>args</code> is the argument list (everything after <code>--</code> on the command line), and <code>stdin</code> is standard input. both are io values—the argument list and the input stream belong to the outside world, so touching them is an effect like any other, and they pipe like everything else:</p>
 
@@ -463,7 +481,7 @@ test eval::tests::scripted_executor_records_the_transcript ... ok</code></pre>
 </div>
 </div>
 
-<p>you can now split any program into the part that decides and the part that touches the world, and say precisely where the boundary sits: io values on one side, one executor on the other. you can read <code>&gt;&gt;</code> as pure sequence and <code>.</code> as a value crossing into the future, and predict a <code>--plan</code> from the source before you run it. you can trace an execution-time failure to the endpoint and explain why no arm caught it. and you can test the logic of an effectful program without faking a single i/o call. chapter 06 takes the one thing this chapter kept quiet—what happens when two io values <em>don't</em> need an order—and turns it into concurrency for free.</p>
+<p>you can now split any program into the part that decides and the part that touches the world, and say precisely where the boundary sits: io values on one side, one executor on the other. you can read <code>&gt;&gt;</code> as pure sequence and <code>.&gt;</code> as a value crossing into the future, and predict a <code>--plan</code> from the source before you run it. you can trace an execution-time failure to the endpoint and explain why no arm caught it. and you can test the logic of an effectful program without faking a single i/o call. chapter 06 takes the one thing this chapter kept quiet—what happens when two io values <em>don't</em> need an order—and turns it into concurrency for free.</p>
 
 <h2>exercises</h2>
 
