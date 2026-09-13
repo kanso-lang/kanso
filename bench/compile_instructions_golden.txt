@@ -1367,4 +1367,21 @@
 # say it answers a box is decided by reading its arms' tails, which a set-only
 # check could not do. Ruled 2026-08-29; the floor moves to admit it rather
 # than the feature going.
-compile_instructions=46111185
+#
+# 2026-09-13 (the runtime's counter sites, re-based): compile_instructions 46,111,185 -> 46103773,
+# a FALL of 7,412 (-0.0161%). CI's sitting on the merged base carrying
+# kanso#1395.
+#
+# THE SIGN FLIPPED WHEN THE BASE MOVED. Against the base kanso#1395 left, the
+# same diff read 45,522,509 -> 45,529,923, a RISE of +7,414. That is what this file's own
+# warning means by the layout vein: `kanso check lib/json` stops before
+# codegen and cannot run a runtime gate, so nothing a counter gate does can
+# reach this row. What moves it is that src/codegen.rs and src/main.rs both
+# change -- counters_wanted() becomes a function both halves ask, and
+# cached_runtime_object keys on it -- and their bytes move where the
+# compiler's own code lands. Where it lands depends on everything else in the
+# binary, so a base that moved takes the sign with it, and the magnitude on
+# compile_instructions came back the same to two instructions.
+#
+# compile_allocs (30,273) and compile_memory are byte-identical on both bases.
+compile_instructions=46103773

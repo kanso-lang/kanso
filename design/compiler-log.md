@@ -4994,3 +4994,152 @@ same answer a round later.
 counting object linked into the counting binaries, which is a second object in
 the cached-runtime key rather than a second flag on the emitter.
 
+
+---
+
+## 2026-09-13 (fifth) — the runtime's twenty-seven counter sites, and what a shipped binary says when asked for counters
+
+The entry above split the emitter's eight `k_stats_on` gates out of a shipped
+binary and left the runtime's own twenty-seven, naming them as the other
+13,187,834 instructions. This is them, and it is also the answer to the hazard
+that entry opened and could not close.
+
+**The sites.** `runtime.c` gains one macro, `K_COUNTING`, defined 1 under
+`-DKANSO_COUNTERS_BUILD` and 0 without, and each of the twenty-seven reads it
+before it reads `k_stats_on`. In a counting build that is a constant 1 and the
+test reads exactly as it did; in a shipped build it is a constant 0 and the
+whole condition folds away. The flag comes from the caller, so
+`cached_runtime_object` keys on it: an object built one way handed to a build
+that wanted the other is a binary whose counters are half there, which is the
+same reason the key already carries the closure convention.
+
+`counters_wanted()` moves out of the emitter's one call site into a function
+both halves ask, because a counting runtime linked against gate-free IR, or
+the reverse, is exactly the failure the key exists to prevent.
+
+**Measured on the base carrying the emitter half**, merged main at 7b9844fe,
+both readings on this container:
+
+    runbench  2,115,255,600 -> 2,102,067,766   −13,187,834  (−0.6235%)
+    .text           313,650 ->      310,082        −3,568
+
+The absolute figure is the one the entry above predicted to the instruction,
+which it could be because the delta is a fixed number of tests per run rather
+than anything that varies with the workload. CI measures its own rows; this
+host's glibc and clang do not match the goldens' measured-on line, so the
+instructions gate refuses to compare and is right to.
+
+**A shipped binary asked for counters says it cannot and prints nothing.**
+That is the hazard: with only the emitter half shipped, the runtime still
+counted and the inlined fast paths did not, so the block printed was mostly
+right. On escapebench `push_mut_fast` read 0 against 3,000 and
+`push_mut_slow` 12,000 against 1,200,000, with twenty-odd rows agreeing
+either way. A reader has no reason to distrust the two that do not, which is
+what makes a mostly-right block worse than a refusal. `k_stats_dump` now
+tests `K_COUNTING` first and writes two lines to stderr naming
+`kanso build --counters` as the thing to do instead.
+
+`k_stats_on` itself stays defined in both builds. The emitted IR declares it
+`external global` either way, so removing the definition would be a link
+error rather than a saving.
+
+**The spec runs both binaries.** `tests/a_shipped_binary_refuses_to_report_
+counters.rs` builds one sample twice, with and without `--counters`, sets
+`KANSO_COUNTERS` at RUN time on each, and reads stderr: the counting one must
+still carry `push_mut_fast=` and `allocs=`, the shipped one must say it was
+built without them and must print neither row. Watched red with the refusal
+deleted, where it failed on the full counter block the shipped binary then
+printed. A spec asserting this off the source would pass with the refusal
+removed, which is why it runs the programs.
+
+The counters sweep agrees: every one of the twelve cost veins and the lazy
+tier is byte-identical, because each of those gates measures the counting
+binary, where the gates are all still there.
+
+**CI's sitting, and the two things round one found.** All fourteen work rows
+fall and all fourteen .text rows fall:
+
+    runbench     2,141,642,566 -> 2,128,867,999   -12,774,567  (-0.5965%)
+    deepbench      376,926,218 ->   371,382,179    -5,544,039  (-1.4709%)
+    scanbench      534,892,515 ->   528,870,249    -6,022,266  (-1.1258%)
+    indexbench       3,265,392 ->     3,265,296           -96  (-0.0029%)
+    runbench .text     313,682 ->       308,978        -4,704
+
+deepbench and scanbench carry the largest falls because they call hardest, and
+indexbench the smallest because it barely allocates. The .text spread, 1,600 to
+4,704 bytes, is which arms a program's own code makes reachable in a runtime
+that is linked into all of them.
+
+The container projected -13,187,834 on runbench and CI read 0.9687 of it. The
+delta is a fixed number of tests per run rather than anything that scales with
+the workload, so the two hosts differ only in what a test costs them, and that
+ratio is the one to expect from this box.
+
+The three compile rows RISE, and each lands on a value:
+`compile_instructions` 45,522,509 -> 45,529,923 (+7,414 / +0.0163%),
+`entry_instructions` 152,090,185 -> 152,111,514 (+21,329 / +0.0140%),
+`library_instructions` 152,460,583 -> 152,481,754 (+21,171 / +0.0139%).
+`kanso check lib/json` stops before codegen and cannot run a runtime gate, so
+this is the layout vein: both `src/codegen.rs` and `src/main.rs` change, and
+their bytes move the compiler's own layout. `compile_allocs` (29,473) and
+`compile_memory` are byte-identical.
+
+Welfare 68.08 -> 68.12, banked with `--set` in the same round. A rise is
+arithmetic rather than a decision.
+
+**Round one was red twice, and both were mine.** The ratchet went STALE on `an
+allocation counter gated by two branches`: its sed searched for
+`if (__builtin_expect(k_stats_on > 0, 0)) {` and the gate now reads
+`K_COUNTING && k_stats_on > 0`, so the patch matched nothing and the mutation
+could not turn its gate red. Only the anchor moved; what the mutation proves is
+unchanged. That is the third time in this repository a mutation has gone stale
+because the line it anchors on was rewritten under it, and the detector each
+time was the ratchet itself rather than anybody noticing.
+
+`kq specs` died at its cost-goldens step, which is this change working. kq
+builds `./kq` with `--release` and then runs `KANSO_COUNTERS=1 ./kq` to diff
+three cost goldens, and `ci.yml` does the same for `publish_numbers`; under
+kanso#1393 alone it got a block that was mostly right, and under this it gets
+the refusal. kq is the caller the hazard was about, found by the refusal rather
+than by reading. kanso-lang/kq#104 builds both with `--counters` -- and had to
+bump kq's pin with them, because `--counters` does not exist at 08dc714d and
+was minted by kanso#1393. kanso's own `kq specs` job never saw that, because it
+clones kq at HEAD and builds it with the PR's compiler rather than with the
+pin.
+
+## 2026-09-13 (sixth) — the layout vein's sign flipped when the base moved
+
+kanso#1395 landed while the counter-sites branch was in flight, and the branch
+was re-cut onto merged main. The runtime side did not notice — all fourteen
+work rows, all fourteen .text rows and the twelve cost veins agree on both
+bases — and the three compile rows did.
+
+    row                     against #1395's base      against merged main
+    compile_instructions    45,522,509 -> 45,529,923  46,111,185 -> 46,103,773
+                                   +7,414  (+0.0163%)        -7,412  (-0.0161%)
+    entry_instructions     152,090,185 -> 152,111,514 153,623,844 -> 153,606,666
+                                  +21,329  (+0.0140%)       -17,178  (-0.0112%)
+    library_instructions   152,460,583 -> 152,481,754 154,382,827 -> 154,367,035
+                                  +21,171  (+0.0139%)       -15,792  (-0.0102%)
+
+Same diff, two bases, opposite signs — and on compile_instructions the same
+magnitude to two instructions, 7,414 against 7,412. `compile_allocs` is 30,273
+on the merged base and byte-identical either way, and so is `compile_memory`.
+
+**That is what this file means by the layout vein, stated as a measurement
+rather than a caveat.** `kanso check lib/json` stops before codegen, so no
+counter gate the diff touches can run during the compile that this row counts.
+What the diff does reach is the compiler's own bytes: `counters_wanted()`
+becomes a function both halves ask, and `cached_runtime_object` keys on it. A
+few hundred bytes of Rust move where every function after them lands, and where
+they land depends on everything else in the binary — which is exactly what a
+base change replaces. CLAUDE.md already says never to write down that this row
+cannot move and never to write down that it did before CI has said so. This
+adds the other half: **its SIGN is not a property of the diff either.**
+
+The practical rule that follows is the one the re-base already used. When main
+moves under a branch whose diff touches src/, the three compile goldens take
+main's values and CI measures the delta again; carrying the old delta forward
+by arithmetic would have written a rise where CI reads a fall.
+
+Welfare 68.03 -> 68.07, banked with `--set` in the same round.
