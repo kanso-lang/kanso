@@ -4882,3 +4882,35 @@ period right. Watched red on that version, with the staging removed:
     ::error::digestbench read 10060595 10060609 10060609 10060609 from four trees
 
 and green with it restored.
+
+### What CI said about the first push, and two repairs
+
+The step went red having printed nothing at all. The whole of the job log for
+it was `Process completed with exit code 127`.
+
+127 is a shell saying a command was not there. valgrind is installed inside the
+step named "how much work", and this new step runs ahead of it, so valgrind was
+not on PATH — and because a callgrind total is read off stderr, the gate sends
+stderr to a file, which is where `valgrind: not found` went. Reproduced here by
+renaming the binary in a copy of the script: exit 127, no output, the message
+sitting in `/tmp/ir.pi`.
+
+The install is now its own step ahead of both, and the gate reads its own
+failures out loud: an empty count prints the captured file and says which
+benchmark and which tree it was measuring.
+
+    ::error::no instruction count came back for indexbench run from /tmp/kanso-pi.
+    ::error::What the run said, in full:
+    ::error::    env: 'valgrind_absent': No such file or directory
+
+The second repair is a diagnostic bug the first push carried. `rc` was both the
+per-benchmark verdict and the job's, so indexbench going red printed the error
+block for digestbench too, over four readings that agreed. The comment in the
+script promises that either one going red names which half broke, and one
+variable could not keep that. Watched with a stub that moves indexbench and
+holds digestbench still: indexbench named, digestbench reported clean, the job
+still red.
+
+The rest of the run is what the change predicted. `work:success` — the fourteen
+staged rows matched the golden exactly, so `/tmp/kanso-ir` and the repo root do
+sit in the same phase and no golden needed regenerating.

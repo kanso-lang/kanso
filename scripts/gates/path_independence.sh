@@ -38,6 +38,14 @@ for i in 1 2 3 4; do
   pad="${pad}x"
 done
 
+# The count has to be READ before it can be compared, and the read is where
+# this went wrong the first time it ran on CI. valgrind's stderr is where the
+# total is, so it goes to a file -- and that file is also where a "valgrind:
+# not found" lands. The step was placed ahead of the one that installs
+# valgrind, so the gate exited 127 having printed NOTHING, and the job log said
+# only "Process completed with exit code 127". A tool that is missing must say
+# so out loud; a gate whose whole output is a number owes its reader the file
+# when the number does not arrive.
 measure() {  # measure <source tree> <benchmark>; echoes the instruction count
   rm -rf "$stage"
   mkdir -p "$stage/bench"
@@ -45,21 +53,34 @@ measure() {  # measure <source tree> <benchmark>; echoes the instruction count
   cp "$1/bench/digest_input.txt" "$stage/bench/"
   ( cd "$stage" && env -i PATH=/usr/bin:/bin \
       valgrind --tool=callgrind --callgrind-out-file=/tmp/cg.pi ./"$2" \
-      >/dev/null 2>/tmp/ir.pi )
-  grep -o 'I   refs:.*' /tmp/ir.pi | tr -dc 0-9
+      >/dev/null 2>/tmp/ir.pi ) || true
+  ir=$(grep -o 'I   refs:.*' /tmp/ir.pi | tr -dc 0-9)
+  if [ -z "$ir" ]; then
+    echo "::error::no instruction count came back for $2 run from $1." >&2
+    echo "::error::What the run said, in full:" >&2
+    sed 's/^/::error::    /' /tmp/ir.pi >&2
+    exit 1
+  fi
+  printf '%s' "$ir"
 }
 
+# `moved` is per benchmark and `rc` is the verdict for the job. They were one
+# variable to begin with, which made the second benchmark report the first
+# one's failure: indexbench going red printed the error block for digestbench
+# too, over four readings that agreed. The comment above promises that either
+# one going red names which half broke, and one variable could not keep it.
 rc=0
 for b in indexbench digestbench; do
   first=""
   seen=""
+  moved=0
   for src in $srcs; do
     got=$(measure "$src" "$b")
     [ -z "$first" ] && first="$got"
     seen="$seen $got"
-    [ "$got" = "$first" ] || rc=1
+    [ "$got" = "$first" ] || { moved=1; rc=1; }
   done
-  if [ "$rc" -eq 0 ]; then
+  if [ "$moved" -eq 0 ]; then
     echo "    $b $first from all four tree lengths"
   else
     echo "::error::$b read$seen from four trees whose paths differ only in"

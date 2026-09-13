@@ -267,6 +267,15 @@ jobs:
           }
       - name: build the benchmarks
         run: sh scripts/gates/build_benchmarks.sh
+      # Valgrind is installed HERE rather than inside "how much work", which is
+      # where it used to live, because two steps count instructions now and the
+      # first of them is the next one. Installed inside a later step it was not
+      # on PATH for the earlier one, and since a callgrind total is read off
+      # stderr the gate sends stderr to a file -- so "valgrind: not found" went
+      # into the file and the job log showed a step that printed nothing and
+      # exited 127.
+      - name: valgrind, for the two steps that count instructions
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq valgrind
       # Before any row is compared, prove the rows can be compared at all: an
       # exact instruction golden has to be a property of the binary and not of
       # where the tree was checked out. It was not, and the nightly ratchet is
@@ -294,9 +303,7 @@ jobs:
         id: work
         if: always()
         continue-on-error: true
-        run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq valgrind
-          sh scripts/gates/instructions.sh
+        run: sh scripts/gates/instructions.sh
       - name: decode counters
         id: decode
         if: always()
