@@ -150,17 +150,13 @@
 # 2026-09-11 (a validated string knows its length): 164,041,672 -> 164,060,471,
 # a rise of 18,799 (+0.0115%). The same layout move as the other two compile
 # rows; see bench/compile_instructions_golden.txt.
-# 2026-09-11 (a none that reaches a group with no arm for it is refused):
-# 164,060,471 -> 168,851,345, a rise of 4,790,874 (+2.9202%). The
-# exhaustiveness check stops being flag-gated and infer gains a shadow table;
-# see bench/compile_instructions_golden.txt.
-# 2026-09-11 (the ruling's compile cost, paid down by a third):
-# 168,851,345 -> 167,038,742, a fall of 1,812,603 (-1.0735%). The one map
-# and the pinned inline; see bench/compile_instructions_golden.txt.
-#
-# 2026-09-12, the same two paydowns. 167,038,742 -> 166,387,431, -651,311
-# (-0.390%), which is the same fraction the module row moved -- the
-# signature these two rows have had on every change that reaches both.
+# 2026-09-12 (the box check asks a question the program has already answered):
+# CI's sitting, 168,998,559 -> 167,770,493, a fall of 1,228,066 (-0.7267%).
+# The `any_boxed` hoist; see bench/compile_instructions_golden.txt.
+# 2026-09-12 (three paydown rounds on the box check): CI's sitting,
+# 167,770,493 -> 166,036,229, a fall of 1,734,264 (-1.0337%). The same three
+# changes as the module row. This corpus names effects, so it is the one that
+# actually saves the second walk of every body, and it falls furthest.
 # 2026-09-12 (five compile-cost paydowns in the whole-program checks):
 # 164,060,471 -> 159,904,406, a FALL of 4,156,065 (-2.5333%). The same three
 # fusions and two necessary conditions; see
@@ -234,4 +230,7 @@
 # 2026-09-13 (Arities::of reads the slot it is about to write): 147,951,808 ->
 # 147,756,205, a fall of 195,603 (-0.1322%). Container projected -206,672; CI
 # reads 0.9464. Summed with the module row, -253,322 (-0.1318%).
-entry_instructions=147756205
+# 2026-09-13 (the effect type): 147,756,205 -> 149,755,117, a RISE of
+# 1,998,912 (+1.3529%). The entry corpus names ten imports against the
+# module corpus's four, so the same per-declaration check costs it more.
+entry_instructions=149755117

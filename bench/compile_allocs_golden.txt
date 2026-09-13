@@ -345,22 +345,10 @@
 # constructions that built it are a word. All four compile rows fall together
 # and this one falls furthest in relative terms, which is what a change that
 # deletes a declaration rather than reshaping one looks like.
-# 2026-09-11 (a none that reaches a group with no arm for it is refused):
-# 29,350 -> 29,483, a rise of 133 (+0.4532%). The shadow table is one vector
-# the length of the parameter list, and the exhaustiveness check builds two
-# maps over the program's returns and handled positions.
-# 2026-09-11 (the ruling's compile cost, paid down by a third): CI's
-# sitting, 29,483 -> 29,473, a fall of 10 (-0.0339%). The exhaustiveness
-# check kept two maps over the program where one carries both facts; the
-# second map is gone, and with it its table.
-#
-# 2026-09-12 -- A RISE, and it is the shadow paydown's own ask. 29,473 ->
-# 29,485, +12. The running-total rewrite needs one scratch vector where the
-# derivation it replaces used a scalar; that vector is the only allocation
-# the change introduces, which makes it the candidate rather than a proven
-# cause, and nothing has yet measured the two apart. It is priced against
-# -205,602 on compile_instructions in the same welfare term, and the sum is
-# what the objective reads.
+# 2026-09-12 (the box check asks a question the program has already answered):
+# CI's sitting, 29,386 -> 29,374, a fall of 12 (-0.0408%). The binder set is
+# one reused table, so skipping the fill costs it its growth rather than its
+# creation; twelve blocks is what that growth was.
 #
 # 2026-09-12 (the shadow set deferred): 29,350 -> 29,338, a FALL of 12
 # (-0.0409%). The set of a declaration's bound names is a HashSet, and the
@@ -412,4 +400,9 @@
 # fall of 3. `BuildScan` loses its `types` field -- `PerNode` already carries
 # that table -- and the struct is built once per program either way, so three
 # is the whole of it. compile_peak_bytes is byte-identical at 774,660.
-compile_allocs=29314
+# 2026-09-13 (the effect type): 29,314 -> 29,338, a RISE of 24 --
+# `check_box_where_value`'s one table per module. `compile_peak_bytes` is
+# byte-identical at 774,660, so the pass allocates a table and nothing that
+# grows with the program. This is a ruled language feature and its cost is
+# admitted by lowering the floor, under Clay's 2026-09-13 ironclad rule.
+compile_allocs=29338

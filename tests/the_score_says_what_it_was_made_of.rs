@@ -93,9 +93,14 @@ fn asking_what_was_scored_does_not_move_the_floor() {
 /// today — `--counters` is that half of a row exactly — and requires the
 /// rescorer's column to be the number welfare reports.
 ///
-/// The column carries four places and welfare's banner two, so the column is
-/// rounded to the banner rather than compared inside a tolerance. A tolerance
-/// is a guess that stays green through exactly the drift this is here for.
+/// COMPARED AT ONE PRECISION, because rounding a rounded number is wrong at a
+/// boundary. This read the banner's two places and rounded the column's four
+/// down to them, and on kanso#1372 the two implementations agreed exactly at
+/// 67.54499292290286 and were reported as disagreeing: four places make that
+/// 67.5450, rounding 67.5450 gives 67.55, and the banner says 67.54. Anything
+/// in [67.5445, 67.5450) reads that way. `welfare --score` prints the column's
+/// own precision, so the two are compared as they are written — which is also
+/// a hundred times tighter than the old comparison, and still not a tolerance.
 #[test]
 fn the_rescored_column_is_the_score_the_tool_reports() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -142,12 +147,10 @@ fn the_rescored_column_is_the_score_the_tool_reports() {
     let at = said.find("\"welfare\":\"").expect("a welfare column") + 11;
     let rest = &said[at..];
     let column = &rest[..rest.find('"').expect("the column ends")];
-    let theirs: f64 = column.parse().expect("a score");
 
-    let banner = ask(root, &[]);
-    let ours = banner.split_whitespace().nth(1).expect("welfare says a score").to_string();
+    let ours = ask(root, &["--", "--score"]).trim().to_string();
 
-    assert_eq!(format!("{theirs:.2}"), ours, "the rescorer writes {column}");
+    assert_eq!(column, ours, "the rescorer writes {column}, welfare scores {ours}");
 }
 
 /// The model dates the formula, because that date is what the rescorer stamps

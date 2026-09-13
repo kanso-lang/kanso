@@ -138,17 +138,16 @@
 # 2026-09-11 (a validated string knows its length): 164,324,373 -> 164,342,505,
 # a rise of 18,132 (+0.0110%). The same layout move as the other two compile
 # rows; see bench/compile_instructions_golden.txt.
-# 2026-09-11 (a none that reaches a group with no arm for it is refused):
-# 164,342,505 -> 169,613,006, a rise of 5,270,501 (+3.2070%). The
-# exhaustiveness check stops being flag-gated and infer gains a shadow table;
-# see bench/compile_instructions_golden.txt.
-# 2026-09-11 (the ruling's compile cost, paid down by a third):
-# 169,613,006 -> 167,802,001, a fall of 1,811,005 (-1.0677%). The one map
-# and the pinned inline; see bench/compile_instructions_golden.txt.
-#
-# 2026-09-12, the same two paydowns. 167,802,001 -> 167,177,778, -624,223
-# (-0.372%). This row is not in the objective; it moves with the other two
-# because the three are one compile counted on three routes.
+# 2026-09-12 (the box check asks a question the program has already answered):
+# CI's sitting, 169,284,150 -> 168,056,074, a fall of 1,228,076 (-0.7255%).
+# The `any_boxed` hoist; see bench/compile_instructions_golden.txt. Ten
+# instructions from the entry row's fall on the same change, which is what
+# kanso#1344 found these two corpora to be: the same measurement.
+# 2026-09-12 (three paydown rounds on the box check): CI's sitting,
+# 168,056,074 -> 166,320,043, a fall of 1,736,031 (-1.0330%). The entry and
+# library rows fall within 1,767 instructions of each other on the same change,
+# which is kanso#1344's finding restated: the two corpora name the identical
+# imports and are the same measurement.
 # 2026-09-12 (five compile-cost paydowns in the whole-program checks):
 # 164,342,505 -> 160,184,317, a FALL of 4,158,188 (-2.5302%). The same three
 # fusions and two necessary conditions; see
@@ -215,4 +214,7 @@
 # 2026-09-13 (Arities::of reads the slot it is about to write): 148,288,999 ->
 # 148,091,856, a fall of 197,143 (-0.1329%). `check_named_per_node` runs on
 # every route, so this row moves with the other two.
-library_instructions=148091856
+# 2026-09-13 (the effect type): 148,091,856 -> 150,092,130, a RISE of
+# 2,000,274 (+1.3507%). `check_box_where_value` runs in the shared checks,
+# so this row moves with the entry row to within 0.0022 points.
+library_instructions=150092130

@@ -1155,35 +1155,21 @@
 # a rise of 5,700 (+0.0116%). src/runtime.c is carried in the compiler, so its
 # bytes and the layout under them move when it changes; the front end does no
 # more work. The entry and library rows rise by the same fraction.
-# 2026-09-11 (a none that reaches a group with no arm for it is refused):
-# 49,097,584 -> 50,747,925, a rise of 1,650,341 (+3.3614%). Two pieces of
-# per-declaration work every route now does. check_none_exhaustive ran only
-# under KANSO_EXHAUSTIVE and the flag was set nowhere, so the ruling cost
-# nothing to carry and answered nothing; it runs on every compile now. And
-# infer builds a shadow table beside its parameter sets -- per parameter, the
-# bits an arm earlier in the group takes first -- so an arm below a `none` arm
-# is not handed the none it can never be given. The three compile rows rise
-# together and by nearly the same fraction, which is what per-declaration work
-# looks like when every route runs it.
-# 2026-09-11 (the ruling's compile cost, paid down by a third): CI's
-# sitting, 50,747,925 -> 50,228,060, a fall of 519,865 (-1.0244%). Two
-# structures the entry above added were doing the same work twice.
-# check_none_exhaustive kept `returns` keyed by (name, arity) and `handles`
-# keyed by (name, arity, position); both keys start with the declaration's
-# name, so the second hashed that string once per parameter to build and
-# once per argument to read. They are one map now, the per-position bool a
-# u64 bitmask beside the return set. And widen_param, three lines that LLVM
-# inlined at every caller until the shadow load was added, had outlined; the
-# inline is pinned and the load stays. The three instruction rows fall
-# together by nearly the same fraction, the same signature the rise had.
-#
-# 2026-09-12, the exhaustiveness rule's two paydowns. The walk asks its
-# arguments before it asks the returns table, and the shadow table
-# accumulates instead of re-deriving. 50,228,060 -> 50,022,458, -205,602
-# (-0.409%). The container read the two changes at -256,721 SUMMED across
-# this row and the entry row where CI reads -856,913; the toolchains differ
-# and this is a layout vein, so the container sized the change and CI
-# priced it. Both agree on the sign.
+# 2026-09-12 (the box check asks a question the program has already answered):
+# CI's sitting, 50,544,369 -> 49,937,088, a fall of 607,281 (-1.2015%). The
+# pass reads `any_boxed` once over its returns table, and when nothing in the
+# program answers a box the two arms that ask the table answer no without
+# asking -- so the binder set those arms read is never read, and the second
+# walk of every body that built it is never taken. The three instruction rows
+# fall together, which is what per-declaration work looks like on every route.
+# 2026-09-12 (three paydown rounds on the box check): CI's sitting,
+# 49,937,088 -> 49,626,153, a fall of 310,935 (-0.6226%). Three changes, each
+# measured on its own: a call asks its arguments before it asks the returns
+# table; the table answers before the binder set does; the binder set is built
+# on the first ask rather than eagerly. The module row is the one that gains
+# least of the three, because this corpus imports no effect-bearing module, so
+# `any_boxed` is false and the eager binder walk it now skips was already
+# being skipped here.
 # 2026-09-12 (five compile-cost paydowns in the whole-program checks):
 # 49,097,584 -> 47,846,337, a FALL of 1,251,247 (-2.5475%). Three fusions gave
 # the checks in src/check.rs one descent apiece where they had taken one each,
@@ -1369,4 +1355,9 @@
 # noting against this file's own warning that this row usually moves on any
 # edit to the compiler's Rust: here it moved because the work moved, not
 # because the layout did.
-compile_instructions=44234005
+# 2026-09-13 (the effect type: the plain dot is an application, and a box
+# where a value is expected is refused): 44,234,005 -> 44,767,714, a RISE of
+# 533,709 (+1.2065%). The rule's own cost, after the four paydown rounds
+# this branch already spent on it. Ruled 2026-08-29; the floor moves to
+# admit it rather than the feature going.
+compile_instructions=44767714

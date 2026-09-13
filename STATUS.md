@@ -92,10 +92,25 @@ not audited.
 
 ### Effects are types, and the words are the only doors (2026-08-29)
 
-The archive entry of that name. No `<t>effect` type exists; a `.` over an io
-still binds automatically, so `effect . rescue orders` parses and its handler
-never runs. Owes: the type, the refusal of a box where a value is expected,
-the end of the automatic bind, and ch04/ch05 moving with it.
+The archive entry of that name. Built on 2026-09-10: the automatic bind is
+gone (`x . f` is `f x`, and a box handed through the plain dot stays a box),
+and a provable box handed to something that reads the value inside is
+refused at check. Owes: the `<t>effect` spelling (`e:<int>effect` is refused
+by the canonical-spacing rule today) and ch04/ch05 moving with it (the
+ledger's "The book teaches the boundary language").
+
+It does NOT owe the drop question. The same 2026-08-29 sitting closed it —
+the archive's "gavel: the drop question closes — explicitness IS the
+guarantee" — and closed it by DECLINING to mint anything: an unused binding
+is already a compile error, so a dropped effect is already unspellable, and
+Clay ruled the premise backwards. "No new checker rule and no io-edge rule
+is minted." An earlier draft of this row carried it as owed.
+
+**BUILT AND MERGED, 2026-09-13 (kanso#1372).** The floor that blocked it was
+never Clay's to grant: he ruled on 2026-09-13 that lowering the floor in
+service of the specification needs no permission, and the language clause in
+CLAUDE.md now says so. The floor moved 67.77800065192253 -> 67.754 by hand,
+CI went 19/19 green, and the row below stays only until the chat clears it.
 
 ### Pure fallibility is boxed too (2026-08-31)
 
@@ -105,10 +120,24 @@ box; `foo["bar"]` stays the data form. Rides with the effect type above and
 is listed so the one-line `foo["bar"]! .? (e -> "anonymous")` form the gavel
 promises is visible as owed.
 
+**Half unblocked, 2026-09-13.** The effect type it rides on has landed
+(kanso#1372). What still blocks it is its own unruled question: where the box
+wraps. the ledger's Blocking
+entry "Where the box wraps under the pure-fallibility rider" asks whether the
+box is every err-carrying answer (738 of lib's 770 declarations) or the `!`
+name (71), with the price of each measured. Nothing builds until that is
+ruled, and a ruling alone does not unblock it — the effect type has to land
+first either way.
+
 ### The book teaches the boundary language (queued P1, 2026-08-26)
 
 Held in the ledger's "Open, not blocking" until the effect type exists; the
 row is here so the dependency is visible from the list cloud reads.
+
+**Unblocked, 2026-09-13.** `book_check` executes every panel and compares its
+output, so ch04/ch05 could not describe the effect type before it shipped. It
+has now shipped (kanso#1372), so this is buildable: the prose is written and
+verified on a local branch and needs re-verifying against merged main.
 
 ## In flight
 

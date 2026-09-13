@@ -2,8 +2,10 @@
 # a sequence until it runs. Equality refuses the same pair for its own reason —
 # asking whether two effects are the same effect is asking which one you were
 # handed — so the two refusals read differently on purpose.
+# The check refuses a provable box here now (the errors corpus pins that
+# sentence), so the box travels through a list, where nothing can prove it.
 import "std/io"
 
-w = io/write "x"
+w = (push [] (io/write "x"))[1]!
 
 pub play = print "{w < w}"
