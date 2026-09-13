@@ -27,6 +27,56 @@ enum ArmCase {
     Rec(i64, usize),
 }
 
+/// The eight inlined fast paths in DECLARES each ask `k_stats_on` before they
+/// take the shortcut, because the shortcut bypasses the runtime call that
+/// would have counted. A binary nobody is going to count does not need the
+/// question: folding the eight gates to a constant and relinking the shipped
+/// recipe reads 2,141,315,030 -> 2,115,346,210 on the run program, a fall of
+/// 25,968,820 (1.2128%), with `.text` 2,048 bytes smaller and stdout byte for
+/// byte the same.
+///
+/// The gate is exactly three lines wherever it appears, and this REFUSES to
+/// proceed on anything else rather than silently leaving one in: a ninth site
+/// written a different way must turn the build red, not go quietly unstripped.
+fn without_stats_gate(lines: Vec<&str>) -> Vec<String> {
+    let mut out: Vec<String> = Vec::with_capacity(lines.len());
+    let mut i = 0;
+    let mut stripped = 0;
+    while i < lines.len() {
+        let line = lines[i];
+        if !line.contains("load i32, ptr @k_stats_on") {
+            out.push(line.to_string());
+            i += 1;
+            continue;
+        }
+        let icmp = lines.get(i + 1).copied().unwrap_or("");
+        let br = lines.get(i + 2).copied().unwrap_or("");
+        assert!(
+            icmp.contains("= icmp ne i32 ") && icmp.trim_end().ends_with(", 0"),
+            "the stats gate's second line is not the icmp this expects: {icmp}"
+        );
+        let fast = br
+            .rsplit_once("label %")
+            .map(|(_, name)| name.trim())
+            .filter(|_| br.trim_start().starts_with("br i1 "))
+            .unwrap_or_else(|| {
+                panic!("the stats gate's third line is not the br this expects: {br}")
+            });
+        out.push(format!("  br label %{fast}"));
+        stripped += 1;
+        i += 3;
+    }
+    assert_eq!(
+        stripped, STATS_GATE_SITES,
+        "the stats gate moved: DECLARES holds a different number of them"
+    );
+    out
+}
+
+/// How many `k_stats_on` gates DECLARES carries. Pinned so that adding one
+/// without teaching `without_stats_gate` about it fails loudly.
+pub const STATS_GATE_SITES: usize = 8;
+
 const DECLARES: &str = r#"%KValue = type { i64, i64 }
 %parsed = type { i64, i64 }
 %KBytes = type { i64, ptr }
@@ -2766,7 +2816,7 @@ impl<'a> Backend<'a> {
                         .filter(|l| !l.starts_with("declare"))
                         .any(|l| l.contains(&probe))
             };
-            DECLARES
+            let kept: Vec<&str> = DECLARES
                 .lines()
                 .filter(|line| {
                     let Some(rest) = line.strip_prefix("declare ") else { return true };
@@ -2775,8 +2825,20 @@ impl<'a> Backend<'a> {
                     let Some(paren) = sym.find('(') else { return true };
                     referenced(&sym[..paren])
                 })
-                .collect::<Vec<_>>()
-                .join("\n")
+                .collect();
+            // Either flag keeps them. `--counters` is the explicit ask; a
+            // build running under KANSO_COUNTERS is a process that is itself
+            // counting, and a binary it produces is going to be counted too.
+            // Without the second, tests/golden.rs's .mem vein -- which sets
+            // KANSO_COUNTERS around a build it drives through the library --
+            // silently got a gate-free binary and every allocation counter in
+            // the corpus moved at once.
+            let counters = std::env::var_os("KANSO_COUNTERS_BUILD").is_some()
+                || std::env::var_os("KANSO_COUNTERS").is_some();
+            match counters {
+                true => kept.join("\n"),
+                false => without_stats_gate(kept).join("\n"),
+            }
         };
         let mut out = declares;
         out.push('\n');

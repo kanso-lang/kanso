@@ -10,7 +10,7 @@
 # doubles. Nothing else in the corpus can see that shape, so a change that
 # restores per-position rewinding shows up here and only here.
 set -e
-KANSO_COUNTERS=1 ./scanbench 2>counters_scan.txt >/dev/null
+KANSO_COUNTERS=1 ./scanbench-counters 2>counters_scan.txt >/dev/null
 diff bench/cost_golden_scan.txt counters_scan.txt || {
   echo "::error::scan counters diverged. arena_blocks is the row to read"
   echo "::error::first: it is arena the scan never gave back, and it grows"
