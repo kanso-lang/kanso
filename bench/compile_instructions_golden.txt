@@ -1402,4 +1402,4 @@
 # statements and nodes in the same order, and share one walk now. Runtime did
 # NOT move: `work:success` on the same run, runbench 2,003,021,871, identical
 # to its golden.
-compile_instructions=45490501
+compile_instructions=45251941

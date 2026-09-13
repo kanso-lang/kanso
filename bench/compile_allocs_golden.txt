@@ -431,4 +431,4 @@
 # apart. Seventeen allocations is the net, and the container could not see it:
 # the three instruction rows were read there as PROGRAM TOTALS because valgrind
 # would not read that binary's symbols, and this row is not in that reading.
-compile_allocs=30241
+compile_allocs=30224

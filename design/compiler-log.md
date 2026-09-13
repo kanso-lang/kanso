@@ -4587,3 +4587,18 @@ gap #1409 read on its own binary, which is the size of the error this
 substitution carries. CI's rows are the ones to quote.
 
 The runtime sweep agrees with its goldens and the full suite is green.
+
+CI'S SITTING, and the caveat above did not bite. compile_allocs 30,258 ->
+30,224 (−34), compile_instructions 45,490,501 -> 45,251,941 (−238,560 /
+−0.5244%), entry 151,628,169 -> 150,873,629 (−754,540 / −0.4977%), library
+152,469,420 -> 151,715,592 (−753,828 / −0.4944%), summed −1,746,928
+(−0.4997%). The container's totals-against-totals projection was −1,734,046
+and CI read 1.0074 of it — closer than the six main-against-main folds before
+it, and well inside the ~9,200 of gap drift that substitution carries. So the
+0.80 kanso#1409 read is what that shape CAN cost, not what it must: a fold
+whose whole effect is one descent removed moves the startup work not at all,
+and the two binaries' pre-main gaps happened to sit near each other.
+compile_memory, machine_code, emitted_code and compile_libraries all AGREED.
+Runtime is untouched: `work:success`, runbench 2,003,021,871, identical to its
+golden. Welfare 68.5446 -> 68.5543, banked, ratchet 263. Seven `data-golden`
+spans on docs/compiler.html rewritten.
