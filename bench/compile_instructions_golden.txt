@@ -1315,4 +1315,6 @@
 # about the same call sites, so whichever lands second collects less. The two
 # pairs before it were additive to 0.067% and 0.76% and said nothing about
 # this one.
-compile_instructions=44888539
+# 2026-09-13 (the effect type, re-measured on main with all five folds in):
+# 44,888,539 -> 45,428,226, a RISE of 539,687 (+1.2023%). The rule's own cost.
+compile_instructions=45428226

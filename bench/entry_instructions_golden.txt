@@ -218,4 +218,6 @@
 # is cheap where its per-declaration driver was not, so more of the saving
 # sits in the module row's declaration count than in the entry row's node
 # count.
-entry_instructions=149925203
+# 2026-09-13 (the effect type, re-measured): 149,925,203 -> 151,943,865, a RISE
+# of 2,018,662 (+1.3464%).
+entry_instructions=151943865
