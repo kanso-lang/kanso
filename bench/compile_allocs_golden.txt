@@ -402,4 +402,6 @@
 # one because the row counts the whole compile and the set is built once per
 # declaration in each module the directory holds. What the fold buys on the
 # instruction rows is in bench/compile_instructions_golden.txt.
-compile_allocs=29323
+# 2026-09-13 (the exhaustiveness rule, re-measured): 29,323 -> 29,458, a RISE of
+# 135 -- check_none_exhaustive's map and infer's shadow table.
+compile_allocs=29458

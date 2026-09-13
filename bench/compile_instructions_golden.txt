@@ -1329,4 +1329,6 @@
 # about the same call sites, so whichever lands second collects less. The two
 # pairs before it were additive to 0.067% and 0.76% and said nothing about
 # this one.
-compile_instructions=44888539
+# 2026-09-13 (the exhaustiveness rule, re-measured on main with all five folds
+# in): 44,888,539 -> 45,642,466, a RISE of 753,927 (+1.6795%).
+compile_instructions=45642466

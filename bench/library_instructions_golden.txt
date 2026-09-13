@@ -205,4 +205,6 @@
 # and the entry corpus runs statements, and this check keys on call sites in
 # bodies: the two corpora hold different mixes of those, which the earlier
 # folds' per-node savings could not see.
-library_instructions=150211345
+# 2026-09-13 (the exhaustiveness rule, re-measured): 150,211,345 -> 152,595,931,
+# a RISE of 2,384,586 (+1.5875%).
+library_instructions=152595931

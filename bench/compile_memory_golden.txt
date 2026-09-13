@@ -167,7 +167,12 @@ front_end_rounds=62
 # `emitted_code` AGREED across the change, which is the same finding from the
 # other end: the compiler wrote byte-identical code, so the answers did not
 # move, only the route to them.
-front_end_visits=22724
+# 2026-09-13: the merge left this file carrying front_end_visits from main and
+# compile_peak_bytes from this branch, which is a file that agrees with neither
+# tree. The branch's own reading is 22,449 -- the inference narrowing subtracts
+# the bits an arm above names, so a parameter settles on a smaller set and the
+# fixpoint re-dirties fewer declarations. rounds unchanged at 62.
+front_end_visits=22449
 # 2026-08-31 (the AST's identifiers are inline names): 728,030 -> 713,606, a
 # fall of 14,424, or 1.98%. Banked. The peak falls with the traffic because a
 # short name's bytes now live inside the AST node the allocator already gave

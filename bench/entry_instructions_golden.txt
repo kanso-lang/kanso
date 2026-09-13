@@ -222,4 +222,6 @@
 # is cheap where its per-declaration driver was not, so more of the saving
 # sits in the module row's declaration count than in the entry row's node
 # count.
-entry_instructions=149925203
+# 2026-09-13 (the exhaustiveness rule, re-measured): 149,925,203 -> 151,799,014,
+# a RISE of 1,873,811 (+1.2498%).
+entry_instructions=151799014
