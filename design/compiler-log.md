@@ -20,567 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-09 — the chart's palette was picked for one of the two pages it is drawn on
-
-**DONE.** kanso#1343 fixed *which* counters the trend chart draws and left
-*how* it draws them alone. Clay, on the result: "both blue lines have gone up."
-The rise was real and already answered — two corpus re-basings, kanso#1321 and
-kanso#1331, with the baseline moving under them so the floor went 59.74 →
-66.3024 — but the reading was harder than it needed to be, because three of the
-seven lines were in the blue band. This is the colour half.
-
-Colour on a categorical chart is computable, so it was computed. Run against
-the two surfaces the page actually paints (`--bg`, light `#fcfbf7` and dark
-`#0c0c0f`), the shipped palette failed four checks:
-
-    lightness band      all seven outside it
-    chroma floor        #94a3b8 at 0.035 — reads as grey, so as gridline
-    CVD separation      #38bdf8 <-> #a78bfa, 5.2 deutan against a floor of 8
-    normal-vision floor #fb923c <-> #facc15, 14.6 against a floor of 15
-
-And the finding nobody had looked for: **one palette was shipped for two
-surfaces, and it had been chosen for the dark one.** On the light page every
-one of the seven lines sat under 3:1 — yellow at 1.48:1. The blue-band
-collision was the visible half of that; the light page was worse and unremarked.
-The grey was mine, from #1343, and it was the chroma failure.
-
-Each mode now takes its own steps, validated against its own surface. The
-ordering was searched rather than chosen: of the 5,040 orderings of seven hues,
-536 clear the adjacent-pair gates in both modes, and 216 of those also clear
-them among the three compile lines taken all-pairs — which is the comparison a
-reader of this chart makes, and which the adjacent pairlist does not cover. The
-one kept scores 9.2 worst-case either way (OKLab ΔE ×100, floor 8) with a
-within-group normal-vision margin of 24.6 against a floor of 15.
-
-Two orderings show why the second gate was worth adding. `aqua blue orange
-violet yellow magenta green` passes the adjacent gate identically — 16.3 light,
-13.0 dark — and puts orange beside yellow *inside* the compile group, where
-they separate by 4.8 under deuteranopia and 10.6 under normal vision. The
-adjacent check cannot see it, because those two lines are not adjacent. Every
-ordering that moves yellow onto binary size, which is where the weakest-contrast
-hue belongs, drops the adjacent margin to 6.9 — the warn band. That refinement
-was rejected: it costs more than it buys.
-
-Binary size draws dashed instead of grey. The dash says what the grey was
-trying to say — this is the one line the score does not read — without failing
-the chroma floor. The legend key is drawn as the mark, dash included.
-
-Three light-mode steps still sit under 3:1 (#1baf7a 2.72, #eda100 2.09,
-#e87ba4 2.60). That is a documented relief rather than a pass, and the relief
-has to be real: a faint line is readable only if its number is written down
-somewhere. It was not. **The panel under the chart carried no row for any of
-the seven series** — it listed `compile_rounds`, `compile_visits` and
-`emitted_lines`, three counters the 2026-09-03 rebuild retired from the
-objective, and nothing the chart drew. So the panel now leads with the chart's
-lines, built from `TREND` rather than from a second list written by hand, in the
-chart's own order.
-
-Two specs, both watched red first.
-`tests/the_chart_palette_is_the_one_that_was_measured.rs` pins the steps and
-the sequence in both modes and refuses a raw hex in `TREND` — four assertions,
-each shown failing on its own, including the hex one, which the token assertion
-short-circuits past under the obvious mutation. `missing_panel_rows` in
-scripts/site_smoke reads both the chart's keys and the panel's rows off the
-rendered page in a browser and asserts they are equal: dropping the spread
-turns it red, and so does reversing it, since containment would let the two
-orders drift while a reader matches a faint line to its number by position.
-
-Also here: welfare's chart reader stops rounding to hundredths. The rounding
-existed to survive a `Math.round` the vertical axis never needed — the axis is
-per-series and floating — and it cost the panel the last two digits of every
-move.
-
-OPEN, unchanged by this: whether a chart row should mark the commits where the
-baseline was re-based. `bench/welfare_floor.json` holds 224 history entries and
-exactly two begin "re-basing, not a gain"; both join to their rows through the
-`kanso#NNNN` in their prose, which works and breaks silently. The version worth
-building stamps the baseline into the row itself, beside `scored_by` and
-`scored_weight`, and back-fills the two historical steps once.
-
-## 2026-09-09 (second) — page_drift reads committed history, so it under-reports on a dirty tree
-
-**DONE.** kanso#1345 ran `sh scripts/gates/all_pages.sh` twice before pushing and
-both times read `page drift 3/3` — at the budget, green. CI on the same content
-read `the log is 4 entries ahead, and the budget is 3` and failed the
-cost-goldens job, taking `welfare` with it as a skip.
-
-Neither reading is wrong. The gate asks git for the last commit that touched
-`docs/compiler.html` and diffs that commit against HEAD, so it sees only what
-is COMMITTED. Locally the new log entry was still in the working tree, so it
-was not in the diff and the count was the three that came before it. The commit
-turned the same tree into 4/3.
-
-It cuts both ways, and the second direction is the one that costs a round: an
-uncommitted page edit does not discharge the debt either. Adding §63 to
-docs/compiler.html and re-running the sweep still reported the failure, because
-the edit was not yet a commit. Run this gate after committing, or read its
-number as a lower bound.
-
-Two other things this found. The gate keys on `docs/compiler.html` alone, so
-editing docs/numbers.html — which is what kanso#1345 did, twice over — moves no
-count at all. That is the gate working as written rather than a defect: the two
-pages are different things, and the settled-design page is the one the log is
-supposed to stay level with. And the budget is genuinely cumulative across
-sessions: the four entries named were kanso#1341, #1343, #1344 and #1345, of
-which two are the chart campaign, so §63 was written for that campaign as the
-gate's own message invites.
-
-## 2026-09-09 (third) — a merged-check diagnostic on the module path had no location at all
-
-**DONE.** kanso#1340 refused moving `check_merged` to the root because a
-root-raised diagnostic loses the file, the span and the `(module …)` suffix,
-and named provenance on merged declarations as what the thread owed next. That
-plumbing was prototyped on 2026-09-08 and left in a scratch directory with two
-defects, both recorded on the entry above. This is the repair, and the second
-defect turned out to be worse and more useful than the record had it.
-
-**DEFECT ONE: the attribution was dynamically scoped.** The prototype read the
-file from a thread-local set by the walk, and its `Attributed` iterator held
-its last item's guard until the iterator itself dropped, so a walk outliving
-the raise site leaked one file's attribution onto a diagnostic raised somewhere
-else. `Diagnostic` now carries `file: Option<Arc<str>>` set AT THE RAISE SITE,
-from the declaration in hand, by `Diagnostic::about(&decl.file)`. A value
-passed in has no guard to outlive it. The whole golden suite passes, including
-`error_corpus_reports_each_golden_diagnostic`, the test the prototype turned
-red — so the plumbing is inert where the prototype's was not, and a check opts
-in one call at a time.
-
-**DEFECT TWO IS NOT "render_across is never called".** On the module path a
-merged-check diagnostic was formatted as kind, message and the `(module …)`
-suffix, with the span and the source line DROPPED ENTIRELY — the loop built
-that string by hand and never touched the renderer. kanso#1340's blocker was
-not a thing to build; it was sitting in `compile_module_loaded` being done.
-
-The corpus already held the proof, in a pair nobody had read side by side.
-`tests/golden/errors/let_binding` carries both variants of one program:
-
-    .stderr           error[name]: `let` is not a type …
-                        --> let_binding.kso:2:7
-                         2 |   let x = 1
-                                   ^
-    .imported.stderr  error[name]: `let` is not a type … (module let_binding)
-
-Same program, same error, two routes through the front end, and the module
-route reported no location. `compile_module_loaded` now renders through
-`render_across`, which picks each diagnostic's own source and falls back to
-naming a file with no quoted line when its text is not in hand. Where that
-source comes from is the next section: the first two answers both cost the
-objective, and the third costs nothing.
-
-The suffix stays at the end of the header line, so an existing message is
-byte-identical and simply gains the two lines under it. That is what keeps the
-blast radius small: one check wired, and exactly two goldens move, both by
-addition. Measured on a real two-file module, a dependency's error caught only
-by the merged check now reads `--> …/inner/core.kso:5:9` with the line quoted,
-where it used to read the message and nothing else.
-
-`check_binding_patterns` is the one check wired, as the caller that keeps this
-from being plumbing with nothing behind it.
-
-**Two things found on the way.** The per-file checks were never broken: the
-`unused` refusal already names a dependency's file and line correctly, so the
-loss is specific to the whole-program check over the merged program. And the
-two goldens that moved are single files compiled as modules, so they prove the
-module ROUTE gained a location and NOT that a dependency's file is named — the
-`errors_module` fixtures still pass untouched, because their errors come from
-checks not yet wired. A cross-file golden is still owed and is listed below
-rather than claimed here.
-
-OPEN, in order: `.about(&decl.file)` at the remaining raise sites in
-`check_merged_after_aliases`; the entry and library paths' merged renders,
-which have the same shape; a cross-file fixture under tests/golden/errors_module;
-the forty-four module goldens regenerated; and then the reorder this was always
-for, at kanso#1340's repricing.
-
-**AND THE SIZE OF THAT FIRST ITEM IS NOT TWENTY-TWO.** This entry said so
-until the survey behind it was redone. The driver calls 23 checks; 14 raise in
-their own body, 17 sites between them, 1 wired here, so 13 checks and 16 sites
-remain. Three have a declaration with `.file` already in hand at the raise
-site; the rest raise inside a closure.
-
-The redo also found what a count of the callees cannot see. NINE of the 23
-raise nothing themselves -- `check_boolean_equality`, `check_build_blocks`,
-`check_call_arities`, `check_call_shaped_list`, `check_decidable_failures`,
-`check_err_as_value`, `check_field_exists`, `check_if_arity` and
-`check_literal_arguments` -- and delegate to helpers that do. check.rs holds 65
-`Diagnostic::new` against the 17 inside the driver's direct callees, so wiring
-the checks is not the whole job and the helper sites need the file reaching
-them too.
-
-Two bad surveys preceded the good one, and both failed silently. The first was
-a boundary scan by line that mis-sliced any body holding a nested `fn`, and
-reported zero raise sites for four checks against 65 in the file. The second
-matched `\nfn NAME` and found NOTHING AT ALL, because the driver is `pub fn` --
-a scan that returns an empty set reads like an answer. A survey whose result
-is a count wants a total it can be checked against; 65 is that total here.
-
-**THE FIRST TWO SHAPES BOTH COST THE OBJECTIVE, AND THE THIRD IS FREE.** The
-renderer needs the text of the file a diagnostic is about, and the merge loop
-had been eating `parsed` — so the obvious repair is to keep the text across the
-merge. Round one did that, with a `Vec<(String, String)>` built as the loop
-consumed the triples, and CI turned five compile gates red:
-
-    compile_allocs          29,606 ->      29,613     +7
-    compile_peak_bytes     773,818 ->     774,847     +1,029
-    compile_instructions 48,791,172 ->  48,744,634    -46,538
-    entry_instructions  162,170,772 -> 162,528,521    +357,749
-    library_instructions 162,970,167 -> 162,823,672   -146,495
-
-The +7 is exact and derived: that vector is one allocation per module loaded,
-and `KANSO_PHASES=1 kanso check compile_corpus` prints seven `load` lines
-(compile_corpus, std/json, std/text, std/list, std/testing, std/text again,
-std/render — std/text twice because a module is compiled once per path to it,
-which "Remembering a compiled module costs more than compiling it again"
-measured and declined). This container read 29,613 and 774,847 too, agreeing
-with CI to the unit on both, as those two rows always have.
-
-The three instruction rows are layout: three routes on ONE binary sha moving
-+357,749, −46,538 and −146,495 in the same job cannot be seven allocations.
-`welfare` priced the whole thing at −0.01. A fall means the change goes or the
-weights are argued, and the right answer here was a third one: the shape was
-wrong.
-
-Shape two: keep `parsed` itself alive and take each program out of it in
-place, so nothing new is allocated at all. allocations went back to 29,606 and
-peak went the OTHER way, 773,818 -> 775,730 — worse than shape one by 883
-bytes, because a `(String, String, Program)` triple is about three times the
-width of a pair and holding that vector holds the wider one. Priced on the
-objective, the 7 allocations saved are worth about a twentieth of what the 883
-bytes cost. Declined.
-
-Both shapes are answering the wrong question, and the two measurements
-together say so: the rise in each is the size of the VECTOR and not of the text
-it points at — the same files held two ways, 1,029 bytes and 1,912 bytes, where
-holding the corpus's actual source would be tens of kilobytes.
-
-Shape three ships, and it holds nothing at all. The loader is now
-`module_sources`, and
-the diagnostics branch CALLS IT AGAIN. A clean compile runs the code it always
-ran, byte for byte; a compile that is about to print an error opens its own
-files a second time, which nothing anywhere measures. On this container both
-rows read exactly main's numbers — `compile_allocs=29606`,
-`compile_peak_bytes=773818` — and `welfare` reads 66.30 against the floor of
-66.30. If the second read fails the diagnostics still print, without their
-source lines.
-
-The general form is worth keeping. A repair that hangs state on the success
-path to serve a failure that usually does not happen has bought the wrong
-thing, and doing the work again on the failing path costs nothing anyone
-measures. The three compile veins said so within a round.
-
-**CI SAID, AND THE ANSWER IS A BETTER PROOF THAN ROUND ONE'S.** All three
-instruction rows moved on the shipping shape too, and this time all three
-fell together:
-
-    row                    golden        CI            move
-    compile_instructions   48,791,172    48,746,831    -44,341   (-0.0909%)
-    entry_instructions    162,170,772   162,044,531   -126,241   (-0.0778%)
-    library_instructions  162,970,167   162,840,377   -129,790   (-0.0796%)
-    compile_allocs             29,606        29,606          0
-    compile_peak_bytes        773,818       773,818          0
-
-The last two rows are what make this worth writing down. The shipping shape
-adds NO work to any successful compile, and the two counters that measure the
-front end's work say so in the same job that counted the three that moved. So
-the layout reading is not an inference from the size of the change here; it is
-a measurement with the alternative already excluded.
-
-Round one is the control. Seven allocations and a kilobyte moved those same
-three rows -46,538, +357,749 and -146,495 -- three directions on one binary
-sha. Zero allocations moved them -44,341, -126,241 and -129,790. A row that
-answers differently to two shapes of one change while the work counters hold
-still is the compiler's own bytes, and nothing about the corpus.
-
-Summed on the objective's compile term the fall is 170,582 (-0.0809%), so
-`welfare` rose and the floor is held at 66.30 in this PR with the reason
-recorded. It is banked as layout and claimed as nothing else: the front end
-did not get faster at anything, and the next change is not free to spend this.
-
-## 2026-09-09 (fourth) — the chart drew two differently-scored populations as one line
-
-**DONE.** The design chat's entry of the same day, "the cliff is the run terms
-joining the score, and the chart draws a coverage change as a fall", diagnosed
-what Clay has been looking at and named three pieces. This is the third of
-them, the one that makes the page honest today rather than right.
-
-`scripts/welfare_rescore` scores a row on the counters it carries and
-renormalises the weights that remain, and it writes `scored_weight` into every
-row so that a reader is not fooled. The chart never read the field. Across the
-500 rows there are five runs of it and four boundaries:
-
-    rows       scored_weight   welfare
-    0..30      0.28            74.64 -> 73.77
-    31..181    0.00            no score, the line has a gap here
-    182..390   0.28            82.82 -> 89.72
-    391..438   0.44            91.67 -> 91.57
-    439..499   1.00            58.96 -> 66.30
-
-Two of those boundaries are steps in the line, and neither is the compiler.
-Compile instructions joining on 2026-09-03 takes the score 89.72 -> 91.67. The
-run counters joining on 2026-09-06 take it 91.57 -> 58.96, because the compile
-terms carry the advantage they have accumulated since august while the run
-terms start at parity against a baseline measured on the day they joined. That
-second one is the whole of the "dramatically worse" the page has been showing.
-
-The chart marks every boundary with a dashed muted rule labelled with the
-coverage to its right, and splits the welfare polyline per run, drawing it
-faded wherever the coverage is below 1.00. Each segment reaches one point into
-the next run so the step itself is drawn rather than left as a gap the eye
-closes by guessing. Coverage gets no colour of its own: it is not an entity,
-and a categorical hue would have made it an eighth series.
-
-**`scored_weight` IS TEXT, AND THE FIRST CUT OF THIS DID NOTHING.** Every row
-in the history carries the string "0.00", "0.28", "0.44" or "1.00", the same
-way `welfare` is text and has always been read through `parseFloat`. A
-`typeof r.scored_weight === 'number'` guard read all 500 rows as unscored,
-found one run, drew no rule, and split nothing -- a change that ships, passes
-its own eye test, and leaves the picture exactly as wrong as before. The runs
-are keyed on the text now, which is canonical to two places and so compares
-exactly, and the number is parsed only to decide whether the coverage is full.
-
-The spec is in the site smoke, which renders the page in a browser and reads
-the marks off the DOM. Its stub carried six rows at one coverage and could not
-have seen any of this, so it now carries the shape the real history has: four
-older rows without the run counters at 0.44, two with them at 1.00. That makes
-`missing_series` a real assertion -- [2 2 2 5 6 6 6 6], the two run lines
-short, the four old counters full, and welfare in TWO strokes -- and adds
-`missing_bounds` for the one rule and its label.
-
-Both were watched red first, and they fail differently, which is what says
-they are testing two things. Under the `typeof` guard: `marks: []` and series
-[2,2,6,6,6,6,6], both checks red, the real bug reproduced. With the split
-removed but the guard correct: series red, `marks: ["coverage 1.00"]` still
-right. Restored, green.
-
-The prose said the score falls "from about 75 to about 52" and the column has
-read 91.57 -> 58.96 since the compile epochs moved under it. Corrected, with
-both steps named. `sh scripts/gates/all_pages.sh` green on all three. The
-labels were checked for collision rather than eyeballed: four rules, tightest
-gap 16px, right edge 1097 of 1200.
-
-OPEN, both the chat's and both still cloud's: reconstructing the run terms for
-the 439 earlier rows so they score on all five, and the compile-side epoch
-table. When those land the boundaries stop being steps and these rules stop
-having anything to mark.
-
-## 2026-09-09 — the cliff is the run terms joining the score, and the chart draws a coverage change as a fall
-
-Clay, 2026-09-09: "the latest welfare metric still looks like it has gotten
-dramatically worse. I do not understand this. the only things you should have
-done recently to the corpus had to do with applying the metric consistently.
-that shouldn't have had anything to do with the compiler being worse in any
-kind of way."
-
-He is right, and the column agrees with him: it reads 66.30 across the last
-fourteen commits with every counter byte-identical. What looks dramatically
-worse is the shape, a peak of 91.67 on 2026-09-03 and 66.30 today, and the
-whole of that gap is the step at 2026-09-06 11:26. This entry corrects the
-mechanism the 2026-09-08 entry gave for that step, because the correction
-changes what a reader should conclude from the picture.
-
-**The 91 was never a score of the compiler.** `scripts/welfare_rescore` scores
-a row on the counters it carries, drops a term whose counters are absent, and
-renormalises the weights that remain; its own header says a row scoring well
-on what it has "reads the same as a full row scoring well." `run_instructions`
-and `run_peak_bytes` exist in none of the 439 rows before 2026-09-06 11:26 and
-in all 61 after. So every earlier row is scored on the two compile terms alone,
-at `scored_weight` 0.44, and reads high because the compile ratios are large.
-The first row after carries all five at `scored_weight` 1.00, and the run terms
-enter at parity, r = 1 against satiation 2.0, so each contributes a third of
-its weight and pulls the total down:
-
-    2026-09-06 09:43   scored_weight 0.44   welfare 91.57   compile terms only
-    2026-09-06 11:26   scored_weight 1.00   welfare 58.96   all five, run at parity
-
-The 2026-09-08 entry said the earlier rows "score against a baseline they never
-carried." They do not score the run terms at all. The remedy is unchanged; the
-reading is different. The chart draws two differently-scored populations as one
-line.
-
-**The page already says this, and the chart does not.** docs/numbers.html:
-"read `scored_weight` before reading a step in the line ... the step where the
-run counters arrive is a change in what was recorded rather than in what the
-compiler costs." That sentence is correct, and finding it is the reader's job.
-The line draws 288 rows at coverage 0.28 or 0.44 and 61 at 1.00 in one stroke,
-one colour, with no mark at the boundary. The rescore writes `scored_weight`
-into every row so that, in its own words, "a reader needs to not be fooled,"
-and the chart does not read the field. That is why the site does not look
-right: the safeguard is in the data and in the prose and nowhere in the
-picture. The prose is also stale, "from about 75 to about 52," against a column
-that now reads 91.57 to 58.96, because the compile epochs moved under it.
-
-**What Clay's principle requires, in three pieces.** A change in what is
-measured is neutral to the score, so the line is flat across every one of
-them.
-
-1. The run side: the 2026-09-07 ruling, still unbuilt. Reconstruct the run
-   terms for the 439 earlier rows from the per-benchmark counters they do
-   carry (`instructions` and `encode_instructions` in 424 of them),
-   share-weighted, based at 2026-08-10, so those rows score on all five terms
-   and the boundary disappears.
-2. The compile side: the epoch table from the 2026-09-08 entry, so each of
-   the four compile epochs is scored against a baseline scaled to its own
-   measurement.
-3. The chart: draw `scored_weight`. A lighter or dashed stroke below 1.00, or
-   a marker at each coverage boundary, so that until 1 and 2 land a step that
-   is a coverage change looks like one. This is an afternoon, and it makes the
-   page honest today; 1 and 2 make it right.
-
-**OPEN, all three cloud's.** The rescore and the chart are code and the page
-is cloud's surface.
-
-## 2026-09-09 — the merged check has four routes, and the fourth is the repl
-
-§60 and CLAUDE.md both say `kanso check` routes a single file by content and
-that the three routes are three compiles: a DIRECTORY is a module, a file of
-bare STATEMENTS is an entry, a file of DEFINITIONS alone is a library. That is
-true of `kanso check` and it is not the whole census.
-`check::check_merged_after_aliases` has FOUR call sites in src/lib.rs:
-
-    line   caller                    route
-     168   compile_parsed_entry      entry      (a file with bare statements)
-     372   compile_one               THE REPL   (not reachable from kanso check)
-     465   compile_library           library    (a file of definitions alone)
-    3666   compile_module_loaded     module     (a directory)
-
-`compile_one` has one caller, `compile_repl`, which has one caller,
-src/repl.rs:290. Its own doc comment says it serves both `kanso play` — the
-playground's convention — and the repl prompt, assembling imports and units
-into one source. So the fourth route is a user-facing surface that the website
-runs, and no census keyed on `kanso check` could see it, which is why three
-separate readings of this code have said three.
-
-**The module row's name is one level off too.** CLAUDE.md says the module route
-takes `compile_module_inner`. It does — but the raise site is
-`compile_module_loaded`, which `compile_module_inner` calls at src/lib.rs:3375.
-The entry point and the raise site are different functions, and a survey
-grepping for the raise site finds the second name while the doc names the first.
-
-**What this owes.** kanso#1346 repaired the attribution on the module path and
-wired one check (`check_binding_patterns`); the `.about()` wide pass is 13
-checks and 16 sites. This adds a fourth render to that pass rather than three,
-and the repl's is the one with a user watching: a diagnostic in the playground
-that loses its file and span loses it in a browser. Not measured yet — whether
-the repl route renders locations today is the next question, and it is asked
-here rather than assumed either way.
-
-**How the count went wrong before.** Recorded on 2026-09-08 in this log: a
-survey whose product is a count wants a total to check against, because an
-empty or short result set reads like an answer. The route census had a total
-available and did not use it — `kanso check`'s three branches — and the
-function has four callers. Grep for the callee, count the call sites, and
-reconcile against the routes; do not derive the call sites from the routes.
-
----
-
-## 2026-09-09 — a fold's in-place write was licensed without asking about its seed
-
-**DONE.** Native disagreed with the interpreter on a fifteen-line program, and
-the disagreement was silent: a stale value, printed as an answer.
-
-**How it surfaced.** Building the compile epoch table (kanso#1347 item 2),
-`scripts/welfare_rescore` walks the five hundred history rows carrying a
-per-counter divisor and stores each row's divisor in a map keyed by commit. It
-read 1.0 for every row. The rescored file came back byte-identical to the one
-the old tool wrote, which is what sent me looking: a change that does arithmetic
-on every row and moves no digit is either a no-op or a lie.
-
-**The defect.** `src/linear.rs` decides which `put` and `push` sites may write
-in place. Inside a fold it grants the folder's own accumulator parameter that
-licence, on the strength of `folder_is_unique` — which inspects the LAMBDA and
-nothing else. A fold writes into its SEED on the first step, so the licence also
-needs the seed to be uniquely owned, and that half was never asked. Both grant
-sites had the hole: the licence walk (`callsites_unique_in`) and the marking
-walk (`walk_for_push_in`).
-
-`unique_in_with`'s own fold arm has always asked both, so "is this fold's RESULT
-unique" was answered correctly the whole time while "may this folder write" was
-not. The two questions sit forty lines apart in the same file.
-
-**The shape that reaches it** needs two folds. An outer fold's accumulator
-carries a value and a record of that value at each step; the inner fold hands
-the value straight back on a step with nothing to do, so the stored copy IS the
-accumulator; the next step's write lands in both. Neither fold alone does it — a
-write outside a loop traces back to a literal, and a folder whose seed is built
-where it stands owns it.
-
-    native: first: 2   second: 2   fresh: 2
-    interp: first: 1   second: 2   fresh: 2
-
-**The fix** asks both conditions, in one place, because the two walks must agree
-about it and this is exactly where they had drifted:
-
-    fn fold_owns_accumulator(&self, args, ctx, scoped) -> bool {
-        self.folder_is_unique(&args[2], ctx, scoped)
-            && self.unique_in(&args[1], ctx, scoped)
-    }
-
-**What it costs: nothing on the runtime side, and three layout-sized falls on
-the compile side.** `sh scripts/gates/all_counters.sh` reads the twelve cost
-veins and the lazy tier and every one is byte-identical, so no in-place site in
-the benchmarked code was standing on a non-unique seed. The compile sweep saw
-nothing move on this host, with six of the nine gates host-bound. CI then read
-all three instruction rows:
-
-    counter                golden          CI            delta
-    compile_instructions   48,746,831      48,746,192      -639   (-0.0013%)
-    entry_instructions    162,044,531     162,042,653    -1,878   (-0.0012%)
-    library_instructions  162,840,377     162,839,321    -1,056   (-0.0006%)
-
-with `compile_allocs` 29,606, `compile_peak_bytes` 773,818 and the machine-code
-row byte-identical beside them. Welfare's floor rises 66.3039170230475 ->
-66.30393941879086 and is ratcheted in this PR.
-
-**Ratcheting a golden is a page edit.** The three rows are quoted by five
-`data-golden` spans in compiler.html, and moving the goldens without walking the
-pages left all five stale — `golden_prose` caught it as the LAST step of the
-welfare job, so the job read red with the number itself green at 66.30 and its
-floor met. CLAUDE.md's rule says a page edit ends with
-`sh scripts/gates/all_pages.sh`; the trigger is wider than the rule's wording,
-because a golden that moves silently re-points every span that quotes it. One of
-the five needed prose rather than a swap: the sentence said the library vein
-"fell 1,282,921 instructions, or 0.78%, to" that row, and a row that moves again
-makes the arithmetic false. The landing is now a fixed figure and the span
-carries today's reading beside it.
-
-**The direction is not evidence the fix is cheaper, and the entry says so.**
-Two mechanisms could each produce a move this size, and 639 instructions cannot
-separate them: the analysis does MORE work at every fold site (one extra
-`unique_in` on the seed) and LESS at a site the new condition rejects, because
-the marking walk then never descends into the folder's body. A condition that
-is strictly added cannot make the analysis cheaper on its own. The work
-counters staying put is the usual layout signature, and that is what the rows
-are recorded as.
-
-**The fixture** is `tests/golden/micro/a_folds_seed_is_held_by_something_else`,
-which `micro_corpus_agrees_across_engines` runs on native and on the oracle
-against one golden, and the wasm and browser sweeps run on the third engine.
-Watched red through that harness before the fix landed: it named the fixture,
-the native run, and `left: "first: 2"` against `right: "first: 1"`. Its last
-line is the legitimate case — a seed born at the call, which the fold may still
-write through — so a licence simply switched off would not satisfy it.
-
-**All three accumulator kinds were reachable, and the fixture carries all
-three.** The grant is per fold rather than per write, so one hole covered
-`put`, `push` and `append` — but that is a claim about the code, and the
-cheap way to settle it is to write the other two and look. Built, and on the
-unfixed compiler native answered every one of them wrong:
-
-    kind    native            the oracle
-    map     first: 2          first: 1
-    list    first: [1 9]      first: [1]
-    bytes   first: [120 121]  first: [120]
-
-A fixture exercising one of the three would have left the other two resting on
-the claim.
-
-**What generalises.** A two-part condition split across two call sites is one
-edit away from disagreeing, and nothing here would have caught the disagreement:
-the analysis has no differential of its own, and the corpus had no program whose
-answer depended on it. The counters could not see it either — an unsound licence
-makes a program FASTER and wrong. What found it was arithmetic that had to move
-and did not.
-
 ## 2026-09-09 — the compile side has three changes of measurement, not two
 
 The 2026-09-08 entry on the compile term said the workload had been
@@ -5019,3 +4458,109 @@ and every one agrees byte for byte. Neither an exhaustiveness rule nor a linker
 flag can move a counter that counts allocator calls, so that is the expected
 answer; it is written down because a sweep that is run and not reported is a
 sweep nobody can check.
+
+## 2026-09-13 (second) — an inline decision's value belongs to the whole optimisation state, so no rule over functions can find it
+
+**MEASURED AND DECLINED, and the decline is the finding.** kanso#1389 left an
+open lead: one instruction in ten of the run program is a register save, and
+the threshold took only part of it. The obvious next step is to inline
+particular functions rather than raise a global knob. Fifty-one link-and-count
+measurements later the answer is that a per-function rule cannot exist, and the
+reason is not that the right predicate was not found.
+
+**The harness.** `runbench.ll` off merged main, one `alwaysinline` added by sed
+to one `define tailcc`, relinked with the shipped recipe —
+`clang -O3 -flto -mllvm -inline-threshold=1000 -mssse3` against the cached
+runtime object — and counted under callgrind. The control relink is
+BYTE-IDENTICAL to the shipped `runbench`, so this is the real link and not an
+approximation of it. Base 2,187,039,574 instructions, `.text` 278,850.
+
+**Thirty-two functions one at a time: seven win, four lose, twenty-one are
+exact no-ops.** Nothing about a function predicts which. Not its IR instruction
+count, not its block count, not its call-site count, not whether every call is
+a `musttail` — all seven winners are, and three of the no-ops are not — and not
+the frame fraction that produced the original shortlist. `array_delim_4` is
+worth 11,083,644 alone and the frame profile never flagged it, 4.7x either
+function the profile did pick out.
+
+**The union is not the sum.** Five of the seven, the ones whose own `.text`
+fell, are worth 24,556,754 together: 3,725,371 MORE than their single-function
+sum. Adding the other two costs 4,305,504 instructions and 1,840 bytes, and
+`value_for_3` — the largest single win in the whole sweep at 16,541,819 — is
+the single worst thing to add to the set.
+
+**Two greedy rounds found three more improvers, and every one had measured
+nothing alone.** `string_scan_3` was an exact zero and is worth 1,037,025.
+`str_low_5` the same, worth 175,527. `array_open_3` buys 48 bytes for no
+instructions, measured twice. `str_chars_3` read +2 on the five — noise — and
+is worth 175,525 with 688 bytes on the eight. The best set is nine functions at
+2,161,094,743 and `.text` 274,802: −25,944,831 (−1.1863%) with 4,048 fewer
+bytes, both axes moving the right way.
+
+`str_chars_3` and `str_surrogate_4` are a useful pair. Both move `.text` by the
+identical −688 and their instruction counts by ±175,5xx. The two read the same
+thing, since a surrogate pair is decoded inside the character walk, and
+inlining either shrinks the same code while only one of them wins.
+
+**Then the same nine, linked at three thresholds, against the plain file at
+each:**
+
+```
+threshold   plain            nine             the set is worth
+1000        2,187,039,574    2,161,094,743    −25,944,831   .text  −4,048
+1250        2,166,321,995    2,156,158,161    −10,163,834   .text  −1,744
+2000        2,141,224,406    2,151,254,594    +10,030,188   .text  −7,088
+```
+
+At the shipped threshold the nine are worth 26 million instructions. At 2000
+they COST ten million. Nothing about the annotations changed; the state they
+landed in did. So the value of an inline decision is a property of neither the
+function nor the set but of the whole optimisation state, which is why no
+predicate over functions could have worked and why the set is worthless as an
+artifact: any change to the threshold, the library or the emitter invalidates
+it.
+
+**The knob is not monotone either.** The plain file at five thresholds:
+
+```
+1000   2,187,039,574   .text 278,850
+1250   2,166,321,995   .text 289,458   −0.9473%
+1500   2,168,898,667   .text 299,794   −0.8295%
+2000   2,141,224,406   .text 315,698   −2.0948%
+3000   2,135,106,996   .text 391,842   −2.3746%
+```
+
+1500 is WORSE than 1250 on instructions while costing 10,336 more bytes. A
+wider threshold admits a different set of inlinings, and a superset of
+decisions is not a better program — the same non-composition one level up.
+
+**Nothing ships from the search, and one thing ships from the ladder.** The
+emitter has never decided this attribute for a user's function: all thirty-six
+`alwaysinline`s in `src/codegen.rs` sit inside hand-written prelude shims, and
+no code path writes the attribute onto emitted code. Adding one would need a
+predicate that the measurements above rule out. **Threshold 2000 is the live
+follow-up**: −2.0948% for +13.2% `.text` is close to the trade kanso#1389
+already took (1000 over clang's 250 was −2.0174% for +9.8% on this same file),
+machine-code size carries no welfare term under the 2026-09-05 ruling, and it
+is one line. What this container cannot answer is what CI reads across all
+fourteen benchmarks, which is exactly the lesson kanso#1389's three sittings
+taught, so it goes as its own pull request that takes CI's rows.
+
+**And CI answered while this entry was in review, so the figure above is a
+projection rather than the result.** kanso#1391 measured runbench
+2,194,976,748 -> 2,168,019,757 on CI, a fall of 26,956,991 (−1.2281%), for a
+`.text` sum of 1,783,980 against 1,664,396 (+7.1848%). That is 59% of the
+−2.0948% this container read, where eight days earlier the same pair of boxes
+disagreed the other way round. Every absolute number in this entry is this
+container's, which the ladder was always for; the shape of the ladder is what
+it establishes and the steps are not CI's.
+
+**A trap reproduced cleanly, worth the paragraph.** Twenty of the twenty-seven
+greedy candidates came back at exactly −14 instructions, and twenty
+coincidences is not a result. The candidates linked as `bin_00` and the control
+was `bin_c`: one character of path.
+`scripts/gates/instructions.sh` says the kernel puts the exec path on the new
+process's stack for libc to walk before main, and the check is direct —
+relinking the control as `bin_zz` gives a byte-identical binary reading
+2,162,482,820 against 2,162,482,834. So −14 meant NO CHANGE, and every figure
+in this entry is taken at matched name lengths.
