@@ -4397,6 +4397,14 @@ allocation does not, and `.text` does not move either, which is worth saying
 because `src/check.rs` changed substantially and the machine-code vein has
 caught layout-only moves seven times before.
 
+And the three rows REPRODUCED. CI read them twice, on two commits that differ
+only in markdown so carry the same compiler binary — `fd7ee486` before the base
+merge and `7f7a65a4` after — and both sittings gave 45,708,985 / 152,355,905 /
+153,175,369, with `compile_allocs` 30,258 and every `text=` and emitted row
+identical between them. That is what `compile_instructions.sh` asks for in
+place of a per-host key: the same build on any runner counts the same number,
+and a run that disagrees halts the vein. These did not disagree.
+
 Welfare rose 0.01 and is banked in the same round, the goldens carrying CI's
 rows first: floor 68.52093722983558 -> 68.5353360462189, ratchet 262. Five
 `data-golden` spans on compiler.html quoting the compile rows were rewritten by
