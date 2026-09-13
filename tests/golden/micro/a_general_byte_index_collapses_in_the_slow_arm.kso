@@ -1,0 +1,52 @@
+# kanso#1398 gave the PROVEN byte-index path a raw i64 phi beside its box, so a
+# byte-discriminated dispatch could read one i64 instead of taking the box
+# apart with an extractvalue pair, an icmp and a select. `emit_at` has a second
+# path: when the inference cannot prove the container is bytes and the key an
+# int, it tests both tags at runtime and falls back to `k_b_at_fast`. That
+# merge got no raw phi, so the four instructions stayed.
+#
+# They stay on the SLOW arm here and leave the fast one. The in-range arm's
+# byte is already an i64 and hands it straight to the phi; the arm that calls
+# the runtime does the collapse beside the call, where it is one branch off the
+# hot path rather than on it. 256 is the sentinel, and no byte can be 256.
+#
+# `source` answers bytes or `none`, so the container's set is BYTES|NONE: not
+# provably bytes, which takes the general path, and with no LIST bit, which is
+# what makes the merge's set safe to narrow -- a list slot holds whatever the
+# list holds, thunks included, and `k_b_at`'s list case is the one arm that
+# could answer one.
+#
+# Written against the printed answers rather than the emitted IR, because the
+# IR is the current shape and the answers are the contract.
+import "std/text"
+
+fn source 1
+  text/bytes "AB0"
+
+fn source _
+  none
+
+fn kind none p
+  "no source at {p}"
+
+fn kind src p
+  at_byte src[p] p
+
+fn at_byte 65 _
+  "A"
+
+fn at_byte 66 _
+  "B"
+
+fn at_byte none p
+  "none at {p}"
+
+fn at_byte c p
+  "byte {c} at {p}"
+
+pub play =
+  print "{kind (source 1) 1}"
+  >> print "{kind (source 1) 3}"
+  >> print "{kind (source 1) 4}"
+  >> print "{kind (source 1) 0}"
+  >> print "{kind (source 2) 1}"

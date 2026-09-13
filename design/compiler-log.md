@@ -4773,3 +4773,74 @@ CLAUDE.md has the rule this broke, in two places -- "enter where a user
 enters" and "watch it fail, for the right reason, before it passes". A probe
 standing in for the fixture satisfies neither, and it looks exactly like
 satisfying both.
+
+## 2026-09-13 (ninth) — the general byte index recorded no set, so every reader took TOP, so a thunk test stood in front of a value no arm can make a thunk
+
+`emit_at` has two paths. The PROVEN one — `set_of(container) == BYTES` and
+`set_of(key) == INT` — emits the diamond itself, gives the miss arm a constant,
+and records `INT | NONE` for the merge, or `INT | ERR` under `!`. The GENERAL
+one tests both tags at runtime and falls back to `k_b_at_fast`. It recorded
+NOTHING. A merge with no set takes the default, the default is TOP, TOP carries
+THUNK, and `maybe_force` reads a set before it decides whether to emit a force.
+So every general index handed its result to a `k_force_fast` on the strength of
+a bit nobody had ever cleared. Program-wide: 441 call sites to 437.
+
+The bound on narrowing it is the LIST bit and nothing weaker. `k_b_at_fast`'s
+`slow` label hands off to `k_b_at`, and `k_b_at`'s list case answers
+`l->items[i - 1]` — whatever the list holds, thunks included. Every other case
+it can take answers a byte, a character or the miss. So the set is safe to
+narrow exactly when the container's set has no LIST bit, and the guard is
+written that way: `if f.set_of(container) & LIST == 0`. That is the reason this
+is not the same change as #1398's proven path, where BYTES is already known and
+there was never a list to worry about.
+
+The second half sinks the collapse. #1398 wrote the `256`-for-`none` conversion
+AFTER the merge, where the fast arm's byte and the slow arm's `%KValue` come
+back together; the byte discriminator then reads it. Here the same collapse is
+written INSIDE the slow arm instead — an extract pair, an `icmp` and a `select`,
+four instructions on the arm that already calls the runtime — and the merge
+becomes a bare `i64` phi that the fast arm feeds for nothing. All four are pure,
+so where no byte discriminator reads the result the whole thing is dead and
+LLVM removes it. Two more crossings convert with this in: `d_json/array_step_3`
+and `d_json/obj_value_4`.
+
+A/B on this container, callgrind both sides, measured twice on the re-cut
+branch: runbench 2,034,746,727 -> 2,010,049,371, a fall of 24,697,356
+(−1.2138%). The twelve cost veins and the lazy tier all AGREE — no allocation
+counter moves, which is what a change that only removes a test should look
+like.
+
+The cost is emitted lines, on every program, because the collapse is written
+whether or not anything reads it. `defines` and `branches` hold everywhere and
+`calls` falls in two programs. decoder 9138 -> 9145; encodebench 11138 ->
+11178; oneshot 9067 -> 9074; basket 8043 -> 8093; widebench 12120 -> 12160;
+deepbench 5955 -> 5990; pendbench 7009 -> 7044; scanbench 19772 -> 19807;
+indexbench 1867 -> 1872; digestbench 10086 -> 10120 with calls 1527 -> 1526;
+livebench 9184 -> 9191; runbench 34748 -> 34791 with calls 5947 -> 5943.
+escapebench and readbench do not move at all.
+
+Named as the trend gate's own keys and the values they land on:
+`emitted_lines` 9,138 -> 9,145, `emitted_other_lines` 132,718 -> 133,049 and
+`module_lines` 5,284 -> 5,319 all WORSEN, and `emitted_other_calls` 20,335 ->
+20,330 improves. That is the trade, and the objective is where it gets settled.
+
+The fixture took four drafts, and three of them missed in ways worth writing
+down, because "a byte index whose result reaches a byte-discriminated group"
+is not enough to reach this path:
+
+- #1398's own fixture takes the PROVEN path. Its miss arm is the constant
+  `{ i64 4, i64 0 }`. Mutating the general path's select changed nothing in it.
+- A bytes-or-string source reaches the general path, and then the dispatch
+  takes a `%KValue` rather than the raw `i64`: a string index answers a
+  character, which widens the arms until the group is no longer byte-
+  discriminated.
+- A bytes-or-err source is byte-discriminated and takes the PROVEN path anyway,
+  because the err is hoisted out before the index runs.
+
+The fourth — a bytes-or-none source — is the shape. kanso#1369's exhaustiveness
+refusal caught the first cut of it (a group whose scrutinee can be `none` needs
+a `none` arm), which is the check doing its job on the way to the fixture.
+`a_general_byte_index_collapses_in_the_slow_arm` is watched red on the fixture
+itself: with the miss edge carrying 0 instead of 256 it answers `byte 0 at 4`
+and `byte 0 at 0` where it owes `none at 4` and `none at 0`. Eleven of eleven
+golden tests pass with it in.
