@@ -286,7 +286,7 @@ ramen: bowled</code></pre>
   </div>
 </div>
 
-<p>neither err was rescued, so both rode up to the endpoint exactly as chapter 04 described—but they arrived <em>together</em>, as a list, because the join collected them before the wall could gate. <code>serving</code> never ran; the merged err short-circuits from the wall onward. this is the one place an err pauses on its way out: at the join, to wait for its siblings. the <code>.</code> bind stays short-circuiting as always—it is only the parallel group that accumulates.</p>
+<p>neither err was rescued, so both rode up to the endpoint exactly as chapter 04 described—but they arrived <em>together</em>, as a list, because the join collected them before the wall could gate. <code>serving</code> never ran; the merged err short-circuits from the wall onward. this is the one place an err pauses on its way out: at the join, to wait for its siblings. the <code>.&gt;</code> bind stays short-circuiting as always—it is only the parallel group that accumulates.</p>
 
 <p>and the bare-line rule the table mentioned is real. a group member exists for its effect; a line that computes a plain value and binds nothing has thrown that value away, and the compiler says so rather than letting it rot:</p>
 
@@ -342,7 +342,7 @@ both dice have landed</code></pre>
 
 <div class="fl-rules">
 <ul>
-  <li><strong>data crosses only at bindings and <code>.</code></strong>—if downstream needs a value, name it or pipe it; the dependency is the order.</li>
+  <li><strong>data crosses only at bindings and <code>.&gt;</code></strong>—if downstream needs a value, name it or pipe it; the dependency is the order.</li>
   <li><strong><code>&gt;&gt;</code> carries no data</strong>—it carries one bit: nothing above me failed. it walls off the whole group above it, not just the line before it.</li>
   <li><strong>a group discards every member's value</strong>—bare lines exist for their effects; all of them always run, as independent green threads.</li>
   <li><strong>only failure survives a group</strong>—errs merge into one and short-circuit from the wall onward; the join is the one place an err pauses to collect its siblings.</li>
@@ -364,6 +364,6 @@ both dice have landed</code></pre>
 <nav class="chapter-nav">
   <a href="index.html">contents</a>
   <span class="nav-spacer"></span>
-  <a href="ch05.html">← effects are descriptions</a>
+  <a href="ch05.html">← effects are io</a>
   <a href="ch07.html">next: modules and tests →</a>
 </nav>

@@ -5,7 +5,7 @@
     - { num: "02", slug: "ch02", title: "values and bindings" }
     - { num: "03", slug: "ch03", title: "types and dispatch" }
     - { num: "04", slug: "ch04", title: "failure is a value" }
-    - { num: "05", slug: "ch05", title: "effects are descriptions" }
+    - { num: "05", slug: "ch05", title: "effects are io" }
     - { num: "06", slug: "ch06", title: "flow and concurrency" }
     - { num: "07", slug: "ch07", title: "modules and tests" }
 - part: "part ii — real programs"
