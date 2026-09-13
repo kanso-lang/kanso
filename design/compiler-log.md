@@ -4453,3 +4453,42 @@ compile_memory, machine_code, emitted_code and compile_libraries all AGREED.
 Runtime is untouched: `work:success`, runbench 2,003,021,871, identical to its
 golden. Welfare 68.5446 -> 68.5543, banked, ratchet 263. Seven `data-golden`
 spans on docs/compiler.html rewritten.
+
+## 2026-09-13 — the box question joins the second descent, and the splice gap a third time
+
+DONE. `check_box_where_value` was the last of the four checks that walked the
+whole program after inference for itself. It asks on the same descent now.
+Four questions share one walk over the declarations, the statements and the
+nodes: the effect one, the wall one, this one, and exhaustiveness.
+
+Its tables are the heaviest of the four and they move whole: the group table
+carrying a return set, a member chain and a binds-anything mask; the tail
+walk that decides whether a group answers a box by following its arms'
+last statements; the lazily-filled binder set behind the shadowing test. None
+of that changes. What goes is the second `for decl in &program.fns` loop and
+the second `Vec<&Expr>` worklist under it.
+
+The binder set is the one piece that has to be rebuilt per declaration rather
+than once: `shadows(i, name)` is asked of THIS declaration and fills on the
+first ask, so the closure the walk hands to `site` is made inside the
+declaration loop. Everything else is built once above it.
+
+THE SPLICE GAP IS NOW THREE FOR THREE. Move the box answers from after the
+exhaustiveness answers to beside the wall's, and all 465 error fixtures stayed
+green — the same thing kanso#1409 found for the effect answers and kanso#1411
+for the wall's. Nothing in the corpus held a box refusal beside another
+post-inference one. `a_box_refused_after_an_earlier_exhaustiveness` closes it:
+one program with one of each, watched red under that exact move (the two lines
+swap), then green. Three folds, three fixtures, one shape of gap — a corpus
+organised by what a check refuses has nothing that pins the ORDER two checks
+refuse in, and the fused descent is what makes that order a property of one
+line rather than of the call sequence.
+
+Container, main-against-main this time — both binaries let valgrind read
+`kanso::main`, which kanso#1411's baseline did not. Module 45,884,046 ->
+45,622,817 (−261,229 / −0.5693%), entry 152,981,263 -> 152,124,687 (−856,576 /
+−0.5599%), library 153,824,934 -> 152,964,635 (−860,299 / −0.5593%), summed
+−1,978,104 (−0.5609%). The six folds that measured this way read 0.98 to 0.996
+of CI.
+
+The runtime sweep agrees with its goldens and the full suite is green.
