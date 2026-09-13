@@ -1300,4 +1300,13 @@
 # about the same call sites, so whichever lands second collects less. The two
 # pairs before it were additive to 0.067% and 0.76% and said nothing about
 # this one.
-compile_instructions=44888539
+# 2026-09-12 (the field-read check joins the one descent): 44,888,539 ->
+# 44,564,895, a fall of 323,644 (-0.7210%). `field_reads`'s whole-program walk
+# is gone; the per-node half rides the descent `check_per_node` was already
+# making, and the per-statement half is called from the fused walk's
+# `Expr::Build` arm. The container projected -314,725 on this row and CI reads
+# 1.028 of that -- the closest the two hosts have come across four folds, after
+# 1.04, 0.88 and 2.01. Three of those four are near one and the fourth is not,
+# which is why the previous entry called the offset noise rather than a ratio:
+# a fourth point near one does not make it one.
+compile_instructions=44564895

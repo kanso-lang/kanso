@@ -386,4 +386,10 @@
 # one because the row counts the whole compile and the set is built once per
 # declaration in each module the directory holds. What the fold buys on the
 # instruction rows is in bench/compile_instructions_golden.txt.
-compile_allocs=29323
+# 2026-09-12 (the field-read check joins the one descent): 29,323 -> 29,317, a
+# fall of 6. The old driver built nothing per declaration that the fused walk
+# does not already keep; the six are the `Open` vector the split stopped
+# rebuilding per module. `compile_peak_bytes` and the front end's rounds and
+# visits are byte-identical: the fold moves where work happens and allocates
+# nothing new.
+compile_allocs=29317

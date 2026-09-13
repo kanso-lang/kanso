@@ -1,0 +1,65 @@
+# Four positions where a field read is NOT certain to happen, and one where it
+# is. The co-occurrence refusal counts only reads the program is going to make:
+# a value read for two fields no record declares together cannot be one record,
+# and that argument holds only for reads that happen.
+#
+# `m.to` is read on the certain path in every declaration here. The second read
+# — `.wanted`, which no record declares beside `to` — sits behind a lambda, an
+# `if` branch, a guard's early answer, and the right of an `and`. None of the
+# four is counted, so only the last declaration is refused.
+type span
+  from
+  to
+
+type node
+  kind
+  wanted
+
+# A lambda may never be called.
+fn behind_a_lambda m
+  step = (q -> q + m.wanted)
+  m.to + step 0
+
+# An `if` branch may not be taken.
+fn behind_a_branch m
+  if (1 < 2) m.to m.wanted
+
+# A guard's early answer fires only when its condition does.
+fn behind_a_guard m
+  return m.wanted if 1 < 2
+  m.to
+
+# The right of `and` runs only when the left held.
+fn right_of_and? m
+  m.to < 9 and m.wanted < 9
+
+# Both reads are certain, and the pair is refused.
+fn both_certain m
+  m.to + m.wanted
+
+# A rebinding ends the run of reads that belonged to the name's old value, so
+# these two reads are of two different values and nothing joins them.
+fn rebound one two
+  v = one
+  a = v.to
+  v = two
+  a + v.wanted
+
+# A build block runs its statements, so a binding inside one ends a run there
+# for the same reason.
+fn inside_a_build one two
+  build
+    v = one
+    a = v.to
+    v = two
+    b = v.wanted
+  a + b
+
+pub play =
+  print "{behind_a_lambda (span 1 5)}"
+  print "{behind_a_branch (span 1 5)}"
+  print "{behind_a_guard (span 1 5)}"
+  print "{right_of_and? (span 1 5)}"
+  print "{rebound (span 1 5) (node 2 3)}"
+  print "{inside_a_build (span 1 5) (node 2 3)}"
+  print "{both_certain (span 1 5)}"

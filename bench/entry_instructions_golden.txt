@@ -211,4 +211,9 @@
 # is cheap where its per-declaration driver was not, so more of the saving
 # sits in the module row's declaration count than in the entry row's node
 # count.
-entry_instructions=149925203
+# 2026-09-12 (the field-read check joins the one descent): 149,925,203 ->
+# 148,827,747, a fall of 1,097,456 (-0.7320%). The same fold. This row and the
+# module row part by 0.011 percentage points here, where the literal fold's
+# round parted them by 0.330 -- the field-read check keys on dot-reads, which
+# the entry and module corpora hold in nearly the same proportion.
+entry_instructions=148827747
