@@ -4267,13 +4267,16 @@ Five of seven mutations turn the corpus red: the build arm opening with nothing
 born, its `before`, its `after`, the `if`-arm block arm existing at all, and
 the top level asking `before`. Two do not.
 
-Removing `conditional += 1` from the block arm is a CORPUS GAP. The counter is
-live and the arm is reachable —
+Removing `conditional += 1` from the block arm WAS a corpus gap, and this
+branch closes it. The counter is live and the arm is reachable —
 `tests/golden/errors/a_field_write_inside_an_if_arm.kso` exercises it — but no
-fixture distinguishes a field whose birth was recorded inside an arm from one
-recorded outside, which is the only thing the counter changes. The fixture that
-would close it reads a field an arm conditionally wrote, binds the result, and
-writes through the binding: refused today, accepted with the counter gone.
+fixture distinguished a field whose birth was recorded inside an arm from one
+recorded outside, which is the only thing the counter changes.
+`a_birth_recorded_inside_an_if_arm.kso` does: both arms answer `outer` so the
+`if`'s value is born, but `outer.link` was filled only in the arm that ran
+conditionally, so the field is not proved born and the write through it is
+refused. Watched both ways — the fixture is red today and the program compiles
+with the counter removed.
 
 Removing the guard arm's `after` looks like the `and`/`or` arm kanso#1385
 recorded as unreachable, and for a parser reason rather than a corpus one. A

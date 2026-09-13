@@ -1,0 +1,1 @@
+error[build]: `held.tag = ...` writes only block-born values: `held` is not a construction made in this `build` block, so it stays immutable (module a_birth_recorded_inside_an_if_arm)
