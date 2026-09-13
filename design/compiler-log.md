@@ -4379,3 +4379,25 @@ it are refused earlier by "`x` is already a declaration; rename the binding":
 a top-level bind of a declared name, and a parameter named after one. Whether
 any program can reach it is not answered here, and the machinery stays until
 something answers it.
+
+CI's rows, round two. `compile_instructions` 46,072,247 -> 45,708,985 (−363,262
+/ −0.7885%), `entry_instructions` 153,586,146 -> 152,355,905 (−1,230,241 /
+−0.8010%), `library_instructions` 154,378,731 -> 153,175,369 (−1,203,362 /
+−0.7795%); summed 354,037,124 -> 351,240,259 (−2,796,865 / −0.7900%). The
+container projected −2,755,600 summed, so the projection came in at 0.9853 of
+the landing — the second-closest of the six folds, behind kanso#1386's 0.9960.
+
+Only those three moved. The job's own vein summary — the authority, since the
+nineteen counter steps are `continue-on-error` and their API conclusions lie —
+reads `compile memory:success`, `compile allocations:success` and `machine
+code:success` alongside the three failures. That agrees with the box: allocs
+30,258, alloc bytes 4,841,171, peak 777,126, passes 8, rounds 62 and visits
+22,437 are all byte-identical between main and the fold. A descent goes; an
+allocation does not, and `.text` does not move either, which is worth saying
+because `src/check.rs` changed substantially and the machine-code vein has
+caught layout-only moves seven times before.
+
+Welfare rose 0.01 and is banked in the same round, the goldens carrying CI's
+rows first: floor 68.52093722983558 -> 68.5353360462189, ratchet 262. Five
+`data-golden` spans on compiler.html quoting the compile rows were rewritten by
+`all_pages.sh --write`, and all three page gates agree afterwards.

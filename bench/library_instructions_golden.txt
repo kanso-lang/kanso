@@ -251,4 +251,4 @@
 # one binding lighter, and the library row is the layout vein reacting to a
 # compiler whose bytes moved. Runtime did NOT move: `work:success` on the same
 # run, runbench 2,003,021,871, identical to its golden.
-library_instructions=154378731
+library_instructions=153175369
