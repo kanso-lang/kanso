@@ -5349,3 +5349,72 @@ The twelve cost veins and the lazy tier AGREE, which is the right answer
 rather than a silence: this removes instructions and allocates nothing
 differently, so no allocation counter has anything to say about it. The work
 vein is where it shows, and that vein is measured on CI.
+
+**CI's sitting.** Six of the fourteen work rows fall and eight are
+byte-identical:
+
+    runbench      2,111,374,474 -> 2,034,936,773   -76,437,701  (-3.6203%)
+    jsonbench     1,392,055,809 -> 1,272,616,210  -119,439,599  (-8.5801%)
+    oneshot          20,306,435 ->    19,510,172      -796,263  (-3.9212%)
+    widebench        34,114,831 ->    33,078,691    -1,036,140  (-3.0372%)
+    encodebench   3,693,122,957 -> 3,692,200,106      -922,851  (-0.0250%)
+    livebench     3,144,795,841 -> 3,143,999,578      -796,263  (-0.0253%)
+
+basket, deepbench, escapebench, pendbench, indexbench, scanbench,
+digestbench and readbench do not move a digit.
+
+The container projected -49,596,425 on runbench and CI read -76,437,701, a
+factor of 1.54. The offset usually runs the other way — this box has
+over-projected every compile row it has measured this fortnight — so a
+container A/B sizes this family of change rather than bounding it, in both
+directions. jsonbench was never A/B'd here at all, and it is the largest
+fall of the six.
+
+The three compile rows move a little, all down: compile_instructions
+46,106,555 -> 46,103,965 (-2,590), entry 153,614,264 -> 153,609,608 (-4,656),
+library 154,373,046 -> 154,368,086 (-4,960). compile_allocs and
+compile_peak_bytes are byte-identical. Welfare 68.13 -> 68.40, banked.
+
+**The machine code RISES, and the reason is not the one this change makes
+obvious.** `text` lands at 1,735,340 against 1,731,932, +3,408 (+0.1968%).
+Four rows fall — jsonbench, oneshot and livebench by 3,056 each, runbench by
+2,848 — and two rise by 7,712 apiece:
+
+    encodebench   131,202 -> 138,914   +7,712
+    widebench     140,354 -> 148,066   +7,712
+
+Those are the two whose emitted line counts FELL by sixteen, so the compiler
+wrote less and the linker produced more. Both directions reproduce on this
+box under its own clang (+7,216 on each, same two programs), which is what
+makes the next step possible: a symbol-size diff of the two encodebench
+binaries.
+
+Five functions that main's binary does not contain at all — every call site
+inlined, the out-of-line copy stripped — carry standalone symbols here:
+
+    d_encodebench/array_delim_4      +5,001
+    d_encodebench/parse_array_2      +2,936
+    d_encodebench/parse_number_2       +780
+    d_encodebench/parse_object_2       +754
+    d_encodebench/bad_value_char_2     +372
+
+against seven callers that shrink by 2,653 between them, `array_items_3`
+losing 1,314 and `parse_value_2` 511. Net +7,190, which is the whole move.
+
+The obvious cause is the dead phi: one extra `phi i64` per non-strict byte
+index, written whether a discriminator reads it or not, and an inline cost
+model that runs before the dead-code pass would read those as callee weight.
+**That is refuted.** Three of the five gained no phi at all, and
+`array_delim_4` — 5,001 of the 9,843 — has BYTE-IDENTICAL IR on the two
+trees, as does `array_items_3`, the caller that stopped inlining it. Neither
+function changed by a character.
+
+So the decision moved from outside both of them. LLVM's inliner walks a
+module bottom-up and the budget it spends at one call site is not available
+at the next, so editing `string_scan_3` and `parse_value_2` moved a decision
+in a function neither of them touches. The rise is real, it is named here,
+and the cause is the traversal rather than anything this change wrote into
+those five functions. The runtime rows are the reason to keep it: 3.6% off
+the run program against 3,408 bytes of text, on a vein Clay ruled out of
+welfare on 2026-09-05 precisely so it could be watched without being traded
+against.
