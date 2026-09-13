@@ -4261,9 +4261,8 @@ diagnostics arrived ahead of the walk's; folded, they sit inside that block.
 `diag::render` does not sort on this route. No fixture in the corpus carries a
 build diagnostic beside another, so none of the 204 moves.
 
-## Two of seven mutations stayed green, for two different reasons
-
-Five of seven mutations turn the corpus red: the build arm opening with nothing
+Two of the seven mutations stayed green, for two different reasons. Five of
+them turn the corpus red: the build arm opening with nothing
 born, its `before`, its `after`, the `if`-arm block arm existing at all, and
 the top level asking `before`. Two do not.
 
@@ -4307,3 +4306,38 @@ following a binding in one, following a field write in one, and leading an `if`
 arm inside one, each refused at the `return` line itself. The arm stays as
 documentation of a shape the walk would otherwise have to think about; it costs
 one match arm, the same trade kanso#1385 made for `and`/`or`.
+
+CI's rows, round two:
+
+```
+module   44,564,895 ->  44,291,724    -273,171  -0.6130%
+entry   148,827,747 -> 147,951,808    -875,939  -0.5886%
+library 149,164,244 -> 148,288,999    -875,245  -0.5868%
+summed  193,392,642 -> 192,243,532  -1,149,110  -0.5942%
+```
+
+`compile_allocs` falls 3, from 29,317 to 29,314 — `BuildScan` loses its `types`
+field and is built once per program either way. `compile_peak_bytes` is
+byte-identical at 774,660, and the twelve runtime cost veins and the lazy tier
+do not move: the fold is in the front end and emits the same code. Welfare
+67.77 -> 67.78, banked.
+
+The container projected -1,153,754 summed and CI reads 0.9960 of it, the
+closest of the five folds after 1.04, 0.88, 2.01 and 1.028 on the module row.
+Four of those five now sit within 3% of one. That does not make the offset a
+ratio — one point off by a factor of two is what "noise the size of the effect"
+looks like, and the reading kanso#1384 wrote down stands: a compile delta is
+projected from CI or it takes the red round.
+
+`named_walk` is the only whole-program walk left in
+`check_merged_after_aliases`, and it does not fold this way. `arity_at` pushes
+diagnostics of kind `arity`; the function gates on exactly that kind
+immediately after `check_per_node` returns, with a `retain` and an early
+return. Folding would put those diagnostics in front of their own gate, where a
+wrong-arity call to a declared group would take the early return and lose every
+other diagnostic the program reports today — and `named_walk`'s driver drains
+its suppressed diagnostics after the whole declaration's walk, so the gate
+would fire on one that was going to be withdrawn. That second one refuses a
+valid program. The fixture for it needs two modules, because a binding
+shadowing a declaration in the same module is already refused outright, so it
+belongs with the branch that tries the fold rather than with this one.

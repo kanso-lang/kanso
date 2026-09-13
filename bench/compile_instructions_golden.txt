@@ -1309,4 +1309,23 @@
 # 1.04, 0.88 and 2.01. Three of those four are near one and the fourth is not,
 # which is why the previous entry called the offset noise rather than a ratio:
 # a fourth point near one does not make it one.
-compile_instructions=44564895
+# 2026-09-13 (the block-born check joins the one descent): 44,564,895 ->
+# 44,291,724, a fall of 273,171 (-0.6130%). The fifth and last of the foldable
+# whole-program walks. `BuildScan::expr` held no per-node predicate at all --
+# the check WAS a traversal -- so `check_build_blocks` is gone outright and the
+# scan's bookkeeping is called from the fused walk's `Expr::Build`,
+# `Expr::Block` and `Expr::Guard` arms, where the walk already stood.
+#
+# The container projected -275,225 and CI reads 0.9925 of it, the closest of
+# the five rounds after 1.04, 0.88, 2.01 and 1.028. Four of five now sit within
+# 3% of one and the fifth is off by a factor of two, which is the same reading
+# as before: the offset is noise the size of the effect, and a compile delta is
+# projected from CI or it takes the red round. A fifth point near one does not
+# make it one.
+#
+# `named_walk` is the only whole-program walk left and it does not fold this
+# way. `arity_at` pushes diagnostics of kind `arity`, and
+# `check_merged_after_aliases` gates on exactly that kind immediately after
+# `check_per_node` returns; folding would put those diagnostics in front of
+# their own gate.
+compile_instructions=44291724

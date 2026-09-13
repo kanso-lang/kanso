@@ -392,4 +392,8 @@
 # rebuilding per module. `compile_peak_bytes` and the front end's rounds and
 # visits are byte-identical: the fold moves where work happens and allocates
 # nothing new.
-compile_allocs=29317
+# 2026-09-13 (the block-born check joins the one descent): 29,317 -> 29,314, a
+# fall of 3. `BuildScan` loses its `types` field -- `PerNode` already carries
+# that table -- and the struct is built once per program either way, so three
+# is the whole of it. compile_peak_bytes is byte-identical at 774,660.
+compile_allocs=29314
