@@ -1,0 +1,29 @@
+# A write made inside an `if` arm may not have happened, so it takes a field's
+# proof away rather than supplying one. Both arms answer `outer`, so `q` is
+# born; but `outer.link` was filled only in the arm that ran conditionally, so
+# `q.link` is not proved born and `held` may not be written. Without the
+# conditional counter this program compiles, and the rest of the corpus does
+# not distinguish the two: kanso#1386's mutation sweep found the gap.
+type cell
+  tag
+  link
+
+fn wire old
+  build
+    inner = cell "inner" none
+    outer = cell "outer" none
+    q = if (old.tag == "old")
+      outer.link = inner
+      outer
+    else
+      outer
+    held = q.link
+    held.tag = "written"
+    outer
+
+fn go _
+  build
+    c = cell "old" none
+  (wire c).tag
+
+pub play = print "{go 0}"

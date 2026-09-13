@@ -222,6 +222,16 @@
 # is cheap where its per-declaration driver was not, so more of the saving
 # sits in the module row's declaration count than in the entry row's node
 # count.
-# 2026-09-13 (the exhaustiveness rule, re-measured): 149,925,203 -> 151,799,014,
-# a RISE of 1,873,811 (+1.2498%).
-entry_instructions=151799014
+# 2026-09-12 (the field-read check joins the one descent): 149,925,203 ->
+# 148,827,747, a fall of 1,097,456 (-0.7320%). The same fold. This row and the
+# module row part by 0.011 percentage points here, where the literal fold's
+# round parted them by 0.330 -- the field-read check keys on dot-reads, which
+# the entry and module corpora hold in nearly the same proportion.
+# 2026-09-13 (the block-born check joins the one descent): 148,827,747 ->
+# 147,951,808, a fall of 875,939 (-0.5886%). Container projected -878,529; CI
+# reads 0.9971 of it. Summed with the module row the fold is worth -1,149,110
+# (-0.5942%) against a container projection of -1,153,754.
+# 2026-09-13 (Arities::of reads the slot it is about to write): 147,951,808 ->
+# 147,756,205, a fall of 195,603 (-0.1322%). Container projected -206,672; CI
+# reads 0.9464. Summed with the module row, -253,322 (-0.1318%).
+entry_instructions=147756205

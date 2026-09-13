@@ -20,627 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-08 (eighth) — the last two callers check before they canonicalize
-
-kanso#1328 put `canonicalize_bare_aliases` in front of the whole-program check
-on the module path and kanso#1335 did it on the entry path. `src/lib.rs` kept
-two callers running the old order: `compile_one`, reached only from
-`compile_repl`, and `compile_library`, reached from `kanso check` on a file of
-definitions. Both merge `dep_program`, so both see the twins, and both would
-break the way the entry path did. They were never blocked on a measurement.
-They were blocked on a vein, and the vein opened yesterday.
-
-Measured on the library corpus, both readings on this container, the recipe
-`scripts/gates/library_instructions.sh` uses minus the host check:
-
-    library_instructions   165,589,540 -> 164,300,594   -1,288,946   -0.7784%
-
-Read twice, on two builds whose shas differ, and identical to the instruction.
-
-**The recorded −3.111% is a different workload and does not belong to this
-row.** The 2026-09-08 (sixth) entry measured `kanso check
-bench/compile_corpus/compile_corpus.kso` treated as a library file, 50,244,948
--> 48,681,802, and that corpus is a third the size of `bench/library_corpus`,
-so the same absolute saving reads as four times the proportion there. The row
-this change is watched by falls 0.7784%.
-
-**The record was watched red before it was watched green.** The reorder without
-it takes `scripts/module_differential` from 29 modules 0 wrong to 2:
-
-    a bare call to a shared name, from a library file
-      expected it to compile:
-      error[opacity]: `m/thing` is foreign -- only `m` builds a `thing`;
-      ask it for one through a pub function
-
-    a call from a library file at the wrong arity
-      refused, but not with
-      'error[arity]: no 2-argument arm of `one` (arms take 1)':
-      error[arity]: no 2-argument arm of `m/one` (arms take 1)
-
-The first REFUSES A PROGRAM THAT COMPILES; the second is the spelling
-kanso#1120 settled. Both are the library-path twins of what the entry path had,
-which is why the record ships with the reorder rather than after it. With
-`check_merged_after_aliases(&program, false, &rewritten)` at both sites the same
-run is 29 modules, 0 wrong.
-
-**THE ROW COULD NOT BE SELECTED AT ALL, and this branch is what found out.**
-kanso#1337 said its mutation was verified only as an anchor that still matches,
-never run, because the touched pass selects rows patching a file the branch
-changed and that branch touched no `src/`. This one rewrites `src/lib.rs`, so
-the row should have been selected. It was not. CI's touched pass named three
-rows and neither `library_ir` nor its entry twin was among them:
-
-    ratchet: 3 rows patch a file this branch changed
-      cost goldens — a front-end pass that owns the program's names instead of
-        borrowing them
-      welfare — a number the page states about the present drifting from its
-        golden
-      diagnostics differential — a name a module keeps private crossing an
-        import anyway
-
-THE SELECTION KEYS ON GUARD LINES, NOT ON THE PATCHED FILE. `read_it` collects
-the lines of a mutation that spell `grep -q` and asks whether any of them names
-a file the branch changed. That is deliberate and kanso#1254 argued it well: a
-guard IS the dependency, and reading the whole script instead selected 33 rows
-where 12 were at risk. But both compile-path mutations reach `src/lib.rs`
-through `"$file"` and assert with `grep -c`, so the path appears on no guard
-line and neither row could ever be selected, whatever a branch touched.
-
-`entry_instructions` has been in that position since kanso#1330 and
-`library_instructions` since kanso#1337 — the same pair the trend gate had left
-unclassified, found the same afternoon by two different means.
-
-Both mutations now carry a guard line that spells the path, and the selection
-goes from three rows to five with the entry and library rows both named. Watched
-blind first: the three-row listing above is this branch before the repair.
-
-**EIGHT MORE ARE IN THE SAME POSITION**, and the count is off disk rather than
-from memory: of 112 mutations, 77 name a path under `src/` and 69 of those name
-one on a `grep -q` line. The two repaired here were among the ten that did not.
-The eight left are
-
-    a_module_rewritten_twice_before_it_is_checked.sh
-    a_path_copied_once_per_declaration.sh
-    a_validator_that_skips_its_tail.sh
-    a_validator_the_reference_disagrees_with.sh
-    an_entry_program_rewritten_twice_before_it_is_checked.sh
-    clippy_bait.sh
-    misformatted_source.sh
-    the_wasm_engine_answers_something_else.sh
-
-and each is unselectable for the same reason: it reaches its file through a
-variable and asserts with `grep -c`, `grep -cF` or `grep -A1`. Repairing them is
-its own change, and it owes a spec that reads the mutations off disk — which is
-why one is not shipped here. Written and watched red, it named all ten; with a
-green list of eight it would only be a list, and a list is the shape that goes
-stale.
-
-`canonicalize_types` stays where it is. On the entry path moving it too read
-8,930 instructions worse, because the alias pass deletes the twins before that
-one would have walked them, and there is no reason to expect the other
-direction here.
-
-**CI's row.** The vein summary named exactly one failing counter against
-eighteen green, which is what round one was for:
-
-    library_instructions   164,253,088 -> 162,970,167   -1,282,921   -0.7811%
-
-The container projected a fall of 1,288,946, or 0.7784%. It overstated the
-saving by 6,025 instructions — half a per cent of the fall — while reading
-0.8136% high on the LEVEL of the row. A level offset between toolchains does
-not carry to a delta, and this is the second sitting to say so: kanso#1335
-recorded the same thing on the entry and module rows, where the projections
-also came out conservative.
-
-**THE OTHER TWO COMPILE ROWS DID NOT MOVE AT ALL**, and that is worth writing
-down because this change edits `src/lib.rs`, the compiler's own Rust.
-`compile_instructions=48,791,172` and `entry_instructions=162,170,772` are
-byte-identical to their goldens in the job that counted the new row. CLAUDE.md's
-prior is that `compile_instructions` usually moves on such an edit through
-layout alone; it holds, and this is the second recorded change small enough to
-leave it alone, after kanso#1285.
-
-**The mutation's anchor went stale in this same change, and pass one of the
-ratchet is what said so.** `the_library_program_is_checked_twice.sh` anchors on
-`let merged_diags = check::check_merged(&program, false);`, which is the exact
-line the reorder rewrites, at both sites. So round one's ratchet job failed
-`every mutation still matches the source it patches` and skipped the touched
-pass underneath it — the pass this branch exists to reach. The anchor moves to
-`check::check_merged_after_aliases(&program, false, &rewritten)` and the
-duplicate lands at 465, inside `compile_library` (390), with `compile_one`'s
-call at 372 untouched.
-
-A mutation anchored on a line a change is about to rewrite goes stale in that
-change. That is the ordinary case rather than a surprise, and the first pass
-exists to report it on the runner before the row it guards is ever read.
-
-**A FIFTH READER, found by running the trend gate on this change's own diff.**
-The fall printed as UNCLASSIFIED:
-
-    UNCLASSIFIED — no direction table names these, so they count
-    toward neither side of the pure-regression rule:
-      library_instructions
-
-The gate walks the golden and has no direction for the counter in it, so it can
-report the move and cannot say which way is better. A rise of the same size
-would have printed identically and counted toward neither side of the
-pure-regression rule. `entry_instructions` has been in the same position since
-kanso#1330 — two compile veins unclassified for as long as they have existed.
-
-This is the digestbench failure one vein down, which
-`tests/every_benchmark_in_the_work_vein_has_a_direction.rs` exists to prevent
-and could not see here: it reads `bench/instructions_golden.txt` and stops. Its
-own argument carries straight across — each compile golden holds retired
-instructions for one compile and fewer is better in all of them, so every row
-has a direction and none of them is a presence counter whose direction means
-nothing alone.
-
-`tests/every_compile_vein_row_has_a_direction.rs` asserts it over every
-`bench/*instructions_golden.txt` other than the work vein's, read off disk, so a
-fourth compile path opening a vein under a fourth name is covered on the day the
-file lands. Watched red first, naming both: `["entry_instructions",
-"library_instructions"]`. Both join `lower_gg` and the gate now prints
-`improved: library_instructions 164,253,088 -> 162,970,167`.
-
-That makes five readers a compile vein owes: its gate, `all_compile.sh`'s
-`gates=` line, the trend gate's walk, `golden_prose`, and the trend gate's
-direction table. kanso#1337 wired three of them.
-
----
-
-## 2026-09-08 (ninth) — the twins inside infer, sized at last
-
-The log has carried this OPEN item since 2026-09-08 (fifth) and twice since:
-*the twins inside `infer`, the other half of the reorder's value.* It has never
-had a number. It has one now, and the number is small.
-
-`enroll_bare` (src/lib.rs) clones every exported declaration of every imported
-module under its short name, and those clones are real declarations that infer
-and check both walk. On `bench/library_corpus` the top-level enrollment makes
-**292 function twins and 45 type twins against a merged program of 1,437
-functions** — one declaration in five. infer is 22.5% of that compile.
-
-**THE OBVIOUS INSTRUMENT DOES NOT WORK, and the way it fails is the blocker
-arriving as a diagnostic.** An env-gated early return in `enroll_bare`, so the
-twins are never made, stops the compile at
-
-    error[name]: `first` is already a declaration; rename the binding
-      --> std/regexp/regexp.kso:654:3
-
-Inside the standard library, not at the corpus's call sites -- `library_corpus`
-writes every call qualified and needs no bare twin of its own. The bare space is
-load-bearing inside std. That is the positional-index blocker already recorded
-for this thread: `group_members`, `ctx.current_index` and the reader bitmap are
-all indexed by position in `program.fns`, and beat.rs, check.rs and codegen.rs
-all read `inference.returns[i]` by that same position.
-
-**The instrument that does work: skip only the BODY WALK.** In infer's fixpoint
-sweep, beside the dirty test, skip a declaration whose `synthetic` is set. Every
-twin stays in `program.fns`, so no index moves. All readings on one probe
-binary, so the added branch cancels:
-
-    corpus                walked        skipped        delta
-    library_corpus   167,284,685   166,685,167     -599,518   -0.3584%
-    entry_corpus     164,832,926   164,512,869     -320,057   -0.1942%
-    compile_corpus    49,403,663    49,412,576       +8,913   +0.0180%
-
-infer itself: 38,972,582 -> 38,342,754, -1.6161%.
-
-**One declaration in five is one instruction in sixty-two.** A count-based
-estimate assuming infer is linear in the declaration count says 20.3% of infer,
-4.57% of the row; the measurement refutes that by 12.6x. The reason is the
-fixpoint: only DIRTY declarations are revisited, and a twin nothing calls goes
-clean after its first visit and is never re-dirtied again.
-
-**The module row goes the wrong way, and that is a finding about the probe.**
-Skipping the walk leaves `returns[twin]` at its default instead of the answer
-the walk would have written, so other declarations infer different values and
-the dirty sets and round count move with them. The delta is a mix of walks not
-taken and a fixpoint doing different work, and on `compile_corpus` the second
-term wins. So these three numbers size the thread; they are not a ceiling in the
-strict sense.
-
-**Where that leaves it.** The shipping shape has to copy the original's answer
-into `returns[twin]` rather than leave it at the default, and that copy costs
-something none of this pays. So the honest reading is a couple of tenths of a
-percent before the copy, against the alias-pass reorder's 0.7784% on the same
-row in the same session. The thread goes to the back of the queue: not refuted,
-not worth building next, and no longer unpriced. What is owed first if it is
-ever picked up is recording the twin/original pairing at the `enroll_bare` clone
-site, which is the cheap half of the copy.
-
-## 2026-09-08 (tenth) — a host-bound row was dropped on every host, including the one that could prove it
-
-`type bound` in scripts/ratchet/ratchet.kso has said since kanso#1228 that a row
-sharing a host-bound gate is skipped where the runner cannot answer it and
-**"on a run that lands on the golden's silicon the row is proved normally"**. The
-code has never done the second half. `kept_provable` dropped every row whose
-gate is on the `host_bound` list, and that list is a property of the GATE — its
-golden pins exact counts and the runner pool is not one machine — which says
-nothing about whether THIS run landed on the golden's silicon.
-
-So `library_ir`, `entry_ir`, `compile_ir` and `work` could be selected and never
-proved, anywhere. Not on a container, where the gate refuses and the drop is
-right. Not on CI, where the gate compares and the drop is wrong.
-
-kanso#1338's ratchet job is the instance, and it is the first branch that could
-ever have produced one — the guard-line repair it carried is what made the two
-compile rows selectable at all:
-
-    ratchet: 5 gates green before any mutation
-    ratchet: 5 rows patch a file this branch changed
-      ... a front-end pass that owns the program's names instead of borrowing them
-      ... work on the entry path, where the compile row measures a module
-      ... work on the library path, which the entry and module rows both walk past
-      ... a number the page states about the present drifting from its golden
-      ... a name a module keeps private crossing an import anyway
-    ratchet: 3 rows
-
-Five gates green. The baseline had just run `entry_instructions.sh` and
-`library_instructions.sh` on that runner and both compared. Then three rows ran,
-and the two compile rows left the report with no line at all — not a finding, not
-a skip notice, nothing. The same job's cost-goldens run read `entry instructions`
-and `library instructions` green on their own steps, which is the same fact from
-the other side.
-
-THE BASELINE ALREADY ASKS THE RIGHT QUESTION and its answer was being thrown
-away. It runs every distinct gate on an unmutated worktree before any mutation,
-and pushes a finding for each one it could not answer. A host-bound gate with a
-finding is `UNPROVEN THIS RUN` and its row must be dropped; a host-bound gate
-with no finding was green on this machine, minutes ago, and a red under mutation
-in a sibling worktree on the same machine is the mutation's doing.
-
-`finding` gains the gate it is about, and `kept_provable` reads it back. Four
-lines of decision where there was one, and the static list keeps its job: it
-still decides whether a red baseline FAILS the run or is excused.
-
-Watched red, with the whole program rather than a piece of it. The spec copies
-scripts/ratchet to a temp directory with one constant changed — `work_gate`
-points at `scripts/gates/python_free.sh` instead of `instructions.sh` — which
-makes a two-git-grep gate host-bound, the property four callgrind gates otherwise
-have and only a runner can exercise. Then it runs the real `prove python-free`
-against a worktree of HEAD. On the old rule:
-
-    ratchet: 1 gates green before any mutation
-    ratchet: no row on this runner could be proved; none was claimed
-    ratchet: 0 rows
-
-on the new one:
-
-    ratchet: 1 gates green before any mutation
-    ratchet: 1 rows
-      red   python-free (the harnesses stay kanso) — a python call creeping back into a harness
-    ratchet: every row turned its gate red
-
-Ten seconds for the file's four fixtures. It lives beside
-`a_gate_red_before_the_mutation_is_refused_rather_than_credited`, whose baseline
-pass this reads, and shares that file's mutex because `prove` names its scratch
-worktrees by fixed paths. The other three fixtures stayed green throughout,
-which is what says the baseline pass itself did not move.
-
-What this does not do is prove a compile row on a runner. That is CI's to say,
-and the reading is in the next ratchet job on a branch touching src/: five rows
-selected should now be five rows proved.
-
-## 2026-09-08 (eleventh) — the per-module check, built and refuted as specified
-
-§59 prices the per-module whole-program check at 20.38% gross and reasons down
-to "about 8.5 million instructions, roughly 16.5% of the row" for a version that
-moves the check up and leaves six slash-guarded passes where they are. This
-built that version. The ceiling is larger than the page says and the change is
-not reachable, and both halves are worth writing down.
-
-Repriced first, with an env-gated skip of `check_merged` for every module that
-is not the root, both readings on one probe binary:
-
-    corpus                        checked        skipped         delta
-    compile_corpus (module)     49,209,611     40,189,876    -18.3292%
-    library_corpus (library)   164,306,354    126,030,042    -23.2957%
-
-The library row gains more because 67.8% of that compile is
-`load_dependencies` and its corpus names ten imports where the module corpus
-names four. The shape §59 describes is most of what the library path does.
-
-**§59 NAMES ONE MECHANISM AND THERE ARE THREE.** The page's account is the
-slash: six passes skip any declaration whose name carries one, so run at the
-root they apply to the root and pass over every dependency. That is right and it
-is not the whole list.
-
-The second is a message that QUOTES A DECLARATION. With only the three
-slash-guarded checks kept per module, `scripts/module_differential` reads 29
-modules and 2 wrong:
-
-    a call to a sibling at the wrong arity
-      refused, but not with 'error[arity]: no 2-argument arm of `one`':
-      error[arity]: no 2-argument arm of `m/one` (arms take 1)
-
-    an arm no call can reach
-      refused, but not with 'error[dispatch]: overlapping overloads of `twice`':
-      error[dispatch]: overlapping overloads of `m/twice` are illegal
-
-Neither `check_call_arities` nor `check_overlapping_arms` is slash-guarded. What
-makes them per-module is that the message names a declaration and the merge has
-already qualified it — the spelling kanso#1120 settled. Keeping those two per
-module returns the sweep to 29 and 0.
-
-The third is ATTRIBUTION, and it is the one that closes the route. With five
-checks per module the suite is 122 binaries and four fail, five tests:
-
-    a_library_at_fault_is_reported_through_the_program_that_imports_it
-    error_corpus_reports_each_golden_diagnostic
-    the_wasm_engine_agrees_with_the_golden_corpus
-    the_wasm_engine_complains_the_way_the_others_do
-    the_front_end_infers_the_whole_program_four_times
-
-The first four are one defect. A diagnostic raised on a dependency's
-declarations at the root loses the file, the span and the module suffix that the
-dependency's own compile supplied:
-
-    error[naming]: `silly` answers only true or false: name it `silly?`
-      --> deep_library_error/main.kso:4:8
-
-    error[naming]: `silly` answers only true or false: name it `silly?`
-      (module deep_library_error/deep)
-
-It points at `main.kso`, which does not contain the fault. Detection is
-unaffected — the dependency's declarations are all in the merged program — so
-what is lost is attribution. The fifth failure is the saving showing up: a spec
-pins how many times the front end infers the whole program, and running the
-check once at the root is what moves it.
-
-So any check that can fire on a dependency's declarations stays per module
-unless a root-raised diagnostic can name where the declaration came from, and
-that is nearly all of them. `infer::infer` is 11.8M of `check_merged`'s 19.1M
-and runs for any check that reads inference, so the saving leaves with them.
-18.33% and 23.30% are a ceiling reachable only with provenance on merged
-declarations, which is a larger piece of work than a two-way split and is what
-this thread owes next.
-
-kanso#1003 walked this route once and withdrew it as "the per-dependency
-check_merged is not redundant" without naming what made it so. §59 named one
-thing. There are three, and they are written down now. Nothing shipped: the
-probe is reverted and the page is corrected to say what the tree says.
-
-## 2026-09-09 — the touched pass could not see eight mutations, in three different ways
-
-kanso#1338 repaired two mutations the ratchet's `touched` pass could never
-select and counted eight more in the same position. Reading all eight says they
-are not one kind, which is why a repair that treats them alike would have been
-wrong.
-
-The pass selects the rows a branch could have blinded by intersecting the files
-the branch changed with the paths each mutation names on a guard line, and
-`guarding` recognised one spelling of grep.
-
-**THREE guarded correctly and were still invisible.**
-`a_module_rewritten_twice_before_it_is_checked`, `a_path_copied_once_per_declaration`
-and `an_entry_program_rewritten_twice_before_it_is_checked` all do this:
-
-    n=$(grep -cF "$target" src/lib.rs)
-    [ "$n" -eq 1 ] || { echo "moved or multiplied ($n)" >&2; exit 1; }
-
-src/lib.rs is spelled right there, on a grep line. That guard is STRICTER than
-the `grep -q` its neighbours use — it catches the anchor multiplying as well as
-vanishing — and `guarding` keyed on the literal `grep -q`, so the three
-mutations that guard best were the three it could not read.
-
-Widening the predicate to `grep -q` or `grep -c` is measured rather than
-assumed: over the 112 mutations on disk it takes the satisfying count from 69
-to 72, and the three are exactly the three that were blind. Nothing else moves,
-so it cannot over-select. That is the whole repair for this shape, and it is one
-line rather than three edited scripts.
-
-**THREE reach their file through a variable** — `grep -qF '<anchor>' "$f"` with
-`f=src/runtime.c` or `f=src/wasm.rs`. A grep line with no path on it. Exactly the
-shape kanso#1338 repaired, repaired the same way: one guard line spelling the
-path.
-
-**TWO carry no grep at all**, because they append rather than anchor:
-`clippy_bait` and `misformatted_source` both `printf ... >> src/lib.rs`. They
-cannot go stale the way an anchored mutation does, which is why they had no
-guard — and they are NOT exempt. An `allow(clippy::ptr_arg)` anywhere in
-src/lib.rs makes the bait inert with the gate green, and a crate-level rustfmt
-escape does the same to the other. Both now assert the escape hatch is absent,
-which is a guard worth having on its own and puts the path where the pass can
-read it.
-
-77 of 77 mutations naming a src/ file now name it on a guard line.
-
-**The spec asserts the property, not the list.** kanso#1338 wrote the
-list-shaped version, watched it red naming ten, and declined to ship it: with
-the ten repaired it would have been a green list, and a list goes stale the next
-time somebody adds a mutation.
-`tests/every_mutation_names_its_file_on_a_guard.rs` reads the directory off
-disk. Watched red on one of each repairable shape, naming both by file and by
-path:
-
-    a_validator_that_skips_its_tail.sh names ["src/runtime.c"] and guards none of them
-    clippy_bait.sh names ["src/lib.rs"] and guards none of them
-
-## 2026-09-09 (second) — the chart drew the counters the objective had stopped reading
-
-docs/numbers.html is the long view: one row per merged commit, and a chart over
-it whose own subject line reads "what a run costs, what compiling costs, and the
-welfare score they roll up into". Five of its six lines drew counters the
-objective had retired.
-
-    line              read                                        status
-    run instructions  instructions + encode_instructions          retired 09-06
-    run memory        oneshot_arena_peak_bytes                    retired 09-06
-    binary size       text_bytes                                  never a term
-    compile work      compile_rounds+compile_visits+emitted_lines retired 09-03
-    compile memory    compile_peak_bytes                          a term
-    welfare           welfare                                     the score
-
-The 2026-09-06 gavel made the objective's runtime one consolidated program, and
-`run_instructions` and `run_peak_bytes` replaced the thirteen work rows and
-twelve memory rows the run side used to weigh. The 2026-09-03 rebuild had
-already retired fixpoint rounds, expression visits and emitted lines.
-`scripts/perf_record` writes a row's objective counters straight out of
-`welfare --counters`, unfiltered, so both counters the gavel minted have been in
-every row written since that day. Neither had a line.
-
-Read off the five hundred rows on the history branch:
-
-    counter                     rows   from         distinct   span
-    run_instructions              57   2026-09-06         18   3.04e9 -> 2.39e9
-    run_peak_bytes                57   2026-09-06          5   156.8 -> 46.7 MB
-    compile_instructions         105   2026-09-03         52
-    compile_allocs               349   2026-08-09         45
-    compile_peak_bytes           349   2026-08-09         22
-    oneshot_arena_peak_bytes     349   2026-08-09          2   the drawn one
-
-The last row is what a reader was looking at. `run memory` took two values, 2
-MiB and 3 MiB, across every row that holds it, so that line was flat with one
-step in it over the span where the counter the score reads fell 3.4x.
-
-**THE CHART DRAWS THE OBJECTIVE'S FIVE TERMS NOW**, in the order
-`bench/objective_sources.txt` lists them, plus welfare and plus binary size.
-`.text` stays because the page has nowhere else to show it and the 2026-09-05
-ruling is a fact worth publishing: no machine-code-size term in welfare, and
-`.text` keeps its own exact vein. It is drawn grey and the legend says why.
-
-`tests/the_chart_draws_the_objective.rs` replays `bench/objective_sources.txt`
-against the TREND array in both directions, and was watched red on the old page
-naming exactly the two failures:
-
-    the objective reads ["compile_allocs", "compile_instructions",
-      "run_instructions", "run_peak_bytes"] and the chart draws no line for them
-
-    the chart draws ["compile_rounds", "compile_visits", "emitted_lines",
-      "encode_instructions", "instructions", "oneshot_arena_peak_bytes"],
-      which the objective does not read
-
-Two keys are allowed past the second test by name, each with its reason written
-beside it: `welfare` is the score rather than a counter it reads, and
-`text_bytes` carries the 2026-09-05 ruling. A third arriving without a reason
-turns the spec red.
-
-THE SITE SMOKE FIXTURE HAD GONE STALE THE SAME WAY. Its stub history was six
-hand-picked rows, and the keys picked were the ones the chart happened to read
-in august: on 2026-09-09 it held neither `run_instructions` nor `run_peak_bytes`
-and could not have caught a chart that drew neither. It is generated from the
-newest real row now, every key of it, each value stepped so no series can draw
-flat and pass for a drawn one. The count it asserts went from six series to
-seven, and the protective property was watched: dropping `run_instructions` from
-one stub row alone reads `[5,6,6,6,6,6,6]` and fails.
-
-THE PAGE'S ROW ACCOUNTING WAS WRONG, and it is the same kind of error one layer
-up. It said 349 of the five hundred rows are scored on the compile counters
-alone and the other 151 have no score at all, which accounts for every row and
-leaves out the 57 that are scored on all five. The real shape is 244 rows on two
-counters at coverage 0.28, 48 on three at 0.44, 57 on all five at 1.00, and 151
-with none. The paragraph is restated in dates rather than counts. Those counts
-perish on the next merge — the file grows a row per commit, and "the five
-hundred rows" was already a number waiting to go stale.
-
-## 2026-09-09 (third) — the entry row and the library row are the same measurement
-
-`bench/objective_sources.txt` said the instruction term "sums BOTH compile
-paths: `kanso check <dir>` is a module and `kanso check <file>` is an entry".
-`kanso check <file>` is TWO paths — it routes by content, and a file of
-definitions alone is a library taking compile_library — so the sentence names
-two of three and the term takes two of three, which is right for a different
-reason than the one written down.
-
-Whether the library row should join is answered by measurement rather than by
-a gavel. Callgrind on this container, `kanso check` on each corpus:
-
-    frame                     module        entry       library
-    kanso::main           49,226,188  163,918,585  164,230,408
-    load_dependencies     29,179,760  112,141,854  112,163,002
-    compile_module_inner  41,345,039  100,795,947  100,804,487
-    check_merged_after..  17,585,954   62,110,471   62,242,504
-    infer::infer          10,931,355   36,679,783   36,496,937
-
-bench/entry_corpus and bench/library_corpus name the IDENTICAL ten imports —
-bits, io, json, list, math, path, regexp, render, sha256, text — and the two
-totals sit 311,823 apart out of 164M, which is 0.19%. Their dependency loads
-agree to 21,148, which is 0.019%. Every shared frame agrees to under half a
-per cent; the paths diverge only in the roughly 21M above load_dependencies,
-where compile_parsed_entry reads 142.58M against compile_library's 143.18M.
-
-The term is already 66% dependency loading: 29.2M for the module corpus's four
-imports and 112.1M for the entry corpus's ten, out of 213.1M. Admitting the
-library row would count that same 112.1M a third time and weight loading three
-to one against the compiler's own passes, for a dimension the entry row already
-carries. The module row is redundant with neither, at four imports against ten
-and 49.2M against 164M.
-
-`bench/library_instructions_golden.txt` is unaffected and still fails CI when
-it moves. A vein the objective does not weigh is still a vein — that is what
-kanso#1337 opened it for.
-
-**THE ATTRIBUTION PLUMBING §59 OWES WAS ALREADY PROTOTYPED, and the prototype
-lives nowhere the tree can see.** kanso#1340 refuted moving check_merged to the
-root because a root-raised diagnostic loses the file, the span and the
-`(module …)` suffix, and named provenance on merged declarations as what the
-thread owes next. That session built the plumbing and left it in a scratch
-directory: a `diag::HasFile` trait implemented for `ast::FnDecl` that returns
-`&self.file`, and a `diag::attributing(&program.fns)` wrapper standing in for
-`&program.fns` at each per-declaration check, so a diagnostic raised inside the
-loop carries the declaration's own file. Both patches are stale against main —
-they fail at src/check.rs:724 and src/lib.rs:3578, where kanso#1338's reorder
-moved under them — so what survives is the shape, which is written down here
-because a container is not a record.
-
-Four facts make that shape the right one, and they were checked rather than
-assumed. `FnDecl` already carries `file: Arc<str>` and `span`, so the
-provenance is in the tree. The merge does not re-stamp it: `stamp_file` runs
-per parse, per file, and the merges are plain `extend`, so a merged
-dependency's declaration keeps its own file. The file cannot ride on `Span`,
-because kanso#1135 made a span two u32 for a 7.1% peak win and an `Arc<str>`
-there hands it back; `Diagnostic` is the place, since diagnostics are built
-only on errors. And the `(module …)` suffix needs no new state at all —
-`split_qual` on the merged declaration's qualified name recovers it.
-
-The scope is 23 checks in `check_merged_after_aliases` and 65 `Diagnostic::new`
-sites in check.rs. The prize is the ceiling kanso#1340 repriced: −18.33% on the
-module row and −23.30% on the library row.
-
-**A CORRECTION, WRITTEN THE SAME NIGHT.** The paragraph above says the patches
-fail "at src/check.rs:724 and src/lib.rs:3578". That conflates two of them:
-`419_attribution.patch` fails only at check.rs:724, in four hunks that are all
-the same substitution, and the lib.rs failure belongs to the wider
-`419_all_six.patch`. Rebasing the first is mechanical — four lines — and it
-builds.
-
-Building it says the shape is further from shipping than the paragraph above
-implies, in two specific ways, and both were found by running the suite rather
-than by reading.
-
-THE PROTOTYPE IS NOT INERT. The obvious shipping order — land the attribution
-first, doing nothing until `check_merged` moves to the root, then move it —
-does not work: `cargo test --release --test golden` goes red on
-`error_corpus_reports_each_golden_diagnostic`.
-
-    fixture: tests/golden/errors/a_reexport_of_a_name_nothing_offers.kso
-    got:  error[name]: no import offers a pub `nonexistent` to re-export
-            --> std/text/text.kso:3:5
-    want: error[name]: no import offers a pub `nonexistent` to re-export
-            --> a_reexport_of_a_name_nothing_offers.kso:3:5
-             3 | pub nonexistent
-                       ^
-
-THE ATTRIBUTION IS DYNAMICALLY SCOPED, so it names whoever is iterating rather
-than what the diagnostic is about. That refusal is raised at src/lib.rs:3348,
-about a re-export in the user's own file, and it came out attributed to
-std/text. The `Attributed` iterator holds its last item's guard until the
-iterator itself drops, so a walk whose iterator outlives the raise site leaks
-its attribution forward. A thread-local read by a constructor cannot tell the
-declaration in hand from the declaration some other loop last held.
-
-AND `render_across` IS NEVER CALLED. The lib.rs half of the patch is a single
-`Diagnostic::new` conversion; no call site passes it the sources map. Every
-cross-file attribution therefore renders against an empty map, which is the
-second half of that fixture's diff — the quoted source line is gone.
-
-So the next step is not a rebase and a measurement. It is: attribute at the
-raise site rather than through a thread-local, and wire `render_across` at the
-`compile_*` call sites. Then the reorder is measurable. kanso#1340 called this
-"a larger piece of work than a two-way split" and was right; this is what it
-consists of.
-
 ## 2026-09-09 — the chart's palette was picked for one of the two pages it is drawn on
 
 **DONE.** kanso#1343 fixed *which* counters the trend chart draws and left
@@ -4439,3 +3818,327 @@ module and entry corpora the compile term rises 2,627,738 (+1.3489%), and that
 is the whole of the welfare fall — `front_end_visits` FELL 22,724 -> 22,449
 because the narrowing re-dirties fewer declarations, and every runtime counter
 is byte-identical.
+
+## 2026-09-12 — the field-read check joins the one descent, and the module row lands on a number it has produced before
+
+`check_merged_after_aliases` ran seven whole-program expression walks. kanso#1382
+folded the first, kanso#1383 the second, kanso#1384 the third. This is the
+fourth, and the largest of them on this host.
+
+`field_reads` did two different jobs in one function. Per NODE it asks whether a
+dot-read reaches a field, and whether the record it reaches is certain — that
+half is a question `check_per_node` was already at the node to ask. Per
+STATEMENT it does ordered bookkeeping: a bind closes the runs its pattern binds
+and calls `judge_cooccurrence`, a set notes a read. Ordered work cannot ride a
+descent that visits children in whatever order `for_each_child` hands them over,
+so the two halves are now two functions. `field_read_at` joins the fused walk.
+`field_reads_after` stays a statement loop and is called from the fused walk's
+`Expr::Build` arm, where the statements it needs are.
+
+The fused walk carries a third flag with the two it already had. `decidable` is
+off inside an `if`'s branches (kanso#1382). `raised` is off for the head of a
+call spelled `err` (kanso#1383). `certain` is off wherever the record a read
+reaches is not settled: inside a lambda, inside either arm of an `if`, in a
+guard's early and rest, and to the right of an `and` or an `or`. Three flags,
+three shapes that turn them off, and no shape turns off more than one.
+
+Measured against merged main. Container, `kanso::main` inclusive under callgrind, pinned tunables, read twice
+on the same box path with two builds identical to the instruction:
+
+```
+module   45,488,806 ->  45,174,081    -314,725  -0.6919%
+entry   151,905,787 -> 150,841,086  -1,064,701  -0.7009%
+summed  197,394,593 -> 196,015,167  -1,379,426  -0.6988%
+```
+
+The module row's fall is 314,725, which is the figure the previous entry
+records as this container's projection for the literal fold on the same row.
+Two different changes, one host, the same count. The candidate reason is that
+the module corpus is small enough for the removed DRIVER — the outer loop over
+declarations and the recursion setup — to dominate a fold's saving there, where
+the predicates the two folds move differ; the entry rows, 1,064,701 against
+1,609,713, would then be where the predicates show. That is a hypothesis and
+nothing here tests it. Both readings are exact counts and both repeated.
+
+Six mutations against `tests/golden/errors/uncertain_reads_are_not_counted.kso`,
+whose six legal declarations each read a field somewhere the record is not
+settled and whose seventh, `both_certain`, is refused. Five of the six turn the
+fixture red. The sixth cannot: the `Expr::BinOp` arm for `and` and `or` is
+unreachable, because `parse_and` and `parse_or` build `logical_if(...)` — an
+`Expr::App` with head `if` — so the walk never meets an `and` as a BinOp and the
+`if` arm is what clears `certain` to its right. Proved twice: by census over
+every `Expr::BinOp` construction site in the parser (`parse_cmp`, `parse_bits`,
+`parse_add`, `parse_mul`, and trmc's two, filtered to `+` and `*`), and in
+isolation, with a fixture holding only an `and` that stays legal, goes red under
+the `if`-arm mutation, and is legal again restored.
+
+The error corpus is byte-identical otherwise. `diag::render` does not sort, and
+`diags.rotate_left(walked)` sends the fused walk's block to the back, so a
+fixture carrying a field diagnostic beside another would move; none does.
+
+`sh scripts/gates/all_counters.sh`: the twelve runtime cost veins and the lazy
+tier agree. `sh scripts/gates/all_compile.sh`: `emitted_code`,
+`compile_libraries` and `compile_cost` AGREED; the six host-keyed rows are
+refused on this container and are CI's to write. `cargo clippy --release
+--all-targets` and `cargo fmt --check` clean, full release suite green after
+`scripts/build_wasm.sh`.
+
+`BuildScan::expr` is the fifth and last foldable walk, census 743,211, the
+smallest. `named_walk` is the largest remaining at 1,791,359 and stays out:
+`arity_at` pushes diagnostics of kind `arity`, and `check_merged_after_aliases`
+gates on that kind immediately after `check_per_node`, so folding it would put
+those diagnostics in front of their own early return.
+
+CI's rows, written in round two:
+
+```
+module   44,888,539 ->  44,564,895    -323,644  -0.7210%
+entry   149,925,203 -> 148,827,747  -1,097,456  -0.7320%
+library 150,211,345 -> 149,164,244  -1,047,101  -0.6971%
+summed  194,813,742 -> 193,392,642  -1,421,100  -0.7295%
+```
+
+`compile_allocs` 29,323 -> 29,317, a fall of six; `compile_peak_bytes` and the
+front end's rounds and visits byte-identical. Welfare 67.75 -> 67.77, banked in
+the same commit; seven `data-golden` spans on compiler.html regenerated.
+
+The container projected -1,379,426 summed and CI reads 1.030 of that, the
+closest the two hosts have come across four folds after 1.04, 0.88 and 2.01.
+Three of the four are near one and the fourth is not, which is why the previous
+entry called the offset noise rather than a ratio. A fourth point near one does
+not make it one.
+
+The entry and module rows part by 0.011 percentage points here, where the
+literal fold's round parted them by 0.330. That fold keyed on call sites, which
+the two corpora hold in different proportions; this one keys on dot-reads,
+which they hold in nearly the same one.
+
+## 2026-09-12 — the block-born check joins the one descent, and it was never a per-node question
+
+The fifth and last of the foldable walks in `check_merged_after_aliases`.
+kanso#1382 folded the decidable check, kanso#1383 the shapes walk, kanso#1384
+the literal-argument check, kanso#1385 the field-read check. `BuildScan` is
+gone with this one, and `check_per_node`'s descent does its work.
+
+The shape is different from the four before it, and the difference is the
+finding. `BuildScan::expr` held NO per-node predicate at all. Every diagnostic
+the check produced came from `wrote_a_field`, called from `body`; `expr`
+existed only to locate the statement lists nested inside expressions — a
+`build`, an `if` arm, a guard's remainder. So this fold is not a question
+joining a descent. It is three arms running ordered statement work at nodes the
+fused walk already reaches.
+
+`body` splits in two. `before` is the field write's refusal, and it must be
+asked against `born` as it stands at that statement and ahead of the value's
+own descent, which is what reading a statement list in order buys. `after` is
+the binding's birth and the write's record, both of which read the value the
+statement has just walked. `types` leaves the struct entirely: `PerNode`
+already carries the same `HashMap<&str, &TypeDecl>`, built once for the whole
+program, where `BuildScan` built a second copy of it.
+
+Measured on this container, `kanso::main` inclusive under callgrind with pinned
+tunables, against kanso#1385's head read on the same box path — both readings
+repeated and identical to the instruction:
+
+```
+module   45,174,081 ->  44,898,856    -275,225  -0.6093%
+entry   150,841,086 -> 149,962,557    -878,529  -0.5824%
+summed  196,015,167 -> 194,861,413  -1,153,754  -0.5886%
+```
+
+Ablating `check_build_blocks` outright on merged main — no walk, no tables, no
+diagnostics — reads `-1,193,288` summed. The fold recovers 96.7% of that. The
+four folds before it realised between 57% and 75% of their own census figures,
+and the gap is the same fact that made this one structurally different: where
+they left a predicate behind and removed only a traversal, this check WAS a
+traversal, so removing the traversal removed nearly all of it.
+
+The error corpus is byte-identical. That is worth a sentence, because the
+ordering genuinely moves: `check_build_blocks` used to push before
+`diags.rotate_left(walked)` sent the fused walk's block to the back, so its
+diagnostics arrived ahead of the walk's; folded, they sit inside that block.
+`diag::render` does not sort on this route. No fixture in the corpus carries a
+build diagnostic beside another, so none of the 204 moves.
+
+Two of the seven mutations stayed green, for two different reasons. Five of
+them turn the corpus red: the build arm opening with nothing
+born, its `before`, its `after`, the `if`-arm block arm existing at all, and
+the top level asking `before`. Two do not.
+
+Removing `conditional += 1` from the block arm WAS a corpus gap, and this
+branch closes it. The counter is live and the arm is reachable —
+`tests/golden/errors/a_field_write_inside_an_if_arm.kso` exercises it — but no
+fixture distinguished a field whose birth was recorded inside an arm from one
+recorded outside, which is the only thing the counter changes.
+`a_birth_recorded_inside_an_if_arm.kso` does: both arms answer `outer` so the
+`if`'s value is born, but `outer.link` was filled only in the arm that ran
+conditionally, so the field is not proved born and the write through it is
+refused. Watched both ways — the fixture is red today and the program compiles
+with the counter removed.
+
+Removing the guard arm's `after` leaves the corpus green because the arm is
+UNREACHABLE, like the `and`/`or` arm kanso#1385 recorded, and the proof is the
+parser's.
+
+`Expr::Guard` has exactly one construction site: `parser.rs:866`, inside
+`parse_body`. `parse_build_body` never calls `parse_body` — it reads each line
+with `parse_stmt` and hands blocks to `parse_block_construct` — so a build
+body's own statements are never a guard. That leaves the nested route, and
+`parse_body`'s own stray check closes it. The leading run is a maximal prefix
+of returns and binds, each carrying the deeper lines beneath it; the check that
+follows it,
+
+```rust
+if let Some(stray) = body[lead_end..].iter().find(|l| is_return(l)) {
+```
+
+scans FLAT. It does not skip deeper indents the way the lead scan does, so a
+`return` at any depth below a line that is neither a return nor a bind is
+refused with "a `return` sits with the bindings, before the effect chain". A
+`build` header is never either of those — `q = build ...` is refused outright
+with "`build` answers nothing to bind `q` to" — so the lead run always breaks
+at or before a build, and every `return X if C` anywhere inside that build is a
+stray.
+
+Four spellings confirm it from the other side: the guard leading a build body,
+following a binding in one, following a field write in one, and leading an `if`
+arm inside one, each refused at the `return` line itself. The arm stays as
+documentation of a shape the walk would otherwise have to think about; it costs
+one match arm, the same trade kanso#1385 made for `and`/`or`.
+
+CI's rows, round two:
+
+```
+module   44,564,895 ->  44,291,724    -273,171  -0.6130%
+entry   148,827,747 -> 147,951,808    -875,939  -0.5886%
+library 149,164,244 -> 148,288,999    -875,245  -0.5868%
+summed  193,392,642 -> 192,243,532  -1,149,110  -0.5942%
+```
+
+`compile_allocs` falls 3, from 29,317 to 29,314 — `BuildScan` loses its `types`
+field and is built once per program either way. `compile_peak_bytes` is
+byte-identical at 774,660, and the twelve runtime cost veins and the lazy tier
+do not move: the fold is in the front end and emits the same code. Welfare
+67.77 -> 67.78, banked.
+
+The container projected -1,153,754 summed and CI reads 0.9960 of it, the
+closest of the five folds after 1.04, 0.88, 2.01 and 1.028 on the module row.
+Four of those five now sit within 3% of one. That does not make the offset a
+ratio — one point off by a factor of two is what "noise the size of the effect"
+looks like, and the reading kanso#1384 wrote down stands: a compile delta is
+projected from CI or it takes the red round.
+
+`named_walk` is the only whole-program walk left in
+`check_merged_after_aliases`, and it does not fold this way. `arity_at` pushes
+diagnostics of kind `arity`; the function gates on exactly that kind
+immediately after `check_per_node` returns, with a `retain` and an early
+return. Folding would put those diagnostics in front of their own gate, where a
+wrong-arity call to a declared group would take the early return and lose every
+other diagnostic the program reports today — and `named_walk`'s driver drains
+its suppressed diagnostics after the whole declaration's walk, so the gate
+would fire on one that was going to be withdrawn. That second one refuses a
+valid program. The fixture for it needs two modules, because a binding
+shadowing a declaration in the same module is already refused outright, so it
+belongs with the branch that tries the fold rather than with this one.
+## 2026-09-13 — the sixth walk is the wrong target, and the measurement says where the money is
+
+Five folds landed in two days: kanso#1382 the decidable check, kanso#1383 the
+shapes walk, kanso#1384 the literal-argument check, kanso#1385 the field-read
+check, kanso#1386 the block-born check. Each entry closed by naming
+`named_walk` as the one left, at a census figure of 1,791,359, and saying the
+arity gate puts it out of reach. Before building the way around that gate I
+measured what the fold would actually buy. It is the smallest of the six, and
+the check's cost is somewhere else.
+
+Four readings on merged main plus the block-born fold, `kanso::main` inclusive
+under callgrind with pinned tunables, module and entry corpora summed:
+
+```
+full                                194,861,413
+tables built, walk skipped          191,131,486
+walk runs, three predicates no-op   192,298,663
+check_named_per_node gone outright  189,839,799
+```
+
+Which decomposes the whole check, 5,021,614 (2.577% of the compile):
+
+```
+table construction   1,291,687   25.7%
+traversal            1,167,177   23.2%
+per-node predicates  2,562,750   51.0%
+```
+
+**A fold removes the traversal and nothing else.** 1,167,177 is the ceiling,
+and the four folds that left a predicate behind realised 57% to 75% of their
+own figures, so the fold is worth roughly 0.67M to 0.88M summed — the smallest
+of the six, against a gate whose doc comment records a bug where sharing it
+silently skipped every check after. The census's 1,791,359 was the walk's
+inclusive cost under `for_each_child`, which carries the predicates it calls;
+it was never the fold's figure.
+
+The table slice is hazard-free and it is almost entirely one function.
+`Arities::of` reads 1,345,353 inclusive on the entry corpus alone — more than
+the summed table figure, because the ablation deltas carry allocator and layout
+effects the per-function reading does not.
+
+It is called **18 times** on one entry compile, against one call to
+`check_file_shadow`. `check_merged_after_aliases` runs per module, so the
+entry corpus's seventeen dependencies plus the entry itself each rebuild every
+table the check needs, over their own merged program. 74,742 instructions a
+call.
+
+That is the shape to look at next, and it is bigger than the fold: the five
+folds each removed a traversal that was running eighteen times, which is why
+they paid what they did. What has not been asked is whether the per-module
+rebuild is necessary — each module's merged namespace is genuinely different,
+so this is not a free deduplication, and kanso#1003 already withdrew one claim
+that the per-dependency merged check was redundant. The question here is
+narrower: whether the TABLES a module's check needs can be derived from its
+dependencies' rather than rebuilt from the merged program.
+
+`Arities::of` also hashes each declaration name up to three times: once to
+count, once to read the range back, and once more through `get_mut` when the
+arity is new. The last two are a `get` and a `get_mut` of the same key, and the
+slot the first returns is the slot the second wanted. Collapsing them:
+
+```
+module   44,898,856 ->  44,837,968     -60,888  -0.1356%
+entry   149,962,557 -> 149,755,885    -206,672  -0.1378%
+summed  194,861,413 -> 194,593,853    -267,560  -0.1373%
+```
+
+One hash per declaration, 267,560 instructions — a quarter of what the whole
+fold could reach, for six lines and no gate to think about. That is the shape
+of the rest of this: the check is re-entered eighteen times, so anything per
+declaration is paid eighteen times over.
+
+The fold is not refused, it is ranked: it is the smallest remaining and the
+only one carrying a gate hazard, so it goes behind the table work rather than
+in front of it. What ships here is the hash collapse; the rest is four
+ablations and one call count, and they say where to look next.
+
+CI's rows for the collapse, measured on merged main rather than this
+container:
+
+```
+module   44,291,724 ->  44,234,005    -57,719  -0.1303%
+entry   147,951,808 -> 147,756,205   -195,603  -0.1322%
+library 148,288,999 -> 148,091,856   -197,143  -0.1329%
+summed  192,243,532 -> 191,990,210   -253,322  -0.1318%
+```
+
+The container projected -267,560 summed and CI reads 0.9468 of it. Across six
+rounds the ratio now runs 1.04, 0.88, 2.01, 1.028, 0.9960, 0.9468 — five
+within 6% of one and a sixth off by a factor of two, which is the reading
+those entries have carried all along: a compile delta is projected from CI or
+it takes the red round.
+
+Three veins moved and three did not. `machine_code`, `compile_memory` and
+`compile_allocs` all agreed, which is what a refactor that changes neither
+what is allocated nor how much code is emitted should look like. That is worth
+one sentence against `bench/compile_instructions_golden.txt`'s own warning
+that this row usually moves on any edit to the compiler's Rust because the
+layout shifts under it: here the row moved because the work moved, and the
+layout held still enough to leave `.text` byte-identical.
+
+Welfare 67.77569149595541 -> 67.77800065192253, banked in the same commit.

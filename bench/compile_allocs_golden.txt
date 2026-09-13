@@ -402,6 +402,14 @@
 # one because the row counts the whole compile and the set is built once per
 # declaration in each module the directory holds. What the fold buys on the
 # instruction rows is in bench/compile_instructions_golden.txt.
-# 2026-09-13 (the exhaustiveness rule, re-measured): 29,323 -> 29,458, a RISE of
-# 135 -- check_none_exhaustive's map and infer's shadow table.
-compile_allocs=29458
+# 2026-09-12 (the field-read check joins the one descent): 29,323 -> 29,317, a
+# fall of 6. The old driver built nothing per declaration that the fused walk
+# does not already keep; the six are the `Open` vector the split stopped
+# rebuilding per module. `compile_peak_bytes` and the front end's rounds and
+# visits are byte-identical: the fold moves where work happens and allocates
+# nothing new.
+# 2026-09-13 (the block-born check joins the one descent): 29,317 -> 29,314, a
+# fall of 3. `BuildScan` loses its `types` field -- `PerNode` already carries
+# that table -- and the struct is built once per program either way, so three
+# is the whole of it. compile_peak_bytes is byte-identical at 774,660.
+compile_allocs=29314
