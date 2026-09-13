@@ -5215,3 +5215,43 @@ goldens caught it because their interleavings put the growth somewhere the
 rounding does not hide. The lifted spec is the guard that would have caught it
 first, which is why it scans the whole file rather than the five sites the
 change edited.
+
+**CI's sitting, and the four rows that rose.** Round one was red on the five
+host-gated veins, as expected; these are CI's numbers.
+
+    row                     golden          CI              delta
+    work_runbench           2,128,867,999   2,111,374,474   -17,493,525  (-0.8217%)
+    work_encodebench        3,778,345,357   3,693,122,957   -85,222,400  (-2.2555%)
+    work_livebench          3,215,435,236   3,144,795,841   -70,639,395  (-2.1970%)
+    work_oneshot               20,499,188      20,306,435      -192,753  (-0.9403%)
+    work_jsonbench          1,394,485,059   1,392,055,809    -2,429,250  (-0.1742%)
+    work_basket                34,285,873      34,281,871        -4,002  (-0.0117%)
+    work_widebench             34,066,831      34,114,831       +48,000  (+0.1409%)
+    compile_instructions       46,103,773      46,106,555        +2,782  (+0.0060%)
+    entry_instructions        153,606,666     153,614,264        +7,598  (+0.0049%)
+    library_instructions      154,367,035     154,373,046        +6,011  (+0.0039%)
+
+The container projected the run row at 2,084,434,456 against its own baseline,
+a fall of 17,633,310; CI reads 17,493,525, which is 0.9921 of the projection.
+Seven of the fourteen work rows are byte-identical.
+
+`work_widebench` rises 48,000 and is the one runtime row that does. widebench
+builds wide records and pushes lists; it reaches the KBuf fast paths, whose
+sign expressions this change leaves alone, and its bytes work is one append per
+field. What it does gain is the regime helper's own bytes — `.text` rises 16 in
+eight of the fourteen programs, widebench among them, where the helper did not
+inline away. 48,000 against 34.1M is the scheduling that follows.
+
+The three compile rows rise by 0.006%, 0.005% and 0.004%. `kanso check lib/json`
+stops before codegen, so the emitter's five sites cannot run during the compile
+these rows count; what moves is the compiler's own bytes, and the 2026-09-13
+(sixth) entry above records both halves of that — the row moves on a layout
+change, and its SIGN is not a property of the diff. `compile_allocs` is 30,273
+and `compile_memory` 777,126 bytes, both byte-identical.
+
+The `.text` vein totals 1,734,300 -> 1,731,932. Six programs fall — runbench
+-576, oneshot and livebench -496, widebench -448, jsonbench -272, encodebench
+-208 — and the other eight rise 16, the helper's own bytes where it stayed a
+call.
+
+Welfare 68.07 -> 68.13, banked with `--set` in this round.
