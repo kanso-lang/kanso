@@ -136,8 +136,13 @@ row is here so the dependency is visible from the list cloud reads.
 
 **Unblocked, 2026-09-13.** `book_check` executes every panel and compares its
 output, so ch04/ch05 could not describe the effect type before it shipped. It
-has now shipped (kanso#1372), so this is buildable: the prose is written and
-verified on a local branch and needs re-verifying against merged main.
+has now shipped (kanso#1372), so this is buildable.
+
+An earlier note here said the prose was already "written and verified on a local
+branch". That branch is not in the compiler worker's container — no branch or
+worktree matching book/ch04/ch05/boundary exists there — so treat the prose as
+unwritten until someone points at a commit. Whoever picks this up writes it
+against merged main and lets `book_check` execute the panels.
 
 ## In flight
 
