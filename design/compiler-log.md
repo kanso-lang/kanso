@@ -4949,22 +4949,42 @@ either the binding's expression kept where `emit_cond` can reach it or a
 front-end rewrite that inlines a single-use condition; `lookup` returning an
 operand is the whole obstacle.
 
-AND THE CENSUS SAYS THAT FIX BUYS NOTHING HERE. A sweep of every `.kso` under
-lib, std, scripts, bench and hako for a binding whose value is a comparison,
-`and`, `or` or `not` and whose name is the condition of an `if` within the next
-eight lines returns seven sites. One is this line. One is the same line in
-`bench/jsonbench/jsonbench/number.kso`, the frozen decoder jsonbench compiles,
-which is a control and stays as it is — its counters are byte-identical here,
-as they should be. Three of the remaining five bind `list/find`, so the name
-holds an option a reader needs and the comparison against `none` is the real
-question. The last two are in `hako/hako/update.kso`, where `mine` is read on
-two lines, so a once-used rule would not fire on it, and hako is in no
-benchmark.
+AND THE CENSUS SAYS THAT FIX BUYS NOTHING HERE — but the first census was
+wrong, and the way it was wrong is the finding.
+
+Sweeping every `.kso` under lib, std, scripts, bench and hako for a binding
+whose value is a comparison, `and`, `or` or `not` and whose name is an `if`
+condition within eight lines returns seven sites: this line, its twin in
+`bench/jsonbench/jsonbench/number.kso` (the frozen decoder jsonbench compiles,
+a control that stays as it is — its counters are byte-identical here, as they
+should be), three that bind `list/find` where the name holds an option a reader
+needs, and two in `hako/hako/update.kso` where the name is read twice, so a
+once-used rule would not fire, and which no benchmark compiles.
+
+That sweep filtered on the operator and so could not see `blank = ws? c`, which
+stands EIGHT times in `lib/json/value.kso` on the decoder's hottest paths —
+`array_delim` alone is 4.13% of runbench. Dropping the filter finds them, and
+the disassembly looks like the same defect: at 0x29200 the loop runs `mov
+$0x2,%edi` / `cmp $0x2,%rdi` / `jne`, and at 0x292b9 `mov $0x3,%edi` / `cmp
+$0x2,%rdi` / `je`, two flags turned into a value and back.
+
+MEASURED, AND IT IS NOT. All eight rewritten to ask in place, as
+`if (ws? c) ...`, build a runbench byte-identical to main's — md5
+034613928ffe1a3ef39424e0c8b92353 on both sides — and `emitted_code` AGREED. `ws?` is a group over the byte
+returning literal `true` and `false`, so the condition is a CALL, and
+`emit_cond` has nothing to walk: a callee hands back a tagged value whether or
+not the caller names it. The binding is free. What `emit_cond` can walk is an
+`and` of comparisons, which is why the line above it paid and these eight do
+not. The eight fewer source lines move one vein, `front_end_visits` 22,449 ->
+22,359, which is not a welfare term, and the change is declined — the name
+`blank` says what the test means.
 
 So the emitter learning to see through a once-used binding is worth the name it
-gives back and nothing measurable on this tree. It is a language-quality change
-for programs nobody has written yet, and it is recorded here at that size
-rather than as a performance lead.
+gives back and nothing measurable on this tree, and the shape worth teaching it
+next is the other one: a group whose arms are all boolean literals, whose
+switch could jump straight to the `if`'s targets instead of building a tag for
+a compare to take apart. That is where the six instructions at 0x29200 and
+0x292b9 live, and no source spelling reaches them.
 
 Two compile veins moved and both are regenerated here. The emitted goldens lose
 two branches and one line in every program that carries the number scanner —
