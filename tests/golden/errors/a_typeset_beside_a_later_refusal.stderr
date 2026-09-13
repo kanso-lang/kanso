@@ -1,0 +1,8 @@
+error[type]: `shape` is a typeset — it only annotates
+  --> a_typeset_beside_a_later_refusal.kso:24:11
+  24 |   print "{shape}{x}"
+                 ^
+error[name]: `let` is not a type, so a binding cannot destructure with it — a binding is `x = …`, with no keyword
+  --> a_typeset_beside_a_later_refusal.kso:23:7
+  23 |   let x = 1
+             ^

@@ -1,0 +1,24 @@
+# TWO CHECKS, ONE PROGRAM, AND THE ORDER BETWEEN THEM.
+#
+# The name questions — arity, opacity, typeset — were asked on a descent of
+# their own until they joined the one `check_per_node` makes. The route hands
+# diagnostics back in PUSH order, and the fused walk's own answers are rotated
+# to the back, so a name answer that rode along with them would come out after
+# every check that used to follow it. Nothing in the corpus could see that:
+# thirty-two fixtures raise more than one diagnostic and not one of them pairs
+# a name answer with a later check's.
+#
+# This one does. `shape` is a typeset named as a value, which the name half
+# refuses; `let` is not a type, which `check_binding_patterns` refuses, and
+# that check pushes AFTER the name half. The typeset line comes first.
+type circle
+  r
+
+type square
+  s
+
+type shape circle square
+
+pub play =
+  let x = 1
+  print "{shape}{x}"

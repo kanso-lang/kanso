@@ -20,98 +20,6 @@
 > unedited — go there for a thread this file does not mention, and search it
 > before concluding an idea is new.
 
-## 2026-09-10 — a record built into its own first field
-
-Found while writing a mem fixture for the carry tier: a loop that chains
-records, `grow (node n i) (i + 1)`, came out cyclic on native and correct on
-the oracle, on main as on the branch. The emitter builds a constructor into
-a record the arm has finished with — `shift (n - 1) (point (p.x + 1) p.y)`
-reads every field it needs before the constructor runs, so by then `p` is
-done with and its storage is free — and `sole_finished_record` judged
-finished by counting mentions: the parameter read in this constructor's
-arguments and nowhere else in the arm, and handed over by every caller. A
-bare mention counted as a read. `node n i` mentions `n` once, in the
-constructor, and every caller hands it over; the emitter passed it to
-`k_rec_reuse` as the victim, and the runtime overwrote the victim's fields
-with arguments the first of which was the victim. The new node's `next`
-pointed at its own storage, and `show` walked it until the stack ran out.
-
-**The fix** is in the analysis. Finished means read from, and a field read
-is the only read that leaves nothing behind: `field_reads_in` counts the
-mentions that are the base of a `var.x`, and a parameter whose mentions in
-the arguments are not all field reads is not a victim. A bare mention stores
-the record itself, whether directly or inside another constructor, and a
-record something is about to hold is not free. The runtime is unchanged;
-`k_rec_reuse` still trusts its caller, which is the arrangement the
-2026-09-04 attribution (k_rec 30.39% of pendbench) chose.
-
-The first cut of that rule declined every reuse in the tree — basket's
-`sh_rec` 130,192 -> 386,192, `record_reuse_shape`'s 4,006 allocations back
-where 3 had been — and the reason is worth a line for the next pass written
-against this AST. `desugar_field_reads` runs before the linear analysis,
-and after it there is no `Expr::Field` anywhere: `p.x` is `Get_x p`, the
-getter applied to the record. A count of `Expr::Field` reads zero on every
-program. `field_reads_in` reads both spellings now, the getter application
-by `getter_field` on the head's name, and the veins agree.
-
-One site in the tree was the defect's shape and never showed it.
-lib/json/scan.kso's `fail p reason` builds `err (parse_failure p reason)`,
-and `reason` — mentioned once, bare, in the constructor's arguments, handed
-over by every caller — was the victim at that site. It is a string at every
-call, and `k_rec_reuse` allocates fresh when the victim is not a record of
-the constructor's width, so the program was right by the runtime's guard
-rather than by the analysis; a caller passing a two-field record as the
-reason would have built the failure into its own `reason` field. The site
-emits `k_rec` now, which is the one line the emitted veins lose.
-
-**Spec.** `tests/golden/micro/a_loop_that_chains_records_keeps_each_node`
-on all three engines, `3>2>1>0>end`; watched red on native (the stack ran
-out) with the oracle green before the fix, both green after.
-
-**Cost.** None at run time: `all_counters.sh` reads the twelve cost veins
-and the lazy tier agreeing with their goldens, and welfare holds at 66.31.
-The emitted veins each lose the `k_rec_reuse` line at lib/json's `fail`,
-landed at: emitted_lines 9,135 (from 9,136), and in the others vein
-encodebench 11,142, oneshot 9,064, widebench 12,124, pendbench 7,033,
-scanbench 19,728, livebench 9,181 and runbench 34,673 lines, one fewer
-each; defines, calls and branches hold, because the `k_rec_reuse` declare
-that goes is not a define and its call is replaced by a `k_rec` call. The
-six host-keyed compile rows are refused on this container and copied from
-CI's sitting.
-
-**CI's five host-keyed rows, and what each one says.** The container refuses
-five of the veins this change moves, so round one was red on all five and CI's
-sitting is what lands. Two go down and three go up.
-
-The runtime rows fall in four of fourteen programs and hold in ten: basket
-34,690,245 -> 34,690,216 (-29), pendbench 583,758,224 -> 583,755,724 (-2,500),
-scanbench 726,019,079 -> 726,018,879 (-200), runbench 2,367,877,484 ->
-2,367,876,664 (-820). Machine code falls in nine and holds in five, jsonbench
-100,434 -> 100,130 the largest at -304. NINE against the emitted vein's EIGHT:
-basket loses sixteen bytes of text without losing an emitted line, because the
-`k_rec_reuse` declare it drops was already text some other program shared.
-
-The three compile rows RISE, together and by nearly the same fraction:
-compile_instructions 48,393,437 -> 48,412,144 (+18,707, +0.0387%),
-entry_instructions 161,314,264 -> 161,360,451 (+46,187, +0.0286%),
-library_instructions 162,023,537 -> 162,069,092 (+45,555, +0.0281%). That is
-the price of the answer. `sole_finished_record` used to count mentions, which
-costs nothing; `field_reads_in` asks of each mention whether it is the base of
-a field read, which walks. Every compile route runs the linear pass, so all
-three rows move, and a per-declaration check that moves them by the same
-fraction is what a uniform cost looks like.
-
-**The trade, and the objective's verdict.** A rise anywhere is a thing to
-state rather than defend, and this one is real: the compiler does 110,449 more
-instructions summed across the three routes to buy 3,549 fewer at run time on
-the four programs that reach the shape. Stated that way it sounds like a bad
-bargain, and by the raw counts it is. The objective disagrees, because the
-counts are not what it weighs: welfare reads **66.42 against a floor of 66.42,
-held exactly**, since a 0.03% rise on a compile term measured in hundreds of
-millions moves the saturating curve by less than the floor's own precision.
-The change is a MISCOMPILATION fix besides — a program that came out cyclic
-now does not — and that is not a term the objective has at all.
-
 ## 2026-09-10 — three library shapes off the run program's profile
 
 Three arms, each one a shape the profile pointed at, each one measured on
@@ -4410,3 +4318,94 @@ as though it were inclusive — once in a hand-written callgrind parser that
 reported 99,188,064,506 against a 1,994,172,731 program because it read the
 cost line after `calls=` as self, and once here against the phase table. Read
 the units before writing the number down.
+
+## 2026-09-13 (eighteenth) — the name questions join the one descent
+
+Built: the sixth fold. kanso#1382 through kanso#1386 moved five checks into
+`check_per_node`'s single descent and each returned between 0.36% and 1.14% of
+the summed compile term. `check_named_per_node` was the largest check still
+walking the program on its own, and it is the sixth to go in.
+
+`named_walk` was a `for_each_child` recursion over the same declarations and
+the same statements `per_node_walk` already descends, asking three questions at
+each node: a call's arity against the group that could answer it, a foreign
+type built outside its owner, a typeset named as a value. What is left once the
+recursion line goes is `named_at`, called from `per_node_walk` beside the other
+eight. `Named` rides in `PerNode` as one reference, the way `FieldScan` and the
+literal groups do; `own` and the shadowable list ride in `DeclState`, which is
+already per-declaration.
+
+**The answers go in their own vector, and that is deliberate.** This route hands
+diagnostics back in PUSH order — only the arity-gated early return sorts — and
+the fused walk's answers are rotated to the back so they land where the checks
+they replaced used to push. A name answer riding along with them would come out
+after every check that used to follow it. So `DeclState` carries
+`named_diags`, `check_per_node` returns it, and `check_merged_after_aliases`
+splices it in at the position `check_named_per_node` pushed from. The arity gate
+also keeps reading only the walk's own vector, so a name-side arity refusal does
+not trip a return that was written about a different refusal.
+
+MEASURED on the container, `kanso check` in the gate's box, `kanso::main`
+inclusive, one build each:
+
+    vein                 main           fold          delta
+    module         46,906,319     46,545,400   −360,919 (−0.7695%)
+    entry         156,302,043    155,075,270 −1,226,773 (−0.7848%)
+    library       157,445,822    156,226,595 −1,219,227 (−0.7744%)
+    summed        361,654,184    357,847,265 −2,806,919 (−0.7761%)
+
+The container reads about 0.8% above CI on all three rows, an offset every
+compile vein has carried since kanso#1337, so the projection onto the landed
+goldens is roughly −354,600 / −1,205,500 / −1,195,500, summed −2,755,600
+(−0.7783%). The goldens in this commit still hold main's values and round one is
+expected red on all three; CI's rows are written in the round after.
+
+**The corpus could not see the ordering, and now it can.** Thirty-two fixtures
+in `tests/golden/errors` raise more than one diagnostic and not one of them
+paired a name answer with a later check's, so splicing the name answers at the
+END instead of at their old position left all 465 fixtures green. That is a gap
+rather than a licence. `a_typeset_beside_a_later_refusal` raises both — `shape`
+named as a value, which the name half refuses, and `let x = 1`, which
+`check_binding_patterns` refuses after it — and it was watched red under exactly
+that mutation, the two lines coming back in the other order.
+
+**OPEN: the shadow suppression may be unreachable.** `arity_at`'s one use of the
+declaration's bound names is to drop a diagnostic when a local shadows a
+declared group, and the machinery around it — the stretch list, the second pass
+that builds the bound-name set only when that list is non-empty — moved across
+verbatim. Deleting the drop leaves all 465 error fixtures green, leaves
+`compile_corpus` and `lib/json` compiling, and the two shapes that would reach
+it are refused earlier by "`x` is already a declaration; rename the binding":
+a top-level bind of a declared name, and a parameter named after one. Whether
+any program can reach it is not answered here, and the machinery stays until
+something answers it.
+
+CI's rows, round two. `compile_instructions` 46,072,247 -> 45,708,985 (−363,262
+/ −0.7885%), `entry_instructions` 153,586,146 -> 152,355,905 (−1,230,241 /
+−0.8010%), `library_instructions` 154,378,731 -> 153,175,369 (−1,203,362 /
+−0.7795%); summed 354,037,124 -> 351,240,259 (−2,796,865 / −0.7900%). The
+container projected −2,755,600 summed, so the projection came in at 0.9853 of
+the landing — the second-closest of the six folds, behind kanso#1386's 0.9960.
+
+Only those three moved. The job's own vein summary — the authority, since the
+nineteen counter steps are `continue-on-error` and their API conclusions lie —
+reads `compile memory:success`, `compile allocations:success` and `machine
+code:success` alongside the three failures. That agrees with the box: allocs
+30,258, alloc bytes 4,841,171, peak 777,126, passes 8, rounds 62 and visits
+22,437 are all byte-identical between main and the fold. A descent goes; an
+allocation does not, and `.text` does not move either, which is worth saying
+because `src/check.rs` changed substantially and the machine-code vein has
+caught layout-only moves seven times before.
+
+And the three rows REPRODUCED. CI read them twice, on two commits that differ
+only in markdown so carry the same compiler binary — `fd7ee486` before the base
+merge and `7f7a65a4` after — and both sittings gave 45,708,985 / 152,355,905 /
+153,175,369, with `compile_allocs` 30,258 and every `text=` and emitted row
+identical between them. That is what `compile_instructions.sh` asks for in
+place of a per-host key: the same build on any runner counts the same number,
+and a run that disagrees halts the vein. These did not disagree.
+
+Welfare rose 0.01 and is banked in the same round, the goldens carrying CI's
+rows first: floor 68.52093722983558 -> 68.5353360462189, ratchet 262. Five
+`data-golden` spans on compiler.html quoting the compile rows were rewritten by
+`all_pages.sh --write`, and all three page gates agree afterwards.

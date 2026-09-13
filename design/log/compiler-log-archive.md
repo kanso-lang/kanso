@@ -60817,3 +60817,95 @@ Welfare 66.42 held and re-set: the objective's compile term sums the three rows,
 so it takes the whole 1,220,025, and the rise is under a hundredth of a point.
 Five compiler.html spans quoting the three rows were rewritten by
 `golden_prose --write`.
+
+## 2026-09-10 — a record built into its own first field
+
+Found while writing a mem fixture for the carry tier: a loop that chains
+records, `grow (node n i) (i + 1)`, came out cyclic on native and correct on
+the oracle, on main as on the branch. The emitter builds a constructor into
+a record the arm has finished with — `shift (n - 1) (point (p.x + 1) p.y)`
+reads every field it needs before the constructor runs, so by then `p` is
+done with and its storage is free — and `sole_finished_record` judged
+finished by counting mentions: the parameter read in this constructor's
+arguments and nowhere else in the arm, and handed over by every caller. A
+bare mention counted as a read. `node n i` mentions `n` once, in the
+constructor, and every caller hands it over; the emitter passed it to
+`k_rec_reuse` as the victim, and the runtime overwrote the victim's fields
+with arguments the first of which was the victim. The new node's `next`
+pointed at its own storage, and `show` walked it until the stack ran out.
+
+**The fix** is in the analysis. Finished means read from, and a field read
+is the only read that leaves nothing behind: `field_reads_in` counts the
+mentions that are the base of a `var.x`, and a parameter whose mentions in
+the arguments are not all field reads is not a victim. A bare mention stores
+the record itself, whether directly or inside another constructor, and a
+record something is about to hold is not free. The runtime is unchanged;
+`k_rec_reuse` still trusts its caller, which is the arrangement the
+2026-09-04 attribution (k_rec 30.39% of pendbench) chose.
+
+The first cut of that rule declined every reuse in the tree — basket's
+`sh_rec` 130,192 -> 386,192, `record_reuse_shape`'s 4,006 allocations back
+where 3 had been — and the reason is worth a line for the next pass written
+against this AST. `desugar_field_reads` runs before the linear analysis,
+and after it there is no `Expr::Field` anywhere: `p.x` is `Get_x p`, the
+getter applied to the record. A count of `Expr::Field` reads zero on every
+program. `field_reads_in` reads both spellings now, the getter application
+by `getter_field` on the head's name, and the veins agree.
+
+One site in the tree was the defect's shape and never showed it.
+lib/json/scan.kso's `fail p reason` builds `err (parse_failure p reason)`,
+and `reason` — mentioned once, bare, in the constructor's arguments, handed
+over by every caller — was the victim at that site. It is a string at every
+call, and `k_rec_reuse` allocates fresh when the victim is not a record of
+the constructor's width, so the program was right by the runtime's guard
+rather than by the analysis; a caller passing a two-field record as the
+reason would have built the failure into its own `reason` field. The site
+emits `k_rec` now, which is the one line the emitted veins lose.
+
+**Spec.** `tests/golden/micro/a_loop_that_chains_records_keeps_each_node`
+on all three engines, `3>2>1>0>end`; watched red on native (the stack ran
+out) with the oracle green before the fix, both green after.
+
+**Cost.** None at run time: `all_counters.sh` reads the twelve cost veins
+and the lazy tier agreeing with their goldens, and welfare holds at 66.31.
+The emitted veins each lose the `k_rec_reuse` line at lib/json's `fail`,
+landed at: emitted_lines 9,135 (from 9,136), and in the others vein
+encodebench 11,142, oneshot 9,064, widebench 12,124, pendbench 7,033,
+scanbench 19,728, livebench 9,181 and runbench 34,673 lines, one fewer
+each; defines, calls and branches hold, because the `k_rec_reuse` declare
+that goes is not a define and its call is replaced by a `k_rec` call. The
+six host-keyed compile rows are refused on this container and copied from
+CI's sitting.
+
+**CI's five host-keyed rows, and what each one says.** The container refuses
+five of the veins this change moves, so round one was red on all five and CI's
+sitting is what lands. Two go down and three go up.
+
+The runtime rows fall in four of fourteen programs and hold in ten: basket
+34,690,245 -> 34,690,216 (-29), pendbench 583,758,224 -> 583,755,724 (-2,500),
+scanbench 726,019,079 -> 726,018,879 (-200), runbench 2,367,877,484 ->
+2,367,876,664 (-820). Machine code falls in nine and holds in five, jsonbench
+100,434 -> 100,130 the largest at -304. NINE against the emitted vein's EIGHT:
+basket loses sixteen bytes of text without losing an emitted line, because the
+`k_rec_reuse` declare it drops was already text some other program shared.
+
+The three compile rows RISE, together and by nearly the same fraction:
+compile_instructions 48,393,437 -> 48,412,144 (+18,707, +0.0387%),
+entry_instructions 161,314,264 -> 161,360,451 (+46,187, +0.0286%),
+library_instructions 162,023,537 -> 162,069,092 (+45,555, +0.0281%). That is
+the price of the answer. `sole_finished_record` used to count mentions, which
+costs nothing; `field_reads_in` asks of each mention whether it is the base of
+a field read, which walks. Every compile route runs the linear pass, so all
+three rows move, and a per-declaration check that moves them by the same
+fraction is what a uniform cost looks like.
+
+**The trade, and the objective's verdict.** A rise anywhere is a thing to
+state rather than defend, and this one is real: the compiler does 110,449 more
+instructions summed across the three routes to buy 3,549 fewer at run time on
+the four programs that reach the shape. Stated that way it sounds like a bad
+bargain, and by the raw counts it is. The objective disagrees, because the
+counts are not what it weighs: welfare reads **66.42 against a floor of 66.42,
+held exactly**, since a 0.03% rise on a compile term measured in hundreds of
+millions moves the saturating curve by less than the floor's own precision.
+The change is a MISCOMPILATION fix besides — a program that came out cyclic
+now does not — and that is not a term the objective has at all.
