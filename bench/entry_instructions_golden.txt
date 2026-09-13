@@ -266,4 +266,6 @@
 # one binding lighter, and the library row is the layout vein reacting to a
 # compiler whose bytes moved. Runtime did NOT move: `work:success` on the same
 # run, runbench 2,003,021,871, identical to its golden.
-entry_instructions=152355905
+# 2026-09-13 (kanso#1409): entry_instructions 152,355,905 -> 151,628,169, a
+# FALL of 727,736 (-0.4777%). The second fused descent; see the compile row.
+entry_instructions=151628169

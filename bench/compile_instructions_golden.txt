@@ -1396,4 +1396,10 @@
 # one binding lighter, and the library row is the layout vein reacting to a
 # compiler whose bytes moved. Runtime did NOT move: `work:success` on the same
 # run, runbench 2,003,021,871, identical to its golden.
-compile_instructions=45708985
+# 2026-09-13 (kanso#1409): compile_instructions 45,708,985 -> 45,490,501, a
+# FALL of 218,484 (-0.4780%). The second fused descent, after inference:
+# check_effect_discarded and check_none_exhaustive walked the same declarations,
+# statements and nodes in the same order, and share one walk now. Runtime did
+# NOT move: `work:success` on the same run, runbench 2,003,021,871, identical
+# to its golden.
+compile_instructions=45490501

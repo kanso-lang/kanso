@@ -1,0 +1,3 @@
+error[effect]: `ignore` reads none of what it is handed here, so this effect never happens — hand it back, or give `ignore` a name for it (module an_effect_discarded_beside_a_later_refusal)
+error[unused]: this value is never used: a non-final line binds a name, or is an effect joining the group (module an_effect_discarded_beside_a_later_refusal)
+error[unused]: this value is never used: a non-final line binds a name, or is an effect joining the group (module an_effect_discarded_beside_a_later_refusal)
