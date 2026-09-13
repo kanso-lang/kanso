@@ -1,0 +1,2 @@
+pub fn brew _
+  err "the kettle is cold"

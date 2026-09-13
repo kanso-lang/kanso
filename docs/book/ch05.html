@@ -166,7 +166,25 @@ hojicha</code></pre>
 
 <p>look at that plan. the runtime can name the first step, but the rest is <code>&lt;continuation&gt;</code>—honest notation for "what happens next depends on a value i don't have yet." that's the difference between the wall and the bind dot in one screenshot: <code>&gt;&gt;</code> sequences io values that don't pass data (the plan lists every step up front), while <code>.&gt;</code> threads a value through, so later steps are functions waiting for input. together they are the complete vocabulary of "before" in kanso—everywhere else, order belongs to the runtime, which is chapter 06's whole subject.</p>
 
-<p>note what <code>count_lines</code> is: an ordinary pure function that takes a string. it doesn't know files exist, and nothing in its signature says "i get used near i/o." there's no <code>async</code> keyword to sprinkle through every caller, no effect type to declare—effectfulness travels in the value itself. a function that returns an io is effectful; a function that returns a string is not; and the same function can be piped from a file today and called on a literal in a test tomorrow.</p>
+<p>note what <code>count_lines</code> is: an ordinary pure function that takes a string. it doesn't know files exist, and nothing in its signature says "i get used near i/o." there's no <code>async</code> keyword to sprinkle through every caller and no annotation to write—effectfulness travels in the value itself. a function that returns an io is effectful; a function that returns a string is not; and the same function can be piped from a file today and called on a literal in a test tomorrow.</p>
+
+<p>that is not the same as saying effects are untyped. an effect has a type, <code>&lt;t&gt;effect</code>, and the compiler tracks it through your program without being told. you never write the name; it is inferred from the io values you touch, the way every other type in kanso is inferred. what it buys you is that the compiler knows which of your expressions is a box, so it can refuse one wherever the thing inside is what's wanted:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">boxed.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/os"</span>
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> (<span class="f">length</span> os/args)</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso check boxed.kso</div>
+    <pre><code><span class="k">error[effect]</span>: this is an effect &#8212; a box the words open &#8212; and `length` takes a value; open it with `.&gt;`
+  --&gt; boxed.kso:3:26
+   3 | pub play = print (length os/args)
+                                ^</code></pre>
+  </div>
+</div>
+
+<p><code>os/args</code> is an io, so <code>length</code> is being handed the box rather than the list inside it, and the compiler says so before the program runs. the same refusal covers <code>+</code>, <code>if</code>, an index, <code>==</code>, and any function of your own that wants a value. the fix is the operator you already know: <code>os/args .&gt; (a -&gt; print (length a))</code> opens the box and lets <code>length</code> see the list. this is the whole content of "the words are the only doors"&#8212;the dot applies, <code>.&gt;</code> opens, and nothing opens a box by accident.</p>
 
 <h2>holding an argument back</h2>
 
@@ -234,7 +252,7 @@ order <span class="o">=</span> <span class="s">"one taiyaki, extra custard"</spa
   </div>
 </div>
 
-<p>the round trip proves the sequencing: the read found the file because the wall put the write before it. one line of source holds both operators doing their one job each—<code>&gt;&gt;</code> orders two effects that share no data, <code>.</code> moves the read's result into <code>print</code>.</p>
+<p>the round trip proves the sequencing: the read found the file because the wall put the write before it. one line of source holds both operators doing their one job each—<code>&gt;&gt;</code> orders two effects that share no data, <code>.&gt;</code> moves the read's result into <code>print</code>.</p>
 
 <p><code>args</code> is the argument list (everything after <code>--</code> on the command line), and <code>stdin</code> is standard input. both are io values—the argument list and the input stream belong to the outside world, so touching them is an effect like any other, and they pipe like everything else:</p>
 
@@ -358,6 +376,27 @@ order <span class="o">=</span> <span class="s">"one taiyaki, extra custard"</spa
 
 <p><code>rescue</code> has two siblings, both ordinary two-argument functions taking the effect first. <code>bind</code> is the other side of the same rule&#8212;its callback sees the value and never the failure. <code>annotate</code> reads the failure channel like <code>rescue</code> and re-wraps whatever the callback answers, so it can say more about a failure and can never clear one. that leaves <code>rescue</code> as the only door out, which is the point: a reader looking for where a program recovers has one word to search for.</p>
 
+<p>each of the three has a fused spelling, and those are the forms most code wears: <code>.&gt;</code> for <code>bind</code>, <code>.!</code> for <code>annotate</code>, <code>.?</code> for <code>rescue</code>. the program below is the one above with both steps written that way, and it prints the same line:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">fused.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/os"</span>
+
+<span class="k">fn</span> <span class="f">orders</span> (<span class="f">err</span> _)
+  <span class="s">"no orders yet"</span>
+
+<span class="k">fn</span> <span class="f">orders</span> text
+  <span class="s">"yesterday: <span class="i">{text}</span>"</span>
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">os/read_file!</span> <span class="s">"yesterday.txt"</span> <span class="o">.?</span> <span class="f">orders</span> <span class="o">.&gt;</span> <span class="f">print</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run fused.kso</div>
+    <pre><code>no orders yet</code></pre>
+  </div>
+</div>
+
+<p><code>rescue (os/read_file! "yesterday.txt") orders</code> and <code>os/read_file! "yesterday.txt" .? orders</code> are the same call. the fused form reads left to right with the rest of the chain, which is why a chain of several steps usually wears it, and appendix C gives the wrapping rule for a statement that runs past eighty columns.</p>
+
 <div class="tip">
 <svg class="sprite" viewBox="0 0 44 38" role="img" aria-label="err" shape-rendering="crispEdges"><title>err - always arrives, never uninvited</title><rect x="18" y="3" width="8" height="1" fill="#f03a00"/><rect x="15" y="4" width="14" height="1" fill="#f03a00"/><rect x="13" y="5" width="18" height="1" fill="#f03a00"/><rect x="12" y="6" width="20" height="1" fill="#f03a00"/><rect x="11" y="7" width="3" height="1" fill="#f03a00"/><rect x="14" y="7" width="2" height="1" fill="#ff7a52"/><rect x="16" y="7" width="17" height="1" fill="#f03a00"/><rect x="10" y="8" width="4" height="1" fill="#f03a00"/><rect x="14" y="8" width="2" height="1" fill="#ff7a52"/><rect x="16" y="8" width="18" height="1" fill="#f03a00"/><rect x="9" y="9" width="2" height="1" fill="#f03a00"/><rect x="11" y="9" width="2" height="1" fill="#ff7a52"/><rect x="13" y="9" width="1" height="1" fill="#f03a00"/><rect x="14" y="9" width="2" height="1" fill="#ff7a52"/><rect x="16" y="9" width="19" height="1" fill="#f03a00"/><rect x="9" y="10" width="1" height="1" fill="#f03a00"/><rect x="10" y="10" width="6" height="1" fill="#ff7a52"/><rect x="16" y="10" width="19" height="1" fill="#f03a00"/><rect x="8" y="11" width="2" height="1" fill="#f03a00"/><rect x="10" y="11" width="4" height="1" fill="#ff7a52"/><rect x="14" y="11" width="22" height="1" fill="#f03a00"/><rect x="8" y="12" width="2" height="1" fill="#f03a00"/><rect x="10" y="12" width="4" height="1" fill="#ff7a52"/><rect x="14" y="12" width="22" height="1" fill="#f03a00"/><rect x="7" y="13" width="3" height="1" fill="#f03a00"/><rect x="10" y="13" width="4" height="1" fill="#ff7a52"/><rect x="14" y="13" width="23" height="1" fill="#f03a00"/><rect x="7" y="14" width="4" height="1" fill="#f03a00"/><rect x="11" y="14" width="2" height="1" fill="#ff7a52"/><rect x="13" y="14" width="24" height="1" fill="#f03a00"/><rect x="6" y="15" width="32" height="1" fill="#f03a00"/><rect x="6" y="16" width="32" height="1" fill="#f03a00"/><rect x="5" y="17" width="9" height="1" fill="#f03a00"/><rect x="14" y="17" width="4" height="1" fill="#2b2320"/><rect x="18" y="17" width="9" height="1" fill="#f03a00"/><rect x="27" y="17" width="4" height="1" fill="#2b2320"/><rect x="31" y="17" width="8" height="1" fill="#f03a00"/><rect x="5" y="18" width="9" height="1" fill="#f03a00"/><rect x="14" y="18" width="3" height="1" fill="#2b2320"/><rect x="17" y="18" width="1" height="1" fill="#faf3e3"/><rect x="18" y="18" width="9" height="1" fill="#f03a00"/><rect x="27" y="18" width="3" height="1" fill="#2b2320"/><rect x="30" y="18" width="1" height="1" fill="#faf3e3"/><rect x="31" y="18" width="8" height="1" fill="#f03a00"/><rect x="5" y="19" width="9" height="1" fill="#f03a00"/><rect x="14" y="19" width="4" height="1" fill="#2b2320"/><rect x="18" y="19" width="9" height="1" fill="#f03a00"/><rect x="27" y="19" width="4" height="1" fill="#2b2320"/><rect x="31" y="19" width="8" height="1" fill="#f03a00"/><rect x="5" y="20" width="9" height="1" fill="#f03a00"/><rect x="14" y="20" width="4" height="1" fill="#2b2320"/><rect x="18" y="20" width="9" height="1" fill="#f03a00"/><rect x="27" y="20" width="4" height="1" fill="#2b2320"/><rect x="31" y="20" width="8" height="1" fill="#f03a00"/><rect x="5" y="21" width="9" height="1" fill="#f03a00"/><rect x="14" y="21" width="4" height="1" fill="#2b2320"/><rect x="18" y="21" width="9" height="1" fill="#f03a00"/><rect x="27" y="21" width="4" height="1" fill="#2b2320"/><rect x="31" y="21" width="8" height="1" fill="#f03a00"/><rect x="5" y="22" width="9" height="1" fill="#f03a00"/><rect x="14" y="22" width="4" height="1" fill="#2b2320"/><rect x="18" y="22" width="9" height="1" fill="#f03a00"/><rect x="27" y="22" width="4" height="1" fill="#2b2320"/><rect x="31" y="22" width="8" height="1" fill="#f03a00"/><rect x="5" y="23" width="9" height="1" fill="#f03a00"/><rect x="14" y="23" width="4" height="1" fill="#2b2320"/><rect x="18" y="23" width="9" height="1" fill="#f03a00"/><rect x="27" y="23" width="4" height="1" fill="#2b2320"/><rect x="31" y="23" width="8" height="1" fill="#f03a00"/><rect x="5" y="24" width="34" height="1" fill="#f03a00"/><rect x="6" y="25" width="32" height="1" fill="#f03a00"/><rect x="6" y="26" width="32" height="1" fill="#f03a00"/><rect x="7" y="27" width="12" height="1" fill="#f03a00"/><rect x="19" y="27" width="7" height="1" fill="#2b2320"/><rect x="26" y="27" width="11" height="1" fill="#f03a00"/><rect x="7" y="28" width="13" height="1" fill="#f03a00"/><rect x="20" y="28" width="5" height="1" fill="#2b2320"/><rect x="25" y="28" width="12" height="1" fill="#f03a00"/><rect x="8" y="29" width="28" height="1" fill="#f03a00"/><rect x="9" y="30" width="26" height="1" fill="#f03a00"/><rect x="10" y="31" width="24" height="1" fill="#f03a00"/><rect x="11" y="32" width="22" height="1" fill="#f03a00"/><rect x="10" y="33" width="23" height="1" fill="#f03a00"/><rect x="9" y="34" width="25" height="1" fill="#f03a00"/><rect x="9" y="35" width="6" height="1" fill="#f03a00"/><rect x="18" y="35" width="8" height="1" fill="#f03a00"/><rect x="28" y="35" width="6" height="1" fill="#f03a00"/><rect x="10" y="36" width="4" height="1" fill="#f03a00"/><rect x="29" y="36" width="4" height="1" fill="#f03a00"/></svg>
 <div class="tip-bubble">
@@ -463,7 +502,7 @@ test eval::tests::scripted_executor_records_the_transcript ... ok</code></pre>
 </div>
 </div>
 
-<p>you can now split any program into the part that decides and the part that touches the world, and say precisely where the boundary sits: io values on one side, one executor on the other. you can read <code>&gt;&gt;</code> as pure sequence and <code>.</code> as a value crossing into the future, and predict a <code>--plan</code> from the source before you run it. you can trace an execution-time failure to the endpoint and explain why no arm caught it. and you can test the logic of an effectful program without faking a single i/o call. chapter 06 takes the one thing this chapter kept quiet—what happens when two io values <em>don't</em> need an order—and turns it into concurrency for free.</p>
+<p>you can now split any program into the part that decides and the part that touches the world, and say precisely where the boundary sits: io values on one side, one executor on the other. you can read <code>&gt;&gt;</code> as pure sequence and <code>.&gt;</code> as a value crossing into the future, and predict a <code>--plan</code> from the source before you run it. you can trace an execution-time failure to the endpoint and explain why no arm caught it. and you can test the logic of an effectful program without faking a single i/o call. chapter 06 takes the one thing this chapter kept quiet—what happens when two io values <em>don't</em> need an order—and turns it into concurrency for free.</p>
 
 <h2>exercises</h2>
 

@@ -131,7 +131,7 @@ b <span class="o">=</span> random <span class="i">6</span>              <span cl
 
 <h2>the dot is the only place a value chooses</h2>
 
-<p>for the reader who wants the theory named once: <code>.</code> is bind—a value crosses into what comes next, and what comes next gets to look at it. <code>&gt;&gt;</code> is sequence-and-discard—run this, then that, pass nothing. and a group is the applicative layer: its shape is fixed before anything runs, no member's value can steer another member, and <em>that</em> is precisely why the compiler may run them in parallel without asking. the parallelism is safe by construction, because the syntax that would create a dependency doesn't exist there.</p>
+<p>for the reader who wants the theory named once: <code>.&gt;</code> is bind—a value crosses into what comes next, and what comes next gets to look at it. <code>&gt;&gt;</code> is sequence-and-discard—run this, then that, pass nothing. and a group is the applicative layer: its shape is fixed before anything runs, no member's value can steer another member, and <em>that</em> is precisely why the compiler may run them in parallel without asking. the parallelism is safe by construction, because the syntax that would create a dependency doesn't exist there.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">all three, one program</div>
@@ -148,7 +148,7 @@ b <span class="o">=</span> random <span class="i">6</span>              <span cl
 
 <div class="fl-rules">
 <ul>
-  <li><strong>data crosses only at bindings and <code>.</code></strong>—if downstream needs a value, name it or pipe it; the dependency is the order.</li>
+  <li><strong>data crosses only at bindings and <code>.&gt;</code></strong>—if downstream needs a value, name it or pipe it; the dependency is the order.</li>
   <li><strong><code>&gt;&gt;</code> carries no data</strong>—it carries one bit: nothing above me failed.</li>
   <li><strong>a group discards every member's value</strong>—members exist for their effects; all of them always run.</li>
   <li><strong>only failure survives a group</strong>—errs merge into one and short-circuit from the wall onward. an err is a true exception: you don't handle it, and the parallel join is the one place it pauses (to collect its siblings) before resuming its exit.</li>

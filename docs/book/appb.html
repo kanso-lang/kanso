@@ -370,7 +370,7 @@ zero non-positive</code></pre>
 
 <h2>effects</h2>
 
-<p>the seven functions in this group return <code>io</code> values—descriptions of work, not results. evaluating them performs no i/o; they build a value the runtime executes afterward, which is why the same program can be run, planned with <code>--plan</code>, or fed to a scripted executor in a test (chapter 05). <code>&gt;&gt;</code> sequences two descriptions that pass no data; <code>.</code> pipes the value a description will yield into a function.</p>
+<p>the seven functions in this group return <code>io</code> values—descriptions of work, not results. evaluating them performs no i/o; they build a value the runtime executes afterward, which is why the same program can be run, planned with <code>--plan</code>, or fed to a scripted executor in a test (chapter 05). <code>&gt;&gt;</code> sequences two descriptions that pass no data; <code>.&gt;</code> pipes the value a description will yield into a function.</p>
 
 <h3 id="b-args"><code>os/args</code> <span class="desc-tag">description</span></h3>
 <p class="builtin-sig"><code>os/args → io (yields string[])</code></p>
@@ -469,7 +469,7 @@ third</code></pre>
   </div>
 </div>
 
-<p>the plan names <code>sleep</code> and <code>random</code> up front, then stops at <code>. &lt;continuation&gt;</code>—honest notation for "what <code>show</code> does depends on a value the roll hasn't produced yet." that is the visible seam between <code>&gt;&gt;</code>, which lists every step, and <code>.</code>, which threads a not-yet-known value forward.</p>
+<p>the plan names <code>sleep</code> and <code>random</code> up front, then stops at <code>. &lt;continuation&gt;</code>—honest notation for "what <code>show</code> does depends on a value the roll hasn't produced yet." that is the visible seam between <code>&gt;&gt;</code>, which lists every step, and <code>.&gt;</code>, which threads a not-yet-known value forward. the plan renders that step with a bare dot, which is the notation of the printed plan rather than the operator you write.</p>
 
 <h3 id="b-read_file"><code>os/read_file</code> <span class="desc-tag">description</span></h3>
 <p class="builtin-sig"><code>os/read_file string → io (yields string | file_not_found)</code></p>
