@@ -304,7 +304,7 @@ fn a_pinned_clock_reads_the_same_in_both_engines() {
     let program = staged.join("clock_probe.kso");
     std::fs::write(
         &program,
-        "import \"std/time\"\n\npub play = time/now . show\n\npub fn show t\n  print \"{t}\"\n",
+        "import \"std/time\"\n\npub play = time/now .> show\n\npub fn show t\n  print \"{t}\"\n",
     )
     .expect("program writes");
 

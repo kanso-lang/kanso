@@ -535,7 +535,19 @@ Only Clay arms, disarms or retimes it.
   or the claim is that the *weights* are wrong — and that is a real argument,
   made about the weights, recorded, and settled before the floor moves. Moving
   the floor to accommodate a change while leaving the weights alone is
-  declaring the objective wrong without saying so.
+  declaring the objective wrong without saying so. **The exception is the
+  language itself, and it is ironclad.** Clay, 2026-09-13, verbatim: "you
+  don't need to ask my permission to lower the welfare floor if it is in
+  service of making the language actually work for the specification. this is
+  an ironclad rule." So a change that builds a ruled part of the language
+  lowers the floor by exactly what it costs, records why in the history entry,
+  and carries on. It does not go to the ledger, it does not wait, and it is
+  not a question. What still needs him is a floor drop bought by something
+  OTHER than the specification — a performance change that came out behind, a
+  convenience, a shape nobody ruled. This rule is why kanso#1372 and kanso#1369
+  sat blocked for a day each: both were ruled language features, both were
+  built and green but for the floor, and both should have lowered it the hour
+  they measured the fall.
 - **A rise is held, not banked.** When the number goes up, run `--set` in the
   same PR. A gain nobody ratchets is a gain the next change is free to spend.
 - **Raising the floor is never a decision, and never waits on Clay.** The two

@@ -1,0 +1,6 @@
+error[effect]: this is an effect — a box the words open — and `==` takes a value; open it with `.>` (module a_box_where_a_value_is_expected)
+error[effect]: this is an effect — a box the words open — and an index takes a value; open it with `.>` (module a_box_where_a_value_is_expected)
+error[effect]: this is an effect — a box the words open — and `if` takes a value; open it with `.>` (module a_box_where_a_value_is_expected)
+error[effect]: this is an effect — a box the words open — and `told` takes a value; open it with `.>` (module a_box_where_a_value_is_expected)
+error[effect]: this is an effect — a box the words open — and `+` takes a value; open it with `.>` (module a_box_where_a_value_is_expected)
+error[effect]: this is an effect — a box the words open — and `length` takes a value; open it with `.>` (module a_box_where_a_value_is_expected)

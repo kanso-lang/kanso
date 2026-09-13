@@ -1,10 +1,12 @@
 # The same preemption one site over: indexing opens with `val(base)` and so
 # answered the data sentence where the other two engines say what indexing
 # takes. `!` is the strict form and shares the check.
+# The check refuses a provable box here now (the errors corpus pins that
+# sentence), so the box travels through a list, where nothing can prove it.
 import "std/io"
 
 pub fn opaque v
-  v
+  (push [] v)[1]!
 
 d = io/write "a\n" >> io/write "b\n"
 
