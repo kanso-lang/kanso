@@ -4466,6 +4466,12 @@ RELRO/data segment in main's binary and in the following segment in this one.
 The section table is otherwise identical, `.symtab` holds 6,687 entries, and
 `nm -C` finds `kanso::main` at 0x13ea80.
 
+It is rare rather than universal, and that was checked rather than assumed: a
+probe binary built from merged main plus one dead function resolves 265 kanso
+frames and keeps `.relro_padding` in segment 04. So an arbitrary edit does not
+flip it; something about the size or ordering this change gives the data
+segment does.
+
 Comparing PROGRAM TOTALS costs nothing here, because on the base binary the gap
 between totals and `kanso::main` is 469,781 / 470,606 / 470,527 across the three
 veins — flat to within 825 instructions — so the deltas are identical either
