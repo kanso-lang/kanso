@@ -4962,11 +4962,21 @@ needs, and two in `hako/hako/update.kso` where the name is read twice, so a
 once-used rule would not fire, and which no benchmark compiles.
 
 That sweep filtered on the operator and so could not see `blank = ws? c`, which
-stands EIGHT times in `lib/json/value.kso` on the decoder's hottest paths —
+stands EIGHT times in `lib/json/value.kso` on the decoder's busiest paths —
 `array_delim` alone is 4.13% of runbench. Dropping the filter finds them, and
-the disassembly looks like the same defect: at 0x29200 the loop runs `mov
-$0x2,%edi` / `cmp $0x2,%rdi` / `jne`, and at 0x292b9 `mov $0x3,%edi` / `cmp
-$0x2,%rdi` / `je`, two flags turned into a value and back.
+the disassembly looks like the same defect: at 0x29200 sit `mov $0x2,%edi` /
+`cmp $0x2,%rdi` / `jne`, and at 0x292b9 `mov $0x3,%edi` / `cmp $0x2,%rdi` /
+`je`, two flags turned into a value and back.
+
+NEITHER BLOCK EVER RUNS. A callgrind profile taken with `--dump-instr=yes`,
+parsed so its self costs reconcile to the program total exactly
+(1,994,172,731, every function agreeing with `callgrind_annotate`), gives all
+six addresses a count of zero. The `jae` at 0x291fe is taken on all 672,606
+trips: the input has no whitespace between array elements, so the arm the
+binding sits in is never entered. Reading a cost off a disassembly is what
+this was — the instructions are in the binary and they cost nothing, and the
+same profile says `array_delim` is not a loop at all but 122 instructions of
+per-call work spread over 492 addresses, the hottest reached 943,569 times.
 
 MEASURED, AND IT IS NOT. All eight rewritten to ask in place, as
 `if (ws? c) ...`, build a runbench byte-identical to main's — md5
