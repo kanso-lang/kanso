@@ -4546,6 +4546,15 @@ is one line. What this container cannot answer is what CI reads across all
 fourteen benchmarks, which is exactly the lesson kanso#1389's three sittings
 taught, so it goes as its own pull request that takes CI's rows.
 
+**And CI answered while this entry was in review, so the figure above is a
+projection rather than the result.** kanso#1391 measured runbench
+2,194,976,748 -> 2,168,019,757 on CI, a fall of 26,956,991 (−1.2281%), for a
+`.text` sum of 1,783,980 against 1,664,396 (+7.1848%). That is 59% of the
+−2.0948% this container read, where eight days earlier the same pair of boxes
+disagreed the other way round. Every absolute number in this entry is this
+container's, which the ladder was always for; the shape of the ladder is what
+it establishes and the steps are not CI's.
+
 **A trap reproduced cleanly, worth the paragraph.** Twenty of the twenty-seven
 greedy candidates came back at exactly −14 instructions, and twenty
 coincidences is not a result. The candidates linked as `bin_00` and the control
