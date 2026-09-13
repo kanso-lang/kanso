@@ -203,21 +203,19 @@ bfast:
   %bp = extractvalue %KValue %acc, 1
   %b = inttoptr i64 %bp to ptr
   %len = load i64, ptr %b
-  %datap = getelementptr i8, ptr %b, i64 8
-  %data = load ptr, ptr %datap
   %capp = getelementptr i8, ptr %b, i64 16
   %cap = load i64, ptr %capp
   %capa = and i64 %cap, -2
-  %owned = icmp ne i64 %cap, 0
-  br i1 %owned, label %bfr, label %slow
+  %len1 = add i64 %len, 1
+  %fits = icmp sle i64 %len1, %capa
+  br i1 %fits, label %bfr, label %slow
 bfr:
+  %datap = getelementptr i8, ptr %b, i64 8
+  %data = load ptr, ptr %datap
   %usedp = getelementptr i8, ptr %data, i64 -8
   %used = load i64, ptr %usedp
   %atfront = icmp eq i64 %used, %len
-  %len1 = add i64 %len, 1
-  %fits = icmp sle i64 %len1, %capa
-  %ok = and i1 %atfront, %fits
-  br i1 %ok, label %bwrite, label %slow
+  br i1 %atfront, label %bwrite, label %slow
 bwrite:
   %dst = getelementptr i8, ptr %data, i64 %len
   %xv = extractvalue %KValue %x, 1

@@ -4868,3 +4868,79 @@ changed, only how much it writes.
 Welfare 68.40361950943213 -> 68.50, banked in this pull request. The runtime
 fall buys the compile rise with a tenth of a point to spare; five page spans
 quoting the moved compile goldens were rewritten by `golden_prose --write`.
+
+## 2026-09-13 (eleventh) — the in-place byte append tested for a buffer, then tested that the byte fits, and the second test already says the first
+
+`k_b_append_mut_byte`'s byte arm loaded the capacity word, masked off the
+storage-regime bit kanso#1397 put in bit 0, and asked `cap != 0` on the RAW
+word before it would read the buffer header. Then, past that branch, it asked
+`len + 1 <= capa` — and that second question already answers the first. `len`
+is never negative, so `len + 1 >= 1`, so the fit can only hold when
+`capa >= 1`, so `cap != 0`.
+
+The zero test was not dead code, which is why it could not simply be deleted.
+It fenced the header load: the block behind it reads `data[-8]` to check that
+the buffer's used-length still matches, and on a buffer with no capacity there
+is no header eight bytes back to read. The fix is a reorder — compute the fit
+from `len` and the masked capacity FIRST, branch on it, and load the data
+pointer and its header only on the arm where the fit held. Every path that
+reaches the header load satisfied the old test too, so the guard is strictly
+narrower.
+
+**The string arm keeps its zero test, and the reason is worth writing down.**
+It looks identical — same mask, same `scap != 0`, same header read behind it —
+but its fit is `slen + n <= scapa` where `n` is the appended string's length,
+and `n` can be zero. An empty accumulator appending an empty string satisfies
+`0 <= 0` with the capacity word at zero, reaches the header load, and reads
+eight bytes that are not there. The byte arm is safe only because its `n` is
+literally 1. Two arms that look the same and are not.
+
+A/B on this container, callgrind both sides, re-measured after kanso#1400
+landed and the branch was re-cut onto it: runbench 2,010,049,371 ->
+2,003,781,037, a fall of **6,268,334 (−0.3119%)**. Against the pre-#1400 base
+the same change measured −6,268,320, fourteen instructions apart — the same
+change at the same size on either side of a merge. The twelve cost veins and
+the lazy tier all AGREE.
+
+It is the count, not the site, that makes this worth 0.3%. Inside
+`d_json/encode_onto_2` alone there are eighteen places that store ONE literal
+byte — `"`, `[`, `{`, `,`, `]`, `}`, `:`, `\`, `n`, `t` — and between them they
+run 5,583,330 times per runbench, each paying the same eleven-instruction
+guard ladder first.
+
+Every emitted vein FALLS by exactly two lines, on every program with no
+exception: the decoder 9,145 -> 9,143 and each of the thirteen others two
+lighter, `emitted_lines` and `emitted_other_lines` with it, and `module_lines`
+5,319 -> 5,317. `calls`, `branches` and `defines` are byte-identical
+everywhere, which is what a two-instruction reorder inside one `alwaysinline`
+shim should look like. On the pre-#1400 base escapebench and readbench did not
+move; on this base they do, because #1400's own emitted change had shifted
+them and the two-line fall is uniform once both are in.
+
+**On kanso#1400's first base the two changes were exactly additive.** Measured
+on one tree carrying both, against the pre-#1400 base: runbench 2,034,746,727
+-> 2,003,781,051, a fall of 30,965,676, against −24,697,356 for #1400 alone
+and −6,268,320 for this one. The sum is 30,965,676 — the same number to the
+instruction, with no interaction term. They touch different code (`emit_at`'s
+general path against the prelude's append shim), and the re-measurement above
+confirms it from the other direction: with #1400 landed, this change is still
+worth the same 6.27 million.
+
+MAPPED on the way, and the reason the ladder was found at all: `encode_onto_2`
+is 340,877,621 instructions, 16.72% of runbench, over 2,380,950 calls.
+TWENTY-SEVEN instructions run on every one of those calls — six pushes, `sub
+$0x58`, two argument moves, the failure guard's `cmp/jne`, the
+six-instruction jump table, then two return moves, `add $0x58`, six pops and
+`ret $0x8` — which is 64,285,650, 3.16% of runbench, and NINETEEN of the
+twenty-seven are pure calling convention (2.22%). kanso#1338 already declined
+the one shape that shrinks that, outlining the arm that sizes the frame, at
++2.5582%. No instruction in the function runs more than once per call: there
+is no loop, the other 276M is straight-line arm work across 843 instructions
+in 48 executed runs, and the ladder above is the largest repeated shape in it.
+
+Also measured and NOT taken: fusing adjacent appends so the second inherits
+the first's guards. Eighteen of the twenty-four store sites have a call
+between them and a call can move the buffer, so only the escape pairs (`\`
+then `n`, `"`, `t`, `r`, `\`) are genuinely back-to-back, and those run about
+100,000 times each — roughly 0.27% of runbench for a much larger change. Left
+on the table with its number.
