@@ -4663,3 +4663,21 @@ them. Both readings say the same thing: the entry and library corpora hold
 different mixes of call sites in bodies, and this check keys on exactly those,
 where the earlier folds' savings were keyed to nodes and could not see the
 difference.
+
+CI's rows, and what each landed on. The tables above are container readings
+taken while the pass was being paid down; these are the numbers the goldens
+carry and the ones the decision rests on:
+
+```
+compile_instructions   44,888,539 ->  45,428,226    +539,687  +1.2023%
+entry_instructions    149,925,203 -> 151,943,865  +2,018,662  +1.3464%
+library_instructions  150,211,345 -> 152,228,069  +2,016,724  +1.3426%
+compile_allocs             29,323 ->      29,347         +24  +0.0818%
+```
+
+The three instruction rows move together because the check runs on every
+route, and `compile_peak_bytes` is byte-identical at 774,660: the pass reads
+tables it builds once and allocates twenty-four blocks doing it. Summed over
+the module and entry corpora the compile term rises 2,558,349 (+1.3132%),
+which is the whole of the welfare fall. Nothing else the objective weighs
+moved.
