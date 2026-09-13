@@ -4494,3 +4494,41 @@ reads, which `check_discarded_value` refuses after it. Under exactly that
 mutation it goes red with the effect line rotated to the back — `unused /
 unused / effect` against `effect / unused / unused`.
 
+**CI's sitting, and the symbol question ANSWERED: the flip is this container's,
+not the veins'.** Round one measured normally on CI. No gate errored, nothing
+said `the profile carries no kanso::main frame`, and all four rows came back:
+
+    row                    main          kanso#1409    delta
+    compile_allocs           30,258          30,241    −17       (−0.0562%)
+    compile_instructions 45,708,985      45,490,501    −218,484  (−0.4780%)
+    entry_instructions  152,355,905     151,628,169    −727,736  (−0.4777%)
+    library_instructions153,175,369     152,469,420    −705,949  (−0.4609%)
+    summed              351,240,259     349,588,090  −1,652,169  (−0.4704%)
+
+So CI's linker puts `.relro_padding` where its valgrind can still read the
+binary, and the paragraph above is about this container rather than about the
+compile veins. The gate's halt-the-vein arm is still the right arm to have —
+it is what would have surfaced this had CI hit it — but nothing here shows the
+veins are hostage on CI, and the earlier draft of this entry said they might
+be. Corrected here rather than left standing.
+
+`compile_allocs` moved and the container could not see it. The fold drops one
+of the two `Vec<&Expr>` worklists and adds two `Vec<Diagnostic>` to keep the
+checks' answers apart; seventeen allocations is the net. It is not in the
+container's reading at all, because that reading was whole-process instruction
+totals.
+
+**The container over-projected, and by more than any fold before it.** It
+projected roughly −2,061,000 on the summed term and CI read −1,652,169, a ratio
+of 0.80. The five folds of kanso#1382–#1386 read 0.98 to 0.996 against the same
+kind of projection, and kanso#1408 read 0.985. The difference is the
+measurement rather than the change: those were `kanso::main` against
+`kanso::main`, and this one was PROGRAM TOTALS across two binaries the linker
+laid out differently, so the loader and stack-guard work above `main` is not
+the same quantity on both sides. A projection off whole-process totals is worth
+about what this one was worth — the sign and the order of magnitude — and the
+number to quote is CI's.
+
+Runtime did not move: `work:success` on the same run, runbench 2,003,021,871,
+identical to its golden. Welfare 68.5353360462189 -> 68.54457814481255, banked
+in the same round; seven `data-golden` spans on docs/compiler.html rewritten.
