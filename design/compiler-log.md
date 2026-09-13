@@ -5106,3 +5106,40 @@ bump kq's pin with them, because `--counters` does not exist at 08dc714d and
 was minted by kanso#1393. kanso's own `kq specs` job never saw that, because it
 clones kq at HEAD and builds it with the PR's compiler rather than with the
 pin.
+
+## 2026-09-13 (sixth) — the layout vein's sign flipped when the base moved
+
+kanso#1395 landed while the counter-sites branch was in flight, and the branch
+was re-cut onto merged main. The runtime side did not notice — all fourteen
+work rows, all fourteen .text rows and the twelve cost veins agree on both
+bases — and the three compile rows did.
+
+    row                     against #1395's base      against merged main
+    compile_instructions    45,522,509 -> 45,529,923  46,111,185 -> 46,103,773
+                                   +7,414  (+0.0163%)        -7,412  (-0.0161%)
+    entry_instructions     152,090,185 -> 152,111,514 153,623,844 -> 153,606,666
+                                  +21,329  (+0.0140%)       -17,178  (-0.0112%)
+    library_instructions   152,460,583 -> 152,481,754 154,382,827 -> 154,367,035
+                                  +21,171  (+0.0139%)       -15,792  (-0.0102%)
+
+Same diff, two bases, opposite signs — and on compile_instructions the same
+magnitude to two instructions, 7,414 against 7,412. `compile_allocs` is 30,273
+on the merged base and byte-identical either way, and so is `compile_memory`.
+
+**That is what this file means by the layout vein, stated as a measurement
+rather than a caveat.** `kanso check lib/json` stops before codegen, so no
+counter gate the diff touches can run during the compile that this row counts.
+What the diff does reach is the compiler's own bytes: `counters_wanted()`
+becomes a function both halves ask, and `cached_runtime_object` keys on it. A
+few hundred bytes of Rust move where every function after them lands, and where
+they land depends on everything else in the binary — which is exactly what a
+base change replaces. CLAUDE.md already says never to write down that this row
+cannot move and never to write down that it did before CI has said so. This
+adds the other half: **its SIGN is not a property of the diff either.**
+
+The practical rule that follows is the one the re-base already used. When main
+moves under a branch whose diff touches src/, the three compile goldens take
+main's values and CI measures the delta again; carrying the old delta forward
+by arithmetic would have written a rise where CI reads a fall.
+
+Welfare 68.03 -> 68.07, banked with `--set` in the same round.
