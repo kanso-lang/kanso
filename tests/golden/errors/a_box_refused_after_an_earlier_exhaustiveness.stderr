@@ -1,0 +1,8 @@
+error[exhaustive]: this can be a none and `double` has no arm for it — resolve it here, or give `double` a `none` arm (in a_box_refused_after_an_earlier_exhaustiveness.kso)
+  --> a_box_refused_after_an_earlier_exhaustiveness.kso:14:19
+  14 |   print (double xs[n])
+                         ^
+error[effect]: this is an effect — a box the words open — and `length` takes a value; open it with `.>`
+  --> a_box_refused_after_an_earlier_exhaustiveness.kso:18:18
+  18 |   print (length (os/read_file "a.txt"))
+                        ^

@@ -268,4 +268,6 @@
 # run, runbench 2,003,021,871, identical to its golden.
 # 2026-09-13 (kanso#1409): entry_instructions 152,355,905 -> 151,628,169, a
 # FALL of 727,736 (-0.4777%). The second fused descent; see the compile row.
-entry_instructions=150873629
+# 2026-09-13 (kanso#1413): entry_instructions 150,873,629 -> 150,030,446, a
+# FALL of 843,183 (-0.5589%). The box question joins the second fused descent.
+entry_instructions=150030446

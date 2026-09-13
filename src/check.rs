@@ -1007,19 +1007,20 @@ fn names_bound_by(decl: &FnDecl) -> crate::hash::Set<&str> {
     names
 }
 
-/// The three questions inference makes answerable, asked on ONE descent.
+/// The four questions inference makes answerable, asked on ONE descent.
 ///
 /// Each used to walk the whole program for itself, over the same declarations,
 /// the same statements and the same nodes, in the same order. The answers go
-/// into three vectors rather than one because this route hands diagnostics
+/// into four vectors rather than one because this route hands diagnostics
 /// back in push order and the checks pushed from either side of the fused
 /// walk's rotation; the caller splices each where its own check used to push.
-fn check_after_infer(
-    program: &Program,
+fn check_after_infer<'p>(
+    program: &'p Program,
     inference: &crate::infer::Inference,
     returns: &HashMap<(&str, usize), crate::infer::Set>,
     effect_diags: &mut Vec<Diagnostic>,
     wall_diags: &mut Vec<Diagnostic>,
+    box_diags: &mut Vec<Diagnostic>,
     none_diags: &mut Vec<Diagnostic>,
 ) {
     let mut discarded: crate::hash::Map<(&str, usize, usize), bool> =
@@ -1059,71 +1060,6 @@ fn check_after_infer(
 
     let tables = AfterInfer { discarded, nones, returns };
 
-    // One worklist for the whole program rather than one per statement, which
-    // keeps the capacity a long declaration earned instead of doubling up from
-    // nothing at the next one. The `clear` is what makes that safe: the loop
-    // below happens to drain the stack every time, but nothing tests that it
-    // does — a mutation that leaves items behind keeps the whole error corpus
-    // green — so the reuse does not rest on it.
-    let mut stack: Vec<&Expr> = Vec::new();
-    for decl in &program.fns {
-        // The wall question is the one of the three that skips a synthetic
-        // declaration, and it keeps that: the compiler writes those, so a
-        // refusal in one names a line nobody typed.
-        let asks_wall = !decl.synthetic;
-        // Built on the first wall this declaration holds, and not at all for
-        // the many that hold none. Collecting for every declaration cost 537
-        // allocations and 659k instructions on `kanso check lib/json`, which
-        // took welfare 0.06 UNDER its floor — the objective saying the change
-        // was not worth its price as written.
-        let mut bound: Option<crate::hash::Set<&str>> = None;
-        for stmt in &decl.body {
-            let e = match stmt {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
-            };
-            stack.clear();
-            stack.push(e);
-            while let Some(cur) = stack.pop() {
-                effect_discarded_at(cur, &tables, effect_diags);
-                none_exhaustive_at(cur, &tables, &decl.file, none_diags);
-                if asks_wall {
-                    if let Expr::Seq(lhs, rhs, span) = cur {
-                        let bound = bound.get_or_insert_with(|| names_bound_by(decl));
-                        if never_describes(lhs, returns, bound)
-                            || never_describes(rhs, returns, bound)
-                        {
-                            wall_diags.push(Diagnostic::new(
-                                "type",
-                                "`>>` sequences two effects, and this side answers a \
-                                 plain value — bind it with `.` if you want what it \
-                                 answers"
-                                    .to_string(),
-                                *span,
-                            ));
-                        }
-                    }
-                }
-                crate::for_each_child(cur, |c| stack.push(c));
-            }
-        }
-    }
-}
-
-/// A box where a value is expected. An effect is `<t>effect`, the unresolved
-/// outcome of an operation, and the three words are its only doors (the
-/// 2026-08-29 gavel): holding one is fine, so a parameter that binds
-/// anything takes it, and so does `print`, which renders it as `<io>`. What
-/// is refused is handing one to something that reads the value inside —
-/// an operator, an index, a field read, `if`'s condition, a builtin that
-/// takes values, or a group none of whose arms binds anything at that
-/// position. Only what is provable: a group whose joined return set holds
-/// the description bit and no value bit, a `.>` step over such a subject,
-/// or a wall.
-fn check_box_where_value<'p>(
-    program: &'p Program,
-    inference: &crate::infer::Inference,
-    diags: &mut Vec<Diagnostic>,
-) {
     use crate::infer::{Set, DESC, FAIL, THUNK, TOP};
     // ONE MAP, NOT TWO. Both keys began with the declaration's name, so the
     // second hashed that string once per PARAMETER to build and once per
@@ -1140,12 +1076,12 @@ fn check_box_where_value<'p>(
     //
     // The middle field threads the group's members — the first in the map, the
     // rest through `next` — for the tail read below.
-    let mut returns: crate::hash::Map<(&str, usize), (Set, u32, u64)> =
+    let mut groups: crate::hash::Map<(&str, usize), (Set, u32, u64)> =
         crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
     let mut next: Vec<u32> = vec![u32::MAX; program.fns.len()];
     for (i, d) in program.fns.iter().enumerate() {
         let key = (d.name.as_str(), d.params.len());
-        let group = returns.entry(key).or_insert((0, u32::MAX, 0));
+        let group = groups.entry(key).or_insert((0, u32::MAX, 0));
         group.0 |= inference.returns[i];
         next[i] = group.1;
         group.1 = i as u32;
@@ -1177,7 +1113,7 @@ fn check_box_where_value<'p>(
     // walk on `boxed` would hide every such group behind the short circuit.
     // Asking for the bit alone admits a superset of what `boxed` admits, so no
     // refusal is lost, and a program with no io at all still pays nothing.
-    let any_boxed = returns.values().any(|(s, _, _)| s & DESC != 0);
+    let any_boxed = groups.values().any(|(s, _, _)| s & DESC != 0);
     // a name the declaration binds itself — a parameter, a binding, a
     // lambda's parameter — is that binding, whatever declaration shares
     // its spelling; `fn either ... args` reads its own list, not `os/args`
@@ -1304,7 +1240,7 @@ fn check_box_where_value<'p>(
     }
     let tails = Tails {
         program,
-        returns: &returns,
+        returns: &groups,
         next: &next,
         boxed: &boxed,
         state: vec![std::cell::Cell::new(UNKNOWN); program.fns.len()],
@@ -1416,7 +1352,7 @@ fn check_box_where_value<'p>(
                 }
                 // one lookup for the whole call: whether the name is a group,
                 // and which of its positions bind anything
-                let found = returns.get(&(name.as_str(), args.len())).copied();
+                let found = groups.get(&(name.as_str(), args.len())).copied();
                 if found.is_none() && !reads_value(name.as_str()) {
                     return;
                 }
@@ -1434,9 +1370,29 @@ fn check_box_where_value<'p>(
             _ => {}
         }
     };
+
+    // One worklist for the whole program rather than one per statement, which
+    // keeps the capacity a long declaration earned instead of doubling up from
+    // nothing at the next one. The `clear` is what makes that safe: the loop
+    // below happens to drain the stack every time, but nothing tests that it
+    // does — a mutation that leaves items behind keeps the whole error corpus
+    // green — so the reuse does not rest on it.
     let mut stack: Vec<&Expr> = Vec::new();
     for (i, decl) in program.fns.iter().enumerate() {
+        // The wall question is the one of the four that skips a synthetic
+        // declaration, and it keeps that: the compiler writes those, so a
+        // refusal in one names a line nobody typed.
+        let asks_wall = !decl.synthetic;
+        // The box question's shadowing test is asked of THIS declaration, and
+        // the set behind it is filled on the first ask — so the closure has to
+        // be rebuilt per declaration even though nothing else here is.
         let shadow = |n: &str| shadows(i, n);
+        // Built on the first wall this declaration holds, and not at all for
+        // the many that hold none. Collecting for every declaration cost 537
+        // allocations and 659k instructions on `kanso check lib/json`, which
+        // took welfare 0.06 UNDER its floor — the objective saying the change
+        // was not worth its price as written.
+        let mut bound: Option<crate::hash::Set<&str>> = None;
         for stmt in &decl.body {
             let e = match stmt {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
@@ -1444,7 +1400,26 @@ fn check_box_where_value<'p>(
             stack.clear();
             stack.push(e);
             while let Some(cur) = stack.pop() {
-                site(cur, &shadow, diags);
+                effect_discarded_at(cur, &tables, effect_diags);
+                none_exhaustive_at(cur, &tables, &decl.file, none_diags);
+                site(cur, &shadow, box_diags);
+                if asks_wall {
+                    if let Expr::Seq(lhs, rhs, span) = cur {
+                        let bound = bound.get_or_insert_with(|| names_bound_by(decl));
+                        if never_describes(lhs, returns, bound)
+                            || never_describes(rhs, returns, bound)
+                        {
+                            wall_diags.push(Diagnostic::new(
+                                "type",
+                                "`>>` sequences two effects, and this side answers a \
+                                 plain value — bind it with `.` if you want what it \
+                                 answers"
+                                    .to_string(),
+                                *span,
+                            ));
+                        }
+                    }
+                }
                 crate::for_each_child(cur, |c| stack.push(c));
             }
         }
@@ -2351,12 +2326,13 @@ pub fn check_merged_after_aliases(
     diags.extend(named_diags);
     check_binding_patterns(program, &mut diags);
     check_overlapping_arms(program, &mut diags);
-    // The three questions inference makes answerable are asked on ONE descent,
+    // The four questions inference makes answerable are asked on ONE descent,
     // and their answers are spliced in where each check used to push: the
-    // effect and wall answers here, the exhaustiveness answers after the
-    // rotation.
+    // effect and wall answers here, the exhaustiveness and box answers after
+    // the rotation.
     let mut effect_diags = Vec::new();
     let mut wall_diags = Vec::new();
+    let mut box_diags = Vec::new();
     let mut none_diags = Vec::new();
     check_after_infer(
         program,
@@ -2364,6 +2340,7 @@ pub fn check_merged_after_aliases(
         &returns,
         &mut effect_diags,
         &mut wall_diags,
+        &mut box_diags,
         &mut none_diags,
     );
     diags.append(&mut effect_diags);
@@ -2377,7 +2354,7 @@ pub fn check_merged_after_aliases(
     // there and leaves both halves in their own order.
     diags.rotate_left(walked);
     diags.append(&mut none_diags);
-    check_box_where_value(program, &inference, &mut diags);
+    diags.append(&mut box_diags);
     if require_entry {
         check_entry(program, &mut diags);
     }

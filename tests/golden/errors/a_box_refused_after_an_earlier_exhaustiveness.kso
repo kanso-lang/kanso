@@ -1,0 +1,18 @@
+import "std/os"
+
+# Both refusals ride the second fused descent, and where each vector is
+# spliced back in is what a reader sees. The exhaustiveness answers go in
+# after the rotation and the box answers after those, so the box is reported
+# LAST even though nothing else orders it that way. Nothing else in the
+# corpus held one of each.
+fn double x
+  x * 2
+
+xs = [1 2 3]
+
+fn shout n
+  print (double xs[n])
+
+pub play =
+  shout 9
+  print (length (os/read_file "a.txt"))

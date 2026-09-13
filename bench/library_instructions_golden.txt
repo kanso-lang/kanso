@@ -253,4 +253,6 @@
 # run, runbench 2,003,021,871, identical to its golden.
 # 2026-09-13 (kanso#1409): library_instructions 153,175,369 -> 152,469,420, a
 # FALL of 705,949 (-0.4609%). The second fused descent; see the compile row.
-library_instructions=151715592
+# 2026-09-13 (kanso#1413): library_instructions 151,715,592 -> 150,868,905, a
+# FALL of 846,687 (-0.5581%). The box question joins the second fused descent.
+library_instructions=150868905
