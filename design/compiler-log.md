@@ -4977,3 +4977,73 @@ sign. A branch that reads one of these rows as evidence about its own change
 is reading the linker.
 
 Welfare 68.50 -> 68.52, banked here.
+
+## 2026-09-13 (fourteenth) — the digit test built a boolean and took it apart, three instructions on every byte of every number
+
+`d_json/scan_4` is 4.65% of runbench — 93,099,402 instructions over only 113
+addresses — and unlike the functions above it in the profile it is not per-call
+work. Four equal-trip groups at about three million trips each sit in one
+contiguous run, 0x24a40 to 0x24a8c. That is the loop over the bytes of a JSON
+number, and twenty instructions in it cost 63M, 3.14% of the program.
+
+Six of the twenty were this:
+
+    0x24a64  3,062,862  add    $0xd0,%al      ; b - '0'
+    0x24a66  3,062,862  cmp    $0xa,%al       ; carry set iff it is a digit
+    0x24a68  3,062,862  mov    $0x3,%eax      ; <-- the flag becomes a value
+    0x24a6d  3,062,862  sbb    $0x0,%rax      ;     2 if digit, 3 if not
+    0x24a71  3,062,862  cmp    $0x2,%rax      ; <-- and a flag again
+    0x24a75  3,062,862  jne    24ab1
+
+The middle three carry the answer of `cmp $0xa,%al` across to the `jne`, which
+`jb` would have taken straight off the flags. The source said
+
+    digit = 47 < c and c < 58
+    if digit (scan cs start (p + 1) marked) (number_done cs start p marked)
+
+and `emit_cond` never saw the comparison. It walks an `and` and branches off
+the flags — its own comment says so, and kanso#1271 shipped that — but only
+when the condition IS the expression. Here the condition is a bound NAME, and
+`f.lookup` gives back an SSA operand rather than the expression behind it, so
+the emitter fell through to taking a value apart. In the IR the tell is one
+line:
+
+    %t80 = icmp slt i64 %t78, %t79
+    %t81 = select i1 %t80, %KValue { i64 2, i64 0 }, %KValue { i64 3, i64 0 }
+
+The first comparison of the `and` branches on its i1; the last one, whose value
+the binding holds, is materialised.
+
+Asked in place the select is gone and the loop branches off the flags. Measured
+by copying both runbench binaries into one directory and counting each there,
+because the exec path shifts a count by fourteen (the thirteenth entry):
+
+    baseline  2,003,781,671
+    in place  1,994,172,731   -9,608,940, -0.4795%
+
+Output byte-identical, and the whole suite green on all three engines, 454
+passed. The disassembly predicted 9,188,586 from the three instructions alone;
+the extra 420,354 is the register pressure the materialisation cost around
+them.
+
+THE NAME IS THE PRICE. `marked` had to become `m` for the line to fit eighty
+columns, and that formatting rule is why the binding was written in the first
+place. The file already calls its other parameters `cs`, `p`, `bs` and `n`, so
+the short name is in keeping — but the durable fix is the emitter seeing
+through a once-used binding, and that would give the longer name back. It needs
+either the binding's expression kept where `emit_cond` can reach it or a
+front-end rewrite that inlines a single-use condition; `lookup` returning an
+operand is the whole obstacle.
+
+Two compile veins moved and both are regenerated here. The emitted goldens lose
+two branches and one line in every program that carries the number scanner —
+the decoder 795 -> 793 branches and 9,143 -> 9,142 lines, oneshot 784 -> 782
+and 9,072 -> 9,071, livebench 798 -> 796 and 9,189 -> 9,188, runbench 3,447 ->
+3,445 and 34,789 -> 34,788 — which is the materialisation leaving. front_end
+visits fall 22,449 -> 22,437, twelve fewer expressions for the front end to
+walk on each round it is dirty; rounds hold at 62. Every runtime counter and
+the lazy tier are byte-identical: this removes instructions, not events.
+
+Welfare rises and is NOT banked here. CI measures the instruction rows, so the
+floor is ratcheted in the round after its sitting lands, per the order in
+CLAUDE.md.

@@ -172,7 +172,11 @@ front_end_rounds=62
 # tree. The branch's own reading is 22,449 -- the inference narrowing subtracts
 # the bits an arm above names, so a parameter settles on a smaller set and the
 # fixpoint re-dirties fewer declarations. rounds unchanged at 62.
-front_end_visits=22449
+# 2026-09-13 (the digit test asked in place): front_end_visits 22,449 ->
+# 22,437, a FALL of 12 (-0.0534%); front_end_rounds unchanged at 62. One
+# binding fewer in lib/json/number.kso is one expression fewer for the
+# front end to visit on each round it is dirty.
+front_end_visits=22437
 # 2026-08-31 (the AST's identifiers are inline names): 728,030 -> 713,606, a
 # fall of 14,424, or 1.98%. Banked. The peak falls with the traffic because a
 # short name's bytes now live inside the AST node the allocator already gave
