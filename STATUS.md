@@ -95,9 +95,10 @@ not audited.
 The archive entry of that name. Built on 2026-09-10: the automatic bind is
 gone (`x . f` is `f x`, and a box handed through the plain dot stays a box),
 and a provable box handed to something that reads the value inside is
-refused at check. Owes: the `<t>effect` spelling (`e:<int>effect` is refused
-by the canonical-spacing rule today) and ch04/ch05 moving with it (the
-ledger's "The book teaches the boundary language").
+refused at check; and, the same day, the `<t>effect` spelling on all three
+engines, a parameter declared `e:<int>effect` taking the box as data. Owes:
+ch04/ch05 moving with it (the ledger's "The book teaches the boundary
+language").
 
 It does NOT owe the drop question. The same 2026-08-29 sitting closed it —
 the archive's "gavel: the drop question closes — explicitness IS the
@@ -118,7 +119,10 @@ The archive entry "rider: pure fallibility is boxed too": any operation whose
 answer includes an err yields `<t>effect`, io or not; `foo["bar"]!` answers a
 box; `foo["bar"]` stays the data form. Rides with the effect type above and
 is listed so the one-line `foo["bar"]! .? (e -> "anonymous")` form the gavel
-promises is visible as owed.
+promises is visible as owed. Sized 2026-09-10 (the log entry "the effect
+type is spellable"): 723 `]!` sites in the tree, 104 of them in lib; by
+infer's reading 738 of lib's 770 declarations carry an err in their answer
+set and 71 of those raise or insist themselves. The respell is the build.
 
 **Half unblocked, 2026-09-13.** The effect type it rides on has landed
 (kanso#1372). What still blocks it is its own unruled question: where the box

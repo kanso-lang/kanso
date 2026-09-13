@@ -22,20 +22,23 @@
 //! Watched red by deleting `net_read`'s arm: `these builtins answer a
 //! description and desc_yield does not say what they yield: ["net_read"]`.
 
-/// The names whose call answers `DESC`, read off `builtin_returns`.
+/// The names whose call answers `DESC`: `builtin_set`'s arm answers it for
+/// every name `is_effect_builtin` matches, so the list is read off that
+/// function's body. The checker asks the same function when it decides
+/// whether a declaration's tail answers a box, which is why the names live
+/// in one place and not in the arm.
 fn answer_a_description(source: &str) -> Vec<String> {
-    let lines: Vec<&str> = source.lines().collect();
-    let end = lines
-        .iter()
-        .position(|l| l.contains("=> DESC | fails,"))
-        .expect("builtin_returns has an arm answering DESC");
-    // The arm's patterns run back over as many lines as they need; each
-    // earlier arm ends in its own `=>`, which is where this stops.
-    let mut start = end;
-    while start > 0 && !lines[start - 1].contains("=>") {
-        start -= 1;
-    }
-    let mut names = literals(&lines[start..=end].join("\n"));
+    assert!(
+        source.contains("n if is_effect_builtin(n) => DESC | fails,"),
+        "builtin_set no longer answers DESC through is_effect_builtin"
+    );
+    let at = source.find("pub fn is_effect_builtin").expect("is_effect_builtin is there");
+    let rest = &source[at..];
+    // the body strips the `builtin_` prefix before it matches, and that
+    // literal is not a name; the names start where the match does
+    let rest = &rest[rest.find(".unwrap_or(name),").expect("the body is a matches!")..];
+    let end = rest.find("\n}\n").map(|e| e + 2).unwrap_or(rest.len());
+    let mut names = literals(&rest[..end]);
     // `print` is typed on its own, beside `err`, because its answer carries
     // its argument's failure bit.
     assert!(
@@ -84,7 +87,7 @@ fn a_builtin_that_answers_a_description_says_what_it_yields() {
     );
 }
 
-/// And the reading is not vacuous: the twenty-two names are actually found.
+/// And the reading is not vacuous: the twenty-four names are actually found.
 #[test]
 fn the_reading_finds_every_effect_builtin() {
     let source = include_str!("../src/infer.rs");
@@ -93,6 +96,7 @@ fn the_reading_finds_every_effect_builtin() {
         found,
         [
             "accept",
+            "args",
             "env",
             "exists",
             "is_dir",
@@ -112,6 +116,7 @@ fn the_reading_finds_every_effect_builtin() {
             "run",
             "sleep",
             "start",
+            "stdin",
             "write",
             "write_err",
             "write_file",

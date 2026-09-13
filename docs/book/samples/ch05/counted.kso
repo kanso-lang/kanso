@@ -1,0 +1,12 @@
+import "std/list"
+import "std/os"
+import "std/text"
+
+fn count_lines text
+  newlines = list/count (text/chars text) (c -> c == "\n")
+  "flavors.txt has {newlines} lines"
+
+fn counted e:<string>effect
+  e .> count_lines
+
+pub play = counted (os/read_file! "flavors.txt") .> print

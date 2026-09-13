@@ -217,7 +217,18 @@
 # 2026-09-13 (the effect type): 148,091,856 -> 150,092,130, a RISE of
 # 2,000,274 (+1.3507%). `check_box_where_value` runs in the shared checks,
 # so this row moves with the entry row to within 0.0022 points.
-# 2026-09-13 (the runtime's counter sites): 152,460,583 -> 152,481,754, a RISE
-# of 21,171 (+0.0139%). The same layout move again; the library and entry rows
-# track each other to three significant figures, as they should.
-library_instructions=152481754
+# 2026-09-13 (the `<t>effect` spelling): 152,460,583 -> 154,382,827, a RISE
+# of 1,922,244 (+1.2608%). The library path pays it too, and pays the most of
+# the three: a file of definitions alone is all declarations, so the tail walk
+# runs on every one of them with no statements to dilute it.
+# Ruled 2026-08-29; admitted by the floor under the language clause.
+library_instructions=154382827
+#
+# 2026-09-13 (the runtime's counter sites, re-based): the sitting above was
+# measured against the base kanso#1395 left, and this branch was re-cut onto
+# merged main after it landed. The earlier reading was 152,460,583 -> 152,481,754, a rise
+# of 21,171 (+0.0139%) on the layout vein: src/codegen.rs and src/main.rs both change
+# (counters_wanted() becomes a function both halves ask, and
+# cached_runtime_object keys on it), and their bytes move the compiler's own
+# layout. compile_allocs and compile_memory were byte-identical. The row below
+# is main's and CI measures the re-based one.

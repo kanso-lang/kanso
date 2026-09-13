@@ -1,0 +1,4 @@
+error[type]: no type is called `banana`, so this arm can never match
+  --> an_effect_yield_is_a_type.kso:2:9
+   2 | fn held e:<banana>effect
+               ^

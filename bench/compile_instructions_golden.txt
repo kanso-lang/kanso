@@ -1360,12 +1360,20 @@
 # 533,709 (+1.2065%). The rule's own cost, after the four paydown rounds
 # this branch already spent on it. Ruled 2026-08-29; the floor moves to
 # admit it rather than the feature going.
-# 2026-09-13 (the runtime's counter sites): 45,522,509 -> 45,529,923, a RISE of
-# 7,414 (+0.0163%). `kanso check lib/json` stops before codegen and cannot run
-# a runtime gate, so this is the layout vein this file's own warning names:
-# src/codegen.rs and src/main.rs both change (counters_wanted() becomes a
-# function both halves ask, and cached_runtime_object keys on it), and their
-# bytes move the compiler's own layout. compile_allocs and compile_memory are
-# byte-identical, which is what a change with no allocation consequence should
-# look like.
-compile_instructions=45529923
+# 2026-09-13 (the `<t>effect` spelling): 45,522,509 -> 46,111,185, a RISE of
+# 588,676 (+1.2932%). CI's sitting on the merged base carrying kanso#1393.
+# The spelling adds a lexer run recogniser keyed the way `slice_marker` is,
+# and the box check gains the tail walk -- a group whose joined set does not
+# say it answers a box is decided by reading its arms' tails, which a set-only
+# check could not do. Ruled 2026-08-29; the floor moves to admit it rather
+# than the feature going.
+compile_instructions=46111185
+#
+# 2026-09-13 (the runtime's counter sites, re-based): the sitting above was
+# measured against the base kanso#1395 left, and this branch was re-cut onto
+# merged main after it landed. The earlier reading was 45,522,509 -> 45,529,923, a rise
+# of 7,414 (+0.0163%) on the layout vein: src/codegen.rs and src/main.rs both change
+# (counters_wanted() becomes a function both halves ask, and
+# cached_runtime_object keys on it), and their bytes move the compiler's own
+# layout. compile_allocs and compile_memory were byte-identical. The row below
+# is main's and CI measures the re-based one.

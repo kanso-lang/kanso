@@ -3647,6 +3647,9 @@ fn type_match_depth(ty: &str, arg: &Value) -> Option<u8> {
         }
         return type_match_depth(ty, inner).map(|d| d.saturating_add(1));
     }
+    if crate::ast::is_effect_type(ty) {
+        return matches!(arg, Value::Desc(_)).then_some(0);
+    }
     if ty.ends_with("[]") {
         return matches!(arg, Value::List(_)).then_some(0);
     }

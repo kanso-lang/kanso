@@ -1,0 +1,18 @@
+# A parameter declared `<t>effect` takes the box as data, and holding is not
+# opening: a group tells a box from a value by the annotation alone, a box
+# handed on is still a box, and `.>` is still the door.
+import "std/math"
+
+fn shape _:<int>effect
+  "a box"
+
+fn shape n:int
+  "an int {n}"
+
+fn opened e:<int>effect
+  e .> (n -> print "yields {n < 6}")
+
+pub play =
+  print (shape (math/random 6))
+  >> print (shape 4)
+  >> opened (math/random 6)

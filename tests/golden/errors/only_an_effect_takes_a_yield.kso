@@ -1,0 +1,6 @@
+# The angle brackets in front of a type name what an effect yields, and
+# only `effect` takes a yield. A slice is `[]int`.
+fn held e:<int>list
+  "{e}"
+
+pub play = print (held 1)

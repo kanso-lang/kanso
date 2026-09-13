@@ -480,6 +480,8 @@ pub extern "C" fn rt_check_type(h: u32, code: u32) -> u32 {
             9 => matches!(v, Value::Done),
             // `some` is a value that is not none; a failure is neither
             8 => !matches!(v, Value::NoneV | Value::ErrV(_)),
+            // `<t>effect`: a box, whatever it will yield
+            10 => matches!(v, Value::Desc(_)),
             tid => match v {
                 Value::Record { ty, .. } => {
                     type_index(ty).is_some_and(|i| i == (tid - 100) as usize)

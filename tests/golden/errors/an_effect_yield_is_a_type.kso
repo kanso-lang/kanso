@@ -1,0 +1,5 @@
+# The yield inside an effect type is a type, and is checked as one.
+fn held e:<banana>effect
+  "{e}"
+
+pub play = print (held 1)

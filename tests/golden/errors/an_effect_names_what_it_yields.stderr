@@ -1,0 +1,4 @@
+error[syntax]: an effect names what it yields: `<int>effect`
+  --> an_effect_names_what_it_yields.kso:3:11
+   3 | fn held e:effect
+                 ^

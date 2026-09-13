@@ -13,6 +13,14 @@ fn told 1
 fn held e
   e
 
+# a library function whose tail is a `.>` step answers a box, and so does
+# anything that ends in a call of one: its set carries the callback's answer
+# beside the description bit, so the tail is what says box
+fn load path
+  os/read_file path
+
+loaded = load "flavors.txt"
+
 pub play =
   print (length os/args)
   >> print (math/random 6 + 1)
@@ -22,3 +30,6 @@ pub play =
   >> print (math/random 6 == 3)
   >> print (held os/args)
   >> print "{os/args}"
+  >> print (length (os/read_file "flavors.txt"))
+  >> print (length (load "flavors.txt"))
+  >> print (length loaded)

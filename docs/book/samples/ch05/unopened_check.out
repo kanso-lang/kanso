@@ -1,0 +1,4 @@
+error[effect]: this is an effect — a box the words open — and `length` takes a value; open it with `.>`
+  --> unopened_check.kso:3:27
+   3 | pub play = print (length (os/read_file! "flavors.txt"))
+                                 ^

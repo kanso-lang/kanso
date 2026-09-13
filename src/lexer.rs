@@ -1012,11 +1012,69 @@ fn required_gap(prev: &Tok, next: &Tok) -> usize {
     }
 }
 
+/// Which token pairs sit inside an effect type's spelling, `<int>effect`:
+/// the yield's brackets hug what they hold, and the head hugs the closing
+/// bracket. `<` is otherwise the comparison, which takes a space on each
+/// side, so the run is read from the colon an annotation starts with,
+/// walking over a slice prefix — `:[]<int>effect` — on the way. The marks
+/// are on the second token of each pair, the one the diagnostic points at.
+fn effect_type_runs(tokens: &[(Tok, Span, u32)]) -> Vec<bool> {
+    let n = tokens.len();
+    let mut tight = vec![false; n];
+    let tok = |k: usize| tokens.get(k).map(|(t, _, _)| t);
+    for start in 0..n {
+        if !matches!(tok(start), Some(Tok::Colon)) {
+            continue;
+        }
+        let mut open = start + 1;
+        while matches!(tok(open), Some(Tok::LBracket))
+            && matches!(tok(open + 1), Some(Tok::RBracket))
+        {
+            open += 2;
+        }
+        if !matches!(tok(open), Some(Tok::Op("<"))) {
+            continue;
+        }
+        tight[open] = true;
+        let mut depth = 0i32;
+        let mut k = open;
+        while k < n {
+            match tok(k) {
+                Some(Tok::Op("<")) => depth += 1,
+                Some(Tok::Op(">")) => depth -= 1,
+                _ => {}
+            }
+            if k > open {
+                tight[k] = true;
+            }
+            if depth == 0 {
+                if k + 1 < n {
+                    tight[k + 1] = true;
+                }
+                break;
+            }
+            k += 1;
+        }
+    }
+    tight
+}
+
 fn validate_spacing(lexed_line: &LexedLine, line: usize, diags: &mut Vec<Diagnostic>) {
+    let effect_tight = effect_type_runs(&lexed_line.tokens);
     for (at, pair) in lexed_line.tokens.windows(2).enumerate() {
         let (prev, _, prev_end) = &pair[0];
         let (next, next_span, _) = &pair[1];
         let gap = (next_span.col as usize).saturating_sub(*prev_end as usize);
+        if effect_tight[at + 1] {
+            if gap != 0 {
+                diags.push(Diagnostic::new(
+                    "formatting",
+                    "canonical form requires no space here".to_string(),
+                    Span::at(line, next_span.col as usize),
+                ));
+            }
+            continue;
+        }
         if matches!(prev, Tok::Colon) {
             if gap > 1 {
                 diags.push(Diagnostic::new(
