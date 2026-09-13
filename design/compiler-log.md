@@ -3822,3 +3822,90 @@ layout shifts under it: here the row moved because the work moved, and the
 layout held still enough to leave `.text` byte-identical.
 
 Welfare 67.77569149595541 -> 67.77800065192253, banked in the same commit.
+
+## 2026-09-13 — one instruction in ten of the run program is a register save, and the inline threshold is the lever
+
+**SHIPPED, round one.** `release_clang` passes `-mllvm -inline-threshold=1000`,
+four times clang's default of 250. The rows CI lands are owed in round two;
+everything below is this container's, measured against a container baseline.
+
+**The finding.** runbench retires 2,232,013,849 instructions, of which the
+binary's own code (everything but libc) is 2,185,625,151. `push`, `pop`, `ret`
+and `leave` alone are **215,229,225** of that — 9.85% of the binary's code and
+9.64% of the whole program. One instruction in ten is saving or restoring a
+callee-saved register.
+
+That was measured rather than guessed. `callgrind --dump-instr=yes` gives a
+per-address cost, `objdump -d` gives each address its mnemonic, and joining the
+two sums the frame instructions exactly. The dump changes nothing it measures:
+the instrumented run read 2,232,013,849, the same total to the digit.
+
+**The cost is flat, which is why no previous round found it.** `encode_onto`
+spreads its 298,748,819 self instructions over 588 distinct addresses, the
+hottest carrying 0.80%; `value_for` 233,828,199 over 491, hottest 1.49%;
+`obj_key_start` 151,499,007 over 217, hottest 0.52%. There is no loop to
+tighten — kanso#1306 said as much about two functions and this says it about
+the whole program. What there is instead is per-call overhead, and the
+functions paying most of it are small and hot rather than long:
+
+```
+k_map_sorted            49.56% frame     6,517,497 self, 160 addrs
+d_json/string_at_4      20.02%          69,083,185 self, 158 addrs
+d_json/entry_onto_2'2   20.00%          41,341,950 self,  65 addrs
+d_json/esc_byte_2       19.26%          27,717,120 self, 175 addrs
+k_b_append_rendered     16.97%          24,604,654 self, 114 addrs
+k_map_lit               16.66%          18,048,293 self,  78 addrs
+k_b_utf8_slice_raw      16.51%          52,188,939 self, 134 addrs
+k_b_at                  14.51%          61,798,244 self, 226 addrs
+```
+
+`obj_key_start`'s prologue disassembles as six callee-saved pushes, a 152-byte
+frame, and a move of an incoming STACK argument into its own frame — the
+function takes more arguments than the ABI has registers, and 827,739 calls
+pay for it.
+
+**Inlining is what removes a frame, so the threshold is the lever.** Measured
+by hand-linking `runbench.ll` against the same cached runtime object at three
+settings, every binary in one directory and run from the repo root so the
+exec-path offset cancels:
+
+```
+threshold  runbench          .text
+250        2,229,257,603     324,110     (clang's default)
+1000       2,184,283,786     355,790     −2.0174%, +9.8% text
+5000       2,141,173,484     507,998     −3.9513%, +56.7% text
+```
+
+1000 ships. 5000 is declined here: twice the win for six times the code.
+
+**The whole benchmark set, container A/B.** Both binary sets copied into one
+directory, `base_` and `inln_` the same length so the path costs the same:
+
+```
+runbench     2,232,013,849 -> 2,187,040,032   −44,973,817  −2.0149%
+encodebench  4,052,767,921 -> 3,976,859,553   −75,908,368  −1.8730%
+digestbench     10,497,757 ->     10,316,938      −180,819  −1.7225%
+jsonbench    1,436,454,329 -> 1,427,971,381    −8,482,948  −0.5905%
+escapebench     85,489,184 ->     85,483,165        −6,019  −0.0070%
+readbench        4,631,248 ->      4,631,250            +2  +0.0000%
+```
+
+**A CORRECTION, made mid-measurement and worth writing down.** The first pass
+compared these container readings against the COMMITTED goldens and read
+encodebench as a RISE of 1.1241%. The goldens are CI's host: main's runbench
+golden is 2,252,446,969 where this container reads 2,232,013,849, 0.9% apart.
+Against a container baseline encodebench falls 1.87%. A container reading and a
+golden are not comparable, and the gap is bigger than most of the effects this
+log records.
+
+**What it does not cost.** `all_counters.sh` reports the twelve cost veins and
+the lazy tier all AGREE: inlining moves no allocation counter, which is what it
+should do. What it does cost is `.text`, +9.8%, and machine-code size has no
+welfare term — Clay ruled that on 2026-09-05 — though the vein still watches it
+exactly.
+
+**Owed in round two.** CI's fourteen work rows, its `machine_code` and
+`emitted_code` veins, and `welfare --set` once the goldens carry them. The
+eight benchmarks not measured here (oneshot, basket, widebench, deepbench,
+pendbench, indexbench, scanbench, livebench) are CI's to report; round one is
+deliberately red on `bench/instructions_golden.txt`.

@@ -752,6 +752,19 @@ fn release_clang(stem: &str, ll_path: &str) -> std::io::Result<std::process::Exi
     std::process::Command::new("clang")
         .arg("-O3")
         .arg("-flto")
+        // Four times clang's default of 250. The run program spends one
+        // instruction in ten on `push`, `pop` and `ret` -- 215,229,225 of
+        // 2,185,625,151 in the binary's own code -- and the functions paying
+        // most are small and hot rather than looping: k_map_sorted is 49.6%
+        // frame, string_at and entry_onto 20.0% each. Inlining is what
+        // removes a frame, so the threshold is the lever, and the A/B on
+        // runbench.ll alone reads -2.0174% at 1000 and -3.9513% at 5000.
+        // 1000 is taken because 5000 costs 56.7% of .text for twice the
+        // win; 1000 costs 9.8%. Machine-code size has no welfare term --
+        // Clay ruled that on 2026-09-05 -- but `.text` keeps its own exact
+        // vein, so the growth is watched even though it is not scored.
+        .arg("-mllvm")
+        .arg("-inline-threshold=1000")
         .args(if cfg!(target_arch = "x86_64") { &["-mssse3"][..] } else { &[][..] })
         .arg("-Wno-override-module")
         .arg("-o")
