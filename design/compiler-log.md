@@ -5005,9 +5005,37 @@ visits fall 22,449 -> 22,437, twelve fewer expressions for the front end to
 walk on each round it is dirty; rounds hold at 62. Every runtime counter and
 the lazy tier are byte-identical: this removes instructions, not events.
 
-Welfare rises and is NOT banked here. CI measures the instruction rows, so the
-floor is ratcheted in the round after its sitting lands, per the order in
-CLAUDE.md.
+## CORRECTION: the 9.6M does not reproduce on CI, and the change is a compile win
+
+CI read `work:success` on this branch — runbench 2,003,021,871, identical to
+its golden, every one of the fourteen work rows unmoved. The −9,608,940 above
+is real on this container and is a property of its LLVM, not of the compiler:
+rustc here is 1.94.1 against CI's 1.98.1, and CI's backend evidently already
+folds the materialised boolean that this container's leaves standing. The
+emitted IR still loses the branches on both — CI's own `runbench defines=593
+calls=5943 branches=3445 lines=34788` matches the regenerated golden exactly —
+so the select is gone from the IR and the machine code was already without it.
+
+The lesson is the one this repo keeps relearning about host-keyed veins, in a
+direction it had not hit before: a RUNTIME row can be host-keyed too, not by
+the fourteen-instruction exec-path offset kanso#1404 fixes, but by which
+optimiser saw the IR. A container measurement of a codegen-shaped change sizes
+what THIS toolchain does with it, and CI is the only authority on what ships.
+
+What lands, then, is compile-side and small. All four compile veins move
+because `lib/*.kso` is `include_str!`'d into the compiler:
+
+    compile_allocs        30,273 ->      30,258   (-15)
+    compile_instructions  46,104,930 ->  46,072,247  (-32,683, -0.0709%)
+    entry_instructions    153,613,687 -> 153,586,146 (-27,541, -0.0179%)
+    library_instructions  154,370,895 -> 154,378,731 (+7,836,  +0.0051%)
+
+Three fall and the library row rises, which is the layout vein behaving as
+CLAUDE.md describes it. The change stands on that and on eight fewer source
+lines, not on the runtime figure it was built for.
+
+Welfare is NOT banked here; the floor is ratcheted in the round after this
+sitting lands, per the order in CLAUDE.md.
 
 ## 2026-09-13 (fifteenth) — the instruction vein counts a byte of memcpy as an instruction
 
