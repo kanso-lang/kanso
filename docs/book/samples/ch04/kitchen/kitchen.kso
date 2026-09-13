@@ -1,0 +1,13 @@
+import "../teahouse"
+
+fn apologise (err _)
+  "sorry, no tea"
+
+pub fn served _
+  teahouse/brew "sencha" .? apologise
+
+fn scorched _
+  err "i burnt it myself"
+
+pub fn mine _
+  scorched "sencha" .? apologise
