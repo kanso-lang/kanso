@@ -1,0 +1,4 @@
+import "./kitchen"
+
+print (kitchen/served "go")
+>> print (kitchen/mine "go")
