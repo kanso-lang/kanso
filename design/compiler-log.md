@@ -4383,3 +4383,42 @@ number to quote is CI's.
 Runtime did not move: `work:success` on the same run, runbench 2,003,021,871,
 identical to its golden. Welfare 68.5353360462189 -> 68.54457814481255, banked
 in the same round; seven `data-golden` spans on docs/compiler.html rewritten.
+
+## the advisory union that had nothing to union, and the pre-size that cost more than it saved
+
+`advisory::name_types` answers "which types can this name be" by unioning the
+answer sets of every arm in the name's group. It started the union at nothing
+and grew it: 829 of the compile's 1,283 hashbrown table growths came from that
+one loop, 182,282 instructions on `kanso check lib/json`. Most groups hold ONE
+declaration, and a union of one set is that set, so the arm's answer is cloned
+straight back and the incremental insert path is skipped entirely.
+
+Measured with the compile gate's own box, environment emptied, all three
+corpora, baseline against changed:
+
+    module   46,561,759 -> 46,447,127   −114,632 (−0.2462%)
+    entry   154,656,197 -> 154,469,445  −186,752 (−0.1207%)
+    library 155,779,162 -> 155,592,215  −186,947 (−0.1200%)
+    summed                              −488,331 (−0.1368%)
+
+**The obvious companion is a regression, and that is the third time.** Pre-size
+the union — sum the arms' answer lengths, build the set with that capacity —
+and the module row reads 46,628,372, which is +66,613 ABOVE the baseline. Both
+changes together reach only −148,040, so the sizing walk costs about 340,000 of
+the clone's 488,000 and then some. kanso#1157 declined pre-sizing six filtered
+collects at 4,514 instructions and kanso#1159 declined the other direction; the
+rule those three share is that a walk to measure a table costs more than the
+rehash it saves, whenever the table is small and the walk is over cache-cold
+slices. Only the clone ships.
+
+**The wider lead is closed as diffuse.** `reserve_rehash` is 1,150,492
+instructions, 2.50% of the compile term, and no owner holds a tenth of it: the
+generic `insert` and `rustc_entry` nodes carry most of it, and under those it
+splits across `qualify` (343,761), `Resolver::flush_unused` (192,797),
+`bound_in_pattern` (171,421), `check_merged_after_aliases` (521,449 through
+entry), `inline::aliases` (271,684), `infer::infer` (229,569) and a dozen more,
+none above 0.75%. Fourteen `::default()` hash constructions survive in the
+whole compile path — kanso#1158 already pre-sized the thirteen whose capacity
+was knowable, and what is left grows across a recursive dependency walk whose
+final size nothing knows before the loop that fills it. `name_types` was the
+one piece with a shape that does not need a capacity at all.
