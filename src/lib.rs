@@ -1864,7 +1864,7 @@ fn qualify(
         .filter(|n| *n != MATH_FAILURE && *n != DIVIDE_BY_ZERO)
         .map(|n| match mixed.contains(n) {
             true => (n.to_string(), ast::bare_space(qual, n)),
-            false => (n.to_string(), format!("{qual}/{n}")),
+            false => (n.to_string(), ast::qualified(qual, n)),
         })
         .collect();
     // The prelude's own declarations go, rather than travelling under this
@@ -1891,14 +1891,15 @@ fn qualify(
             exports.insert(ty.name.clone(), open);
             continue;
         }
-        exports.insert(format!("{qual}/{}", ty.name), ty.is_pub);
-        ty.name = format!("{qual}/{}", ty.name);
+        let joined = ast::qualified(qual, &ty.name);
+        exports.insert(joined.clone(), ty.is_pub);
+        ty.name = joined;
         if let Some(o) = &mut ty.origin {
-            *o = format!("{qual}/{o}");
+            *o = ast::qualified(qual, o);
         }
         if let Some(parent) = &mut ty.parent {
             if own_types.contains(parent.as_str()) {
-                *parent = format!("{qual}/{parent}");
+                *parent = ast::qualified(qual, parent);
             }
         }
         // A typeset's membership is a list of type names, and a member this
@@ -1906,7 +1907,7 @@ fn qualify(
         // `float64`, or a type from somewhere else — keeps its spelling.
         for member in &mut ty.members {
             if own_types.contains(member.as_str()) {
-                *member = format!("{qual}/{member}");
+                *member = ast::qualified(qual, member);
             }
         }
         for (_, members, _) in &mut ty.fields {
@@ -1937,7 +1938,7 @@ fn qualify(
             } else {
                 let key = match ast::has_slash(&f.name) {
                     true => f.name.clone(),
-                    false => format!("{qual}/{}", f.name),
+                    false => ast::qualified(qual, &f.name),
                 };
                 let taken = exports.get(&key).copied();
                 let same_decl = claims.get(&key).is_some_and(|c| *c == canon_id(&f.file));
@@ -1967,7 +1968,7 @@ fn qualify(
                 // spelling — it still enrolls, it just does not get a second
                 // prefix.
                 if !ast::has_slash(&f.name) {
-                    f.name = format!("{qual}/{}", f.name);
+                    f.name = ast::qualified(qual, &f.name);
                 }
             }
         }
@@ -2659,7 +2660,7 @@ fn load_dependencies(
             import
                 .renames
                 .iter()
-                .map(move |(theirs, _)| format!("{qual}/{theirs}"))
+                .map(move |(theirs, _)| ast::qualified(&qual, theirs))
                 .collect::<Vec<_>>()
         })
         .collect();
@@ -2667,12 +2668,12 @@ fn load_dependencies(
     for import in imports {
         let qual = import.alias.clone().unwrap_or_else(|| short_name(&import.path).to_string());
         for (theirs, yours) in &import.renames {
-            let qualified = format!("{qual}/{theirs}");
+            let qualified = ast::qualified(&qual, theirs);
             let mut found = false;
             let mut clones = Vec::new();
             for f in &dep_program.fns {
                 if f.name == qualified {
-                    for spelling in [yours.clone(), format!("{qual}/{yours}")] {
+                    for spelling in [yours.clone(), ast::qualified(&qual, yours)] {
                         let mut c = f.clone();
                         c.name = spelling;
                         c.synthetic = true;
@@ -2685,7 +2686,7 @@ fn load_dependencies(
             let mut tclones = Vec::new();
             for t in &dep_program.types {
                 if t.name == qualified {
-                    for spelling in [yours.clone(), format!("{qual}/{yours}")] {
+                    for spelling in [yours.clone(), ast::qualified(&qual, yours)] {
                         let mut c = t.clone();
                         c.name = spelling;
                         c.synthetic = true;
@@ -2721,7 +2722,7 @@ fn mark_reexport_quals(
         let named = program
             .reexports
             .iter()
-            .any(|re| re.name == qual || surfaces(&format!("{qual}/{}", re.name)));
+            .any(|re| re.name == qual || surfaces(&ast::qualified(&qual, &re.name)));
         if named {
             quals.insert(qual);
         }
@@ -2748,7 +2749,7 @@ fn open_qualified_doors(
     let mut doors = crate::hash::Map::default();
     for (bare, by_qual) in surfaced {
         for (qual, owners) in by_qual {
-            let door = format!("{qual}/{bare}");
+            let door = ast::qualified(qual, bare);
             // Only a name that answers blocks the door. A dependency's bare
             // enrolment demotes when the module's own surface is drawn, so
             // `mid/blank` exists and is private long before `mid` re-exports
