@@ -4999,3 +4999,29 @@ still red.
 The rest of the run is what the change predicted. `work:success` — the fourteen
 staged rows matched the golden exactly, so `/tmp/kanso-ir` and the repo root do
 sit in the same phase and no golden needed regenerating.
+
+### A third repair: the new gate is the first callgrind gate that reads no golden
+
+`specs` and `the other host` were both red on one spec,
+`a_host_bound_gate_is_reported_not_credited`. Its property is that the ratchet's
+`host_bound` list — gates whose red the baseline reports rather than fails on —
+holds exactly the gates that count instructions under callgrind. The list is
+pinned to a property of the gates instead of to anyone's judgement, because an
+entry excusing a gate that is not silicon-bound turns a real failure into a
+note. `path_independence.sh` runs callgrind, so the list and the property came
+apart the moment it landed.
+
+Declaring it host-bound would have been the wrong repair. The four gates on the
+list diff their counts against numbers a different machine wrote down, which is
+why a foreign runner reddens them whatever the mutation did. This one counts one
+binary from four tree depths and asks the four readings to agree with EACH
+OTHER; every runner in the pool answers it the same way, and a red here is
+always a real red.
+
+So the property gained its second half: a gate is host-bound when it counts
+instructions under callgrind AND compares them against a recorded golden, which
+it says by calling `host_gate.sh`. Watched three ways before it passed — giving
+`path_independence.sh` a `host_gate.sh` call puts it on the right-hand side and
+the list goes red; taking the call out of `instructions.sh` drops it off and the
+list goes red; removing `bound_a` from the list goes red without either script
+moving.

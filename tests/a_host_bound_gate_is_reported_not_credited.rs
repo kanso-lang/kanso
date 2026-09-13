@@ -15,10 +15,15 @@
 //!
 //! The danger is the list, not the mechanism: an entry that excuses a gate
 //! which is not silicon-bound turns a real failure into a note. So the list is
-//! pinned to a property of the gates themselves — a gate is host-bound exactly
-//! when it counts instructions under callgrind — rather than to anyone's
-//! judgement. A new callgrind gate that is not declared turns this red; a
-//! declared gate that runs no callgrind turns it red too.
+//! pinned to a property of the gates themselves rather than to anyone's
+//! judgement: a gate is host-bound exactly when it counts instructions under
+//! callgrind AND compares them against a recorded golden, which it says by
+//! calling `host_gate.sh`. A new gate of that shape that is not declared turns
+//! this red; a declared gate that is not of that shape turns it red too. The
+//! golden half of the property arrived with `path_independence.sh`, which runs
+//! callgrind and reads no golden — it asks four readings of one binary to
+//! agree with each other, so it answers the same on every runner in the pool.
+//! `counts_instructions` below carries the reasoning.
 //!
 //! Reading the table is not running it. The behavioural half is the nightly
 //! `prove`, which applies every mutation and reads every gate on a real runner.
@@ -72,9 +77,20 @@ fn resolved(binding: &str) -> String {
     panic!("{binding} is named as a host-bound gate and nothing binds it");
 }
 
-/// Every gate script that actually counts instructions under callgrind. A
-/// mention in a comment is not a run; kanso#1137 found four checks resting on
-/// prose and this file was written the day a fifth and a sixth turned up.
+/// Every gate script that counts instructions under callgrind AND compares
+/// them against a recorded golden. A mention in a comment is not a run;
+/// kanso#1137 found four checks resting on prose and this file was written the
+/// day a fifth and a sixth turned up.
+///
+/// BOTH halves are the property, and the second half was added the day
+/// `path_independence.sh` arrived. That gate runs callgrind and reads no
+/// golden: it counts one binary from four tree depths and asks the four
+/// readings to agree with EACH OTHER, so it answers the same on every runner
+/// in the pool and a foreign chip cannot redden it. Declaring it host-bound
+/// would have excused a gate that is not silicon-bound, which is the exact
+/// danger this file's header names. What makes a gate host-bound is the
+/// comparison against a number some other machine wrote down, and the way a
+/// gate says so is `host_gate.sh`.
 fn counts_instructions() -> Vec<String> {
     let mut found = Vec::new();
     let dir = root().join("scripts/gates");
@@ -84,10 +100,11 @@ fn counts_instructions() -> Vec<String> {
             continue;
         }
         let text = std::fs::read_to_string(&path).expect("a gate reads");
-        let runs = text.lines().map(str::trim_start).any(|line| {
-            !line.starts_with('#') && line.contains("valgrind") && line.contains("callgrind")
-        });
-        if runs {
+        let operative = || text.lines().map(str::trim_start).filter(|line| !line.starts_with('#'));
+        let counts =
+            operative().any(|line| line.contains("valgrind") && line.contains("callgrind"));
+        let against_a_golden = operative().any(|line| line.contains("host_gate.sh"));
+        if counts && against_a_golden {
             let name = path.file_name().expect("a name").to_string_lossy();
             found.push(format!("sh scripts/gates/{name}"));
         }
