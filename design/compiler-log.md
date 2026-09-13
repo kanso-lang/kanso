@@ -4453,3 +4453,36 @@ compile_memory, machine_code, emitted_code and compile_libraries all AGREED.
 Runtime is untouched: `work:success`, runbench 2,003,021,871, identical to its
 golden. Welfare 68.5446 -> 68.5543, banked, ratchet 263. Seven `data-golden`
 spans on docs/compiler.html rewritten.
+## ch04 names the type its plumbing hands around, and a branch STATUS.md said was gone
+
+`<t>effect` shipped in kanso#1395 and ch05 teaches it properly: an effect has a
+type, the compiler infers it, a parameter can be declared `e:<string>effect`,
+and the refusal a boxed value earns is a panel. ch04 reaches the same machinery
+nine sections earlier — "the two failures" opens by pointing `os/read_file!` at
+`version.txt` and piping the answer with `.>` — and it named nothing. It called
+the value "a description of the read" and asked the reader to take the plumbing
+on credit for two pages, which is the right instruction and leaves the reader
+without a word for the thing on the page in front of them. One clause names it.
+
+This is the live remainder of the ruling STATUS.md carries as "The book teaches
+the boundary language" (queued P1, 2026-08-26). kanso#1392 gave ch05 the three
+chain words and the three fused spellings, kanso#1394 gave ch04 its rescue
+collision and its boundary panel, kanso#1406 gave ch05 `done`. Measured on
+merged main before this change: ch05 names `<t>effect` twice and carries
+twenty-two chain-operator spellings; ch04 carried ten of the operators and zero
+of the type.
+
+**And the branch that row says does not exist is in the container.**
+STATUS.md's note reads "That branch is not in the compiler worker's container —
+no branch or worktree matching book/ch04/ch05/boundary exists there — so treat
+the prose as unwritten until someone points at a commit." `claude/book-effect-type`
+is checked out at `/tmp/wt-book`, tip `d540fe3a`, with three real commits under
+two merges of main. The conclusion the note draws is right and the reason is
+wrong: every file that branch adds is already on main. `boxed.kso`,
+`boxed_check.out`, `fused.kso` and `fused.out` are all in
+`docs/book/samples/ch05/` on `origin/main`, and its ch05 prose landed through
+kanso#1392 and kanso#1395. A `git diff origin/main...HEAD` on it reads as 71
+insertions across twelve files, which is what made it look live; that is a
+three-dot diff against a stale merge base. Two-dot against current main it is
+ninety-six files and six thousand deletions BEHIND. The branch is superseded,
+not pending, and nothing is owed to it.
