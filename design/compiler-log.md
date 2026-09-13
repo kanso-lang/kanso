@@ -4908,10 +4908,14 @@ delta is a fixed number of tests per run rather than anything that scales with
 the workload, so the two hosts differ only in what a test costs them, and that
 ratio is the one to expect from this box.
 
-The three compile rows RISE, 0.0139% to 0.0163%. `kanso check lib/json` stops
-before codegen and cannot run a runtime gate, so this is the layout vein: both
-`src/codegen.rs` and `src/main.rs` change, and their bytes move the compiler's
-own layout. `compile_allocs` and `compile_memory` are byte-identical.
+The three compile rows RISE, and each lands on a value:
+`compile_instructions` 45,522,509 -> 45,529,923 (+7,414 / +0.0163%),
+`entry_instructions` 152,090,185 -> 152,111,514 (+21,329 / +0.0140%),
+`library_instructions` 152,460,583 -> 152,481,754 (+21,171 / +0.0139%).
+`kanso check lib/json` stops before codegen and cannot run a runtime gate, so
+this is the layout vein: both `src/codegen.rs` and `src/main.rs` change, and
+their bytes move the compiler's own layout. `compile_allocs` (29,473) and
+`compile_memory` are byte-identical.
 
 Welfare 68.08 -> 68.12, banked with `--set` in the same round. A rise is
 arithmetic rather than a decision.
