@@ -130,8 +130,7 @@ fn the_ratchet_builds_the_blob_its_site_gate_reads() {
 }
 
 fn builds_the_blob(text: &str) -> bool {
-    text.lines()
-        .any(|l| !l.trim_start().starts_with('#') && l.contains("scripts/build_wasm.sh"))
+    text.lines().any(|l| !l.trim_start().starts_with('#') && l.contains("scripts/build_wasm.sh"))
 }
 
 /// The same trap the valgrind check walked into, one file over: the paragraph
