@@ -4783,6 +4783,23 @@ reading only one of them would conclude the other was wrong.
 term's 1,780 several thousand times over, which is the trade the weights are
 for.
 
+**A FOURTH reader, and this one is a spec rather than a gate.**
+`tests/every_counter_gate_is_in_the_sweep.rs` asserts that every program the
+sweep names is one the BUILD can produce — a benchmark directory, or something
+`bench/make_<name>` writes. Repointing the twelve rows at `<name>-counters`
+made every row name something that is neither, so it turned red on both hosts
+while the gates themselves were green. The spec was right and the rows were
+new; the derivation had no way to know the suffix exists.
+
+It reads the suffix now, and gets STRONGER rather than laxer for it: the
+benchmark check runs against the name with `-counters` stripped, and a second
+assertion requires `build_benchmarks.sh` to carry the matching
+`mv <name> <name>-counters` line. Renaming that line to anything else fails
+with "build_benchmarks.sh never makes it", watched. Without that half the
+suffix would have been a free pass — a row could name a binary nothing
+produces and the gate would run against whatever the name happened to be, or
+nothing, which is the failure this whole file exists to catch.
+
 **A HAZARD THIS CHANGE CREATES, found by running it and not yet closed.**
 A shipped binary run under `KANSO_COUNTERS=1` still prints a counter block,
 because the runtime's twenty-seven sites are untouched and only the emitted
