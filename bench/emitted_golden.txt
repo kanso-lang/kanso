@@ -202,7 +202,14 @@
 # and the sites lose the force in front of it. Banked. The eleven other
 # programs are in bench/emitted_golden_others.txt and eight of them move the
 # same way.
+# 2026-09-13 (the regime rides in bit 0 of a bytes capacity): -10 lines in
+# every one of the fourteen rows, and defines, calls and branches hold in all
+# of them. The emitter's five append fast paths each wrote a `sub`, an `icmp`
+# and a `select` to strip a sign off the capacity; each writes one `and` now.
+# Two lines a site, five sites, every program that links the runtime prelude.
+# The uniformity is the check: a program that moved by anything other than ten
+# would mean a site the emitter writes conditionally, and none does.
 defines=142
 calls=1210
 branches=795
-lines=9147
+lines=9137

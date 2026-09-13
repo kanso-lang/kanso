@@ -165,16 +165,23 @@
 # More code written, much less allocated: pendbench allocates 79.86% fewer
 # blocks for its 103 extra lines. Measured on the merged tree over origin/main
 # ef2f4ea4.
-encodebench defines=186 calls=1632 branches=1002 lines=11164
-oneshot defines=142 calls=1203 branches=784 lines=9076
-basket defines=143 calls=1265 branches=808 lines=8053
-widebench defines=202 calls=1823 branches=1093 lines=12146
-deepbench defines=117 calls=841 branches=595 lines=5965
-escapebench defines=48 calls=106 branches=120 lines=1568
-pendbench defines=132 calls=1192 branches=679 lines=7019
-scanbench defines=330 calls=3260 branches=2133 lines=19782
-indexbench defines=54 calls=146 branches=135 lines=1877
-digestbench defines=198 calls=1527 branches=923 lines=10096
-readbench defines=62 calls=166 branches=152 lines=2181
-livebench defines=143 calls=1227 branches=798 lines=9193
-runbench defines=593 calls=5947 branches=3447 lines=34757
+# 2026-09-13 (the regime rides in bit 0 of a bytes capacity): -10 lines in
+# every one of the fourteen rows, and defines, calls and branches hold in all
+# of them. The emitter's five append fast paths each wrote a `sub`, an `icmp`
+# and a `select` to strip a sign off the capacity; each writes one `and` now.
+# Two lines a site, five sites, every program that links the runtime prelude.
+# The uniformity is the check: a program that moved by anything other than ten
+# would mean a site the emitter writes conditionally, and none does.
+encodebench defines=186 calls=1632 branches=1002 lines=11154
+oneshot defines=142 calls=1203 branches=784 lines=9066
+basket defines=143 calls=1265 branches=808 lines=8043
+widebench defines=202 calls=1823 branches=1093 lines=12136
+deepbench defines=117 calls=841 branches=595 lines=5955
+escapebench defines=48 calls=106 branches=120 lines=1558
+pendbench defines=132 calls=1192 branches=679 lines=7009
+scanbench defines=330 calls=3260 branches=2133 lines=19772
+indexbench defines=54 calls=146 branches=135 lines=1867
+digestbench defines=198 calls=1527 branches=923 lines=10086
+readbench defines=62 calls=166 branches=152 lines=2171
+livebench defines=143 calls=1227 branches=798 lines=9183
+runbench defines=593 calls=5947 branches=3447 lines=34747
