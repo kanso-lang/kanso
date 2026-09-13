@@ -4341,3 +4341,79 @@ would fire on one that was going to be withdrawn. That second one refuses a
 valid program. The fixture for it needs two modules, because a binding
 shadowing a declaration in the same module is already refused outright, so it
 belongs with the branch that tries the fold rather than with this one.
+## 2026-09-13 — the sixth walk is the wrong target, and the measurement says where the money is
+
+Five folds landed in two days: kanso#1382 the decidable check, kanso#1383 the
+shapes walk, kanso#1384 the literal-argument check, kanso#1385 the field-read
+check, kanso#1386 the block-born check. Each entry closed by naming
+`named_walk` as the one left, at a census figure of 1,791,359, and saying the
+arity gate puts it out of reach. Before building the way around that gate I
+measured what the fold would actually buy. It is the smallest of the six, and
+the check's cost is somewhere else.
+
+Four readings on merged main plus the block-born fold, `kanso::main` inclusive
+under callgrind with pinned tunables, module and entry corpora summed:
+
+```
+full                                194,861,413
+tables built, walk skipped          191,131,486
+walk runs, three predicates no-op   192,298,663
+check_named_per_node gone outright  189,839,799
+```
+
+Which decomposes the whole check, 5,021,614 (2.577% of the compile):
+
+```
+table construction   1,291,687   25.7%
+traversal            1,167,177   23.2%
+per-node predicates  2,562,750   51.0%
+```
+
+**A fold removes the traversal and nothing else.** 1,167,177 is the ceiling,
+and the four folds that left a predicate behind realised 57% to 75% of their
+own figures, so the fold is worth roughly 0.67M to 0.88M summed — the smallest
+of the six, against a gate whose doc comment records a bug where sharing it
+silently skipped every check after. The census's 1,791,359 was the walk's
+inclusive cost under `for_each_child`, which carries the predicates it calls;
+it was never the fold's figure.
+
+The table slice is hazard-free and it is almost entirely one function.
+`Arities::of` reads 1,345,353 inclusive on the entry corpus alone — more than
+the summed table figure, because the ablation deltas carry allocator and layout
+effects the per-function reading does not.
+
+It is called **18 times** on one entry compile, against one call to
+`check_file_shadow`. `check_merged_after_aliases` runs per module, so the
+entry corpus's seventeen dependencies plus the entry itself each rebuild every
+table the check needs, over their own merged program. 74,742 instructions a
+call.
+
+That is the shape to look at next, and it is bigger than the fold: the five
+folds each removed a traversal that was running eighteen times, which is why
+they paid what they did. What has not been asked is whether the per-module
+rebuild is necessary — each module's merged namespace is genuinely different,
+so this is not a free deduplication, and kanso#1003 already withdrew one claim
+that the per-dependency merged check was redundant. The question here is
+narrower: whether the TABLES a module's check needs can be derived from its
+dependencies' rather than rebuilt from the merged program.
+
+`Arities::of` also hashes each declaration name up to three times: once to
+count, once to read the range back, and once more through `get_mut` when the
+arity is new. The last two are a `get` and a `get_mut` of the same key, and the
+slot the first returns is the slot the second wanted. Collapsing them:
+
+```
+module   44,898,856 ->  44,837,968     -60,888  -0.1356%
+entry   149,962,557 -> 149,755,885    -206,672  -0.1378%
+summed  194,861,413 -> 194,593,853    -267,560  -0.1373%
+```
+
+One hash per declaration, 267,560 instructions — a quarter of what the whole
+fold could reach, for six lines and no gate to think about. That is the shape
+of the rest of this: the check is re-entered eighteen times, so anything per
+declaration is paid eighteen times over.
+
+The fold is not refused, it is ranked: it is the smallest remaining and the
+only one carrying a gate hazard, so it goes behind the table work rather than
+in front of it. What ships here is the hash collapse; the rest is four
+ablations and one call count, and they say where to look next.
