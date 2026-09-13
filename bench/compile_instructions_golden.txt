@@ -1328,4 +1328,16 @@
 # `check_merged_after_aliases` gates on exactly that kind immediately after
 # `check_per_node` returns; folding would put those diagnostics in front of
 # their own gate.
-compile_instructions=44291724
+# 2026-09-13 (Arities::of reads the slot it is about to write): 44,291,724 ->
+# 44,234,005, a fall of 57,719 (-0.1303%). The second walk read a name's range
+# with `get` and bumped it with `get_mut` -- two hashes of one string, where
+# the slot the first returns is the slot the second wanted. One `get_mut` does
+# both.
+#
+# The container projected -60,888 and CI reads 0.9480 of it. `machine_code`,
+# `compile_memory` and `compile_allocs` all AGREED, which is what a refactor
+# with no allocation and no layout consequence should look like -- and worth
+# noting against this file's own warning that this row usually moves on any
+# edit to the compiler's Rust: here it moved because the work moved, not
+# because the layout did.
+compile_instructions=44234005

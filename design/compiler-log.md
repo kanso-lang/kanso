@@ -4417,3 +4417,29 @@ The fold is not refused, it is ranked: it is the smallest remaining and the
 only one carrying a gate hazard, so it goes behind the table work rather than
 in front of it. What ships here is the hash collapse; the rest is four
 ablations and one call count, and they say where to look next.
+
+CI's rows for the collapse, measured on merged main rather than this
+container:
+
+```
+module   44,291,724 ->  44,234,005    -57,719  -0.1303%
+entry   147,951,808 -> 147,756,205   -195,603  -0.1322%
+library 148,288,999 -> 148,091,856   -197,143  -0.1329%
+summed  192,243,532 -> 191,990,210   -253,322  -0.1318%
+```
+
+The container projected -267,560 summed and CI reads 0.9468 of it. Across six
+rounds the ratio now runs 1.04, 0.88, 2.01, 1.028, 0.9960, 0.9468 — five
+within 6% of one and a sixth off by a factor of two, which is the reading
+those entries have carried all along: a compile delta is projected from CI or
+it takes the red round.
+
+Three veins moved and three did not. `machine_code`, `compile_memory` and
+`compile_allocs` all agreed, which is what a refactor that changes neither
+what is allocated nor how much code is emitted should look like. That is worth
+one sentence against `bench/compile_instructions_golden.txt`'s own warning
+that this row usually moves on any edit to the compiler's Rust because the
+layout shifts under it: here the row moved because the work moved, and the
+layout held still enough to leave `.text` byte-identical.
+
+Welfare 67.77569149595541 -> 67.77800065192253, banked in the same commit.
