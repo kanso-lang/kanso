@@ -5008,3 +5008,20 @@ arguments do not all fit in registers is miscompiled on arm64. Call instructions
 193M of frame, which is 7.7 frame instructions per call: these are callee-saved
 register spills, not frame-pointer setup, and `-O3` already omits the frame
 pointer.
+
+**A THIRD CORRECTION, and a third sitting.** kanso#1369 landed on main while
+this branch sat in CI, and it changed `lib/list`, `lib/regexp` and
+`hako/remote` — three files the run program links. Every work and .text figure
+in the two tables above was measured against 12e73890, which no longer has a
+tree behind it. They stay written down because they are what the second sitting
+read, and because the pair of sittings is the evidence that the effect is
+stable across a base change; the goldens in this commit are main's, so CI is
+measuring the third sitting now and the numbers it returns replace both tables.
+Composing the old delta onto the new base by arithmetic would be the error this
+entry has already recorded once: a different library changes what inlines.
+
+The twelve allocation veins and the lazy tier were re-read on the merged tree
+and every one agrees byte for byte. Neither an exhaustiveness rule nor a linker
+flag can move a counter that counts allocator calls, so that is the expected
+answer; it is written down because a sweep that is run and not reported is a
+sweep nobody can check.
