@@ -67,11 +67,47 @@ sh scripts/gates/dispatch.sh name
 # the one that moves welfare and the rest are the breakdown; the loop treats
 # them identically, which is right, because a diagnostic nobody compares is
 # not one.
+# Every benchmark is measured from ONE fixed directory, and that is what makes
+# these rows a property of the binary rather than of where the tree is checked
+# out. The header above says the exec path shifts the count; the ratchet is
+# what proved it costs something, because its baseline pass reads this gate
+# from `/tmp/kanso-ratchet-base` and the repo root is six characters longer.
+# Eleven of fourteen rows disagreed with the golden by exactly +/-14 and three
+# agreed, grouped perfectly by the benchmark's NAME length, which is the giveaway.
+#
+# Measured directly: one byte-identical binary copied into directories whose
+# length rises by one character reads 3,226,048 at full-path lengths 25, 29, 33
+# and 37 and 3,226,062 everywhere between -- periodic with period four and
+# amplitude fourteen.
+#
+# Both halves have to be pinned. Exec'ing through a fixed absolute path is NOT
+# enough: digestbench run from the same absolute path with only the working
+# directory changed still read 10,060,595 against 10,060,609. And eight of the
+# fourteen open an input relative to the working directory -- jsonbench,
+# encodebench, oneshot, readbench, livebench and runbench take bench/large.json,
+# widebench bench/wide.json, digestbench bench/digest_input.txt -- so the cwd
+# cannot simply be pointed elsewhere either. Those three files come along.
+#
+# `/tmp/kanso-ir` is thirteen characters, and CI's repo root
+# `/home/runner/work/kanso/kanso` is twenty-nine. Both are 1 mod 4, so the
+# goldens measured at the repo root are the goldens this staging produces and
+# nothing needed regenerating. That is a convenience, not the point: the point
+# is that the answer stops moving when the tree does.
+run_dir=/tmp/kanso-ir
+rm -rf "$run_dir"
+mkdir -p "$run_dir/bench"
+for f in large.json wide.json digest_input.txt; do
+  cp "bench/$f" "$run_dir/bench/$f"
+done
 for b in jsonbench encodebench oneshot basket widebench deepbench escapebench pendbench \
          indexbench scanbench digestbench readbench livebench runbench; do
-  env -i PATH=/usr/bin:/bin \
-    valgrind --tool=callgrind --callgrind-out-file=/tmp/cg.$b ./$b \
-    >/dev/null 2>/tmp/ir.$b
+  cp "./$b" "$run_dir/$b"
+done
+for b in jsonbench encodebench oneshot basket widebench deepbench escapebench pendbench \
+         indexbench scanbench digestbench readbench livebench runbench; do
+  ( cd "$run_dir" && env -i PATH=/usr/bin:/bin \
+      valgrind --tool=callgrind --callgrind-out-file=/tmp/cg.$b ./$b \
+      >/dev/null 2>/tmp/ir.$b )
   printf '%s %s\n' "$b" "$(grep -o 'I   refs:.*' /tmp/ir.$b | tr -dc 0-9)"
 done > work.txt
 # The profile is already on disk — the loop above threw away everything but the
