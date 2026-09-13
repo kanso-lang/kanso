@@ -299,7 +299,7 @@ struct DeclState<'a> {
     open: Open<'a>,
     /// What the block-born rule has proved, carried through the same descent.
     /// Unlike the three above it is NOT cleared per declaration: the cohort is
-    /// one table for the whole program, exactly as `check_build_blocks` kept
+    /// one table for the whole program, exactly as the block-born check kept
     /// it, and `born` is None outside a `build` and restored by the arm that
     /// opened one.
     build: BuildScan<'a>,
@@ -1902,12 +1902,15 @@ impl<'a> Arities<'a> {
         }
         let mut flat: Vec<usize> = vec![0; program.fns.len()];
         for decl in &program.fns {
-            let key = decl.name.as_str();
-            let (start, end) = *ranges.get(key).expect("every name was counted");
+            // One hash of the name, not two: the read and the bump were a
+            // `get` and a `get_mut` of the same key, and the slot the first
+            // returns is the slot the second wanted.
+            let slot = ranges.get_mut(decl.name.as_str()).expect("every name was counted");
+            let (start, end) = *slot;
             let arity = decl.params.len();
             if !flat[start as usize..end as usize].contains(&arity) {
                 flat[end as usize] = arity;
-                ranges.get_mut(key).expect("every name was counted").1 = end + 1;
+                slot.1 = end + 1;
             }
         }
         Arities { ranges, flat }
