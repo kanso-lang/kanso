@@ -304,15 +304,13 @@ fn caught_in_order caught at acc wanted
 fn gathering_slots _ _ acc _ true
   acc
 
+# The seed is the answer for a slot no record names, so the search carries a
+# text the whole way and `latest` is never handed a none. It used to seed with
+# one and translate at the end, which asked `or_blank` to name a none that the
+# empty string already says.
 fn gathering_slots caught at acc wanted false
-  seen = latest caught 1 none at
-  caught_in_order caught (at + 1) (push acc (or_blank seen)) wanted
-
-fn or_blank none
-  ""
-
-fn or_blank text
-  text
+  seen = latest caught 1 "" at
+  caught_in_order caught (at + 1) (push acc seen) wanted
 
 fn latest caught i best at
   seeking caught i best at (i > length caught)

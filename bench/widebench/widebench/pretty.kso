@@ -20,7 +20,7 @@ fn pretty v depth
 
 fn pretty_elems acc xs i depth
   return acc if length xs < i
-  pretty_elems (elem_row acc xs[i] depth) xs (i + 1) depth
+  pretty_elems (elem_row acc xs[i]! depth) xs (i + 1) depth
 
 fn pretty_entry acc (entry k v) depth
   opened = text/append (indent_onto acc (depth + 1)) 34
@@ -29,13 +29,13 @@ fn pretty_entry acc (entry k v) depth
 
 fn pretty_list acc xs depth
   opened = indent_onto (text/append acc "[\n") (depth + 1)
-  first = pretty_onto opened xs[1] (depth + 1)
+  first = pretty_onto opened xs[1]! (depth + 1)
   rest = text/append (pretty_elems first xs 2 depth) "\n"
   text/append (indent_onto rest depth) 93
 
 fn pretty_map acc m depth
   es = entries m
-  first = pretty_entry (text/append acc "\{\n") es[1] depth
+  first = pretty_entry (text/append acc "\{\n") es[1]! depth
   rest = text/append (pretty_pairs first es 2 depth) "\n"
   text/append (indent_onto rest depth) 125
 
@@ -66,4 +66,4 @@ fn pretty_onto acc m:map[string some] depth
 
 fn pretty_pairs acc es i depth
   return acc if length es < i
-  pretty_pairs (pair_row acc es[i] depth) es (i + 1) depth
+  pretty_pairs (pair_row acc es[i]! depth) es (i + 1) depth

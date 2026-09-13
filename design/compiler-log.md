@@ -2718,6 +2718,239 @@ inner wrappers take `long long* chars`, and the door's wrapper declares one as
 NULL since harness.c calls it with two arguments. 45,189,025 cases and
 8,346,016 count checks, 0 mismatches.
 
+## 2026-09-11 — exhaustiveness on arm match, and the inference it needed
+
+Searched the log, the archive and design/ before filing: `check_none_exhaustive`
+appears in the 2026-07-24 none-campaign entries that built it and in the
+2026-08-15 sitting that recorded the rule, and nowhere since. The archive's
+last campaign report blames the group-level return set for the migration cost
+and leaves it there; STATUS.md's row said that set was "the implementer's to
+sharpen". This entry is the sharpening and the flag's removal together.
+
+**The ruling.** Clay, 2026-09-09: "the exhaustiveness when you're looking for a
+match on an arm has always been the way the language works." `KANSO_EXHAUSTIVE`
+comes out of src/check.rs and the check runs on every compile, on every route.
+The refusal fixture is the book's menu sample with its `none` arm deleted:
+`describe menu["pocky"]` where `fn describe price` interpolates. Until now that
+program ran and printed `<none> yen`.
+
+**A wildcard is NOT a `none` arm, and getting that wrong is silent.** The first
+cut counted `Pattern::Wildcard` as an arm that handles a none, on the reasoning
+that `_` does bind one. It does — and so does a bare name, which is what the
+ruling's own fixture writes. Counting either leaves the rule with nothing to
+say: the refusal fixture went green, the whole tree checked clean, and the only
+thing that noticed was the golden's empty stderr. Only a pattern that NAMES a
+none — `none` or `x:none` — is an arm for one.
+
+**Two under-refusals are load-bearing, deliberately.** The check reads a call's
+ARGUMENTS, not its head, so `nothing 1` where `nothing = none` is permitted.
+And a lambda's call has no `Expr::Ident` head to look up, so `(_ -> none) 0` is
+not proof either. Both are the safe direction — the rule refuses less than it
+could rather than more — and both are what keep two runtime fixtures reachable
+at all: tests/golden/runtime/calling_none_names_it.kso and
+to_float_names_what_it_takes.kso exist to run a none into a builtin and read
+the runtime's sentence, which the rule would otherwise refuse at compile time.
+
+**Unknown is not proof.** A set holding every value bit is infer's don't-know,
+and it carries the none bit with the rest. A field read through a variable is
+TOP; a strict index `xs[i]!` is every value but a thunk. Without the guard a
+group that hands either back reads as proof of a none it never produces, and
+half the tree is refused for nothing. Getters are skipped for a different
+reason: a getter is synthesized from a field read, so nobody can give it an
+arm, and the play route checks before the read is rewritten into one while the
+module route checks after — `xs[i].x` would be refused through an import and
+run direct.
+
+**The phantom, and the fix the rule actually needed.** `scripts/fingerprint`
+was refused at `sha256/hex (as_bytes raw)`, for a none that cannot happen.
+Traced with a debug dump of every group's return set: the source is
+`os/read_file!`, whose set carries NONE. Its body is
+`builtin_read_file path .> (r -> insisted path r)`, and `insisted` is two arms —
+`insisted path none` answering the missing file, `insisted _ text` handing the
+text back. The first arm answers every none. The second inherits it anyway,
+because `widen_param` widens EVERY arm's parameter by the whole argument set
+with no account of what the arms above it already took, so `text` carries NONE,
+the arm hands it back, and `read_file!` reads as an answer that could be a
+none — all the way down to whatever the caller did with it.
+
+infer now carries a per-parameter `shadow` table beside `params`: an arm
+earlier in its group takes the bits it NAMES at a position, and `widen_param`
+subtracts them. The narrowing is sound only when the earlier arm's OTHER
+positions accept anything, because `f 1 none` catches a none at position two
+for a 1 alone and says nothing about the arm below it; the table is built once
+from the group table rather than per call, so the fixpoint pays nothing for it.
+`pattern_catches` already existed for the FAIL pass-through on the same
+reasoning — this is the same question asked of the parameter instead of the
+result.
+
+Watched red first: tests/golden/micro/an_arm_below_a_none_arm_is_never_handed_one.kso
+is `kept none` / `kept s` fed a group that answers a literal none, its result
+handed to a `shouted` with no `none` arm. With the subtraction disabled the
+module is refused with the exhaustiveness diagnostic naming `shouted`; with it
+the program compiles and prints `nothing!` / `7!`. Note what the fixture could
+NOT be: a lenient index is TOP in infer, so `word[9]` would have been caught by
+the unknown guard and proved nothing — the none source has to be narrow.
+
+Every other site the rule refused was re-verified by reverting it and
+re-checking: all genuine, none of them a phantom the narrowing would have
+removed.
+
+**What the rule forced.** One library shape: `lib/list`'s `bisect` carried a
+`none` seed through `list/fold`, and `fold` has no `none` arm. It carries the
+INDEX now and answers through `found_at`, which is shorter and retires nothing
+the module needed. `lib/regexp`'s `gathering_slots` had the same shape and
+seeds with the first value, retiring `or_blank`. `hako/remote`'s `highest`
+seeds with the first release and retires `later`. Four programs outside lib
+resolve at the site: `examples/trace_demo` and `scripts/browser_differential_run`
+take the strict index they meant, `scripts/welfare_rescore` replaces a
+boolean-flag arm with a `none` arm, and eleven vendored benchmark files under
+bench/encodebench and bench/widebench take strict indexes and `none` arms to
+match the library they were copied from.
+
+Five corpus fixtures were reshaped rather than excused, because each existed to
+run a none into a generic arm — which is exactly the program the rule refuses.
+They name the none now and assert the same output.
+
+**The veins.** The narrowing pays where a scrutinee stops carrying a none the
+arms above it already answered: the emitter drops the arm's none test and the
+force in front of it. The decoder loses 16 calls, 24 branches and 109 lines;
+of the thirteen rows beside it six fall, four rise by seven lines apiece (the
+`none` arms in std/list, in programs that reach none of the narrowing shapes)
+and three hold. Summed: emitted_other_calls 20,445 -> 20,386,
+emitted_other_branches 12,800 -> 12,689, emitted_other_defines 2,366 -> 2,364,
+emitted_other_lines 133,802 -> 133,375. The front end's own work falls too:
+front_end_visits 22,727 -> 22,452 (-1.2100%), and on the module corpus
+module_visits 2,534 -> 2,511. **module_lines 5,304 -> 5,310** is the one rise
+— six lines, the `none` arms the rule forced into lib/list and lib/regexp, and
+the price of every fall above. Every runtime cost counter and the lazy tier are
+byte-identical: `all_counters.sh` reports the twelve cost veins agree.
+
+Welfare reads 67.59 = floor here, and cannot say more: `run_instructions`,
+`compile_instructions`, `compile_allocs` and `compile_peak_bytes` all come from
+goldens this container's host gate refuses, so the objective sees no movement
+until CI writes its own sitting in. Round one expects red on those rows.
+
+**CI's sitting, and what the ruling costs.** The three compile rows rise
+together: compile_instructions 49,097,584 -> 50,747,925 (+1,650,341 /
++3.3614%), entry_instructions 164,060,471 -> 168,851,345 (+4,790,874 /
++2.9202%), library_instructions 164,342,505 -> 169,613,006 (+5,270,501 /
++3.2070%). With them compile_allocs 29,350 -> 29,483 (+133) and
+compile_peak_bytes 774,660 -> 777,126 (+2,466 / +0.3184%).
+
+Split three ways on this container, one build per reading: the head measures
+51,460,049, the head with `check_none_exhaustive` not called measures
+50,564,701, and the head with the shadow mask off as well measures 50,288,026.
+So the check is 895,348 instructions and the shadow table 276,675, against a
+container total of 1,172,023; the rest of CI's rise is the library source the
+rule forced and layout. The check is the larger half and could not be smaller:
+it sat behind `KANSO_EXHAUSTIVE`, the flag was set nowhere, and a ruling that
+costs nothing to carry is a ruling that answers nothing. The container reads
+about 1.4% high against CI on this row, so read the split as a ratio rather
+than as CI instructions.
+
+In the work vein two of fourteen rows move and twelve are byte-identical:
+encodebench 3,932,651,503 -> 3,958,779,263 (+0.6644%) and widebench 35,316,107
+-> 35,202,913 (-0.3205%), both the vendored benchmark sources taking strict
+indexes and `none` arms rather than anything in the runtime. **runbench, the
+objective's whole run term, does not move**, and neither does run_peak_bytes.
+In the .text vein seven rows move: four fall by the same 176 bytes (jsonbench,
+oneshot, livebench) and runbench by 160 with their work rows identical, which
+is the shadow table reaching the emitter — an arm below a `none` arm loses the
+case it was compiled with. encodebench +1,360, widebench +464 and scanbench
++16 are the vendored sources again.
+
+**Welfare falls 67.58619 -> 67.52, and that is Clay's call, not mine.** Every
+term that moved is a compile term and every one of them got worse; nothing
+improves. `--set` refuses a fall this size by design and the floor file is
+edited by hand, which is what the 2026-08-25 language clause has meant three
+times before (#1355, #1356, #1359) — but those spent 0.001 to 0.01 and this
+spends 0.07, an order of magnitude more than any ruled feature has taken from
+the objective. Sent to Clay rather than banked: the change is a ruling and
+cannot go, so the only question left is whether the objective should record
+what the ruling costs. Not filed in design/pending-gavels.md here — that
+ledger's own rule is that its edits ride small, promptly-merged PRs and never
+a feature branch, and this is one.
+
+Named for the trend gate, which asks a worsened row for its landed value:
+work_encodebench 3,932,651,503 -> 3,958,779,263 is the vendored encode
+benchmark's own source, and `text` 1,549,100 -> **1,550,252** is the .text vein
+summed — up 1,152 bytes across fourteen programs, where seven rows move and
+the two vendored ones carry all of the rise. That pair read 1,551,324 ->
+1,552,476 until the trend gate refused round two: the rise of 1,152 was right
+and both endpoints were a base behind, because kanso#1372 moved the .text vein
+by 2,224 between this branch being measured and being merged with main. The
+goldens on this branch are CI's round-two rows and these are now read off
+them.
+
+## 2026-09-11 — the ruling's compile cost, paid down by a third
+
+The entry above priced per-call exhaustiveness at +3.3614% on
+compile_instructions and sent the welfare fall to Clay. Two of the structures
+the rule added were doing the same work twice, and profiling the same box the
+three-way split was read on names both.
+
+`check_none_exhaustive` kept two maps: `returns`, keyed by (name, arity), and
+`handles`, keyed by (name, arity, position) and holding one bool. Both keys
+start with the declaration's name, so building `handles` hashed that string
+once per PARAMETER and reading it hashed it once per ARGUMENT, on top of the
+`returns` hash the same call site already paid. The two are one map now, the
+per-position bool a bitmask beside the return set, so a call site pays one
+hash and a declaration pays one insert. `check_merged_after_aliases` falls
+2,519,015 -> 2,293,470 and the module row falls 276,320.
+
+`widen_param` is three lines and LLVM inlined it at every caller until the
+shadow mask was added, at which point it outlined: the profile read 584,011
+instructions under a name main spends nothing on. That figure is the call
+overhead. Pinned `#[inline(always)]` the symbol disappears, the load stays,
+and the module row falls another 223,326.
+
+Together, on this container, one build per reading:
+
+    module compile    50,199,441 main    51,758,263 ruled    51,258,065 now
+    entry compile    166,705,591 main   171,650,496 ruled   169,903,991 now
+
+The objective's compile term is those two summed. It reads +2.9984% against
+main as the rule shipped and +1.9626% now, so 34.5% of the rise is recovered.
+What is left is the check's own walk and the shadow load, and the rule needs
+both to do its job.
+
+Nothing the rule refuses moved. Each structure was watched red, and the two
+mutations fail on different fixtures in opposite directions: with the mask
+never learning a position, `foreign_destructure` is refused though it has a
+`none` arm; with every position reading as handled, the ruling's own fixture
+stops being refused at all. `emitted_code`, `compile_cost` and the twelve
+runtime cost veins are byte-identical, so no decision moved — only what
+deciding costs.
+
+A position past the mask's width reads as handled, which is the same
+under-refusing direction as the two gaps the entry above records. The widest
+group in lib/ takes five parameters against a width of sixty-four.
+
+CI's sitting, on the run that read `9d737dec`. Step 30 names four failures and
+no others: `work`, `emitted`, `machine code` and `compile memory` all agree, so
+no runtime counter and no emitted line moved, and `compile_peak_bytes` holds at
+777,126. The four rows that did move, each against main and against the value
+the entry above landed them on:
+
+    compile_instructions   49,097,584 main   50,747,925 ruled   50,228,060 now
+    entry_instructions    164,060,471 main  168,851,345 ruled  167,038,742 now
+    library_instructions  164,342,505 main  169,613,006 ruled  167,802,001 now
+    compile_allocs             29,350 main       29,483 ruled       29,473 now
+
+So compile_instructions falls 519,865 (-1.0244%) from where the ruling left it,
+entry_instructions 1,812,603 (-1.0735%), library_instructions 1,811,005
+(-1.0677%), and compile_allocs 10 (-0.0339%) as the second map's table goes.
+All four still stand above main, and that residue is the check's walk and the
+shadow load.
+
+The objective's compile term is the module and entry rows summed: 213,158,055
+on main, 219,599,270 as the ruling shipped (+3.0218%), 217,266,802 now
+(+1.9276%). **36.2% of the rise is recovered.** The container projected 34.5%
+off its own three readings and was pessimistic by a point and a half, which is
+the usual direction for this box.
+
+The welfare question in the entry above stands with a smaller number in it,
+and CI prices it.
 ---
 
 ## 2026-09-10 — the plain dot is an application, and a box where a value is expected is refused
@@ -3328,6 +3561,79 @@ Five spans on compiler.html quote these goldens and `all_pages.sh --write`
 rewrote them. A sixth thing on that page was stale in a way no gate can see —
 the library row's paragraph said two changes had moved it since, and there are
 now five — so that sentence is edited by hand rather than regenerated.
+
+## 2026-09-12 — the exhaustiveness rule pays down two of its three costs
+
+kanso#1369 is built and blocked on the floor, and while it waits the pass it
+adds is the largest single compile cost on either open branch. Two changes,
+each measured on its own, on the branch rather than on main.
+
+**A call asks its arguments before it asks the returns table.** The walk
+consulted the table at every call site with an identifier head, and that
+lookup hashes the callee's name where the none question is a match on the
+argument's shape. Most call sites hand over literals, arithmetic or field
+reads and answer no on the match alone. Summed 220,373,766 -> 220,182,802,
+-190,962 (-0.0867%). The same shape kanso#1372's round four found in the
+effect check; the three early returns are the same three conditions
+reordered, so no diagnostic moves.
+
+**The shadow table accumulates instead of re-deriving.** It said, for every
+arm and every position, what every arm above takes there, walking each
+earlier arm's whole parameter list once per position. The answer grows by one
+arm at a time, so each arm now reads the running total and folds in its own,
+and whether an arm settles a position is one count of its parameters rather
+than one scan per position. Summed 220,182,802 -> 220,117,045, -65,757.
+
+The interesting part of that second one is the first cut, which measured
+294,981 WORSE. Skipping single-arm groups is what makes it pay: the work the
+running total saves lives in long groups, which are rare, and the per-arm
+count it adds lands on every group, and most groups are one arm. The entry
+of 2026-09-11 above put the keyed map build and the shadow load together at
+about 643,000; this pays down the build side of that pair and leaves the
+load, which measures 610 and is not worth a shape.
+
+**A figure that is available and does not ship.** Isolating either loop by
+ablation needs the mask in `widen_param` ablated too, or the shadow values
+move and the fixpoint moves with them. Under that barrier the old build
+reads 984,991 and the new one 440,448 — and those are not the change's
+delta, because `black_box` there changes how the whole of infer inlines, and
+that function's inlining already carries a pinned attribute and a measurement
+saying why. The shipping numbers above are end-to-end with the mask live and
+the two tables proven identical.
+
+Watched red first against the derivation rather than a downstream effect:
+the old loop was kept beside the new one and the two tables asserted equal
+over the whole compile corpus, where the table holds dozens of live entries.
+An off-by-one letting an arm read its own contribution trips it on the first
+module. The scaffold is removed; golden 11/11.
+
+The whole pass, ablated, is 2,500,754 of the branch's compile cost and the
+shadow machinery another 985,601, against roughly 3.9M the branch carries at
+container levels. What is left of that is the traversal, which is kanso#487's
+and not this pass's alone.
+
+**CI's rows for the two paydowns**, landed the round after. compile_instructions
+50,228,060 -> 50,022,458 (-205,602), entry_instructions 167,038,742 ->
+166,387,431 (-651,311), library_instructions 167,802,001 -> 167,177,778
+(-624,223). The objective's compile term is the first two summed: 217,266,802
+-> 216,409,889, **-856,913**.
+
+That is 3.3x the -256,721 this container read for the same two commits, and the
+direction of the disagreement is worth writing down rather than smoothing over.
+Both figures are before-and-after on one host, so neither is a host offset in
+the usual sense; what differs is the toolchain (container rustc 1.94.1 against
+CI's 1.98.1), and compile_instructions is a layout vein whose deltas move with
+inlining. The container sized the change and got the sign right; CI priced it.
+Neither number is wrong and only CI's is the row.
+
+compile_allocs ROSE, 29,473 -> 29,485, +12. The running-total rewrite needs one
+scratch vector where the derivation it replaces used a scalar, and that vector
+is the only allocation the change introduces -- which makes it the candidate
+and not a proven cause, since nothing has measured the two apart. It sits in
+the same welfare term as the -205,602, so the objective reads the pair
+together; the compile corpus is one file importing four modules, so the "one
+vector per module" story that would explain a twelve does NOT fit it, and that
+is the reason this is written as an open attribution rather than an answer.
 ## 2026-09-12 — a necessary condition beats a shared descent, and the corpus says why
 
 The whole-program checks in src/check.rs each walked every expression of every
@@ -4084,6 +4390,26 @@ CLAUDE.md's welfare section both now say that the rule governs a ruled feature
 and the ordinary fall rule still governs everything the specification did not
 buy.
 
+CI's rows, and what each landed on. The container tables above were taken
+while the rule was being paid down; these are the numbers the goldens carry:
+
+```
+compile_instructions   44,888,539 ->  45,642,466    +753,927  +1.6795%
+entry_instructions    149,925,203 -> 151,799,014  +1,873,811  +1.2498%
+library_instructions  150,211,345 -> 152,595,931  +2,384,586  +1.5875%
+compile_allocs             29,323 ->      29,458        +135  +0.4604%
+```
+
+The module row rises hardest of the three because the rule's per-call question
+is asked once per argument and the module corpus is the denser of the two in
+call sites; the entry and library rows part by 0.34 points for the same
+reason. `compile_allocs` gains 135 blocks, which is the shadow table: one
+`Vec` per group with a parameter an earlier arm already names. Summed over the
+module and entry corpora the compile term rises 2,627,738 (+1.3489%), and that
+is the whole of the welfare fall — `front_end_visits` FELL 22,724 -> 22,449
+because the narrowing re-dirties fewer declarations, and every runtime counter
+is byte-identical.
+
 ## 2026-09-12 — the field-read check joins the one descent, and the module row lands on a number it has produced before
 
 `check_merged_after_aliases` ran seven whole-program expression walks. kanso#1382
@@ -4407,6 +4733,35 @@ layout shifts under it: here the row moved because the work moved, and the
 layout held still enough to leave `.text` byte-identical.
 
 Welfare 67.77569149595541 -> 67.77800065192253, banked in the same commit.
+
+**What CI landed, and what the rule costs.** The rule shipped in kanso#1369 on
+merged main. Six veins moved, and every one that got worse is named here with
+the value it landed on, because the trend gate reads this file and nothing else:
+
+```
+compile_allocs         29,338 ->      29,473      +135  +0.4602%
+compile_instructions   44,767,714 -> 45,523,131  +755,417  +1.6874%
+entry_instructions    149,755,117 -> 152,087,783 +2,332,666  +1.5576%
+library_instructions  150,092,130 -> 152,459,094 +2,366,964  +1.5770%
+```
+
+`compile_memory` agreed and the fourteen work rows agreed: the rule costs the
+front end and costs the run program nothing, which is what a check should do.
+
+**The emitted and machine-code veins moved too, and that is the library, not the
+check.** Making the rule unconditional means the shipped library has to satisfy
+it, so `lib/list`, `lib/regexp` and `hako/remote` gained arms. Those arms are
+compiled, so `emitted` and `.text` move with them. runbench's emitted line count
+goes 34,905 -> 34,773 and its `.text` 247,026 -> 246,866: both FALL, because the
+added arms replaced fall-through paths the emitter had been expanding. That
+direction was not predicted and is worth recording — the obvious expectation is
+that more source means more code.
+
+**The floor drops 67.754 -> 67.7149**, by hand, under Clay's 2026-09-13 ironclad
+rule: lowering it in service of the specification is never his call. The
+container projected the fall at 0.01 and CI read 0.04, so the projection was
+four times light — a reminder that the compile rows are a CI-host measurement
+and the container's are not a substitute for them.
 
 ## 2026-09-13 — one instruction in ten of the run program is a register save, and the inline threshold is the lever
 

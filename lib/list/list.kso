@@ -78,11 +78,21 @@ pub fn argmin coll key
 
 # the predicate must be monotonic over the order — false for a prefix,
 # true for the rest — which is what lets the range halve instead of walk
+#
+# `best` is the index of the best element seen, and 0 before there is one. An
+# index is never a none, so the search carries none through its own recursion
+# and the single read at the end says what 0 means. Seeding with a none instead
+# would hand one to an arm that has no name for it.
 fn bisect xs p lo hi best
-  return best if hi < lo
+  return found_at xs best if hi < lo
   mid = lo + (hi - lo) / 2
-  here = xs[mid]!
-  if (p here) (bisect xs p lo (mid - 1) here) (bisect xs p (mid + 1) hi best)
+  if (p xs[mid]!) (bisect xs p lo (mid - 1) mid) (bisect xs p (mid + 1) hi best)
+
+fn found_at _ 0
+  none
+
+fn found_at xs i
+  xs[i]!
 
 fn bump none
   1
@@ -100,7 +110,7 @@ pub fn drop coll n
   skipped n (iter coll)
 
 pub fn find (sorted items) pred
-  bisect items pred 1 (length items) none
+  bisect items pred 1 (length items) 0
 
 pub fn find coll pred
   found_in (next (iter coll)) pred

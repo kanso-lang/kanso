@@ -1,3 +1,9 @@
-import "std/list"
+# `none` is the call's HEAD here rather than an argument. The exhaustiveness
+# check reads a call's arguments, so a literal none handed to a group with no
+# arm for it is refused at compile time now — the error corpus pins that in
+# a_none_reaches_a_group_with_no_arm_for_it. Calling a none is a different
+# mistake, the check says nothing about it, and it stays the runtime's to
+# report. It used to be written `list/map [1 2] none`, which the check refuses.
+nothing = none
 
-pub play = print "{list/to_list (list/map [1 2] none)}"
+pub play = print "{nothing 1}"

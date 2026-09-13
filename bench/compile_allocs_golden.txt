@@ -405,4 +405,4 @@
 # byte-identical at 774,660, so the pass allocates a table and nothing that
 # grows with the program. This is a ruled language feature and its cost is
 # admitted by lowering the floor, under Clay's 2026-09-13 ironclad rule.
-compile_allocs=29338
+compile_allocs=29473

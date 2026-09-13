@@ -40,6 +40,9 @@ fn mark_step _ 69 _ _
 fn mark_step _ 101 _ _
   true
 
+fn mark_step _ none _ _
+  false
+
 fn mark_step cs _ p q
   mark_from cs (p + 1) q
 

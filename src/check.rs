@@ -757,34 +757,56 @@ fn check_none_exhaustive(
     use crate::infer::NONE;
     // inference is handed in: one pass serves every check that reads it
 
-    // group -> joined return set, and whether any arm names none at a position
-    let mut returns: crate::hash::Map<(&str, usize), crate::infer::Set> =
-        crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
-    let mut handles: crate::hash::Map<(&str, usize, usize), bool> =
+    // group -> its joined return set and the positions some arm names a none
+    // at, one bit per position. Two facts about the same group live in one
+    // entry so a call site pays ONE hash of the name: a separate
+    // (name, arity, position) map cost a string hash per PARAMETER to build
+    // and another per ARGUMENT to read, and both keys start with the name.
+    // A position past the mask's width reads as handled, the same under-
+    // refusing direction as the two below, and nothing in the tree is close:
+    // the widest group in lib/ takes five.
+    let mut returns: crate::hash::Map<(&str, usize), (crate::infer::Set, u64)> =
         crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
     for (i, d) in program.fns.iter().enumerate() {
-        let key = (d.name.as_str(), d.params.len());
-        *returns.entry(key).or_insert(0) |= inference.returns[i];
+        // Only an arm that NAMES a none handles one. A wildcard binds a
+        // none the same way a bare name does, and the ruling's own
+        // fixture is a bare name: `fn describe price` runs for a none
+        // and prints `<none> yen`, which is the program the check
+        // exists to refuse. Counting either as an arm would leave the
+        // rule with nothing to say.
+        let mut named = 0u64;
         for (pos, param) in d.params.iter().enumerate() {
             let names_none = match param {
                 Pattern::Nullary(n, _) => n == "none",
                 Pattern::Annotated { ty, .. } => ty == "none",
                 _ => false,
             };
-            *handles.entry((d.name.as_str(), d.params.len(), pos)).or_insert(false) |= names_none;
+            if names_none {
+                named |= 1u64 << pos.min(63);
+            }
         }
+        let entry = returns.entry((d.name.as_str(), d.params.len())).or_insert((0, 0));
+        entry.0 |= inference.returns[i];
+        entry.1 |= named;
     }
 
     // only what is provable: a lenient read, a literal none, or a call whose
-    // group's return set carries one
+    // group's return set carries one. A set holding every value bit is the
+    // unknown, and the unknown carries the none bit with the rest: a field
+    // read through a variable (`m.to` is TOP in infer) and a strict index
+    // (`xs[i]!` is every value but a thunk) both answer it, so a group that
+    // hands either back would read as proof of a none it never produces.
+    // Unknown is not proof.
+    let values = crate::infer::TOP & !crate::infer::FAIL & !crate::infer::THUNK;
+    let unknown = |s: crate::infer::Set| s & values == values;
     let yields_none = |e: &Expr| -> bool {
         match e {
             Expr::Index { strict: false, .. } => true,
             Expr::Ident(name, _) => name == "none",
             Expr::App { head, args, piped: false, .. } => match head.as_ref() {
-                Expr::Ident(name, _) => {
-                    returns.get(&(name.as_str(), args.len())).is_some_and(|s| s & NONE != 0)
-                }
+                Expr::Ident(name, _) => returns
+                    .get(&(name.as_str(), args.len()))
+                    .is_some_and(|&(s, _)| s & NONE != 0 && !unknown(s)),
                 _ => false,
             },
             _ => false,
@@ -794,19 +816,43 @@ fn check_none_exhaustive(
     let walk = |e: &Expr, diags: &mut Vec<Diagnostic>, owner: &str| {
         let Expr::App { head, args, piped: false, .. } = e else { return };
         let Expr::Ident(name, _) = head.as_ref() else { return };
-        if !returns.contains_key(&(name.as_str(), args.len())) {
+        // A getter is synthesized from a field read, so nobody can give it
+        // an arm, and the play route checks before the read is rewritten
+        // into one while the module route checks after: `xs[i].x` would be
+        // refused through an import and run direct. A field read of a none
+        // stays the runtime's sentence on every route.
+        if crate::ast::getter_field(name).is_some() {
             return;
         }
+        // THE CHEAP TESTS COME FIRST, and asking the table is not one of
+        // them: the lookup hashes the callee's name, where a none question
+        // about an argument is a match on the argument's own shape. A call
+        // whose arguments are literals, arithmetic or field reads answers no
+        // on the match alone and never touches the table, which is most of
+        // them. The second walk over the arguments below costs a few compares
+        // on the sites that reach it, and those are the rare ones.
+        if !args.iter().any(&yields_none) {
+            return;
+        }
+        let Some(&(_, named)) = returns.get(&(name.as_str(), args.len())) else { return };
         for (pos, arg) in args.iter().enumerate() {
             if !yields_none(arg) {
                 continue;
             }
-            if *handles.get(&(name.as_str(), args.len(), pos)).unwrap_or(&false) {
+            if named & (1u64 << pos.min(63)) != 0 {
                 continue;
             }
             // an absolute path built from the binary's location tells a
-            // reader nothing; the module name is what they searched for
-            let short = owner.rsplit_once("/lib/").map(|(_, m)| m).unwrap_or(owner);
+            // reader nothing; the module name is what they searched for. A
+            // file outside lib/ is named by its own name: the corpus stages
+            // a fixture into a temporary directory before it runs, and a
+            // golden that quoted the staging path would pin that run's
+            // temporary directory rather than the diagnostic.
+            let short = owner
+                .rsplit_once("/lib/")
+                .map(|(_, m)| m)
+                .or_else(|| owner.rsplit_once('/').map(|(_, f)| f))
+                .unwrap_or(owner);
             diags.push(Diagnostic::new(
                 "exhaustive",
                 format!(
@@ -1942,8 +1988,11 @@ pub fn check_merged_after_aliases(
     // below asked this and each built it for itself, in loops identical to
     // the byte; inference is handed round for exactly this reason and the
     // table over it should be too. A fourth build sits in
-    // `check_none_exhaustive`, which runs only under KANSO_EXHAUSTIVE and so
-    // keeps its own.
+    // `check_none_exhaustive` and stays there: its entry carries a SECOND
+    // fact beside the set -- the positions some arm names a none at, one bit
+    // each -- so reading this table instead would leave it hashing the name a
+    // second time for the mask, at every call site. That is the cost its own
+    // comment weighs, and it is why one richer map beats two.
     let mut returns: HashMap<(&str, usize), crate::infer::Set> =
         HashMap::with_capacity_and_hasher(program.fns.len(), Default::default());
     for (i, d) in program.fns.iter().enumerate() {
@@ -1969,9 +2018,7 @@ pub fn check_merged_after_aliases(
     // was last of the run. Rotating the walk's answers to the back puts them
     // there and leaves both halves in their own order.
     diags.rotate_left(walked);
-    if std::env::var("KANSO_EXHAUSTIVE").is_ok() {
-        check_none_exhaustive(program, &inference, &mut diags);
-    }
+    check_none_exhaustive(program, &inference, &mut diags);
     check_box_where_value(program, &inference, &mut diags);
     if require_entry {
         check_entry(program, &mut diags);

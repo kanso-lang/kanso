@@ -33,4 +33,11 @@
 # 5,247, branches 434 -> 436; calls, defines, rounds and visits hold. The same
 # +15 lines and +2 branches every row of compile_golden.txt moved by, for the
 # same reason: the twin's two new arms arrive through the preamble.
-module lines=5304 calls=754 branches=446 defines=101 rounds=6 visits=2534
+# 2026-09-11 (a none reaches a group with no arm for it): lines 5304 -> 5310,
+# visits 2534 -> 2511, and the other four rows hold. The six lines are the
+# `none` arms the exhaustiveness rule forced into lib/list and lib/regexp; the
+# twenty-three visits are the inference narrowing beside it — an arm below a
+# `none` arm no longer inherits the none, so its parameter set settles sooner
+# and the fixpoint re-dirties fewer declarations. Six more lines to write and
+# less work to decide them.
+module lines=5310 calls=754 branches=446 defines=101 rounds=6 visits=2511
