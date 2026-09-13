@@ -4702,6 +4702,15 @@ increments `k_stat_allocs` and `k_stat_alloc_bytes` UNDER the gate. Dropping the
 gate blinds two counters the cost goldens pin. Keeping them exact means three
 unconditional read-modify-writes against the gate's two instructions.
 
+**The emitted vein says the transform did exactly what it says.** Every one of
+the fourteen programs loses EXACTLY 16 IR lines, and `defines`, `calls` and
+`branches` are byte-identical in all of them. Eight gates, three lines each,
+collapsed to one: sixteen lines gone, and `branches` holds because an
+unconditional `br` stands where the conditional one did. jsonbench 9,163 ->
+9,147, runbench 34,773 -> 34,757, and so on down the list. That vein counts the
+IR rather than the host's instructions, so it was regenerated here; `work` and
+`machine code` refuse to compare across glibc and wait for CI.
+
 **Two readers of the same programs, and repointing one was not enough.** The
 twelve `*_counters.sh` gates name their program, and `all_counters.sh` has its
 own `vein:program:golden` table naming it again. Repointing only the gates left
