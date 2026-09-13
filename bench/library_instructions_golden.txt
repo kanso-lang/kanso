@@ -197,4 +197,8 @@
 # 2026-09-12 (the field-read check joins the one descent): 150,211,345 ->
 # 149,164,244, a fall of 1,047,101 (-0.6971%). The same fold, on the library
 # route.
-library_instructions=149164244
+# 2026-09-13 (the block-born check joins the one descent): 149,164,244 ->
+# 148,288,999, a fall of 875,245 (-0.5868%). The library row moves with the
+# entry row here, as it does for anything in the shared checks: the fold is in
+# `check_merged_after_aliases`, which every route runs.
+library_instructions=148288999
