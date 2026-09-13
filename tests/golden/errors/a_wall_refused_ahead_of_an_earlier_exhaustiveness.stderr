@@ -1,0 +1,8 @@
+error[type]: `>>` sequences two effects, and this side answers a plain value — bind it with `.` if you want what it answers
+  --> a_wall_refused_ahead_of_an_earlier_exhaustiveness.kso:19:23
+  19 |   io/write "steeping" >> 2
+                             ^
+error[exhaustive]: this can be a none and `double` has no arm for it — resolve it here, or give `double` a `none` arm (in a_wall_refused_ahead_of_an_earlier_exhaustiveness.kso)
+  --> a_wall_refused_ahead_of_an_earlier_exhaustiveness.kso:15:19
+  15 |   print (double xs[n])
+                         ^

@@ -4384,6 +4384,75 @@ Runtime did not move: `work:success` on the same run, runbench 2,003,021,871,
 identical to its golden. Welfare 68.5353360462189 -> 68.54457814481255, banked
 in the same round; seven `data-golden` spans on docs/compiler.html rewritten.
 
+## 2026-09-13 — the wall question joins the second descent, and two mutations the corpus could not see
+
+DONE. `check_wall_operands` walked the whole program for itself, over the same
+declarations, statements and nodes that `check_after_infer` had just walked in
+the same order. It asks its question on that one descent now. Three questions
+share the walk where two did: the effect one, this one, and exhaustiveness.
+
+The wall's answers go into their own vector and are spliced in where the check
+used to push — after the effect answers, before `check_discarded_value`, ahead
+of the rotation. That is the whole of what a reader sees change, which is
+nothing: the diagnostics come back in the order they came back in before.
+
+Two properties this fold could break, and what the corpus said about each.
+
+The `bound` shielding is pinned. Hand `never_describes` an empty set instead of
+the declaration's bound names and `a_wall_whose_name_is_a_local` goes red,
+because `naturals` is bare-enrolled in std/list and the fixpoint answers it at
+arity zero. Watched.
+
+The SPLICE POSITION was not pinned, and nothing in the corpus held a wall
+refusal beside an exhaustiveness one. Move the append to after
+`diags.rotate_left(walked)` and all 465 error fixtures stayed green.
+`a_wall_refused_ahead_of_an_earlier_exhaustiveness` closes it: one program with
+one of each, and the wall is reported first though it is nine lines later, so
+the order is explicable by the splice and by nothing else. Watched red under
+that exact move — the two lines swap — then green.
+
+A THIRD mutation left the corpus green and is NOT a gap to close with a
+fixture. Drop the `decl.synthetic` skip and nothing notices, because trmc is
+the only pass that writes synthetic declarations and every body it writes is a
+`BinOp` or an `App` over names and integers — no `Seq`, so no wall. The skip is
+live rather than dead: 24 synthetic declarations reach this check on
+`kanso check lib/regexp`, arriving through dependencies that finished their own
+compiles before the merge. `trmc::rewrite` runs after
+`check_merged_after_aliases` on every route, so a declaration this pass writes
+is never checked in the compile that wrote it — only in a dependent's. The skip
+is kept because it is the behaviour that was there; it is not reachable from
+anything trmc can produce today.
+
+Container projection, and the caveat is the same one kanso#1409 recorded. The
+baseline binary's `.relro_padding` lands in the segment after RELRO, valgrind
+declines to read its symbols, and `kanso::main` is unavailable — so this is
+PROGRAM TOTALS against PROGRAM TOTALS across two differently-laid-out binaries,
+which #1409 measured at 0.80 of CI where main-against-main read 0.98 to 0.996.
+Two separate builds of merged main's source landed in the same bad layout and
+neither could be read. Module 46,577,748 -> 46,344,651 (−233,097 / −0.5004%),
+entry 154,193,331 -> 153,442,665 (−750,666 / −0.4868%), library 155,036,546 ->
+154,286,263 (−750,283 / −0.4839%), summed −1,734,046 (−0.4873%). The gap
+between totals and `kanso::main` on the readable binary is 460,605 / 461,402 /
+461,329 — flat to within 800 across the three routes, and about 9,200 from the
+gap #1409 read on its own binary, which is the size of the error this
+substitution carries. CI's rows are the ones to quote.
+
+The runtime sweep agrees with its goldens and the full suite is green.
+
+CI'S SITTING, and the caveat above did not bite. compile_allocs 30,258 ->
+30,224 (−34), compile_instructions 45,490,501 -> 45,251,941 (−238,560 /
+−0.5244%), entry 151,628,169 -> 150,873,629 (−754,540 / −0.4977%), library
+152,469,420 -> 151,715,592 (−753,828 / −0.4944%), summed −1,746,928
+(−0.4997%). The container's totals-against-totals projection was −1,734,046
+and CI read 1.0074 of it — closer than the six main-against-main folds before
+it, and well inside the ~9,200 of gap drift that substitution carries. So the
+0.80 kanso#1409 read is what that shape CAN cost, not what it must: a fold
+whose whole effect is one descent removed moves the startup work not at all,
+and the two binaries' pre-main gaps happened to sit near each other.
+compile_memory, machine_code, emitted_code and compile_libraries all AGREED.
+Runtime is untouched: `work:success`, runbench 2,003,021,871, identical to its
+golden. Welfare 68.5446 -> 68.5543, banked, ratchet 263. Seven `data-golden`
+spans on docs/compiler.html rewritten.
 ## ch04 names the type its plumbing hands around, and a branch STATUS.md said was gone
 
 `<t>effect` shipped in kanso#1395 and ch05 teaches it properly: an effect has a

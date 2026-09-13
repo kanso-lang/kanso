@@ -906,18 +906,120 @@ fn none_exhaustive_at(e: &Expr, tables: &AfterInfer, owner: &str, diags: &mut Ve
     }
 }
 
-/// The two questions inference makes answerable, asked on ONE descent.
+/// `>>` sequences effects, refused where the operand is written.
+///
+/// `1 >> 2` passed check clean and died at run time, though both operands are
+/// literals and the wall's own rule names what it takes. A call that can never
+/// answer an effect is the same case one step out, and the fixpoint knows
+/// which those are. An operand it cannot judge is left alone.
+///
+/// An err is a legitimate operand — propagating one is what the wall does
+/// when a side fails — so only a side that can be neither an effect nor a
+/// failure is refused. A literal qualifies by its shape; a call qualifies
+/// when every arm of its group answers without either.
+fn never_describes(
+    e: &Expr,
+    returns: &HashMap<(&str, usize), crate::infer::Set>,
+    bound: &crate::hash::Set<&str>,
+) -> bool {
+    use crate::infer::{DESC, ERR};
+    match e {
+        Expr::Int(..)
+        | Expr::Float(..)
+        | Expr::Str(..)
+        | Expr::List(..)
+        | Expr::MapLit(..)
+        | Expr::Lambda { .. } => true,
+        Expr::App { head, args, piped: false, .. } => match head.as_ref() {
+            Expr::Ident(name, _) => {
+                returns.get(&(name.as_str(), args.len())).is_some_and(|set| set & (DESC | ERR) == 0)
+            }
+            _ => false,
+        },
+        // A bare NAME is the same case one step further out than a call,
+        // and the fixpoint answers it at arity zero. `bound` is what makes
+        // that safe: a name the declaration binds belongs to the local,
+        // whatever the fixpoint says about a top-level constant sharing it.
+        Expr::Ident(name, _) => {
+            !bound.contains(name.as_str())
+                && returns.get(&(name.as_str(), 0)).is_some_and(|set| set & (DESC | ERR) == 0)
+        }
+        _ => false,
+    }
+}
+
+/// Every name a declaration binds, at any depth: its parameters, the
+/// patterns of its bindings, and every lambda parameter under it.
+///
+/// Without this the wall check refuses a working program. `list/naturals` and
+/// `list/first` are bare-enrolled and answer plain values, so asking the
+/// fixpoint what the NAME `naturals` returns finds the stdlib row — and
+/// check.rs's own rule is that "the enrollment must never make every stdlib
+/// export a forbidden binding name". The micro corpus keeps that program at
+/// a_wall_whose_name_is_a_local; it was written and watched refused before
+/// this set existed.
+///
+/// The set is deliberately over-wide. It does not model scope, so a name
+/// bound anywhere in a declaration shields it everywhere in that
+/// declaration. The cost is a refusal not made rather than one made
+/// wrongly, which is the safe side to be loose on: the run still names the
+/// fault, and since #1090 it names it the same way on all three engines.
+fn bound_under<'a>(e: &'a Expr, into: &mut crate::hash::Set<&'a str>) {
+    match e {
+        Expr::Lambda { params, .. } => {
+            into.extend(params.iter().map(|(name, _)| name.as_str()));
+        }
+        // Guard carries its own statement list. Leaving it out refused
+        // a working program: a binding after a `return` line is in `rest`
+        // rather than in a Block, so the name looked like the stdlib
+        // constant it shadows. Found by reading this walk against the Expr
+        // enum and then writing the program, which is the only order that
+        // settles it — the whole suite was green with the gap in place,
+        // because no fixture bound a shadowing name inside a guard.
+        Expr::Block(stmts, _) | Expr::Build(stmts, _) | Expr::Guard { rest: stmts, .. } => {
+            for stmt in stmts {
+                if let Stmt::Bind { pattern, .. } = stmt {
+                    collect_pattern_names(pattern, into);
+                }
+            }
+        }
+        _ => {}
+    }
+    crate::for_each_child(e, |c| bound_under(c, into));
+}
+
+/// The names `decl` binds, for the wall question above.
+fn names_bound_by(decl: &FnDecl) -> crate::hash::Set<&str> {
+    let mut names: crate::hash::Set<&str> = Default::default();
+    for param in &decl.params {
+        collect_pattern_names(param, &mut names);
+    }
+    for stmt in &decl.body {
+        if let Stmt::Bind { pattern, .. } = stmt {
+            collect_pattern_names(pattern, &mut names);
+        }
+        match stmt {
+            Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
+                bound_under(expr, &mut names)
+            }
+        }
+    }
+    names
+}
+
+/// The three questions inference makes answerable, asked on ONE descent.
 ///
 /// Each used to walk the whole program for itself, over the same declarations,
 /// the same statements and the same nodes, in the same order. The answers go
-/// into two vectors rather than one because this route hands diagnostics back
-/// in push order and the two checks pushed from either side of the fused
+/// into three vectors rather than one because this route hands diagnostics
+/// back in push order and the checks pushed from either side of the fused
 /// walk's rotation; the caller splices each where its own check used to push.
 fn check_after_infer(
     program: &Program,
     inference: &crate::infer::Inference,
     returns: &HashMap<(&str, usize), crate::infer::Set>,
     effect_diags: &mut Vec<Diagnostic>,
+    wall_diags: &mut Vec<Diagnostic>,
     none_diags: &mut Vec<Diagnostic>,
 ) {
     let mut discarded: crate::hash::Map<(&str, usize, usize), bool> =
@@ -965,6 +1067,16 @@ fn check_after_infer(
     // green — so the reuse does not rest on it.
     let mut stack: Vec<&Expr> = Vec::new();
     for decl in &program.fns {
+        // The wall question is the one of the three that skips a synthetic
+        // declaration, and it keeps that: the compiler writes those, so a
+        // refusal in one names a line nobody typed.
+        let asks_wall = !decl.synthetic;
+        // Built on the first wall this declaration holds, and not at all for
+        // the many that hold none. Collecting for every declaration cost 537
+        // allocations and 659k instructions on `kanso check lib/json`, which
+        // took welfare 0.06 UNDER its floor — the objective saying the change
+        // was not worth its price as written.
+        let mut bound: Option<crate::hash::Set<&str>> = None;
         for stmt in &decl.body {
             let e = match stmt {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
@@ -974,6 +1086,23 @@ fn check_after_infer(
             while let Some(cur) = stack.pop() {
                 effect_discarded_at(cur, &tables, effect_diags);
                 none_exhaustive_at(cur, &tables, &decl.file, none_diags);
+                if asks_wall {
+                    if let Expr::Seq(lhs, rhs, span) = cur {
+                        let bound = bound.get_or_insert_with(|| names_bound_by(decl));
+                        if never_describes(lhs, returns, bound)
+                            || never_describes(rhs, returns, bound)
+                        {
+                            wall_diags.push(Diagnostic::new(
+                                "type",
+                                "`>>` sequences two effects, and this side answers a \
+                                 plain value — bind it with `.` if you want what it \
+                                 answers"
+                                    .to_string(),
+                                *span,
+                            ));
+                        }
+                    }
+                }
                 crate::for_each_child(cur, |c| stack.push(c));
             }
         }
@@ -2222,14 +2351,23 @@ pub fn check_merged_after_aliases(
     diags.extend(named_diags);
     check_binding_patterns(program, &mut diags);
     check_overlapping_arms(program, &mut diags);
-    // The two questions inference makes answerable are asked on ONE descent,
+    // The three questions inference makes answerable are asked on ONE descent,
     // and their answers are spliced in where each check used to push: the
-    // effect answers here, the exhaustiveness answers after the rotation.
+    // effect and wall answers here, the exhaustiveness answers after the
+    // rotation.
     let mut effect_diags = Vec::new();
+    let mut wall_diags = Vec::new();
     let mut none_diags = Vec::new();
-    check_after_infer(program, &inference, &returns, &mut effect_diags, &mut none_diags);
+    check_after_infer(
+        program,
+        &inference,
+        &returns,
+        &mut effect_diags,
+        &mut wall_diags,
+        &mut none_diags,
+    );
     diags.append(&mut effect_diags);
-    check_wall_operands(program, &returns, &mut diags);
+    diags.append(&mut wall_diags);
     check_discarded_value(program, &returns, &mut diags);
     // This route hands its diagnostics back in push order — only the gated
     // return above sorts — so where a check pushes is what a reader sees.
@@ -4261,146 +4399,6 @@ fn moved_to_os(name: &str) -> String {
             format!(" — it moved to `os/{rest}`, and `std/io` keeps the reading and writing")
         }
         _ => String::new(),
-    }
-}
-
-/// `>>` sequences effects, refused where the operand is written.
-///
-/// `1 >> 2` passed check clean and died at run time, though both operands are
-/// literals and the wall's own rule names what it takes. A call that can never
-/// answer an effect is the same case one step out, and the fixpoint knows
-/// which those are. An operand it cannot judge is left alone.
-fn check_wall_operands(
-    program: &Program,
-    returns: &HashMap<(&str, usize), crate::infer::Set>,
-    diags: &mut Vec<Diagnostic>,
-) {
-    use crate::infer::{DESC, ERR};
-
-    // An err is a legitimate operand — propagating one is what the wall does
-    // when a side fails — so only a side that can be neither an effect nor a
-    // failure is refused. A literal qualifies by its shape; a call qualifies
-    // when every arm of its group answers without either.
-    let never_describes = |e: &Expr, bound: &crate::hash::Set<&str>| -> bool {
-        match e {
-            Expr::Int(..)
-            | Expr::Float(..)
-            | Expr::Str(..)
-            | Expr::List(..)
-            | Expr::MapLit(..)
-            | Expr::Lambda { .. } => true,
-            Expr::App { head, args, piped: false, .. } => match head.as_ref() {
-                Expr::Ident(name, _) => returns
-                    .get(&(name.as_str(), args.len()))
-                    .is_some_and(|set| set & (DESC | ERR) == 0),
-                _ => false,
-            },
-            // A bare NAME is the same case one step further out than a call,
-            // and the fixpoint answers it at arity zero. `bound` is what makes
-            // that safe: a name the declaration binds belongs to the local,
-            // whatever the fixpoint says about a top-level constant sharing it.
-            Expr::Ident(name, _) => {
-                !bound.contains(name.as_str())
-                    && returns.get(&(name.as_str(), 0)).is_some_and(|set| set & (DESC | ERR) == 0)
-            }
-            _ => false,
-        }
-    };
-
-    // Every name a declaration binds, at any depth: its parameters, the
-    // patterns of its bindings, and every lambda parameter under it.
-    //
-    // Without this the check refuses a working program. `list/naturals` and
-    // `list/first` are bare-enrolled and answer plain values, so asking the
-    // fixpoint what the NAME `naturals` returns finds the stdlib row — and
-    // check.rs's own rule is that "the enrollment must never make every stdlib
-    // export a forbidden binding name". The micro corpus keeps that program at
-    // a_wall_whose_name_is_a_local; it was written and watched refused before
-    // this set existed.
-    //
-    // The set is deliberately over-wide. It does not model scope, so a name
-    // bound anywhere in a declaration shields it everywhere in that
-    // declaration. The cost is a refusal not made rather than one made
-    // wrongly, which is the safe side to be loose on: the run still names the
-    // fault, and since #1090 it names it the same way on all three engines.
-    fn bound_under<'a>(e: &'a Expr, into: &mut crate::hash::Set<&'a str>) {
-        match e {
-            Expr::Lambda { params, .. } => {
-                into.extend(params.iter().map(|(name, _)| name.as_str()));
-            }
-            // Guard carries its own statement list. Leaving it out refused
-            // a working program: a binding after a `return` line is in `rest`
-            // rather than in a Block, so the name looked like the stdlib
-            // constant it shadows. Found by reading this walk against the Expr
-            // enum and then writing the program, which is the only order that
-            // settles it — the whole suite was green with the gap in place,
-            // because no fixture bound a shadowing name inside a guard.
-            Expr::Block(stmts, _) | Expr::Build(stmts, _) | Expr::Guard { rest: stmts, .. } => {
-                for stmt in stmts {
-                    if let Stmt::Bind { pattern, .. } = stmt {
-                        collect_pattern_names(pattern, into);
-                    }
-                }
-            }
-            _ => {}
-        }
-        crate::for_each_child(e, |c| bound_under(c, into));
-    }
-
-    // One worklist for the whole program rather than one per statement; the
-    // loop below drains it every time, so the capacity carries forward.
-    let mut stack: Vec<&Expr> = Vec::new();
-    for decl in &program.fns {
-        if decl.synthetic {
-            continue;
-        }
-        // Built on the first wall this declaration holds, and not at all for
-        // the many that hold none. Collecting for every declaration cost 537
-        // allocations and 659k instructions on `kanso check lib/json`, which
-        // took welfare 0.06 UNDER its floor — the objective saying the change
-        // was not worth its price as written. Deferring it is the answer, and
-        // it costs nothing extra: the walk below already looks for the wall,
-        // so the set is built exactly where the question is first asked.
-        let mut bound: Option<crate::hash::Set<&str>> = None;
-        for stmt in &decl.body {
-            let root = match stmt {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
-            };
-            stack.clear();
-            stack.push(root);
-            while let Some(cur) = stack.pop() {
-                if let Expr::Seq(lhs, rhs, span) = cur {
-                    let bound = bound.get_or_insert_with(|| {
-                        let mut names: crate::hash::Set<&str> = Default::default();
-                        for param in &decl.params {
-                            collect_pattern_names(param, &mut names);
-                        }
-                        for stmt in &decl.body {
-                            if let Stmt::Bind { pattern, .. } = stmt {
-                                collect_pattern_names(pattern, &mut names);
-                            }
-                            match stmt {
-                                Stmt::Bind { expr, .. }
-                                | Stmt::Expr(expr)
-                                | Stmt::Set { value: expr, .. } => bound_under(expr, &mut names),
-                            }
-                        }
-                        names
-                    });
-                    if never_describes(lhs, bound) || never_describes(rhs, bound) {
-                        diags.push(Diagnostic::new(
-                            "type",
-                            "`>>` sequences two effects, and this side answers a \
-                             plain value — bind it with `.` if you want what it \
-                             answers"
-                                .to_string(),
-                            *span,
-                        ));
-                    }
-                }
-                crate::for_each_child(cur, |c| stack.push(c));
-            }
-        }
     }
 }
 
