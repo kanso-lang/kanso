@@ -5262,3 +5262,64 @@ and nothing in the tree would catch it.
 
 All three page gates agree afterwards — golden_prose 0 drifted, page_drift
 2/3, prose_check 0 tells — and `book_check.sh` verifies every sample.
+
+## 2026-09-13 (eighteenth) — the name questions join the one descent
+
+Built: the sixth fold. kanso#1382 through kanso#1386 moved five checks into
+`check_per_node`'s single descent and each returned between 0.36% and 1.14% of
+the summed compile term. `check_named_per_node` was the largest check still
+walking the program on its own, and it is the sixth to go in.
+
+`named_walk` was a `for_each_child` recursion over the same declarations and
+the same statements `per_node_walk` already descends, asking three questions at
+each node: a call's arity against the group that could answer it, a foreign
+type built outside its owner, a typeset named as a value. What is left once the
+recursion line goes is `named_at`, called from `per_node_walk` beside the other
+eight. `Named` rides in `PerNode` as one reference, the way `FieldScan` and the
+literal groups do; `own` and the shadowable list ride in `DeclState`, which is
+already per-declaration.
+
+**The answers go in their own vector, and that is deliberate.** This route hands
+diagnostics back in PUSH order — only the arity-gated early return sorts — and
+the fused walk's answers are rotated to the back so they land where the checks
+they replaced used to push. A name answer riding along with them would come out
+after every check that used to follow it. So `DeclState` carries
+`named_diags`, `check_per_node` returns it, and `check_merged_after_aliases`
+splices it in at the position `check_named_per_node` pushed from. The arity gate
+also keeps reading only the walk's own vector, so a name-side arity refusal does
+not trip a return that was written about a different refusal.
+
+MEASURED on the container, `kanso check` in the gate's box, `kanso::main`
+inclusive, one build each:
+
+    vein                 main           fold          delta
+    module         46,906,319     46,545,400   −360,919 (−0.7695%)
+    entry         156,302,043    155,075,270 −1,226,773 (−0.7848%)
+    library       157,445,822    156,226,595 −1,219,227 (−0.7744%)
+    summed        361,654,184    357,847,265 −2,806,919 (−0.7761%)
+
+The container reads about 0.8% above CI on all three rows, an offset every
+compile vein has carried since kanso#1337, so the projection onto the landed
+goldens is roughly −354,600 / −1,205,500 / −1,195,500, summed −2,755,600
+(−0.7783%). The goldens in this commit still hold main's values and round one is
+expected red on all three; CI's rows are written in the round after.
+
+**The corpus could not see the ordering, and now it can.** Thirty-two fixtures
+in `tests/golden/errors` raise more than one diagnostic and not one of them
+paired a name answer with a later check's, so splicing the name answers at the
+END instead of at their old position left all 465 fixtures green. That is a gap
+rather than a licence. `a_typeset_beside_a_later_refusal` raises both — `shape`
+named as a value, which the name half refuses, and `let x = 1`, which
+`check_binding_patterns` refuses after it — and it was watched red under exactly
+that mutation, the two lines coming back in the other order.
+
+**OPEN: the shadow suppression may be unreachable.** `arity_at`'s one use of the
+declaration's bound names is to drop a diagnostic when a local shadows a
+declared group, and the machinery around it — the stretch list, the second pass
+that builds the bound-name set only when that list is non-empty — moved across
+verbatim. Deleting the drop leaves all 465 error fixtures green, leaves
+`compile_corpus` and `lib/json` compiling, and the two shapes that would reach
+it are refused earlier by "`x` is already a declaration; rename the binding":
+a top-level bind of a declared name, and a parameter named after one. Whether
+any program can reach it is not answered here, and the machinery stays until
+something answers it.

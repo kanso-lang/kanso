@@ -267,6 +267,10 @@ struct PerNode<'a> {
     types: HashMap<&'a str, &'a TypeDecl>,
     builtins: HashMap<(&'a str, usize), &'a str>,
     scan: FieldScan<'a>,
+    /// The three questions the name walk asked on its own descent. One
+    /// reference, like the four above it, because `Named` was already the
+    /// struct those three shared.
+    named: Named<'a>,
 }
 
 /// What the fused walk knows about where it is standing. Three independent
@@ -303,9 +307,31 @@ struct DeclState<'a> {
     /// it, and `born` is None outside a `build` and restored by the arm that
     /// opened one.
     build: BuildScan<'a>,
+    /// Whether the declaration in hand is this program's own, which two of the
+    /// name questions ask before they answer. Per declaration, so it rides
+    /// here rather than in `Flags`, which the walk copies at every node.
+    own: bool,
+    /// Where the name walk's answers go. NOT the `diags` the rest of the walk
+    /// pushes to, and that is the point: `check_named_per_node` used to push
+    /// between `check_bare_ambiguity` and `check_binding_patterns`, and the
+    /// route hands diagnostics back in push order, so answering them inside a
+    /// walk whose answers are rotated to the back would move them. They are
+    /// spliced in at the old position instead, and every fixture reads the
+    /// same. Held across declarations: `shadowable` addresses it by index.
+    named_diags: Vec<Diagnostic>,
+    /// Each stretch of `named_diags` one arity question pushed, with the name
+    /// it was about — the list that decides whether the bound-name set is
+    /// worth building for this declaration. Cleared per declaration.
+    shadowable: Vec<(usize, usize, &'a str)>,
 }
 
-fn check_per_node(program: &Program, diags: &mut Vec<Diagnostic>) {
+/// Answers `check_named_per_node`'s three questions in its own vector, which
+/// the caller splices in where that check used to push.
+fn check_per_node(
+    program: &Program,
+    rewritten: &crate::Rewrites,
+    diags: &mut Vec<Diagnostic>,
+) -> Vec<Diagnostic> {
     let mut arities: crate::hash::Map<&str, usize> =
         crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
     for decl in &program.fns {
@@ -330,6 +356,36 @@ fn check_per_node(program: &Program, diags: &mut Vec<Diagnostic>) {
         // Borrowed: the map is keyed by an owned name, and looking one up
         // needed a String built from the callee at every call expression.
         builtins: crate::inline::aliases(program),
+        named: Named {
+            // Construction is positional and complete, and the same seam hid
+            // it: a type declared in one file of a module and built in another
+            // was checked by nobody, and a foreign type never was. A typeset
+            // does not construct and a subtype takes the one value it wraps,
+            // so neither is entered.
+            fields: program
+                .types
+                .iter()
+                .filter(|ty| ty.members.is_empty() && ty.parent.is_none() && !ty.fields.is_empty())
+                .map(|ty| (ty.name.as_str(), ty.fields.len()))
+                .collect(),
+            arities: Arities::of(program),
+            foreign: program
+                .types
+                .iter()
+                .filter(|ty| {
+                    crate::ast::has_slash(&ty.name)
+                        && (!ty.fields.is_empty() || ty.parent.is_some())
+                })
+                .map(|ty| ty.name.as_str())
+                .collect(),
+            annotating: program
+                .types
+                .iter()
+                .filter(|ty| !ty.members.is_empty())
+                .map(|ty| ty.name.as_str())
+                .collect(),
+            rewritten,
+        },
         scan: FieldScan {
             program,
             // an err answers its three readers whatever the program declares
@@ -352,7 +408,26 @@ fn check_per_node(program: &Program, diags: &mut Vec<Diagnostic>) {
         local: HashMap::default(),
         open: Vec::new(),
         build: BuildScan { born: None, cohort: Cohort::default(), conditional: 0 },
+        own: false,
+        named_diags: Vec::new(),
+        shadowable: Vec::new(),
     };
+    // THE SHADOW SET IS BUILT ONLY WHEN THERE IS SOMETHING TO SHADOW.
+    //
+    // `arity_at`'s one use of the declaration's bound names is to SUPPRESS a
+    // diagnostic: a local binding that shadows a declared group means the
+    // call is not that group's. Walking the parameters and every statement to
+    // collect those names costs the compile corpus 286,809 instructions, and
+    // on a program that compiles it suppresses nothing, because a program
+    // that compiles raises no arity diagnostic to suppress.
+    //
+    // So the walk runs without the set and says what it would say, each
+    // stretch of diagnostics one call pushed remembered with the name it was
+    // about; the set is built only if that list is non-empty. Same answers,
+    // and a clean declaration never builds it. `state.bound` is the walk's own
+    // set and is not this one: it holds parameters and top-level binds, where
+    // this holds every name bound anywhere in the body.
+    let mut shadows: HashSet<&str> = HashSet::default();
     for decl in &program.fns {
         if decl.synthetic {
             continue;
@@ -360,6 +435,8 @@ fn check_per_node(program: &Program, diags: &mut Vec<Diagnostic>) {
         state.bound.clear();
         state.local.clear();
         state.open.clear();
+        state.shadowable.clear();
+        state.own = !crate::ast::has_slash(&decl.name);
         for p in &decl.params {
             collect_pattern_names(p, &mut state.bound);
         }
@@ -406,7 +483,27 @@ fn check_per_node(program: &Program, diags: &mut Vec<Diagnostic>) {
         for (base, seen) in &state.open {
             judge_cooccurrence(base, seen, program, diags);
         }
+        if state.shadowable.is_empty() {
+            continue;
+        }
+        shadows.clear();
+        for param in &decl.params {
+            for_each_param_name(param, &mut |n| {
+                shadows.insert(n);
+            });
+        }
+        for stmt in &decl.body {
+            bound_in_stmt(stmt, &mut shadows);
+        }
+        // highest first, so an earlier stretch's indices still address the
+        // diagnostics it named
+        for (from, to, name) in state.shadowable.iter().rev() {
+            if shadows.contains(name) {
+                state.named_diags.drain(*from..*to);
+            }
+        }
     }
+    state.named_diags
 }
 
 fn per_node_walk<'a>(
@@ -428,6 +525,7 @@ fn per_node_walk<'a>(
     call_shaped_at(expr, &tables.arities, &state.bound, diags);
     literal_argument_at(expr, tables, &state.bound, diags);
     field_read_at(expr, &tables.scan, &state.local, &mut state.open, flags.certain, diags);
+    named_at(expr, &tables.named, state.own, &mut state.named_diags, &mut state.shadowable);
     // Every child of every arm below is exactly what `for_each_child` yields
     // for that shape, in the same order. The arms exist to turn a flag off for
     // some of those children, never to change which children are walked: an
@@ -2089,7 +2187,7 @@ pub fn check_merged_after_aliases(
     // Three checks read what inference knows, and inference over a whole
     // program is the most expensive thing the front end does. One pass,
     // handed round.
-    check_per_node(program, &mut diags);
+    let named_diags = check_per_node(program, rewritten, &mut diags);
     let walked = diags.len();
     if diags.iter().any(|d| d.kind == "arity") {
         // inference indexes an if's branches, so it never runs over a shape
@@ -2122,7 +2220,10 @@ pub fn check_merged_after_aliases(
     check_arm_ties(program, &mut diags);
     check_sub_parents(program, &mut diags);
     check_bare_ambiguity(program, &mut diags);
-    check_named_per_node(program, rewritten, &mut diags);
+    // Where the name questions' answers go. They are asked inside the one
+    // descent now; the route hands diagnostics back in push order, so they are
+    // spliced in at the position their own check used to push from.
+    diags.extend(named_diags);
     check_binding_patterns(program, &mut diags);
     check_overlapping_arms(program, &mut diags);
     check_effect_discarded(program, &returns, &mut diags);
@@ -2312,104 +2413,6 @@ impl<'a> Arities<'a> {
     }
 }
 
-/// ONE DESCENT, MANY CHECKS — the half that has to wait.
-///
-/// These three all ask about a NAME, and none of them can join
-/// `check_per_node`: that driver runs in front of inference and returns on
-/// its first diagnostic, so a wrong-arity call reported there would take
-/// every check between it and here with it. They stay where they were, in
-/// the order they were in, and share a descent with each other instead.
-///
-/// The App-with-an-Ident-head destructure happens once, here. Each of these
-/// used to ask it again, so a call node was taken apart three times to ask
-/// three questions about the same name.
-///
-/// Two of the three refuse to look inside a declaration the loader
-/// qualified, and the arity check reads all of them, so that skip is a flag
-/// the walk carries rather than a `continue` in the loop.
-fn check_named_per_node(
-    program: &Program,
-    rewritten: &crate::Rewrites,
-    diags: &mut Vec<Diagnostic>,
-) {
-    let named = Named {
-        // Construction is positional and complete, and the same seam hid it: a
-        // type declared in one file of a module and built in another was checked
-        // by nobody, and a foreign type never was. A typeset does not construct
-        // and a subtype takes the one value it wraps, so neither is entered.
-        fields: program
-            .types
-            .iter()
-            .filter(|ty| ty.members.is_empty() && ty.parent.is_none() && !ty.fields.is_empty())
-            .map(|ty| (ty.name.as_str(), ty.fields.len()))
-            .collect(),
-        arities: Arities::of(program),
-        foreign: program
-            .types
-            .iter()
-            .filter(|ty| {
-                crate::ast::has_slash(&ty.name) && (!ty.fields.is_empty() || ty.parent.is_some())
-            })
-            .map(|ty| ty.name.as_str())
-            .collect(),
-        annotating: program
-            .types
-            .iter()
-            .filter(|ty| !ty.members.is_empty())
-            .map(|ty| ty.name.as_str())
-            .collect(),
-        rewritten,
-    };
-    // THE SHADOW SET IS BUILT ONLY WHEN THERE IS SOMETHING TO SHADOW.
-    //
-    // `arity_at`'s one use of the declaration's bound names is to SUPPRESS a
-    // diagnostic: a local binding that shadows a declared group means the
-    // call is not that group's. Walking the parameters and every statement to
-    // collect those names costs the compile corpus 286,809 instructions, and
-    // on a program that compiles it suppresses nothing, because a program
-    // that compiles raises no arity diagnostic to suppress.
-    //
-    // So the walk runs without the set and says what it would say, each
-    // stretch of diagnostics one call pushed remembered with the name it was
-    // about; the set is built only if that list is non-empty. Same answers,
-    // and a clean declaration never builds it.
-    let mut bound: HashSet<&str> = HashSet::default();
-    let mut shadowable: Vec<(usize, usize, &str)> = Vec::new();
-    for decl in &program.fns {
-        if decl.synthetic {
-            continue;
-        }
-        let own = !crate::ast::has_slash(&decl.name);
-        shadowable.clear();
-        for stmt in &decl.body {
-            match stmt {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
-                    named_walk(expr, &named, own, diags, &mut shadowable)
-                }
-            }
-        }
-        if shadowable.is_empty() {
-            continue;
-        }
-        bound.clear();
-        for param in &decl.params {
-            for_each_param_name(param, &mut |n| {
-                bound.insert(n);
-            });
-        }
-        for stmt in &decl.body {
-            bound_in_stmt(stmt, &mut bound);
-        }
-        // highest first, so an earlier stretch's indices still address the
-        // diagnostics it named
-        for (from, to, name) in shadowable.iter().rev() {
-            if bound.contains(name) {
-                diags.drain(*from..*to);
-            }
-        }
-    }
-}
-
 /// What the three share: four tables built once over the whole program, and
 /// the record of what the alias pass rewrote.
 struct Named<'a> {
@@ -2420,7 +2423,11 @@ struct Named<'a> {
     rewritten: &'a crate::Rewrites,
 }
 
-fn named_walk<'a>(
+/// The three name questions at one node. They had a descent of their own until
+/// the fold; it was the same descent `per_node_walk` already makes, over the
+/// same declarations and the same statements, so this is what is left once the
+/// `for_each_child` line goes.
+fn named_at<'a>(
     e: &'a Expr,
     named: &Named<'_>,
     own: bool,
@@ -2447,7 +2454,6 @@ fn named_walk<'a>(
     if own && !named.annotating.is_empty() {
         typeset_at(e, &named.annotating, diags);
     }
-    crate::for_each_child(e, |child| named_walk(child, named, own, diags, shadowable));
 }
 
 /// Hands each name a pattern binds to `f`, in the order the pattern spells
