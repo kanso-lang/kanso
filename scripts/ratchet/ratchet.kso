@@ -1262,7 +1262,22 @@ dedup_key_owned = row
   (breaking "the_dedup_keys_own_their_names")
   release
 
-rows_b1o = text/concat rows_b1n [append_rendered arm_narrowed dedup_key_owned]
+# The fusion pass's name set, the same question about a different table: it is
+# asked `contains` and dropped, so nothing needs owned names in it. A separate
+# row from `dedup_key_owned` because a separate table can regress on its own --
+# module +104,581 (+0.2281%), entry +339,005 (+0.2227%), library +369,885
+# (+0.2424%) in the box, compile_allocs +296.
+fused_names_owned = row
+  "a set asked one question, holding copies of names it could have borrowed"
+  false
+  "sh scripts/gates/compile_instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_fused_name_set_owns_its_names")
+  release
+
+rows_b1oa = text/concat rows_b1n [append_rendered arm_narrowed]
+
+rows_b1o = text/concat rows_b1oa [dedup_key_owned fused_names_owned]
 
 rows_b = text/concat rows_b1o [compile_mem compile_mem_host]
 

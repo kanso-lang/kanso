@@ -1261,13 +1261,15 @@ pub fn fuse_enumerable(program: &mut ast::Program) {
         return;
     }
     let mut shorts: crate::hash::Map<String, String> = crate::hash::Map::default();
-    let std_names: crate::hash::Set<String> = program
+    // The set is asked `contains` and then dropped, so it borrows. Owning the
+    // short names cost a `String` apiece for a table read once and thrown away.
+    // `shorts` below still owns: it outlives the borrow the rewrite mutates
+    // through, which is the same reason collapse_diamonds needs a keep mask.
+    let std_names: crate::hash::Set<&str> = program
         .fns
         .iter()
         .filter(|d| d.file.starts_with("std/list"))
-        .map(|d| {
-            ast::split_qual(&d.name).map(|(_, s)| s.to_string()).unwrap_or_else(|| d.name.clone())
-        })
+        .map(|d| ast::split_qual(&d.name).map(|(_, s)| s).unwrap_or(&d.name))
         .collect();
     for d in &program.fns {
         let short = ast::split_qual(&d.name).map(|(_, s)| s).unwrap_or(&d.name);
