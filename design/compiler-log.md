@@ -5008,3 +5008,37 @@ the lazy tier are byte-identical: this removes instructions, not events.
 Welfare rises and is NOT banked here. CI measures the instruction rows, so the
 floor is ratcheted in the round after its sitting lands, per the order in
 CLAUDE.md.
+
+## 2026-09-13 (fifteenth) — the instruction vein counts a byte of memcpy as an instruction
+
+Chasing a lead off the runbench profile turned up something about the profile
+itself. `__memcpy_avx_unaligned_erms` is 38,690,280 of runbench's 1,994,172,731
+— 1.940% — and 27,194,862 of that sits on ONE address, 0x188d87. An address
+that hot is either a loop body or something counted oddly. It is the second:
+
+    188d84:  sub    %rdi,%rcx
+    188d87:  rep movsb %ds:(%rsi),%es:(%rdi)
+    188d89:  vmovdqu %ymm0,(%r8)
+
+Callgrind simulates a `rep`-prefixed string instruction one iteration at a
+time, so `rep movsb` costs one Ir per BYTE moved. The arithmetic closes it:
+instrumenting `k_b_append_grow`'s copy says runbench moves 24,964,380 bytes
+through it in 1,080 copies, largest 138,756, and the profile's call edge from
+that function into memcpy reads 24,342,225 Ir. That is 1.026 bytes per
+instruction — the count is the byte count.
+
+WHAT THIS MEANS FOR READING THE VEIN. ERMS moves tens of bytes a cycle, so
+memcpy's real share of runbench is a small fraction of the 1.940% the profile
+shows, and a lead ranked by Ir that lands on memcpy is a mirage. That is how
+this one died: `k_b_append_grow` looked like 24.3M instructions, 63% of all
+memcpy and 1.22% of the program, and it is 25 MB of copying that the hardware
+does in about a millisecond. Growth is already geometric — `cap = 2 * (a->len +
+n)` — so 25 MB against 1,080 copies is amortised doubling behaving exactly as
+it should, and there is nothing to fix.
+
+The objective is not wrong, and nothing here asks to change it. Its run term is
+deterministic, comparable between two trees, and that is what a ratchet needs.
+But a change that trades work for bytes moved, or bytes moved for work, is
+scored on a scale where one byte weighs one instruction, and the two are not
+worth the same. Read a memcpy row as bytes, and price a change against it
+knowing that.
