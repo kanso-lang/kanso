@@ -1,6 +1,6 @@
 #!/bin/sh
 set -e
-KANSO_COUNTERS=1 ./encodebench 2>counters_encode.txt >/dev/null
+KANSO_COUNTERS=1 ./encodebench-counters 2>counters_encode.txt >/dev/null
 diff bench/cost_golden_encode.txt counters_encode.txt || {
   echo "::error::encode counters diverged from cost_golden_encode.txt."
   echo "::error::A kernel's presence counter moved — a fast path was"

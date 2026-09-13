@@ -2826,7 +2826,16 @@ impl<'a> Backend<'a> {
                     referenced(&sym[..paren])
                 })
                 .collect();
-            match std::env::var_os("KANSO_COUNTERS_BUILD").is_some() {
+            // Either flag keeps them. `--counters` is the explicit ask; a
+            // build running under KANSO_COUNTERS is a process that is itself
+            // counting, and a binary it produces is going to be counted too.
+            // Without the second, tests/golden.rs's .mem vein -- which sets
+            // KANSO_COUNTERS around a build it drives through the library --
+            // silently got a gate-free binary and every allocation counter in
+            // the corpus moved at once.
+            let counters = std::env::var_os("KANSO_COUNTERS_BUILD").is_some()
+                || std::env::var_os("KANSO_COUNTERS").is_some();
+            match counters {
                 true => kept.join("\n"),
                 false => without_stats_gate(kept).join("\n"),
             }

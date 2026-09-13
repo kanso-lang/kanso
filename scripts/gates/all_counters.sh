@@ -30,18 +30,26 @@ write=0
 sh scripts/gates/build_benchmarks.sh >/dev/null
 
 # vein:program:golden
-veins="decode:jsonbench:bench/cost_golden.txt
-encode:encodebench:bench/cost_golden_encode.txt
-oneshot:oneshot:bench/cost_golden_oneshot.txt
-basket:basket:bench/cost_golden_basket.txt
-wide:widebench:bench/cost_golden_wide.txt
-pend:pendbench:bench/cost_golden_pend.txt
-escape:escapebench:bench/cost_golden_escape.txt
-digest:digestbench:bench/cost_golden_digest.txt
-read:readbench:bench/cost_golden_read.txt
-scan:scanbench:bench/cost_golden_scan.txt
-live:livebench:bench/cost_golden_live.txt
-run:runbench:bench/cost_golden_run.txt"
+#
+# The program column names the COUNTING binary. `kanso build` strips the
+# emitted `k_stats_on` gates unless asked for them, so the bare name is a
+# binary whose inlined fast paths no longer bail to the runtime call that
+# counts -- run it under KANSO_COUNTERS=1 and every vein here moves at once.
+# That is not a hypothetical: this table and the twelve gate scripts beside it
+# are two separate readers of the same programs, and repointing only the gates
+# left the sweep reading the wrong binaries and calling all twelve moved.
+veins="decode:jsonbench-counters:bench/cost_golden.txt
+encode:encodebench-counters:bench/cost_golden_encode.txt
+oneshot:oneshot-counters:bench/cost_golden_oneshot.txt
+basket:basket-counters:bench/cost_golden_basket.txt
+wide:widebench-counters:bench/cost_golden_wide.txt
+pend:pendbench-counters:bench/cost_golden_pend.txt
+escape:escapebench-counters:bench/cost_golden_escape.txt
+digest:digestbench-counters:bench/cost_golden_digest.txt
+read:readbench-counters:bench/cost_golden_read.txt
+scan:scanbench-counters:bench/cost_golden_scan.txt
+live:livebench-counters:bench/cost_golden_live.txt
+run:runbench-counters:bench/cost_golden_run.txt"
 
 moved=""
 for row in $veins; do

@@ -2,7 +2,7 @@
 # The golden this reads carries a header, which the other counter gates' plain
 # diff would report as six lines of divergence.
 set -e
-KANSO_COUNTERS=1 ./pendbench 2>counters_pend.txt >/dev/null
+KANSO_COUNTERS=1 ./pendbench-counters 2>counters_pend.txt >/dev/null
 grep -v '^#' bench/cost_golden_pend.txt > counters_pend_want.txt
 diff counters_pend_want.txt counters_pend.txt || {
   echo "::error::pending-cell counters diverged from cost_golden_pend.txt."

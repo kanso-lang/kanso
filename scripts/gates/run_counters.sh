@@ -5,7 +5,7 @@
 # one of twelve. The rest of the rows are diagnostics: they say WHERE a peak
 # moved, which the single term cannot.
 set -e
-KANSO_COUNTERS=1 ./runbench 2>run_counters.txt >/dev/null
+KANSO_COUNTERS=1 ./runbench-counters 2>run_counters.txt >/dev/null
 diff bench/cost_golden_run.txt run_counters.txt || {
   echo "::error::the run program's counters diverged from"
   echo "::error::bench/cost_golden_run.txt. Its three peak rows are the"
