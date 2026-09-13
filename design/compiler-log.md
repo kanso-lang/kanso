@@ -2873,9 +2873,14 @@ a feature branch, and this is one.
 
 Named for the trend gate, which asks a worsened row for its landed value:
 work_encodebench 3,932,651,503 -> 3,958,779,263 is the vendored encode
-benchmark's own source, and text 1,551,324 -> 1,552,476 is the .text vein
+benchmark's own source, and `text` 1,549,100 -> **1,550,252** is the .text vein
 summed — up 1,152 bytes across fourteen programs, where seven rows move and
-the two vendored ones carry all of the rise.
+the two vendored ones carry all of the rise. That pair read 1,551,324 ->
+1,552,476 until the trend gate refused round two: the rise of 1,152 was right
+and both endpoints were a base behind, because kanso#1372 moved the .text vein
+by 2,224 between this branch being measured and being merged with main. The
+goldens on this branch are CI's round-two rows and these are now read off
+them.
 
 ## 2026-09-11 — the ruling's compile cost, paid down by a third
 
