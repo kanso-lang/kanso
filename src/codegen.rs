@@ -5801,6 +5801,27 @@ impl<'a> Backend<'a> {
         f.line(&format!(
             "{slow_value} = call %KValue @{slow_fn}(%KValue {container}, %KValue {key}{slow_extra})"
         ));
+        // The same i64 merge the proven path above builds, with the collapse
+        // the crossing would otherwise write AFTER the merge sunk into this
+        // arm instead. The fast arm's byte is already an i64 and pays
+        // nothing; this arm is the one that calls the runtime, so four more
+        // instructions here are four the hot path does not run. They are an
+        // extract pair, an icmp and a select -- all pure, so where no byte
+        // discriminator reads the result the whole thing is dead and goes.
+        let slow_raw = match strict {
+            true => String::new(),
+            false => {
+                let stag = f.tmp();
+                f.line(&format!("{stag} = extractvalue %KValue {slow_value}, 0"));
+                let spay = f.tmp();
+                f.line(&format!("{spay} = extractvalue %KValue {slow_value}, 1"));
+                let sisn = f.tmp();
+                f.line(&format!("{sisn} = icmp eq i64 {stag}, 4"));
+                let sraw = f.tmp();
+                f.line(&format!("{sraw} = select i1 {sisn}, i64 256, i64 {spay}"));
+                sraw
+            }
+        };
         let slow_from = f.cur_label.clone();
         f.line(&format!("br label %{merge}"));
         f.start_block(&merge);
@@ -5808,6 +5829,29 @@ impl<'a> Backend<'a> {
         f.line(&format!(
             "{t} = phi %KValue [ {fast_value}, %{load} ], [ {slow_value}, %{slow_from} ]"
         ));
+        if !strict {
+            let raw = f.tmp();
+            f.line(&format!("{raw} = phi i64 [ {wide}, %{load} ], [ {slow_raw}, %{slow_from} ]"));
+            f.raw_byte.insert(t.clone(), raw);
+        }
+        // This merge carried no set, so every reader took the default, which
+        // is TOP, which contains THUNK -- and `maybe_force` then emitted a
+        // `k_force_fast` on a value that reaches it through two arms neither
+        // of which can answer a thunk. The proven path above has always
+        // recorded `INT | NONE`; this one is the same index with the tag test
+        // still to run, and it was missed. It is the shape the comment at the
+        // arithmetic phi records, found in a second place.
+        //
+        // The bound is the LIST bit and nothing weaker. The fast arm is the
+        // `insertvalue` written just above, an int. The slow arm is `k_b_at`
+        // or the shim in front of it, and their cases answer a byte, a
+        // one-character string, `none`, or a failure they were handed --
+        // except the LIST case, which answers `l->items[i - 1]`, whatever the
+        // list holds, thunks included. So the set is safe to narrow exactly
+        // when the container cannot be a list.
+        if f.set_of(container) & LIST == 0 {
+            f.record(&t, TOP & !infer::THUNK);
+        }
         t
     }
 
