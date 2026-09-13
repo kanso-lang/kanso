@@ -4762,3 +4762,260 @@ rule: lowering it in service of the specification is never his call. The
 container projected the fall at 0.01 and CI read 0.04, so the projection was
 four times light — a reminder that the compile rows are a CI-host measurement
 and the container's are not a substitute for them.
+
+## 2026-09-13 — one instruction in ten of the run program is a register save, and the inline threshold is the lever
+
+**SHIPPED.** `release_clang` passes `-mllvm -inline-threshold=1000`, four times
+clang's default of 250. CI's rows are in the "What CI read" section at the
+bottom; everything before it is this container's, measured against a container
+baseline, and the two must not be compared across.
+
+**The finding.** runbench retires 2,232,013,849 instructions, of which the
+binary's own code (everything but libc) is 2,185,625,151. `push`, `pop`, `ret`
+and `leave` alone are **215,229,225** of that — 9.85% of the binary's code and
+9.64% of the whole program. One instruction in ten is saving or restoring a
+callee-saved register.
+
+That was measured rather than guessed. `callgrind --dump-instr=yes` gives a
+per-address cost, `objdump -d` gives each address its mnemonic, and joining the
+two sums the frame instructions exactly. The dump changes nothing it measures:
+the instrumented run read 2,232,013,849, the same total to the digit.
+
+**The cost is flat, which is why no previous round found it.** `encode_onto`
+spreads its 298,748,819 self instructions over 588 distinct addresses, the
+hottest carrying 0.80%; `value_for` 233,828,199 over 491, hottest 1.49%;
+`obj_key_start` 151,499,007 over 217, hottest 0.52%. There is no loop to
+tighten — the 2026-09-02 entry on the byte arm found the same thing about two
+functions, and this says it about the whole program. What there is instead is per-call overhead, and the
+functions paying most of it are small and hot rather than long:
+
+```
+k_map_sorted            49.56% frame     6,517,497 self, 160 addrs
+d_json/string_at_4      20.02%          69,083,185 self, 158 addrs
+d_json/entry_onto_2'2   20.00%          41,341,950 self,  65 addrs
+d_json/esc_byte_2       19.26%          27,717,120 self, 175 addrs
+k_b_append_rendered     16.97%          24,604,654 self, 114 addrs
+k_map_lit               16.66%          18,048,293 self,  78 addrs
+k_b_utf8_slice_raw      16.51%          52,188,939 self, 134 addrs
+k_b_at                  14.51%          61,798,244 self, 226 addrs
+```
+
+`obj_key_start`'s prologue disassembles as six callee-saved pushes, a 152-byte
+frame, and a move of an incoming STACK argument into its own frame — the
+function takes more arguments than the ABI has registers, and 827,739 calls
+pay for it.
+
+**Inlining is what removes a frame, so the threshold is the lever.** Measured
+by hand-linking `runbench.ll` against the same cached runtime object at three
+settings, every binary in one directory and run from the repo root so the
+exec-path offset cancels:
+
+```
+threshold  runbench          .text
+250        2,229,257,603     324,110     (clang's default)
+1000       2,184,283,786     355,790     −2.0174%, +9.8% text
+5000       2,141,173,484     507,998     −3.9513%, +56.7% text
+```
+
+1000 ships. 5000 is declined here: twice the win for six times the code.
+
+**The whole benchmark set, container A/B.** Both binary sets copied into one
+directory, `base_` and `inln_` the same length so the path costs the same:
+
+```
+runbench     2,232,013,849 -> 2,187,040,032   −44,973,817  −2.0149%
+encodebench  4,052,767,921 -> 3,976,859,553   −75,908,368  −1.8730%
+digestbench     10,497,757 ->     10,316,938      −180,819  −1.7225%
+jsonbench    1,436,454,329 -> 1,427,971,381    −8,482,948  −0.5905%
+escapebench     85,489,184 ->     85,483,165        −6,019  −0.0070%
+readbench        4,631,248 ->      4,631,250            +2  +0.0000%
+```
+
+**A CORRECTION, made mid-measurement and worth writing down.** The first pass
+compared these container readings against the COMMITTED goldens and read
+encodebench as a RISE of 1.1241%. The goldens are CI's host: main's runbench
+golden is 2,252,446,969 where this container reads 2,232,013,849, 0.9% apart.
+Against a container baseline encodebench falls 1.87%. A container reading and a
+golden are not comparable, and the gap is bigger than most of the effects this
+log records.
+
+**What it does not cost.** `all_counters.sh` reports the twelve cost veins and
+the lazy tier all AGREE: inlining moves no allocation counter, which is what it
+should do. What it does cost is `.text`, +9.8%, and machine-code size has no
+welfare term — Clay ruled that on 2026-09-05 — though the vein still watches it
+exactly.
+
+**Owed in round two.** CI's fourteen work rows, its `machine_code` and
+`emitted_code` veins, and `welfare --set` once the goldens carry them. The
+eight benchmarks not measured here (oneshot, basket, widebench, deepbench,
+pendbench, indexbench, scanbench, livebench) are CI's to report; round one is
+deliberately red on `bench/instructions_golden.txt`.
+
+
+**What CI read, three times, against three different bases.** The first sitting
+was taken against main at 5982c60a, before kanso#1372 landed the effect type;
+the second against 12e73890 after it; the third against 047efca9 after
+kanso#1369 landed the exhaustiveness rule and changed `lib/list`, `lib/regexp`
+and `hako/remote`. Only the third is in the goldens. The three were never
+composed by arithmetic — a different library changes what inlines, and deltas
+measured on different trees do not add — which is why each base change cost a
+full re-measure rather than a subtraction.
+
+```
+                  vs 5982c60a      vs 12e73890      vs 047efca9 (landed)
+runbench          −63,128,569      −63,128,542      −57,470,167
+percentage         −2.8027%         −2.8027%         −2.5515%
+widebench            +32,011          +32,011          +16,019
+readbench                 +2               +2               +2
+.text total          +6.2209%         +6.2209%         +7.3629%
+```
+
+The first two agree to five significant figures and the third does not, and
+that is the finding rather than an inconvenience. kanso#1372 moved the library
+without changing what the linker could inline; kanso#1369 added arms to three
+shipped modules, and those moved it. Nine per cent of the win went with them.
+A threshold's effect is a property of the program it is applied to, and the two
+sittings that agreed were the coincidence.
+
+runbench **2,252,446,915 -> 2,194,976,748**, a fall of 57,470,167 (−2.5515%).
+The full third sitting, twelve of fourteen work rows falling:
+
+```
+jsonbench    1,468,801,090 -> 1,449,421,842   −19,379,248  −1.3194%
+encodebench  3,958,779,263 -> 3,882,689,256   −76,090,007  −1.9221%
+oneshot         21,616,888 ->     21,164,390      −452,498  −2.0933%
+basket          34,698,668 ->     34,693,472        −5,196  −0.0150%
+widebench       35,202,913 ->     35,218,932       +16,019  +0.0455%
+deepbench      387,474,235 ->    378,118,216    −9,356,019  −2.4146%
+escapebench     85,558,078 ->     85,537,054       −21,024  −0.0246%
+pendbench      221,912,236 ->    221,101,809      −810,427  −0.3652%
+indexbench       3,265,819 ->      3,265,392          −427  −0.0131%
+scanbench      587,488,450 ->    562,456,145   −25,032,305  −4.2609%
+digestbench     10,426,549 ->     10,199,161      −227,388  −2.1809%
+readbench        4,630,969 ->      4,630,971            +2  +0.0000%
+livebench    3,450,423,659 -> 3,320,972,422  −129,451,237  −3.7517%
+runbench     2,252,446,915 -> 2,194,976,748   −57,470,167  −2.5515%
+```
+
+**The rows that got worse, each named with the value it landed on.** Two work
+rows rise: `work_widebench` **35,218,932** (+16,019, +0.0455%) and
+`work_readbench` **4,630,971** (+2). The `text` vein rises with them, to
+**1,664,396**. The objective weighs the sum and the sum went up, so none of the
+three is a decision to defend on its own, but a rise that nobody names is the
+thing this log exists to catch. widebench is the larger of the two work rows,
+and its cause is the same as its .text rise: a wider inline threshold
+specialises more call sites and a few of them were better off shared. It is
+half what the second sitting read, which is the base change again.
+
+**A CORRECTION to this entry.** The trend gate refused it for a naming miss. It
+wants each worsened counter written with the key its golden uses, and the entry
+said `widebench` and `readbench` where the goldens say `work_widebench` and
+`work_readbench`, and gave no value at all for `text`. Fixing that turned up a
+second fault the gate could not see. Both tables above had kept the sitting
+taken against 5982c60a, so escapebench, indexbench, scanbench and runbench read
+a few dozen instructions off on each side of the arrow, the .text vein totalled
+1,551,324 -> 1,647,884 rather than 1,549,100 -> 1,645,468, and the compile
+paragraph below named the four pre-kanso#1372 rows, and the welfare pair read
+67.78 -> 67.98 where main's floor is 67.754 and `--score` says 67.9598.
+kanso#1372 moved every one of them. Each figure in this entry is now read off
+the committed goldens and the committed floor.
+
+Twelve of fourteen .text rows rise, the vein `text` totalling
+1,550,252 -> **1,664,396** (+114,144, +7.3629%) — less than the +9.8% projected from runbench.ll alone, because most
+benchmarks link less of the library than the run program does:
+
+```
+jsonbench     99,874 -> 106,530  +6.66%      escapebench  57,490 ->  57,298  −0.33%
+encodebench  122,322 -> 129,778  +6.10%      pendbench    92,034 ->  94,786  +2.99%
+oneshot      111,746 -> 117,970  +5.57%      indexbench   61,730 ->  61,170  −0.91%
+basket       114,082 -> 118,258  +3.66%      scanbench   158,946 -> 182,402 +14.76%
+widebench    126,690 -> 135,682  +7.10%      digestbench 111,362 -> 114,098  +2.46%
+deepbench     76,354 ->  82,402  +7.92%      readbench    58,434 ->  58,434   0.00%
+                                             livebench   112,322 -> 119,554  +6.44%
+                                             runbench    246,866 -> 286,034 +15.87%
+```
+
+Machine-code size has no welfare term — Clay ruled that on 2026-09-05 — so
+nothing here scores. The vein is exact all the same, which is the point: the
+growth is watched even though it is not paid for.
+
+**One prediction in the pull request was wrong, and CI corrected it.** Round one
+was opened expecting `emitted` to go red alongside `machine code` and `work`.
+It did not: `emitted` came back SUCCESS, and the emitted golden is byte-identical
+across the change. It counts what the COMPILER wrote, and the inline threshold is
+read by clang at link time, long after the compiler has finished writing. The
+three veins that can see a linker flag are work, machine code, and nothing else.
+
+**The compile side is untouched and that is not a coincidence.** compile_allocs
+29,473, compile_instructions 45,523,131, entry_instructions 152,087,783,
+library_instructions 152,459,094 — all four AGREED with their goldens. The flag
+is on `release_clang`, which links benchmark binaries; `kanso check` never
+reaches it.
+
+**Welfare 67.7149 -> 67.9019**, banked with `--set` in this same commit. The gain is
+run_instructions', which satiates late (2.0) and carries the objective's whole
+run-speed term.
+
+**What is left of the frame cost, and why it is not the next change.** Re-profiled
+under the new threshold, the frame is 192,992,914 — 8.82% of the program, down
+from 9.64%, so the threshold took about 22M of frame directly and 45M in total:
+inlining's second-order optimisations are roughly half the win. `k_map_sorted`
+and `entry_onto` have left the profile entirely.
+
+**Where it actually sits, measured rather than guessed.** An earlier draft of
+this paragraph said the residual sits in the `tailcc` mutual tail cycle. A
+per-instruction profile of the linked binary, with every address mapped to its
+opcode through `objdump`, says otherwise, and the frame total reproduces to
+2,791 instructions (192,995,705 against 192,992,914) so the two readings are of
+the same thing. Two of the cycle's four members — `str_chars_3` and
+`string_scan_3` — are not in the profile at all: the wider threshold inlined
+them away. Of the two that survive, `string_at_4` carries 13,832,389 frame
+instructions, 7.2% of the program's 193M, and it is the THIRD owner rather than
+the first. The frame is spread:
+
+```
+d_json/encode_onto_2   30,952,350   8.3% of its own 372,343,104
+d_json/value_for_3     22,114,451   9.0% of its own 244,520,545
+d_json/string_at_4     13,832,389  17.1% of its own  80,843,551
+d_json/obj_key_start_4 10,760,607   6.8% of its own 158,344,918
+k_b_at                  8,970,000  14.5% of its own  61,798,244
+k_b_utf8_slice_raw      8,614,980  16.5% of its own  52,188,939
+```
+
+The four big decode and encode drivers spend 6–9% of their own instructions on
+the frame, which is what a large function that spills its callee-saved
+registers costs. The interesting column is the second one: five small hot
+functions — `string_at_4`, `k_b_utf8_slice_raw`, `k_b_append_rendered` (17.0%),
+`number_done_4` (15.9%) and `k_b_at` — each spend about one instruction in six
+on prologue and epilogue, and threshold 1000 did not inline any of them. Those
+five hold 39.4M of frame between them. Whether a targeted `alwaysinline` on
+that shortlist buys part of threshold 5000's extra 1.93% without its 56% of
+code is an open lead, and it is a different question from the cycle.
+
+What IS settled about the cycle is that the obvious lever does
+not reach it: `preserve_none` cannot be swapped in for `tailcc` here.
+src/codegen.rs records that a `musttail` call may cross an arity or a type only
+under `tailcc`, and this cycle does exactly that — a
+`(KValue, i64, i64, i64) -> %parsed` function musttails into a
+`(KValue, i64, KValue)` one. Dropping `tailcc` for the cycle is therefore not a
+tuning question but a correctness one, and the same comment records why the
+convention is narrowed rather than universal: a non-tail `call tailcc` whose
+arguments do not all fit in registers is miscompiled on arm64. Call instructions are only 25,174,058 against
+193M of frame, which is 7.7 frame instructions per call: these are callee-saved
+register spills, not frame-pointer setup, and `-O3` already omits the frame
+pointer.
+
+**A THIRD CORRECTION, and a third sitting.** kanso#1369 landed on main while
+this branch sat in CI, and it changed `lib/list`, `lib/regexp` and
+`hako/remote` — three files the run program links. Both tables above now carry
+the third sitting, measured by CI against 047efca9; the second sitting's
+numbers survive only in the three-column comparison, where they are the point.
+Composing the old delta onto the new base by arithmetic would have been the
+error this entry already recorded once, and it would have been wrong by
+5,658,375 instructions on runbench alone.
+
+The twelve allocation veins and the lazy tier were re-read on the merged tree
+and every one agrees byte for byte. Neither an exhaustiveness rule nor a linker
+flag can move a counter that counts allocator calls, so that is the expected
+answer; it is written down because a sweep that is run and not reported is a
+sweep nobody can check.
