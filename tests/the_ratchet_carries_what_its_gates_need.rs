@@ -95,3 +95,56 @@ fn both_workflows_that_run_the_ratchet_run_the_toolchain_script() {
         );
     }
 }
+
+const RATCHET: &str = include_str!("../scripts/ratchet/ratchet.kso");
+const SMOKE: &str = include_str!("../scripts/site_smoke/site_smoke.kso");
+
+/// A tool is installed; an ARTIFACT is built, and this file could not see the
+/// difference. `installed_by` above reads `apt-get install` and `rustup target
+/// add` lines, so a file that ci.yml BUILDS in the step before a gate is
+/// outside its reach entirely — and one of those went missing.
+///
+/// kanso#1350 stopped committing `docs/kanso.wasm`. ci.yml's site job rebuilds
+/// it with `sh scripts/build_wasm.sh` in the step before
+/// `kanso run scripts/site_smoke`; the ratchet's `landing` row set its
+/// worktree up with `cargo build --release` alone. So from that day the gate
+/// was red on the nightly's baseline before any mutation was applied —
+/// `cannot read docs/kanso.wasm: no such file` — and the ratchet reads a red
+/// gate as proof. Read off ratchet run 33, 2026-09-13.
+///
+/// Installing the wasm32 TARGET is not the same thing and was already there.
+#[test]
+fn the_ratchet_builds_the_blob_its_site_gate_reads() {
+    assert!(
+        SMOKE.contains("docs/kanso.wasm"),
+        "site_smoke no longer reads the blob, so delete this check rather than \
+         satisfying it"
+    );
+    assert!(
+        builds_the_blob(RATCHET),
+        "scripts/site_smoke reads docs/kanso.wasm, which is built and not \
+         committed, so a ratchet row running that gate needs a setup that runs \
+         scripts/build_wasm.sh. Without it the gate is red before any mutation \
+         and every row sharing it proves nothing."
+    );
+}
+
+fn builds_the_blob(text: &str) -> bool {
+    text.lines().any(|l| !l.trim_start().starts_with('#') && l.contains("scripts/build_wasm.sh"))
+}
+
+/// The same trap the valgrind check walked into, one file over: the paragraph
+/// above names the script four times, so a check reading file text passes with
+/// the setup gone.
+#[test]
+fn a_comment_naming_the_blob_build_does_not_build_it() {
+    let only_a_comment = "# sh scripts/build_wasm.sh && cargo build --release\n";
+    assert!(
+        only_a_comment.contains("scripts/build_wasm.sh"),
+        "the line still mentions the script — this is the case the check must not be fooled by"
+    );
+    assert!(
+        !builds_the_blob(only_a_comment),
+        "a commented-out setup must not count as building anything"
+    );
+}
