@@ -217,7 +217,4 @@
 # 2026-09-13 (the effect type): 148,091,856 -> 150,092,130, a RISE of
 # 2,000,274 (+1.3507%). `check_box_where_value` runs in the shared checks,
 # so this row moves with the entry row to within 0.0022 points.
-# 2026-09-13 (the effect type is spellable: `<t>effect`): 152,459,094 ->
-# 154,376,018, a RISE of 1,916,924 (+1.2573%). Same cause as the module and
-# entry rows. Ruled 2026-08-29.
-library_instructions=154376018
+library_instructions=152460583

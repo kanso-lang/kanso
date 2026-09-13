@@ -336,6 +336,7 @@ fn parse_args(args: &[String]) -> Option<(String, String, bool, bool, bool)> {
     let mut plan = false;
     let mut release = false;
     let mut interp = false;
+    let mut counters = false;
     while let Some(arg) = rest.next() {
         match arg.as_str() {
             "--plan" => plan = true,
@@ -349,6 +350,13 @@ fn parse_args(args: &[String]) -> Option<(String, String, bool, bool, bool)> {
             // env var carries it to every stage (demand runs in infer,
             // codegen, and the interp) and into the spawned native binary.
             "--strict" => std::env::set_var("KANSO_STRICT", "1"),
+            // The allocation counters cost the emitted fast paths a load and
+            // a branch at every inlined append, push and insert -- 25,968,820
+            // instructions on the run program, 1.2128%, measured by folding
+            // the eight gates to a constant and relinking the shipped recipe.
+            // A binary nobody is going to count is built without them, and
+            // the counter gates ask for them by name.
+            "--counters" => counters = true,
             "--" => break,
             _ => return None,
         }
@@ -361,6 +369,15 @@ fn parse_args(args: &[String]) -> Option<(String, String, bool, bool, bool)> {
     }
     if release && command != "build" {
         return None;
+    }
+    if counters && command != "build" {
+        return None;
+    }
+    // Carried by an env var for the same reason `--strict` is: codegen sits
+    // three stages from this parse, and threading a sixth bool through every
+    // caller of this tuple to reach it would be the whole diff.
+    if counters {
+        std::env::set_var("KANSO_COUNTERS_BUILD", "1");
     }
     Some((command, file, plan, release, interp))
 }

@@ -205,4 +205,4 @@
 defines=142
 calls=1210
 branches=795
-lines=9163
+lines=9147

@@ -4792,3 +4792,184 @@ gavel left weighable.
 **OPEN.** 3000 reads −2.3746% in this container and was not taken, on the
 byte-per-instruction argument above. If `.text` ever gains a welfare term the
 argument changes shape and both rungs want re-measuring on CI rather than here.
+
+## 2026-09-13 (fourth) — a binary nobody is going to count is built without the counters
+
+**BUILT.** Every inlined fast path the emitter writes — the byte append, the
+whole-string append, the list push, the map insert, five more — begins by
+loading `k_stats_on` and branching. The shortcut bypasses the runtime call that
+would have counted, so when counting is on it has to bail. When counting is off,
+which is every run that is not a cost golden, the load and the branch are paid
+for a question whose answer was fixed before `main`.
+
+`kanso build --counters` keeps the gates. A plain build strips them.
+
+**What it is worth, measured three ways that agree.** First by patching the
+eight `load i32, ptr @k_stats_on` lines in `runbench.ll` to a constant and
+relinking with the shipped recipe, control and variant at matched binary-name
+lengths:
+
+    control (both gates live)     2,141,315,030          -   0.0000%   .text      +0
+    emitted eight folded          2,115,346,210 -25,968,820  -1.2128%   .text  -2,048
+    runtime twenty-seven folded   2,128,127,196 -13,187,834  -0.6159%   .text  -2,944
+    both folded                   2,102,158,376 -39,156,654  -1.8286%   .text  -4,992
+
+The control reads 2,141,315,030, which is the shipped `runbench` to the
+instruction, so the harness is the real link. The two halves are exactly
+additive in instructions and in bytes, and stdout is byte-identical in all
+three variants.
+
+Second by a static join: the disassembly's 607 instructions at 303 `k_stats_on`
+sites, weighted by their own execution counts out of the callgrind dump, sum to
+37,740,165. The measurement came in above that because folding also lets LLVM
+simplify around the branch.
+
+Third by this change itself, which is the emitted half and nothing else:
+
+    --counters   2,141,315,030   .text 315,698
+    default      2,115,346,210   .text 313,650
+                  -25,968,820      -1.2128%      .text -2,048
+
+The compiler reproduces the hand-patched figure exactly. THIS CONTAINER'S
+NUMBERS; CI measures its own and they go in a second round, because the
+instructions gate refuses to compare a row measured on another glibc.
+
+**Two ways out that do not work, so nobody spends the afternoon again.**
+`!invariant.load` on the eight loads is arguably sound — `k_stats_on` is written
+once, before any emitted code runs — and it does CSE them. It measures WORSE:
++1,875,636 (+0.0877%) and 288 bytes MORE `.text`. Keeping the value live costs
+more than the reload saved.
+
+And the gate cannot simply be deleted with the fast path counting for itself.
+`k_b_append_into`'s in-place arm does `k_stat_append_fast++` unguarded, so that
+counter is free — but the emitted fast path also takes its 32-byte header from
+the arena, where the slow path's `k_bytes_owned` reaches `k_alloc` and
+increments `k_stat_allocs` and `k_stat_alloc_bytes` UNDER the gate. Dropping the
+gate blinds two counters the cost goldens pin. Keeping them exact means three
+unconditional read-modify-writes against the gate's two instructions.
+
+**The emitted vein says the transform did exactly what it says.** Every one of
+the fourteen programs loses EXACTLY 16 IR lines, and `defines`, `calls` and
+`branches` are byte-identical in all of them. Eight gates, three lines each,
+collapsed to one: sixteen lines gone, and `branches` holds because an
+unconditional `br` stands where the conditional one did. jsonbench 9,163 ->
+9,147, runbench 34,773 -> 34,757, and so on down the list. That vein counts the
+IR rather than the host's instructions, so it was regenerated here; `work` and
+`machine code` refuse to compare across glibc and wait for CI.
+
+**Two readers of the same programs, and repointing one was not enough.** The
+twelve `*_counters.sh` gates name their program, and `all_counters.sh` has its
+own `vein:program:golden` table naming it again. Repointing only the gates left
+the sweep running the bare, gate-free binaries under `KANSO_COUNTERS=1`, and it
+reported all twelve veins moved at once. The `.mem` vein had the same shape and
+a different cause: `tests/golden.rs` drives a build through the library with
+`KANSO_COUNTERS` already set in the child's environment and no way to pass a
+flag. So a build running under `KANSO_COUNTERS` keeps the gates as well — a
+process that is itself counting is going to count what it builds.
+
+`sh scripts/gates/all_counters.sh` now reads: the twelve cost veins and the
+lazy tier agree with their goldens. No counter moved.
+
+**What it costs.** `build_benchmarks.sh` builds twelve of the fourteen
+benchmarks twice. deepbench and indexbench have no counter gate — their rows
+live in the instructions vein — so they are built once. That is twelve extra
+release links in the cost-goldens job, and CI wall time is not a welfare term,
+so the objective cannot see the price. It is written here instead.
+
+**CI's sitting.** The run program reads 2,168,019,757 -> 2,141,642,566, a fall
+of 26,377,191 (-1.2166%). This container projected -25,968,820 (-1.2128%) off
+the hand-patched link, so CI read 1.0157 times the projection, the closest the
+two have come in this log. Twelve of the fourteen work rows fall and the total
+is -226,928,501 (-1.8732%). deepbench, indexbench and readbench are flat:
+those three carry no emitted fast path, so there was no gate in them to strip.
+Machine code falls in eleven of fourteen, -8,288 bytes (-0.4646%).
+
+**CORRECTION, three rows I said could not move.** The commit that opened this
+branch said round one expects red on `work`, `machine code`, `emitted` and
+`text`. CI also turned three compile rows red:
+
+    compile_instructions     45,523,131 ->  45,522,509    -622   -0.0014%
+    entry_instructions      152,087,783 -> 152,090,185  +2,402   +0.0016%
+    library_instructions    152,459,094 -> 152,460,583  +1,489   +0.0010%
+
+`kanso check` stops before codegen, so no decision these rows count changed.
+What changed is src/codegen.rs, and src/codegen.rs is the compiler, so its
+bytes and the layout under them moved anyway. CLAUDE.md says this in as many
+words, and says not to write down that the row cannot move. I wrote it down
+anyway. The three moves are a thousandth of a per cent each and go into the
+goldens as measured. The objective's compile term is the first two summed:
+197,610,914 -> 197,612,694, a rise of 1,780.
+
+**A THIRD reader, and the one CLAUDE.md warns about by name.**
+`bench/compile_golden.txt` and `bench/compile_golden_modules.txt` are read only
+by `tests/compile_cost.rs`, so no file under scripts/gates names them and the
+sweep's own derivation walks past them. Round one regenerated the emitted vein
+and stopped; `all_compile.sh` runs the cargo test as a hand-named step and that
+is what caught it. All six programs move identically: 16 fewer lines and 8
+fewer branches each, with `calls`, `defines`, `rounds` and `visits`
+byte-identical.
+
+    recursion    lines 1223 -> 1207   branches 78 -> 70
+    dispatch     lines 1215 -> 1199   branches 77 -> 69
+    guards       lines 1208 -> 1192   branches 78 -> 70
+    records      lines 1264 -> 1248   branches 81 -> 73
+    build_block  lines 1189 -> 1173   branches 73 -> 65
+    module       lines 5310 -> 5294   branches 446 -> 438
+
+**The two branch counters disagree, and both are right.** `bench/emitted_golden
+.txt` held its `branches` byte-identical while this vein's falls by eight per
+program. They count different things, which is checkable rather than arguable:
+`tests/compile_cost.rs:86` counts `br i1 ` and sees only CONDITIONAL branches,
+so eight gates removed is eight fewer; `scripts/gates/emitted_code.sh:23`
+counts `^  br ` and `^  switch` and sees every branch, so the unconditional
+`br label` standing where the conditional one stood keeps the count. A session
+reading only one of them would conclude the other was wrong.
+
+**Welfare 67.99 -> 68.08, banked here.** The run term pays for the compile
+term's 1,780 several thousand times over, which is the trade the weights are
+for.
+
+**A FOURTH reader, and this one is a spec rather than a gate.**
+`tests/every_counter_gate_is_in_the_sweep.rs` asserts that every program the
+sweep names is one the BUILD can produce — a benchmark directory, or something
+`bench/make_<name>` writes. Repointing the twelve rows at `<name>-counters`
+made every row name something that is neither, so it turned red on both hosts
+while the gates themselves were green. The spec was right and the rows were
+new; the derivation had no way to know the suffix exists.
+
+It reads the suffix now, and gets STRONGER rather than laxer for it: the
+benchmark check runs against the name with `-counters` stripped, and a second
+assertion requires `build_benchmarks.sh` to carry the matching
+`mv <name> <name>-counters` line. Renaming that line to anything else fails
+with "build_benchmarks.sh never makes it", watched. Without that half the
+suffix would have been a free pass — a row could name a binary nothing
+produces and the gate would run against whatever the name happened to be, or
+nothing, which is the failure this whole file exists to catch.
+
+**A HAZARD THIS CHANGE CREATES, found by running it and not yet closed.**
+A shipped binary run under `KANSO_COUNTERS=1` still prints a counter block,
+because the runtime's twenty-seven sites are untouched and only the emitted
+eight are gone. It is not a block of zeros and it does not say anything is
+missing: every row the runtime owns is right, and the two the emitter owns are
+wrong. escapebench, shipped against counting, on this box:
+
+    push_mut_fast        0  against      3,000
+    push_mut_slow   12,000  against  1,200,000
+
+Twenty-odd rows agreeing is what makes it dangerous — a reader has no reason to
+distrust the two that do not. The cost goldens are safe because every gate
+reads the `-counters` binary, so nothing in CI is wrong today; what is exposed
+is anybody measuring by hand, which is how this was found.
+
+The fix belongs in the runtime half rather than here. There the runtime object
+is already built twice, so `int k_counters_built = K_COUNTING;` is a line in
+runtime.c that `k_stats_dump` reads to refuse, and it costs no emitted IR at
+all. Closing it here would mean the emitter defining a global, which is one
+more line in every program, another sitting of the work and text rows, and the
+same answer a round later.
+
+**OPEN.** The runtime's own twenty-seven sites are the other 13,187,834
+(0.6159%) and are untouched. They would want `runtime.c` compiled twice and the
+counting object linked into the counting binaries, which is a second object in
+the cached-runtime key rather than a second flag on the emitter.
+

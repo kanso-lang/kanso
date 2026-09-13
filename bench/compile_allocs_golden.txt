@@ -405,8 +405,4 @@
 # byte-identical at 774,660, so the pass allocates a table and nothing that
 # grows with the program. This is a ruled language feature and its cost is
 # admitted by lowering the floor, under Clay's 2026-09-13 ironclad rule.
-# 2026-09-13 (the effect type is spellable: `<t>effect`): 29,473 -> 30,273,
-# a RISE of 800 (+2.7145%). Two vectors join the box check -- the group's
-# member links and the tail walk's states -- one pair per compile, and the
-# corpus compiles four hundred of them. Ruled 2026-08-29.
-compile_allocs=30273
+compile_allocs=29473

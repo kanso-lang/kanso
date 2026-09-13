@@ -1,6 +1,6 @@
 #!/bin/sh
 set -e
-KANSO_COUNTERS=1 ./livebench 2>counters_live.txt >/dev/null
+KANSO_COUNTERS=1 ./livebench-counters 2>counters_live.txt >/dev/null
 diff bench/cost_golden_live.txt counters_live.txt || {
   echo "::error::the live encode counters diverged. This vein"
   echo "::error::watches lib/json's encoder, which bench/encodebench"

@@ -16,7 +16,7 @@
 # change was 52x slower in wall clock and nothing in the corpus was long
 # enough on an input like this to notice either.
 set -e
-KANSO_COUNTERS=1 ./digestbench 2>counters_digest.txt >/dev/null
+KANSO_COUNTERS=1 ./digestbench-counters 2>counters_digest.txt >/dev/null
 diff bench/cost_golden_digest.txt counters_digest.txt || {
   echo "::error::digest counters diverged. arena_peak_bytes is the row"
   echo "::error::to read: it is what a streaming walk holds, and it is"

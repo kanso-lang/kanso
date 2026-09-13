@@ -6,7 +6,7 @@
 # bytes of them to the end. Every other benchmark reads zero or a handful, so
 # reintroducing the leak turns this row red and nothing else.
 set -e
-KANSO_COUNTERS=1 ./escapebench 2>counters_escape.txt >/dev/null
+KANSO_COUNTERS=1 ./escapebench-counters 2>counters_escape.txt >/dev/null
 diff bench/cost_golden_escape.txt counters_escape.txt || {
   echo "::error::escape counters diverged. perm_live_bytes is the row to"
   echo "::error::read first: it is what the program still holds at exit,"

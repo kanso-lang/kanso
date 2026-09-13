@@ -84,3 +84,18 @@ run_counters.txt
 # first (scripts/build_wasm.sh), so a committed copy was only ever the older
 # source somebody last remembered to rebuild.
 docs/kanso.wasm
+
+# The counting twin of each benchmark, built by scripts/gates/build_benchmarks.sh
+# beside the shipped one. Built artifacts, same as the bare names above.
+/basket-counters
+/digestbench-counters
+/encodebench-counters
+/escapebench-counters
+/jsonbench-counters
+/livebench-counters
+/oneshot-counters
+/pendbench-counters
+/readbench-counters
+/runbench-counters
+/scanbench-counters
+/widebench-counters

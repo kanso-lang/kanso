@@ -17,7 +17,7 @@
 # loop. beat_iters is the row that says which: 1 means the loop never bracketed
 # at all, 201 means it bracketed every round.
 set -e
-KANSO_COUNTERS=1 ./readbench 2>counters_read.txt >/dev/null
+KANSO_COUNTERS=1 ./readbench-counters 2>counters_read.txt >/dev/null
 diff bench/cost_golden_read.txt counters_read.txt || {
   echo "::error::read counters diverged. beat_iters is the row to read"
   echo "::error::first: 201 is the loop bracketing every round and 1 is it"
