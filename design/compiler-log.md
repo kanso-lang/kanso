@@ -5212,3 +5212,53 @@ But a change that trades work for bytes moved, or bytes moved for work, is
 scored on a scale where one byte weighs one instruction, and the two are not
 worth the same. Read a memcpy row as bytes, and price a change against it
 knowing that.
+## 2026-09-13 (sixteenth) — ch05 never said what an effect hands back
+
+`done` was ruled at the 2026-08-26 sitting and built in kanso#1363: a
+succeeded effect yields it, `none` means absence and nothing else, and the
+two used to be the same answer. Nothing in the book said so. A census of
+every chapter and every appendix for the value found it nowhere — ch03,
+ch04, ch08 and ch10 carry the English word "done" in ordinary prose, and no
+page carries the kanso one. ch05 is the effects chapter and taught the
+whole i/o vocabulary without saying what a `print` or a `write_file`
+answers.
+
+This is the last piece of STATUS.md's "The book teaches the boundary
+language" that a census can find still owed. The rest of that row has
+landed in pieces: kanso#1394 put ch04's boundary panel in, kanso#1392 gave
+ch05 all three chain words and all three fused spellings, kanso#1395 the
+`<t>effect` spelling. ch04 has carried the one sentence the 2026-08-17
+gavel named — "your own failures only bubble" — since kanso#1076.
+
+**Where it goes.** After the `save.kso` round trip, which is the first
+place a reader watches a yield get discarded: `os/write_file "order.txt"
+order >> os/read_file! "order.txt" .> print`. The paragraph that follows
+already explains that `>>` orders two effects that share no data, so the
+question "then what did the write answer?" is one line away, and the
+chapter used to leave it there.
+
+**The panel.** `yielded.kso` binds the write's yield with `.>` and prints
+three lines: the yield interpolated (`<done>`), which of two arms caught it
+(`done`, not `none`), and `yield == none` (`false`). Three facts, one
+program, and each of them is a thing #1363 changed.
+
+**Watched red twice, each for its own reason.** The book has two gates over
+a panel and they fail on different things, so both were made to fire.
+Changing one word of the panel's source away from the .kso turned
+`book_panels` red (`drifted: ch05.html :: yielded.kso`) — that is the proof
+the gate reads this panel at all rather than skipping it. Recording the
+.out as the language answered BEFORE `done` existed — `<none>`, the `none`
+arm, `true` — turned it red again. The second red is the one that matters:
+it is this panel going red on a compiler where the ruling had not shipped.
+
+**Checked rather than repeated.** The #1363 log entry says a read that
+finds no file answers `none`. On current main it does not: `os/read_file
+"nope.txt"` answers `os/file_not_found "nope.txt"`, which is the
+fallback.kso panel four sections later. The prose says an unset environment
+variable instead, which was run and does answer `<none>`. Also deliberately
+absent: a count of the effects that yield `done`. The entry for #1363 says
+twelve; a number in the book goes stale the first time an effect is added,
+and nothing in the tree would catch it.
+
+All three page gates agree afterwards — golden_prose 0 drifted, page_drift
+2/3, prose_check 0 tells — and `book_check.sh` verifies every sample.

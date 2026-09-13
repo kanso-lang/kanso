@@ -298,6 +298,34 @@ order <span class="o">=</span> <span class="s">"one taiyaki, extra custard"</spa
 
 <p>the round trip proves the sequencing: the read found the file because the wall put the write before it. one line of source holds both operators doing their one job each—<code>&gt;&gt;</code> orders two effects that share no data, <code>.&gt;</code> moves the read's result into <code>print</code>.</p>
 
+<p>every effect that succeeds yields a value, including the ones with nothing to report. a write yields <code>done</code>, the fourth nullary alongside <code>true</code>, <code>false</code> and <code>none</code>. the wall throws that yield away, which is why <code>&gt;&gt;</code> is the right operator between a write and a read. bind it with <code>.&gt;</code> and you can look at it:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">yielded.kso</div>
+  <pre><code>import "std/os"
+
+fn name done
+  "done"
+
+fn name none
+  "none"
+
+fn report yield
+  print "the write yielded {yield}"
+    &gt;&gt; print "an arm named {name yield} caught it"
+    &gt;&gt; print "yield == none is {yield == none}"
+
+pub play = os/write_file "receipt.txt" "one taiyaki" .&gt; report</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run yielded.kso</div>
+    <pre><code>the write yielded &lt;done&gt;
+an arm named done caught it
+yield == none is false</code></pre>
+  </div>
+</div>
+
+<p>it renders in brackets because it is not data, the same convention that prints <code>&lt;none&gt;</code> and <code>&lt;io&gt;</code>. otherwise it is an ordinary value: an arm can name it, a typeset can hold it, and it equals itself and nothing else. the word earns its place by the distinction it draws. <code>none</code> means something is absent—a key that was not in the map, an environment variable nobody set. a finished write is not an absence. while both yielded <code>none</code>, a chain that bound the result could not tell the two apart.</p>
+
 <p><code>args</code> is the argument list (everything after <code>--</code> on the command line), and <code>stdin</code> is standard input. both are io values—the argument list and the input stream belong to the outside world, so touching them is an effect like any other, and they pipe like everything else:</p>
 
 <div class="code-panel">
