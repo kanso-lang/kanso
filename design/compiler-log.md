@@ -4715,6 +4715,72 @@ one lands on a smaller pile.
 Floor banked 68.64 -> 68.68, and `all_pages.sh --write` rewrote the seven
 `compiler.html` spans that quote these goldens.
 
+## 2026-09-13 — the advisory union that had nothing to union, and the pre-size that cost more than it saved
+
+`advisory::name_types` answers "which types can this name be" by unioning the
+answer sets of every arm in the name's group. It started the union at nothing
+and grew it: 829 of the compile's 1,283 hashbrown table growths came from that
+one loop, 182,282 instructions on `kanso check lib/json`. Most groups hold ONE
+declaration, and a union of one set is that set, so the arm's answer is cloned
+straight back and the incremental insert path is skipped entirely.
+
+Measured with the compile gate's own box, environment emptied, all three
+corpora, baseline against changed:
+
+    module   46,561,759 -> 46,447,127   −114,632 (−0.2462%)
+    entry   154,656,197 -> 154,469,445  −186,752 (−0.1207%)
+    library 155,779,162 -> 155,592,215  −186,947 (−0.1200%)
+    summed                              −488,331 (−0.1368%)
+
+**The obvious companion is a regression, and that is the third time.** Pre-size
+the union — sum the arms' answer lengths, build the set with that capacity —
+and the module row reads 46,628,372, which is +66,613 ABOVE the baseline. Both
+changes together reach only −148,040, so the sizing walk costs about 340,000 of
+the clone's 488,000 and then some. kanso#1157 declined pre-sizing six filtered
+collects at 4,514 instructions and kanso#1159 declined the other direction; the
+rule those three share is that a walk to measure a table costs more than the
+rehash it saves, whenever the table is small and the walk is over cache-cold
+slices. Only the clone ships.
+
+**The wider lead is closed as diffuse.** `reserve_rehash` is 1,150,492
+instructions, 2.50% of the compile term, and no owner holds a tenth of it: the
+generic `insert` and `rustc_entry` nodes carry most of it, and under those it
+splits across `qualify` (343,761), `Resolver::flush_unused` (192,797),
+`bound_in_pattern` (171,421), `check_merged_after_aliases` (521,449 through
+entry), `inline::aliases` (271,684), `infer::infer` (229,569) and a dozen more,
+none above 0.75%. Fourteen `::default()` hash constructions survive in the
+whole compile path — kanso#1158 already pre-sized the thirteen whose capacity
+was knowable, and what is left grows across a recursive dependency walk whose
+final size nothing knows before the loop that fills it. `name_types` was the
+one piece with a shape that does not need a capacity at all.
+
+**CI's rows, on the base kanso#1416 left.** The branch was re-cut onto merged
+main after kanso#1416 landed, because its round-one rows were read against the
+tree kanso#1415 left and that base is gone:
+
+    compile_instructions   44,031,424 ->  43,910,543  -120,881  -0.2745%
+    entry_instructions    146,767,592 -> 146,573,721  -193,871  -0.1321%
+    library_instructions  147,572,025 -> 147,378,070  -193,955  -0.1314%
+    summed                338,371,041 -> 337,862,334  -508,707  -0.1503%
+
+All three fall together, and the entry and library rows track each other to 84
+instructions — they run the same passes over corpora built to the same shape,
+so a decision the front end stops making shows up in both at the same size.
+`compile_allocs` held at 28,361 and `compile_peak_bytes` at 776,055: the clone
+that went away was of a borrowed set, so no allocation site moved.
+
+The summed figure barely shifted between bases. Round one read -510,720
+(-0.1500%) against kanso#1415's tree and CI now reads -508,707 (-0.1503%)
+against kanso#1416's — 2,013 instructions apart on half a million, and the
+same percentage to three places. That is worth setting beside kanso#1416's
+own reading, where the container's projection ran 1.191x high against CI on
+the instruction rows. A delta survives a change of base when the work it
+removes is a fixed count of operations; it does not when the work is a share
+of a pile that something else has just made smaller.
+
+Floor banked, welfare 68.68 held. `all_pages.sh --write` rewrote four
+compiler.html lines quoting the three goldens.
+
 ## 2026-09-14 — the advisory fixpoint asked every declaration six times to learn 142 things
 
 `advisory::return_type_names` decides, for every function, which record type
@@ -4814,3 +4880,26 @@ read map and a queue, and the net is the 424.
 Runtime did NOT move. `work:success` on the same run, runbench 2,003,021,871
 and all thirteen other rows identical to their goldens, which is the shape a
 front-end change should have: nothing this pass decides reaches the emitter.
+
+## the base moved under all four rows, and the direction is predictable
+
+kanso#1414 landed after that sitting. It removes the union-build from
+`name_types` when a group has one arm, which is work every visit of this
+fixpoint was doing, so the four rows above are deltas against a base that has
+since got cheaper by 120,881 module instructions on its own.
+
+CLAUDE.md already says which way that cuts. A delta survives a change of base
+when the work removed is a fixed count of operations, and does not when it is
+a share of a pile something else has just made smaller. This one is the second
+kind: the saving is 1,575 visits that no longer happen times what a visit
+costs, and kanso#1414 made a visit cost less. So the four rows go back to
+main's values, round three is deliberately red on them, and the expectation
+written down before CI answers is that the fall comes back **smaller** than
+-6,434,951.
+
+The two changes also meet in the code rather than only in the number. The
+one-arm shortcut returns a group's answer without walking the loop that
+records the read, so the merge pushes the dependency there too — a worklist
+that never hears about that edge stops before the answer has finished
+growing. The four-hop `relayed` fixture is what would catch it, and it is
+green.
