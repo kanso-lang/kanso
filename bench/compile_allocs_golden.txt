@@ -438,4 +438,7 @@
 # (-3.4363%). `format!` grows its string from empty, so most qualified names
 # cost TWO allocations; the sized join costs one, and the type loop's
 # duplicate build costs none.
-compile_allocs=29169
+# 2026-09-14 (kanso#1416): compile_allocs 29,169 -> 28,361, a fall of 808
+# (-2.7705%). Two tables built owned `String` keys for names read once and
+# dropped; both borrow now. The container projected exactly 808.
+compile_allocs=28361

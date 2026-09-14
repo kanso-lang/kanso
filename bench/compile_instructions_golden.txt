@@ -1414,4 +1414,10 @@
 # three copies, and two lines in `qualify`'s type loop were building the same
 # string twice. Runtime did NOT move: `work:success` on the same run, runbench
 # 2,003,021,871, identical to its golden.
-compile_instructions=44301309
+# 2026-09-14 (kanso#1416): compile_instructions 44,301,309 -> 44,031,424, a
+# FALL of 269,885 (-0.6092%). Two dedup tables stop cloning names the
+# program is holding open: collapse_diamonds computes a keep mask under an
+# immutable borrow so its keys can be `&str`, and fuse_enumerable's short-name
+# set borrows outright. Runtime did NOT move: `work:success` on the same run,
+# runbench 2,003,021,871, identical to its golden.
+compile_instructions=44031424

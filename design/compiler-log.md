@@ -4616,6 +4616,104 @@ container projected 776,055 for the peak and CI read the same number.
 
 Runtime did not move: `work:success` on the same run, runbench 2,003,021,871,
 identical to its golden. Floor 68.56 -> 68.64.
+
+## 2026-09-13 — two tables clone names the program is holding open
+
+A module reached by two import paths contributes its declarations twice, and
+`collapse_diamonds` drops the second copy. It decides by building a key per
+declaration — the canonical file id, the name, the arity, the line, the column,
+whether the declaration is synthetic — and a key per type, and putting each into
+a set. The name went in as a cloned `String`.
+
+The key is read once and dropped. The clone was a heap allocation per
+declaration and per type for a name the program holds open beside it, and the
+only reason it was there is that `retain` needs the vector mutably: a set of
+`&str` borrowed from the elements cannot live across the closure that removes
+them.
+
+`prune_unused_getters` answered that in kanso#1141's family and left the shape
+written down — compute a keep mask under an immutable borrow, drop the borrow,
+then `retain` over the mask. Both halves of the collapse do that now.
+
+On the gate's own box (`library_box.sh`, environment emptied), the same tree
+with and without the change:
+
+    module    46,069,191 -> 45,848,443    -220,748 (-0.4792%)
+    entry    153,041,019 -> 152,256,142   -784,877 (-0.5128%)
+    library  153,410,944 -> 152,591,027   -819,917 (-0.5345%)
+    summed   352,521,154 -> 350,695,612 -1,825,542 (-0.5178%)
+
+Two builds of the changed source agree to 66, 52 and 52 instructions, against a
+delta three thousand times larger. compile_allocs 30,207 -> 29,695 (−512,
+−1.6949%), compile_alloc_bytes −15,280, compile_peak_bytes byte-identical at
+777,126: the mask is a `Vec<bool>` the size of the declaration list, and it
+costs one allocation where the clones cost 512.
+
+**Where this came from.** A fresh callgrind profile of the compile on merged
+main, read by self cost. The compile term is flat now — the allocator is 15.5%
+spread over six symbols, hashbrown 13.7% over six more, infer 12% over four —
+and the way in was to ask who the allocator's 26,487 callers are rather than
+which function is hottest. `RawVecInner::finish_grow` holds 8,417 of them and
+`lex_line` 8,223; the collapse's two `retain`s were fourth and seventh, at 379,531
+and 154,704 instructions in two calls apiece. A count of calls found what a
+count of instructions did not.
+
+**The same question, a second table.** `fuse_enumerable` builds a set of
+std/list's short names, asks it `contains` once per declaration, and drops it.
+Nothing in it needed owning either. The set borrows now; `shorts` beside it
+still owns, because that one outlives the borrow the rewrite mutates through --
+the same constraint the keep mask answers above.
+
+Both changes together, against the same baseline:
+
+    module    46,069,191 -> 45,741,657    -327,534 (-0.7109%)
+    entry    153,041,019 -> 151,895,480  -1,145,539 (-0.7485%)
+    library  153,410,944 -> 152,285,923  -1,125,021 (-0.7333%)
+    summed   352,521,154 -> 349,923,060  -2,598,094 (-0.7370%)
+
+compile_allocs 30,207 -> 29,399 (−808, −2.6749%), alloc_bytes −21,315, peak
+byte-identical. The two are very nearly additive: −220,748 and −104,581 apart
+sum to −325,329 against −327,534 measured together, and the 2,205 between them
+is the layout moving, not the changes interacting.
+
+**The ratchet rows.** `the_dedup_keys_own_their_names` writes both key types back
+to owned `String`s and leaves the keep mask alone, so the row watches the borrow
+and not the shape around it. Under the mutation module rises 234,146 (+0.5107%),
+entry 860,245 (+0.5650%), library 848,228 (+0.5559%) and compile_allocs 515. The
+mutated tree reads slightly ABOVE the pre-change baseline — 46,082,589 against
+46,069,191 — because the mask itself is not free; the change wins by removing
+the clones, not by removing work the mask replaced.
+
+`the_fused_name_set_owns_its_names` is its own row rather than a second case of
+the first, because a second table can regress on its own: module +104,581
+(+0.2281%), entry +339,005 (+0.2227%), library +369,885 (+0.2424%),
+compile_allocs +296.
+
+**CI's rows.** The container's box measured against the tree kanso#1413 left;
+kanso#1415 landed first and took its own bite out of the same family, so CI
+measured this change against a base that had already stopped cloning fifteen
+qualified names. These are CI's numbers and they are what the goldens hold:
+
+    module    44,301,309 -> 44,031,424    -269,885 (-0.6092%)
+    entry    147,706,790 -> 146,767,592    -939,198 (-0.6358%)
+    library  148,544,439 -> 147,572,025    -972,414 (-0.6546%)
+    summed   340,552,538 -> 338,371,041  -2,181,497 (-0.6406%)
+
+`compile_allocs` 29,169 -> 28,361, a fall of 808 — the container projected
+exactly 808 and CI read exactly 808, because an allocation removed is an
+allocation removed whatever the base. `compile_peak_bytes` byte-identical at
+776,055, and `work:success` with runbench 2,003,021,871 unchanged.
+
+The instruction rows are the ones that moved with the base: the container
+projected −2,598,094 summed where CI read −2,181,497, so the projection ran
+1.191x high. That is not this box reading the vein wrong. It is the same shape
+as the allocation row's exactness read the other way round: an allocation is a
+count and does not care what else was removed, where an instruction total is a
+layout and does. Both PRs remove `String` clones from the loader, so the second
+one lands on a smaller pile.
+
+Floor banked 68.64 -> 68.68, and `all_pages.sh --write` rewrote the seven
+`compiler.html` spans that quote these goldens.
 ## 2026-09-13 — the advisory union that had nothing to union, and the pre-size that cost more than it saved
 
 `advisory::name_types` answers "which types can this name be" by unioning the
