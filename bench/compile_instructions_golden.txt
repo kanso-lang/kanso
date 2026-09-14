@@ -1426,4 +1426,12 @@
 # it returns. It hands the set back instead. The pre-size beside it was
 # measured and DECLINED: a capacity for a set whose final size nothing knows
 # before the loop that fills it costs more than the growth it saves.
-compile_instructions=43910543
+# 2026-09-14 (kanso#1417): compile_instructions 43,910,543 -> 43,910,243, a
+# FALL of 300 (-0.0007%). The change is three lines of src/runtime.c -- k_b_at
+# asks the string arm first -- and the compiler carries runtime.c the way it
+# carries lib/*.kso, so its bytes move and the layout under them moves with
+# them. Nothing the front end decides changed: compile_allocs is byte-identical
+# at 28,361 and compile_peak_bytes at 776,055. Three hundred instructions in
+# forty-four million is this vein's floor for a change that touches the
+# compiler's embedded text and no decision it makes.
+compile_instructions=43910243

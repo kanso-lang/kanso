@@ -4600,6 +4600,45 @@ elsewhere. The lexer's 4,407 are the `String`s the AST needs, which
 kanso#1033 declined interning at 365 conversion sites. No other single owner
 holds more than a per cent.
 
+**The third sitting, on the merged base, and all three rows fall.** CI
+re-measured on the kanso#1414 base:
+
+    compile_instructions   43,910,543 ->  43,910,243    -300  -0.0007%
+    entry_instructions    146,573,721 -> 146,570,800  -2,921  -0.0020%
+    library_instructions  147,378,070 -> 147,374,531  -3,539  -0.0024%
+    summed                337,862,334 -> 337,855,574  -6,760  -0.0020%
+
+`compile_allocs` held at 28,361 again and `compile_peak_bytes` at 776,055,
+the same pair of byte-identical rows as before. The reorder is three lines of
+`src/runtime.c` and the front end does not run a line of it; these six
+thousand instructions are the compiler's own bytes sitting differently.
+
+Set the two sittings of the same change side by side and the paragraph above
+is checked rather than asserted:
+
+                            on kanso#1416     on kanso#1414
+    compile_instructions           +883              -300
+    entry_instructions           -2,236            -2,921
+    library_instructions         -2,878            -3,539
+    summed                       -4,231            -6,760
+
+Same diff, same three lines, and the module row changes sign between one base
+and the next while the other two keep theirs and grow by about a quarter.
+CLAUDE.md's rule reads that a delta survives a change of base when the work
+removed is a fixed count of operations, and does not when it is a share of a
+pile something else just made smaller. Nothing here is a count of operations
+at all: no decision was removed, so there is nothing to count, and every one
+of these six numbers is an arrangement. An arrangement belongs to one binary.
+kanso#1418 measured the other half of the same rule on the same day, where
+`compile_allocs` fell by 424 against both of its bases because it counts
+`HashSet` constructions that stopped happening.
+
+So a layout row is projected from CI or not at all, and never from a
+container whose glibc and clang the gate has already refused. The work vein
+is where this change was aimed and where its win is; the compile veins are
+regenerated, said out loud, and not banked against.
+
+
 
 **CI's rows.** The container's box reads about 0.8% high on these veins and the
 projection was 5,410,533 summed; CI's sitting on the base kanso#1413 left reads:

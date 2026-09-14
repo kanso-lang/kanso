@@ -265,4 +265,10 @@
 # front end stops making looks like: the entry and library rows track each
 # other to 84 instructions because they run the same passes over corpora of
 # the same shape.
-library_instructions=147378070
+# 2026-09-14 (kanso#1417): library_instructions 147,378,070 -> 147,374,531, a
+# FALL of 3,539 (-0.0024%). The k_b_at arm order; see the compile row. All
+# three rows fall and compile_allocs does not move at all, which is the
+# signature of a layout move: the same decisions, reached through a binary
+# whose bytes sit differently. The runtime vein is where this change was
+# actually aimed, and it is the one that carries the win.
+library_instructions=147374531
