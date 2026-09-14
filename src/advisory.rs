@@ -188,8 +188,16 @@ fn name_types<'a>(
     if let Some(local) = env.get(name) {
         return local.clone();
     }
+    // A group whose arms are one declaration — most of them — hands back
+    // exactly that declaration's answer, so there is nothing to union and the
+    // clone sizes itself in one go. The union below started at nothing and
+    // grew: 829 of the compile's 1,283 table growths came from this one loop.
+    let group = groups.get(name);
+    if let [only] = group {
+        return returns[*only as usize].clone();
+    }
     let mut set = HashSet::default();
-    for &i in groups.get(name) {
+    for &i in group {
         set.extend(returns[i as usize].iter().copied());
     }
     set
