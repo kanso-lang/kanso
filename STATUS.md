@@ -37,11 +37,18 @@ kanso — sat here and was bounced on 2026-08-29: a performance question with no
 surface area is the implementer's, per the ledger's own charter, and the log
 carries the research mandate it left with.
 
-**Four questions are waiting** — two blocking. Two more left the ledger on
+**Three questions are waiting** — one blocking. The welfare-floor entry left
+Blocking on 2026-09-14 with all three of its asks already answered: its two
+builds merged on 2026-09-13, the `git add bench/welfare_floor.json` permission
+it wanted is moot under Clay's ironclad rule of the same day, and its options
+4 and 5 ask for a branch, which CLAUDE.md now says was never his to grant. Two
+more left the ledger on
 2026-09-05 in the same sitting as the compile row: machine-code size gets no
 term in welfare, and `.text` stays in its own exact vein. Counted from the ledger, which is the only place that count is true;
 this file said fourteen in one paragraph and sixteen in another until the
-2026-08-29 sitting ruled the rest. The July letters are closed: Clay ruled the
+2026-08-29 sitting ruled the rest, said four with three in the ledger until
+2026-09-14, and had "one blocking" in one paragraph and "two blocking" in
+another on the same day. The July letters are closed: Clay ruled the
 last five in one sitting on 2026-08-26, and that ruling reached main only on
 2026-08-28, on a branch that had been sitting unmerged.
 
@@ -343,10 +350,11 @@ else. Chains that tested for `none` after an effect migrate.
     checked from here on two days and both refused by the tooling
   - whether an err gains readers a lambda callback can use
 
-**Four questions wait in `design/pending-gavels.md`** — two blocking, two
-open — each with a recommendation. Counted from the ledger on 2026-09-12 by
-reading its `###` headings, which is what this line has always claimed to do
-and had stopped doing TWICE. On 2026-09-05 it said nineteen while the ledger
+**Three questions wait in `design/pending-gavels.md`** — one blocking, two
+open — each with a recommendation. Recounted on 2026-09-14, when the
+welfare-floor entry left Blocking with all three of its asks answered. Counted
+from the ledger by reading its `###` headings, which is what this line has
+always claimed to do and had stopped doing TWICE. On 2026-09-05 it said nineteen while the ledger
 held three; fifteen had been gaveled and had left the file as the lifecycle
 requires, and the count here was carried forward instead of recounted. It was
 recounted that day and went stale again within three days: it said six, none
@@ -355,13 +363,18 @@ four of the six it named had been ruled or shipped since. A count maintained
 by hand goes stale by default, so `tests/the_status_index_counts_the_ledger.rs`
 now reads both files and fails when this sentence and the ledger disagree.
 
-The three blocking are the welfare history's baseline after the one-program
-gavel, the compile term's workload, and an infinite or nan float's rendering.
-The two open are the book teaching the boundary language, which as of
-2026-09-08 waits on the typed-effect surface in both halves rather than one,
-and the maps parse being 100% of the compile row's binary-to-binary drift —
-which had been sitting under Parked with no heading at all, so no index and
-no session citing by heading could reach it.
+The one blocking is where the box wraps under the pure-fallibility rider,
+filed 2026-09-11. The two open are the book teaching the boundary language,
+whose campaign ran on 2026-09-13 and which now owes only ch04's "nothing is
+asked of the signature" framing, itself waiting on that same rider; and the
+maps parse being 100% of the compile row's binary-to-binary drift — which had
+been sitting under Parked with no heading at all, so no index and no session
+citing by heading could reach it.
+
+This sentence named three blocking entries that Clay ruled on 2026-09-08 and
+went on naming them for six days. The count above it is pinned by a spec and
+the names beside it are not, so the names are what rots; a reader who trusted
+them would have brought him three settled questions and missed the live one.
 
 Rulings since the last recount: no machine-code-size term in welfare and no
 two-value chip row (both 2026-09-05); the granted-baseline question CLOSED AS

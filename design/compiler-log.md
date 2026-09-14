@@ -4952,3 +4952,49 @@ off the top of the last pull request's open items.
 Recorded rather than filed as a question. The rule stands as written and
 needs no ruling; this entry is the record that it went unobserved five times
 in one day, so the next reader has a date to count from.
+
+## 2026-09-14 — the floor entry leaves the ledger, every one of its three asks already answered
+
+`design/pending-gavels.md` carried a second Blocking entry beside the
+box-wrapping question: "The welfare floor cannot be staged from this session,
+and two ruled builds wait on it". It asked Clay for one of five things. All of
+them are settled, and it had been asking anyway.
+
+**Its two builds merged.** kanso#1372 landed 2026-09-13T04:12Z and kanso#1369
+at 05:16Z. The entry describes both as parked behind a permission.
+
+**Its central ask is moot.** The entry wants a Bash permission rule for `git
+add bench/welfare_floor.json`, refused seven times by the auto-mode
+classifier. Clay ruled on 2026-09-13, verbatim: "you don't need to ask my
+permission to lower the welfare floor if it is in service of making the
+language actually work for the specification. this is an ironclad rule."
+CLAUDE.md's welfare section carries it. The floor moved 67.77800065192253 ->
+67.754 by hand on kanso#1369 and both branches went green.
+
+**Its options 4 and 5 ask for a branch.** Both request "a third branch" —
+option 4 for ledger-only edits, option 5 for kanso#487's fused descent. Clay's
+answer to that shape of request is in CLAUDE.md under WHAT THE BRANCH RULE
+ACTUALLY SAYS: "i can't believe you paused to ask me permission to make a
+branch. Jesus Christ." Branches are free and were free when the entry was
+written.
+
+The entry's measurements are worth keeping and are kept: the ablation ceiling
+for kanso#487's fusion (sixteen whole-program checks costing 36,348,088
+instructions together, a bare no-work walk costing 1,147,185, so fifteen
+fused descents are worth about 17.2M against a combined ask of 6,829,872) is
+what the second fused descent has been landing against all week — kanso#1409,
+kanso#1411 and kanso#1413 are that work. Nothing in the entry was wasted. It
+simply stopped being a question and nobody removed it.
+
+**How it survived.** Its own option 4 explains it: the entry lived on
+`claude/go-to-town-m0dicm`, kanso#1369's build branch, because the ledger's
+header says ledger edits ride small promptly-merged pull requests and the
+entry was written from a branch that could not merge until the thing it asked
+for was granted. So it reached main only when that branch merged — on
+2026-09-13, the day its asks were answered. It was obsolete before it arrived.
+
+**And it was miscounted.** This session told Clay twice that Blocking held
+exactly one entry. That count came from grepping the headings of a working
+tree checked out to an older branch, and was never re-run after the branch was
+rebuilt from main. The ledger is one file with one canonical copy on
+origin/main; a count taken anywhere else is a count of something else.
