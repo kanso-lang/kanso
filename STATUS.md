@@ -37,11 +37,18 @@ kanso — sat here and was bounced on 2026-08-29: a performance question with no
 surface area is the implementer's, per the ledger's own charter, and the log
 carries the research mandate it left with.
 
-**Four questions are waiting** — two blocking. Two more left the ledger on
+**Three questions are waiting** — one blocking. The welfare-floor entry left
+Blocking on 2026-09-14 with all three of its asks already answered: its two
+builds merged on 2026-09-13, the `git add bench/welfare_floor.json` permission
+it wanted is moot under Clay's ironclad rule of the same day, and its options
+4 and 5 ask for a branch, which CLAUDE.md now says was never his to grant. Two
+more left the ledger on
 2026-09-05 in the same sitting as the compile row: machine-code size gets no
 term in welfare, and `.text` stays in its own exact vein. Counted from the ledger, which is the only place that count is true;
 this file said fourteen in one paragraph and sixteen in another until the
-2026-08-29 sitting ruled the rest. The July letters are closed: Clay ruled the
+2026-08-29 sitting ruled the rest, said four with three in the ledger until
+2026-09-14, and had "one blocking" in one paragraph and "two blocking" in
+another on the same day. The July letters are closed: Clay ruled the
 last five in one sitting on 2026-08-26, and that ruling reached main only on
 2026-08-28, on a branch that had been sitting unmerged.
 
@@ -88,70 +95,54 @@ discretion; a pull request on something else says which of these it weighed.
 The chat adds a row the day a ruling lands and removes it the day the build
 lands on main. Verified against the tree on 2026-09-09 by probing the
 compiler; the list is a floor, since the rest of the 2026-08-29 sitting was
-not audited.
-
-### Effects are types, and the words are the only doors (2026-08-29)
-
-The archive entry of that name. Built on 2026-09-10: the automatic bind is
-gone (`x . f` is `f x`, and a box handed through the plain dot stays a box),
-and a provable box handed to something that reads the value inside is
-refused at check; and, the same day, the `<t>effect` spelling on all three
-engines, a parameter declared `e:<int>effect` taking the box as data. Owes:
-ch04/ch05 moving with it (the ledger's "The book teaches the boundary
-language").
-
-It does NOT owe the drop question. The same 2026-08-29 sitting closed it —
-the archive's "gavel: the drop question closes — explicitness IS the
-guarantee" — and closed it by DECLINING to mint anything: an unused binding
-is already a compile error, so a dropped effect is already unspellable, and
-Clay ruled the premise backwards. "No new checker rule and no io-edge rule
-is minted." An earlier draft of this row carried it as owed.
-
-**BUILT AND MERGED, 2026-09-13 (kanso#1372).** The floor that blocked it was
-never Clay's to grant: he ruled on 2026-09-13 that lowering the floor in
-service of the specification needs no permission, and the language clause in
-CLAUDE.md now says so. The floor moved 67.77800065192253 -> 67.754 by hand,
-CI went 19/19 green, and the row below stays only until the chat clears it.
+not audited. Swept again on 2026-09-14 against merged main: the effect-type
+row came off, built and merged as kanso#1372, and the exhaustiveness row came
+off with kanso#1369. The book row came off with kanso#1412, which its own
+log entry calls the live remainder of that ruling. One row remains, and it
+waits on a ruling.
 
 ### Pure fallibility is boxed too (2026-08-31)
 
 The archive entry "rider: pure fallibility is boxed too": any operation whose
 answer includes an err yields `<t>effect`, io or not; `foo["bar"]!` answers a
-box; `foo["bar"]` stays the data form. Rides with the effect type above and
-is listed so the one-line `foo["bar"]! .? (e -> "anonymous")` form the gavel
-promises is visible as owed. Sized 2026-09-10 (the log entry "the effect
+box; `foo["bar"]` stays the data form. Rides with the effect type, which
+landed on 2026-09-13 (kanso#1372), and is listed so the one-line
+`foo["bar"]! .? (e -> "anonymous")` form the gavel promises is visible as
+owed. Sized 2026-09-10 (the log entry "the effect
 type is spellable"): 723 `]!` sites in the tree, 104 of them in lib; by
 infer's reading 738 of lib's 770 declarations carry an err in their answer
 set and 71 of those raise or insist themselves. The respell is the build.
 
 **Half unblocked, 2026-09-13.** The effect type it rides on has landed
-(kanso#1372). What still blocks it is its own unruled question: where the box
-wraps. the ledger's Blocking
-entry "Where the box wraps under the pure-fallibility rider" asks whether the
-box is every err-carrying answer (738 of lib's 770 declarations) or the `!`
-name (71), with the price of each measured. Nothing builds until that is
-ruled, and a ruling alone does not unblock it — the effect type has to land
-first either way.
+(kanso#1372), so the only thing left holding it is its own unruled question:
+where the box wraps. The ledger's Blocking entry "Where the box wraps under
+the pure-fallibility rider" asks whether the box is every err-carrying answer
+(738 of lib's 770 declarations) or the `!` name (71), with the price of each
+measured. Nothing builds until that is ruled. It is the one entry standing in
+the ledger's Blocking section as of 2026-09-14.
 
-### The book teaches the boundary language (queued P1, 2026-08-26)
+**ch04 rides here too.** The book row that stood beside this one came off on
+2026-09-14: ch05 and compiler.html's entry 23 landed with the type's build on
+2026-09-10, kanso#1392 gave ch05 the chain words and their fused spellings,
+kanso#1394 gave ch04 its rescue collision and boundary panel, kanso#1406 gave
+ch05 `done`, and kanso#1412 gave ch04 the clause naming `<t>effect` — the live
+remainder, by its own log entry. What ch04 still owes is its "nothing is asked
+of the signature" framing, which the ledger's own book entry says waits on this
+rider. So the rider's ruling releases the prose with the respell.
 
-Held in the ledger's "Open, not blocking" until the effect type exists; the
-row is here so the dependency is visible from the list cloud reads.
-
-**Unblocked, 2026-09-13.** `book_check` executes every panel and compares its
-output, so ch04/ch05 could not describe the effect type before it shipped. It
-has now shipped (kanso#1372), so this is buildable.
-
-An earlier note here said the prose was already "written and verified on a local
-branch". That branch is not in the compiler worker's container — no branch or
-worktree matching book/ch04/ch05/boundary exists there — so treat the prose as
-unwritten until someone points at a commit. Whoever picks this up writes it
-against merged main and lets `book_check` execute the panels.
+That row also carried a note saying `claude/book-effect-type` was absent from
+the worker's container and the prose should be treated as unwritten.
+kanso#1412 found the branch at `/tmp/wt-book`, tip `d540fe3a`, and every file
+it adds already on main: superseded rather than pending. The note's conclusion
+held and its reason did not.
 
 ## In flight
 
-Nothing. Every branch this session opened is merged and verified on
-`origin/main`, and neither kanso nor kq has an open pull request.
+Every branch this session opened is merged and verified on `origin/main`.
+Three pull requests stood open elsewhere at the 2026-09-14 sweep, all opened
+that morning: kanso#1417 and kanso#1419 with CI running, and kq#105, whose
+spec job is red on `bench/instructions_golden.txt` — the retired-instructions
+vein, which moves on changes that leave every allocation counter alone.
 
 ## What landed on 2026-08-29
 
@@ -359,10 +350,11 @@ else. Chains that tested for `none` after an effect migrate.
     checked from here on two days and both refused by the tooling
   - whether an err gains readers a lambda callback can use
 
-**Four questions wait in `design/pending-gavels.md`** — two blocking, two
-open — each with a recommendation. Counted from the ledger on 2026-09-12 by
-reading its `###` headings, which is what this line has always claimed to do
-and had stopped doing TWICE. On 2026-09-05 it said nineteen while the ledger
+**Three questions wait in `design/pending-gavels.md`** — one blocking, two
+open — each with a recommendation. Recounted on 2026-09-14, when the
+welfare-floor entry left Blocking with all three of its asks answered. Counted
+from the ledger by reading its `###` headings, which is what this line has
+always claimed to do and had stopped doing TWICE. On 2026-09-05 it said nineteen while the ledger
 held three; fifteen had been gaveled and had left the file as the lifecycle
 requires, and the count here was carried forward instead of recounted. It was
 recounted that day and went stale again within three days: it said six, none
@@ -371,13 +363,18 @@ four of the six it named had been ruled or shipped since. A count maintained
 by hand goes stale by default, so `tests/the_status_index_counts_the_ledger.rs`
 now reads both files and fails when this sentence and the ledger disagree.
 
-The three blocking are the welfare history's baseline after the one-program
-gavel, the compile term's workload, and an infinite or nan float's rendering.
-The two open are the book teaching the boundary language, which as of
-2026-09-08 waits on the typed-effect surface in both halves rather than one,
-and the maps parse being 100% of the compile row's binary-to-binary drift —
-which had been sitting under Parked with no heading at all, so no index and
-no session citing by heading could reach it.
+The one blocking is where the box wraps under the pure-fallibility rider,
+filed 2026-09-11. The two open are the book teaching the boundary language,
+whose campaign ran on 2026-09-13 and which now owes only ch04's "nothing is
+asked of the signature" framing, itself waiting on that same rider; and the
+maps parse being 100% of the compile row's binary-to-binary drift — which had
+been sitting under Parked with no heading at all, so no index and no session
+citing by heading could reach it.
+
+This sentence named three blocking entries that Clay ruled on 2026-09-08 and
+went on naming them for six days. The count above it is pinned by a spec and
+the names beside it are not, so the names are what rots; a reader who trusted
+them would have brought him three settled questions and missed the live one.
 
 Rulings since the last recount: no machine-code-size term in welfare and no
 two-value chip row (both 2026-09-05); the granted-baseline question CLOSED AS
