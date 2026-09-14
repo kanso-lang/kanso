@@ -424,6 +424,19 @@ box_check_hoist = row
   (breaking "the_box_check_asks_when_nothing_answers_a_box")
   release
 
+# A third row on the same gate, for the qualified-name join. compile_ir's
+# mutation stops the vein being read; box_check_hoist asks whether it can see
+# a pass doing provably pointless work; this one asks whether it can see the
+# cost of a shape -- the same strings, built the expensive way. All three
+# answer different questions about the same number.
+qualified_name_join = row
+  "a name the loader mints, built through the formatting machinery"
+  false
+  "sh scripts/gates/compile_instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_qualified_name_goes_back_through_format")
+  release
+
 # The same shape for the ENTRY path, which the row above cannot reach: it
 # checks a directory, and a directory takes compile_module_inner. The mutation
 # asks the entry's whole-program check twice, and the two rows separate
@@ -1220,7 +1233,9 @@ rows_b1d2 = text/concat rows_b1d [compile_ir compile_ir_host entry_ir]
 
 rows_b1d3 = text/concat rows_b1d2 [library_ir]
 
-rows_b1e0 = text/concat rows_b1d3 [compile_ir_one_value box_check_hoist]
+rows_b1e0a = text/concat rows_b1d3 [compile_ir_one_value box_check_hoist]
+
+rows_b1e0 = text/concat rows_b1e0a [qualified_name_join]
 
 rows_b1e1 = text/concat rows_b1e0 [host_measures]
 

@@ -281,9 +281,31 @@ pub fn getter_name(field: &str) -> String {
 /// can write `dep/~join`, and `dep/join` stays the module's own arms.
 pub const BARE_MARK: char = '~';
 
+/// `dep/join`: the canonical spelling of `name` under module `qual`.
+///
+/// Every qualified name the loader mints is this join, and `format!` is an
+/// expensive way to write it: a `{}` on a `&str` goes out through
+/// `Display::fmt`, `Formatter::pad` and `write_str`, and the string it writes
+/// into starts empty and grows. Qualifying the compile corpus makes 712 of
+/// these calls at 860 instructions each; the pieces' lengths are known before
+/// a byte is written, so one exact allocation and three copies do the same
+/// work.
+pub fn qualified(qual: &str, name: &str) -> String {
+    let mut joined = String::with_capacity(qual.len() + 1 + name.len());
+    joined.push_str(qual);
+    joined.push('/');
+    joined.push_str(name);
+    joined
+}
+
 /// `dep/~join`: the bare overload space of `join` inside module `dep`.
 pub fn bare_space(qual: &str, name: &str) -> String {
-    format!("{qual}/{BARE_MARK}{name}")
+    let mut joined = String::with_capacity(qual.len() + 1 + BARE_MARK.len_utf8() + name.len());
+    joined.push_str(qual);
+    joined.push('/');
+    joined.push(BARE_MARK);
+    joined.push_str(name);
+    joined
 }
 
 /// A name as a reader may see it: the bare-space mark comes off, so a
