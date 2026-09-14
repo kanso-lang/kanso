@@ -5044,3 +5044,40 @@ dies at the first open and exits clean. Two dead programs agree about
 everything. Re-run from the repository root, both produced `done: 74072800`
 and the comparison meant something.
 
+
+## CI's sitting, and the one vein that went the other way
+
+CI measured the pair loop on merged main. Five of the fourteen work rows fall
+and nine hold to the digit:
+
+    encodebench  3,641,023,306 -> 3,616,600,106   -24,423,200   -0.6707%
+    livebench    3,115,992,526 -> 3,091,569,326   -24,423,200   -0.7838%
+    runbench     2,003,021,871 -> 1,997,526,651    -5,495,220   -0.2743%
+    oneshot         19,292,672 ->     19,231,614       -61,058   -0.3165%
+    widebench       33,078,691 ->     33,070,691        -8,000   -0.0242%
+
+encodebench and livebench fall by the same 24,423,200 because they are two
+programs over one encode path and the floats in them are the same floats. The
+container read -0.2660% on runbench against CI's -0.2743%, a ratio of 1.031.
+
+The machine-code vein rises: text 1,734,268 -> 1,734,940, +672 summed, and
+EVERY ONE of its fourteen rows rises by exactly 48. That uniformity is the
+finding. The fused loop lives in src/runtime.c, every binary links the same
+runtime, and the `for (;;)` body is 48 bytes longer than the `if` it replaced
+— so the vein records one number fourteen times. A change in the emitter would
+spread unevenly across these rows instead, because the programs differ in what
+they emit; this one cannot. The 2026-09-05 gavel keeps machine-code size out
+of welfare, so nothing prices the 48 bytes against the runtime falls they buy.
+The trade is stated here and the objective does not weigh it.
+
+The three compile rows fall as layout: module 42,877,925 -> 42,869,800
+(-8,125), entry 144,056,402 -> 144,035,324 (-21,078), library 144,858,538 ->
+144,836,246 (-22,292). `kanso check` stops before codegen and no decision they
+count can be altered by a runtime edit, but src/runtime.c is compiled into the
+compiler and its bytes move what sits where. compile_allocs held at 27,937 and
+compile_memory is byte-identical, which is the pair that really cannot move.
+Nothing is inferred from the size of those three: kanso#1417 read one
+three-line runtime diff on four bases and got four different answers, the
+module row changing sign twice.
+
+Welfare 68.73 -> 68.75, banked in the same commit.

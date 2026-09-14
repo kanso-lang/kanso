@@ -271,4 +271,23 @@
 # -6,069,469 (-1.7963%). The entry and library rows track each other to 2,213
 # instructions because they run the same passes over corpora of the same
 # shape.
-library_instructions=144858538
+# 2026-09-14 (kanso#1419): ryu_d2d removes digits two at a time. This is a
+# RUNTIME change -- src/runtime.c, one function -- and the library row moved
+# anyway: 144,858,538 -> 144,836,246, -22,292 (-0.0154%).
+#
+# `kanso check` stops before codegen, so no decision this row counts can have
+# been altered by a runtime edit. What moved is the LAYOUT: src/runtime.c is
+# compiled into the compiler and its bytes shift what sits where. CLAUDE.md
+# has the rule and this row is another instance of it -- regenerate from
+# whatever base CI last ran, say so, and do not reason from the size.
+#
+# The size especially. kanso#1417 read the same three-line runtime diff on
+# four bases and got four different answers, the module row changing sign
+# twice and the fourth reading eight times the third. A layout delta is a
+# property of one binary's arrangement and carries no information about the
+# change that provoked it.
+#
+# compile_allocs held at 27,937 and compile_memory is byte-identical, which
+# is the expected pair: those two really cannot move on a runtime edit.
+#
+library_instructions=144836246

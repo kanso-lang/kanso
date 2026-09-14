@@ -436,11 +436,39 @@
 # delta is a fixed number of tests per run rather than anything that scales, so
 # the two hosts differ only in what a test costs them.
 #
+# 2026-09-14 (kanso#1419): ryu_d2d's general branch removes digits two at a
+# time instead of one. The `if (vp/100 > vm/100)` block became a `for (;;)`
+# over the same body, so a float with four removable digits makes two trips
+# where it made four.
+#
+# Four rows fall and ten hold to the digit:
+#
+#   encodebench  3,641,023,306 -> 3,616,600,106   -24,423,200   -0.6707%
+#   livebench    3,115,992,526 -> 3,091,569,326   -24,423,200   -0.7838%
+#   runbench     2,003,021,871 -> 1,997,526,651    -5,495,220   -0.2743%
+#   oneshot         19,292,672 ->     19,231,614       -61,058   -0.3165%
+#   widebench       33,078,691 ->     33,070,691        -8,000   -0.0242%
+#
+# encodebench and livebench fall by the SAME 24,423,200. They are two programs
+# over one encode path and the floats in them are the same floats; the equality
+# is the measurement agreeing with itself, not a coincidence to explain.
+#
+# The container read -0.2660% on runbench and CI reads -0.2743%, a ratio of
+# 1.031. Round one of this branch profiled a binary older than src/runtime.c
+# and read the OLD shape at 1,994,173,231; the number above is the rebuilt one.
+#
+# The margin is NARROWER than the pull request first claimed. That body said
+# both loops cost the same sixteen instructions, so a trip taking two digits
+# was worth two taking one. Sixteen was the count of the code being REPLACED.
+# The fused loop disassembles to twenty-one at 0x39190-0x391d2, seven of them
+# register moves carrying vp/vm/vr around the back edge. The trade is 21
+# against 32, not 16 against 32, and the rows above are what it is worth.
+#
 jsonbench 1250438261
-encodebench 3641023306
-oneshot 19292672
+encodebench 3616600106
+oneshot 19231614
 basket 34281871
-widebench 33078691
+widebench 33070691
 deepbench 371382179
 escapebench 82969017
 pendbench 219476888
@@ -448,7 +476,7 @@ indexbench 3265296
 scanbench 528870249
 digestbench 9837152
 readbench 4629745
-livebench 3115992526
+livebench 3091569326
 # 2026-09-06 (the run program joins): `runbench 3043743748` is a NEW row and
 # nothing regressed to make it appear. It is the program Clay's gavel that day
 # made the objective's whole run-speed term, and the thirteen rows above it
@@ -506,4 +534,4 @@ livebench 3115992526
 #
 # The uniform -8 across six rows is one instruction on a path each program
 # takes eight times, and the four flat rows never take it at all.
-runbench 2003021871
+runbench 1997526651
