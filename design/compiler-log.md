@@ -4881,25 +4881,39 @@ Runtime did NOT move. `work:success` on the same run, runbench 2,003,021,871
 and all thirteen other rows identical to their goldens, which is the shape a
 front-end change should have: nothing this pass decides reaches the emitter.
 
-## the base moved under all four rows, and the direction is predictable
+## the base moved under all four rows, and the rule called both halves right
 
-kanso#1414 landed after that sitting. It removes the union-build from
+kanso#1414 landed after the first sitting. It removes the union-build from
 `name_types` when a group has one arm, which is work every visit of this
-fixpoint was doing, so the four rows above are deltas against a base that has
-since got cheaper by 120,881 module instructions on its own.
+fixpoint was doing, so the four rows measured against the old base were
+deltas against a base that had since got cheaper on its own.
 
-CLAUDE.md already says which way that cuts. A delta survives a change of base
-when the work removed is a fixed count of operations, and does not when it is
-a share of a pile something else has just made smaller. This one is the second
-kind: the saving is 1,575 visits that no longer happen times what a visit
-costs, and kanso#1414 made a visit cost less. So the four rows go back to
-main's values, round three is deliberately red on them, and the expectation
-written down before CI answers is that the fall comes back **smaller** than
--6,434,951.
+CLAUDE.md says which way that cuts, and the prediction went into the branch
+before CI answered: the saving here is visits that no longer happen times
+what a visit costs, kanso#1414 made a visit cost less, so the fall should
+come back SMALLER. CI, on the merged base:
 
-The two changes also meet in the code rather than only in the number. The
-one-arm shortcut returns a group's answer without walking the loop that
-records the read, so the merge pushes the dependency there too — a worklist
-that never hears about that edge stops before the answer has finished
-growing. The four-hop `relayed` fixture is what would catch it, and it is
-green.
+    compile_instructions   43,910,543 ->  42,877,925  -1,032,618  -2.3516%
+    entry_instructions    146,573,721 -> 144,056,402  -2,517,319  -1.7174%
+    library_instructions  147,378,070 -> 144,858,538  -2,519,532  -1.7096%
+    summed                337,862,334 -> 331,792,865  -6,069,469  -1.7963%
+    compile_allocs            28,361  ->     27,937         -424  -1.4950%
+
+The summed fall came back 365,482 instructions smaller than the -6,434,951
+read against the old base. That is the rule's first half.
+
+The second half is the allocation row, and it is the more interesting one.
+`compile_allocs` fell 424 against the old base and 424 against the new one --
+the same number, to the allocation, across a change of base that moved every
+instruction row beside it. An allocation is a count of operations. It does
+not care what else got cheaper, because nothing kanso#1414 did removes a
+`HashSet` this fixpoint builds; it only made the instructions around one
+cheaper. The three instruction rows are a share of a pile, and a share
+shrinks when the pile does.
+
+So one run of one branch shows both halves of the rule, in the same table:
+the counter that survives a change of base and the counters that do not,
+told apart by what they count rather than by how they behaved.
+
+The trend gate reads the four as improved and nothing as worsened.
+

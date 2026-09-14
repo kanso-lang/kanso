@@ -1426,4 +1426,18 @@
 # it returns. It hands the set back instead. The pre-size beside it was
 # measured and DECLINED: a capacity for a set whose final size nothing knows
 # before the loop that fills it costs more than the growth it saves.
-compile_instructions=43910543
+# 2026-09-14 (kanso#1418): compile_instructions 43,910,543 -> 42,877,925, a
+# FALL of 1,032,618 (-2.3516%). The advisory fixpoint stops being
+# round-robin: `return_type_names` asked all 315 declarations of
+# bench/compile_corpus over six passes, 1,890 visits of which 142 learned
+# anything. It is a worklist on the read graph now -- a body's `name_types`
+# reads are the same indices on every visit, so the first pass records them
+# and after that a declaration is re-asked only when an answer it read has
+# grown.
+#
+# Against the pre-kanso#1414 base this row read 42,908,199, a fall of
+# 1,123,225. kanso#1414 removed the union-build from the one-arm case, which
+# is work every visit was doing, so the saving here -- visits that no longer
+# happen, times what a visit costs -- lost 90,607 when the second factor
+# shrank. Runtime did NOT move: `work:success`, runbench 2,003,021,871.
+compile_instructions=42877925
