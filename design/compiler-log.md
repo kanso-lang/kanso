@@ -4791,6 +4791,18 @@ byte-identical. The reorder lives in `src/runtime.c` and every program links
 it, so the cost is shared; the spread is which arms a program's own code makes
 reachable. That vein carries no welfare term.
 
+Summed over the fourteen binaries that vein reads `text 1,734,268 ->
+1,734,716`, a rise of 448 bytes: eight times 32 and four times 48.
+
+The trend gate refused the branch until that figure was written down, and the
+mechanism is worth recording. It searches the branch's log delta for a
+worsened counter's name AND for the value it landed on, as two separate
+matches. This entry used the word `text` three times and quoted only the
+per-row deltas, so the name matched and the number did not. The number is the
+half that carries the weight: a name on its own licenses every later move of
+that counter on the branch, which is how a mutation once set a named counter
+to 999,999,999 and left this gate green.
+
 The three compile veins moved too, which is the layout prior CLAUDE.md
 records for any edit to the compiler's own bytes: `src/runtime.c` is
 `include_str!`'d into the compiler, so its length and contents move the
