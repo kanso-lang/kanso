@@ -1909,6 +1909,18 @@ error[name]: `builtin_probe/hello` is internal to the standard library
 
 <p><code>kanso build --counters</code> now keeps the gates and a plain build strips them, so the twelve benchmarks the cost goldens read are built twice and everything else is built once. two cheaper escapes were tried first and both are worse. marking the loads invariant is arguably sound — the switch is written once, before any emitted code runs — and it does common-subexpression them; it measures 0.0877% slower with 288 bytes more machine code, because keeping the value live costs more than the reload saved. and the gate cannot simply be deleted with the fast path counting for itself: the emitted path takes its header from the arena, where the slow path reaches the allocator and increments two counters the goldens pin, so dropping the gate blinds them and keeping them exact costs three unconditional read-modify-writes against the gate&#39;s two instructions.</p>
 
+<h2 id="digitpairs"><span class="sec-num">66</span>seventeen digits in, four digits out, one at a time</h2>
+
+<p>a double carries about seventeen significant decimal digits. a float a program writes down &#8212; a price, a coordinate, a measurement someone typed &#8212; carries three or four. printing one means working out which of the seventeen the shortest representation actually needs, and that is done by taking digits off the end until taking one more would make the number ambiguous.</p>
+
+<p>so the loop that takes them off runs about thirteen times per float, and it was taking one digit a trip. sixteen instructions each: three multiply-highs and three shifts, which is what dividing three 64-bit numbers by ten costs, plus a counter, a compare and a branch. measured on the encode corpus it ran <strong>9.41</strong> times a call and carried a third of the whole renderer.</p>
+
+<p>a step that takes two digits at once was already sitting beside that loop, and it fired once. it costs the same sixteen instructions &#8212; three divisions by a hundred are three divisions &#8212; so a trip that takes two is worth two that take one. it loops now, and the one-at-a-time loop runs afterwards for the odd digit at the end.</p>
+
+<p>the digits are the same digits, and that was checked rather than argued: all four binaries run, two programs, byte-identical output. the loop decides how fast the digits arrive and nothing else about them.</p>
+
+<p>the renderer costs <strong>468.5</strong> instructions a float, and it cost that in both benchmarks that call it &#8212; 191,070 calls in the run program and 849,200 in the encode benchmark, agreeing to one decimal place. two corpora with nothing in common except that the numbers in them are numbers people wrote.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>

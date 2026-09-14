@@ -4779,3 +4779,67 @@ of a pile that something else has just made smaller.
 
 Floor banked, welfare 68.68 held. `all_pages.sh --write` rewrote four
 compiler.html lines quoting the three goldens.
+
+## 2026-09-14 — a float a program writes down has few digits, and ryu took them off one at a time
+
+`render_ryu` is 4.49% of the run program and 10.62% of encodebench, at
+exactly 468.5 instructions a float in both — 191,070 calls in one and 849,200
+in the other, and the same number per call to one decimal place. That
+agreement is the first thing worth noticing: whatever the cost is, it does
+not depend on which corpus the floats came from.
+
+Instruction-level callgrind says where it goes. One sixteen-instruction block
+at 0x12050 runs **9.41 times a call** and carries 127,916,800 of encodebench's
+397,836,000 — 32% of the function. It is the general digit-removal loop:
+
+    mov %rsi,%r9 / mov %rdx,%rcx / mov %rsi,%rax
+    mul %rbp / mov %rdx,%rsi / shr $0x3,%rsi / inc %ebx
+    mov %r8,%rax / mul %rbp / mov %rdx,%r8
+    mov %rcx,%rax / mul %rbp
+    shr $0x3,%r8 / shr $0x3,%rdx / cmp %rdx,%r8 / ja
+
+Three multiply-highs and three shifts — `vp / 10`, `vm / 10`, `vr / 10` — a
+counter, a compare and the branch. LLVM had already sunk the `vr % 10` and
+the `round_up` out of the loop, because only the last trip's value survives.
+
+Nine and a half trips is a lot, and the reason is the corpus rather than the
+algorithm. `vr` starts with seventeen significant digits. A float a program
+writes down — a price, a coordinate, a measurement — has three or four, so
+thirteen or fourteen come off, and the loop takes them one at a time.
+
+## the hundred-step was already there and fired once
+
+    int round_up = 0;
+    uint64_t vpd100 = vp / 100, vmd100 = vm / 100;
+    if (vpd100 > vmd100) { ... removed += 2; }
+    for (;;) { ... the ten-loop ... }
+
+Two digits for the same three multiply-highs the ten-loop spends on one, and
+it ran once. It is a `for (;;)` now. The shapes are otherwise identical: the
+same rounding test on the two removed digits (`vrm100 >= 50` is "is the tail
+at least half of a hundred", which is what `vrm >= 5` is for ten), and the
+ten-loop still runs afterwards to take a last odd digit.
+
+Measured on one container sitting, four binaries built from one tree with
+equal-length names, all four run from the repository root:
+
+    encodebench  3,747,072,758 -> 3,723,499,558   -23,573,200  -0.6291%
+    runbench     1,994,263,401 -> 1,988,959,431    -5,303,970  -0.2660%
+
+The bytes out are identical on both programs. That was checked by diffing the
+output of all four binaries, and it is the only check that matters here: the
+loop decides how fast the digits arrive, never which digits they are.
+
+## the first reading was of two dead programs
+
+The first output comparison ran the four binaries from the scratch directory
+they were built into, and both "agreed" on fifteen bytes. Callgrind then read
+315,755 instructions for a program that takes three and a half billion.
+
+That is the second trap in `bench/instructions_golden.txt`'s own header,
+written down after it cost somebody a reading before: the benchmarks resolve
+their data relative to the working directory, so a run from anywhere else
+dies at the first open and exits clean. Two dead programs agree about
+everything. Re-run from the repository root, both produced `done: 74072800`
+and the comparison meant something.
+
