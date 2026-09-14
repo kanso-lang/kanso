@@ -1923,6 +1923,16 @@ error[name]: `builtin_probe/hello` is internal to the standard library
 
 <p>the answers are the same, and that was checked rather than argued: both binaries over 1,074 files and 45 module directories, nothing diverging. a fixpoint&#39;s result does not depend on the order its queue drains — the union is monotone and the loop runs until nothing grows — but the differential costs a minute and the argument is not the evidence.</p>
 
+<h2 id="alreadyright"><span class="sec-num">67</span>two encode leads that turned out to already be right</h2>
+
+<p>both of these are declines, and they are here so the ideas stay declined. the section before this one is a change that landed; these two are the same amount of work, spent finding out that the code was already doing the thing.</p>
+
+<p>the first was a standing note that the encode path pays for a 32-byte arena conversion on every append, worth about 0.61%. re-attributing it on merged main refuted the note outright: every append the emitter writes already mutates in place, so there is no conversion to remove. the 80.5/19.5 split the note rested on was a reading of the wrong two rows.</p>
+
+<p>the second was ryū&#39;s pair loop, which extracts two decimal digits at a time out of a table. the loop looked like it carried a division that a multiply-high could replace. it does not: the division is already compiled to a multiply-high, and that is visible in the disassembly rather than inferred. two reformulations were written and both measured <em>faster</em> on a first reading — and both had introduced a real divide that the original did not have, which the second reading caught. a reformulation only measures anything if it is still computing the same thing, and that has to be checked in the disassembly rather than assumed from the source.</p>
+
+<p>both cost a day the queue could have spent elsewhere, and both are written down here so nobody re-opens them. the standing note claimed 0.61% and carried no measurement, which is how it survived long enough to be worth a day.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>
