@@ -1420,4 +1420,13 @@
 # immutable borrow so its keys can be `&str`, and fuse_enumerable's short-name
 # set borrows outright. Runtime did NOT move: `work:success` on the same run,
 # runbench 2,003,021,871, identical to its golden.
-compile_instructions=44031424
+# 2026-09-14 (kanso#1418): compile_instructions 44,031,424 -> 42,908,199, a
+# FALL of 1,123,225 (-2.5510%). The advisory fixpoint stops being round-robin:
+# `return_type_names` asked all 315 declarations of bench/compile_corpus over
+# six passes, 1,890 visits of which 142 learned anything. It is a worklist on
+# the read graph now -- a body's `name_types` reads are the same indices on
+# every visit, so the first pass records them and after that a declaration is
+# re-asked only when an answer it read has grown. Runtime did NOT move:
+# `work:success` on the same run, runbench 2,003,021,871, identical to its
+# golden.
+compile_instructions=42908199

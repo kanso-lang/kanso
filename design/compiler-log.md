@@ -4790,3 +4790,27 @@ evidence.
 `compile_cost` AGREED; the other six gates refuse on this host. Nothing the
 emitter writes changed, which is the expected shape: this pass produces
 advisories and feeds no code.
+
+## CI's four rows, and a container projection that ran 13% high
+
+    compile_instructions   44,031,424 ->  42,908,199  -1,123,225  -2.5510%
+    entry_instructions    146,767,592 -> 144,112,872  -2,654,720  -1.8087%
+    library_instructions  147,572,025 -> 144,915,019  -2,657,006  -1.8004%
+    summed                338,371,041 -> 331,936,090  -6,434,951  -1.9017%
+    compile_allocs            28,361  ->     27,937         -424  -1.4950%
+
+The container measured -7,251,289 summed on two builds from one tree. CI read
+-6,434,951, which is 0.8874 of the projection. The compile gates refuse on this
+host, and this is the second reading this week where the refusal moved a delta
+rather than a level — kanso#1417 projected exactly half of CI's on both work
+rows. A worklist's saving is rounds of walking that no longer happen, and how
+much each walk costs is an inlining decision the two toolchains make
+differently. Project the sign from a refused host; take the size from CI.
+
+`compile_allocs` fell 424. `body_types` allocates a `HashSet` per visit, so
+1,890 visits became 315 plus re-asks; against that the worklist keeps a reverse
+read map and a queue, and the net is the 424.
+
+Runtime did NOT move. `work:success` on the same run, runbench 2,003,021,871
+and all thirteen other rows identical to their goldens, which is the shape a
+front-end change should have: nothing this pass decides reaches the emitter.

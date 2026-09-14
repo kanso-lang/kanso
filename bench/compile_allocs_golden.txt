@@ -441,4 +441,10 @@
 # 2026-09-14 (kanso#1416): compile_allocs 29,169 -> 28,361, a fall of 808
 # (-2.7705%). Two tables built owned `String` keys for names read once and
 # dropped; both borrow now. The container projected exactly 808.
-compile_allocs=28361
+# 2026-09-14 (kanso#1418): compile_allocs 28,361 -> 27,937, a fall of 424
+# (-1.4950%). The advisory worklist. `body_types` builds a `HashSet` per visit
+# and the round-robin built 1,890 of them; the worklist builds 315 plus one per
+# re-ask. Against that the worklist keeps two vectors per declaration -- the
+# reverse read map and the queue -- so the net is 424 rather than the visit
+# count.
+compile_allocs=27937
