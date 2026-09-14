@@ -60,8 +60,8 @@ research mandate it left with.)
 **Cited:** the archive's "rider: pure fallibility is boxed too" (2026-08-31),
 "gavel: effects are types, and the words are the only doors" (2026-08-29),
 "gavel: the suffix contracts are refusals, as ruled in July" (2026-09-03),
-and the live log's "the effect type is spellable" (2026-09-10), which sized
-the rider. None of them says what a non-`!` declaration that raises `err` in
+and "the effect type is spellable" (2026-09-10), which sized the rider and
+moved to the archive on 2026-09-14 with the log's trim back to forty. None of them says what a non-`!` declaration that raises `err` in
 one arm and answers a value in another yields, or where its value arm is
 lifted into the box.
 
