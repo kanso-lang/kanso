@@ -4616,3 +4616,53 @@ container projected 776,055 for the peak and CI read the same number.
 
 Runtime did not move: `work:success` on the same run, runbench 2,003,021,871,
 identical to its golden. Floor 68.56 -> 68.64.
+
+## 2026-09-14 — the string arm is asked first, and a list index pays for it
+
+`k_b_at` is what `at` compiles to, and it answers five container kinds by
+asking their tags in order. The list arm stood first. runbench indexes text
+690,000 times and lists 7,900, so the list test was two instructions the
+common case paid to be told no.
+
+The arms swap. The string arm is asked first; every other arm keeps its
+place. Nothing else in the function changed, and the bytes out are the same,
+so no golden but the work vein moves.
+
+Measured on the container, `env -i` under callgrind, both binaries copied
+into one directory under EQUAL-LENGTH names:
+
+    runbench     1,994,173,291 -> 1,992,793,291  -1,380,000  -0.0692%
+    indexbench       3,226,622 ->     3,186,624     -39,998  -1.2396%
+
+The other twelve work rows are byte-identical. 1,380,000 is 690,000 calls
+times exactly two instructions, which is the attribution the profile gave
+before the change was written.
+
+The whole vein was read rather than runbench alone, on purpose: a list index
+now pays the two instructions a string index stopped paying, and a row that
+rose would have been the trade to state. None rose.
+
+**Three harness traps cost three wrong readings on the way, and all three are
+already written into `bench/instructions_golden.txt`'s own header.** The
+first: binaries named `base-runbench` and `new-runbench` differ by one
+character of exec path, and the kernel puts that path on the new process's
+stack for libc to walk before main — four benchmarks read exactly -14 and one
++14, which is the artifact and not the change. Equal-length prefixes
+(`aaa-`/`bbb-`) fix it. The second: the benchmarks resolve their data
+relative to the working directory, so running them from `/tmp/ab/aa` and
+`/tmp/ab/bb` gave eight rows near 225,000 — a work row that small means the
+program DIED, and running one by hand says so: `cannot read
+bench/large.json: no such file`. One directory, `bench` symlinked beside the
+binaries. The third is the container's own: `scripts/gates/instructions.sh`
+refuses on this host (glibc 2.39-0ubuntu8.7 / clang 18.1.3 against the
+golden's 8.9 / 19.1.1) and never measures at all, which is why these rows are
+a direct callgrind sitting and the golden is regenerated from CI's.
+
+Row `list_test_first`, mutation `a_list_test_every_string_index_pays.sh` —
+an awk block swap that puts the list arm back in front, verified by sorting
+both files to prove the mutation moves lines and writes none.
+
+Under the mutation, on the same sitting and against the shipped binary:
+runbench 1,992,792,731 -> 1,994,172,731 (+1,380,000 / +0.0692%) and
+indexbench 3,186,064 -> 3,226,062 (+39,998 / +1.2555%). Exactly the negative
+of the change, to the instruction.

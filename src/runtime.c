@@ -7492,12 +7492,12 @@ static __attribute__((noinline, cold)) void k_die_index(KValue container) {
 KValue k_b_at(KValue container, KValue index) {
     if (!k_not_failure(container)) return container;
     if (!k_not_failure(index)) return index;
-    if (container.tag == K_LIST && index.tag == K_INT) {
-        KList* l = k_as_list(container);
-        long long i = index.payload;
-        if (i < 1 || i > l->len) return k_none();
-        return l->items[i - 1];
-    }
+    /* The STR arm is asked FIRST. `length s[i]` over text is the index this
+       runtime meets most -- 690,000 calls on runbench, all of them from
+       tally_4 -- and the LIST test in front of it was two instructions
+       every one of them paid to be told no. A list index pays the same two
+       instructions now, which is why this is measured on the whole work
+       vein rather than on runbench alone. */
     if (container.tag == K_STR && index.tag == K_INT) {
         KStr* s = k_as_str(container);
         long long want = index.payload;
@@ -7553,6 +7553,12 @@ KValue k_b_at(KValue container, KValue index) {
         os->cap = -2;
         KValue one; one.tag = K_STR; one.payload = k_ptr(os);
         return one;
+    }
+    if (container.tag == K_LIST && index.tag == K_INT) {
+        KList* l = k_as_list(container);
+        long long i = index.payload;
+        if (i < 1 || i > l->len) return k_none();
+        return l->items[i - 1];
     }
     if (container.tag == K_BYTES && index.tag == K_INT) {
         KBytes* b = k_as_bytes(container);
