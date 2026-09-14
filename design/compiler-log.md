@@ -4918,63 +4918,70 @@ told apart by what they count rather than by how they behaved.
 The trend gate reads the four as improved and nothing as worsened.
 
 
-## 2026-09-14 — the header the encoder still allocates, counted rather than profiled
+## 2026-09-14 — the append is already in place everywhere, and the counter that said otherwise counts two constructors
 
 The standing lead off `encode_onto` was "a 32-byte arena conversion at 0.61%".
-Re-attributed on merged main (15e1c3b7), the figure is wrong in both halves and
-the real one is bigger.
+Re-attributing it on merged main (15e1c3b7) refuted the lead and produced two
+wrong answers on the way, both recorded here because the second was caught
+only by going back for the call sites.
 
-**It cannot be read off a profile at all.** `callgrind_annotate` on runbench
-(1,994,172,731 instructions) has no row for `k_bytes_owned` and none for
-`k_alloc`: both are inlined into every caller, which is what kanso#1221 and
-kanso#1298 were for. The outlined append family is all that shows —
-`k_b_append_rendered` 23,466,064 (1.18%), `k_b_append_grow` 19,358,910
-(0.97%), `k_b_append_slice` 9,141,444 (0.46%), `k_b_append_range` 2,000,394
-(0.10%), and two more under a thousandth, summing to 54,010,642 (2.71%). The
-header allocation is spread inside those and inside the callers the fast path
-inlined into, so no self row carries it and the 0.61% was not read from one.
+**It is not readable from a profile.** `callgrind_annotate` on runbench —
+1,994,172,731 instructions, `env -i`, run from the repository root — has no row
+for `k_bytes_owned` and none for `k_alloc`. Both inline into every caller,
+which is what kanso#1221 and kanso#1298 were for. Only the outlined append
+family shows: `k_b_append_rendered` 23,466,064 (1.18%), `k_b_append_grow`
+19,358,910 (0.97%), `k_b_append_slice` 9,141,444 (0.46%), `k_b_append_range`
+2,000,394 (0.10%), two more under a thousandth, summing to 54,010,642 (2.71%).
+So the 0.61% was not read off a self row, because there is none.
 
-**A counter carries it exactly.** `k_stat_sh_bytes` is incremented in
-`k_bytes_owned` and nowhere else, by `sizeof(KBytes)`, which is three words:
+**THE FINDING: every emitted append in the run program already mutates in
+place.** Counting call sites in `runbench.ll` rather than reasoning about the
+analysis:
 
-    sh_bytes      41,290,272
-    sizeof        24
-    calls         1,720,428     -- and it divides exactly
+    k_b_append_mut_byte     18   mutate = 1
+    k_b_append_mut           2   mutate = 1
+    k_b_append_rendered      2   both with the literal i64 1
+    k_b_append_byte          0
+    k_b_append               1   inside the k_b_append_byte SHIM, not program code
+    k_b_append_slice         1   inside the k_b_append_slice_fast SHIM
 
-Against `append_fast` 8,834,013, that splits the fast path:
+Twenty-two emitted sites, and the only two that pass a non-mutating flag are
+the slow-path tails inside the runtime's own inline shims — and
+`k_b_append_byte`, the shim holding one of them, has no call sites at all. The
+uniqueness analysis is not failing on this workload. **`src/linear.rs` is
+refuted as a lead for the run program**, and the round that would have widened
+its Perceus fixpoint, with the differential sweep an aliasing argument owes,
+would have bought nothing.
 
-    mutate in place   7,113,585   80.5%
-    allocate a header 1,720,428   19.5%
+**The wrong answer that got there: a counter with two increment sites.**
+`k_stat_sh_bytes` reads 41,290,272, and `sizeof(KBytes)` is three words, so
+41,290,272 / 24 = 1,720,428 exactly — a clean division, which is precisely what
+made it convincing. It was written down as `k_bytes_owned`'s call count, and
+against `append_fast` 8,834,013 that gave a fast path splitting 80.5% mutating
+against 19.5% allocating, with a ceiling of 1.04–1.38% of runbench.
 
-Four in five fast appends already write their length in place. The remaining
-one in five allocates a KBytes the caller may keep, and those 1,720,428
-headers are 28.9% of runbench's 5,958,961 allocations — the single largest
-allocation shape in the program.
+Every one of those numbers is withdrawn. `k_stat_sh_bytes` is incremented at
+TWO sites: `k_bytes_owned` (runtime.c:7965) and `k_bytes_view`
+(runtime.c:6828), the borrowed-view constructor that builds the same 24-byte
+header with `cap = 0`. 1,720,428 is the two summed. Nothing separates them —
+`k_stat_view_allocs` is bumped at runtime.c:6489, in neither of them, so it is
+not the split either. The header-allocation count is UNKNOWN, and with it the
+ceiling.
 
-**Ceiling, and why it is not reachable.** The arena path is a round-up, a
-predicted-false counter test, a predicted-false bounds test and a pointer
-bump, then three stores and a tag: call it twelve to sixteen instructions, so
-1.04% to 1.38% of runbench. That is the whole prize if every one of the
-1,720,428 disappeared, and they cannot. A header is allocated exactly when
-the analysis could not prove the accumulator unique, and sometimes it is not
-unique — the old value is still live and a second header is what keeps the two
-lengths apart. What is reachable is the gap between "not unique" and "not
-proven unique", and nothing here measures that gap.
+An exact division is not a check. It follows from the two sites sharing one
+`sizeof`, so it would have held however the calls divided between them.
 
-**Where a fix would live, and why this is not a small change.**
-`src/linear.rs` decides it: a Perceus-style GREATEST fixpoint that assumes
-every parameter linear and every group's result unique, then removes what the
-code disproves. `mutate` at each of the four call sites is
-`in_place_pushes.contains(&(file, line, col))`. Widening it is a soundness
-argument about aliasing, not a rewrite — its own header says unsoundness here
-is memory corruption. A round that takes this owes a differential sweep, not
-just a benchmark.
-
-Recorded rather than built. The number to carry forward is 1,720,428 headers
-and the 80.5/19.5 split, not the 0.61%.
+**What to carry forward.** The append path is done: it mutates in place at
+every site the run program emits, and no lead survives there. Anyone returning
+to `k_bytes_owned` needs a counter of its own first — the existing one cannot
+answer the question, and a second constructor is exactly what a shared counter
+hides.
 
 THE SHAPE TO CARRY. `callgrind_annotate` ships with valgrind and was not being
 used; the hand-written parser that once read 99,188,064,506 against a
-1,994,172,731 program was solving a problem the tool already solves. Reach for
-it first. And when a function has no row, that is information — it inlined —
-not a reason to go looking for the cost somewhere it is not.
+1,994,172,731 program was solving a problem the tool already solves. And a
+function with no row has inlined, which is information rather than a reason to
+hunt for the cost elsewhere. Both of those held. What did not hold was reading
+one counter as one call site: `grep -n` for the counter name before dividing by
+anything, and count the emitted call sites before reasoning about the pass that
+decides them.
