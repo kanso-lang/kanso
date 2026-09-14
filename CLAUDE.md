@@ -59,9 +59,15 @@ machinery: gavels, the log, the ledger, and the rules in this file. A session
 should know which it is before it starts editing.
 
 The chat does not write code. Its pull requests touch design/pending-gavels.md,
-design/compiler-log.md and this file. A change to the compiler, its goldens or
-its benchmarks is cloud's, however small it looks. Clay, 2026-09-08: "your PRs
-should only write to gavels and such, and cloud should do the coding work."
+design/compiler-log.md, STATUS.md and this file. A change to the compiler, its
+goldens or its benchmarks is cloud's, however small it looks. Clay, 2026-09-08:
+"your PRs should only write to gavels and such, and cloud should do the coding
+work."
+
+STATUS.md joined that list on 2026-09-14, having been missing from it since the
+"Ruled, unbuilt" rule below was written on 2026-09-09 — and that rule makes
+keeping STATUS.md current the chat's job, in those words. A session reading the
+lane sentence strictly would have found its own assignment out of lane.
 
 Each session merges its own pull requests on green. Clay named the alternative
 on the same day and is content with either: cloud sweeping and landing what the
@@ -522,9 +528,13 @@ Only Clay arms, disarms or retimes it.
   **It is an
   index, not a percentage** — the ceiling is a hundred, where every term costs
   nothing, and the origin is arbitrary. Only its direction and the size of its
-  moves mean anything. It reads 66.00 as of 2026-09-07. Every
-  term is deterministic, so the number moves only when somebody changes the
-  compiler. CI fails when it drops.
+  moves mean anything. **Do not read the current score from this file.** The
+  line here said 66.00 from 2026-09-07 until 2026-09-14, by which date the
+  floor stood at 68.73238080266131 — a week of ratcheted gains invisible to
+  anyone who trusted the sentence. `bench/welfare_floor.json` carries the
+  floor and the `why` of every move, and `kanso run scripts/welfare` reads
+  the tree. Every term is deterministic, so the number moves only when
+  somebody changes the compiler. CI fails when it drops.
 - **The sum is the objective; the terms are diagnostics.** A term getting worse
   is not a problem to defend if the sum went up — that trade is precisely what
   the weights are for, and refusing it would be optimising a part against the
