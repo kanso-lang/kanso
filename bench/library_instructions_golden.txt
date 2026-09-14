@@ -257,4 +257,6 @@
 # FALL of 846,687 (-0.5581%). The box question joins the second fused descent.
 # 2026-09-13 (kanso#1415): library_instructions 150,868,905 -> 148,544,439, a
 # FALL of 2,324,466 (-1.5407%). The qualified-name join; see the compile row.
-library_instructions=148544439
+# 2026-09-14 (kanso#1416): library_instructions 148,544,439 -> 147,572,025, a
+# FALL of 972,414 (-0.6546%). The borrowed dedup keys; see the compile row.
+library_instructions=147572025

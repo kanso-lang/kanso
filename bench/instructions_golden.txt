@@ -436,6 +436,25 @@
 # delta is a fixed number of tests per run rather than anything that scales, so
 # the two hosts differ only in what a test costs them.
 #
+# 2026-09-14 (kanso#1417): the string arm is asked first in k_b_at. Two rows
+# move and twelve are byte-identical. runbench 2,003,021,871 -> 2,000,261,871,
+# a FALL of 2,760,000 (-0.1378%); indexbench 3,265,296 -> 3,185,298, a FALL of
+# 79,998 (-2.4500%). The dispatch tested K_LIST before K_STR, so every string
+# index paid a compare and a branch for a question the arriving tag had
+# already settled, and the run program's tally_4 loop asks it 690,000 times.
+# A list index now pays those two instructions instead, which is why the row
+# to read is the whole vein rather than indexbench alone.
+#
+# THE CONTAINER PROJECTED HALF OF BOTH, and that is the finding to carry.
+# Its A/B read -1,380,000 on runbench against CI's -2,760,000, exactly twice,
+# and -39,998 on indexbench against CI's -79,998, twice and two more. The A/B
+# was run on a host this vein's gate had already refused (glibc 2.39-0ubuntu8.7
+# and clang 18.1.3 against the 8.9 and 19.1.1 above). The header says a refused
+# host cannot be compared for a LEVEL; this is the first time one has been
+# shown to halve a DELTA. Inlining decides how many call sites reach the
+# reordered test, and the two toolchains reach it a different number of times.
+# From a refused host, project the sign and not the size.
+#
 jsonbench 1250438261
 encodebench 3641023306
 oneshot 19292672
@@ -444,7 +463,7 @@ widebench 33078691
 deepbench 371382179
 escapebench 82969017
 pendbench 219476888
-indexbench 3265296
+indexbench 3185298
 scanbench 528870249
 digestbench 9837152
 readbench 4629745
@@ -506,4 +525,4 @@ livebench 3115992526
 #
 # The uniform -8 across six rows is one instruction on a path each program
 # takes eight times, and the four flat rows never take it at all.
-runbench 2003021871
+runbench 2000261871
