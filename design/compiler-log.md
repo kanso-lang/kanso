@@ -4799,7 +4799,24 @@ of it. On the kanso#1415 base CI read compile_instructions +35, entry -1,854
 and library +230 against that base's goldens — three digits on a
 147-million-instruction row, which is layout and nothing else.
 `compile_allocs` and `compile_peak_bytes` were both byte-identical, as they
-have to be: no allocation site changed. Those three rows are NOT written
-here. This branch has merged kanso#1416, which moved all three on its own, and
-a layout delta does not add — CI measures them again on the merged base and
-those are the rows that land.
+have to be: no allocation site changed.
+
+CI measured them again on the merged base, and those are the rows that landed:
+
+    compile_instructions   44,031,424 ->  44,032,307    +883  +0.0020%
+    entry_instructions    146,767,592 -> 146,765,356  -2,236  -0.0015%
+    library_instructions  147,572,025 -> 147,569,147  -2,878  -0.0020%
+    summed                338,371,041 -> 338,366,810  -4,231  -0.0013%
+
+**The three rows disagree in sign**, and that is the tell worth keeping: the
+module row rose while the other two fell, on one binary, from one change. A
+decision the front end makes differently moves all three the same way, because
+all three run the same passes. Layout does this instead. `compile_allocs`
+held at 28,361 and `compile_peak_bytes` at 776,055, which is the other half of
+the same statement — the compiler asks exactly what it asked before and pays
+for it in a differently-arranged binary.
+
+Welfare reads 68.69 against a floor of 68.69 with those rows in. Four thousand
+instructions on three hundred and thirty-eight million does not reach the
+objective's resolution, so the bank taken on the work vein alone was already
+the right number and `--set` was not run a second time.

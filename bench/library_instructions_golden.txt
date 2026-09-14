@@ -259,4 +259,9 @@
 # FALL of 2,324,466 (-1.5407%). The qualified-name join; see the compile row.
 # 2026-09-14 (kanso#1416): library_instructions 148,544,439 -> 147,572,025, a
 # FALL of 972,414 (-0.6546%). The borrowed dedup keys; see the compile row.
-library_instructions=147572025
+# 2026-09-14 (kanso#1417): library_instructions 147,572,025 -> 147,569,147, a
+# FALL of 2,878 (-0.0020%). Layout, with the module row rising 883 and the
+# entry row falling 2,236 on the same binary. Summed across the three the
+# compile term moves -4,231 (-0.0013%) -- four thousand instructions on three
+# hundred and thirty-eight million.
+library_instructions=147569147

@@ -1420,4 +1420,11 @@
 # immutable borrow so its keys can be `&str`, and fuse_enumerable's short-name
 # set borrows outright. Runtime did NOT move: `work:success` on the same run,
 # runbench 2,003,021,871, identical to its golden.
-compile_instructions=44031424
+# 2026-09-14 (kanso#1417): compile_instructions 44,031,424 -> 44,032,307, a
+# RISE of 883 (+0.0020%). The string arm is asked first in k_b_at, and
+# `src/runtime.c` is `include_str!`'d into the compiler, so its bytes move the
+# binary this row measures even though `kanso check` never runs a line of it.
+# Nothing the front end decides changed: `compile_allocs` and
+# `compile_peak_bytes` are both byte-identical, as they have to be, since no
+# allocation site moved. 883 instructions on 44 million is layout.
+compile_instructions=44032307
