@@ -4917,3 +4917,38 @@ told apart by what they count rather than by how they behaved.
 
 The trend gate reads the four as improved and nothing as worsened.
 
+
+## 2026-09-14 — five merged leads in a row, and not one of them named a ruling
+
+CLAUDE.md's "Every unbuilt ruling stays in view" rule asks two things of cloud.
+It may order the work however it likes. What it owes in exchange is a sentence:
+the body of a pull request on a self-generated lead says which rulings it
+weighed and why the lead came first.
+
+Read off merged main on 2026-09-14, the five most recent leads carry no such
+sentence. kanso#1413 (the box question joins the second fused descent),
+kanso#1415 (a qualified name is joined), kanso#1416 (two tables clone names),
+kanso#1414 (a union of one set) and kanso#1418 (the advisory fixpoint) run
+from 22 to 102 lines of body apiece and none of them mentions the unbuilt
+list, the ledger, or a ruling of any kind.
+
+**The choices those five made were defensible, which is the point.** By the
+time kanso#1413 opened, the effect type had merged (kanso#1372, 04:12Z), the
+exhaustiveness rule had merged (kanso#1369, 05:16Z), and the book's live
+remainder had merged (kanso#1412, 15:44Z). What was left on the list was the
+pure-fallibility rider, blocked on a ruling nobody has made. There was nothing
+buildable to weigh them against, and a lead was the right call five times
+running.
+
+So the missing sentence costs nothing here, and that is exactly when a habit
+goes. The rule was written on 2026-09-09 because five rulings had stood
+unbuilt through 296 merged pull requests, and what made that possible was
+that no body ever had to say what it had read. A body that says "the list
+holds one row and it is blocked" takes ten seconds and is checkable by anyone
+reading the pull request afterwards. Nothing else in the machinery can tell
+the difference between a lead chosen over a considered list and a lead taken
+off the top of the last pull request's open items.
+
+Recorded rather than filed as a question. The rule stands as written and
+needs no ruling; this entry is the record that it went unobserved five times
+in one day, so the next reader has a date to count from.
