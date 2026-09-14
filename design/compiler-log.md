@@ -4917,3 +4917,64 @@ told apart by what they count rather than by how they behaved.
 
 The trend gate reads the four as improved and nothing as worsened.
 
+
+## 2026-09-14 — the header the encoder still allocates, counted rather than profiled
+
+The standing lead off `encode_onto` was "a 32-byte arena conversion at 0.61%".
+Re-attributed on merged main (15e1c3b7), the figure is wrong in both halves and
+the real one is bigger.
+
+**It cannot be read off a profile at all.** `callgrind_annotate` on runbench
+(1,994,172,731 instructions) has no row for `k_bytes_owned` and none for
+`k_alloc`: both are inlined into every caller, which is what kanso#1221 and
+kanso#1298 were for. The outlined append family is all that shows —
+`k_b_append_rendered` 23,466,064 (1.18%), `k_b_append_grow` 19,358,910
+(0.97%), `k_b_append_slice` 9,141,444 (0.46%), `k_b_append_range` 2,000,394
+(0.10%), and two more under a thousandth, summing to 54,010,642 (2.71%). The
+header allocation is spread inside those and inside the callers the fast path
+inlined into, so no self row carries it and the 0.61% was not read from one.
+
+**A counter carries it exactly.** `k_stat_sh_bytes` is incremented in
+`k_bytes_owned` and nowhere else, by `sizeof(KBytes)`, which is three words:
+
+    sh_bytes      41,290,272
+    sizeof        24
+    calls         1,720,428     -- and it divides exactly
+
+Against `append_fast` 8,834,013, that splits the fast path:
+
+    mutate in place   7,113,585   80.5%
+    allocate a header 1,720,428   19.5%
+
+Four in five fast appends already write their length in place. The remaining
+one in five allocates a KBytes the caller may keep, and those 1,720,428
+headers are 28.9% of runbench's 5,958,961 allocations — the single largest
+allocation shape in the program.
+
+**Ceiling, and why it is not reachable.** The arena path is a round-up, a
+predicted-false counter test, a predicted-false bounds test and a pointer
+bump, then three stores and a tag: call it twelve to sixteen instructions, so
+1.04% to 1.38% of runbench. That is the whole prize if every one of the
+1,720,428 disappeared, and they cannot. A header is allocated exactly when
+the analysis could not prove the accumulator unique, and sometimes it is not
+unique — the old value is still live and a second header is what keeps the two
+lengths apart. What is reachable is the gap between "not unique" and "not
+proven unique", and nothing here measures that gap.
+
+**Where a fix would live, and why this is not a small change.**
+`src/linear.rs` decides it: a Perceus-style GREATEST fixpoint that assumes
+every parameter linear and every group's result unique, then removes what the
+code disproves. `mutate` at each of the four call sites is
+`in_place_pushes.contains(&(file, line, col))`. Widening it is a soundness
+argument about aliasing, not a rewrite — its own header says unsoundness here
+is memory corruption. A round that takes this owes a differential sweep, not
+just a benchmark.
+
+Recorded rather than built. The number to carry forward is 1,720,428 headers
+and the 80.5/19.5 split, not the 0.61%.
+
+THE SHAPE TO CARRY. `callgrind_annotate` ships with valgrind and was not being
+used; the hand-written parser that once read 99,188,064,506 against a
+1,994,172,731 program was solving a problem the tool already solves. Reach for
+it first. And when a function has no row, that is information — it inlined —
+not a reason to go looking for the cost somewhere it is not.
