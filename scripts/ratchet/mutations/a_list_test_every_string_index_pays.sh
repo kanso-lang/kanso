@@ -12,6 +12,12 @@ set -e
 str_arm='    if (container.tag == K_STR && index.tag == K_INT) {'
 list_arm='    if (container.tag == K_LIST && index.tag == K_INT) {'
 bytes_arm='    if (container.tag == K_BYTES && index.tag == K_INT) {'
+# The guard names the file this patches, on its own line, the way every other
+# runtime mutation does: the touched pass selects a row by reading the guard,
+# and a row it selects whose script never greps the file is a row that would go
+# on being selected after the code moved out from under it.
+grep -q "container.tag == K_STR && index.tag == K_INT" src/runtime.c \
+  || { echo "k_b_at has no string arm; rewrite this" >&2; exit 1; }
 for line in "$str_arm" "$list_arm" "$bytes_arm"; do
   n=$(grep -cF "$line" src/runtime.c)
   [ "$n" -eq 1 ] || { echo "k_b_at changed shape ($n for '$line'); rewrite this" >&2; exit 1; }
