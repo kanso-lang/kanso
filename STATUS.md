@@ -90,7 +90,9 @@ lands on main. Verified against the tree on 2026-09-09 by probing the
 compiler; the list is a floor, since the rest of the 2026-08-29 sitting was
 not audited. Swept again on 2026-09-14 against merged main: the effect-type
 row came off, built and merged as kanso#1372, and the exhaustiveness row came
-off with kanso#1369. Two rows remain, and one of them waits on a ruling.
+off with kanso#1369. The book row came off with kanso#1412, which its own
+log entry calls the live remainder of that ruling. One row remains, and it
+waits on a ruling.
 
 ### Pure fallibility is boxed too (2026-08-31)
 
@@ -112,25 +114,28 @@ the pure-fallibility rider" asks whether the box is every err-carrying answer
 measured. Nothing builds until that is ruled. It is the one entry standing in
 the ledger's Blocking section as of 2026-09-14.
 
-### The book teaches the boundary language (queued P1, 2026-08-26)
+**ch04 rides here too.** The book row that stood beside this one came off on
+2026-09-14: ch05 and compiler.html's entry 23 landed with the type's build on
+2026-09-10, kanso#1392 gave ch05 the chain words and their fused spellings,
+kanso#1394 gave ch04 its rescue collision and boundary panel, kanso#1406 gave
+ch05 `done`, and kanso#1412 gave ch04 the clause naming `<t>effect` — the live
+remainder, by its own log entry. What ch04 still owes is its "nothing is asked
+of the signature" framing, which the ledger's own book entry says waits on this
+rider. So the rider's ruling releases the prose with the respell.
 
-Held in the ledger's "Open, not blocking" until the effect type exists; the
-row is here so the dependency is visible from the list cloud reads.
-
-**Unblocked, 2026-09-13.** `book_check` executes every panel and compares its
-output, so ch04/ch05 could not describe the effect type before it shipped. It
-has now shipped (kanso#1372), so this is buildable.
-
-An earlier note here said the prose was already "written and verified on a local
-branch". That branch is not in the compiler worker's container — no branch or
-worktree matching book/ch04/ch05/boundary exists there — so treat the prose as
-unwritten until someone points at a commit. Whoever picks this up writes it
-against merged main and lets `book_check` execute the panels.
+That row also carried a note saying `claude/book-effect-type` was absent from
+the worker's container and the prose should be treated as unwritten.
+kanso#1412 found the branch at `/tmp/wt-book`, tip `d540fe3a`, and every file
+it adds already on main: superseded rather than pending. The note's conclusion
+held and its reason did not.
 
 ## In flight
 
-Nothing. Every branch this session opened is merged and verified on
-`origin/main`, and neither kanso nor kq has an open pull request.
+Every branch this session opened is merged and verified on `origin/main`.
+Three pull requests stood open elsewhere at the 2026-09-14 sweep, all opened
+that morning: kanso#1417 and kanso#1419 with CI running, and kq#105, whose
+spec job is red on `bench/instructions_golden.txt` — the retired-instructions
+vein, which moves on changes that leave every allocation counter alone.
 
 ## What landed on 2026-08-29
 
