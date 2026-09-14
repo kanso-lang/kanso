@@ -259,4 +259,10 @@
 # FALL of 2,324,466 (-1.5407%). The qualified-name join; see the compile row.
 # 2026-09-14 (kanso#1416): library_instructions 148,544,439 -> 147,572,025, a
 # FALL of 972,414 (-0.6546%). The borrowed dedup keys; see the compile row.
-library_instructions=147572025
+# 2026-09-14 (kanso#1414): library_instructions 147,572,025 -> 147,378,070, a
+# FALL of 193,955 (-0.1314%). Summed across the three the compile term moves
+# -508,707 (-0.1503%). All three fall together, which is what a decision the
+# front end stops making looks like: the entry and library rows track each
+# other to 84 instructions because they run the same passes over corpora of
+# the same shape.
+library_instructions=147378070

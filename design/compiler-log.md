@@ -4752,3 +4752,30 @@ whole compile path — kanso#1158 already pre-sized the thirteen whose capacity
 was knowable, and what is left grows across a recursive dependency walk whose
 final size nothing knows before the loop that fills it. `name_types` was the
 one piece with a shape that does not need a capacity at all.
+
+**CI's rows, on the base kanso#1416 left.** The branch was re-cut onto merged
+main after kanso#1416 landed, because its round-one rows were read against the
+tree kanso#1415 left and that base is gone:
+
+    compile_instructions   44,031,424 ->  43,910,543  -120,881  -0.2745%
+    entry_instructions    146,767,592 -> 146,573,721  -193,871  -0.1321%
+    library_instructions  147,572,025 -> 147,378,070  -193,955  -0.1314%
+    summed                338,371,041 -> 337,862,334  -508,707  -0.1503%
+
+All three fall together, and the entry and library rows track each other to 84
+instructions — they run the same passes over corpora built to the same shape,
+so a decision the front end stops making shows up in both at the same size.
+`compile_allocs` held at 28,361 and `compile_peak_bytes` at 776,055: the clone
+that went away was of a borrowed set, so no allocation site moved.
+
+The summed figure barely shifted between bases. Round one read -510,720
+(-0.1500%) against kanso#1415's tree and CI now reads -508,707 (-0.1503%)
+against kanso#1416's — 2,013 instructions apart on half a million, and the
+same percentage to three places. That is worth setting beside kanso#1416's
+own reading, where the container's projection ran 1.191x high against CI on
+the instruction rows. A delta survives a change of base when the work it
+removes is a fixed count of operations; it does not when the work is a share
+of a pile that something else has just made smaller.
+
+Floor banked, welfare 68.68 held. `all_pages.sh --write` rewrote four
+compiler.html lines quoting the three goldens.
