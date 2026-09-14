@@ -88,50 +88,29 @@ discretion; a pull request on something else says which of these it weighed.
 The chat adds a row the day a ruling lands and removes it the day the build
 lands on main. Verified against the tree on 2026-09-09 by probing the
 compiler; the list is a floor, since the rest of the 2026-08-29 sitting was
-not audited.
-
-### Effects are types, and the words are the only doors (2026-08-29)
-
-The archive entry of that name. Built on 2026-09-10: the automatic bind is
-gone (`x . f` is `f x`, and a box handed through the plain dot stays a box),
-and a provable box handed to something that reads the value inside is
-refused at check; and, the same day, the `<t>effect` spelling on all three
-engines, a parameter declared `e:<int>effect` taking the box as data. Owes:
-ch04/ch05 moving with it (the ledger's "The book teaches the boundary
-language").
-
-It does NOT owe the drop question. The same 2026-08-29 sitting closed it —
-the archive's "gavel: the drop question closes — explicitness IS the
-guarantee" — and closed it by DECLINING to mint anything: an unused binding
-is already a compile error, so a dropped effect is already unspellable, and
-Clay ruled the premise backwards. "No new checker rule and no io-edge rule
-is minted." An earlier draft of this row carried it as owed.
-
-**BUILT AND MERGED, 2026-09-13 (kanso#1372).** The floor that blocked it was
-never Clay's to grant: he ruled on 2026-09-13 that lowering the floor in
-service of the specification needs no permission, and the language clause in
-CLAUDE.md now says so. The floor moved 67.77800065192253 -> 67.754 by hand,
-CI went 19/19 green, and the row below stays only until the chat clears it.
+not audited. Swept again on 2026-09-14 against merged main: the effect-type
+row came off, built and merged as kanso#1372, and the exhaustiveness row came
+off with kanso#1369. Two rows remain, and one of them waits on a ruling.
 
 ### Pure fallibility is boxed too (2026-08-31)
 
 The archive entry "rider: pure fallibility is boxed too": any operation whose
 answer includes an err yields `<t>effect`, io or not; `foo["bar"]!` answers a
-box; `foo["bar"]` stays the data form. Rides with the effect type above and
-is listed so the one-line `foo["bar"]! .? (e -> "anonymous")` form the gavel
-promises is visible as owed. Sized 2026-09-10 (the log entry "the effect
+box; `foo["bar"]` stays the data form. Rides with the effect type, which
+landed on 2026-09-13 (kanso#1372), and is listed so the one-line
+`foo["bar"]! .? (e -> "anonymous")` form the gavel promises is visible as
+owed. Sized 2026-09-10 (the log entry "the effect
 type is spellable"): 723 `]!` sites in the tree, 104 of them in lib; by
 infer's reading 738 of lib's 770 declarations carry an err in their answer
 set and 71 of those raise or insist themselves. The respell is the build.
 
 **Half unblocked, 2026-09-13.** The effect type it rides on has landed
-(kanso#1372). What still blocks it is its own unruled question: where the box
-wraps. the ledger's Blocking
-entry "Where the box wraps under the pure-fallibility rider" asks whether the
-box is every err-carrying answer (738 of lib's 770 declarations) or the `!`
-name (71), with the price of each measured. Nothing builds until that is
-ruled, and a ruling alone does not unblock it — the effect type has to land
-first either way.
+(kanso#1372), so the only thing left holding it is its own unruled question:
+where the box wraps. The ledger's Blocking entry "Where the box wraps under
+the pure-fallibility rider" asks whether the box is every err-carrying answer
+(738 of lib's 770 declarations) or the `!` name (71), with the price of each
+measured. Nothing builds until that is ruled. It is the one entry standing in
+the ledger's Blocking section as of 2026-09-14.
 
 ### The book teaches the boundary language (queued P1, 2026-08-26)
 
