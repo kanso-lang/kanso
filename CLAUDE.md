@@ -522,9 +522,13 @@ Only Clay arms, disarms or retimes it.
   **It is an
   index, not a percentage** — the ceiling is a hundred, where every term costs
   nothing, and the origin is arbitrary. Only its direction and the size of its
-  moves mean anything. It reads 66.00 as of 2026-09-07. Every
-  term is deterministic, so the number moves only when somebody changes the
-  compiler. CI fails when it drops.
+  moves mean anything. **Do not read the current score from this file.** The
+  line here said 66.00 from 2026-09-07 until 2026-09-14, by which date the
+  floor stood at 68.73238080266131 — a week of ratcheted gains invisible to
+  anyone who trusted the sentence. `bench/welfare_floor.json` carries the
+  floor and the `why` of every move, and `kanso run scripts/welfare` reads
+  the tree. Every term is deterministic, so the number moves only when
+  somebody changes the compiler. CI fails when it drops.
 - **The sum is the objective; the terms are diagnostics.** A term getting worse
   is not a problem to defend if the sum went up — that trade is precisely what
   the weights are for, and refusing it would be optimising a part against the
