@@ -271,4 +271,10 @@
 # signature of a layout move: the same decisions, reached through a binary
 # whose bytes sit differently. The runtime vein is where this change was
 # actually aimed, and it is the one that carries the win.
-library_instructions=147374531
+# 2026-09-14 (kanso#1418): library_instructions 147,378,070 -> 144,858,538,
+# a FALL of 2,519,532 (-1.7096%). The advisory worklist; see the compile row.
+# Summed across the three the compile term moves 337,862,334 -> 331,792,865,
+# -6,069,469 (-1.7963%). The entry and library rows track each other to 2,213
+# instructions because they run the same passes over corpora of the same
+# shape.
+library_instructions=144858538
