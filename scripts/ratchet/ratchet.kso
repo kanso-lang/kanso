@@ -364,6 +364,18 @@ remainder = row
   (breaking "the_remainder_calls_the_runtime_again")
   benchmarks
 
+# ryu_d2d's general digit-removal loop takes two digits a trip since
+# 2026-09-14; the mutation puts the hundred-step back to firing once and the
+# ten-loop back to averaging 9.41 trips a float. The digits out are identical
+# either way, so the work vein is the only thing that can see it.
+digit_pairs = row
+  "the digit removal taking one at a time again"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_digit_removal_takes_one_at_a_time")
+  benchmarks
+
 machine_code = row
   "the machine code changing size"
   true
@@ -1221,7 +1233,9 @@ rows_b1z = [thunk_walk scan_counters read_counters compile_libraries]
 
 rows_b1 = text/concat rows_b1a (text/concat rows_b1z [live_counters clean_run])
 
-rows_b1r = text/concat rows_b1 [emitted_code emitted_others remainder]
+rows_b1r0 = text/concat rows_b1 [emitted_code emitted_others remainder]
+
+rows_b1r = text/concat rows_b1r0 [digit_pairs]
 
 rows_b1b = text/concat rows_b1r [machine_code]
 

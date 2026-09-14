@@ -4035,8 +4035,17 @@ static int ryu_d2d(double f, char* dig, int* e10) {
         output = vr + ((vr == vm && (!accept || !vm_trailing)) || last_removed >= 5);
     } else {
         int round_up = 0;
-        uint64_t vpd100 = vp / 100, vmd100 = vm / 100;
-        if (vpd100 > vmd100) {
+        /* Two digits a trip while two are there to take. This loop used to
+           run once and hand the rest to the ten-loop below, and the ten-loop
+           was averaging 9.41 trips a float on the encode corpus -- because a
+           float a program writes down has few significant digits and `vr`
+           starts with seventeen, so most of them come off. Both loops cost
+           the same sixteen instructions a trip (three multiply-highs, three
+           shifts, a compare and the branch), so a trip that takes two digits
+           is worth two that take one. */
+        for (;;) {
+            uint64_t vpd100 = vp / 100, vmd100 = vm / 100;
+            if (vpd100 <= vmd100) break;
             uint64_t vrd100 = vr / 100;
             uint32_t vrm100 = (uint32_t)(vr % 100);
             round_up = vrm100 >= 50;
