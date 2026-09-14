@@ -1408,4 +1408,10 @@
 # check_after_infer was already walking, and asked its questions on that walk
 # now. Runtime did NOT move: `work:success` on the same run, runbench
 # 2,003,021,871, identical to its golden.
-compile_instructions=44994843
+# 2026-09-13 (kanso#1415): compile_instructions 44,994,843 -> 44,301,309, a
+# FALL of 693,534 (-1.5414%). A qualified name is joined, not formatted:
+# fifteen `format!("{qual}/{name}")` sites became one exact allocation and
+# three copies, and two lines in `qualify`'s type loop were building the same
+# string twice. Runtime did NOT move: `work:success` on the same run, runbench
+# 2,003,021,871, identical to its golden.
+compile_instructions=44301309
