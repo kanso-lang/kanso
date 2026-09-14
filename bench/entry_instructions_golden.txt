@@ -276,4 +276,8 @@
 # FALL of 939,198 (-0.6358%). The borrowed dedup keys; see the compile row.
 # 2026-09-14 (kanso#1414): entry_instructions 146,767,592 -> 146,573,721, a
 # FALL of 193,871 (-0.1321%). The advisory union that had nothing to union.
-entry_instructions=146573721
+# 2026-09-14 (kanso#1418): entry_instructions 146,573,721 -> 144,056,402, a
+# FALL of 2,517,319 (-1.7174%). The advisory worklist; see the compile row.
+# Against the pre-kanso#1414 base it fell 2,654,720, and 137,401 of that was
+# work kanso#1414 had already removed.
+entry_instructions=144056402

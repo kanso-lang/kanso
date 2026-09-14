@@ -1,0 +1,18 @@
+# The foreign type reaches the surface through four hops, and the hops are
+# declared caller-first. Under the round-robin fixpoint that took five passes
+# over every declaration: a pass could only carry the type one hop back up the
+# chain, because `relay` is visited before `hop_one`, which is visited before
+# `hop_two`. The advisory on `relay` is the last thing to become true.
+import "std/json"
+
+pub fn relay text
+  hop_one text
+
+fn hop_one text
+  hop_two text
+
+fn hop_two text
+  hop_three text
+
+fn hop_three text
+  json/decode text
