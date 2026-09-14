@@ -5059,3 +5059,17 @@ through `strtod`. The round-trip check runs on non-negatives only:
 feeding it a negative renders the magnitude and `strtod` reads back a positive.
 That guard was missing at first and reported 25,115,977 failures, none of them
 real.
+
+**And the wider census, which is the reason the rule is forward-looking.**
+Counting `div`/`idiv` sites across all fourteen benchmark binaries on the same
+build: eleven hold exactly one, in `k_exec`, which is process plumbing and runs
+once. The other three — encodebench, widebench and basket — hold five, the same
+one in `k_exec` plus two each in `k_div` and `k_mod`. Those two are the outlined
+helpers kanso#1292 minted when it sent integer quotient and remainder through a
+call with zero and -1 handled there, and a language whose `/` and `%` divide has
+to divide somewhere.
+
+So no hot path in the shipped runtime executes a divide today, and none of the
+297 changes that have landed traded a multiply-high for one. The rule this
+entry leaves behind has no current violations to repair; it exists to catch the
+next change that would have been the first.
