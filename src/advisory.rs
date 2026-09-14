@@ -100,15 +100,57 @@ fn return_type_names<'a>(
     type_names: &HashSet<&str>,
     groups: &Groups<'a>,
 ) -> Vec<HashSet<&'a str>> {
-    let mut returns: Vec<HashSet<&'a str>> = vec![HashSet::default(); program.fns.len()];
-    let mut changed = true;
-    while changed {
-        changed = false;
-        for (i, decl) in program.fns.iter().enumerate() {
-            let inferred = body_types(decl, program, type_names, groups, &returns);
-            if !inferred.is_subset(&returns[i]) {
-                returns[i].extend(inferred);
-                changed = true;
+    let n = program.fns.len();
+    let mut returns: Vec<HashSet<&'a str>> = vec![HashSet::default(); n];
+    // Which declarations read each declaration's answer. A body asks
+    // `name_types` about a fixed set of names -- the body, the groups and the
+    // type names never move -- so the set of indices it reads is the same on
+    // every visit and is collected on the first. That makes the revisit
+    // condition exact: a declaration's answer can only change when one of the
+    // answers it read has grown.
+    let mut readers: Vec<Vec<u32>> = vec![Vec::new(); n];
+    let mut queue: Vec<u32> = Vec::new();
+    let mut queued = vec![false; n];
+    let mut reads: Vec<u32> = Vec::new();
+
+    // The first pass visits everything and records the dependencies. A
+    // declaration that grows re-queues the bodies that already read it; the
+    // ones not yet visited read the grown answer when their turn comes.
+    for (i, decl) in program.fns.iter().enumerate() {
+        reads.clear();
+        let inferred = body_types(decl, program, type_names, groups, &returns, &mut reads);
+        reads.sort_unstable();
+        reads.dedup();
+        for &j in &reads {
+            readers[j as usize].push(i as u32);
+        }
+        if !inferred.is_subset(&returns[i]) {
+            returns[i].extend(inferred);
+            for &r in &readers[i] {
+                if !queued[r as usize] {
+                    queued[r as usize] = true;
+                    queue.push(r);
+                }
+            }
+        }
+    }
+
+    // Then only the bodies a growth can reach. The order the queue is drained
+    // in does not change the answer: the union is a monotone lattice and the
+    // loop runs until nothing grows, which is the same fixpoint the round-robin
+    // reached by asking everything six times over.
+    while let Some(i) = queue.pop() {
+        queued[i as usize] = false;
+        reads.clear();
+        let decl = &program.fns[i as usize];
+        let inferred = body_types(decl, program, type_names, groups, &returns, &mut reads);
+        if !inferred.is_subset(&returns[i as usize]) {
+            returns[i as usize].extend(inferred);
+            for &r in &readers[i as usize] {
+                if !queued[r as usize] {
+                    queued[r as usize] = true;
+                    queue.push(r);
+                }
             }
         }
     }
@@ -121,20 +163,21 @@ fn body_types<'a>(
     type_names: &HashSet<&str>,
     groups: &Groups<'a>,
     returns: &[HashSet<&'a str>],
+    reads: &mut Vec<u32>,
 ) -> HashSet<&'a str> {
     let mut env: HashMap<&str, HashSet<&'a str>> = HashMap::default();
     let mut tail = HashSet::default();
     for (i, stmt) in decl.body.iter().enumerate() {
         match stmt {
             Stmt::Bind { pattern, expr } => {
-                let set = expr_types(expr, type_names, groups, returns, &env);
+                let set = expr_types(expr, type_names, groups, returns, &env, reads);
                 if let Pattern::Var(name, _) = pattern {
                     env.insert(name, set);
                 }
             }
             Stmt::Set { .. } => {}
             Stmt::Expr(e) if i == decl.body.len() - 1 => {
-                tail = expr_types(e, type_names, groups, returns, &env);
+                tail = expr_types(e, type_names, groups, returns, &env, reads);
             }
             Stmt::Expr(_) => {}
         }
@@ -149,25 +192,26 @@ fn expr_types<'a>(
     groups: &Groups<'a>,
     returns: &[HashSet<&'a str>],
     env: &HashMap<&str, HashSet<&'a str>>,
+    reads: &mut Vec<u32>,
 ) -> HashSet<&'a str> {
     match e {
-        Expr::Ident(name, _) => name_types(name, type_names, groups, returns, env),
+        Expr::Ident(name, _) => name_types(name, type_names, groups, returns, env, reads),
         Expr::App { head, args, .. } => {
             if let Expr::Ident(name, _) = head.as_ref() {
                 if name == "if" && args.len() == 3 {
-                    let mut set = expr_types(&args[1], type_names, groups, returns, env);
-                    set.extend(expr_types(&args[2], type_names, groups, returns, env));
+                    let mut set = expr_types(&args[1], type_names, groups, returns, env, reads);
+                    set.extend(expr_types(&args[2], type_names, groups, returns, env, reads));
                     return set;
                 }
                 // an err carries its payload; the payload's type is what leaks
                 if name == "err" && args.len() == 1 {
-                    return expr_types(&args[0], type_names, groups, returns, env);
+                    return expr_types(&args[0], type_names, groups, returns, env, reads);
                 }
-                return name_types(name, type_names, groups, returns, env);
+                return name_types(name, type_names, groups, returns, env, reads);
             }
             HashSet::default()
         }
-        Expr::Seq(_, b, _) => expr_types(b, type_names, groups, returns, env),
+        Expr::Seq(_, b, _) => expr_types(b, type_names, groups, returns, env, reads),
         _ => HashSet::default(),
     }
 }
@@ -178,6 +222,7 @@ fn name_types<'a>(
     groups: &Groups<'a>,
     returns: &[HashSet<&'a str>],
     env: &HashMap<&str, HashSet<&'a str>>,
+    reads: &mut Vec<u32>,
 ) -> HashSet<&'a str> {
     // Every name this answers with is a type the program declares, so the set
     // holds borrows of the program's own strings. It used to hold copies:
@@ -190,6 +235,9 @@ fn name_types<'a>(
     }
     let mut set = HashSet::default();
     for &i in groups.get(name) {
+        // the dependency, recorded where it is taken: this body's answer is
+        // only as settled as declaration i's
+        reads.push(i);
         set.extend(returns[i as usize].iter().copied());
     }
     set

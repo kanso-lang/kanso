@@ -4714,3 +4714,79 @@ one lands on a smaller pile.
 
 Floor banked 68.64 -> 68.68, and `all_pages.sh --write` rewrote the seven
 `compiler.html` spans that quote these goldens.
+
+## 2026-09-14 — the advisory fixpoint asked every declaration six times to learn 142 things
+
+`advisory::return_type_names` decides, for every function, which record type
+names its return value can carry. It is a monotone fixpoint, and it was
+round-robin: ask every declaration in order, over and over, until a whole pass
+changes nothing.
+
+A probe on `bench/compile_corpus` says what that costs:
+
+    decls=315  rounds=6  visits=1890  grew=142  nonempty=130
+
+1,748 of the 1,890 visits — 92.5% — walked a body and learned nothing. A
+declaration's answer can only change when an answer it reads has grown, and
+the round-robin has no way to ask that question, so it asks all of them.
+
+It is a worklist now. A body asks `name_types` about a fixed set of names —
+the body, the groups and the type names never move — so the set of declaration
+indices it reads is the same on every visit. The first pass records those
+indices as it takes them, builds the reverse map, and after that a declaration
+is re-asked only when one of the answers it read has grown.
+
+## the measurement
+
+Base is merged main at kanso#1416. Both binaries measured by callgrind in the
+staged box, the compiler built from the same tree apart from this change:
+
+    module     45,286,209 -> 44,049,155  -1,237,054  -2.7316%
+    entry     149,978,957 -> 146,969,629  -3,009,328  -2.0065%
+    library   151,165,544 -> 148,160,637  -3,004,907  -1.9878%
+    summed    346,430,710 -> 339,179,421  -7,251,289  -2.0931%
+
+These are container numbers and the compile gates refuse on this host, so CI
+measures the rows that land. The ratio this box has projected at has run
+between 0.84 and 1.19 of CI's over the last dozen changes, which is why the
+projection is written down as a projection.
+
+The ceiling was measured before the shape was chosen, by capping the loop at
+one round and letting the answers be wrong: 45,612,584 -> 43,999,030 on the
+pre-#1416 base, a fall of 1,613,554. The worklist takes about three quarters
+of that. The rest is the first pass, which still visits everything and has to,
+and the 142 revisits that are real.
+
+## what a worklist can get wrong, and the fixture for it
+
+Stopping early. So the fixture is four hops long and declared caller-first,
+which is the worst order for the round-robin and the order most likely to
+expose a re-queue that only walks forward: `relay` calls `hop_one` calls
+`hop_two` calls `hop_three`, and only `hop_three` names `json/parse_failure`.
+One round-robin pass carried the type one hop, so the advisory on `relay` was
+the fifth thing to become true.
+
+Watched red two ways before it was green. Dropping the re-queue entirely
+turned it red AND took `leaky` with it, which says the break was too coarse to
+prove the new fixture earns its place. Re-queueing only readers with a HIGHER
+index — the plausible off-by-one — left all seven older advisory specs green
+and turned exactly this one red. That is the spec doing work nothing else in
+the tree was doing.
+
+The assertion is the advisory a reader sees, not the round count and not the
+visit count. Those are the decomposition, and the decomposition is the thing
+that just moved.
+
+## the answers are identical, and that was checked rather than argued
+
+`kanso check` on both binaries over every `.kso` in the tree: 1,074 files, 0
+diverging. Over every module directory under lib, the three corpora and
+scripts: 45 modules, 0 diverging. A fixpoint's answer does not depend on the
+order its queue is drained in — the union is monotone and the loop runs until
+nothing grows — but the differential is cheap and the argument is not the
+evidence.
+
+`all_compile.sh` reports `emitted_code`, `compile_libraries` and
+`compile_cost` AGREED; the other six gates refuse on this host. Nothing the
+emitter writes changed, which is the expected shape: this pass produces
+advisories and feeds no code.
