@@ -272,4 +272,6 @@
 # FALL of 843,183 (-0.5589%). The box question joins the second fused descent.
 # 2026-09-13 (kanso#1415): entry_instructions 150,030,446 -> 147,706,790, a
 # FALL of 2,323,656 (-1.5488%). The qualified-name join; see the compile row.
-entry_instructions=147706790
+# 2026-09-14 (kanso#1416): entry_instructions 147,706,790 -> 146,767,592, a
+# FALL of 939,198 (-0.6358%). The borrowed dedup keys; see the compile row.
+entry_instructions=146767592
