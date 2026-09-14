@@ -3866,3 +3866,52 @@ exactly one entry. That count came from grepping the headings of a working
 tree checked out to an older branch, and was never re-run after the branch was
 rebuilt from main. The ledger is one file with one canonical copy on
 origin/main; a count taken anywhere else is a count of something else.
+
+
+## 2026-09-14 — the render side of the float pair had no round-trip harness either
+
+kanso#1423 found `k_b_to_float` taking eisel-lemire's answer as certain on a
+truncated significand, one ULP from the correctly-rounded double, on 221 of
+1,405,451 cases. That function's whole corpus was 86 values. The same question
+asked of the other direction — does the text `render_ryu` writes read back as
+the double it was given — had no harness at all.
+
+What existed checked two neighbouring things. `scripts/render_differential`
+runs the interpreter's `render` against the C runtime's `k_render` and
+requires them to agree; two implementations wrong the same way pass it, and
+the interpreter's float rendering is not independent of ryū's. The sweep in
+`the_shortest_digits_come_out_in_pairs` checks the block that writes chosen
+digits into a buffer against snprintf; it says nothing about which digits were
+chosen.
+
+`tests/every_rendered_float_reads_back_as_itself.rs` asks the property
+directly, with `strtod` as the independent reference. It lifts `ryu_d2d`,
+`render_ryu`, their pow5 tables and the two helpers they call out of
+`src/runtime.c` — the real text, never a copy — and sweeps 2,809,326 values in
+three seconds:
+
+    2,809,326 rendered, 0 do not read back, 0 length disagrees, 0 not shortest
+
+The corpus is four groups, and the second one matters more than it looks.
+Random 64-bit patterns spread their exponents uniformly over the whole field,
+so almost none of them land where a json document's numbers live; `m`, `m/10`,
+`m/1000` and `-m/100` for m below 200,000 name that range by hand. The other
+two groups are both sides of every binary exponent including the subnormals,
+and both sides of every power of ten.
+
+**Watched red three ways, one per property, each leaving the other two
+clean.** That separation is the evidence the three checks are independent
+rather than one check written three times:
+
+    output = vr + (...)  ->  output = vr        815,943 do not read back
+    the removal loop breaks after one step      581,913 are not shortest
+    return (o - buf)     ->  + 1                2,809,321 lengths disagree
+
+**A counter of mine was wrong before the renderer was.** The first
+shortest-ness check counted significant digits out of the rendered text, which
+calls `"100"` two digits — the plain form pads with zeros to reach the decimal
+point and those are not digits ryū chose. It reported 2,863 shortest failures,
+every one of them the counter's. Taking `k` from `ryu_d2d` itself is both
+correct and the more honest question, since `k` is what ryū claims.
+
+Ratchet row `render_trip`, mutation `a_rendered_float_that_never_rounds_up.sh`.
