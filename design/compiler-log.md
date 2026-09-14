@@ -3866,3 +3866,64 @@ exactly one entry. That count came from grepping the headings of a working
 tree checked out to an older branch, and was never re-run after the branch was
 rebuilt from main. The ledger is one file with one canonical copy on
 origin/main; a count taken anywhere else is a count of something else.
+
+
+## 2026-09-14 — three ratchet rows proved nothing, and each one for its own reason
+
+The ratchet reported `ten_walk`, `char_word` and `alloc_gate` BLIND on
+kanso#1417. They are blind on `origin/main` at `15e1c3b7` with that branch
+nowhere in the tree, so the reading is main's. Each was chased to an
+artefact rather than argued from the equal counts.
+
+Baseline runbench on the container, `env -i` under callgrind from one fixed
+directory: **1,994,172,731**.
+
+    mutation                                 runbench md5   runbench
+    none                                     3b9af36f       1,994,172,731
+    a_wide_character_copied_through_a_call   d1064916       1,994,172,731
+    a_tenure_walk_asked_about_arena_pointers 3b9af36f       1,994,172,731
+
+**`alloc_gate` is blind by construction, and has been since kanso#1393 and
+kanso#1396.** `scripts/gates/instructions.sh` copies `./runbench` — the plain
+binary. `build_benchmarks.sh` builds the counting set first under `--counters`,
+moves it aside, and builds the plain set second, so the binary the gate
+measures has `K_COUNTING` at 0. Both the guarded form and the mutant's
+two-branch form sit inside `if (__builtin_expect(K_COUNTING && ...), 0)` and
+compile to nothing there. The counting binary keeps both, and both count
+identically, so no allocation counter can see it either. What kanso#1298 won
+is no longer in the artefact it was won on; there is nothing left to protect.
+
+**`ten_walk`'s function is not in the linked binary.** `nm runbench` lists
+`k_ten_holds_outside` and no `k_ten_holds`. The mutation edits the one-line
+body of `k_ten_holds`, which the release link does not emit, so the mutated
+compiler — a different binary, md5 `7d005e1c` against `28f31106` — produces a
+byte-identical `runbench`. A mutation that cannot change the bytes cannot
+redden a gate over them.
+
+**`char_word`'s arm is never executed.** The equal instruction count on a
+binary that genuinely differs is suggestive and not proof, so the copy was
+poisoned instead of slowed: `memcpy(os->data, "ZZZZ", 4)` in place of the
+character's own bytes. runbench's output is byte-identical either way
+(`e8e74ccb` both ways) on a binary whose md5 is `33402193`. The wide arm of
+`k_b_at` is not reached by the run program at all. CI's own gate agrees from
+the other side — it diffs all fourteen rows and stayed green under the
+mutation, so no benchmark reaches it.
+
+The three rows and their mutations are removed. `instructions.sh` keeps its
+other rows, so the job stays covered and the coverage check still passes.
+
+What this leaves open: the run corpus indexes no wide character anywhere. That
+is a gap in the corpus rather than in the ratchet, and closing it means adding
+to the run program, which moves every golden and the welfare floor. Recorded
+here rather than done alongside a row removal.
+
+A CORRECTION to my own first reading of the same nightly, before it reached a
+commit: I took its two baseline objections as one and wrote that an UNPROVEN
+gate ends the pass. It does not. `told p r true` builds its finding with
+`ok = true`, `unmutated` exits only on findings where `not f.ok`, and
+`kept_provable` already drops the rows sharing an unanswerable gate and carries
+the rest into proving. The comment above `answerable?` says exactly this and I
+had read past it. So the 2026-09-13 run exited on the ALREADY RED site gate
+alone, and once kanso#1403's blob setup does its job the nightly reaches the
+mutation phase on any runner — marking the instructions-gate rows unproven
+where the silicon does not match, and proving everything else.
