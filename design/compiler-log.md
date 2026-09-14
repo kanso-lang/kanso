@@ -4688,3 +4688,29 @@ the clones, not by removing work the mask replaced.
 the first, because a second table can regress on its own: module +104,581
 (+0.2281%), entry +339,005 (+0.2227%), library +369,885 (+0.2424%),
 compile_allocs +296.
+
+**CI's rows.** The container's box measured against the tree kanso#1413 left;
+kanso#1415 landed first and took its own bite out of the same family, so CI
+measured this change against a base that had already stopped cloning fifteen
+qualified names. These are CI's numbers and they are what the goldens hold:
+
+    module    44,301,309 -> 44,031,424    -269,885 (-0.6092%)
+    entry    147,706,790 -> 146,767,592    -939,198 (-0.6358%)
+    library  148,544,439 -> 147,572,025    -972,414 (-0.6546%)
+    summed   340,552,538 -> 338,371,041  -2,181,497 (-0.6406%)
+
+`compile_allocs` 29,169 -> 28,361, a fall of 808 — the container projected
+exactly 808 and CI read exactly 808, because an allocation removed is an
+allocation removed whatever the base. `compile_peak_bytes` byte-identical at
+776,055, and `work:success` with runbench 2,003,021,871 unchanged.
+
+The instruction rows are the ones that moved with the base: the container
+projected −2,598,094 summed where CI read −2,181,497, so the projection ran
+1.191x high. That is not this box reading the vein wrong. It is the same shape
+as the allocation row's exactness read the other way round: an allocation is a
+count and does not care what else was removed, where an instruction total is a
+layout and does. Both PRs remove `String` clones from the loader, so the second
+one lands on a smaller pile.
+
+Floor banked 68.64 -> 68.68, and `all_pages.sh --write` rewrote the seven
+`compiler.html` spans that quote these goldens.
