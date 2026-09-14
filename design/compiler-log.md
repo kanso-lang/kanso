@@ -4638,6 +4638,52 @@ container whose glibc and clang the gate has already refused. The work vein
 is where this change was aimed and where its win is; the compile veins are
 regenerated, said out loud, and not banked against.
 
+## the fourth sitting, and four bases give four answers
+
+kanso#1418 landed and the branch merged it, so CI measured the same three
+lines a fourth time:
+
+    compile_instructions   42,877,925 ->  42,869,709   -8,216  -0.0192%
+    entry_instructions    144,056,402 -> 144,034,290  -22,112  -0.0153%
+    library_instructions  144,858,538 -> 144,834,698  -23,840  -0.0165%
+    summed                331,792,865 -> 331,738,697  -54,168  -0.0163%
+
+`compile_allocs` held at 27,937 and `compile_peak_bytes` at 776,055 for the
+fourth time running.
+
+Four sittings of one diff now sit side by side:
+
+    base          module      entry     library      summed
+    kanso#1415       +35     -1,854        +230      -1,589
+    kanso#1416      +883     -2,236      -2,878      -4,231
+    kanso#1414      -300     -2,921      -3,539      -6,760
+    kanso#1418    -8,216    -22,112     -23,840     -54,168
+
+The module row changes sign twice across the four. The fourth is eight times
+the third and thirty-four times the first, and it is the only one where all
+three fall together by a comparable share.
+
+Nothing about the diff changed between them. It is three lines swapping two
+arms of a tag switch in `src/runtime.c`, and `kanso check` never executes one
+of them. What changed is the binary the rows were measured on: kanso#1418
+rewrote the advisory fixpoint to revisit on demand, which moved the
+compiler's own code and every address after it, so the reorder's embedded
+bytes land somewhere else again.
+
+The earlier sections of this entry read the sign disagreement as the tell
+that a layout move is not a decision. Four sittings say something stronger
+and worth writing down plainly: the SIZE carries no information either. A
+layout delta is a property of one arrangement, and four bases are four
+arrangements, so a reading from any of them predicts nothing about the next.
+
+Which settles how to handle these rows, at the cost of six rounds on this
+branch. A compile row on a runtime-only change is regenerated from whatever
+base CI last ran, said out loud, and not reasoned from or banked against.
+The objective cannot see it in any case: fifty-four thousand instructions on
+three hundred and thirty-two million is a sixtieth of a per cent, and the
+work vein -- runbench 2,000,261,871, indexbench 3,185,298, both CI's own --
+is where this change was aimed and where its win is.
+
 
 
 **CI's rows.** The container's box reads about 0.8% high on these veins and the

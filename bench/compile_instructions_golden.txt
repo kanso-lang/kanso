@@ -1448,4 +1448,9 @@
 # is work every visit was doing, so the saving here -- visits that no longer
 # happen, times what a visit costs -- lost 90,607 when the second factor
 # shrank. Runtime did NOT move: `work:success`, runbench 2,003,021,871.
-compile_instructions=42877925
+# 2026-09-14 (kanso#1417, FOURTH sitting): compile_instructions 42,877,925 ->
+# 42,869,709, a FALL of 8,216 (-0.0192%). Same three-line diff as the three
+# sittings before it, on the base kanso#1418 left. compile_allocs held at
+# 27,937 and compile_peak_bytes at 776,055 for the fourth time running, which
+# is the half that says this is layout and not a decision.
+compile_instructions=42869709

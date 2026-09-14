@@ -277,4 +277,35 @@
 # -6,069,469 (-1.7963%). The entry and library rows track each other to 2,213
 # instructions because they run the same passes over corpora of the same
 # shape.
-library_instructions=144858538
+# 2026-09-14 (kanso#1417, FOURTH sitting): library_instructions 144,858,538 ->
+# 144,834,698, a FALL of 23,840 (-0.0165%). Summed across the three the
+# compile term moves -54,168 (-0.0163%).
+#
+# FOUR SITTINGS OF ONE DIFF, AND THE SPREAD IS AN ORDER OF MAGNITUDE. The
+# same three lines of src/runtime.c have now been measured against four bases:
+#
+#     base          module      entry     library      summed
+#     kanso#1415       +35     -1,854        +230      -1,589
+#     kanso#1416      +883     -2,236      -2,878      -4,231
+#     kanso#1414      -300     -2,921      -3,539      -6,760
+#     kanso#1418    -8,216    -22,112     -23,840     -54,168
+#
+# The module row changes sign twice across the four. The fourth is eight times
+# the third and thirty-four times the first, and it is the only one where all
+# three rows fall together by a comparable share. Nothing about the diff
+# changed between them: it is three lines swapping two arms of a tag switch,
+# and `kanso check` never executes one of them.
+#
+# What changed is the binary the rows are measured on. kanso#1418 rewrote the
+# advisory fixpoint to revisit on demand, which moved the compiler's own code
+# and every address after it; the reorder's bytes then land somewhere else
+# again. A layout delta is a property of one arrangement, and four bases are
+# four arrangements.
+#
+# So the practical rule, which cost this branch six rounds to learn: a compile
+# row on a runtime-only change is regenerated from whatever base CI last ran,
+# stated, and not reasoned from. It carries no information about the change
+# and the objective cannot see it -- fifty-four thousand instructions on three
+# hundred and thirty-two million is a sixtieth of a per cent. The work vein is
+# where this change was aimed and where its win is.
+library_instructions=144834698

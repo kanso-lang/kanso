@@ -285,4 +285,7 @@
 # FALL of 2,517,319 (-1.7174%). The advisory worklist; see the compile row.
 # Against the pre-kanso#1414 base it fell 2,654,720, and 137,401 of that was
 # work kanso#1414 had already removed.
-entry_instructions=144056402
+# 2026-09-14 (kanso#1417, FOURTH sitting): entry_instructions 144,056,402 ->
+# 144,034,290, a FALL of 22,112 (-0.0153%). The k_b_at arm order on the
+# kanso#1418 base; see the compile row.
+entry_instructions=144034290
