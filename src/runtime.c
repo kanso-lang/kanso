@@ -2603,6 +2603,24 @@ static const char RYU_DIGITS[201] =
     "6061626364656667686970717273747576777879"
     "8081828384858687888990919293949596979899";
 
+/* Powers of a hundred, for taking `vr` down in one divide once the search on
+   `vp` and `vm` has said how far to go. Ten entries is the whole reachable
+   range: trip k+1 of that search needs vp >= 100^(k+1), vp is a u64, and
+   100^10 is 1e20 against a ceiling of 1.845e19, so the index never passes
+   nine. */
+static const uint64_t RYU_POW100[10] = {
+    1ULL,
+    100ULL,
+    10000ULL,
+    1000000ULL,
+    100000000ULL,
+    10000000000ULL,
+    1000000000000ULL,
+    100000000000000ULL,
+    10000000000000000ULL,
+    1000000000000000000ULL,
+};
+
 static inline int ryu_declen(uint64_t v) {
     if (v < 10ULL) return 1;
     if (v < 100ULL) return 2;
@@ -4039,18 +4057,33 @@ static int ryu_d2d(double f, char* dig, int* e10) {
            run once and hand the rest to the ten-loop below, and the ten-loop
            was averaging 9.41 trips a float on the encode corpus -- because a
            float a program writes down has few significant digits and `vr`
-           starts with seventeen, so most of them come off. Both loops cost
-           the same sixteen instructions a trip (three multiply-highs, three
-           shifts, a compare and the branch), so a trip that takes two digits
-           is worth two that take one. */
-        for (;;) {
-            uint64_t vpd100 = vp / 100, vmd100 = vm / 100;
-            if (vpd100 <= vmd100) break;
-            uint64_t vrd100 = vr / 100;
-            uint32_t vrm100 = (uint32_t)(vr % 100);
-            round_up = vrm100 >= 50;
-            vr = vrd100; vp = vpd100; vm = vmd100;
-            removed += 2;
+           starts with seventeen, so most of them come off.
+
+           The search reads only `vp` and `vm`, so it runs on those two and
+           `vr` comes down afterwards in one divide off RYU_POW100. Three
+           values a trip cost more than the third divide: on the break, all
+           three have to still hold their pre-trip values and `round_up` has
+           to come from the pre-trip `vr`, so LLVM rotates the loop and saves
+           a copy of each -- three register moves a trip that carry no
+           arithmetic. Measured on the encode corpus the search runs 5.35
+           trips a float, so those saves alone were 0.46% of runbench. */
+        int pairs = 0;
+        {
+            uint64_t p = vp, m = vm;
+            for (;;) {
+                uint64_t pd = p / 100, md = m / 100;
+                if (pd <= md) break;
+                p = pd; m = md;
+                pairs++;
+            }
+            vp = p; vm = m;
+        }
+        if (pairs) {
+            /* The last trip's discarded pair decides the rounding, and it is
+               the two digits sitting just above where `vr` lands. */
+            round_up = (uint32_t)((vr / RYU_POW100[pairs - 1]) % 100) >= 50;
+            vr /= RYU_POW100[pairs];
+            removed += 2 * pairs;
         }
         for (;;) {
             uint64_t vpd = vp / 10, vmd = vm / 10;
