@@ -3915,3 +3915,19 @@ every one of them the counter's. Taking `k` from `ryu_d2d` itself is both
 correct and the more honest question, since `k` is what ryū claims.
 
 Ratchet row `render_trip`, mutation `a_rendered_float_that_never_rounds_up.sh`.
+
+**And the integer half of the same door.** `k_b_to_int` parses `[-]?digits` in
+a bare loop when the digit run is eighteen or fewer, on the ground that
+eighteen digits cannot overflow an i64, and hands everything else to strtoll.
+That bound is the whole safety argument and nothing checked it. It is SOUND:
+24,000,029 strings, 21,816,309 of them taking the fast path, 0 disagreeing
+with strtoll.
+
+Recorded as a spec rather than left as a measurement because the bound is one
+character from wrong. Nineteen nines is 9,999,999,999,999,999,999 against
+i64's 9,223,372,036,854,775,807, so widening the bound — the edit someone
+optimising this would reach for — puts 50,249 wrong answers into the fast
+path, the first at `"9223372036854775808"`, 2^63 exactly, where the loop wraps
+to the negative and libc saturates and raises. That is the watched-red, and
+`tests/the_int_fast_path_agrees_with_libc.rs` is what now sees it. Ratchet row
+`int_bound`, mutation `an_eighteen_digit_bound_widened_to_nineteen.sh`.
