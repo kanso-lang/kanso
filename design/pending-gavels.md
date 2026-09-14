@@ -327,6 +327,22 @@ a library function whose tail is a `.>` step (`os/read_file`), fixed in the
 same build. ch04's "nothing is asked of the signature" still describes the
 railway, which still runs, and waits on the 2026-08-31 rider.
 
+**The campaign has run, 2026-09-14.** The recommendation above was to hold
+until `<t>effect` exists and then run it once. It exists (kanso#1372, merged
+2026-09-13) and the pass landed in four pieces: kanso#1392 gave ch05 the
+three chain words and their fused spellings, kanso#1394 gave ch04 its rescue
+collision and boundary panel, kanso#1406 gave ch05 `done`, and kanso#1412
+gave ch04 the clause naming the type — the live remainder, by its own log
+entry. Counted on merged main: ch04 carries the type once, eleven fused
+operators and `done`; ch05 carries the type twice, thirty-five operators and
+`done` five times.
+
+What is left is the single paragraph this entry has named since 2026-08-29:
+ch04's "nothing is asked of the signature", which describes the railway and
+waits on the 2026-08-31 rider. STATUS.md's row for this ruling came off on
+2026-09-14 and that paragraph moved into the rider's row, since the rider's
+ruling is what releases it. Still nothing here for Clay.
+
 ### The maps parse is 100% of the compile row's binary-to-binary drift
 
 **Cited: the ruling of 2026-09-03 (NO EXCLUSION; the toggle dropped, sorts
