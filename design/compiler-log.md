@@ -4917,3 +4917,42 @@ told apart by what they count rather than by how they behaved.
 
 The trend gate reads the four as improved and nothing as worsened.
 
+
+## 2026-09-14 — to_float called a truncated significand certain, and it is off by one ULP
+
+`k_b_to_float` takes the Eisel-Lemire path when the scan sees a clean
+number. The scan keeps nineteen significant digits and drops the rest,
+and it handed the dropped ones to Lemire without saying they were gone.
+Lemire's method answers exactly or declines, and what it decides is a
+rounding boundary: a significand that has lost its twentieth digit can
+sit on the far side of that boundary from the number the program wrote.
+When it does, native returns the neighbouring double and the interpreter
+returns the right one.
+
+Lemire's own implementation carries a `truncated` flag for this, and so
+does fast_float. This one did not.
+
+The scan now sets `cut` when it drops a nonzero digit, and the fast path
+is taken only while `cut` is clear. A dropped ZERO is not a truncation in
+value — `10000000000000000000` is exactly the nineteen-digit `w` times
+ten — so a trailing run of zeros still takes the fast path. That
+distinction is what keeps the run corpus where it was: all 210,177 float
+parses on runbench go through Eisel-Lemire before and after, because none
+of them drops a nonzero digit.
+
+The differential harness in the parse direction, against `strtod`,
+reported 221 mismatches on the old scanner and 0 on the new one over
+23,264,660 cases. The smallest is twenty significant digits:
+`44090656.994409065` parsed 44090656.99440906 and should parse
+44090656.99440907.
+
+`tests/golden/micro/a_long_significand_rounds_like_the_oracle.kso` is the
+fixture, six cases from twenty digits to thirty-six plus the trailing-zero
+case that must stay on the fast path. Every line in it was a divergence
+before the fix; `micro_corpus_agrees_across_engines` runs it on both
+engines. Watched red on a binary built from the unfixed source first.
+
+All twelve cost goldens and the lazy tier agree, so the fix is free on
+the counters this repo watches. Row `truncated_significand`, mutation
+`a_truncated_significand_taken_as_certain`, which removes the `!cut`
+guard.
