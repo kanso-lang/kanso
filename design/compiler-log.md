@@ -3868,54 +3868,65 @@ rebuilt from main. The ledger is one file with one canonical copy on
 origin/main; a count taken anywhere else is a count of something else.
 
 
-## 2026-09-14 — the parse harness that found the bug was thrown away, so it ships
+## 2026-09-14 — three ratchet rows proved nothing, and each one for its own reason
 
-kanso#1423 found `k_b_to_float` calling a truncated significand certain by
-building a differential harness against strtod, running it over 1,405,451
-cases, and reading off 221 wrong answers. Then the harness was deleted and
-the fix shipped with a six-line micro fixture.
+The ratchet reported `ten_walk`, `char_word` and `alloc_gate` BLIND on
+kanso#1417. They are blind on `origin/main` at `15e1c3b7` with that branch
+nowhere in the tree, so the reading is main's. Each was chased to an
+artefact rather than argued from the equal counts.
 
-That leaves the corpus where it was. CLAUDE.md asks for the fuzzer to be
-the thing that ships — "build the differential fuzzer first, against an
-independently-written reference... The harness extracts the real function
-text from the source, never a copy" — and a bug with no home in the corpus
-is a gap in the corpus, so adding the home is part of the fix. Float
-RENDERING has had a harness since kanso#1424 and integer PARSING since the
-same pull request. Parsing a float, the one kernel with an actual defect
-against it, had none: `grep -l k_b_to_float tests/*.rs` came back empty.
+Baseline runbench on the container, `env -i` under callgrind from one fixed
+directory: **1,994,172,731**.
 
-`tests/every_float_literal_parses_like_strtod.rs` closes it. Two spans are
-lifted out of src/runtime.c — the pow5 tables with `k_el_parse`, and the
-scan out of `k_b_to_float` — and compiled with clang, so a change to either
-cannot pass by leaving a stale duplicate behind. Six deliberately-chosen
-groups: significands past nineteen digits with a nonzero tail, the same
-with the point inside the run so the fraction branch drops rather than
-trades, trailing zeros past nineteen digits which are NOT a truncation and
-must stay fast, the exponent extremes where the table runs out and doubles
-go subnormal, round-to-even boundaries, and the plain short decimals the
-benchmarks actually parse.
+    mutation                                 runbench md5   runbench
+    none                                     3b9af36f       1,994,172,731
+    a_wide_character_copied_through_a_call   d1064916       1,994,172,731
+    a_tenure_walk_asked_about_arena_pointers 3b9af36f       1,994,172,731
 
-    1,193,654 parsed    599,826 took the fast path    0 disagree
+**`alloc_gate` is blind by construction, and has been since kanso#1393 and
+kanso#1396.** `scripts/gates/instructions.sh` copies `./runbench` — the plain
+binary. `build_benchmarks.sh` builds the counting set first under `--counters`,
+moves it aside, and builds the plain set second, so the binary the gate
+measures has `K_COUNTING` at 0. Both the guarded form and the mutant's
+two-branch form sit inside `if (__builtin_expect(K_COUNTING && ...), 0)` and
+compile to nothing there. The counting binary keeps both, and both count
+identically, so no allocation counter can see it either. What kanso#1298 won
+is no longer in the artefact it was won on; there is nothing left to protect.
 
-WATCHED RED, and the first attempt was watched red for the WRONG REASON,
-which is worth writing down because the mistake is invisible when it
-happens. The closing anchor of the lifted scan was the line
-`if (ok && any && !cut && p == stop) {`. The mutation removes `!cut` from
-that line. So under the mutation the anchor stopped matching, `cut` panicked
-with "no longer ends with", and the spec went red having proved nothing
-about the parser — it had proved its own anchor. A spec that fails loudly
-for the wrong reason still passes a careless reading of "watched red".
+**`ten_walk`'s function is not in the linked binary.** `nm runbench` lists
+`k_ten_holds_outside` and no `k_ten_holds`. The mutation edits the one-line
+body of `k_ten_holds`, which the release link does not emit, so the mutated
+compiler — a different binary, md5 `7d005e1c` against `28f31106` — produces a
+byte-identical `runbench`. A mutation that cannot change the bytes cannot
+redden a gate over them.
 
-The anchor now ends at the strtod fallthrough and names nothing under test.
-With that, the mutation is caught properly: 2,099 of 1,186,978 fast-path
-takes disagree, the first at `43270000000000000011e20`, one ULP low —
-the same shape as `4409065699.4409065699e-2`, which is the case kanso#1423
-was opened on. The rule the miss teaches: AN ANCHOR MAY NOT MENTION THE
-THING UNDER TEST.
+**`char_word`'s arm is never executed.** The equal instruction count on a
+binary that genuinely differs is suggestive and not proof, so the copy was
+poisoned instead of slowed: `memcpy(os->data, "ZZZZ", 4)` in place of the
+character's own bytes. runbench's output is byte-identical either way
+(`e8e74ccb` both ways) on a binary whose md5 is `33402193`. The wide arm of
+`k_b_at` is not reached by the run program at all. CI's own gate agrees from
+the other side — it diffs all fourteen rows and stayed green under the
+mutation, so no benchmark reaches it.
 
-No counter moves; this file adds a test and touches nothing the compiler
-builds.
+The three rows and their mutations are removed. `instructions.sh` keeps its
+other rows, so the job stays covered and the coverage check still passes.
 
+What this leaves open: the run corpus indexes no wide character anywhere. That
+is a gap in the corpus rather than in the ratchet, and closing it means adding
+to the run program, which moves every golden and the welfare floor. Recorded
+here rather than done alongside a row removal.
+
+A CORRECTION to my own first reading of the same nightly, before it reached a
+commit: I took its two baseline objections as one and wrote that an UNPROVEN
+gate ends the pass. It does not. `told p r true` builds its finding with
+`ok = true`, `unmutated` exits only on findings where `not f.ok`, and
+`kept_provable` already drops the rows sharing an unanswerable gate and carries
+the rest into proving. The comment above `answerable?` says exactly this and I
+had read past it. So the 2026-09-13 run exited on the ALREADY RED site gate
+alone, and once kanso#1403's blob setup does its job the nightly reaches the
+mutation phase on any runner — marking the instructions-gate rows unproven
+where the silicon does not match, and proving everything else.
 ## 2026-09-14 — to_float called a truncated significand certain, and it is off by one ULP
 
 `k_b_to_float` takes the Eisel-Lemire path when the scan sees a clean
@@ -3999,3 +4010,50 @@ compile fall outweighs the runtime rise, so the objective came out ahead
 and the floor is raised rather than lowered. The differential-law
 exception was not needed here.
 
+## 2026-09-14 — the parse harness that found the bug was thrown away, so it ships
+
+kanso#1423 found `k_b_to_float` calling a truncated significand certain by
+building a differential harness against strtod, running it over 1,405,451
+cases, and reading off 221 wrong answers. Then the harness was deleted and
+the fix shipped with a six-line micro fixture.
+
+That leaves the corpus where it was. CLAUDE.md asks for the fuzzer to be
+the thing that ships — "build the differential fuzzer first, against an
+independently-written reference... The harness extracts the real function
+text from the source, never a copy" — and a bug with no home in the corpus
+is a gap in the corpus, so adding the home is part of the fix. Float
+RENDERING has had a harness since kanso#1424 and integer PARSING since the
+same pull request. Parsing a float, the one kernel with an actual defect
+against it, had none: `grep -l k_b_to_float tests/*.rs` came back empty.
+
+`tests/every_float_literal_parses_like_strtod.rs` closes it. Two spans are
+lifted out of src/runtime.c — the pow5 tables with `k_el_parse`, and the
+scan out of `k_b_to_float` — and compiled with clang, so a change to either
+cannot pass by leaving a stale duplicate behind. Six deliberately-chosen
+groups: significands past nineteen digits with a nonzero tail, the same
+with the point inside the run so the fraction branch drops rather than
+trades, trailing zeros past nineteen digits which are NOT a truncation and
+must stay fast, the exponent extremes where the table runs out and doubles
+go subnormal, round-to-even boundaries, and the plain short decimals the
+benchmarks actually parse.
+
+    1,193,654 parsed    599,826 took the fast path    0 disagree
+
+WATCHED RED, and the first attempt was watched red for the WRONG REASON,
+which is worth writing down because the mistake is invisible when it
+happens. The closing anchor of the lifted scan was the line
+`if (ok && any && !cut && p == stop) {`. The mutation removes `!cut` from
+that line. So under the mutation the anchor stopped matching, `cut` panicked
+with "no longer ends with", and the spec went red having proved nothing
+about the parser — it had proved its own anchor. A spec that fails loudly
+for the wrong reason still passes a careless reading of "watched red".
+
+The anchor now ends at the strtod fallthrough and names nothing under test.
+With that, the mutation is caught properly: 2,099 of 1,186,978 fast-path
+takes disagree, the first at `43270000000000000011e20`, one ULP low —
+the same shape as `4409065699.4409065699e-2`, which is the case kanso#1423
+was opened on. The rule the miss teaches: AN ANCHOR MAY NOT MENTION THE
+THING UNDER TEST.
+
+No counter moves; this file adds a test and touches nothing the compiler
+builds.
