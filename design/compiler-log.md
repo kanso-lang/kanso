@@ -3902,8 +3902,52 @@ case that must stay on the fast path. Every line in it was a divergence
 before the fix; `micro_corpus_agrees_across_engines` runs it on both
 engines. Watched red on a binary built from the unfixed source first.
 
-All twelve cost goldens and the lazy tier agree, so the fix is free on
-the counters this repo watches. Row `truncated_significand`, mutation
+Row `truncated_significand`, mutation
 `a_truncated_significand_taken_as_certain`, which removes the `!cut`
 guard.
+
+CORRECTION. This entry first said "all twelve cost goldens and the lazy
+tier agree, so the fix is free on the counters this repo watches". The
+first clause is true and the second does not follow, and CI refuted it:
+five veins moved. `all_counters.sh` reads the twelve RUNTIME COST
+goldens and the lazy tier, and those did all agree. The work vein, the
+text vein and the three compile veins are read by other gates, the sweep
+never touched them, and "the counters this repo watches" is the wider
+set. Do not read a green sweep as a silent tree.
+
+CI's sitting. Six of the fourteen work rows rise and the other eight are
+byte-identical, and the six are exactly the programs that link
+`k_b_to_float`. Each landed at:
+
+    work_runbench      2,003,021,871 -> 2,003,046,621   +24,750  +0.0012%
+    work_jsonbench     1,250,438,261 -> 1,250,475,761   +37,500  +0.0030%
+    work_widebench        33,078,691 ->    33,142,691   +64,000  +0.1935%
+    work_encodebench   3,641,023,306 -> 3,641,023,556      +250  +0.0000%
+    work_livebench     3,115,992,526 -> 3,115,992,776      +250  +0.0000%
+    work_oneshot          19,292,672 ->    19,292,922      +250  +0.0013%
+
+and the summed text vein with them, 1,734,268 -> 1,734,364 (+96): the
+same six .text rows rise 16 bytes apiece and the other eight hold. The
+96 is 6 x 16, which is the check that the two veins agree about which
+programs the change reached.
+
+widebench is the largest share because it is the smallest of the six and
+parses the most floats per instruction; runbench carries the largest
+absolute rise and the smallest fraction. That is what a guard flag costs
+on a path a benchmark reaches a few hundred thousand times, and it buys
+a correctly-rounded double where the two engines used to disagree.
+
+The three compile rows all FELL: compile_instructions 42,877,925 ->
+42,870,366 (-7,559), entry 144,056,402 -> 144,035,949 (-20,453),
+library 144,858,538 -> 144,836,225 (-22,313), with compile_allocs and
+compile_peak_bytes byte-identical. `src/runtime.c` is `include_str!`'d
+into the compiler at src/main.rs:826, so its bytes are bytes the
+compiler carries and a change to it moves the layout underneath. The
+front end does no less work than it did; the fall is layout and is
+recorded as such, not claimed as a compile-side win.
+
+Welfare 68.73238080266131 -> 68.73254693776617, banked in this PR. The
+compile fall outweighs the runtime rise, so the objective came out ahead
+and the floor is raised rather than lowered. The differential-law
+exception was not needed here.
 
