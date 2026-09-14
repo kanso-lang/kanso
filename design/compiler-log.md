@@ -4807,6 +4807,70 @@ algorithm. `vr` starts with seventeen significant digits. A float a program
 writes down — a price, a coordinate, a measurement — has three or four, so
 thirteen or fourteen come off, and the loop takes them one at a time.
 
+## the loop that replaced them costs twenty-one, not sixteen
+
+Measured after the change, on a freshly built `runbench` — and the
+rebuild is the point, because the binary sitting in the worktree
+predated `src/runtime.c` by four minutes and profiling it read
+1,994,173,231, the old shape's number. Rebuilt: 1,988,869,261, a fall of
+5,303,970 (-0.2660%), which is the A/B figure recovered from a second
+direction.
+
+`render_ryu` is 84,209,130 instructions, 4.23% of runbench, 440.7 a
+float over 191,070 calls. It was 4.49% and 468.5 before.
+
+The new loop is block `0x39190`-`0x391d2`. It runs 1,022,310 times,
+5.35 trips a float, and is 25.49% of the function at 112.4 instructions
+a float. The old pair ran 9.41 trips at sixteen each, about 150.
+
+**Twenty-one instructions a trip, not sixteen.** The premise this change
+was built on is that the hundred-step and the ten-loop each cost
+sixteen, so one trip taking two digits beats two taking one. That was
+true of the code being replaced. The fused loop is not that body
+unchanged: it is twenty-one instructions, and seven of them are
+register moves that carry `vp`, `vm` and `vr` around the back edge.
+Disassembled:
+
+    39190:  mov %rsi,%r11          391b0:  mov %rcx,%rax
+    39193:  mov %rcx,%r9           391b3:  shr $0x2,%rax
+    39196:  mov %rdx,%r8           391b7:  mul %rdi
+    39199:  mov %rsi,%r10          391ba:  mov %r8,%rax
+    3919c:  shr $0x2,%r10          391bd:  shr $0x2,%rax
+    391a0:  mov %r10,%rax          391c1:  mov %rdx,%rcx
+    391a3:  mul %rdi               391c4:  mul %rdi
+    391a6:  mov %rdx,%rsi          391c7:  shr $0x2,%rcx
+    391a9:  shr $0x2,%rsi          391cb:  shr $0x2,%rdx
+    391ad:  add $0x2,%ebx          391cf:  cmp %rdx,%rcx
+                                   391d2:  ja  39190
+
+So the trade is 21 against 32, not 16 against 32 — a narrower margin
+than the sentence in the commit implies, and the measured -0.2660%
+sizes it correctly either way. The correction is recorded because the
+number 16 would otherwise be read back as this loop's cost.
+
+Two things the disassembly settles that the C does not. The `vr % 100`
+that feeds `round_up` does not appear in the loop at all: only the last
+trip's value survives, so LLVM sank the modulo past the back edge. And
+the three `mul %rdi` are the three divisions by 100, sharing one
+reciprocal in `%rdi`.
+
+**The next lead, not taken here.** Seven of the twenty-one are moves
+the loop would not need if the body wrote its results into the
+registers it reads. That is 37 instructions a float, 8.5% of
+`render_ryu`, about 0.36% of runbench — real, and a separate change
+with its own measurement.
+
+The rest of the function, same sitting, by straight-line run:
+
+    0x38fbf-0x39092   62 instrs   once a float    62.0   14.07%
+    0x39570-0x3959d   13 instrs   2.79 trips      36.3    8.24%
+    0x39770-0x3978f   11 instrs   2.88 trips      31.7    7.19%
+    0x38e1e-0x38e85   22 instrs   once a float    22.0    4.99%
+    0x3936e-0x393b9   26 instrs   0.71 trips      18.5    4.20%
+
+The 62-instruction run is unconditional setup, once per float, and is
+the largest single non-loop cost left in the function.
+
 ## the hundred-step was already there and fired once
 
     int round_up = 0;
