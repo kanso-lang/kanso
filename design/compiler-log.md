@@ -4714,6 +4714,7 @@ one lands on a smaller pile.
 
 Floor banked 68.64 -> 68.68, and `all_pages.sh --write` rewrote the seven
 `compiler.html` spans that quote these goldens.
+
 ## 2026-09-13 — the advisory union that had nothing to union, and the pre-size that cost more than it saved
 
 `advisory::name_types` answers "which types can this name be" by unioning the
@@ -4779,6 +4780,142 @@ of a pile that something else has just made smaller.
 
 Floor banked, welfare 68.68 held. `all_pages.sh --write` rewrote four
 compiler.html lines quoting the three goldens.
+
+## 2026-09-14 — the advisory fixpoint asked every declaration six times to learn 142 things
+
+`advisory::return_type_names` decides, for every function, which record type
+names its return value can carry. It is a monotone fixpoint, and it was
+round-robin: ask every declaration in order, over and over, until a whole pass
+changes nothing.
+
+A probe on `bench/compile_corpus` says what that costs:
+
+    decls=315  rounds=6  visits=1890  grew=142  nonempty=130
+
+1,748 of the 1,890 visits — 92.5% — walked a body and learned nothing. A
+declaration's answer can only change when an answer it reads has grown, and
+the round-robin has no way to ask that question, so it asks all of them.
+
+It is a worklist now. A body asks `name_types` about a fixed set of names —
+the body, the groups and the type names never move — so the set of declaration
+indices it reads is the same on every visit. The first pass records those
+indices as it takes them, builds the reverse map, and after that a declaration
+is re-asked only when one of the answers it read has grown.
+
+## the measurement
+
+Base is merged main at kanso#1416. Both binaries measured by callgrind in the
+staged box, the compiler built from the same tree apart from this change:
+
+    module     45,286,209 -> 44,049,155  -1,237,054  -2.7316%
+    entry     149,978,957 -> 146,969,629  -3,009,328  -2.0065%
+    library   151,165,544 -> 148,160,637  -3,004,907  -1.9878%
+    summed    346,430,710 -> 339,179,421  -7,251,289  -2.0931%
+
+These are container numbers and the compile gates refuse on this host, so CI
+measures the rows that land. The ratio this box has projected at has run
+between 0.84 and 1.19 of CI's over the last dozen changes, which is why the
+projection is written down as a projection.
+
+The ceiling was measured before the shape was chosen, by capping the loop at
+one round and letting the answers be wrong: 45,612,584 -> 43,999,030 on the
+pre-#1416 base, a fall of 1,613,554. The worklist takes about three quarters
+of that. The rest is the first pass, which still visits everything and has to,
+and the 142 revisits that are real.
+
+## what a worklist can get wrong, and the fixture for it
+
+Stopping early. So the fixture is four hops long and declared caller-first,
+which is the worst order for the round-robin and the order most likely to
+expose a re-queue that only walks forward: `relay` calls `hop_one` calls
+`hop_two` calls `hop_three`, and only `hop_three` names `json/parse_failure`.
+One round-robin pass carried the type one hop, so the advisory on `relay` was
+the fifth thing to become true.
+
+Watched red two ways before it was green. Dropping the re-queue entirely
+turned it red AND took `leaky` with it, which says the break was too coarse to
+prove the new fixture earns its place. Re-queueing only readers with a HIGHER
+index — the plausible off-by-one — left all seven older advisory specs green
+and turned exactly this one red. That is the spec doing work nothing else in
+the tree was doing.
+
+The assertion is the advisory a reader sees, not the round count and not the
+visit count. Those are the decomposition, and the decomposition is the thing
+that just moved.
+
+## the answers are identical, and that was checked rather than argued
+
+`kanso check` on both binaries over every `.kso` in the tree: 1,074 files, 0
+diverging. Over every module directory under lib, the three corpora and
+scripts: 45 modules, 0 diverging. A fixpoint's answer does not depend on the
+order its queue is drained in — the union is monotone and the loop runs until
+nothing grows — but the differential is cheap and the argument is not the
+evidence.
+
+`all_compile.sh` reports `emitted_code`, `compile_libraries` and
+`compile_cost` AGREED; the other six gates refuse on this host. Nothing the
+emitter writes changed, which is the expected shape: this pass produces
+advisories and feeds no code.
+
+## CI's four rows, and a container projection that ran 13% high
+
+    compile_instructions   44,031,424 ->  42,908,199  -1,123,225  -2.5510%
+    entry_instructions    146,767,592 -> 144,112,872  -2,654,720  -1.8087%
+    library_instructions  147,572,025 -> 144,915,019  -2,657,006  -1.8004%
+    summed                338,371,041 -> 331,936,090  -6,434,951  -1.9017%
+    compile_allocs            28,361  ->     27,937         -424  -1.4950%
+
+The container measured -7,251,289 summed on two builds from one tree. CI read
+-6,434,951, which is 0.8874 of the projection. The compile gates refuse on this
+host, and this is the second reading this week where the refusal moved a delta
+rather than a level — kanso#1417 projected exactly half of CI's on both work
+rows. A worklist's saving is rounds of walking that no longer happen, and how
+much each walk costs is an inlining decision the two toolchains make
+differently. Project the sign from a refused host; take the size from CI.
+
+`compile_allocs` fell 424. `body_types` allocates a `HashSet` per visit, so
+1,890 visits became 315 plus re-asks; against that the worklist keeps a reverse
+read map and a queue, and the net is the 424.
+
+Runtime did NOT move. `work:success` on the same run, runbench 2,003,021,871
+and all thirteen other rows identical to their goldens, which is the shape a
+front-end change should have: nothing this pass decides reaches the emitter.
+
+## the base moved under all four rows, and the rule called both halves right
+
+kanso#1414 landed after the first sitting. It removes the union-build from
+`name_types` when a group has one arm, which is work every visit of this
+fixpoint was doing, so the four rows measured against the old base were
+deltas against a base that had since got cheaper on its own.
+
+CLAUDE.md says which way that cuts, and the prediction went into the branch
+before CI answered: the saving here is visits that no longer happen times
+what a visit costs, kanso#1414 made a visit cost less, so the fall should
+come back SMALLER. CI, on the merged base:
+
+    compile_instructions   43,910,543 ->  42,877,925  -1,032,618  -2.3516%
+    entry_instructions    146,573,721 -> 144,056,402  -2,517,319  -1.7174%
+    library_instructions  147,378,070 -> 144,858,538  -2,519,532  -1.7096%
+    summed                337,862,334 -> 331,792,865  -6,069,469  -1.7963%
+    compile_allocs            28,361  ->     27,937         -424  -1.4950%
+
+The summed fall came back 365,482 instructions smaller than the -6,434,951
+read against the old base. That is the rule's first half.
+
+The second half is the allocation row, and it is the more interesting one.
+`compile_allocs` fell 424 against the old base and 424 against the new one --
+the same number, to the allocation, across a change of base that moved every
+instruction row beside it. An allocation is a count of operations. It does
+not care what else got cheaper, because nothing kanso#1414 did removes a
+`HashSet` this fixpoint builds; it only made the instructions around one
+cheaper. The three instruction rows are a share of a pile, and a share
+shrinks when the pile does.
+
+So one run of one branch shows both halves of the rule, in the same table:
+the counter that survives a change of base and the counters that do not,
+told apart by what they count rather than by how they behaved.
+
+The trend gate reads the four as improved and nothing as worsened.
 
 ## 2026-09-14 — a float a program writes down has few digits, and ryu took them off one at a time
 
