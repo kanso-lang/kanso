@@ -82,7 +82,7 @@ fn the_anchor_frame_cannot_be_inlined_away() {
     let attributes: Vec<&str> =
         lines[..at].iter().rev().take_while(|line| line.starts_with("#[")).copied().collect();
     assert!(
-        attributes.iter().any(|a| *a == "#[inline(never)]"),
+        attributes.contains(&"#[inline(never)]"),
         "fn main in src/main.rs carries {attributes:?} and not #[inline(never)]. \
          The three compile gates read their rows at the kanso::main frame; a \
          compiler that folded it into the shim would leave them nothing to read."
