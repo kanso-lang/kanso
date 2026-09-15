@@ -1282,6 +1282,9 @@ pub fn builtin_set(name: &str, args: &[Set]) -> Set {
     let name = name.strip_prefix("builtin_").unwrap_or(name);
     let fails: Set = args.iter().fold(0, |acc, s| acc | (s & FAIL));
     match name {
+        // the box built by hand. What goes in is the box's content, value or
+        // err, so the argument's failure bits are held rather than carried
+        "effect" => DESC,
         "at" => {
             let mut out = fails | NONE;
             if args[0] & BYTES != 0 {

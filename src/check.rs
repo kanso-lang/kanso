@@ -3,7 +3,7 @@ use crate::diag::{article, Diagnostic, Span};
 use crate::hash::{Map as HashMap, Set as HashSet};
 use num_traits::Zero;
 
-pub const BUILTINS: [&str; 59] = [
+pub const BUILTINS: [&str; 60] = [
     "annotate",
     "append",
     "args",
@@ -20,6 +20,7 @@ pub const BUILTINS: [&str; 59] = [
     "now",
     "if",
     "is_desc",
+    "effect",
     "join",
     "length",
     "print",
@@ -70,8 +71,8 @@ pub const BUILTINS: [&str; 59] = [
 /// three chain words are here because a chain step is written wherever an
 /// effect is, and importing a module to spell one would be a tax on the
 /// failure channel.
-pub const AMBIENT: [&str; 9] =
-    ["annotate", "bind", "entries", "if", "length", "print", "push", "put", "rescue"];
+pub const AMBIENT: [&str; 10] =
+    ["annotate", "bind", "effect", "entries", "if", "length", "print", "push", "put", "rescue"];
 
 /// What each builtin takes. `if` is absent: its count is checked where its
 /// branches are, because a guard form spells the same word with a different
@@ -85,7 +86,7 @@ pub const AMBIENT: [&str; 9] =
 /// `native backend: `length` takes 1 argument(s)` and no span, the page
 /// died at the call, and `kanso check` said ok. So the counts live here,
 /// beside the names, and every reader takes them from one place.
-pub const BUILTIN_ARITY: [(&str, usize); 63] = [
+pub const BUILTIN_ARITY: [(&str, usize); 64] = [
     ("accept", 1),
     ("annotate", 2),
     ("append", 2),
@@ -102,6 +103,7 @@ pub const BUILTIN_ARITY: [(&str, usize); 63] = [
     ("char_code", 1),
     ("chars", 1),
     ("concat", 2),
+    ("effect", 1),
     ("entries", 1),
     ("env", 1),
     ("exists", 1),
@@ -1135,6 +1137,14 @@ fn check_after_infer<'p>(
             // back boxed. Asking the binder set first paid its hash on every
             // name in every expression to short-circuit the locals, and the
             // locals are the common case only in the arms this pass walks past.
+            // the box built by hand answers one whatever else the program
+            // holds, so it is asked before the short circuit below
+            Expr::App { head, args, piped: false, .. }
+                if args.len() == 1
+                    && matches!(head.as_ref(), Expr::Ident(name, _) if name == "effect") =>
+            {
+                !shadows("effect")
+            }
             Expr::App { head, args, piped: false, .. } if any_boxed => match head.as_ref() {
                 // both branches of an `if` answering a box makes the `if` one
                 Expr::Ident(name, _) if name == "if" && args.len() == 3 => {
@@ -1262,6 +1272,7 @@ fn check_after_infer<'p>(
                     | "put"
                     | "err"
                     | "wrap_err"
+                    | "effect"
             )
     };
     let refuse = |diags: &mut Vec<Diagnostic>, who: &str, at: Span| {

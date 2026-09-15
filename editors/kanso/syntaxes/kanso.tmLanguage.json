@@ -179,7 +179,7 @@
       "name": "support.function.qualified.kanso"
     },
     "builtin": {
-      "match": "\\b(entries|err|length|print|push|put)\\b",
+      "match": "\\b(effect|entries|err|length|print|push|put)\\b",
       "name": "support.function.builtin.kanso"
     },
     "primitive-type": {

@@ -1,0 +1,10 @@
+# `effect v` builds a box, so it is refused wherever a value is wanted,
+# the same as a box a library function answers: an operator, a builtin
+# that reads its argument, and a function whose tail is the constructor
+fn boxed x
+  effect x
+
+pub play =
+  print (effect 5 + 1)
+  >> print (length (effect [1 2]))
+  >> print (boxed 3 + 1)
