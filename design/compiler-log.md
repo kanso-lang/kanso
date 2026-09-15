@@ -5390,8 +5390,18 @@ write of a global, on paths the emitter inlines into every caller.
 
 Every one of the forty now reads `if (K_COUNTING) k_stat_x++;`. A counted
 build increments exactly as before, so every cost golden and every `.mem`
-fixture holds to the byte, and the counters sweep agrees with all of them. A
-shipped build carries none.
+fixture holds to the byte, and the counters sweep agrees with all of them.
+
+Four more sites were not increments and the sweep for `++` walked past them:
+`k_stat_utf8_bytes += len` at both utf-8 validators, `k_stat_evac_bytes +=
+n` at the evacuation, `k_stat_str_scan_bytes += s->len` at the character
+scan, and the arena peak's `if (live > peak) peak = live` at every block. The
+disassembly of the shipped run program still named all four; they carry the
+same guard now and it names none. Measured alone on the forty-site build,
+runbench -1,012,853 (-0.0546%) and jsonbench -1,426,835 (-0.1231%), output
+byte-identical; the sweep agrees with every golden. A shipped build carries
+no counter at all now, and the check that says so is `objdump -d runbench |
+grep -c k_stat_`, which reads 0.
 
 Container A/B, `env -i` under callgrind, equal-length names in one directory,
 on the kanso#1435 leaves:
