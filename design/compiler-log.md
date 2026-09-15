@@ -2544,3 +2544,69 @@ The three compile rows FALL by layout: compile_instructions 42,872,288 ->
 42,870,366 (-1,922), entry_instructions 144,041,140 -> 144,035,949
 (-5,191), library_instructions 144,841,869 -> 144,836,225 (-5,644).
 compile_allocs held at 27,937 and compile_memory is byte-identical.
+
+## 2026-09-15 — gavel: the box is explicit, an err is a value, and a bare err halts where it lands
+
+Clay ruled the ledger's one Blocking entry, "Where the box wraps under the
+pure-fallibility rider: at every err-carrying answer, or at the `!` name",
+and ruled it by retiring the question. His words, after the chat put the
+three parts below to him: "I think you have your gavel a wise one."
+
+**What he said, in his own framing.** "none is just an ordinary value. it has
+nothing to do with effects. the idea is that when IO gives you a value it is
+wrapped in an effect but we've never discussed how you could already manually
+box a value yourself if you wanted to. I suppose you might as well be able to
+do that I guess why not. but in that case it seems like you would also want
+some kind of box to contain the errors to present them as an effect as well.
+we already have the combinators to unwrap them to get access to the
+underlying value or error object."
+
+**The ruling, in three parts.**
+
+1. **The box is only ever explicit.** IO applies it for you. Anyone else
+   applies it by hand, holding a value or holding an err, and the three words
+   are the only way back out. There is no lifting at a declaration boundary:
+   a function that passes a fallible answer through is boxed only if it boxed.
+   The spelling of the hand-applied constructor is not ruled here; it is the
+   ledger's new Open entry "The box constructor's spelling", with a
+   recommendation, and cloud builds against that recommendation unless Clay
+   objects.
+2. **A bare err is data.** An `(err _)` arm matches it anywhere, the way an
+   arm matches `none` or a marker like `file_not_found`, and exhaustiveness
+   makes sure the arm is there. A pure function that wants to signal failure
+   hands back a bare err and its caller dispatches on it. Boxing the err is
+   what takes that option away from the caller and turns it into a failure
+   only a foreign `rescue` can end. The distinction the errors page draws
+   between "a valid pseudo-error" and "a true exception" is spelled by
+   whether the err is bare or boxed, and one object serves both.
+3. **A bare err arriving where a value is wanted halts the program there.**
+   An operator, an index, or a call with no `(err _)` arm at that position
+   stops with the report, the way `+` on a string dies today. That is what
+   `!` means: "I insist, and if I'm wrong the program stops here." The
+   railway retires; nothing outside a box propagates.
+
+**What it supersedes.** The 2026-08-31 rider "pure fallibility is boxed too",
+read literally, lifted every err-carrying answer into the box at the
+declaration boundary. That reading is retired. The 2026-08-29 gavel stands
+whole: effects are types, the words are the only doors, the box is opaque to
+dispatch, the foreign-only rescue license, and `!` at the call site as the
+choice of channel.
+
+**What it dissolves.** The ledger entry measured 738 of lib's 770
+declarations becoming boxes under the literal rider and priced the bind
+shape at four allocations an element in a kernel. Under an explicit box,
+neither number exists: a helper is boxed only where somebody wrote the box,
+and `xs[i]!` in sha256's compress or regexp's scanner costs nothing when the
+index is in range by construction, because a miss halts rather than
+wrapping. That is the in-range read the entry's option 4 asked a third
+spelling for, and it needs none.
+
+**What is left.** Two things for cloud, one for the ledger. Cloud builds the
+constructor and retires the railway, with the kernels untouched; ch04's
+"nothing is asked of the signature" paragraph, the last piece of the book
+ruling, is released by this and moves with the build. The ledger carries the
+constructor's spelling as an Open entry so the build does not wait on it.
+
+The entry left `design/pending-gavels.md` in this commit, four days after it
+was filed. STATUS.md's "Ruled, unbuilt" row for the rider is replaced by a
+row for this ruling.

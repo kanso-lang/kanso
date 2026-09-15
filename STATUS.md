@@ -7,9 +7,9 @@ is stale — say so.
 ## Waiting on Clay
 
 The decisions live in design/pending-gavels.md — the single ledger; this file
-only indexes it. **Blocking right now: one** — where the box wraps under the pure-fallibility
-rider, filed 2026-09-11 after it spent a day written on a feature branch and
-nowhere else. The reconstruction coverage
+only indexes it. **Blocking right now: zero.** The box-wrapping question was ruled on
+2026-09-15, four days after it was filed: the box is explicit, an err is a
+value, and a bare err halts where it lands. The reconstruction coverage
 question was ruled on 2026-09-10, taking cloud's recommendation: rows 15..390
 stay unscored on the run terms, the eight-phase half stays built, and
 re-measuring the old commits is filed as a lead with a feasibility probe in
@@ -101,40 +101,19 @@ off with kanso#1369. The book row came off with kanso#1412, which its own
 log entry calls the live remainder of that ruling. One row remains, and it
 waits on a ruling.
 
-### Pure fallibility is boxed too (2026-08-31)
+### The box is explicit, an err is a value, and a bare err halts where it lands (2026-09-15)
 
-The archive entry "rider: pure fallibility is boxed too": any operation whose
-answer includes an err yields `<t>effect`, io or not; `foo["bar"]!` answers a
-box; `foo["bar"]` stays the data form. Rides with the effect type, which
-landed on 2026-09-13 (kanso#1372), and is listed so the one-line
-`foo["bar"]! .? (e -> "anonymous")` form the gavel promises is visible as
-owed. Sized 2026-09-10 (the log entry "the effect
-type is spellable"): 723 `]!` sites in the tree, 104 of them in lib; by
-infer's reading 738 of lib's 770 declarations carry an err in their answer
-set and 71 of those raise or insist themselves. The respell is the build.
-
-**Half unblocked, 2026-09-13.** The effect type it rides on has landed
-(kanso#1372), so the only thing left holding it is its own unruled question:
-where the box wraps. The ledger's Blocking entry "Where the box wraps under
-the pure-fallibility rider" asks whether the box is every err-carrying answer
-(738 of lib's 770 declarations) or the `!` name (71), with the price of each
-measured. Nothing builds until that is ruled. It is the one entry standing in
-the ledger's Blocking section as of 2026-09-14.
-
-**ch04 rides here too.** The book row that stood beside this one came off on
-2026-09-14: ch05 and compiler.html's entry 23 landed with the type's build on
-2026-09-10, kanso#1392 gave ch05 the chain words and their fused spellings,
-kanso#1394 gave ch04 its rescue collision and boundary panel, kanso#1406 gave
-ch05 `done`, and kanso#1412 gave ch04 the clause naming `<t>effect` — the live
-remainder, by its own log entry. What ch04 still owes is its "nothing is asked
-of the signature" framing, which the ledger's own book entry says waits on this
-rider. So the rider's ruling releases the prose with the respell.
-
-That row also carried a note saying `claude/book-effect-type` was absent from
-the worker's container and the prose should be treated as unwritten.
-kanso#1412 found the branch at `/tmp/wt-book`, tip `d540fe3a`, and every file
-it adds already on main: superseded rather than pending. The note's conclusion
-held and its reason did not.
+The live log's entry of that name, ruled 2026-09-15. It retires the
+2026-08-31 rider "pure fallibility is boxed too" that stood here as a row:
+there is no lifting at a declaration boundary, so the 738-of-770 count and
+the bind chains it priced do not exist. Owes: a prefix constructor that
+boxes a value or an err by hand (the ledger's Open entry "The box
+constructor's spelling" recommends `effect`, and the build does not wait on
+it); a bare err becoming data an `(err _)` arm can match anywhere; a bare err
+arriving at an operator, an index or an arm-less call halting the program
+with the report, which is what `!` means, so `xs[i]!` costs nothing in
+range; the railway retiring; and ch04's "nothing is asked of the signature"
+paragraph, the last of the book ruling, moving with it.
 
 ## In flight
 
@@ -353,9 +332,10 @@ else. Chains that tested for `none` after an effect migrate.
     checked from here on two days and both refused by the tooling
   - whether an err gains readers a lambda callback can use
 
-**Three questions wait in `design/pending-gavels.md`** — one blocking, two
-open — each with a recommendation. Recounted on 2026-09-14, when the
-welfare-floor entry left Blocking with all three of its asks answered. Counted
+**Three questions wait in `design/pending-gavels.md`** — zero blocking, three
+open — each with a recommendation. Recounted on 2026-09-15, when the
+box-wrapping entry left Blocking ruled and the constructor's spelling joined
+Open with a recommendation the build does not wait on. Counted
 from the ledger by reading its `###` headings, which is what this line has
 always claimed to do and had stopped doing TWICE. On 2026-09-05 it said nineteen while the ledger
 held three; fifteen had been gaveled and had left the file as the lifecycle
@@ -366,10 +346,11 @@ four of the six it named had been ruled or shipped since. A count maintained
 by hand goes stale by default, so `tests/the_status_index_counts_the_ledger.rs`
 now reads both files and fails when this sentence and the ledger disagree.
 
-The one blocking is where the box wraps under the pure-fallibility rider,
-filed 2026-09-11. The two open are the book teaching the boundary language,
-whose campaign ran on 2026-09-13 and which now owes only ch04's "nothing is
-asked of the signature" framing, itself waiting on that same rider; and the
+Nothing is blocking. The three open are the box constructor's spelling,
+recommended `effect`, which cloud builds against unless Clay names another;
+the book teaching the boundary language, whose campaign ran on 2026-09-13 and
+which now owes only ch04's "nothing is asked of the signature" framing,
+released by the 2026-09-15 gavel and moving with its build; and the
 maps parse being 100% of the compile row's binary-to-binary drift — which had
 been sitting under Parked with no heading at all, so no index and no session
 citing by heading could reach it.
