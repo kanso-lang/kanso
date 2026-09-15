@@ -64,6 +64,7 @@ fn a_short_scan_tail_answers_like_the_byte_walk() {
 #include <tmmintrin.h>
 #endif
 
+#define K_COUNTING 0
 static long long k_stat_find2_calls = 0;
 
 {window}

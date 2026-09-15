@@ -5337,3 +5337,41 @@ answering yes unconditionally died on the guard page with SIGSEGV.
 
 Row `scan_tail`, mutation `a_short_scan_tail_walks_a_byte_at_a_time` (the
 window test answers no, so the byte walk is the only tail again).
+
+## 2026-09-15 — the counters a shipped binary was still counting
+
+kanso#1396 put the runtime's counter sites behind `K_COUNTING`, the macro
+that is 1 in a counted build and 0 in the binary a program ships as, and
+recorded twenty-seven of them leaving. Forty more never did. They were the
+bare increments, `k_stat_beat_iters++` and its kind, with no guard at all:
+the macro guards the dump that reads them, so in a shipped binary the
+counters are written and never read, and the assumption was that a store
+nobody reads is removed at link time. It is not, at least not here: the
+per-instruction profile of kanso#1435's run program shows 6,425,360 counter
+increments a run executing in the shipped binary, `k_stat_beat_iters`
+2,692,767 of them, `k_stat_find2_calls` 2,072,753, `k_stat_append_fast`
+385,040, `k_stat_append_rendered` 379,530, `k_stat_el_parses` 210,177,
+`k_stat_ryu_renders` 191,070, `k_stat_append_grow` 176,697,
+`k_stat_utf8_zerocopy` 175,617, and eleven smaller. Each is a read-modify-
+write of a global, on paths the emitter inlines into every caller.
+
+Every one of the forty now reads `if (K_COUNTING) k_stat_x++;`. A counted
+build increments exactly as before, so every cost golden and every `.mem`
+fixture holds to the byte, and the counters sweep agrees with all of them. A
+shipped build carries none.
+
+Container A/B, `env -i` under callgrind, equal-length names in one directory,
+on the kanso#1435 leaves:
+
+    runbench    1,867,578,425 -> 1,854,886,339   -12,692,086   -0.6796%
+    jsonbench   1,172,409,354 -> 1,158,934,066   -13,475,288   -1.1494%
+
+Twice the increments counted. The other half is what the increments cost
+around them: a memory read-modify-write on a global in the middle of an
+inlined fast path holds a register and orders the stores either side of it,
+and the code around each site got shorter when it left. Output
+byte-identical on both.
+
+Row `counters_out`, mutation
+`the_beat_iteration_counter_is_counted_in_a_shipped_binary` (the two
+`k_beat_iter` sites unguarded again, 2,692,767 increments a run).
