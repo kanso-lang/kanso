@@ -4683,3 +4683,32 @@ merged base. Only the work vein's bank stands, and it stands because no
 compile row here has ever reached the objective's resolution: four thousand
 instructions on three hundred and thirty-eight million is a ten-thousandth of
 a per cent.
+
+
+## 2026-09-14 — the pow5 table's low word is loaded once a call, and LLVM had already sunk it
+
+`k_el_parse` reads three fields out of `k_el_pow10[q - K_EL_POW10_MIN]`: the
+high word and the binary exponent, which every call uses, and the low word,
+which only the refinement arm uses. That arm runs when the truncated product
+sits within 2^-9 of a rounding boundary — one call in 512 by construction.
+The source loads all three at the top, so by reading it the low word looks
+like a load per call paid to serve one call in five hundred.
+
+Sinking it into the arm is a three-line edit and it buys nothing:
+
+    runbench    1,994,263,341 -> 1,994,263,341
+    jsonbench   1,233,334,045 -> 1,233,334,045
+
+Byte-identical, both programs, callgrind on this container, equal-length
+binary names in one directory. The load is from a `const` table with no
+intervening store, so LLVM sinks it to its use without being asked, and the
+source position of the declaration is not the position of the load.
+
+The general form is worth keeping: on a `static const` table, moving a read
+closer to its use is a comment, not an optimisation. What LLVM cannot sink is
+a read whose address depends on something the compiler cannot prove
+unchanging, or one whose sinking would cross a call it must assume writes
+memory. Neither holds here.
+
+This closes the first of the two shapes the decode number-path attribution
+named. No counter moves, and nothing is committed to `src/`.
