@@ -5472,3 +5472,52 @@ put back through the same slot pointer; gated on the emitted vein, which
 sees the calls return), and `own_err_inline`, mutation
 `an_own_err_check_is_a_call_on_every_value` (the bare call at both sites;
 gated on the work vein, since the emitted text counts the same one call).
+
+## 2026-09-15 — the per-call floors, mapped after the inlines
+
+Where the run program's instructions go on the kanso#1437 leaves, read off
+the per-instruction profile and bucketed by how often each instruction
+runs, so a per-call cost separates from a per-byte one. Every figure is a
+count of instructions the shipped binary executes.
+
+`d_json/encode_onto` is 382,082,442 of 1,823,814,374 (20.95%), 2,380,950
+calls. Twenty-six instructions run on every call: fifteen of frame (six
+pushes, the stack adjust, six pops, the return) and the tag switch. Fifty-five
+run once per string (942,750): the in-place quote append, the thirty-two-byte
+bytes view `escape_onto` builds for its scan, and the scan's setup. Sixty-six
+run once per map pair past the first (504,000) and thirty-eight once per
+list element past the first (628,200), each with a `k_beat_iter` beside it,
+because the element loop allocates the view and is a beat. A hundred and
+twenty run once per map (248,490), `k_b_entries` and the empty check. None of
+these buckets holds a loop the code walks a byte at a time; each is a stack
+of ten-instruction steps the library's shape asks for. The one bucket with a
+removable part is the view: seventeen instructions and thirty-two arena
+bytes per string, 16,026,750 a run (0.88%), and removing it needs the escape
+scan to read a string's bytes without a view, which is a byte-position
+primitive on strings that the library does not have. That is surface, so it
+is written down here and not built. The frame was priced by kanso#1338
+(outlining the arm that sizes it, +2.5582%) and is not retried.
+
+The decoder's `obj_key_start` is 236,081,850 of the decode program's
+1,124,895,296 (20.99%), 1,254,150 keys, and 158 of its instructions run on
+every key: the frame, the quote test, the `find2` scan's setup and one
+sixteen-byte step, the byte at the close quote, the `k_b_utf8_slice_raw` call
+and its result checks, the colon, the `parse_value` call and its checks, the
+map's in-place insert. Ten steps, none over twenty instructions, four of
+them re-testing the input's bytes tag and four re-testing a result for
+failure across block edges LLVM did not fold. `str_escape` runs 81 to 86 per
+escape, in four copies, one per escape arm: the in-place append, the `find2`
+to the next special, the fused slice-append of the clean run and the dispatch
+on the byte found. `k_b_utf8_slice_raw` is 49 per call on a short ascii key:
+the bounds clamp, two overlapping four-byte loads for the high-bit test, a
+thirty-two-byte string and two overlapping stores. `k_b_to_float` is 104 per
+float plus fourteen per digit, and the 104 are the Clinger exact path, one
+`divsd` against a power of ten. `k_beat_iter` is 23 per iteration, 2,685,021
+a run; two of the 23 are the call and return, and a settled top-of-stack
+mark was declined at +0.3210% (kanso#1293).
+
+So the two programs are at the floor their emitted shape sets: per-call
+frames, per-step tag tests, and library steps of ten instructions each. The
+next run-speed win of a per cent or more is a library or emitter shape, not a
+runtime kernel, and the bytes-free escape scan above is the one with a
+number on it.
