@@ -226,7 +226,14 @@
 # a load, which is where the other calls go and where the lines come from.
 # The two own-err sites keep their one `call` each, now to the twin. Banked as
 # the price of runbench -1.6751% and jsonbench -2.9371% on the container.
-defines=143
-calls=1207
-branches=794
-lines=9155
+# 2026-09-15 (a bare err is data; the arm skip retires): defines 143 -> 142,
+# calls 1,207 -> 1,204, branches 794 -> 791, lines 9,155 -> 9,134. The
+# prelude loses k_not_own_err_fast, the alwaysinline twin the row above
+# banked, and the two own-err sites lose their call each: an `(err _)` arm
+# matches a failure whoever raised it now, so the emitter asks nothing about
+# the raiser. The foreign-only licence moved to the rescue word, which the
+# decoder never writes, so nothing came back the other way. Banked.
+defines=142
+calls=1204
+branches=791
+lines=9134

@@ -116,7 +116,17 @@
 # run can be appended in one piece — and a declaration is expressions to visit
 # and two more rounds for the fixpoint to reach it. Banked as the price of the
 # runtime fall it buys.
-front_end_rounds=62
+# 2026-09-15 (a bare err is data; the provenance fixpoint retires):
+# front_end_rounds 62 -> 47, a FALL of 15 (-24.19%), and front_end_visits
+# 22,437 -> 15,076, a FALL of 7,361 (-32.81%). `kanso check` ran a second
+# fixpoint after inference -- provenance.rs walked every declaration's body
+# up to two hundred rounds carrying the packages whose errs each group could
+# receive, so it could refuse an arm written for its own package's err. The
+# ruling made a bare err data, that arm is live, and the pass has nothing to
+# refuse, so it is gone and its rounds and visits with it. What is left is
+# inference's own. compile_peak_bytes reads 776,055 on this container, the
+# figure already recorded, so the row below is unchanged. Banked.
+front_end_rounds=47
 # 2026-09-06 (the array's second walk over the same whitespace): visits 17,169
 # -> 17,115, a fall of 54, or 0.31%, and rounds hold at 40. Two expressions
 # leave lib/json — `array_items`'s `skip_ws` binding and its use — so the front
@@ -176,7 +186,7 @@ front_end_rounds=62
 # 22,437, a FALL of 12 (-0.0534%); front_end_rounds unchanged at 62. One
 # binding fewer in lib/json/number.kso is one expression fewer for the
 # front end to visit on each round it is dirty.
-front_end_visits=22437
+front_end_visits=15076
 # 2026-08-31 (the AST's identifiers are inline names): 728,030 -> 713,606, a
 # fall of 14,424, or 1.98%. Banked. The peak falls with the traffic because a
 # short name's bytes now live inside the AST node the allocator already gave

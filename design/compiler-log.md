@@ -3451,3 +3451,131 @@ goldens need no re-sit because they were never sat on the other reading.
 STATUS.md's row comes off when this lands, which is the chat's. The
 `.rodata` pin is a measured option, recorded above, and not a question the
 ledger needs.
+
+## 2026-09-15 — a bare err is data: the arm skip retires, and the rescue licence moves to the word
+
+Part 2 of the 2026-09-15 ruling "the box is explicit, an err is a value, and
+a bare err halts where it lands". Part 1, the `effect` constructor, is
+kanso#1440. This entry builds the ruling's second sentence: "an `(err _)` arm
+matches it anywhere, the way an arm matches `none` or a marker". Part 3, a
+bare err refused at check where a value is wanted, is next and waits on
+nothing.
+
+### What retires
+
+Since 2026-08-24 an err skipped every arm its own hako wrote. Three engines
+carried it: the interpreter asked `own_failure` inside `match_one` with the
+arm's package threaded through `match_params`, native emitted a
+`k_not_own_err` call in front of every err-admitting pattern (an
+alwaysinline twin since kanso#1437, the same morning), and wasm emitted an
+`rt_not_own_err` guard. All three are gone. `(err r)`, an `:err` annotation
+and a typeset with err among its members take a failure whoever raised it.
+
+The static half went with it. `kanso check` ran a second fixpoint after
+inference, provenance.rs, carrying per group the packages whose errs could
+arrive at each parameter, to refuse an arm written for its own package's err
+as dead code (`error[license]`). That arm is live now and there is nothing
+to refuse, so the pass is deleted and provenance.rs keeps `package_of`
+alone. The four advisory fixtures that only fed the refusal go with it, and
+the licence entry leaves tests/golden/unpinned_diagnostics.txt.
+
+### What stands, and where it moved to
+
+The 2026-08-29 gavel's foreign-only rescue licence stands, and the ruling
+says so in as many words. It is asked at the WORD now. `rescue` carries the
+site it was written at, exactly as `annotate` already did: `Desc::Rescue`
+gains a `Raised`, native's `k_b_rescue` takes the origin literal and builds
+the same closure `k_b_annotate` builds (`k_rescue_wrap` beside
+`k_annotate_wrap`, both through `k_sited_word`), wasm's `rt_rescue` takes
+the origin literal and `Slot::Rescue` carries it. A `.?` written in the
+package that raised the failure hands it on without entering its callback.
+A failure with no package — merged out of several, or raised by a host with
+no frame — passes the test, as the arm form always let it.
+
+`annotate` keeps entering its callback on an own failure. It re-raises under
+the site's own name, which is the shape a package uses to say what it was
+doing when a failure reached it, and nothing in the ruling touches it.
+
+### Two fixtures the licence caught, both this module rescuing itself
+
+`a_chain_step_names_its_channel` ended a chain with `.!` and then `.?` in
+one file, so the rescue was reading the failure the annotate had just
+raised as this module's own. Under the licence that failure goes to the
+endpoint. The fixture reads it through `std/testing` now, which is foreign
+to it, and the chain ends at the annotate.
+
+`an_err_has_readers` rescued `boom 1` in the file that raised it, eight
+times. Every line is an `:err` arm now, which is the ruling's point: the
+readers `.reason`, `.cause` and `.origin` are applied inside an arm that
+took this module's own failure, and the one foreign failure (json's) is
+still read through `rescue`. The fixture used to say "a named group handed
+the err would pass it through"; that sentence was the rule this entry
+retires.
+
+### The pins
+
+- `an_arm_sees_its_own_hakos_err` and `a_typeset_arm_sees_its_own_hakos_err`
+  replace their "cannot see" twins: `mine own` answers "rescued 99", and the
+  foreign rescuer handed a string answers false.
+- `which_patterns_can_hold_a_failure`: the own column reads the same as the
+  foreign one, `took` for the three err-admitting forms and `past` for the
+  seven others.
+- `a_rescue_hands_on_its_own_packages_failure` (micro): a bare own failure
+  under `.?` with a LAMBDA callback goes by ("still failed, mine"), a bare
+  foreign one is claimed, a boxed foreign one is claimed. The lambda is the
+  discriminating half: a lambda has no arms to decline with, so before the
+  licence moved every engine printed "claimed mine".
+- `a_rescue_on_its_own_boxed_failure_reaches_the_endpoint` (runtime): the
+  boxed own shape, `time/sleep 0 .> (_ -> mine 1) .? (e -> …)`, ends at the
+  endpoint on both engines with the same report.
+- ch04's `boundary` sample loses one line: the report no longer says
+  `passed through kitchen/apologise`, because the callback is never entered.
+- Ratchet: the `own_err_inline` row and its mutation retire with the sites
+  they patched; `rescue_licence` deletes the interpreter's licence arm, and
+  the micro corpus prints the callback's answer where the golden says the
+  failure went by.
+
+### The prose
+
+ch04's "no arm can catch it" is "an arm has to name it": a catch-all
+declines an err, an `(err _)` arm claims one wherever it is written, and
+`.?` is licensed on failures that reached you from elsewhere. The
+teahouse/kitchen example keeps its two opposite answers and loses the hop.
+ch08's json section no longer says an arm in the library could never match;
+it says the library chooses not to write one. appb's `wrap_err` paragraph
+and the two ch08 report samples stop citing the arm rule. compiler.html's
+§08 entry for the arm rule is marked retired with the date, §22's second
+table reads `took` in both columns, and §23's first decision records the
+move. design/testing.md's collision section records the retirement.
+
+### What moved, measured on this container
+
+The compile side falls because a whole-program fixpoint is gone.
+`bench/compile_memory_golden.txt`: front_end_rounds 62 -> 47 (-24.19%),
+front_end_visits 22,437 -> 15,076 (-32.81%); compile_peak_bytes reads
+776,055 here, the recorded figure. compile_allocs reads 26,883 against the
+golden's 27,937 (-1,054, -3.77%), a host-keyed row CI re-sits. The three
+compile instruction rows are host-keyed too; this container's compile sweep
+refused all of them and they will fall on CI by the pass's whole cost.
+`bench/compile_golden.txt`: every sample loses eleven lines, one call, one
+branch and one define, the twin's; the modules row 5,334 -> 5,323 lines.
+
+The emitted code falls the same way in every program: the decoder 143 ->
+142 defines, 1,207 -> 1,204 calls, 794 -> 791 branches, 9,155 -> 9,134
+lines, and the other thirteen each lose the twin and their own-err call
+sites (runbench 5,895 -> 5,892 calls, widebench 1,810 -> 1,807). Read
+against origin/main, which does not yet hold kanso#1437, the thirteen
+programs' summed lines RISE, 133,020 -> 133,110: kanso#1437's inline
+capture reads add more lines than the retired guard takes away, and this
+branch is cut on top of it. Against kanso#1437's own tip every one of those
+rows falls, and that is the comparison that stands once it lands.
+
+The twelve runtime allocation veins and the lazy tier agree with their
+goldens: the guard never allocated. The work vein, the text vein and machine
+code are host-keyed and will move on CI — the row kanso#1437 banked that
+morning counted 1,454,508 own-err checks a run on the run program, and
+every one of them is gone rather than inlined. Round one is deliberately red
+on those, and CI's sitting is what gets written.
+
+Welfare cannot see any of this until CI's rows land, because the priced
+compile rows are host-keyed; the floor is banked after they do.

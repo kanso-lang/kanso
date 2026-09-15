@@ -1,10 +1,15 @@
 # `.reason`, `.cause` and `.origin` read an err instead of propagating it —
 # the second deliberate hole in infectiousness, beside `wrap_err`'s second
 # argument. Every other operation on an err still passes it through, which
-# is why the callback below reads the cause with a second `rescue` rather
-# than an interpolation: `"{e.cause}"` would answer the cause itself, and a
-# named group handed the err would pass it through, so the readers are
-# applied inside the lambda and the group gets the piece.
+# is why the readers are applied inside an `:err` arm or a rescue callback:
+# `"{e.cause}"` would answer the cause itself, and a bare binder handed the
+# err would pass it through.
+#
+# The arms are this module's and the errs are this module's. A bare err is
+# data (ruled 2026-09-15), so an `:err` arm takes one wherever it was raised;
+# `rescue` would not do here, because its licence is foreign-only and every
+# failure but json's was raised in this file. json's is foreign, and the last
+# line reads it through the word to keep that shape in the corpus.
 #
 # Settled failures only, so every engine including the page runs this one.
 # The origin names the file the err was raised in, and the harness stages a
@@ -26,12 +31,27 @@ fn wrapped n
 fn raised_in origin
   list/last (text/split (list/first (text/split origin " at ")) "/")
 
+fn reason_of e:err
+  e.reason
+
+fn cause_of e:err
+  e.cause
+
+fn cause_reason_of e:err
+  e.cause.reason
+
+fn caused e:err
+  "cause: {e.reason}"
+
+fn origin_of e:err
+  raised_in e.origin
+
 pub play =
-  print (rescue (boom 1) (e -> e.reason))
-  >> print (rescue (wrapped 2) (e -> e.reason))
-  >> print (rescue (wrapped 3) (e -> e.cause.reason))
-  >> print (rescue (boom 4) (e -> e.cause))
-  >> print (rescue (wrapped 5) (e -> rescue e.cause (c -> "cause: {c.reason}")))
-  >> print (rescue (boom 6) (e -> raised_in e.origin))
-  >> print (rescue (wrapped 7) (e -> raised_in e.origin))
+  print (reason_of (boom 1))
+  >> print (reason_of (wrapped 2))
+  >> print (cause_reason_of (wrapped 3))
+  >> print (cause_of (boom 4))
+  >> print (caused (cause_of (wrapped 5)))
+  >> print (origin_of (boom 6))
+  >> print (origin_of (wrapped 7))
   >> print (rescue (json/decode "[1, 2") (e -> e.reason.reason))
