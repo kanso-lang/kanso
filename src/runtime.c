@@ -2686,8 +2686,14 @@ KValue k_float(double d) {
    than a couple of words. Two overlapping loads and two overlapping stores
    touch only bytes inside [s, s+n) and [d, d+n), so no caller needs slack
    at either end for this to be safe. */
+/* A copy long enough to be libc's, out of line and preserve_most so a caller
+   whose short copies are inline words keeps no frame for the long case. */
+static __attribute__((noinline, cold, preserve_most)) void k_copy_cold(void* d, const void* s, size_t n) {
+    memcpy(d, s, n);
+}
+
 static inline void k_copy_short(char* d, const char* s, long long n) {
-    if (n >= 16) { memcpy(d, s, (size_t)n); return; }
+    if (n >= 16) { k_copy_cold(d, s, (size_t)n); return; }
     if (n >= 8) {
         uint64_t a, b;
         __builtin_memcpy(&a, s, 8);
@@ -6205,7 +6211,7 @@ static KValue k_mklist(long long n, KValue* items) {
     if (n <= 4) {
         for (long long i = 0; i < n; i++) buf[i] = items[i];
     } else {
-        memcpy(buf, items, sizeof(KValue) * n);
+        k_copy_cold(buf, items, sizeof(KValue) * n);
     }
     return k_list_own(buf, n);
 }
@@ -6600,7 +6606,7 @@ KValue k_map_lit(long long n, KValue* flat_pairs) {
     if (n <= 2) {
         for (long long i = 0; i < 2 * n; i++) m->pairs[i] = flat_pairs[i];
     } else {
-        memcpy(m->pairs, flat_pairs, sizeof(KValue) * 2 * n);
+        k_copy_cold(m->pairs, flat_pairs, sizeof(KValue) * 2 * n);
     }
     k_buf_of(m->pairs)->used = 2 * n;
     m->len = n;
@@ -7055,6 +7061,31 @@ KValue k_utf8_bad(const char* data, long long len, const char* origin,
     return k_utf8_bad_wide(data, len, origin, chars);
 }
 
+/* The same door for a caller whose runs are ascii 98 times in 100: the two
+   validators sit behind preserve_most wrappers, so the caller keeps no frame
+   for them, and the 2 in 100 pay the wrapper's saves instead. */
+static __attribute__((noinline, cold, preserve_most))
+KValue k_utf8_bad_scalar_cold(const char* data, long long len, const char* origin,
+                              long long* chars) {
+    return k_utf8_bad_scalar(data, len, origin, chars);
+}
+static __attribute__((noinline, cold, preserve_most))
+KValue k_utf8_bad_wide_cold(const char* data, long long len, const char* origin,
+                            long long* chars) {
+    return k_utf8_bad_wide(data, len, origin, chars);
+}
+static inline __attribute__((always_inline))
+KValue k_utf8_bad_rare(const char* data, long long len, const char* origin,
+                       long long* chars) {
+    k_stat_utf8_bytes += len;
+    if (k_all_ascii(data, len)) {
+        if (chars) *chars = len;
+        return k_none();
+    }
+    if (len <= K_UTF8_SCALAR_MAX) return k_utf8_bad_scalar_cold(data, len, origin, chars);
+    return k_utf8_bad_wide_cold(data, len, origin, chars);
+}
+
 /* A string the validator just read has its character count in hand: every
    byte was ascii, or the pass counted the continuation bytes as it
    classified them. The memo `k_str_chars` writes lazily is written now, so
@@ -7097,7 +7128,7 @@ KValue k_b_utf8_slice_raw(const unsigned char* bytes, long long blen,
        861,498 of them on runbench, and none of them is asked its length.
        Seeding each one cost 7,728,237 instructions there against 13,280,580
        the whole-string doors below save. */
-    KValue bad = k_utf8_bad(data, len, origin, NULL);
+    KValue bad = k_utf8_bad_rare(data, len, origin, NULL);
     if (bad.tag == K_ERR) return bad;
     if (len >= 4 && len < 8) {
         /* The decoder's tokens: 840,807 of runbench's 861,498 slices are

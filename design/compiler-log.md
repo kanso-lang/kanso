@@ -4890,3 +4890,42 @@ Each half needed the other, which is why they ship together.
 Rows `cold_registers` and `index_cold_arms`. The first mutation strips
 `preserve_most` from all six helpers; the second inlines the index's two
 arms back.
+
+## 2026-09-15 — a long copy is a cold call, and the slice door's rare arms are too
+
+Two more frames of the shape the preserve_most entry above describes.
+
+`k_map_lit` and `k_mklist` copy their items inline when there are a few
+and call memcpy when there are more, and the call is why both opened with
+three pushes: 273,339 map literals and 300,479 list literals a run paid
+them for a copy 98 of them and 16,011 of them respectively make. The
+same call sat inside `k_copy_short`, the string copy inlined into every
+string builder, behind its sixteen-byte threshold. All three go through
+`k_copy_cold` now, a preserve_most wrapper around memcpy, and the three
+functions open with no pushes. The wrapper costs twenty-one a call over
+26,551 calls, and `k_b_join`, whose copies are long and many, pays
+199,822 of them alone.
+
+`k_b_utf8_slice_raw`, the decoder's token door at 861,498 calls a run,
+opened with three pushes for the two utf-8 validators it calls 16,929
+times, and the validators could not carry preserve_most themselves:
+`k_b_utf8` calls the scalar one 117,513 times a run on its own strings,
+and measured that way the attribute cost 1,613,304 there for what it
+saved here. So the slice door validates through `k_utf8_bad_rare`, the
+same ascii test with the two validators behind preserve_most wrappers,
+and its entry is one `push %rax`; the wrappers cost seventeen a call over
+16,929.
+
+Measured on the container, `env -i` under callgrind, both binaries in one
+directory under equal-length names, run from the repository root, on the
+base kanso#1429 leaves:
+
+    runbench    1,969,066,916 -> 1,962,311,522    -6,755,394   -0.3431%
+    jsonbench   1,211,697,168 -> 1,200,857,142   -10,840,026   -0.8946%
+
+`k_b_utf8_slice_raw` falls five a call, `k_map_lit` six, `k_mklist` five,
+`k_b_append_grow` two, to the instruction, and `k_utf8_bad_scalar` does
+not move. Output is byte-identical on both programs.
+
+Rows `cold_copy` and `rare_door`. The first mutation inlines the wrapper
+back, the second sends the slice door through the plain validator door.
