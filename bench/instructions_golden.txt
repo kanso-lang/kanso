@@ -658,19 +658,34 @@
 # work_digestbench 9,838,994 still stand above it, priced in kanso#1432's
 # and kanso#1430's entries; nothing here moves them.
 #
-jsonbench 1185398676
-encodebench 3457542341
-oneshot 18367303
-basket 33685770
-widebench 32712263
-deepbench 355470728
-escapebench 85995606
-pendbench 208151563
-indexbench 2895940
-scanbench 500327419
-digestbench 9838994
-readbench 4629709
-livebench 2879379542
+# 2026-09-15 (kanso#1436): the counters a shipped binary was still counting.
+# All fourteen rows FALL, on the base kanso#1435 left: work_jsonbench
+# 1,185,398,676 -> 1,169,790,503 (-15,608,173, -1.3167%), work_runbench
+# 1,871,522,584 -> 1,857,535,269 (-13,987,315, -0.7474%), work_livebench
+# -6,326,619 (-0.2197%), work_encodebench -5,013,110 (-0.1450%),
+# work_escapebench -1,215,014 (-1.4129%), work_deepbench -965,492
+# (-0.2716%), and the other eight by between 232 and 128,315. Forty-four
+# counter sites left the shipped binary: an increment, sometimes a
+# load-store pair, on every beat iteration, every find2 call and every
+# thunk escape. The container had read runbench -13,704,939 and jsonbench
+# -14,902,123 for the two commits together; the runner reads both a little
+# deeper. Against main, work_escapebench 84,780,592 and work_digestbench
+# 9,830,211 still stand above it, priced in kanso#1432's and kanso#1430's
+# entries; both fall here.
+#
+jsonbench 1169790503
+encodebench 3452529231
+oneshot 18247618
+basket 33569560
+widebench 32583948
+deepbench 354505236
+escapebench 84780592
+pendbench 208145421
+indexbench 2895708
+scanbench 500324263
+digestbench 9830211
+readbench 4629439
+livebench 2873052923
 # 2026-09-06 (the run program joins): `runbench 3043743748` is a NEW row and
 # nothing regressed to make it appear. It is the program Clay's gavel that day
 # made the objective's whole run-speed term, and the thirteen rows above it
@@ -728,4 +743,4 @@ livebench 2879379542
 #
 # The uniform -8 across six rows is one instruction on a path each program
 # takes eight times, and the four flat rows never take it at all.
-runbench 1871522584
+runbench 1857535269
