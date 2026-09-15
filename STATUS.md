@@ -138,11 +138,14 @@ held and its reason did not.
 
 ## In flight
 
-Every branch this session opened is merged and verified on `origin/main`.
-Three pull requests stood open elsewhere at the 2026-09-14 sweep, all opened
-that morning: kanso#1417 and kanso#1419 with CI running, and kq#105, whose
-spec job is red on `bench/instructions_golden.txt` — the retired-instructions
-vein, which moves on changes that leave every allocation counter alone.
+This section does not list open pull requests. It did until 2026-09-15, and
+the list it carried was stale by the next morning both times it was written:
+cloud lands five or more a day, so a snapshot here is wrong within hours and
+nobody reads STATUS.md for it. Open pull requests live on GitHub, and the
+daily sweep reads them there — age, mergeable state and the check-run tally
+straight from CI, never from a comment. What belongs here is a branch that is
+NOT a pull request and would otherwise be invisible: a worktree holding
+unpushed work, a measurement mid-run. As of 2026-09-15 there is none.
 
 ## What landed on 2026-08-29
 
