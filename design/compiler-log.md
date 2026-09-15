@@ -4830,3 +4830,22 @@ Row `int_cold_tail`, mutation
 attribute to `always_inline`, which puts the five pushes back. Under the
 mutation runbench reads 1,985,349,707, the base's count to the
 instruction, and `k_b_to_int` is back at 21,770,496.
+
+**CI's sitting, on the base kanso#1427 left.** The work vein reads eleven
+a call where the container read twelve: runbench 1,992,627,657 ->
+1,990,347,291 (-2,280,366, -0.1144%) over 207,306 calls and jsonbench
+1,247,197,361 -> 1,243,742,261 (-3,455,100, -0.2770%) over 314,100, both
+to the instruction. The runner's clang keeps one instruction of frame the
+container's discards. encodebench 3,616,555,466, livebench 3,091,524,686
+and oneshot 19,186,974 each fall by 23,034, one decode of the large
+document; nine rows hold to the digit.
+
+Six machine-code rows FALL by exactly 976 bytes: jsonbench text 117,474,
+encodebench 137,986, oneshot 127,506, widebench 146,994, livebench
+129,058 and runbench 304,386; summed 1,736,060 -> 1,730,204 (-5,856). The
+tail's two refusals were laid out twice inline and once as a function.
+
+The three compile rows RISE by layout: compile_instructions 42,871,412 ->
+42,872,288 (+876), entry_instructions 144,040,625 -> 144,041,140 (+515),
+library_instructions 144,841,583 -> 144,841,869 (+286). compile_allocs
+held at 27,937 and compile_memory is byte-identical.
