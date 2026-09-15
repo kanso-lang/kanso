@@ -1,0 +1,12 @@
+error[effect]: this is an effect — a box the words open — and `+` takes a value; open it with `.>`
+  --> a_hand_built_box_where_a_value_is_expected.kso:10:13
+  10 |   >> print (boxed 3 + 1)
+                   ^
+error[effect]: this is an effect — a box the words open — and `length` takes a value; open it with `.>`
+  --> a_hand_built_box_where_a_value_is_expected.kso:9:21
+   9 |   >> print (length (effect [1 2]))
+                           ^
+error[effect]: this is an effect — a box the words open — and `+` takes a value; open it with `.>`
+  --> a_hand_built_box_where_a_value_is_expected.kso:8:10
+   8 |   print (effect 5 + 1)
+                ^

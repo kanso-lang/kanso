@@ -1,0 +1,2 @@
+effect 5 .> (n -> print "got {n}")
+  >> effect (err "missing") .? (e -> "rescued {e.reason}") .> print
