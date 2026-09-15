@@ -608,6 +608,22 @@ compile_ir_one_value = row
   (breaking "the_compile_row_pins_a_second_value")
   no_setup
 
+# THE MAPS PARSE IS EXTERNAL STATE, ruled 2026-09-15. Rust's startup parses
+# /proc/self/maps to place the stack guard, and the parse costs whatever the
+# binary's layout makes the file: a 64 KiB .bss nothing reaches moved the
+# whole-process count 2,128 with the compiler's own frame identical to the
+# instruction. The three compile gates read their rows as `kanso::main`
+# inclusive, which leaves the parse above the count. The cheap regression is a
+# gate going back to callgrind's summary line, which is one grep shorter and
+# is the whole process again; the spec reads the three gates for the anchor.
+compile_ir_from_main = row
+  "a compile row read from process entry, so the maps parse is in it again"
+  false
+  "cargo test --test the_compile_rows_start_at_the_compilers_main"
+  "specs (unit, golden, differential)"
+  (breaking "a_compile_row_that_counts_from_process_entry")
+  no_setup
+
 # A refusal is only as good as what it leaves a reader able to do. This one
 # told CI to copy rows out of a job log that could not contain them, because
 # the gate stopped before it measured. The row watches the two answers stay
@@ -1302,7 +1318,9 @@ rows_b1d3 = text/concat rows_b1d2 [library_ir]
 
 rows_b1e0a = text/concat rows_b1d3 [compile_ir_one_value box_check_hoist]
 
-rows_b1e0 = text/concat rows_b1e0a [qualified_name_join]
+rows_b1e0m = text/concat rows_b1e0a [compile_ir_from_main]
+
+rows_b1e0 = text/concat rows_b1e0m [qualified_name_join]
 
 rows_b1e1 = text/concat rows_b1e0 [host_measures]
 
