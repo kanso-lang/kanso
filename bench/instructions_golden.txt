@@ -602,19 +602,46 @@
 # and the long copy cost it 1,752,029 against 846,030 the push itself no
 # longer pays (container A/B, 905,659 summed against CI's 908,659).
 #
-jsonbench 1211426976
-encodebench 3575756608
-oneshot 18968024
-basket 33956235
-widebench 32795381
-deepbench 354898747
-escapebench 83901717
-pendbench 219435891
+# 2026-09-15 (kanso#1432): an empty list literal opens with room for four.
+# Nine rows fall, two hold and three rise, on the base kanso#1431 left:
+#
+#   pendbench      219,435,891 ->    208,151,563   -11,284,328   -5.1424%
+#   jsonbench    1,211,426,976 ->  1,195,571,676   -15,855,300   -1.3088%
+#   digestbench      9,941,342 ->      9,838,994      -102,348   -1.0295%
+#   basket          33,956,235 ->     33,685,770      -270,465   -0.7965%
+#   runbench     1,945,875,866 ->  1,930,572,613   -15,303,253   -0.7864%
+#   oneshot         18,968,024 ->     18,862,981      -105,043   -0.5538%
+#   widebench       32,795,381 ->     32,712,263       -83,118   -0.2534%
+#   encodebench  3,575,756,608 ->  3,575,628,491      -128,117   -0.0036%
+#   livebench    3,050,693,016 ->  3,050,596,946       -96,070   -0.0031%
+#   indexbench       2,895,940 ->      2,895,940            +0
+#   readbench        4,629,709 ->      4,629,709            +0
+#   scanbench      508,340,742 ->    508,351,545       +10,803   +0.0021%
+#   deepbench      354,898,747 ->    355,470,728      +571,981   +0.1612%
+#   escapebench     83,901,717 ->     85,995,606    +2,093,889   +2.4956%
+#
+# runbench's fall is 342,891 deeper than the container's -14,960,362 and
+# jsonbench's 630,000 deeper than its -15,225,300. escapebench's rise is the
+# container's to the instruction (83,868,738 -> 85,962,627, +2,093,889) and
+# it is the accumulator's new lifetime: with room for four, a list a loop
+# pushes into stays in the arena through four pushes instead of one, and
+# every rewind in between carries it, where before the second push moved it
+# to permanent storage. memcpy +738,000, malloc +626,895, the free path
+# +441,000, k_beat_rewind_slow +183,000, k_b_push_mut +162,000.
+#
+jsonbench 1195571676
+encodebench 3575628491
+oneshot 18862981
+basket 33685770
+widebench 32712263
+deepbench 355470728
+escapebench 85995606
+pendbench 208151563
 indexbench 2895940
-scanbench 508340742
-digestbench 9941342
+scanbench 508351545
+digestbench 9838994
 readbench 4629709
-livebench 3050693016
+livebench 3050596946
 # 2026-09-06 (the run program joins): `runbench 3043743748` is a NEW row and
 # nothing regressed to make it appear. It is the program Clay's gavel that day
 # made the objective's whole run-speed term, and the thirteen rows above it
@@ -672,4 +699,4 @@ livebench 3050693016
 #
 # The uniform -8 across six rows is one instruction on a path each program
 # takes eight times, and the four flat rows never take it at all.
-runbench 1945875866
+runbench 1930572613
