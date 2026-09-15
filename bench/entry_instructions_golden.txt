@@ -280,4 +280,4 @@
 # FALL of 2,517,319 (-1.7174%). The advisory worklist; see the compile row.
 # Against the pre-kanso#1414 base it fell 2,654,720, and 137,401 of that was
 # work kanso#1414 had already removed.
-entry_instructions=144056402
+entry_instructions=144035949
