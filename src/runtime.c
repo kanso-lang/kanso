@@ -648,8 +648,17 @@ __attribute__((constructor)) static void k_stats_switch(void) {
 }
 
 /* The refill path stays out of line; the bump inlines into every hot
-   caller. Counters, when enabled, are exact: both paths count. */
-static __attribute__((noinline)) void* k_alloc_refill(size_t n) {
+   caller. Counters, when enabled, are exact: both paths count.
+
+   preserve_most makes the refill save every register it touches, so a
+   caller keeps its live values in caller-saved registers across the call.
+   Without it a hot function whose only call was this one pinned its values
+   in callee-saved registers and opened with pushes for a path a run takes
+   about a thousand times: four instructions a call left k_b_slice_raw,
+   k_map_lit, k_rec, k_b_append_slice and k_b_push on runbench, and the
+   refill paid twelve a call over 1,278 calls. The six cold helpers that
+   carry the attribute are the ones a hot function calls and nothing else. */
+static __attribute__((noinline, preserve_most)) void* k_alloc_refill(size_t n) {
     k_arena_push(n > (1 << 20) ? n : (size_t)(1 << 20));
     void* p = k_arena;
     k_arena += n;
@@ -2433,7 +2442,7 @@ void k_beat_iter_carry(void) {
    bump pointer, so caching arena storage and reusing it after a pop hands
    back reclaimed, since-reused memory. Permanent storage is the only cache
    that is sound across beats. */
-static void* k_alloc_perm(size_t n) {
+static __attribute__((noinline, preserve_most)) void* k_alloc_perm(size_t n) {
     k_stat_perm_allocs++;
     void* p = malloc(n);
     if (!p) { fputs("out of memory\n", stderr); exit(1); }
@@ -2756,21 +2765,32 @@ KValue k_str_lit(const char* data, long long len, KValue* slot) {
    73.82. The sum is the objective and the terms are diagnostics, so this is
    the shape that ships; the narrow one is recorded in the log beside it. */
 __attribute__((always_inline))
-KValue k_str_n(const char* data, long long len) {
+/* The ascii cache's first fill of a slot, out of line and preserve_most so
+   the hit path in k_str_n carries no frame into its callers. k_str_n is
+   inlined everywhere the runtime uses it, and with the fill in its body two
+   of those callers stopped inlining it. */
+static __attribute__((noinline, cold, preserve_most)) KValue k_ascii_fill(unsigned char b) {
+    KStr* s = k_alloc_perm(sizeof(KStr));
+    s->len = 1;
+    s->cap = 0;
+    s->data = malloc(2);
+    s->data[0] = (char)b;
+    s->data[1] = 0;
+    KValue v; v.tag = K_STR; v.payload = k_ptr(s);
+    k_ascii_cache[b] = v;
+    k_ascii_ready[b] = 1;
+    return v;
+}
+
+/* always_inline: with the fill outlined the inliner declined this at two
+   sites (k_b_slice and k_b_utf8_slice_raw) and 205,098 calls a run paid
+   twenty-three instructions each. Nothing emitted calls it; the symbol is
+   declared to the IR and never used. */
+__attribute__((always_inline)) KValue k_str_n(const char* data, long long len) {
     if (len == 1) {
         unsigned char b = (unsigned char)data[0];
         if (b < 128 && b != 0) {
-            if (!k_ascii_ready[b]) {
-                KStr* s = k_alloc_perm(sizeof(KStr));
-                s->len = 1;
-                s->cap = 0;
-                s->data = malloc(2);
-                s->data[0] = (char)b;
-                s->data[1] = 0;
-                KValue v; v.tag = K_STR; v.payload = k_ptr(s);
-                k_ascii_cache[b] = v;
-                k_ascii_ready[b] = 1;
-            }
+            if (!k_ascii_ready[b]) return k_ascii_fill(b);
             return k_ascii_cache[b];
         }
     }
@@ -4036,8 +4056,17 @@ static int ryu_d2d(double f, char* dig, int* e10) {
         output = vr + ((vr == vm && (!accept || !vm_trailing)) || last_removed >= 5);
     } else {
         int round_up = 0;
-        uint64_t vpd100 = vp / 100, vmd100 = vm / 100;
-        if (vpd100 > vmd100) {
+        /* Two digits a trip while two are there to take. This loop used to
+           run once and hand the rest to the ten-loop below, and the ten-loop
+           was averaging 9.41 trips a float on the encode corpus -- because a
+           float a program writes down has few significant digits and `vr`
+           starts with seventeen, so most of them come off. Both loops cost
+           the same sixteen instructions a trip (three multiply-highs, three
+           shifts, a compare and the branch), so a trip that takes two digits
+           is worth two that take one. */
+        for (;;) {
+            uint64_t vpd100 = vp / 100, vmd100 = vm / 100;
+            if (vpd100 <= vmd100) break;
             uint64_t vrd100 = vr / 100;
             uint32_t vrm100 = (uint32_t)(vr % 100);
             round_up = vrm100 >= 50;
@@ -7496,15 +7525,62 @@ static __attribute__((noinline, cold)) void k_die_index(KValue container) {
     k_die(said);
 }
 
+/* The two arms of an index that allocate or refuse: a wide character the
+   cache does not hold, and a map or an unindexable value. They are a
+   separate function so the arm every runbench index takes -- an ascii
+   character out of k_str_n's cache -- carries no frame; with the calls in
+   the same body the compiler opened every index with six pushes and a
+   forty-byte reservation for paths a run takes six times. preserve_most on
+   both, for the reason k_alloc_refill gives. */
+static __attribute__((noinline, cold, preserve_most)) KValue k_b_at_wide_miss(uint32_t q, uint32_t key, unsigned slot, long w) {
+    if (!k_wide_ready[slot]) {
+        KStr* ps = k_alloc_perm(sizeof(KStr));
+        ps->len = w;
+        ps->cap = -2;
+        ps->data = malloc(5);
+        memcpy(ps->data, &q, 4);
+        ps->data[w] = 0;
+        KValue pv; pv.tag = K_STR; pv.payload = k_ptr(ps);
+        k_wide_cache[slot] = pv;
+        k_wide_key[slot] = key;
+        k_wide_ready[slot] = 1;
+        return pv;
+    }
+    KStr* os = k_str_alloc(w);
+    memcpy(os->data, &q, 4);
+    os->data[w] = 0;
+    os->cap = -2;
+    KValue one; one.tag = K_STR; one.payload = k_ptr(os);
+    return one;
+}
+
+static __attribute__((noinline, cold, preserve_most)) KValue k_b_at_rest(KValue container, KValue index) {
+    if (container.tag == K_MAP) {
+        KMap* m = k_as_map(container);
+        long long n;
+        KValue* s = k_map_sorted(m, &n);
+        long long lo = 0, hi = n - 1;
+        while (lo <= hi) {
+            long long mid = (lo + hi) / 2;
+            int c = k_key_cmp(index, s[mid * 2]);
+            if (c == 0) return s[mid * 2 + 1];
+            if (c < 0) hi = mid - 1; else lo = mid + 1;
+        }
+        return k_none();
+    }
+    k_die_index(container);
+    return k_none();
+}
+
 KValue k_b_at(KValue container, KValue index) {
     if (!k_not_failure(container)) return container;
     if (!k_not_failure(index)) return index;
-    if (container.tag == K_LIST && index.tag == K_INT) {
-        KList* l = k_as_list(container);
-        long long i = index.payload;
-        if (i < 1 || i > l->len) return k_none();
-        return l->items[i - 1];
-    }
+    /* The STR arm is asked FIRST. `length s[i]` over text is the index this
+       runtime meets most -- 690,000 calls on runbench, all of them from
+       tally_4 -- and the LIST test in front of it was two instructions
+       every one of them paid to be told no. A list index pays the same two
+       instructions now, which is why this is measured on the whole work
+       vein rather than on runbench alone. */
     if (container.tag == K_STR && index.tag == K_INT) {
         KStr* s = k_as_str(container);
         long long want = index.payload;
@@ -7541,25 +7617,13 @@ KValue k_b_at(KValue container, KValue index) {
         uint32_t key = q & (0xffffffffu >> (8 * (4 - w)));
         unsigned slot = (unsigned)((key * 2654435761u) >> 24);
         if (k_wide_key[slot] == key && k_wide_ready[slot]) return k_wide_cache[slot];
-        if (!k_wide_ready[slot]) {
-            KStr* ps = k_alloc_perm(sizeof(KStr));
-            ps->len = w;
-            ps->cap = -2;
-            ps->data = malloc(5);
-            memcpy(ps->data, &q, 4);
-            ps->data[w] = 0;
-            KValue pv; pv.tag = K_STR; pv.payload = k_ptr(ps);
-            k_wide_cache[slot] = pv;
-            k_wide_key[slot] = key;
-            k_wide_ready[slot] = 1;
-            return pv;
-        }
-        KStr* os = k_str_alloc(w);
-        memcpy(os->data, &q, 4);
-        os->data[w] = 0;
-        os->cap = -2;
-        KValue one; one.tag = K_STR; one.payload = k_ptr(os);
-        return one;
+        return k_b_at_wide_miss(q, key, slot, w);
+    }
+    if (container.tag == K_LIST && index.tag == K_INT) {
+        KList* l = k_as_list(container);
+        long long i = index.payload;
+        if (i < 1 || i > l->len) return k_none();
+        return l->items[i - 1];
     }
     if (container.tag == K_BYTES && index.tag == K_INT) {
         KBytes* b = k_as_bytes(container);
@@ -7567,21 +7631,7 @@ KValue k_b_at(KValue container, KValue index) {
         if (i < 1 || i > b->len) return k_none();
         return k_int(b->data[i - 1]);
     }
-    if (container.tag == K_MAP) {
-        KMap* m = k_as_map(container);
-        long long n;
-        KValue* s = k_map_sorted(m, &n);
-        long long lo = 0, hi = n - 1;
-        while (lo <= hi) {
-            long long mid = (lo + hi) / 2;
-            int c = k_key_cmp(index, s[mid * 2]);
-            if (c == 0) return s[mid * 2 + 1];
-            if (c < 0) hi = mid - 1; else lo = mid + 1;
-        }
-        return k_none();
-    }
-    k_die_index(container);
-    return k_none();
+    return k_b_at_rest(container, index);
 }
 
 KValue k_index(KValue container, KValue key, const char* origin) {
@@ -8567,6 +8617,31 @@ KValue k_b_from_code(KValue nv, const char* origin) {
    scanner guarantees is the delimiter at data[len]. So we parse in place
    straight from the bytes, skipping the string the scanner would otherwise
    allocate per number. */
+/* Everything past the bare digit loop: libc's strtoll and the two refusals.
+   It is a separate function so the fast path above carries no frame -- with
+   the calls in the same body the compiler pinned the string's data, length
+   and origin in callee-saved registers and paid five pushes and five pops on
+   every call, for a path no call in either benchmark takes. preserve_most
+   takes the last push with it, for the reason k_alloc_refill gives. */
+static __attribute__((noinline, cold, preserve_most)) KValue k_b_to_int_slow(const char* data, long long len, const char* origin) {
+    char* end = NULL;
+    errno = 0;
+    long long n = strtoll(data, &end, 10);
+    if (errno == ERANGE) {
+        /* strtoll saturates while consuming every digit — without this check
+           an overflowing literal decodes as a silently wrong value. Loud
+           limit beats quiet lie until native bignum tiering ships. */
+        KValue str = k_str_n(data, len);
+        return k_err(k_concat(k_concat(k_str("\""), str),
+            k_str("\" overflows this engine's integers")), origin);
+    }
+    if (len == 0 || end != data + len) {
+        KValue str = k_str_n(data, len);
+        return k_err(k_concat(k_concat(k_str("\""), str), k_str("\" is not an integer")), origin);
+    }
+    return k_int(n);
+}
+
 KValue k_b_to_int(KValue sv, const char* origin) {
     if (!k_not_failure(sv)) return sv;
     if (sv.tag == K_INT) return sv;
@@ -8588,22 +8663,7 @@ KValue k_b_to_int(KValue sv, const char* origin) {
         }
         if (j == len) return k_int(start ? -acc : acc);
     }
-    char* end = NULL;
-    errno = 0;
-    long long n = strtoll(data, &end, 10);
-    if (errno == ERANGE) {
-        /* strtoll saturates while consuming every digit — without this check
-           an overflowing literal decodes as a silently wrong value. Loud
-           limit beats quiet lie until native bignum tiering ships. */
-        KValue str = k_str_n(data, len);
-        return k_err(k_concat(k_concat(k_str("\""), str),
-            k_str("\" overflows this engine's integers")), origin);
-    }
-    if (len == 0 || end != data + len) {
-        KValue str = k_str_n(data, len);
-        return k_err(k_concat(k_concat(k_str("\""), str), k_str("\" is not an integer")), origin);
-    }
-    return k_int(n);
+    return k_b_to_int_slow(data, len, origin);
 }
 
 KValue k_b_sqrt(KValue v) {
@@ -9418,7 +9478,24 @@ KValue k_b_to_float(KValue v, const char* origin) {
     /* the fast path: a plain decimal scanned into (w, q) and parsed by
        eisel-lemire; anything it can't be certain about — overlong digits,
        exotic forms, halfway cases — falls through to strtod, which stays
-       the semantic authority */
+       the semantic authority.
+
+       `cut` is why the overlong case is one of those. The scan keeps
+       nineteen significant digits; past that an integer digit is traded for
+       a `q++` and a fraction digit is dropped outright, and either way the
+       significand handed on is no longer the number that was written. A
+       truncated significand can sit on the far side of a rounding boundary
+       from the true value, so eisel-lemire's answer is not certain and the
+       algorithm does not claim it is — Lemire's own implementation carries
+       the same flag. Without it this returned a double one ULP below the
+       correctly-rounded one on `4409065699.4409065699e-2` and 220 other
+       cases the parse harness found, and the interpreter — the oracle —
+       disagreed with native on every one of them.
+
+       A dropped ZERO changes nothing, so only a nonzero one sets the flag:
+       "10000000000000000000" is exactly w * 10 and stays on the fast path.
+       That is what keeps the run corpus at 210,177 fast-path parses, which
+       is every call it makes. */
     if (len > 0) {
         const char* p = data;
         const char* stop = data + len;
@@ -9426,22 +9503,32 @@ KValue k_b_to_float(KValue v, const char* origin) {
         if (*p == '-' || *p == '+') { neg = *p == '-'; p++; }
         unsigned long long w = 0;
         long long q = 0;
-        int digits = 0, any = 0, ok = 1;
+        int digits = 0, any = 0, ok = 1, cut = 0;
+        /* leading zeros are not significant digits, and once the first
+           nonzero digit has landed every later one is. skipping them here
+           lets both loops count unconditionally instead of re-asking
+           `if (w)` on every digit -- a predicate that is monotone in the
+           digit position and was costing three instructions a digit. */
+        while (p < stop && *p == '0') { any = 1; p++; }
         while (p < stop && *p >= '0' && *p <= '9') {
             any = 1;
-            if (digits < 19) { w = w * 10 + (unsigned long long)(*p - '0'); if (w) digits++; }
-            else { q++; }
+            if (digits < 19) { w = w * 10 + (unsigned long long)(*p - '0'); digits++; }
+            else { q++; if (*p != '0') cut = 1; }
             p++;
         }
         if (p < stop && *p == '.') {
             p++;
+            if (w == 0) {
+                while (p < stop && *p == '0') { any = 1; q--; p++; }
+            }
             while (p < stop && *p >= '0' && *p <= '9') {
                 any = 1;
                 if (digits < 19) {
                     w = w * 10 + (unsigned long long)(*p - '0');
-                    if (w) digits++;
+                    digits++;
                     q--;
                 }
+                else if (*p != '0') cut = 1;
                 p++;
             }
         }
@@ -9459,7 +9546,7 @@ KValue k_b_to_float(KValue v, const char* origin) {
             if (!edigits) ok = 0;
             q += esign * e;
         }
-        if (ok && any && p == stop) {
+        if (ok && any && !cut && p == stop) {
             double out;
             if (k_el_parse(w, q, &out)) {
                 return k_float(neg ? -out : out);

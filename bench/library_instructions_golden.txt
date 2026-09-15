@@ -255,4 +255,103 @@
 # FALL of 705,949 (-0.4609%). The second fused descent; see the compile row.
 # 2026-09-13 (kanso#1413): library_instructions 151,715,592 -> 150,868,905, a
 # FALL of 846,687 (-0.5581%). The box question joins the second fused descent.
-library_instructions=150868905
+# 2026-09-13 (kanso#1415): library_instructions 150,868,905 -> 148,544,439, a
+# FALL of 2,324,466 (-1.5407%). The qualified-name join; see the compile row.
+# 2026-09-14 (kanso#1416): library_instructions 148,544,439 -> 147,572,025, a
+# FALL of 972,414 (-0.6546%). The borrowed dedup keys; see the compile row.
+# 2026-09-14 (kanso#1414): library_instructions 147,572,025 -> 147,378,070, a
+# FALL of 193,955 (-0.1314%). Summed across the three the compile term moves
+# -508,707 (-0.1503%). All three fall together, which is what a decision the
+# front end stops making looks like: the entry and library rows track each
+# other to 84 instructions because they run the same passes over corpora of
+# the same shape.
+# 2026-09-14 (kanso#1417): library_instructions 147,378,070 -> 147,374,531, a
+# FALL of 3,539 (-0.0024%). The k_b_at arm order; see the compile row. All
+# three rows fall and compile_allocs does not move at all, which is the
+# signature of a layout move: the same decisions, reached through a binary
+# whose bytes sit differently. The runtime vein is where this change was
+# actually aimed, and it is the one that carries the win.
+# 2026-09-14 (kanso#1418): library_instructions 147,378,070 -> 144,858,538,
+# a FALL of 2,519,532 (-1.7096%). The advisory worklist; see the compile row.
+# Summed across the three the compile term moves 337,862,334 -> 331,792,865,
+# -6,069,469 (-1.7963%). The entry and library rows track each other to 2,213
+# instructions because they run the same passes over corpora of the same
+# shape.
+# 2026-09-14 (kanso#1417, FOURTH sitting): library_instructions 144,858,538 ->
+# 144,834,698, a FALL of 23,840 (-0.0165%). Summed across the three the
+# compile term moves -54,168 (-0.0163%).
+# 2026-09-14 (kanso#1417, FIFTH sitting): library_instructions 144,842,133 ->
+# 144,837,840, a FALL of 4,293 (-0.0030%), on the base kanso#1419 left.
+# Summed across the three the compile term moves 331,756,407 -> 331,746,012,
+# -10,395 (-0.0031%).
+#
+# FIVE SITTINGS OF ONE DIFF, AND THE SPREAD IS AN ORDER OF MAGNITUDE. The
+# same three lines of src/runtime.c have now been measured against five bases:
+#
+#     base          module      entry     library      summed
+#     kanso#1415       +35     -1,854        +230      -1,589
+#     kanso#1416      +883     -2,236      -2,878      -4,231
+#     kanso#1414      -300     -2,921      -3,539      -6,760
+#     kanso#1418    -8,216    -22,112     -23,840     -54,168
+#     kanso#1419    -1,325     -4,777      -4,293     -10,395
+#
+# The module row changes sign twice across the five. The fourth is eight times
+# the third and thirty-four times the first, and it is the only one where all
+# three rows fall together by a comparable share; the fifth is a sixth of it. Nothing about the diff
+# changed between them: it is three lines swapping two arms of a tag switch,
+# and `kanso check` never executes one of them.
+#
+# What changed is the binary the rows are measured on. kanso#1418 rewrote the
+# advisory fixpoint to revisit on demand, which moved the compiler's own code
+# and every address after it; the reorder's bytes then land somewhere else
+# again. A layout delta is a property of one arrangement, and four bases are
+# four arrangements.
+#
+# So the practical rule, which cost this branch six rounds to learn: a compile
+# row on a runtime-only change is regenerated from whatever base CI last ran,
+# stated, and not reasoned from. It carries no information about the change
+# and the objective cannot see it -- fifty-four thousand instructions on three
+# hundred and thirty-two million is a sixtieth of a per cent, and ten thousand
+# is a three-hundredth. The work vein is where this change was aimed and where
+# its win is.
+# 2026-09-14 (kanso#1419): ryu_d2d removes digits two at a time. This is a
+# RUNTIME change -- src/runtime.c, one function -- and the library row moved
+# anyway: 144,836,225 -> 144,842,133, +5,908 (+0.0041%). On the kanso#1418 base the same diff read
+# -22,292 (-0.0154%); on the kanso#1423 base it RISES. Same bytes,
+# opposite sign, which is the whole of what a layout delta carries.
+#
+# `kanso check` stops before codegen, so no decision this row counts can have
+# been altered by a runtime edit. What moved is the LAYOUT: src/runtime.c is
+# compiled into the compiler and its bytes shift what sits where. CLAUDE.md
+# has the rule and this row is another instance of it -- regenerate from
+# whatever base CI last ran, say so, and do not reason from the size.
+#
+# The size especially. kanso#1417 read the same three-line runtime diff on
+# four bases and got four different answers, the module row changing sign
+# twice and the fourth reading eight times the third. A layout delta is a
+# property of one binary's arrangement and carries no information about the
+# change that provoked it.
+#
+# compile_allocs held at 27,937 and compile_memory is byte-identical, which
+# is the expected pair: those two really cannot move on a runtime edit.
+#
+# 2026-09-15 (kanso#1427): the leading-zero skip in k_b_to_float, a RUNTIME
+# change in one function, and this row moved anyway: 144,837,840 -> 144,841,583, +3,743
+# (+0.0026%), on the base kanso#1417 left. Layout, as the entry above says:
+# `kanso check` never reaches the runtime, and src/runtime.c is compiled into
+# the compiler. Regenerated from the base CI last ran, stated, not reasoned
+# from. compile_allocs held at 27,937 and compile_memory is byte-identical.
+#
+# 2026-09-15 (kanso#1428): the int parser's cold tail outlined, a RUNTIME
+# change in one function, and this row moved anyway: 144,841,583 -> 144,841,869, +286
+# (+0.0002%), on the base kanso#1427 left. Layout, as the entries above say;
+# regenerated from the base CI last ran, stated, not reasoned from.
+# compile_allocs held at 27,937 and compile_memory is byte-identical.
+#
+# 2026-09-15 (kanso#1429): six cold helpers carry preserve_most and three
+# arms are outlined, a RUNTIME change, and this row moved anyway: 144,841,869 ->
+# 144,836,225, -5,644 (-0.0039%), on the base kanso#1428 left. Layout, as the entries
+# above say; regenerated from the base CI last ran, stated, not reasoned
+# from. compile_allocs held at 27,937 and compile_memory is byte-identical.
+#
+library_instructions=144836225

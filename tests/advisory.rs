@@ -106,3 +106,39 @@ fn laundering_an_own_err_through_a_foreign_reason_is_refused() {
 fn rescuing_a_genuinely_foreign_err_is_silent() {
     assert!(licenses("tests/golden/advisory/foreign_rescue").is_empty());
 }
+
+/// The fixpoint reaches an answer several hops from where the type is built,
+/// and this pins that it still does.
+///
+/// `return_type_names` used to be round-robin: it asked every declaration in
+/// order, over and over, until a whole pass changed nothing. It is a
+/// dependency-driven worklist now -- a declaration is re-asked only when one
+/// of the answers its body read has grown -- and 92.5% of the visits the
+/// round-robin made produced nothing.
+///
+/// What a worklist can get wrong is stopping early, so the fixture is built to
+/// catch exactly that. `relay` is four hops from the declaration that names
+/// `json/parse_failure`, and the hops are declared caller-first, which is the
+/// worst order for the round-robin: one pass carried the type one hop, so the
+/// advisory on `relay` only became true on the fifth. A worklist that failed to
+/// re-queue a reader would leave `relay` with an empty answer and this would
+/// assert an empty vector.
+///
+/// The assertion is the advisory a user reads, not the round count or the
+/// visit count -- those are the decomposition, and the decomposition is what
+/// just moved.
+#[test]
+fn an_answer_four_hops_from_where_the_type_is_built_still_arrives() {
+    let dir = std::path::Path::new("tests/golden/advisory/relayed");
+    let program = kanso::compile_module(dir, false).expect("relayed compiles");
+
+    let advisories = door_advisories(&program);
+
+    assert_eq!(
+        advisories,
+        vec!["advisory[door]: `relay` returns `json/parse_failure` and the \
+             surface offers nothing that accepts it — re-export what callers \
+             need, or wrap it"
+            .to_string()]
+    );
+}

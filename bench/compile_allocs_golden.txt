@@ -434,4 +434,23 @@
 # 2026-09-13 (kanso#1413): compile_allocs 30,224 -> 30,207, a fall of 17. The
 # box question joins the second fused descent; the seventeen are the per-pass
 # scratch its own traversal built and the shared descent does not.
-compile_allocs=30207
+# 2026-09-13 (kanso#1415): compile_allocs 30,207 -> 29,169, a fall of 1,038
+# (-3.4363%). `format!` grows its string from empty, so most qualified names
+# cost TWO allocations; the sized join costs one, and the type loop's
+# duplicate build costs none.
+# 2026-09-14 (kanso#1416): compile_allocs 29,169 -> 28,361, a fall of 808
+# (-2.7705%). Two tables built owned `String` keys for names read once and
+# dropped; both borrow now. The container projected exactly 808.
+# 2026-09-14 (kanso#1418): compile_allocs 28,361 -> 27,937, a fall of 424
+# (-1.4950%). The advisory fixpoint is a worklist. `body_types` builds a
+# `HashSet` per visit and the round-robin built 1,890 of them; the worklist
+# builds 315 plus one per re-ask. Against that it keeps two vectors per
+# declaration -- the reverse read map and the queue -- so the net is 424
+# rather than the visit count.
+#
+# This delta is EXACTLY the one measured against the pre-kanso#1414 base,
+# to the allocation. An allocation is a count of operations and does not
+# care what else got cheaper; the three instruction rows beside it are a
+# share of a pile kanso#1414 shrank, and every one of them came back
+# smaller. Same branch, same run, the two halves of CLAUDE.md's rule.
+compile_allocs=27937

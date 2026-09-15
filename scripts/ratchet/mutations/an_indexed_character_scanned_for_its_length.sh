@@ -6,17 +6,20 @@
 # zero the same way, so every multi-byte character handed out is scanned once
 # more by `length`. str_scans in the fixture rises by one per non-ascii
 # position, 2,003 on 4,000, and the mem corpus goes red on that row.
+#
+# The wide-character memo lives in k_b_at_wide_miss since 2026-09-15, one
+# indent level up from where it sat inside k_b_at; the anchors follow it.
 set -e
 grep -q '^            if (os->cap == 0) os->cap = -2;$' src/runtime.c || {
   echo "k_b_at's ascii memo changed shape; this needs rewriting" >&2
   exit 1
 }
-grep -q '^        os->cap = -2;$' src/runtime.c || {
+grep -q '^    os->cap = -2;$' src/runtime.c || {
   echo "k_b_at's wide-character memo changed shape; this needs rewriting" >&2
   exit 1
 }
 sed -i 's|^            if (os->cap == 0) os->cap = -2;$|            if (os->cap == 0) os->cap = 0;|' \
   src/runtime.c
-sed -i 's|^        os->cap = -2;$|        os->cap = 0;|' src/runtime.c
+sed -i 's|^    os->cap = -2;$|    os->cap = 0;|' src/runtime.c
 grep -q '^            if (os->cap == 0) os->cap = 0;$' src/runtime.c
-grep -q '^        os->cap = 0;$' src/runtime.c
+grep -q '^    os->cap = 0;$' src/runtime.c

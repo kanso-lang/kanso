@@ -376,6 +376,69 @@ remainder = row
   (breaking "the_remainder_calls_the_runtime_again")
   benchmarks
 
+# ryu_d2d's general digit-removal loop takes two digits a trip since
+# 2026-09-14; the mutation puts the hundred-step back to firing once and the
+# ten-loop back to averaging 9.41 trips a float. The digits out are identical
+# either way, so the work vein is the only thing that can see it.
+digit_pairs = row
+  "the digit removal taking one at a time again"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_digit_removal_takes_one_at_a_time")
+  benchmarks
+
+# k_b_to_float skips leading zeros before its digit loops since 2026-09-15,
+# so the loops count significant digits unconditionally; the mutation puts
+# `if (w) digits++` back on every digit. The (w, q) handed to eisel-lemire is
+# identical either way, so the work vein is the only thing that can see it.
+leading_zeros = row
+  "every digit asking whether the first nonzero has landed"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "every_digit_asks_whether_the_first_nonzero_has_landed")
+  benchmarks
+
+# k_b_to_int's strtoll fallthrough is a separate cold function since
+# 2026-09-15, so the fast path carries no frame; the mutation inlines it back
+# and the five pushes and five pops return to every call. The value out is
+# identical either way, so the work vein is the only thing that can see it.
+int_cold_tail = row
+  "the int parser's cold tail sharing its frame"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_int_parser_s_cold_tail_shares_its_frame")
+  benchmarks
+
+# Six cold helpers carry preserve_most since 2026-09-15 -- the arena refill,
+# the permanent allocator, the int parser's strtoll tail, the ascii cache's
+# fill and the two arms of an index that allocate or refuse -- so a hot
+# function whose only calls are cold ones opens with no pushes. The mutation
+# strips the attribute from all six and the pushes return. Every value out is
+# identical either way, so the work vein is the only thing that can see it.
+cold_registers = row
+  "the cold helpers clobbering their callers' registers"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_cold_helpers_clobber_their_callers_registers")
+  benchmarks
+
+# k_b_at's two arms that allocate or refuse are separate cold functions since
+# 2026-09-15, so the arm every runbench index takes carries no frame; the
+# mutation inlines both back and the six pushes return to every index. The
+# value out is identical either way, so the work vein is the only thing that
+# can see it.
+index_cold_arms = row
+  "the index's allocating arms sharing its frame"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_index_s_allocating_arms_share_its_frame")
+  benchmarks
+
 machine_code = row
   "the machine code changing size"
   true
@@ -436,6 +499,19 @@ box_check_hoist = row
   (breaking "the_box_check_asks_when_nothing_answers_a_box")
   release
 
+# A third row on the same gate, for the qualified-name join. compile_ir's
+# mutation stops the vein being read; box_check_hoist asks whether it can see
+# a pass doing provably pointless work; this one asks whether it can see the
+# cost of a shape -- the same strings, built the expensive way. All three
+# answer different questions about the same number.
+qualified_name_join = row
+  "a name the loader mints, built through the formatting machinery"
+  false
+  "sh scripts/gates/compile_instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_qualified_name_goes_back_through_format")
+  release
+
 # The same shape for the ENTRY path, which the row above cannot reach: it
 # checks a directory, and a directory takes compile_module_inner. The mutation
 # asks the entry's whole-program check twice, and the two rows separate
@@ -471,6 +547,22 @@ entry_rewritten_twice = row
   "cargo test --release --test rewrite_passes"
   "specs (unit, golden, differential)"
   (breaking "an_entry_program_rewritten_twice_before_it_is_checked")
+  release
+
+render_trip = row
+  "a rendered float that truncates instead of rounding"
+  false
+  "cargo test --release --test every_rendered_float_reads_back_as_itself"
+  "specs (unit, golden, differential)"
+  (breaking "a_rendered_float_that_never_rounds_up")
+  release
+
+int_bound = row
+  "an integer fast path whose digit bound can overflow"
+  false
+  "cargo test --release --test the_int_fast_path_agrees_with_libc"
+  "specs (unit, golden, differential)"
+  (breaking "an_eighteen_digit_bound_widened_to_nineteen")
   release
 
 append_rendered = row
@@ -561,14 +653,6 @@ inline_pin = row
   "sh scripts/gates/instructions.sh"
   "cost goldens (deterministic ratchet, no clocks)"
   (breaking "an_inline_pin_the_inliner_undoes")
-  benches
-
-ten_walk = row
-  "a tenure walk asked about pointers the arena still holds"
-  false
-  "sh scripts/gates/instructions.sh"
-  "cost goldens (deterministic ratchet, no clocks)"
-  (breaking "a_tenure_walk_asked_about_arena_pointers")
   benches
 
 one_char_memo = row
@@ -664,14 +748,6 @@ buf_class_loop = row
   (breaking "a_size_class_found_by_doubling")
   benches
 
-char_word = row
-  "an indexed wide character copied through a call"
-  false
-  "sh scripts/gates/instructions.sh"
-  "cost goldens (deterministic ratchet, no clocks)"
-  (breaking "a_wide_character_copied_through_a_call")
-  benches
-
 walk_once = row
   "a survivor asked two walks of the chain"
   false
@@ -712,6 +788,14 @@ wide_char_cache = row
   (breaking "a_wide_character_built_in_the_arena_at_every_index")
   benches
 
+list_test_first = row
+  "a list test every string index pays"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_list_test_every_string_index_pays")
+  benches
+
 ascii_four_blocks = row
   "four ascii blocks validated one at a time"
   false
@@ -726,14 +810,6 @@ slice_count_words = row
   "sh scripts/gates/instructions.sh"
   "cost goldens (deterministic ratchet, no clocks)"
   (breaking "a_slice_stepped_a_character_at_a_time_between_its_positions")
-  benches
-
-alloc_gate = row
-  "an allocation counter gated by two branches"
-  false
-  "sh scripts/gates/instructions.sh"
-  "cost goldens (deterministic ratchet, no clocks)"
-  (breaking "an_allocation_counter_gated_by_two_branches")
   benches
 
 str_words = row
@@ -1220,7 +1296,11 @@ rows_b1z = [thunk_walk scan_counters read_counters compile_libraries]
 
 rows_b1 = text/concat rows_b1a (text/concat rows_b1z [live_counters clean_run])
 
-rows_b1r = text/concat rows_b1 [emitted_code emitted_others remainder]
+rows_b1r0 = text/concat rows_b1 [emitted_code emitted_others remainder]
+
+rows_b1r1 = text/concat rows_b1r0 [digit_pairs leading_zeros int_cold_tail]
+
+rows_b1r = text/concat rows_b1r1 [cold_registers index_cold_arms]
 
 rows_b1b = text/concat rows_b1r [machine_code]
 
@@ -1232,19 +1312,23 @@ rows_b1d2 = text/concat rows_b1d [compile_ir compile_ir_host entry_ir]
 
 rows_b1d3 = text/concat rows_b1d2 [library_ir]
 
-rows_b1e0 = text/concat rows_b1d3 [compile_ir_one_value box_check_hoist]
+rows_b1e0a = text/concat rows_b1d3 [compile_ir_one_value box_check_hoist]
+
+rows_b1e0 = text/concat rows_b1e0a [qualified_name_join]
 
 rows_b1e1 = text/concat rows_b1e0 [host_measures]
 
 rows_b1e2 = text/concat rows_b1e1 [inline_pin chart_replay objective_row]
 
-rows_b1e3 = text/concat rows_b1e2 [ten_walk one_char_memo length_memo]
+rows_b1e3 = text/concat rows_b1e2 [one_char_memo length_memo]
 
 rows_b1e = text/concat rows_b1e3 [length_fold ten_open pop_fast push_walk]
 
 rows_b1f = text/concat rows_b1e [scalar_words slice_words render_words]
 
-rows_b1g = text/concat rows_b1f [map_lit_copy buf_class_loop char_word]
+rows_b1f2 = text/concat rows_b1f [render_trip int_bound]
+
+rows_b1g = text/concat rows_b1f2 [map_lit_copy buf_class_loop]
 
 rows_b1h = text/concat rows_b1g [walk_once data_beside]
 
@@ -1252,7 +1336,7 @@ rows_b1i = text/concat rows_b1h [freeze_all mark_block_first]
 
 rows_b1j = text/concat rows_b1i [wide_char_cache ascii_four_blocks]
 
-rows_b1k = text/concat rows_b1j [slice_count_words alloc_gate]
+rows_b1k = text/concat rows_b1j [slice_count_words]
 
 rows_b1l = text/concat rows_b1k [size_walk chain_drift thunk_set failure_set]
 
@@ -1260,9 +1344,40 @@ rows_b1m = text/concat rows_b1l [pop_deep str_words ryu_words rewritten_twice]
 
 rows_b1n = text/concat rows_b1m [shared_path entry_rewritten_twice]
 
-rows_b1o = text/concat rows_b1n [append_rendered arm_narrowed]
+# The one-module collapse's dedup keys. compile_ir's own mutation stops the
+# vein being read; this one leaves the vein alone and asks whether it can see a
+# key clone a name the program already holds. The keep mask stays under the
+# mutation, so the row watches the borrow rather than the shape around it, and
+# all three compile rows rise together on it -- module +234,146 (+0.5107%),
+# entry +860,245 (+0.5650%), library +848,228 (+0.5559%) in the box.
+dedup_key_owned = row
+  "a dedup key that clones a name the program is holding open beside it"
+  false
+  "sh scripts/gates/compile_instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_dedup_keys_own_their_names")
+  release
 
-rows_b = text/concat rows_b1o [compile_mem compile_mem_host]
+# The fusion pass's name set, the same question about a different table: it is
+# asked `contains` and dropped, so nothing needs owned names in it. A separate
+# row from `dedup_key_owned` because a separate table can regress on its own --
+# module +104,581 (+0.2281%), entry +339,005 (+0.2227%), library +369,885
+# (+0.2424%) in the box, compile_allocs +296.
+fused_names_owned = row
+  "a set asked one question, holding copies of names it could have borrowed"
+  false
+  "sh scripts/gates/compile_instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_fused_name_set_owns_its_names")
+  release
+
+rows_b1oa = text/concat rows_b1n [append_rendered arm_narrowed]
+
+rows_b1o = text/concat rows_b1oa [dedup_key_owned fused_names_owned]
+
+rows_b1p = text/concat rows_b1o [list_test_first]
+
+rows_b = text/concat rows_b1p [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 
@@ -1274,7 +1389,24 @@ rows_c1p = text/concat rows_c1t [published_numbers]
 
 rows_c1b = text/concat rows_c1p [diagnostics accumulator]
 
-rows_c1c0 = text/concat rows_c1b [rendering negative_sign small_record]
+# The `goldens` row above covers the micro differential generically, through a
+# golden that drifts. This one covers the direction the corpus could not see
+# until 2026-09-14: the two engines PARSING a decimal differently. Rendering
+# has had rows since kanso#1256; reading one back had none, and native sat one
+# ULP off the oracle on every number longer than nineteen significant digits.
+# A drifted golden and a diverged engine are different defects and a mutation
+# that moves a `.out` file cannot produce the second.
+truncated_significand = row
+  "a truncated significand the fast path calls certain"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_truncated_significand_taken_as_certain")
+  release
+
+rows_c1c0a = text/concat rows_c1b [rendering negative_sign small_record]
+
+rows_c1c0 = text/concat rows_c1c0a [truncated_significand]
 
 rows_c1c1 = text/concat rows_c1c0 [short_append beat_mark every_edge pure_cycle]
 

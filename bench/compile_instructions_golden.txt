@@ -1408,4 +1408,93 @@
 # check_after_infer was already walking, and asked its questions on that walk
 # now. Runtime did NOT move: `work:success` on the same run, runbench
 # 2,003,021,871, identical to its golden.
-compile_instructions=44994843
+# 2026-09-13 (kanso#1415): compile_instructions 44,994,843 -> 44,301,309, a
+# FALL of 693,534 (-1.5414%). A qualified name is joined, not formatted:
+# fifteen `format!("{qual}/{name}")` sites became one exact allocation and
+# three copies, and two lines in `qualify`'s type loop were building the same
+# string twice. Runtime did NOT move: `work:success` on the same run, runbench
+# 2,003,021,871, identical to its golden.
+# 2026-09-14 (kanso#1416): compile_instructions 44,301,309 -> 44,031,424, a
+# FALL of 269,885 (-0.6092%). Two dedup tables stop cloning names the
+# program is holding open: collapse_diamonds computes a keep mask under an
+# immutable borrow so its keys can be `&str`, and fuse_enumerable's short-name
+# set borrows outright. Runtime did NOT move: `work:success` on the same run,
+# runbench 2,003,021,871, identical to its golden.
+# 2026-09-14 (kanso#1414): compile_instructions 44,031,424 -> 43,910,543, a
+# FALL of 120,881 (-0.2745%). `advisory::name_types` returned a clone of a
+# group's answer when the group has one arm and the clone is the whole of what
+# it returns. It hands the set back instead. The pre-size beside it was
+# measured and DECLINED: a capacity for a set whose final size nothing knows
+# before the loop that fills it costs more than the growth it saves.
+# 2026-09-14 (kanso#1417): compile_instructions 43,910,543 -> 43,910,243, a
+# FALL of 300 (-0.0007%). The change is three lines of src/runtime.c -- k_b_at
+# asks the string arm first -- and the compiler carries runtime.c the way it
+# carries lib/*.kso, so its bytes move and the layout under them moves with
+# them. Nothing the front end decides changed: compile_allocs is byte-identical
+# at 28,361 and compile_peak_bytes at 776,055. Three hundred instructions in
+# forty-four million is this vein's floor for a change that touches the
+# compiler's embedded text and no decision it makes.
+# 2026-09-14 (kanso#1418): compile_instructions 43,910,543 -> 42,877,925, a
+# FALL of 1,032,618 (-2.3516%). The advisory fixpoint stops being
+# round-robin: `return_type_names` asked all 315 declarations of
+# bench/compile_corpus over six passes, 1,890 visits of which 142 learned
+# anything. It is a worklist on the read graph now -- a body's `name_types`
+# reads are the same indices on every visit, so the first pass records them
+# and after that a declaration is re-asked only when an answer it read has
+# grown.
+#
+# Against the pre-kanso#1414 base this row read 42,908,199, a fall of
+# 1,123,225. kanso#1414 removed the union-build from the one-arm case, which
+# is work every visit was doing, so the saving here -- visits that no longer
+# happen, times what a visit costs -- lost 90,607 when the second factor
+# shrank. Runtime did NOT move: `work:success`, runbench 2,003,021,871.
+# 2026-09-14 (kanso#1417, FOURTH sitting): compile_instructions 42,877,925 ->
+# 42,869,709, a FALL of 8,216 (-0.0192%). Same three-line diff as the three
+# sittings before it, on the base kanso#1418 left. compile_allocs held at
+# 27,937 and compile_peak_bytes at 776,055 for the fourth time running, which
+# is the half that says this is layout and not a decision.
+# 2026-09-14 (kanso#1417, FIFTH sitting): compile_instructions 42,872,197 ->
+# 42,870,872, a FALL of 1,325 (-0.0031%), on the base kanso#1419 left. Same
+# diff, fifth arrangement; compile_allocs 27,937 and compile_peak_bytes
+# 776,055 for the fifth time.
+# 2026-09-14 (kanso#1419): ryu_d2d removes digits two at a time. This is a
+# RUNTIME change -- src/runtime.c, one function -- and the module row moved
+# anyway: 42,870,366 -> 42,872,197, +1,831 (+0.0043%). On the kanso#1418 base the same diff read
+# -8,125 (-0.0189%); on the kanso#1423 base it RISES. Same bytes,
+# opposite sign, which is the whole of what a layout delta carries.
+#
+# `kanso check` stops before codegen, so no decision this row counts can have
+# been altered by a runtime edit. What moved is the LAYOUT: src/runtime.c is
+# compiled into the compiler and its bytes shift what sits where. CLAUDE.md
+# has the rule and this row is another instance of it -- regenerate from
+# whatever base CI last ran, say so, and do not reason from the size.
+#
+# The size especially. kanso#1417 read the same three-line runtime diff on
+# four bases and got four different answers, the module row changing sign
+# twice and the fourth reading eight times the third. A layout delta is a
+# property of one binary's arrangement and carries no information about the
+# change that provoked it.
+#
+# compile_allocs held at 27,937 and compile_memory is byte-identical, which
+# is the expected pair: those two really cannot move on a runtime edit.
+#
+# 2026-09-15 (kanso#1427): the leading-zero skip in k_b_to_float, a RUNTIME
+# change in one function, and this row moved anyway: 42,870,872 -> 42,871,412, +540
+# (+0.0013%), on the base kanso#1417 left. Layout, as the entry above says:
+# `kanso check` never reaches the runtime, and src/runtime.c is compiled into
+# the compiler. Regenerated from the base CI last ran, stated, not reasoned
+# from. compile_allocs held at 27,937 and compile_memory is byte-identical.
+#
+# 2026-09-15 (kanso#1428): the int parser's cold tail outlined, a RUNTIME
+# change in one function, and this row moved anyway: 42,871,412 -> 42,872,288, +876
+# (+0.0020%), on the base kanso#1427 left. Layout, as the entries above say;
+# regenerated from the base CI last ran, stated, not reasoned from.
+# compile_allocs held at 27,937 and compile_memory is byte-identical.
+#
+# 2026-09-15 (kanso#1429): six cold helpers carry preserve_most and three
+# arms are outlined, a RUNTIME change, and this row moved anyway: 42,872,288 ->
+# 42,870,366, -1,922 (-0.0045%), on the base kanso#1428 left. Layout, as the entries
+# above say; regenerated from the base CI last ran, stated, not reasoned
+# from. compile_allocs held at 27,937 and compile_memory is byte-identical.
+#
+compile_instructions=42870366

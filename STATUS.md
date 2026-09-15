@@ -7,9 +7,11 @@ is stale — say so.
 ## Waiting on Clay
 
 The decisions live in design/pending-gavels.md — the single ledger; this file
-only indexes it. **Blocking right now: one** — where the box wraps under the pure-fallibility
-rider, filed 2026-09-11 after it spent a day written on a feature branch and
-nowhere else. The reconstruction coverage
+only indexes it. **Blocking right now: one** — what `!` promises the checker, filed
+2026-09-15 the hour the box-wrapping question was ruled. That ruling — the
+box is explicit, an err is a value, and a bare err is refused at check —
+settled where the box wraps and left what `xs[i]!` reads as, on which 710
+sites in the tree wait. The reconstruction coverage
 question was ruled on 2026-09-10, taking cloud's recommendation: rows 15..390
 stay unscored on the run terms, the eight-phase half stays built, and
 re-measuring the old commits is filed as a lead with a feasibility probe in
@@ -37,11 +39,18 @@ kanso — sat here and was bounced on 2026-08-29: a performance question with no
 surface area is the implementer's, per the ledger's own charter, and the log
 carries the research mandate it left with.
 
-**Four questions are waiting** — two blocking. Two more left the ledger on
+**Three questions are waiting** — one blocking. The welfare-floor entry left
+Blocking on 2026-09-14 with all three of its asks already answered: its two
+builds merged on 2026-09-13, the `git add bench/welfare_floor.json` permission
+it wanted is moot under Clay's ironclad rule of the same day, and its options
+4 and 5 ask for a branch, which CLAUDE.md now says was never his to grant. Two
+more left the ledger on
 2026-09-05 in the same sitting as the compile row: machine-code size gets no
 term in welfare, and `.text` stays in its own exact vein. Counted from the ledger, which is the only place that count is true;
 this file said fourteen in one paragraph and sixteen in another until the
-2026-08-29 sitting ruled the rest. The July letters are closed: Clay ruled the
+2026-08-29 sitting ruled the rest, said four with three in the ledger until
+2026-09-14, and had "one blocking" in one paragraph and "two blocking" in
+another on the same day. The July letters are closed: Clay ruled the
 last five in one sitting on 2026-08-26, and that ruling reached main only on
 2026-08-28, on a branch that had been sitting unmerged.
 
@@ -88,70 +97,50 @@ discretion; a pull request on something else says which of these it weighed.
 The chat adds a row the day a ruling lands and removes it the day the build
 lands on main. Verified against the tree on 2026-09-09 by probing the
 compiler; the list is a floor, since the rest of the 2026-08-29 sitting was
-not audited.
+not audited. Swept again on 2026-09-14 against merged main: the effect-type
+row came off, built and merged as kanso#1372, and the exhaustiveness row came
+off with kanso#1369. The book row came off with kanso#1412, which its own
+log entry calls the live remainder of that ruling. Two rows stand on
+2026-09-15: the explicit box, whose `!` half waits on a ruling, and the
+compile row's normalization, which waits on nothing.
 
-### Effects are types, and the words are the only doors (2026-08-29)
+### The box is explicit, an err is a value, and a bare err halts where it lands (2026-09-15)
 
-The archive entry of that name. Built on 2026-09-10: the automatic bind is
-gone (`x . f` is `f x`, and a box handed through the plain dot stays a box),
-and a provable box handed to something that reads the value inside is
-refused at check; and, the same day, the `<t>effect` spelling on all three
-engines, a parameter declared `e:<int>effect` taking the box as data. Owes:
-ch04/ch05 moving with it (the ledger's "The book teaches the boundary
-language").
+The live log's entry of that name, ruled 2026-09-15. It retires the
+2026-08-31 rider "pure fallibility is boxed too" that stood here as a row:
+there is no lifting at a declaration boundary, so the 738-of-770 count and
+the bind chains it priced do not exist. Owes: a prefix constructor that
+boxes a value or an err by hand (the ledger's Open entry "The box
+constructor's spelling" recommends `effect`, and the build does not wait on
+it); a bare err becoming data an `(err _)` arm can match anywhere; a bare err
+arriving at an operator, an index or an arm-less call being refused at
+check, like a `none`; the railway retiring; and ch04's "nothing is asked of
+the signature" paragraph, the last of the book ruling, moving with it. What
+`xs[i]!` answers as the checker reads it is NOT ruled — the ledger's Blocking
+entry "What `!` promises the checker" — and the 710 operator sites wait on it.
 
-It does NOT owe the drop question. The same 2026-08-29 sitting closed it —
-the archive's "gavel: the drop question closes — explicitness IS the
-guarantee" — and closed it by DECLINING to mint anything: an unused binding
-is already a compile error, so a dropped effect is already unspellable, and
-Clay ruled the premise backwards. "No new checker rule and no io-edge rule
-is minted." An earlier draft of this row carried it as owed.
+### The compile row is normalized so the maps parse is not counted (2026-09-15)
 
-**BUILT AND MERGED, 2026-09-13 (kanso#1372).** The floor that blocked it was
-never Clay's to grant: he ruled on 2026-09-13 that lowering the floor in
-service of the specification needs no permission, and the language clause in
-CLAUDE.md now says so. The floor moved 67.77800065192253 -> 67.754 by hand,
-CI went 19/19 green, and the row below stays only until the chat clears it.
-
-### Pure fallibility is boxed too (2026-08-31)
-
-The archive entry "rider: pure fallibility is boxed too": any operation whose
-answer includes an err yields `<t>effect`, io or not; `foo["bar"]!` answers a
-box; `foo["bar"]` stays the data form. Rides with the effect type above and
-is listed so the one-line `foo["bar"]! .? (e -> "anonymous")` form the gavel
-promises is visible as owed. Sized 2026-09-10 (the log entry "the effect
-type is spellable"): 723 `]!` sites in the tree, 104 of them in lib; by
-infer's reading 738 of lib's 770 declarations carry an err in their answer
-set and 71 of those raise or insist themselves. The respell is the build.
-
-**Half unblocked, 2026-09-13.** The effect type it rides on has landed
-(kanso#1372). What still blocks it is its own unruled question: where the box
-wraps. the ledger's Blocking
-entry "Where the box wraps under the pure-fallibility rider" asks whether the
-box is every err-carrying answer (738 of lib's 770 declarations) or the `!`
-name (71), with the price of each measured. Nothing builds until that is
-ruled, and a ruling alone does not unblock it — the effect type has to land
-first either way.
-
-### The book teaches the boundary language (queued P1, 2026-08-26)
-
-Held in the ledger's "Open, not blocking" until the effect type exists; the
-row is here so the dependency is visible from the list cloud reads.
-
-**Unblocked, 2026-09-13.** `book_check` executes every panel and compares its
-output, so ch04/ch05 could not describe the effect type before it shipped. It
-has now shipped (kanso#1372), so this is buildable.
-
-An earlier note here said the prose was already "written and verified on a local
-branch". That branch is not in the compiler worker's container — no branch or
-worktree matching book/ch04/ch05/boundary exists there — so treat the prose as
-unwritten until someone points at a commit. Whoever picks this up writes it
-against merged main and lets `book_check` execute the panels.
+The live log's entry of that name. `pthread_getattr_np`'s parse of
+`/proc/self/maps` at Rust startup is 0.27% of the compile row and 100% of
+its movement between two binaries that do the same compiler work; its cost
+follows the binary's section layout, not the code under test. Clay: "this
+has nothing to do with compiler performance and obviously shouldn't be part
+of what we measure." Supersedes the 2026-09-03 NO EXCLUSION on this term.
+Owes: the normalization — count from the compiler's `main` rather than
+process entry (kanso#1234's dropped toggle is the starting point), or pin
+the layout — chosen by measurement, and the compile goldens re-sat on it.
 
 ## In flight
 
-Nothing. Every branch this session opened is merged and verified on
-`origin/main`, and neither kanso nor kq has an open pull request.
+This section does not list open pull requests. It did until 2026-09-15, and
+the list it carried was stale by the next morning both times it was written:
+cloud lands five or more a day, so a snapshot here is wrong within hours and
+nobody reads STATUS.md for it. Open pull requests live on GitHub, and the
+daily sweep reads them there — age, mergeable state and the check-run tally
+straight from CI, never from a comment. What belongs here is a branch that is
+NOT a pull request and would otherwise be invisible: a worktree holding
+unpushed work, a measurement mid-run. As of 2026-09-15 there is none.
 
 ## What landed on 2026-08-29
 
@@ -359,10 +348,15 @@ else. Chains that tested for `none` after an effect migrate.
     checked from here on two days and both refused by the tooling
   - whether an err gains readers a lambda callback can use
 
-**Four questions wait in `design/pending-gavels.md`** — two blocking, two
-open — each with a recommendation. Counted from the ledger on 2026-09-12 by
-reading its `###` headings, which is what this line has always claimed to do
-and had stopped doing TWICE. On 2026-09-05 it said nineteen while the ledger
+**Three questions wait in `design/pending-gavels.md`** — one blocking, two
+open — each with a recommendation. Recounted on 2026-09-15, when the
+box-wrapping entry left Blocking ruled, the `!` question it left behind
+joined Blocking, the constructor's spelling joined Open with a
+recommendation the build does not wait on, and the maps-parse entry left
+Open ruled the other way from its recommendation: the parse is external
+state, and the compile row is normalized so it is not counted. Counted
+from the ledger by reading its `###` headings, which is what this line has
+always claimed to do and had stopped doing TWICE. On 2026-09-05 it said nineteen while the ledger
 held three; fifteen had been gaveled and had left the file as the lifecycle
 requires, and the count here was carried forward instead of recounted. It was
 recounted that day and went stale again within three days: it said six, none
@@ -371,13 +365,18 @@ four of the six it named had been ruled or shipped since. A count maintained
 by hand goes stale by default, so `tests/the_status_index_counts_the_ledger.rs`
 now reads both files and fails when this sentence and the ledger disagree.
 
-The three blocking are the welfare history's baseline after the one-program
-gavel, the compile term's workload, and an infinite or nan float's rendering.
-The two open are the book teaching the boundary language, which as of
-2026-09-08 waits on the typed-effect surface in both halves rather than one,
-and the maps parse being 100% of the compile row's binary-to-binary drift —
-which had been sitting under Parked with no heading at all, so no index and
-no session citing by heading could reach it.
+The one blocking is what `!` promises the checker: a box at the read, or
+the value on the programmer's word, with a miss halting at runtime; the
+recommendation is the second. The two open are the box constructor's spelling,
+recommended `effect`, which cloud builds against unless Clay names another;
+and the book teaching the boundary language, whose campaign ran on 2026-09-13
+and which now owes only ch04's "nothing is asked of the signature" framing,
+released by the 2026-09-15 gavel and moving with its build.
+
+This sentence named three blocking entries that Clay ruled on 2026-09-08 and
+went on naming them for six days. The count above it is pinned by a spec and
+the names beside it are not, so the names are what rots; a reader who trusted
+them would have brought him three settled questions and missed the live one.
 
 Rulings since the last recount: no machine-code-size term in welfare and no
 two-value chip row (both 2026-09-05); the granted-baseline question CLOSED AS

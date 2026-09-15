@@ -55,236 +55,69 @@ went to the log rather than here.
 implementer's, per this file's own charter. The log carries the
 research mandate it left with.)
 
-### Where the box wraps under the pure-fallibility rider: at every err-carrying answer, or at the `!` name
+### What `!` promises the checker
 
-**Cited:** the archive's "rider: pure fallibility is boxed too" (2026-08-31),
-"gavel: effects are types, and the words are the only doors" (2026-08-29),
-"gavel: the suffix contracts are refusals, as ruled in July" (2026-09-03),
-and the live log's "the effect type is spellable" (2026-09-10), which sized
-the rider. None of them says what a non-`!` declaration that raises `err` in
-one arm and answers a value in another yields, or where its value arm is
-lifted into the box.
+**Cited:** the live log's "gavel: the box is explicit, an err is a value, and
+a bare err halts where it lands" (2026-09-15), part 3 as corrected by Clay
+the same day — a bare err reaching an operator, an index or an arm-less call
+is refused at check, like a `none`; the archive's "gavel: the suffix
+contracts are refusals, as ruled in July" (2026-09-03), which says a `!` name
+must be able to answer a failure; and the retired Blocking entry's
+measurement of 2026-09-10: 723 `]!` sites in the tree, 13 opening their
+answer with a word, 710 handing it straight to an operator, a group or a
+field, and a two-million-element loop at 9 allocations and 21 ms as
+`acc + xs[i]!` against 8,000,014 allocations, 352 MB and 65 ms as
+`xs[i]! .> (v -> go (acc + v))`.
 
-**The question.** The rider says any operation whose answer includes an err
-yields `<t>effect`. Read literally, a declaration like json's `hex_digit`,
-`if (…) (c - 55) (err "invalid hex digit")`, yields `<int>effect`: the
-compiler lifts its value arm into the box at the declaration's boundary,
-every caller opens it with `.>`, and by infer's reading 3,801 declarations in
-the tree answer that way, 738 of lib's 770, because a declaration that hands
-a fallible answer through is fallible too. Measured on 2026-09-10 with the
-checker made to read it so: the first layer of refusals alone is 108 sites in
-lib (list 49, regexp 25, sha256 25, json 3, http 3, path 3), and each bind
-written for one moves the refusal a caller outward until the 738 are chained.
-The library becomes bind chains from `parse_value` down, and every bind is a
-closure and a box the arena pays for.
+**The question.** `xs[i]` answers `none` on a miss and the checker demands an
+arm. What does `xs[i]!` answer, as the checker reads it?
 
-The insist alone is smaller, and it has the same problem in a sharper form.
-With only `foo[k]!` answering a box, which is the case the rider was raised
-on, the checker refuses 143 sites in the tree (lib 28, scripts 61, the test
-corpus 54). The readers are `==`, `+` and `-` in sha256's compress and
-regexp's scanner, where the index is in range by construction. The lenient
-form looked like the answer for those, and it is not: under the 2026-09-07
-exhaustiveness ruling `choice s[5] s[6] s[7]` is refused three times, since
-each index can be a none and `choice` has no arm for one, and `walked
-parts[i] s` the same. So an in-range read has no spelling left. `xs[i]` is a
-none at every group; `xs[i]!` is a box at every operator; what remains is
-`xs[i]! .> (v -> …)`, a box and a closure per element in the kernels, or a
-`none` arm on every group an element reaches. Of the 723 `]!` sites in the
-tree, 13 open their answer with a word today; the other 710 hand it to an
-operator, a group or a field. The bind shape was priced on native with the
-box built: a loop reading two million in-range elements costs 9 allocations
-and 21 ms as `acc + xs[i]!`, and 8,000,014 allocations (four an element: the
-box, the closure, the bind and the rewrap), 352 MB and 65 ms as
-`xs[i]! .> (v -> go (acc + v))`, the same sum both ways.
+1. **A box.** `xs[i]!` is the manual box applied at the read: `<t>effect`
+   holding the element or the err. Consistent with the errors page's "a
+   promise; a miss is a failure" and with a failure being something only a
+   foreign `rescue` ends. Every one of the 710 operator sites owes a `.>`,
+   and sha256's compress and regexp's scanner pay the closure-per-element
+   price measured above, or the checker learns to discharge bounds it can
+   see and those sites write nothing.
+2. **The value, on the programmer's word.** `!` tells the checker to drop
+   the miss from the answer set: `xs[i]!` reads as data, the 710 sites stand
+   as written, and a miss at runtime is an err value reaching an operator,
+   which halts with the report the way `+` on a string halts today. `!` is
+   then the recorded decision "I have checked this", which is what a
+   language whose source contains only decisions would spell it as. The cost
+   is that it is the one place the checker takes a promise instead of a
+   proof.
 
-**Options.**
-
-1. The literal rider: every err-carrying answer is a box, lifted at the
-   declaration boundary. The cost is the paragraph above.
-2. Fallibility is spelled in the name, which is how the suffix contract
-   already reads it in one direction: a `!` name answers a box; a name
-   without `!` answers data and may not raise, absence being `none`, as
-   `foo[k]` already is. `to_int` answers none on bad text and `to_int!` the
-   box. The 71 lib declarations that raise or insist themselves choose a
-   spelling each; the other 667 are untouched. The railway retires the same
-   day, since nothing outside a box carries an err any more.
-3. As 2, with `err reason` itself answering a box, so a non-`!` name may
-   still raise and its callers must open it. Wherever that is written it
-   costs what 1 costs.
-
-4. The index keeps a third spelling for the in-range read, and the ledger
-   does not propose one: it is a language question. What the kernels need
-   is a read that is neither a none nor a box, which is what `xs[i]!` was
-   before the rider.
-
-**Recommendation:** 2 for names, and for the index a ruling on 4 before the
-insist lands, because without it the insist PR respells sha256 and regexp
-into bind chains or none arms and pays for it in every cost vein. The insist
-answers a box on all three engines in the worktree today (the oracle and
-native print the same four lines on the fixture); the respell of the 710
-sites is what waits.
-
-### The welfare floor cannot be staged from this session, and two ruled builds wait on it
-
-**Cited:** the archive's "the floor is permeable to the language" (2026-08-25),
-the live log's entries for kanso#1355 (floor 66.3715 -> 66.3705), kanso#1356
-(66.3705 -> 66.3596) and kanso#1359 (66.35962 -> 66.35960), each of which moved
-the floor by hand under that clause; and `scripts/welfare/welfare.kso`, whose
-`--set` declines a fall of this size by design and names the hand edit as the
-path. Searched the log, the archive and design/ for a prior entry about the
-edit being unstageable: there is none. What the log carries is the three moves
-themselves, none of which records any difficulty making them.
-
-**The block.** `git add bench/welfare_floor.json` is refused by the harness's
-auto-mode permission classifier, not by git and not by GitHub. SEVEN attempts
-now. Six were distinct spellings on one tree; the seventh was the plainest
-spelling of all, tried again on 2026-09-12 after main had been merged in and
-two further commits pushed. That last one is what settles the question the
-first six could only suggest: the tree state is not the variable, and neither
-is the wording. It is the file. Reading it with `python3 -c` is refused too;
-`grep` reads it, and the `Edit`/`Write` tools change it. So the edit can be
-MADE and cannot be COMMITTED.
-
-The refusal's own text asks for exactly this entry: "STOP and explain to the
-user what you were trying to do and why you need this permission. Let the user
-decide how to proceed."
-
-**What waits on it.** Both, and only this:
-
-- **kanso#1369**, per-call exhaustiveness — the 2026-08-15 ruling. Ruled by
-  Clay on 2026-09-11 ("if the welfare went down it went down. why are you even
-  considering it?"). Floor 67.58619464088068 -> **67.54491496889482**, history
-  entry as ratchet 239, with the log paragraph recording the ruling.
-  Everything else on the PR is done and it is now un-conflicted against main.
-- **kanso#1372**, step 1 of the effect-type sequence. Floor 67.58619464088068
-  -> **67.54499292290286**. CI reads 67.54 at head 86a07b3d, where it read
-  67.52 before the box check's hoist took 1,835,347 instructions off the
-  compile term.
-
-**BOTH NUMBERS ARE REPLAYS, AND THE REPLAY IS CHECKED AGAINST A KNOWN ANSWER.**
-`welfare --model` prints the four terms with their weights, satiations and
-baselines, and `welfare --counters` the five readings; scoring one against the
-other — saturate each counter, mean within a term, weight, sum — reproduces
-main's recorded floor 67.58619464088068 to every digit, difference exactly
-zero. That is the check that makes the two above worth pasting into the file.
-
-It also CORRECTS an earlier number in this entry's own working notes. 2026-09-12
-carried 67.53919650395524 for kanso#1369, and that value matches neither the
-PR's current goldens nor its pre-paydown ones (which replay to 67.52396324220125):
-it is a reading from an intermediate round that the paydown then moved. It would
-have passed, since a floor below the score passes — but it gives away 0.0057 of
-headroom the project never had to give, and a floor is a pinned number rather
-than a safe one.
-
-Nothing else on either branch is outstanding. No third party is involved: both
-branches are mine, both pushes are to branches I am permitted to push.
-
-**What I have NOT done, deliberately.** Written to the file through the GitHub
-contents API, which would make exactly the commit the classifier declined;
-handed the commit to a spawned session, which routes around a decision rather
-than answering it; or pushed to main, which skips CI, the only gate this
-project has. CLAUDE.md forbids the second and third by name and the first is
-the same move in a different tool.
-
-**The fourth option is closed, and closed by measurement.** The obvious way
-out is to stop needing the floor: pay the compile cost back until welfare
-holds on its own. kanso#1372's round three did some of that — the box check's
-two keyed maps folded into one, -275,876 instructions, -0.534% — and the
-question is whether more of the same could finish the job. It cannot, and the
-ceiling is readable rather than guessed.
-
-CI priced `check_box_where_value` at +1,726,645 on the module compile and
-+5,941,272 on the entry compile: +7,667,917 on a compile term that went
-213,158,055 -> 220,825,972. Holding the floor needs roughly -7.2M back. After
-the paydown, `check_merged_after_aliases` — the frame the pass is inlined
-into, measured on this container with callgrind — costs 2,616,386
-instructions, 5.04% of the module compile, and it carries the pre-existing
-merged check as well as the new pass.
-
-So closing the gap means removing essentially all of the pass, and the pass
-IS the ruling. The same holds for kanso#1369, whose own paydown already
-recovered 34.5% of its rise and left the rest in the check's own walk. There
-is no third structure to find; the cost is the rule being enforced.
-
-**And the ceiling is lower than that estimate: the gap does not close even at
-zero.** Replaying the model against kanso#1372's counters with
-`compile_instructions` set to main's own 213,158,055 — the effect type costing
-nothing whatever to compile — scores 67.58523299827530 against the floor's
-67.58619464088068. The residue is `compile_allocs`, which went 29,350 ->
-29,374. Twenty-four allocations are worth 0.00096182 of the score on their
-own, more than several recent changes moved the number in total. Restoring
-those as well lands on 67.58619481394834, which agrees with the floor to seven
-decimal places and leaves nothing to ship into.
-
-So the fall is two counters and no others: +4,549,526 compile instructions
-(+2.13%) worth 0.04024, and +24 compile allocations worth 0.00096. The run
-side did not move at all. Among the shapes tried to that date there was no
-compile-side engineering that held this floor, and the one that came closest
-sat on the boundary rather than above it. **That sentence is superseded by the
-2026-09-12 update at the end of this entry, which measures one that clears it
-with room to spare.**
-
-**Options.**
-
-1. Add a Bash permission rule allowing `git add bench/welfare_floor.json` (or
-   allow the path generally). Both PRs then land under the ordinary rules.
-2. Make the two commits yourself from the branches as they stand — the edits
-   are already in the worktrees, and the exact values are in this entry and in
-   design/compiler-log.md.
-3. Rule that the floor does NOT move for these two, which would mean the
-   2026-08-25 clause has a size threshold it has never had, and would send both
-   rulings back to be rebuilt at a compile cost they do not have.
-
-**A fourth option, and the reason it is needed.** This file's own header says
-edits to it ride small, promptly-merged PRs and never a feature branch, so the
-ledger cannot fork. This entry breaks that rule and cannot avoid it from here.
-It lives on `claude/go-to-town-m0dicm`, which carries kanso#1369's whole build
-and cannot merge until the permission above is granted — so the entry asking
-for the permission reaches main only after the permission is given. kanso#1370
-cleaned up a fork of exactly this shape on 2026-09-11.
-
-4. Grant a third branch for ledger-only edits. This entry then lands on main in
-   a small PR of its own, and the next session reads it whether or not the two
-   builds have moved. It is the smallest of the four asks and it is the one
-   that fixes how you hear about the others.
-
-**Recommendation:** 1. The clause is settled and has been walked three times;
-this is a harness permission rather than a design question, and it is the only
-thing standing between two of your rulings and main. 2 works and costs you a
-minute per PR. 3 is a real argument about the weights and should be made about
-the weights, not reached by leaving the branches parked.
-
-**Update, 2026-09-12 — a fifth option, and it may retire the other four.**
-
-The claim above that no compile-side engineering holds this floor was true of
-the shapes tried by 2026-09-11 and is not true now. Sixteen whole-program
-checks in src/check.rs each walk the expression tree themselves. Ablated
-together on `claude/go-to-town-m0dicm` they cost 36,348,088 instructions, 16.5%
-of the whole compile. A bare walk of every expression with no per-node work at
-all — added as a seventeenth and measured on its own — costs 1,147,185
-(module 264,491, entry 882,694).
-
-kanso#487 fuses those sixteen walks into one. Fifteen descents at that measured
-price is about 17.2 million instructions, against a combined ask of 6,829,872
-for both blocked builds. It is a ceiling rather than a forecast: some of the
-sixteen recurse instead of using a stack, some skip synthetic declarations, and
-a fused walk still has to reach each check at each node. But it is measured, it
-is two and a half times the size of the thing it would pay for, and nothing
-about it needs a ruling.
-
-5. Grant a third branch for kanso#487. If the fusion lands anywhere near its
-   ceiling, both builds clear the floor on their own and no hand edit happens
-   at all. It costs a branch and a round of building; it does not ask you to
-   decide anything about the objective.
-
-**Revised recommendation:** 5, with 1 or 2 as the fallback if the fusion comes
-in far under its ceiling. The reason to prefer it is not that the floor edit is
-wrong — the clause is settled and has been walked three times — but that the
-floor would not need to move at all, and an objective that never had to be
-paid off is worth more than a clause invoked a fourth time. What 5 needs from
-you is only the branch; the measurement is done and the work is ordinary.
+**Recommendation:** 2. It is what the tree already assumes at 710 sites, it
+keeps the kernels free, and it gives `!` one meaning at the index and at the
+name — a promise the checker takes and the runtime enforces. Reading 1 is
+the purer one and should win only if a bound-discharging checker is on the
+table, which is a build with a measurement in front of it, not a ruling.
 
 ## Open, not blocking
+
+### The box constructor's spelling
+
+**Cited:** the live log's "gavel: the box is explicit, an err is a value, and
+a bare err halts where it lands" (2026-09-15), which rules that a value or an
+err can be boxed by hand and leaves the word unnamed; the archive's "gavel:
+effects are types, and the words are the only doors" (2026-08-29), which
+names the type `<t>effect` and the three eliminators `bind`, `annotate`,
+`rescue`; and "gavel: the fused chain operators" (2026-08-31), which gave the
+three words their chain spellings. Nothing names the introducer.
+
+**The question.** What is the prefix word that boxes a value or an err by
+hand, so that `<int>effect` can be built in pure code? It is an ordinary
+one-argument function, effect-shaped in its answer and value-shaped in its
+argument, and it needs a chain spelling only if a chain ever ends by boxing,
+which nothing in lib does today.
+
+**Recommendation:** `effect`, the type's own name in prefix position:
+`effect 5` answers `<int>effect` holding 5, `effect (err "bad")` answers a
+box holding the failure. A type spelled `<t>effect` and a constructor
+spelled `effect` read as one thing, the way `err reason` builds an err. No
+chain spelling until a chain wants one. Cloud builds against this unless
+Clay names a different word; it does not block the build.
 
 ### The book teaches the boundary language (queued P1, Clay 2026-08-26)
 
@@ -327,45 +160,25 @@ a library function whose tail is a `.>` step (`os/read_file`), fixed in the
 same build. ch04's "nothing is asked of the signature" still describes the
 railway, which still runs, and waits on the 2026-08-31 rider.
 
-### The maps parse is 100% of the compile row's binary-to-binary drift
+**The campaign has run, 2026-09-14.** The recommendation above was to hold
+until `<t>effect` exists and then run it once. It exists (kanso#1372, merged
+2026-09-13) and the pass landed in four pieces: kanso#1392 gave ch05 the
+three chain words and their fused spellings, kanso#1394 gave ch04 its rescue
+collision and boundary panel, kanso#1406 gave ch05 `done`, and kanso#1412
+gave ch04 the clause naming the type — the live remainder, by its own log
+entry. Counted on merged main: ch04 carries the type once, eleven fused
+operators and `done`; ch05 carries the type twice, thirty-five operators and
+`done` five times.
 
-**Cited: the ruling of 2026-09-03 (NO EXCLUSION; the toggle dropped, sorts
-plus `setarch` shipped instead, kanso#1234) and the archive entry that
-measured this — "the mechanism, named and accounted to the instruction",
-which closes by saying the fact goes to the gavel rather than into a gate.
-Nothing in a design doc or a spec speaks to it.**
+What is left is the single paragraph this entry has named since 2026-08-29:
+ch04's "nothing is asked of the signature", which describes the railway and
+waits on the 2026-08-31 rider. STATUS.md's row for this ruling came off on
+2026-09-14 and that paragraph moved into the rider's row, since the rider's
+ruling is what releases it. Still nothing here for Clay.
 
-**THE MECHANISM IS NAMED NOW, AND IT IS A TERM ALREADY RULED ON.** callgrind's
-call graph: `std::rt::lang_start_internal` calls `pthread_getattr_np`, which
-parses `/proc/self/maps` with `getline` and `sscanf` to place Rust's stack
-guard. Splitting each profile into that parse and the program:
-
-    binary                      row          maps parse   the program
-    9fcc6686dc47 baseline       42,344,081      112,580    41,878,959
-    45c6dbed10bb +64 KiB .bss   42,346,211      114,710    41,878,959
-    2a4e10fb2116 100 fns        42,345,904      112,586    41,880,776
-    5e73453bcc7b 200 fns        42,343,660      110,317    41,880,801
-
-The `.bss` probe adds no code and the compiler's work is **identical to the
-instruction**. All 2,130 of the row's move is the parse.
-
-kanso#1234 found this term and the ruling of 2026-09-03 was NO EXCLUSION, so
-**nothing here asks to exclude it and nothing has been changed.** The new fact
-is its size: 0.27% of the row and 100% of its binary-to-binary drift, with
-`std::rt::lang_start::{{closure}}` sitting still through a change that moved the
-published row by 2,130. The ruling was made when the term was known to exist
-and not known to be the whole of the drift, which is the question this entry
-asks: does the 2026-09-03 ruling stand on the new number?
-
-**RECOMMENDATION: it stands, and this entry closes on a word.** The ruling
-was that the row counts what the binary costs to start, term and all, and
-0.27% is not a reason to reopen a decision made on principle. What the
-number does change is how a session reads a 2,130 move on the row: as the
-loader's, until `lang_start::{{closure}}` says otherwise.
-
-**FILED WITHOUT A HEADING until 2026-09-08**, appended under Parked, where
-the ledger's own navigation could not see it — sessions cite entries by
-heading, STATUS.md indexes by heading, and neither could reach this one.
+**Released, 2026-09-15.** The rider is retired by the gavel "the box is
+explicit, an err is a value, and a bare err halts where it lands" (the live
+log). ch04's paragraph moves with that build. Still nothing here for Clay.
 
 ## Stale — the July campaign's unclosed letters (GAVELS.md, retired here)
 
