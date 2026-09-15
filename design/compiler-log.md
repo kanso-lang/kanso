@@ -5286,3 +5286,54 @@ compile_allocs held at 27,937 and compile_memory is byte-identical.
 
 Welfare 69.16 -> 69.26, banked in this pull request; the three page spans
 quoting the moved compile goldens were rewritten by `golden_prose --write`.
+
+## 2026-09-15 — a scan's short tail is one masked load
+
+`k_b_find2_raw` and `k_b_find2_below_raw` scan sixteen bytes a step and then
+finish whatever is shorter than a vector one byte at a time. On kanso#1433's
+run program the per-instruction profile put 8,042,860 bytes a run through
+those byte loops (counted at the loops' `cmp $0x22`, which the vector path
+never executes), at eight instructions a byte: 5,375,790 in `encode_onto`,
+1,655,478 in `obj_key_start`, 509,751 in `parse_value`, 326,304 in
+`array_delim`, 175,537 in `str_escape`. The loop is reached whenever fewer
+than sixteen bytes remain from the scan position, which for a json key or a
+short value is every time: the two copies in `encode_onto` entered 860,130
+and 347,220 times and walked 4.9 and 3.7 bytes an entry. kanso#1294 had
+declined a word-at-a-time tail for the below-floor scan at +2.2879%, because
+the mask's setup per entry cost more than the few bytes it replaced. With the
+scanners inlined since kanso#1433 the setup is different: the byte pair and
+the floor are rodata vectors already, so a tail is one unaligned load, the
+same three compares the loop does, and a mask over the bytes that are the
+string's.
+
+The load reads sixteen bytes from a string that may hold three, so it is
+taken only when `k_tail_window` says the sixteen stay inside the page the
+string's next byte is in (`(p & 4095) <= 4080`): the page holding a valid
+byte is mapped whole, so the load cannot fault, and the bytes past the end
+are loaded and then masked off, so nothing the answer depends on is read from
+outside the string. A tail that does cross a page edge takes the byte walk it
+always took. aarch64 gets the same shape with the shrn-by-4 mask, four bits a
+byte.
+
+Container A/B, `env -i` under callgrind, equal-length names in one directory,
+on the kanso#1433 leaves:
+
+    runbench    1,898,278,815 -> 1,867,578,425   -30,700,390   -1.6173%
+    jsonbench   1,171,809,954 -> 1,172,409,354      +599,400   +0.0512%
+
+jsonbench RISES by a twentieth of a per cent: the decoder's tails are a byte
+or two long (the closing quote right after the key), where two trips of the
+byte walk are cheaper than one masked load with its window test. The run
+program's tails average four to five bytes and it is the objective's term.
+Output byte-identical on both.
+
+The harness `a_short_scan_tail_answers_like_the_byte_walk` lifts both
+scanners and the window test out of src/runtime.c and sweeps them against a
+byte-at-a-time reference: every length 0..40, every start position, four byte
+pairs, five floors, with the string placed at every offset in the last 64
+bytes of a page whose next page is PROT_NONE, 836,400 cases. Watched red two
+ways: the mask's `- 1` removed disagreed on 259,631 cases; the window test
+answering yes unconditionally died on the guard page with SIGSEGV.
+
+Row `scan_tail`, mutation `a_short_scan_tail_walks_a_byte_at_a_time` (the
+window test answers no, so the byte walk is the only tail again).
