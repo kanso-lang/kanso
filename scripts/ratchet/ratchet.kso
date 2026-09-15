@@ -517,6 +517,35 @@ counters_out = row
   (breaking "the_beat_iteration_counter_is_counted_in_a_shipped_binary")
   benchmarks
 
+# A lambda reads its captures out of the environment on entry. Until
+# 2026-09-15 each read was a call to k_env_get, three instructions behind a
+# call and a return, once per capture on every entry: 1,279,648 calls a run
+# on the run program. The read is a getelementptr and a load now, so the
+# emitted vein sees one `call` fewer per capture per lambda, which is what
+# this row asserts. The mutation puts the call back through the same slot
+# pointer, so the twin the emitter writes is otherwise unchanged.
+capture_load = row
+  "a captured value read through a call on every lambda entry"
+  true
+  (gating "emitted_code")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_capture_is_read_through_a_call")
+  benches
+
+# The own-err check in front of an err-admitting arm crossed a call on every
+# value the arm was tried against, 1,454,508 a run on the run program, when
+# only an err needs the package compare behind it. The check is an
+# alwaysinline twin now: the tag test in the caller, the call only for an
+# err. Emitted text counts the same one `call`, so the work vein is the only
+# thing that can see it.
+own_err_inline = row
+  "an own-err check that calls out on every value, err or not"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_own_err_check_is_a_call_on_every_value")
+  benchmarks
+
 empty_room = row
   "an empty list literal with no room for a push"
   true
@@ -1400,7 +1429,9 @@ rows_b1r3 = text/concat rows_b1r2 [cold_copy rare_door]
 
 rows_b1r4 = text/concat rows_b1r3 [sweep_helpers slice_walk closure_caps]
 
-rows_b1r = text/concat rows_b1r4 [empty_room scan_inline scan_tail counters_out]
+rows_b1r5 = text/concat rows_b1r4 [empty_room scan_inline scan_tail]
+
+rows_b1r = text/concat rows_b1r5 [counters_out capture_load own_err_inline]
 
 rows_b1b = text/concat rows_b1r [machine_code]
 

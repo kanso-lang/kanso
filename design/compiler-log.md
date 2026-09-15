@@ -5408,3 +5408,57 @@ byte-identical on both.
 Row `counters_out`, mutation
 `the_beat_iteration_counter_is_counted_in_a_shipped_binary` (the two
 `k_beat_iter` sites unguarded again, 2,692,767 increments a run).
+
+## 2026-09-15 — a capture is a load, an own-err check is a tag test
+
+Two runtime calls sat at the top of the run program's call-count table on
+kanso#1436's leaves, above every emitted function but `encode_onto`:
+`k_not_own_err` 1,454,508 times and `k_env_get` 1,279,648 times. Neither does
+anything a call should be paid for. `k_env_get` is `((KValue*)env)[i]`, three
+instructions behind a call and a return, and the emitter called it once per
+captured name in every lambda's entry block. `k_not_own_err` is the gavel-24
+check in front of an arm that admits err, whether the value is an err its own
+package raised; its first line is `if (v.tag != K_ERR) return 1`, and nearly
+every value an arm is tried against is not an err at all, so the package
+compare behind that line ran 1,454,508 times for the handful of errs the
+program ever raises.
+
+Both stop being calls. A capture read is a `getelementptr` and a `load` in
+the lambda's entry block. The own-err check is an alwaysinline twin,
+`k_not_own_err_fast`, that tests the tag in the caller and calls the C
+function only for an err; the two sites the emitter writes it at call the
+twin.
+
+Container A/B, `env -i` under callgrind, equal-length names in one directory,
+on the kanso#1436 leaves, each half measured alone by applying the other
+half's mutation:
+
+    both                runbench  1,854,886,339 -> 1,823,814,374  -31,071,965  -1.6751%
+                        jsonbench 1,158,934,066 -> 1,124,895,296  -34,038,770  -2.9371%
+    the capture load    runbench  -7,751,327 (-0.4179%)   jsonbench -20
+    the own-err twin    runbench -23,077,569 (-1.2442%)   jsonbench -34,038,750 (-2.9371%)
+
+The two sum to within 243,069 of the pair. The own-err half is worth more
+than its 1,454,508 calls at a few instructions each: the decoder's
+`obj_key_start`, `scan` and `str_escape` each dispatch on a value that has
+just been switched on by tag, and with the check inline LLVM folds the twin's
+tag test into the switch it already made, so the call, the argument moves
+and the spill around them all leave. Output byte-identical on both programs at
+every step. The decoder has no lambda with a capture, which is why the
+capture half reads twenty instructions on jsonbench.
+
+The emitted vein moves in every program, in one direction. The prelude gains
+one define, one branch and one call, the twin's body; every capture read
+that was a call is a load, so a program's `calls` fall by its capture reads
+less one: runbench 5,943 -> 5,895, scanbench 3,260 -> 3,234, deepbench 841
+-> 827, the decoder 1,210 -> 1,207. The compile-cost goldens move the same
+way, one define and one branch per program and lines up by the twin. The
+runtime cost veins and the lazy tier are byte-identical: nothing here
+allocates. The three host-keyed compile rows and machine code are CI's until
+round two.
+
+Rows `capture_load`, mutation `a_capture_is_read_through_a_call` (the call
+put back through the same slot pointer; gated on the emitted vein, which
+sees the calls return), and `own_err_inline`, mutation
+`an_own_err_check_is_a_call_on_every_value` (the bare call at both sites;
+gated on the work vein, since the emitted text counts the same one call).
