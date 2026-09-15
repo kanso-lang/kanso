@@ -8015,6 +8015,20 @@ KValue k_b_length(KValue v) {
     return k_none();
 }
 
+/* Sixteen bytes read from p stay inside p's page, so a vector load that runs
+   past the end of a short string cannot fault: the page holding a valid byte
+   is mapped whole. The two scanners below use it for a tail shorter than a
+   vector, which they used to walk one byte at a time. On the run program
+   8,042,860 bytes a run went through those byte loops at eight instructions
+   each, because a json key or value is usually shorter than sixteen bytes
+   and the vector loop never opened; one load and a mask over the bytes that
+   are the string's answers the same question. The bytes past the end are
+   loaded and then masked off, so nothing the answer depends on is read from
+   outside the string. */
+static inline int k_tail_window(const unsigned char* p) {
+    return ((uintptr_t)p & 4095) <= 4096 - 16;
+}
+
 /* Scan for the first of two bytes at or after a 1-based position — the string
    scanner's inner loop, done as a tight pass instead of one boxed dispatch per
    byte. Returns the 1-based hit, or len+1 when neither byte appears. */
@@ -8052,6 +8066,14 @@ __attribute__((always_inline)) long long k_b_find2_raw(const unsigned char* d, l
         uint64_t mask = vget_lane_u64(vreinterpret_u64_u8(narrowed), 0);
         if (mask) return (i + (__builtin_ctzll(mask) >> 2) + 1);
     }
+    if (i < len && k_tail_window(d + i)) {
+        uint8x16_t chunk = vld1q_u8(d + i);
+        uint8x16_t m = vorrq_u8(vceqq_u8(chunk, va), vceqq_u8(chunk, vb));
+        uint8x8_t narrowed = vshrn_n_u16(vreinterpretq_u16_u8(m), 4);
+        uint64_t mask = vget_lane_u64(vreinterpret_u64_u8(narrowed), 0);
+        mask &= (1ULL << (4 * (len - i))) - 1;
+        return mask ? (i + (__builtin_ctzll(mask) >> 2) + 1) : (len + 1);
+    }
 #elif defined(__x86_64__)
     __m128i va = _mm_set1_epi8((char)ca), vb = _mm_set1_epi8((char)cb);
     for (; i + 16 <= len; i += 16) {
@@ -8059,6 +8081,12 @@ __attribute__((always_inline)) long long k_b_find2_raw(const unsigned char* d, l
         __m128i m = _mm_or_si128(_mm_cmpeq_epi8(chunk, va), _mm_cmpeq_epi8(chunk, vb));
         int mask = _mm_movemask_epi8(m);
         if (mask) return (i + __builtin_ctz(mask) + 1);
+    }
+    if (i < len && k_tail_window(d + i)) {
+        __m128i chunk = _mm_loadu_si128((const __m128i*)(d + i));
+        __m128i m = _mm_or_si128(_mm_cmpeq_epi8(chunk, va), _mm_cmpeq_epi8(chunk, vb));
+        int mask = _mm_movemask_epi8(m) & ((1 << (len - i)) - 1);
+        return mask ? (i + __builtin_ctz(mask) + 1) : (len + 1);
     }
 #endif
     for (; i < len; i++) {
@@ -8395,6 +8423,15 @@ __attribute__((always_inline)) long long k_b_find2_below_raw(const unsigned char
             uint64_t mask = vget_lane_u64(vreinterpret_u64_u8(narrowed), 0);
             if (mask) return (i + (__builtin_ctzll(mask) >> 2) + 1);
         }
+        if (i < len && k_tail_window(d + i)) {
+            uint8x16_t chunk = vld1q_u8(d + i);
+            uint8x16_t m = vorrq_u8(vorrq_u8(vceqq_u8(chunk, va), vceqq_u8(chunk, vb)),
+                                    vcleq_u8(chunk, vl));
+            uint8x8_t narrowed = vshrn_n_u16(vreinterpretq_u16_u8(m), 4);
+            uint64_t mask = vget_lane_u64(vreinterpret_u64_u8(narrowed), 0);
+            mask &= (1ULL << (4 * (len - i))) - 1;
+            return mask ? (i + (__builtin_ctzll(mask) >> 2) + 1) : (len + 1);
+        }
 #elif defined(__x86_64__)
         __m128i va = _mm_set1_epi8((char)ca), vb = _mm_set1_epi8((char)cb);
         __m128i vl = _mm_set1_epi8((char)cl);
@@ -8405,6 +8442,14 @@ __attribute__((always_inline)) long long k_b_find2_below_raw(const unsigned char
                                                   _mm_cmpeq_epi8(chunk, vb)), low);
             int mask = _mm_movemask_epi8(m);
             if (mask) return (i + __builtin_ctz(mask) + 1);
+        }
+        if (i < len && k_tail_window(d + i)) {
+            __m128i chunk = _mm_loadu_si128((const __m128i*)(d + i));
+            __m128i low = _mm_cmpeq_epi8(_mm_min_epu8(chunk, vl), chunk);
+            __m128i m = _mm_or_si128(_mm_or_si128(_mm_cmpeq_epi8(chunk, va),
+                                                  _mm_cmpeq_epi8(chunk, vb)), low);
+            int mask = _mm_movemask_epi8(m) & ((1 << (len - i)) - 1);
+            return mask ? (i + __builtin_ctz(mask) + 1) : (len + 1);
         }
 #endif
     }

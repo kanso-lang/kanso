@@ -491,6 +491,19 @@ scan_inline = row
   (breaking "the_byte_scanners_rebuild_their_constants_on_every_call")
   benchmarks
 
+# A tail shorter than a vector is one masked load when the sixteen bytes stay
+# inside the page; the mutation makes the window test answer no, so every
+# short tail walks a byte at a time again, 8,042,860 bytes a run at eight
+# instructions each. Every scan answers the same position either way, so the
+# work vein is the only thing that can see it.
+scan_tail = row
+  "a scan's short tail walked one byte at a time"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_short_scan_tail_walks_a_byte_at_a_time")
+  benchmarks
+
 empty_room = row
   "an empty list literal with no room for a push"
   true
@@ -1374,7 +1387,7 @@ rows_b1r3 = text/concat rows_b1r2 [cold_copy rare_door]
 
 rows_b1r4 = text/concat rows_b1r3 [sweep_helpers slice_walk closure_caps]
 
-rows_b1r = text/concat rows_b1r4 [empty_room scan_inline]
+rows_b1r = text/concat rows_b1r4 [empty_room scan_inline scan_tail]
 
 rows_b1b = text/concat rows_b1r [machine_code]
 
