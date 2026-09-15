@@ -550,19 +550,45 @@
 # little live across them pays and collects nothing. Which of the three
 # basket pays was not attributed.
 #
-jsonbench 1229738040
-encodebench 3616439594
-oneshot 19096479
-basket 34433106
-widebench 32837013
-deepbench 369202224
-escapebench 82999058
-pendbench 219469722
-indexbench 3085763
-scanbench 528872901
-digestbench 9813332
-readbench 4629808
-livebench 3091427397
+# 2026-09-15 (kanso#1430): a long copy is a cold call, and the slice door's
+# rare arms are too. Nine rows fall and five rise, on the base kanso#1429
+# left:
+#
+#   jsonbench    1,229,738,040 -> 1,218,898,014  -10,840,026   -0.8815%
+#   runbench     1,977,087,740 -> 1,970,132,223   -6,955,517   -0.3518%
+#   deepbench      369,202,224 ->   368,942,227     -259,997   -0.0704%
+#   oneshot         19,096,479 ->    19,024,257      -72,222   -0.3782%
+#   encodebench  3,616,439,594 -> 3,616,369,380      -70,214   -0.0019%
+#   livebench    3,091,427,397 -> 3,091,363,554      -63,843   -0.0021%
+#   escapebench     82,999,058 ->    82,993,058       -6,000   -0.0072%
+#   scanbench      528,872,901 ->   528,868,084       -4,817   -0.0009%
+#   pendbench      219,469,722 ->   219,466,315       -3,407   -0.0016%
+#   readbench        4,629,808 ->     4,629,832          +24   +0.0005%
+#   indexbench       3,085,763 ->     3,086,146         +383   +0.0124%
+#   widebench       32,837,013 ->    32,845,030       +8,017   +0.0244%
+#   basket          34,433,106 ->    34,534,020     +100,914   +0.2931%
+#   digestbench      9,813,332 ->     9,944,479     +131,147   +1.3364%
+#
+# jsonbench's fall is the container's A/B to the instruction; runbench's is
+# 200,123 deeper than the container's -6,755,394. The five rises are the
+# wrapper's own price: a copy of sixteen bytes or more goes through
+# k_copy_cold now, which saves every register it touches before memcpy, so
+# a program whose copies are long and frequent pays that on each one and
+# keeps no frame it did not already keep. The digest builds such copies.
+#
+jsonbench 1218898014
+encodebench 3616369380
+oneshot 19024257
+basket 34534020
+widebench 32845030
+deepbench 368942227
+escapebench 82993058
+pendbench 219466315
+indexbench 3086146
+scanbench 528868084
+digestbench 9944479
+readbench 4629832
+livebench 3091363554
 # 2026-09-06 (the run program joins): `runbench 3043743748` is a NEW row and
 # nothing regressed to make it appear. It is the program Clay's gavel that day
 # made the objective's whole run-speed term, and the thirteen rows above it
@@ -620,4 +646,4 @@ livebench 3091427397
 #
 # The uniform -8 across six rows is one instruction on a path each program
 # takes eight times, and the four flat rows never take it at all.
-runbench 1977087740
+runbench 1970132223

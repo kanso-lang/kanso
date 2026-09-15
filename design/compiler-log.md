@@ -4976,3 +4976,30 @@ not move. Output is byte-identical on both programs.
 
 Rows `cold_copy` and `rare_door`. The first mutation inlines the wrapper
 back, the second sends the slice door through the plain validator door.
+
+**CI's sitting, on the base kanso#1429 left.** The work vein reads
+jsonbench 1,229,738,040 -> 1,218,898,014 (-10,840,026, -0.8815%), the
+container's A/B to the instruction, and runbench 1,977,087,740 ->
+1,970,132,223 (-6,955,517, -0.3518%), 200,123 deeper than the container's
+-6,755,394. Seven more rows fall: deepbench -259,997, oneshot -72,222,
+encodebench -70,214, livebench -63,843, work_escapebench 82,999,058 ->
+82,993,058 (-6,000), scanbench -4,817, pendbench -3,407. Five RISE, and they are the wrapper's price:
+work_digestbench 9,813,332 -> 9,944,479 (+131,147, +1.3364%), work_basket
+34,433,106 -> 34,534,020 (+100,914, +0.2931%), work_widebench 32,837,013
+-> 32,845,030 (+8,017), work_indexbench 3,085,763 -> 3,086,146 (+383),
+work_readbench 4,629,808 -> 4,629,832 (+24). A copy of sixteen bytes or
+more goes through `k_copy_cold` now, which saves every register it touches
+before memcpy, so a program whose copies are long and frequent pays that on
+each one and keeps no frame it did not already keep. The digest builds
+such copies.
+
+Machine code: six rows RISE by 96 or 64 bytes and four FALL by 16 or 32;
+summed text 1,707,852 -> 1,708,284 (+432). The six that rise link the
+slice door and its two new wrappers; the four that fall link
+`k_copy_short` and lost the inline memcpy dispatch a call replaces.
+
+The three compile rows RISE by layout, and to the instruction they are the
+values the rows held before kanso#1429: compile_instructions 42,870,366 ->
+42,871,412 (+1,046), entry_instructions 144,035,949 -> 144,040,625
+(+4,676), library_instructions 144,836,225 -> 144,841,583 (+5,358).
+compile_allocs held at 27,937 and compile_memory is byte-identical.
