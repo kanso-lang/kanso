@@ -5426,6 +5426,15 @@ Row `counters_out`, mutation
 `the_beat_iteration_counter_is_counted_in_a_shipped_binary` (the two
 `k_beat_iter` sites unguarded again, 2,692,767 increments a run).
 
+Three harnesses lift runtime text and compile it on their own: the float
+parse spec, the bytes-capacity spec and the utf-8 differential. The lifted
+text now names `K_COUNTING`, which only src/runtime.c defines, so the first
+and third failed to compile on CI and the second lost its anchor line. The
+float and utf-8 harnesses define `K_COUNTING 0` in front of the lifted text,
+as the scan-tail harness already did, and the capacity spec cuts from the
+guarded line. Seen red on CI at 727cb321 and d7b6acad; the two specs and the
+differential pass here (45,189,025 checked, 0 mismatches).
+
 ## 2026-09-15 — a capture is a load, an own-err check is a tag test
 
 Two runtime calls sat at the top of the run program's call-count table on
