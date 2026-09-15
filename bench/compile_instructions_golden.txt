@@ -1478,4 +1478,11 @@
 # compile_allocs held at 27,937 and compile_memory is byte-identical, which
 # is the expected pair: those two really cannot move on a runtime edit.
 #
-compile_instructions=42870872
+# 2026-09-15 (kanso#1427): the leading-zero skip in k_b_to_float, a RUNTIME
+# change in one function, and this row moved anyway: 42,870,872 -> 42,871,412, +540
+# (+0.0013%), on the base kanso#1417 left. Layout, as the entry above says:
+# `kanso check` never reaches the runtime, and src/runtime.c is compiled into
+# the compiler. Regenerated from the base CI last ran, stated, not reasoned
+# from. compile_allocs held at 27,937 and compile_memory is byte-identical.
+#
+compile_instructions=42871412

@@ -489,11 +489,29 @@
 # register moves carrying vp/vm/vr around the back edge. The trade is 21
 # against 32, not 16 against 32, and the rows above are what it is worth.
 #
-jsonbench 1250475761
-encodebench 3616600356
-oneshot 19231864
+# 2026-09-15 (kanso#1427): a float's leading zeros are skipped once, and the
+# digit loops stop asking whether the first nonzero has landed. Six rows fall
+# and eight hold to the digit, on the base kanso#1417 left:
+#
+#   jsonbench    1,250,475,761 -> 1,247,197,361    -3,278,400   -0.2622%
+#   runbench     1,994,791,401 -> 1,992,627,657    -2,163,744   -0.1085%
+#   widebench       33,134,691 ->     33,028,905      -105,786   -0.3193%
+#   encodebench  3,616,600,356 -> 3,616,578,500       -21,856   -0.0006%
+#   livebench    3,091,569,576 -> 3,091,547,720       -21,856   -0.0007%
+#   oneshot         19,231,864 ->     19,210,008       -21,856   -0.1136%
+#
+# jsonbench and runbench are the container's two deltas TO THE INSTRUCTION:
+# the saving is a fixed count per digit and the digits are the same digits
+# on both hosts. encodebench, livebench and oneshot fall by ONE decode of the
+# large document each, 21,856, which is jsonbench's fall divided by its 150
+# decodes; widebench holds its own floats. The eight that hold never parse a
+# float.
+#
+jsonbench 1247197361
+encodebench 3616578500
+oneshot 19210008
 basket 34281871
-widebench 33134691
+widebench 33028905
 deepbench 371382179
 escapebench 82969017
 pendbench 219476888
@@ -501,7 +519,7 @@ indexbench 3185298
 scanbench 528870249
 digestbench 9837152
 readbench 4629745
-livebench 3091569576
+livebench 3091547720
 # 2026-09-06 (the run program joins): `runbench 3043743748` is a NEW row and
 # nothing regressed to make it appear. It is the program Clay's gavel that day
 # made the objective's whole run-speed term, and the thirteen rows above it
@@ -559,4 +577,4 @@ livebench 3091569576
 #
 # The uniform -8 across six rows is one instruction on a path each program
 # takes eight times, and the four flat rows never take it at all.
-runbench 1994791401
+runbench 1992627657

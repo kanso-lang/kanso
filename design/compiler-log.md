@@ -4763,3 +4763,26 @@ Row `leading_zeros`, mutation
 `every_digit_asks_whether_the_first_nonzero_has_landed.sh`: it deletes
 both skips and puts `if (w)` back on both loops, and the result diffs
 against main's `k_b_to_float` in nothing but this change's comment.
+
+**CI's sitting, on the base kanso#1417 left.** The work vein reads the
+container's two deltas to the instruction: runbench 1,994,791,401 ->
+1,992,627,657 (-2,163,744, -0.1085%) and jsonbench 1,250,475,761 ->
+1,247,197,361 (-3,278,400, -0.2622%). Four more rows fall: widebench
+33,134,691 -> 33,028,905 (-105,786), and encodebench 3,616,578,500,
+livebench 3,091,547,720 and oneshot 19,210,008 each by 21,856, one decode
+of the large document. Eight rows hold to the digit, since nothing in them
+parses a float.
+
+Six machine-code rows RISE by exactly 96 bytes, the two skip loops:
+jsonbench text 118,450, encodebench 138,962, oneshot 128,482, widebench
+147,970, livebench 130,034 and runbench 305,362; summed 1,735,484 ->
+1,736,060 (+576). Eight rows do not move, because the linker keeps
+`k_b_to_float` only where it is called.
+
+The three compile rows RISE by layout, as every runtime-only change moves
+them: compile_instructions 42,870,872 -> 42,871,412 (+540),
+entry_instructions 144,037,300 -> 144,040,625 (+3,325),
+library_instructions 144,837,840 -> 144,841,583 (+3,743). `kanso check`
+never reaches the runtime; the bytes of src/runtime.c shift what sits
+where. Regenerated from the base CI ran, stated, not reasoned from.
+compile_allocs held at 27,937 and compile_memory is byte-identical.
