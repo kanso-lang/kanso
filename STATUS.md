@@ -335,11 +335,13 @@ else. Chains that tested for `none` after an effect migrate.
     checked from here on two days and both refused by the tooling
   - whether an err gains readers a lambda callback can use
 
-**Four questions wait in `design/pending-gavels.md`** — one blocking, three
+**Three questions wait in `design/pending-gavels.md`** — one blocking, two
 open — each with a recommendation. Recounted on 2026-09-15, when the
 box-wrapping entry left Blocking ruled, the `!` question it left behind
-joined Blocking, and the constructor's spelling joined Open with a
-recommendation the build does not wait on. Counted
+joined Blocking, the constructor's spelling joined Open with a
+recommendation the build does not wait on, and the maps-parse entry left
+Open ruled: the 2026-09-03 NO EXCLUSION stands, and a 2,130 move on the
+compile row is the loader's. Counted
 from the ledger by reading its `###` headings, which is what this line has
 always claimed to do and had stopped doing TWICE. On 2026-09-05 it said nineteen while the ledger
 held three; fifteen had been gaveled and had left the file as the lifecycle
@@ -352,14 +354,11 @@ now reads both files and fails when this sentence and the ledger disagree.
 
 The one blocking is what `!` promises the checker: a box at the read, or
 the value on the programmer's word, with a miss halting at runtime; the
-recommendation is the second. The three open are the box constructor's spelling,
+recommendation is the second. The two open are the box constructor's spelling,
 recommended `effect`, which cloud builds against unless Clay names another;
-the book teaching the boundary language, whose campaign ran on 2026-09-13 and
-which now owes only ch04's "nothing is asked of the signature" framing,
-released by the 2026-09-15 gavel and moving with its build; and the
-maps parse being 100% of the compile row's binary-to-binary drift — which had
-been sitting under Parked with no heading at all, so no index and no session
-citing by heading could reach it.
+and the book teaching the boundary language, whose campaign ran on 2026-09-13
+and which now owes only ch04's "nothing is asked of the signature" framing,
+released by the 2026-09-15 gavel and moving with its build.
 
 This sentence named three blocking entries that Clay ruled on 2026-09-08 and
 went on naming them for six days. The count above it is pinned by a spec and

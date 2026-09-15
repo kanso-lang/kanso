@@ -2616,3 +2616,32 @@ that hand `xs[i]!` to an operator today wait on its answer.
 The entry left `design/pending-gavels.md` in this commit, four days after it
 was filed. STATUS.md's "Ruled, unbuilt" row for the rider is replaced by a
 row for this ruling.
+
+## 2026-09-15 — gavel: the maps parse stays in the compile row, and a 2,130 move on it is the loader's
+
+Clay closed the ledger's "The maps parse is 100% of the compile row's
+binary-to-binary drift", open since 2026-09-08, by asking why it was a
+question: "if the binary changes in a way that makes it more costly to run it
+is more costly to run, that is just an empirical fact right? I don't
+understand why there's a question here."
+
+The 2026-09-03 ruling — NO EXCLUSION, the row counts what the binary costs to
+start, term and all — stands on the new number. The new number is that
+`pthread_getattr_np`'s parse of `/proc/self/maps`, called from
+`std::rt::lang_start_internal` to place the stack guard, is 0.27% of the
+compile row and 100% of its movement between two binaries that do the same
+compiler work: a 64 KiB `.bss` probe that adds no code moved the row 2,130
+with the compiler's own work identical to the instruction.
+
+What the fact buys is a reading rule rather than a change to the gate. A move
+of that size on the compile row, with `std::rt::lang_start::{{closure}}`
+sitting still, is the loader's and is not chased as a compiler regression.
+The one argument for excluding the term was signal: layout noise in a
+regression row. It loses because a quarter of a percent is below anything
+anyone acts on, and because excluding it would turn the row from "what the
+binary costs" into "what we chose to count", which is the judgment the
+2026-09-03 ruling refused.
+
+The entry was filed because the ledger's charter sends a new fact about a
+ruled matter to the gavel rather than quietly into a gate. It leaves the
+ledger in this commit.
