@@ -3042,6 +3042,17 @@ as the scan-tail harness already did, and the capacity spec cuts from the
 guarded line. Seen red on CI at 727cb321 and d7b6acad; the two specs and the
 differential pass here (45,189,025 checked, 0 mismatches).
 
+The guard blinded the utf-8 differential's two ratchet rows on CI a round
+later, at ed7c51b5, and the define was not why. The differential builds the
+door by text and strips the counter line, `k_stat_utf8_bytes += len;`, to
+nothing; with the guard in front of it the strip left a bare
+`if (K_COUNTING)` standing over the next statement, the ascii check, so the
+harness's door skipped straight to the validators on every input and
+`k_all_ascii` was never reached. Both mutations live in `k_all_ascii`, so
+the gate stayed green under each. The strip takes the whole guarded
+statement now; both rows read red again here (`MISMATCH len=1 bytes=80` and
+`len=12 ... e4 5d 13`), and the clean sweep passes.
+
 **CI's sitting, on the base kanso#1435 left.** All fourteen work rows fall:
 work_jsonbench 1,185,398,676 -> 1,169,790,503 (-15,608,173, -1.3167%),
 work_runbench 1,871,522,584 -> 1,857,535,269 (-13,987,315, -0.7474%),
