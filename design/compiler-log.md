@@ -4918,10 +4918,10 @@ keeps a little more frame than the container's, as it did on kanso#1428.
 Eight more rows fall, deepbench -2,179,955, widebench -191,892,
 encodebench -115,872, indexbench -99,535, livebench -97,289, oneshot
 -90,495, digestbench -23,820, pendbench -7,166. Four RISE, and they are
-the outlining's own price: basket 34,281,871 -> 34,433,106 (+151,235,
-+0.4412%), escapebench 82,969,017 -> 82,999,058 (+30,041), scanbench
-528,870,249 -> 528,872,901 (+2,652), readbench 4,629,745 -> 4,629,808
-(+63). An index whose container is a map reaches `k_b_at_rest` by a call
+the outlining's own price: work_basket 34,281,871 -> 34,433,106
+(+151,235, +0.4412%), work_escapebench 82,969,017 -> 82,999,058 (+30,041),
+work_scanbench 528,870,249 -> 528,872,901 (+2,652), work_readbench
+4,629,745 -> 4,629,808 (+63). An index whose container is a map reaches `k_b_at_rest` by a call
 now, the ascii fill is a call, and the refill saves every register it
 touches on each call, so a program that takes those paths and holds little
 live across them pays and collects nothing. Which of the three basket pays
