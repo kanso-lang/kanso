@@ -576,19 +576,45 @@
 # a program whose copies are long and frequent pays that on each one and
 # keeps no frame it did not already keep. The digest builds such copies.
 #
-jsonbench 1218898014
-encodebench 3616369380
-oneshot 19024257
-basket 34534020
-widebench 32845030
-deepbench 368942227
-escapebench 82993058
-pendbench 219466315
-indexbench 3086146
-scanbench 528868084
-digestbench 9944479
-readbench 4629832
-livebench 3091363554
+# 2026-09-15 (kanso#1431): the third cold-frame sweep, nine more rare arms.
+# Thirteen rows fall and one rises, on the base kanso#1430 left:
+#
+#   indexbench       3,086,146 ->      2,895,940      -190,206   -6.1632%
+#   scanbench      528,868,084 ->    508,340,742   -20,527,342   -3.8814%
+#   deepbench      368,942,227 ->    354,898,747   -14,043,480   -3.8064%
+#   basket          34,534,020 ->     33,956,235      -577,785   -1.6731%
+#   livebench    3,091,363,554 ->  3,050,693,016   -40,670,538   -1.3156%
+#   runbench     1,970,132,223 ->  1,945,875,866   -24,256,357   -1.2312%
+#   encodebench  3,616,369,380 ->  3,575,756,608   -40,612,772   -1.1230%
+#   jsonbench    1,218,898,014 ->  1,211,426,976    -7,471,038   -0.6129%
+#   oneshot         19,024,257 ->     18,968,024       -56,233   -0.2956%
+#   widebench       32,845,030 ->     32,795,381       -49,649   -0.1512%
+#   digestbench      9,944,479 ->      9,941,342        -3,137   -0.0315%
+#   pendbench      219,466,315 ->    219,435,891       -30,424   -0.0139%
+#   readbench        4,629,832 ->      4,629,709          -123   -0.0027%
+#   escapebench     82,993,058 ->     83,901,717      +908,659   +1.0949%
+#
+# runbench's fall is 132,878 deeper than the container's -24,123,479 and
+# jsonbench's 171,000 shallower than its -7,642,038. The one rise is the
+# list grow's price: its permanent buffer, its registration and its release
+# are preserve_most helpers now, and escapebench grows a list 12,000
+# times a run (9,000 of them releasing a predecessor), so the three helpers
+# and the long copy cost it 1,752,029 against 846,030 the push itself no
+# longer pays (container A/B, 905,659 summed against CI's 908,659).
+#
+jsonbench 1211426976
+encodebench 3575756608
+oneshot 18968024
+basket 33956235
+widebench 32795381
+deepbench 354898747
+escapebench 83901717
+pendbench 219435891
+indexbench 2895940
+scanbench 508340742
+digestbench 9941342
+readbench 4629709
+livebench 3050693016
 # 2026-09-06 (the run program joins): `runbench 3043743748` is a NEW row and
 # nothing regressed to make it appear. It is the program Clay's gavel that day
 # made the objective's whole run-speed term, and the thirteen rows above it
@@ -646,4 +672,4 @@ livebench 3091363554
 #
 # The uniform -8 across six rows is one instruction on a path each program
 # takes eight times, and the four flat rows never take it at all.
-runbench 1970132223
+runbench 1945875866

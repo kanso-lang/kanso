@@ -5090,3 +5090,40 @@ locally against 1,938,188,043: the first reads runbench 1,945,409,548
 (+2,387,826), the third 1,940,317,281 (+2,129,238). `k_map_sorted` spelt
 `static` without `inline` builds byte-identically, so the word stays for
 the reader and decides nothing.
+
+**Declined on the way.** `k_b_append_range`'s fast-path memcpy replaced by
+the short ladder: five pushes to none on the standalone compile, and
+runbench +328,995, jsonbench -863,400, encodebench -1,200; the objective
+declines it. Outlining `k_b_to_float`'s strtod tail left it at seven
+pushes; that frame is the parse body's and no tail reaches it.
+
+**CI's sitting, on the base kanso#1430 left.** The work vein reads
+runbench 1,970,132,223 -> 1,945,875,866 (-24,256,357, -1.2312%), 132,878
+deeper than the container's -24,123,479, and jsonbench 1,218,898,014 ->
+1,211,426,976 (-7,471,038, -0.6129%), 171,000 shallower than the
+container's -7,642,038. Eleven more rows fall: livebench -40,670,538
+(-1.3156%), encodebench -40,612,772 (-1.1230%), scanbench -20,527,342
+(-3.8814%), deepbench -14,043,480 (-3.8064%), basket -577,785 (-1.6731%),
+indexbench -190,206 (-6.1632%), oneshot -56,233, widebench -49,649,
+pendbench -30,424, digestbench -3,137, readbench -123. Against main the
+digest row still stands above where the chain found it, work_digestbench
+9,813,332 -> 9,941,342: that is kanso#1430's wrapper price less this
+sweep's 3,137, and it is priced in that entry. One RISES here:
+work_escapebench 82,993,058 -> 83,901,717 (+908,659, +1.0949%). That is
+the list grow's price. Its permanent buffer, its registration and its
+release are preserve_most helpers now, and escapebench grows a list
+12,000 times a run, 9,000 of them releasing a predecessor: on the
+container the three helpers and the long copy cost it 1,752,029
+(`k_permreg_add` 888,017, `k_buf_perm` 432,004, `k_buf_release` 243,004,
+`k_copy_cold` 189,004) against 846,030 the push itself no longer pays,
+905,659 summed where CI read 908,659.
+
+Machine code: nine rows RISE and five FALL, summed 1,708,284 ->
+1,708,652 (+368). Nine helpers are out of line now, each with a
+preserve_most prologue and epilogue, and the callers they left keep no
+frame; which side is larger is per program, and runbench falls 832.
+
+The three compile rows FALL by layout: compile_instructions 42,871,412 ->
+42,869,908 (-1,504), entry_instructions 144,040,625 -> 144,035,862
+(-4,763), library_instructions 144,841,583 -> 144,837,205 (-4,378).
+compile_allocs held at 27,937 and compile_memory is byte-identical.
