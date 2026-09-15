@@ -5226,3 +5226,71 @@ allocation counters of a sample that opens an empty list, and the sweep
 does not regenerate them; CI's book job caught both, allocs 10 -> 9 and
 alloc_bytes 43,888 -> 22,032 on each, and they are rewritten here.
 
+## 2026-09-15 — the two byte scanners are inlined, and their constants fold
+
+`k_b_find2_raw` and `k_b_find2_below_raw` are the decoder's inner scans:
+sixteen bytes a step under SSE, looking for the first of two bytes. On
+kanso#1432's run program the per-instruction profile put them at
+58,181,994 and 84,989,250 self over 1,756,429 and 1,353,330 calls, and
+the loop body ran 1.01 times a call: the hit is in the first sixteen
+bytes 99.99% of the time. Half of each call was setup, the two bytes
+broadcast into vector registers, `movd`, `shl`, `or`, `movd`, `movd`,
+`pxor`, two `pshufb`, rebuilt from the argument registers on every call.
+Every emitted caller hands those bytes as literals (`text/find2 cs p 34
+92`, and the same 34 92 at `find2_below`), so inlined they are constant
+vectors loaded from rodata.
+
+The link is LTO, so `__attribute__((always_inline))` on the two doors is
+enough: LLVM honours it at every emitted call site and the out-of-line
+copies vanish from the binary. Nothing else changes.
+
+Container A/B, `env -i` under callgrind, equal-length names in one
+directory, on the kanso#1432 leaves:
+
+    runbench    1,923,227,681 -> 1,898,278,815   -24,948,866   -1.2972%
+    jsonbench   1,177,989,804 -> 1,171,809,954    -6,179,850   -0.5246%
+
+The first door alone read runbench -18,619,812 and jsonbench -6,179,850;
+the second adds -6,329,054 to runbench and nothing to jsonbench, which
+never calls it. Output byte-identical on both. Per function, the two
+doors' 143,171,244 become 118,222,370 inside their callers:
+`encode_onto` +78,660,646, `obj_key_start` +17,251,938 and +958,320 on
+its two clones, `str_escape` +7,891,587, `array_delim` +4,526,379 and
++88,506, `str_chars` +3,510,540, `parse_value` +3,029,202,
+`in_class?` +2,295,180, `worth_trying?` +10,272. No counter moves: the
+scan allocates nothing and the sweep agrees with every golden.
+
+Row `scan_inline`, mutation
+`the_byte_scanners_rebuild_their_constants_on_every_call` (strips both
+attributes). Under the mutation the source is kanso#1432's to the byte
+outside comments, so its count is the base's: runbench +24,948,866.
+
+**CI's sitting, on the base kanso#1432 left.** The work vein reads runbench
+1,930,572,613 -> 1,904,577,350 (-25,995,263, -1.3465%), 1,046,397 deeper
+than the container's -24,948,866, and jsonbench 1,195,571,676 ->
+1,187,809,626 (-7,762,050, -0.6492%), 1,582,200 deeper than the container's
+-6,179,850. Four more fall: livebench -32,587,731 (-1.0682%), encodebench
+-8,047,675 (-0.2251%), scanbench -7,521,638 (-1.4796%), oneshot -133,071
+(-0.7055%). The other eight hold to the instruction; none of them calls
+either scanner. Against main two work rows still stand above it, neither
+moved here: work_escapebench 82,969,017 -> 85,995,606 (+3,026,589), the
+accumulator's lifetime priced in kanso#1432's entry, and work_digestbench
+9,837,152 -> 9,838,994 (+1,842), kanso#1430's wrapper price less the falls
+since.
+
+Machine code: seven rows RISE and seven hold, summed text 1,706,956 ->
+1,718,924 (+11,968): runbench +3,536, oneshot +2,816, livebench +2,816,
+jsonbench +2,128, scanbench +464, widebench +160, encodebench +48. Every
+emitted call site carries its own copy of the sixteen-byte scan loop now,
+with the two bytes as rodata vectors, where before it carried a call.
+Against main the sum is a fall, 1,730,204 -> 1,718,924, on the chain's
+earlier links.
+
+The three compile rows RISE by layout, both on the base and against main:
+compile_instructions 42,871,308 -> 42,873,185 (+1,877; main 42,872,288),
+entry_instructions 144,038,199 -> 144,044,710 (+6,511; main 144,041,140),
+library_instructions 144,838,028 -> 144,845,808 (+7,780; main 144,841,869).
+compile_allocs held at 27,937 and compile_memory is byte-identical.
+
+Welfare 69.16 -> 69.26, banked in this pull request; the three page spans
+quoting the moved compile goldens were rewritten by `golden_prose --write`.
