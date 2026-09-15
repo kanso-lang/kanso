@@ -273,7 +273,9 @@
 # shape.
 # 2026-09-14 (kanso#1419): ryu_d2d removes digits two at a time. This is a
 # RUNTIME change -- src/runtime.c, one function -- and the library row moved
-# anyway: 144,858,538 -> 144,836,246, -22,292 (-0.0154%).
+# anyway: 144,836,225 -> 144,842,133, +5,908 (+0.0041%). On the kanso#1418 base the same diff read
+# -22,292 (-0.0154%); on the kanso#1423 base it RISES. Same bytes,
+# opposite sign, which is the whole of what a layout delta carries.
 #
 # `kanso check` stops before codegen, so no decision this row counts can have
 # been altered by a runtime edit. What moved is the LAYOUT: src/runtime.c is
@@ -290,4 +292,4 @@
 # compile_allocs held at 27,937 and compile_memory is byte-identical, which
 # is the expected pair: those two really cannot move on a runtime edit.
 #
-library_instructions=144836225
+library_instructions=144842133

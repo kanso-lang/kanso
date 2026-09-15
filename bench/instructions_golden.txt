@@ -441,13 +441,17 @@
 # over the same body, so a float with four removable digits makes two trips
 # where it made four.
 #
-# Four rows fall and ten hold to the digit:
+# Five rows fall and nine hold to the digit, on the base kanso#1423 left:
 #
-#   encodebench  3,641,023,306 -> 3,616,600,106   -24,423,200   -0.6707%
-#   livebench    3,115,992,526 -> 3,091,569,326   -24,423,200   -0.7838%
-#   runbench     2,003,021,871 -> 1,997,526,651    -5,495,220   -0.2743%
-#   oneshot         19,292,672 ->     19,231,614       -61,058   -0.3165%
-#   widebench       33,078,691 ->     33,070,691        -8,000   -0.0242%
+#   encodebench  3,641,023,556 -> 3,616,600,356   -24,423,200   -0.6708%
+#   livebench    3,115,992,776 -> 3,091,569,576   -24,423,200   -0.7838%
+#   runbench     2,003,046,621 -> 1,997,551,401    -5,495,220   -0.2743%
+#   oneshot         19,292,922 ->     19,231,864       -61,058   -0.3165%
+#   widebench       33,142,691 ->     33,134,691        -8,000   -0.0241%
+#
+# The same five deltas, to the instruction, were read on the kanso#1418 base
+# a day earlier; kanso#1423 moved the levels by +250 to +64,000 and the pair
+# loop's saving did not move with them.
 #
 # encodebench and livebench fall by the SAME 24,423,200. They are two programs
 # over one encode path and the floats in them are the same floats; the equality
@@ -465,10 +469,10 @@
 # against 32, not 16 against 32, and the rows above are what it is worth.
 #
 jsonbench 1250475761
-encodebench 3641023556
-oneshot 19292922
+encodebench 3616600356
+oneshot 19231864
 basket 34281871
-widebench 33142691
+widebench 33134691
 deepbench 371382179
 escapebench 82969017
 pendbench 219476888
@@ -476,7 +480,7 @@ indexbench 3265296
 scanbench 528870249
 digestbench 9837152
 readbench 4629745
-livebench 3115992776
+livebench 3091569576
 # 2026-09-06 (the run program joins): `runbench 3043743748` is a NEW row and
 # nothing regressed to make it appear. It is the program Clay's gavel that day
 # made the objective's whole run-speed term, and the thirteen rows above it
@@ -534,4 +538,4 @@ livebench 3115992776
 #
 # The uniform -8 across six rows is one instruction on a path each program
 # takes eight times, and the four flat rows never take it at all.
-runbench 2003046621
+runbench 1997551401

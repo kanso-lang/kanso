@@ -1442,7 +1442,9 @@
 # shrank. Runtime did NOT move: `work:success`, runbench 2,003,021,871.
 # 2026-09-14 (kanso#1419): ryu_d2d removes digits two at a time. This is a
 # RUNTIME change -- src/runtime.c, one function -- and the module row moved
-# anyway: 42,877,925 -> 42,869,800, -8,125 (-0.0189%).
+# anyway: 42,870,366 -> 42,872,197, +1,831 (+0.0043%). On the kanso#1418 base the same diff read
+# -8,125 (-0.0189%); on the kanso#1423 base it RISES. Same bytes,
+# opposite sign, which is the whole of what a layout delta carries.
 #
 # `kanso check` stops before codegen, so no decision this row counts can have
 # been altered by a runtime edit. What moved is the LAYOUT: src/runtime.c is
@@ -1459,4 +1461,4 @@
 # compile_allocs held at 27,937 and compile_memory is byte-identical, which
 # is the expected pair: those two really cannot move on a runtime edit.
 #
-compile_instructions=42870366
+compile_instructions=42872197
