@@ -5004,6 +5004,16 @@ values the rows held before kanso#1429: compile_instructions 42,870,366 ->
 (+4,676), library_instructions 144,836,225 -> 144,841,583 (+5,358).
 compile_allocs held at 27,937 and compile_memory is byte-identical.
 
+**Round three: the render harness lifts the copy it calls.**
+`tests/every_rendered_float_reads_back_as_itself.rs` cuts `k_copy_short`
+out of runtime.c by its declaration line and compiles it beside ryū. This
+change made the short copy hand its long case to `k_copy_cold`, and the
+lifted text called a function the harness never carried, so the spec
+failed to compile on both hosts and the ratchet reported its gate ALREADY
+RED. The cut now runs from `k_copy_cold`'s declaration to the short copy's
+closing brace, one span, so a later change to either shape is still read
+from the source and not from a copy. Green on the container in 4.09s.
+
 ## 2026-09-15 — the third cold-frame sweep: nine more rare arms, and a scan that `cold` cost its vector loop
 
 kanso#1429 and kanso#1430 took the frames the arena refill, the index's

@@ -48,8 +48,12 @@ fn every_rendered_float_reads_back_as_itself_and_no_shorter_one_does() {
     let src = runtime();
     let digits = cut(&src, "static const char RYU_DIGITS[201]", "\";");
     let declen = cut(&src, "static inline int ryu_declen(uint64_t v) {", "\n}");
-    let copy =
-        cut(&src, "static inline void k_copy_short(char* d, const char* s, long long n) {", "\n}");
+    // the short copy and the cold long copy it hands the rest to, one span
+    let copy = cut(
+        &src,
+        "static __attribute__((noinline, cold, preserve_most)) void k_copy_cold(void* d, const void* s, size_t n) {",
+        "\n    } else if (n == 1) {\n        d[0] = s[0];\n    }\n}",
+    );
     // one contiguous span: the pow5 tables, the small helpers, ryu_d2d and
     // render_ryu, in the order the runtime declares them
     let core =
