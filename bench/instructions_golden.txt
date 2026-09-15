@@ -507,9 +507,25 @@
 # decodes; widebench holds its own floats. The eight that hold never parse a
 # float.
 #
-jsonbench 1247197361
-encodebench 3616578500
-oneshot 19210008
+# 2026-09-15 (kanso#1428): the int parser's cold tail leaves the frame it was
+# sizing. Five rows fall and nine hold to the digit, on the base kanso#1427
+# left:
+#
+#   jsonbench    1,247,197,361 -> 1,243,742,261    -3,455,100   -0.2770%
+#   runbench     1,992,627,657 -> 1,990,347,291    -2,280,366   -0.1144%
+#   encodebench  3,616,578,500 -> 3,616,555,466       -23,034   -0.0006%
+#   livebench    3,091,547,720 -> 3,091,524,686       -23,034   -0.0007%
+#   oneshot         19,210,008 ->     19,186,974       -23,034   -0.1199%
+#
+# ELEVEN a call on the runner where the container read TWELVE: 2,280,366
+# over 207,306 calls and 3,455,100 over 314,100, both to the instruction, so
+# the runner's clang keeps one instruction of frame the container's
+# discards. The three one-decode rows fall by 23,034, jsonbench's fall over
+# its 150 decodes. The nine that hold never parse an integer.
+#
+jsonbench 1243742261
+encodebench 3616555466
+oneshot 19186974
 basket 34281871
 widebench 33028905
 deepbench 371382179
@@ -519,7 +535,7 @@ indexbench 3185298
 scanbench 528870249
 digestbench 9837152
 readbench 4629745
-livebench 3091547720
+livebench 3091524686
 # 2026-09-06 (the run program joins): `runbench 3043743748` is a NEW row and
 # nothing regressed to make it appear. It is the program Clay's gavel that day
 # made the objective's whole run-speed term, and the thirteen rows above it
@@ -577,4 +593,4 @@ livebench 3091547720
 #
 # The uniform -8 across six rows is one instruction on a path each program
 # takes eight times, and the four flat rows never take it at all.
-runbench 1992627657
+runbench 1990347291
