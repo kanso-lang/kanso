@@ -271,4 +271,4 @@
 # -6,069,469 (-1.7963%). The entry and library rows track each other to 2,213
 # instructions because they run the same passes over corpora of the same
 # shape.
-library_instructions=144858538
+library_instructions=144836225

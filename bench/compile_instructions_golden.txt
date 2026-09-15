@@ -1440,4 +1440,4 @@
 # is work every visit was doing, so the saving here -- visits that no longer
 # happen, times what a visit costs -- lost 90,607 when the second factor
 # shrank. Runtime did NOT move: `work:success`, runbench 2,003,021,871.
-compile_instructions=42877925
+compile_instructions=42870366
