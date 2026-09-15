@@ -5021,7 +5021,7 @@ arms and the long copy were charging. This entry took the attribution
 again on the cold-copy build, per function: callgrind's dynamic call
 counts against each function's prologue push count, ranked by calls times
 pushes. Seven hot functions still opened with five to seven pushes for
-calls a run makes a few thousand times: `k_b_at` (five, 690,000 calls),
+calls a run makes a few thousand times: `k_b_at` (six, 690,000 calls),
 `k_b_entries` and `k_map_sorted` (six each, 248,490), `k_b_push_grow`
 (six, 252,499), `k_b_slice` (seven, 183,682), `k_b_append_grow` (six,
 176,697), `k_closure` (five, 243,978) and `k_copy_alloc` (seven, 74,551).
@@ -5044,12 +5044,16 @@ ascii and list arms open with no pushes where the inline walk cost seven.
 `k_copy_short` is `always_inline` as well: `k_b_slice` was calling it out
 of line, and inlining it is worth 236,052 against the same tree.
 
-Prologues after, read off the linked run program: `k_b_at` 5 -> 1,
+Prologues after, read off the linked run program: `k_b_at` 6 -> 1,
 `k_b_slice` 7 -> 1, `k_copy_alloc` 7 -> 1, `k_closure` 5 -> 1,
-`k_b_push_grow` 6 -> 0, `k_b_entries` 6 -> 3, `k_b_append_grow` 6 -> 3.
-The two that keep three pushes hold more values live than the nine
+`k_b_push_grow` 6 -> 4, `k_b_entries` 6 -> 3, `k_b_append_grow` 6 -> 3.
+The three that keep pushes hold more values live than the nine
 caller-saved registers can carry; that is pressure, and no attribute
-reaches it.
+reaches it. (This paragraph first said `k_b_at` 5 -> 1 and
+`k_b_push_grow` 6 -> 0. The linked binary says six and four: the grow's
+four pushes and an alignment slot sit below its doubling loop now, so
+the entry opens with none, and every one of its 252,499 calls still
+reaches them. Corrected in round two from the per-instruction profile.)
 
 Container A/B, `env -i` under callgrind, equal-length names in one
 directory, on the kanso#1430 leaves:
