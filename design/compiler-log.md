@@ -2579,11 +2579,12 @@ underlying value or error object."
    only a foreign `rescue` can end. The distinction the errors page draws
    between "a valid pseudo-error" and "a true exception" is spelled by
    whether the err is bare or boxed, and one object serves both.
-3. **A bare err arriving where a value is wanted halts the program there.**
-   An operator, an index, or a call with no `(err _)` arm at that position
-   stops with the report, the way `+` on a string dies today. That is what
-   `!` means: "I insist, and if I'm wrong the program stops here." The
-   railway retires; nothing outside a box propagates.
+3. **A bare err arriving where a value is wanted is refused at check.** An
+   operator, an index, or a call with no `(err _)` arm at that position does
+   not compile, exactly as it does not compile today when a `none` can reach
+   it. Clay, correcting the chat's first draft of this part, which said the
+   program halts there at runtime: "well no that would just fail to compile
+   obviously." The railway retires; nothing outside a box propagates.
 
 **What it supersedes.** The 2026-08-31 rider "pure fallibility is boxed too",
 read literally, lifted every err-carrying answer into the box at the
@@ -2593,19 +2594,24 @@ dispatch, the foreign-only rescue license, and `!` at the call site as the
 choice of channel.
 
 **What it dissolves.** The ledger entry measured 738 of lib's 770
-declarations becoming boxes under the literal rider and priced the bind
-shape at four allocations an element in a kernel. Under an explicit box,
-neither number exists: a helper is boxed only where somebody wrote the box,
-and `xs[i]!` in sha256's compress or regexp's scanner costs nothing when the
-index is in range by construction, because a miss halts rather than
-wrapping. That is the in-range read the entry's option 4 asked a third
-spelling for, and it needs none.
+declarations becoming boxes under the literal rider. Under an explicit box
+that number does not exist: a helper is boxed only where somebody wrote the
+box.
 
-**What is left.** Two things for cloud, one for the ledger. Cloud builds the
-constructor and retires the railway, with the kernels untouched; ch04's
-"nothing is asked of the signature" paragraph, the last piece of the book
-ruling, is released by this and moves with the build. The ledger carries the
-constructor's spelling as an Open entry so the build does not wait on it.
+**What it does not dissolve.** The in-range read. With a bare err refused at
+check the way a `none` is, `xs[i]!` cannot be free in a kernel by halting on
+a miss; whether the checker sees an err in its answer set, or a box, or
+neither, is what the ledger's option 4 was asking and is still asking. It
+goes back to the ledger as its own Blocking entry, "What `!` promises the
+checker", with the two readings and a recommendation. The chat's first draft
+of this entry said the halt dissolved it; it did not.
+
+**What is left.** Cloud builds the constructor and retires the railway;
+ch04's "nothing is asked of the signature" paragraph, the last piece of the
+book ruling, is released by this and moves with the build. The ledger
+carries the constructor's spelling as an Open entry so the build does not
+wait on it, and the `!` question as a Blocking one, because the 710 sites
+that hand `xs[i]!` to an operator today wait on its answer.
 
 The entry left `design/pending-gavels.md` in this commit, four days after it
 was filed. STATUS.md's "Ruled, unbuilt" row for the rider is replaced by a

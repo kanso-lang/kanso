@@ -7,9 +7,11 @@ is stale — say so.
 ## Waiting on Clay
 
 The decisions live in design/pending-gavels.md — the single ledger; this file
-only indexes it. **Blocking right now: zero.** The box-wrapping question was ruled on
-2026-09-15, four days after it was filed: the box is explicit, an err is a
-value, and a bare err halts where it lands. The reconstruction coverage
+only indexes it. **Blocking right now: one** — what `!` promises the checker, filed
+2026-09-15 the hour the box-wrapping question was ruled. That ruling — the
+box is explicit, an err is a value, and a bare err is refused at check —
+settled where the box wraps and left what `xs[i]!` reads as, on which 710
+sites in the tree wait. The reconstruction coverage
 question was ruled on 2026-09-10, taking cloud's recommendation: rows 15..390
 stay unscored on the run terms, the eight-phase half stays built, and
 re-measuring the old commits is filed as a lead with a feasibility probe in
@@ -110,10 +112,11 @@ the bind chains it priced do not exist. Owes: a prefix constructor that
 boxes a value or an err by hand (the ledger's Open entry "The box
 constructor's spelling" recommends `effect`, and the build does not wait on
 it); a bare err becoming data an `(err _)` arm can match anywhere; a bare err
-arriving at an operator, an index or an arm-less call halting the program
-with the report, which is what `!` means, so `xs[i]!` costs nothing in
-range; the railway retiring; and ch04's "nothing is asked of the signature"
-paragraph, the last of the book ruling, moving with it.
+arriving at an operator, an index or an arm-less call being refused at
+check, like a `none`; the railway retiring; and ch04's "nothing is asked of
+the signature" paragraph, the last of the book ruling, moving with it. What
+`xs[i]!` answers as the checker reads it is NOT ruled — the ledger's Blocking
+entry "What `!` promises the checker" — and the 710 operator sites wait on it.
 
 ## In flight
 
@@ -332,10 +335,11 @@ else. Chains that tested for `none` after an effect migrate.
     checked from here on two days and both refused by the tooling
   - whether an err gains readers a lambda callback can use
 
-**Three questions wait in `design/pending-gavels.md`** — zero blocking, three
+**Four questions wait in `design/pending-gavels.md`** — one blocking, three
 open — each with a recommendation. Recounted on 2026-09-15, when the
-box-wrapping entry left Blocking ruled and the constructor's spelling joined
-Open with a recommendation the build does not wait on. Counted
+box-wrapping entry left Blocking ruled, the `!` question it left behind
+joined Blocking, and the constructor's spelling joined Open with a
+recommendation the build does not wait on. Counted
 from the ledger by reading its `###` headings, which is what this line has
 always claimed to do and had stopped doing TWICE. On 2026-09-05 it said nineteen while the ledger
 held three; fifteen had been gaveled and had left the file as the lifecycle
@@ -346,7 +350,9 @@ four of the six it named had been ruled or shipped since. A count maintained
 by hand goes stale by default, so `tests/the_status_index_counts_the_ledger.rs`
 now reads both files and fails when this sentence and the ledger disagree.
 
-Nothing is blocking. The three open are the box constructor's spelling,
+The one blocking is what `!` promises the checker: a box at the read, or
+the value on the programmer's word, with a miss halting at runtime; the
+recommendation is the second. The three open are the box constructor's spelling,
 recommended `effect`, which cloud builds against unless Clay names another;
 the book teaching the boundary language, whose campaign ran on 2026-09-13 and
 which now owes only ch04's "nothing is asked of the signature" framing,
