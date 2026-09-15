@@ -717,23 +717,35 @@
 # with are bytes, and every binary calls the refill; the index's two arms
 # and the ascii fill laid out once each are the rest of the fall.
 #
-jsonbench text=115618
-encodebench text=136130
-oneshot text=125666
-basket text=112818
-widebench text=145138
+# 2026-09-15 (kanso#1430): a long copy is a cold call, and the slice door's
+# rare arms are too. Six rows RISE by 96 or 64 bytes and four FALL by 16 or
+# 32: jsonbench 115,618 -> 115,714, encodebench 136,130 -> 136,226, oneshot
+# 125,666 -> 125,762, widebench 145,138 -> 145,234, livebench 127,218 ->
+# 127,314, runbench 301,954 -> 302,018; basket 112,818 -> 112,802, pendbench
+# 90,898 -> 90,866, scanbench 192,434 -> 192,402, readbench 55,298 ->
+# 55,266. Four hold. Summed, text 1,707,852 -> 1,708,284, +432.
+#
+# The six that rise link the slice door, whose two new wrappers are 96
+# bytes; the four that fall link k_copy_short and lost the inline memcpy
+# dispatch a call replaces.
+#
+jsonbench text=115714
+encodebench text=136226
+oneshot text=125762
+basket text=112802
+widebench text=145234
 deepbench text=81602
 escapebench text=54754
-pendbench text=90898
+pendbench text=90866
 indexbench text=58418
-scanbench text=192434
+scanbench text=192402
 digestbench text=109906
-readbench text=55298
-livebench text=127218
+readbench text=55266
+livebench text=127314
 # 2026-09-10 (kanso#1362): the backends build the partial over a value. Every
 # one of the fourteen rows RISES, by 2,096 bytes on eight of them and 2,432 on
 # the other six: k_partial0..4 and the branch each of k_call0..4 gains are in
 # src/runtime.c, which is linked into every program. The 336-byte spread is the
 # arms a program's own dispatch makes reachable. Machine-code size carries no
 # welfare term (ruled 2026-09-05); this vein is exact and watched on its own.
-runbench text=301954
+runbench text=302018

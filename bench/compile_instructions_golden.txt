@@ -1497,4 +1497,11 @@
 # above say; regenerated from the base CI last ran, stated, not reasoned
 # from. compile_allocs held at 27,937 and compile_memory is byte-identical.
 #
-compile_instructions=42870366
+# 2026-09-15 (kanso#1430): a long copy is a cold call, a RUNTIME change,
+# and this row moved anyway: 42,870,366 -> 42,871,412, +1,046 (+0.0024%), on the base
+# kanso#1429 left. That is the value the row held before kanso#1429, to the
+# instruction: the layout moved back. Regenerated from the base CI last
+# ran, stated, not reasoned from. compile_allocs held at 27,937 and
+# compile_memory is byte-identical.
+#
+compile_instructions=42871412

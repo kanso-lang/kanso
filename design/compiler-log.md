@@ -2544,3 +2544,79 @@ The three compile rows FALL by layout: compile_instructions 42,872,288 ->
 42,870,366 (-1,922), entry_instructions 144,041,140 -> 144,035,949
 (-5,191), library_instructions 144,841,869 -> 144,836,225 (-5,644).
 compile_allocs held at 27,937 and compile_memory is byte-identical.
+
+## 2026-09-15 — a long copy is a cold call, and the slice door's rare arms are too
+
+Two more frames of the shape the preserve_most entry above describes.
+
+`k_map_lit` and `k_mklist` copy their items inline when there are a few
+and call memcpy when there are more, and the call is why both opened with
+three pushes: 273,339 map literals and 300,479 list literals a run paid
+them for a copy 98 of them and 16,011 of them respectively make. The
+same call sat inside `k_copy_short`, the string copy inlined into every
+string builder, behind its sixteen-byte threshold. All three go through
+`k_copy_cold` now, a preserve_most wrapper around memcpy, and the three
+functions open with no pushes. The wrapper costs twenty-one a call over
+26,551 calls, and `k_b_join`, whose copies are long and many, pays
+199,822 of them alone.
+
+`k_b_utf8_slice_raw`, the decoder's token door at 861,498 calls a run,
+opened with three pushes for the two utf-8 validators it calls 16,929
+times, and the validators could not carry preserve_most themselves:
+`k_b_utf8` calls the scalar one 117,513 times a run on its own strings,
+and measured that way the attribute cost 1,613,304 there for what it
+saved here. So the slice door validates through `k_utf8_bad_rare`, the
+same ascii test with the two validators behind preserve_most wrappers,
+and its entry is one `push %rax`; the wrappers cost seventeen a call over
+16,929.
+
+Measured on the container, `env -i` under callgrind, both binaries in one
+directory under equal-length names, run from the repository root, on the
+base kanso#1429 leaves:
+
+    runbench    1,969,066,916 -> 1,962,311,522    -6,755,394   -0.3431%
+    jsonbench   1,211,697,168 -> 1,200,857,142   -10,840,026   -0.8946%
+
+`k_b_utf8_slice_raw` falls five a call, `k_map_lit` six, `k_mklist` five,
+`k_b_append_grow` two, to the instruction, and `k_utf8_bad_scalar` does
+not move. Output is byte-identical on both programs.
+
+Rows `cold_copy` and `rare_door`. The first mutation inlines the wrapper
+back, the second sends the slice door through the plain validator door.
+
+**CI's sitting, on the base kanso#1429 left.** The work vein reads
+jsonbench 1,229,738,040 -> 1,218,898,014 (-10,840,026, -0.8815%), the
+container's A/B to the instruction, and runbench 1,977,087,740 ->
+1,970,132,223 (-6,955,517, -0.3518%), 200,123 deeper than the container's
+-6,755,394. Seven more rows fall: deepbench -259,997, oneshot -72,222,
+encodebench -70,214, livebench -63,843, work_escapebench 82,999,058 ->
+82,993,058 (-6,000), scanbench -4,817, pendbench -3,407. Five RISE, and they are the wrapper's price:
+work_digestbench 9,813,332 -> 9,944,479 (+131,147, +1.3364%), work_basket
+34,433,106 -> 34,534,020 (+100,914, +0.2931%), work_widebench 32,837,013
+-> 32,845,030 (+8,017), work_indexbench 3,085,763 -> 3,086,146 (+383),
+work_readbench 4,629,808 -> 4,629,832 (+24). A copy of sixteen bytes or
+more goes through `k_copy_cold` now, which saves every register it touches
+before memcpy, so a program whose copies are long and frequent pays that on
+each one and keeps no frame it did not already keep. The digest builds
+such copies.
+
+Machine code: six rows RISE by 96 or 64 bytes and four FALL by 16 or 32;
+summed text 1,707,852 -> 1,708,284 (+432). The six that rise link the
+slice door and its two new wrappers; the four that fall link
+`k_copy_short` and lost the inline memcpy dispatch a call replaces.
+
+The three compile rows RISE by layout, and to the instruction they are the
+values the rows held before kanso#1429: compile_instructions 42,870,366 ->
+42,871,412 (+1,046), entry_instructions 144,035,949 -> 144,040,625
+(+4,676), library_instructions 144,836,225 -> 144,841,583 (+5,358).
+compile_allocs held at 27,937 and compile_memory is byte-identical.
+
+**Round three: the render harness lifts the copy it calls.**
+`tests/every_rendered_float_reads_back_as_itself.rs` cuts `k_copy_short`
+out of runtime.c by its declaration line and compiles it beside ryū. This
+change made the short copy hand its long case to `k_copy_cold`, and the
+lifted text called a function the harness never carried, so the spec
+failed to compile on both hosts and the ratchet reported its gate ALREADY
+RED. The cut now runs from `k_copy_cold`'s declaration to the short copy's
+closing brace, one span, so a later change to either shape is still read
+from the source and not from a copy. Green on the container in 4.09s.
