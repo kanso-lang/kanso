@@ -400,6 +400,33 @@ int_cold_tail = row
   (breaking "the_int_parser_s_cold_tail_shares_its_frame")
   benchmarks
 
+# Six cold helpers carry preserve_most since 2026-09-15 -- the arena refill,
+# the permanent allocator, the int parser's strtoll tail, the ascii cache's
+# fill and the two arms of an index that allocate or refuse -- so a hot
+# function whose only calls are cold ones opens with no pushes. The mutation
+# strips the attribute from all six and the pushes return. Every value out is
+# identical either way, so the work vein is the only thing that can see it.
+cold_registers = row
+  "the cold helpers clobbering their callers' registers"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_cold_helpers_clobber_their_callers_registers")
+  benchmarks
+
+# k_b_at's two arms that allocate or refuse are separate cold functions since
+# 2026-09-15, so the arm every runbench index takes carries no frame; the
+# mutation inlines both back and the six pushes return to every index. The
+# value out is identical either way, so the work vein is the only thing that
+# can see it.
+index_cold_arms = row
+  "the index's allocating arms sharing its frame"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_index_s_allocating_arms_share_its_frame")
+  benchmarks
+
 machine_code = row
   "the machine code changing size"
   true
@@ -1259,7 +1286,9 @@ rows_b1 = text/concat rows_b1a (text/concat rows_b1z [live_counters clean_run])
 
 rows_b1r0 = text/concat rows_b1 [emitted_code emitted_others remainder]
 
-rows_b1r = text/concat rows_b1r0 [digit_pairs leading_zeros int_cold_tail]
+rows_b1r1 = text/concat rows_b1r0 [digit_pairs leading_zeros int_cold_tail]
+
+rows_b1r = text/concat rows_b1r1 [cold_registers index_cold_arms]
 
 rows_b1b = text/concat rows_b1r [machine_code]
 

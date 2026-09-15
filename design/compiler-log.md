@@ -4849,3 +4849,91 @@ The three compile rows RISE by layout: compile_instructions 42,871,412 ->
 42,872,288 (+876), entry_instructions 144,040,625 -> 144,041,140 (+515),
 library_instructions 144,841,583 -> 144,841,869 (+286). compile_allocs
 held at 27,937 and compile_memory is byte-identical.
+
+## 2026-09-15 — the cold helpers stop clobbering their callers' registers
+
+A hot runtime function that calls nothing on its usual path still opened
+with a frame when its unusual path called something. `k_b_slice_raw` is
+two comparisons and a sixteen-byte store, and it opened with three pushes
+because `k_bytes_view` bumps the arena and the bump's refill is a call;
+the compiler pinned the slice's bounds in callee-saved registers so they
+would survive a call a run makes 1,278 times, and 417,483 calls paid the
+pushes to keep them there. `k_map_lit`, `k_rec`, `k_b_append_slice` and
+`k_b_push` had the same shape over the same refill.
+
+The refill carries `preserve_most` now, and so do five more helpers a hot
+function calls and nothing else: `k_alloc_perm`, `k_b_to_int_slow`,
+`k_ascii_fill`, `k_b_at_wide_miss` and `k_b_at_rest`. A preserve_most
+callee saves every register it touches, so a caller may leave its live
+values in caller-saved registers across the call, and a function whose
+only calls are to these helpers opens with no pushes. The helper pays the
+saves instead: the refill went from 37 instructions a call to 49, over
+1,278 calls. clang emits the convention on x86-64 and aarch64, which is
+every host this runtime is compiled for; a wasm target would ignore it
+with a warning, and the runtime is never compiled for one.
+
+Three cuts went with it, each measured on its own:
+
+- `k_b_at`'s two arms that allocate or refuse -- a wide character the
+  cache does not hold, and a map or an unindexable value -- are separate
+  cold functions. Alone that was runbench -3,794,934: the index lost its
+  forty-byte reservation and one push, and kept five for `k_str_n`'s
+  ascii-cache fill, which was inlined into it.
+- The fill is its own preserve_most function, `k_ascii_fill`. With it out
+  of line the inliner declined `k_str_n` at two sites, `k_b_slice` and
+  `k_b_utf8_slice_raw`, and 205,098 calls a run paid twenty-three
+  instructions each: the composite read -11,810,628 with 4,712,914 of
+  frame given back in `k_str_n`'s own row.
+- `k_str_n` is `always_inline`. Nothing emitted calls it, though the IR
+  declares it. That took the last 1,984,491.
+
+Measured on the container, `env -i` under callgrind, both binaries in one
+directory under equal-length names, run from the repository root, on the
+base kanso#1428 leaves:
+
+    runbench    1,982,862,035 -> 1,969,066,916   -13,795,119   -0.6957%
+    jsonbench   1,226,233,289 -> 1,211,697,168   -14,536,121   -1.1854%
+
+The refill alone was runbench -5,195,902 and jsonbench -7,011,888, four
+instructions a call to the instruction in each of the five functions
+named above and two in `k_b_utf8`, with the binary the same size to the
+byte. Output is byte-identical on both programs at every step.
+
+**The two shapes this rules out.** Outlining a cold tail without the
+attribute was kanso#1428, and it only clears the frame when the tail was
+the frame's only reason; `k_b_at` kept five pushes that way. The attribute
+without the outlining reaches only the helpers that already exist; the
+index's arms and the ascii fill were inline, so there was nothing to mark.
+Each half needed the other, which is why they ship together.
+
+Rows `cold_registers` and `index_cold_arms`. The first mutation strips
+`preserve_most` from all six helpers; the second inlines the index's two
+arms back.
+
+**CI's sitting, on the base kanso#1428 left.** The work vein reads
+runbench 1,990,347,291 -> 1,977,087,740 (-13,259,551, -0.6662%) and
+jsonbench 1,243,742,261 -> 1,229,738,040 (-14,004,221, -1.1260%), where
+the container's A/B read -13,795,119 and -14,536,121: the runner's clang
+keeps a little more frame than the container's, as it did on kanso#1428.
+Eight more rows fall, deepbench -2,179,955, widebench -191,892,
+encodebench -115,872, indexbench -99,535, livebench -97,289, oneshot
+-90,495, digestbench -23,820, pendbench -7,166. Four RISE, and they are
+the outlining's own price: work_basket 34,281,871 -> 34,433,106
+(+151,235, +0.4412%), work_escapebench 82,969,017 -> 82,999,058 (+30,041),
+work_scanbench 528,870,249 -> 528,872,901 (+2,652), work_readbench
+4,629,745 -> 4,629,808 (+63). An index whose container is a map reaches `k_b_at_rest` by a call
+now, the ascii fill is a call, and the refill saves every register it
+touches on each call, so a program that takes those paths and holds little
+live across them pays and collects nothing. Which of the three basket pays
+was not attributed.
+
+All fourteen machine-code rows FALL, 928 to 2,432 bytes each; summed
+1,730,204 -> 1,707,852 (-22,352). The container sized the refill's
+attribute alone as neutral and never sized the composite: the pushes and
+pops a caller no longer opens with are bytes, and every binary calls the
+refill.
+
+The three compile rows FALL by layout: compile_instructions 42,872,288 ->
+42,870,366 (-1,922), entry_instructions 144,041,140 -> 144,035,949
+(-5,191), library_instructions 144,841,869 -> 144,836,225 (-5,644).
+compile_allocs held at 27,937 and compile_memory is byte-identical.
