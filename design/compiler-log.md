@@ -5345,3 +5345,29 @@ answering yes unconditionally died on the guard page with SIGSEGV.
 
 Row `scan_tail`, mutation `a_short_scan_tail_walks_a_byte_at_a_time` (the
 window test answers no, so the byte walk is the only tail again).
+
+**CI's sitting, on the base kanso#1433 left.** The work vein reads runbench
+1,904,577,350 -> 1,871,522,584 (-33,054,766, -1.7356%), 2,354,376 deeper than
+the container's -30,700,390, and jsonbench 1,187,809,626 -> 1,185,398,676
+(-2,410,950, -0.2030%) where the container had read +599,400. Four more
+fall, and the two the container never measured fall furthest: livebench
+-138,629,673 (-4.5934%), encodebench -110,038,475 (-3.0844%), oneshot
+-362,607 (-1.9360%), scanbench -502,488 (-0.1003%). An escape scan's runs
+between specials are a few bytes each, so nearly every one of them was a
+tail and ended in the byte walk. The other eight hold to the instruction.
+Against main two work rows still stand above it, neither moved here:
+work_escapebench 82,999,058 -> 85,995,606 (+2,996,548), the accumulator's
+lifetime priced in kanso#1432's entry, and work_digestbench 9,813,332 ->
+9,838,994 (+25,662), kanso#1430's wrapper price less the falls since.
+
+Machine code: seven rows RISE and seven hold, summed text 1,718,924 ->
+1,746,636 (+27,712): runbench +7,088, oneshot +6,368, livebench +6,368,
+jsonbench +5,984, scanbench +976, widebench +496, encodebench +432. Each
+inlined scan site carries the masked tail load beside its loop, and the
+below-floor scanners carry it twice. Against main the summed `text` vein is
+a RISE, 1,707,852 -> 1,746,636 (+38,784), the tail and kanso#1433's inlining
+priced together and bought with the falls above. The three compile rows fall
+on the base by layout, -3,385, -9,386 and -9,562, and against main
+`library_instructions` reads 144,836,225 -> 144,836,246 (+21), the layout
+vein's noise.
+
