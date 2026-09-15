@@ -218,6 +218,18 @@ goldens = row
   (breaking "drifted_micro_golden")
   no_setup
 
+# A rescue or annotate callback is entered with the failure itself. The
+# emitter trusts inference for a group's entry guard, so a callback lambda
+# whose parameter is seeded as never failing costs native the guard on the
+# group it hands the err to, and the interpreter is the oracle that refuses.
+callback_err = row
+  "a chain callback's parameter seeded as never failing"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_chain_callbacks_parameter_never_fails")
+  release
+
 # The four `cargo test --test golden` rows above and below all point at the
 # micro corpus or the mem corpus. The error corpus — 161 fixtures pinning
 # every diagnostic the language emits — had no row at all, so nothing had
@@ -1535,7 +1547,9 @@ rows_c1l = text/concat rows_c1k [coverage_page coverage_page_format]
 
 rows_c1m = text/concat rows_c1l [beat_cursor]
 
-rows_c = text/concat rows_c1m [itself]
+rows_c1n = text/concat rows_c1m [callback_err]
+
+rows_c = text/concat rows_c1n [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
