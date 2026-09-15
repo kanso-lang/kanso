@@ -183,7 +183,7 @@ KValue k_thunk_new(long long site, int argc, ...) {
     } else {
         t = (KThunk*)malloc(sizeof(KThunk));
     }
-    k_stat_thunk_allocs++;
+    if (K_COUNTING) k_stat_thunk_allocs++;
     t->rc = 1;
     t->site = site;
     t->forced = K_MEMO_NONE;
@@ -239,7 +239,7 @@ static void k_thunk_release_cell(KThunk* t) {
     k_thunk_drop_args(t);
     t->next_free = k_thunk_free;
     k_thunk_free = t;
-    k_stat_thunk_frees++;
+    if (K_COUNTING) k_stat_thunk_frees++;
 }
 
 static void k_thunk_drop_args(KThunk* t) {
@@ -255,13 +255,13 @@ static void k_thunk_drop_args(KThunk* t) {
 /* A cell handed onward in a tail call outlives its frame by design;
    count it so live-to-exit cells are always attributable. */
 void k_thunk_note_escape(KValue cell) {
-    if (cell.tag == K_THUNK) k_stat_thunk_escaped++;
+    if (K_COUNTING && cell.tag == K_THUNK) k_stat_thunk_escaped++;
 }
 
 KValue k_thunk_release_unless(KValue cell, KValue result) {
     if (cell.tag != K_THUNK) return result;
     if (result.tag == K_THUNK && result.payload == cell.payload) {
-        k_stat_thunk_escaped++;
+        if (K_COUNTING) k_stat_thunk_escaped++;
         return result;
     }
     k_thunk_release_cell((KThunk*)cell.payload);
@@ -326,7 +326,7 @@ static __attribute__((noinline)) KValue k_force_slow(KThunk* t) {
         t->forced = K_MEMO_NONE;
     }
     if (t->site == K_SITE_BLACKHOLE) k_die("a lazy binding demands its own value");
-    k_stat_thunk_evals++;
+    if (K_COUNTING) k_stat_thunk_evals++;
     KValue answer = d_thunk_eval(t->site, t->args);
     t->result = answer;
     if (!k_memo_outlives(answer)) {
@@ -342,7 +342,7 @@ static __attribute__((noinline)) KValue k_force_slow(KThunk* t) {
 KValue k_force(KValue v) {
     if (v.tag != K_THUNK) return v;
     KThunk* t = (KThunk*)v.payload;
-    k_stat_thunk_forces++;
+    if (K_COUNTING) k_stat_thunk_forces++;
     if (t->forced == K_MEMO_KEPT) return t->result;
     return k_force_slow(t);
 }
@@ -609,12 +609,12 @@ static void k_arena_push(size_t need) {
         b = malloc(sizeof(KBlock) + need);
         if (!b) { fputs("out of memory\n", stderr); exit(1); }
         b->cap = need;
-        k_stat_blocks++;
+        if (K_COUNTING) k_stat_blocks++;
     }
     b->next = k_blocks;
     k_blocks = b;
     k_live_block_bytes += (long long)b->cap;
-    if (k_live_block_bytes > k_stat_peak_block_bytes) {
+    if (K_COUNTING && k_live_block_bytes > k_stat_peak_block_bytes) {
         k_stat_peak_block_bytes = k_live_block_bytes;
     }
     k_arena = (char*)(b + 1);
@@ -673,7 +673,7 @@ static inline __attribute__((always_inline)) void* k_alloc(size_t n) {
        not held since the constructor above began setting it: 7.3 million
        allocations a run on the run program, one instruction each. */
     if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) {
-        k_stat_allocs++;
+        if (K_COUNTING) k_stat_allocs++;
         k_stat_alloc_bytes += (long long)n;
     }
     if (__builtin_expect(n > k_arena_left, 0)) {
@@ -874,7 +874,7 @@ static long long k_chunkreg_spill[K_BEAT_MAX];
 static void k_chunkreg_flush(int d) {
     for (int i = 0; i < k_chunkreg_n[d]; i++) {
         if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) {
-            k_stat_bytes_freed++;
+            if (K_COUNTING) k_stat_bytes_freed++;
             k_stat_held_live -= (long long)sizeof(KBuf) + k_chunkreg[d][i]->cap;
         }
         free(k_chunkreg[d][i]);
@@ -1003,7 +1003,7 @@ void k_beat_push(void) {
 }
 
 void k_beat_iter(void) {
-    k_stat_beat_iters++;
+    if (K_COUNTING) k_stat_beat_iters++;
     if (k_beat_depth > 0 && k_beat_depth <= K_BEAT_MAX) {
         k_beat_rewind(&k_beat_stack[k_beat_depth - 1]);
     }
@@ -1583,8 +1583,8 @@ static void* k_copy_alloc(KCopy* cp, size_t n) {
        reference instead, so this is the side of that trade beats can measure.
        The arena path is counted here and in allocs both: the two ask different
        questions, one what was allocated and one why. */
-    k_stat_evac_bytes += (long long)n;
-    k_stat_evac_allocs++;
+    if (K_COUNTING) k_stat_evac_bytes += (long long)n;
+    if (K_COUNTING) k_stat_evac_allocs++;
     if (cp->to_arena) return k_alloc(n);
     if (cp->in_ten) return k_ten_alloc(n);
     void* p = cp->buf->data + cp->buf->used;
@@ -1940,7 +1940,7 @@ static KValue k_deep_copy(KValue v, KCopy* cp) {
         if (!cp->deep && k_interior_survives(v, p, cp->mark)) return v;
         KPtrSlot* slot = k_ptrmap_at(&k_copy_map, p, &k_copy_map_live);
         if (slot->gen == k_copy_map.gen && slot->key == p) {
-            k_stat_carry_dedup++;
+            if (K_COUNTING) k_stat_carry_dedup++;
             return v;
         }
         k_copy_map_put(p, p);
@@ -1951,7 +1951,7 @@ static KValue k_deep_copy(KValue v, KCopy* cp) {
     {
         KPtrSlot* slot = k_ptrmap_at(&k_copy_map, p, &k_copy_map_live);
         if (slot->gen == k_copy_map.gen && slot->key == p) {
-            k_stat_carry_dedup++;
+            if (K_COUNTING) k_stat_carry_dedup++;
             KValue out = v;
             out.payload = k_ptr(slot->val);
             return out;
@@ -2312,7 +2312,7 @@ KValue k_cohort_pop(KValue r) {
         k_beat_depth--;
         k_beat_rewind(m);
         k_spare_release(2);
-        k_stat_cohort_frees++;
+        if (K_COUNTING) k_stat_cohort_frees++;
         return r;
     }
     /* the survivor-ratio guard: the threshold above counts what grew, not
@@ -2343,8 +2343,8 @@ KValue k_cohort_pop(KValue r) {
     k_carry_reset();
     k_carry_stage(r);
     k_beat_iter_carry();
-    k_stat_beat_iters--; /* the dance is a free, not a loop iteration */
-    k_stat_cohort_frees++;
+    if (K_COUNTING) k_stat_beat_iters--; /* the dance is a free, not a loop iteration */
+    if (K_COUNTING) k_stat_cohort_frees++;
     r = k_carry_take(0);
     r = k_beat_pop(r);
     /* the carry pair is sized for a loop that will stage again; a cohort
@@ -2398,7 +2398,7 @@ void k_carry_stage_kept(KValue v) {
 
 
 void k_beat_iter_carry(void) {
-    k_stat_beat_iters++;
+    if (K_COUNTING) k_stat_beat_iters++;
     if (k_beat_depth <= 0 || k_beat_depth > K_BEAT_MAX) return;
     for (long long i = 0; i < k_carry_n; i++) {
         long long tag = k_carry_slots[i].tag;
@@ -2446,7 +2446,7 @@ void k_beat_iter_carry(void) {
    back reclaimed, since-reused memory. Permanent storage is the only cache
    that is sound across beats. */
 static __attribute__((noinline, preserve_most)) void* k_alloc_perm(size_t n) {
-    k_stat_perm_allocs++;
+    if (K_COUNTING) k_stat_perm_allocs++;
     void* p = malloc(n);
     if (!p) { fputs("out of memory\n", stderr); exit(1); }
     return p;
@@ -3067,9 +3067,9 @@ KValue k_b_str_builder(KValue sv) {
     if (!base) { fputs("out of memory\n", stderr); exit(1); }
     char* room = base + K_STR_HEAD;
     if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) {
-        k_stat_allocs++;
+        if (K_COUNTING) k_stat_allocs++;
         k_stat_alloc_bytes += cap + 1;
-        k_stat_bytes_malloc++;
+        if (K_COUNTING) k_stat_bytes_malloc++;
         k_stat_sh_str += (long long)sizeof(KStr);
     }
     memcpy(room, src->data, (size_t)src->len);
@@ -3108,9 +3108,9 @@ KValue k_concat_arr_mut(long long n, const KValue* parts) {
         if (!base) { fputs("out of memory\n", stderr); exit(1); }
         char* room = base + K_STR_HEAD;
         if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) {
-            k_stat_allocs++;
+            if (K_COUNTING) k_stat_allocs++;
             k_stat_alloc_bytes += cap + 1;
-            k_stat_bytes_malloc++;
+            if (K_COUNTING) k_stat_bytes_malloc++;
         }
         memcpy(room, acc->data, (size_t)acc->len);
         long long carried = k_str_count(acc);
@@ -4331,7 +4331,7 @@ static inline __attribute__((always_inline)) long long k_render_number(KValue v,
                double never needs more, and rarely fewer, than 15 digits */
             /* the ryu digit core computes the true shortest round-trip
                representation directly — no probing, no dtoa */
-            k_stat_ryu_renders++;
+            if (K_COUNTING) k_stat_ryu_renders++;
             if (d < 0) {
                 /* Straight into the caller's buffer behind the sign. The
                    scratch this replaced was 63 bytes and a strcpy of the whole
@@ -6121,9 +6121,9 @@ static __attribute__((noinline, cold, preserve_most)) KValue* k_buf_perm(long lo
     if (k_perm_live > k_perm_peak) k_perm_peak = k_perm_live;
     if (!b) { fputs("out of memory\n", stderr); exit(1); }
     if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) {
-        k_stat_allocs++;
+        if (K_COUNTING) k_stat_allocs++;
         k_stat_alloc_bytes += (long long)(sizeof(KBuf) + sizeof(KValue) * (size_t)cap);
-        k_stat_bytes_malloc++;
+        if (K_COUNTING) k_stat_bytes_malloc++;
     }
     b->cap = -cap;
     b->used = 0;
@@ -6537,7 +6537,7 @@ static KValue* k_view_alloc(long long cap) {
     char* raw = malloc(sizeof(KValue) + sizeof(KValue) * 2 * (size_t)cap);
     if (!raw) { fputs("out of memory\n", stderr); exit(1); }
     if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) {
-        k_stat_allocs++;
+        if (K_COUNTING) k_stat_allocs++;
         k_stat_alloc_bytes += (long long)(sizeof(KValue) + sizeof(KValue) * 2 * (size_t)cap);
     }
     *(long long*)raw = cap;
@@ -6554,7 +6554,7 @@ static long long k_view_cap(KValue* view) {
 
 static void k_view_free(KValue* view) {
     if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) {
-        k_stat_view_frees++;
+        if (K_COUNTING) k_stat_view_frees++;
         long long cap = k_view_cap(view);
         k_stat_held_live -= (long long)(sizeof(KValue) + sizeof(KValue) * 2 * (size_t)cap);
     }
@@ -6754,14 +6754,14 @@ KValue k_b_put_mut(KValue mv, KValue key, KValue val) {
         k_note_if_carried(val);
         buf->used += 2;
         m->len++;
-        k_stat_put_mut_fast++;
+        if (K_COUNTING) k_stat_put_mut_fast++;
         k_map_view_insert(m, key, val);
         return mv;
     }
     /* growth at a proven-unique site: the map keeps its header, the pairs
        move to a bigger buffer, and the outgrown one goes to the shelf */
     {
-        k_stat_put_mut_grow++;
+        if (K_COUNTING) k_stat_put_mut_grow++;
         long long need = 2 * (m->len + 1);
         long long cap = 8;
         while (cap < need) cap <<= 1;
@@ -7077,7 +7077,7 @@ static KValue k_utf8_bad_wide(const char* data, long long len, const char* origi
 static inline __attribute__((always_inline))
 KValue k_utf8_bad(const char* data, long long len, const char* origin,
                   long long* chars) {
-    k_stat_utf8_bytes += len;
+    if (K_COUNTING) k_stat_utf8_bytes += len;
     if (k_all_ascii(data, len)) {
         if (chars) *chars = len;
         return k_none();
@@ -7102,7 +7102,7 @@ KValue k_utf8_bad_wide_cold(const char* data, long long len, const char* origin,
 static inline __attribute__((always_inline))
 KValue k_utf8_bad_rare(const char* data, long long len, const char* origin,
                        long long* chars) {
-    k_stat_utf8_bytes += len;
+    if (K_COUNTING) k_stat_utf8_bytes += len;
     if (k_all_ascii(data, len)) {
         if (chars) *chars = len;
         return k_none();
@@ -7454,7 +7454,7 @@ static KValue k_utf8_finish(KValue bv, const char* origin) {
             s->data = (char*)b->data;
             s->cap = 0;
             k_str_seed_count(s, chars);
-            k_stat_utf8_zerocopy++;
+            if (K_COUNTING) k_stat_utf8_zerocopy++;
             KValue v; v.tag = K_STR; v.payload = k_ptr(s); return v;
         }
     }
@@ -7912,8 +7912,8 @@ static long long k_utf8_chars(const unsigned char* p, long long len) {
    slice -- are the hot ones, so it saves the registers it touches and they
    keep no frame for it. */
 static __attribute__((noinline, preserve_most)) long long k_str_chars_scan(KStr* s) {
-    k_stat_str_scans++;
-    k_stat_str_scan_bytes += s->len;
+    if (K_COUNTING) k_stat_str_scans++;
+    if (K_COUNTING) k_stat_str_scan_bytes += s->len;
     long long count = k_utf8_chars((const unsigned char*)s->data, s->len);
     if (s->cap == 0 && count < 2147483647LL) s->cap = (int)(-count - 1);
     return count;
@@ -8050,7 +8050,7 @@ static inline int k_tail_window(const unsigned char* p) {
    than the calls cost the work vein. */
 __attribute__((always_inline)) long long k_b_find2_raw(const unsigned char* d, long long len, long long from,
                         long long a, long long b) {
-    k_stat_find2_calls++;
+    if (K_COUNTING) k_stat_find2_calls++;
     long long p = from < 1 ? 0 : from - 1;
     unsigned char ca = (unsigned char)(a & 0xff);
     unsigned char cb = (unsigned char)(b & 0xff);
@@ -8096,13 +8096,13 @@ __attribute__((always_inline)) long long k_b_find2_raw(const unsigned char* d, l
 }
 
 KValue k_b_find2(KValue cs, KValue from, KValue a, KValue b) {
-    if (!k_not_failure(cs)) { k_stat_find2_calls++; return cs; }
-    if (!k_not_failure(from)) { k_stat_find2_calls++; return from; }
+    if (!k_not_failure(cs)) { if (K_COUNTING) k_stat_find2_calls++; return cs; }
+    if (!k_not_failure(from)) { if (K_COUNTING) k_stat_find2_calls++; return from; }
     if (!k_not_failure(a) || !k_not_failure(b)) {
-        k_stat_find2_calls++;
+        if (K_COUNTING) k_stat_find2_calls++;
         return k_both_or_either(a, b);
     }
-    if (cs.tag != K_BYTES) { k_stat_find2_calls++; k_die("find2 takes bytes"); }
+    if (cs.tag != K_BYTES) { if (K_COUNTING) k_stat_find2_calls++; k_die("find2 takes bytes"); }
     KBytes* by = k_as_bytes(cs);
     return k_int(k_b_find2_raw(by->data, by->len, from.payload, a.payload,
                                b.payload));
@@ -8154,7 +8154,7 @@ static KValue k_b_append_into(KValue acc, KValue x, int mutate) {
         if (bcap) {
             KBuf* bbuf = ((KBuf*)data) - 1;
             if (bbuf->used == alen && alen + 1 <= bcap) {
-                k_stat_append_fast++;
+                if (K_COUNTING) k_stat_append_fast++;
                 data[alen] = (unsigned char)(x.payload & 0xff);
                 bbuf->used = alen + 1;
                 if (mutate) {
@@ -8203,7 +8203,7 @@ static inline KValue k_b_append_range(KValue acc, KBytes* a, const unsigned char
     if (acap) {
         KBuf* buf = ((KBuf*)a->data) - 1;
         if (buf->used == a->len && a->len + n <= acap) {
-            k_stat_append_fast++;
+            if (K_COUNTING) k_stat_append_fast++;
             /* A comma, a colon, a brace: the encoder's commonest append is one
                byte, and a call into memcpy to move it costs more than the
                move. */
@@ -8239,9 +8239,9 @@ static __attribute__((noinline, cold, preserve_most)) KBuf* k_bytes_buf_malloc(l
     KBuf* buf = malloc(sizeof(KBuf) + (size_t)cap);
     if (!buf) { fputs("out of memory\n", stderr); exit(1); }
     if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) {
-        k_stat_allocs++;
+        if (K_COUNTING) k_stat_allocs++;
         k_stat_alloc_bytes += (long long)(sizeof(KBuf) + (size_t)cap);
-        k_stat_bytes_malloc++;
+        if (K_COUNTING) k_stat_bytes_malloc++;
         k_stat_held_live += (long long)(sizeof(KBuf) + (size_t)cap);
         if (k_stat_held_live > k_stat_held_peak) k_stat_held_peak = k_stat_held_live;
     }
@@ -8249,7 +8249,7 @@ static __attribute__((noinline, cold, preserve_most)) KBuf* k_bytes_buf_malloc(l
 }
 static __attribute__((noinline, cold, preserve_most)) void k_bytes_buf_release(KBuf* old) {
     if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) {
-        k_stat_bytes_freed++;
+        if (K_COUNTING) k_stat_bytes_freed++;
         k_stat_held_live -= (long long)sizeof(KBuf) + old->cap;
     }
     free(old);
@@ -8258,7 +8258,7 @@ static __attribute__((noinline, cold, preserve_most)) void k_bytes_buf_release(K
 static __attribute__((noinline)) KValue k_b_append_grow(KValue acc, KBytes* a,
                                                         const unsigned char* src,
                                                         long long n, int mutate) {
-    k_stat_append_grow++;
+    if (K_COUNTING) k_stat_append_grow++;
     long long cap = 2 * (a->len + n);
     if (cap < 64) cap = 64;
     /* Where the grown buffer lives depends on where its header dies. A
@@ -8366,7 +8366,7 @@ KValue k_b_append_rendered(KValue acc, KValue v, long long mutate) {
     if (acc.tag != K_BYTES) k_die("append takes bytes and a string, bytes, or byte");
     char buf[64];
     long long n = k_render_number(v, buf);
-    k_stat_append_rendered++;
+    if (K_COUNTING) k_stat_append_rendered++;
     KBytes* a = k_as_bytes(acc);
     long long acap = a->cap & ~1LL;
     if (acap) {
@@ -8376,7 +8376,7 @@ KValue k_b_append_rendered(KValue acc, KValue v, long long mutate) {
            three words whatever the length, and the call into memcpy for a
            handful of digits is not made. */
         if (kb->used == a->len && a->len + 24 <= acap) {
-            k_stat_append_fast++;
+            if (K_COUNTING) k_stat_append_fast++;
             memcpy((unsigned char*)a->data + a->len, buf, 24);
             kb->used = a->len + n;
             if (mutate) {
@@ -8406,7 +8406,7 @@ KValue k_b_append_rendered(KValue acc, KValue v, long long mutate) {
 __attribute__((always_inline)) long long k_b_find2_below_raw(const unsigned char* d, long long len,
                               long long from, long long a, long long b,
                               long long floor_v) {
-    k_stat_find2_calls++;
+    if (K_COUNTING) k_stat_find2_calls++;
     long long p = from < 1 ? 0 : from - 1;
     unsigned char ca = (unsigned char)(a & 0xff);
     unsigned char cb = (unsigned char)(b & 0xff);
@@ -8460,14 +8460,14 @@ __attribute__((always_inline)) long long k_b_find2_below_raw(const unsigned char
 }
 
 KValue k_b_find2_below(KValue cs, KValue from, KValue a, KValue b, KValue lim) {
-    if (!k_not_failure(cs)) { k_stat_find2_calls++; return cs; }
-    if (!k_not_failure(from)) { k_stat_find2_calls++; return from; }
+    if (!k_not_failure(cs)) { if (K_COUNTING) k_stat_find2_calls++; return cs; }
+    if (!k_not_failure(from)) { if (K_COUNTING) k_stat_find2_calls++; return from; }
     if (!k_not_failure(a) || !k_not_failure(b)) {
-        k_stat_find2_calls++;
+        if (K_COUNTING) k_stat_find2_calls++;
         return k_both_or_either(a, b);
     }
-    if (!k_not_failure(lim)) { k_stat_find2_calls++; return lim; }
-    if (cs.tag != K_BYTES) { k_stat_find2_calls++; k_die("find2_below takes bytes"); }
+    if (!k_not_failure(lim)) { if (K_COUNTING) k_stat_find2_calls++; return lim; }
+    if (cs.tag != K_BYTES) { if (K_COUNTING) k_stat_find2_calls++; k_die("find2_below takes bytes"); }
     KBytes* by = k_as_bytes(cs);
     return k_int(k_b_find2_below_raw(by->data, by->len, from.payload, a.payload,
                                      b.payload, lim.payload));
@@ -9540,7 +9540,7 @@ static const struct { unsigned long long hi, lo; int e2; } k_el_pow10[] = {
    and writes *out when certain, 0 to defer. w is the digit significand,
    q the decimal exponent — value = w * 10^q. */
 static int k_el_parse(unsigned long long w, long long q, double* out) {
-    k_stat_el_parses++;
+    if (K_COUNTING) k_stat_el_parses++;
     if (w == 0) { *out = 0.0; return 1; }
     static const double exact10[23] = {
         1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11,

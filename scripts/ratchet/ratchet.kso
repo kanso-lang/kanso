@@ -504,6 +504,19 @@ scan_tail = row
   (breaking "a_short_scan_tail_walks_a_byte_at_a_time")
   benchmarks
 
+# Every counter increment sits behind K_COUNTING, so a shipped binary carries
+# none of them; the mutation puts the beat iteration counter's two sites back
+# unguarded, 2,692,767 increments a run on the run program. A counted binary
+# counts the same either way, so the work vein is the only thing that can see
+# it.
+counters_out = row
+  "a counter increment left in a shipped binary"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_beat_iteration_counter_is_counted_in_a_shipped_binary")
+  benchmarks
+
 empty_room = row
   "an empty list literal with no room for a push"
   true
@@ -1387,7 +1400,7 @@ rows_b1r3 = text/concat rows_b1r2 [cold_copy rare_door]
 
 rows_b1r4 = text/concat rows_b1r3 [sweep_helpers slice_walk closure_caps]
 
-rows_b1r = text/concat rows_b1r4 [empty_room scan_inline scan_tail]
+rows_b1r = text/concat rows_b1r4 [empty_room scan_inline scan_tail counters_out]
 
 rows_b1b = text/concat rows_b1r [machine_code]
 

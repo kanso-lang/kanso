@@ -389,4 +389,12 @@
 # from the base CI last ran, stated, not reasoned from. compile_allocs held at
 # 27,937 and compile_memory is byte-identical.
 #
-library_instructions=144836246
+# 2026-09-15 (kanso#1436): the counters a shipped binary was still counting,
+# a RUNTIME change, and this row moved anyway, a RISE: 144,836,246 -> 144,840,900,
+# +4,654 (+0.0032%), on the base kanso#1435 left, and 144,836,225 ->
+# 144,840,900 against main (+4,675). The compiler's own bytes and the layout
+# under them move with src/runtime.c. Regenerated from the base CI last ran,
+# stated, not reasoned from. compile_allocs held at 27,937 and
+# compile_memory is byte-identical.
+#
+library_instructions=144840900

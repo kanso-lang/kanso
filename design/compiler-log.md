@@ -5378,3 +5378,95 @@ on the base by layout, -3,385, -9,386 and -9,562, and against main
 `library_instructions` reads 144,836,225 -> 144,836,246 (+21), the layout
 vein's noise.
 
+## 2026-09-15 — the counters a shipped binary was still counting
+
+kanso#1396 put the runtime's counter sites behind `K_COUNTING`, the macro
+that is 1 in a counted build and 0 in the binary a program ships as, and
+recorded twenty-seven of them leaving. Forty more never did. They were the
+bare increments, `k_stat_beat_iters++` and its kind, with no guard at all:
+the macro guards the dump that reads them, so in a shipped binary the
+counters are written and never read, and the assumption was that a store
+nobody reads is removed at link time. It is not, at least not here: the
+per-instruction profile of kanso#1435's run program shows 6,425,360 counter
+increments a run executing in the shipped binary, `k_stat_beat_iters`
+2,692,767 of them, `k_stat_find2_calls` 2,072,753, `k_stat_append_fast`
+385,040, `k_stat_append_rendered` 379,530, `k_stat_el_parses` 210,177,
+`k_stat_ryu_renders` 191,070, `k_stat_append_grow` 176,697,
+`k_stat_utf8_zerocopy` 175,617, and eleven smaller. Each is a read-modify-
+write of a global, on paths the emitter inlines into every caller.
+
+Every one of the forty now reads `if (K_COUNTING) k_stat_x++;`. A counted
+build increments exactly as before, so every cost golden and every `.mem`
+fixture holds to the byte, and the counters sweep agrees with all of them.
+
+Four more sites were not increments and the sweep for `++` walked past them:
+`k_stat_utf8_bytes += len` at both utf-8 validators, `k_stat_evac_bytes +=
+n` at the evacuation, `k_stat_str_scan_bytes += s->len` at the character
+scan, and the arena peak's `if (live > peak) peak = live` at every block. The
+disassembly of the shipped run program still named all four; they carry the
+same guard now and it names none. Measured alone on the forty-site build,
+runbench -1,012,853 (-0.0546%) and jsonbench -1,426,835 (-0.1231%), output
+byte-identical; the sweep agrees with every golden. A shipped build carries
+no counter at all now, and the check that says so is `objdump -d runbench |
+grep -c k_stat_`, which reads 0.
+
+Container A/B, `env -i` under callgrind, equal-length names in one directory,
+on the kanso#1435 leaves:
+
+    runbench    1,867,578,425 -> 1,854,886,339   -12,692,086   -0.6796%
+    jsonbench   1,172,409,354 -> 1,158,934,066   -13,475,288   -1.1494%
+
+Twice the increments counted. The other half is what the increments cost
+around them: a memory read-modify-write on a global in the middle of an
+inlined fast path holds a register and orders the stores either side of it,
+and the code around each site got shorter when it left. Output
+byte-identical on both.
+
+Row `counters_out`, mutation
+`the_beat_iteration_counter_is_counted_in_a_shipped_binary` (the two
+`k_beat_iter` sites unguarded again, 2,692,767 increments a run).
+
+Three harnesses lift runtime text and compile it on their own: the float
+parse spec, the bytes-capacity spec and the utf-8 differential. The lifted
+text now names `K_COUNTING`, which only src/runtime.c defines, so the first
+and third failed to compile on CI and the second lost its anchor line. The
+float and utf-8 harnesses define `K_COUNTING 0` in front of the lifted text,
+as the scan-tail harness already did, and the capacity spec cuts from the
+guarded line. Seen red on CI at 727cb321 and d7b6acad; the two specs and the
+differential pass here (45,189,025 checked, 0 mismatches).
+
+The guard blinded the utf-8 differential's two ratchet rows on CI a round
+later, at ed7c51b5, and the define was not why. The differential builds the
+door by text and strips the counter line, `k_stat_utf8_bytes += len;`, to
+nothing; with the guard in front of it the strip left a bare
+`if (K_COUNTING)` standing over the next statement, the ascii check, so the
+harness's door skipped straight to the validators on every input and
+`k_all_ascii` was never reached. Both mutations live in `k_all_ascii`, so
+the gate stayed green under each. The strip takes the whole guarded
+statement now; both rows read red again here (`MISMATCH len=1 bytes=80` and
+`len=12 ... e4 5d 13`), and the clean sweep passes.
+
+**CI's sitting, on the base kanso#1435 left.** All fourteen work rows fall:
+work_jsonbench 1,185,398,676 -> 1,169,790,503 (-15,608,173, -1.3167%),
+work_runbench 1,871,522,584 -> 1,857,535,269 (-13,987,315, -0.7474%),
+work_livebench -6,326,619 (-0.2197%), work_encodebench -5,013,110
+(-0.1450%), work_escapebench -1,215,014 (-1.4129%), work_deepbench -965,492
+(-0.2716%), and the other eight by between 232 and 128,315. The container
+had read runbench -13,704,939 and jsonbench -14,902,123 for the two commits
+together; the runner reads both a little deeper. Against main two work rows
+still stand above it, both falling here: work_escapebench 82,999,058 ->
+84,780,592 (+1,781,534), the accumulator's lifetime priced in kanso#1432's
+entry, and work_digestbench 9,813,332 -> 9,830,211 (+16,879), kanso#1430's
+wrapper price less the falls since.
+
+Machine code: all fourteen rows fall, summed `text` 1,746,636 -> 1,737,068
+(-9,568), oneshot and livebench -1,824 each, runbench -1,808, jsonbench
+-1,728; a guarded site compiles to nothing and the code around it shortens.
+Against main the summed text vein is still a RISE, 1,707,852 -> 1,737,068
+(+29,216), kanso#1433's inlining and kanso#1435's masked tail less this. The
+three compile rows rise by layout on the base, compile_instructions
+42,869,800 -> 42,871,759 (+1,959), entry_instructions 144,035,324 ->
+144,040,457 (+5,133), library_instructions 144,836,246 -> 144,840,900
+(+4,654); against main +1,393, +4,508 and +4,675, the compiler's bytes moving
+with src/runtime.c. compile_allocs holds at 27,937 and compile_memory is
+byte-identical. Welfare 69.39 -> 69.44, banked.

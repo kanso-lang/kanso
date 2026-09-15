@@ -89,7 +89,7 @@ fn every_capacity_the_growth_can_produce_is_even_and_reads_back_whole() {
     // From the growth's first statement rather than its head: the head also
     // appears as a forward declaration, and a cut from there ends at the wrong
     // brace and quietly asserts nothing.
-    let grow = cut(&src, "    k_stat_append_grow++;", "\n}");
+    let grow = cut(&src, "    if (K_COUNTING) k_stat_append_grow++;", "\n}");
     assert!(
         grow.contains("        marked = cap | 1;"),
         "the arena regime is no longer bit 0 set in k_b_append_grow"
