@@ -58,6 +58,7 @@ fn a_short_scan_tail_answers_like_the_byte_walk() {
 #include <string.h>
 #include <stdlib.h>
 #include <sys/mman.h>
+#include <unistd.h>
 #if defined(__aarch64__)
 #include <arm_neon.h>
 #elif defined(__x86_64__)
@@ -88,8 +89,11 @@ static long long ref_below(const unsigned char* d, long long len, long long from
 }}
 
 int main(void) {{
-    /* two pages: the strings end in the first, the second is a guard */
-    long page = 4096;
+    /* two pages: the strings end in the first, the second is a guard. The
+       page is the host's, not 4096: Apple silicon maps 16 KiB pages, and
+       an mprotect at +4096 there is refused as unaligned. */
+    long page = sysconf(_SC_PAGESIZE);
+    if (page <= 0) {{ printf("sysconf failed\n"); return 2; }}
     unsigned char* base = mmap(NULL, 2 * page, PROT_READ | PROT_WRITE,
                                MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (base == MAP_FAILED) {{ printf("mmap failed\n"); return 2; }}
