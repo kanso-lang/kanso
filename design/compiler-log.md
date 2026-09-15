@@ -5521,3 +5521,14 @@ frames, per-step tag tests, and library steps of ten instructions each. The
 next run-speed win of a per cent or more is a library or emitter shape, not a
 runtime kernel, and the bytes-free escape scan above is the one with a
 number on it.
+
+Measured, not built: a scratch builtin `text/find2_below_str` that scans a
+string's own bytes for the two specials below a floor and answers 0 for a
+miss, with `escape_onto` building the view only when it hits. Container A/B
+on the same leaves, output byte-identical on both programs: runbench
+1,823,814,374 -> 1,801,576,724 (-22,237,650, -1.2193%), the decoder
+unmoved. More than the view's seventeen instructions predicted, because the
+element loop's beat and the view's arena bytes go with it. It is surface, a
+byte-position scan on a string in a library whose string positions are
+codepoints, so it goes to Clay with this number and is not built here. The
+patch is in the session's scratchpad as escape_str.patch.
