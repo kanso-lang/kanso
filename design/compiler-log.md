@@ -2393,3 +2393,66 @@ library_instructions 144,837,840 -> 144,841,583 (+3,743). `kanso check`
 never reaches the runtime; the bytes of src/runtime.c shift what sits
 where. Regenerated from the base CI ran, stated, not reasoned from.
 compile_allocs held at 27,937 and compile_memory is byte-identical.
+
+## 2026-09-15 — the int parser's cold tail leaves the frame it was sizing
+
+`k_b_to_int` parses a decimal in place: a digit loop over at most eighteen
+bytes, then `strtoll` and two refusals for anything the loop did not
+accept. The loop needs no stack at all, but the calls after it did:
+`strtoll`, `k_str_n`, `k_concat` and `k_err` each clobber the argument
+registers, so the compiler pinned the string's data, length and origin in
+callee-saved ones, and the function opened with five pushes and a frame
+reservation and closed with five pops. Every call paid them, and neither
+benchmark ever reaches the tail — `k_b_to_int_slow` is called zero times
+in runbench and zero in jsonbench. Twelve instructions a call, attributed
+instruction by instruction with `--dump-instr=yes` in task #547.
+
+The tail is its own function now, `noinline, cold`. The fast path's entry
+is one `push %rax` for alignment, and the tail keeps the frame it always
+needed, for the calls that reach it.
+
+Measured on the container, `env -i` under callgrind, both binaries in one
+directory under equal-length names, run from the repository root, on the
+base kanso#1427 leaves:
+
+    runbench    1,985,349,707 -> 1,982,862,035   -2,487,672   -0.1253%
+    jsonbench   1,230,002,489 -> 1,226,233,289   -3,769,200   -0.3064%
+
+The whole of both falls is `k_b_to_int`'s own count: 21,770,496 ->
+19,282,824 over 207,306 calls in runbench, 32,985,600 -> 29,216,400 over
+314,100 in jsonbench: twelve a call, to the instruction, in both. Output is
+byte-identical on both programs.
+
+**The float parser's tail, measured and declined.** `k_b_to_float` ends the
+same way, with `strtod` behind the fast path, and the same cut was built
+beside this one. It is worth 106,821 on runbench and 161,850 on jsonbench,
+a twenty-third of the int tail's fall, and the seven pushes stay: the
+eisel-lemire fast path is inlined into the function and pins its own
+callee-saved registers, so removing the libc call removes nothing from the
+entry. The int loop had no such neighbour. The shape is not shipped, and
+the harness's closing anchor stays where it is.
+
+Row `int_cold_tail`, mutation
+`the_int_parser_s_cold_tail_shares_its_frame.sh`: it rewrites the tail's
+attribute to `always_inline`, which puts the five pushes back. Under the
+mutation runbench reads 1,985,349,707, the base's count to the
+instruction, and `k_b_to_int` is back at 21,770,496.
+
+**CI's sitting, on the base kanso#1427 left.** The work vein reads eleven
+a call where the container read twelve: runbench 1,992,627,657 ->
+1,990,347,291 (-2,280,366, -0.1144%) over 207,306 calls and jsonbench
+1,247,197,361 -> 1,243,742,261 (-3,455,100, -0.2770%) over 314,100, both
+to the instruction. The runner's clang keeps one instruction of frame the
+container's discards. encodebench 3,616,555,466, livebench 3,091,524,686
+and oneshot 19,186,974 each fall by 23,034, one decode of the large
+document; nine rows hold to the digit.
+
+Six machine-code rows FALL by exactly 976 bytes: jsonbench text 117,474,
+encodebench 137,986, oneshot 127,506, widebench 146,994, livebench
+129,058 and runbench 304,386; summed 1,736,060 -> 1,730,204 (-5,856). The
+tail's two refusals were laid out twice inline and once as a function.
+
+The three compile rows RISE by layout: compile_instructions 42,871,412 ->
+42,872,288 (+876), entry_instructions 144,040,625 -> 144,041,140 (+515),
+library_instructions 144,841,583 -> 144,841,869 (+286). compile_allocs
+held at 27,937 and compile_memory is byte-identical.
