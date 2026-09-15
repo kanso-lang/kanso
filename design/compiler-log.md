@@ -3468,6 +3468,117 @@ elsewhere. The lexer's 4,407 are the `String`s the AST needs, which
 kanso#1033 declined interning at 365 conversion sites. No other single owner
 holds more than a per cent.
 
+**The third sitting, on the merged base, and all three rows fall.** CI
+re-measured on the kanso#1414 base:
+
+    compile_instructions   43,910,543 ->  43,910,243    -300  -0.0007%
+    entry_instructions    146,573,721 -> 146,570,800  -2,921  -0.0020%
+    library_instructions  147,378,070 -> 147,374,531  -3,539  -0.0024%
+    summed                337,862,334 -> 337,855,574  -6,760  -0.0020%
+
+`compile_allocs` held at 28,361 again and `compile_peak_bytes` at 776,055,
+the same pair of byte-identical rows as before. The reorder is three lines of
+`src/runtime.c` and the front end does not run a line of it; these six
+thousand instructions are the compiler's own bytes sitting differently.
+
+Set the two sittings of the same change side by side and the paragraph above
+is checked rather than asserted:
+
+                            on kanso#1416     on kanso#1414
+    compile_instructions           +883              -300
+    entry_instructions           -2,236            -2,921
+    library_instructions         -2,878            -3,539
+    summed                       -4,231            -6,760
+
+Same diff, same three lines, and the module row changes sign between one base
+and the next while the other two keep theirs and grow by about a quarter.
+CLAUDE.md's rule reads that a delta survives a change of base when the work
+removed is a fixed count of operations, and does not when it is a share of a
+pile something else just made smaller. Nothing here is a count of operations
+at all: no decision was removed, so there is nothing to count, and every one
+of these six numbers is an arrangement. An arrangement belongs to one binary.
+kanso#1418 measured the other half of the same rule on the same day, where
+`compile_allocs` fell by 424 against both of its bases because it counts
+`HashSet` constructions that stopped happening.
+
+So a layout row is projected from CI or not at all, and never from a
+container whose glibc and clang the gate has already refused. The work vein
+is where this change was aimed and where its win is; the compile veins are
+regenerated, said out loud, and not banked against.
+
+## the fourth sitting, and four bases give four answers
+
+kanso#1418 landed and the branch merged it, so CI measured the same three
+lines a fourth time:
+
+    compile_instructions   42,877,925 ->  42,869,709   -8,216  -0.0192%
+    entry_instructions    144,056,402 -> 144,034,290  -22,112  -0.0153%
+    library_instructions  144,858,538 -> 144,834,698  -23,840  -0.0165%
+    summed                331,792,865 -> 331,738,697  -54,168  -0.0163%
+
+`compile_allocs` held at 27,937 and `compile_peak_bytes` at 776,055 for the
+fourth time running.
+
+Four sittings of one diff now sit side by side:
+
+    base          module      entry     library      summed
+    kanso#1415       +35     -1,854        +230      -1,589
+    kanso#1416      +883     -2,236      -2,878      -4,231
+    kanso#1414      -300     -2,921      -3,539      -6,760
+    kanso#1418    -8,216    -22,112     -23,840     -54,168
+
+The module row changes sign twice across the four. The fourth is eight times
+the third and thirty-four times the first, and it is the only one where all
+three fall together by a comparable share.
+
+Nothing about the diff changed between them. It is three lines swapping two
+arms of a tag switch in `src/runtime.c`, and `kanso check` never executes one
+of them. What changed is the binary the rows were measured on: kanso#1418
+rewrote the advisory fixpoint to revisit on demand, which moved the
+compiler's own code and every address after it, so the reorder's embedded
+bytes land somewhere else again.
+
+The earlier sections of this entry read the sign disagreement as the tell
+that a layout move is not a decision. Four sittings say something stronger
+and worth writing down plainly: the SIZE carries no information either. A
+layout delta is a property of one arrangement, and four bases are four
+arrangements, so a reading from any of them predicts nothing about the next.
+
+Which settles how to handle these rows, at the cost of six rounds on this
+branch. A compile row on a runtime-only change is regenerated from whatever
+base CI last ran, said out loud, and not reasoned from or banked against.
+The objective cannot see it in any case: fifty-four thousand instructions on
+three hundred and thirty-two million is a sixtieth of a per cent, and the
+work vein -- runbench 2,000,261,871, indexbench 3,185,298, both CI's own --
+is where this change was aimed and where its win is.
+
+## the fifth sitting, on the base kanso#1419 left
+
+kanso#1419 (ryu's pair loop) is chained ahead of this branch, so CI measured
+the same three lines a fifth time, on the arrangement that change leaves:
+
+    compile_instructions   42,872,197 ->  42,870,872   -1,325  -0.0031%
+    entry_instructions    144,042,077 -> 144,037,300   -4,777  -0.0033%
+    library_instructions  144,842,133 -> 144,837,840   -4,293  -0.0030%
+    summed                331,756,407 -> 331,746,012  -10,395  -0.0031%
+
+Against main's goldens, which kanso#1419 has not yet moved, the three rows
+land at compile_instructions 42,870,872, entry_instructions 144,037,300 and
+library_instructions 144,837,840: rises of 506, 1,351 and 1,615, all three
+kanso#1419's layout and not this diff's. `compile_allocs` 27,937 and
+`compile_peak_bytes` 776,055 for the fifth time.
+
+The work vein reads the same two deltas it read on the kanso#1415 base, to
+the instruction: runbench 1,997,551,401 -> 1,994,791,401 (-2,760,000 /
+-0.1382%) and indexbench 3,265,296 -> 3,185,298 (-79,998 / -2.4500%). The
+saving is a fixed cost per call and the call count did not move between
+bases. Machine code likewise: the same eight rows +32 and four +48, text
+1,735,036 -> 1,735,484 (+448), which against main's 1,734,364 lands at
+1,735,484 with kanso#1419's 672 in front of it.
+
+Welfare 68.75 -> 68.76, banked in the same commit.
+
+
 
 **CI's rows.** The container's box reads about 0.8% high on these veins and the
 projection was 5,410,533 summed; CI's sitting on the base kanso#1413 left reads:
@@ -4448,3 +4559,127 @@ byte-identical, the pair that really cannot move.
 
 Welfare 68.73 -> 68.75, banked in the same commit.
 
+## 2026-09-14 — the string arm is asked first, and a list index pays for it
+
+`k_b_at` is what `at` compiles to, and it answers five container kinds by
+asking their tags in order. The list arm stood first. runbench indexes text
+690,000 times and lists 7,900, so the list test was two instructions the
+common case paid to be told no.
+
+The arms swap. The string arm is asked first; every other arm keeps its
+place. Nothing else in the function changed, and the bytes out are the same,
+so no golden but the work vein moves.
+
+Measured on the container, `env -i` under callgrind, both binaries copied
+into one directory under EQUAL-LENGTH names:
+
+    runbench     1,994,173,291 -> 1,992,793,291  -1,380,000  -0.0692%
+    indexbench       3,226,622 ->     3,186,624     -39,998  -1.2396%
+
+The other twelve work rows are byte-identical. 1,380,000 is 690,000 calls
+times exactly two instructions, which is the attribution the profile gave
+before the change was written.
+
+The whole vein was read rather than runbench alone, on purpose: a list index
+now pays the two instructions a string index stopped paying, and a row that
+rose would have been the trade to state. None rose.
+
+**Three harness traps cost three wrong readings on the way, and all three are
+already written into `bench/instructions_golden.txt`'s own header.** The
+first: binaries named `base-runbench` and `new-runbench` differ by one
+character of exec path, and the kernel puts that path on the new process's
+stack for libc to walk before main — four benchmarks read exactly -14 and one
++14, which is the artifact and not the change. Equal-length prefixes
+(`aaa-`/`bbb-`) fix it. The second: the benchmarks resolve their data
+relative to the working directory, so running them from `/tmp/ab/aa` and
+`/tmp/ab/bb` gave eight rows near 225,000 — a work row that small means the
+program DIED, and running one by hand says so: `cannot read
+bench/large.json: no such file`. One directory, `bench` symlinked beside the
+binaries. The third is the container's own: `scripts/gates/instructions.sh`
+refuses on this host (glibc 2.39-0ubuntu8.7 / clang 18.1.3 against the
+golden's 8.9 / 19.1.1) and never measures at all, which is why these rows are
+a direct callgrind sitting and the golden is regenerated from CI's.
+
+Row `list_test_first`, mutation `a_list_test_every_string_index_pays.sh` —
+an awk block swap that puts the list arm back in front, verified by sorting
+both files to prove the mutation moves lines and writes none.
+
+Under the mutation, on the same sitting and against the shipped binary:
+runbench 1,992,792,731 -> 1,994,172,731 (+1,380,000 / +0.0692%) and
+indexbench 3,186,064 -> 3,226,062 (+39,998 / +1.2555%). Exactly the negative
+of the change, to the instruction.
+
+**CI's rows, and the container projected half of both.** The goldens now hold
+what the runner measured on the base kanso#1415 left:
+
+    runbench     2,003,021,871 -> 2,000,261,871  -2,760,000  -0.1378%
+    indexbench       3,265,296 ->     3,185,298     -79,998  -2.4500%
+
+The other twelve are byte-identical, so the trade this entry went looking for
+does not appear anywhere in the vein: no row rose.
+
+The container's sitting above projected -1,380,000 on runbench, exactly half
+of CI's -2,760,000, and -39,998 on indexbench against -79,998, half and one
+less. That reading was taken on a host `instructions.sh` had already refused,
+and the refusal is usually described as a levels problem — two hosts count the
+same program differently, so a row measured on one cannot be compared against
+a row measured on the other. This is the first case in the log where the
+refusal moved a DELTA instead. The change removes a fixed cost per call to
+`k_b_at`, so the delta is the call count times the saving, and the call count
+is an inlining decision: the runner's clang reaches the reordered test twice
+as often as the container's. From a refused host, project the sign, not the
+size.
+
+Machine code moved with it, in `bench/text_golden.txt`: twelve of fourteen
+rows rise, +32 bytes on eight and +48 on four, with escapebench and readbench
+byte-identical. The reorder lives in `src/runtime.c` and every program links
+it, so the cost is shared; the spread is which arms a program's own code makes
+reachable. That vein carries no welfare term.
+
+Summed over the fourteen binaries that vein reads `text 1,734,268 ->
+1,734,716`, a rise of 448 bytes: eight times 32 and four times 48.
+
+The trend gate refused the branch until that figure was written down, and the
+mechanism is worth recording. It searches the branch's log delta for a
+worsened counter's name AND for the value it landed on, as two separate
+matches. This entry used the word `text` three times and quoted only the
+per-row deltas, so the name matched and the number did not. The number is the
+half that carries the weight: a name on its own licenses every later move of
+that counter on the branch, which is how a mutation once set a named counter
+to 999,999,999 and left this gate green.
+
+The three compile veins moved too, which is the layout prior CLAUDE.md
+records for any edit to the compiler's own bytes: `src/runtime.c` is
+`include_str!`'d into the compiler, so its length and contents move the
+binary the compile gates measure even though `kanso check` never runs a line
+of it. On the kanso#1415 base CI read compile_instructions +35, entry -1,854
+and library +230 against that base's goldens — three digits on a
+147-million-instruction row, which is layout and nothing else.
+`compile_allocs` and `compile_peak_bytes` were both byte-identical, as they
+have to be: no allocation site changed.
+
+CI measured them again after kanso#1416 merged in, and read this:
+
+    compile_instructions   44,031,424 ->  44,032,307    +883  +0.0020%
+    entry_instructions    146,767,592 -> 146,765,356  -2,236  -0.0015%
+    library_instructions  147,572,025 -> 147,569,147  -2,878  -0.0020%
+    summed                338,371,041 -> 338,366,810  -4,231  -0.0013%
+
+**The three rows disagree in sign**, and that is the tell worth keeping: the
+module row rose while the other two fell, on one binary, from one change. A
+decision the front end makes differently moves all three the same way, because
+all three run the same passes. Layout does this instead. `compile_allocs`
+held at 28,361 and `compile_peak_bytes` at 776,055, which is the other half of
+the same statement — the compiler asks exactly what it asked before and pays
+for it in a differently-arranged binary.
+
+That sitting is superseded. kanso#1414 landed on main afterwards and took
+compile_instructions to 43,910,543, entry to 146,573,721 and library to
+147,378,070, so the three rows above are deltas against a base that is gone.
+A layout delta does not carry across a rebuild the way a removed decision
+does — the arrangement it describes is the arrangement of one binary — so the
+three veins go back to main's values and CI measures the reorder again on the
+merged base. Only the work vein's bank stands, and it stands because no
+compile row here has ever reached the objective's resolution: four thousand
+instructions on three hundred and thirty-eight million is a ten-thousandth of
+a per cent.
