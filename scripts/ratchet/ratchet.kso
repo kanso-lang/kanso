@@ -483,6 +483,14 @@ slice_walk = row
 # environment to k_copy_cold; the mutation puts memcpy back above four, a
 # plain call the closure kept five pushes for. Every environment holds the
 # same values, so the work vein is the only thing that can see it.
+scan_inline = row
+  "the two byte scanners called out of line with their constants"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_byte_scanners_rebuild_their_constants_on_every_call")
+  benchmarks
+
 empty_room = row
   "an empty list literal with no room for a push"
   true
@@ -1366,7 +1374,7 @@ rows_b1r3 = text/concat rows_b1r2 [cold_copy rare_door]
 
 rows_b1r4 = text/concat rows_b1r3 [sweep_helpers slice_walk closure_caps]
 
-rows_b1r = text/concat rows_b1r4 [empty_room]
+rows_b1r = text/concat rows_b1r4 [empty_room scan_inline]
 
 rows_b1b = text/concat rows_b1r [machine_code]
 

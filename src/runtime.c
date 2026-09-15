@@ -8025,8 +8025,16 @@ KValue k_b_length(KValue v) {
    splat the byte. That unpacking was fourteen of this function's fifty-four
    instructions on jsonbench and the scan itself was ten. The emitter reaches
    this door directly through the `k_b_find2_fast` shim; `k_b_find2` below is
-   the same call for anything the shim's tag test turns away. */
-long long k_b_find2_raw(const unsigned char* d, long long len, long long from,
+   the same call for anything the shim's tag test turns away.
+
+   always_inline, because the link is LTO and every emitted caller hands the
+   two bytes as literals: inlined, the two broadcasts fold to constant vectors
+   loaded from rodata, where the out-of-line door rebuilt them from registers
+   on each of its 1,756,429 calls a run, and the hit was in the first sixteen
+   bytes 99.99% of the time, so the setup was half the call. The scalar tail
+   and the loop are small enough that eight copies cost the .text vein less
+   than the calls cost the work vein. */
+__attribute__((always_inline)) long long k_b_find2_raw(const unsigned char* d, long long len, long long from,
                         long long a, long long b) {
     k_stat_find2_calls++;
     long long p = from < 1 ? 0 : from - 1;
@@ -8363,8 +8371,11 @@ KValue k_b_append_rendered(KValue acc, KValue v, long long mutate) {
    doors the emitter declares over six registers. This takes a pointer, a
    length and four integers: six, and nothing spills. The emitter reaches it
    through the `k_b_find2_below_fast` shim, which tests the tags itself;
-   `k_b_find2_below` below is the same scan for anything the shim turns away. */
-long long k_b_find2_below_raw(const unsigned char* d, long long len,
+   `k_b_find2_below` below is the same scan for anything the shim turns away.
+
+   always_inline for the reason k_b_find2_raw gives: the byte pair and the
+   limit are literals at every emitted site, and the broadcasts fold. */
+__attribute__((always_inline)) long long k_b_find2_below_raw(const unsigned char* d, long long len,
                               long long from, long long a, long long b,
                               long long floor_v) {
     k_stat_find2_calls++;

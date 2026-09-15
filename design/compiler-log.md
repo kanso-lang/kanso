@@ -5182,3 +5182,42 @@ kanso#1431's to the byte outside comments, so its count is the base's:
 runbench +14,960,362.
 
 **Every counter the trend gate calls worse, with the value it landed on.** A four-slot buffer where a one-slot one stood is 48 more bytes for every empty literal that stays empty, so `alloc_bytes` and `sh_buf` rise on the programs whose empty lists never grow, `perm_peak_bytes` and `perm_live_bytes` rise where a list escapes its beat with the larger buffer, and `bytes_freed` falls where fewer grows meant fewer permanent buffers to free: run_alloc_bytes 426,179,869 -> 459,964,461, run_perm_peak_bytes 10,272 -> 20,512, encode_alloc_bytes 658,041,744 -> 658,094,320, encode_sh_buf 73,214,624 -> 73,267,200, basket_alloc_bytes 4,900,609 -> 7,503,425, basket_bytes_freed 12 -> 11, basket_perm_live_bytes 2,228,256 -> 4,259,872, basket_perm_peak_bytes 2,752,560 -> 5,308,464, escape_alloc_bytes 32,976,112 -> 65,760,112, escape_perm_peak_bytes 10,272 -> 20,512, escape_sh_buf 96,000 -> 240,000, scan_alloc_bytes 160,539,964 -> 160,587,964, scan_sh_buf 33,024 -> 81,024, a_class_asks_by_the_byte_alloc_bytes 432,271 -> 468,175, a_class_asks_by_the_byte_sh_buf 82,448 -> 118,352, a_loop_invariant_capture_is_copied_every_rewind_alloc_bytes 91,136 -> 102,064, a_loop_invariant_capture_is_copied_every_rewind_sh_buf 10,976 -> 21,904, a_pushed_call_keeps_the_sweep_alloc_bytes 6,595,280 -> 13,152,080, a_pushed_call_keeps_the_sweep_perm_peak_bytes 10,272 -> 20,512, a_pushed_call_keeps_the_sweep_sh_buf 19,200 -> 48,000, an_escaped_list_gives_its_buffer_back_bytes_freed 400 -> 200, an_escaped_list_gives_its_buffer_back_sh_buf 6,400 -> 16,000, an_inner_beat_opens_its_tenure_in_the_block_outside_allocs 177,420 -> 180,196, an_inner_beat_opens_its_tenure_in_the_block_outside_evac_allocs 29,377 -> 48,531, an_inner_beat_opens_its_tenure_in_the_block_outside_evac_bytes 2,339,344 -> 3,006,224, an_inner_beat_opens_its_tenure_in_the_block_outside_ten_blocks 2 -> 3, build_cycle_alloc_bytes 3,168 -> 3,264, build_cycle_sh_buf 208 -> 304, early_exit_alloc_bytes 44,368 -> 88,064, early_exit_perm_live_bytes 32,784 -> 65,552, early_exit_perm_peak_bytes 40,992 -> 81,952, early_exit_sh_buf 32 -> 80, effect_push_shape_alloc_bytes 3,264 -> 3,456, effect_push_shape_sh_buf 704 -> 896, fold_push_shape_bytes_freed 5 -> 4, fused_map_shape_bytes_freed 5 -> 4, fused_reducer_bytes_freed 4 -> 3, fused_reducer_sh_buf 32 -> 80, fused_select_shape_bytes_freed 5 -> 4, fused_tally_alloc_bytes 32,240 -> 42,880, fused_tally_perm_live_bytes 8,208 -> 16,400, fused_tally_perm_peak_bytes 10,272 -> 20,512, piped_reducer_bytes_freed 4 -> 3, piped_reducer_sh_buf 32 -> 80, skip_shape_bytes_freed 5 -> 4, sort_shape_perm_live_bytes 8,208 -> 16,400, sort_shape_perm_peak_bytes 10,272 -> 20,512, take_shape_bytes_freed 5 -> 4, tally_shape_bytes_freed 5 -> 4, tally_shape_sh_buf 2,016 -> 2,064, the_same_capture_built_below_the_mark_is_shared_alloc_bytes 91,040 -> 101,968, the_same_capture_built_below_the_mark_is_shared_sh_buf 10,976 -> 21,904, unsafe_wrap_alloc_bytes 128 -> 176, unsafe_wrap_sh_buf 32 -> 80. The inner-beat tenure fixture moves the other way for the same reason, its `allocs`, `evac_allocs`, `evac_bytes` and `ten_blocks` landing where the list above says. The peak is what the objective reads, and it fell.
+
+## 2026-09-15 — the two byte scanners are inlined, and their constants fold
+
+`k_b_find2_raw` and `k_b_find2_below_raw` are the decoder's inner scans:
+sixteen bytes a step under SSE, looking for the first of two bytes. On
+kanso#1432's run program the per-instruction profile put them at
+58,181,994 and 84,989,250 self over 1,756,429 and 1,353,330 calls, and
+the loop body ran 1.01 times a call: the hit is in the first sixteen
+bytes 99.99% of the time. Half of each call was setup, the two bytes
+broadcast into vector registers, `movd`, `shl`, `or`, `movd`, `movd`,
+`pxor`, two `pshufb`, rebuilt from the argument registers on every call.
+Every emitted caller hands those bytes as literals (`text/find2 cs p 34
+92`, and the same 34 92 at `find2_below`), so inlined they are constant
+vectors loaded from rodata.
+
+The link is LTO, so `__attribute__((always_inline))` on the two doors is
+enough: LLVM honours it at every emitted call site and the out-of-line
+copies vanish from the binary. Nothing else changes.
+
+Container A/B, `env -i` under callgrind, equal-length names in one
+directory, on the kanso#1432 leaves:
+
+    runbench    1,923,227,681 -> 1,898,278,815   -24,948,866   -1.2972%
+    jsonbench   1,177,989,804 -> 1,171,809,954    -6,179,850   -0.5246%
+
+The first door alone read runbench -18,619,812 and jsonbench -6,179,850;
+the second adds -6,329,054 to runbench and nothing to jsonbench, which
+never calls it. Output byte-identical on both. Per function, the two
+doors' 143,171,244 become 118,222,370 inside their callers:
+`encode_onto` +78,660,646, `obj_key_start` +17,251,938 and +958,320 on
+its two clones, `str_escape` +7,891,587, `array_delim` +4,526,379 and
++88,506, `str_chars` +3,510,540, `parse_value` +3,029,202,
+`in_class?` +2,295,180, `worth_trying?` +10,272. No counter moves: the
+scan allocates nothing and the sweep agrees with every golden.
+
+Row `scan_inline`, mutation
+`the_byte_scanners_rebuild_their_constants_on_every_call` (strips both
+attributes). Under the mutation the source is kanso#1432's to the byte
+outside comments, so its count is the base's: runbench +24,948,866.
