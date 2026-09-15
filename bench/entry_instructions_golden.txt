@@ -288,9 +288,13 @@
 # 2026-09-14 (kanso#1417, FOURTH sitting): entry_instructions 144,056,402 ->
 # 144,034,290, a FALL of 22,112 (-0.0153%). The k_b_at arm order on the
 # kanso#1418 base; see the compile row.
+# 2026-09-14 (kanso#1417, FIFTH sitting): entry_instructions 144,042,077 ->
+# 144,037,300, a FALL of 4,777 (-0.0033%), on the base kanso#1419 left.
 # 2026-09-14 (kanso#1419): ryu_d2d removes digits two at a time. This is a
 # RUNTIME change -- src/runtime.c, one function -- and the entry row moved
-# anyway: 144,056,402 -> 144,035,324, -21,078 (-0.0146%).
+# anyway: 144,035,949 -> 144,042,077, +6,128 (+0.0043%). On the kanso#1418 base the same diff read
+# -21,078 (-0.0146%); on the kanso#1423 base it RISES. Same bytes,
+# opposite sign, which is the whole of what a layout delta carries.
 #
 # `kanso check` stops before codegen, so no decision this row counts can have
 # been altered by a runtime edit. What moved is the LAYOUT: src/runtime.c is
@@ -307,4 +311,4 @@
 # compile_allocs held at 27,937 and compile_memory is byte-identical, which
 # is the expected pair: those two really cannot move on a runtime edit.
 #
-entry_instructions=144035949
+entry_instructions=144037300

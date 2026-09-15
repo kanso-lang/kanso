@@ -3552,6 +3552,32 @@ three hundred and thirty-two million is a sixtieth of a per cent, and the
 work vein -- runbench 2,000,261,871, indexbench 3,185,298, both CI's own --
 is where this change was aimed and where its win is.
 
+## the fifth sitting, on the base kanso#1419 left
+
+kanso#1419 (ryu's pair loop) is chained ahead of this branch, so CI measured
+the same three lines a fifth time, on the arrangement that change leaves:
+
+    compile_instructions   42,872,197 ->  42,870,872   -1,325  -0.0031%
+    entry_instructions    144,042,077 -> 144,037,300   -4,777  -0.0033%
+    library_instructions  144,842,133 -> 144,837,840   -4,293  -0.0030%
+    summed                331,756,407 -> 331,746,012  -10,395  -0.0031%
+
+Against main's goldens, which kanso#1419 has not yet moved, the three rows
+land at compile_instructions 42,870,872, entry_instructions 144,037,300 and
+library_instructions 144,837,840: rises of 506, 1,351 and 1,615, all three
+kanso#1419's layout and not this diff's. `compile_allocs` 27,937 and
+`compile_peak_bytes` 776,055 for the fifth time.
+
+The work vein reads the same two deltas it read on the kanso#1415 base, to
+the instruction: runbench 1,997,551,401 -> 1,994,791,401 (-2,760,000 /
+-0.1382%) and indexbench 3,265,296 -> 3,185,298 (-79,998 / -2.4500%). The
+saving is a fixed cost per call and the call count did not move between
+bases. Machine code likewise: the same eight rows +32 and four +48, text
+1,735,036 -> 1,735,484 (+448), which against main's 1,734,364 lands at
+1,735,484 with kanso#1419's 672 in front of it.
+
+Welfare 68.75 -> 68.76, banked in the same commit.
+
 
 
 **CI's rows.** The container's box reads about 0.8% high on these veins and the
@@ -4495,20 +4521,23 @@ and the comparison meant something.
 
 ## CI's sitting, and the one vein that went the other way
 
-CI measured the pair loop on merged main. Five of the fourteen work rows fall
-and nine hold to the digit:
+CI measured the pair loop on the base kanso#1423 left. Five of the fourteen
+work rows fall and nine hold to the digit:
 
-    encodebench  3,641,023,306 -> 3,616,600,106   -24,423,200   -0.6707%
-    livebench    3,115,992,526 -> 3,091,569,326   -24,423,200   -0.7838%
-    runbench     2,003,021,871 -> 1,997,526,651    -5,495,220   -0.2743%
-    oneshot         19,292,672 ->     19,231,614       -61,058   -0.3165%
-    widebench       33,078,691 ->     33,070,691        -8,000   -0.0242%
+    encodebench  3,641,023,556 -> 3,616,600,356   -24,423,200   -0.6708%
+    livebench    3,115,992,776 -> 3,091,569,576   -24,423,200   -0.7838%
+    runbench     2,003,046,621 -> 1,997,551,401    -5,495,220   -0.2743%
+    oneshot         19,292,922 ->     19,231,864       -61,058   -0.3165%
+    widebench       33,142,691 ->     33,134,691        -8,000   -0.0241%
 
 encodebench and livebench fall by the same 24,423,200 because they are two
 programs over one encode path and the floats in them are the same floats. The
 container read -0.2660% on runbench against CI's -0.2743%, a ratio of 1.031.
+An earlier sitting on the kanso#1418 base read the same five deltas to the
+instruction; kanso#1423 moved the levels and the saving did not move with
+them.
 
-The machine-code vein rises: text 1,734,268 -> 1,734,940, +672 summed, and
+The machine-code vein rises: text 1,734,364 -> 1,735,036, +672 summed, and
 EVERY ONE of its fourteen rows rises by exactly 48. That uniformity is the
 finding. The fused loop lives in src/runtime.c, every binary links the same
 runtime, and the `for (;;)` body is 48 bytes longer than the `if` it replaced
@@ -4518,15 +4547,15 @@ they emit; this one cannot. The 2026-09-05 gavel keeps machine-code size out
 of welfare, so nothing prices the 48 bytes against the runtime falls they buy.
 The trade is stated here and the objective does not weigh it.
 
-The three compile rows fall as layout: module 42,877,925 -> 42,869,800
-(-8,125), entry 144,056,402 -> 144,035,324 (-21,078), library 144,858,538 ->
-144,836,246 (-22,292). `kanso check` stops before codegen and no decision they
-count can be altered by a runtime edit, but src/runtime.c is compiled into the
-compiler and its bytes move what sits where. compile_allocs held at 27,937 and
-compile_memory is byte-identical, which is the pair that really cannot move.
-Nothing is inferred from the size of those three: kanso#1417 read one
-three-line runtime diff on four bases and got four different answers, the
-module row changing sign twice.
+The three compile rows rise as layout: compile_instructions 42,870,366 ->
+42,872,197 (+1,831), entry_instructions 144,035,949 -> 144,042,077 (+6,128),
+library_instructions 144,836,225 -> 144,842,133 (+5,908). `kanso check` stops
+before codegen and no decision they count can be altered by a runtime edit,
+but src/runtime.c is compiled into the compiler and its bytes move what sits
+where. On the kanso#1418 base the same diff read -8,125, -21,078 and -22,292
+on the same three rows: same bytes, opposite sign, which is the whole of what
+a layout delta carries. compile_allocs held at 27,937 and compile_memory is
+byte-identical, the pair that really cannot move.
 
 Welfare 68.73 -> 68.75, banked in the same commit.
 

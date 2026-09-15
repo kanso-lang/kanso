@@ -1453,9 +1453,15 @@
 # sittings before it, on the base kanso#1418 left. compile_allocs held at
 # 27,937 and compile_peak_bytes at 776,055 for the fourth time running, which
 # is the half that says this is layout and not a decision.
+# 2026-09-14 (kanso#1417, FIFTH sitting): compile_instructions 42,872,197 ->
+# 42,870,872, a FALL of 1,325 (-0.0031%), on the base kanso#1419 left. Same
+# diff, fifth arrangement; compile_allocs 27,937 and compile_peak_bytes
+# 776,055 for the fifth time.
 # 2026-09-14 (kanso#1419): ryu_d2d removes digits two at a time. This is a
 # RUNTIME change -- src/runtime.c, one function -- and the module row moved
-# anyway: 42,877,925 -> 42,869,800, -8,125 (-0.0189%).
+# anyway: 42,870,366 -> 42,872,197, +1,831 (+0.0043%). On the kanso#1418 base the same diff read
+# -8,125 (-0.0189%); on the kanso#1423 base it RISES. Same bytes,
+# opposite sign, which is the whole of what a layout delta carries.
 #
 # `kanso check` stops before codegen, so no decision this row counts can have
 # been altered by a runtime edit. What moved is the LAYOUT: src/runtime.c is
@@ -1472,4 +1478,4 @@
 # compile_allocs held at 27,937 and compile_memory is byte-identical, which
 # is the expected pair: those two really cannot move on a runtime edit.
 #
-compile_instructions=42870366
+compile_instructions=42870872
