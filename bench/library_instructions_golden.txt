@@ -397,4 +397,12 @@
 # stated, not reasoned from. compile_allocs held at 27,937 and
 # compile_memory is byte-identical.
 #
-library_instructions=144840900
+# 2026-09-15 (kanso#1437): a capture is a load, an own-err check is a tag test,
+# a CODEGEN change, and this row is a RISE: 144,840,900 -> 144,845,876, +4,976
+# (+0.0034%), on the base kanso#1436 left, and 144,836,225 -> 144,845,876
+# against main (+9,651). The emitter writes one more define per program
+# (the own-err twin) and a load per capture read. Regenerated from the base
+# CI last ran, stated, not reasoned from. compile_allocs held at 27,937 and
+# compile_memory is byte-identical.
+#
+library_instructions=144845876

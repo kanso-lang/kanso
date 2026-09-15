@@ -673,19 +673,36 @@
 # 9,830,211 still stand above it, priced in kanso#1432's and kanso#1430's
 # entries; both fall here.
 #
-jsonbench 1169790503
-encodebench 3452529231
-oneshot 18247618
-basket 33569560
-widebench 32583948
-deepbench 354505236
+# 2026-09-15 (kanso#1437): a capture is a load, an own-err check is a tag test.
+# Twelve rows FALL and two hold, on the base kanso#1436 left: work_jsonbench
+# 1,169,790,503 -> 1,130,225,294 (-39,565,209, -3.3822%), work_scanbench
+# 500,324,263 -> 460,784,763 (-39,539,500, -7.9028%), work_runbench
+# 1,857,535,269 -> 1,823,669,249 (-33,866,020, -1.8232%), work_deepbench
+# -9,376,000 (-2.6448%), work_widebench -448,019 (-1.3750%), work_oneshot
+# -263,777 (-1.4455%), work_encodebench -305,191, work_livebench -263,777,
+# work_basket -20,000, work_pendbench -8,400, work_readbench -9,
+# work_digestbench -8; work_escapebench and work_indexbench hold, having no
+# capture reads and no own-err checks on their paths. A capture read is a
+# load instead of a three-instruction call, and the own-err check tests the
+# tag in the caller and calls out only for an err. The container had read
+# runbench -31,071,965 and jsonbench -34,038,770; the runner reads both
+# deeper. Against main, work_escapebench 84,780,592 and work_digestbench
+# 9,830,203 still stand above it, priced in kanso#1432's and kanso#1430's
+# entries; nothing here moves them.
+#
+jsonbench 1130225294
+encodebench 3452224040
+oneshot 17983841
+basket 33549560
+widebench 32135929
+deepbench 345129236
 escapebench 84780592
-pendbench 208145421
+pendbench 208137021
 indexbench 2895708
-scanbench 500324263
-digestbench 9830211
-readbench 4629439
-livebench 2873052923
+scanbench 460784763
+digestbench 9830203
+readbench 4629430
+livebench 2872789146
 # 2026-09-06 (the run program joins): `runbench 3043743748` is a NEW row and
 # nothing regressed to make it appear. It is the program Clay's gavel that day
 # made the objective's whole run-speed term, and the thirteen rows above it
@@ -743,4 +760,4 @@ livebench 2873052923
 #
 # The uniform -8 across six rows is one instruction on a path each program
 # takes eight times, and the four flat rows never take it at all.
-runbench 1857535269
+runbench 1823669249

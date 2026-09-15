@@ -5502,8 +5502,21 @@ The emitted vein moves in every program, in one direction. The prelude gains
 one define, one branch and one call, the twin's body; every capture read
 that was a call is a load, so a program's `calls` fall by its capture reads
 less one: runbench 5,943 -> 5,895, scanbench 3,260 -> 3,234, deepbench 841
--> 827, the decoder 1,210 -> 1,207. The compile-cost goldens move the same
-way, one define and one branch per program and lines up by the twin. The
+-> 827, the decoder 1,210 -> 1,207. Summed over the thirteen programs
+beside the decoder, emitted_other_defines 2,350 -> 2,363 and
+emitted_other_branches 12,663 -> 12,676 (one each per program, the twin),
+emitted_other_lines 133,020 -> 133,303 (its nine lines per program, less
+the call lines that became loads), and emitted_other_calls 20,330 ->
+20,187; the decoder alone, emitted_defines 142 -> 143, emitted_branches
+793 -> 794, emitted_lines 9,142 -> 9,155, emitted_calls 1,210 -> 1,207.
+The compile-cost goldens move the same way, one define and one branch per
+program and lines up by the twin: bench/compile_golden.txt's five programs
+each gain a define, a branch and eleven lines (recursion `lines` 1,195 ->
+1,206, dispatch 1,187 -> 1,198, guards 1,180 -> 1,191, records 1,236 ->
+1,247, build_block 1,161 -> 1,172, summed `lines` 5,959 -> 6,014), and the
+module row reads module_lines
+5,317 -> 5,334, module_defines 101 -> 102, module_branches 438 -> 439,
+module_calls 754 -> 748. The
 runtime cost veins and the lazy tier are byte-identical: nothing here
 allocates. The three host-keyed compile rows and machine code are CI's until
 round two.
@@ -5513,6 +5526,35 @@ put back through the same slot pointer; gated on the emitted vein, which
 sees the calls return), and `own_err_inline`, mutation
 `an_own_err_check_is_a_call_on_every_value` (the bare call at both sites;
 gated on the work vein, since the emitted text counts the same one call).
+
+**CI's sitting, on the base kanso#1436 left.** Twelve work rows fall and two
+hold: work_jsonbench 1,169,790,503 -> 1,130,225,294 (-39,565,209, -3.3822%),
+work_scanbench 500,324,263 -> 460,784,763 (-39,539,500, -7.9028%),
+work_runbench 1,857,535,269 -> 1,823,669,249 (-33,866,020, -1.8232%),
+work_deepbench -9,376,000 (-2.6448%), work_widebench -448,019 (-1.3750%),
+work_oneshot -263,777 (-1.4455%), and six more by between 8 and 305,191;
+work_escapebench and work_indexbench hold, having no capture read and no
+own-err check on their paths. The container had read runbench -31,071,965
+and jsonbench -34,038,770; the runner reads both deeper, and scanbench,
+which the container never measured, falls furthest: its scanners dispatch
+on every byte class and each dispatch asked the own-err question through a
+call. Against main two work rows still stand above it, neither moved here:
+work_escapebench 82,999,058 -> 84,780,592 (+1,781,534), the accumulator's
+lifetime priced in kanso#1432's entry, and work_digestbench 9,813,332 ->
+9,830,203 (+16,871), kanso#1430's wrapper price less the falls since.
+
+Machine code: twelve rows fall and two hold, summed `text` 1,737,068 ->
+1,735,116 (-1,952), runbench -560, scanbench -256, widebench -224; a load is
+shorter than the call it replaces and the inline tag test folds into the
+dispatcher's switch. Against main the summed text vein is still a RISE,
+1,707,852 -> 1,735,116 (+27,264), kanso#1433's inlining and kanso#1435's
+masked tail less kanso#1436 and this. The three compile rows rise on the
+base, a codegen change writing one more define per program and a load per
+capture read: compile_instructions 42,871,759 -> 42,873,153 (+1,394),
+entry_instructions 144,040,457 -> 144,046,325 (+5,868), library_instructions
+144,840,900 -> 144,845,876 (+4,976); against main +2,787, +10,376 and
++9,651. compile_allocs holds at 27,937 and compile_memory is byte-identical.
+Welfare 69.44 -> 69.58, banked.
 
 ## 2026-09-15 — the per-call floors, mapped after the inlines
 
