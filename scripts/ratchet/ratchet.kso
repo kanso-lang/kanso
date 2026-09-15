@@ -1300,7 +1300,24 @@ rows_c1p = text/concat rows_c1t [published_numbers]
 
 rows_c1b = text/concat rows_c1p [diagnostics accumulator]
 
-rows_c1c0 = text/concat rows_c1b [rendering negative_sign small_record]
+# The `goldens` row above covers the micro differential generically, through a
+# golden that drifts. This one covers the direction the corpus could not see
+# until 2026-09-14: the two engines PARSING a decimal differently. Rendering
+# has had rows since kanso#1256; reading one back had none, and native sat one
+# ULP off the oracle on every number longer than nineteen significant digits.
+# A drifted golden and a diverged engine are different defects and a mutation
+# that moves a `.out` file cannot produce the second.
+truncated_significand = row
+  "a truncated significand the fast path calls certain"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_truncated_significand_taken_as_certain")
+  release
+
+rows_c1c0a = text/concat rows_c1b [rendering negative_sign small_record]
+
+rows_c1c0 = text/concat rows_c1c0a [truncated_significand]
 
 rows_c1c1 = text/concat rows_c1c0 [short_append beat_mark every_edge pure_cycle]
 
