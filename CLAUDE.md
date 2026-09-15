@@ -604,6 +604,26 @@ Only Clay arms, disarms or retimes it.
   moved; welfare says whether the project came out ahead. The first catches a
   deletion, the second catches a trade.
 
+### External state is normalized before it is measured
+
+- **A counter reads the code under test and nothing else.** Every piece of
+  state the code did not produce — a cache, a file the loader parses, a
+  layout the linker chose — is put into a known state before the measurement
+  is taken: cleared, or fixed, so that two runs of the same code read the
+  same number and two runs of different code differ by what the code did.
+  Clay, 2026-09-15, on learning that `pthread_getattr_np`'s parse of
+  `/proc/self/maps` moved the compile row with the binary's layout: "this
+  has nothing to do with compiler performance and obviously shouldn't be
+  part of what we measure. as I've said to you voluminously in the past you
+  want to set up the run so that any external State like this is normalized.
+  you clear it out so it's identical every single run or you do something
+  that puts it into a persistent known initial state." A term that cannot be
+  normalized is excluded and the exclusion is named in the golden's header;
+  a term that is counted and explained is the thing this rule forbids. It
+  had been argued at kanso#1234 and ruled the other way on 2026-09-03; that
+  ruling is superseded on the maps term, and the rule is written here so it
+  is not argued a third time.
+
 ### Performance goldens are watched, not frozen
 - Two veins now: **runtime** (bench/cost_golden*.txt, tests/golden/mem/*.mem)
   and **compilation** (bench/compile_golden.txt). The compile golden counts
