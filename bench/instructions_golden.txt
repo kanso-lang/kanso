@@ -523,19 +523,46 @@
 # discards. The three one-decode rows fall by 23,034, jsonbench's fall over
 # its 150 decodes. The nine that hold never parse an integer.
 #
-jsonbench 1243742261
-encodebench 3616555466
-oneshot 19186974
-basket 34281871
-widebench 33028905
-deepbench 371382179
-escapebench 82969017
-pendbench 219476888
-indexbench 3185298
-scanbench 528870249
-digestbench 9837152
-readbench 4629745
-livebench 3091524686
+# 2026-09-15 (kanso#1429): the cold helpers stop clobbering their callers'
+# registers. Ten rows fall and four rise, on the base kanso#1428 left:
+#
+#   jsonbench    1,243,742,261 -> 1,229,738,040   -14,004,221   -1.1260%
+#   runbench     1,990,347,291 -> 1,977,087,740   -13,259,551   -0.6662%
+#   deepbench      371,382,179 ->   369,202,224    -2,179,955   -0.5870%
+#   widebench       33,028,905 ->    32,837,013      -191,892   -0.5810%
+#   encodebench  3,616,555,466 -> 3,616,439,594      -115,872   -0.0032%
+#   indexbench       3,185,298 ->     3,085,763       -99,535   -3.1248%
+#   livebench    3,091,524,686 -> 3,091,427,397       -97,289   -0.0031%
+#   oneshot         19,186,974 ->    19,096,479       -90,495   -0.4716%
+#   digestbench      9,837,152 ->     9,813,332       -23,820   -0.2421%
+#   pendbench      219,476,888 ->   219,469,722        -7,166   -0.0033%
+#   basket          34,281,871 ->    34,433,106      +151,235   +0.4412%
+#   escapebench     82,969,017 ->    82,999,058       +30,041   +0.0362%
+#   scanbench      528,870,249 ->   528,872,901        +2,652   +0.0005%
+#   readbench        4,629,745 ->     4,629,808           +63   +0.0014%
+#
+# The container read -14,536,121 and -13,795,119 on the two rows the A/B
+# watched; the runner's clang keeps a little more frame than the
+# container's, as it did on kanso#1428. The four rises are the outlining's
+# own price: an index whose container is a map reaches k_b_at_rest by a call
+# now, the ascii fill is a call, and the refill saves every register it
+# touches on each of its calls, so a program that takes those paths and holds
+# little live across them pays and collects nothing. Which of the three
+# basket pays was not attributed.
+#
+jsonbench 1229738040
+encodebench 3616439594
+oneshot 19096479
+basket 34433106
+widebench 32837013
+deepbench 369202224
+escapebench 82999058
+pendbench 219469722
+indexbench 3085763
+scanbench 528872901
+digestbench 9813332
+readbench 4629808
+livebench 3091427397
 # 2026-09-06 (the run program joins): `runbench 3043743748` is a NEW row and
 # nothing regressed to make it appear. It is the program Clay's gavel that day
 # made the objective's whole run-speed term, and the thirteen rows above it
@@ -593,4 +620,4 @@ livebench 3091524686
 #
 # The uniform -8 across six rows is one instruction on a path each program
 # takes eight times, and the four flat rows never take it at all.
-runbench 1990347291
+runbench 1977087740
