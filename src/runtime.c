@@ -9452,19 +9452,28 @@ KValue k_b_to_float(KValue v, const char* origin) {
         unsigned long long w = 0;
         long long q = 0;
         int digits = 0, any = 0, ok = 1, cut = 0;
+        /* leading zeros are not significant digits, and once the first
+           nonzero digit has landed every later one is. skipping them here
+           lets both loops count unconditionally instead of re-asking
+           `if (w)` on every digit -- a predicate that is monotone in the
+           digit position and was costing three instructions a digit. */
+        while (p < stop && *p == '0') { any = 1; p++; }
         while (p < stop && *p >= '0' && *p <= '9') {
             any = 1;
-            if (digits < 19) { w = w * 10 + (unsigned long long)(*p - '0'); if (w) digits++; }
+            if (digits < 19) { w = w * 10 + (unsigned long long)(*p - '0'); digits++; }
             else { q++; if (*p != '0') cut = 1; }
             p++;
         }
         if (p < stop && *p == '.') {
             p++;
+            if (w == 0) {
+                while (p < stop && *p == '0') { any = 1; q--; p++; }
+            }
             while (p < stop && *p >= '0' && *p <= '9') {
                 any = 1;
                 if (digits < 19) {
                     w = w * 10 + (unsigned long long)(*p - '0');
-                    if (w) digits++;
+                    digits++;
                     q--;
                 }
                 else if (*p != '0') cut = 1;

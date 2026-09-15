@@ -4712,3 +4712,77 @@ memory. Neither holds here.
 
 This closes the first of the two shapes the decode number-path attribution
 named. No counter moves, and nothing is committed to `src/`.
+
+## 2026-09-15 — a float's leading zeros are skipped once, and the digit loops stop asking whether the first nonzero has landed
+
+`k_b_to_float` scans a decimal into a nineteen-digit significand and a
+power of ten, then hands the pair to eisel-lemire. Both digit loops counted
+significant digits with `if (w) digits++`: the predicate is false until the
+first nonzero digit lands and true forever after, so every digit past the
+first re-asked a question with one answer. In the disassembly that was
+`xor / setne / add`, three of the eighteen instructions a fraction digit
+cost.
+
+The loops count unconditionally now. Leading zeros are skipped in front of
+the integer loop, and in front of the fraction loop when the integer part
+was empty or all zeros; a zero after the point still moves `q` down, as it
+did. The `(w, q)` handed on is identical for every input: a leading zero
+never changed `w`, and a fraction zero only ever changed `q`.
+
+**The harness first.** `tests/every_float_literal_parses_like_strtod.rs`
+lifts the real scan out of src/runtime.c, so it read this shape and not a
+copy:
+
+    1,193,654 parsed    599,826 took the fast path    0 disagree
+
+Measured on the container, `env -i` under callgrind, both binaries in one
+directory under equal-length names, run from the repository root:
+
+    runbench    1,987,513,451 -> 1,985,349,707   -2,163,744   -0.1089%
+    jsonbench   1,233,280,889 -> 1,230,002,489   -3,278,400   -0.2658%
+
+The whole of runbench's fall is inside `k_b_to_float`: 42,275,772 ->
+40,112,028 inclusive, the same 2,163,744 to the instruction, 10.3 a call
+over 210,177 calls. jsonbench's fall is the same function too, 64,054,200
+-> 60,775,800, and its floats carry more digits: 150 decodes of the large
+document, and the saving per decode is 21,856. Task #539 projected about eighteen a call from three
+instructions on six digits; the corpus's floats carry fewer digits than
+that, and the saving is what the digits there are worth. Output is
+byte-identical on both programs.
+
+**A reading that was wrong on the way, and why.** The first jsonbench A/B
+read +5,637,632, and every rise was in `k_b_push_mut`, `k_mklist`,
+`k_map_lit` and the slice helpers — functions this change does not touch.
+The binary was 912 bytes larger than the base. A counter sweep had been
+started in the same worktree while the A/B was still building, the sweep
+built `jsonbench --counters`, and the A/B's `mv` took that binary as its
+own. The counter sites the sweep instruments are exactly the functions
+that rose. Rebuilt alone, the reading is the one above.
+
+Row `leading_zeros`, mutation
+`every_digit_asks_whether_the_first_nonzero_has_landed.sh`: it deletes
+both skips and puts `if (w)` back on both loops, and the result diffs
+against main's `k_b_to_float` in nothing but this change's comment.
+
+**CI's sitting, on the base kanso#1417 left.** The work vein reads the
+container's two deltas to the instruction: runbench 1,994,791,401 ->
+1,992,627,657 (-2,163,744, -0.1085%) and jsonbench 1,250,475,761 ->
+1,247,197,361 (-3,278,400, -0.2622%). Four more rows fall: widebench
+33,134,691 -> 33,028,905 (-105,786), and encodebench 3,616,578,500,
+livebench 3,091,547,720 and oneshot 19,210,008 each by 21,856, one decode
+of the large document. Eight rows hold to the digit, since nothing in them
+parses a float.
+
+Six machine-code rows RISE by exactly 96 bytes, the two skip loops:
+jsonbench text 118,450, encodebench 138,962, oneshot 128,482, widebench
+147,970, livebench 130,034 and runbench 305,362; summed 1,735,484 ->
+1,736,060 (+576). Eight rows do not move, because the linker keeps
+`k_b_to_float` only where it is called.
+
+The three compile rows RISE by layout, as every runtime-only change moves
+them: compile_instructions 42,870,872 -> 42,871,412 (+540),
+entry_instructions 144,037,300 -> 144,040,625 (+3,325),
+library_instructions 144,837,840 -> 144,841,583 (+3,743). `kanso check`
+never reaches the runtime; the bytes of src/runtime.c shift what sits
+where. Regenerated from the base CI ran, stated, not reasoned from.
+compile_allocs held at 27,937 and compile_memory is byte-identical.
