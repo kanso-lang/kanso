@@ -20,7 +20,9 @@ sed -e "/^        while (p < stop && \*p == '0') { any = 1; p++; }$/d" \
     src/runtime.c > src/runtime.c.mut
 mv src/runtime.c.mut src/runtime.c
 grep -q "if (w) digits++; }" src/runtime.c
-if grep -q "if (w == 0) {" src/runtime.c; then
+# anchored to the fraction skip's own indent: an earlier `if (w == 0)` in the
+# eisel-lemire entry is a different line and stays.
+if grep -q "^            if (w == 0) {\$" src/runtime.c; then
   echo "the fraction skip survived the mutation" >&2
   exit 1
 fi
