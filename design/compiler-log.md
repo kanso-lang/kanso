@@ -5435,6 +5435,31 @@ as the scan-tail harness already did, and the capacity spec cuts from the
 guarded line. Seen red on CI at 727cb321 and d7b6acad; the two specs and the
 differential pass here (45,189,025 checked, 0 mismatches).
 
+**CI's sitting, on the base kanso#1435 left.** All fourteen work rows fall:
+work_jsonbench 1,185,398,676 -> 1,169,790,503 (-15,608,173, -1.3167%),
+work_runbench 1,871,522,584 -> 1,857,535,269 (-13,987,315, -0.7474%),
+work_livebench -6,326,619 (-0.2197%), work_encodebench -5,013,110
+(-0.1450%), work_escapebench -1,215,014 (-1.4129%), work_deepbench -965,492
+(-0.2716%), and the other eight by between 232 and 128,315. The container
+had read runbench -13,704,939 and jsonbench -14,902,123 for the two commits
+together; the runner reads both a little deeper. Against main two work rows
+still stand above it, both falling here: work_escapebench 82,999,058 ->
+84,780,592 (+1,781,534), the accumulator's lifetime priced in kanso#1432's
+entry, and work_digestbench 9,813,332 -> 9,830,211 (+16,879), kanso#1430's
+wrapper price less the falls since.
+
+Machine code: all fourteen rows fall, summed `text` 1,746,636 -> 1,737,068
+(-9,568), oneshot and livebench -1,824 each, runbench -1,808, jsonbench
+-1,728; a guarded site compiles to nothing and the code around it shortens.
+Against main the summed text vein is still a RISE, 1,707,852 -> 1,737,068
+(+29,216), kanso#1433's inlining and kanso#1435's masked tail less this. The
+three compile rows rise by layout on the base, compile_instructions
+42,869,800 -> 42,871,759 (+1,959), entry_instructions 144,035,324 ->
+144,040,457 (+5,133), library_instructions 144,836,246 -> 144,840,900
+(+4,654); against main +1,393, +4,508 and +4,675, the compiler's bytes moving
+with src/runtime.c. compile_allocs holds at 27,937 and compile_memory is
+byte-identical. Welfare 69.39 -> 69.44, banked.
+
 ## 2026-09-15 — a capture is a load, an own-err check is a tag test
 
 Two runtime calls sat at the top of the run program's call-count table on
