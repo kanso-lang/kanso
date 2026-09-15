@@ -4279,3 +4279,172 @@ THING UNDER TEST.
 
 No counter moves; this file adds a test and touches nothing the compiler
 builds.
+
+## 2026-09-14 — a float a program writes down has few digits, and ryu took them off one at a time
+
+`render_ryu` is 4.49% of the run program and 10.62% of encodebench, at
+exactly 468.5 instructions a float in both — 191,070 calls in one and 849,200
+in the other, and the same number per call to one decimal place. That
+agreement is the first thing worth noticing: whatever the cost is, it does
+not depend on which corpus the floats came from.
+
+Instruction-level callgrind says where it goes. One sixteen-instruction block
+at 0x12050 runs **9.41 times a call** and carries 127,916,800 of encodebench's
+397,836,000 — 32% of the function. It is the general digit-removal loop:
+
+    mov %rsi,%r9 / mov %rdx,%rcx / mov %rsi,%rax
+    mul %rbp / mov %rdx,%rsi / shr $0x3,%rsi / inc %ebx
+    mov %r8,%rax / mul %rbp / mov %rdx,%r8
+    mov %rcx,%rax / mul %rbp
+    shr $0x3,%r8 / shr $0x3,%rdx / cmp %rdx,%r8 / ja
+
+Three multiply-highs and three shifts — `vp / 10`, `vm / 10`, `vr / 10` — a
+counter, a compare and the branch. LLVM had already sunk the `vr % 10` and
+the `round_up` out of the loop, because only the last trip's value survives.
+
+Nine and a half trips is a lot, and the reason is the corpus rather than the
+algorithm. `vr` starts with seventeen significant digits. A float a program
+writes down — a price, a coordinate, a measurement — has three or four, so
+thirteen or fourteen come off, and the loop takes them one at a time.
+
+## the loop that replaced them costs twenty-one, not sixteen
+
+Measured after the change, on a freshly built `runbench` — and the
+rebuild is the point, because the binary sitting in the worktree
+predated `src/runtime.c` by four minutes and profiling it read
+1,994,173,231, the old shape's number. Rebuilt: 1,988,869,261, a fall of
+5,303,970 (-0.2660%), which is the A/B figure recovered from a second
+direction.
+
+`render_ryu` is 84,209,130 instructions, 4.23% of runbench, 440.7 a
+float over 191,070 calls. It was 4.49% and 468.5 before.
+
+The new loop is block `0x39190`-`0x391d2`. It runs 1,022,310 times,
+5.35 trips a float, and is 25.49% of the function at 112.4 instructions
+a float. The old pair ran 9.41 trips at sixteen each, about 150.
+
+**Twenty-one instructions a trip, not sixteen.** The premise this change
+was built on is that the hundred-step and the ten-loop each cost
+sixteen, so one trip taking two digits beats two taking one. That was
+true of the code being replaced. The fused loop is not that body
+unchanged: it is twenty-one instructions, and seven of them are
+register moves that carry `vp`, `vm` and `vr` around the back edge.
+Disassembled:
+
+    39190:  mov %rsi,%r11          391b0:  mov %rcx,%rax
+    39193:  mov %rcx,%r9           391b3:  shr $0x2,%rax
+    39196:  mov %rdx,%r8           391b7:  mul %rdi
+    39199:  mov %rsi,%r10          391ba:  mov %r8,%rax
+    3919c:  shr $0x2,%r10          391bd:  shr $0x2,%rax
+    391a0:  mov %r10,%rax          391c1:  mov %rdx,%rcx
+    391a3:  mul %rdi               391c4:  mul %rdi
+    391a6:  mov %rdx,%rsi          391c7:  shr $0x2,%rcx
+    391a9:  shr $0x2,%rsi          391cb:  shr $0x2,%rdx
+    391ad:  add $0x2,%ebx          391cf:  cmp %rdx,%rcx
+                                   391d2:  ja  39190
+
+So the trade is 21 against 32, not 16 against 32 — a narrower margin
+than the sentence in the commit implies, and the measured -0.2660%
+sizes it correctly either way. The correction is recorded because the
+number 16 would otherwise be read back as this loop's cost.
+
+Two things the disassembly settles that the C does not. The `vr % 100`
+that feeds `round_up` does not appear in the loop at all: only the last
+trip's value survives, so LLVM sank the modulo past the back edge. And
+the three `mul %rdi` are the three divisions by 100, sharing one
+reciprocal in `%rdi`.
+
+**The next lead, not taken here.** Seven of the twenty-one are moves
+the loop would not need if the body wrote its results into the
+registers it reads. That is 37 instructions a float, 8.5% of
+`render_ryu`, about 0.36% of runbench — real, and a separate change
+with its own measurement.
+
+The rest of the function, same sitting, by straight-line run:
+
+    0x38fbf-0x39092   62 instrs   once a float    62.0   14.07%
+    0x39570-0x3959d   13 instrs   2.79 trips      36.3    8.24%
+    0x39770-0x3978f   11 instrs   2.88 trips      31.7    7.19%
+    0x38e1e-0x38e85   22 instrs   once a float    22.0    4.99%
+    0x3936e-0x393b9   26 instrs   0.71 trips      18.5    4.20%
+
+The 62-instruction run is unconditional setup, once per float, and is
+the largest single non-loop cost left in the function.
+
+## the hundred-step was already there and fired once
+
+    int round_up = 0;
+    uint64_t vpd100 = vp / 100, vmd100 = vm / 100;
+    if (vpd100 > vmd100) { ... removed += 2; }
+    for (;;) { ... the ten-loop ... }
+
+Two digits for the same three multiply-highs the ten-loop spends on one, and
+it ran once. It is a `for (;;)` now. The shapes are otherwise identical: the
+same rounding test on the two removed digits (`vrm100 >= 50` is "is the tail
+at least half of a hundred", which is what `vrm >= 5` is for ten), and the
+ten-loop still runs afterwards to take a last odd digit.
+
+Measured on one container sitting, four binaries built from one tree with
+equal-length names, all four run from the repository root:
+
+    encodebench  3,747,072,758 -> 3,723,499,558   -23,573,200  -0.6291%
+    runbench     1,994,263,401 -> 1,988,959,431    -5,303,970  -0.2660%
+
+The bytes out are identical on both programs. That was checked by diffing the
+output of all four binaries, and it is the only check that matters here: the
+loop decides how fast the digits arrive, never which digits they are.
+
+## the first reading was of two dead programs
+
+The first output comparison ran the four binaries from the scratch directory
+they were built into, and both "agreed" on fifteen bytes. Callgrind then read
+315,755 instructions for a program that takes three and a half billion.
+
+That is the second trap in `bench/instructions_golden.txt`'s own header,
+written down after it cost somebody a reading before: the benchmarks resolve
+their data relative to the working directory, so a run from anywhere else
+dies at the first open and exits clean. Two dead programs agree about
+everything. Re-run from the repository root, both produced `done: 74072800`
+and the comparison meant something.
+
+
+## CI's sitting, and the one vein that went the other way
+
+CI measured the pair loop on the base kanso#1423 left. Five of the fourteen
+work rows fall and nine hold to the digit:
+
+    encodebench  3,641,023,556 -> 3,616,600,356   -24,423,200   -0.6708%
+    livebench    3,115,992,776 -> 3,091,569,576   -24,423,200   -0.7838%
+    runbench     2,003,046,621 -> 1,997,551,401    -5,495,220   -0.2743%
+    oneshot         19,292,922 ->     19,231,864       -61,058   -0.3165%
+    widebench       33,142,691 ->     33,134,691        -8,000   -0.0241%
+
+encodebench and livebench fall by the same 24,423,200 because they are two
+programs over one encode path and the floats in them are the same floats. The
+container read -0.2660% on runbench against CI's -0.2743%, a ratio of 1.031.
+An earlier sitting on the kanso#1418 base read the same five deltas to the
+instruction; kanso#1423 moved the levels and the saving did not move with
+them.
+
+The machine-code vein rises: text 1,734,364 -> 1,735,036, +672 summed, and
+EVERY ONE of its fourteen rows rises by exactly 48. That uniformity is the
+finding. The fused loop lives in src/runtime.c, every binary links the same
+runtime, and the `for (;;)` body is 48 bytes longer than the `if` it replaced
+— so the vein records one number fourteen times. A change in the emitter would
+spread unevenly across these rows instead, because the programs differ in what
+they emit; this one cannot. The 2026-09-05 gavel keeps machine-code size out
+of welfare, so nothing prices the 48 bytes against the runtime falls they buy.
+The trade is stated here and the objective does not weigh it.
+
+The three compile rows rise as layout: compile_instructions 42,870,366 ->
+42,872,197 (+1,831), entry_instructions 144,035,949 -> 144,042,077 (+6,128),
+library_instructions 144,836,225 -> 144,842,133 (+5,908). `kanso check` stops
+before codegen and no decision they count can be altered by a runtime edit,
+but src/runtime.c is compiled into the compiler and its bytes move what sits
+where. On the kanso#1418 base the same diff read -8,125, -21,078 and -22,292
+on the same three rows: same bytes, opposite sign, which is the whole of what
+a layout delta carries. compile_allocs held at 27,937 and compile_memory is
+byte-identical, the pair that really cannot move.
+
+Welfare 68.73 -> 68.75, banked in the same commit.
+

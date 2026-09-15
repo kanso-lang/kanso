@@ -653,23 +653,39 @@
 # -1,600 the smallest. Machine-code size carries no welfare term (ruled
 # 2026-09-05); this vein is exact and watched on its own.
 #
-jsonbench text=118274
-encodebench text=138786
-oneshot text=128306
-basket text=114338
-widebench text=147794
-deepbench text=82690
-escapebench text=55634
-pendbench text=92210
-indexbench text=59442
-scanbench text=194306
-digestbench text=111122
-readbench text=56418
-livebench text=129858
+# 2026-09-14 (kanso#1419): ryu_d2d's pair loop. EVERY ONE OF THE FOURTEEN ROWS
+# RISES BY EXACTLY 48 BYTES -- 118,274 -> 118,322, 305,186 -> 305,234, and so
+# on down the list, no row moving by anything else. Summed, text 1,734,364 ->
+# 1,735,036, +672.
+#
+# That is what a runtime change looks like in this vein when it touches one
+# function and nothing else: the loop lives in src/runtime.c, every binary
+# links the same runtime, and the fused body is 48 bytes longer than the `if`
+# it replaced. A change that moved the emitter would spread unevenly across
+# these rows instead, because the programs differ in what they emit.
+#
+# The 48 bytes buy the runtime falls recorded in bench/instructions_golden.txt.
+# The 2026-09-05 gavel keeps machine-code size out of welfare, so this vein
+# does not price the trade; it only says the size moved, and by how much, and
+# that it moved the same way everywhere.
+#
+jsonbench text=118322
+encodebench text=138834
+oneshot text=128354
+basket text=114386
+widebench text=147842
+deepbench text=82738
+escapebench text=55682
+pendbench text=92258
+indexbench text=59490
+scanbench text=194354
+digestbench text=111170
+readbench text=56466
+livebench text=129906
 # 2026-09-10 (kanso#1362): the backends build the partial over a value. Every
 # one of the fourteen rows RISES, by 2,096 bytes on eight of them and 2,432 on
 # the other six: k_partial0..4 and the branch each of k_call0..4 gains are in
 # src/runtime.c, which is linked into every program. The 336-byte spread is the
 # arms a program's own dispatch makes reachable. Machine-code size carries no
 # welfare term (ruled 2026-09-05); this vein is exact and watched on its own.
-runbench text=305186
+runbench text=305234
