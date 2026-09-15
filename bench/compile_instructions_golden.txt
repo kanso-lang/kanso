@@ -1497,4 +1497,55 @@
 # above say; regenerated from the base CI last ran, stated, not reasoned
 # from. compile_allocs held at 27,937 and compile_memory is byte-identical.
 #
-compile_instructions=42870366
+# 2026-09-15 (kanso#1430): a long copy is a cold call, a RUNTIME change,
+# and this row moved anyway: 42,870,366 -> 42,871,412, +1,046 (+0.0024%), on the base
+# kanso#1429 left. That is the value the row held before kanso#1429, to the
+# instruction: the layout moved back. Regenerated from the base CI last
+# ran, stated, not reasoned from. compile_allocs held at 27,937 and
+# compile_memory is byte-identical.
+#
+# 2026-09-15 (kanso#1431): the third cold-frame sweep, a RUNTIME change,
+# and this row moved anyway: 42,871,412 -> 42,869,908, -1,504 (-0.0035%), on the base
+# kanso#1430 left. The compiler's own bytes and the layout under them move
+# with src/runtime.c. Regenerated from the base CI last ran, stated, not
+# reasoned from. compile_allocs held at 27,937 and compile_memory is
+# byte-identical.
+#
+# 2026-09-15 (kanso#1432): an empty list literal opens with room for four, a
+# RUNTIME change, and this row moved anyway: 42,869,908 -> 42,871,308, +1,400 (+0.0033%),
+# on the base kanso#1431 left. The compiler's own bytes and the layout under
+# them move with src/runtime.c. Regenerated from the base CI last ran,
+# stated, not reasoned from. compile_allocs held at 27,937 and
+# compile_memory is byte-identical.
+#
+# 2026-09-15 (kanso#1433): the two byte scanners are inlined, and their constants
+# fold, a RUNTIME change, and this row moved anyway: 42,871,308 -> 42,873,185, +1,877 (+0.0044%),
+# on the base kanso#1432 left, and 42,872,288 -> 42,873,185 against main. The compiler's
+# own bytes and the layout under them move with src/runtime.c. Regenerated
+# from the base CI last ran, stated, not reasoned from. compile_allocs held at
+# 27,937 and compile_memory is byte-identical.
+#
+# 2026-09-15 (kanso#1435): a scan's short tail is one masked load, a RUNTIME
+# change, and this row moved anyway, a FALL: 42,873,185 -> 42,869,800, -3,385 (-0.0079%),
+# on the base kanso#1433 left, and 42,870,366 -> 42,869,800 against main (-566). The compiler's
+# own bytes and the layout under them move with src/runtime.c. Regenerated
+# from the base CI last ran, stated, not reasoned from. compile_allocs held at
+# 27,937 and compile_memory is byte-identical.
+#
+# 2026-09-15 (kanso#1436): the counters a shipped binary was still counting,
+# a RUNTIME change, and this row moved anyway, a RISE: 42,869,800 -> 42,871,759,
+# +1,959 (+0.0046%), on the base kanso#1435 left, and 42,870,366 ->
+# 42,871,759 against main (+1,393). The compiler's own bytes and the layout
+# under them move with src/runtime.c. Regenerated from the base CI last ran,
+# stated, not reasoned from. compile_allocs held at 27,937 and
+# compile_memory is byte-identical.
+#
+# 2026-09-15 (kanso#1437): a capture is a load, an own-err check is a tag test,
+# a CODEGEN change, and this row is a RISE: 42,871,759 -> 42,873,153, +1,394
+# (+0.0033%), on the base kanso#1436 left, and 42,870,366 -> 42,873,153
+# against main (+2,787). The emitter writes one more define per program
+# (the own-err twin) and a load per capture read. Regenerated from the base
+# CI last ran, stated, not reasoned from. compile_allocs held at 27,937 and
+# compile_memory is byte-identical.
+#
+compile_instructions=42873153

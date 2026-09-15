@@ -183,16 +183,27 @@
 # sites, so the arithmetic lands the other way. Same edit, opposite signs, and
 # the sign is a property of how many byte indexes a program writes rather than
 # of the change. Banked as the price of runbench -2.3594%.
-encodebench defines=186 calls=1632 branches=1002 lines=11176
-oneshot defines=142 calls=1203 branches=782 lines=9071
-basket defines=143 calls=1265 branches=808 lines=8091
-widebench defines=202 calls=1823 branches=1093 lines=12158
-deepbench defines=117 calls=841 branches=595 lines=5988
-escapebench defines=48 calls=106 branches=120 lines=1556
-pendbench defines=132 calls=1192 branches=679 lines=7042
-scanbench defines=330 calls=3260 branches=2133 lines=19805
-indexbench defines=54 calls=146 branches=135 lines=1870
-digestbench defines=198 calls=1526 branches=923 lines=10118
-readbench defines=62 calls=166 branches=152 lines=2169
-livebench defines=143 calls=1227 branches=796 lines=9188
-runbench defines=593 calls=5943 branches=3445 lines=34788
+# 2026-09-15 (a capture is a load, an own-err check is a tag test): every row
+# gains one define and one branch, the k_not_own_err_fast twin in the prelude,
+# and every row's calls move by the twin's one call less the capture reads the
+# program's lambdas used to make through k_env_get: runbench 5,943 -> 5,895
+# (48 capture reads), scanbench 3,260 -> 3,234, deepbench 841 -> 827, widebench
+# 1,823 -> 1,810, encodebench 1,632 -> 1,622, digestbench 1,526 -> 1,516,
+# pendbench 1,192 -> 1,183, basket 1,265 -> 1,259, oneshot 1,203 -> 1,200,
+# readbench 166 -> 163, livebench 1,227 -> 1,224; escapebench 106 -> 107 and
+# indexbench 146 -> 147 have no captured lambda and show the twin's call alone.
+# Lines rise by the twin's body plus one per capture read. Banked as the price
+# of runbench -1.6751% and jsonbench -2.9371% on the container.
+encodebench defines=187 calls=1622 branches=1003 lines=11196
+oneshot defines=143 calls=1200 branches=783 lines=9084
+basket defines=144 calls=1259 branches=809 lines=8108
+widebench defines=203 calls=1810 branches=1094 lines=12181
+deepbench defines=118 calls=827 branches=596 lines=6013
+escapebench defines=49 calls=107 branches=121 lines=1567
+pendbench defines=133 calls=1183 branches=680 lines=7062
+scanbench defines=331 calls=3234 branches=2134 lines=19842
+indexbench defines=55 calls=147 branches=136 lines=1881
+digestbench defines=199 calls=1516 branches=924 lines=10139
+readbench defines=63 calls=163 branches=153 lines=2183
+livebench defines=144 calls=1224 branches=797 lines=9201
+runbench defines=594 calls=5895 branches=3446 lines=34846
