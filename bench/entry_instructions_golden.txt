@@ -318,4 +318,10 @@
 # the compiler. Regenerated from the base CI last ran, stated, not reasoned
 # from. compile_allocs held at 27,937 and compile_memory is byte-identical.
 #
-entry_instructions=144040625
+# 2026-09-15 (kanso#1428): the int parser's cold tail outlined, a RUNTIME
+# change in one function, and this row moved anyway: 144,040,625 -> 144,041,140, +515
+# (+0.0004%), on the base kanso#1427 left. Layout, as the entries above say;
+# regenerated from the base CI last ran, stated, not reasoned from.
+# compile_allocs held at 27,937 and compile_memory is byte-identical.
+#
+entry_instructions=144041140
