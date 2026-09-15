@@ -3351,3 +3351,103 @@ CLAUDE.md now, beside the platform-invariance rule for counters.
 
 The entry leaves the ledger in this commit, ruled. The build joins STATUS.md's
 "Ruled, unbuilt" list.
+
+## 2026-09-15 — the maps parse is outside all three compile rows, measured, and a spec holds it there
+
+The 2026-09-15 gavel "the maps parse is external state, and the compile row
+is normalized so it is not counted" left a build: count from the compiler's
+`main` or pin the layout, chosen by measurement, and re-sit the goldens. The
+first shape has been on main since kanso#1241 and is what every compile
+golden has been sat on since. This entry is the measurement the gavel asked
+for, taken against the gates as they stand, and the spec that keeps them
+there. No golden moves.
+
+**What the gates read.** `scripts/gates/compile_instructions.sh`,
+`entry_instructions.sh` and `library_instructions.sh` each take the first
+`kanso::main` line of `callgrind_annotate --inclusive=yes`, and `src/main.rs`
+carries `#[inline(never)]` on `main` so the frame survives. The ledger entry
+that became the gavel described the row as the whole process. It was filed
+on 2026-09-08 against a reading kanso#1241 had retired four days earlier: its
+`row` column is callgrind's summary line, which no gate has read since.
+
+**Where the parse sits.** On this container's build, `pthread_getattr_np` is
+called once, by `std::rt::lang_start_internal`, and nothing under
+`kanso::main` reaches it. The call graph:
+
+    112,592  < std::rt::lang_start_internal (1x)
+    112,592  * pthread_getattr_np@@GLIBC_2.32
+     98,386      __isoc23_sscanf (50x)
+      9,049      getline (50x)
+      2,312      fopen (1x)
+
+Fifty lines of `/proc/self/maps`, parsed once, above the anchor.
+
+**The ledger's table, re-read under the anchor.** Same probes as the archive's
+"the mechanism, named and accounted to the instruction", rebuilt on main
+689ff885 and read with `scripts/compile_row_probe.sh`: `row` is the whole
+process, `maps` is `pthread_getattr_np` inclusive, `program` is what the
+three gates read.
+
+    variant           .text     .bss    row         maps     program
+    baseline          2743798   312     43,942,132  112,592  43,472,369
+    +64 KiB .bss      2743798   65848   43,944,260  114,720  43,472,369
+    +1,600 B .bss     2743798   1912    43,942,132  112,592  43,472,369
+    100 dead fns      2745398   312     43,947,012  110,323  43,478,218
+    400 dead fns      2754550   312     43,953,573  112,604  43,478,598
+
+The `.bss` row is the ledger's case. The whole-process count moves 2,128, the
+parse moves 2,128, and the gates' row holds to the instruction: the parse is
+not in it. The 1,600-byte probe says why the ledger's probe moved the parse
+at all — the file gains a line when the RW segment grows past its file
+mapping, which 64 KiB does and 1,600 bytes does not. Under valgrind the brk
+base is fixed at the same page for every binary (read directly: `sbrk(0)` is
+`0x403a000` with a .bss of 8, 1,632 and 65,568 bytes), so the heap's layout
+is already normalized and no probe reached it.
+
+**The one term still inside the anchor, named.** The dead-function rows move
+`program` by 5,849 and 6,229, and the per-function diff of the two profiles
+against the baseline puts all of it in one place: `__memcmp_avx2_movbe`
++5,868 and +6,227, with every kanso symbol identical to the instruction and
+the rest of the movement (`_dl_relocate_object`, the maps parse) above the
+anchor. The mechanism is the binary's own layout: the hundred functions add
+relocations ahead of `.rodata`, which moves `.rodata` from 0x32d00 to
+0x33680, so every string literal's offset within its page changes and glibc's
+memcmp takes its page-crossing arm on a different set of them. Measured 2026-
+09-04 at 402 on a 7,632-byte `.text` probe; 5,849 here on 1,600 bytes, and it
+is not monotone in either, which is what an alignment term looks like.
+
+**The second shape, priced.** Pinning `.rodata` to a fixed page removes that
+term for anything that grows ahead of it. Built with
+`-C link-arg=-Wl,--section-start=.rodata=0x100000` on the same two sources:
+`program` reads 43,471,592 on the baseline and 43,471,592 on the hundred-
+function probe, identical to the instruction where the unpinned pair
+differed by 5,849. The price is the gap the linker writes: the binary grows
+from 4,677,120 to 5,724,880 bytes at that address, and a pin one page above
+today's `.rodata` (0x40000) would cost about 52 KiB and fail the link, loudly,
+the day the sections ahead of it outgrow it. What the pin cannot reach is
+growth inside `.rodata` itself — `src/runtime.c` and `lib/*.kso` are
+`include_str!`'d into it, so a runtime or library edit shifts every literal
+after them whatever the section's start — and those are the edits that have
+moved the compile rows "by layout" on most of this month's pull requests. So
+the pin buys the code-only case at a shipped-binary cost and leaves the
+common case alone. It is not built here. Whether a 1% larger binary, or a
+measurement build linked differently from the shipped one, is worth the
+code-only case is Clay's, and goes to him with these numbers rather than to
+the ledger.
+
+**The spec.** `tests/the_compile_rows_start_at_the_compilers_main.rs` reads
+the three gates for the `kanso::main` anchor, refuses any gate reading
+callgrind's `summary:` line, and reads `#[inline(never)]` off `fn main`.
+Watched red first: the ratchet mutation
+`a_compile_row_that_counts_from_process_entry.sh` replaces one gate's
+anchored read with the summary line, and two of the three tests fail, at the
+anchor check and at the summary check. Row `compile_ir_from_main`. The
+mutation guards on a gate this branch does not change, so the touched pass
+does not select it on this pull request; it was proved by hand here and the
+nightly proves it with the table.
+
+**What this leaves.** The ruled normalization is in place and pinned; the
+goldens need no re-sit because they were never sat on the other reading.
+STATUS.md's row comes off when this lands, which is the chat's. The
+`.rodata` pin is a measured option, recorded above, and not a question the
+ledger needs.
