@@ -629,19 +629,32 @@
 # to permanent storage. memcpy +738,000, malloc +626,895, the free path
 # +441,000, k_beat_rewind_slow +183,000, k_b_push_mut +162,000.
 #
-jsonbench 1195571676
-encodebench 3575628491
-oneshot 18862981
+# 2026-09-15 (kanso#1433): the two byte scanners are inlined, and their constants
+# fold. Six rows FALL and none rises, on the base kanso#1432 left: work_runbench
+# 1,930,572,613 -> 1,904,577,350 (-25,995,263, -1.3465%), work_livebench
+# 3,050,596,946 -> 3,018,009,215 (-32,587,731, -1.0682%), work_encodebench
+# 3,575,628,491 -> 3,567,580,816 (-8,047,675, -0.2251%), work_jsonbench
+# 1,195,571,676 -> 1,187,809,626 (-7,762,050, -0.6492%), work_scanbench
+# 508,351,545 -> 500,829,907 (-7,521,638, -1.4796%), work_oneshot 18,862,981
+# -> 18,729,910 (-133,071, -0.7055%). The other eight hold to the instruction:
+# they never call either scanner. The container had read runbench -24,948,866
+# and jsonbench -6,179,850; the runner's fall is deeper on both. Against main,
+# work_escapebench 85,995,606 and work_digestbench 9,838,994 still stand above
+# it, priced in kanso#1432's and kanso#1430's entries; nothing here moves them.
+#
+jsonbench 1187809626
+encodebench 3567580816
+oneshot 18729910
 basket 33685770
 widebench 32712263
 deepbench 355470728
 escapebench 85995606
 pendbench 208151563
 indexbench 2895940
-scanbench 508351545
+scanbench 500829907
 digestbench 9838994
 readbench 4629709
-livebench 3050596946
+livebench 3018009215
 # 2026-09-06 (the run program joins): `runbench 3043743748` is a NEW row and
 # nothing regressed to make it appear. It is the program Clay's gavel that day
 # made the objective's whole run-speed term, and the thirteen rows above it
@@ -699,4 +712,4 @@ livebench 3050596946
 #
 # The uniform -8 across six rows is one instruction on a path each program
 # takes eight times, and the four flat rows never take it at all.
-runbench 1930572613
+runbench 1904577350
