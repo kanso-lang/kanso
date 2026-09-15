@@ -483,6 +483,14 @@ slice_walk = row
 # environment to k_copy_cold; the mutation puts memcpy back above four, a
 # plain call the closure kept five pushes for. Every environment holds the
 # same values, so the work vein is the only thing that can see it.
+empty_room = row
+  "an empty list literal with no room for a push"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_empty_list_literal_has_no_room_for_a_push")
+  benchmarks
+
 closure_caps = row
   "a closure of five captures calling memcpy"
   true
@@ -1356,7 +1364,9 @@ rows_b1r2 = text/concat rows_b1r1 [cold_registers index_cold_arms]
 
 rows_b1r3 = text/concat rows_b1r2 [cold_copy rare_door]
 
-rows_b1r = text/concat rows_b1r3 [sweep_helpers slice_walk closure_caps]
+rows_b1r4 = text/concat rows_b1r3 [sweep_helpers slice_walk closure_caps]
+
+rows_b1r = text/concat rows_b1r4 [empty_room]
 
 rows_b1b = text/concat rows_b1r [machine_code]
 

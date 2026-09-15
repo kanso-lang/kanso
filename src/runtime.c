@@ -6138,9 +6138,10 @@ static inline int k_outlives_beat(const void* p) {
     /* The head block answers without a walk, as k_born_this_beat's does: a
        header there is in the live chain, and it predates the beat exactly
        when the mark sits in the same block above it. The decoder's arrays
-       outgrow their literal's one slot on the second push, 214,000 times a
-       run, and every one walked the chain twice to learn the header was born
-       a few bytes below the bump pointer. */
+       used to outgrow their literal's one slot on the second push, 214,000
+       times a run, and every one walked the chain twice to learn the header
+       was born a few bytes below the bump pointer; the literal opens with
+       room for four now, and the grows that remain still ask here. */
     if (k_blocks) {
         const char* q = (const char*)p;
         if (q >= (const char*)(k_blocks + 1) && q < k_arena)
@@ -6207,11 +6208,18 @@ static KValue k_list_own(KValue* items, long long n) {
     KValue v; v.tag = K_LIST; v.payload = k_ptr(l); return v;
 }
 
+/* The empty literal is the common one -- the decoder opens 272,000 of them a
+   run -- and it is the accumulator a loop pushes into, so its buffer opens
+   with room for four. With one slot the second push of every array went
+   through k_b_push_grow, a hundred instructions to copy one element into the
+   buffer the literal could have had; 225,621 of the run program's 252,499
+   grows were that one. A one-slot buffer is also below the size classes the
+   free list keeps, so it was garbage the moment it was outgrown, where a
+   four-slot one is recycled. glibc's memcpy costs thirteen instructions to
+   learn it has nothing to move, hence the inline copy; the same split k_rec
+   makes. */
 static KValue k_mklist(long long n, KValue* items) {
-    KValue* buf = k_buf(n ? n : 1);
-    /* The empty literal is the common one -- the decoder opens 272,000 of
-       them a run -- and glibc's memcpy costs thirteen instructions to learn
-       it has nothing to move. The same split k_rec makes. */
+    KValue* buf = k_buf(n ? n : 4);
     if (n <= 4) {
         for (long long i = 0; i < n; i++) buf[i] = items[i];
     } else {

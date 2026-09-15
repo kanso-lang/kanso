@@ -72,13 +72,23 @@ fn peak_bytes(n: u64) -> u64 {
 /// nothing smaller can show. The sizes below sit above the floor. The peak
 /// is no longer an exact doubling because the arena grows by whole blocks,
 /// but it grows with the message, which is the defect this spec is about.
+///
+/// Re-pinned 2026-09-15 when the empty list literal opened with room for
+/// four (the `empty_room` row). The message accumulator is built by pushing
+/// into `[]`, and where its buffer lands moved with the literal's shape: at
+/// 65,536 bytes the arena peak rose two blocks, 17,825,808 -> 19,922,976,
+/// while the permanent peak fell 2,621,472 -> 1,310,752; at 131,072 the
+/// arena fell eight blocks, 40,894,496 -> 32,505,888, and the permanent peak
+/// rose 2,621,472 -> 5,242,912. Summed, the smaller message holds 786,448
+/// bytes more and the larger 5,767,168 less. Both are placement, and both
+/// are still a peak that grows with the message.
 #[test]
 fn a_hash_holds_every_block_it_has_read() {
     let short = peak_bytes(65_536);
     let long = peak_bytes(131_072);
 
-    assert_eq!(short, 17_825_808, "the 65,536-byte peak moved");
-    assert_eq!(long, 40_894_496, "the 131,072-byte peak moved");
+    assert_eq!(short, 19_922_976, "the 65,536-byte peak moved");
+    assert_eq!(long, 32_505_888, "the 131,072-byte peak moved");
     assert!(
         long > short,
         "the peak stopped growing with the message: {short} at 65,536 bytes \
