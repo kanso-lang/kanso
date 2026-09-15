@@ -453,6 +453,44 @@ rare_door = row
   (breaking "the_slice_door_calls_the_validators_directly")
   benchmarks
 
+# The third cold-frame sweep, 2026-09-15: nine rare arms of hot runtime
+# functions are preserve_most helpers, so k_b_at, k_b_entries, k_b_push_grow,
+# k_b_append_grow, k_closure and k_copy_alloc open with one push or none. The
+# mutation strips the attribute from the nine and leaves kanso#1429's six.
+# Every value out is identical, so the work vein is the only thing that can
+# see it.
+sweep_helpers = row
+  "the third sweep's helpers clobbering their callers' registers"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_third_sweep_s_helpers_clobber_their_callers_registers")
+  benchmarks
+
+# k_b_slice's multibyte walk is its own function in tail position, so the
+# ascii and list arms open with no pushes where the inline walk cost seven;
+# the mutation inlines it back. Every slice is the same bytes, so the work
+# vein is the only thing that can see it.
+slice_walk = row
+  "the slice's walk sharing the door's frame"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_slice_s_walk_shares_the_door_s_frame")
+  benchmarks
+
+# k_closure copies up to eight captures as inline words and hands a longer
+# environment to k_copy_cold; the mutation puts memcpy back above four, a
+# plain call the closure kept five pushes for. Every environment holds the
+# same values, so the work vein is the only thing that can see it.
+closure_caps = row
+  "a closure of five captures calling memcpy"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_closure_of_five_captures_calls_memcpy")
+  benchmarks
+
 machine_code = row
   "the machine code changing size"
   true
@@ -1316,7 +1354,9 @@ rows_b1r1 = text/concat rows_b1r0 [digit_pairs leading_zeros int_cold_tail]
 
 rows_b1r2 = text/concat rows_b1r1 [cold_registers index_cold_arms]
 
-rows_b1r = text/concat rows_b1r2 [cold_copy rare_door]
+rows_b1r3 = text/concat rows_b1r2 [cold_copy rare_door]
+
+rows_b1r = text/concat rows_b1r3 [sweep_helpers slice_walk closure_caps]
 
 rows_b1b = text/concat rows_b1r [machine_code]
 
