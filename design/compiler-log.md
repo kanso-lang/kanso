@@ -4010,6 +4010,228 @@ compile fall outweighs the runtime rise, so the objective came out ahead
 and the floor is raised rather than lowered. The differential-law
 exception was not needed here.
 
+
+## 2026-09-14 — the append is already in place everywhere, and the counter that said otherwise counts two constructors
+
+The standing lead off `encode_onto` was "a 32-byte arena conversion at 0.61%".
+Re-attributing it on merged main (15e1c3b7) refuted the lead and produced two
+wrong answers on the way, both recorded here because the second was caught
+only by going back for the call sites.
+
+**It is not readable from a profile.** `callgrind_annotate` on runbench —
+1,994,172,731 instructions, `env -i`, run from the repository root — has no row
+for `k_bytes_owned` and none for `k_alloc`. Both inline into every caller,
+which is what kanso#1221 and kanso#1298 were for. Only the outlined append
+family shows: `k_b_append_rendered` 23,466,064 (1.18%), `k_b_append_grow`
+19,358,910 (0.97%), `k_b_append_slice` 9,141,444 (0.46%), `k_b_append_range`
+2,000,394 (0.10%), two more under a thousandth, summing to 54,010,642 (2.71%).
+So the 0.61% was not read off a self row, because there is none.
+
+**THE FINDING: every emitted append in the run program already mutates in
+place.** Counting call sites in `runbench.ll` rather than reasoning about the
+analysis:
+
+    k_b_append_mut_byte     18   mutate = 1
+    k_b_append_mut           2   mutate = 1
+    k_b_append_rendered      2   both with the literal i64 1
+    k_b_append_byte          0
+    k_b_append               1   inside the k_b_append_byte SHIM, not program code
+    k_b_append_slice         1   inside the k_b_append_slice_fast SHIM
+
+Twenty-two emitted sites, and the only two that pass a non-mutating flag are
+the slow-path tails inside the runtime's own inline shims — and
+`k_b_append_byte`, the shim holding one of them, has no call sites at all. The
+uniqueness analysis is not failing on this workload. **`src/linear.rs` is
+refuted as a lead for the run program**, and the round that would have widened
+its Perceus fixpoint, with the differential sweep an aliasing argument owes,
+would have bought nothing.
+
+**The wrong answer that got there: a counter with two increment sites.**
+`k_stat_sh_bytes` reads 41,290,272, and `sizeof(KBytes)` is three words, so
+41,290,272 / 24 = 1,720,428 exactly — a clean division, which is precisely what
+made it convincing. It was written down as `k_bytes_owned`'s call count, and
+against `append_fast` 8,834,013 that gave a fast path splitting 80.5% mutating
+against 19.5% allocating, with a ceiling of 1.04–1.38% of runbench.
+
+Every one of those numbers is withdrawn. `k_stat_sh_bytes` is incremented at
+TWO sites: `k_bytes_owned` (runtime.c:7965) and `k_bytes_view`
+(runtime.c:6828), the borrowed-view constructor that builds the same 24-byte
+header with `cap = 0`. 1,720,428 is the two summed. Nothing separates them —
+`k_stat_view_allocs` is bumped at runtime.c:6489, in neither of them, so it is
+not the split either. The header-allocation count is UNKNOWN, and with it the
+ceiling.
+
+An exact division is not a check. It follows from the two sites sharing one
+`sizeof`, so it would have held however the calls divided between them.
+
+**What to carry forward.** The append path is done: it mutates in place at
+every site the run program emits, and no lead survives there. Anyone returning
+to `k_bytes_owned` needs a counter of its own first — the existing one cannot
+answer the question, and a second constructor is exactly what a shared counter
+hides.
+
+THE SHAPE TO CARRY. `callgrind_annotate` ships with valgrind and was not being
+used; the hand-written parser that once read 99,188,064,506 against a
+1,994,172,731 program was solving a problem the tool already solves. And a
+function with no row has inlined, which is information rather than a reason to
+hunt for the cost elsewhere. Both of those held. What did not hold was reading
+one counter as one call site: `grep -n` for the counter name before dividing by
+anything, and count the emitted call sites before reasoning about the pass that
+decides them.
+
+## 2026-09-14 — ryū's pair loop is already the right shape, and the two reformulations that measured faster had each introduced a divide
+
+Three shapes, all measured against kanso#1419's head (runbench 1,988,868,701).
+
+The lead came off the pair loop in `render_ryu`. It searches with `vp` and `vm`
+and brings `vr` down on the same trip, so `vr`'s division does work the search
+will throw away on every trip but the last. Hoisting it out should cost one
+division instead of `pairs` of them.
+
+Two ways to hoist it, and a third written afterwards:
+
+    table    vr /= RYU_POW100[pairs]           1,987,944,191   -924,510   -0.0465%
+    switch   nine arms, literal divisors       1,987,371,341  -1,497,360   -0.0753%
+    loop     divide by the literal 100         1,993,136,111  +4,267,410   +0.2146%
+
+The first two look like wins and are not. The base divides by the literal
+`100`, and LLVM turns a literal divisor into a multiply-high — three of them a
+trip, which is what the comment above that loop has said since kanso#1260.
+`RYU_POW100[pairs]` is a runtime value, so it compiles to `div %r8`. Counted in
+the linked runbench binary, `render_ryu` holds 0 divides on the base and 2
+under each of the table and switch shapes. A standalone translation unit at
+-O2 reads 0, 2 and 4 for the same three: it agrees with the binary on the base
+and on the switch and counts two extra under the table, which is the inliner
+seeing a different call graph. Either way the direction is the same and the
+base is the shape with none.
+
+**The switch was written to dodge exactly this and did not.** Nine arms, each
+with its own literal divisor, is nine multiply-highs — until LLVM tail-merges
+the arms back into one divide with a phi'd divisor, which is the same runtime
+value by another route. Writing the constants out does not survive the
+optimiser. Only a construction with no runtime divisor anywhere denies it the
+merge, which is what the third shape is: a loop dividing by the literal `100`.
+That one has no divide at all and costs 22.3 instructions a call, because it
+walks `vr` down in its own loop instead of riding the search's trips.
+
+DECLINED, all three. The base is the shape that already has no divide in it.
+
+**What this says about the vein.** Callgrind scores `div r64` as one
+instruction. On the silicon this project publishes numbers for it is 20 to 40
+cycles against a multiply's three. welfare's run term is an instruction count,
+so the objective would have scored the table and the switch as wins, the floor
+would have ratcheted up on them, and the published decode board would have
+moved the wrong way — on a change that is slower everywhere it runs.
+
+This is the second time the queue has been misled by the distance between what
+the vein counts and what the hardware does, and it is the opposite direction
+from the first. `2026-09-13 (fifteenth) — the instruction vein counts a byte of
+memcpy as an instruction` found the vein OVERcounting something cheap, at one
+Ir per byte moved by `rep movsb`, which makes a memcpy-shaped lead look bigger
+than it is. This one is the vein UNDERcounting something expensive, which makes
+a divide-shaped change look like a win. Both are the same gap read from
+different ends, and the rule that falls out of the pair is narrow enough to be
+useful: before believing an instruction delta, check whether the diff moved any
+instruction whose cost and whose count disagree. `div`, `rep`-prefixed string
+moves, and the divisions LLVM has already turned into multiplies are the three
+this repo has hit.
+
+OPEN, and not a gavel: whether welfare's run term should weigh a `div` at more
+than one is a question about the weights, and nothing here moves the floor in
+either direction, so there is nothing to rule yet. Recording it so the next
+change that trades a multiply-high for a divide meets this entry before it
+meets CI.
+
+**The differential.** Each shape was checked against the base byte-for-byte
+before being priced: 23,264,660 cases for the loop shape, structured (2048
+exponents x 64 mantissas x both signs, the powers of ten from -320 to 308 with
+their `nextafter` neighbours, a million integers and their /7 and x1e-9) plus
+uniform random over the bit space, 0 mismatches and 0 round-trip failures
+through `strtod`. The round-trip check runs on non-negatives only:
+`render_ryu` never writes the sign, its caller does (runtime.c:4304), so
+feeding it a negative renders the magnitude and `strtod` reads back a positive.
+That guard was missing at first and reported 25,115,977 failures, none of them
+real.
+
+**And the wider census, which is the reason the rule is forward-looking.**
+Counting `div`/`idiv` sites across all fourteen benchmark binaries on the same
+build: eleven hold exactly one, in `k_exec`, which is process plumbing and runs
+once. The other three — encodebench, widebench and basket — hold five, the same
+one in `k_exec` plus two each in `k_div` and `k_mod`. Those two are the outlined
+helpers kanso#1292 minted when it sent integer quotient and remainder through a
+call with zero and -1 handled there, and a language whose `/` and `%` divide has
+to divide somewhere.
+
+So no hot path in the shipped runtime executes a divide today, and none of the
+297 changes that have landed traded a multiply-high for one. The rule this
+entry leaves behind has no current violations to repair; it exists to catch the
+next change that would have been the first.
+
+
+## 2026-09-14 — the render side of the float pair had no round-trip harness either
+
+kanso#1423 found `k_b_to_float` taking eisel-lemire's answer as certain on a
+truncated significand, one ULP from the correctly-rounded double, on 221 of
+1,405,451 cases. That function's whole corpus was 86 values. The same question
+asked of the other direction — does the text `render_ryu` writes read back as
+the double it was given — had no harness at all.
+
+What existed checked two neighbouring things. `scripts/render_differential`
+runs the interpreter's `render` against the C runtime's `k_render` and
+requires them to agree; two implementations wrong the same way pass it, and
+the interpreter's float rendering is not independent of ryū's. The sweep in
+`the_shortest_digits_come_out_in_pairs` checks the block that writes chosen
+digits into a buffer against snprintf; it says nothing about which digits were
+chosen.
+
+`tests/every_rendered_float_reads_back_as_itself.rs` asks the property
+directly, with `strtod` as the independent reference. It lifts `ryu_d2d`,
+`render_ryu`, their pow5 tables and the two helpers they call out of
+`src/runtime.c` — the real text, never a copy — and sweeps 2,809,326 values in
+three seconds:
+
+    2,809,326 rendered, 0 do not read back, 0 length disagrees, 0 not shortest
+
+The corpus is four groups, and the second one matters more than it looks.
+Random 64-bit patterns spread their exponents uniformly over the whole field,
+so almost none of them land where a json document's numbers live; `m`, `m/10`,
+`m/1000` and `-m/100` for m below 200,000 name that range by hand. The other
+two groups are both sides of every binary exponent including the subnormals,
+and both sides of every power of ten.
+
+**Watched red three ways, one per property, each leaving the other two
+clean.** That separation is the evidence the three checks are independent
+rather than one check written three times:
+
+    output = vr + (...)  ->  output = vr        815,943 do not read back
+    the removal loop breaks after one step      581,913 are not shortest
+    return (o - buf)     ->  + 1                2,809,321 lengths disagree
+
+**A counter of mine was wrong before the renderer was.** The first
+shortest-ness check counted significant digits out of the rendered text, which
+calls `"100"` two digits — the plain form pads with zeros to reach the decimal
+point and those are not digits ryū chose. It reported 2,863 shortest failures,
+every one of them the counter's. Taking `k` from `ryu_d2d` itself is both
+correct and the more honest question, since `k` is what ryū claims.
+
+Ratchet row `render_trip`, mutation `a_rendered_float_that_never_rounds_up.sh`.
+
+**And the integer half of the same door.** `k_b_to_int` parses `[-]?digits` in
+a bare loop when the digit run is eighteen or fewer, on the ground that
+eighteen digits cannot overflow an i64, and hands everything else to strtoll.
+That bound is the whole safety argument and nothing checked it. It is SOUND:
+24,000,029 strings, 21,816,309 of them taking the fast path, 0 disagreeing
+with strtoll.
+
+Recorded as a spec rather than left as a measurement because the bound is one
+character from wrong. Nineteen nines is 9,999,999,999,999,999,999 against
+i64's 9,223,372,036,854,775,807, so widening the bound — the edit someone
+optimising this would reach for — puts 50,249 wrong answers into the fast
+path, the first at `"9223372036854775808"`, 2^63 exactly, where the loop wraps
+to the negative and libc saturates and raises. That is the watched-red, and
+`tests/the_int_fast_path_agrees_with_libc.rs` is what now sees it. Ratchet row
+`int_bound`, mutation `an_eighteen_digit_bound_widened_to_nineteen.sh`.
+
 ## 2026-09-14 — the parse harness that found the bug was thrown away, so it ships
 
 kanso#1423 found `k_b_to_float` calling a truncated significand certain by
