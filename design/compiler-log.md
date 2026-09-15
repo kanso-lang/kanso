@@ -4763,3 +4763,47 @@ Row `leading_zeros`, mutation
 `every_digit_asks_whether_the_first_nonzero_has_landed.sh`: it deletes
 both skips and puts `if (w)` back on both loops, and the result diffs
 against main's `k_b_to_float` in nothing but this change's comment.
+
+## 2026-09-15 — the int parser's cold tail leaves the frame it was sizing
+
+`k_b_to_int` parses a decimal in place: a digit loop over at most eighteen
+bytes, then `strtoll` and two refusals for anything the loop did not
+accept. The loop needs no stack at all, but the calls after it did:
+`strtoll`, `k_str_n`, `k_concat` and `k_err` each clobber the argument
+registers, so the compiler pinned the string's data, length and origin in
+callee-saved ones, and the function opened with five pushes and a frame
+reservation and closed with five pops. Every call paid them, and neither
+benchmark ever reaches the tail — `k_b_to_int_slow` is called zero times
+in runbench and zero in jsonbench. Twelve instructions a call, attributed
+instruction by instruction with `--dump-instr=yes` in task #547.
+
+The tail is its own function now, `noinline, cold`. The fast path's entry
+is one `push %rax` for alignment, and the tail keeps the frame it always
+needed, for the calls that reach it.
+
+Measured on the container, `env -i` under callgrind, both binaries in one
+directory under equal-length names, run from the repository root, on the
+base kanso#1427 leaves:
+
+    runbench    1,985,349,707 -> 1,982,862,035   -2,487,672   -0.1253%
+    jsonbench   1,230,002,489 -> 1,226,233,289   -3,769,200   -0.3064%
+
+The whole of both falls is `k_b_to_int`'s own count: 21,770,496 ->
+19,282,824 over 207,306 calls in runbench, 32,985,600 -> 29,216,400 over
+314,100 in jsonbench: twelve a call, to the instruction, in both. Output is
+byte-identical on both programs.
+
+**The float parser's tail, measured and declined.** `k_b_to_float` ends the
+same way, with `strtod` behind the fast path, and the same cut was built
+beside this one. It is worth 106,821 on runbench and 161,850 on jsonbench,
+a twenty-third of the int tail's fall, and the seven pushes stay: the
+eisel-lemire fast path is inlined into the function and pins its own
+callee-saved registers, so removing the libc call removes nothing from the
+entry. The int loop had no such neighbour. The shape is not shipped, and
+the harness's closing anchor stays where it is.
+
+Row `int_cold_tail`, mutation
+`the_int_parser_s_cold_tail_shares_its_frame.sh`: it rewrites the tail's
+attribute to `always_inline`, which puts the five pushes back. Under the
+mutation runbench reads 1,985,349,707, the base's count to the
+instruction, and `k_b_to_int` is back at 21,770,496.

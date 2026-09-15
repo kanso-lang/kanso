@@ -388,6 +388,18 @@ leading_zeros = row
   (breaking "every_digit_asks_whether_the_first_nonzero_has_landed")
   benchmarks
 
+# k_b_to_int's strtoll fallthrough is a separate cold function since
+# 2026-09-15, so the fast path carries no frame; the mutation inlines it back
+# and the five pushes and five pops return to every call. The value out is
+# identical either way, so the work vein is the only thing that can see it.
+int_cold_tail = row
+  "the int parser's cold tail sharing its frame"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_int_parser_s_cold_tail_shares_its_frame")
+  benchmarks
+
 machine_code = row
   "the machine code changing size"
   true
@@ -1247,7 +1259,7 @@ rows_b1 = text/concat rows_b1a (text/concat rows_b1z [live_counters clean_run])
 
 rows_b1r0 = text/concat rows_b1 [emitted_code emitted_others remainder]
 
-rows_b1r = text/concat rows_b1r0 [digit_pairs leading_zeros]
+rows_b1r = text/concat rows_b1r0 [digit_pairs leading_zeros int_cold_tail]
 
 rows_b1b = text/concat rows_b1r [machine_code]
 
