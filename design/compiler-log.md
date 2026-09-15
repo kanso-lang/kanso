@@ -5013,3 +5013,121 @@ failed to compile on both hosts and the ratchet reported its gate ALREADY
 RED. The cut now runs from `k_copy_cold`'s declaration to the short copy's
 closing brace, one span, so a later change to either shape is still read
 from the source and not from a copy. Green on the container in 4.09s.
+
+## 2026-09-15 — the third cold-frame sweep: nine more rare arms, and a scan that `cold` cost its vector loop
+
+kanso#1429 and kanso#1430 took the frames the arena refill, the index's
+arms and the long copy were charging. This entry took the attribution
+again on the cold-copy build, per function: callgrind's dynamic call
+counts against each function's prologue push count, ranked by calls times
+pushes. Seven hot functions still opened with five to seven pushes for
+calls a run makes a few thousand times: `k_b_at` (six, 690,000 calls),
+`k_b_entries` and `k_map_sorted` (six each, 248,490), `k_b_push_grow`
+(six, 252,499), `k_b_slice` (seven, 183,682), `k_b_append_grow` (six,
+176,697), `k_closure` (five, 243,978) and `k_copy_alloc` (seven, 74,551).
+
+**Nine rare arms become preserve_most helpers.** The character scan
+behind `k_str_chars` (`k_str_chars_scan`: an index and a slice ask it,
+and it runs once per string, 163 times a run); a map view's first build
+(`k_map_sort_build`, 2,761 of 248,490 asks, so `k_map_sorted` inlines into
+`entries`); `entries`' failing-field record (`k_rec_cold`); a list grow's
+permanent buffer, its registration and its release (`k_buf_perm`,
+`k_permreg_add`, `k_buf_release`: 15,488, 15,488 and 11,616 of 252,499
+grows); a bytes grow's malloc regime and the free of a malloced
+predecessor (`k_bytes_buf_malloc`, `k_bytes_buf_release`: 1,080 and 990 of
+176,697); and the tenure tier's block opener (`k_ten_block_open`, 14 of
+74,551 carves). Two more shapes ride with them: `k_closure` copies up to
+eight captures as inline words and hands longer environments to
+`k_copy_cold` (memcpy had been a plain call on 92,235 of its calls), and
+`k_b_slice`'s multibyte walk is its own function in tail position, so the
+ascii and list arms open with no pushes where the inline walk cost seven.
+`k_copy_short` is `always_inline` as well: `k_b_slice` was calling it out
+of line, and inlining it is worth 236,052 against the same tree.
+
+Prologues after, read off the linked run program: `k_b_at` 6 -> 1,
+`k_b_slice` 7 -> 1, `k_copy_alloc` 7 -> 1, `k_closure` 5 -> 1,
+`k_b_push_grow` 6 -> 4, `k_b_entries` 6 -> 3, `k_b_append_grow` 6 -> 3.
+The three that keep pushes hold more values live than the nine
+caller-saved registers can carry; that is pressure, and no attribute
+reaches it. (This paragraph first said `k_b_at` 5 -> 1 and
+`k_b_push_grow` 6 -> 0. The linked binary says six and four: the grow's
+four pushes and an alignment slot sit below its doubling loop now, so
+the entry opens with none, and every one of its 252,499 calls still
+reaches them. Corrected in round two from the per-instruction profile.)
+
+Container A/B, `env -i` under callgrind, equal-length names in one
+directory, on the kanso#1430 leaves:
+
+    runbench    1,962,311,522 -> 1,938,188,043   -24,123,479   -1.2293%
+    jsonbench   1,200,857,142 -> 1,193,215,104    -7,642,038   -0.6364%
+
+Per function on runbench: `k_b_slice` 18,864,651 -> 8,265,702, with the
+walk's 8,027,391 now standing on its own two calls; `k_b_at` -7,633,165;
+`k_map_sorted` 6,341,332 -> 0 against `k_map_sort_build`'s 710,389;
+`k_b_entries` -3,236,127; `k_b_length` -3,207,837 where the scan it inlined
+now stands as `k_str_chars_scan`'s 4,290,788; `k_b_append_grow`
+-2,368,359; `k_b_push_grow` -2,152,826; glibc's memcpy -2,029,170;
+`k_copy_alloc` 2,255,292 -> 1,360,457. The helpers' own price: `k_buf_perm`
+557,572 over 15,488 calls, `k_buf_release` 313,632, `k_permreg_add`
++247,806, `k_copy_cold` +316,701 on 15,081 more calls. And `k_eq_rec`
++279,330, four pushes to seven: it asks `k_map_sorted` twice, and the inline
+copy carries the build's call into a function that compares maps 92,252
+times a run without ever building one. Output byte-identical on both
+programs at every step.
+
+**`cold` on a loop is a different decision from `cold` on a tail.** The
+first cut marked `k_str_chars_scan` `cold` like the other helpers, and the
+composite read runbench -7,518,671. The scan inside it is `k_utf8_chars`,
+a word-at-a-time loop clang vectorizes at -O3; a cold function is compiled
+for size, and the loop came out scalar: 17,797,006 instructions over 163
+calls, against 4,290,788 for the same helper without the attribute. That
+one word was 13,506,218 of runbench, more than half of what the sweep
+found. The helper keeps `noinline, preserve_most` and nothing else, and
+the rule this leaves: `cold` is for an arm that does a few instructions'
+work, never for one that carries a loop worth vectorizing.
+
+Rows `sweep_helpers` (the mutation strips `preserve_most` from the nine
+and leaves kanso#1429's six), `slice_walk` (inlines the walk back) and
+`closure_caps` (four inline words and memcpy above), each proved red
+locally against 1,938,188,043: the first reads runbench 1,945,409,548
+(+7,221,505) and jsonbench +4,035,972, the second 1,940,575,869
+(+2,387,826), the third 1,940,317,281 (+2,129,238). `k_map_sorted` spelt
+`static` without `inline` builds byte-identically, so the word stays for
+the reader and decides nothing.
+
+**Declined on the way.** `k_b_append_range`'s fast-path memcpy replaced by
+the short ladder: five pushes to none on the standalone compile, and
+runbench +328,995, jsonbench -863,400, encodebench -1,200; the objective
+declines it. Outlining `k_b_to_float`'s strtod tail left it at seven
+pushes; that frame is the parse body's and no tail reaches it.
+
+**CI's sitting, on the base kanso#1430 left.** The work vein reads
+runbench 1,970,132,223 -> 1,945,875,866 (-24,256,357, -1.2312%), 132,878
+deeper than the container's -24,123,479, and jsonbench 1,218,898,014 ->
+1,211,426,976 (-7,471,038, -0.6129%), 171,000 shallower than the
+container's -7,642,038. Eleven more rows fall: livebench -40,670,538
+(-1.3156%), encodebench -40,612,772 (-1.1230%), scanbench -20,527,342
+(-3.8814%), deepbench -14,043,480 (-3.8064%), basket -577,785 (-1.6731%),
+indexbench -190,206 (-6.1632%), oneshot -56,233, widebench -49,649,
+pendbench -30,424, digestbench -3,137, readbench -123. Against main the
+digest row still stands above where the chain found it, work_digestbench
+9,813,332 -> 9,941,342: that is kanso#1430's wrapper price less this
+sweep's 3,137, and it is priced in that entry. One RISES here:
+work_escapebench 82,993,058 -> 83,901,717 (+908,659, +1.0949%). That is
+the list grow's price. Its permanent buffer, its registration and its
+release are preserve_most helpers now, and escapebench grows a list
+12,000 times a run, 9,000 of them releasing a predecessor: on the
+container the three helpers and the long copy cost it 1,752,029
+(`k_permreg_add` 888,017, `k_buf_perm` 432,004, `k_buf_release` 243,004,
+`k_copy_cold` 189,004) against 846,030 the push itself no longer pays,
+905,659 summed where CI read 908,659.
+
+Machine code: nine rows RISE and five FALL, summed 1,708,284 ->
+1,708,652 (+368). Nine helpers are out of line now, each with a
+preserve_most prologue and epilogue, and the callers they left keep no
+frame; which side is larger is per program, and runbench falls 832.
+
+The three compile rows FALL by layout: compile_instructions 42,871,412 ->
+42,869,908 (-1,504), entry_instructions 144,040,625 -> 144,035,862
+(-4,763), library_instructions 144,841,583 -> 144,837,205 (-4,378).
+compile_allocs held at 27,937 and compile_memory is byte-identical.

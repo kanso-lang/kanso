@@ -337,4 +337,11 @@
 # ran, stated, not reasoned from. compile_allocs held at 27,937 and
 # compile_memory is byte-identical.
 #
-entry_instructions=144040625
+# 2026-09-15 (kanso#1431): the third cold-frame sweep, a RUNTIME change,
+# and this row moved anyway: 144,040,625 -> 144,035,862, -4,763 (-0.0033%), on the base
+# kanso#1430 left. The compiler's own bytes and the layout under them move
+# with src/runtime.c. Regenerated from the base CI last ran, stated, not
+# reasoned from. compile_allocs held at 27,937 and compile_memory is
+# byte-identical.
+#
+entry_instructions=144035862
