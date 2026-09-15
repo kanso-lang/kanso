@@ -4831,6 +4831,25 @@ attribute to `always_inline`, which puts the five pushes back. Under the
 mutation runbench reads 1,985,349,707, the base's count to the
 instruction, and `k_b_to_int` is back at 21,770,496.
 
+**CI's sitting, on the base kanso#1427 left.** The work vein reads eleven
+a call where the container read twelve: runbench 1,992,627,657 ->
+1,990,347,291 (-2,280,366, -0.1144%) over 207,306 calls and jsonbench
+1,247,197,361 -> 1,243,742,261 (-3,455,100, -0.2770%) over 314,100, both
+to the instruction. The runner's clang keeps one instruction of frame the
+container's discards. encodebench 3,616,555,466, livebench 3,091,524,686
+and oneshot 19,186,974 each fall by 23,034, one decode of the large
+document; nine rows hold to the digit.
+
+Six machine-code rows FALL by exactly 976 bytes: jsonbench text 117,474,
+encodebench 137,986, oneshot 127,506, widebench 146,994, livebench
+129,058 and runbench 304,386; summed 1,736,060 -> 1,730,204 (-5,856). The
+tail's two refusals were laid out twice inline and once as a function.
+
+The three compile rows RISE by layout: compile_instructions 42,871,412 ->
+42,872,288 (+876), entry_instructions 144,040,625 -> 144,041,140 (+515),
+library_instructions 144,841,583 -> 144,841,869 (+286). compile_allocs
+held at 27,937 and compile_memory is byte-identical.
+
 ## 2026-09-15 — the cold helpers stop clobbering their callers' registers
 
 A hot runtime function that calls nothing on its usual path still opened
@@ -4890,6 +4909,34 @@ Each half needed the other, which is why they ship together.
 Rows `cold_registers` and `index_cold_arms`. The first mutation strips
 `preserve_most` from all six helpers; the second inlines the index's two
 arms back.
+
+**CI's sitting, on the base kanso#1428 left.** The work vein reads
+runbench 1,990,347,291 -> 1,977,087,740 (-13,259,551, -0.6662%) and
+jsonbench 1,243,742,261 -> 1,229,738,040 (-14,004,221, -1.1260%), where
+the container's A/B read -13,795,119 and -14,536,121: the runner's clang
+keeps a little more frame than the container's, as it did on kanso#1428.
+Eight more rows fall, deepbench -2,179,955, widebench -191,892,
+encodebench -115,872, indexbench -99,535, livebench -97,289, oneshot
+-90,495, digestbench -23,820, pendbench -7,166. Four RISE, and they are
+the outlining's own price: work_basket 34,281,871 -> 34,433,106
+(+151,235, +0.4412%), work_escapebench 82,969,017 -> 82,999,058 (+30,041),
+work_scanbench 528,870,249 -> 528,872,901 (+2,652), work_readbench
+4,629,745 -> 4,629,808 (+63). An index whose container is a map reaches `k_b_at_rest` by a call
+now, the ascii fill is a call, and the refill saves every register it
+touches on each call, so a program that takes those paths and holds little
+live across them pays and collects nothing. Which of the three basket pays
+was not attributed.
+
+All fourteen machine-code rows FALL, 928 to 2,432 bytes each; summed
+1,730,204 -> 1,707,852 (-22,352). The container sized the refill's
+attribute alone as neutral and never sized the composite: the pushes and
+pops a caller no longer opens with are bytes, and every binary calls the
+refill.
+
+The three compile rows FALL by layout: compile_instructions 42,872,288 ->
+42,870,366 (-1,922), entry_instructions 144,041,140 -> 144,035,949
+(-5,191), library_instructions 144,841,869 -> 144,836,225 (-5,644).
+compile_allocs held at 27,937 and compile_memory is byte-identical.
 
 ## 2026-09-15 — a long copy is a cold call, and the slice door's rare arms are too
 

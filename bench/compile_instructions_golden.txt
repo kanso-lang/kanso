@@ -1485,4 +1485,16 @@
 # the compiler. Regenerated from the base CI last ran, stated, not reasoned
 # from. compile_allocs held at 27,937 and compile_memory is byte-identical.
 #
-compile_instructions=42871412
+# 2026-09-15 (kanso#1428): the int parser's cold tail outlined, a RUNTIME
+# change in one function, and this row moved anyway: 42,871,412 -> 42,872,288, +876
+# (+0.0020%), on the base kanso#1427 left. Layout, as the entries above say;
+# regenerated from the base CI last ran, stated, not reasoned from.
+# compile_allocs held at 27,937 and compile_memory is byte-identical.
+#
+# 2026-09-15 (kanso#1429): six cold helpers carry preserve_most and three
+# arms are outlined, a RUNTIME change, and this row moved anyway: 42,872,288 ->
+# 42,870,366, -1,922 (-0.0045%), on the base kanso#1428 left. Layout, as the entries
+# above say; regenerated from the base CI last ran, stated, not reasoned
+# from. compile_allocs held at 27,937 and compile_memory is byte-identical.
+#
+compile_instructions=42870366
