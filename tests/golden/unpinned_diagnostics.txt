@@ -439,13 +439,6 @@ a bound description cannot be used as data here
 # the call site to the page's own check.
 this function takes {} argument(s), got 1
 
-# provenance.rs:325, and it needs a hako: an arm for an err raised by the
-# package that owns the arm, which can never match. tests/golden/hako holds
-# two package trees and neither is a corpus the diagnostic scan reads for
-# stderr, because those cases assert what a package DOES rather than what it
-# is refused for.
-error[license]: `{}` has an arm for an err raised in {}, and
-
 # Two engines refuse the same program at different times, in different words.
 # `9223372036854775808 & 1` reaches the interpreter's bitwise guard, and the
 # native backend refuses the literal at compile time — "the literal ... does

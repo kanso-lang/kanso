@@ -35,11 +35,12 @@ enum Slot {
     },
     Seq(u32, u32),
     /// The three worded chain steps of the 2026-08-26 gavel, as one slot with
-    /// the word that says which channel the callback sees. `Annotate` carries
-    /// the origin literal beside them, because the err it builds is a raise
+    /// the word that says which channel the callback sees. `Rescue` and
+    /// `Annotate` carry the origin literal beside them: the first for its
+    /// foreign-only licence, the second because the err it builds is a raise
     /// and a raise records where it happened.
     Bind(u32, u32),
-    Rescue(u32, u32),
+    Rescue(u32, u32, u32),
     Annotate(u32, u32, u32),
 }
 
@@ -396,7 +397,13 @@ fn worded_step(word: &Slot, yielded: u32, callee: u32) -> u32 {
     match (word, failed) {
         (Slot::Bind(..), true) | (Slot::Rescue(..), false) => yielded,
         (Slot::Bind(..), false) => call_decided(callee, yielded),
-        (Slot::Rescue(..), true) => call_decided(callee, yielded),
+        // The foreign-only licence, at the word: a rescue written in the
+        // package that raised the failure hands it on without entering the
+        // callback. The interpreter's `own_failure` is the oracle.
+        (Slot::Rescue(_, _, origin), true) => match slot(yielded) {
+            Slot::V(Value::ErrV(ref cause)) if own_failure(cause, *origin) => yielded,
+            _ => call_decided(callee, yielded),
+        },
         (Slot::Annotate(_, _, origin), true) => {
             let Slot::V(Value::ErrV(cause)) = slot(yielded) else { return yielded };
             let answered = call_decided(callee, yielded);
@@ -709,6 +716,16 @@ fn raised_at(origin_lit: u32) -> crate::eval::Raised {
     }
 }
 
+/// Whether the failure was raised by the package the rescue is written in.
+/// A failure with no package — merged, or raised by a host with no frame —
+/// belongs to nobody and passes.
+fn own_failure(cause: &crate::eval::ErrInfo, origin_lit: u32) -> bool {
+    match (&cause.hako, raised_at(origin_lit).hako) {
+        (Some(raiser), Some(here)) => *raiser == here,
+        _ => false,
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn rt_mkerr(h: u32, origin_lit: u32) -> u32 {
     // An err CARRIES its reason, so this is `value_of` and not `operand`:
@@ -720,18 +737,6 @@ pub extern "C" fn rt_mkerr(h: u32, origin_lit: u32) -> u32 {
         return h;
     }
     push(Slot::V(err_value(v, raised_at(origin_lit))))
-}
-
-/// An arm cannot see an err its own hako raised (gavel 24, clause 1, as
-/// dispatch semantics). Answers whether the match may proceed, so every
-/// non-err and every err from elsewhere passes.
-#[no_mangle]
-pub extern "C" fn rt_not_own_err(h: u32, arm_lit: u32) -> u32 {
-    let arm = lit_str(arm_lit);
-    match val(h) {
-        Value::ErrV(info) => u32::from(info.hako.as_deref() != Some(&*arm)),
-        _ => 1,
-    }
 }
 
 fn lit_str(h: u32) -> Rc<str> {
@@ -1169,9 +1174,11 @@ fn as_desc(h: u32) -> Option<Rc<Desc>> {
         // carries the decided call these two need — without it the subject
         // would run, the callback would be skipped, and the page would answer
         // the failure the other two engines catch.
-        Slot::Rescue(inner, closure) => {
-            Some(Rc::new(Desc::Rescue(as_desc(inner)?, Value::TableFn(closure))))
-        }
+        Slot::Rescue(inner, closure, origin) => Some(Rc::new(Desc::Rescue(
+            as_desc(inner)?,
+            Value::TableFn(closure),
+            raised_at(origin),
+        ))),
         Slot::Annotate(inner, closure, origin) => Some(Rc::new(Desc::Annotate(
             as_desc(inner)?,
             Value::TableFn(closure),
@@ -1238,10 +1245,11 @@ pub extern "C" fn rt_bind(subject: u32, callback: u32) -> u32 {
 }
 
 #[no_mangle]
-pub extern "C" fn rt_rescue(subject: u32, callback: u32) -> u32 {
+pub extern "C" fn rt_rescue(subject: u32, callback: u32, origin_lit: u32) -> u32 {
+    let word = Slot::Rescue(subject, callback, origin_lit);
     match descish(&slot(subject)) {
-        true => push(Slot::Rescue(subject, callback)),
-        false => worded_step(&Slot::Rescue(subject, callback), subject, callback),
+        true => push(word),
+        false => worded_step(&word, subject, callback),
     }
 }
 
@@ -1500,7 +1508,7 @@ fn exec_slot(h: u32) -> Result<u32, String> {
             exec_slot(right)
         }
         ref word @ (Slot::Bind(inner, closure)
-        | Slot::Rescue(inner, closure)
+        | Slot::Rescue(inner, closure, _)
         | Slot::Annotate(inner, closure, _)) => {
             let yielded = exec_slot(inner)?;
             let next = worded_step(word, yielded, closure);

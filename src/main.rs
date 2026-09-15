@@ -272,21 +272,6 @@ fn driven() -> ExitCode {
         for advisory in kanso::advisory::door_advisories(&program) {
             eprintln!("{advisory}");
         }
-        let inference = kanso::infer::infer(&program);
-        if std::env::var_os("KANSO_NO_PROV").is_none() {
-            let prov = kanso::provenance::analyze(&program);
-            // "It was never advisory" — Clay, 2026-08-25. Gavel 24 is dispatch
-            // semantics now, so an arm written for its own hako's err is dead
-            // code, and dead code that looks like error handling is worth
-            // refusing rather than mentioning.
-            let refusals = kanso::provenance::violations(&program, &prov, &inference.returns);
-            if !refusals.is_empty() {
-                for refusal in &refusals {
-                    eprintln!("{refusal}");
-                }
-                return ExitCode::from(1);
-            }
-        }
         if std::env::var_os("KANSO_COUNTERS").is_some() {
             eprint!("{}", compiler_counters());
         }

@@ -1,0 +1,12 @@
+# The foreign-only rescue licence, on the boxed shape. The chain's failure
+# was raised by `mine`, in this file, and the `.?` is written in this file
+# too, so the word hands it on without entering its callback and nothing
+# downstream is foreign enough to end it: the program reaches the endpoint
+# with it. Before the licence moved off the arm and onto the word (ruled
+# 2026-09-15) the lambda was entered and this printed "claimed mine".
+import "std/time"
+
+fn mine _
+  err "mine"
+
+time/sleep 0 .> (_ -> mine 1) .? (e -> "claimed {e.reason}") .> print

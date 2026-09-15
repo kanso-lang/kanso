@@ -4,8 +4,14 @@
 # settled failures, which is what lets the page run this one: no world has to
 # refuse anything for a channel to carry something. `told` is a group handed
 # over as a bare right-hand side; the lambdas are the other bare form, and
-# `settled` is the chain written one step to a line.
+# `settled` chains two of the words with a group between them.
+#
+# `settled` ends at its `.!`. The err that step builds is this module's own,
+# and a `.?` written here would hand it on rather than enter its callback —
+# the rescue licence is foreign-only — so the annotated failure is read the
+# way a test reads one, through `std/testing`, which is foreign to this file.
 import "std/json"
+import "std/testing"
 
 fn told (err r)
   "rescued: {r.reason}"
@@ -20,10 +26,7 @@ fn count_of xs
   length xs
 
 fn settled text
-  json/decode text
-    .> count_of
-    .! (e -> "settled: {e.reason.reason}")
-    .? (e -> "fell back on {e.reason}")
+  json/decode text .> count_of .! (e -> "settled: {e.reason.reason}")
 
 pub play =
   print (json/decode "[1, 2" .? told)
@@ -31,4 +34,4 @@ pub play =
   >> print (json/decode "[1, 2]" .? told)
   >> print (3 .> add_one .> (x -> x * 2))
   >> print (settled "[1, 2, 3]")
-  >> print (settled "[1, 2")
+  >> print (testing/when_failed (settled "[1, 2") (r -> "annotated: {r}"))

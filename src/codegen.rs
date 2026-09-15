@@ -723,16 +723,6 @@ define internal i64 @k_not_failure(%KValue %v) alwaysinline {
   %r = zext i1 %ne to i64
   ret i64 %r
 }
-define internal i64 @k_not_own_err_fast(%KValue %v, ptr %arm) alwaysinline {
-  %tag = extractvalue %KValue %v, 0
-  %is_err = icmp eq i64 %tag, 5
-  br i1 %is_err, label %ask, label %pass
-ask:
-  %r = call i64 @k_not_own_err(%KValue %v, ptr %arm)
-  ret i64 %r
-pass:
-  ret i64 1
-}
 define internal i64 @k_truthy(%KValue %v) alwaysinline {
   %tag = extractvalue %KValue %v, 0
   %t = icmp eq i64 %tag, 2
@@ -1151,7 +1141,6 @@ declare %KValue @k_err_read(%KValue, ptr)
 declare i64 @k_is_err(%KValue)
 declare %KValue @k_set_field(%KValue, ptr, %KValue)
 declare i64 @k_check_some(%KValue)
-declare i64 @k_not_own_err(%KValue, ptr)
 declare %KValue @k_err_inner(%KValue)
 declare i64 @k_check_rec(%KValue, i64, i64)
 declare i64 @k_check_str(%KValue, ptr, i64)
@@ -1214,7 +1203,7 @@ declare %KValue @k_b_net_write(%KValue, %KValue)
 declare %KValue @k_b_net_close(%KValue)
 declare %KValue @k_maybe_bind(%KValue, %KValue)
 declare %KValue @k_b_bind(%KValue, %KValue)
-declare %KValue @k_b_rescue(%KValue, %KValue)
+declare %KValue @k_b_rescue(%KValue, %KValue, ptr)
 declare %KValue @k_b_annotate(%KValue, %KValue, ptr)
 declare %KValue @k_desc_join(%KValue, %KValue)
 declare %KValue @k_desc_sleep(%KValue)
@@ -2900,26 +2889,6 @@ impl<'a> Backend<'a> {
         Ok(narrow_tailcc(out))
     }
 
-    /// Can a value matching this annotation be an err? Only then is the
-    /// own-origin guard worth emitting — every other pattern cannot see a
-    /// failure in the first place, so the check would be a call per match on
-    /// a hot path to learn nothing.
-    fn admits_err(&self, ty: &str) -> bool {
-        if ty == "err" {
-            return true;
-        }
-        match self.typesets.get(ty) {
-            Some(members) => members.iter().any(|m| m != ty && self.admits_err(m)),
-            None => false,
-        }
-    }
-
-    /// The arm's package as an interned literal, for `k_not_own_err`.
-    fn arm_hako(&mut self, f: &FnEmit) -> String {
-        let (name, _) = self.intern(&format!("{}\0", f.hako));
-        name
-    }
-
     fn intern(&mut self, text: &str) -> (String, usize) {
         let bytes = text.as_bytes().to_vec();
         let len = bytes.len();
@@ -3121,10 +3090,9 @@ impl<'a> Backend<'a> {
                 if ty.contains('[') {
                     return Some(ArmCase::Tags(vec![10]));
                 }
-                // An annotation that admits err is tested behind
-                // `k_not_own_err`, and a typeset matches when any member does.
-                // Neither is a tag, so neither is a case.
-                if self.admits_err(ty) || self.typesets.contains_key(ty.as_str()) {
+                // A typeset matches when any member does, which is not a
+                // tag, so not a case.
+                if self.typesets.contains_key(ty.as_str()) {
                     return None;
                 }
                 match ty.as_str() {
@@ -4134,20 +4102,6 @@ impl<'a> Backend<'a> {
                     f.bind(name, value);
                     return Ok(());
                 }
-                // One arm for every annotation, typeset or not, because two
-                // arms for one pattern kind is how the guard below went
-                // missing: the typeset arm returned before reaching it, so a
-                // typeset naming err let a package rescue its own failure on
-                // native where the oracle passed it through. `wasm_backend`
-                // has always had the one arm and has always been right.
-                if self.admits_err(ty) {
-                    let arm = self.arm_hako(f);
-                    check(
-                        self,
-                        f,
-                        format!("call i64 @k_not_own_err_fast(%KValue {value}, ptr @{arm})"),
-                    );
-                }
                 // a typeset matches when any member does: OR the members'
                 // checks and branch once. A plain annotation is the same
                 // shape with one member.
@@ -4177,12 +4131,6 @@ impl<'a> Backend<'a> {
             }
             Pattern::Ctor { ty, fields, whole } => {
                 if ty == "err" {
-                    let arm = self.arm_hako(f);
-                    check(
-                        self,
-                        f,
-                        format!("call i64 @k_not_own_err_fast(%KValue {value}, ptr @{arm})"),
-                    );
                     check(self, f, format!("call i64 @k_check_tag(%KValue {value}, i64 {K_ERR})"));
                     let inner = f.tmp();
                     f.line(&format!("{inner} = call %KValue @k_err_inner(%KValue {value})"));
@@ -6299,14 +6247,17 @@ impl<'a> Backend<'a> {
             f.record(&t, ERR);
             return Ok(t);
         }
-        // `annotate` raises an err of its own, so like `err` and `wrap_err` it
-        // is handed the site it was written at. The runtime wraps the callback
-        // in a closure holding both and hands the result to rescue's node.
-        if name == "annotate" {
+        // `rescue` and `annotate` are handed the site they were written at,
+        // like `err` and `wrap_err`: `annotate` because it raises an err of
+        // its own, `rescue` because its licence is foreign-only and the
+        // site's package is what the failure's raiser is compared against.
+        // The runtime wraps the callback in a closure holding both and hands
+        // the result to the one worded node.
+        if name == "rescue" || name == "annotate" {
             let origin = self.origin_arg(f, span);
             let t = f.tmp();
             f.line(&format!(
-                "{t} = call %KValue @k_b_annotate(%KValue {}, %KValue {}, {origin})",
+                "{t} = call %KValue @k_b_{name}(%KValue {}, %KValue {}, {origin})",
                 emitted[0], emitted[1]
             ));
             f.record(&t, TOP);

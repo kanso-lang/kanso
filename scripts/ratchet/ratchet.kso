@@ -218,6 +218,19 @@ goldens = row
   (breaking "drifted_micro_golden")
   no_setup
 
+# The foreign-only rescue licence, at the word: a `.?` written in the package
+# that raised the failure hands it on without entering its callback. The
+# mutation deletes the interpreter's licence arm, and the micro fixture that
+# pins the licence prints the callback's answer where the golden says the
+# failure went by.
+rescue_licence = row
+  "a rescue that enters the callback on its own package's failure"
+  true
+  "cargo test --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_rescue_that_enters_its_own_packages_callback")
+  no_setup
+
 # The four `cargo test --test golden` rows above and below all point at the
 # micro corpus or the mem corpus. The error corpus — 161 fixtures pinning
 # every diagnostic the language emits — had no row at all, so nothing had
@@ -531,20 +544,6 @@ capture_load = row
   "cost goldens (deterministic ratchet, no clocks)"
   (breaking "a_capture_is_read_through_a_call")
   benches
-
-# The own-err check in front of an err-admitting arm crossed a call on every
-# value the arm was tried against, 1,454,508 a run on the run program, when
-# only an err needs the package compare behind it. The check is an
-# alwaysinline twin now: the tag test in the caller, the call only for an
-# err. Emitted text counts the same one `call`, so the work vein is the only
-# thing that can see it.
-own_err_inline = row
-  "an own-err check that calls out on every value, err or not"
-  true
-  (gating "instructions")
-  "cost goldens (deterministic ratchet, no clocks)"
-  (breaking "an_own_err_check_is_a_call_on_every_value")
-  benchmarks
 
 empty_room = row
   "an empty list literal with no room for a push"
@@ -1447,7 +1446,7 @@ rows_b1r4 = text/concat rows_b1r3 [sweep_helpers slice_walk closure_caps]
 
 rows_b1r5 = text/concat rows_b1r4 [empty_room scan_inline scan_tail]
 
-rows_b1r = text/concat rows_b1r5 [counters_out capture_load own_err_inline]
+rows_b1r = text/concat rows_b1r5 [counters_out capture_load]
 
 rows_b1b = text/concat rows_b1r [machine_code]
 
@@ -1676,7 +1675,7 @@ rows_c1k = text/concat rows_c1j [coverage_oracle coverage_oracle_format]
 
 rows_c1l = text/concat rows_c1k [coverage_page coverage_page_format]
 
-rows_c1m = text/concat rows_c1l [beat_cursor]
+rows_c1m = text/concat rows_c1l [beat_cursor rescue_licence]
 
 rows_c = text/concat rows_c1m [itself]
 

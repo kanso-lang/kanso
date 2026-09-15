@@ -1,9 +1,9 @@
 pattern   own   foreign
 _         past  past
 v         past  past
-v:err     past  took
-(err r)   past  took
-v:maybe   past  took
+v:err     took  took
+(err r)   took  took
+v:maybe   took  took
 v:some    past  past
 v:int     past  past
 v:string  past  past

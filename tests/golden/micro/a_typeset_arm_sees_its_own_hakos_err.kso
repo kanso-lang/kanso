@@ -1,0 +1,35 @@
+# Three patterns can hold an err: `(err …)`, an `:err` annotation, and a
+# TYPESET with err among its members. Under the 2026-09-15 ruling a bare err
+# is data and all three match it wherever it was raised — and the typeset is
+# the one to pin separately, because it is the shape that diverged before:
+# native's typeset arm returned before asking about the raiser while the
+# other two engines asked, so a program answered differently by engine
+# (kanso#1056). The raiser no longer matters, and every engine has to agree
+# that it does not.
+#
+# `own` is this module's failure reaching this module's typeset arm: the arm
+# takes it, and `when_failed`, handed a string, answers false. The value line
+# is the other half: the arm does its job on a member that is not a failure.
+import "std/testing"
+
+type maybe err int
+
+fn as_text reason
+  "{reason}"
+
+fn boom what
+  err what
+
+fn look _:maybe
+  "the typeset arm took it"
+
+fn look v
+  "a value: {v}"
+
+own = look (boom "a")
+
+fine = look 7
+
+pub play =
+  print "own: {testing/when_failed own as_text}"
+  >> print "value: {fine}"

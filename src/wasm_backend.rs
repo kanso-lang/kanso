@@ -78,23 +78,21 @@ const RT_NO_FIELD: u32 = 35;
 const RT_DEFER: u32 = 36;
 const RT_CONST: u32 = 37;
 const RT_FORCE: u32 = 38;
-/// Whether a match may proceed: false only for an err this arm's own hako
-/// raised (gavel 24, clause 1, as dispatch semantics).
-const RT_NOT_OWN_ERR: u32 = 39;
 /// A positional destructuring bind whose value is the wrong shape. It takes
 /// the VALUE as well as the type name, because the sentence names what the
 /// reader bound and only the runtime knows it.
-const RT_DIE_DESTRUCTURE: u32 = 40;
-/// The three worded chain steps. Appended at the end of the import list so
-/// every index above stays where it was.
-const RT_BIND: u32 = 41;
-const RT_RESCUE: u32 = 42;
-const RT_ANNOTATE: u32 = 43;
+const RT_DIE_DESTRUCTURE: u32 = 39;
+/// The three worded chain steps. `rescue` and `annotate` take the site they
+/// were written at: the first for its foreign-only licence, the second
+/// because the err it builds is a raise.
+const RT_BIND: u32 = 40;
+const RT_RESCUE: u32 = 41;
+const RT_ANNOTATE: u32 = 42;
 /// An err's three readers, at a reader getter's entry.
-const RT_ERR_READ: u32 = 44;
+const RT_ERR_READ: u32 = 43;
 /// `&f 2` over a VALUE: the callee and the held arguments go to the host,
 /// which settles the count when the rest arrive.
-const RT_PARTIAL: u32 = 45;
+const RT_PARTIAL: u32 = 44;
 /// A group handed out as a value carries every count its arms take, as bits
 /// below this base: `MASKED - mask`. Paired with `MASKED` in wasm_rt.
 const MASKED_ARITY: i64 = -1000;
@@ -140,10 +138,9 @@ fn imports() -> Vec<Import> {
         Import { name: "rt_defer", params: 1, returns: true },
         Import { name: "rt_const", params: 1, returns: true },
         Import { name: "rt_force", params: 1, returns: true },
-        Import { name: "rt_not_own_err", params: 2, returns: true },
         Import { name: "rt_die_destructure", params: 2, returns: false },
         Import { name: "rt_bind", params: 2, returns: true },
-        Import { name: "rt_rescue", params: 2, returns: true },
+        Import { name: "rt_rescue", params: 3, returns: true },
         Import { name: "rt_annotate", params: 3, returns: true },
         Import { name: "rt_err_read", params: 2, returns: true },
         Import { name: "rt_partial", params: 2, returns: true },
@@ -155,8 +152,9 @@ struct Ctx {
     scope: HashMap<String, u32>,
     /// Err-origin prefix "{fn} at {file}" for the declaration being emitted.
     prefix: String,
-    /// The hako that declaration belongs to. An arm cannot see an err its own
-    /// hako raised, and this is the side of the comparison the compiler knows.
+    /// The hako that declaration belongs to: the first field of every origin
+    /// literal it raises from, and the side of the rescue licence's
+    /// comparison the compiler knows.
     hako: String,
     /// The constant this body computes, where it is a constant. A list
     /// element mentioning it has to wait rather than read a cell that is
@@ -360,30 +358,6 @@ impl<'a> WasmBackend<'a> {
         idx
     }
 
-    /// Can a value matching this annotation be an err? Only then is the
-    /// own-origin guard emitted — every other pattern refuses failures
-    /// already, so the check would cost a call per match to learn nothing.
-    fn admits_err(&self, ty: &str) -> bool {
-        if ty == "err" {
-            return true;
-        }
-        self.program
-            .types
-            .iter()
-            .find(|t| t.name == ty && !t.members.is_empty())
-            .is_some_and(|t| t.members.iter().any(|m| m != ty && self.admits_err(m)))
-    }
-
-    /// Refuse the match when the value is an err this arm's own hako raised.
-    fn own_origin_guard(&mut self, ctx: &mut Ctx, value_local: u32) {
-        let arm = self.str_lit(&ctx.hako.clone());
-        ctx.body.local_get(value_local);
-        ctx.body.i32_const(arm as i64);
-        ctx.body.call(RT_NOT_OWN_ERR);
-        ctx.body.eqz();
-        ctx.body.br_if(0);
-    }
-
     fn str_lit(&mut self, text: &str) -> u32 {
         self.lit(LitKey::Str(text.to_string()), || Lit::Str(text.to_string()))
     }
@@ -531,9 +505,6 @@ impl<'a> WasmBackend<'a> {
                 ctx.scope.insert(name.to_string(), value_local);
             }
             Pattern::Annotated { name, ty, .. } => {
-                if self.admits_err(ty) {
-                    self.own_origin_guard(ctx, value_local);
-                }
                 let members: Vec<String> = self
                     .program
                     .types
@@ -560,7 +531,6 @@ impl<'a> WasmBackend<'a> {
                 ctx.scope.insert(name.to_string(), value_local);
             }
             Pattern::Ctor { ty, fields, whole } if ty == "err" => {
-                self.own_origin_guard(ctx, value_local);
                 ctx.body.local_get(value_local);
                 ctx.body.call(RT_CHECK_ERR);
                 ctx.body.eqz();
@@ -1410,22 +1380,24 @@ impl<'a> WasmBackend<'a> {
         // before: the page compiled `rescue` and then propagated the failure
         // the other two engines catch, and nothing could see it because every
         // other fixture for these words needs a filesystem to fail an effect.
-        // `annotate` takes the site it was written at, like `err`, because the
-        // err it builds is a raise.
+        // `rescue` and `annotate` take the site they were written at, like
+        // `err`: `annotate` because the err it builds is a raise, `rescue`
+        // because its licence is foreign-only and the site's package is the
+        // compiler's side of the comparison.
         if matches!(name.as_str(), "bind" | "rescue" | "annotate") {
             if args.len() != 2 {
                 return Err(format!("`{name}` takes an effect and a callback"));
             }
             self.emit_expr(ctx, &args[0], false)?;
             self.emit_expr(ctx, &args[1], false)?;
+            if name != "bind" {
+                let origin = self.origin_lit(&ctx.prefix, &ctx.hako, span);
+                ctx.body.i32_const(origin as i64);
+            }
             match name.as_str() {
                 "bind" => ctx.body.call(RT_BIND),
                 "rescue" => ctx.body.call(RT_RESCUE),
-                _ => {
-                    let origin = self.origin_lit(&ctx.prefix, &ctx.hako, span);
-                    ctx.body.i32_const(origin as i64);
-                    ctx.body.call(RT_ANNOTATE);
-                }
+                _ => ctx.body.call(RT_ANNOTATE),
             }
             return Ok(());
         }
