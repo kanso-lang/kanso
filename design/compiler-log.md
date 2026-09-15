@@ -5346,6 +5346,13 @@ answering yes unconditionally died on the guard page with SIGSEGV.
 Row `scan_tail`, mutation `a_short_scan_tail_walks_a_byte_at_a_time` (the
 window test answers no, so the byte walk is the only tail again).
 
+The harness assumed a 4,096-byte page and the macOS job refused it: Apple
+silicon maps 16 KiB pages, so `mprotect` at +4096 came back unaligned and the
+harness exited 2 before a single case ran. It asks `sysconf(_SC_PAGESIZE)`
+now. The window test in the runtime keeps its 4,095 mask, which is
+conservative on a larger page: a sixteen-byte load that stays inside a
+4 KiB-aligned window stays inside any page that contains it.
+
 **CI's sitting, on the base kanso#1433 left.** The work vein reads runbench
 1,904,577,350 -> 1,871,522,584 (-33,054,766, -1.7356%), 2,354,376 deeper than
 the container's -30,700,390, and jsonbench 1,187,809,626 -> 1,185,398,676
