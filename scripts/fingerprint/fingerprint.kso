@@ -148,7 +148,8 @@ fn marking s at acc false
   escaping s (at + 1) "{acc}{marked (text/slice s at at)}"
 
 fn marked c
-  guarded c (regexp/match? "^[a-zA-Z0-9]$" c)
+  plain = regexp/match? "^[a-zA-Z0-9]$" c
+  guarded c plain
 
 fn guarded c true
   c

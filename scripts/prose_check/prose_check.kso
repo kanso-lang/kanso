@@ -140,7 +140,8 @@ fn walking page text family patterns at acc false
 
 fn told page text family m
   whole = text/slice text m.from (m.to - 1)
-  quote = text/trim (regexp/replace_all "\\s+" whole " ")
+  squeezed = regexp/replace_all "\\s+" whole " "
+  quote = text/trim squeezed
   finding page (line_of text m.from) family quote
 
 fn line_of text at

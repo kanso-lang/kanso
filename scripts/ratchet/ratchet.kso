@@ -231,6 +231,18 @@ rescue_licence = row
   (breaking "a_rescue_that_enters_its_own_packages_callback")
   no_setup
 
+# The 2026-09-15 ruling's third part: a raised err arriving where a value is
+# wanted does not compile. The mutation deletes the one call that asks, and
+# the three error fixtures that pin the refusal then compile clean, which the
+# error corpus reports as a golden holding a diagnostic nobody raised.
+raised_err = row
+  "a raised err reaching a value site that compiles"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_raised_err_reaching_a_value_site_compiles")
+  no_setup
+
 # The four `cargo test --test golden` rows above and below all point at the
 # micro corpus or the mem corpus. The error corpus — 161 fixtures pinning
 # every diagnostic the language emits — had no row at all, so nothing had
@@ -1675,7 +1687,7 @@ rows_c1k = text/concat rows_c1j [coverage_oracle coverage_oracle_format]
 
 rows_c1l = text/concat rows_c1k [coverage_page coverage_page_format]
 
-rows_c1m = text/concat rows_c1l [beat_cursor rescue_licence]
+rows_c1m = text/concat rows_c1l [beat_cursor rescue_licence raised_err]
 
 rows_c = text/concat rows_c1m [itself]
 

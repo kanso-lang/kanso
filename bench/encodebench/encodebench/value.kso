@@ -30,6 +30,9 @@ fn array_step cs (parsed p v) acc
   p2 = skip_ws cs p
   array_delim cs cs[p2] p2 acc2
 
+fn array_step _ e@(err _) _
+  e
+
 fn bad_value_char c p
   fail p "unexpected character `{text/utf8 [c]}`"
 
@@ -38,6 +41,9 @@ bytes_false = [102 97 108 115 101]
 bytes_null = [110 117 108 108]
 
 bytes_true = [116 114 117 101]
+
+fn obj_colon _ e@(err _) _ _
+  e
 
 fn obj_colon cs p k acc
   obj_value cs (parse_value cs p) k acc
@@ -62,6 +68,9 @@ fn obj_key cs (parsed p k) acc
   p2 = skip_ws cs p
   obj_colon cs (expect_char cs p2 58) k acc
 
+fn obj_key _ e@(err _) _
+  e
+
 fn obj_key_start cs 34 p acc
   obj_key cs (parse_string cs (p + 1)) acc
 
@@ -84,6 +93,9 @@ fn obj_value cs (parsed p v) k acc
   acc2 = put acc k v
   p2 = skip_ws cs p
   obj_delim cs cs[p2] p2 acc2
+
+fn obj_value _ e@(err _) _ _
+  e
 
 fn parse_array cs p
   p2 = skip_ws cs p

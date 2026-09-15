@@ -4,6 +4,13 @@
 # The reasons are read through `std/testing`'s `when_failed`, foreign to this
 # module and therefore licensed to separate a reason from a failure this
 # module raised.
+#
+# Since the 2026-09-15 ruling a raised err handed straight to an operator or
+# to a group with no arm for it does not compile, so the failures here are
+# bound to names first. The checker reads a call's arguments and not the names
+# it is handed, the same deliberate blind spot the none rule keeps, and the
+# runtime contract these lines pin is reached through it. What the runtime
+# does with a bare err it was not warned about is the ledger's open question.
 import "std/testing"
 
 fn boom what
@@ -12,13 +19,17 @@ fn boom what
 fn as_text reason
   "{reason}"
 
-both = boom "a" + boom "b"
+a = boom "a"
 
-left = boom "a" + 1
+b = boom "b"
 
-right = 1 + boom "b"
+both = a + b
 
-compared? = boom "a" < boom "b"
+left = a + 1
+
+right = 1 + b
+
+compared? = a < b
 
 pub play =
   print "both: {testing/when_failed both as_text}"

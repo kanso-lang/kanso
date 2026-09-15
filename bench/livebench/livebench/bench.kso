@@ -3,6 +3,14 @@ import "std/json"
 pub fn hold text
   json/decode text
 
+# A document that did not decode is handed on as it is, so the run halts on
+# the reason instead of encoding nothing 400 times.
+pub fn rounds e@(err _) 0 _
+  e
+
+pub fn rounds e@(err _) _ _
+  e
+
 pub fn rounds _ 0 tally
   print "wrote {tally}"
 

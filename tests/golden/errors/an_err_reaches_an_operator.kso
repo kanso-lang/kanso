@@ -1,0 +1,13 @@
+# A bare err is data, and `+` wants a value. `steeped` answers an err on one
+# arm, so its answer can be one, and the operator has no arm to name it with.
+# Ruled 2026-09-15: a program that hands a raised err to an operator does not
+# compile; it dispatches on the answer first, the way it would on a none.
+fn steeped 0
+  err "nothing steeped"
+
+fn steeped n
+  n
+
+total = steeped 0 + 1
+
+pub play = print "{total}"

@@ -721,7 +721,8 @@ fn refused k _ true
   "expected a refusal saying {shown k.expected}, but it compiled"
 
 fn refused k c false
-  named k c (in? c.stderr k.expected)
+  mentioned = in? c.stderr k.expected
+  named k c mentioned
 
 fn named _ _ true
   ""
@@ -758,7 +759,8 @@ fn ran k _ true
   "expected running it to fail with {shown k.expected}"
 
 fn ran k n false
-  named k n (in? n.stderr k.expected)
+  mentioned = in? n.stderr k.expected
+  named k n mentioned
 
 fn answered _ k n
   printed k n (n.stdout == k.expected)

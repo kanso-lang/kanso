@@ -1174,11 +1174,9 @@ fn as_desc(h: u32) -> Option<Rc<Desc>> {
         // carries the decided call these two need — without it the subject
         // would run, the callback would be skipped, and the page would answer
         // the failure the other two engines catch.
-        Slot::Rescue(inner, closure, origin) => Some(Rc::new(Desc::Rescue(
-            as_desc(inner)?,
-            Value::TableFn(closure),
-            raised_at(origin),
-        ))),
+        Slot::Rescue(inner, closure, origin) => {
+            Some(Rc::new(Desc::Rescue(as_desc(inner)?, Value::TableFn(closure), raised_at(origin))))
+        }
         Slot::Annotate(inner, closure, origin) => Some(Rc::new(Desc::Annotate(
             as_desc(inner)?,
             Value::TableFn(closure),

@@ -1,0 +1,18 @@
+# The book's menu sample at the ruling's third site: `base_price` raises for
+# an item off the menu, and `with_service` has arms for numbers only. The
+# check refuses the call where the raised err is provable, which is what the
+# 2026-09-15 ruling asks for: a bare err is data, and a group that is handed
+# one names it with an `(err _)` arm or does not take it.
+fn base_price "dango"
+  350
+
+fn base_price item
+  err "we do not serve {item}"
+
+fn with_service n
+  n + 50
+
+fn price item
+  with_service (base_price item)
+
+pub play = print "{price "pocky"}"

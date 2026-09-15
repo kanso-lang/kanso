@@ -16,5 +16,9 @@ fn stream_one xs i
 fn stream_elems xs i
   if (length xs < i) (io/write "\n]\n") (stream_one xs i)
 
+# A document that did not decode is handed on as it is.
+pub fn stream_list e@(err _)
+  e
+
 pub fn stream_list xs
   io/write "[\n" .> (_ -> stream_elems xs 1)

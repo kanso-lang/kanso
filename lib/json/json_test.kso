@@ -3,39 +3,39 @@ import "std/text"
 
 # `when_failed` hands back the bare reason, so this names a reason type and
 # never an err — json cannot rescue what json raised.
-test_decode_array = decode "[1, 2, 3]" == [1 2 3]
+test_decode_array = decodes? "[1, 2, 3]" [1 2 3]
 
 test_decode_bool = decode "true"
 
-test_decode_escapes = decode "\"a\\n\\\"b\\\"\"" == "a\n\"b\""
+test_decode_escapes = decodes? "\"a\\n\\\"b\\\"\"" "a\n\"b\""
 
-test_decode_float = decode "3.25" == 3.25
+test_decode_float = decodes? "3.25" 3.25
 
-test_decode_exponent = decode "1e3" == 1000.0
+test_decode_exponent = decodes? "1e3" 1000.0
 
-test_decode_exponent_upper = decode "2E2" == 200.0
+test_decode_exponent_upper = decodes? "2E2" 200.0
 
 # the mark is a `.` here and an `e` further on: a scan that forgot the first
 # one on reaching the second would hand these digits to the integer reader
-test_decode_exponent_signed = decode "1.5e2" == 150.0
+test_decode_exponent_signed = decodes? "1.5e2" 150.0
 
-test_decode_int = decode "42" == 42
+test_decode_int = decodes? "42" 42
 
-test_decode_negative = decode "-7" == -7
+test_decode_negative = decodes? "-7" (0 - 7)
 
 test_decode_nested =
   decoded = decode "\{\"a\": [1, \{\"b\": null}]}"
   decoded == { "a":[1 { "b":json_null }] }
 
-test_decode_object = decode "\{\"a\": 1, \"b\": 2}" == { "a":1 "b":2 }
+test_decode_object = decodes? "\{\"a\": 1, \"b\": 2}" { "a":1 "b":2 }
 
-test_decode_string = decode "\"hello\"" == "hello"
+test_decode_string = decodes? "\"hello\"" "hello"
 
-test_decode_surrogate_pair = decode "\"\\ud83c\\udf8c\"" == "🎌"
+test_decode_surrogate_pair = decodes? "\"\\ud83c\\udf8c\"" "🎌"
 
-test_decode_unicode = decode "\"\\u00e9\"" == "é"
+test_decode_unicode = decodes? "\"\\u00e9\"" "é"
 
-test_decode_whitespace = decode "  [ 1 , 2 ]  " == [1 2]
+test_decode_whitespace = decodes? "  [ 1 , 2 ]  " [1 2]
 
 test_encode_empty_list = encode [] == "[]"
 
@@ -61,4 +61,21 @@ test_error_trailing =
 
 test_roundtrip =
   text = "\{\"a\":[1,2.5,\"x\"],\"b\":null}"
-  encode (decode text) == text
+  encodes_back? (decode text) text
+
+# `decode` answers an err for bad input and `==` wants a value, so a test
+# dispatches on what it decoded before comparing it.
+fn decodes? text want
+  same? (decode text) want
+
+fn same? (err _) _
+  false
+
+fn same? got want
+  got == want
+
+fn encodes_back? (err _) _
+  false
+
+fn encodes_back? v text
+  encode v == text

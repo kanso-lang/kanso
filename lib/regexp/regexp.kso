@@ -108,6 +108,12 @@ no_hit = hit 0 0 []
 pub fn find pattern s
   taken s (found pattern s)
 
+# A pattern that does not compile answers an err, and the checker wants the
+# arm that hands it on written down: an err is a value here, and a group
+# with no arm for one does not compile.
+fn taken _ e@(err _)
+  e
+
 fn taken _ (hit 0 _ _)
   none
 
@@ -116,6 +122,9 @@ fn taken s m
 
 pub fn groups pattern s
   named (found pattern s)
+
+fn named e@(err _)
+  e
 
 fn named (hit 0 _ _)
   none
@@ -126,13 +135,24 @@ fn named m
 # Every match, left to right, never overlapping. A match that consumed nothing
 # still advances one character, or the walk would not end.
 pub fn find_all pattern s
-  gathering (compiled pattern) s 1 []
+  gathered (compiled pattern) s
+
+# The err arm sits on a wrapper rather than on the walk itself, so the walk
+# is not asked at every position whether its program is an err.
+fn gathered e@(err _) _
+  e
+
+fn gathered prog s
+  gathering prog s 1 []
 
 # Does the pattern match starting exactly here? A scanner walking a line one
 # token at a time asks this rather than "is it anywhere after here", because
 # the answer decides what the character at this position is.
 pub fn match_at pattern s at
   anchored (compiled pattern) s at
+
+fn anchored e@(err _) _ _
+  e
 
 fn anchored prog s at
   fitting prog s at (at > length s + 1)
@@ -152,7 +172,13 @@ fn reached_at prog at end
 # The same walk, keeping where each match sat. A caller reporting a finding
 # needs the position to name a line, which the text alone cannot give back.
 pub fn matches pattern s
-  spotting (compiled pattern) s 1 []
+  located (compiled pattern) s
+
+fn located e@(err _) _
+  e
+
+fn located prog s
+  spotting prog s 1 []
 
 fn spotting prog s at acc
   spotted prog s at acc (at > length s + 1)
@@ -198,7 +224,13 @@ fn moved m false
   m.to
 
 pub fn replace_all pattern s repl
-  rebuilt (compiled pattern) s 1 "" repl
+  replaced (compiled pattern) s repl
+
+fn replaced e@(err _) _ _
+  e
+
+fn replaced prog s repl
+  rebuilt prog s 1 "" repl
 
 fn rebuilt prog s at acc repl
   rebuilding prog s at acc repl (at > length s + 1)
@@ -235,7 +267,13 @@ fn remaining s at false
   text/slice s at (length s)
 
 pub fn split pattern s
-  cut (compiled pattern) s 1 1 []
+  divided (compiled pattern) s
+
+fn divided e@(err _) _
+  e
+
+fn divided prog s
+  cut prog s 1 1 []
 
 fn cut prog s from at acc
   cutting prog s from at acc (at > length s + 1)
@@ -256,7 +294,13 @@ fn divided prog s from _ acc m false
 
 # The leftmost match of the whole pattern, tried at each start in turn.
 fn found pattern s
-  scanned (compiled pattern) s 1
+  begun (compiled pattern) s
+
+fn begun e@(err _) _
+  e
+
+fn begun prog s
+  scanned prog s 1
 
 fn scanned prog s at
   scanning prog s at (at > length s + 1)
@@ -702,7 +746,10 @@ fn at_quantifier? chars at
 # is found by its byte: a member wider than a byte has no byte below 128 in
 # it, so a hit is that character and nothing else. Splitting the set on the
 # character built a list and two pieces to answer the same question, once per
-# position a class is asked at. A wider character still takes the split.
+# position a class is asked at. A wider character walks the set's characters:
+# splitting on it would have asked `text/split` a question it answers with an
+# err for an empty separator, and the checker cannot see that `c` is never
+# empty here.
 fn in? set c
   cb = text/bytes c
   member? set c (text/bytes set) cb (length cb == 1)
@@ -711,7 +758,16 @@ fn member? _ _ bs cb true
   text/find2 bs 1 cb[1]! cb[1]! <= length bs
 
 fn member? set c _ _ false
-  length (text/split set c) > 1
+  among? (text/chars set) c 1
+
+fn among? cs c i
+  found_at? cs c i (i > length cs)
+
+fn found_at? _ _ _ true
+  false
+
+fn found_at? cs c i false
+  cs[i]! == c or among? cs c (i + 1)
 
 fn suffixed _ base false
   base

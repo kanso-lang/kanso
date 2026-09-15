@@ -3443,15 +3443,13 @@ fn match_one(pattern: &Pattern, arg: &Value, binds: &mut Bindings) -> Option<u8>
                 Some(0)
             }
         },
-        (Pattern::Annotated { name, ty, .. }, _) => {
-            match type_match_depth(ty, arg) {
-                Some(depth) => {
-                    binds.push((name.to_string(), arg.clone()));
-                    Some(depth)
-                }
-                None => None,
+        (Pattern::Annotated { name, ty, .. }, _) => match type_match_depth(ty, arg) {
+            Some(depth) => {
+                binds.push((name.to_string(), arg.clone()));
+                Some(depth)
             }
-        }
+            None => None,
+        },
         (Pattern::Keyed { .. }, _) => None,
         (Pattern::Ctor { ty, fields, whole }, Value::ErrV(info)) if ty == "err" => {
             match fields.len() == 1 {

@@ -26,9 +26,19 @@ pub const THUNK: Set = 1 << 13;
 /// nothing else, so an absence never stands in for a success.
 pub const DONE: Set = 1 << 14;
 pub const TOP: Set = (1 << 15) - 1;
+/// An err the PROGRAM raised, as opposed to one an operation answered on its
+/// own: `err reason`, or an err bound by name and handed on. The bit rides
+/// with ERR everywhere ERR goes and is set at the two places a program
+/// spells one, so a set carrying it is proof of a bare err at that site.
+/// A strict index's miss and a division's zero divisor carry ERR alone,
+/// because what the checker should make of those is the ledger's open
+/// question, and the 2026-09-15 ruling refuses only what a program raised.
+/// It sits above TOP on purpose: TOP is "any value", and a proof is not a
+/// value.
+pub const RAISED: Set = 1 << 15;
 /// What propagates on its own. A none is a value and stays where it is put;
 /// only an err abandons the computation that produced it.
-pub const FAIL: Set = ERR;
+pub const FAIL: Set = ERR | RAISED;
 pub const BOOL: Set = TRUE | FALSE;
 
 pub struct Inference {
@@ -54,6 +64,9 @@ impl Inference {
 }
 
 struct Ctx<'a> {
+    /// The string-literal constants, for the literal test a call makes on
+    /// each arm of the group it reaches (`arm_can_run`).
+    consts: HashMap<&'a str, &'a str>,
     /// Whether any constant in this program mentions itself. Such a mention
     /// is emitted as a thunk in a storing position, so every container read
     /// has to admit one; no other program does, and none pays for it.
@@ -400,6 +413,7 @@ pub fn infer(program: &Program) -> Inference {
         }
     }
     let mut ctx = Ctx {
+        consts: literal_consts(program),
         defers_into_containers,
         program,
         demand: crate::phase::watched("infer/demand", || crate::demand::analyze(program)),
@@ -706,7 +720,7 @@ fn bind_pattern<'a>(
                 "float64" => FLOAT,
                 "string" => STR,
                 "bool" => BOOL,
-                "err" => ERR,
+                "err" => ERR | RAISED,
                 t if is_effect_type(t) => DESC,
                 t if t.ends_with("[]") => LIST,
                 t if t.contains('[') => MAP,
@@ -717,7 +731,14 @@ fn bind_pattern<'a>(
         // destructuring a declared type refines each field to the join of what
         // construction sites stored there — so `_parsed p v` gives p its real
         // int-ness instead of TOP, which is what unblocks the scanner's hot path
-        Pattern::Ctor { ty, fields, .. } => {
+        Pattern::Ctor { ty, fields, whole } => {
+            // the as-pattern's name is the value that matched, so it carries
+            // the set the pattern caught: `e@(err _) = e` hands on a RAISED err
+            // and a caller that reads it is refused like the raise itself
+            if let Some(whole) = whole {
+                let matched = if ty == "err" { ERR | (joined & RAISED) } else { REC };
+                env.insert(&whole.0, matched);
+            }
             let field_sets = type_names.get(ty.as_str()).map(|i| &type_fields[*i]);
             for (fi, field) in fields.iter().enumerate() {
                 let s = field_sets.and_then(|fs| fs.get(fi)).copied().unwrap_or(TOP & !FAIL);
@@ -736,7 +757,7 @@ fn pattern_catches(pat: &Pattern) -> Set {
     match pat {
         Pattern::Nullary(name, _) if name == "none" => NONE,
         Pattern::Nullary(name, _) if name == "done" => DONE,
-        Pattern::Ctor { ty, .. } if ty == "err" => ERR,
+        Pattern::Ctor { ty, .. } if ty == "err" => ERR | RAISED,
         _ => 0,
     }
 }
@@ -1002,6 +1023,68 @@ fn mark_reader(ctx: &mut Ctx<'_>, decl: usize) {
 // That figure is the call, not the mask: forcing the inline back leaves the
 // load in place and the row falls by most of it.
 #[inline(always)]
+/// Whether an arm's patterns could match a call's arguments, read from the
+/// literals alone: a literal pattern against a different literal argument
+/// cannot, a record or nullary pattern against a literal cannot, and
+/// anything else is taken to match. A module constant bound to a string
+/// literal counts as that literal (a declaration's name cannot be rebound,
+/// so the constant is the only thing the name can mean), and an
+/// interpolated string with fixed text in it cannot match a shorter one.
+pub fn arm_can_run(params: &[Pattern], args: &[Expr], consts: &HashMap<&str, &str>) -> bool {
+    params.iter().zip(args).all(|(param, arg)| {
+        // (exact text if the argument is one literal, the least length it
+        // can have)
+        let str_shape: Option<(Option<&str>, usize)> = match arg {
+            Expr::Str(parts, _) => {
+                let fixed: usize = parts
+                    .iter()
+                    .map(|p| match p {
+                        TemplatePart::Lit(s) => s.len(),
+                        TemplatePart::Interp(_) => 0,
+                    })
+                    .sum();
+                let exact = match parts.as_slice() {
+                    [] => Some(""),
+                    [TemplatePart::Lit(s)] => Some(s.as_str()),
+                    _ => None,
+                };
+                Some((exact, fixed))
+            }
+            Expr::Ident(name, _) => consts.get(name.as_str()).map(|s| (Some(*s), s.len())),
+            _ => None,
+        };
+        let literal_int = match arg {
+            Expr::Int(n, _) => Some(n),
+            _ => None,
+        };
+        let is_literal = str_shape.is_some() || matches!(arg, Expr::Int(..) | Expr::Float(..));
+        match param {
+            Pattern::StrLit(s, _) => match str_shape {
+                Some((Some(exact), _)) => exact == s,
+                Some((None, fixed)) => s.len() >= fixed,
+                None => true,
+            },
+            Pattern::IntLit(n, _) => literal_int.is_none_or(|l| l == n),
+            Pattern::Nullary(..) | Pattern::Ctor { .. } | Pattern::Keyed { .. } => !is_literal,
+            _ => true,
+        }
+    })
+}
+
+/// A program's constants that are one string literal, by name: the only
+/// value such a name can mean, since a declaration's name cannot be rebound.
+pub fn literal_consts(program: &Program) -> HashMap<&str, &str> {
+    let mut consts: HashMap<&str, &str> = HashMap::default();
+    for d in program.fns.iter().filter(|d| d.params.is_empty()) {
+        if let [Stmt::Expr(Expr::Str(parts, _))] = d.body.as_slice() {
+            if let [TemplatePart::Lit(text)] = parts.as_slice() {
+                consts.insert(d.name.as_str(), text.as_str());
+            }
+        }
+    }
+    consts
+}
+
 fn widen_param(ctx: &mut Ctx<'_>, decl: usize, param: usize, set: Set) {
     let at = ctx.param_starts[decl] as usize + param;
     let set = set & !ctx.shadow[at];
@@ -1076,7 +1159,7 @@ fn eval_call<'a>(
         return arg_sets[1] | arg_sets[2] | cond_fail | piped_bits;
     }
     if name == "err" {
-        return ERR | piped_bits;
+        return ERR | RAISED | piped_bits;
     }
     if name == "print" {
         return DESC | (arg_sets[0] & FAIL) | piped_bits;
@@ -1120,6 +1203,12 @@ fn eval_call<'a>(
         }
         for k in start..end {
             let i = ctx.group_members[k];
+            // An arm a literal argument cannot reach neither sees the call
+            // nor answers it: `text/split s "\n"` never runs `split _ ""`,
+            // so what that arm raises is not something this call can answer.
+            if !arm_can_run(&ctx.program.fns[i].params, args, &ctx.consts) {
+                continue;
+            }
             for (p, set) in arg_sets.iter().enumerate() {
                 widen_param(ctx, i, p, *set);
             }

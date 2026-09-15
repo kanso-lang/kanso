@@ -1,0 +1,4 @@
+error[exhaustive]: this can be an err and `with_service` has no arm for it — dispatch on it here, or give `with_service` an `(err _)` arm (in an_err_reaches_a_group_with_no_arm_for_it.kso)
+  --> tests/golden/errors/an_err_reaches_a_group_with_no_arm_for_it.kso:16:17
+  16 |   with_service (base_price item)
+                       ^

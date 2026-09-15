@@ -74,7 +74,8 @@ list_ann = ":\\[\\]{ident_pattern}"
 # drops, the `:type` annotations a panel adds, and the comments and strings
 # whose prose is not code at all.
 fn plain body
-  unescaped (regexp/replace_all "<[^>]+>" body "")
+  untagged = regexp/replace_all "<[^>]+>" body ""
+  unescaped untagged
 
 fn unescaped s
   lt = regexp/replace_all "&lt;" s "<"
@@ -84,7 +85,8 @@ fn unescaped s
 fn code_only s
   bare = regexp/replace_all "#[^\n]*" s ""
   quoted = regexp/replace_all "\"(?:\\\\.|[^\"\\\\])*\"" bare "\"\""
-  regexp/replace_all qualified (unannotated quoted) ""
+  plain_names = unannotated quoted
+  regexp/replace_all qualified plain_names ""
 
 # The three shapes an annotation takes, longest first so `:[]json` does not
 # leave its element type behind. A panel writes these where the file it quotes
@@ -113,10 +115,12 @@ fn heading _ _ acc _ true
   acc
 
 fn heading ls at acc pattern false
-  head_loop ls (at + 1) (with_head acc ls[at]! pattern) pattern
+  grown = with_head acc ls[at]! pattern
+  head_loop ls (at + 1) grown pattern
 
 fn with_head acc line pattern
-  first_group acc (regexp/matches pattern line)
+  hits = regexp/matches pattern line
+  first_group acc hits
 
 fn first_group acc hits
   taken acc hits (length hits == 0)
@@ -130,7 +134,8 @@ fn taken acc hits false
 # The identifier pattern captures nothing, so each hit is read back off the
 # body by the span it matched.
 fn idents_in body
-  ident_loop body (regexp/matches ident_pattern body) 1 []
+  hits = regexp/matches ident_pattern body
+  ident_loop body hits 1 []
 
 fn ident_loop body hits at acc
   identing body hits at acc (at > length hits)
@@ -169,13 +174,18 @@ fn joining bodies at acc false
 literals = ["true" "false" "none"]
 
 fn reachable bodies
-  list/to_list (text/concat literals (idents_in (code_only (joined bodies))))
+  code = code_only (joined bodies)
+  names = idents_in code
+  list/to_list (text/concat literals names)
 
 fn shown panel
-  list/to_list (list/map (heads_in panel decl_head) (n -> exported n))
+  heads = heads_in panel decl_head
+  list/to_list (list/map heads (n -> exported n))
 
 fn named_in panel
-  wanted = list/map (idents_in (code_only panel)) (n -> exported n)
+  code = code_only panel
+  names = idents_in code
+  wanted = list/map names (n -> exported n)
   list/to_list (list/select wanted (n -> length n > 0))
 
 fn dir_of path
@@ -222,7 +232,8 @@ fn picking wanted bodies title at false
 fn found_for q file bodies
   panel = plain q.body
   lead = leading (shown panel)
-  gone = missing (heads_in file decl_head) (shown panel)
+  declared = heads_in file decl_head
+  gone = missing declared (shown panel)
   loose = missing (reachable bodies) (named_in panel)
   as_findings q lead "declares" gone (as_findings q lead "names" loose [])
 
@@ -264,7 +275,8 @@ fn said? acc one
   length (list/to_list (list/select seen (f -> f.kind == one.kind))) > 0
 
 fn quotes_in name raw
-  quote_loop_of name (regexp/matches quote_pattern raw) 1 []
+  hits = regexp/matches quote_pattern raw
+  quote_loop_of name hits 1 []
 
 fn quote_loop_of name hits at acc
   quoting_at name hits at acc (at > length hits)
@@ -416,7 +428,8 @@ fn walking names at found false
 
 fn one_chapter names at found name raw
   after = (more -> chapter_loop names (at + 1) more)
-  checked (quotes_in name raw) 1 found after
+  qs = quotes_in name raw
+  checked qs 1 found after
 
 fn reported found
   telling found (length found == 0)

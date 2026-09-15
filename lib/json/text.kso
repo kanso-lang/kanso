@@ -153,6 +153,9 @@ fn str_hex4 cs p
   h4 = hex_digit (cs[p + 3])
   h1 * 4096 + h2 * 256 + h3 * 16 + h4
 
+fn str_low _ _ _ _ e@(err _)
+  e
+
 fn str_low cs p acc high low
   scalar = 65536 + (high - 55296) * 1024 + (low - 56320)
   if (56319 < low and low < 57344)

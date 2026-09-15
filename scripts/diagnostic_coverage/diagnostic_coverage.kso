@@ -58,7 +58,8 @@ fn without_leading ""
   ""
 
 fn without_leading s
-  shed s (in? blank (first_char s))
+  leading_blank = in? blank (first_char s)
+  shed s leading_blank
 
 fn shed s false
   s
@@ -70,7 +71,8 @@ fn without_trailing ""
   ""
 
 fn without_trailing s
-  shed_end s (in? blank (text/slice s (length s) (length s)))
+  trailing_blank = in? blank (text/slice s (length s) (length s))
+  shed_end s trailing_blank
 
 fn shed_end s false
   s
@@ -108,7 +110,8 @@ fn looked _ _ _ true
 
 fn looked s i n false
   c = text/slice s i i
-  stepped s i n c (in? blank c)
+  blank_here = in? blank c
+  stepped s i n c blank_here
 
 fn stepped s i n _ true
   leading_char s (i + 1) n
@@ -233,7 +236,8 @@ fn kinded chunk kind true
 
 fn bodied kind rest
   segs = text/split rest ","
-  headed kind (cut segs 3) (length (squeezed segs[1]!) == 0)
+  group = cut segs 3
+  headed kind group (length (squeezed segs[1]!) == 0)
 
 fn headed _ _ _ false
   ""
@@ -691,7 +695,8 @@ fn ran? _ _ true
   true
 
 fn ran? line runs false
-  stepped_run? line runs runs[1]! (text/split line runs[1]!)
+  pieces = text/split line runs[1]!
+  stepped_run? line runs runs[1]! pieces
 
 fn stepped_run? line runs r pieces
   onward? line runs r pieces (length pieces == 1)

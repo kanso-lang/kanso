@@ -7,6 +7,13 @@
 #
 # `when_failed` is std's, foreign to this program, so it is the licensed party
 # that separates the reason from the failure and lets the count be printed.
+#
+# Since the 2026-09-15 ruling a raised err handed straight to an operator or
+# to a group with no arm for it does not compile, so the failures here are
+# bound to names first. The checker reads a call's arguments and not the names
+# it is handed, the same deliberate blind spot the none rule keeps, and the
+# runtime contract these lines pin is reached through it. What the runtime
+# does with a bare err it was not warned about is the ledger's open question.
 import "std/testing"
 
 fn boom n
@@ -21,8 +28,14 @@ fn through v
 fn how_many r
   length r
 
-merged = boom 1 + boom 2
+e1 = boom 1
 
-three = through merged + boom 3
+e2 = boom 2
+
+e3 = boom 3
+
+merged = e1 + e2
+
+three = through merged + e3
 
 pub play = print "{testing/when_failed three how_many}"

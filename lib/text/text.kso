@@ -43,9 +43,12 @@ pub fn split s sep
 # What a captured line arrives wearing: a process hands back its newline, a
 # file its trailing blank line, and every caller wanted the sentence. The set
 # is written here rather than held as a constant, because a constant is built
-# whether or not a program ever trims anything.
+# whether or not a program ever trims anything. The builtin is called direct:
+# `split` raises on an empty separator, and an answer that can be a raised err
+# may not reach `step_in`, which has no arm for one. The separator here is a
+# character, never empty, and the builtin answers a list and nothing else.
 fn padding? c
-  length (split " \t\n\r" c) > 1
+  length (builtin_split " \t\n\r" c) > 1
 
 # Both ends, by index: shedding one character at a time copies what is left on
 # every step, which on a long string is the difference between a scan and a

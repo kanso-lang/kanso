@@ -11,4 +11,10 @@ pub fn describe n
   "{n} yen, service included"
 
 pub fn price item
-  base_price item + 50
+  with_service (base_price item)
+
+fn with_service e:err
+  e
+
+fn with_service base
+  base + 50

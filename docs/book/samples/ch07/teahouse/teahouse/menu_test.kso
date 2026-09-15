@@ -1,7 +1,13 @@
 import "std/testing"
 
-test_base_price_raw = base_price "dango" == 350
+fn costs? _ (err _)
+  false
 
-test_dango_price = price "dango" == 400
+fn costs? want n
+  n == want
+
+test_base_price_raw = costs? 350 (base_price "dango")
+
+test_dango_price = costs? 400 (price "dango")
 
 test_unknown_item_fails = testing/failed? (price "pocky")
