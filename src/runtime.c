@@ -614,7 +614,7 @@ static void k_arena_push(size_t need) {
     b->next = k_blocks;
     k_blocks = b;
     k_live_block_bytes += (long long)b->cap;
-    if (k_live_block_bytes > k_stat_peak_block_bytes) {
+    if (K_COUNTING && k_live_block_bytes > k_stat_peak_block_bytes) {
         k_stat_peak_block_bytes = k_live_block_bytes;
     }
     k_arena = (char*)(b + 1);
@@ -1583,7 +1583,7 @@ static void* k_copy_alloc(KCopy* cp, size_t n) {
        reference instead, so this is the side of that trade beats can measure.
        The arena path is counted here and in allocs both: the two ask different
        questions, one what was allocated and one why. */
-    k_stat_evac_bytes += (long long)n;
+    if (K_COUNTING) k_stat_evac_bytes += (long long)n;
     if (K_COUNTING) k_stat_evac_allocs++;
     if (cp->to_arena) return k_alloc(n);
     if (cp->in_ten) return k_ten_alloc(n);
@@ -7077,7 +7077,7 @@ static KValue k_utf8_bad_wide(const char* data, long long len, const char* origi
 static inline __attribute__((always_inline))
 KValue k_utf8_bad(const char* data, long long len, const char* origin,
                   long long* chars) {
-    k_stat_utf8_bytes += len;
+    if (K_COUNTING) k_stat_utf8_bytes += len;
     if (k_all_ascii(data, len)) {
         if (chars) *chars = len;
         return k_none();
@@ -7102,7 +7102,7 @@ KValue k_utf8_bad_wide_cold(const char* data, long long len, const char* origin,
 static inline __attribute__((always_inline))
 KValue k_utf8_bad_rare(const char* data, long long len, const char* origin,
                        long long* chars) {
-    k_stat_utf8_bytes += len;
+    if (K_COUNTING) k_stat_utf8_bytes += len;
     if (k_all_ascii(data, len)) {
         if (chars) *chars = len;
         return k_none();
@@ -7913,7 +7913,7 @@ static long long k_utf8_chars(const unsigned char* p, long long len) {
    keep no frame for it. */
 static __attribute__((noinline, preserve_most)) long long k_str_chars_scan(KStr* s) {
     if (K_COUNTING) k_stat_str_scans++;
-    k_stat_str_scan_bytes += s->len;
+    if (K_COUNTING) k_stat_str_scan_bytes += s->len;
     long long count = k_utf8_chars((const unsigned char*)s->data, s->len);
     if (s->cap == 0 && count < 2147483647LL) s->cap = (int)(-count - 1);
     return count;
