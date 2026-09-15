@@ -376,6 +376,18 @@ digit_pairs = row
   (breaking "the_digit_removal_takes_one_at_a_time")
   benchmarks
 
+# k_b_to_float skips leading zeros before its digit loops since 2026-09-15,
+# so the loops count significant digits unconditionally; the mutation puts
+# `if (w) digits++` back on every digit. The (w, q) handed to eisel-lemire is
+# identical either way, so the work vein is the only thing that can see it.
+leading_zeros = row
+  "every digit asking whether the first nonzero has landed"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "every_digit_asks_whether_the_first_nonzero_has_landed")
+  benchmarks
+
 machine_code = row
   "the machine code changing size"
   true
@@ -1235,7 +1247,7 @@ rows_b1 = text/concat rows_b1a (text/concat rows_b1z [live_counters clean_run])
 
 rows_b1r0 = text/concat rows_b1 [emitted_code emitted_others remainder]
 
-rows_b1r = text/concat rows_b1r0 [digit_pairs]
+rows_b1r = text/concat rows_b1r0 [digit_pairs leading_zeros]
 
 rows_b1b = text/concat rows_b1r [machine_code]
 
