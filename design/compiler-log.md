@@ -3468,6 +3468,117 @@ elsewhere. The lexer's 4,407 are the `String`s the AST needs, which
 kanso#1033 declined interning at 365 conversion sites. No other single owner
 holds more than a per cent.
 
+**The third sitting, on the merged base, and all three rows fall.** CI
+re-measured on the kanso#1414 base:
+
+    compile_instructions   43,910,543 ->  43,910,243    -300  -0.0007%
+    entry_instructions    146,573,721 -> 146,570,800  -2,921  -0.0020%
+    library_instructions  147,378,070 -> 147,374,531  -3,539  -0.0024%
+    summed                337,862,334 -> 337,855,574  -6,760  -0.0020%
+
+`compile_allocs` held at 28,361 again and `compile_peak_bytes` at 776,055,
+the same pair of byte-identical rows as before. The reorder is three lines of
+`src/runtime.c` and the front end does not run a line of it; these six
+thousand instructions are the compiler's own bytes sitting differently.
+
+Set the two sittings of the same change side by side and the paragraph above
+is checked rather than asserted:
+
+                            on kanso#1416     on kanso#1414
+    compile_instructions           +883              -300
+    entry_instructions           -2,236            -2,921
+    library_instructions         -2,878            -3,539
+    summed                       -4,231            -6,760
+
+Same diff, same three lines, and the module row changes sign between one base
+and the next while the other two keep theirs and grow by about a quarter.
+CLAUDE.md's rule reads that a delta survives a change of base when the work
+removed is a fixed count of operations, and does not when it is a share of a
+pile something else just made smaller. Nothing here is a count of operations
+at all: no decision was removed, so there is nothing to count, and every one
+of these six numbers is an arrangement. An arrangement belongs to one binary.
+kanso#1418 measured the other half of the same rule on the same day, where
+`compile_allocs` fell by 424 against both of its bases because it counts
+`HashSet` constructions that stopped happening.
+
+So a layout row is projected from CI or not at all, and never from a
+container whose glibc and clang the gate has already refused. The work vein
+is where this change was aimed and where its win is; the compile veins are
+regenerated, said out loud, and not banked against.
+
+## the fourth sitting, and four bases give four answers
+
+kanso#1418 landed and the branch merged it, so CI measured the same three
+lines a fourth time:
+
+    compile_instructions   42,877,925 ->  42,869,709   -8,216  -0.0192%
+    entry_instructions    144,056,402 -> 144,034,290  -22,112  -0.0153%
+    library_instructions  144,858,538 -> 144,834,698  -23,840  -0.0165%
+    summed                331,792,865 -> 331,738,697  -54,168  -0.0163%
+
+`compile_allocs` held at 27,937 and `compile_peak_bytes` at 776,055 for the
+fourth time running.
+
+Four sittings of one diff now sit side by side:
+
+    base          module      entry     library      summed
+    kanso#1415       +35     -1,854        +230      -1,589
+    kanso#1416      +883     -2,236      -2,878      -4,231
+    kanso#1414      -300     -2,921      -3,539      -6,760
+    kanso#1418    -8,216    -22,112     -23,840     -54,168
+
+The module row changes sign twice across the four. The fourth is eight times
+the third and thirty-four times the first, and it is the only one where all
+three fall together by a comparable share.
+
+Nothing about the diff changed between them. It is three lines swapping two
+arms of a tag switch in `src/runtime.c`, and `kanso check` never executes one
+of them. What changed is the binary the rows were measured on: kanso#1418
+rewrote the advisory fixpoint to revisit on demand, which moved the
+compiler's own code and every address after it, so the reorder's embedded
+bytes land somewhere else again.
+
+The earlier sections of this entry read the sign disagreement as the tell
+that a layout move is not a decision. Four sittings say something stronger
+and worth writing down plainly: the SIZE carries no information either. A
+layout delta is a property of one arrangement, and four bases are four
+arrangements, so a reading from any of them predicts nothing about the next.
+
+Which settles how to handle these rows, at the cost of six rounds on this
+branch. A compile row on a runtime-only change is regenerated from whatever
+base CI last ran, said out loud, and not reasoned from or banked against.
+The objective cannot see it in any case: fifty-four thousand instructions on
+three hundred and thirty-two million is a sixtieth of a per cent, and the
+work vein -- runbench 2,000,261,871, indexbench 3,185,298, both CI's own --
+is where this change was aimed and where its win is.
+
+## the fifth sitting, on the base kanso#1419 left
+
+kanso#1419 (ryu's pair loop) is chained ahead of this branch, so CI measured
+the same three lines a fifth time, on the arrangement that change leaves:
+
+    compile_instructions   42,872,197 ->  42,870,872   -1,325  -0.0031%
+    entry_instructions    144,042,077 -> 144,037,300   -4,777  -0.0033%
+    library_instructions  144,842,133 -> 144,837,840   -4,293  -0.0030%
+    summed                331,756,407 -> 331,746,012  -10,395  -0.0031%
+
+Against main's goldens, which kanso#1419 has not yet moved, the three rows
+land at compile_instructions 42,870,872, entry_instructions 144,037,300 and
+library_instructions 144,837,840: rises of 506, 1,351 and 1,615, all three
+kanso#1419's layout and not this diff's. `compile_allocs` 27,937 and
+`compile_peak_bytes` 776,055 for the fifth time.
+
+The work vein reads the same two deltas it read on the kanso#1415 base, to
+the instruction: runbench 1,997,551,401 -> 1,994,791,401 (-2,760,000 /
+-0.1382%) and indexbench 3,265,296 -> 3,185,298 (-79,998 / -2.4500%). The
+saving is a fixed cost per call and the call count did not move between
+bases. Machine code likewise: the same eight rows +32 and four +48, text
+1,735,036 -> 1,735,484 (+448), which against main's 1,734,364 lands at
+1,735,484 with kanso#1419's 672 in front of it.
+
+Welfare 68.75 -> 68.76, banked in the same commit.
+
+
 
 **CI's rows.** The container's box reads about 0.8% high on these veins and the
 projection was 5,410,533 summed; CI's sitting on the base kanso#1413 left reads:
@@ -3927,6 +4038,652 @@ had read past it. So the 2026-09-13 run exited on the ALREADY RED site gate
 alone, and once kanso#1403's blob setup does its job the nightly reaches the
 mutation phase on any runner — marking the instructions-gate rows unproven
 where the silicon does not match, and proving everything else.
+## 2026-09-14 — to_float called a truncated significand certain, and it is off by one ULP
+
+`k_b_to_float` takes the Eisel-Lemire path when the scan sees a clean
+number. The scan keeps nineteen significant digits and drops the rest,
+and it handed the dropped ones to Lemire without saying they were gone.
+Lemire's method answers exactly or declines, and what it decides is a
+rounding boundary: a significand that has lost its twentieth digit can
+sit on the far side of that boundary from the number the program wrote.
+When it does, native returns the neighbouring double and the interpreter
+returns the right one.
+
+Lemire's own implementation carries a `truncated` flag for this, and so
+does fast_float. This one did not.
+
+The scan now sets `cut` when it drops a nonzero digit, and the fast path
+is taken only while `cut` is clear. A dropped ZERO is not a truncation in
+value — `10000000000000000000` is exactly the nineteen-digit `w` times
+ten — so a trailing run of zeros still takes the fast path. That
+distinction is what keeps the run corpus where it was: all 210,177 float
+parses on runbench go through Eisel-Lemire before and after, because none
+of them drops a nonzero digit.
+
+The differential harness in the parse direction, against `strtod`,
+reported 221 mismatches on the old scanner and 0 on the new one over
+23,264,660 cases. The smallest is twenty significant digits:
+`44090656.994409065` parsed 44090656.99440906 and should parse
+44090656.99440907.
+
+`tests/golden/micro/a_long_significand_rounds_like_the_oracle.kso` is the
+fixture, six cases from twenty digits to thirty-six plus the trailing-zero
+case that must stay on the fast path. Every line in it was a divergence
+before the fix; `micro_corpus_agrees_across_engines` runs it on both
+engines. Watched red on a binary built from the unfixed source first.
+
+Row `truncated_significand`, mutation
+`a_truncated_significand_taken_as_certain`, which removes the `!cut`
+guard.
+
+CORRECTION. This entry first said "all twelve cost goldens and the lazy
+tier agree, so the fix is free on the counters this repo watches". The
+first clause is true and the second does not follow, and CI refuted it:
+five veins moved. `all_counters.sh` reads the twelve RUNTIME COST
+goldens and the lazy tier, and those did all agree. The work vein, the
+text vein and the three compile veins are read by other gates, the sweep
+never touched them, and "the counters this repo watches" is the wider
+set. Do not read a green sweep as a silent tree.
+
+CI's sitting. Six of the fourteen work rows rise and the other eight are
+byte-identical, and the six are exactly the programs that link
+`k_b_to_float`. Each landed at:
+
+    work_runbench      2,003,021,871 -> 2,003,046,621   +24,750  +0.0012%
+    work_jsonbench     1,250,438,261 -> 1,250,475,761   +37,500  +0.0030%
+    work_widebench        33,078,691 ->    33,142,691   +64,000  +0.1935%
+    work_encodebench   3,641,023,306 -> 3,641,023,556      +250  +0.0000%
+    work_livebench     3,115,992,526 -> 3,115,992,776      +250  +0.0000%
+    work_oneshot          19,292,672 ->    19,292,922      +250  +0.0013%
+
+and the summed text vein with them, 1,734,268 -> 1,734,364 (+96): the
+same six .text rows rise 16 bytes apiece and the other eight hold. The
+96 is 6 x 16, which is the check that the two veins agree about which
+programs the change reached.
+
+widebench is the largest share because it is the smallest of the six and
+parses the most floats per instruction; runbench carries the largest
+absolute rise and the smallest fraction. That is what a guard flag costs
+on a path a benchmark reaches a few hundred thousand times, and it buys
+a correctly-rounded double where the two engines used to disagree.
+
+The three compile rows all FELL: compile_instructions 42,877,925 ->
+42,870,366 (-7,559), entry 144,056,402 -> 144,035,949 (-20,453),
+library 144,858,538 -> 144,836,225 (-22,313), with compile_allocs and
+compile_peak_bytes byte-identical. `src/runtime.c` is `include_str!`'d
+into the compiler at src/main.rs:826, so its bytes are bytes the
+compiler carries and a change to it moves the layout underneath. The
+front end does no less work than it did; the fall is layout and is
+recorded as such, not claimed as a compile-side win.
+
+Welfare 68.73238080266131 -> 68.73254693776617, banked in this PR. The
+compile fall outweighs the runtime rise, so the objective came out ahead
+and the floor is raised rather than lowered. The differential-law
+exception was not needed here.
+
+
+## 2026-09-14 — the append is already in place everywhere, and the counter that said otherwise counts two constructors
+
+The standing lead off `encode_onto` was "a 32-byte arena conversion at 0.61%".
+Re-attributing it on merged main (15e1c3b7) refuted the lead and produced two
+wrong answers on the way, both recorded here because the second was caught
+only by going back for the call sites.
+
+**It is not readable from a profile.** `callgrind_annotate` on runbench —
+1,994,172,731 instructions, `env -i`, run from the repository root — has no row
+for `k_bytes_owned` and none for `k_alloc`. Both inline into every caller,
+which is what kanso#1221 and kanso#1298 were for. Only the outlined append
+family shows: `k_b_append_rendered` 23,466,064 (1.18%), `k_b_append_grow`
+19,358,910 (0.97%), `k_b_append_slice` 9,141,444 (0.46%), `k_b_append_range`
+2,000,394 (0.10%), two more under a thousandth, summing to 54,010,642 (2.71%).
+So the 0.61% was not read off a self row, because there is none.
+
+**THE FINDING: every emitted append in the run program already mutates in
+place.** Counting call sites in `runbench.ll` rather than reasoning about the
+analysis:
+
+    k_b_append_mut_byte     18   mutate = 1
+    k_b_append_mut           2   mutate = 1
+    k_b_append_rendered      2   both with the literal i64 1
+    k_b_append_byte          0
+    k_b_append               1   inside the k_b_append_byte SHIM, not program code
+    k_b_append_slice         1   inside the k_b_append_slice_fast SHIM
+
+Twenty-two emitted sites, and the only two that pass a non-mutating flag are
+the slow-path tails inside the runtime's own inline shims — and
+`k_b_append_byte`, the shim holding one of them, has no call sites at all. The
+uniqueness analysis is not failing on this workload. **`src/linear.rs` is
+refuted as a lead for the run program**, and the round that would have widened
+its Perceus fixpoint, with the differential sweep an aliasing argument owes,
+would have bought nothing.
+
+**The wrong answer that got there: a counter with two increment sites.**
+`k_stat_sh_bytes` reads 41,290,272, and `sizeof(KBytes)` is three words, so
+41,290,272 / 24 = 1,720,428 exactly — a clean division, which is precisely what
+made it convincing. It was written down as `k_bytes_owned`'s call count, and
+against `append_fast` 8,834,013 that gave a fast path splitting 80.5% mutating
+against 19.5% allocating, with a ceiling of 1.04–1.38% of runbench.
+
+Every one of those numbers is withdrawn. `k_stat_sh_bytes` is incremented at
+TWO sites: `k_bytes_owned` (runtime.c:7965) and `k_bytes_view`
+(runtime.c:6828), the borrowed-view constructor that builds the same 24-byte
+header with `cap = 0`. 1,720,428 is the two summed. Nothing separates them —
+`k_stat_view_allocs` is bumped at runtime.c:6489, in neither of them, so it is
+not the split either. The header-allocation count is UNKNOWN, and with it the
+ceiling.
+
+An exact division is not a check. It follows from the two sites sharing one
+`sizeof`, so it would have held however the calls divided between them.
+
+**What to carry forward.** The append path is done: it mutates in place at
+every site the run program emits, and no lead survives there. Anyone returning
+to `k_bytes_owned` needs a counter of its own first — the existing one cannot
+answer the question, and a second constructor is exactly what a shared counter
+hides.
+
+THE SHAPE TO CARRY. `callgrind_annotate` ships with valgrind and was not being
+used; the hand-written parser that once read 99,188,064,506 against a
+1,994,172,731 program was solving a problem the tool already solves. And a
+function with no row has inlined, which is information rather than a reason to
+hunt for the cost elsewhere. Both of those held. What did not hold was reading
+one counter as one call site: `grep -n` for the counter name before dividing by
+anything, and count the emitted call sites before reasoning about the pass that
+decides them.
+
+## 2026-09-14 — ryū's pair loop is already the right shape, and the two reformulations that measured faster had each introduced a divide
+
+Three shapes, all measured against kanso#1419's head (runbench 1,988,868,701).
+
+The lead came off the pair loop in `render_ryu`. It searches with `vp` and `vm`
+and brings `vr` down on the same trip, so `vr`'s division does work the search
+will throw away on every trip but the last. Hoisting it out should cost one
+division instead of `pairs` of them.
+
+Two ways to hoist it, and a third written afterwards:
+
+    table    vr /= RYU_POW100[pairs]           1,987,944,191   -924,510   -0.0465%
+    switch   nine arms, literal divisors       1,987,371,341  -1,497,360   -0.0753%
+    loop     divide by the literal 100         1,993,136,111  +4,267,410   +0.2146%
+
+The first two look like wins and are not. The base divides by the literal
+`100`, and LLVM turns a literal divisor into a multiply-high — three of them a
+trip, which is what the comment above that loop has said since kanso#1260.
+`RYU_POW100[pairs]` is a runtime value, so it compiles to `div %r8`. Counted in
+the linked runbench binary, `render_ryu` holds 0 divides on the base and 2
+under each of the table and switch shapes. A standalone translation unit at
+-O2 reads 0, 2 and 4 for the same three: it agrees with the binary on the base
+and on the switch and counts two extra under the table, which is the inliner
+seeing a different call graph. Either way the direction is the same and the
+base is the shape with none.
+
+**The switch was written to dodge exactly this and did not.** Nine arms, each
+with its own literal divisor, is nine multiply-highs — until LLVM tail-merges
+the arms back into one divide with a phi'd divisor, which is the same runtime
+value by another route. Writing the constants out does not survive the
+optimiser. Only a construction with no runtime divisor anywhere denies it the
+merge, which is what the third shape is: a loop dividing by the literal `100`.
+That one has no divide at all and costs 22.3 instructions a call, because it
+walks `vr` down in its own loop instead of riding the search's trips.
+
+DECLINED, all three. The base is the shape that already has no divide in it.
+
+**What this says about the vein.** Callgrind scores `div r64` as one
+instruction. On the silicon this project publishes numbers for it is 20 to 40
+cycles against a multiply's three. welfare's run term is an instruction count,
+so the objective would have scored the table and the switch as wins, the floor
+would have ratcheted up on them, and the published decode board would have
+moved the wrong way — on a change that is slower everywhere it runs.
+
+This is the second time the queue has been misled by the distance between what
+the vein counts and what the hardware does, and it is the opposite direction
+from the first. `2026-09-13 (fifteenth) — the instruction vein counts a byte of
+memcpy as an instruction` found the vein OVERcounting something cheap, at one
+Ir per byte moved by `rep movsb`, which makes a memcpy-shaped lead look bigger
+than it is. This one is the vein UNDERcounting something expensive, which makes
+a divide-shaped change look like a win. Both are the same gap read from
+different ends, and the rule that falls out of the pair is narrow enough to be
+useful: before believing an instruction delta, check whether the diff moved any
+instruction whose cost and whose count disagree. `div`, `rep`-prefixed string
+moves, and the divisions LLVM has already turned into multiplies are the three
+this repo has hit.
+
+OPEN, and not a gavel: whether welfare's run term should weigh a `div` at more
+than one is a question about the weights, and nothing here moves the floor in
+either direction, so there is nothing to rule yet. Recording it so the next
+change that trades a multiply-high for a divide meets this entry before it
+meets CI.
+
+**The differential.** Each shape was checked against the base byte-for-byte
+before being priced: 23,264,660 cases for the loop shape, structured (2048
+exponents x 64 mantissas x both signs, the powers of ten from -320 to 308 with
+their `nextafter` neighbours, a million integers and their /7 and x1e-9) plus
+uniform random over the bit space, 0 mismatches and 0 round-trip failures
+through `strtod`. The round-trip check runs on non-negatives only:
+`render_ryu` never writes the sign, its caller does (runtime.c:4304), so
+feeding it a negative renders the magnitude and `strtod` reads back a positive.
+That guard was missing at first and reported 25,115,977 failures, none of them
+real.
+
+**And the wider census, which is the reason the rule is forward-looking.**
+Counting `div`/`idiv` sites across all fourteen benchmark binaries on the same
+build: eleven hold exactly one, in `k_exec`, which is process plumbing and runs
+once. The other three — encodebench, widebench and basket — hold five, the same
+one in `k_exec` plus two each in `k_div` and `k_mod`. Those two are the outlined
+helpers kanso#1292 minted when it sent integer quotient and remainder through a
+call with zero and -1 handled there, and a language whose `/` and `%` divide has
+to divide somewhere.
+
+So no hot path in the shipped runtime executes a divide today, and none of the
+297 changes that have landed traded a multiply-high for one. The rule this
+entry leaves behind has no current violations to repair; it exists to catch the
+next change that would have been the first.
+
+
+## 2026-09-14 — the render side of the float pair had no round-trip harness either
+
+kanso#1423 found `k_b_to_float` taking eisel-lemire's answer as certain on a
+truncated significand, one ULP from the correctly-rounded double, on 221 of
+1,405,451 cases. That function's whole corpus was 86 values. The same question
+asked of the other direction — does the text `render_ryu` writes read back as
+the double it was given — had no harness at all.
+
+What existed checked two neighbouring things. `scripts/render_differential`
+runs the interpreter's `render` against the C runtime's `k_render` and
+requires them to agree; two implementations wrong the same way pass it, and
+the interpreter's float rendering is not independent of ryū's. The sweep in
+`the_shortest_digits_come_out_in_pairs` checks the block that writes chosen
+digits into a buffer against snprintf; it says nothing about which digits were
+chosen.
+
+`tests/every_rendered_float_reads_back_as_itself.rs` asks the property
+directly, with `strtod` as the independent reference. It lifts `ryu_d2d`,
+`render_ryu`, their pow5 tables and the two helpers they call out of
+`src/runtime.c` — the real text, never a copy — and sweeps 2,809,326 values in
+three seconds:
+
+    2,809,326 rendered, 0 do not read back, 0 length disagrees, 0 not shortest
+
+The corpus is four groups, and the second one matters more than it looks.
+Random 64-bit patterns spread their exponents uniformly over the whole field,
+so almost none of them land where a json document's numbers live; `m`, `m/10`,
+`m/1000` and `-m/100` for m below 200,000 name that range by hand. The other
+two groups are both sides of every binary exponent including the subnormals,
+and both sides of every power of ten.
+
+**Watched red three ways, one per property, each leaving the other two
+clean.** That separation is the evidence the three checks are independent
+rather than one check written three times:
+
+    output = vr + (...)  ->  output = vr        815,943 do not read back
+    the removal loop breaks after one step      581,913 are not shortest
+    return (o - buf)     ->  + 1                2,809,321 lengths disagree
+
+**A counter of mine was wrong before the renderer was.** The first
+shortest-ness check counted significant digits out of the rendered text, which
+calls `"100"` two digits — the plain form pads with zeros to reach the decimal
+point and those are not digits ryū chose. It reported 2,863 shortest failures,
+every one of them the counter's. Taking `k` from `ryu_d2d` itself is both
+correct and the more honest question, since `k` is what ryū claims.
+
+Ratchet row `render_trip`, mutation `a_rendered_float_that_never_rounds_up.sh`.
+
+**And the integer half of the same door.** `k_b_to_int` parses `[-]?digits` in
+a bare loop when the digit run is eighteen or fewer, on the ground that
+eighteen digits cannot overflow an i64, and hands everything else to strtoll.
+That bound is the whole safety argument and nothing checked it. It is SOUND:
+24,000,029 strings, 21,816,309 of them taking the fast path, 0 disagreeing
+with strtoll.
+
+Recorded as a spec rather than left as a measurement because the bound is one
+character from wrong. Nineteen nines is 9,999,999,999,999,999,999 against
+i64's 9,223,372,036,854,775,807, so widening the bound — the edit someone
+optimising this would reach for — puts 50,249 wrong answers into the fast
+path, the first at `"9223372036854775808"`, 2^63 exactly, where the loop wraps
+to the negative and libc saturates and raises. That is the watched-red, and
+`tests/the_int_fast_path_agrees_with_libc.rs` is what now sees it. Ratchet row
+`int_bound`, mutation `an_eighteen_digit_bound_widened_to_nineteen.sh`.
+
+## 2026-09-14 — the parse harness that found the bug was thrown away, so it ships
+
+kanso#1423 found `k_b_to_float` calling a truncated significand certain by
+building a differential harness against strtod, running it over 1,405,451
+cases, and reading off 221 wrong answers. Then the harness was deleted and
+the fix shipped with a six-line micro fixture.
+
+That leaves the corpus where it was. CLAUDE.md asks for the fuzzer to be
+the thing that ships — "build the differential fuzzer first, against an
+independently-written reference... The harness extracts the real function
+text from the source, never a copy" — and a bug with no home in the corpus
+is a gap in the corpus, so adding the home is part of the fix. Float
+RENDERING has had a harness since kanso#1424 and integer PARSING since the
+same pull request. Parsing a float, the one kernel with an actual defect
+against it, had none: `grep -l k_b_to_float tests/*.rs` came back empty.
+
+`tests/every_float_literal_parses_like_strtod.rs` closes it. Two spans are
+lifted out of src/runtime.c — the pow5 tables with `k_el_parse`, and the
+scan out of `k_b_to_float` — and compiled with clang, so a change to either
+cannot pass by leaving a stale duplicate behind. Six deliberately-chosen
+groups: significands past nineteen digits with a nonzero tail, the same
+with the point inside the run so the fraction branch drops rather than
+trades, trailing zeros past nineteen digits which are NOT a truncation and
+must stay fast, the exponent extremes where the table runs out and doubles
+go subnormal, round-to-even boundaries, and the plain short decimals the
+benchmarks actually parse.
+
+    1,193,654 parsed    599,826 took the fast path    0 disagree
+
+WATCHED RED, and the first attempt was watched red for the WRONG REASON,
+which is worth writing down because the mistake is invisible when it
+happens. The closing anchor of the lifted scan was the line
+`if (ok && any && !cut && p == stop) {`. The mutation removes `!cut` from
+that line. So under the mutation the anchor stopped matching, `cut` panicked
+with "no longer ends with", and the spec went red having proved nothing
+about the parser — it had proved its own anchor. A spec that fails loudly
+for the wrong reason still passes a careless reading of "watched red".
+
+The anchor now ends at the strtod fallthrough and names nothing under test.
+With that, the mutation is caught properly: 2,099 of 1,186,978 fast-path
+takes disagree, the first at `43270000000000000011e20`, one ULP low —
+the same shape as `4409065699.4409065699e-2`, which is the case kanso#1423
+was opened on. The rule the miss teaches: AN ANCHOR MAY NOT MENTION THE
+THING UNDER TEST.
+
+No counter moves; this file adds a test and touches nothing the compiler
+builds.
+
+## 2026-09-14 — a float a program writes down has few digits, and ryu took them off one at a time
+
+`render_ryu` is 4.49% of the run program and 10.62% of encodebench, at
+exactly 468.5 instructions a float in both — 191,070 calls in one and 849,200
+in the other, and the same number per call to one decimal place. That
+agreement is the first thing worth noticing: whatever the cost is, it does
+not depend on which corpus the floats came from.
+
+Instruction-level callgrind says where it goes. One sixteen-instruction block
+at 0x12050 runs **9.41 times a call** and carries 127,916,800 of encodebench's
+397,836,000 — 32% of the function. It is the general digit-removal loop:
+
+    mov %rsi,%r9 / mov %rdx,%rcx / mov %rsi,%rax
+    mul %rbp / mov %rdx,%rsi / shr $0x3,%rsi / inc %ebx
+    mov %r8,%rax / mul %rbp / mov %rdx,%r8
+    mov %rcx,%rax / mul %rbp
+    shr $0x3,%r8 / shr $0x3,%rdx / cmp %rdx,%r8 / ja
+
+Three multiply-highs and three shifts — `vp / 10`, `vm / 10`, `vr / 10` — a
+counter, a compare and the branch. LLVM had already sunk the `vr % 10` and
+the `round_up` out of the loop, because only the last trip's value survives.
+
+Nine and a half trips is a lot, and the reason is the corpus rather than the
+algorithm. `vr` starts with seventeen significant digits. A float a program
+writes down — a price, a coordinate, a measurement — has three or four, so
+thirteen or fourteen come off, and the loop takes them one at a time.
+
+## the loop that replaced them costs twenty-one, not sixteen
+
+Measured after the change, on a freshly built `runbench` — and the
+rebuild is the point, because the binary sitting in the worktree
+predated `src/runtime.c` by four minutes and profiling it read
+1,994,173,231, the old shape's number. Rebuilt: 1,988,869,261, a fall of
+5,303,970 (-0.2660%), which is the A/B figure recovered from a second
+direction.
+
+`render_ryu` is 84,209,130 instructions, 4.23% of runbench, 440.7 a
+float over 191,070 calls. It was 4.49% and 468.5 before.
+
+The new loop is block `0x39190`-`0x391d2`. It runs 1,022,310 times,
+5.35 trips a float, and is 25.49% of the function at 112.4 instructions
+a float. The old pair ran 9.41 trips at sixteen each, about 150.
+
+**Twenty-one instructions a trip, not sixteen.** The premise this change
+was built on is that the hundred-step and the ten-loop each cost
+sixteen, so one trip taking two digits beats two taking one. That was
+true of the code being replaced. The fused loop is not that body
+unchanged: it is twenty-one instructions, and seven of them are
+register moves that carry `vp`, `vm` and `vr` around the back edge.
+Disassembled:
+
+    39190:  mov %rsi,%r11          391b0:  mov %rcx,%rax
+    39193:  mov %rcx,%r9           391b3:  shr $0x2,%rax
+    39196:  mov %rdx,%r8           391b7:  mul %rdi
+    39199:  mov %rsi,%r10          391ba:  mov %r8,%rax
+    3919c:  shr $0x2,%r10          391bd:  shr $0x2,%rax
+    391a0:  mov %r10,%rax          391c1:  mov %rdx,%rcx
+    391a3:  mul %rdi               391c4:  mul %rdi
+    391a6:  mov %rdx,%rsi          391c7:  shr $0x2,%rcx
+    391a9:  shr $0x2,%rsi          391cb:  shr $0x2,%rdx
+    391ad:  add $0x2,%ebx          391cf:  cmp %rdx,%rcx
+                                   391d2:  ja  39190
+
+So the trade is 21 against 32, not 16 against 32 — a narrower margin
+than the sentence in the commit implies, and the measured -0.2660%
+sizes it correctly either way. The correction is recorded because the
+number 16 would otherwise be read back as this loop's cost.
+
+Two things the disassembly settles that the C does not. The `vr % 100`
+that feeds `round_up` does not appear in the loop at all: only the last
+trip's value survives, so LLVM sank the modulo past the back edge. And
+the three `mul %rdi` are the three divisions by 100, sharing one
+reciprocal in `%rdi`.
+
+**The next lead, not taken here.** Seven of the twenty-one are moves
+the loop would not need if the body wrote its results into the
+registers it reads. That is 37 instructions a float, 8.5% of
+`render_ryu`, about 0.36% of runbench — real, and a separate change
+with its own measurement.
+
+The rest of the function, same sitting, by straight-line run:
+
+    0x38fbf-0x39092   62 instrs   once a float    62.0   14.07%
+    0x39570-0x3959d   13 instrs   2.79 trips      36.3    8.24%
+    0x39770-0x3978f   11 instrs   2.88 trips      31.7    7.19%
+    0x38e1e-0x38e85   22 instrs   once a float    22.0    4.99%
+    0x3936e-0x393b9   26 instrs   0.71 trips      18.5    4.20%
+
+The 62-instruction run is unconditional setup, once per float, and is
+the largest single non-loop cost left in the function.
+
+## the hundred-step was already there and fired once
+
+    int round_up = 0;
+    uint64_t vpd100 = vp / 100, vmd100 = vm / 100;
+    if (vpd100 > vmd100) { ... removed += 2; }
+    for (;;) { ... the ten-loop ... }
+
+Two digits for the same three multiply-highs the ten-loop spends on one, and
+it ran once. It is a `for (;;)` now. The shapes are otherwise identical: the
+same rounding test on the two removed digits (`vrm100 >= 50` is "is the tail
+at least half of a hundred", which is what `vrm >= 5` is for ten), and the
+ten-loop still runs afterwards to take a last odd digit.
+
+Measured on one container sitting, four binaries built from one tree with
+equal-length names, all four run from the repository root:
+
+    encodebench  3,747,072,758 -> 3,723,499,558   -23,573,200  -0.6291%
+    runbench     1,994,263,401 -> 1,988,959,431    -5,303,970  -0.2660%
+
+The bytes out are identical on both programs. That was checked by diffing the
+output of all four binaries, and it is the only check that matters here: the
+loop decides how fast the digits arrive, never which digits they are.
+
+## the first reading was of two dead programs
+
+The first output comparison ran the four binaries from the scratch directory
+they were built into, and both "agreed" on fifteen bytes. Callgrind then read
+315,755 instructions for a program that takes three and a half billion.
+
+That is the second trap in `bench/instructions_golden.txt`'s own header,
+written down after it cost somebody a reading before: the benchmarks resolve
+their data relative to the working directory, so a run from anywhere else
+dies at the first open and exits clean. Two dead programs agree about
+everything. Re-run from the repository root, both produced `done: 74072800`
+and the comparison meant something.
+
+
+## CI's sitting, and the one vein that went the other way
+
+CI measured the pair loop on the base kanso#1423 left. Five of the fourteen
+work rows fall and nine hold to the digit:
+
+    encodebench  3,641,023,556 -> 3,616,600,356   -24,423,200   -0.6708%
+    livebench    3,115,992,776 -> 3,091,569,576   -24,423,200   -0.7838%
+    runbench     2,003,046,621 -> 1,997,551,401    -5,495,220   -0.2743%
+    oneshot         19,292,922 ->     19,231,864       -61,058   -0.3165%
+    widebench       33,142,691 ->     33,134,691        -8,000   -0.0241%
+
+encodebench and livebench fall by the same 24,423,200 because they are two
+programs over one encode path and the floats in them are the same floats. The
+container read -0.2660% on runbench against CI's -0.2743%, a ratio of 1.031.
+An earlier sitting on the kanso#1418 base read the same five deltas to the
+instruction; kanso#1423 moved the levels and the saving did not move with
+them.
+
+The machine-code vein rises: text 1,734,364 -> 1,735,036, +672 summed, and
+EVERY ONE of its fourteen rows rises by exactly 48. That uniformity is the
+finding. The fused loop lives in src/runtime.c, every binary links the same
+runtime, and the `for (;;)` body is 48 bytes longer than the `if` it replaced
+— so the vein records one number fourteen times. A change in the emitter would
+spread unevenly across these rows instead, because the programs differ in what
+they emit; this one cannot. The 2026-09-05 gavel keeps machine-code size out
+of welfare, so nothing prices the 48 bytes against the runtime falls they buy.
+The trade is stated here and the objective does not weigh it.
+
+The three compile rows rise as layout: compile_instructions 42,870,366 ->
+42,872,197 (+1,831), entry_instructions 144,035,949 -> 144,042,077 (+6,128),
+library_instructions 144,836,225 -> 144,842,133 (+5,908). `kanso check` stops
+before codegen and no decision they count can be altered by a runtime edit,
+but src/runtime.c is compiled into the compiler and its bytes move what sits
+where. On the kanso#1418 base the same diff read -8,125, -21,078 and -22,292
+on the same three rows: same bytes, opposite sign, which is the whole of what
+a layout delta carries. compile_allocs held at 27,937 and compile_memory is
+byte-identical, the pair that really cannot move.
+
+Welfare 68.73 -> 68.75, banked in the same commit.
+
+## 2026-09-14 — the string arm is asked first, and a list index pays for it
+
+`k_b_at` is what `at` compiles to, and it answers five container kinds by
+asking their tags in order. The list arm stood first. runbench indexes text
+690,000 times and lists 7,900, so the list test was two instructions the
+common case paid to be told no.
+
+The arms swap. The string arm is asked first; every other arm keeps its
+place. Nothing else in the function changed, and the bytes out are the same,
+so no golden but the work vein moves.
+
+Measured on the container, `env -i` under callgrind, both binaries copied
+into one directory under EQUAL-LENGTH names:
+
+    runbench     1,994,173,291 -> 1,992,793,291  -1,380,000  -0.0692%
+    indexbench       3,226,622 ->     3,186,624     -39,998  -1.2396%
+
+The other twelve work rows are byte-identical. 1,380,000 is 690,000 calls
+times exactly two instructions, which is the attribution the profile gave
+before the change was written.
+
+The whole vein was read rather than runbench alone, on purpose: a list index
+now pays the two instructions a string index stopped paying, and a row that
+rose would have been the trade to state. None rose.
+
+**Three harness traps cost three wrong readings on the way, and all three are
+already written into `bench/instructions_golden.txt`'s own header.** The
+first: binaries named `base-runbench` and `new-runbench` differ by one
+character of exec path, and the kernel puts that path on the new process's
+stack for libc to walk before main — four benchmarks read exactly -14 and one
++14, which is the artifact and not the change. Equal-length prefixes
+(`aaa-`/`bbb-`) fix it. The second: the benchmarks resolve their data
+relative to the working directory, so running them from `/tmp/ab/aa` and
+`/tmp/ab/bb` gave eight rows near 225,000 — a work row that small means the
+program DIED, and running one by hand says so: `cannot read
+bench/large.json: no such file`. One directory, `bench` symlinked beside the
+binaries. The third is the container's own: `scripts/gates/instructions.sh`
+refuses on this host (glibc 2.39-0ubuntu8.7 / clang 18.1.3 against the
+golden's 8.9 / 19.1.1) and never measures at all, which is why these rows are
+a direct callgrind sitting and the golden is regenerated from CI's.
+
+Row `list_test_first`, mutation `a_list_test_every_string_index_pays.sh` —
+an awk block swap that puts the list arm back in front, verified by sorting
+both files to prove the mutation moves lines and writes none.
+
+Under the mutation, on the same sitting and against the shipped binary:
+runbench 1,992,792,731 -> 1,994,172,731 (+1,380,000 / +0.0692%) and
+indexbench 3,186,064 -> 3,226,062 (+39,998 / +1.2555%). Exactly the negative
+of the change, to the instruction.
+
+**CI's rows, and the container projected half of both.** The goldens now hold
+what the runner measured on the base kanso#1415 left:
+
+    runbench     2,003,021,871 -> 2,000,261,871  -2,760,000  -0.1378%
+    indexbench       3,265,296 ->     3,185,298     -79,998  -2.4500%
+
+The other twelve are byte-identical, so the trade this entry went looking for
+does not appear anywhere in the vein: no row rose.
+
+The container's sitting above projected -1,380,000 on runbench, exactly half
+of CI's -2,760,000, and -39,998 on indexbench against -79,998, half and one
+less. That reading was taken on a host `instructions.sh` had already refused,
+and the refusal is usually described as a levels problem — two hosts count the
+same program differently, so a row measured on one cannot be compared against
+a row measured on the other. This is the first case in the log where the
+refusal moved a DELTA instead. The change removes a fixed cost per call to
+`k_b_at`, so the delta is the call count times the saving, and the call count
+is an inlining decision: the runner's clang reaches the reordered test twice
+as often as the container's. From a refused host, project the sign, not the
+size.
+
+Machine code moved with it, in `bench/text_golden.txt`: twelve of fourteen
+rows rise, +32 bytes on eight and +48 on four, with escapebench and readbench
+byte-identical. The reorder lives in `src/runtime.c` and every program links
+it, so the cost is shared; the spread is which arms a program's own code makes
+reachable. That vein carries no welfare term.
+
+Summed over the fourteen binaries that vein reads `text 1,734,268 ->
+1,734,716`, a rise of 448 bytes: eight times 32 and four times 48.
+
+The trend gate refused the branch until that figure was written down, and the
+mechanism is worth recording. It searches the branch's log delta for a
+worsened counter's name AND for the value it landed on, as two separate
+matches. This entry used the word `text` three times and quoted only the
+per-row deltas, so the name matched and the number did not. The number is the
+half that carries the weight: a name on its own licenses every later move of
+that counter on the branch, which is how a mutation once set a named counter
+to 999,999,999 and left this gate green.
+
+The three compile veins moved too, which is the layout prior CLAUDE.md
+records for any edit to the compiler's own bytes: `src/runtime.c` is
+`include_str!`'d into the compiler, so its length and contents move the
+binary the compile gates measure even though `kanso check` never runs a line
+of it. On the kanso#1415 base CI read compile_instructions +35, entry -1,854
+and library +230 against that base's goldens — three digits on a
+147-million-instruction row, which is layout and nothing else.
+`compile_allocs` and `compile_peak_bytes` were both byte-identical, as they
+have to be: no allocation site changed.
+
+CI measured them again after kanso#1416 merged in, and read this:
+
+    compile_instructions   44,031,424 ->  44,032,307    +883  +0.0020%
+    entry_instructions    146,767,592 -> 146,765,356  -2,236  -0.0015%
+    library_instructions  147,572,025 -> 147,569,147  -2,878  -0.0020%
+    summed                338,371,041 -> 338,366,810  -4,231  -0.0013%
+
+**The three rows disagree in sign**, and that is the tell worth keeping: the
+module row rose while the other two fell, on one binary, from one change. A
+decision the front end makes differently moves all three the same way, because
+all three run the same passes. Layout does this instead. `compile_allocs`
+held at 28,361 and `compile_peak_bytes` at 776,055, which is the other half of
+the same statement — the compiler asks exactly what it asked before and pays
+for it in a differently-arranged binary.
+
+That sitting is superseded. kanso#1414 landed on main afterwards and took
+compile_instructions to 43,910,543, entry to 146,573,721 and library to
+147,378,070, so the three rows above are deltas against a base that is gone.
+A layout delta does not carry across a rebuild the way a removed decision
+does — the arrangement it describes is the arrangement of one binary — so the
+three veins go back to main's values and CI measures the reorder again on the
+merged base. Only the work vein's bank stands, and it stands because no
+compile row here has ever reached the objective's resolution: four thousand
+instructions on three hundred and thirty-eight million is a ten-thousandth of
+a per cent.
+
 
 ## 2026-09-14 — the pow5 table's low word is loaded once a call, and LLVM had already sunk it
 

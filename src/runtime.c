@@ -4035,8 +4035,17 @@ static int ryu_d2d(double f, char* dig, int* e10) {
         output = vr + ((vr == vm && (!accept || !vm_trailing)) || last_removed >= 5);
     } else {
         int round_up = 0;
-        uint64_t vpd100 = vp / 100, vmd100 = vm / 100;
-        if (vpd100 > vmd100) {
+        /* Two digits a trip while two are there to take. This loop used to
+           run once and hand the rest to the ten-loop below, and the ten-loop
+           was averaging 9.41 trips a float on the encode corpus -- because a
+           float a program writes down has few significant digits and `vr`
+           starts with seventeen, so most of them come off. Both loops cost
+           the same sixteen instructions a trip (three multiply-highs, three
+           shifts, a compare and the branch), so a trip that takes two digits
+           is worth two that take one. */
+        for (;;) {
+            uint64_t vpd100 = vp / 100, vmd100 = vm / 100;
+            if (vpd100 <= vmd100) break;
             uint64_t vrd100 = vr / 100;
             uint32_t vrm100 = (uint32_t)(vr % 100);
             round_up = vrm100 >= 50;
@@ -7492,12 +7501,12 @@ static __attribute__((noinline, cold)) void k_die_index(KValue container) {
 KValue k_b_at(KValue container, KValue index) {
     if (!k_not_failure(container)) return container;
     if (!k_not_failure(index)) return index;
-    if (container.tag == K_LIST && index.tag == K_INT) {
-        KList* l = k_as_list(container);
-        long long i = index.payload;
-        if (i < 1 || i > l->len) return k_none();
-        return l->items[i - 1];
-    }
+    /* The STR arm is asked FIRST. `length s[i]` over text is the index this
+       runtime meets most -- 690,000 calls on runbench, all of them from
+       tally_4 -- and the LIST test in front of it was two instructions
+       every one of them paid to be told no. A list index pays the same two
+       instructions now, which is why this is measured on the whole work
+       vein rather than on runbench alone. */
     if (container.tag == K_STR && index.tag == K_INT) {
         KStr* s = k_as_str(container);
         long long want = index.payload;
@@ -7553,6 +7562,12 @@ KValue k_b_at(KValue container, KValue index) {
         os->cap = -2;
         KValue one; one.tag = K_STR; one.payload = k_ptr(os);
         return one;
+    }
+    if (container.tag == K_LIST && index.tag == K_INT) {
+        KList* l = k_as_list(container);
+        long long i = index.payload;
+        if (i < 1 || i > l->len) return k_none();
+        return l->items[i - 1];
     }
     if (container.tag == K_BYTES && index.tag == K_INT) {
         KBytes* b = k_as_bytes(container);
@@ -9411,7 +9426,24 @@ KValue k_b_to_float(KValue v, const char* origin) {
     /* the fast path: a plain decimal scanned into (w, q) and parsed by
        eisel-lemire; anything it can't be certain about — overlong digits,
        exotic forms, halfway cases — falls through to strtod, which stays
-       the semantic authority */
+       the semantic authority.
+
+       `cut` is why the overlong case is one of those. The scan keeps
+       nineteen significant digits; past that an integer digit is traded for
+       a `q++` and a fraction digit is dropped outright, and either way the
+       significand handed on is no longer the number that was written. A
+       truncated significand can sit on the far side of a rounding boundary
+       from the true value, so eisel-lemire's answer is not certain and the
+       algorithm does not claim it is — Lemire's own implementation carries
+       the same flag. Without it this returned a double one ULP below the
+       correctly-rounded one on `4409065699.4409065699e-2` and 220 other
+       cases the parse harness found, and the interpreter — the oracle —
+       disagreed with native on every one of them.
+
+       A dropped ZERO changes nothing, so only a nonzero one sets the flag:
+       "10000000000000000000" is exactly w * 10 and stays on the fast path.
+       That is what keeps the run corpus at 210,177 fast-path parses, which
+       is every call it makes. */
     if (len > 0) {
         const char* p = data;
         const char* stop = data + len;
@@ -9419,11 +9451,11 @@ KValue k_b_to_float(KValue v, const char* origin) {
         if (*p == '-' || *p == '+') { neg = *p == '-'; p++; }
         unsigned long long w = 0;
         long long q = 0;
-        int digits = 0, any = 0, ok = 1;
+        int digits = 0, any = 0, ok = 1, cut = 0;
         while (p < stop && *p >= '0' && *p <= '9') {
             any = 1;
             if (digits < 19) { w = w * 10 + (unsigned long long)(*p - '0'); if (w) digits++; }
-            else { q++; }
+            else { q++; if (*p != '0') cut = 1; }
             p++;
         }
         if (p < stop && *p == '.') {
@@ -9435,6 +9467,7 @@ KValue k_b_to_float(KValue v, const char* origin) {
                     if (w) digits++;
                     q--;
                 }
+                else if (*p != '0') cut = 1;
                 p++;
             }
         }
@@ -9452,7 +9485,7 @@ KValue k_b_to_float(KValue v, const char* origin) {
             if (!edigits) ok = 0;
             q += esign * e;
         }
-        if (ok && any && p == stop) {
+        if (ok && any && !cut && p == stop) {
             double out;
             if (k_el_parse(w, q, &out)) {
                 return k_float(neg ? -out : out);
