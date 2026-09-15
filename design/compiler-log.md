@@ -5183,6 +5183,41 @@ runbench +14,960,362.
 
 **Every counter the trend gate calls worse, with the value it landed on.** A four-slot buffer where a one-slot one stood is 48 more bytes for every empty literal that stays empty, so `alloc_bytes` and `sh_buf` rise on the programs whose empty lists never grow, `perm_peak_bytes` and `perm_live_bytes` rise where a list escapes its beat with the larger buffer, and `bytes_freed` falls where fewer grows meant fewer permanent buffers to free: run_alloc_bytes 426,179,869 -> 459,964,461, run_perm_peak_bytes 10,272 -> 20,512, encode_alloc_bytes 658,041,744 -> 658,094,320, encode_sh_buf 73,214,624 -> 73,267,200, basket_alloc_bytes 4,900,609 -> 7,503,425, basket_bytes_freed 12 -> 11, basket_perm_live_bytes 2,228,256 -> 4,259,872, basket_perm_peak_bytes 2,752,560 -> 5,308,464, escape_alloc_bytes 32,976,112 -> 65,760,112, escape_perm_peak_bytes 10,272 -> 20,512, escape_sh_buf 96,000 -> 240,000, scan_alloc_bytes 160,539,964 -> 160,587,964, scan_sh_buf 33,024 -> 81,024, a_class_asks_by_the_byte_alloc_bytes 432,271 -> 468,175, a_class_asks_by_the_byte_sh_buf 82,448 -> 118,352, a_loop_invariant_capture_is_copied_every_rewind_alloc_bytes 91,136 -> 102,064, a_loop_invariant_capture_is_copied_every_rewind_sh_buf 10,976 -> 21,904, a_pushed_call_keeps_the_sweep_alloc_bytes 6,595,280 -> 13,152,080, a_pushed_call_keeps_the_sweep_perm_peak_bytes 10,272 -> 20,512, a_pushed_call_keeps_the_sweep_sh_buf 19,200 -> 48,000, an_escaped_list_gives_its_buffer_back_bytes_freed 400 -> 200, an_escaped_list_gives_its_buffer_back_sh_buf 6,400 -> 16,000, an_inner_beat_opens_its_tenure_in_the_block_outside_allocs 177,420 -> 180,196, an_inner_beat_opens_its_tenure_in_the_block_outside_evac_allocs 29,377 -> 48,531, an_inner_beat_opens_its_tenure_in_the_block_outside_evac_bytes 2,339,344 -> 3,006,224, an_inner_beat_opens_its_tenure_in_the_block_outside_ten_blocks 2 -> 3, build_cycle_alloc_bytes 3,168 -> 3,264, build_cycle_sh_buf 208 -> 304, early_exit_alloc_bytes 44,368 -> 88,064, early_exit_perm_live_bytes 32,784 -> 65,552, early_exit_perm_peak_bytes 40,992 -> 81,952, early_exit_sh_buf 32 -> 80, effect_push_shape_alloc_bytes 3,264 -> 3,456, effect_push_shape_sh_buf 704 -> 896, fold_push_shape_bytes_freed 5 -> 4, fused_map_shape_bytes_freed 5 -> 4, fused_reducer_bytes_freed 4 -> 3, fused_reducer_sh_buf 32 -> 80, fused_select_shape_bytes_freed 5 -> 4, fused_tally_alloc_bytes 32,240 -> 42,880, fused_tally_perm_live_bytes 8,208 -> 16,400, fused_tally_perm_peak_bytes 10,272 -> 20,512, piped_reducer_bytes_freed 4 -> 3, piped_reducer_sh_buf 32 -> 80, skip_shape_bytes_freed 5 -> 4, sort_shape_perm_live_bytes 8,208 -> 16,400, sort_shape_perm_peak_bytes 10,272 -> 20,512, take_shape_bytes_freed 5 -> 4, tally_shape_bytes_freed 5 -> 4, tally_shape_sh_buf 2,016 -> 2,064, the_same_capture_built_below_the_mark_is_shared_alloc_bytes 91,040 -> 101,968, the_same_capture_built_below_the_mark_is_shared_sh_buf 10,976 -> 21,904, unsafe_wrap_alloc_bytes 128 -> 176, unsafe_wrap_sh_buf 32 -> 80. The inner-beat tenure fixture moves the other way for the same reason, its `allocs`, `evac_allocs`, `evac_bytes` and `ten_blocks` landing where the list above says. The peak is what the objective reads, and it fell.
 
+**CI's sitting, on the base kanso#1431 left.** The work vein reads runbench
+1,945,875,866 -> 1,930,572,613 (-15,303,253, -0.7864%), 342,891 deeper
+than the container's -14,960,362, and jsonbench 1,211,426,976 ->
+1,195,571,676 (-15,855,300, -1.3088%), 630,000 deeper than the container's
+-15,225,300. Seven more fall: pendbench -11,284,328 (-5.1424%), basket
+-270,465, encodebench -128,117, oneshot -105,043, digestbench -102,348,
+livebench -96,070, widebench -83,118; indexbench and readbench hold.
+Against main the digest row still stands above where the chain found it,
+work_digestbench 9,813,332 -> 9,838,994: kanso#1430's wrapper price less
+kanso#1431's and this entry's falls, priced in that entry. Three RISE
+here: work_scanbench 508,340,742 -> 508,351,545 (+10,803), work_deepbench
+354,898,747 -> 355,470,728 (+571,981, +0.1612%), and work_escapebench
+83,901,717 -> 85,995,606 (+2,093,889, +2.4956%). escapebench's rise is the
+container's to the instruction (83,868,738 -> 85,962,627) and it is the
+accumulator's new lifetime: a list a loop pushes into stays in the arena
+through four pushes where one push filled the old buffer, and every rewind
+in between carries it, where before the second push moved it to permanent
+storage. On the container that is memcpy +738,000, malloc +626,895, the
+free path +441,000, `k_beat_rewind_slow` +183,000, `k_b_push_mut`
++162,000. deepbench pays the same carry on a smaller scale.
+
+Machine code: every row FALLS by 112 or 144 bytes, summed 1,708,652 ->
+1,706,956 (-1,696): the one-slot buffer sat below the free list's size
+classes and the grow had a branch for it, laid out once per program.
+
+The three compile rows RISE by layout: compile_instructions 42,869,908 ->
+42,871,308 (+1,400), entry_instructions 144,035,862 -> 144,038,199
+(+2,337), library_instructions 144,837,205 -> 144,838,028 (+823).
+compile_allocs held at 27,937 and compile_memory is byte-identical.
+
+The book's two counter panels (ch10 `counters`, ch12 `fused`) quote the
+allocation counters of a sample that opens an empty list, and the sweep
+does not regenerate them; CI's book job caught both, allocs 10 -> 9 and
+alloc_bytes 43,888 -> 22,032 on each, and they are rewritten here.
+
 ## 2026-09-15 — the two byte scanners are inlined, and their constants fold
 
 `k_b_find2_raw` and `k_b_find2_below_raw` are the decoder's inner scans:
