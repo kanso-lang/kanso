@@ -486,6 +486,22 @@ entry_rewritten_twice = row
   (breaking "an_entry_program_rewritten_twice_before_it_is_checked")
   release
 
+render_trip = row
+  "a rendered float that truncates instead of rounding"
+  false
+  "cargo test --release --test every_rendered_float_reads_back_as_itself"
+  "specs (unit, golden, differential)"
+  (breaking "a_rendered_float_that_never_rounds_up")
+  release
+
+int_bound = row
+  "an integer fast path whose digit bound can overflow"
+  false
+  "cargo test --release --test the_int_fast_path_agrees_with_libc"
+  "specs (unit, golden, differential)"
+  (breaking "an_eighteen_digit_bound_widened_to_nineteen")
+  release
+
 append_rendered = row
   "a scalar rendered into a string and copied again"
   false
@@ -1237,7 +1253,9 @@ rows_b1e = text/concat rows_b1e3 [length_fold ten_open pop_fast push_walk]
 
 rows_b1f = text/concat rows_b1e [scalar_words slice_words render_words]
 
-rows_b1g = text/concat rows_b1f [map_lit_copy buf_class_loop]
+rows_b1f2 = text/concat rows_b1f [render_trip int_bound]
+
+rows_b1g = text/concat rows_b1f2 [map_lit_copy buf_class_loop]
 
 rows_b1h = text/concat rows_b1g [walk_once data_beside]
 
@@ -1296,7 +1314,24 @@ rows_c1p = text/concat rows_c1t [published_numbers]
 
 rows_c1b = text/concat rows_c1p [diagnostics accumulator]
 
-rows_c1c0 = text/concat rows_c1b [rendering negative_sign small_record]
+# The `goldens` row above covers the micro differential generically, through a
+# golden that drifts. This one covers the direction the corpus could not see
+# until 2026-09-14: the two engines PARSING a decimal differently. Rendering
+# has had rows since kanso#1256; reading one back had none, and native sat one
+# ULP off the oracle on every number longer than nineteen significant digits.
+# A drifted golden and a diverged engine are different defects and a mutation
+# that moves a `.out` file cannot produce the second.
+truncated_significand = row
+  "a truncated significand the fast path calls certain"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_truncated_significand_taken_as_certain")
+  release
+
+rows_c1c0a = text/concat rows_c1b [rendering negative_sign small_record]
+
+rows_c1c0 = text/concat rows_c1c0a [truncated_significand]
 
 rows_c1c1 = text/concat rows_c1c0 [short_append beat_mark every_edge pure_cycle]
 

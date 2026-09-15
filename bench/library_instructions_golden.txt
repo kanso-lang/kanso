@@ -290,4 +290,4 @@
 # compile_allocs held at 27,937 and compile_memory is byte-identical, which
 # is the expected pair: those two really cannot move on a runtime edit.
 #
-library_instructions=144836246
+library_instructions=144836225

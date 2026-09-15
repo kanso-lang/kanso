@@ -464,11 +464,11 @@
 # register moves carrying vp/vm/vr around the back edge. The trade is 21
 # against 32, not 16 against 32, and the rows above are what it is worth.
 #
-jsonbench 1250438261
-encodebench 3616600106
-oneshot 19231614
+jsonbench 1250475761
+encodebench 3641023556
+oneshot 19292922
 basket 34281871
-widebench 33070691
+widebench 33142691
 deepbench 371382179
 escapebench 82969017
 pendbench 219476888
@@ -476,7 +476,7 @@ indexbench 3265296
 scanbench 528870249
 digestbench 9837152
 readbench 4629745
-livebench 3091569326
+livebench 3115992776
 # 2026-09-06 (the run program joins): `runbench 3043743748` is a NEW row and
 # nothing regressed to make it appear. It is the program Clay's gavel that day
 # made the objective's whole run-speed term, and the thirteen rows above it
@@ -534,4 +534,4 @@ livebench 3091569326
 #
 # The uniform -8 across six rows is one instruction on a path each program
 # takes eight times, and the four flat rows never take it at all.
-runbench 1997526651
+runbench 2003046621

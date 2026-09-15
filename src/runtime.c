@@ -9420,7 +9420,24 @@ KValue k_b_to_float(KValue v, const char* origin) {
     /* the fast path: a plain decimal scanned into (w, q) and parsed by
        eisel-lemire; anything it can't be certain about — overlong digits,
        exotic forms, halfway cases — falls through to strtod, which stays
-       the semantic authority */
+       the semantic authority.
+
+       `cut` is why the overlong case is one of those. The scan keeps
+       nineteen significant digits; past that an integer digit is traded for
+       a `q++` and a fraction digit is dropped outright, and either way the
+       significand handed on is no longer the number that was written. A
+       truncated significand can sit on the far side of a rounding boundary
+       from the true value, so eisel-lemire's answer is not certain and the
+       algorithm does not claim it is — Lemire's own implementation carries
+       the same flag. Without it this returned a double one ULP below the
+       correctly-rounded one on `4409065699.4409065699e-2` and 220 other
+       cases the parse harness found, and the interpreter — the oracle —
+       disagreed with native on every one of them.
+
+       A dropped ZERO changes nothing, so only a nonzero one sets the flag:
+       "10000000000000000000" is exactly w * 10 and stays on the fast path.
+       That is what keeps the run corpus at 210,177 fast-path parses, which
+       is every call it makes. */
     if (len > 0) {
         const char* p = data;
         const char* stop = data + len;
@@ -9428,11 +9445,11 @@ KValue k_b_to_float(KValue v, const char* origin) {
         if (*p == '-' || *p == '+') { neg = *p == '-'; p++; }
         unsigned long long w = 0;
         long long q = 0;
-        int digits = 0, any = 0, ok = 1;
+        int digits = 0, any = 0, ok = 1, cut = 0;
         while (p < stop && *p >= '0' && *p <= '9') {
             any = 1;
             if (digits < 19) { w = w * 10 + (unsigned long long)(*p - '0'); if (w) digits++; }
-            else { q++; }
+            else { q++; if (*p != '0') cut = 1; }
             p++;
         }
         if (p < stop && *p == '.') {
@@ -9444,6 +9461,7 @@ KValue k_b_to_float(KValue v, const char* origin) {
                     if (w) digits++;
                     q--;
                 }
+                else if (*p != '0') cut = 1;
                 p++;
             }
         }
@@ -9461,7 +9479,7 @@ KValue k_b_to_float(KValue v, const char* origin) {
             if (!edigits) ok = 0;
             q += esign * e;
         }
-        if (ok && any && p == stop) {
+        if (ok && any && !cut && p == stop) {
             double out;
             if (k_el_parse(w, q, &out)) {
                 return k_float(neg ? -out : out);
