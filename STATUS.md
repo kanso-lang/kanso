@@ -100,8 +100,9 @@ compiler; the list is a floor, since the rest of the 2026-08-29 sitting was
 not audited. Swept again on 2026-09-14 against merged main: the effect-type
 row came off, built and merged as kanso#1372, and the exhaustiveness row came
 off with kanso#1369. The book row came off with kanso#1412, which its own
-log entry calls the live remainder of that ruling. One row remains, and it
-waits on a ruling.
+log entry calls the live remainder of that ruling. Two rows stand on
+2026-09-15: the explicit box, whose `!` half waits on a ruling, and the
+compile row's normalization, which waits on nothing.
 
 ### The box is explicit, an err is a value, and a bare err halts where it lands (2026-09-15)
 
@@ -117,6 +118,18 @@ check, like a `none`; the railway retiring; and ch04's "nothing is asked of
 the signature" paragraph, the last of the book ruling, moving with it. What
 `xs[i]!` answers as the checker reads it is NOT ruled — the ledger's Blocking
 entry "What `!` promises the checker" — and the 710 operator sites wait on it.
+
+### The compile row is normalized so the maps parse is not counted (2026-09-15)
+
+The live log's entry of that name. `pthread_getattr_np`'s parse of
+`/proc/self/maps` at Rust startup is 0.27% of the compile row and 100% of
+its movement between two binaries that do the same compiler work; its cost
+follows the binary's section layout, not the code under test. Clay: "this
+has nothing to do with compiler performance and obviously shouldn't be part
+of what we measure." Supersedes the 2026-09-03 NO EXCLUSION on this term.
+Owes: the normalization — count from the compiler's `main` rather than
+process entry (kanso#1234's dropped toggle is the starting point), or pin
+the layout — chosen by measurement, and the compile goldens re-sat on it.
 
 ## In flight
 
@@ -340,8 +353,8 @@ open — each with a recommendation. Recounted on 2026-09-15, when the
 box-wrapping entry left Blocking ruled, the `!` question it left behind
 joined Blocking, the constructor's spelling joined Open with a
 recommendation the build does not wait on, and the maps-parse entry left
-Open ruled: the 2026-09-03 NO EXCLUSION stands, and a 2,130 move on the
-compile row is the loader's. Counted
+Open ruled the other way from its recommendation: the parse is external
+state, and the compile row is normalized so it is not counted. Counted
 from the ledger by reading its `###` headings, which is what this line has
 always claimed to do and had stopped doing TWICE. On 2026-09-05 it said nineteen while the ledger
 held three; fifteen had been gaveled and had left the file as the lifecycle

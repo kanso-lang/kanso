@@ -2617,31 +2617,49 @@ The entry left `design/pending-gavels.md` in this commit, four days after it
 was filed. STATUS.md's "Ruled, unbuilt" row for the rider is replaced by a
 row for this ruling.
 
-## 2026-09-15 — gavel: the maps parse stays in the compile row, and a 2,130 move on it is the loader's
+## 2026-09-15 — gavel: the maps parse is external state, and the compile row is normalized so it is not counted
 
-Clay closed the ledger's "The maps parse is 100% of the compile row's
-binary-to-binary drift", open since 2026-09-08, by asking why it was a
-question: "if the binary changes in a way that makes it more costly to run it
-is more costly to run, that is just an empirical fact right? I don't
-understand why there's a question here."
+The ledger's "The maps parse is 100% of the compile row's binary-to-binary
+drift", open since 2026-09-08, recommended that the 2026-09-03 NO EXCLUSION
+ruling stand. Clay first asked why it was a question at all — "if the binary
+changes in a way that makes it more costly to run it is more costly to run,
+that is just an empirical fact right?" — and the chat recorded it as standing.
+Then the chat explained what the term is: `pthread_getattr_np`, called from
+`std::rt::lang_start_internal` to place the stack guard, parses
+`/proc/self/maps` with `getline` and `sscanf`, and its cost follows the
+number of lines in that file, which follows the binary's section layout. His
+ruling, verbatim: "well then this has nothing to do with compiler performance
+and obviously shouldn't be part of what we measure. as I've said to you
+voluminously in the past you want to set up the run so that any external
+State like this is normalized. you clear it out so it's identical every
+single run or you do something that puts it into a persistent known initial
+state."
 
-The 2026-09-03 ruling — NO EXCLUSION, the row counts what the binary costs to
-start, term and all — stands on the new number. The new number is that
-`pthread_getattr_np`'s parse of `/proc/self/maps`, called from
-`std::rt::lang_start_internal` to place the stack guard, is 0.27% of the
-compile row and 100% of its movement between two binaries that do the same
-compiler work: a 64 KiB `.bss` probe that adds no code moved the row 2,130
-with the compiler's own work identical to the instruction.
+**The ruling.** The compile row measures the compiler's work. A term whose
+size follows the binary's layout rather than the code under test is external
+state, and external state is normalized before it is counted, never counted
+and explained. The 2026-09-03 NO EXCLUSION is superseded on this term. This
+entry replaces one written an hour earlier in the same pull request that
+recorded the opposite; it never reached main.
 
-What the fact buys is a reading rule rather than a change to the gate. A move
-of that size on the compile row, with `std::rt::lang_start::{{closure}}`
-sitting still, is the loader's and is not chased as a compiler regression.
-The one argument for excluding the term was signal: layout noise in a
-regression row. It loses because a quarter of a percent is below anything
-anyone acts on, and because excluding it would turn the row from "what the
-binary costs" into "what we chose to count", which is the judgment the
-2026-09-03 ruling refused.
+**What the fact is, for the build.** The parse is deterministic per binary:
+the same binary parses the same file every run. What differs is the layout
+of two binaries, so a 64 KiB `.bss` probe that adds no code moved the row
+2,130 instructions with the compiler's own work identical to the instruction
+(the archive's "the mechanism, named and accounted to the instruction").
+Nothing can be cleared between runs. The normalization is one of two shapes,
+and choosing is a build with a measurement in front of it: count from the
+compiler's `main` rather than from process entry, so Rust's runtime startup
+and the parse fall outside the row; or pin the layout so the file has a
+known line count. kanso#1234 carried a toggle of the first shape and dropped
+it under the 2026-09-03 ruling; it is the obvious starting point.
 
-The entry was filed because the ledger's charter sends a new fact about a
-ruled matter to the gavel rather than quietly into a gate. It leaves the
-ledger in this commit.
+**The general rule, recorded so it stops being re-argued.** Before a
+measurement is taken, every piece of state the code under test did not
+produce is put into a known state — cleared, or fixed — so that two runs of
+the same code read the same number and two runs of different code differ by
+what the code did. Clay says he has said this "voluminously". It is in
+CLAUDE.md now, beside the platform-invariance rule for counters.
+
+The entry leaves the ledger in this commit, ruled. The build joins STATUS.md's
+"Ruled, unbuilt" list.
