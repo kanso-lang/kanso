@@ -50,6 +50,52 @@ went to the log rather than here.
 
 ## Blocking — a fixture, gate, or merge is waiting
 
+### What the compile term counts once codegen is in it
+
+**Cited:** the archive's "gavel: welfare measures what compiling costs, not
+what it counts" (2026-08-25), which this builds; the live log's entry of
+2026-09-16 naming the defect; the archive's "gavel: no term for machine-code
+size" (2026-09-05), which declined a size term because "a term would need a
+satiation and a weight argued from cases that do not exist yet"; and the
+2026-09-15 rule that external state is normalized before it is measured.
+
+**The question.** The compile term must count codegen. Two things are
+undetermined and both change the numbers, so cloud cannot pick baselines
+without them.
+
+**One — how far down the pipeline.** `kanso build` writes `.ll` and then runs
+clang in a subprocess.
+
+1. kanso's own emitter only. Fully in-process, countable under callgrind the
+   way the front end already is, and independent of the host toolchain.
+2. The emitter and the clang invocation. What a person waiting on a build
+   actually waits for. Clang's instruction count is deterministic per clang
+   version, and pinning that version in the golden's measured-on line is what
+   the external-state rule already asks of every other vein; `host_gate.sh`
+   refuses a comparison on a host that does not match.
+
+**Two — which tier.** `dev_clang` runs `-O0`, `release_clang` runs `-O3 -flto`
+with `-mllvm -inline-threshold=2000`.
+
+1. Price the dev tier. Dev is what iteration pays, release optimization stays
+   free, and the objective's asymmetry becomes deliberate: everything in the
+   edit-test loop is priced, everything that runs once at release is not.
+2. Price the release tier. The number is what CI and deploys pay, and it puts
+   a budget on optimizer work that reading 1, by design, does not.
+3. Price both, as separate counters with their own weights.
+
+**Recommendation: 2 and 1** — the whole pipeline including clang, measured on
+the dev tier, with the clang version pinned in the golden header. That prices
+what a person waits for during iteration and leaves release optimization
+unbudgeted on purpose, which is the structure Clay described when he raised
+the rigor tier. It also means `kanso test`, which runs the front end on every
+invocation, and `kanso build` at `-O0`, which is the inner loop's other half,
+are both counted, and nothing in the loop is free.
+
+**What follows either way.** The floor re-ratchets as a model correction, per
+the 2026-08-25 gavel's own instruction. The run terms stay measured on the
+release tier, because that is what production runs.
+
 (The sha256 digest question sat here briefly and was bounced on
 2026-08-29: performance questions with no surface area are the
 implementer's, per this file's own charter. The log carries the
