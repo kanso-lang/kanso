@@ -266,6 +266,19 @@ err_as_pattern = row
   (breaking "an_err_as_pattern_boxes_a_carried_slot")
   release
 
+# A cell can evaluate to a cell: `rest = names_any? ...` deferred in every
+# arm of a recursion and handed back through `either? _ answer`. The runtime
+# forced one level and the dispatcher tested a cell's tag against `true`;
+# the browser differential harness died in `put_unless` on every corpus
+# directory. The force walks the chain now, on native and on the page.
+force_chain = row
+  "a cell whose answer is a cell, forced one level"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_deferred_answer_is_forced_one_level")
+  release
+
 # The four `cargo test --test golden` rows above and below all point at the
 # micro corpus or the mem corpus. The error corpus — 161 fixtures pinning
 # every diagnostic the language emits — had no row at all, so nothing had
@@ -1712,7 +1725,7 @@ rows_c1l = text/concat rows_c1k [coverage_page coverage_page_format]
 
 rows_c1m = text/concat rows_c1l [beat_cursor rescue_licence raised_err]
 
-rows_c1n = text/concat rows_c1m [carry_failure err_as_pattern]
+rows_c1n = text/concat rows_c1m [carry_failure err_as_pattern force_chain]
 
 rows_c = text/concat rows_c1n [itself]
 

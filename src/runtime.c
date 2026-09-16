@@ -320,6 +320,8 @@ static int k_memo_still_there(KThunk* t) {
    here, because k_force is called once per demanded cell and the caller pays
    for its size: growing it past what the inliner will take cost deepbench
    4,375,985 instructions, 0.60% of the run, with no counter moving at all. */
+KValue k_force(KValue v);
+
 static __attribute__((noinline)) KValue k_force_slow(KThunk* t) {
     if (t->forced == K_MEMO_AT_RISK) {
         if (k_memo_still_there(t)) return t->result;
@@ -328,6 +330,11 @@ static __attribute__((noinline)) KValue k_force_slow(KThunk* t) {
     if (t->site == K_SITE_BLACKHOLE) k_die("a lazy binding demands its own value");
     if (K_COUNTING) k_stat_thunk_evals++;
     KValue answer = d_thunk_eval(t->site, t->args);
+    /* The computation can answer with a cell of its own: a deferred binding
+       handed back through a pass-through arm is the next call's deferred
+       binding. Scrutiny wants the value at the end of that chain, which is
+       what the interpreter's force has always walked to. */
+    answer = k_force(answer);
     t->result = answer;
     if (!k_memo_outlives(answer)) {
         t->forced = K_MEMO_AT_RISK;
