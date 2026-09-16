@@ -5083,3 +5083,67 @@ whatever score the committed goldens produce, so banking before they carry
 CI's rows freezes a number this container projected rather than the one CI
 measured. The rise is small and it is still a rise, and a gain nobody ratchets
 is one the next change is free to spend.
+## 2026-09-16 — the compile term never counted codegen, and the 2026-08-25 gavel says it must
+
+Clay, told in the design chat that an optimizer taking twice as long is
+invisible to welfare: "that was explicitly supposed to be one of the core
+scalars going into the welfare function!!!!" He is right, and the archive
+carries his ruling.
+
+**The ruling it violates.** The archive's "gavel: welfare measures what
+compiling costs, not what it counts" (2026-08-25). Told that the compile-speed
+terms were `front_end_rounds`, `front_end_visits` and `emitted_lines`, his
+words were "then you have a MASSIVE deficiency in your welfare metric. my
+god." The ruling made the terms measured cost rather than proxy counts, with a
+stated purpose: "so that making the compiler genuinely faster or leaner always
+moves the score, and a 26% front-end improvement can never again land silent."
+
+**How it went half-built.** The ruling named the two veins that already
+existed, `bench/compile_instructions_golden.txt` and
+`bench/compile_allocs_golden.txt`, and both measure `kanso check`. So the swap
+from counts to costs happened and the question of WHICH compile was never
+asked. Read off the gates on 2026-09-16, every compile counter the objective
+weighs runs the front end and stops:
+
+    compile_instructions   ./kanso check compile_corpus
+    compile_allocs         ./kanso check compile_corpus
+    compile_peak_bytes     ./kanso check compile_corpus
+    entry_instructions     ./kanso check entry_corpus/main
+
+`kanso check` stops before codegen, which CLAUDE.md already says in another
+context. So the emitter, the `.ll` write and the clang invocation are outside
+the objective entirely.
+
+**What is unpriced, concretely.** `kanso build` writes the IR and shells out
+to clang (src/main.rs:606): `dev_clang` runs `-O0`, `release_clang` runs
+`-O3 -flto` with `-mllvm -inline-threshold=2000`, a threshold whose own
+comment records that it was found by measuring a non-monotone ladder —
+1250 read −0.9473%, 1500 read −0.8295%, 2000 read −2.0948%. That tuning is
+real optimizer work whose cost the index cannot see. `bench/emitted_golden.txt`
+counts what the emitter WROTE, "counted from jsonbench.ll before the linker
+touches it", which is output rather than cost.
+
+**The incentive this leaves.** Welfare pays for the optimizer's output,
+through `run_instructions` on the run program, and charges nothing for the
+optimizer's time. One-sided, with no budget, which is the shape that ends in a
+compiler nobody wants to run. It is also the exact failure the 2026-08-25
+gavel was called to end, one layer down: the front end can never land a silent
+26% again, and the back end still can.
+
+**The two tiers already exist.** `dev_clang` and `release_clang` are the fast
+and rigorous paths of the tiering Clay raised in the same conversation. The
+design question is not whether to build them; it is which one welfare prices
+and which one the run terms are measured on. That is the ledger's new Blocking
+entry, "What the compile term counts once codegen is in it".
+
+**What this costs to fix.** Adding codegen to the term rebases
+`compile_instructions` and `compile_allocs`, so the floor re-ratchets as a
+model correction — the same mechanism the 2026-08-25 gavel itself specified:
+"The floor re-ratchets from the rescored model in the same change, recorded as
+a model correction." Weights and satiation stay as they are unless the new
+numbers argue otherwise, which is a separate argument made about the weights.
+
+**A correction to this session's own advice.** The chat told Clay an hour
+earlier that the trade he wanted — longer compiles for a faster binary — was
+"already free," and presented that as the model working. It is the defect,
+described approvingly. The gradient it creates is real and so is the hole.

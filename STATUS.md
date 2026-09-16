@@ -7,10 +7,10 @@ is stale — say so.
 ## Waiting on Clay
 
 The decisions live in design/pending-gavels.md — the single ledger; this file
-only indexes it. **Blocking right now: zero.** The last one, what `!` promises the
-checker, was ruled 2026-09-16 and reversed the same day on Clay's argument:
-the bang is the channel that bubbles, so `xs[i]!` and every `!` name answer
-a box. The box-wrapping question before it was
+only indexes it. **Blocking right now: one** — what the compile term counts once codegen is
+in it, filed 2026-09-16. The `!` question before it was ruled 2026-09-16 and
+reversed the same day: the bang is the channel that bubbles, so `xs[i]!` and
+every `!` name answer a box. The box-wrapping question before it was
 ruled 2026-09-15. The reconstruction coverage
 question was ruled on 2026-09-10, taking cloud's recommendation: rows 15..390
 stay unscored on the run terms, the eight-phase half stays built, and
@@ -39,7 +39,8 @@ kanso — sat here and was bounced on 2026-08-29: a performance question with no
 surface area is the implementer's, per the ledger's own charter, and the log
 carries the research mandate it left with.
 
-**Five questions are waiting** — zero blocking. The welfare-floor entry left
+**Six questions are waiting** — one blocking, what the compile term counts
+once codegen is in it, filed 2026-09-16. The welfare-floor entry left
 Blocking on 2026-09-14 with all three of its asks already answered: its two
 builds merged on 2026-09-13, the `git add bench/welfare_floor.json` permission
 it wanted is moot under Clay's ironclad rule of the same day, and its options
@@ -109,7 +110,7 @@ compiler; the list is a floor, since the rest of the 2026-08-29 sitting was
 not audited. Swept again on 2026-09-14 against merged main: the effect-type
 row came off, built and merged as kanso#1372, and the exhaustiveness row came
 off with kanso#1369. The book row came off with kanso#1412, which its own
-log entry calls the live remainder of that ruling. Two rows stand on
+log entry calls the live remainder of that ruling. Three rows stand on
 2026-09-16: the explicit box, fully ruled once its `!` half went on
 2026-09-16, and the build hole, ruled 2026-08-24 and found off this list on
 2026-09-16. The compile row's normalization, ruled 2026-09-15, was built the
@@ -138,6 +139,24 @@ provable; `!` names in lib answering a box; and the two cost levers, an
 inlined bind for a pure index read and bound discharge for a literal index
 into a known-length list, each measured, with the floor moving under the
 ironclad rule where they come in short. Nothing here waits on a ruling.
+
+### The compile term counts what compiling costs, codegen included (2026-08-25)
+
+The archive's "gavel: welfare measures what compiling costs, not what it
+counts", found half-built on 2026-09-16. Every compile counter the objective
+weighs runs `kanso check` and stops before codegen, so the emitter, the `.ll`
+write and the clang invocation are outside the index; welfare pays for the
+optimizer's output through `run_instructions` and charges nothing for its
+time. Clay: "that was explicitly supposed to be one of the core scalars going
+into the welfare function!!!!" Owes: the term extended to codegen, the
+baselines rebased and the floor re-ratcheted as a model correction. BLOCKED on
+the ledger's "What the compile term counts once codegen is in it" — how far
+down the pipeline (emitter alone, or clang too) and which tier (`dev_clang`
+at `-O0`, `release_clang` at `-O3 -flto`), both of which set the numbers. That
+entry now carries Clay's 2026-09-16 proposal to split the objective in two —
+a development welfare over the edit-test loop and a production welfare over
+the binary, with a meta-welfare across them — which counts both tiers rather
+than choosing one, and is the entry's recommendation.
 
 ### A build hole is spelled `_`, and fills exactly once (2026-08-24)
 
@@ -373,13 +392,15 @@ else. Chains that tested for `none` after an effect migrate.
     checked from here on two days and both refused by the tooling
   - whether an err gains readers a lambda callback can use
 
-**Five questions wait in `design/pending-gavels.md`** — zero blocking, five
-open — each with a recommendation. Recounted three times on 2026-09-16: the
+**Six questions wait in `design/pending-gavels.md`** — one blocking, five
+open — each with a recommendation. Recounted four times on 2026-09-16: the
 binding-position question joined Open with its measurement, the escape
 path's byte-position scan joined it, measured on 2026-09-15 and filed to
-nobody until the sweep that found this paragraph's own overview stale, and the
+nobody until the sweep that found this paragraph's own overview stale, the
 `.rodata` page pin joined it the same day — a second send found unfiled, which
-is what built the check that now reads the log for them.
+is what built the check that now reads the log for them — and what the compile
+term counts once codegen is in it joined Blocking, filed by the chat against
+the 2026-08-25 gavel the term had never carried.
 Recounted on 2026-09-15 before that, when the
 box-wrapping entry left Blocking ruled, the `!` question it left behind
 joined Blocking, the constructor's spelling joined Open with a
@@ -396,7 +417,8 @@ four of the six it named had been ruled or shipped since. A count maintained
 by hand goes stale by default, so `tests/the_status_index_counts_the_ledger.rs`
 now reads both files and fails when this sentence and the ledger disagree.
 
-Nothing is blocking. The two open are the box constructor's spelling,
+The one blocking is what the compile term counts once codegen is in it: how
+far down the pipeline, and which of the two clang tiers. The two open are the box constructor's spelling,
 recommended `effect`, which cloud builds against unless Clay names another;
 and the book teaching the boundary language, whose campaign ran on 2026-09-13
 and which now owes only ch04's "nothing is asked of the signature" framing,

@@ -50,6 +50,97 @@ went to the log rather than here.
 
 ## Blocking — a fixture, gate, or merge is waiting
 
+### What the compile term counts once codegen is in it
+
+**Cited:** the archive's "gavel: welfare measures what compiling costs, not
+what it counts" (2026-08-25), which this builds; the live log's entry of
+2026-09-16 naming the defect; the archive's "gavel: no term for machine-code
+size" (2026-09-05), which declined a size term because "a term would need a
+satiation and a weight argued from cases that do not exist yet"; and the
+2026-09-15 rule that external state is normalized before it is measured.
+
+**The question.** The compile term must count codegen. Two things are
+undetermined and both change the numbers, so cloud cannot pick baselines
+without them.
+
+**One — how far down the pipeline.** `kanso build` writes `.ll` and then runs
+clang in a subprocess.
+
+1. kanso's own emitter only. Fully in-process, countable under callgrind the
+   way the front end already is, and independent of the host toolchain.
+2. The emitter and the clang invocation. What a person waiting on a build
+   actually waits for. Clang's instruction count is deterministic per clang
+   version, and pinning that version in the golden's measured-on line is what
+   the external-state rule already asks of every other vein; `host_gate.sh`
+   refuses a comparison on a host that does not match.
+
+**Two — which tier.** `dev_clang` runs `-O0`, `release_clang` runs `-O3 -flto`
+with `-mllvm -inline-threshold=2000`.
+
+1. Price the dev tier. Dev is what iteration pays, release optimization stays
+   free, and the objective's asymmetry becomes deliberate: everything in the
+   edit-test loop is priced, everything that runs once at release is not.
+2. Price the release tier. The number is what CI and deploys pay, and it puts
+   a budget on optimizer work that reading 1, by design, does not.
+3. Price both, as separate counters with their own weights.
+
+**Three — and this one dissolves Two.** Clay proposed, the same hour this
+entry was filed, that the objective split in two with a meta-welfare over
+them: "if we're optimizing for production performance (CPU and memory) and
+not compile performance, then compile performance becomes more like a very
+dialed-down input... then we have a separate welfare for the interpreted
+version, where start-time is vastly more important than speed which is more
+important than memory usage... sometimes it will make sense to do a change
+which makes development speed much better in exchange for a very small
+production performance cost, or vice versa."
+
+Under that structure the tier question has no answer to pick, because both
+tiers are counted in different places:
+
+    development welfare   front-end cost (`kanso check`, run by `kanso test`
+                          on every invocation), dev-tier codegen (`-O0`),
+                          interpreter start-up, interpreter speed, interpreter
+                          memory
+    production welfare    native run instructions, native run memory,
+                          release-tier codegen (`-O3 -flto`)
+    meta-welfare          a function of the two
+
+One correction to the proposal as stated: compile cost does not dial DOWN, it
+MOVES. `kanso test` runs the front end every time, so front-end cost belongs
+beside interpreter start-up as a first-class development term, and production
+welfare carries codegen rather than checking.
+
+**Recommendation: 3, with one floor.** It prices every counter exactly once,
+in the model whose user pays for it, and it is the only reading that makes
+interpreter start-up expressible at all — a cost paid on every test run and
+never in production, which no single scalar can weigh. Failing a ruling on 3,
+the fallback is 2 and 1: the whole pipeline including clang, on the dev tier,
+with the clang version pinned in the golden header.
+
+**Three things the ruling should settle with it.**
+
+- **The meta layer needs a job.** `a·W_prod + b·W_dev` with a linear meta is
+  algebraically one flat term list; it buys legibility and nothing else.
+  Saturating the meta makes the composition real: a sub-welfare near its
+  ceiling then earns little from further wins, which is how the model would
+  say "the interpreter is fast enough now."
+- **One floor, not three.** Ratcheting the sub-scores separately re-enables
+  the part-against-whole optimization that "the sum is the objective; the
+  terms are diagnostics" was written to stop.
+- **Start-up is the region normalized out of the compile row on 2026-09-15.**
+  Measuring it is not a contradiction — noise inside one measurement is the
+  object of another — but the counter must count kanso's own start-up work
+  and normalize the loader's, which is the count-from-`main` machinery
+  kanso#1439 already built.
+
+**What follows either way.** The floor re-ratchets as a model correction, per
+the 2026-08-25 gavel's own instruction. The run terms stay measured on the
+release tier, because that is what production runs. The model's surface
+roughly doubles under 3 — about eight counters against today's five — and
+every new term joins `bench/objective_sources.txt` and its replay spec in the
+same commit, because this model's PROSE has gone stale twice while the file
+never did.
+
 (The sha256 digest question sat here briefly and was bounced on
 2026-08-29: performance questions with no surface area are the
 implementer's, per this file's own charter. The log carries the
