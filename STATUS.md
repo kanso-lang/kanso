@@ -8,8 +8,9 @@ is stale — say so.
 
 The decisions live in design/pending-gavels.md — the single ledger; this file
 only indexes it. **Blocking right now: zero.** The last one, what `!` promises the
-checker, was ruled 2026-09-16 on its recommendation: `xs[i]!` reads as
-data and a miss halts at runtime. The box-wrapping question before it was
+checker, was ruled 2026-09-16 and reversed the same day on Clay's argument:
+the bang is the channel that bubbles, so `xs[i]!` and every `!` name answer
+a box. The box-wrapping question before it was
 ruled 2026-09-15. The reconstruction coverage
 question was ruled on 2026-09-10, taking cloud's recommendation: rows 15..390
 stay unscored on the run terms, the eight-phase half stays built, and
@@ -117,9 +118,17 @@ it); a bare err becoming data an `(err _)` arm can match anywhere; a bare err
 arriving at an operator, an index or an arm-less call being refused at
 check, like a `none`; the railway retiring; and ch04's "nothing is asked of
 the signature" paragraph, the last of the book ruling, moving with it. Its
-`!` half was ruled 2026-09-16 (the log's "`!` is the value on the
-programmer's word"): `xs[i]!` reads as data, the 710 operator sites stand
-as written, and a miss halts at runtime. Nothing here waits on a ruling.
+`!` half was ruled 2026-09-16 and REVERSED the same day (the log's "gavel,
+reversed the same day: `!` answers a box, at the index and at the name"):
+the bang is the channel that bubbles, bubbling is the box, so `xs[i]!` and
+every `!` name answer `<t>effect`. The morning's reading — data on the
+programmer's word, a halt on a miss — is withdrawn; do not build it. Owes,
+on top of the constructor: the 710 sites handing `xs[i]!` to an operator
+respelled, `.>` where the read can miss and no bang where the bound is
+provable; `!` names in lib answering a box; and the two cost levers, an
+inlined bind for a pure index read and bound discharge for a literal index
+into a known-length list, each measured, with the floor moving under the
+ironclad rule where they come in short. Nothing here waits on a ruling.
 
 ### A build hole is spelled `_`, and fills exactly once (2026-08-24)
 

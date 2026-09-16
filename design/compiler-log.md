@@ -3514,3 +3514,50 @@ the same night — the maps parse outside all three compile rows, measured,
 with a spec holding it there. Its row came off in this commit. A ruling
 built in under an hour beside one unbuilt for twenty-three days is the
 difference between a row on the list and a row off it.
+
+## 2026-09-16 — gavel, reversed the same day: `!` answers a box, at the index and at the name
+
+The morning's entry "`!` is the value on the programmer's word, and a miss
+halts at runtime" is superseded. Clay ruled it on the chat's recommendation
+and the chat's recommendation was a cost argument dressed as semantics. His
+argument, verbatim: "the entire point of distinguishing the bang from the
+non-bang form is to say whether this thing has an exception which bubbles up
+or not. like none is something that is reached by an arm so it just uses
+polymorphic dispatch. so if the return you're going to give needs to be able
+to bubble up isn't that inherently an effect type?" It is. Ruled: "yes of
+course you have to write it and get it up so whatever work the other cloud
+thread is working on can minimize its waste."
+
+**The ruling.** The bang is the choice of channel. A non-bang form answers a
+value — `none`, a marker, a bare err — and an arm handles it where it lands,
+by dispatch. A bang form answers something that bubbles: it cannot be
+handled where it lands, only by a foreign `rescue` or the endpoint, and
+bubbling is what the box is. So `xs[i]!` answers `<t>effect`, and so does
+every `!` name, pure or io. `!` applies the box the way IO applies it, and
+that is the one meaning of `!`. `rescue (menu["dango"]!) handler` is a
+correct program.
+
+**What the morning's reading got wrong.** A value on the programmer's word
+with a runtime halt on a miss is bubbling with the rescue machinery cut off.
+It made a `!` failure the one failure in the language nobody can catch,
+which is backwards, and it did so to keep 710 sites in the tree compiling as
+written. The 09-15 gavel stands whole; only the `!` half of what followed it
+is reversed.
+
+**The cost is cloud's, and the design does not pay it.** The 8,000,014
+allocations on two million elements were measured on today's `.>`, where
+every bind allocates a box, a closure, a bind node and a rewrap. Nothing in
+the ruling requires that. Two levers, each a build with a measurement in
+front of it: a bind whose box is a pure index read and whose callback is
+applied at once is inlinable to nothing; and a literal index into a list of
+known length, which is what sha256's `s[5] + s[6]` is, is provable in range
+by the checker, so those sites drop the bang rather than gain a `.>`. Where
+the levers come in short, the floor moves under the ironclad rule, because
+this is the specification.
+
+**What cloud builds.** The 710 sites that hand `xs[i]!` to an operator, a
+group or a field are respelled: `.>` where the read can miss, no bang where
+the bound is provable. `!` names in lib answer a box. The explicit-box row in
+STATUS.md carries this; nothing waits on a ruling. This entry exists so the
+worker stops building the morning's reading the moment it next reads the
+list.
