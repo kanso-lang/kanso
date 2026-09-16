@@ -66360,3 +66360,90 @@ hunt for the cost elsewhere. Both of those held. What did not hold was reading
 one counter as one call site: `grep -n` for the counter name before dividing by
 anything, and count the emitted call sites before reasoning about the pass that
 decides them.
+## 2026-09-14 — ryū's pair loop is already the right shape, and the two reformulations that measured faster had each introduced a divide
+
+Three shapes, all measured against kanso#1419's head (runbench 1,988,868,701).
+
+The lead came off the pair loop in `render_ryu`. It searches with `vp` and `vm`
+and brings `vr` down on the same trip, so `vr`'s division does work the search
+will throw away on every trip but the last. Hoisting it out should cost one
+division instead of `pairs` of them.
+
+Two ways to hoist it, and a third written afterwards:
+
+    table    vr /= RYU_POW100[pairs]           1,987,944,191   -924,510   -0.0465%
+    switch   nine arms, literal divisors       1,987,371,341  -1,497,360   -0.0753%
+    loop     divide by the literal 100         1,993,136,111  +4,267,410   +0.2146%
+
+The first two look like wins and are not. The base divides by the literal
+`100`, and LLVM turns a literal divisor into a multiply-high — three of them a
+trip, which is what the comment above that loop has said since kanso#1260.
+`RYU_POW100[pairs]` is a runtime value, so it compiles to `div %r8`. Counted in
+the linked runbench binary, `render_ryu` holds 0 divides on the base and 2
+under each of the table and switch shapes. A standalone translation unit at
+-O2 reads 0, 2 and 4 for the same three: it agrees with the binary on the base
+and on the switch and counts two extra under the table, which is the inliner
+seeing a different call graph. Either way the direction is the same and the
+base is the shape with none.
+
+**The switch was written to dodge exactly this and did not.** Nine arms, each
+with its own literal divisor, is nine multiply-highs — until LLVM tail-merges
+the arms back into one divide with a phi'd divisor, which is the same runtime
+value by another route. Writing the constants out does not survive the
+optimiser. Only a construction with no runtime divisor anywhere denies it the
+merge, which is what the third shape is: a loop dividing by the literal `100`.
+That one has no divide at all and costs 22.3 instructions a call, because it
+walks `vr` down in its own loop instead of riding the search's trips.
+
+DECLINED, all three. The base is the shape that already has no divide in it.
+
+**What this says about the vein.** Callgrind scores `div r64` as one
+instruction. On the silicon this project publishes numbers for it is 20 to 40
+cycles against a multiply's three. welfare's run term is an instruction count,
+so the objective would have scored the table and the switch as wins, the floor
+would have ratcheted up on them, and the published decode board would have
+moved the wrong way — on a change that is slower everywhere it runs.
+
+This is the second time the queue has been misled by the distance between what
+the vein counts and what the hardware does, and it is the opposite direction
+from the first. `2026-09-13 (fifteenth) — the instruction vein counts a byte of
+memcpy as an instruction` found the vein OVERcounting something cheap, at one
+Ir per byte moved by `rep movsb`, which makes a memcpy-shaped lead look bigger
+than it is. This one is the vein UNDERcounting something expensive, which makes
+a divide-shaped change look like a win. Both are the same gap read from
+different ends, and the rule that falls out of the pair is narrow enough to be
+useful: before believing an instruction delta, check whether the diff moved any
+instruction whose cost and whose count disagree. `div`, `rep`-prefixed string
+moves, and the divisions LLVM has already turned into multiplies are the three
+this repo has hit.
+
+OPEN, and not a gavel: whether welfare's run term should weigh a `div` at more
+than one is a question about the weights, and nothing here moves the floor in
+either direction, so there is nothing to rule yet. Recording it so the next
+change that trades a multiply-high for a divide meets this entry before it
+meets CI.
+
+**The differential.** Each shape was checked against the base byte-for-byte
+before being priced: 23,264,660 cases for the loop shape, structured (2048
+exponents x 64 mantissas x both signs, the powers of ten from -320 to 308 with
+their `nextafter` neighbours, a million integers and their /7 and x1e-9) plus
+uniform random over the bit space, 0 mismatches and 0 round-trip failures
+through `strtod`. The round-trip check runs on non-negatives only:
+`render_ryu` never writes the sign, its caller does (runtime.c:4304), so
+feeding it a negative renders the magnitude and `strtod` reads back a positive.
+That guard was missing at first and reported 25,115,977 failures, none of them
+real.
+
+**And the wider census, which is the reason the rule is forward-looking.**
+Counting `div`/`idiv` sites across all fourteen benchmark binaries on the same
+build: eleven hold exactly one, in `k_exec`, which is process plumbing and runs
+once. The other three — encodebench, widebench and basket — hold five, the same
+one in `k_exec` plus two each in `k_div` and `k_mod`. Those two are the outlined
+helpers kanso#1292 minted when it sent integer quotient and remainder through a
+call with zero and -1 handled there, and a language whose `/` and `%` divide has
+to divide somewhere.
+
+So no hot path in the shipped runtime executes a divide today, and none of the
+297 changes that have landed traded a multiply-high for one. The rule this
+entry leaves behind has no current violations to repair; it exists to catch the
+next change that would have been the first.
