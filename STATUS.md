@@ -39,7 +39,7 @@ kanso — sat here and was bounced on 2026-08-29: a performance question with no
 surface area is the implementer's, per the ledger's own charter, and the log
 carries the research mandate it left with.
 
-**Three questions are waiting** — one blocking. The welfare-floor entry left
+**Three questions are waiting** — zero blocking. The welfare-floor entry left
 Blocking on 2026-09-14 with all three of its asks already answered: its two
 builds merged on 2026-09-13, the `git add bench/welfare_floor.json` permission
 it wanted is moot under Clay's ironclad rule of the same day, and its options
@@ -50,7 +50,8 @@ term in welfare, and `.text` stays in its own exact vein. Counted from the ledge
 this file said fourteen in one paragraph and sixteen in another until the
 2026-08-29 sitting ruled the rest, said four with three in the ledger until
 2026-09-14, and had "one blocking" in one paragraph and "two blocking" in
-another on the same day. The July letters are closed: Clay ruled the
+another on the same day, and said "one blocking" here while the paragraph above
+it said zero until 2026-09-16. The July letters are closed: Clay ruled the
 last five in one sitting on 2026-08-26, and that ruling reached main only on
 2026-08-28, on a branch that had been sitting unmerged.
 
