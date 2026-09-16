@@ -99,6 +99,7 @@ binary_path = "target/utf8_harness"
 
 header = """
   #include <stdint.h>
+  #define K_COUNTING 0
   #if defined(__aarch64__)
   #include <arm_neon.h>
   #elif defined(__x86_64__)
@@ -170,7 +171,7 @@ fn as_wide body
 fn as_door body
   named = swapped body signature harness_sig
   ok = swapped named "return k_none();" "return 1;"
-  counted = swapped ok "k_stat_utf8_bytes += len;" ""
+  counted = swapped ok "if (K_COUNTING) k_stat_utf8_bytes += len;" ""
   wided = swapped counted wide_call harness_wide_call
   swapped wided scalar_call harness_scalar_call
 

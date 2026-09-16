@@ -550,19 +550,159 @@
 # little live across them pays and collects nothing. Which of the three
 # basket pays was not attributed.
 #
-jsonbench 1229738040
-encodebench 3616439594
-oneshot 19096479
-basket 34433106
-widebench 32837013
-deepbench 369202224
-escapebench 82999058
-pendbench 219469722
-indexbench 3085763
-scanbench 528872901
-digestbench 9813332
-readbench 4629808
-livebench 3091427397
+# 2026-09-15 (kanso#1430): a long copy is a cold call, and the slice door's
+# rare arms are too. Nine rows fall and five rise, on the base kanso#1429
+# left:
+#
+#   jsonbench    1,229,738,040 -> 1,218,898,014  -10,840,026   -0.8815%
+#   runbench     1,977,087,740 -> 1,970,132,223   -6,955,517   -0.3518%
+#   deepbench      369,202,224 ->   368,942,227     -259,997   -0.0704%
+#   oneshot         19,096,479 ->    19,024,257      -72,222   -0.3782%
+#   encodebench  3,616,439,594 -> 3,616,369,380      -70,214   -0.0019%
+#   livebench    3,091,427,397 -> 3,091,363,554      -63,843   -0.0021%
+#   escapebench     82,999,058 ->    82,993,058       -6,000   -0.0072%
+#   scanbench      528,872,901 ->   528,868,084       -4,817   -0.0009%
+#   pendbench      219,469,722 ->   219,466,315       -3,407   -0.0016%
+#   readbench        4,629,808 ->     4,629,832          +24   +0.0005%
+#   indexbench       3,085,763 ->     3,086,146         +383   +0.0124%
+#   widebench       32,837,013 ->    32,845,030       +8,017   +0.0244%
+#   basket          34,433,106 ->    34,534,020     +100,914   +0.2931%
+#   digestbench      9,813,332 ->     9,944,479     +131,147   +1.3364%
+#
+# jsonbench's fall is the container's A/B to the instruction; runbench's is
+# 200,123 deeper than the container's -6,755,394. The five rises are the
+# wrapper's own price: a copy of sixteen bytes or more goes through
+# k_copy_cold now, which saves every register it touches before memcpy, so
+# a program whose copies are long and frequent pays that on each one and
+# keeps no frame it did not already keep. The digest builds such copies.
+#
+# 2026-09-15 (kanso#1431): the third cold-frame sweep, nine more rare arms.
+# Thirteen rows fall and one rises, on the base kanso#1430 left:
+#
+#   indexbench       3,086,146 ->      2,895,940      -190,206   -6.1632%
+#   scanbench      528,868,084 ->    508,340,742   -20,527,342   -3.8814%
+#   deepbench      368,942,227 ->    354,898,747   -14,043,480   -3.8064%
+#   basket          34,534,020 ->     33,956,235      -577,785   -1.6731%
+#   livebench    3,091,363,554 ->  3,050,693,016   -40,670,538   -1.3156%
+#   runbench     1,970,132,223 ->  1,945,875,866   -24,256,357   -1.2312%
+#   encodebench  3,616,369,380 ->  3,575,756,608   -40,612,772   -1.1230%
+#   jsonbench    1,218,898,014 ->  1,211,426,976    -7,471,038   -0.6129%
+#   oneshot         19,024,257 ->     18,968,024       -56,233   -0.2956%
+#   widebench       32,845,030 ->     32,795,381       -49,649   -0.1512%
+#   digestbench      9,944,479 ->      9,941,342        -3,137   -0.0315%
+#   pendbench      219,466,315 ->    219,435,891       -30,424   -0.0139%
+#   readbench        4,629,832 ->      4,629,709          -123   -0.0027%
+#   escapebench     82,993,058 ->     83,901,717      +908,659   +1.0949%
+#
+# runbench's fall is 132,878 deeper than the container's -24,123,479 and
+# jsonbench's 171,000 shallower than its -7,642,038. The one rise is the
+# list grow's price: its permanent buffer, its registration and its release
+# are preserve_most helpers now, and escapebench grows a list 12,000
+# times a run (9,000 of them releasing a predecessor), so the three helpers
+# and the long copy cost it 1,752,029 against 846,030 the push itself no
+# longer pays (container A/B, 905,659 summed against CI's 908,659).
+#
+# 2026-09-15 (kanso#1432): an empty list literal opens with room for four.
+# Nine rows fall, two hold and three rise, on the base kanso#1431 left:
+#
+#   pendbench      219,435,891 ->    208,151,563   -11,284,328   -5.1424%
+#   jsonbench    1,211,426,976 ->  1,195,571,676   -15,855,300   -1.3088%
+#   digestbench      9,941,342 ->      9,838,994      -102,348   -1.0295%
+#   basket          33,956,235 ->     33,685,770      -270,465   -0.7965%
+#   runbench     1,945,875,866 ->  1,930,572,613   -15,303,253   -0.7864%
+#   oneshot         18,968,024 ->     18,862,981      -105,043   -0.5538%
+#   widebench       32,795,381 ->     32,712,263       -83,118   -0.2534%
+#   encodebench  3,575,756,608 ->  3,575,628,491      -128,117   -0.0036%
+#   livebench    3,050,693,016 ->  3,050,596,946       -96,070   -0.0031%
+#   indexbench       2,895,940 ->      2,895,940            +0
+#   readbench        4,629,709 ->      4,629,709            +0
+#   scanbench      508,340,742 ->    508,351,545       +10,803   +0.0021%
+#   deepbench      354,898,747 ->    355,470,728      +571,981   +0.1612%
+#   escapebench     83,901,717 ->     85,995,606    +2,093,889   +2.4956%
+#
+# runbench's fall is 342,891 deeper than the container's -14,960,362 and
+# jsonbench's 630,000 deeper than its -15,225,300. escapebench's rise is the
+# container's to the instruction (83,868,738 -> 85,962,627, +2,093,889) and
+# it is the accumulator's new lifetime: with room for four, a list a loop
+# pushes into stays in the arena through four pushes instead of one, and
+# every rewind in between carries it, where before the second push moved it
+# to permanent storage. memcpy +738,000, malloc +626,895, the free path
+# +441,000, k_beat_rewind_slow +183,000, k_b_push_mut +162,000.
+#
+# 2026-09-15 (kanso#1433): the two byte scanners are inlined, and their constants
+# fold. Six rows FALL and none rises, on the base kanso#1432 left: work_runbench
+# 1,930,572,613 -> 1,904,577,350 (-25,995,263, -1.3465%), work_livebench
+# 3,050,596,946 -> 3,018,009,215 (-32,587,731, -1.0682%), work_encodebench
+# 3,575,628,491 -> 3,567,580,816 (-8,047,675, -0.2251%), work_jsonbench
+# 1,195,571,676 -> 1,187,809,626 (-7,762,050, -0.6492%), work_scanbench
+# 508,351,545 -> 500,829,907 (-7,521,638, -1.4796%), work_oneshot 18,862,981
+# -> 18,729,910 (-133,071, -0.7055%). The other eight hold to the instruction:
+# they never call either scanner. The container had read runbench -24,948,866
+# and jsonbench -6,179,850; the runner's fall is deeper on both. Against main,
+# work_escapebench 85,995,606 and work_digestbench 9,838,994 still stand above
+# it, priced in kanso#1432's and kanso#1430's entries; nothing here moves them.
+#
+# 2026-09-15 (kanso#1435): a scan's short tail is one masked load. Six rows
+# FALL and none rises, on the base kanso#1433 left: work_livebench
+# 3,018,009,215 -> 2,879,379,542 (-138,629,673, -4.5934%), work_encodebench
+# 3,567,580,816 -> 3,457,542,341 (-110,038,475, -3.0844%), work_runbench
+# 1,904,577,350 -> 1,871,522,584 (-33,054,766, -1.7356%), work_jsonbench
+# 1,187,809,626 -> 1,185,398,676 (-2,410,950, -0.2030%), work_scanbench
+# 500,829,907 -> 500,327,419 (-502,488, -0.1003%), work_oneshot 18,729,910 ->
+# 18,367,303 (-362,607, -1.9360%). The other eight hold to the instruction:
+# they never reach a scanner's tail. The container had read runbench
+# -30,700,390 and jsonbench +599,400; the runner reads both deeper, and the
+# two encode programs, which the container did not measure, fall furthest:
+# an escape scan's runs between specials are short, and every one of them
+# ended in the byte walk. Against main, work_escapebench 85,995,606 and
+# work_digestbench 9,838,994 still stand above it, priced in kanso#1432's
+# and kanso#1430's entries; nothing here moves them.
+#
+# 2026-09-15 (kanso#1436): the counters a shipped binary was still counting.
+# All fourteen rows FALL, on the base kanso#1435 left: work_jsonbench
+# 1,185,398,676 -> 1,169,790,503 (-15,608,173, -1.3167%), work_runbench
+# 1,871,522,584 -> 1,857,535,269 (-13,987,315, -0.7474%), work_livebench
+# -6,326,619 (-0.2197%), work_encodebench -5,013,110 (-0.1450%),
+# work_escapebench -1,215,014 (-1.4129%), work_deepbench -965,492
+# (-0.2716%), and the other eight by between 232 and 128,315. Forty-four
+# counter sites left the shipped binary: an increment, sometimes a
+# load-store pair, on every beat iteration, every find2 call and every
+# thunk escape. The container had read runbench -13,704,939 and jsonbench
+# -14,902,123 for the two commits together; the runner reads both a little
+# deeper. Against main, work_escapebench 84,780,592 and work_digestbench
+# 9,830,211 still stand above it, priced in kanso#1432's and kanso#1430's
+# entries; both fall here.
+#
+# 2026-09-15 (kanso#1437): a capture is a load, an own-err check is a tag test.
+# Twelve rows FALL and two hold, on the base kanso#1436 left: work_jsonbench
+# 1,169,790,503 -> 1,130,225,294 (-39,565,209, -3.3822%), work_scanbench
+# 500,324,263 -> 460,784,763 (-39,539,500, -7.9028%), work_runbench
+# 1,857,535,269 -> 1,823,669,249 (-33,866,020, -1.8232%), work_deepbench
+# -9,376,000 (-2.6448%), work_widebench -448,019 (-1.3750%), work_oneshot
+# -263,777 (-1.4455%), work_encodebench -305,191, work_livebench -263,777,
+# work_basket -20,000, work_pendbench -8,400, work_readbench -9,
+# work_digestbench -8; work_escapebench and work_indexbench hold, having no
+# capture reads and no own-err checks on their paths. A capture read is a
+# load instead of a three-instruction call, and the own-err check tests the
+# tag in the caller and calls out only for an err. The container had read
+# runbench -31,071,965 and jsonbench -34,038,770; the runner reads both
+# deeper. Against main, work_escapebench 84,780,592 and work_digestbench
+# 9,830,203 still stand above it, priced in kanso#1432's and kanso#1430's
+# entries; nothing here moves them.
+#
+jsonbench 1130225294
+encodebench 3452224040
+oneshot 17983841
+basket 33549560
+widebench 32135929
+deepbench 345129236
+escapebench 84780592
+pendbench 208137021
+indexbench 2895708
+scanbench 460784763
+digestbench 9830203
+readbench 4629430
+livebench 2872789146
 # 2026-09-06 (the run program joins): `runbench 3043743748` is a NEW row and
 # nothing regressed to make it appear. It is the program Clay's gavel that day
 # made the objective's whole run-speed term, and the thirteen rows above it
@@ -620,4 +760,4 @@ livebench 3091427397
 #
 # The uniform -8 across six rows is one instruction on a path each program
 # takes eight times, and the four flat rows never take it at all.
-runbench 1977087740
+runbench 1823669249

@@ -723,6 +723,16 @@ define internal i64 @k_not_failure(%KValue %v) alwaysinline {
   %r = zext i1 %ne to i64
   ret i64 %r
 }
+define internal i64 @k_not_own_err_fast(%KValue %v, ptr %arm) alwaysinline {
+  %tag = extractvalue %KValue %v, 0
+  %is_err = icmp eq i64 %tag, 5
+  br i1 %is_err, label %ask, label %pass
+ask:
+  %r = call i64 @k_not_own_err(%KValue %v, ptr %arm)
+  ret i64 %r
+pass:
+  ret i64 1
+}
 define internal i64 @k_truthy(%KValue %v) alwaysinline {
   %tag = extractvalue %KValue %v, 0
   %t = icmp eq i64 %tag, 2
@@ -4132,7 +4142,11 @@ impl<'a> Backend<'a> {
                 // has always had the one arm and has always been right.
                 if self.admits_err(ty) {
                     let arm = self.arm_hako(f);
-                    check(self, f, format!("call i64 @k_not_own_err(%KValue {value}, ptr @{arm})"));
+                    check(
+                        self,
+                        f,
+                        format!("call i64 @k_not_own_err_fast(%KValue {value}, ptr @{arm})"),
+                    );
                 }
                 // a typeset matches when any member does: OR the members'
                 // checks and branch once. A plain annotation is the same
@@ -4164,7 +4178,11 @@ impl<'a> Backend<'a> {
             Pattern::Ctor { ty, fields, whole } => {
                 if ty == "err" {
                     let arm = self.arm_hako(f);
-                    check(self, f, format!("call i64 @k_not_own_err(%KValue {value}, ptr @{arm})"));
+                    check(
+                        self,
+                        f,
+                        format!("call i64 @k_not_own_err_fast(%KValue {value}, ptr @{arm})"),
+                    );
                     check(self, f, format!("call i64 @k_check_tag(%KValue {value}, i64 {K_ERR})"));
                     let inner = f.tmp();
                     f.line(&format!("{inner} = call %KValue @k_err_inner(%KValue {value})"));
@@ -6636,8 +6654,10 @@ impl<'a> Backend<'a> {
         f.file = outer.file.clone();
         f.start_block("entry");
         for (i, cap) in captures.iter().enumerate() {
+            let slot = f.tmp();
+            f.line(&format!("{slot} = getelementptr %KValue, ptr %env, i64 {i}"));
             let t = f.tmp();
-            f.line(&format!("{t} = call %KValue @k_env_get(ptr %env, i64 {i})"));
+            f.line(&format!("{t} = load %KValue, ptr {slot}"));
             f.bind(cap, &t);
         }
         for (i, p) in params.iter().enumerate() {

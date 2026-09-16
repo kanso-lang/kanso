@@ -427,6 +427,141 @@ index_cold_arms = row
   (breaking "the_index_s_allocating_arms_share_its_frame")
   benchmarks
 
+# A copy long enough to be libc's goes through a preserve_most wrapper since
+# 2026-09-15, so a function whose short copies are inline words keeps no frame
+# for the long case; the mutation inlines the wrapper back and the pushes
+# return. Every byte copied is the same, so the work vein is the only thing
+# that can see it.
+cold_copy = row
+  "the long copy sharing its caller's frame"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_long_copy_shares_its_callers_frame")
+  benchmarks
+
+# k_b_utf8_slice_raw validates through a door whose two validators sit behind
+# preserve_most wrappers since 2026-09-15, so its 861,498 calls a run open
+# with no pushes; the mutation sends it through the plain door again. The
+# answer is identical either way, so the work vein is the only thing that can
+# see it.
+rare_door = row
+  "the slice door calling the validators directly"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_slice_door_calls_the_validators_directly")
+  benchmarks
+
+# The third cold-frame sweep, 2026-09-15: nine rare arms of hot runtime
+# functions are preserve_most helpers, so k_b_at, k_b_entries, k_b_push_grow,
+# k_b_append_grow, k_closure and k_copy_alloc open with one push or none. The
+# mutation strips the attribute from the nine and leaves kanso#1429's six.
+# Every value out is identical, so the work vein is the only thing that can
+# see it.
+sweep_helpers = row
+  "the third sweep's helpers clobbering their callers' registers"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_third_sweep_s_helpers_clobber_their_callers_registers")
+  benchmarks
+
+# k_b_slice's multibyte walk is its own function in tail position, so the
+# ascii and list arms open with no pushes where the inline walk cost seven;
+# the mutation inlines it back. Every slice is the same bytes, so the work
+# vein is the only thing that can see it.
+slice_walk = row
+  "the slice's walk sharing the door's frame"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_slice_s_walk_shares_the_door_s_frame")
+  benchmarks
+
+# k_closure copies up to eight captures as inline words and hands a longer
+# environment to k_copy_cold; the mutation puts memcpy back above four, a
+# plain call the closure kept five pushes for. Every environment holds the
+# same values, so the work vein is the only thing that can see it.
+scan_inline = row
+  "the two byte scanners called out of line with their constants"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_byte_scanners_rebuild_their_constants_on_every_call")
+  benchmarks
+
+# A tail shorter than a vector is one masked load when the sixteen bytes stay
+# inside the page; the mutation makes the window test answer no, so every
+# short tail walks a byte at a time again, 8,042,860 bytes a run at eight
+# instructions each. Every scan answers the same position either way, so the
+# work vein is the only thing that can see it.
+scan_tail = row
+  "a scan's short tail walked one byte at a time"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_short_scan_tail_walks_a_byte_at_a_time")
+  benchmarks
+
+# Every counter increment sits behind K_COUNTING, so a shipped binary carries
+# none of them; the mutation puts the beat iteration counter's two sites back
+# unguarded, 2,692,767 increments a run on the run program. A counted binary
+# counts the same either way, so the work vein is the only thing that can see
+# it.
+counters_out = row
+  "a counter increment left in a shipped binary"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "the_beat_iteration_counter_is_counted_in_a_shipped_binary")
+  benchmarks
+
+# A lambda reads its captures out of the environment on entry. Until
+# 2026-09-15 each read was a call to k_env_get, three instructions behind a
+# call and a return, once per capture on every entry: 1,279,648 calls a run
+# on the run program. The read is a getelementptr and a load now, so the
+# emitted vein sees one `call` fewer per capture per lambda, which is what
+# this row asserts. The mutation puts the call back through the same slot
+# pointer, so the twin the emitter writes is otherwise unchanged.
+capture_load = row
+  "a captured value read through a call on every lambda entry"
+  true
+  (gating "emitted_code")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_capture_is_read_through_a_call")
+  benches
+
+# The own-err check in front of an err-admitting arm crossed a call on every
+# value the arm was tried against, 1,454,508 a run on the run program, when
+# only an err needs the package compare behind it. The check is an
+# alwaysinline twin now: the tag test in the caller, the call only for an
+# err. Emitted text counts the same one `call`, so the work vein is the only
+# thing that can see it.
+own_err_inline = row
+  "an own-err check that calls out on every value, err or not"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_own_err_check_is_a_call_on_every_value")
+  benchmarks
+
+empty_room = row
+  "an empty list literal with no room for a push"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_empty_list_literal_has_no_room_for_a_push")
+  benchmarks
+
+closure_caps = row
+  "a closure of five captures calling memcpy"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_closure_of_five_captures_calls_memcpy")
+  benchmarks
+
 machine_code = row
   "the machine code changing size"
   true
@@ -1304,7 +1439,15 @@ rows_b1r0 = text/concat rows_b1 [emitted_code emitted_others remainder]
 
 rows_b1r1 = text/concat rows_b1r0 [digit_pairs leading_zeros int_cold_tail]
 
-rows_b1r = text/concat rows_b1r1 [cold_registers index_cold_arms]
+rows_b1r2 = text/concat rows_b1r1 [cold_registers index_cold_arms]
+
+rows_b1r3 = text/concat rows_b1r2 [cold_copy rare_door]
+
+rows_b1r4 = text/concat rows_b1r3 [sweep_helpers slice_walk closure_caps]
+
+rows_b1r5 = text/concat rows_b1r4 [empty_room scan_inline scan_tail]
+
+rows_b1r = text/concat rows_b1r5 [counters_out capture_load own_err_inline]
 
 rows_b1b = text/concat rows_b1r [machine_code]
 
