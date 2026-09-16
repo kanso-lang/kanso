@@ -15,7 +15,8 @@ fn outing _ _ acc true
   print (length acc)
 
 fn outing dirs at acc false
-  inner dirs at acc dirs[at]! 1 []
+  return print (length acc) if at < 1 or length dirs < at
+  inner dirs at acc dirs[at] 1 []
 
 fn inner dirs at acc kids k acc2
   innering dirs at acc kids k acc2 (k > length kids)
@@ -28,7 +29,7 @@ fn innering dirs at acc kids k acc2 false
   io/write "" .> on
 
 fn one dirs at acc kids k acc2
-  inner dirs at acc kids (k + 1) (push acc2 kids[k]!)
+  inner dirs at acc kids (k + 1) (push acc2 kids[k])
 
 fn joined a b
   list/to_list (text/concat a b)

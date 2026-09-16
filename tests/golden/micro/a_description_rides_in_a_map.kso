@@ -10,4 +10,4 @@ d = io/write "a\n" >> io/write "b\n"
 
 m = { "k":(opaque d) }
 
-pub play = m["k"]!
+pub play = m["k"]

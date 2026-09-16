@@ -89,11 +89,11 @@ fn assignment? l
 
 fn key_of l
   parts = text/split l "="
-  parts[1]!
+  parts[1]
 
 fn value_of l
   parts = text/split l "="
-  parts[2]!
+  parts[2]
 
 fn value_for lines key
   hit = list/to_list (list/select lines (l -> key_of l == key))
@@ -103,7 +103,8 @@ fn answered _ true
   ""
 
 fn answered hit false
-  value_of hit[1]!
+  return "" if length hit < 1
+  value_of hit[1]
 
 fn stripped s
   text/join (text/split s ",") ""
@@ -153,7 +154,7 @@ fn after_first parts sep
 
 fn basename path
   parts = text/split path "/"
-  parts[length parts]!
+  parts[length parts]
 
 fn html? name
   text/slice name (length name - 4) (length name) == ".html"
@@ -216,7 +217,7 @@ fn onward _ _ _ drift true
 
 fn onward j dir names drift false
   rest = list/to_list (list/drop names 1)
-  here = "{dir}/{names[1]!}"
+  here = "{dir}/{names[1]}"
   os/is_dir here .> (d -> entered j here d dir rest drift)
 
 fn entered j here true dir rest drift
@@ -261,7 +262,7 @@ fn scanned j here src
   pieces = text/split src marker
   rest = list/to_list (list/drop pieces 1)
   seen = page (basename here) (verb_for j.write)
-  list/fold rest (sweep 0 "" pieces[1]!) (s c -> tagged s c j seen)
+  list/fold rest (sweep 0 "" pieces[1]) (s c -> tagged s c j seen)
 
 fn verb_for true
   "rewrote"
@@ -271,14 +272,15 @@ fn verb_for false
 
 fn tagged s chunk j seen
   quoted = text/split chunk "\""
-  key = quoted[1]!
+  key = quoted[1]
   after = after_first quoted "\""
   keyed s key after j seen
 
 fn keyed s key after j seen
   named = text/split key "."
-  lines = golden_for j named[1]!
-  compared s key after seen (value_for lines named[2]!)
+  return compared s key after seen "" if length named < 2
+  lines = golden_for j named[1]
+  compared s key after seen (value_for lines named[2])
 
 fn compared s key after seen ""
   note = "UNKNOWN KEY {key} in {seen.name}\n"
@@ -286,10 +288,11 @@ fn compared s key after seen ""
 
 fn compared s key after seen actual
   opened = text/split after ">"
-  head = opened[1]!
+  head = opened[1]
   body = after_first opened ">"
   closed = text/split body "<"
-  judged s key head closed[1]! body seen actual
+  return compared s key after seen "" if length opened < 1 or length closed < 1
+  judged s key head closed[1] body seen actual
 
 fn judged s key head shown body seen actual
   settled s key head shown body seen actual (stripped shown == actual)

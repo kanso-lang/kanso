@@ -4726,7 +4726,16 @@ impl<'a> Backend<'a> {
                 let container = self.maybe_force(f, container);
                 let key = self.emit_expr(f, index)?;
                 let key = self.maybe_force(f, key);
-                Ok(self.emit_at(f, &container, &key, *strict, *span))
+                let read = self.emit_at(f, &container, &key, *strict, *span);
+                if !*strict {
+                    return Ok(read);
+                }
+                // the sigil is the choice of channel (ruled 2026-09-16): the
+                // element, or the missing-index err, settles into a box
+                let boxed = f.tmp();
+                f.line(&format!("{boxed} = call %KValue @k_b_effect(%KValue {read})"));
+                f.record(&boxed, DESC);
+                Ok(boxed)
             }
             Expr::Seq(lhs, rhs, span) => {
                 let a = self.emit_expr(f, lhs)?;
@@ -5809,6 +5818,57 @@ impl<'a> Backend<'a> {
         span: Span,
     ) -> Result<String, String> {
         if piped && !args.is_empty() {
+            // A `.>` whose subject is a strict index is a bind over a box the
+            // read settles on the spot (ruled 2026-09-16), so nothing about it
+            // is deferred: the element goes straight to the callback, and a
+            // miss answers the missing-index err boxed. The chain's answer is
+            // a box either way -- what the callback answered when that is one,
+            // else its answer settled -- which is what the oracle's bind node
+            // yields when the executor reaches it. The bind node, its closure
+            // and the box under it are never built.
+            if let Expr::Index { base, index, strict: true, span: at } = &args[0] {
+                let container = self.emit_expr(f, base)?;
+                let container = self.maybe_force(f, container);
+                let key = self.emit_expr(f, index)?;
+                let key = self.maybe_force(f, key);
+                let read = self.emit_at(f, &container, &key, true, *at);
+                let ok = inline_not_failure(f, &read);
+                let docall = f.label();
+                let missed = f.label();
+                let merge = f.label();
+                f.line(&format!("br i1 {ok}, label %{docall}, label %{missed}"));
+                f.start_block(&docall);
+                let called = self.emit_call_rest(f, head, args, Some(read.clone()), span)?;
+                let ctag = inline_tag(f, &called);
+                let is_box = f.tmp();
+                f.line(&format!("{is_box} = icmp eq i64 {ctag}, 8"));
+                let wrap = f.label();
+                let answered = f.label();
+                let called_from = f.cur_label.clone();
+                f.line(&format!("br i1 {is_box}, label %{answered}, label %{wrap}"));
+                f.start_block(&wrap);
+                let settled = f.tmp();
+                f.line(&format!("{settled} = call %KValue @k_b_effect(%KValue {called})"));
+                f.line(&format!("br label %{answered}"));
+                f.start_block(&answered);
+                let boxed = f.tmp();
+                f.line(&format!(
+                    "{boxed} = phi %KValue [ {called}, %{called_from} ], [ {settled}, %{wrap} ]"
+                ));
+                let boxed_from = f.cur_label.clone();
+                f.line(&format!("br label %{merge}"));
+                f.start_block(&missed);
+                let failed = f.tmp();
+                f.line(&format!("{failed} = call %KValue @k_b_effect(%KValue {read})"));
+                f.line(&format!("br label %{merge}"));
+                f.start_block(&merge);
+                let t = f.tmp();
+                f.line(&format!(
+                    "{t} = phi %KValue [ {boxed}, %{boxed_from} ], [ {failed}, %{missed} ]"
+                ));
+                f.record(&t, DESC);
+                return Ok(t);
+            }
             let piped_value = self.emit_expr(f, &args[0])?;
             if f.set_of(&piped_value) & DESC != 0 {
                 let mut body_args: Vec<Expr> = vec![Expr::Ident(Name::new("__piped"), span)];

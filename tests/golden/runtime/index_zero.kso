@@ -4,4 +4,4 @@
 # of `> 0` reads the word before the first element with every other fixture
 # in the tree still green.
 prices = [30 10 20]
-print "zeroth: {prices[0]!}"
+prices[0]! .> (v -> print "zeroth: {v}")

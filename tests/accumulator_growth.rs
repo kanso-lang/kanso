@@ -18,7 +18,7 @@ fn peak_at(iterations: u64) -> (u64, u64) {
         format!(
             "fn go 0 m\n  print (length (entries m))\n\n\
              fn go n m\n  junk = \"k{{n % 17}}\"\n  \
-             go (n - 1) (put m \"k1\" (m[\"k1\"]! + length junk))\n\n\
+             go (n - 1) (put m \"k1\" (m[\"k1\"] + length junk))\n\n\
              go {iterations} {{ \"k1\":0 }}\n"
         ),
     )

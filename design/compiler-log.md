@@ -3924,3 +3924,160 @@ the same night — the maps parse outside all three compile rows, measured,
 with a spec holding it there. Its row came off in this commit. A ruling
 built in under an hour beside one unbuilt for twenty-three days is the
 difference between a row on the list and a row off it.
+
+## 2026-09-16 — the box at the index: `xs[i]!` answers an effect, and the operator sites are respelled
+
+Builds the reversal ruled the same morning (the entry "gavel, reversed the
+same day: `!` answers a box, at the index and at the name", kanso#1446).
+`xs[i]!` answers `<t>effect`, a box holding the element or the missing-index
+err; the words open it, and an operator, a field read or a builtin handed the
+box is refused at check with the effect sentence. The plain read `xs[i]`
+answers the element or a `none` for an arm to handle, unless the `if`s around
+it prove the index in range, in which case the miss cannot happen and the read
+is its element.
+
+**The prover.** infer's `Fact` set gained the shapes the tree writes its
+bounds in: `return x if i < 1 or length xs < i` and `if (i < 1 or length xs
+< i) x (... xs[i] ...)` both prove `xs[i]`, through the desugared `and`,
+`or` and `not` of a condition, a comparison against `length xs` on either
+side, and a literal offset (`xs[at + 1]` under `length xs < at + 1`). A read
+needs a lower bound as well as an upper one: `xs[length xs]` alone is not
+proven, `length xs < 1` beside it is. A literal list has a length the
+prover can read, so `[4 5 6][1]` is proven by arithmetic and `xs = [1 2 3]`
+in a body gives `xs` a length the guards below can use. The proof is recorded
+per span, and the checker's none rule reads it: an unproven plain read handed
+to a group with no arm naming `none` is refused as before, and a proven one
+goes through. Micro fixture `a_guard_proves_the_read` pins six shapes on both
+engines; errors fixture `a_strict_index_where_a_value_is_expected` pins the
+four refusals of the box (`+`, a field, `==`, `length`). Ratchet rows
+`bang_box` (the `yields_box` arm for a strict index), `guard_bound` (the
+guard's discharge) and `literal_bound` (the literal list's length), each
+watched red.
+
+**The respell.** 155 files, +1,654 / −729. 745 `]!` sites lost their bang;
+208 guards were written where the read's bound was not already spelled
+beside it; 41 `]!` sites stand, each one opened by `.>` or annotated by `.!`.
+lib/list's fold and the bounded steps ask their length where the read is,
+so the proof can see it — the hoisted `len` of kanso#1278 is gone from
+`fold_flat`, and the read is proven instead. sha256, regexp, json, hako,
+twenty scripts, the four bench copies of the decoder, the book's six samples
+and eleven pages, and the corpus follow the same shapes.
+
+**Lever one, measured.** A `.>` whose subject is a strict index and whose
+callback is a lambda in tail position was already inlined by the fused-bind
+path (the callback's body becomes the caller's tail); the probe `xs[n % 3 +
+1]! .> (v -> go (n - 1) (acc + v))` reads 63,696,216 instructions for
+200,000 iterations with the emitter's new path on and with it off, and the
+two IRs are identical. The new path in `emit_call_full` is for the other
+shape, a named callback: `f = &step n acc` then `xs[n % 3 + 1]! .> f` at
+2,000 iterations reads 913,876 instructions and 12,004 allocations without
+it and 558,651 and 4,004 with it (−38.87%, six allocations an iteration to
+two): the settled box, the closure and the bind node are never built. What
+it costs: the inlined call is not a tail call, because the ruling wants the
+callback's answer settled when it is a value, so at 200,000 iterations the
+probe overflows the 8 MiB stack where the executor's bind survived it; the
+interpreter overflows at that depth on both, so the differential law is
+kept, and a loop written through a named callback was never a tail loop on
+the oracle. No benchmark holds a `!` site, so the lever has no ratchet row;
+this paragraph is its record.
+
+**Lever two is a proof, not a shape.** The literal-list bound changes what
+the checker accepts and emits the same read; it costs nothing at runtime
+and is pinned by `a_guard_proves_the_read` and the `literal_bound` row.
+
+**What the sweep found, and a bisect that lied first.** The first counter
+sweep read the encode vein at 49,875,132 allocations against 7,557,132 and
+`beat_iters` at 401 against 5,032,401: the encode loops had lost their
+beat. A bisect built the bench decoder's old shape under the old and the
+new compiler and read both as agreeing with the golden — because it ran the
+binaries from /tmp, where `bench/large.json` does not exist, and all three
+"agreed" on a run that died at the file read. Run from the tree, the old
+shape under the new compiler matched the golden exactly, so the compiler
+was not the cause; the respelled shape was, and `KANSO_BEAT_REPORT` named
+the accumulator as "may carry heap". Two gaps, both older than this branch:
+
+- A name bound below a `return x if c` guard is a statement of the guard's
+  `rest`. linear.rs's `is_unique_source` and beat.rs's `local_binds` read a
+  body's top level only, so `opened = ...` under `encode_list`'s guard was
+  a binding neither could find, the accumulator handed on through it read as
+  an alias, and every group in the chain lost its in-place append and its
+  beat. Both lookups read through guards now (`bound_in`, `binds_into`). Mem
+  fixture `a_local_bound_under_a_guard_keeps_the_beat` pins `allocs` 16 and
+  `beat_iters` 8,000; under the linearity mutation it reads 17,016 and 0
+  (`sh_bytes` 24 -> 408,024), under the chain mutation 16 and 7,000. Rows
+  `guard_bind_linear` and `guard_bind_chain`.
+- The boundary rule's licence for a byte builder crossing a rewind asked
+  only the first parameter. `builder_transient`'s `assemble cs p acc`
+  carries its builder third; while its loop was a two-group cycle no
+  self-call argument was checked, and the respell into a direct self-call
+  put the argument in front of the rule, which read it as heap: `beat_iters`
+  1,360 -> 40, `bytes_malloc` 40 -> 0, `held_peak_bytes` 80 -> 0. The rule
+  asks the position under test as well as the first parameter, the fixture
+  reads 1,360 / 40 / 80 again, and the mutation that puts the first-only
+  reading back turns it red. Row `bytes_acc_position`.
+
+**What moved, priced.** digest `thunk_forces` 8,256 -> 16,512 and the run
+program's `thunk_forces` 16,025 -> 32,025: sha256's `compress` guards
+`length rounds < at` beside `rounds[at]`, and `rounds` is a deferred
+constant, so each round forces it twice where it forced it once; every
+force after the first is a memoised tag test. scan `allocs` 3,011,150 ->
+3,011,149, `sh_rec` 1,552 -> 1,616, `sh_buf` 81,024 -> 80,976, and the run
+program's `allocs` 5,730,654 -> 5,730,653, `sh_rec` 48,174,560 ->
+48,174,624, `sh_buf` 111,160,896 -> 111,160,848: regexp's `spans` answers a
+`bounds` record where it answered a two-element list, one allocation and 16
+bytes fewer per quantifier parsed. The trend gate's keys for the two record
+rows are `scan_sh_rec` at 1,616 and `run_sh_rec` at 48,174,624. `a_digest_holds_every_block_it_walked`
+reads `thunk_forces` 64 -> 128 for the same reason as the digest. Every
+other runtime vein and the rest of the lazy tier agree with their goldens.
+The work, text and compile rows are CI's, written in the second round, and
+the floor moves under the 2026-09-13 clause where they come in short.
+
+**What the full suite found.** Nine failures, three of them defects of the
+branch and one older than it.
+
+- The oracle nested a frame for every turn of a guarded loop. `eval_tail`
+  hands a call in tail position back to the dispatcher's loop, directly or
+  through either branch of an `if`, and had no arm for a guard: the lines
+  under `return x if c` ran as a nested block, so their last call was a
+  Rust frame, and the interpreter's ceiling is ten thousand of those. Older
+  than this branch (`kanso run` of a module with that shape overflows on
+  main), and invisible until the respell wrote `fold_flat` in it: the
+  tenure fixture's `list/map` over 16,800 records ran the oracle out of
+  stack where native looped, because native's `emit_tail` has kept a
+  guard's tail position since the guard existed. The tail evaluator takes
+  the guard now, the rest's lead runs as any block's does and its last
+  statement is evaluated in tail position. Micro fixture
+  `a_guarded_tail_call_runs_in_constant_stack` counts to 30,000 and folds
+  12,000 elements under a guard, past the ceiling on both counts; it reads
+  the stack refusal on the old interpreter and `30000` / `72006000` on both
+  engines now. Row `guard_tail_oracle`.
+- welfare scored a golden that had lost its run row. `work["runbench"]!`
+  was the pin, and the respell's plain read answered a `none` that
+  `list/to_h` stored and the kept-counter filter dropped, so a golden with
+  no runbench row scored 86.00 on what was left; the arm `live none -> 1`
+  the checker asked for would have done the same for a counter missing at
+  scoring time. The five weighed reads are opened in `gauge`'s effect chain
+  now (`pinned`), before anything is scored, and a miss ends the run naming
+  the index. `a_welfare_that_prints_no_score_is_named_rather_than_indexed`
+  reads the refusal again.
+- Four specs embed programs that read `xs[i]!` as a value
+  (`accumulator_elements_survive`, `accumulator_growth`, `carry_escape`,
+  `carry_repair`); an interpolated box printed `<io>` and a builtin handed
+  one was refused. Respelled the way the tree was: the bang dropped where
+  the value is wanted, and `paths[at]! .> (path -> os/read_file path .> on)`
+  where the read feeds a builtin.
+- The three new mutations spelled their file through `$f`, which the
+  `touched` pass cannot see; the paths are literal now.
+
+**The compile veins, re-sat after the two analysis fixes.** The decoder's
+emitted code reads `calls` 1,209 -> 1,212, `branches` 795 -> 807, `lines`
+9,161 -> 9,258, and every other benchmark's emitted rows rise with it
+(runbench `lines` 35,087 -> 36,085): the guard-bound fixes give the
+beat back to loops the respell had cost it, and a beat loop is more code
+than a call. `front_end_visits` 15,119 -> 15,474 and the module compile
+golden's `visits` 2,511 -> 2,656 with `lines` 5,302 -> 5,377: the linearity
+and chain fixpoints walk a guard's rest where they stopped at it. Both
+remain well under the base (22,437 visits before this branch). The trend
+gate's keys for the rows that rose: `module_branches` at 448, `module_lines`
+at 5,377, `module_visits` at 2,656, `emitted_other_branches` at 13,099,
+`emitted_other_calls` at 20,323 and `emitted_other_lines` at 136,463.

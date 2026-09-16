@@ -30,7 +30,7 @@ fn wide n
   list/to_list (list/map (list/take list/naturals n) fat)
 
 fn gathered n xs acc
-  stepped (n - 1) xs (push acc xs[n]!)
+  stepped (n - 1) xs (push acc xs[n])
 
 fn stepped 0 _ acc
   acc
@@ -50,7 +50,7 @@ fn loaded acc
   stepped (length xs) xs acc
 
 fn read_back out
-  io/write "kept {length out}, first {out[1]!}, last {out[400]!}\n"
+  io/write "kept {length out}, first {out[1]}, last {out[400]}\n"
 
 fn begin acc0
   io/write "" .> (_ -> loaded acc0) .> read_back

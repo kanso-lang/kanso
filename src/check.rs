@@ -797,6 +797,10 @@ struct AfterInfer<'a, 'r> {
     /// reading this table instead would leave it hashing the name a second
     /// time for the mask, at every call site.
     returns: &'r HashMap<(&'a str, usize), crate::infer::Set>,
+    /// The plain index reads inference proved in range, by span: a read
+    /// its `if`s bound cannot miss, so it is not a none the caller owes an
+    /// arm for.
+    proven: &'r std::collections::HashSet<crate::diag::Span>,
 }
 
 /// An effect handed to a position every arm throws away never happens.
@@ -966,7 +970,7 @@ fn none_exhaustive_at(e: &Expr, tables: &AfterInfer, owner: &str, diags: &mut Ve
     let unknown = |s: crate::infer::Set| s & values == values;
     let yields_none = |e: &Expr| -> bool {
         match e {
-            Expr::Index { strict: false, .. } => true,
+            Expr::Index { strict: false, span, .. } => !tables.proven.contains(span),
             Expr::Ident(name, _) => name == "none",
             Expr::App { head, args, piped: false, .. } => match head.as_ref() {
                 Expr::Ident(name, _) => tables
@@ -1216,7 +1220,7 @@ fn check_after_infer<'p>(
     }
     // The module's constants that are one string literal, for the same test.
     let consts = crate::infer::literal_consts(program);
-    let tables = AfterInfer { discarded, nones, returns };
+    let tables = AfterInfer { discarded, nones, returns, proven: &inference.proven };
 
     use crate::infer::{Set, DESC, FAIL, THUNK, TOP};
     // ONE MAP, NOT TWO. Both keys began with the declaration's name, so the
@@ -1301,6 +1305,8 @@ fn check_after_infer<'p>(
             {
                 !shadows("effect")
             }
+            // `xs[i]!` is the box a miss bubbles through (ruled 2026-09-16)
+            Expr::Index { strict: true, .. } => true,
             Expr::App { head, args, piped: false, .. } if any_boxed => match head.as_ref() {
                 // both branches of an `if` answering a box makes the `if` one
                 Expr::Ident(name, _) if name == "if" && args.len() == 3 => {
@@ -2227,12 +2233,12 @@ fn check_predicates(
         // Fires on a provable lie only, the same conservatism the `?` direction
         // takes: an empty set means inference learned nothing, and TOP (what a
         // generic driver widens to) still holds ERR, so neither is accused.
-        if short.ends_with('!') && set != 0 && set & ERR == 0 {
+        if short.ends_with('!') && set != 0 && set & crate::infer::DESC == 0 {
             diags.push(Diagnostic::new(
                 "naming",
                 format!(
-                    "`{short}` wears a bang: a `!` function's answer \
-                     must be able to be a failure"
+                    "`{short}` wears a bang: a `!` function answers an effect, \
+                     the box a failure bubbles through"
                 ),
                 span,
             ));
@@ -2802,6 +2808,14 @@ fn bound_in_stmt<'a>(stmt: &'a Stmt, out: &mut HashSet<&'a str>) {
 fn bound_in_expr<'a>(e: &'a Expr, out: &mut HashSet<&'a str>) {
     if let Expr::Lambda { params, .. } = e {
         out.extend(params.iter().map(|(n, _)| n.as_str()));
+    }
+    // the statements after a `return .. if` bind names too: until this walk
+    // read them, a name bound behind a guard was taken for the declaration
+    // sharing its spelling, and `start = text/split ..` read as the effect
+    if let Expr::Guard { rest, .. } = e {
+        for stmt in rest {
+            bound_in_stmt(stmt, out);
+        }
     }
     crate::for_each_child(e, |child| bound_in_expr(child, out));
 }

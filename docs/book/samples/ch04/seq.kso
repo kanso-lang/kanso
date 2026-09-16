@@ -1,7 +1,7 @@
 import "std/text"
 
-steeps = []
-word = text/trim " two "
+sencha = text/trim " one "
+hojicha = text/trim " two "
 
-print "sencha: {steeps[1]!} steeps left"
->> print "hojicha: {text/to_int word} steeps left"
+print "sencha: {text/to_int sencha} steeps left"
+>> print "hojicha: {text/to_int hojicha} steeps left"

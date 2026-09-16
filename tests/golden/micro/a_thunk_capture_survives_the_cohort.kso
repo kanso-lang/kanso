@@ -24,7 +24,8 @@ fn numeric? _
 
 fn pair_of prefix f
   parts = text/split f "="
-  ["{prefix}{parts[1]!}" parts[2]!]
+  return ["" ""] if length parts < 2
+  ["{prefix}{parts[1]}" parts[2]]
 
 fn body? l
   text/slice l 1 1 != "#" and length l > 0
@@ -40,20 +41,24 @@ fn counted text prefix
   lines = list/select (text/split text "\n") body?
   all = list/to_list (list/map lines (l -> on_line prefix l))
   flat = list/to_list (list/fold all [] joined)
-  list/to_list (list/select flat (p -> numeric? p[2]!))
+  list/to_list (list/select flat (p -> length p > 1 and numeric? p[2]))
 
 fn totals pairs
-  list/to_h (list/to_list (list/map pairs (p -> [p[1]! (text/to_int p[2]!)])))
+  list/to_h (list/to_list (list/map pairs total_of))
+
+fn total_of p
+  return ["" 0] if length p < 2
+  [p[1] (text/to_int p[2])]
 
 fn names_of pairs
   sorted = list/to_list (list/sort (list/to_list (list/map pairs first_of)))
   list/to_list (list/fold sorted [] once)
 
 fn first_of p
-  p[1]!
+  p[1]
 
 fn once acc name
-  fresh acc name (length acc == 0 or acc[length acc]! != name)
+  fresh acc name (length acc == 0 or acc[length acc] != name)
 
 fn fresh acc name true
   push acc name
@@ -79,7 +84,9 @@ ours_a = "front_end_rounds=28\nfront_end_visits=23384\n"
 ours_now = "{ours_a}compile_peak_bytes=872591\n"
 
 fn against golden base_text found
-  io/write "" .> (_ -> weighed golden golden[2]! base_text ours_now found)
+  return io/write "" if length golden < 2
+  prefix = golden[2]
+  io/write "" .> (_ -> weighed golden prefix base_text ours_now found)
 
 fn weighed golden prefix base_text ours found
   mine = counted ours prefix
@@ -102,7 +109,8 @@ fn unchanged _ _ _ _ true
   move "" "" false
 
 fn unchanged golden name before after false
-  bare = bare_name name golden[2]!
+  return move "" "" false if length golden < 2
+  bare = bare_name name golden[2]
   worse = worsened? bare before after
   told golden name before after worse
 
@@ -114,7 +122,7 @@ fn bare_name name prefix
 
 fn told golden name before after worse
   arrow = arrow_of worse
-  line = "{arrow}: {name} {before} -> {after} ({golden[1]!})\n"
+  line = "{arrow}: {name} {before} -> {after} ({golden[1]})\n"
   move name line worse
 
 fn arrow_of true
@@ -124,7 +132,7 @@ fn arrow_of false
   "improved"
 
 fn started _
-  g = bench_memory[1]!
+  g = bench_memory[1]
   against g held [] .> (ms -> priced "" ms)
 
 fn priced _ ms

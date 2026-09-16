@@ -30,7 +30,8 @@ fn shouting _ _ out true
   out
 
 fn shouting parts at out false
-  piece = parts[at]!
+  return out if at < 1 or length parts < at
+  piece = parts[at]
   codes = text/bytes piece
   shout_all parts (at + 1) (push out (text/utf8 codes))
 
@@ -135,6 +136,6 @@ pub fn run _
   a = "{length built} {length repeated} {length grown} {summed}"
   b = "{length kept} {folded} {length grouped} {length counted}"
   c = "{ints} {floats} {moved.x} {length joined} {sliced} {sorted}"
-  d = "{length bulk} {bulk[100000]!}"
+  d = "{length bulk} {bulk[100000]}"
   e = "{length doc} {length lines} {length rejoined} {length trimmed}"
   print "basket {a} {b} {c} {d} {e}"

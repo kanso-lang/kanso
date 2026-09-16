@@ -1,0 +1,16 @@
+# `xs[i]!` answers a box: the element when the position is present, the
+# missing-index err when it is not, and `.>` is the word that opens it
+# (ruled 2026-09-16, the same day the reading that made it a bare value was
+# withdrawn). An operator, a field read and a builtin all take a value, so
+# the box is refused at each, the way any other effect is.
+type spot
+  from
+  to
+
+pub play =
+  xs = [(spot 1 2) (spot 3 4)]
+  ns = [10 20 30]
+  print "{ns[1]! + 1}"
+  >> print "{xs[2]!.from}"
+  >> print "{ns[2]! == 20}"
+  >> print "{length ns[1]!}"

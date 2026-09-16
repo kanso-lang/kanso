@@ -108,7 +108,7 @@ fn reading _ _ acc after true
   after acc
 
 fn reading pages at acc after false
-  page = pages[at]!
+  page = pages[at]
   os/read_file! page .> (raw -> scanned_page pages at acc after page raw)
 
 fn scanned_page pages at acc after page raw
@@ -133,7 +133,8 @@ fn walking _ _ _ _ _ acc true
   acc
 
 fn walking page text family patterns at acc false
-  found = hits patterns[at]! text
+  return acc if at < 1 or length patterns < at
+  found = hits patterns[at] text
   here = list/to_list (list/map found (m -> told page text family m))
   grown = list/to_list (text/concat acc here)
   from_family page text family patterns (at + 1) grown
@@ -159,7 +160,7 @@ fn telling _ _ acc true
   acc
 
 fn telling found at acc false
-  f = found[at]!
+  f = found[at]
   where = "  {f.page}:{f.line}  {f.family}\n"
   spelled found (at + 1) "{acc}{where}    {clipped f.quote}\n"
 

@@ -54,6 +54,11 @@ pub struct Inference {
     pub returns: Vec<Set>,
     /// per type index, per field: joined set seen at construction sites
     pub type_fields: Vec<Vec<Set>>,
+    /// The plain index reads (`xs[i]`, by span) whose enclosing `if`s prove
+    /// the index in range, so the read answers its element and never the
+    /// miss; the checker's none question and the bang's respell both read
+    /// it. See `Fact`.
+    pub proven: std::collections::HashSet<crate::diag::Span>,
 }
 
 impl Inference {
@@ -144,6 +149,11 @@ struct Ctx<'a> {
     decl_yields: Vec<Set>,
     type_fields: Vec<Vec<Set>>,
     changed: bool,
+    /// What the enclosing `if`s have established about the reads under them,
+    /// innermost last; see `Fact`.
+    facts: Vec<Fact<'a>>,
+    /// The plain index reads the facts prove in range, by span.
+    proven: std::collections::HashSet<crate::diag::Span>,
 }
 
 /// What compiling actually did, as opposed to what it wrote. Emitted text
@@ -438,6 +448,8 @@ pub fn infer(program: &Program) -> Inference {
         decl_yields: vec![0; program.fns.len()],
         type_fields: program.types.iter().map(|t| vec![0; t.fields.len()]).collect(),
         changed: true,
+        facts: Vec::new(),
+        proven: Default::default(),
     };
     // seed: entry points (main, constants, tests) run with no arguments;
     // anything used as a function value gets TOP params.
@@ -532,6 +544,198 @@ pub fn infer(program: &Program) -> Inference {
         param_starts: ctx.param_starts,
         returns: ctx.returns,
         type_fields: ctx.type_fields,
+        proven: ctx.proven,
+    }
+}
+
+/// What an enclosing `if` has established about the reads under one of its
+/// arms (ruled 2026-09-16, the bound the checker discharges): the condition
+/// holds in the first arm and fails in the second, and `and`, `or` and
+/// `not` are `if`s the parser wrote, so one walk reads them all. A fact
+/// names the expressions it saw, and a read matches one by shape
+/// (`same_expr`), so `chars[at + 1]` under `at + 1 <= length chars` is the
+/// read the fact is about and `chars[at]` is not.
+#[derive(Clone, Copy)]
+enum Fact<'a> {
+    /// `index <= length list`
+    Upper(&'a Expr, &'a str),
+    /// `index >= n`
+    Lower(&'a Expr, i64),
+    /// `length list >= n`
+    AtLeast(&'a str, i64),
+}
+
+/// The list whose length `e` reads, when `e` is `length xs`.
+fn length_of(e: &Expr) -> Option<&str> {
+    let Expr::App { head, args, piped: false, .. } = e else { return None };
+    let Expr::Ident(name, _) = head.as_ref() else { return None };
+    if name != "length" || args.len() != 1 {
+        return None;
+    }
+    match &args[0] {
+        Expr::Ident(xs, _) => Some(xs.as_str()),
+        _ => None,
+    }
+}
+
+fn int_of(e: &Expr) -> Option<i64> {
+    match e {
+        Expr::Int(n, _) => num_traits::ToPrimitive::to_i64(n),
+        _ => None,
+    }
+}
+
+/// Two expressions written the same way: a name, a literal, an operator over
+/// two of them, a field read, or a `length` of a name.
+fn same_expr(a: &Expr, b: &Expr) -> bool {
+    match (a, b) {
+        (Expr::Ident(x, _), Expr::Ident(y, _)) => x == y,
+        (Expr::Int(x, _), Expr::Int(y, _)) => x == y,
+        (
+            Expr::BinOp { op: p, lhs: l1, rhs: r1, .. },
+            Expr::BinOp { op: q, lhs: l2, rhs: r2, .. },
+        ) => p == q && same_expr(l1, l2) && same_expr(r1, r2),
+        (Expr::Field { base: b1, name: n1, .. }, Expr::Field { base: b2, name: n2, .. }) => {
+            n1 == n2 && same_expr(b1, b2)
+        }
+        _ => match (length_of(a), length_of(b)) {
+            (Some(x), Some(y)) => x == y,
+            _ => false,
+        },
+    }
+}
+
+/// The facts a condition establishes when it `holds`, or when it does not.
+fn facts_when<'a>(cond: &'a Expr, holds: bool, out: &mut Vec<Fact<'a>>) {
+    match cond {
+        // `a and b` is `if a b false`, `a or b` is `if a true b`, `not a` is
+        // `if a false true`: the parser writes all three as an `if`
+        Expr::App { head, args, piped: false, .. }
+            if args.len() == 3 && matches!(head.as_ref(), Expr::Ident(n, _) if n == "if") =>
+        {
+            let lit = |e: &Expr| match e {
+                Expr::Ident(n, _) if n == "true" => Some(true),
+                Expr::Ident(n, _) if n == "false" => Some(false),
+                _ => None,
+            };
+            match (holds, lit(&args[1]), lit(&args[2])) {
+                (true, _, Some(false)) => {
+                    facts_when(&args[0], true, out);
+                    facts_when(&args[1], true, out);
+                }
+                (true, Some(false), Some(true)) => facts_when(&args[0], false, out),
+                (false, Some(true), _) => {
+                    facts_when(&args[0], false, out);
+                    facts_when(&args[2], false, out);
+                }
+                (false, Some(false), Some(true)) => facts_when(&args[0], true, out),
+                _ => {}
+            }
+        }
+        Expr::BinOp { op, lhs, rhs, .. } => {
+            // read every comparison as `left OP right` with the operator
+            // turned so that a failing condition is the same table entry as
+            // its holding opposite
+            let op = match (holds, *op) {
+                (true, o) => o,
+                (false, "<") => ">=",
+                (false, "<=") => ">",
+                (false, ">") => "<=",
+                (false, ">=") => "<",
+                (false, "==") => "!=",
+                (false, "!=") => "==",
+                _ => return,
+            };
+            let (l, r) = (lhs.as_ref(), rhs.as_ref());
+            // `index <= length xs`, in its four spellings
+            match (op, length_of(l), length_of(r)) {
+                ("<" | "<=", None, Some(xs)) => out.push(Fact::Upper(l, xs)),
+                (">" | ">=", Some(xs), None) => out.push(Fact::Upper(r, xs)),
+                _ => {}
+            }
+            // `length xs >= n`, in its spellings, and `length xs != 0`; the
+            // length expression itself is then a lower-bounded index, which is
+            // what `xs[length xs]` reads
+            let known = match (op, length_of(l), int_of(r), length_of(r), int_of(l)) {
+                ("==" | ">=", Some(xs), Some(n), _, _) => Some((l, xs, n)),
+                (">", Some(xs), Some(n), _, _) => Some((l, xs, n + 1)),
+                ("!=", Some(xs), Some(0), _, _) => Some((l, xs, 1)),
+                ("==" | "<=", _, _, Some(xs), Some(n)) => Some((r, xs, n)),
+                ("<", _, _, Some(xs), Some(n)) => Some((r, xs, n + 1)),
+                ("!=", _, _, Some(xs), Some(0)) => Some((r, xs, 1)),
+                _ => None,
+            };
+            if let Some((len, xs, n)) = known {
+                out.push(Fact::AtLeast(xs, n));
+                out.push(Fact::Lower(len, n));
+            }
+            // `index >= n`, in its spellings
+            match (op, int_of(l), int_of(r)) {
+                (">=", None, Some(k)) => out.push(Fact::Lower(l, k)),
+                (">", None, Some(k)) => out.push(Fact::Lower(l, k + 1)),
+                ("<=", Some(k), None) => out.push(Fact::Lower(r, k)),
+                ("<", Some(k), None) => out.push(Fact::Lower(r, k + 1)),
+                _ => {}
+            }
+        }
+        _ => {}
+    }
+}
+
+/// An expression as a base and a literal offset: `n + k` and `n - k` are
+/// `(n, k)` and `(n, -k)`, a literal alone is `(None, k)`, and anything else
+/// is itself at zero. A fact about `at - 16` then speaks for a read at
+/// `at - 15`, which is where sha256's schedule reads.
+fn offset_of(e: &Expr) -> (Option<&Expr>, i64) {
+    if let Some(k) = int_of(e) {
+        return (None, k);
+    }
+    if let Expr::BinOp { op, lhs, rhs, .. } = e {
+        match (*op, int_of(lhs), int_of(rhs)) {
+            ("+", None, Some(k)) => return (Some(lhs), k),
+            ("+", Some(k), None) => return (Some(rhs), k),
+            ("-", None, Some(k)) => return (Some(lhs), -k),
+            _ => {}
+        }
+    }
+    (Some(e), 0)
+}
+
+/// Whether the facts in force put `list[index]` inside the list: the index
+/// is at least one, and at most the length. A literal carries its own lower
+/// bound and needs the list's length known to be at least it; anything else
+/// needs a fact about the same base, at an offset the arithmetic covers.
+fn in_range(facts: &[Fact<'_>], index: &Expr, list: &str) -> bool {
+    let (base, off) = offset_of(index);
+    let same_base = |e: &Expr| -> Option<i64> {
+        let (eb, eo) = offset_of(e);
+        match (eb, base) {
+            (Some(eb), Some(b)) if same_expr(eb, b) => Some(eo),
+            _ => None,
+        }
+    };
+    let lower = match base {
+        None => off >= 1,
+        // the fact says base + eo >= k, so base + off >= k - eo + off
+        Some(_) => facts.iter().any(|f| match f {
+            Fact::Lower(e, k) => same_base(e).is_some_and(|eo| k - eo + off >= 1),
+            _ => false,
+        }),
+    };
+    if !lower {
+        return false;
+    }
+    // `xs[length xs]` is the last element and never past it
+    if length_of(index) == Some(list) {
+        return true;
+    }
+    match base {
+        None => facts.iter().any(|f| matches!(f, Fact::AtLeast(xs, n) if *xs == list && *n >= off)),
+        // the fact says base + eo <= length, so base + off is too when off <= eo
+        Some(_) => facts.iter().any(|f| match f {
+            Fact::Upper(e, xs) if *xs == list => same_base(e).is_some_and(|eo| eo >= off),
+            _ => false,
+        }),
     }
 }
 
@@ -764,10 +968,16 @@ fn pattern_catches(pat: &Pattern) -> Set {
 
 fn eval_body<'a>(ctx: &mut Ctx<'a>, body: &'a [Stmt], env: &mut Env<'a>) -> Set {
     let mut result = NONE;
+    let mark = ctx.facts.len();
     for (index, stmt) in body.iter().enumerate() {
         match stmt {
             Stmt::Bind { pattern, expr } => {
                 let mut value = eval_expr(ctx, expr, env);
+                // a name bound to a literal list has a known length for the
+                // rest of the body: `xs = [1 2 3]` then `xs[2]` is in range
+                if let (Pattern::Var(name, _), Expr::List(items, _)) = (pattern, expr) {
+                    ctx.facts.push(Fact::AtLeast(name, items.len() as i64));
+                }
                 if ctx.demand.is_lazy_bind(ctx.current.0, ctx.current.1, index) {
                     // The binding holds a thunk; forcing yields the expr's set.
                     value |= THUNK;
@@ -789,6 +999,7 @@ fn eval_body<'a>(ctx: &mut Ctx<'a>, body: &'a [Stmt], env: &mut Env<'a>) -> Set 
             }
         }
     }
+    ctx.facts.truncate(mark);
     result
 }
 
@@ -855,16 +1066,34 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut Env<'a>) -> Set {
             }
             MAP
         }
-        Expr::Index { base, index, strict, .. } => {
+        Expr::Index { base, index, strict, span } => {
             let b = eval_expr(ctx, base, env);
             let k = eval_expr(ctx, index, env);
-            // a miss errs under the sigil (xs[i]!) and nones under the plain
-            // lenient form (xs[i])
-            let miss = match strict {
-                true => ERR,
-                false => NONE,
+            // the sigil is the choice of channel (ruled 2026-09-16): a miss
+            // bubbles, so `xs[i]!` answers a box holding the element or the
+            // missing-index err, and the plain form answers the element or
+            // `none` for an arm to handle -- unless the `if`s around it prove
+            // the index in range, in which case the miss cannot happen and
+            // the read is its element
+            if *strict {
+                return (b & FAIL) | (k & FAIL) | DESC;
+            }
+            let proven = match base.as_ref() {
+                Expr::Ident(xs, _) => in_range(&ctx.facts, index, xs.as_str()),
+                // a literal list has a known length, and a literal index
+                // into it is in range or not by arithmetic
+                Expr::List(items, _) => {
+                    int_of(index).is_some_and(|i| i >= 1 && i <= items.len() as i64)
+                }
+                _ => false,
             };
-            let mut out = (b & FAIL) | (k & FAIL) | miss;
+            let mut out = (b & FAIL) | (k & FAIL);
+            match proven {
+                true => {
+                    ctx.proven.insert(*span);
+                }
+                false => out |= NONE,
+            }
             if b & BYTES != 0 {
                 out |= INT;
             }
@@ -890,7 +1119,10 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut Env<'a>) -> Set {
             for (p, _) in params {
                 inner.insert(p, TOP & !FAIL);
             }
+            // a parameter may shadow a name a fact is about
+            let outer = std::mem::take(&mut ctx.facts);
             let _ = eval_expr(ctx, body, &mut inner);
+            ctx.facts = outer;
             FN
         }
         Expr::BinOp { op, lhs, rhs, .. } => {
@@ -911,8 +1143,13 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut Env<'a>) -> Set {
         Expr::Guard { cond, early, rest, .. } => {
             let c = eval_expr(ctx, cond, env);
             let mut benv = env.child(rest.len());
+            let mark = ctx.facts.len();
+            facts_when(cond, true, &mut ctx.facts);
             let taken = eval_expr(ctx, early, env);
+            ctx.facts.truncate(mark);
+            facts_when(cond, false, &mut ctx.facts);
             let not_taken = eval_body(ctx, rest, &mut benv);
+            ctx.facts.truncate(mark);
             (c & FAIL) | taken | not_taken
         }
         // the join yields a description, a lone propagated failure, or an
@@ -921,6 +1158,22 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut Env<'a>) -> Set {
             let a = eval_expr(ctx, lhs, env);
             let b = eval_expr(ctx, rhs, env);
             DESC | ((a | b) & FAIL) | ERR
+        }
+        // an `if` is walked here rather than as a call so its condition's
+        // facts can hold in the arm they hold in (see `Fact`); the answer is
+        // what `eval_call` gave it
+        Expr::App { head, args, piped: false, .. }
+            if args.len() == 3 && matches!(head.as_ref(), Expr::Ident(n, _) if n == "if") =>
+        {
+            let c = eval_expr(ctx, &args[0], env);
+            let mark = ctx.facts.len();
+            facts_when(&args[0], true, &mut ctx.facts);
+            let taken = eval_expr(ctx, &args[1], env);
+            ctx.facts.truncate(mark);
+            facts_when(&args[0], false, &mut ctx.facts);
+            let other = eval_expr(ctx, &args[2], env);
+            ctx.facts.truncate(mark);
+            taken | other | (c & FAIL)
         }
         Expr::App { head, args, piped, .. } => eval_call(ctx, head, args, env, *piped),
     }
@@ -1300,6 +1553,8 @@ fn desc_yield<'a>(ctx: &mut Ctx<'a>, e: &'a Expr) -> Set {
         Expr::Ident(n, _) if base(n) == "stdin" => STR,
         Expr::Ident(n, _) if base(n) == "args" => LIST,
         Expr::Ident(n, _) if base(n) == "now" => INT,
+        // a strict index yields its element, forced on the way out
+        Expr::Index { strict: true, .. } => TOP & !FAIL & !THUNK,
         // an `if` yields whichever branch runs
         Expr::App { head, args, piped: false, .. }
             if matches!(head.as_ref(), Expr::Ident(n, _) if n == "if") && args.len() == 3 =>

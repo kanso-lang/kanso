@@ -93,8 +93,9 @@ fn parsed_terms model
 
 fn one_term line
   parts = text/split (text/slice line 6 (length line)) "|"
-  term parts[1]! (text/to_float parts[2]!) (text/to_float parts[3]!)
-    (text/split parts[4]! ",")
+  return term "" 0.0 0.0 [] if length parts < 4
+  term parts[1] (text/to_float parts[2]) (text/to_float parts[3])
+    (text/split parts[4] ",")
 
 # Which definition scored these rows, as the model states it. Holding a copy
 # here would keep its old value through the gavel that moved the formula, and
@@ -114,7 +115,8 @@ fn named _ true
   err "the model has no formula line; it wants welfare -- --model"
 
 fn named rows false
-  text/slice rows[1]! 9 (length rows[1]!)
+  return named rows true if length rows < 1
+  text/slice rows[1] 9 (length rows[1])
 
 fn parsed_base model
   rows = list/select (model_lines model) (l -> text/slice l 1 5 == "base ")
@@ -122,7 +124,8 @@ fn parsed_base model
 
 fn one_base line
   halves = text/split (text/slice line 6 (length line)) "="
-  [halves[1]! (text/to_int halves[2]!)]
+  return ["" 0] if length halves < 2
+  [halves[1] (text/to_int halves[2])]
 
 # --- the run term for a row measured before runbench existed ----------------
 # Ruling of 2026-09-07, "the welfare history's baseline" (kanso#1313): each
@@ -172,10 +175,11 @@ fn phase_line? l
 
 fn one_phase line
   parts = text/split line " "
-  [parts[2]! (text/to_float parts[3]!)]
+  return ["" 0.0] if length parts < 3
+  [parts[2] (text/to_float parts[3])]
 
 fn carries_all? row phases
-  here = list/to_list (list/select phases (p -> row[p[1]!] != none))
+  here = list/to_list (list/select phases (p -> row[p[1]] != none))
   length here == length phases
 
 fn anchor rows phases
@@ -206,17 +210,17 @@ fn calibrated _ _ _ true
   none
 
 fn calibrated eights runs phases false
-  last = eights[length eights]!
-  first = runs[1]!
-  both = list/to_list (list/select phases (p -> first[p[1]!] != none))
-  agreed = list/to_list (list/select both (p -> last[p[1]!] == first[p[1]!]))
+  last = eights[length eights]
+  first = runs[1]
+  both = list/to_list (list/select phases (p -> first[p[1]] != none))
+  agreed = list/to_list (list/select both (p -> last[p[1]] == first[p[1]]))
   checked last first (length agreed == length both)
 
 fn checked _ _ false
   err "the splice rows disagree on a phase they share"
 
 fn checked last first true
-  splice last first["run_instructions"]!
+  splice last first["run_instructions"]
 
 # Rebuilt from the anchor every run, rather than only when the row has no
 # count. A count this tool wrote on an earlier run is not an answer to keep: it
@@ -276,10 +280,10 @@ fn sourced row _ false
 # The share-weighted ratio to the anchor. Renormalised over the phases the row
 # carries, which for every row this reaches is all of them.
 fn weighed_ratio p tot row anchored
-  p[2]! / tot * (1.0 * row[p[1]!] / anchored[p[1]!])
+  p[2] / tot * (1.0 * row[p[1]] / anchored[p[1]])
 
 fn moved row anchored phases
-  tot = list/sum (list/to_list (list/map phases (p -> p[2]!)))
+  tot = list/sum (list/to_list (list/map phases (p -> p[2])))
   each = list/map phases (p -> weighed_ratio p tot row anchored)
   list/sum (list/to_list each)
 
@@ -303,12 +307,17 @@ fn epoch_map raw
 
 fn one_epoch line
   parts = text/split line " "
-  [parts[1]! parts[2]! (text/to_float parts[3]!)]
+  return ["" "" 0.0] if length parts < 3
+  [parts[1] parts[2] (text/to_float parts[3])]
 
 # The divisor the OLDEST epoch carries: every boundary's factor multiplied,
 # per counter.
 fn oldest_divisor epochs
-  fold epochs {} (acc e -> multiplied acc e[2]! e[3]!)
+  fold epochs {} multiplied_by
+
+fn multiplied_by acc e
+  return acc if length e < 3
+  multiplied acc e[2] e[3]
 
 fn multiplied acc key f
   seeded acc key f (acc[key] == none)
@@ -317,7 +326,7 @@ fn seeded acc key f true
   put acc key f
 
 fn seeded acc key f false
-  put acc key (acc[key]! * f)
+  put acc key (acc[key] * f)
 
 # THE BOUNDARIES A HISTORY CARRIES MUST BE A SUFFIX OF THE TABLE, and that one
 # rule covers three situations that look alike and are not.
@@ -341,19 +350,19 @@ fn seeded acc key f false
 # with an empty suffix, and it gets no epochs rather than a scaling it never
 # had.
 fn carried? rows e
-  length (list/to_list (list/select rows (r -> r["commit"] == e[1]!))) > 0
+  length (list/to_list (list/select rows (r -> r["commit"] == e[1]))) > 0
 
 # The table's own order is oldest-first, so the boundaries a history carries
 # form a suffix exactly when nothing carried comes before something missing.
 fn suffix? epochs rows
   seen = list/fold epochs [false true] (a e -> after_gap a (carried? rows e))
-  seen[2]!
+  seen[2]
 
 fn after_gap a true
-  [true a[2]!]
+  [true a[2]]
 
 fn after_gap a false
-  [a[1]! (a[2]! and not a[1]!)]
+  [a[1] (a[2] and not a[1])]
 
 fn epoch_divisors rows epochs
   in_window = list/to_list (list/select epochs (e -> carried? rows e))
@@ -368,7 +377,11 @@ fn divisors rows _ true true
 
 # The boundary commits, oldest first, with each named once.
 fn ahead_of epochs
-  list/fold epochs [] (acc e -> once acc e[1]!)
+  list/fold epochs [] once_of
+
+fn once_of acc e
+  return acc if length e < 1
+  once acc e[1]
 
 fn once acc c
   added acc c (length (list/to_list (list/select acc (x -> x == c))) > 0)
@@ -389,10 +402,15 @@ fn no_epochs rows
 # The divisor drops by a boundary's factor at the first row measured the new
 # way and holds until the next boundary.
 fn crossed a row epochs
-  here = list/to_list (list/select epochs (e -> e[1]! == row["commit"]))
-  now = list/fold here a[1]! (m e -> put m e[2]! (m[e[2]!]! / e[3]!))
-  left = list/to_list (list/select a[3]! (c -> c != row["commit"]))
-  [now (put a[2]! row["commit"] [now (epoch_name left)]) left]
+  return a if length a < 3
+  here = list/to_list (list/select epochs (e -> e[1] == row["commit"]))
+  now = list/fold here a[1] divided
+  left = list/to_list (list/select a[3] (c -> c != row["commit"]))
+  [now (put a[2] row["commit"] [now (epoch_name left)]) left]
+
+fn divided m e
+  return m if length e < 3
+  put m e[2] (m[e[2]] / e[3])
 
 # A row is scored against the baseline as it stood BEFORE the next boundary
 # ahead of it, so that boundary names its epoch. A row past every boundary is
@@ -404,7 +422,7 @@ fn epoch_named _ true
   "as measured"
 
 fn epoch_named ahead false
-  "before {ahead[1]!}"
+  "before {ahead[1]}"
 
 # The baseline as a row's own epoch would have measured it.
 fn rebased base d
@@ -423,8 +441,9 @@ fn epoch_value v f
   math/round (1.0 * v / f)
 
 fn at_row m divs row
-  found = divs[row["commit"]]!
-  scoring m.terms (rebased m.base found[1]!) m.formula
+  found = divs[row["commit"]]
+  return scoring m.terms m.base m.formula if found == none or length found < 2
+  scoring m.terms (rebased m.base found[1]) m.formula
 
 # --- the rewrite ------------------------------------------------------------
 fn over_rows m given
@@ -446,20 +465,27 @@ fn chosen _ true
   "history.jsonl"
 
 fn chosen given false
-  given[1]!
+  given[1]
 
 fn written m phases epochs raw
   lines = list/select (text/split raw "\n") (l -> length l > 0)
   decoded = list/to_list (list/map lines json/decode)
   a = anchor decoded phases
-  divs = (epoch_divisors decoded epochs)[2]!
+  divs = (epoch_divisors decoded epochs)[2]
   built = list/map decoded (r -> scored_row m divs r a phases)
   rows = list/to_list built
   io/write "{text/join rows "\n"}\n"
 
 fn scored_row m divs r a phases
-  found = divs[r["commit"]]!
-  rescored (at_row m divs r) (reconstructed r a phases) found[2]!
+  found = divs[r["commit"]]
+  rescored_at m divs r a phases found (found == none or length found < 2)
+
+fn rescored_at m divs r a phases _ true
+  rescored (at_row m divs r) (reconstructed r a phases) "as measured"
+
+fn rescored_at m divs r a phases found false
+  return rescored_at m divs r a phases found true if length found < 2
+  rescored (at_row m divs r) (reconstructed r a phases) found[2]
 
 fn rescored m row epoch
   weight = covered row m.terms m.base
@@ -553,13 +579,16 @@ fn shared row base t here false
   list/sum sats / (1.0 * length sats) * t.weight
 
 fn ratio_of row base c
-  as_ratio (live base[c]!) (live row[c]!)
+  as_ratio (live base[c]) (live row[c])
 
 fn as_ratio a b
   1.0 * a / b
 
 fn satisfaction ratio satiation
   ratio / (ratio + satiation)
+
+fn live none
+  1
 
 fn live n
   nonzero n (n == 0)

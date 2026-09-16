@@ -94,7 +94,7 @@ fn walking_names _ _ _ acc after true
   after acc
 
 fn walking_names path names at acc after false
-  kid = "{path}/{names[at]!}"
+  kid = "{path}/{names[at]}"
   os/is_dir kid .> (d -> walk_kid path names at acc after kid d)
 
 fn walk_kid path names at acc after kid true
@@ -116,7 +116,7 @@ fn reading _ _ acc after true
   after acc
 
 fn reading wanted at acc after false
-  path = wanted[at]!
+  path = wanted[at]
   on = (body -> read_next wanted at acc after path body)
   os/read_file! path .> on
 
@@ -140,7 +140,7 @@ fn walking _ _ drift write true
   reported drift write
 
 fn walking names at drift write false
-  name = names[at]!
+  name = names[at]
   on = (raw -> one_chapter names at drift write name raw)
   os/read_file! "{chapters}/{name}" .> on
 
@@ -173,7 +173,10 @@ fn sourcing _ _ _ _ acc true
   acc
 
 fn sourcing ms dir paths at acc false
-  found = sample_at paths dir ms[at]!.groups[2]!
+  return acc if at < 1 or length ms < at
+  gs = ms[at].groups
+  return acc if length gs < 2
+  found = sample_at paths dir gs[2]
   wanted_src ms dir paths (at + 1) (noted acc found)
 
 fn wanted_out ms dir paths at acc
@@ -183,9 +186,11 @@ fn recording _ _ _ _ acc true
   acc
 
 fn recording ms dir paths at acc false
-  m = ms[at]!
-  parts = text/split m.groups[3]! "/"
-  base = "{parts[length parts]!}{counters_of m.groups[2]!}"
+  return acc if at < 1 or length ms < at
+  gs = ms[at].groups
+  return acc if length gs < 3
+  parts = text/split gs[3] "/"
+  base = "{parts[length parts]}{counters_of gs[2]}"
   wanted_out ms dir paths (at + 1) (noted acc (out_at paths dir base))
 
 fn noted acc ""
@@ -218,16 +223,16 @@ fn merging src _ i _ acc false true
   trailing src i acc 1
 
 fn merging src out i j acc false false
-  ahead src out i j acc (src[i]!.from < out[j]!.from)
+  ahead src out i j acc (src[i].from < out[j].from)
 
 fn merging _ out _ j acc true _
   trailing out j acc 2
 
 fn ahead src out i j acc true
-  merged src out (i + 1) j (push acc (placed src[i]! 1))
+  merged src out (i + 1) j (push acc (placed src[i] 1))
 
 fn ahead src out i j acc false
-  merged src out i (j + 1) (push acc (placed out[j]! 2))
+  merged src out i (j + 1) (push acc (placed out[j] 2))
 
 fn trailing xs at acc shape
   trailed xs at acc shape (at > length xs)
@@ -236,10 +241,10 @@ fn trailed _ _ acc _ true
   acc
 
 fn trailed xs at acc shape false
-  trailing xs (at + 1) (push acc (placed xs[at]! shape)) shape
+  trailing xs (at + 1) (push acc (placed xs[at] shape)) shape
 
 fn dir_of name
-  "{chapters}/samples/{(text/split name ".")[1]!}"
+  "{chapters}/samples/{(text/split name ".")[1]}"
 
 fn next_chapter names at drift write name raw said
   saved "{chapters}/{name}" raw said.text write
@@ -267,7 +272,7 @@ fn stitching raw _ _ from acc drift log _ _ _ _ true
   outcome "{acc}{span_of raw from (length raw)}" drift log
 
 fn stitching raw found at from acc drift log name dir files write false
-  p = found[at]!
+  p = found[at]
   m = p.m
   gap = span_of raw from (m.from - 1)
   said = fixed raw m name dir files write p.shape
@@ -295,13 +300,15 @@ fn smaller _ b false
   b
 
 fn fixed raw m name dir files write 1
-  sample = m.groups[2]!
+  sample = m.groups[2]
   found = sample_at (path_list files) dir sample
   no_sample raw m sample name files write found (found == "")
 
 fn fixed raw m name dir files write _
-  parts = text/split m.groups[3]! "/"
-  base = "{parts[length parts]!}{counters_of m.groups[2]!}"
+  gs = m.groups
+  return outcome (whole_of raw m) 0 "" if length gs < 3
+  parts = text/split gs[3] "/"
+  base = "{parts[length parts]}{counters_of gs[2]}"
   found = out_at (path_list files) dir base
   no_recorded raw m base name files write found (found == "")
 
@@ -339,7 +346,7 @@ fn deep? _ _ _ _ _ false
   false
 
 fn deep? parts path dir name _ true
-  parts[length parts]! == name and starts? path "{dir}/"
+  parts[length parts] == name and starts? path "{dir}/"
 
 fn starts? s pre
   text/slice s 1 (length pre) == pre
@@ -364,10 +371,10 @@ fn only _ false
   ""
 
 fn only hits true
-  hits[1]!
+  hits[1]
 
 fn body_of files path
-  (list/to_list (list/select files (f -> f.path == path)))[1]!.body
+  (list/to_list (list/select files (f -> f.path == path)))[1].body
 
 fn no_sample raw m _ _ _ _ _ true
   outcome (whole_of raw m) 0 ""
@@ -376,7 +383,9 @@ fn no_sample raw m sample name files write found false
   weighed raw m (body_of files found) sample name write
 
 fn weighed raw m src sample name write
-  shown = strip_tags m.groups[3]!
+  gs = m.groups
+  return outcome (whole_of raw m) 0 "" if length gs < 3
+  shown = strip_tags gs[3]
   same = trimmed shown == trimmed src
   settled raw m src sample name write same
 
@@ -390,7 +399,7 @@ fn swapped raw m _ false said
   outcome (whole_of raw m) 1 said
 
 fn swapped _ m src true said
-  outcome "{m.groups[1]!}{render src}{m.groups[4]!}" 1 said
+  outcome "{m.groups[1]}{render src}{m.groups[4]}" 1 said
 
 fn no_recorded raw m _ _ _ _ _ true
   outcome (whole_of raw m) 0 ""
@@ -399,7 +408,9 @@ fn no_recorded raw m base name files write found false
   weighed_out raw m (body_of files found) base name write
 
 fn weighed_out raw m rec base name write
-  shown = strip_tags m.groups[4]!
+  gs = m.groups
+  return outcome (whole_of raw m) 0 "" if length gs < 4
+  shown = strip_tags gs[4]
   same = trimmed shown == trimmed rec
   settled_out raw m rec base name write same
 
@@ -413,7 +424,7 @@ fn swapped_out raw m _ false said
   outcome (whole_of raw m) 1 said
 
 fn swapped_out _ m rec true said
-  outcome "{m.groups[1]!}{render_output rec}{m.groups[5]!}" 1 said
+  outcome "{m.groups[1]}{render_output rec}{m.groups[5]}" 1 said
 
 fn verb true
   "rewrote"
@@ -469,7 +480,8 @@ fn joining _ _ acc true
   text/join acc "\n"
 
 fn joining lines at acc false
-  joined_lines lines (at + 1) (push acc (highlight lines[at]!))
+  return text/join acc "\n" if at < 1 or length lines < at
+  joined_lines lines (at + 1) (push acc (highlight lines[at]))
 
 fn highlight line
   toks = tokens_of line
@@ -490,7 +502,7 @@ fn painting toks at acc false
   painted toks (at + 1) "{acc}{one_token toks at}"
 
 fn one_token toks at
-  t = toks[at]!
+  t = toks[at]
   classed toks at t.text (text/slice t.text 1 1)
 
 fn classed _ _ t "\""
@@ -602,7 +614,7 @@ fn stepping _ _ _ true
   ""
 
 fn stepping toks at step false
-  here = toks[at]!.text
+  here = toks[at].text
   blank = trimmed_blank here
   kept toks at step here (blank == "")
 
@@ -619,7 +631,7 @@ fn off_end _ _ true
   ""
 
 fn off_end toks at false
-  toks[at]!.text
+  toks[at].text
 
 fn trimmed_blank s
   regexp/replace_all "[ \t]" s ""
@@ -697,7 +709,8 @@ fn outing _ _ acc true
   text/join acc "\n"
 
 fn outing lines at acc false
-  out_lines lines (at + 1) (push acc (one_out lines[at]!))
+  return text/join acc "\n" if at < 1 or length lines < at
+  out_lines lines (at + 1) (push acc (one_out lines[at]))
 
 fn one_out line
   headed = regexp/match? "^(error|warning)\\[[a-z]+\\]" line
@@ -705,8 +718,9 @@ fn one_out line
 
 fn tagged line true
   parts = text/split line ":"
+  return escaped line if length parts < 1
   rest = text/join (list/to_list (list/drop parts 1)) ":"
-  "<span class=\"k\">{escaped parts[1]!}</span>:{escaped rest}"
+  "<span class=\"k\">{escaped parts[1]}</span>:{escaped rest}"
 
 fn tagged line false
   bare = lstripped line
@@ -728,7 +742,7 @@ fn caret_only? line
 
 fn carets line true
   hits = regexp/matches "\\^" line
-  at = hits[1]!.from
+  at = hits[1].from
   before = text/slice line 1 (at - 1)
   rest = escaped (text/slice line at (length line))
   "{before}<span class=\"k\">{rest}</span>"

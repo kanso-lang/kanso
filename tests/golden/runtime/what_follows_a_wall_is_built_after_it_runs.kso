@@ -6,4 +6,4 @@
 # evaluated to build the description, and it died there.
 pub play =
   print "a"
-  >> print "{[1][5]!}"
+  >> [1][5]! .> (v -> print "{v}")

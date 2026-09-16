@@ -109,7 +109,7 @@ header = """
 
 fn body_of src sig
   parts = text/split src sig
-  start = "{sig}{parts[2]!}"
+  start = "{sig}{parts[2]}"
   text/slice start 1 (closing_brace start 0 1)
 
 # The function ends at the brace that closes the one its signature opens.
@@ -133,7 +133,8 @@ fn at_brace src depth i _
 # no semicolon, so the statement ends at the first one.
 fn no_err body
   parts = text/split body "return k_err("
-  list/fold (list/to_list (list/drop parts 1)) parts[1]! rejoined
+  return body if length parts < 1
+  list/fold (list/to_list (list/drop parts 1)) parts[1] rejoined
 
 fn rejoined acc chunk
   tail = text/split chunk ";"
@@ -160,10 +161,11 @@ fn as_harness src
 # The threshold the door reads, taken from the line that defines it.
 fn threshold_of src
   parts = text/split src threshold_head
-  "{threshold_head}{cut_at_newline parts[2]!}"
+  return "" if length parts < 2
+  "{threshold_head}{cut_at_newline parts[2]}"
 
 fn cut_at_newline s
-  (text/split s "\n")[1]!
+  (text/split s "\n")[1]
 
 fn as_scalar body
   named = swapped body scalar_sig harness_scalar_sig

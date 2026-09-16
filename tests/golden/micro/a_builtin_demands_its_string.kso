@@ -14,10 +14,13 @@ fn noted acc one false
   text/concat acc [one]
 
 fn gathered acc at
-  seen = strs[at]!
+  seen = strs[at]
   made = "{seen.why}"
   noted acc made false
 
 texts = gathered [] 1
 
-pub play = print "{text/to_int texts[1]!} {length (text/split texts[1]! "4")}"
+pub play = texts[1]! .> shown
+
+fn shown t
+  print "{text/to_int t} {length (text/split t "4")}"

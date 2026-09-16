@@ -1244,6 +1244,25 @@ impl<'a> Interp<'a> {
         env: &Option<Rc<Env>>,
         frame: &Frame,
     ) -> Result<Flow, RuntimeError> {
+        // a guard keeps the tail position of the lines under it: `return x
+        // if c` followed by a self-call is the loop shape the library's
+        // folds are written in, and a frame nested per iteration ran the
+        // oracle out of stack at 10,000 elements where native looped
+        if let Expr::Guard { cond, early, rest, span } = expr {
+            let c = self.eval(cond, env, frame)?;
+            return match c {
+                Value::True => self.eval_tail(early, env, frame),
+                Value::False => self.eval_stmts_flow(rest, env, frame),
+                bad if is_failure(&bad) => Ok(Flow::Done(bad)),
+                other => Err(RuntimeError {
+                    message: format!(
+                        "an if condition is true or false, got {}",
+                        render(self, &other, false)
+                    ),
+                    span: *span,
+                }),
+            };
+        }
         let Expr::App { head, args, span, piped } = expr else {
             return Ok(Flow::Done(self.eval(expr, env, frame)?));
         };
@@ -1331,6 +1350,22 @@ impl<'a> Interp<'a> {
 
     /// A statement list in expression position: a branch body, a build
     /// block, or the tail a fired guard skipped past.
+    /// A block whose last statement may hand back a tail call: the lines
+    /// before it run as `eval_stmts` runs them, on a copy of the environment.
+    fn eval_stmts_flow(
+        &self,
+        stmts: &[Stmt],
+        env: &Option<Rc<Env>>,
+        frame: &Frame,
+    ) -> Result<Flow, RuntimeError> {
+        let Some((Stmt::Expr(last), lead)) = stmts.split_last() else {
+            return Ok(Flow::Done(self.eval_stmts(stmts, env, frame)?));
+        };
+        let mut env = env.clone();
+        self.run_stmts(lead, &mut env, frame)?;
+        self.eval_tail(last, &env, frame)
+    }
+
     fn eval_stmts(&self, stmts: &[Stmt], env: &Option<Rc<Env>>, frame: &Frame) -> EvalResult {
         let mut env = env.clone();
         self.run_stmts(stmts, &mut env, frame)
@@ -1592,11 +1627,14 @@ impl<'a> Interp<'a> {
             Expr::Index { base, index, strict, span } => {
                 let container = self.force_thunk(self.eval(base, env, frame)?)?;
                 let key = self.force_thunk(self.eval(index, env, frame)?)?;
+                // the sigil is the choice of channel (ruled 2026-09-16): the
+                // read settles a box holding the element or the miss
                 match index_value(container, key.clone(), *span)? {
-                    Value::NoneV if *strict => Ok(err_value(
+                    Value::NoneV if *strict => Ok(Value::Desc(Rc::new(Desc::Settled(err_value(
                         Value::Str(format!("missing index {}", render(self, &key, true))),
                         origin_at(frame, *span),
-                    )),
+                    ))))),
+                    found if *strict => Ok(Value::Desc(Rc::new(Desc::Settled(found)))),
                     found => Ok(found),
                 }
             }

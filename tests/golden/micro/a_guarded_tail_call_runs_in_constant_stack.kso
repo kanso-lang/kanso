@@ -1,0 +1,23 @@
+# A tail call under a guard keeps its tail position on the oracle. `return x
+# if c` followed by a self-call is the shape the library's folds are written
+# in since 2026-09-16, and the interpreter nested a frame for every turn of
+# it, so a fold over ten thousand elements ran the oracle out of stack where
+# native looped. Both depths here are past the interpreter's ceiling of ten
+# thousand nested frames.
+fn count n acc
+  return acc if n < 1
+  count (n - 1) (acc + 1)
+
+fn total xs i acc
+  return acc if i < 1 or length xs < i
+  total xs (i + 1) (acc + xs[i])
+
+fn build acc 0
+  acc
+
+fn build acc n
+  build (push acc n) (n - 1)
+
+pub play =
+  print "{count 30000 0}"
+  >> print "{total (build [] 12000) 1 0}"

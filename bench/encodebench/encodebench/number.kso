@@ -1,7 +1,8 @@
 import "std/text"
 
 fn mark_from? cs p q
-  if (p > q) false (mark_step? cs cs[p]! p q)
+  return false if p < 1 or length cs < p or p > q
+  mark_step? cs cs[p] p q
 
 # float marks: . E e
 fn mark_step? _ 46 _ _

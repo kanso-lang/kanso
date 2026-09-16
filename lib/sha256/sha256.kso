@@ -50,9 +50,10 @@ fn schedule w _ true
   w
 
 fn schedule w at false
-  s0 = small_sigma0 w[at - 15]!
-  s1 = small_sigma1 w[at - 2]!
-  next = w[at - 16]! + s0 + w[at - 7]! + s1 & whole
+  return w if at - 16 < 1 or length w < at - 2
+  s0 = small_sigma0 w[at - 15]
+  s1 = small_sigma1 w[at - 2]
+  next = w[at - 16] + s0 + w[at - 7] + s1 & whole
   rolled (push w next) (at + 1)
 
 fn rolled w at
@@ -109,17 +110,19 @@ fn compress s _ _ true
   s
 
 fn compress s w at false
-  mixed = big_sigma1 s[5]! + choice s[5]! s[6]! s[7]!
-  fed = rounds[at]! + w[at]!
-  t1 = s[8]! + mixed + fed & whole
-  t2 = big_sigma0 s[1]! + majority s[1]! s[2]! s[3]! & whole
+  return s if length s < 8 or at < 1 or length w < at or length rounds < at
+  mixed = big_sigma1 s[5] + choice s[5] s[6] s[7]
+  fed = rounds[at] + w[at]
+  t1 = s[8] + mixed + fed & whole
+  t2 = big_sigma0 s[1] + majority s[1] s[2] s[3] & whole
   moved = shifted_state s t1 t2
   turned moved w (at + 1)
 
 fn shifted_state s t1 t2
-  first = t1 + t2 & whole
-  fifth = s[4]! + t1 & whole
-  [first s[1]! s[2]! s[3]! fifth s[5]! s[6]! s[7]!]
+  return s if length s < 8
+  leading = t1 + t2 & whole
+  fifth = s[4] + t1 & whole
+  [leading s[1] s[2] s[3] fifth s[5] s[6] s[7]]
 
 fn turned s w at
   compress s w at (at > 64)
@@ -134,7 +137,8 @@ fn summing _ _ _ acc true
   acc
 
 fn summing old new at acc false
-  word = old[at]! + new[at]! & whole
+  return acc if at < 1 or length old < at or length new < at
+  word = old[at] + new[at] & whole
   summed old new (at + 1) (push acc word)
 
 # The padded message, block by block. `at` is a one-based byte offset into it.
@@ -156,8 +160,9 @@ fn gathered _ _ _ w true
 
 fn gathered padded at i w false
   base = at + i * 4
-  high = padded[base]! * 16777216 + padded[base + 1]! * 65536
-  low = padded[base + 2]! * 256 + padded[base + 3]!
+  return w if base < 1 or length padded < base + 3
+  high = padded[base] * 16777216 + padded[base + 1] * 65536
+  low = padded[base + 2] * 256 + padded[base + 3]
   word = high + low
   first_sixteen padded at (i + 1) (push w word)
 
@@ -198,7 +203,8 @@ fn spelling _ _ acc true
   acc
 
 fn spelling words at acc false
-  spelled words (at + 1) "{acc}{eight_hexits words[at]! 7 ""}"
+  return acc if at < 1 or length words < at
+  spelled words (at + 1) "{acc}{eight_hexits words[at] 7 ""}"
 
 fn eight_hexits x at acc
   hexed x at acc (at < 0)

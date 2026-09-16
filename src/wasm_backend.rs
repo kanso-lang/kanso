@@ -796,6 +796,13 @@ impl<'a> WasmBackend<'a> {
                         let origin = self.origin_lit(&ctx.prefix, &ctx.hako, *span);
                         ctx.body.i32_const(origin as i64);
                         ctx.body.call(RT_ERR_STAMP);
+                        // the read settles a box (ruled 2026-09-16), built the
+                        // way `effect v` is
+                        ctx.body.call(RT_ARG);
+                        let lit = self.str_lit("effect");
+                        ctx.body.i32_const(lit as i64);
+                        ctx.body.i32_const(1);
+                        ctx.body.call(RT_BUILTIN);
                     }
                     false => ctx.body.call(RT_AT),
                 }

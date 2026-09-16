@@ -14,7 +14,7 @@ fn noted acc why false
   text/concat acc [why]
 
 fn gathered acc at
-  one = wants[at]!
+  one = wants[at]
   why = "the site did not paint {one.why}"
   noted acc why false
 

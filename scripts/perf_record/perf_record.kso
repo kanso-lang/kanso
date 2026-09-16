@@ -90,11 +90,12 @@ fn pair? l
 
 fn kept prefix l
   parts = text/split l "="
-  tally = text/to_int parts[2]!
-  ["{prefix}{parts[1]!}" tally]
+  return ["{prefix}{l}" 0] if length parts < 2
+  tally = text/to_int parts[2]
+  ["{prefix}{parts[1]}" tally]
 
 fn named l
-  (text/split l "=")[1]!
+  (text/split l "=")[1]
 
 # The cost goldens are one `name=value` to a line, so a line is a pair.
 # A watched name with no line used to drop out of the row in silence, so a
@@ -149,7 +150,10 @@ fn amount _ true
   0
 
 fn amount fs false
-  text/to_int (text/split fs[1]! "=")[2]!
+  return 0 if length fs < 1
+  kv = text/split fs[1] "="
+  return 0 if length kv < 2
+  text/to_int kv[2]
 
 # The instructions golden is one benchmark to a line, `name count`. It is the
 # only vein here counting the work a process did rather than what it
@@ -161,7 +165,7 @@ fn ir_line text name
   ir_count_in (list/to_list wanted)
 
 fn ir_starts? line name
-  (text/split line " ")[1]! == name
+  (text/split line " ")[1] == name
 
 fn ir_count_in ls
   ir_amount ls (length ls == 0)
@@ -170,7 +174,10 @@ fn ir_amount _ true
   0
 
 fn ir_amount ls false
-  text/to_int (text/split ls[1]! " ")[2]!
+  return 0 if length ls < 1
+  words = text/split ls[1] " "
+  return 0 if length words < 2
+  text/to_int words[2]
 
 ir_benches = ["jsonbench" "encodebench" "oneshot" "basket"]
 
@@ -196,7 +203,12 @@ fn size_amount _ true
   0
 
 fn size_amount ls false
-  text/to_int (text/split (text/split ls[1]! " ")[2]! "=")[2]!
+  return 0 if length ls < 1
+  words = text/split ls[1] " "
+  return 0 if length words < 2
+  kv = text/split words[2] "="
+  return 0 if length kv < 2
+  text/to_int kv[2]
 
 # The compile golden is many fields to a line, one line per sample, and the
 # published number is the total across them.
@@ -213,13 +225,13 @@ fn asked argv
   os/run "git" argv
 
 fn head_line r
-  (text/split r.stdout "\n")[1]!
+  (text/split r.stdout "\n")[1]
 
 fn described line
   parts = text/split line " "
   rest = list/to_list (list/drop parts 2)
   subject = text/join rest " "
-  [["commit" parts[1]!] ["date" parts[2]!] ["subject" subject]]
+  [["commit" parts[1]] ["date" parts[2]] ["subject" subject]]
 
 # What the compiler costs itself, on a real module rather than a sample small
 # enough that the number never moves. env carries the flag because os/run
@@ -267,7 +279,7 @@ fn scored_counters text
 # second field, so that is what is asked, and the status goes in the message
 # rather than into the decision.
 fn score_in r
-  head = (text/split r.stdout "\n")[1]!
+  head = (text/split r.stdout "\n")[1]
   score_of head r (length (text/split head " ") < 2)
 
 fn score_of _ r true
@@ -275,7 +287,7 @@ fn score_of _ r true
   err "welfare printed no score, so this row has none to carry. {told}"
 
 fn score_of head _ false
-  (text/split head " ")[2]!
+  (text/split head " ")[2]
 
 fn stamped r
   os/read_file! "bench/cost_golden.txt" .> (d -> with_decode (head_line r) d)
@@ -326,7 +338,7 @@ fn prefixed prefix names
   list/to_list (list/map names (n -> "{prefix}{n}"))
 
 fn key_of pair
-  pair[1]!
+  pair[1]
 
 # Every key the five `counters` calls are supposed to have produced, spelled the
 # way they are spelled in the row.

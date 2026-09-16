@@ -137,16 +137,16 @@ fn onward _ count true
 
 fn onward todo count false
   rest = list/to_list (list/drop todo 1)
-  c = todo[1]!
+  c = todo[1]
   ran (shaped c.a c.b c.reader) .> (v -> reported rest count c v)
 
 fn reported rest count c v
   told (named c.label v) .> (n -> swept rest (count + n))
 
 fn cased ai bi ri
-  a = layouts[ai]!
-  b = layouts[bi]!
-  probe_case a b "layout {ai} then {bi}, hand {ri}" readers[ri]!
+  a = layouts[ai]
+  b = layouts[bi]
+  probe_case a b "layout {ai} then {bi}, hand {ri}" readers[ri]
 
 fn over_readers ai bi ri acc
   gathering ai bi ri acc (ri > length readers)

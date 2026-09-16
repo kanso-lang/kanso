@@ -2,6 +2,6 @@ type node
   name
   peers
 
-graph = { "a":(node "a" [graph["b"]!]) "b":(node "b" [graph["a"]!]) }
+graph = { "a":(node "a" [graph["b"]]) "b":(node "b" [graph["a"]]) }
 
-pub play = print "{graph["a"]!.peers[1]!.name} {graph["b"]!.peers[1]!.name}"
+pub play = print "{graph["a"].peers[1].name} {graph["b"].peers[1].name}"

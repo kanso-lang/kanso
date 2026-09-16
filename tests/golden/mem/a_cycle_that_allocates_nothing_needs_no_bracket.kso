@@ -17,7 +17,8 @@ fn run acc bs n len
   if (len < n) acc (mark acc bs n len)
 
 fn mark acc bs n len
-  scan (text/append (text/append acc 92) bs[n]!) bs (n + 1) len
+  return acc if n < 1 or length bs < n
+  scan (text/append (text/append acc 92) bs[n]) bs (n + 1) len
 
 fn escaped bs
   text/utf8 (scan (text/bytes "") bs 1 (length bs))

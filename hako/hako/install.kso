@@ -15,7 +15,8 @@ fn gathered todo found
   if (length todo == 0) (answered found) more
 
 fn visiting todo found
-  here = todo[1]!
+  return answered found if length todo < 1
+  here = todo[1]
   rest = list/to_list (list/drop todo 1)
   os/list_dir here .> (names -> divided here rest found names [] [])
 
@@ -25,7 +26,8 @@ fn divided here rest found names dirs files
   if (length names == 0) finished more
 
 fn weighed here rest found names dirs files
-  full = path/join here names[1]!
+  return divided here rest found [] dirs files if length names < 1
+  full = path/join here names[1]
   left = list/to_list (list/drop names 1)
   onward = (d -> placed here rest found left dirs files full d)
   os/is_dir full .> onward
@@ -56,7 +58,8 @@ fn read_all files names
 fn reading files names
   rest = list/to_list (list/drop files 1)
   onward = (text -> read_all rest (merged names (imported text)))
-  os/read_file! files[1]! .> onward
+  return answered (list/sort names) if length files < 1
+  os/read_file! files[1] .> onward
 
 fn merged names found
   list/fold found names one_of
@@ -72,14 +75,15 @@ fn imported text
 
 fn spec_of row
   after = text/split row "\""
-  after[2]!
+  if (length after < 2) "" after[2]
 
 fn local? spec
   text/slice spec 1 4 == "std/" or text/slice spec 1 1 == "."
 
 fn hako_name spec
   parts = text/split spec "/"
-  "{parts[1]!}/{parts[2]!}"
+  return spec if length parts < 2
+  "{parts[1]}/{parts[2]}"
 
 # `kanso install` — read the imports, resolve each hako, fetch it, write the
 # lock. An interim pin already in the lock survives a plain install: it is a
@@ -93,14 +97,15 @@ fn begun dir wanted names
   if (length names == 0) none_wanted (verified dir wanted names)
 
 fn verified dir wanted names
-  unknown = list/find wanted (a -> not list/any? names (n -> n == a[1]!))
+  unknown = list/find wanted (a -> not list/any? names (n -> n == a[1]))
   if (unknown == none) (locked_at dir wanted names) (unimported unknown)
 
 # A binding is forced where it is written, so the message an unknown pin
 # would carry cannot be built beside the test for one.
 fn unimported unknown
   why = "so pinning it would pin nothing — imports are the manifest"
-  refused "nothing imports `{unknown[1]!}`, {why}"
+  name = if (length unknown < 1) "?" unknown[1]
+  refused "nothing imports `{name}`, {why}"
 
 # No lock yet is the ordinary case on a fresh checkout, so the read answers
 # it rather than raising: one read where there were an `exists` and a read,
@@ -132,20 +137,26 @@ fn each_hako dir wanted names held root origin lines report
   if (length names == 0) finished more
 
 fn one_hako dir wanted names held root origin lines report
-  n = names[1]!
+  return recorded dir lines report 0 if length names < 1
+  n = names[1]
   rest = list/to_list (list/drop names 1)
   onward = (two -> next_hako dir wanted rest held root origin lines report two)
   speakable_name n .> (_ -> chosen n wanted held root origin .> onward)
 
 fn next_hako dir wanted rest held root origin lines report two
-  ls = "{lines}{two[1]!}"
-  rs = "{report}{two[2]!}"
+  return carried dir wanted rest held root origin lines report if length two < 2
+  ls = "{lines}{two[1]}"
+  rs = "{report}{two[2]}"
   each_hako dir wanted rest held root origin ls rs
+
+fn carried dir wanted rest held root origin lines report
+  each_hako dir wanted rest held root origin lines report
 
 # A name is a hako by owner and repo; asking a domain which protocol it
 # speaks is a different question and nobody has needed it yet.
 fn speakable_name n
-  owner = (text/split n "/")[1]!
+  parts = text/split n "/"
+  owner = if (length parts < 1) n parts[1]
   by_domain = "names a hako by domain, and asking a domain which protocol"
   bad = refused "`{n}` {by_domain} it speaks is not built yet"
   if (dotted? owner) bad (io/write "")
@@ -154,13 +165,14 @@ fn dotted? owner
   length (text/split owner ".") > 1
 
 fn chosen n wanted held root origin
-  pinned = list/find wanted (a -> a[1]! == n)
+  pinned = list/find wanted (a -> a[1] == n)
   standing = list/find held (p -> p.name == n and not release? p.tag)
   plain = unasked n standing root origin
   if (pinned == none) plain (by_branch n pinned root origin)
 
 fn by_branch n pinned root origin
-  branch = pinned[2]!
+  return refused "a pin names a branch" if length pinned < 2
+  branch = pinned[2]
   head_of origin n branch .> (sha -> fetched_as n branch sha root origin)
 
 fn unasked n standing root origin
@@ -175,7 +187,8 @@ fn by_release n root origin
 
 fn released n found root origin
   bad = refused "`{n}` publishes no vX.Y.Z release tag"
-  if (found == none) bad (fetched_as n found[1]! found[2]! root origin)
+  return bad if found == none or length found < 2
+  fetched_as n found[1] found[2] root origin
 
 fn fetched_as n tag sha root origin
   mark = if (release? tag) "" " (interim pin)"

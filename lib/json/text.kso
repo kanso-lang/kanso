@@ -44,7 +44,8 @@ fn escape_run acc bs p n
   if (p < n) (text/append acc (text/slice bs p (n - 1))) acc
 
 fn escape_at acc bs n len
-  escape_next (esc_byte acc bs[n]!) bs (n + 1) len
+  return acc if n < 1 or length bs < n
+  escape_next (esc_byte acc bs[n]) bs (n + 1) len
 
 fn escape_next acc bs p len
   escape_found acc bs p len (text/find2_below bs p 34 92 32)
