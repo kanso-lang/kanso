@@ -277,6 +277,8 @@ force_chain = row
   "cargo test --release --test golden micro_corpus_agrees_across_engines"
   "specs (unit, golden, differential)"
   (breaking "a_deferred_answer_is_forced_one_level")
+  release
+
 # `effect v` is the box built by hand, ruled 2026-09-15. The interpreter is
 # the oracle for what it settles to, and native is compared with it on the
 # fixture that starts every chain shape from one. The mutation makes the
@@ -287,6 +289,8 @@ hand_box = row
   "cargo test --release --test golden micro_corpus_agrees_across_engines"
   "specs (unit, golden, differential)"
   (breaking "the_hand_built_box_answers_its_value_bare")
+  release
+
 # A rescue or annotate callback is entered with the failure itself. The
 # emitter trusts inference for a group's entry guard, so a callback lambda
 # whose parameter is seeded as never failing costs native the guard on the
