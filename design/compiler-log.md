@@ -3754,9 +3754,37 @@ the largest program in the tree — runbench, 36,085 lines, md5
 `ebd24064f1a55e8effeb3ed5f08d4cf4` before and after — so nothing about what the
 compiler produces has changed, only what it spends deciding it.
 
-**Nothing in the tree can see this.** `compile_instructions` and its two
+**Nothing in the tree could see this.** `compile_instructions` and its two
 neighbours stop before codegen, and `emitted_code` and `machine_code` read
 output that did not move. A win of this size with no golden against it is a win
 the next change is free to give back, which is the ironclad rule's whole
 subject — so the counter comes with it rather than after it, and the gavel
 orders that counter anyway.
+
+**The vein.** `bench/startup_instructions_golden.txt`, read by
+`scripts/gates/startup_instructions.sh`, counting `kanso play` on
+`bench/startup_corpus/main.kso` — one `print` — at the `kanso::main` anchor
+with the same emptied environment and pinned tunables the three compile rows
+use. It is the fourth callgrind row and the only one that reaches codegen. Its
+own sitting on this container, one box and one corpus, the two binaries
+differing in nothing else:
+
+    base    69,183,407
+    fixed    4,996,663
+    delta  -64,186,744   -92.78%   13.85x
+
+It is an exact vein of its own and NOT an objective term, the way `.text` is
+pinned under the 2026-09-05 ruling. The objective takes it when the model
+splits, which is the gavel's own build and not this one.
+
+Four things had to move with it, and three were found by specs rather than by
+hand, which is the point of them. `scripts/gates/library_box.sh` stages the new
+corpus. `scripts/trend_gate/trend_gate.kso` names the golden, because
+`tests/every_counter_golden_is_walked_by_the_trend_gate.rs` reads `bench/` off
+disk and keys on the word `golden` — it went red the moment the file existed.
+`scripts/ratchet/ratchet.kso`'s `host_bound` list gains the gate, because
+`tests/a_host_bound_gate_is_reported_not_credited.rs` asserts that list and the
+gates running callgrind are the same set, and it named the omission exactly:
+"a callgrind gate left off the list makes a runner mismatch fail the whole
+job". And `.github/workflows/ci.yml` gains the step and its entry in the vein
+summary, which is the block that actually fails the job.

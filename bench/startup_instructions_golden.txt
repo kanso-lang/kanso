@@ -1,0 +1,55 @@
+# Retired instructions for `kanso play startup_corpus/main.kso`, counted under
+# callgrind and anchored at the `kanso::main` frame.
+#
+# WHAT THIS COUNTS THAT THE OTHER THREE COMPILE ROWS DO NOT. They count what
+# compiling a body of code costs: `bench/compile_instructions_golden.txt` a
+# directory, `bench/entry_instructions_golden.txt` a file with statements,
+# `bench/library_instructions_golden.txt` a file of definitions. All three run
+# `kanso check`, which stops before codegen. This one runs `kanso play` on a
+# program holding a single `print`, so what it counts is what a run costs
+# BEFORE it has any work to do — the loader, the prelude, the whole of the
+# backend deciding what to emit for almost nothing. A one-line program is the
+# point of it: what is left when the program is that small is start-up.
+#
+# WHY THE VEIN EXISTS. Clay ruled on 2026-09-16 that the objective becomes a
+# development welfare, a production welfare and a meta over them, and that
+# start-up belongs to the development side: `kanso test` pays it on every
+# invocation and production never pays it once. The same microsecond is
+# enormous in one context and free in the other, which is the reason that
+# gavel gives for splitting rather than re-weighting. The counters for that
+# side did not exist. This is the first of them.
+#
+# It is pinned here as its own exact vein and is NOT an objective term yet, the
+# way `.text` is pinned under the 2026-09-05 ruling. The objective takes it
+# when the model splits, which is that gavel's own build.
+#
+# ONE ROW, ONE VALUE, ruled 2026-09-05. No per-chip key and no pinned pair: a
+# build that counts two numbers is a reproduction failure and is hunted rather
+# than recorded. `scripts/gates/compile_instructions.sh` carries the
+# measurements that ruling was made on, and the `startup_binary sha256` and
+# `startup_sample` lines this gate prints are where such a hunt starts.
+#
+# THE ROW IS CI'S, never a container's. The container this file was written on
+# runs rustc 1.94.1 against CI's 1.98.1 and reads about one per cent high on
+# the other instruction rows, so the number below is a projection until CI
+# replaces it.
+#
+# measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
+#
+# 2026-09-16 (the vein opens, with the change that made it worth opening):
+# `codegen::Backend::emit`'s `declares` filter asked `referenced(sym)` for each
+# of about 1,204 DECLARES lines, and `referenced` re-split DECLARES and
+# re-scanned its non-declare lines on every ask — roughly one and a half
+# million line scans to decide which declarations to keep. Three quarters of
+# start-up was substring search and 92.6% of it had that one owner.
+#
+# Measured on this container at gate settings, one box and one corpus, the two
+# binaries differing only in that expression:
+#
+#     base    69,183,407
+#     fixed    4,996,663
+#     delta  -64,186,744   -92.78%   13.85x
+#
+# THE VALUE BELOW IS THE CONTAINER'S, and round one is deliberately red on it.
+# CI measures and its own reading replaces this line.
+startup_instructions=4996663

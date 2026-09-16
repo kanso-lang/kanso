@@ -247,6 +247,14 @@ bench_library = [["bench/library_instructions_golden.txt" ""]]
 
 bench_traffic = [["bench/compile_allocs_golden.txt" ""]]
 
+# Start-up, added with its vein on 2026-09-16. It is the only row here that
+# sees codegen: the three compile rows run `kanso check`, which stops before
+# it. Listed in the commit that opens the vein, for the reason the library row
+# gives — the spec reads bench/ off disk and keys on the word `golden`, so it
+# goes red the moment the file exists. No prefix: `startup_instructions`
+# collides with nothing.
+bench_startup = [["bench/startup_instructions_golden.txt" ""]]
+
 bench_pend = [["bench/cost_golden_pend.txt" "pend_"]]
 
 # The three RUNTIME veins, none of which this gate could read. `work_` and
@@ -308,7 +316,7 @@ bench_ab = text/concat bench_a (text/concat bench_encode bench_b)
 
 bench_cd = text/concat bench_c (text/concat bench_compile bench_modules)
 
-bench_libcheck = text/concat bench_library bench_traffic
+bench_libcheck = text/concat bench_library (text/concat bench_traffic bench_startup)
 
 bench_compiled = text/concat bench_ir (text/concat bench_entry bench_libcheck)
 

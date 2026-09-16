@@ -48,3 +48,9 @@ cp -R bench/entry_corpus "$box/entry_corpus"
 # — the path the count tracks, about 160 instructions a character — is the same
 # for all three.
 cp -R bench/library_corpus "$box/library_corpus"
+# And the start-up corpus, which is one `print` and exists to be small. The
+# other three corpora measure what compiling a body of code costs; this one
+# measures what a `kanso play` costs before it has any work to do, which is
+# the term `kanso test` pays on every invocation and never pays once in
+# production. A one-line program is the whole point: what is left is start-up.
+cp -R bench/startup_corpus "$box/startup_corpus"
