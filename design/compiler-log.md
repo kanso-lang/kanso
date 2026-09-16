@@ -3619,3 +3619,60 @@ read another, so the row is stable for a given binary and moves between them.
 Under glibc the same shape cost 508 instructions and the header carries seven
 readings and four distinct values for it. At 13 it is 39 times smaller, which
 is the one part of this that got better.
+
+## 2026-09-16 — a binder pays for a lookup it never reads
+
+`infer::arm_can_run` decides whether an arm's patterns could match a call's
+arguments, from the literals alone. CI's library-corpus profile names its
+closure at 4,023,145 instructions, 3.03% of that compile, and it is the only
+frame in the top ten that is one expression rather than a pass.
+
+The shape is the one this queue has shipped against before. For every
+(pattern, argument) pair the closure computed the argument's string shape —
+which asks `consts` for an `Ident` and walks every template part of a `Str` —
+then its integer literal, then whether it was a literal at all, and only then
+looked at the pattern. Four of the match's arms read one of those three each;
+the fifth reads none of them. That fifth arm is `_ => true`, the binder, and a
+binder matches whatever it is handed. Most patterns are binders, so most pairs
+paid for a hash lookup and a walk and threw both answers away.
+
+Each arm asks for what it reads now, and `str_shape` and `is_literal` are named
+functions rather than expressions in the prelude. Both are pure — a `HashMap`
+read and a match over the expression — so computing them later, or not at all,
+cannot change the answer. The literal-dispatch rules the doc comment states are
+untouched: a module constant bound to a string literal still counts as that
+literal, and an interpolated string with fixed text in it still cannot match a
+shorter one.
+
+Gate-shaped on this container, `env -i` with the pinned tunables, `kanso::main`
+inclusive, one build each:
+
+    compile_instructions    37,309,598 ->  37,127,534    -182,064   -0.4880%
+    entry_instructions     133,285,762 -> 132,067,512  -1,218,250   -0.9140%
+    library_instructions   133,429,679 -> 132,213,543  -1,216,136   -0.9114%
+    summed                 304,025,039 -> 301,408,589  -2,616,450   -0.8606%
+
+The module row was read twice on two stagings and came back identical both
+times. It also falls about half as hard as the other two, and the corpora are
+why rather than the change: the entry corpus names ten imports and the library
+corpus is the whole of `lib/`, where the module corpus names four, so the two
+long rows walk far more declarations and far more calls into groups than the
+short one does.
+
+CONTAINER FIGURES, not CI's. This box reads about 1.2 per cent high on these
+rows and the goldens are CI's; round one is deliberately red on all three and
+CI's own reading replaces the numbers above.
+
+Nothing else the compiler counts moves, and that was measured rather than
+argued. `KANSO_COUNTERS=1` on both binaries off the same staging reads
+`compile_alloc_bytes` 4,612,036, `compile_allocs` 27,395, `compile_peak_bytes`
+787,956, `compile_passes` 7, `compile_rounds` 47 and `compile_visits` 15,474 on
+each. The last two carry the correctness argument: an identical round count and
+an identical visit count mean the fixpoint did the same work in the same order,
+so inference reached the same answers. A reorder that had changed one would
+have moved them.
+
+No ratchet row. The compile goldens are already the objection to a revert —
+put the three computations back in front of the match and the rows disagree by
+the amounts above — which is how kanso#1382 through kanso#1387 shipped the same
+kind of reordering, none of which minted a row either.
