@@ -101,7 +101,9 @@ row came off, built and merged as kanso#1372, and the exhaustiveness row came
 off with kanso#1369. The book row came off with kanso#1412, which its own
 log entry calls the live remainder of that ruling. Two rows stand on
 2026-09-16: the explicit box, fully ruled once its `!` half went on
-2026-09-16, and the compile row's normalization. Neither waits on anything.
+2026-09-16, and the build hole, ruled 2026-08-24 and found off this list on
+2026-09-16. The compile row's normalization, ruled 2026-09-15, was built the
+same night (kanso#1439) and came off. Neither remaining row waits on anything.
 
 ### The box is explicit, an err is a value, and a bare err halts where it lands (2026-09-15)
 
@@ -119,17 +121,22 @@ the signature" paragraph, the last of the book ruling, moving with it. Its
 programmer's word"): `xs[i]!` reads as data, the 710 operator sites stand
 as written, and a miss halts at runtime. Nothing here waits on a ruling.
 
-### The compile row is normalized so the maps parse is not counted (2026-09-15)
+### A build hole is spelled `_`, and fills exactly once (2026-08-24)
 
-The live log's entry of that name. `pthread_getattr_np`'s parse of
-`/proc/self/maps` at Rust startup is 0.27% of the compile row and 100% of
-its movement between two binaries that do the same compiler work; its cost
-follows the binary's section layout, not the code under test. Clay: "this
-has nothing to do with compiler performance and obviously shouldn't be part
-of what we measure." Supersedes the 2026-09-03 NO EXCLUSION on this term.
-Owes: the normalization — count from the compiler's `main` rather than
-process entry (kanso#1234's dropped toggle is the starting point), or pin
-the layout — chosen by measurement, and the compile goldens re-sat on it.
+The archive entry of that name, filed by Clay in the developer chat on
+2026-08-24 — "build doesn't work this way, as i said many times. you don't
+supply 'none', you supply _" — and it says in its own text that the shipping
+ch03 sample does the thing he rejected. Twenty-three days later it still
+does: `docs/book/samples/ch03/knot.kso` reads `ada = person "ada" none`, and
+`tests/golden/micro/bare_field.kso` the same. Probed 2026-09-16: the compiler
+refuses the ruled spelling outright, `error[syntax]: unexpected trailing
+tokens` at `person "ada" _`, so this is a build and not a sample edit. Owes:
+the parser and checker taking `_` inside `build` as a field held open, the
+write-once fill (the archive entry: "then you can update with a real value
+exactly once"), the two samples and their goldens, and ch03's panel. This
+ruling was never on this list: the 2026-09-09 audit that seeded it probed the
+2026-08-29 sitting and called itself a floor, and this row is what the floor
+was missing.
 
 ## In flight
 

@@ -2798,3 +2798,31 @@ check unless `!` said otherwise, in which case the runtime enforces the
 promise. That is the whole failure model, and nothing about it waits on a
 ruling. The entry leaves the ledger in this commit. STATUS.md's row for the
 explicit box drops the clause that said its `!` half was unruled.
+
+## 2026-09-16 — a ruling from 2026-08-24 was never on the unbuilt list, and the sample it condemned still ships
+
+Clay, reading ch03's knot sample: "this is still out of date ... you use _
+not none." The archive's "gavel: a build hole is spelled `_`, and fills
+exactly once" (2026-08-24) records him saying the same thing then — "build
+doesn't work this way, as i said many times" — and records, in its own text,
+that the shipping ch03 sample does the thing he rejected.
+
+Read off main on 2026-09-16: `docs/book/samples/ch03/knot.kso` still reads
+`ada = person "ada" none`, so does `tests/golden/micro/bare_field.kso`, and
+the compiler refuses the ruled spelling — `person "ada" _` is `error[syntax]:
+unexpected trailing tokens`. Twenty-three days, ruled and recorded and
+unbuilt, and Clay found it by reading the book.
+
+**Why the list did not catch it.** STATUS.md's "Ruled, unbuilt" was seeded on
+2026-09-09 by probing the 2026-08-29 sitting, and its preamble said so: "the
+list is a floor, since the rest of the 2026-08-29 sitting was not audited."
+This ruling is from 2026-08-24, five days before the sitting the audit
+started at. The floor was honest about its edge and nobody walked past the
+edge. The row is on the list now, with the probe.
+
+**The other row moved the other way.** The compile-row normalization was
+ruled on 2026-09-15 at about 20:40Z and kanso#1439 landed it before 21:30Z
+the same night — the maps parse outside all three compile rows, measured,
+with a spec holding it there. Its row came off in this commit. A ruling
+built in under an hour beside one unbuilt for twenty-three days is the
+difference between a row on the list and a row off it.
