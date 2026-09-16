@@ -536,4 +536,8 @@
 # runs and round five read another, so the row is stable per binary and moves
 # between them; 13 in 132 million is 1.0e-7, against the 508 the same shape
 # cost under glibc, which is the one thing here that is an improvement.
-entry_instructions=131884284
+# 2026-09-16 (the declares scan asks once; kanso#1461): entry_instructions
+# 131,884,284 -> 131,883,938, a FALL of 346 (-0.0003%). A layout move, like the
+# module row beside it: `kanso check` never reaches the emitter this change
+# edits.
+entry_instructions=131883938

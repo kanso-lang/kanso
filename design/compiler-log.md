@@ -3893,6 +3893,35 @@ It is an exact vein of its own and NOT an objective term, the way `.text` is
 pinned under the 2026-09-05 ruling. The objective takes it when the model
 splits, which is the gavel's own build and not this one.
 
+**CI's own first sitting is 6,018,394, and the container is 22.3% BELOW it.**
+That is the opposite sign and twenty times the size of the 1.2% this box reads
+HIGH on the three compile rows, and the row's own composition is why: start-up
+is the loader, the prelude and the backend deciding what to emit for one
+`print`, and the loader's share belongs to the runner's glibc and rustc rather
+than to anything the compiler does. The compile rows are dominated by the
+compiler's own passes and this one is not, so the projection that holds for
+them does not hold here. CI's is the number the golden carries.
+
+**The row reproduces.** Four runs of one binary on this container all read
+4,919,980, which is the question the gate's case (2) asks and the reason to ask
+it before pinning anything. The reproduction matters more here than on the
+compile rows, because `kanso play` SPAWNS -- a clang feature probe, clang
+itself and the linker -- and a process that forks is a process whose own work
+could vary with what it forks into. Measured against that worry: with
+`--trace-children`, the three children of a `kanso build` count byte-identically
+across two runs (clang -cc1 532,991,920, the clang driver 31,648,129, ld
+87,120,997) while kanso's own process varies by 480. The anchor sits inside
+`kanso::main`, and four sittings say the variance does not reach it.
+
+**Three layout moves came with the change**, and they are small and do not
+move together: `compile_instructions` -194 (-0.0005%), `entry_instructions`
+-346 (-0.0003%), `library_instructions` -18 (-0.00001%). `kanso check` stops
+before codegen, so none of them is this change doing work differently; they are
+the move CLAUDE.md's note on that row describes, because src/codegen.rs IS the
+compiler and editing it moves the compiler's bytes and what sits around them.
+Three different magnitudes on three rows is the signature of layout rather than
+of work. Welfare holds at 69.75.
+
 Four things had to move with it, and three were found by specs rather than by
 hand, which is the point of them. `scripts/gates/library_box.sh` stages the new
 corpus. `scripts/trend_gate/trend_gate.kso` names the golden, because

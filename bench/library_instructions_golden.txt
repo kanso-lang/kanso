@@ -560,4 +560,8 @@
 # runs and round five read another, so the row is stable per binary and moves
 # between them; 13 in 132 million is 1.0e-7, against the 508 the same shape
 # cost under glibc, which is the one thing here that is an improvement.
-library_instructions=132025167
+# 2026-09-16 (the declares scan asks once; kanso#1461): library_instructions
+# 132,025,167 -> 132,025,149, a FALL of 18 (-0.00001%). A layout move, the
+# smallest of the three, and the three do not move together -- -194, -346 and
+# -18 -- which is the signature of layout rather than of work.
+library_instructions=132025149

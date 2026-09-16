@@ -60,4 +60,13 @@
 #
 # THE VALUE BELOW IS THE CONTAINER'S, and round one is deliberately red on it.
 # CI measures and its own reading replaces this line.
-startup_instructions=4919980
+# 2026-09-16 (CI's own first sitting): the row above was this container's
+# 4,919,980 and the runner reads 6,018,394, 22.3% higher. The container has
+# read about 1.2% high on the three compile rows all month, so the sign is the
+# other way here and the size is twenty times larger. That is what the row is:
+# start-up is the loader, the prelude and the backend deciding what to emit for
+# one `print`, and the loader's share of it belongs to the runner's glibc and
+# its rustc rather than to anything the compiler does. The compile rows are
+# dominated by the compiler's own passes and this one is not, which is why the
+# projection that holds for them does not hold here. CI's is the number.
+startup_instructions=6018394
