@@ -4333,3 +4333,37 @@ instruction. `tests/the_compile_path_hashes_with_a_fixed_seed.rs` now reads
 `src/` and fails on a std-hashed container outside a named exception, watched
 red on all three sites before it went green.
 
+
+**The ruling's two cost levers, censused: one is built and the objective cannot
+see it, the other is DECLINED before building.** STATUS.md's explicit-box row
+owes "an inlined bind for a pure index read and bound discharge for a literal
+index into a known-length list, each measured". Both were named on 2026-09-16,
+the same day as the respell, and the respell is what decides them.
+
+LEVER ONE is built here. `emit_call_full` matches a `.>` whose subject is a
+strict index and emits the read, the callback and the settle inline: the bind
+node, its closure and the box under it are never constructed. It fires on ten
+sites in the tree — four book samples, six goldens — and on five lines of
+`scripts/welfare/welfare.kso`. Zero in `lib/`, `hako/` or `bench/`. Nothing the
+objective measures writes `xs[i]! .>`, so the emission is right and no counter
+in welfare can price it. It stays because it is the correct shape for the
+construct, not because a row moved.
+
+LEVER TWO reaches eighteen sites and not one of them is hot. Nine index a list
+literal directly, nine index a name bound to one, and every one is a sample or
+a golden demonstrating a MISS: `flavors[9]`, `xs[9]`, `prices[9]`, `xs[5]`,
+`[10 20 30][9]`. The benchmarks' literal indexes are `xs[1]`, `es[1]` and
+`bulk[100000]`, whose containers are parameters and built lists — no length the
+checker could know. So discharge would add a length-tracking analysis to the
+checker, paid for on all three compile rows, to fold a branch in nine programs
+that run once. The objective reads that as a fall with no term to set against
+it. Declined, before building.
+
+Why both come out this way is the same fact. The respell took the shipped
+corpus from 570 bang-index sites to five: `lib/` 107 to 0, `hako/` 55 to 1,
+`bench/` 17 to 0, `scripts/` 391 to 7, and three of the eight survivors are
+comments. That is the ruling's "no bang where the bound is provable" half doing
+its work, and it removed the construct the levers were written to optimise. The
+levers were sized against the corpus as it stood before the respell they
+shipped beside.
+
