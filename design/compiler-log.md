@@ -4467,3 +4467,39 @@ the first half of this entry is what that costs: a wrong answer, silently.
 Nothing here blocks the respell — every site in this tree and in kq is spelled
 so that no box reaches a dispatch — so this is a hole in the checking rather
 than in the change. It stays OPEN.
+
+## 2026-09-16 — the inlined bind for a pure index read has nothing to inline
+
+**DECLINED by counting, before building.** STATUS.md's explicit-box row owes
+two cost levers on top of the `!` respell, and the first is "an inlined bind
+for a pure index read". The respell is what takes its surface away, so the
+lever has to be priced after it rather than before.
+
+Counted on the respelled tree (kanso#1449's branch, c332f9c0), the shape
+`name[...] .>` — an index read whose answer is bound — appears **eleven times
+in the whole repository**: eight in `scripts/`, two in micro fixtures
+(`a_strict_index_then_a_field`, `not_equal`), one in `hako/hako/install.kso`.
+There are **none in `lib/` and none in `bench/`**.
+
+`lib/` carries the `.>` bind seven times in total, five in `lib/os` and two in
+`lib/net`, and not one of the seven follows a `]`. `lib/json` — the decoder
+the run program is built from, and the code the objective's
+`run_instructions` term measures — carries no `.>` at all. Its index reads
+are bare: `cs[p]` and `hex_byte_table[n + 1]`, feeding the dispatch that
+kanso#1398 taught to take a raw byte.
+
+The run program reaches one `!` call site, `os/read_file!` at
+`bench/runbench/main.kso:4`, and it runs once at startup to read the input.
+The three `] .>` lines under `bench/runbench` bind list literals in the pend
+and deep benchmark bodies, which is a different shape: the `]` there closes
+an argument, not an index.
+
+So the lever cannot move the objective's run term, because the workload that
+term measures holds none of the construct the lever speeds up. The nine live
+sites outside the fixtures are tooling, each entered a handful of times in a
+script run. The second lever, bound discharge for a literal index into a
+known-length list, is untouched by this and still owes its measurement.
+
+Recorded rather than built. Counted with
+`grep -rnoE '[A-Za-z_][A-Za-z0-9_]*\[[^]]*\][[:space:]]*\.>' --include=*.kso`,
+which any later session can re-run to check the number has not moved.
