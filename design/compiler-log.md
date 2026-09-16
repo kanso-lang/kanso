@@ -3703,6 +3703,23 @@ refused through an import and run direct. A field read of an err stays the
 runtime's sentence on every route, and `accessor_hop_is_silent` keeps its
 trail.
 
+The harness found a third. Part 3 refuses `either? here (names_any? src
+needles (at + 1))` in the browser differential's `hunted?`, since the
+nested call can raise, and the entry's shape for that is to bind first:
+`rest = names_any? ...` then `either? here rest`. The demand analysis
+defers `rest`, because `either?`'s first arm never asks for it, and
+`either? _ answer` hands the cell back unforced. That cell evaluates to
+the next call's `rest`, which is another cell. `k_force_slow` stored what
+a cell evaluated to and `k_force` tested the tag once, so the dispatcher
+for `put_unless acc path src skip` was handed a cell, tested it against
+`true` and `false`, and matched nothing; the harness died on every corpus
+directory, and the pinned compiler 39442a53 does the same on the reduced
+program, so this is main's too. The interpreter's force has always walked
+the chain. `k_force_slow` forces what the cell answered before it stores
+it, and the page's `forced` does the same before the write-back.
+`a_deferred_answer_that_defers_again_forces_to_a_value` pins it on all
+three engines (ratchet row `force_chain`).
+
 ### What moved, and which way
 
 Every runtime allocation vein and the lazy tier agree with their goldens:
