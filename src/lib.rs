@@ -2950,6 +2950,12 @@ fn used_quals(program: &ast::Program, quals: &mut crate::hash::Set<String>) {
     // itself reads as unused. Every run of name characters is a name, and the
     // ones holding a slash are the qualified ones.
     fn mark(name: &str, quals: &mut crate::hash::Set<String>) {
+        // Every identifier in every body reaches this, so the common name --
+        // one holding no slash, and so no qualifier anywhere inside it --
+        // answers on one scan and never builds the iterator below.
+        if !name.contains('/') {
+            return;
+        }
         for part in name.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '/')) {
             if let Some((qual, _)) = ast::split_module(part) {
                 quals.insert(qual.to_string());
