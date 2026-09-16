@@ -3676,3 +3676,86 @@ No ratchet row. The compile goldens are already the objection to a revert —
 put the three computations back in front of the match and the rows disagree by
 the amounts above — which is how kanso#1382 through kanso#1387 shipped the same
 kind of reordering, none of which minted a row either.
+## 2026-09-16 — gavel: two welfares and a meta-welfare over them, and the floor re-ratchets
+
+Clay ruled the ledger's "What the compile term counts once codegen is in it"
+the same day it was filed, and ruled it by supplying the framework rather than
+picking among the entry's options. The entry had offered his own proposal back
+to him as an option 3 to choose; he corrected that: "what do you mean my call
+in the shape of the fix. I just discussed with you a general framework for
+updating the welfare metrics."
+
+**The ruling.** The objective becomes three numbers.
+
+    development welfare   the edit-test loop: front-end cost (`kanso check`,
+                          which `kanso test` runs on every invocation),
+                          dev-tier codegen (`-O0`), interpreter start-up,
+                          interpreter speed, interpreter memory
+    production welfare    the binary: native run instructions, native run
+                          memory, release-tier codegen (`-O3 -flto`)
+    meta-welfare          a function of the two, and the number CI gates on
+
+His framing, verbatim: "if we're optimizing for production performance (CPU
+and memory) and not compile performance, then compile performance
+(speed/instructions and to some extent memory) becomes more like a very
+dialed-down input to the overall welfare. then we have a separate welfare for
+the interpreted version, where start-time is vastly more important than speed
+which is more important than memory usage. of course sometimes these welfare
+metrics themselves will conflict, so then you need something like a
+'meta-welfare' which is a function of both, because sometimes it will make
+sense to do a change which makes development speed much better in exchange for
+a very small production performance cost, or vice versa."
+
+**Why the split, and not a re-weighting.** Interpreter start-up is paid on
+every test run and never once in production. The same microsecond is enormous
+in one context and free in the other, and no single scalar can hold both
+readings of it. That dimension is unexpressible in today's model and is the
+reason the split earns its cost.
+
+**One correction to the proposal as stated, and it was made in the chat before
+the ruling.** Compile cost does not dial DOWN, it MOVES. `kanso test` runs the
+front end on every invocation, so front-end cost sits beside interpreter
+start-up as a first-class DEVELOPMENT term. Production welfare carries codegen
+rather than checking.
+
+**What it closes.** The entry asked which of the two clang tiers welfare
+should price. Under two welfares there is nothing to pick: dev-tier codegen is
+a development term, release-tier codegen is a production term, both counted
+where their cost is paid.
+
+**Three things the entry raised that were never Clay's to settle, and are
+recorded here as consequences rather than decisions.**
+
+- **One floor, on the meta.** This follows from the standing rule that the sum
+  is the objective and the terms are diagnostics. Ratcheting the sub-scores
+  separately would re-enable the part-against-whole optimisation that rule
+  exists to stop. Filing it as an open question was the chat's error.
+- **Whether the meta layer saturates is the implementer's.** The 2026-08-25
+  gavel already says so in its own words: "Weights and satiation for the
+  measured terms are the holder's to price from evidence... that is
+  implementation under the ledger's own charter, and it does not come back
+  here." Noted for the pricing: `a·W_prod + b·W_dev` with a linear meta is
+  algebraically one flat term list, so a saturating meta is what makes the
+  composition more than arithmetic — a sub-welfare near its ceiling then earns
+  little from further wins, which is how the model says "the interpreter is
+  fast enough now."
+- **Start-up reuses count-from-`main`.** Interpreter start-up is the stretch of
+  execution normalised out of the compile row on 2026-09-15; measuring it is
+  not a contradiction, since noise inside one measurement is the object of
+  another. The counter counts kanso's own start-up work and normalises the
+  loader's, which is the machinery kanso#1439 shipped.
+
+**THE FLOOR RE-RATCHETS.** Clay: "yeah you've got to re-ratchet." The
+changeover is a model correction, not a rebase recorded and left: the meta
+floor is set from the rescored model in the same change, exactly as the
+2026-08-25 gavel specified for the last model correction. No change rides
+across the changeover holding a score it earned under the old model.
+
+**What cloud builds.** The counters for the development side, which do not
+exist yet — interpreter start-up, interpreter speed, interpreter memory, and
+dev-tier codegen cost — and release-tier codegen cost on the production side.
+`bench/objective_sources.txt` gains every one of them in the same commit that
+adds them, with `tests/the_objective_reads_what_the_gate_watches.rs` replaying
+the file, because this model's PROSE has gone stale twice while the file never
+did. Weights and satiations priced from evidence. The entry leaves the ledger
+with this commit and STATUS.md carries the build.
