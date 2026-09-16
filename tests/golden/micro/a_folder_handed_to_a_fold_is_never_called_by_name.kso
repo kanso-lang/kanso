@@ -1,0 +1,58 @@
+# A folder handed to `fold` is never called by name, so a walk asking what
+# every call site hands over at a parameter finds no call site and answers yes
+# for free. That answer marks the folder's first parameter an accumulator it
+# may write through. `escapes_as_value` exists to refuse exactly this, and it
+# lived in `callers_hand_over` while the grant was written out a second time in
+# `param_is_linear`, which never asked. Until 2026-09-16 native was wrong on
+# all three accumulator kinds and the oracle was right on all three:
+#
+#     kind    native                         the oracle
+#     map     1 11                           1 10
+#     list    [1 9 8] [1 9 8]                [1 9] [1 8]
+#     bytes   [120 121 122] [120 121 122]    [120 121] [120 122]
+#
+# The map line reads 1 rather than 11 in its first column because that answer
+# is read out before the second fold runs; the write lands in the seed either
+# way, which the second column shows.
+#
+# THE SHAPE IS TWO FOLDS OVER ONE SEED. The caller still holds the seed when
+# the second fold starts, so a write through the first fold's accumulator lands
+# in the second fold's seed too, and both answers read as the last write.
+#
+# AN INLINE LAMBDA WAS NEVER WRONG. The fold's own arm asks whether the seed is
+# unique before licensing a write inside a lambda, and a lambda is not a group
+# with parameters to mark. Only the named folder reached the grant by the other
+# route, which is why the lambda pair is here: without it this fixture would
+# pass under a licence that had simply been switched off.
+#
+# ALL THREE KINDS ARE HERE because the grant is per parameter rather than per
+# write, so one grant covers `put`, `push` and `append` alike.
+import "std/list"
+import "std/text"
+
+fn put_step m e
+  put m "k" (m["k"] + e)
+
+fn push_step l e
+  push l e
+
+fn append_step b e
+  append b e
+
+pub play =
+  seed = { "k":0 }
+  start = [1]
+  raw = text/bytes "x"
+  held = { "k":0 }
+  first = (list/fold [1] seed put_step)["k"]
+  second = (list/fold [10] seed put_step)["k"]
+  grown = list/fold [9] start push_step
+  again = list/fold [8] start push_step
+  wide = list/fold ["y"] raw append_step
+  twice = list/fold ["z"] raw append_step
+  one = (list/fold [1] held (m e -> put m "k" (m["k"] + e)))["k"]
+  ten = (list/fold [10] held (m e -> put m "k" (m["k"] + e)))["k"]
+  print "map: {first} {second}"
+  print "list: {grown} {again}"
+  print "bytes: {wide} {twice}"
+  print "lambda: {one} {ten}"
