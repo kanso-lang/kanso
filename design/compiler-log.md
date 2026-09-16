@@ -4646,6 +4646,11 @@ the iterator. CI's round two, all three rows against this branch's base:
 `compile_allocs` held at 27,395 and `compile_memory` is byte-identical; the
 emitted, machine-code and every runtime vein agreed in both rounds.
 
+The three rows land at `compile_instructions` 40,830,719,
+`entry_instructions` 144,799,835 and `library_instructions` 145,482,390.
+All three rise, and the rise is what the qualified-name scan costs after the
+early-out has taken back three quarters of it.
+
 **The local A/B tracked CI to 0.77 per cent.** This container refuses to
 compare the absolute rows — other silicon, other glibc — so the fix was priced
 here as a three-point delta on one box, same path, three builds: pre-fix
