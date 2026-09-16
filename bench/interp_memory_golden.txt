@@ -1,0 +1,40 @@
+# What an INTERPRETED run holds, and the traffic it makes holding it.
+#
+# `KANSO_COUNTERS=1 kanso run interp_corpus --interp`, read off the same
+# counting allocator the compiler's own row reads. The interpreted engine is a
+# deployment rather than a stage of one -- the program is parsed, inferred and
+# then EXECUTED in this process, and nothing is emitted -- so these two rows
+# cover the front end and the interpreter together, which is what an
+# interpreted run actually costs. The compile veins cannot see either number:
+# they run `kanso check`, which stops before anything is executed.
+#
+# TWO DIMENSIONS, NOT ONE. interp_allocs is TRAFFIC, what the run asked the
+# allocator for and gave back; interp_peak_bytes is RESIDENCY, the most it held
+# at once. A thunk allocated and forced inside one beat moves the first and not
+# the second, which is why both are here.
+#
+# BOTH BELONG TO THE RUSTC THAT BUILT THE COMPILER, the way compile_peak_bytes
+# does: a HashMap's growth schedule and a Vec's doubling are the standard
+# library's, and the interpreter is Rust. So the rows are exact for the host
+# the measured-on line names and any other host refuses to compare rather than
+# fuzzing. Clay ruled tolerance bands away on 2026-08-24.
+#
+# WHY IT EXISTS. Clay ruled on 2026-09-16 that the objective becomes a
+# development welfare, a production welfare and a meta over them, and named the
+# interpreted engine's own order: "start-time is vastly more important than
+# speed which is more important than memory usage." This is the last of the
+# three. It is an exact vein of its own and not yet an objective term, the way
+# `.text` is under the 2026-09-05 ruling.
+#
+# 2026-09-16 (the vein opens): three runs of one binary read these two rows
+# identically before the fixed-seed change and identically after it, which is
+# the check on what that change touched -- a probe sequence moves how much work
+# a table does and not how many bytes it asks for. The instruction row beside
+# this one moved 10.40% across the same change and these did not.
+#
+# The rows below are THIS CONTAINER's, rustc 1.94.1 against the runner's
+# 1.98.1, so the gate refuses to compare them here. Round one is deliberately
+# red and CI's own reading is what stands.
+interp_allocs=5313431
+interp_peak_bytes=933202
+# measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

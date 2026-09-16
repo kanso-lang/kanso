@@ -402,6 +402,20 @@ jobs:
         if: always()
         continue-on-error: true
         run: sh scripts/gates/library_instructions.sh
+      # The interpreted engine's own two rows, and the first here that count a
+      # program EXECUTING. `kanso run --interp` parses, infers and then runs in
+      # one process, so nothing above can see either number: every gate beside
+      # them runs `kanso check`, which stops before anything executes.
+      - name: interpreted run instructions
+        id: interp_ir
+        if: always()
+        continue-on-error: true
+        run: sh scripts/gates/interp_instructions.sh
+      - name: interpreted run memory
+        id: interp_memory
+        if: always()
+        continue-on-error: true
+        run: sh scripts/gates/interp_memory.sh
       - name: compile memory
         id: compile_memory
         if: always()
@@ -509,6 +523,8 @@ jobs:
                       "compile instructions:${{ steps.compile_ir.outcome }}" \
                       "entry instructions:${{ steps.entry_ir.outcome }}" \
                       "library instructions:${{ steps.library_ir.outcome }}" \
+                      "interpreted run instructions:${{ steps.interp_ir.outcome }}" \
+                      "interpreted run memory:${{ steps.interp_memory.outcome }}" \
                       "encode counters:${{ steps.encode.outcome }}" \
                       "wide counters:${{ steps.wide.outcome }}" \
                       "pending-cell counters:${{ steps.pend.outcome }}" \

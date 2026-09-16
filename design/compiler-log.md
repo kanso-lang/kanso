@@ -3619,6 +3619,83 @@ read another, so the row is stable for a given binary and moves between them.
 Under glibc the same shape cost 508 instructions and the header carries seven
 readings and four distinct values for it. At 13 it is 39 times smaller, which
 is the one part of this that got better.
+## 2026-09-16 — the interpreter hashed against an attacker it does not have
+
+Clay's gavel that morning ordered three counters for the interpreted engine and
+named their order in his own words: "start-time is vastly more important than
+speed which is more important than memory usage." Start-up was measured first
+and is kanso#1461. This is the other two, and opening them found something.
+
+**The corpus builds its own input.** `bench/interp_corpus` interpolates a
+document of 220 objects and decodes it six times, so the workload is a property
+of the corpus alone. Every other benchmark in this tree reads
+`bench/large.json`, and a row that reads a file is a row that moves when the
+file does.
+
+**The anchor is the interpreter's own thread, not `kanso::main`.** `kanso run
+--interp` pins a one-gigabyte stack and hands the program to a thread of its
+own, so the main thread holds the front end and 1.8% of the run: 48,026,664
+against 2,700,128,254 for the whole process on the first sitting.
+`run_interpreted_on_stack` is that thread's entry, it is not recursive, and it
+excludes the loader for the same reason the compile rows exclude it.
+
+## The vein opened onto a reproduction failure
+
+Two runs of one binary over one corpus read 2,651,460,189 and 2,648,375,305 —
+3,084,884 apart, 0.116% — while the front end's own anchor read 48,026,664
+twice in the same pair of runs. One row, one value is the 2026-09-05 ruling, so
+that halts the vein and is hunted rather than keyed.
+
+It took one grep. `src/eval.rs` declared the interpreter's tables with
+`std::collections`: `fns` and `types`, the `knots` cell map, the typeset cache,
+and the two cycle-guard sets under `values_equal` and `render`. `RandomState`
+draws a fresh key from the OS on every process, so each run probes those tables
+in a different order and does a different amount of work reaching the same
+answer.
+
+That is exactly the defect kanso#1449 cost three CI rounds, two published
+corrections and a withdrawn escalation to find on the compile path.
+`tests/the_compile_path_hashes_with_a_fixed_seed.rs` exists to stop it
+recurring, and it EXCUSED this file, with this reason:
+
+    the interpreter. No compile golden runs a program, and the interpreter's
+    own cost is not counted by any exact vein.
+
+Both halves were true when they were written and the second half is what this
+change falsifies. The excuse is gone, `src/eval.rs` is spelled `crate::hash`,
+and the spec covers the file that had the defect.
+
+## It is a fall as well as a fix
+
+Three consecutive runs read 2,375,580,224. Against the higher of the two
+disagreeing readings that is 275,879,965 fewer instructions, a fall of 10.40%:
+SipHash-1-3 was hashing every name the interpreter looked up, on a path where
+the keys are the program's own identifiers and there is no adversary. The
+argument `src/hash.rs` makes for the front end held for the interpreter the
+whole time and nobody had made it.
+
+The two memory rows read identically before the change and after it —
+`interp_allocs` 5,313,431 and `interp_peak_bytes` 933,202 — which is the check
+on what it touched. A probe sequence moves how much work a table does and not
+how many bytes it asks for.
+
+## What the veins are and are not
+
+`bench/interp_instructions_golden.txt` and `bench/interp_memory_golden.txt` are
+exact veins of their own and NOT objective terms, the way `.text` is under the
+2026-09-05 ruling. The objective takes them when the model splits, which is
+that gavel's own build.
+
+The memory vein covers the front end and the interpreter together, on purpose:
+the interpreted engine is a deployment rather than a stage of one, and what an
+interpreted run costs includes deciding what to run. The instruction vein
+excludes the front end, because it is the SPEED row and the front end has a
+speed row of its own.
+
+The rows recorded are this container's. It runs rustc 1.94.1 against the
+runner's 1.98.1, so both gates refuse to compare here; round one is
+deliberately red on both and CI's own reading is what stands.
+
 ## 2026-09-16 — gavel: two welfares and a meta-welfare over them, and the floor re-ratchets
 
 Clay ruled the ledger's "What the compile term counts once codegen is in it"
