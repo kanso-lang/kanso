@@ -1,0 +1,6 @@
+import "std/text"
+
+broken = text/split "a" ""
+
+effect 5 .> (n -> print "got {n}")
+  >> effect broken .? (e -> "rescued {e.reason}") .> print

@@ -194,16 +194,23 @@
 # indexbench 146 -> 147 have no captured lambda and show the twin's call alone.
 # Lines rise by the twin's body plus one per capture read. Banked as the price
 # of runbench -1.6751% and jsonbench -2.9371% on the container.
-encodebench defines=187 calls=1622 branches=1003 lines=11196
-oneshot defines=143 calls=1200 branches=783 lines=9084
-basket defines=144 calls=1259 branches=809 lines=8108
-widebench defines=203 calls=1810 branches=1094 lines=12181
-deepbench defines=118 calls=827 branches=596 lines=6013
-escapebench defines=49 calls=107 branches=121 lines=1567
-pendbench defines=133 calls=1183 branches=680 lines=7062
-scanbench defines=331 calls=3234 branches=2134 lines=19842
-indexbench defines=55 calls=147 branches=136 lines=1881
-digestbench defines=199 calls=1516 branches=924 lines=10139
-readbench defines=63 calls=163 branches=153 lines=2183
-livebench defines=144 calls=1224 branches=797 lines=9201
-runbench defines=594 calls=5895 branches=3446 lines=34846
+# 2026-09-15 (a bare err is data; the arm skip retires): every program loses
+# one define, the twin's; the two own-err call sites are gone from every arm
+# that admits an err, so calls fall by the count of those arms -- runbench
+# 5,895 -> 5,892, widebench 1,810 -> 1,807, encodebench 1,622 -> 1,619,
+# oneshot 1,200 -> 1,197, readbench 163 -> 162, livebench 1,224 -> 1,221,
+# indexbench 147 -> 146 and the rest by one -- with branches and lines falling
+# by the twin's body. Banked.
+encodebench defines=185 calls=1632 branches=1011 lines=11231
+oneshot defines=141 calls=1202 branches=784 lines=9090
+basket defines=143 calls=1256 branches=804 lines=8080
+widebench defines=201 calls=1815 branches=1097 lines=12198
+deepbench defines=117 calls=826 branches=595 lines=6002
+escapebench defines=48 calls=106 branches=120 lines=1556
+pendbench defines=132 calls=1180 branches=675 lines=7034
+scanbench defines=332 calls=3245 branches=2140 lines=19956
+indexbench defines=53 calls=136 branches=129 lines=1824
+digestbench defines=197 calls=1505 branches=917 lines=10084
+readbench defines=62 calls=154 branches=146 lines=2136
+livebench defines=142 calls=1234 branches=805 lines=9236
+runbench defines=597 calls=5940 branches=3466 lines=35087

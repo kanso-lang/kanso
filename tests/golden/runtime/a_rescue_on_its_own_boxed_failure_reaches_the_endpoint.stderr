@@ -1,0 +1,2 @@
+error[endpoint]: unhandled err reached the executor: "mine"
+  born in mine at a_rescue_on_its_own_boxed_failure_reaches_the_endpoint.kso:10

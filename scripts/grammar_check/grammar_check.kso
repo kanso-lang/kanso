@@ -185,7 +185,8 @@ fn seeking _ _ at true
   at
 
 fn seeking ends line at false
-  reached ends line at (regexp/match_at ends line at)
+  m = regexp/match_at ends line at
+  reached ends line at m
 
 fn reached ends line at none
   closing ends line (at + 1)

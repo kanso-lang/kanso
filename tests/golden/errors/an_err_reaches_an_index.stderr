@@ -1,0 +1,4 @@
+error[exhaustive]: this can be an err and an index wants a value — dispatch on it first with an `(err _)` arm (in an_err_reaches_an_index.kso)
+  --> tests/golden/errors/an_err_reaches_an_index.kso:9:21
+   9 | first = [10 20 30][(slot 0)]!
+                           ^

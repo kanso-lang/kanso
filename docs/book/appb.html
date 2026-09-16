@@ -42,7 +42,7 @@ extra_css: /book/book.css
 
 <p>kanso keeps its standard library small enough to hold in your head, and it draws one line through it. six names are <em>ambient</em>—<code>if</code>, <code>print</code>, <code>push</code>, <code>put</code>, <code>length</code>, and <code>entries</code> resolve in any file with no import, because nearly every program touches them. everything else arrives through a std module: <code>import "std/math"</code> gives you <code>math/sqrt</code>, <code>import "std/list"</code> gives you <code>list/map</code>, and the qualified spelling in your source is the same spelling you will find in the entry headers below. the functions come in two shapes. most are ordinary pure functions—<code>list/sort</code> takes a list and returns a sorted one, <code>math/sqrt</code> takes a number and returns its root, with no trace left behind. eight are <em>descriptions</em>: <code>print</code>, <code>os/read_file</code>, <code>io/write</code>, <code>os/write_file</code>, <code>os/args</code>, <code>io/stdin</code>, <code>time/sleep</code>, and <code>math/random</code> don't perform i/o when evaluated—they return a value describing i/o that the runtime performs later (chapter 05). this appendix marks those <span class="desc-tag">description</span> and treats the rest as plain functions.</p>
 
-<p>every function here follows the same failure convention. an <code>err</code> or <code>none</code> handed in passes straight through, unlooked-at, so failures ride the railway from chapter 04 without special cases. a genuine type mismatch—<code>list/sum</code> on a list containing a string, <code>math/sqrt</code> on a record—is a program bug, not a value, and raises a runtime error at the point of the call. each entry below states both: what the function does, and what it does when the input is wrong. every example was run through the interpreter; every output block is copied from the machine, and the sources live under <code>samples/appb/</code>.</p>
+<p>every function here follows the same failure convention. an <code>err</code> or <code>none</code> the checker can see arriving is refused at the call, the way chapter 04 describes; one it cannot see passes straight through, unlooked-at, so a failure still rides out to whoever asks for it. a genuine type mismatch—<code>list/sum</code> on a list containing a string, <code>math/sqrt</code> on a record—is a program bug, not a value, and raises a runtime error at the point of the call. each entry below states both: what the function does, and what it does when the input is wrong. every example was run through the interpreter; every output block is copied from the machine, and the sources live under <code>samples/appb/</code>.</p>
 
 <div class="builtin-index" aria-label="alphabetical index">
 <a href="#b-args"><code>os/args</code></a>
@@ -52,6 +52,7 @@ extra_css: /book/book.css
 <a href="#b-chars"><code>text/chars</code></a>
 <a href="#b-concat"><code>text/concat</code></a>
 <a href="#b-entries"><code>entries</code></a>
+<a href="#b-effect"><code>effect</code></a>
 <a href="#b-find2"><code>text/find2</code></a>
 <a href="#b-from_code"><code>text/from_code</code></a>
 <a href="#b-if"><code>if</code></a>
@@ -136,7 +137,7 @@ word <span class="o">=</span> <span class="f">text/trim</span> <span class="s">"
   <div class="code-output">
     <div class="code-panel-title">kanso run parse_fail.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: ""seven" is not an integer"
-  born in text/to_int at std/text/text.kso:89</code></pre>
+  born in text/to_int at std/text/text.kso:92</code></pre>
   </div>
 </div>
 
@@ -370,7 +371,7 @@ zero non-positive</code></pre>
 
 <h2>effects</h2>
 
-<p>the seven functions in this group return <code>io</code> values—descriptions of work, not results. evaluating them performs no i/o; they build a value the runtime executes afterward, which is why the same program can be run, planned with <code>--plan</code>, or fed to a scripted executor in a test (chapter 05). <code>&gt;&gt;</code> sequences two descriptions that pass no data; <code>.&gt;</code> pipes the value a description will yield into a function.</p>
+<p>the eight functions in this group return <code>io</code> values—descriptions of work, not results. evaluating them performs no i/o; they build a value the runtime executes afterward, which is why the same program can be run, planned with <code>--plan</code>, or fed to a scripted executor in a test (chapter 05). <code>&gt;&gt;</code> sequences two descriptions that pass no data; <code>.&gt;</code> pipes the value a description will yield into a function.</p>
 
 <h3 id="b-args"><code>os/args</code> <span class="desc-tag">description</span></h3>
 <p class="builtin-sig"><code>os/args → io (yields string[])</code></p>
@@ -396,7 +397,7 @@ zero non-positive</code></pre>
 
 <h3 id="b-wrap_err"><code>wrap_err</code></h3>
 <p class="builtin-sig"><code>wrap_err reason err → err</code></p>
-<p>a new <code>err</code> carrying your reason, with the one it wraps kept as its <em>cause</em>. this is the only place an <code>err</code> is an ordinary argument instead of something that propagates: everywhere else, handing an <code>err</code> to anything yields that <code>err</code> unchanged, which is why <code>err e</code> cannot wrap and this function exists. the endpoint report prints the chain, each link keeping its own birthplace, so re-raising under a name of your own never loses where the trouble started. the err it wraps is <code>std/text</code>'s here, and it has to be somebody else's: an arm cannot see an err its own hako raised, so wrapping is what you do to a failure that reached you from elsewhere &mdash; your own only bubble:</p>
+<p>a new <code>err</code> carrying your reason, with the one it wraps kept as its <em>cause</em>. this is the only place an <code>err</code> is an ordinary argument instead of something that propagates: everywhere else, handing an <code>err</code> to anything yields that <code>err</code> unchanged, which is why <code>err e</code> cannot wrap and this function exists. the endpoint report prints the chain, each link keeping its own birthplace, so re-raising under a name of your own never loses where the trouble started. the err it wraps is <code>std/text</code>'s here, which is the usual shape: wrapping is what you do to a failure that reached you from elsewhere, so the report can say what you were doing when it arrived:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">wrap_err.kso</div>
@@ -417,7 +418,26 @@ zero non-positive</code></pre>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: wrap_err/config_bad "app.conf"
   born in relabel at wrap_err.kso:10
   caused by: "invalid utf-8"
-  born in text/utf8 at std/text/text.kso:92</code></pre>
+  born in text/utf8 at std/text/text.kso:95</code></pre>
+  </div>
+</div>
+
+<h3 id="b-effect"><code>effect</code> <span class="desc-tag">description</span></h3>
+<p class="builtin-sig"><code>effect value → io (yields value)</code></p>
+<p>a description that yields the value it was handed. it builds the box by hand, so a chain can start from a plain value and a function that sometimes has work to describe and sometimes has an answer ready can return a description either way. a failure handed to it is content: with <code>broken</code> holding a failure <code>std/text</code> raised, <code>effect broken</code> is a description that yields the <code>err</code>, which the <code>.?</code> step sees and the <code>.&gt;</code> step skips, the same as a failure a read raised. the rescue licence is foreign-only, so a box built over this file's own <code>err</code> hands it on to the endpoint instead. the value stays boxed until a chain word opens it, so <code>effect 5 + 1</code> is refused at compile time.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">effect.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/text"</span>
+
+broken <span class="o">=</span> <span class="f">text/split</span> <span class="s">"a"</span> <span class="s">""</span>
+
+<span class="f">effect</span> <span class="n">5</span> <span class="o">.&gt;</span> (n <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"got <span class="i">{n}</span>"</span>)
+  <span class="o">&gt;&gt;</span> <span class="f">effect</span> broken <span class="o">.?</span> (e <span class="o">-&gt;</span> <span class="s">"rescued <span class="i">{e.reason}</span>"</span>) <span class="o">.&gt;</span> <span class="f">print</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run effect.kso</div>
+    <pre><code>got 5
+rescued split needs a separator; text/chars answers the characters</code></pre>
   </div>
 </div>
 

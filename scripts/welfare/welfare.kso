@@ -459,6 +459,9 @@ unmeasured = """
   it and write the reading into bench/welfare_floor.json's baseline.
 """
 
+fn against _ e@(err _)
+  e
+
 fn against now held
   base = held["baseline"]!
   missing = unbaselined base

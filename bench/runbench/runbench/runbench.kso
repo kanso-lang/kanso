@@ -94,10 +94,19 @@ fn encoded doc n sofar
 fn digested raw n
   length (sha256/hex (text/bytes (text/slice raw 1 n)))
 
+# `decoded` can answer the decode's err, and `+` wants a value, so the sum
+# dispatches on it first.
+fn summed e@(err _) _
+  e
+
+fn summed a b
+  a + b
+
 fn tally raw doc a b
-  bulk = decoded raw decode_rounds 0 + encoded doc encode_rounds 0
+  bulk = summed (decoded raw decode_rounds 0) (encoded doc encode_rounds 0)
   shapes = a + b + escape/total escape_lines + index/total index_chars
-  bulk + shapes + split/total split_chars + digested raw digest_bytes
+  scanned = split/total split_chars
+  bulk + shapes + scanned + digested raw digest_bytes
 
 fn shaped raw doc a
   pend/total pend_cards .> (b -> io/write "runbench {tally raw doc a b}\n")

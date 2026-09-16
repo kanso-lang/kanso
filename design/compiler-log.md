@@ -3452,6 +3452,416 @@ STATUS.md's row comes off when this lands, which is the chat's. The
 `.rodata` pin is a measured option, recorded above, and not a question the
 ledger needs.
 
+## 2026-09-15 — the box built by hand: `effect v` on all three engines
+
+The first slice of the 2026-09-15 gavel "the box is explicit, an err is a
+value, and a bare err halts where it lands", part 1: the constructor. The
+word is the ledger's Open recommendation, `effect`, the type's own name in
+prefix position, and the build does not wait on the entry.
+
+**What it is.** `effect v` is an ambient one-argument builtin that answers a
+description settling to `v` when it runs. It is value-shaped in its argument
+and box-shaped in its answer, so `effect 5 .> f` hands `f` a 5, and
+`effect (err "bad")` is a box whose content is the failure: `.?` sees it,
+`.>` skips it, `.!` annotates it, the same three doors a failure that a read
+raised has. A box answered by `effect` is refused wherever a value is wanted,
+the way a box a library function answers already was: `effect 5 + 1`,
+`length (effect [1 2])` and a call of a function whose tail is the
+constructor all read the effect diagnostic at check.
+
+**Where it lives.** One arm in each engine and one in the checker. The
+interpreter's `Desc` gains a `Settled(Value)` variant, executed by handing
+the value back and rendered `settled` in `--plan`; the page runs the same
+interpreter through the generic builtin bridge, so it needs nothing of its
+own. Native gains `k_settled`, description tag 31, with `k_exec` answering
+`d->x` for it, and the emitter calls `k_b_effect` like any other builtin. The
+checker's box question, `yields_box`, answers yes for an application of the
+unshadowed name before its short circuit, because a hand-built box is the one
+case where a program with no boxed declaration still holds a box; and `infer`
+gives the builtin the description bit and nothing else, since the argument's
+failure bits are held as content rather than carried.
+
+**Watched red.** The micro fixture `the_box_built_by_hand` starts a chain
+from a value, from a failure through `.?`, from a failure through `.!` then
+`.?`, holds a box through a function and an interpolation, and skips a `.>`
+on a boxed failure; native and the interpreter agree byte for byte. The ratchet
+row `hand_box` mutates the interpreter to hand the value over unboxed, and the
+micro corpus goes red. The errors fixture
+`a_hand_built_box_where_a_value_is_expected` pins the three refusals on both
+the direct and the imported path.
+
+**What it costs.** No runtime vein moves: no benchmark program builds a box by
+hand. The text vein and the three compile rows move as they do for any edit
+to runtime.c and the emitter, and CI's sitting is written in the next round.
+
+**What is left of the gavel.** Part 2, a bare err matched by an `(err _)` arm
+anywhere, retiring the own-origin skip; and part 3, a bare err refused at an
+operator at check, on the sites that are not `!`. The `!` sites wait on the
+ledger's Blocking entry "What `!` promises the checker".
+## 2026-09-15 — a chain callback is handed the err itself, and native's guard on the group behind it was left out
+
+Found while mapping the arm-dispatch sites for part 2 of the 2026-09-15
+explicit-box gavel. A probe program with a rescue callback that hands the
+err on to a bare-binder group printed `took mine` on native and died at the
+endpoint on the interpreter with `passed through lam`. The interpreter is
+the oracle, and it is right: a bare binder refuses every failure, and the
+callback's parameter holds the err `rescue` handed it.
+
+**Why native differed.** A group's entry guard is emitted only when
+inference says the parameter can be a failure, and the parameter's set is
+the union of what every call site hands it. The one call site here hands
+the callback lambda's parameter, and inference seeds every lambda parameter
+as never failing, because an ordinary call refuses to hand a closure a
+failure. That seed is wrong for exactly two callers: `rescue` and
+`annotate` hand their callback the failure on purpose. So the group's
+parameter proved never-failing, the guard was left out, and the err walked
+into the body. A direct call `lam (mine 1)` guards, because the argument's
+set carries the failure, which is why no fixture had caught the shape.
+
+**The fix.** Inference walks a lambda written as a rescue or annotate
+callback with its parameter seeded to everything, err included. The group's
+parameter then carries the failure bit and the emitter writes the guard.
+Nothing changes for any other lambda.
+
+**Watched red.** Micro fixture `a_chain_callback_is_handed_the_err_itself`:
+two chains, one through `.?` and one through `.!`, each handing the err to a
+bare-binder group, each read by std's `when_failed` so the fixture prints
+what came out rather than dying. Native read `the callback's group took the
+failure` and `passed lam, reason took mine` against the interpreter's
+`passed lam, reason mine` twice; both engines print the interpreter's lines
+now. Ratchet row `callback_err`, mutation
+`a_chain_callbacks_parameter_never_fails`, puts the old seed back and the
+micro corpus goes red on that fixture.
+
+**What it costs.** An inference change moves the three compile rows and
+possibly the compile allocations; CI's sitting is written in the next round.
+The wasm engine runs the interpreter and needed nothing.
+## 2026-09-15 — a bare err is data: the arm skip retires, and the rescue licence moves to the word
+
+Part 2 of the 2026-09-15 ruling "the box is explicit, an err is a value, and
+a bare err halts where it lands". Part 1, the `effect` constructor, is
+kanso#1440. This entry builds the ruling's second sentence: "an `(err _)` arm
+matches it anywhere, the way an arm matches `none` or a marker". Part 3, a
+bare err refused at check where a value is wanted, is next and waits on
+nothing.
+
+### What retires
+
+Since 2026-08-24 an err skipped every arm its own hako wrote. Three engines
+carried it: the interpreter asked `own_failure` inside `match_one` with the
+arm's package threaded through `match_params`, native emitted a
+`k_not_own_err` call in front of every err-admitting pattern (an
+alwaysinline twin since kanso#1437, the same morning), and wasm emitted an
+`rt_not_own_err` guard. All three are gone. `(err r)`, an `:err` annotation
+and a typeset with err among its members take a failure whoever raised it.
+
+The static half went with it. `kanso check` ran a second fixpoint after
+inference, provenance.rs, carrying per group the packages whose errs could
+arrive at each parameter, to refuse an arm written for its own package's err
+as dead code (`error[license]`). That arm is live now and there is nothing
+to refuse, so the pass is deleted and provenance.rs keeps `package_of`
+alone. The four advisory fixtures that only fed the refusal go with it, and
+the licence entry leaves tests/golden/unpinned_diagnostics.txt.
+
+### What stands, and where it moved to
+
+The 2026-08-29 gavel's foreign-only rescue licence stands, and the ruling
+says so in as many words. It is asked at the WORD now. `rescue` carries the
+site it was written at, exactly as `annotate` already did: `Desc::Rescue`
+gains a `Raised`, native's `k_b_rescue` takes the origin literal and builds
+the same closure `k_b_annotate` builds (`k_rescue_wrap` beside
+`k_annotate_wrap`, both through `k_sited_word`), wasm's `rt_rescue` takes
+the origin literal and `Slot::Rescue` carries it. A `.?` written in the
+package that raised the failure hands it on without entering its callback.
+A failure with no package — merged out of several, or raised by a host with
+no frame — passes the test, as the arm form always let it.
+
+`annotate` keeps entering its callback on an own failure. It re-raises under
+the site's own name, which is the shape a package uses to say what it was
+doing when a failure reached it, and nothing in the ruling touches it.
+
+### Two fixtures the licence caught, both this module rescuing itself
+
+`a_chain_step_names_its_channel` ended a chain with `.!` and then `.?` in
+one file, so the rescue was reading the failure the annotate had just
+raised as this module's own. Under the licence that failure goes to the
+endpoint. The fixture reads it through `std/testing` now, which is foreign
+to it, and the chain ends at the annotate.
+
+`an_err_has_readers` rescued `boom 1` in the file that raised it, eight
+times. Every line is an `:err` arm now, which is the ruling's point: the
+readers `.reason`, `.cause` and `.origin` are applied inside an arm that
+took this module's own failure, and the one foreign failure (json's) is
+still read through `rescue`. The fixture used to say "a named group handed
+the err would pass it through"; that sentence was the rule this entry
+retires.
+
+### The pins
+
+- `an_arm_sees_its_own_hakos_err` and `a_typeset_arm_sees_its_own_hakos_err`
+  replace their "cannot see" twins: `mine own` answers "rescued 99", and the
+  foreign rescuer handed a string answers false.
+- `which_patterns_can_hold_a_failure`: the own column reads the same as the
+  foreign one, `took` for the three err-admitting forms and `past` for the
+  seven others.
+- `a_rescue_hands_on_its_own_packages_failure` (micro): a bare own failure
+  under `.?` with a LAMBDA callback goes by ("still failed, mine"), a bare
+  foreign one is claimed, a boxed foreign one is claimed. The lambda is the
+  discriminating half: a lambda has no arms to decline with, so before the
+  licence moved every engine printed "claimed mine".
+- `a_rescue_on_its_own_boxed_failure_reaches_the_endpoint` (runtime): the
+  boxed own shape, `time/sleep 0 .> (_ -> mine 1) .? (e -> …)`, ends at the
+  endpoint on both engines with the same report.
+- ch04's `boundary` sample loses one line: the report no longer says
+  `passed through kitchen/apologise`, because the callback is never entered.
+- Ratchet: the `own_err_inline` row and its mutation retire with the sites
+  they patched; `rescue_licence` deletes the interpreter's licence arm, and
+  the micro corpus prints the callback's answer where the golden says the
+  failure went by.
+
+### The prose
+
+ch04's "no arm can catch it" is "an arm has to name it": a catch-all
+declines an err, an `(err _)` arm claims one wherever it is written, and
+`.?` is licensed on failures that reached you from elsewhere. The
+teahouse/kitchen example keeps its two opposite answers and loses the hop.
+ch08's json section no longer says an arm in the library could never match;
+it says the library chooses not to write one. appb's `wrap_err` paragraph
+and the two ch08 report samples stop citing the arm rule. compiler.html's
+§08 entry for the arm rule is marked retired with the date, §22's second
+table reads `took` in both columns, and §23's first decision records the
+move. design/testing.md's collision section records the retirement.
+
+### What moved, measured on this container
+
+The compile side falls because a whole-program fixpoint is gone.
+`bench/compile_memory_golden.txt`: front_end_rounds 62 -> 47 (-24.19%),
+front_end_visits 22,437 -> 15,076 (-32.81%); compile_peak_bytes reads
+776,055 here, the recorded figure. compile_allocs reads 26,883 against the
+golden's 27,937 (-1,054, -3.77%), a host-keyed row CI re-sits. The three
+compile instruction rows are host-keyed too; this container's compile sweep
+refused all of them and they will fall on CI by the pass's whole cost.
+`bench/compile_golden.txt`: every sample loses eleven lines, one call, one
+branch and one define, the twin's; the modules row 5,334 -> 5,323 lines.
+
+The emitted code falls the same way in every program: the decoder 143 ->
+142 defines, 1,207 -> 1,204 calls, 794 -> 791 branches, 9,155 -> 9,134
+lines, and the other thirteen each lose the twin and their own-err call
+sites (runbench 5,895 -> 5,892 calls, widebench 1,810 -> 1,807). Read
+against origin/main, which does not yet hold kanso#1437, the thirteen
+programs' summed lines RISE, 133,020 -> 133,110: kanso#1437's inline
+capture reads add more lines than the retired guard takes away, and this
+branch is cut on top of it. Against kanso#1437's own tip every one of those
+rows falls, and that is the comparison that stands once it lands.
+
+The twelve runtime allocation veins and the lazy tier agree with their
+goldens: the guard never allocated. The work vein, the text vein and machine
+code are host-keyed and will move on CI — the row kanso#1437 banked that
+morning counted 1,454,508 own-err checks a run on the run program, and
+every one of them is gone rather than inlined. Round one is deliberately red
+on those, and CI's sitting is what gets written.
+
+Welfare cannot see any of this until CI's rows land, because the priced
+compile rows are host-keyed; the floor is banked after they do.
+
+## 2026-09-15 — a bare err where a value is wanted is refused at check
+
+Part 3 of the 2026-09-15 ruling "the box is explicit, an err is a value, and
+a bare err halts where it lands", built on kanso#1442's tree (part 2). The
+ruling's sentence: "An operator, an index, or a call with no `(err _)` arm
+at that position does not compile, exactly as it does not compile today when
+a `none` can reach it."
+
+### What the checker proves, and what it does not
+
+The none rule (kanso#1369) reads infer's answer sets: a call whose group can
+answer `none`, handed to a group with no `none` arm at that position, is
+refused. This rule reads the same sets for an err, with one bit added.
+`RAISED` sits above `TOP` in infer, and only three things set it: the `err`
+call, an `e:err` annotation, and an `(err _)` arm's catch. `bind_pattern`
+now binds an as-pattern's name to what the pattern caught, so
+`fn taken e@(err _) = e` hands the err on as a raised err and a caller that
+reads `taken x` is refused like the raise itself. A strict index's miss and
+a division's zero answer `ERR` without the bit: what the checker should make
+of those is the ledger's Blocking entry "What `!` promises the checker",
+and this rule does not pre-empt it. A description is skipped whatever it
+carries, since a boxed failure is not a bare one.
+
+The first cut refused 191 sites. Reading them: 43 were `text/split s "\n"`
+and the like, refused because `split _ ""` raises and the group's joined
+answer carries the bit whatever the separator. So infer's call join reads a
+group one arm at a time and skips an arm a literal argument cannot reach:
+`arm_can_run` compares a string or int literal against a literal pattern, a
+module constant bound to a string literal counts as that literal (a
+declaration's name cannot be rebound), and an interpolated string with fixed
+text cannot match a shorter pattern. The check makes the same test at the
+call. That took the count to 127, and the rest were real: every site left
+was a raised err handed to a group with no arm for it.
+
+**What the checker reads is calls, not names.** `x = decode s` then `f x`
+compiles: a bare local binding drops the failure bits (`bind_pattern`'s
+"generics never bind failures", the rule the none check already lives
+with), so what a name holds is not something this rule sees. The
+`some_is_a_value_not_a_failure` fixture pins the runtime's answer for that
+shape on purpose, and says so.
+
+### What the tree had to say to compile
+
+std/regexp raises in one place, a variable-width lookbehind, and every entry
+point could hand that err to its walk. Eight entry points now have an arm:
+`taken` and `named` directly, and six through a wrapper (`gathered`,
+`anchored`, `located`, `replaced`, `divided`, `begun`), so the walk is not
+asked at every position whether its program is an err. `in?`'s
+wide-character arm walked `text/split set c` and now walks the set's
+characters, because the checker cannot see that `c` is never empty.
+
+std/json's decoder threads a parse failure through `finish`, `array_step`,
+`obj_key`, `obj_value` and `str_low`; each has an `e@(err _)` arm, last where
+the group's other arms are constructor patterns and first where one is a
+bare name. Its tests dispatch on what they decoded before comparing
+(`decodes?`, `same?`, `encodes_back?`). The three vendored decoders
+(encodebench, widebench, kq's query) take the same arms, kq's own
+`obj_colon` included; kq#106 lands them first, since kanso's CI runs kq's
+suite against the compiler on the pull request.
+
+Four benchmark programs (encodebench, livebench, widebench, runbench), hako
+and fourteen scripts bind a raised answer to a name before handing it on, or
+give the receiving group an arm: 13 arms in lib, 22 in bench and kq, and
+the rest bindings. The three micro fixtures that handed `json/decode "[1, 2"`
+straight to an arm-less group to pin "a failure reaches none of the arms"
+are reshaped: two write the err as an arm, the way the none rule had them
+write `none` as one, and the third arrives by name. Two runtime trails lose a
+`passed through` line, because an arm that answers an err is not a hop.
+
+### Watched red
+
+The three error-corpus fixtures, `an_err_reaches_an_operator`,
+`an_err_reaches_an_index` and `an_err_reaches_a_group_with_no_arm_for_it`,
+compile with `raised_err_at` deleted and refuse with it present; the ratchet
+row `raised_err` carries that mutation.
+
+### What the sweep found under the arms
+
+The first counter sweep read the decode's `sh_rec` at 253,968,000 against
+a golden of 0, with `allocs` 4,390,215 -> 8,358,465, and the run program
+5,730,654 -> 8,348,673. Every scanner answer in the decoder travels in two
+registers, the position packed above the value's tag in one word and the
+payload in the other, and a consumer whose arm destructures `(parsed p v)`
+reads those words with no record built. The escape analysis boxes a slot
+whenever any arm at it names the whole value, since `r@(parsed p v)` wants
+the record. The five `e@(err _)` arms this entry asked of the decoder sit at
+exactly those slots, and the rule read them as as-patterns like any other.
+
+An err as-pattern needs no record. The dispatcher reads the two words back
+as one value before it matches, and on the failure path that value is the
+failure that arrived; the name binds to it. The rule exempts `err`, and the
+decode's counters read the golden to the byte again. The mem fixture
+`an_err_as_pattern_keeps_a_carried_slot_unboxed` pins it at `sh_rec=0`; with
+the exemption reverted it reads 64,000, a record for each of its thousand
+scans (ratchet row `err_as_pattern`).
+
+The fixture's first draft found something older. Written as a loop whose
+groups hand back a value rather than a record, it is a beat, and the
+scanner's answer crosses the rewind through the carry. The carry stages
+boxed values, so the two words were built into a record on the way in and
+read back out of one on the way out, and neither conversion asked whether
+the words were a failure. A failure's words became a record whose second
+field was the failure, `k_rec` merged that into a failure, the unpack read
+two fields off it, and the consumer got a value whose first word was not
+the err tag. `step`'s record arm matched it, and `+` was handed a garbage
+word: native printed `error[runtime]: `+` is not defined for these values`
+where the interpreter printed `stopped: end of input`. The #1393 compiler
+does the same with a plain `(err _)` arm, so this is main's, and the
+ruling makes it reachable everywhere an err arm now stands. `k_parsed_box`
+and `k_parsed_words` in the runtime ask first and hand a failure through as
+its own two words; the emitter calls them in place of the inline build and
+the inline field reads. `a_failure_crosses_a_beat_carry_in_two_words` pins
+the answer on both engines (ratchet row `carry_failure`). Its `sh_rec` reads
+64,000: the carry still boxes a two-word value it could stage as words,
+which is a gap left open here, not a regression.
+
+The check also skips getters, as the none check has since kanso#1369 and
+for the same reason: the play route checks before a field read is rewritten
+into a getter call and the module route after, so `xs[i].x` would be
+refused through an import and run direct. A field read of an err stays the
+runtime's sentence on every route, and `accessor_hop_is_silent` keeps its
+trail.
+
+The harness found a third. Part 3 refuses `either? here (names_any? src
+needles (at + 1))` in the browser differential's `hunted?`, since the
+nested call can raise, and the entry's shape for that is to bind first:
+`rest = names_any? ...` then `either? here rest`. The demand analysis
+defers `rest`, because `either?`'s first arm never asks for it, and
+`either? _ answer` hands the cell back unforced. That cell evaluates to
+the next call's `rest`, which is another cell. `k_force_slow` stored what
+a cell evaluated to and `k_force` tested the tag once, so the dispatcher
+for `put_unless acc path src skip` was handed a cell, tested it against
+`true` and `false`, and matched nothing; the harness died on every corpus
+directory, and the pinned compiler 39442a53 does the same on the reduced
+program, so this is main's too. The interpreter's force has always walked
+the chain. `k_force_slow` forces what the cell answered before it stores
+it, and the page's `forced` does the same before the write-back.
+`a_deferred_answer_that_defers_again_forces_to_a_value` pins it on all
+three engines (ratchet row `force_chain`).
+
+### What moved, and which way
+
+Every runtime allocation vein and the lazy tier agree with their goldens:
+the arms cost the decoder nothing once the as-pattern rule admits them,
+and the run program's counters are the ones kanso#1437 left. The emitted
+code moves with the arms and the two runtime calls the emitter now makes:
+the decoder's `emitted_lines` 9,134 -> 9,161 and `emitted_branches` 791 ->
+795, `emitted_calls` 1,204 -> 1,209, defines 142 -> 141; over the other
+thirteen programs `emitted_other_lines` 133,110 -> 133,514,
+`emitted_other_branches` 12,653 -> 12,689 and `emitted_other_calls`
+20,164 -> 20,231, defines 2,350 held. Four programs fall (basket,
+pendbench, indexbench, readbench: a getter the check no longer walks emits
+less), the rest rise by the arms std/regexp and std/json gained. The
+front end's visits on the compile corpus read 15,076 -> 15,119 for the
+same five decoder arms; rounds hold at 47. The three host-keyed compile
+rows, the machine-code vein and the compile allocations are CI's to
+measure, and welfare on this box reads 69.58 against a floor of 69.58
+with the runtime side unmoved. A fall on CI
+from the compile rows is the language's to pay under the 2026-09-13
+clause and the floor moves with it in the second round.
+
+### Left open, on purpose
+
+- The runtime railway stays. "Halts where it lands" is the ruling's title
+  and not one of its three built parts; it reads through the `!` entry, and
+  retiring the railway before that entry is ruled would decide the entry.
+- The containment idiom. `length (text/split hay needle) > 1` is how five
+  scripts ask whether a string holds another, and each is a raise the
+  checker sees. A `text/contains?` would be surface, so it is not added
+  here; the scripts bind instead.
+- Division's `ERR` and the strict index's miss, as above.
+
+### CI's sitting, written in the second round (kanso#1444)
+
+The stack of four landed as one pull request and CI sat it once, on the
+kanso#1443 base. The compile term falls as the provenance fixpoint retires:
+`compile_instructions` 42,873,153 -> 40,273,027, `entry_instructions`
+144,046,325 -> 140,614,828, `library_instructions` 144,845,876 ->
+140,855,393, `compile_allocs` 27,937 -> 27,173. The front end's peak rises,
+`compile_peak_bytes` 776,055 -> 781,895 (+5,840, +0.7525%): the RAISED bit
+rides in every inference set, the callback guard's seed table and the
+provenance walk are held for the whole of inference, and the effect type is
+one more declaration the front end holds. The run program pays for the
+arms it gained and the two runtime calls the emitter makes at a rescue
+site: `work_runbench` 1,823,669,249 -> 1,827,443,530 (+3,774,281,
++0.2070%), `work_jsonbench` 1,130,225,294 -> 1,133,644,520 (+0.3025%,
+the decoder's five `(err _)` arms), `work_encodebench` 3,452,224,040 ->
+3,452,269,515, `work_livebench` 2,872,789,146 -> 2,872,813,523,
+`work_oneshot` 17,983,841 -> 18,006,613, `work_digestbench` 9,830,203 ->
+9,830,546; five rows fall (basket, pendbench, readbench, scanbench,
+widebench). Machine code rises with the arms, `text` 1,735,116 ->
+1,737,148 summed over the fourteen. Welfare on CI's rows reads 69.58 ->
+69.64 and is banked. The standalone scanbench takes the split's respell so
+the shapes spec finds the pair identical, and two fixtures the ruling
+refused — the register-convention failure and the module-boundary
+reencode — bind the raised answer before handing it on, the shape every
+other reshaped fixture took.
+
 ## 2026-09-16 — gavel: `!` is the value on the programmer's word, and a miss halts at runtime
 
 Clay ruled the ledger's "What `!` promises the checker", filed 2026-09-15 the

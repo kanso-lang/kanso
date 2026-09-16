@@ -3,7 +3,7 @@ use crate::diag::{article, Diagnostic, Span};
 use crate::hash::{Map as HashMap, Set as HashSet};
 use num_traits::Zero;
 
-pub const BUILTINS: [&str; 59] = [
+pub const BUILTINS: [&str; 60] = [
     "annotate",
     "append",
     "args",
@@ -20,6 +20,7 @@ pub const BUILTINS: [&str; 59] = [
     "now",
     "if",
     "is_desc",
+    "effect",
     "join",
     "length",
     "print",
@@ -70,8 +71,8 @@ pub const BUILTINS: [&str; 59] = [
 /// three chain words are here because a chain step is written wherever an
 /// effect is, and importing a module to spell one would be a tax on the
 /// failure channel.
-pub const AMBIENT: [&str; 9] =
-    ["annotate", "bind", "entries", "if", "length", "print", "push", "put", "rescue"];
+pub const AMBIENT: [&str; 10] =
+    ["annotate", "bind", "effect", "entries", "if", "length", "print", "push", "put", "rescue"];
 
 /// What each builtin takes. `if` is absent: its count is checked where its
 /// branches are, because a guard form spells the same word with a different
@@ -85,7 +86,7 @@ pub const AMBIENT: [&str; 9] =
 /// `native backend: `length` takes 1 argument(s)` and no span, the page
 /// died at the call, and `kanso check` said ok. So the counts live here,
 /// beside the names, and every reader takes them from one place.
-pub const BUILTIN_ARITY: [(&str, usize); 63] = [
+pub const BUILTIN_ARITY: [(&str, usize); 64] = [
     ("accept", 1),
     ("annotate", 2),
     ("append", 2),
@@ -102,6 +103,7 @@ pub const BUILTIN_ARITY: [(&str, usize); 63] = [
     ("char_code", 1),
     ("chars", 1),
     ("concat", 2),
+    ("effect", 1),
     ("entries", 1),
     ("env", 1),
     ("exists", 1),
@@ -828,6 +830,116 @@ fn effect_discarded_at(e: &Expr, tables: &AfterInfer, diags: &mut Vec<Diagnostic
     }
 }
 
+/// The 2026-09-15 ruling's third part: a bare err a program raised, arriving
+/// where a value is wanted, does not compile. The sites are the ruling's
+/// three — an operator's operand, an index's base or key, and a call at a
+/// position no arm names an err at — and the proof is `RAISED`, the bit
+/// infer sets only where a program spells an err. A strict index's miss and
+/// a division's zero divisor answer ERR without it, because what the checker
+/// should make of those is the ledger's open question and not this rule's.
+/// A description is skipped whatever it carries: a boxed failure is not a
+/// bare one, and the three words are its doors.
+fn raised_err_at(
+    e: &Expr,
+    raisers: &crate::hash::Map<(&str, usize), Vec<&[Pattern]>>,
+    consts: &crate::infer::Consts<'_>,
+    err_arms: &crate::hash::Map<(&str, usize), u64>,
+    owner: &str,
+    diags: &mut Vec<Diagnostic>,
+) {
+    // A call raises when some arm that can raise can be the one that runs.
+    // The arms are read one at a time rather than as the group's joined
+    // answer because a literal argument settles a literal pattern here and
+    // now: `text/split s "\n"` cannot reach `split _ ""`, the only arm of
+    // that group that raises, so the call is not a raise. What a literal
+    // cannot match is decided by shape alone — a string is never a record
+    // and never a none — and every other pattern is taken to match.
+    let raised = |e: &Expr| -> bool {
+        match e {
+            Expr::App { head, args, piped: false, .. } => match head.as_ref() {
+                Expr::Ident(name, _) if name == "err" => true,
+                Expr::Ident(name, _) => {
+                    raisers.get(&(name.as_str(), args.len())).is_some_and(|arms| {
+                        arms.iter().any(|arm| crate::infer::arm_can_run(arm, args, consts))
+                    })
+                }
+                _ => false,
+            },
+            _ => false,
+        }
+    };
+    let short = |owner: &str| -> String {
+        owner
+            .rsplit_once("/lib/")
+            .map(|(_, m)| m)
+            .or_else(|| owner.rsplit_once('/').map(|(_, f)| f))
+            .unwrap_or(owner)
+            .to_string()
+    };
+    match e {
+        Expr::BinOp { op, lhs, rhs, .. } => {
+            for side in [lhs.as_ref(), rhs.as_ref()] {
+                if raised(side) {
+                    diags.push(Diagnostic::new(
+                        "exhaustive",
+                        format!(
+                            "this can be an err and `{op}` wants a value — dispatch on it \
+                             first with an `(err _)` arm (in {})",
+                            short(owner)
+                        ),
+                        side.span(),
+                    ));
+                }
+            }
+        }
+        Expr::Index { base, index, .. } => {
+            for side in [base.as_ref(), index.as_ref()] {
+                if raised(side) {
+                    diags.push(Diagnostic::new(
+                        "exhaustive",
+                        format!(
+                            "this can be an err and an index wants a value — dispatch on \
+                             it first with an `(err _)` arm (in {})",
+                            short(owner)
+                        ),
+                        side.span(),
+                    ));
+                }
+            }
+        }
+        Expr::App { head, args, piped: false, .. } => {
+            let Expr::Ident(name, _) = head.as_ref() else { return };
+            // A getter is synthesized from a field read, so nobody can give it
+            // an arm, and the two routes check on opposite sides of the
+            // rewrite that makes one: refusing here would refuse `xs[i].x`
+            // through an import and run it direct. A field read of an err
+            // stays the runtime's sentence on every route, as a none's does.
+            if crate::ast::getter_field(name).is_some() {
+                return;
+            }
+            if !args.iter().any(&raised) {
+                return;
+            }
+            let Some(&named) = err_arms.get(&(name.as_str(), args.len())) else { return };
+            for (pos, arg) in args.iter().enumerate() {
+                if named & (1u64 << pos.min(63)) != 0 || !raised(arg) {
+                    continue;
+                }
+                diags.push(Diagnostic::new(
+                    "exhaustive",
+                    format!(
+                        "this can be an err and `{name}` has no arm for it — dispatch on \
+                         it here, or give `{name}` an `(err _)` arm (in {})",
+                        short(owner)
+                    ),
+                    arg.span(),
+                ));
+            }
+        }
+        _ => {}
+    }
+}
+
 /// The gavel makes a receiver responsible for a none it can be handed, and
 /// lets the caller discharge that by resolving first. The report belongs at
 /// the argument, because that is the line an author edits.
@@ -1058,6 +1170,52 @@ fn check_after_infer<'p>(
         entry.1 |= named;
     }
 
+    // The positions some arm names an err at, one bit each, keyed like
+    // `nones`. An arm names an err with `(err _)`, with `x:err`, or with a
+    // typeset that holds `err` — `type maybe err int` is an arm for one, and
+    // a typeset naming such a typeset is too, so the set is closed first.
+    let mut err_typesets: crate::hash::Set<&str> = crate::hash::Set::default();
+    loop {
+        let before = err_typesets.len();
+        for t in program.types.iter().filter(|t| !t.members.is_empty()) {
+            if t.members.iter().any(|m| m == "err" || err_typesets.contains(m.as_str())) {
+                err_typesets.insert(t.name.as_str());
+            }
+        }
+        if err_typesets.len() == before {
+            break;
+        }
+    }
+    let mut err_arms: crate::hash::Map<(&str, usize), u64> =
+        crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
+    for d in program.fns.iter() {
+        let mut named = 0u64;
+        for (pos, param) in d.params.iter().enumerate() {
+            let names_err = match param {
+                Pattern::Ctor { ty, .. } => ty == "err",
+                Pattern::Annotated { ty, .. } => ty == "err" || err_typesets.contains(ty.as_str()),
+                _ => false,
+            };
+            if names_err {
+                named |= 1u64 << pos.min(63);
+            }
+        }
+        *err_arms.entry((d.name.as_str(), d.params.len())).or_insert(0) |= named;
+    }
+    // The arms that can raise, keyed like `nones`: each one's patterns, for
+    // the literal test `raised_err_at` makes at a call. An arm raises when
+    // its answer carries RAISED, the bit infer sets only where a program
+    // spells an err; a description is not counted, since a boxed failure is
+    // not a bare one.
+    let mut raisers: crate::hash::Map<(&str, usize), Vec<&[Pattern]>> = crate::hash::Map::default();
+    for (i, d) in program.fns.iter().enumerate() {
+        let r = inference.returns[i];
+        if r & crate::infer::RAISED != 0 && r & crate::infer::DESC == 0 {
+            raisers.entry((d.name.as_str(), d.params.len())).or_default().push(&d.params);
+        }
+    }
+    // The module's constants that are one string literal, for the same test.
+    let consts = crate::infer::literal_consts(program);
     let tables = AfterInfer { discarded, nones, returns };
 
     use crate::infer::{Set, DESC, FAIL, THUNK, TOP};
@@ -1135,6 +1293,14 @@ fn check_after_infer<'p>(
             // back boxed. Asking the binder set first paid its hash on every
             // name in every expression to short-circuit the locals, and the
             // locals are the common case only in the arms this pass walks past.
+            // the box built by hand answers one whatever else the program
+            // holds, so it is asked before the short circuit below
+            Expr::App { head, args, piped: false, .. }
+                if args.len() == 1
+                    && matches!(head.as_ref(), Expr::Ident(name, _) if name == "effect") =>
+            {
+                !shadows("effect")
+            }
             Expr::App { head, args, piped: false, .. } if any_boxed => match head.as_ref() {
                 // both branches of an `if` answering a box makes the `if` one
                 Expr::Ident(name, _) if name == "if" && args.len() == 3 => {
@@ -1262,6 +1428,7 @@ fn check_after_infer<'p>(
                     | "put"
                     | "err"
                     | "wrap_err"
+                    | "effect"
             )
     };
     let refuse = |diags: &mut Vec<Diagnostic>, who: &str, at: Span| {
@@ -1402,6 +1569,7 @@ fn check_after_infer<'p>(
             while let Some(cur) = stack.pop() {
                 effect_discarded_at(cur, &tables, effect_diags);
                 none_exhaustive_at(cur, &tables, &decl.file, none_diags);
+                raised_err_at(cur, &raisers, &consts, &err_arms, &decl.file, none_diags);
                 site(cur, &shadow, box_diags);
                 if asks_wall {
                     if let Expr::Seq(lhs, rhs, span) = cur {

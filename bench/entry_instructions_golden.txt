@@ -390,4 +390,4 @@
 # stated, not reasoned from. compile_allocs held at 27,937 and compile_memory
 # is byte-identical.
 #
-entry_instructions=144044890
+entry_instructions=140614828

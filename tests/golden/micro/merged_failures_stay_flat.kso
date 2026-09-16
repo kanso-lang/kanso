@@ -11,6 +11,13 @@
 # The reasons are read through `std/testing`'s `when_failed`: foreign to this
 # module, so it is licensed to separate a reason from a failure this module
 # raised. Under gavel 24 an arm here could not see these errs at all.
+#
+# Since the 2026-09-15 ruling a raised err handed straight to an operator or
+# to a group with no arm for it does not compile, so the failures here are
+# bound to names first. The checker reads a call's arguments and not the names
+# it is handed, the same deliberate blind spot the none rule keeps, and the
+# runtime contract these lines pin is reached through it. What the runtime
+# does with a bare err it was not warned about is the ledger's open question.
 import "std/testing"
 
 fn boom what
@@ -23,13 +30,21 @@ fn as_text reason
 fn listed _
   err ["a" "b"]
 
-left = boom "a" + boom "b" + boom "c"
+a = boom "a"
 
-right = boom "a" + (boom "b" + boom "c")
+b = boom "b"
 
-nested = listed 0 + boom "c"
+c = boom "c"
 
-walled = boom "a" >> boom "b"
+ab = listed 0
+
+left = a + b + c
+
+right = a + (b + c)
+
+nested = ab + c
+
+walled = a >> b
 
 pub play =
   print "left first: {testing/when_failed left as_text}"

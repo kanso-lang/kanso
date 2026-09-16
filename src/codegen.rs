@@ -723,16 +723,6 @@ define internal i64 @k_not_failure(%KValue %v) alwaysinline {
   %r = zext i1 %ne to i64
   ret i64 %r
 }
-define internal i64 @k_not_own_err_fast(%KValue %v, ptr %arm) alwaysinline {
-  %tag = extractvalue %KValue %v, 0
-  %is_err = icmp eq i64 %tag, 5
-  br i1 %is_err, label %ask, label %pass
-ask:
-  %r = call i64 @k_not_own_err(%KValue %v, ptr %arm)
-  ret i64 %r
-pass:
-  ret i64 1
-}
 define internal i64 @k_truthy(%KValue %v) alwaysinline {
   %tag = extractvalue %KValue %v, 0
   %t = icmp eq i64 %tag, 2
@@ -1135,10 +1125,13 @@ declare %KValue @k_str_n(ptr, i64)
 declare %KValue @k_str_lit(ptr, i64, ptr)
 declare %KValue @k_err(%KValue, ptr)
 declare %KValue @k_b_wrap_err(%KValue, %KValue, ptr)
+declare %KValue @k_b_effect(%KValue)
 declare %KValue @k_err_hop(%KValue, ptr)
 declare %KValue @k_rec(i64, i64, ptr)
 declare %KValue @k_pair_failure(%KValue, %KValue)
 declare %KValue @k_rec_reuse(i64, i64, ptr, %KValue)
+declare %KValue @k_parsed_box(i64, i64, i64)
+declare %KValue @k_parsed_words(%KValue)
 declare %KValue @k_concat_arr_mut(i64, ptr)
 declare %KValue @k_b_str_builder(%KValue)
 declare %KValue @k_field(%KValue, i64)
@@ -1151,7 +1144,6 @@ declare %KValue @k_err_read(%KValue, ptr)
 declare i64 @k_is_err(%KValue)
 declare %KValue @k_set_field(%KValue, ptr, %KValue)
 declare i64 @k_check_some(%KValue)
-declare i64 @k_not_own_err(%KValue, ptr)
 declare %KValue @k_err_inner(%KValue)
 declare i64 @k_check_rec(%KValue, i64, i64)
 declare i64 @k_check_str(%KValue, ptr, i64)
@@ -1214,7 +1206,7 @@ declare %KValue @k_b_net_write(%KValue, %KValue)
 declare %KValue @k_b_net_close(%KValue)
 declare %KValue @k_maybe_bind(%KValue, %KValue)
 declare %KValue @k_b_bind(%KValue, %KValue)
-declare %KValue @k_b_rescue(%KValue, %KValue)
+declare %KValue @k_b_rescue(%KValue, %KValue, ptr)
 declare %KValue @k_b_annotate(%KValue, %KValue, ptr)
 declare %KValue @k_desc_join(%KValue, %KValue)
 declare %KValue @k_desc_sleep(%KValue)
@@ -1290,7 +1282,8 @@ declare %KValue @k_force_unless_black(%KValue)
 
 "#;
 
-pub(crate) const BUILTIN_CALLS: [&str; 56] = [
+pub(crate) const BUILTIN_CALLS: [&str; 57] = [
+    "effect",
     "net_port",
     "start",
     "kill",
@@ -1813,34 +1806,16 @@ impl FnEmit {
     /// Undo the by-value convention: rebuild the record the two words hold.
     /// The type is whatever produced the value, which the escape analysis
     /// already knows, because only a returnable type is ever in this shape.
+    /// A failure rides in the same two words and comes back as itself: the
+    /// runtime asks before it builds, which the inline build here did not.
     fn box_parsed(&mut self, e: &str) -> String {
         let (_, id) = self.parsed[e];
         let w0 = self.tmp();
         self.raw(&format!("{w0} = extractvalue %parsed {e}, 0"));
         let w1 = self.tmp();
         self.raw(&format!("{w1} = extractvalue %parsed {e}, 1"));
-        let pos = self.tmp();
-        self.raw(&format!("{pos} = lshr i64 {w0}, 8"));
-        let vtag = self.tmp();
-        self.raw(&format!("{vtag} = and i64 {w0}, 255"));
-        let f0a = self.tmp();
-        self.raw(&format!("{f0a} = insertvalue %KValue undef, i64 0, 0"));
-        let f0 = self.tmp();
-        self.raw(&format!("{f0} = insertvalue %KValue {f0a}, i64 {pos}, 1"));
-        let f1a = self.tmp();
-        self.raw(&format!("{f1a} = insertvalue %KValue undef, i64 {vtag}, 0"));
-        let f1 = self.tmp();
-        self.raw(&format!("{f1} = insertvalue %KValue {f1a}, i64 {w1}, 1"));
-        let arr = self.tmp();
-        self.raw(&format!("{arr} = alloca [2 x %KValue]"));
-        let p0 = self.tmp();
-        self.raw(&format!("{p0} = getelementptr [2 x %KValue], ptr {arr}, i64 0, i64 0"));
-        self.raw(&format!("store %KValue {f0}, ptr {p0}"));
-        let p1 = self.tmp();
-        self.raw(&format!("{p1} = getelementptr [2 x %KValue], ptr {arr}, i64 0, i64 1"));
-        self.raw(&format!("store %KValue {f1}, ptr {p1}"));
         let t = self.tmp();
-        self.raw(&format!("{t} = call %KValue @k_rec(i64 {id}, i64 2, ptr {arr})"));
+        self.raw(&format!("{t} = call %KValue @k_parsed_box(i64 {id}, i64 {w0}, i64 {w1})"));
         t
     }
 
@@ -2272,21 +2247,16 @@ impl<'a> Backend<'a> {
                 return format!("%parsed {e}");
             }
             // a boxed record reached a by-value slot (a construction bound or
-            // passed outside tail position): unpack it into the convention
-            let f0 = f.tmp();
-            f.line(&format!("{f0} = call %KValue @k_field_fast(%KValue {e}, i64 0)"));
-            let f1 = f.tmp();
-            f.line(&format!("{f1} = call %KValue @k_field_fast(%KValue {e}, i64 1)"));
-            let posp = f.tmp();
-            f.line(&format!("{posp} = extractvalue %KValue {f0}, 1"));
-            let sh = f.tmp();
-            f.line(&format!("{sh} = shl i64 {posp}, 8"));
-            let vt = f.tmp();
-            f.line(&format!("{vt} = extractvalue %KValue {f1}, 0"));
+            // passed outside tail position, or a carry take): unpack it into
+            // the convention. A failure in the slot is its own two words, and
+            // the runtime hands them over unread rather than reading fields
+            // off a value that has none.
+            let u = f.tmp();
+            f.line(&format!("{u} = call %KValue @k_parsed_words(%KValue {e})"));
             let w0 = f.tmp();
-            f.line(&format!("{w0} = or i64 {sh}, {vt}"));
+            f.line(&format!("{w0} = extractvalue %KValue {u}, 0"));
             let w1 = f.tmp();
-            f.line(&format!("{w1} = extractvalue %KValue {f1}, 1"));
+            f.line(&format!("{w1} = extractvalue %KValue {u}, 1"));
             let a = f.tmp();
             f.line(&format!("{a} = insertvalue %parsed undef, i64 {w0}, 0"));
             let p = f.tmp();
@@ -2900,26 +2870,6 @@ impl<'a> Backend<'a> {
         Ok(narrow_tailcc(out))
     }
 
-    /// Can a value matching this annotation be an err? Only then is the
-    /// own-origin guard worth emitting — every other pattern cannot see a
-    /// failure in the first place, so the check would be a call per match on
-    /// a hot path to learn nothing.
-    fn admits_err(&self, ty: &str) -> bool {
-        if ty == "err" {
-            return true;
-        }
-        match self.typesets.get(ty) {
-            Some(members) => members.iter().any(|m| m != ty && self.admits_err(m)),
-            None => false,
-        }
-    }
-
-    /// The arm's package as an interned literal, for `k_not_own_err`.
-    fn arm_hako(&mut self, f: &FnEmit) -> String {
-        let (name, _) = self.intern(&format!("{}\0", f.hako));
-        name
-    }
-
     fn intern(&mut self, text: &str) -> (String, usize) {
         let bytes = text.as_bytes().to_vec();
         let len = bytes.len();
@@ -3121,10 +3071,9 @@ impl<'a> Backend<'a> {
                 if ty.contains('[') {
                     return Some(ArmCase::Tags(vec![10]));
                 }
-                // An annotation that admits err is tested behind
-                // `k_not_own_err`, and a typeset matches when any member does.
-                // Neither is a tag, so neither is a case.
-                if self.admits_err(ty) || self.typesets.contains_key(ty.as_str()) {
+                // A typeset matches when any member does, which is not a
+                // tag, so not a case.
+                if self.typesets.contains_key(ty.as_str()) {
                     return None;
                 }
                 match ty.as_str() {
@@ -4134,20 +4083,6 @@ impl<'a> Backend<'a> {
                     f.bind(name, value);
                     return Ok(());
                 }
-                // One arm for every annotation, typeset or not, because two
-                // arms for one pattern kind is how the guard below went
-                // missing: the typeset arm returned before reaching it, so a
-                // typeset naming err let a package rescue its own failure on
-                // native where the oracle passed it through. `wasm_backend`
-                // has always had the one arm and has always been right.
-                if self.admits_err(ty) {
-                    let arm = self.arm_hako(f);
-                    check(
-                        self,
-                        f,
-                        format!("call i64 @k_not_own_err_fast(%KValue {value}, ptr @{arm})"),
-                    );
-                }
                 // a typeset matches when any member does: OR the members'
                 // checks and branch once. A plain annotation is the same
                 // shape with one member.
@@ -4177,12 +4112,6 @@ impl<'a> Backend<'a> {
             }
             Pattern::Ctor { ty, fields, whole } => {
                 if ty == "err" {
-                    let arm = self.arm_hako(f);
-                    check(
-                        self,
-                        f,
-                        format!("call i64 @k_not_own_err_fast(%KValue {value}, ptr @{arm})"),
-                    );
                     check(self, f, format!("call i64 @k_check_tag(%KValue {value}, i64 {K_ERR})"));
                     let inner = f.tmp();
                     f.line(&format!("{inner} = call %KValue @k_err_inner(%KValue {value})"));
@@ -6299,14 +6228,17 @@ impl<'a> Backend<'a> {
             f.record(&t, ERR);
             return Ok(t);
         }
-        // `annotate` raises an err of its own, so like `err` and `wrap_err` it
-        // is handed the site it was written at. The runtime wraps the callback
-        // in a closure holding both and hands the result to rescue's node.
-        if name == "annotate" {
+        // `rescue` and `annotate` are handed the site they were written at,
+        // like `err` and `wrap_err`: `annotate` because it raises an err of
+        // its own, `rescue` because its licence is foreign-only and the
+        // site's package is what the failure's raiser is compared against.
+        // The runtime wraps the callback in a closure holding both and hands
+        // the result to the one worded node.
+        if name == "rescue" || name == "annotate" {
             let origin = self.origin_arg(f, span);
             let t = f.tmp();
             f.line(&format!(
-                "{t} = call %KValue @k_b_annotate(%KValue {}, %KValue {}, {origin})",
+                "{t} = call %KValue @k_b_{name}(%KValue {}, %KValue {}, {origin})",
                 emitted[0], emitted[1]
             ));
             f.record(&t, TOP);

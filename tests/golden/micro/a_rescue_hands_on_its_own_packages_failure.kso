@@ -1,0 +1,42 @@
+# The foreign-only rescue licence lives at the WORD. Ruled 2026-08-29 and
+# kept whole by the 2026-09-15 ruling, which moved the test off the arm: an
+# `(err _)` arm matches a bare err anywhere now, and the one place provenance
+# is still asked is `rescue`. A `.?` written in the package that raised the
+# failure hands it on without entering its callback; the same `.?` on a
+# failure raised elsewhere enters it.
+#
+# The callback is a lambda on purpose. A lambda has no arms to decline with,
+# so if the word entered it on an own failure the first line would read
+# "claimed mine" — which is what every engine printed before the licence
+# moved, and what this pins against.
+#
+# Both shapes of subject: a bare err decided at the word, and a boxed one
+# decided when the chain runs. `when_failed` is std/testing's, foreign to
+# this file, so it may read the bare failure the word handed on. The boxed
+# own failure has nobody foreign left to read it and ends the program at the
+# endpoint, which is a report on stderr and an exit of 1, so that shape is
+# pinned in the runtime corpus: a_rescue_on_its_own_boxed_failure_reaches_
+# the_endpoint.
+import "std/json"
+import "std/os"
+import "std/testing"
+
+fn mine _
+  err "mine"
+
+fn still r
+  "still failed, {r}"
+
+own = mine 1 .? (e -> "claimed {e.reason}")
+
+far = json/decode "[1, 2" .? (e -> "claimed {e.reason}")
+
+# The boxed reason is not printed: the playground has no filesystem and
+# says so in its own words, and what this line pins is that a foreign
+# boxed failure enters the callback at all.
+far_boxed = os/read_file! "no_such_file" .? (_ -> "claimed")
+
+pub play =
+  print "own: {testing/when_failed own still}"
+  >> print "far: {far}"
+  >> far_boxed .> (v -> print "far boxed: {v}")

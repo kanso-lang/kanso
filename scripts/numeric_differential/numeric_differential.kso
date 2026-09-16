@@ -223,7 +223,8 @@ fn settled suspect at bad known _ _ true
   alone suspect (at + 1) bad known
 
 fn settled suspect at bad known c r false
-  counted suspect at bad known c r (at_ceiling? r[1]! r[2]!)
+  ceiling = at_ceiling? r[1]! r[2]!
+  counted suspect at bad known c r ceiling
 
 fn counted suspect at bad known _ _ true
   alone suspect (at + 1) bad (known + 1)

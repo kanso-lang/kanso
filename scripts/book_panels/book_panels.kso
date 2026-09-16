@@ -376,7 +376,8 @@ fn no_sample raw m sample name files write found false
   weighed raw m (body_of files found) sample name write
 
 fn weighed raw m src sample name write
-  same = trimmed (strip_tags m.groups[3]!) == trimmed src
+  shown = strip_tags m.groups[3]!
+  same = trimmed shown == trimmed src
   settled raw m src sample name write same
 
 fn settled raw m _ _ _ _ true
@@ -398,7 +399,8 @@ fn no_recorded raw m base name files write found false
   weighed_out raw m (body_of files found) base name write
 
 fn weighed_out raw m rec base name write
-  same = trimmed (strip_tags m.groups[4]!) == trimmed rec
+  shown = strip_tags m.groups[4]!
+  same = trimmed shown == trimmed rec
   settled_out raw m rec base name write same
 
 fn settled_out raw m _ _ _ _ true
@@ -443,7 +445,8 @@ fn in? hay needle
 # What the panel body says, with its markup taken off, so it can be compared
 # with the file it claims to show.
 fn strip_tags body
-  unescaped (regexp/replace_all "<[^>]+>" body "")
+  untagged = regexp/replace_all "<[^>]+>" body ""
+  unescaped untagged
 
 fn unescaped s
   amp = regexp/replace_all "&lt;" s "<"
@@ -503,7 +506,8 @@ fn by_shape _ _ t true
   "<span class=\"k\">{t}</span>"
 
 fn by_shape toks at t false
-  numeric toks at t (regexp/match? whole_num t)
+  number = regexp/match? whole_num t
+  numeric toks at t number
 
 fn numeric _ _ t true
   "<span class=\"n\">{t}</span>"
@@ -515,7 +519,8 @@ fn operator _ _ t true
   "<span class=\"o\">{escaped t}</span>"
 
 fn operator toks at t false
-  namelike toks at t (regexp/match? whole_ident t)
+  ident = regexp/match? whole_ident t
+  namelike toks at t ident
 
 fn namelike toks at t true
   mark_ident toks at t
@@ -598,7 +603,8 @@ fn stepping _ _ _ true
 
 fn stepping toks at step false
   here = toks[at]!.text
-  kept toks at step here (trimmed_blank here == "")
+  blank = trimmed_blank here
+  kept toks at step here (blank == "")
 
 fn kept toks at step _ true
   near toks (at + step) step
@@ -649,13 +655,16 @@ fn heads t _ _ false
   t
 
 fn heads t _ after true
-  applied t after (argumentish? after)
+  argument = argumentish? after
+  applied t after argument
 
 fn argumentish? ""
   true
 
 fn argumentish? a
-  starts_arg? a (regexp/match? whole_ident a or regexp/match? whole_num a)
+  ident = regexp/match? whole_ident a
+  number = regexp/match? whole_num a
+  starts_arg? a (ident or number)
 
 fn starts_arg? _ true
   true
@@ -691,7 +700,8 @@ fn outing lines at acc false
   out_lines lines (at + 1) (push acc (one_out lines[at]!))
 
 fn one_out line
-  tagged line (regexp/match? "^(error|warning)\\[[a-z]+\\]" line)
+  headed = regexp/match? "^(error|warning)\\[[a-z]+\\]" line
+  tagged line headed
 
 fn tagged line true
   parts = text/split line ":"
@@ -699,7 +709,8 @@ fn tagged line true
   "<span class=\"k\">{escaped parts[1]!}</span>:{escaped rest}"
 
 fn tagged line false
-  pointed line (starts? (lstripped line) "-->")
+  bare = lstripped line
+  pointed line (starts? bare "-->")
 
 fn lstripped line
   regexp/replace_all "^[ \t]+" line ""
@@ -708,14 +719,16 @@ fn pointed line true
   "<span class=\"c\">{escaped line}</span>"
 
 fn pointed line false
-  carets line (caret_only? line)
+  only_carets = caret_only? line
+  carets line only_carets
 
 fn caret_only? line
   bare = regexp/replace_all "[ \t^]" line ""
   bare == "" and in? line "^"
 
 fn carets line true
-  at = (regexp/matches "\\^" line)[1]!.from
+  hits = regexp/matches "\\^" line
+  at = hits[1]!.from
   before = text/slice line 1 (at - 1)
   rest = escaped (text/slice line at (length line))
   "{before}<span class=\"k\">{rest}</span>"

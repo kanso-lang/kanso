@@ -11,6 +11,13 @@
 # Native and wasm both returned the FIRST failing field from a construction
 # where the interpreter merged, so the three engines disagreed on `built` and
 # nothing in the corpus asked. The oracle's answer is the one pinned here.
+#
+# Since the 2026-09-15 ruling a raised err handed straight to an operator or
+# to a group with no arm for it does not compile, so the failures here are
+# bound to names first. The checker reads a call's arguments and not the names
+# it is handed, the same deliberate blind spot the none rule keeps, and the
+# runtime contract these lines pin is reached through it. What the runtime
+# does with a bare err it was not warned about is the ledger's open question.
 import "std/testing"
 
 type couple
@@ -26,11 +33,15 @@ fn as_text reason
 fn joined a b
   "{a} and {b}"
 
-operated = boom "a" + boom "b"
+ea = boom "a"
 
-built = couple (boom "a") (boom "b")
+eb = boom "b"
 
-called = joined (boom "a") (boom "b")
+operated = ea + eb
+
+built = couple ea eb
+
+called = joined ea eb
 
 pub play =
   print "operated: {testing/when_failed operated as_text}"

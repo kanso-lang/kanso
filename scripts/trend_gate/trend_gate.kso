@@ -1010,7 +1010,9 @@ fn say_of m
 # had improvements to spend — which is every performance branch. Movement is
 # fine; silence is not, and a rule that only prints is silence.
 fn silent? added m
-  either? (not_named? added m.key) (not_named? added (commas m.after))
+  key_absent = not_named? added m.key
+  value_absent = not_named? added (commas m.after)
+  either? key_absent value_absent
 
 fn not_named? haystack needle
   length (text/split haystack needle) == 1

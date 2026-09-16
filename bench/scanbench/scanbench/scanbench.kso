@@ -62,4 +62,5 @@ fn wider s n true
 
 pub fn total n
   subject = text/slice (doubled alphabet n) 1 n
-  length (regexp/find_all pattern subject)
+  hits = regexp/find_all pattern subject
+  length hits

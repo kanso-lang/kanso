@@ -43,7 +43,7 @@ gomen: we do not serve pocky</code></pre>
   </div>
 </div>
 
-<p>point the toolchain at the directory and it runs the module. <code>main.kso</code> calls <code>price</code> from <code>menu.kso</code> as if it were next door, because it is. notice three earlier chapters shaking hands in a dozen lines: string-literal dispatch is the menu, an <code>err</code> is the missing item, and the railway carries it from <code>base_price</code> through <code>price</code>—whose <code>+ 50</code> never runs on the sad track—out to the arm in <code>describe</code>.</p>
+<p>point the toolchain at the directory and it runs the module. <code>main.kso</code> calls <code>price</code> from <code>menu.kso</code> as if it were next door, because it is. notice three earlier chapters shaking hands in a dozen lines: string-literal dispatch is the menu, an <code>err</code> is the missing item, and <code>price</code> hands it on as it is: <code>with_service</code> has an arm for an err and an arm for a number, and its <code>+ 50</code> runs on the number alone. the err travels out as a value to the arm in <code>main.kso</code>, which is the only place that wants to read it.</p>
 
 <h2>one namespace, many files</h2>
 
@@ -129,7 +129,7 @@ test_unknown_item_fails ... ok
   </div>
 </div>
 
-<p>a test is a boolean constant. the runner evaluates each <code>test_</code> name and reports. there is no assertion library, no matcher dsl, no lifecycle—<code>test_dango_price</code> is a name bound to <code>(price "dango") == 400</code>, and that is the whole framework. when a test fails, the report says only what the value was, because a failure is nothing more than a constant that came out <code>false</code>:</p>
+<p>a test is a boolean constant. the runner evaluates each <code>test_</code> name and reports. there is no assertion library, no matcher dsl, no lifecycle—<code>test_dango_price</code> is a name bound to <code>costs? 400 (price "dango")</code>, and that is the whole framework. <code>costs?</code> is two arms in the test file, one for an err and one for a number, because <code>price</code> can answer either and <code>==</code> takes only the number: a fallible answer is dispatched on before it is compared, which is chapter 04's rule and not a testing convention. when a test fails, the report says only what the value was, because a failure is nothing more than a constant that came out <code>false</code>:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">double_test.kso</div>

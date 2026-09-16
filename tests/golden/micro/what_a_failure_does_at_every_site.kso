@@ -15,6 +15,13 @@
 #   first      the operation is ordered, so the first failure is the answer
 #   holds      a container holds what it was built from; it did not fail
 #   through    the failure passes and the operation does not happen
+#
+# Since the 2026-09-15 ruling a raised err handed straight to an operator or
+# to a group with no arm for it does not compile, so the failures here are
+# bound to names first. The checker reads a call's arguments and not the names
+# it is handed, the same deliberate blind spot the none rule keeps, and the
+# runtime contract these lines pin is reached through it. What the runtime
+# does with a bare err it was not warned about is the ledger's open question.
 import "std/testing"
 
 type couple
@@ -30,33 +37,37 @@ fn boom what
 fn joined a b
   "{a}{b}"
 
+ea = boom "a"
+
+eb = boom "b"
+
 # merge: neither operand caused the other
-operated = boom "a" + boom "b"
+operated = ea + eb
 
-compared? = boom "a" < boom "b"
+compared? = ea < eb
 
-built = couple (boom "a") (boom "b")
+built = couple ea eb
 
-grouped = boom "a" & boom "b"
+grouped = ea & eb
 
 # first: the sites that are ordered
-called = joined (boom "a") (boom "b")
+called = joined ea eb
 
-woven = "{boom "a"} and {boom "b"}"
+woven = "{ea} and {eb}"
 
-sequenced = boom "a" >> boom "b"
+sequenced = ea >> eb
 
 # holds: a container is not its contents
-listed = [(boom "a") 2]
+listed = [ea 2]
 
-mapped = { "k":(boom "a") }
+mapped = { "k":ea }
 
 # through: the operation does not happen
-reached = (boom "a").left
+reached = ea.left
 
-indexed = [1 2 3][(boom "a")]!
+indexed = [1 2 3][ea]!
 
-sized = length (boom "a")
+sized = length ea
 
 pub play =
   print "operated:  {testing/when_failed operated as_text}"

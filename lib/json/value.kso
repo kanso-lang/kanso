@@ -39,6 +39,9 @@ fn array_open cs c p
 fn array_step cs (parsed p v) acc
   array_delim cs cs[p] p (push acc v)
 
+fn array_step _ e@(err _) _
+  e
+
 fn bad_value_char c p
   fail p "unexpected character `{text/utf8 [c]}`"
 
@@ -70,6 +73,9 @@ fn obj_items cs p acc
 # same byte a second time to compare it.
 fn obj_key cs (parsed p k) acc
   obj_key_end cs cs[p] p k acc
+
+fn obj_key _ e@(err _) _
+  e
 
 fn obj_key_end cs 58 p k acc
   obj_colon cs (p + 1) k acc
@@ -106,6 +112,9 @@ fn obj_open cs c p
 
 fn obj_value cs (parsed p v) k acc
   obj_delim cs cs[p] p (put acc k v)
+
+fn obj_value _ e@(err _) _ _
+  e
 
 fn parse_array cs p
   array_open cs cs[p] p

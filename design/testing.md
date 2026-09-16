@@ -42,11 +42,11 @@ the caller the bare REASON RECORD, and answers whatever the
 continuation answers; on a non-failure it answers false, so a test
 that expected a failure and got a value fails honestly.
 
-The continuation is where the tested package reads its own failure,
-and it breaks no rule doing so: the rule bans arms MATCHING YOUR OWN
-ERR, and the continuation never sees an err — it receives a reason
-record that a licensed foreign party already separated from the
-failure. Clay ruled the round-trip explicitly: "you ensured it would
+The continuation is where the tested package reads its own failure.
+It receives a reason record that a foreign party already separated
+from the failure, and since the 2026-09-15 ruling made a bare err
+data it could also match the err itself with an `(err …)` arm of its
+own; the round-trip through `testing` is the shape the suites use. Clay ruled the round-trip explicitly: "you ensured it would
 bubble up to the caller, and it did. if the caller wants to pass it
 back to you, so be it." 1b's per-field pub covers the field reads.
 
@@ -100,19 +100,17 @@ explicitly blessed. The seeding served the old return-channel rule;
 it cannot survive the new one.
 
 Resolution, derived from the ruling's own sentence ("your own
-failures only bubble"): clause 1 is DISPATCH SEMANTICS, not only a
-static check — **an arm cannot see an own-origin err**. At match
-time an err whose origin hako equals the arm's hako simply does not
-match; infectiousness then carries it onward, so it keeps bubbling,
-which is the doctrine executing itself. The static refusal remains
-for what the computed provenance set proves WITHOUT self-seeding
-(arms naming own reason types, provably-own flows); the pub seed
-retires. For `when_failed` this means: a testing-raised err reaching
-it skips both arms and propagates, so the harness reports the failure
-— exactly right. Veto window Clay's, as with every derivation. Filed
-2026-08-25 in design/pending-gavels.md as **An arm cannot see an
-own-origin err — semantics, or an advisory?**, since the window never
-closed and the shipped behaviour is an advisory rather than either.
+failures only bubble"): clause 1 was made DISPATCH SEMANTICS on
+2026-08-24 — an arm could not see an own-origin err at match time,
+and the static refusal covered what provenance proved without the
+seed. RETIRED 2026-09-15 by the ruling "the box is explicit, an err
+is a value": a bare err is data and an `(err …)` arm matches it
+wherever it is written, so both the match-time skip and the static
+refusal are gone. What stands is the 2026-08-29 gavel's foreign-only
+rescue licence, asked at the WORD: a `.?` written in the package that
+raised the failure hands it on without entering its callback. For
+`when_failed` nothing changes — the tested package's failures are
+foreign to `testing`, so its arms see them as they always did.
 
 ## Refinement-phase stitches, logged while drafting
 

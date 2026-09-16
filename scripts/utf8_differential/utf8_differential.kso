@@ -141,14 +141,19 @@ fn rejoined acc chunk
   "{acc}return 0;{rest}"
 
 fn swapped src from to
-  text/join (text/split src from) to
+  parts = text/split src from
+  text/join parts to
 
 fn as_harness src
   ascii = body_of src ascii_sig
-  wide = as_wide (no_err (body_of src wide_sig))
-  scalar = as_scalar (no_err (body_of src scalar_sig))
-  door = as_door (body_of src signature)
-  chars = swapped (body_of src chars_sig) chars_sig harness_chars_sig
+  wide_raw = body_of src wide_sig
+  wide = as_wide (no_err wide_raw)
+  scalar_raw = body_of src scalar_sig
+  scalar = as_scalar (no_err scalar_raw)
+  door_body = body_of src signature
+  door = as_door door_body
+  chars_body = body_of src chars_sig
+  chars = swapped chars_body chars_sig harness_chars_sig
   cap = threshold_of src
   "{header}{cap}\n{ascii}\n{wide}\n{scalar}\n{door}\n{chars}\n"
 
@@ -226,4 +231,8 @@ fn verdict _
   io/write_err "FAIL  a function and its reference disagree\n"
     .> (_ -> os/exit 1)
 
-pub play = os/read_file! "src/runtime.c" .> (src -> written (as_harness src))
+pub play = os/read_file! "src/runtime.c" .> written_from
+
+fn written_from src
+  harness = as_harness src
+  written harness

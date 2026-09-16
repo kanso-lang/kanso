@@ -2,16 +2,14 @@
 # admit the same kind. the native backend answers a group shaped like this
 # with one switch on the value's tag instead of a cascade of checks, so this
 # is where a case wired to the wrong arm shows up: each line below has to
-# reach the arm the interpreter reaches, and a failure has to reach none of
-# them.
+# reach the arm the interpreter reaches. An err is a kind too, and the
+# checker refuses a raised one at a position no arm names it at, so the
+# group has an arm for it and the switch a case.
 import "std/json"
 
 type marks
 
 type stamps
-
-fn said (err r)
-  "no arm: {r.reason}"
 
 fn kind true
   "true"
@@ -43,6 +41,9 @@ fn kind xs:[]some
 fn kind m:map[string some]
   "map {length (entries m)}"
 
+fn kind (err r)
+  "err {r.reason}"
+
 pub play =
   print (kind true)
   >> print (kind false)
@@ -54,4 +55,4 @@ pub play =
   >> print (kind "hi")
   >> print (kind [1 2 3])
   >> print (kind { "a":1 "b":2 })
-  >> print (rescue (kind (json/decode "[1, 2")) said)
+  >> print (kind (json/decode "[1, 2"))

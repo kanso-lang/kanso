@@ -218,6 +218,91 @@ goldens = row
   (breaking "drifted_micro_golden")
   no_setup
 
+# The foreign-only rescue licence, at the word: a `.?` written in the package
+# that raised the failure hands it on without entering its callback. The
+# mutation deletes the interpreter's licence arm, and the micro fixture that
+# pins the licence prints the callback's answer where the golden says the
+# failure went by.
+rescue_licence = row
+  "a rescue that enters the callback on its own package's failure"
+  true
+  "cargo test --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_rescue_that_enters_its_own_packages_callback")
+  no_setup
+
+# The 2026-09-15 ruling's third part: a raised err arriving where a value is
+# wanted does not compile. The mutation deletes the one call that asks, and
+# the three error fixtures that pin the refusal then compile clean, which the
+# error corpus reports as a golden holding a diagnostic nobody raised.
+raised_err = row
+  "a raised err reaching a value site that compiles"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_raised_err_reaching_a_value_site_compiles")
+  no_setup
+
+# A failure crossing a beat carry in the two-word record convention was boxed
+# as a record and read back out of one; the mutation puts the read back and
+# the mem fixture a_failure_crosses_a_beat_carry_in_two_words dies on native
+# where the interpreter answers.
+carry_failure = row
+  "a failure read as a record on the far side of a carry"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_failure_read_as_a_record_at_a_carry_take")
+  release
+
+# An `e@(err _)` arm at a carried slot needs no record, and the mutation makes
+# it ask for one: the fixture an_err_as_pattern_keeps_a_carried_slot_unboxed
+# reads sh_rec=64000 against its 0.
+err_as_pattern = row
+  "an err as-pattern that boxes a carried slot"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "an_err_as_pattern_boxes_a_carried_slot")
+  release
+
+# A cell can evaluate to a cell: `rest = names_any? ...` deferred in every
+# arm of a recursion and handed back through `either? _ answer`. The runtime
+# forced one level and the dispatcher tested a cell's tag against `true`;
+# the browser differential harness died in `put_unless` on every corpus
+# directory. The force walks the chain now, on native and on the page.
+force_chain = row
+  "a cell whose answer is a cell, forced one level"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_deferred_answer_is_forced_one_level")
+  release
+
+# `effect v` is the box built by hand, ruled 2026-09-15. The interpreter is
+# the oracle for what it settles to, and native is compared with it on the
+# fixture that starts every chain shape from one. The mutation makes the
+# interpreter hand the value over unboxed.
+hand_box = row
+  "the box built by hand answering its value bare on one engine"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "the_hand_built_box_answers_its_value_bare")
+  release
+
+# A rescue or annotate callback is entered with the failure itself. The
+# emitter trusts inference for a group's entry guard, so a callback lambda
+# whose parameter is seeded as never failing costs native the guard on the
+# group it hands the err to, and the interpreter is the oracle that refuses.
+callback_err = row
+  "a chain callback's parameter seeded as never failing"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_chain_callbacks_parameter_never_fails")
+  release
+
 # The four `cargo test --test golden` rows above and below all point at the
 # micro corpus or the mem corpus. The error corpus — 161 fixtures pinning
 # every diagnostic the language emits — had no row at all, so nothing had
@@ -552,20 +637,6 @@ capture_load = row
   "cost goldens (deterministic ratchet, no clocks)"
   (breaking "a_capture_is_read_through_a_call")
   benches
-
-# The own-err check in front of an err-admitting arm crossed a call on every
-# value the arm was tried against, 1,454,508 a run on the run program, when
-# only an err needs the package compare behind it. The check is an
-# alwaysinline twin now: the tag test in the caller, the call only for an
-# err. Emitted text counts the same one `call`, so the work vein is the only
-# thing that can see it.
-own_err_inline = row
-  "an own-err check that calls out on every value, err or not"
-  true
-  (gating "instructions")
-  "cost goldens (deterministic ratchet, no clocks)"
-  (breaking "an_own_err_check_is_a_call_on_every_value")
-  benchmarks
 
 empty_room = row
   "an empty list literal with no room for a push"
@@ -1470,7 +1541,7 @@ rows_b1r4 = text/concat rows_b1r3 [sweep_helpers slice_walk closure_caps]
 
 rows_b1r5 = text/concat rows_b1r4 [empty_room scan_inline scan_tail]
 
-rows_b1r = text/concat rows_b1r5 [counters_out capture_load own_err_inline]
+rows_b1r = text/concat rows_b1r5 [counters_out capture_load]
 
 rows_b1b = text/concat rows_b1r [machine_code]
 
@@ -1699,9 +1770,13 @@ rows_c1k = text/concat rows_c1j [coverage_oracle coverage_oracle_format]
 
 rows_c1l = text/concat rows_c1k [coverage_page coverage_page_format]
 
-rows_c1m = text/concat rows_c1l [beat_cursor]
+rows_c1m = text/concat rows_c1l [beat_cursor rescue_licence raised_err]
 
-rows_c = text/concat rows_c1m [itself]
+rows_c1n = text/concat rows_c1m [carry_failure err_as_pattern force_chain]
+
+rows_c1o = text/concat rows_c1n [hand_box callback_err]
+
+rows_c = text/concat rows_c1o [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

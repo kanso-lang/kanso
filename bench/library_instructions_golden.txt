@@ -414,4 +414,4 @@
 # stated, not reasoned from. compile_allocs held at 27,937 and compile_memory
 # is byte-identical.
 #
-library_instructions=144844867
+library_instructions=140855393

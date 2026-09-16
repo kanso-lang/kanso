@@ -1,0 +1,4 @@
+error[exhaustive]: this can be an err and `+` wants a value — dispatch on it first with an `(err _)` arm (in an_err_reaches_an_operator.kso)
+  --> tests/golden/errors/an_err_reaches_an_operator.kso:11:9
+  11 | total = steeped 0 + 1
+               ^

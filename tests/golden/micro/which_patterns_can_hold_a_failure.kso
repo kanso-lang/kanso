@@ -1,28 +1,30 @@
-# Gavel 24 names three patterns that can hold an err — `(err …)`, an `:err`
-# annotation, and a typeset with err among its members — and says none of them
-# holds an err its own hako raised. That is a table with two columns, and it
-# lived in three scattered fixtures covering three of its cells.
+# Three patterns can hold an err — `(err …)`, an `:err` annotation, and a
+# typeset with err among its members — and a table with two columns says
+# which, against a failure this module raised and a failure std/json raised.
+# It lived in three scattered fixtures covering three of its cells before it
+# was one table.
 #
-# Two divergences this afternoon were cells of it. `_:some` took a foreign
-# failure on two engines and was refused outright at build time on the third
-# (#1052). A typeset arm took its own hako's failure on native alone, because
-# the typeset branch of `emit_pattern` returned before it asked `admits_err`
-# (#1056). In both cases the row existed in somebody's head and nowhere in the
-# tree.
+# Two divergences were cells of it. `_:some` took a foreign failure on two
+# engines and was refused outright at build time on the third (#1052). A
+# typeset arm took its own hako's failure on native alone, because the
+# typeset branch of `emit_pattern` returned before it asked about the raiser
+# (#1056). In both cases the row existed in somebody's head and nowhere in
+# the tree.
 #
-# So: every pattern form a parameter can take, against a failure this module
-# raised and a failure std/json raised. `took` means the arm fired. `past`
-# means the failure went by as though the arm were not written.
+# So: every pattern form a parameter can take. `took` means the arm fired.
+# `past` means the failure went by as though the arm were not written.
 #
-# The foreign column is the rule about which patterns admit err: three do, and
-# the other seven are ordinary patterns that a failure declines to match. The
-# own column is `past` in every row — a package cannot rescue itself under any
-# spelling, and adding a spelling to the language means adding a row here.
+# The two columns read the same. Until 2026-09-15 the own column was `past`
+# in every row — an err skipped every arm its own hako wrote — and the
+# ruling of that day made a bare err data, so the three err-admitting
+# patterns take a failure whoever raised it and the other seven decline one
+# whoever raised it. Adding a spelling to the language means adding a row
+# here.
 #
 # `when_failed` hands the reason to its callback and answers `false` when
-# there was no failure, so `outcome` reads that `false` as `took`. It has to
-# be std's arm that reads the err: an `(err …)` arm written in this module
-# could not see this module's own failure, which is the rule being pinned.
+# there was no failure, so `outcome` reads that `false` as `took`. It is
+# std's arm that reads the err, which keeps the table about the patterns
+# rather than about which module wrote them.
 import "std/json"
 import "std/testing"
 

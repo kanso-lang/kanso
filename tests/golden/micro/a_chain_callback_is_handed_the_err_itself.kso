@@ -1,0 +1,30 @@
+# A rescue or annotate callback is entered with the err itself, so a group
+# the callback hands that err to sees a failure and refuses it, the way a
+# bare binder refuses every failure. The interpreter always did this. Native
+# trusted inference, which seeded every lambda parameter as never failing
+# because an ordinary call refuses to hand a closure a failure, and the
+# words are the two callers that hand one over on purpose. So `lam`'s entry
+# guard was left out and the err walked into its body.
+#
+# `when_failed` is std's arm, so it reads what came out of each chain: the
+# failure that passed through `lam`, on every engine.
+import "std/testing"
+
+fn mine _
+  err "mine"
+
+fn lam e
+  "took {e.reason}"
+
+fn passed r
+  "passed lam, reason {r}"
+
+fn outcome false
+  "the callback's group took the failure"
+
+fn outcome v
+  v
+
+pub play =
+  print (outcome (testing/when_failed (mine 1 .? (e -> lam e)) passed))
+  >> print (outcome (testing/when_failed (mine 1 .! (e -> lam e)) passed))

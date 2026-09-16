@@ -320,6 +320,8 @@ static int k_memo_still_there(KThunk* t) {
    here, because k_force is called once per demanded cell and the caller pays
    for its size: growing it past what the inliner will take cost deepbench
    4,375,985 instructions, 0.60% of the run, with no counter moving at all. */
+KValue k_force(KValue v);
+
 static __attribute__((noinline)) KValue k_force_slow(KThunk* t) {
     if (t->forced == K_MEMO_AT_RISK) {
         if (k_memo_still_there(t)) return t->result;
@@ -328,6 +330,11 @@ static __attribute__((noinline)) KValue k_force_slow(KThunk* t) {
     if (t->site == K_SITE_BLACKHOLE) k_die("a lazy binding demands its own value");
     if (K_COUNTING) k_stat_thunk_evals++;
     KValue answer = d_thunk_eval(t->site, t->args);
+    /* The computation can answer with a cell of its own: a deferred binding
+       handed back through a pass-through arm is the next call's deferred
+       binding. Scrutiny wants the value at the end of that chain, which is
+       what the interpreter's force has always walked to. */
+    answer = k_force(answer);
     t->result = answer;
     if (!k_memo_outlives(answer)) {
         t->forced = K_MEMO_AT_RISK;
@@ -403,7 +410,8 @@ struct KDesc { long long dtag; KValue x; KValue y; };
 /* dtag: 0 print, 1 seq, 2 args, 3 stdin, 4 read_file, 5 write_file, 6 bind,
    7 join, 8 sleep, 9 random, 10 nil, 11 write (stdout, no newline),
    12 write_err, 13 env, 14 exists, 15 list_dir, 16 now, 17 run,
-   18 is_dir, 26 start, 27 kill, 29 rescue, 30 read_bytes */
+   18 is_dir, 26 start, 27 kill, 29 rescue, 30 read_bytes,
+   31 settled (a box already holding its answer: what `effect v` was handed) */
 
 /* An err's propagation trace rides on the err value alone: the origin
    ("fn at file:line", interned at the construction site; NULL for
@@ -2827,19 +2835,6 @@ long long k_not_failure(KValue v) { return v.tag != K_ERR; }
 
 static KErrBox* k_err_box(KValue v) { return (KErrBox*)(intptr_t)v.payload; }
 
-/* An arm cannot see an err its own package raised (gavel 24, clause 1, ruled
-   as dispatch semantics rather than as a check). Answers whether the match may
-   proceed, so every non-err and every err from elsewhere passes; an own-origin
-   err fails the arm and infectiousness carries it onward exactly as if the arm
-   were not written. Package names are one short string — "" for the program,
-   "std", or a hako owner — so the compare is a few bytes. */
-long long k_not_own_err(KValue v, const char* arm) {
-    if (v.tag != K_ERR) return 1;
-    const char* raiser = k_err_box(v)->hako;
-    if (!raiser) return 1;
-    return strcmp(raiser, arm) != 0;
-}
-
 /* Every field, every time. The arena bumps and does not zero, so a
    construction that leaves a field out reads whatever the last user of those
    bytes wrote. That is not theoretical: k_hop and k_b_wrap_err both skipped
@@ -3002,6 +2997,33 @@ static KValue k_sub_base(KValue v);
 KValue k_field(KValue v, long long i) {
     if (v.tag == K_SUB) v = k_sub_base(v);
     return k_as_rec(v)->fields[i];
+}
+
+/* The by-value record convention packs a two-field record into two words:
+   field 0's int payload shifted above field 1's tag in the first word,
+   field 1's payload in the second. A failure crosses in the same two words
+   untouched: its first word is exactly K_ERR, and no packed value's first
+   word is, since a packed word carries a position above bit eight over a
+   field the analysis proved is never a failure. These two are the only
+   conversions between the two shapes, and both pass a failure through.
+   Until 2026-09-16 the emitter inlined them and neither did: a failure
+   staged through a beat carry was boxed as a record whose second field was
+   the failure, k_rec merged that into a failure, and the unpack on the far
+   side read two fields off it and handed the consumer a value whose first
+   word was not K_ERR. The consumer's record arm matched a failure. */
+KValue k_parsed_box(long long type_id, long long w0, long long w1) {
+    KValue words; words.tag = w0; words.payload = w1;
+    if (!k_not_failure(words)) return words;
+    KValue fields[2];
+    fields[0].tag = K_INT; fields[0].payload = (long long)((unsigned long long)w0 >> 8);
+    fields[1].tag = w0 & 255; fields[1].payload = w1;
+    return k_rec(type_id, 2, fields);
+}
+KValue k_parsed_words(KValue v) {
+    if (!k_not_failure(v)) return v;
+    KValue f0 = k_field(v, 0), f1 = k_field(v, 1);
+    KValue out; out.tag = (f0.payload << 8) | f1.tag; out.payload = f1.payload;
+    return out;
 }
 KValue k_err_inner(KValue v) { return k_err_box(v)->reason; }
 
@@ -4842,6 +4864,11 @@ KValue k_seq(KValue a, KValue b) {
 }
 
 KValue k_desc_args(void) { return k_mkdesc(2, k_none(), k_none()); }
+/* The box built by hand (ruled 2026-09-15). Nothing about it is deferred, so
+   it is built holding what it was handed, value or err, and running it hands
+   that over. An err arrives as content, never as a failure to propagate. */
+KValue k_settled(KValue v) { return k_mkdesc(31, v, k_none()); }
+KValue k_b_effect(KValue v) { return k_settled(v); }
 KValue k_desc_stdin(void) { return k_mkdesc(3, k_none(), k_none()); }
 KValue k_desc_now(void) { return k_mkdesc(16, k_none(), k_none()); }
 
@@ -5152,21 +5179,39 @@ KValue k_b_bind(KValue subject, KValue callback) {
     return k_worded_step(6, subject, callback);
 }
 
-KValue k_b_rescue(KValue subject, KValue callback) {
-    if (subject.tag == K_DESC) return k_mkdesc(29, subject, callback);
-    return k_worded_step(29, subject, callback);
-}
+/* `rescue` and `annotate` are both a wrapper around their callback on the one
+   description shape, so neither needs a description of its own — which
+   matters, because both are written at a site and a description's two slots
+   are already the subject and the callback. The runtime builds the wrapper
+   here instead: a closure over the callback and the site, standing where the
+   user's callback would.
 
-/* `annotate` is `rescue` with a wrapper around its callback, so it needs no
-   description of its own — which matters, because it is the one word that
-   builds an err, an err records where it was raised, and a description's two
-   slots are already the subject and the callback. The runtime builds the
-   wrapper here instead: a closure over the callback and the site, standing
-   where the user's callback would.
+   `rescue` needs the site for its licence. The 2026-08-29 gavel's rescue is
+   foreign-only, and the 2026-09-15 ruling moved that test from the arm to
+   the word: a rescue written in the package that raised the failure hands it
+   on without entering the callback. The compare is the raise's package
+   against the site's, both the first field of an origin literal, and a
+   failure nobody can be held responsible for — merged, or raised by a host
+   with no frame — carries no package and passes.
+
+   `annotate` needs it because the err it builds is a raise, and a raise
+   records where it happened.
 
    The site rides as an int payload. It is a static literal the collector
    never owns and never traces, and a raw pointer in a payload is already how
    `k_fnref` carries what it carries. */
+static int k_own_failure(KValue failure, const char* site) {
+    const char* raiser = k_err_box(failure)->hako;
+    return raiser && strcmp(raiser, site) == 0;
+}
+
+static K_CLOSCC KValue k_rescue_wrap(void* env, KValue failure) {
+    KValue callback = k_env_get(env, 0);
+    KValue site = k_env_get(env, 1);
+    if (k_own_failure(failure, (const char*)(intptr_t)site.payload)) return failure;
+    return k_call_decided(callback, failure);
+}
+
 static K_CLOSCC KValue k_annotate_wrap(void* env, KValue failure) {
     KValue callback = k_env_get(env, 0);
     KValue site = k_env_get(env, 1);
@@ -5174,12 +5219,21 @@ static K_CLOSCC KValue k_annotate_wrap(void* env, KValue failure) {
                         (const char*)(intptr_t)site.payload);
 }
 
-KValue k_b_annotate(KValue subject, KValue callback, const char* origin) {
+static KValue k_sited_word(KValue subject, KValue callback, const char* origin,
+                           K_CLOSCC KValue (*wrap)(void*, KValue)) {
     KValue site; site.tag = K_INT; site.payload = (long long)(intptr_t)origin;
     KValue caps[2]; caps[0] = callback; caps[1] = site;
-    KValue wrap = k_closure(k_annotate_wrap, 1, 2, caps);
-    if (subject.tag == K_DESC) return k_mkdesc(29, subject, wrap);
-    return k_worded_step(29, subject, wrap);
+    KValue wrapped = k_closure(wrap, 1, 2, caps);
+    if (subject.tag == K_DESC) return k_mkdesc(29, subject, wrapped);
+    return k_worded_step(29, subject, wrapped);
+}
+
+KValue k_b_rescue(KValue subject, KValue callback, const char* origin) {
+    return k_sited_word(subject, callback, origin, k_rescue_wrap);
+}
+
+KValue k_b_annotate(KValue subject, KValue callback, const char* origin) {
+    return k_sited_word(subject, callback, origin, k_annotate_wrap);
 }
 
 KValue k_desc_sleep(KValue ms) {
@@ -5243,6 +5297,7 @@ static char** k_argv_global = NULL;
 
 static KValue k_exec(KDesc* d) {
     switch (d->dtag) {
+        case 31: return d->x;
         case 0: {
             KStr* s = k_as_str(d->x);
             fwrite(s->data, 1, s->len, stdout);

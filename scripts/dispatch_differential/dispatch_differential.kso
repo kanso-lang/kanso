@@ -141,10 +141,11 @@ decls9 = """
     "any"
 """
 
-# The err has to come from somewhere FOREIGN: gavel 24 means an arm cannot see
-# an err its own hako raised, so a probe raising its own err would take neither
-# arm and print nothing — which is a fact about provenance rather than about
-# arm order, and this sweep is about arm order. `text/utf8` raises in std/text.
+# The err comes from somewhere FOREIGN, and a bare twin below raises its own.
+# Until 2026-09-15 an arm could not see an err its own hako raised, so the
+# probe raising its own took neither arm; that rule is retired and the two
+# probes answer alike, which is a fact about provenance rather than about arm
+# order, and this sweep is about arm order. `text/utf8` raises in std/text.
 decls10 = """
   import "std/text"
 

@@ -69,7 +69,14 @@ pub type splice
 pub play = io/stdin .> (model -> with_model model)
 
 fn with_model model
-  os/args .> (given -> over_rows (read model) given)
+  os/args .> (given -> scoring_rows (read model) given)
+
+# A model with no formula line answers an err, handed on as it is.
+fn scoring_rows e@(err _) _
+  e
+
+fn scoring_rows m given
+  over_rows m given
 
 # The model in one value, so the walk below takes an argument rather than
 # three that have to stay in step.

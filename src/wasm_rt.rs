@@ -29,17 +29,18 @@ enum Slot {
         tidx: u32,
         env: u32,
         /// How many arguments the body reads, or -1 where the callee sorts
-        /// arity out itself — a group's wrapper dispatches across its arms
+        /// arity out itself â a group's wrapper dispatches across its arms
         /// and says `no overload` for the counts none of them take.
         arity: i32,
     },
     Seq(u32, u32),
     /// The three worded chain steps of the 2026-08-26 gavel, as one slot with
-    /// the word that says which channel the callback sees. `Annotate` carries
-    /// the origin literal beside them, because the err it builds is a raise
+    /// the word that says which channel the callback sees. `Rescue` and
+    /// `Annotate` carry the origin literal beside them: the first for its
+    /// foreign-only licence, the second because the err it builds is a raise
     /// and a raise records where it happened.
     Bind(u32, u32),
-    Rescue(u32, u32),
+    Rescue(u32, u32, u32),
     Annotate(u32, u32, u32),
 }
 
@@ -53,12 +54,12 @@ thread_local! {
     static ERROR: RefCell<String> = const { RefCell::new(String::new()) };
     static PRINTS: RefCell<String> = const { RefCell::new(String::new()) };
     /// Kept apart from stdout and appended after it, the way a shell captures
-    /// the two streams — so this engine and the native binary agree byte for
+    /// the two streams â so this engine and the native binary agree byte for
     /// byte on a program that writes to both.
     static ERRS: RefCell<String> = const { RefCell::new(String::new()) };
     /// Held by reference, not by value: `with_interp` hands the reference out
-    /// and the cell's borrow ends immediately, so evaluation — which reaches
-    /// arbitrary guest code and can abort — never runs inside it.
+    /// and the cell's borrow ends immediately, so evaluation â which reaches
+    /// arbitrary guest code and can abort â never runs inside it.
     static INTERP: RefCell<Option<&'static Interp<'static>>> = const { RefCell::new(None) };
 }
 
@@ -146,10 +147,10 @@ const PARTIAL: i32 = -4;
 /// when it is finished. The backend's MASKED_ARITY.
 const MASKED: i32 = -1000;
 
-/// Every count a callee answers to, smallest first — the interpreter's
+/// Every count a callee answers to, smallest first â the interpreter's
 /// `arities_of`. A lambda answers its one count, a wrapper the mask it was
-/// handed, and anything else — a partial, a cell, a value that is not
-/// callable — nothing, which is what makes a partial over it grow.
+/// handed, and anything else â a partial, a cell, a value that is not
+/// callable â nothing, which is what makes a partial over it grow.
 fn arities_of(callee: u32) -> Vec<usize> {
     let Slot::C { arity, .. } = closure_slot(callee) else { return Vec::new() };
     if arity >= 0 {
@@ -211,7 +212,7 @@ fn forced(v: Value) -> Value {
             let handle = call_closure(h, Vec::new());
             // A cell whose body is a wall or a bind answers a slot shape
             // rather than a value, so it is materialized rather than read as
-            // data — GAVEL 15 put such a cell to the right of every `>>`.
+            // data â GAVEL 15 put such a cell to the right of every `>>`.
             let answered = match slot(handle) {
                 Slot::V(value) => value,
                 _ => match as_desc(handle) {
@@ -219,6 +220,10 @@ fn forced(v: Value) -> Value {
                     None => val(handle),
                 },
             };
+            // The body can answer with a cell of its own — a deferred binding
+            // handed back through a pass-through arm is the next call's deferred
+            // binding — and a read wants the value at the end of that chain.
+            let answered = forced(answered);
             REG.with(|r| r.borrow_mut()[h as usize] = Slot::V(answered.clone()));
             answered
         }
@@ -231,7 +236,7 @@ fn forced(v: Value) -> Value {
 
 /// Which handles are cells rather than functions. A deferred slot is one
 /// nobody has demanded, and a value slot is one a demand already wrote its
-/// answer over — both name the same binding, which is what lets a comparison
+/// answer over â both name the same binding, which is what lets a comparison
 /// tell a second arrival from a first.
 fn cell_handle(v: &Value) -> Option<usize> {
     let Value::TableFn(h) = v else {
@@ -304,9 +309,9 @@ fn closure_slot(h: u32) -> Slot {
 
 fn call_closure(c_h: u32, arg_handles: Vec<u32>) -> u32 {
     // A failing CALLABLE answers before a failing argument does. The other two
-    // engines both read it that way — `k_call2` returns `f` on its first line
+    // engines both read it that way â `k_call2` returns `f` on its first line
     // and the interpreter never reaches its own `call_closure` with a failed
-    // head — and this asked the arguments first, so a call with a failure in
+    // head â and this asked the arguments first, so a call with a failure in
     // both positions named the argument here and the callable there.
     //
     // The arity check answers before a failing argument too, for the same
@@ -366,7 +371,7 @@ fn call_closure(c_h: u32, arg_handles: Vec<u32>) -> u32 {
 }
 
 /// `call_closure` without its argument guard, for the callers that have
-/// already decided about the argument themselves — `rescue` and `annotate`,
+/// already decided about the argument themselves â `rescue` and `annotate`,
 /// which must hand a failure to a callback, and `bind`, whose chain step has
 /// already tested the yielded value and would otherwise pay for the test
 /// twice. The other two engines carry the same name and the same two reasons.
@@ -384,7 +389,7 @@ fn call_decided(c_h: u32, arg: u32) -> u32 {
     unsafe { k_callback(tidx, env, args) }
 }
 
-/// What a worded chain step answers once its subject has settled — the whole
+/// What a worded chain step answers once its subject has settled â the whole
 /// difference between the three words. `bind` reads the value channel and lets
 /// a failure past untouched; `rescue` reads the failure channel and lets a
 /// value past; `annotate` reads the same channel as `rescue` and re-wraps the
@@ -396,7 +401,13 @@ fn worded_step(word: &Slot, yielded: u32, callee: u32) -> u32 {
     match (word, failed) {
         (Slot::Bind(..), true) | (Slot::Rescue(..), false) => yielded,
         (Slot::Bind(..), false) => call_decided(callee, yielded),
-        (Slot::Rescue(..), true) => call_decided(callee, yielded),
+        // The foreign-only licence, at the word: a rescue written in the
+        // package that raised the failure hands it on without entering the
+        // callback. The interpreter's `own_failure` is the oracle.
+        (Slot::Rescue(_, _, origin), true) => match slot(yielded) {
+            Slot::V(Value::ErrV(ref cause)) if own_failure(cause, *origin) => yielded,
+            _ => call_decided(callee, yielded),
+        },
         (Slot::Annotate(_, _, origin), true) => {
             let Slot::V(Value::ErrV(cause)) = slot(yielded) else { return yielded };
             let answered = call_decided(callee, yielded);
@@ -560,15 +571,15 @@ fn keyed_refusal(shown: &str) -> String {
 #[no_mangle]
 pub extern "C" fn rt_keyed_check(h: u32, entries: u32) -> u32 {
     // The guard here used to be `let Slot::V(value) = slot(h)`, which fired on
-    // exactly the two handles that are not values — a closure and a
-    // description — and said "cannot read fields of this value" about both.
+    // exactly the two handles that are not values â a closure and a
+    // description â and said "cannot read fields of this value" about both.
     // The other two engines name what they were given, `<fn>` and `<io>`.
     //
     // A closure goes through `val`, which is how a closure is data everywhere
     // else on this engine. A description does not: `val` refuses it, so the
     // slot answers instead. Every description renders `<io>` whatever it
     // holds, and building the Desc to render it would mean demanding a
-    // deferred right side — an effect a refusal must not have.
+    // deferred right side â an effect a refusal must not have.
     if descish(&slot(h)) {
         die(keyed_refusal("<io>"));
     }
@@ -628,7 +639,7 @@ pub extern "C" fn rt_no_field(base: u32, name_lit: u32) -> u32 {
     };
     // `operand` rather than `val`: a description reaches the arm below instead
     // of being refused by the accessor in its own words. `.n` on a description
-    // arrives HERE and not at `rt_field_by_name` — a field name the program
+    // arrives HERE and not at `rt_field_by_name` â a field name the program
     // declares somewhere compiles to a getter, and a getter that matches
     // nothing ends in this call. `(opaque d).nope`, with no record declaring
     // `nope`, never reaches the runtime at all. See a_description_has_no_fields.
@@ -695,8 +706,8 @@ pub extern "C" fn rt_keyed_field(h: u32, name_lit: u32) -> u32 {
     }
 }
 
-/// The raise site's literal holds both halves — the package that raises here,
-/// a NUL, then the trace line — so one argument carries what the match rule
+/// The raise site's literal holds both halves â the package that raises here,
+/// a NUL, then the trace line â so one argument carries what the match rule
 /// asks about and what the report prints. `origin_lit` in the backend builds
 /// it; native's `origin_arg` builds the same shape.
 fn raised_at(origin_lit: u32) -> crate::eval::Raised {
@@ -706,6 +717,16 @@ fn raised_at(origin_lit: u32) -> crate::eval::Raised {
             crate::eval::Raised { at: Some(Rc::from(at)), hako: Some(Rc::from(hako)) }
         }
         None => crate::eval::Raised { at: Some(both), hako: None },
+    }
+}
+
+/// Whether the failure was raised by the package the rescue is written in.
+/// A failure with no package â merged, or raised by a host with no frame â
+/// belongs to nobody and passes.
+fn own_failure(cause: &crate::eval::ErrInfo, origin_lit: u32) -> bool {
+    match (&cause.hako, raised_at(origin_lit).hako) {
+        (Some(raiser), Some(here)) => *raiser == here,
+        _ => false,
     }
 }
 
@@ -720,18 +741,6 @@ pub extern "C" fn rt_mkerr(h: u32, origin_lit: u32) -> u32 {
         return h;
     }
     push(Slot::V(err_value(v, raised_at(origin_lit))))
-}
-
-/// An arm cannot see an err its own hako raised (gavel 24, clause 1, as
-/// dispatch semantics). Answers whether the match may proceed, so every
-/// non-err and every err from elsewhere passes.
-#[no_mangle]
-pub extern "C" fn rt_not_own_err(h: u32, arm_lit: u32) -> u32 {
-    let arm = lit_str(arm_lit);
-    match val(h) {
-        Value::ErrV(info) => u32::from(info.hako.as_deref() != Some(&*arm)),
-        _ => 1,
-    }
 }
 
 fn lit_str(h: u32) -> Rc<str> {
@@ -931,7 +940,7 @@ pub extern "C" fn rt_template(n: u32) -> u32 {
         // on the other two engines and died here. See
         // a_description_renders_in_an_interpolation.
         let v = value_of(h);
-        // only an err propagates; none renders its sentinel via the group —
+        // only an err propagates; none renders its sentinel via the group â
         // the same rule as the other engines, through the same helper
         if matches!(v, Value::ErrV(_)) {
             return h;
@@ -947,18 +956,18 @@ pub extern "C" fn rt_template(n: u32) -> u32 {
 }
 
 /// A slot as a value the interpreter can read: an operator's side, an index,
-/// the thing being indexed, an `if` condition, the base of a field read —
+/// the thing being indexed, an `if` condition, the base of a field read â
 /// every place a site reads a slot as data it may turn out to refuse.
 ///
-/// REFUSING sites only. A site that CARRIES a description onward — into a
-/// list, a record field, an err — wants `value_of`, which builds the real
+/// REFUSING sites only. A site that CARRIES a description onward â into a
+/// list, a record field, an err â wants `value_of`, which builds the real
 /// description; the placeholder below would be handed back to the program as
 /// if it were the effect the program wrote.
 ///
 /// A closure is data here the same way it is data in a list: `val` turns it
 /// into the handle-carrying function value, and the interpreter refuses that
 /// by name. A description is not data, and nothing that reads one this way
-/// succeeds — arithmetic and comparison have no arm that takes one, equality
+/// succeeds â arithmetic and comparison have no arm that takes one, equality
 /// refuses it in so many words, indexing has no arm for it either, and `if`
 /// wants true or false. Every arm that reports one renders it `<io>`. So any
 /// description stands in for the real one, and the site's sentence still
@@ -966,7 +975,7 @@ pub extern "C" fn rt_template(n: u32) -> u32 {
 ///
 /// Standing one in is also what keeps a refusal from running anything.
 /// `as_desc`, which builds the true description, forces a deferred right
-/// side — and native does not:
+/// side â and native does not:
 ///
 ///     xs = [1]
 ///     boom = io/write "{opaque xs[5]!}"    # errors if ever evaluated
@@ -977,8 +986,8 @@ pub extern "C" fn rt_template(n: u32) -> u32 {
 /// the out-of-bounds error, so `boom` never runs. Demanding it to build a
 /// value about to be refused would do strictly more than the oracle does.
 ///
-/// Handing the operand's own handle back — what `rt_binop` used to do for
-/// every slot that was not a plain value — made `1 + d` answer `d`, so the
+/// Handing the operand's own handle back â what `rt_binop` used to do for
+/// every slot that was not a plain value â made `1 + d` answer `d`, so the
 /// page printed `<io>` where both other engines refused.
 fn operand(h: u32) -> Value {
     match slot(h) {
@@ -1033,7 +1042,7 @@ pub extern "C" fn rt_index(base: u32, index: u32) -> u32 {
     }
 }
 
-/// Lenient indexing: a miss is none — the plain `xs[i]` form.
+/// Lenient indexing: a miss is none â the plain `xs[i]` form.
 #[no_mangle]
 pub extern "C" fn rt_at(base: u32, index: u32) -> u32 {
     match index_value(operand(base), operand(index), SPAN0) {
@@ -1068,7 +1077,7 @@ pub extern "C" fn rt_builtin(name_lit: u32, n: u32) -> u32 {
     }
     let mut args = Vec::with_capacity(handles.len());
     for h in handles {
-        // A builtin takes a description like any other argument — `push [] d`
+        // A builtin takes a description like any other argument â `push [] d`
         // hands back a list still holding it. See
         // a_description_rides_through_a_builtin.
         args.push(value_of(h));
@@ -1150,7 +1159,7 @@ fn demanded(h: u32) -> u32 {
 }
 
 /// Every deferred shape is materialized so the interpreter's scheduler sees a
-/// real description — including a closure-bound one, whose continuation rides
+/// real description â including a closure-bound one, whose continuation rides
 /// as a handle the interpreter calls back through. A group of green threads
 /// needs this: it can only interleave what the one scheduler can see.
 fn as_desc(h: u32) -> Option<Rc<Desc>> {
@@ -1166,11 +1175,11 @@ fn as_desc(h: u32) -> Option<Rc<Desc>> {
         // The scheduler runs a group's members through the interpreter's
         // Desc, so a worded step inside one has to have a shape there. The
         // callback rides back as a table handle, and `call_from_interp` now
-        // carries the decided call these two need — without it the subject
+        // carries the decided call these two need â without it the subject
         // would run, the callback would be skipped, and the page would answer
         // the failure the other two engines catch.
-        Slot::Rescue(inner, closure) => {
-            Some(Rc::new(Desc::Rescue(as_desc(inner)?, Value::TableFn(closure))))
+        Slot::Rescue(inner, closure, origin) => {
+            Some(Rc::new(Desc::Rescue(as_desc(inner)?, Value::TableFn(closure), raised_at(origin))))
         }
         Slot::Annotate(inner, closure, origin) => Some(Rc::new(Desc::Annotate(
             as_desc(inner)?,
@@ -1238,10 +1247,11 @@ pub extern "C" fn rt_bind(subject: u32, callback: u32) -> u32 {
 }
 
 #[no_mangle]
-pub extern "C" fn rt_rescue(subject: u32, callback: u32) -> u32 {
+pub extern "C" fn rt_rescue(subject: u32, callback: u32, origin_lit: u32) -> u32 {
+    let word = Slot::Rescue(subject, callback, origin_lit);
     match descish(&slot(subject)) {
-        true => push(Slot::Rescue(subject, callback)),
-        false => worded_step(&Slot::Rescue(subject, callback), subject, callback),
+        true => push(word),
+        false => worded_step(&word, subject, callback),
     }
 }
 
@@ -1301,7 +1311,7 @@ pub extern "C" fn rt_mkclosure(tidx: u32, ncap: u32, arity: i32) -> u32 {
 }
 
 /// `&f a b` over a VALUE. The callee is evaluated first and then each
-/// argument, and the first failure among them is the answer, callee first —
+/// argument, and the first failure among them is the answer, callee first â
 /// the interpreter's order in its App-with-Partial arm; a bare `&f` wraps
 /// whatever `f` holds.
 #[no_mangle]
@@ -1347,7 +1357,7 @@ pub extern "C" fn rt_die(msg_lit: u32) {
 
 /// The positional destructuring bind's refusal. It renders the value QUOTED,
 /// the way `render(.., true)` does at eval.rs:1283 and `k_render(v, 1)` does in
-/// runtime.c — unquoted agrees on an int, a list and a float and diverges on a
+/// runtime.c â unquoted agrees on an int, a list and a float and diverges on a
 /// string, which is the whole reason the fixture holds one.
 #[no_mangle]
 pub extern "C" fn rt_die_destructure(value: u32, ty_lit: u32) {
@@ -1356,8 +1366,8 @@ pub extern "C" fn rt_die_destructure(value: u32, ty_lit: u32) {
         _ => "that type".to_string(),
     };
     // `operand`, so a description renders `<io>` here instead of `val`
-    // answering with its own sentence. This site REFUSES — it dies on the next
-    // line — so the placeholder is right; a carrying site wants `value_of`.
+    // answering with its own sentence. This site REFUSES â it dies on the next
+    // line â so the placeholder is right; a carrying site wants `value_of`.
     // See a_description_cannot_be_destructured.
     let shown = with_interp(|interp| render(interp, &operand(value), true));
     die(format!(
@@ -1426,7 +1436,7 @@ impl Executor for RtExecutor {
     }
 
     /// A page has no clock the differential could agree on, so it reads zero
-    /// — and a program that timestamps pins KANSO_NOW anyway.
+    /// â and a program that timestamps pins KANSO_NOW anyway.
     fn now(&mut self) -> i64 {
         0
     }
@@ -1489,7 +1499,7 @@ fn exec_slot(h: u32) -> Result<u32, String> {
                 }
             }
             // GAVEL 15 defers the right side, so what it answers is not known
-            // until here — and `never_describes` in check.rs only refuses a
+            // until here â and `never_describes` in check.rs only refuses a
             // literal or a direct call, which leaves a bare name to reach the
             // run. `rt_seq` says this when both sides arrive as values; the
             // deferred side has to say the same thing or the page names a
@@ -1500,7 +1510,7 @@ fn exec_slot(h: u32) -> Result<u32, String> {
             exec_slot(right)
         }
         ref word @ (Slot::Bind(inner, closure)
-        | Slot::Rescue(inner, closure)
+        | Slot::Rescue(inner, closure, _)
         | Slot::Annotate(inner, closure, _)) => {
             let yielded = exec_slot(inner)?;
             let next = worded_step(word, yielded, closure);
@@ -1514,7 +1524,7 @@ fn exec_slot(h: u32) -> Result<u32, String> {
         // descish: `exec_main` tests before it calls, `rt_seq` builds a
         // `Slot::Seq` only when its left side is descish, `rt_maybe_bind`
         // builds a `Slot::Bind` only when what is piped in is, and the one
-        // side that was not decided at construction — a deferred right — is
+        // side that was not decided at construction â a deferred right â is
         // tested above. The arm stays because the match must be exhaustive.
         _ => Err("main is not an io".to_string()),
     }

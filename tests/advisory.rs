@@ -26,59 +26,6 @@ fn an_accepting_op_on_the_surface_silences_the_advisory() {
     assert_eq!(advisories, Vec::<String>::new());
 }
 
-fn licenses(dir: &str) -> Vec<String> {
-    let dir = std::path::Path::new(dir);
-    let program = kanso::compile_module(dir, false).expect("module compiles");
-    let inference = kanso::infer::infer(&program);
-    let prov = kanso::provenance::analyze(&program);
-    kanso::provenance::violations(&program, &prov, &inference.returns)
-}
-
-/// Gavel 24 made the two-universe rule dispatch semantics, so an arm written
-/// for an err its own hako raised is dead rather than merely unlicensed, and
-/// the message says so. The flow is proved by a written call site: the pub
-/// self-seed that used to stand in for callers out of view retired with the
-/// gavel, because under it every pub bare-err arm was a violation — including
-/// `std/testing`'s `when_failed`, which the whole testing design turns on.
-#[test]
-fn an_arm_for_this_packages_own_err_can_never_match() {
-    assert_eq!(
-        licenses("tests/golden/advisory/own_err"),
-        vec!["error[license]: `position` has an arm for an err raised in `own_err`, \
-             and that arm can never match — a failure does not enter an arm its own \
-             hako raised, so it passes as though the arm were not written. Return an \
-             err, or let a caller in another package name the reason"
-            .to_string()]
-    );
-}
-
-/// Provenance keys its fixpoint on (name, arity). Nothing pinned the name half
-/// of that: collapsing every group's name to `""` left all six advisories here
-/// green and lib/json's three unchanged, so the pass could have been gutted
-/// without a spec noticing.
-///
-/// `recover` is fed by a written call site; `quiet` is never called, so nothing
-/// reaches it. They differ only in their name, and if the key stops telling
-/// them apart `quiet` inherits what `recover` was fed and is reported for a
-/// rescue it never made.
-#[test]
-fn a_group_is_told_apart_by_its_name_and_not_only_its_arity() {
-    assert_eq!(
-        licenses("tests/golden/advisory/group_identity"),
-        vec!["error[license]: `recover` has an arm for an err raised in \
-             `group_identity`, and that arm can never match — a failure does not \
-             enter an arm its own hako raised, so it passes as though the arm were \
-             not written. Return an err, or let a caller in another package name \
-             the reason"
-            .to_string()]
-    );
-}
-
-#[test]
-fn re_raising_ones_own_err_is_silent() {
-    assert!(licenses("tests/golden/advisory/reraises").is_empty());
-}
-
 /// The case a reason-type proxy cannot see: the err was raised here, and
 /// only its reason was borrowed from elsewhere. Provenance is the raiser.
 #[test]
@@ -86,9 +33,8 @@ fn laundering_an_own_err_through_a_foreign_reason_is_refused() {
     // GAVEL 1b subsumes the advisory this used to assert. Forging a foreign
     // reason so your own err can be rescued under a borrowed name is no longer
     // advised against — it does not compile, because only a reason's owner
-    // builds one. The advisory itself stays live where the reason is genuinely
-    // foreign, which own_err and doored cover; what retires is the forged
-    // variant, and this pins the refusal that replaced it.
+    // builds one. What retires is the forged variant, and this pins the
+    // refusal that replaced it.
     let dir = std::path::Path::new("tests/golden/advisory/laundered");
     let said = kanso::compile_module(dir, false).expect_err("the forged reason is refused");
 
@@ -98,13 +44,6 @@ fn laundering_an_own_err_through_a_foreign_reason_is_refused() {
          `parse_failure`; ask it for one through a pub function (module \
          tests/golden/advisory/laundered)\n"
     );
-}
-
-/// The other direction, which must stay legal: the failure really is
-/// somebody else's, so this program is the party that may answer it.
-#[test]
-fn rescuing_a_genuinely_foreign_err_is_silent() {
-    assert!(licenses("tests/golden/advisory/foreign_rescue").is_empty());
 }
 
 /// The fixpoint reaches an answer several hops from where the type is built,

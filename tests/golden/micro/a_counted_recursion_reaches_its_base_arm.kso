@@ -5,17 +5,23 @@
 # paths could differ on, and under the exhaustiveness rule it is written as an
 # arm: the switch gets a case for it and the cascade an arm, and the two must
 # answer the same thing. Before the rule it was the generic tail that caught a
-# none, which is the shape the check refuses now.
+# none, which is the shape the check refuses now. An err is written as an arm
+# for the same reason: the checker refuses a raised err at a position no arm
+# names one at, so the group says what it does with one, and the switch gets
+# a case for that tag too.
 import "std/json"
 
 fn said (err r)
-  "no arm: {r.reason}"
+  "the err arm handed it on: {r.reason}"
 
 fn step 0
   "base"
 
 fn step none
   "step nothing"
+
+fn step e@(err _)
+  e
 
 fn step n
   "step {n}"

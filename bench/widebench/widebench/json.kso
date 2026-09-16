@@ -88,6 +88,12 @@ fn finish cs (parsed p v)
   p2 = skip_ws cs p
   if (p2 > length cs) v (fail p2 "unexpected trailing characters")
 
+# A failure inside the value is handed on as it is. The arm is written down
+# because the checker asks for it: an err is a value, and a group with no arm
+# for one where one can arrive does not compile.
+fn finish _ e@(err _)
+  e
+
 fn must (err reason)
   err (defect "{reason}")
 

@@ -1,0 +1,11 @@
+# The same rule at an index: the key is a raised err, and an index wants a
+# value. Ruled 2026-09-15, beside the operator and the arm-less call.
+fn slot 0
+  err "no slot"
+
+fn slot n
+  n
+
+first = [10 20 30][(slot 0)]!
+
+pub play = print "{first}"

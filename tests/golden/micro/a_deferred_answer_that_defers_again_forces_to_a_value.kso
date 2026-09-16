@@ -1,0 +1,33 @@
+import "std/text"
+
+# `rest` is deferred: `either?`'s first arm never asks for it. Its cell,
+# handed back through the pass-through arm, evaluates to the next call's
+# `rest`, which is another cell. A dispatch on a literal arm has to force
+# the chain to its value, the way the interpreter always has; forcing once
+# left native holding a cell and answering that no arm of `keep` matched.
+fn either? true _
+  true
+
+fn either? _ answer
+  answer
+
+fn any_over? xs at
+  found? xs at (at > length xs)
+
+fn found? _ _ true
+  false
+
+fn found? xs at false
+  here = xs[at]! > 3
+  rest = any_over? xs (at + 1)
+  either? here rest
+
+fn keep acc _ true
+  acc
+
+fn keep acc x false
+  text/concat acc [x]
+
+pub play =
+  print (keep [] "small" (any_over? [1 2 3] 1))
+  print (keep [] "big" (any_over? [1 2 5] 1))

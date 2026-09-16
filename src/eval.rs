@@ -306,11 +306,13 @@ pub enum Desc {
     /// over the value and lets a failure past untouched, `rescue` hands over
     /// the err and lets a value past. `annotate` reads the same channel as
     /// `rescue` and re-wraps whatever comes back, so it can say more about a
-    /// failure and can never clear one. It carries the site it was written at
-    /// because the err it builds is a raise, and a raise records where it
-    /// happened.
+    /// failure and can never clear one. `rescue` and `annotate` carry the site
+    /// they were written at: `annotate` because the err it builds is a raise,
+    /// and a raise records where it happened; `rescue` because its licence is
+    /// foreign-only, and the site's package is what the failure's raiser is
+    /// compared against.
     Bind(Rc<Desc>, Value),
-    Rescue(Rc<Desc>, Value),
+    Rescue(Rc<Desc>, Value, Raised),
     Annotate(Rc<Desc>, Value, Raised),
     Await(i64),
     Listen(i64),
@@ -323,6 +325,12 @@ pub enum Desc {
     Sleep(u64),
     Random(u64),
     Nil,
+    /// A box whose outcome is already known: the value, or the err, that
+    /// `effect v` was handed. The box is only ever explicit (ruled
+    /// 2026-09-15), and this is the hand-applied one; nothing about it is
+    /// deferred, so it holds its answer from the moment it is built and
+    /// running it hands the answer over.
+    Settled(Value),
 }
 
 /// A read that found nothing answers `none`, the shape `env` already uses for
@@ -1437,7 +1445,7 @@ impl<'a> Interp<'a> {
             Pattern::Var(name, _) => Ok(bind(env, name, value)),
             Pattern::Ctor { ty, .. } => {
                 let mut binds = Vec::new();
-                match match_one(pattern, &value, &mut binds, None) {
+                match match_one(pattern, &value, &mut binds) {
                     Some(_) => {
                         let mut env = env;
                         for (name, bound) in binds {
@@ -2103,8 +2111,7 @@ impl<'a> Interp<'a> {
                 if decl.params.len() != args.len() {
                     continue;
                 }
-                let arm = Some(crate::provenance::package_of(&decl.file));
-                let Some((score, binds)) = match_params(&decl.params, &args, arm) else {
+                let Some((score, binds)) = match_params(&decl.params, &args) else {
                     continue;
                 };
                 let replace = match &best {
@@ -2182,6 +2189,11 @@ impl<'a> Interp<'a> {
         };
         match word {
             Word::Bind => Ok(yielded),
+            // The foreign-only licence, at the word. A rescue written in the
+            // package that raised the failure hands it on without entering
+            // the callback; a failure nobody can be held responsible for —
+            // no frame, or merged out of several — passes the test.
+            Word::Rescue if own_failure(&cause, raised) => Ok(yielded),
             Word::Rescue => self.call_decided(callee, yielded, span),
             Word::Annotate => match self.call_decided(callee, yielded, span)? {
                 // the callback failed on its own account, and that err
@@ -2278,11 +2290,17 @@ impl<'a> Interp<'a> {
             if let Value::Desc(inner) = subject {
                 return Ok(Value::Desc(Rc::new(match word {
                     Word::Bind => Desc::Bind(inner, callback),
-                    Word::Rescue => Desc::Rescue(inner, callback),
+                    Word::Rescue => Desc::Rescue(inner, callback, raised),
                     Word::Annotate => Desc::Annotate(inner, callback, raised),
                 })));
             }
             return self.worded_step(word, subject, &callback, &raised, span);
+        }
+        // the box built by hand: `effect (err r)` holds the failure as its
+        // content, so it is the second hole in err's infectiousness
+        if name == "effect" {
+            let [v] = arity(args, name, span)?;
+            return Ok(Value::Desc(Rc::new(Desc::Settled(v))));
         }
         if args.iter().any(is_failure) {
             return Ok(merged_failures(&args));
@@ -3378,31 +3396,21 @@ fn arity<const N: usize>(
     }
 }
 
-/// An arm cannot see an err its own package raised.
-///
-/// Gavel 24, clause 1, ruled as DISPATCH SEMANTICS rather than as a check:
-/// at match time an err whose raiser is this arm's package simply does not
-/// match, and infectiousness then carries it onward exactly as if the arm
-/// were not written. "Your own failures only bubble" is the doctrine, and
-/// this is the doctrine executing itself rather than a warning about it.
-///
-/// Only the two err-admitting patterns ask. A bare binder and a wildcard
-/// refuse every failure already, which is what makes one hop enough for the
-/// static half of the rule in `provenance.rs`.
-/// `None` where there is no arm to speak of — a destructuring bind is not
-/// dispatch, and the rule is about what an arm may see.
-fn own_failure(arg: &Value, arm: Option<&str>) -> bool {
-    match (arg, arm) {
-        (Value::ErrV(info), Some(pkg)) => info.hako.as_deref() == Some(pkg),
+/// Whether a failure was raised by the package a rescue is written in. The
+/// 2026-09-15 ruling made a bare err data — an `(err _)` arm matches it
+/// anywhere — and kept the 2026-08-29 gavel's foreign-only rescue licence,
+/// so the one place provenance is still asked is the word. `None` on either
+/// side always passes: an err with no frame (the wasm host) or merged out of
+/// several belongs to no single package, and a site with no frame holds
+/// nobody responsible.
+fn own_failure(cause: &ErrInfo, site: &Raised) -> bool {
+    match (&cause.hako, &site.hako) {
+        (Some(raiser), Some(here)) => raiser == here,
         _ => false,
     }
 }
 
-fn match_params(
-    params: &[Pattern],
-    args: &[Value],
-    arm: Option<&str>,
-) -> Option<(Score, Bindings)> {
+fn match_params(params: &[Pattern], args: &[Value]) -> Option<(Score, Bindings)> {
     let mut score = Vec::new();
     let mut binds = Vec::new();
     for (pattern, arg) in params.iter().zip(args) {
@@ -3414,7 +3422,7 @@ fn match_params(
             1 => 100,
             _ => 10,
         };
-        let depth = match_one(pattern, arg, &mut binds, arm)?;
+        let depth = match_one(pattern, arg, &mut binds)?;
         score.push(base.saturating_sub(depth));
     }
     Some((score, binds))
@@ -3428,12 +3436,7 @@ fn bind_whole(whole: &Option<Box<(Name, crate::diag::Span)>>, arg: &Value, binds
     }
 }
 
-fn match_one(
-    pattern: &Pattern,
-    arg: &Value,
-    binds: &mut Bindings,
-    arm: Option<&str>,
-) -> Option<u8> {
+fn match_one(pattern: &Pattern, arg: &Value, binds: &mut Bindings) -> Option<u8> {
     match (pattern, arg) {
         (Pattern::IntLit(n, _), Value::Int(v)) if n == v => Some(0),
         (Pattern::StrLit(s, _), Value::Str(v)) if s == v => Some(0),
@@ -3452,22 +3455,18 @@ fn match_one(
                 Some(0)
             }
         },
-        (Pattern::Annotated { name, ty, .. }, _) if !own_failure(arg, arm) => {
-            match type_match_depth(ty, arg) {
-                Some(depth) => {
-                    binds.push((name.to_string(), arg.clone()));
-                    Some(depth)
-                }
-                None => None,
+        (Pattern::Annotated { name, ty, .. }, _) => match type_match_depth(ty, arg) {
+            Some(depth) => {
+                binds.push((name.to_string(), arg.clone()));
+                Some(depth)
             }
-        }
+            None => None,
+        },
         (Pattern::Keyed { .. }, _) => None,
-        (Pattern::Ctor { ty, fields, whole }, Value::ErrV(info))
-            if ty == "err" && !own_failure(arg, arm) =>
-        {
+        (Pattern::Ctor { ty, fields, whole }, Value::ErrV(info)) if ty == "err" => {
             match fields.len() == 1 {
                 true => {
-                    let inner = match_one(&fields[0], &info.reason, binds, arm)?;
+                    let inner = match_one(&fields[0], &info.reason, binds)?;
                     bind_whole(whole, arg, binds);
                     // a bare reason binder demands err-ness but names
                     // nothing: it ranks below every named reason — leaf
@@ -3485,7 +3484,7 @@ fn match_one(
             if ty.as_str() == &**vty && fields.len() == vfields.borrow().len() =>
         {
             for (fp, fv) in fields.iter().zip(vfields.borrow().iter()) {
-                match_one(fp, fv, binds, arm)?;
+                match_one(fp, fv, binds)?;
             }
             bind_whole(whole, arg, binds);
             Some(0)
@@ -3518,7 +3517,7 @@ fn match_one(
             match &base {
                 Value::Record { fields: vfields, .. } if fields.len() == vfields.borrow().len() => {
                     for (fp, fv) in fields.iter().zip(vfields.borrow().iter()) {
-                        match_one(fp, fv, binds, arm)?;
+                        match_one(fp, fv, binds)?;
                     }
                     bind_whole(whole, arg, binds);
                     Some(depth)
@@ -4310,6 +4309,7 @@ impl<'a> Interp<'a> {
             }
             Desc::Random(n) => Ok(Value::Int(executor.random(*n).into())),
             Desc::Nil => Ok(Value::Done),
+            Desc::Settled(v) => Ok(v.clone()),
             Desc::Args => {
                 let list = executor.args().into_iter().map(Value::Str).collect();
                 Ok(Value::List(Rc::new(list)))
@@ -4467,15 +4467,9 @@ impl<'a> Interp<'a> {
                         other => return Ok(other),
                     }
                 }
-                Desc::Rescue(inner, callee) => {
+                Desc::Rescue(inner, callee, raised) => {
                     let yielded = self.execute(inner, executor)?;
-                    match self.worded_step(
-                        Word::Rescue,
-                        yielded,
-                        callee,
-                        &Raised::default(),
-                        origin,
-                    )? {
+                    match self.worded_step(Word::Rescue, yielded, callee, raised, origin)? {
                         Value::Desc(d) => d,
                         other => return Ok(other),
                     }
@@ -4592,18 +4586,13 @@ impl<'a> Interp<'a> {
                     }
                 }
             },
-            Desc::Rescue(inner, callee) => match self.step(inner, executor)? {
-                Step::Blocked(ms, cont) => {
-                    Ok(Step::Blocked(ms, Rc::new(Desc::Rescue(cont, callee.clone()))))
-                }
+            Desc::Rescue(inner, callee, raised) => match self.step(inner, executor)? {
+                Step::Blocked(ms, cont) => Ok(Step::Blocked(
+                    ms,
+                    Rc::new(Desc::Rescue(cont, callee.clone(), raised.clone())),
+                )),
                 Step::Done(yielded) => {
-                    let next = self.worded_step(
-                        Word::Rescue,
-                        yielded,
-                        callee,
-                        &Raised::default(),
-                        origin,
-                    )?;
+                    let next = self.worded_step(Word::Rescue, yielded, callee, raised, origin)?;
                     match next {
                         Value::Desc(d) => self.step(&d, executor),
                         other => Ok(Step::Done(other)),
@@ -4691,7 +4680,7 @@ pub fn render_plan(desc: &Desc, out: &mut String, force: &dyn Fn(&Value) -> Opti
             render_plan(inner, out, force);
             out.push_str("  . <continuation>\n");
         }
-        Desc::Rescue(inner, _) => {
+        Desc::Rescue(inner, ..) => {
             render_plan(inner, out, force);
             out.push_str("  rescue <continuation>\n");
         }
@@ -4702,6 +4691,7 @@ pub fn render_plan(desc: &Desc, out: &mut String, force: &dyn Fn(&Value) -> Opti
         Desc::Sleep(ms) => out.push_str(&format!("  sleep {ms}\n")),
         Desc::Random(n) => out.push_str(&format!("  random {n}\n")),
         Desc::Nil => {}
+        Desc::Settled(_) => out.push_str("  settled\n"),
     }
 }
 
