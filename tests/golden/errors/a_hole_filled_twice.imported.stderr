@@ -1,0 +1,1 @@
+error[build]: `ada.partner = ...` fills a hole that is already filled: a hole is filled exactly once (module a_hole_filled_twice)

@@ -1,0 +1,1 @@
+error[build]: `_` in `person`'s `partner` is never filled: a hole is filled exactly once before the block freezes (module a_hole_never_filled_before_the_freeze)

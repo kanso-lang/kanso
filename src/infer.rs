@@ -796,6 +796,9 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut Env<'a>) -> Set {
     work::visit();
     match expr {
         Expr::Int(..) => INT,
+        // A hole is filled with a real value before its block freezes, so what
+        // readers see is that value: anything but a failure, and not a none.
+        Expr::Hole(..) => TOP & !FAIL & !NONE,
         Expr::Partial(..) => TOP,
         Expr::Upcast { expr: inner, .. } => eval_expr(ctx, inner, env),
         Expr::Block(stmts, _) | Expr::Build(stmts, _) => {

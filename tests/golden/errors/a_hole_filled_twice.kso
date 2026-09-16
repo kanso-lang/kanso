@@ -1,0 +1,15 @@
+# A hole is filled exactly once, ruled 2026-08-24. The second write to
+# ada's partner is refused where it stands.
+type person
+  name
+  partner
+
+fn tie _
+  build
+    ada = person "ada" _
+    bob = person "bob" ada
+    ada.partner = bob
+    ada.partner = ada
+  ada.partner.name
+
+pub play = print "{tie 0}"

@@ -1,0 +1,16 @@
+# The spelling the 2026-08-24 ruling retired: `none` standing in for a field
+# the block writes later. A none is genuine absence and never a placeholder,
+# so the write finds no hole to fill and is refused; the field that is
+# coming is built with `_`.
+type person
+  name
+  partner
+
+fn tie _
+  build
+    ada = person "ada" none
+    bob = person "bob" ada
+    ada.partner = bob
+  ada.partner.name
+
+pub play = print "{tie 0}"

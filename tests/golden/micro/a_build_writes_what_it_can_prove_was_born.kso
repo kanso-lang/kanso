@@ -1,29 +1,23 @@
-# A field write's target is anything the checker can prove was born in the
-# block: a name that aliases a construction, a node reached through a field a
-# construction filled or a write set, a node taken out of a list the block
-# built, and a node chosen by an `if`. The write form is unchanged; what
-# widened is how the target's birthday is proven. A write through the choice
-# reaches whichever arm was taken, so after `chosen.up = a` neither `b.up`
-# nor `c.up` is proved, which is why `over` reads `b.up` before it.
+# A build block writes only what it can prove was born in it, and since the
+# 2026-08-24 ruling what it writes is a hole: a field the construction left
+# as `_`, filled exactly once. The proof reaches a record through the name
+# it was bound to, through an alias of that name, and through a field read
+# that resolves to one record; each of the three fills a hole here. What the
+# proof declines — a field built with a value, a record an `if` chose, an
+# element of a list — is refused, and the error corpus pins each refusal.
 type node
   id
   up
 
 pub play =
   build
-    a = node 1 none
-    b = node 2 a
-    c = node 3 none
+    a = node 1 _
+    b = node 2 _
+    c = node 3 _
     twin = a
     twin.up = b
-    over = b.up
-    over.id = 10
     down = a.up
     down.up = c
-    ring = [a b c]
-    middle = ring[2]!
-    middle.id = 20
-    chosen = if (a.id < b.id) c b
-    chosen.up = a
+    c.up = a
   print "{a.id} {b.id} {c.id}"
   >> print "{a.up.id} {b.up.id} {c.up.id}"

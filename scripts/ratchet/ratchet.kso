@@ -303,6 +303,66 @@ callback_err = row
   (breaking "a_chain_callbacks_parameter_never_fails")
   release
 
+# A build hole is spelled `_` and fills exactly once, ruled 2026-08-24. The
+# seven rows below each disarm one of the checker's refusals, and the error
+# corpus reads a program compiling, or a different sentence, where its golden
+# holds the refusal.
+hole_unfilled = row
+  "a hole nobody filled freezing quietly"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_hole_nobody_filled_freezes_quietly")
+  no_setup
+
+hole_twice = row
+  "a hole filled a second time"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_hole_filled_a_second_time")
+  no_setup
+
+hole_placeholder = row
+  "a none standing in for a hole"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_none_standing_in_for_a_hole")
+  no_setup
+
+hole_in_arm = row
+  "a hole filled inside an if arm that may not run"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_hole_filled_inside_an_if_arm")
+  no_setup
+
+hole_chosen = row
+  "a hole filled through a record an if or a list chose"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_hole_filled_through_a_chosen_record")
+  no_setup
+
+hole_outside = row
+  "a hole standing outside a build block"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_hole_outside_a_build_block")
+  no_setup
+
+hole_type_lacks = row
+  "a field the type lacks written as a hole"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_field_the_type_lacks_written_as_a_hole")
+  no_setup
+
 # The four `cargo test --test golden` rows above and below all point at the
 # micro corpus or the mem corpus. The error corpus — 161 fixtures pinning
 # every diagnostic the language emits — had no row at all, so nothing had
@@ -1753,7 +1813,13 @@ rows_c1n = text/concat rows_c1m [carry_failure err_as_pattern force_chain]
 
 rows_c1o = text/concat rows_c1n [hand_box callback_err]
 
-rows_c = text/concat rows_c1o [itself]
+rows_c1x = text/concat rows_c1o [hole_unfilled hole_twice hole_placeholder]
+
+rows_c1y = text/concat rows_c1x [hole_in_arm hole_chosen hole_outside]
+
+rows_c1z = text/concat rows_c1y [hole_type_lacks]
+
+rows_c = text/concat rows_c1z [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

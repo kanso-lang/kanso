@@ -54,7 +54,11 @@ fn param_stays_local(body: &[Stmt], name: &str) -> bool {
         match e {
             Expr::Build(..) | Expr::Guard { .. } => false,
             Expr::Ident(id, _) if id == name => is_result,
-            Expr::Int(..) | Expr::Float(..) | Expr::Ident(..) | Expr::Partial(..) => true,
+            Expr::Int(..)
+            | Expr::Float(..)
+            | Expr::Ident(..)
+            | Expr::Partial(..)
+            | Expr::Hole(..) => true,
             Expr::BinOp { lhs, rhs, .. } => {
                 (operand_is(lhs, name) || expr_safe(lhs, name, false))
                     && (operand_is(rhs, name) || expr_safe(rhs, name, false))
@@ -198,7 +202,7 @@ fn use_targets(expr: &Expr, name: &str, out: &mut Vec<(String, usize, usize)>) {
             use_targets(lhs, name, out);
             use_targets(rhs, name, out);
         }
-        Expr::Int(..) | Expr::Float(..) | Expr::Ident(..) => {}
+        Expr::Int(..) | Expr::Float(..) | Expr::Ident(..) | Expr::Hole(..) => {}
     }
 }
 
@@ -236,7 +240,7 @@ fn collect_uses(
 ) {
     match expr {
         Expr::Ident(id, _) | Expr::Partial(id, _) if id == name => uses.demanding += 1,
-        Expr::Int(..) | Expr::Float(..) | Expr::Ident(..) | Expr::Partial(..) => {}
+        Expr::Int(..) | Expr::Float(..) | Expr::Ident(..) | Expr::Partial(..) | Expr::Hole(..) => {}
         Expr::Guard { cond, early, rest, .. } => {
             collect_uses(cond, name, discard, uses);
             collect_uses(early, name, discard, uses);
@@ -365,7 +369,11 @@ fn expensive(expr: &Expr, fns: &HashSet<&str>) -> bool {
         Expr::Field { base, .. } => expensive(base, fns),
         Expr::Upcast { expr, .. } => expensive(expr, fns),
         Expr::Index { base, index, .. } => expensive(base, fns) || expensive(index, fns),
-        Expr::Lambda { .. } | Expr::Ident(..) | Expr::Int(..) | Expr::Float(..) => false,
+        Expr::Lambda { .. }
+        | Expr::Ident(..)
+        | Expr::Int(..)
+        | Expr::Float(..)
+        | Expr::Hole(..) => false,
     }
 }
 

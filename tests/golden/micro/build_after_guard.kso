@@ -5,7 +5,7 @@ type cell
 fn tie n
   return none if n < 1
   build
-    a = cell "a" none
+    a = cell "a" _
     b = cell "b" a
     a.link = b
   a.link.tag

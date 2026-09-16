@@ -4,8 +4,8 @@ type node
 
 fn ring_of first second
   build
-    a = node first 0
-    b = node second 0
+    a = node first _
+    b = node second _
     a.peer = b
     b.peer = a
   a

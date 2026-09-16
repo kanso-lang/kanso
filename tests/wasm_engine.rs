@@ -847,6 +847,7 @@ fn shape(e: &kanso::ast::Expr) -> &'static str {
         Upcast { .. } => "Upcast",
         Build(..) => "Build",
         Guard { .. } => "Guard",
+        Hole(..) => "Hole",
     }
 }
 
@@ -1009,6 +1010,7 @@ fn every_construct_is_carried_by_a_program_the_page_runs() {
         "Upcast",
         "Build",
         "Guard",
+        "Hole",
         "p:IntLit",
         "p:StrLit",
         "p:Nullary",

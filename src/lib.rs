@@ -996,6 +996,7 @@ fn bound_in_expr<'a>(e: &'a ast::Expr, out: &mut crate::hash::Set<&'a str>) {
             bound_in_expr(rhs, out);
         }
         ast::Expr::Int(..)
+        | ast::Expr::Hole(..)
         | ast::Expr::Float(..)
         | ast::Expr::Ident(..)
         | ast::Expr::Partial(..) => {}
@@ -1143,7 +1144,7 @@ fn alias_expr(e: &mut ast::Expr, aliases: &crate::hash::Map<String, String>, wro
                 *name = Name::new(q);
             }
         }
-        ast::Expr::Int(..) | ast::Expr::Float(..) => {}
+        ast::Expr::Int(..) | ast::Expr::Float(..) | ast::Expr::Hole(..) => {}
         ast::Expr::MapLit(pairs, _) => {
             for (k, v) in pairs {
                 alias_expr(k, aliases, wrote);
@@ -2370,7 +2371,7 @@ fn rewrite_expr(e: &mut ast::Expr, owned: &crate::hash::Map<String, String>, bou
                 }
             }
         }
-        ast::Expr::Int(..) | ast::Expr::Float(..) => {}
+        ast::Expr::Int(..) | ast::Expr::Float(..) | ast::Expr::Hole(..) => {}
     }
 }
 
@@ -3061,6 +3062,7 @@ fn expr_span(e: &ast::Expr) -> &diag::Span {
         | ast::Expr::MapLit(_, s)
         | ast::Expr::Str(_, s)
         | ast::Expr::Int(_, s)
+        | ast::Expr::Hole(s)
         | ast::Expr::Float(_, s) => s,
         ast::Expr::Field { span: s, .. } => s,
         ast::Expr::Upcast { span: s, .. } => s,
@@ -3205,6 +3207,7 @@ fn walk_children<'a, F: FnMut(&'a ast::Expr) -> bool>(e: &'a ast::Expr, f: &mut 
     match e {
         ast::Expr::Partial(..)
         | ast::Expr::Int(..)
+        | ast::Expr::Hole(..)
         | ast::Expr::Float(..)
         | ast::Expr::Ident(..) => {}
         ast::Expr::Upcast { expr, .. } => {
@@ -3886,7 +3889,7 @@ pub fn hoist_repeated_strings(program: &mut ast::Program) {
 fn purely_computed(e: &ast::Expr) -> bool {
     use ast::Expr;
     match e {
-        Expr::Ident(..) | Expr::Int(..) | Expr::Float(..) => true,
+        Expr::Ident(..) | Expr::Int(..) | Expr::Float(..) | Expr::Hole(..) => true,
         Expr::BinOp { op, lhs, rhs, .. } => {
             matches!(*op, "+" | "-" | "*" | "/" | "%")
                 && purely_computed(lhs)

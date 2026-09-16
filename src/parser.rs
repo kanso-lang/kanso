@@ -1386,6 +1386,7 @@ fn reject_never_effect(e: &Expr, is_final: bool) -> Result<(), Diagnostic> {
     let never = matches!(
         e,
         Expr::Int(..)
+            | Expr::Hole(..)
             | Expr::Float(..)
             | Expr::Str(..)
             | Expr::List(..)
@@ -1425,6 +1426,7 @@ fn logical_if(cond: Expr, then_e: Expr, else_e: Expr, span: Span) -> Expr {
 fn expr_span(e: &Expr) -> Span {
     match e {
         Expr::Int(_, s)
+        | Expr::Hole(s)
         | Expr::Partial(_, s)
         | Expr::Field { span: s, .. }
         | Expr::Upcast { span: s, .. }
@@ -2185,11 +2187,12 @@ impl<'a> P<'a> {
     }
 
     fn starts_atom(&self) -> bool {
-        // `_.name` is an atom; a bare `_` is not, so the pipe hole and the
-        // wildcard pattern keep the meanings they already have
-        if matches!(self.peek(), Some(Tok::Underscore))
-            && matches!(self.toks.get(self.pos + 1).map(|(t, _, _)| t), Some(Tok::Dot))
-        {
+        // `_.name` is an atom, and since the 2026-08-24 ruling a bare `_` is
+        // one too: the hole a construction leaves for a field its `build`
+        // block fills. The wildcard pattern and a lambda's `_` parameter are
+        // read by the pattern parser and the lambda lookahead before this is
+        // asked.
+        if matches!(self.peek(), Some(Tok::Underscore)) {
             return true;
         }
         matches!(
@@ -2292,6 +2295,13 @@ impl<'a> P<'a> {
         // identifier — 3,788 of the front end's allocation blocks — for the
         // three arms that go on to want it, and for every arm that does not.
         match self.toks.get(self.pos).map(|(t, _, _)| t) {
+            // A bare `_` in expression position is a hole: a field a `build`
+            // block fills later, ruled 2026-08-24. Where it may stand is the
+            // checker's question, so the parser hands every one on.
+            Some(Tok::Underscore) => {
+                self.pos += 1;
+                Ok(Expr::Hole(span))
+            }
             Some(Tok::Int(n)) => {
                 self.pos += 1;
                 Ok(Expr::Int(n.clone(), span))

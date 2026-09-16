@@ -1256,7 +1256,7 @@ fn expr_allocates(
             expr_allocates(a, fn_names, allocating, seed_pass, site)
                 || expr_allocates(b, fn_names, allocating, seed_pass, site)
         }
-        Expr::Ident(..) | Expr::Int(..) | Expr::Float(..) => false,
+        Expr::Ident(..) | Expr::Int(..) | Expr::Float(..) | Expr::Hole(..) => false,
     }
 }
 
@@ -1688,7 +1688,7 @@ fn collect_names(e: &Expr, out: &mut HashSet<String>) {
                 }
             }
         }
-        Expr::Int(..) | Expr::Float(..) => {}
+        Expr::Int(..) | Expr::Float(..) | Expr::Hole(..) => {}
     }
 }
 
@@ -1739,7 +1739,7 @@ fn value_use(e: &Expr, name: &str) -> bool {
             TemplatePart::Interp(inner) => value_use(inner, name),
             TemplatePart::Lit(_) => false,
         }),
-        Expr::Int(..) | Expr::Float(..) => false,
+        Expr::Int(..) | Expr::Float(..) | Expr::Hole(..) => false,
     }
 }
 

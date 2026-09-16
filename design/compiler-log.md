@@ -3924,3 +3924,105 @@ the same night — the maps parse outside all three compile rows, measured,
 with a spec holding it there. Its row came off in this commit. A ruling
 built in under an hour beside one unbuilt for twenty-three days is the
 difference between a row on the list and a row off it.
+
+## 2026-09-16 — a build hole is spelled `_`, and the checker fills it exactly once
+
+**DONE.** The 2026-08-24 gavel, "a build hole is spelled `_`, and fills
+exactly once" in the archive, built end to end. It sat unbuilt for
+twenty-three days because it was never on the unbuilt list; the entry above,
+"a ruling from 2026-08-24 was never on the unbuilt list, and the sample it
+condemned still ships", put it there, and this is the build.
+
+**The rule.** Inside a `build` block, a construction's argument may be `_`:
+a hole for a field the block fills later. A hole is filled by exactly one
+field write, made through the name of the record built with it, before the
+block freezes. `none` keeps its one meaning and never stands in for a field
+that is coming.
+
+**What the parser does.** `_` is an atom (`Expr::Hole`), and the parser
+admits it where an argument starts; until now a bare `_` after a
+constructor was `unexpected trailing tokens`, which is what STATUS.md's row
+probed. The pattern refusal is untouched: `_` in a binding pattern still
+says "omit fields with a keyed read", and appendix A's paragraph now says
+the character has one job and a pattern is never where it goes.
+
+**What the checker does.** The block-born walk (kanso#1359's proof, folded
+into the one descent in kanso#1386) already knows which names a block made
+and which fields they were made with. A construction bound to a name inside
+a block pushes a hole per `_` argument, keyed by the record's birth and the
+field. A field write asks the holes before it asks anything else, and there
+are seven refusals, each with an errors fixture:
+
+- `_` anywhere else — a top-level construction, a list element, an argument
+  to a function — is refused where it stands: nothing could fill it
+  (`a_hole_outside_a_build_block`, two spellings in one fixture).
+- a write to a field that was built with a value is refused: the field the
+  block fills is built with `_`
+  (`a_field_written_that_was_not_left_as_a_hole`). This is the retired
+  spelling, `ada = person "ada" none` then `ada.partner = bob`, and it is
+  now a compile error rather than the idiom the book taught.
+- a second write to a filled hole is refused (`a_hole_filled_twice`).
+- a write inside an `if` arm may not run, and a hole is filled exactly once,
+  so it is refused with "fill it outside the arm"
+  (`a_birth_recorded_inside_an_if_arm`, which now reports three diagnostics
+  where it reported one: the conditional fill, the write through a name the
+  arm's answer left unproven, and the hole nobody filled).
+- a write through a record an `if` chose, or an element a list literal
+  holds, is two records to the checker, and would fill one hole and leave
+  the other open; it is refused, and the hole it would have filled is
+  reported unfilled at the freeze (`a_hole_filled_through_a_chosen_record`,
+  `a_hole_filled_through_an_element`;
+  `build_write_a_field_an_if_may_have_overwritten` gains this diagnostic
+  ahead of the one it had).
+- a hole nobody filled is refused when the block freezes, at the `_`'s own
+  span (`a_hole_never_filled_before_the_freeze`).
+- a write to a field the type never declared is refused before the hole
+  question is asked, with the sentence a READ of that field gets, `` `node`
+  has no field `nope` ``. That fixture,
+  `a_field_write_names_a_field_the_type_lacks`, lived in the runtime corpus
+  pinning the sentence native and the interpreter say when the write runs;
+  it moves to the errors corpus, because no checked program reaches the
+  runtime site now. The two `has no field` sites at the write in runtime.c
+  stay, and the read path still pins their words.
+
+**What the engines do.** Nothing. A hole is the `none` word on all three
+engines until its fill runs — the emitter writes the none constant, the
+interpreter binds `NoneV`, the page emits the `none` identifier — and the
+checker is the whole of the enforcement. So a read of a hole before its fill
+sees `none`, and `a_hole_read_before_its_fill_is_a_none` pins that on both
+engines rather than leaving it to be discovered: the block
+`ada = person "ada" _`, `early = ada.partner`, `ada.partner = bob` reads
+`<none> bob`. The alternative, a runtime sentinel the engines would have to
+carry and test on every field read, buys nothing the checker does not
+already prove.
+
+**Fill is by name, and an alias counts.** `born_of` resolves a name bound to
+another born name, or a field read that lands on one born record, to that
+record's birth, so `pair = ada` then `pair.partner = bob` fills ada's hole
+exactly as `ada.partner = bob` would. What cannot fill a hole is a name
+whose birth is `Either`: the checker cannot say which record the write
+reaches, so it cannot say the hole was filled once.
+
+**The corpus.** Beyond the errors fixtures:
+`a_build_writes_what_it_can_prove_was_born` rewritten with holes where it
+had `none` placeholders and an untouched `.out`;
+`a_knot_equals_the_same_cycle_built_in_a_block`,
+`a_description_rides_in_a_field`, `build_after_guard` and
+`build_nested_cohort` respelled; the runtime fixture `build_set_err` respelled
+with the err in the first field and the hole in the second; the mem fixture
+`build_cycle` respelled, and its vein moved — `allocs` 70 -> 66,
+`alloc_bytes` 3,264 -> 3,072, `sh_buf` 304 -> 144 — because the two `[]`
+placeholders it built and then overwrote were two buffers the hole does not
+allocate. Four examples respelled (`build_blocks`, `build_contained`,
+`build_cyclic_eq`, `none_is_a_value`), stdout goldens unchanged. The book:
+ch03's `knot.kso` reads `ada = person "ada" _`, its panel regenerated, and
+the paragraph under it teaches the hole and the four refusals instead of
+"`none` holds ada's place". The playground's `build` and `contained` samples
+respelled. STATUS.md's row also names `tests/golden/micro/bare_field.kso` as
+the same defect; it is not — `p = person "ada" none` there is a top-level
+construction with a genuine absence and no write, and it stands as written.
+
+**The ratchet.** Seven rows, one per refusal, each patching check.rs to
+disarm one test and each proved by the applies pass: `hole_unfilled`,
+`hole_twice`, `hole_placeholder`, `hole_in_arm`, `hole_chosen`,
+`hole_outside`, `hole_type_lacks`.

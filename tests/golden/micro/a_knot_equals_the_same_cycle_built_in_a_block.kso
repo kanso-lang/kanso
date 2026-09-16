@@ -15,7 +15,7 @@ k = node "a" [k]
 
 pub play =
   build
-    q = node "a" []
+    q = node "a" _
     q.peers = [q]
   print "{k == q}"
   >> print "{k.peers == q.peers}"
