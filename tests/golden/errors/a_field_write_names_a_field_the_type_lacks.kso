@@ -1,0 +1,16 @@
+# Writing a field a record does not declare. This sat in the runtime corpus,
+# pinning the sentence native and the interpreter say when the write runs; since
+# the 2026-08-24 ruling a `build` block's write fills a hole, and a field the
+# type never declared has no hole to fill, so the checker refuses it first, with
+# the sentence a READ of the field gets. The runtime sites in runtime.c keep the
+# same words for the read path, which this corpus pins beside this one.
+pub type node
+  id
+
+pub fn tagged x
+  build
+    n = node x
+    n.nope = 2
+  n
+
+pub play = print "{tagged 1}"

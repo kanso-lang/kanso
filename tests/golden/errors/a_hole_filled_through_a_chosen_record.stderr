@@ -1,0 +1,8 @@
+error[build]: `chosen.up = ...` writes one of several records, an `if`'s arms or a list's elements, and would fill one hole and leave the rest open: a hole is filled by the name of the record built with it
+  --> a_hole_filled_through_a_chosen_record.kso:14:12
+  14 |     chosen.up = b
+                  ^
+error[build]: `_` in `node`'s `up` is never filled: a hole is filled exactly once before the block freezes
+  --> a_hole_filled_through_a_chosen_record.kso:11:16
+  11 |     a = node 1 _
+                      ^

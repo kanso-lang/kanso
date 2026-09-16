@@ -4477,6 +4477,7 @@ impl<'a> Backend<'a> {
             // so `1 * 18446744073709551616` answered 0 — a wrong answer that
             // looked right, which is the one thing this build's ceiling is
             // supposed to refuse rather than produce.
+            Expr::Hole(_) => Ok("{ i64 4, i64 0 }".to_string()),
             Expr::Int(n, _) => match i64::try_from(n) {
                 Ok(fits) => Ok(format!("{{ i64 0, i64 {fits} }}")),
                 Err(_) => Err(format!(
@@ -6680,7 +6681,7 @@ impl<'a> Backend<'a> {
 
 fn collect_idents(expr: &Expr, out: &mut Vec<String>) {
     match expr {
-        Expr::Int(..) | Expr::Float(..) | Expr::Partial(..) => {}
+        Expr::Int(..) | Expr::Float(..) | Expr::Partial(..) | Expr::Hole(..) => {}
         Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
             for stmt in stmts {
                 match stmt {

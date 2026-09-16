@@ -1,0 +1,2 @@
+error[build]: `_` is a hole for a field a `build` block fills; it stands only where a construction's argument goes, inside one (module a_hole_outside_a_build_block)
+error[build]: `_` is a hole for a field a `build` block fills; it stands only where a construction's argument goes, inside one (module a_hole_outside_a_build_block)

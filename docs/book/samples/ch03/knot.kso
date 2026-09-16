@@ -3,7 +3,7 @@ type person
   partner
 
 build
-  ada = person "ada" none
+  ada = person "ada" _
   bob = person "bob" ada
   ada.partner = bob
 

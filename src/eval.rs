@@ -1542,6 +1542,9 @@ impl<'a> Interp<'a> {
     fn eval(&self, expr: &Expr, env: &Option<Rc<Env>>, frame: &Frame) -> EvalResult {
         match expr {
             Expr::Int(n, _) => Ok(Value::Int(n.clone())),
+            // A hole is a none until the block fills it, on every engine; the
+            // checker holds that the fill comes exactly once before the freeze.
+            Expr::Hole(_) => Ok(Value::NoneV),
             Expr::Upcast { expr: inner, ty, span } => {
                 let v = self.force_thunk(self.eval(inner, env, frame)?)?;
                 if is_failure(&v) {

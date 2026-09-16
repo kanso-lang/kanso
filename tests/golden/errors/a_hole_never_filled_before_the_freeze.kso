@@ -1,0 +1,14 @@
+# A hole is a field a `build` block promises to fill, ruled 2026-08-24, and
+# the block keeps the promise before it freezes or does not compile. Here
+# ada's partner is left as `_` and nothing writes it.
+type person
+  name
+  partner
+
+fn tie _
+  build
+    ada = person "ada" _
+    bob = person "bob" ada
+  bob.partner.name
+
+pub play = print "{tie 0}"

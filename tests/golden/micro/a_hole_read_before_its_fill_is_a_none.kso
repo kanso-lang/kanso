@@ -1,0 +1,16 @@
+# A hole is filled exactly once before its block freezes, and the checker
+# holds the block to that. What a read sees BETWEEN the construction and the
+# fill is the one edge the ruling leaves open, and this pins the answer all
+# three engines give: a none. The fill lands before the freeze all the same,
+# so the second read sees bob.
+type person
+  name
+  partner
+
+pub play =
+  build
+    ada = person "ada" _
+    early = ada.partner
+    bob = person "bob" ada
+    ada.partner = bob
+  print "{early} {ada.partner.name}"

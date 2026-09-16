@@ -807,7 +807,7 @@ fn child_exprs(e: &Expr) -> Vec<&Expr> {
                 crate::ast::TemplatePart::Lit(_) => None,
             })
             .collect(),
-        Expr::Int(..) | Expr::Float(..) | Expr::Ident(..) => vec![],
+        Expr::Int(..) | Expr::Float(..) | Expr::Ident(..) | Expr::Hole(..) => vec![],
     }
 }
 

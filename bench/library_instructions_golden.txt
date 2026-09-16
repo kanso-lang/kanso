@@ -453,4 +453,26 @@
 # from CI's own reading, stated, not reasoned from. compile_allocs held at
 # 27,395; every other vein AGREED.
 #
+# 2026-09-16 (kanso#1447): the build hole, and this row is a FALL: 140,855,393 ->
+# 140,641,362, -214,031 (-0.1520%), on the base kanso#1444 left. `_` is an atom the
+# parser reads where an argument starts and the block-born walk records as a
+# hole; the two `none` placeholders it replaces stop being constructed and
+# stop being walked, and a hole answers the field's fill rather than a value
+# the later write has to reconcile. Regenerated from CI's own reading, stated,
+# not reasoned from. compile_allocs held at 27,173 and compile_memory is
+# byte-identical; the emitted, machine-code and every runtime vein agreed.
+#
+# 2026-09-16 (kanso#1447, round three): the same change re-read on the merged
+# tree, and this row RISES: 140,855,393 -> 140,935,957, +80,564
+# (+0.0572%), against the base kanso#1444 left. The round above read
+# 140,641,362 on a branch that had not yet merged main's kanso#1448 through
+# the base. The base row is the same number on both trees, CI-verified either
+# side, so the swing is not the base moving: kanso#1448 moves `src/linear.rs`
+# and the layout under it, and the hole's edit lands in `src/check.rs` on top
+# of that. The two single-file rows fall 214,995 and 214,031 above and rise
+# here, so this direction is the layout's rather than the hole's.
+# Regenerated from CI's own reading, stated, not reasoned from.
+# compile_allocs held at 27,173 and compile_memory is byte-identical; the
+# emitted, machine-code, compiler-libraries and every runtime vein agreed.
+#
 library_instructions=145482390

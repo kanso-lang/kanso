@@ -753,6 +753,11 @@ impl<'a> WasmBackend<'a> {
                 let lit = self.nullary_lit("none");
                 ctx.body.i32_const(lit as i64);
             }
+            // A hole is a none until the block fills it, the way the other two
+            // engines build it.
+            Expr::Hole(span) => {
+                self.emit_expr(ctx, &Expr::Ident(Name::new("none"), *span), tail)?
+            }
             Expr::Int(n, _) => {
                 let lit = self.lit(LitKey::Int(n.clone()), || Lit::Int(n.clone()));
                 ctx.body.i32_const(lit as i64);
@@ -1670,7 +1675,7 @@ fn free_idents(expr: &Expr, visit: &mut dyn FnMut(&str)) {
         }
         Expr::Field { base, .. } => free_idents(base, visit),
         Expr::Upcast { expr, .. } => free_idents(expr, visit),
-        Expr::Int(..) | Expr::Float(..) => {}
+        Expr::Int(..) | Expr::Float(..) | Expr::Hole(..) => {}
         Expr::Str(parts, _) => {
             for part in parts {
                 if let TemplatePart::Interp(inner) = part {

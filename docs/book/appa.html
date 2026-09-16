@@ -681,7 +681,7 @@ size <span class="o">=</span> <span class="n">9</span>
 
 <h2>error[syntax]—shapes the grammar won't parse</h2>
 
-<p>a handful of constructs are simply not in the grammar, and the <code>syntax</code> family names them so you reach for the real spelling. the wildcard <code>_</code>, borrowed from languages with positional destructuring, is one: kanso omits fields by <em>naming</em> the ones you want in a keyed read, not by placeholder-ing the ones you don't:</p>
+<p>a handful of constructs are simply not in the grammar, and the <code>syntax</code> family names them so you reach for the real spelling. the wildcard <code>_</code> in a binding pattern, borrowed from languages with positional destructuring, is one: kanso omits fields by <em>naming</em> the ones you want in a keyed read. the same character has one job in kanso, the hole a <code>build</code> block fills (chapter 03), and a pattern is never where it goes:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">underscore_check.kso</div>

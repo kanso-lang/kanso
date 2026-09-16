@@ -1,0 +1,3 @@
+error[build]: `outer.link = ...` inside an `if` arm may not run, and a hole is filled exactly once: fill it outside the arm (module a_birth_recorded_inside_an_if_arm)
+error[build]: `held.tag = ...` writes only block-born values: `held` is not a construction made in this `build` block, so it stays immutable (module a_birth_recorded_inside_an_if_arm)
+error[build]: `_` in `cell`'s `link` is never filled: a hole is filled exactly once before the block freezes (module a_birth_recorded_inside_an_if_arm)

@@ -1,0 +1,18 @@
+# A record an `if` chose is two records to the checker, and a write through
+# it would fill one hole and leave the other open. A hole is filled by the
+# name of the record built with it, so the write is refused, and the hole
+# the write would have filled is reported unfilled at the freeze.
+type node
+  id
+  up
+
+fn tie _
+  build
+    a = node 1 _
+    b = node 2 _
+    chosen = if (a.id < b.id) a b
+    chosen.up = b
+    b.up = a
+  a.id
+
+pub play = print "{tie 0}"

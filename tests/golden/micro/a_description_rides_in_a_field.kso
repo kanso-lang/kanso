@@ -13,6 +13,6 @@ d = io/write "a\n" >> io/write "b\n"
 
 pub play =
   build
-    c = cell 1
+    c = cell _
     c.n = opaque d
   c.n
