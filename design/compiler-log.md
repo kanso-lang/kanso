@@ -4182,3 +4182,17 @@ the fold's own arm asks whether the seed is unique before licensing a write
 inside a lambda, and only the named folder reached the grant by the other
 route. Without that pair the fixture would pass under a licence that had
 simply been switched off.
+
+**The family, swept.** §69's shape is an analysis that grants a licence when a
+walk finds no objection, where the walk cannot see every use. Two whole-program
+`.all()` walks exist in the compiler and only one had it. `src/escape.rs:185`
+is the opposite polarity — `body_is_safe` REFUSES on any mention of the type
+outside the tail, and every body is in `program.fns`, so a use the walk cannot
+see cannot introduce a mention it would have objected to. `src/linear.rs` is
+the one that granted, and after kanso#1448 `callsites_unique` has exactly one
+caller, inside `callers_hand_over`; the three other grant sites (the sole
+finished record, the carrying slot, the constructor candidate) already asked it
+and each carries a stronger condition besides. The fold's own lambda arm grants
+on evidence rather than silence: `fold_owns_accumulator` needs the folder
+unique AND the seed unique before it licenses a write. Nothing else in the
+compiler grants on a walk's silence.
