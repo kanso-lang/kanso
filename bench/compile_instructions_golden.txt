@@ -1661,4 +1661,18 @@
 # are purged on the runner. CI re-measures and this line is replaced by what
 # it read.
 #
-compile_instructions=36878550
+#
+# CI's row, replacing the projection above: 36,878,537. The projection said
+# 36,878,550 and was 13 out.
+#
+# The gap is the finding, not an error in the arithmetic. The projection
+# subtracted the purge machinery's cost as this container measured it
+# (8,288); CI saved 8,301. On the module row the two agree to within 13.
+# On the entry and library rows CI saved far more, because how many purge
+# deadlines expire is a function of how long the process has been running,
+# and the runner is slower under callgrind than this box. A fixed per-process
+# cost would have carried across all three. A term keyed to elapsed time does
+# exactly this, and CI reading one number where the container read another is
+# the reason the option is off.
+#
+compile_instructions=36878537

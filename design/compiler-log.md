@@ -5408,3 +5408,42 @@ copied out of the header and pinned by nothing.
 The three compile goldens go back deliberately red this round. CI has to
 re-measure them on the runner, because the container reads about one per cent
 high and the whole point of the change is that these rows now hold still.
+
+## Round four: CI's rows, and the container was wrong in the way that proves it
+
+CI measured the three rows with purging off:
+
+    row                    before          after         saved    container said
+    compile_instructions   36,886,838   36,878,537       8,301          8,288
+    entry_instructions    131,957,599  131,884,271      73,328         44,608
+    library_instructions  132,092,011  132,025,154      66,857         48,487
+    summed                300,936,448  300,787,962     148,486
+
+The goldens carried a projection for one round: CI's earlier row minus the
+purge machinery's cost as this container measured it. It was 13 out on the
+module row, 28,720 out on entry and 18,370 out on library.
+
+**That pattern is the argument.** A fixed per-process cost would have carried
+across all three rows unchanged. What actually happened is that the short
+compile agreed to within 13 and the two long ones saved sixty and thirty-eight
+per cent more than projected, because the runner is slower under callgrind and
+crosses more deadlines in the time it takes. The purge count is counted out by
+elapsed time, and two hosts running the same binary reach different numbers.
+That is the whole reason the option is off, and CI demonstrated it while
+disagreeing with the projection rather than while agreeing with it.
+
+Welfare 69.74755197041536 -> 69.74831917675371, banked after the goldens
+carried CI's rows. The rise is small because 148,486 instructions out of
+300,787,962 is 0.05% of one of five terms.
+
+Everything else in the cost-goldens job agreed: compile_allocs 27,395,
+compile_memory byte-identical, the five compiler libraries unchanged, all
+fourteen runtime work rows, the emitted vein and the machine-code vein. The
+job's own vein summary named exactly the three that were deliberately red and
+nothing else.
+
+**The 13-instruction disagreement is still open.** Nothing here explains it,
+and the arithmetic that would have — three fixed init reads at 11 instructions
+a call — does not divide 13. What this round establishes is narrower and worth
+having on its own: the compile veins no longer contain a term that counts wall
+time.
