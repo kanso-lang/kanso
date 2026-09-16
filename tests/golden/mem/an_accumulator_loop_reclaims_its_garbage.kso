@@ -18,6 +18,6 @@ fn go 0 m
 
 fn go n m
   junk = "k{n % 17}"
-  go (n - 1) (put m "k1" (m["k1"]! + length junk))
+  go (n - 1) (put m "k1" (m["k1"] + length junk))
 
 pub play = go 200000 { "k1":0 }

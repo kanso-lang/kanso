@@ -689,7 +689,8 @@ fn laying _ _ _ after true
   after
 
 fn laying root files at after false
-  made root files[at]! (laid root files (at + 1) after)
+  return after if at < 1 or length files < at
+  made root files[at] (laid root files (at + 1) after)
 
 fn asked argv
   os/run kanso argv
@@ -794,7 +795,7 @@ fn sweeping _ _ found after true
   after found
 
 fn sweeping all at found after false
-  k = all[at]!
+  k = all[at]
   judged k (fault -> swept all (at + 1) (kept found k fault) after)
 
 fn kept found _ ""

@@ -88,11 +88,13 @@ fn negative _ false
 
 fn random_case s
   drawn = digits s 20 ""
-  after = drawn[1]!
-  left = "{signed after}{drawn[2]!}"
+  return [] if length drawn < 2
+  after = drawn[1]
+  left = "{signed after}{drawn[2]}"
   second = digits (stepped after) 20 ""
-  right = "{signed second[1]!}{second[2]!}"
-  [(stepped second[1]!) left (op_for second[1]!) right]
+  return [] if length second < 2
+  right = "{signed second[1]}{second[2]}"
+  [(stepped second[1]) left (op_for second[1]) right]
 
 fn op_for s
   chosen (s % 3)
@@ -111,7 +113,8 @@ fn rounds_of _ 0 acc
 
 fn rounds_of s n acc
   drawn = random_case s
-  rounds_of drawn[1]! (n - 1) (push acc [drawn[2]! drawn[3]! drawn[4]!])
+  return acc if length drawn < 4
+  rounds_of drawn[1] (n - 1) (push acc [drawn[2] drawn[3] drawn[4]])
 
 fn pairs_for a
   list/fold edges [] (acc b -> joined acc (ops_for a b))
@@ -128,7 +131,7 @@ fn ops_for a b
 every_edge_case = list/fold edges [] (acc a -> joined acc (pairs_for a))
 
 fn line_for c
-  "print ({c[1]!} {c[2]!} {c[3]!})\n"
+  "print ({c[1]} {c[2]} {c[3]})\n"
 
 fn program cases
   text/join (list/to_list (list/map cases line_for)) ""
@@ -176,7 +179,8 @@ fn asked_for _ true
   200
 
 fn asked_for given false
-  text/to_int given[1]!
+  return 200 if length given < 1
+  text/to_int given[1]
 
 fn started rounds
   fixed = every_edge_case
@@ -191,11 +195,12 @@ fn onward_batch _ _ suspect true
   suspect
 
 fn onward_batch batches at suspect false
-  here = batches[at]!
+  here = batches[at]
   ran (program here) .> (r -> kept batches at suspect here r)
 
 fn kept batches at suspect here r
-  over_batches batches (at + 1) (widened suspect here (agree? r[1]! r[2]!))
+  return over_batches batches (at + 1) suspect if length r < 2
+  over_batches batches (at + 1) (widened suspect here (agree? r[1] r[2]))
 
 fn widened suspect _ true
   suspect
@@ -213,28 +218,30 @@ fn onward_one _ _ bad known true
   [bad known]
 
 fn onward_one suspect at bad known false
-  c = suspect[at]!
+  c = suspect[at]
   ran (program [c]) .> (r -> judged suspect at bad known c r)
 
 fn judged suspect at bad known c r
-  settled suspect at bad known c r (agree? r[1]! r[2]!)
+  return alone suspect (at + 1) bad known if length r < 2
+  settled suspect at bad known c r (agree? r[1] r[2])
 
 fn settled suspect at bad known _ _ true
   alone suspect (at + 1) bad known
 
 fn settled suspect at bad known c r false
-  ceiling = at_ceiling? r[1]! r[2]!
+  return alone suspect (at + 1) bad known if length r < 2
+  ceiling = at_ceiling? r[1] r[2]
   counted suspect at bad known c r ceiling
 
 fn counted suspect at bad known _ _ true
   alone suspect (at + 1) bad (known + 1)
 
 fn counted suspect at bad known c r false
-  alone suspect (at + 1) (push bad [c r[1]! r[2]!]) known
+  alone suspect (at + 1) (push bad [c r[1] r[2]]) known
 
 fn reported everything batches found
-  bad = found[1]!
-  known = found[2]!
+  bad = found[1]
+  known = found[2]
   head = "{length everything} programs in {length batches} batches"
   tail = "{known} at the known ceiling, {length bad} disagreements"
   io/write "{head}, {tail}\n" .> (_ -> io/write (findings bad))
@@ -261,13 +268,14 @@ fn more_findings _ _ _ acc true
   acc
 
 fn more_findings bad at upto acc false
-  gathered bad (at + 1) upto "{acc}{finding bad[at]!}"
+  return acc if at < 1 or length bad < at
+  gathered bad (at + 1) upto "{acc}{finding bad[at]}"
 
 fn finding b
-  c = b[1]!
-  n = b[2]!
-  i = b[3]!
-  said = "  print ({c[1]!} {c[2]!} {c[3]!})\n"
+  c = b[1]
+  n = b[2]
+  i = b[3]
+  said = "  print ({c[1]} {c[2]} {c[3]})\n"
   "{said}{engine "native" n}{engine "interp" i}"
 
 fn engine name r

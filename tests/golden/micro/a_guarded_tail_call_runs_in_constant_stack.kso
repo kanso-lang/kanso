@@ -1,0 +1,29 @@
+# A branch keeps the tail position of what it answers. `return x if c`
+# followed by a self-call is the shape the library's folds are written in
+# since 2026-09-16, and an `if` whose arms are self-calls is the same loop
+# spelled the other way. The interpreter nested a frame per turn of the
+# guard, and the wasm backend nested one per turn of either, so a fold over
+# ten thousand elements ran those two out of stack where native looped.
+# Every depth here is past the interpreter's ceiling of ten thousand nested
+# frames.
+fn count n acc
+  return acc if n < 1
+  count (n - 1) (acc + 1)
+
+fn total xs i acc
+  return acc if i < 1 or length xs < i
+  total xs (i + 1) (acc + xs[i])
+
+fn build acc 0
+  acc
+
+fn build acc n
+  build (push acc n) (n - 1)
+
+fn ticked n acc
+  if (n < 1) acc (ticked (n - 1) (acc + 1))
+
+pub play =
+  print "{count 30000 0}"
+  >> print "{ticked 30000 0}"
+  >> print "{total (build [] 12000) 1 0}"

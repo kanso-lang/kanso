@@ -18,10 +18,10 @@ fn noted acc why false
   text/concat acc [why]
 
 fn gathered acc at
-  one = wants[at]!
+  one = wants[at]
   why = "did not paint {one.why}"
   noted acc why false
 
-first = (gathered [] 1)[1]!
+first = (gathered [] 1)[1]
 
 pub play = print first

@@ -3971,6 +3971,162 @@ the bound is provable. `!` names in lib answer a box. The explicit-box row in
 STATUS.md carries this; nothing waits on a ruling. This entry exists so the
 worker stops building the morning's reading the moment it next reads the
 list.
+## 2026-09-16 — the box at the index: `xs[i]!` answers an effect, and the operator sites are respelled
+
+Builds the reversal ruled the same morning (the entry "gavel, reversed the
+same day: `!` answers a box, at the index and at the name", kanso#1446).
+`xs[i]!` answers `<t>effect`, a box holding the element or the missing-index
+err; the words open it, and an operator, a field read or a builtin handed the
+box is refused at check with the effect sentence. The plain read `xs[i]`
+answers the element or a `none` for an arm to handle, unless the `if`s around
+it prove the index in range, in which case the miss cannot happen and the read
+is its element.
+
+**The prover.** infer's `Fact` set gained the shapes the tree writes its
+bounds in: `return x if i < 1 or length xs < i` and `if (i < 1 or length xs
+< i) x (... xs[i] ...)` both prove `xs[i]`, through the desugared `and`,
+`or` and `not` of a condition, a comparison against `length xs` on either
+side, and a literal offset (`xs[at + 1]` under `length xs < at + 1`). A read
+needs a lower bound as well as an upper one: `xs[length xs]` alone is not
+proven, `length xs < 1` beside it is. A literal list has a length the
+prover can read, so `[4 5 6][1]` is proven by arithmetic and `xs = [1 2 3]`
+in a body gives `xs` a length the guards below can use. The proof is recorded
+per span, and the checker's none rule reads it: an unproven plain read handed
+to a group with no arm naming `none` is refused as before, and a proven one
+goes through. Micro fixture `a_guard_proves_the_read` pins six shapes on both
+engines; errors fixture `a_strict_index_where_a_value_is_expected` pins the
+four refusals of the box (`+`, a field, `==`, `length`). Ratchet rows
+`bang_box` (the `yields_box` arm for a strict index), `guard_bound` (the
+guard's discharge) and `literal_bound` (the literal list's length), each
+watched red.
+
+**The respell.** 155 files, +1,654 / −729. 745 `]!` sites lost their bang;
+208 guards were written where the read's bound was not already spelled
+beside it; 41 `]!` sites stand, each one opened by `.>` or annotated by `.!`.
+lib/list's fold and the bounded steps ask their length where the read is,
+so the proof can see it — the hoisted `len` of kanso#1278 is gone from
+`fold_flat`, and the read is proven instead. sha256, regexp, json, hako,
+twenty scripts, the four bench copies of the decoder, the book's six samples
+and eleven pages, and the corpus follow the same shapes.
+
+**Lever one, measured.** A `.>` whose subject is a strict index and whose
+callback is a lambda in tail position was already inlined by the fused-bind
+path (the callback's body becomes the caller's tail); the probe `xs[n % 3 +
+1]! .> (v -> go (n - 1) (acc + v))` reads 63,696,216 instructions for
+200,000 iterations with the emitter's new path on and with it off, and the
+two IRs are identical. The new path in `emit_call_full` is for the other
+shape, a named callback: `f = &step n acc` then `xs[n % 3 + 1]! .> f` at
+2,000 iterations reads 913,876 instructions and 12,004 allocations without
+it and 558,651 and 4,004 with it (−38.87%, six allocations an iteration to
+two): the settled box, the closure and the bind node are never built. What
+it costs: the inlined call is not a tail call, because the ruling wants the
+callback's answer settled when it is a value, so at 200,000 iterations the
+probe overflows the 8 MiB stack where the executor's bind survived it; the
+interpreter overflows at that depth on both, so the differential law is
+kept, and a loop written through a named callback was never a tail loop on
+the oracle. No benchmark holds a `!` site, so the lever has no ratchet row;
+this paragraph is its record.
+
+**Lever two is a proof, not a shape.** The literal-list bound changes what
+the checker accepts and emits the same read; it costs nothing at runtime
+and is pinned by `a_guard_proves_the_read` and the `literal_bound` row.
+
+**What the sweep found, and a bisect that lied first.** The first counter
+sweep read the encode vein at 49,875,132 allocations against 7,557,132 and
+`beat_iters` at 401 against 5,032,401: the encode loops had lost their
+beat. A bisect built the bench decoder's old shape under the old and the
+new compiler and read both as agreeing with the golden — because it ran the
+binaries from /tmp, where `bench/large.json` does not exist, and all three
+"agreed" on a run that died at the file read. Run from the tree, the old
+shape under the new compiler matched the golden exactly, so the compiler
+was not the cause; the respelled shape was, and `KANSO_BEAT_REPORT` named
+the accumulator as "may carry heap". Two gaps, both older than this branch:
+
+- A name bound below a `return x if c` guard is a statement of the guard's
+  `rest`. linear.rs's `is_unique_source` and beat.rs's `local_binds` read a
+  body's top level only, so `opened = ...` under `encode_list`'s guard was
+  a binding neither could find, the accumulator handed on through it read as
+  an alias, and every group in the chain lost its in-place append and its
+  beat. Both lookups read through guards now (`bound_in`, `binds_into`). Mem
+  fixture `a_local_bound_under_a_guard_keeps_the_beat` pins `allocs` 16 and
+  `beat_iters` 8,000; under the linearity mutation it reads 17,016 and 0
+  (`sh_bytes` 24 -> 408,024), under the chain mutation 16 and 7,000. Rows
+  `guard_bind_linear` and `guard_bind_chain`.
+- The boundary rule's licence for a byte builder crossing a rewind asked
+  only the first parameter. `builder_transient`'s `assemble cs p acc`
+  carries its builder third; while its loop was a two-group cycle no
+  self-call argument was checked, and the respell into a direct self-call
+  put the argument in front of the rule, which read it as heap: `beat_iters`
+  1,360 -> 40, `bytes_malloc` 40 -> 0, `held_peak_bytes` 80 -> 0. The rule
+  asks the position under test as well as the first parameter, the fixture
+  reads 1,360 / 40 / 80 again, and the mutation that puts the first-only
+  reading back turns it red. Row `bytes_acc_position`.
+
+**What moved, priced.** digest `thunk_forces` 8,256 -> 16,512 and the run
+program's `thunk_forces` 16,025 -> 32,025: sha256's `compress` guards
+`length rounds < at` beside `rounds[at]`, and `rounds` is a deferred
+constant, so each round forces it twice where it forced it once; every
+force after the first is a memoised tag test. scan `allocs` 3,011,150 ->
+3,011,149, `sh_rec` 1,552 -> 1,616, `sh_buf` 81,024 -> 80,976, and the run
+program's `allocs` 5,730,654 -> 5,730,653, `sh_rec` 48,174,560 ->
+48,174,624, `sh_buf` 111,160,896 -> 111,160,848: regexp's `spans` answers a
+`bounds` record where it answered a two-element list, one allocation and 16
+bytes fewer per quantifier parsed. The trend gate's keys for the two record
+rows are `scan_sh_rec` at 1,616 and `run_sh_rec` at 48,174,624. `a_digest_holds_every_block_it_walked`
+reads `thunk_forces` 64 -> 128 for the same reason as the digest. Every
+other runtime vein and the rest of the lazy tier agree with their goldens.
+The work, text and compile rows are CI's, written in the second round, and
+the floor moves under the 2026-09-13 clause where they come in short.
+
+**What the full suite found.** Nine failures, three of them defects of the
+branch and one older than it.
+
+- The oracle nested a frame for every turn of a guarded loop. `eval_tail`
+  hands a call in tail position back to the dispatcher's loop, directly or
+  through either branch of an `if`, and had no arm for a guard: the lines
+  under `return x if c` ran as a nested block, so their last call was a
+  Rust frame, and the interpreter's ceiling is ten thousand of those. Older
+  than this branch (`kanso run` of a module with that shape overflows on
+  main), and invisible until the respell wrote `fold_flat` in it: the
+  tenure fixture's `list/map` over 16,800 records ran the oracle out of
+  stack where native looped, because native's `emit_tail` has kept a
+  guard's tail position since the guard existed. The tail evaluator takes
+  the guard now, the rest's lead runs as any block's does and its last
+  statement is evaluated in tail position. Micro fixture
+  `a_guarded_tail_call_runs_in_constant_stack` counts to 30,000 and folds
+  12,000 elements under a guard, past the ceiling on both counts; it reads
+  the stack refusal on the old interpreter and `30000` / `72006000` on both
+  engines now. Row `guard_tail_oracle`.
+- welfare scored a golden that had lost its run row. `work["runbench"]!`
+  was the pin, and the respell's plain read answered a `none` that
+  `list/to_h` stored and the kept-counter filter dropped, so a golden with
+  no runbench row scored 86.00 on what was left; the arm `live none -> 1`
+  the checker asked for would have done the same for a counter missing at
+  scoring time. The five weighed reads are opened in `gauge`'s effect chain
+  now (`pinned`), before anything is scored, and a miss ends the run naming
+  the index. `a_welfare_that_prints_no_score_is_named_rather_than_indexed`
+  reads the refusal again.
+- Four specs embed programs that read `xs[i]!` as a value
+  (`accumulator_elements_survive`, `accumulator_growth`, `carry_escape`,
+  `carry_repair`); an interpolated box printed `<io>` and a builtin handed
+  one was refused. Respelled the way the tree was: the bang dropped where
+  the value is wanted, and `paths[at]! .> (path -> os/read_file path .> on)`
+  where the read feeds a builtin.
+- The three new mutations spelled their file through `$f`, which the
+  `touched` pass cannot see; the paths are literal now.
+
+**The compile veins, re-sat after the two analysis fixes.** The decoder's
+emitted code reads `calls` 1,209 -> 1,212, `branches` 795 -> 807, `lines`
+9,161 -> 9,258, and every other benchmark's emitted rows rise with it
+(runbench `lines` 35,087 -> 36,085): the guard-bound fixes give the
+beat back to loops the respell had cost it, and a beat loop is more code
+than a call. `front_end_visits` 15,119 -> 15,474 and the module compile
+golden's `visits` 2,511 -> 2,656 with `lines` 5,302 -> 5,377: the linearity
+and chain fixpoints walk a guard's rest where they stopped at it. Both
+remain well under the base (22,437 visits before this branch). The trend
+gate's keys for the rows that rose: `module_branches` at 448, `module_lines`
+at 5,377, `module_visits` at 2,656, `emitted_other_branches` at 13,099,
+`emitted_other_calls` at 20,323 and `emitted_other_lines` at 136,463.
 
 ---
 
@@ -4043,6 +4199,218 @@ rose on the compile term and was banked: floor 69.57819815695791 ->
 nobody does this, and nobody here can see who does — and an analysis that
 cannot tell them apart grants on the second. That is the presented design this
 change fixed, and the page owed it an entry.
+
+**The family, swept.** §69's shape is an analysis that grants a licence when a
+walk finds no objection, where the walk cannot see every use. Two whole-program
+`.all()` walks exist in the compiler and only one had it. `src/escape.rs:185`
+is the opposite polarity — `body_is_safe` REFUSES on any mention of the type
+outside the tail, and every body is in `program.fns`, so a use the walk cannot
+see cannot introduce a mention it would have objected to. `src/linear.rs` is
+the one that granted, and after kanso#1448 `callsites_unique` has exactly one
+caller, inside `callers_hand_over`; the three other grant sites (the sole
+finished record, the carrying slot, the constructor candidate) already asked it
+and each carries a stronger condition besides. The fold's own lambda arm grants
+on evidence rather than silence: `fold_owns_accumulator` needs the folder
+unique AND the seed unique before it licenses a write. Nothing else in the
+compiler grants on a walk's silence.
+
+**CI's sitting, and every row that worsened.** Round one measured the seven
+host-keyed veins and this is what they landed on. Every before-value below is
+this branch's base, kanso#1444's stack, which is where the goldens sat when
+round one ran. The trend gate's own table compares against main instead, so it
+reads five of these rows from a different starting point (`work_runbench`
+1,823,669,249, `work_scanbench` 460,784,763, `work_widebench` 32,135,929,
+`work_readbench` 4,629,430 and `text` 1,735,116 are main's).
+
+The compile side is the prover: infer now records a bound proof per indexed span and the none rule
+reads it, which is work the front end did not do before, on every `xs[i]` in
+the corpus. `entry_instructions` 140,614,828 -> **144,655,874** (+4,041,046,
++2.87%) and `library_instructions` 140,855,393 -> **145,336,811** (+4,481,418,
++3.18%) are that work counted over the two compile paths; `compile_allocs`
+27,173 -> **27,395** (+222) and `compile_peak_bytes` 781,895 -> **787,956**
+(+6,061) are the per-span proof table the walk holds while it runs.
+`compile_instructions` 40,273,027 -> **40,749,158** (+476,131) rises against
+this branch's base and is a FALL of 2,123,696 against main, which has not yet
+taken the base's retired provenance fixpoint.
+
+The run side is the 208 guards. A guard the respell wrote is a real branch in
+emitted code, and the programs that run one pay for it: `work_encodebench`
+3,452,269,515 -> **3,497,149,260** (+44,879,745, +1.3000%) is the largest rise;
+`work_widebench` 32,103,964 -> **33,516,094** (+1,412,130, +4.3986%) is the
+steepest, the widest program taking the most guards per element;
+`work_deepbench` 345,129,236 -> **347,289,236** (+2,160,000, +0.6259%);
+`work_scanbench` 459,778,477 -> **462,269,296** (+2,490,819, +0.5417%);
+`work_digestbench` 9,830,546 -> **9,967,039** (+136,493, +1.3885%);
+`work_basket` 33,549,379 -> **33,678,746** (+129,367, +0.3856%); and
+`work_pendbench` 208,133,415 -> **208,138,815** (+5,400, +0.0026%), the
+smallest of them. `work_jsonbench`, `work_escapebench`, `work_indexbench` and
+`work_readbench` are byte-identical.
+
+Three rows fall. `work_runbench` 1,827,443,530 -> **1,821,933,936**
+(-5,509,594, -0.3015%), `work_livebench` 2,872,813,523 -> **2,825,430,323**
+(-47,383,200, -1.6494%) and `work_oneshot` 18,006,613 -> **17,888,155**
+(-118,458, -0.6579%). Where the bound is proven the read emits no check at all,
+and those three read more than they guard.
+
+The `text` vein moves both ways and comes out +18,224 summed, 1,737,148 ->
+**1,755,372**. Eight rows shrink between 480 and 1,152 bytes each; `scanbench`
++16,000 and `runbench` +9,472 grow, and those two are the whole of the rise. A
+guard is an emitted branch and a retired `]!` site is a call that goes away, so
+both directions are expected here; which one wins is per program and is not
+attributed further.
+
+The objective weighs the two sides together and comes out 0.0422 down. The
+floor moves with it, 69.63579260553377 -> 69.59359812089627, under the
+2026-09-13 ironclad clause, with the reason recorded in
+`bench/welfare_floor.json`'s history entry beside the number.
+
+**CORRECTION, and a reproduction failure: one binary counted two compile rows
+on two CPUs.** The paragraph above writes round one's sitting, and round two
+disagreed with it on the three compile rows: `compile_instructions` +149,
+`entry_instructions` +41, `library_instructions` -127. The two rounds ran
+identical source for everything the measurement reads — ten files changed
+between them, seven goldens and `bench/welfare_floor.json`, this log and
+`docs/compiler.html`, and nothing under `src/`, `lib/`, `hako/` or
+`bench/*_corpus/`; there is no `build.rs`, `include_str!` reaches only `lib/`
+and `hako/`, and `library_box.sh` stages the binary, `lib/` and the three
+corpora at a fixed path with the environment emptied. All fourteen work rows
+and all fourteen text rows agree to the instruction across the pair.
+
+The gates print the hunt's first question and answer it:
+
+    round one  library_sample cpu="cpu family 0x19 model 0x1" sha=75988d5b311a row=145336811
+    round two  library_sample cpu="cpu family 0x1a model 0x2" sha=75988d5b311a row=145336684
+
+One sha, two CPUs, two rows, which is case (2) by the gate's own text: a
+reproduction failure, hunted to its source and never pinned as a second value.
+Family 0x19 is Zen 3 and family 0x1a model 0x2 is Zen 5, new to the pool.
+`compile_instructions.sh` rests on eight within-binary sittings across two
+vendors and four CPU generations agreeing to the instruction, and those
+sittings predate this silicon.
+
+WHERE IT IS NOT. libc was the first guess and the profiles refute it. Every
+libc frame the annotation shows is identical across the two chips:
+`_int_free` 5,479,699, `_int_malloc` 5,428,597, `__memcmp_avx2_movbe`
+4,656,489, `malloc` 4,015,271, `__memcpy_avx_unaligned_erms` 2,998,404. The
+same memcmp implementation is selected on both and counts the same on both, so
+the ifunc choice the tunables do not pin is not what moved, and neither are the
+cache-derived thresholds the gate already pins. The one frame in the top
+fifteen that differs is the compiler's own: `kanso::check::check_after_infer`
+4,020,015 -> 4,019,967, -48, with the remaining -79 below the annotation
+threshold. So the compiler's own instruction count moves with the host CPU
+under valgrind, which is a sharper thing than a libc path and is not yet
+attributed further.
+
+So the three goldens here hold round one's numbers and are deliberately not
+regenerated. The remedy reopens the 2026-09-05 ruling "one row, one value; the
+pair and the per-chip key are retired", so it went to Clay. It exposes every
+open pull request carrying a compile vein: which chip a round lands on decides
+whether that vein is red.
+
+**THE ATTRIBUTION ABOVE IS WRONG, AND THE CAUSE IS IN THIS PULL REQUEST.** The
+two paragraphs before this one blamed the host CPU, and a third CI round
+refuted them: at `11b282d1`, on source identical again, the rows read
+`compile_instructions` 40,749,259, `entry_instructions` 144,655,962,
+`library_instructions` 145,336,861. Three rounds, three distinct values on
+every row, over a pool of two chips. A per-chip story predicts two.
+
+The measurement that found it runs on one machine. Eight repeats of the library
+gate's own command, same binary, same box, same tunables, gave 146,776,367 /
+146,776,546 / 146,776,647 / 146,776,453 / 146,776,334 / 146,776,489 /
+146,776,401 / 146,776,335 — a spread of 313 instructions with the process total
+minus the `kanso::main` row constant at 470,409 throughout, so the variance is
+inside the compiler's own frame. Five more under `setarch -R` varied the same
+way, which rules out ASLR. Diffing two of those callgrind profiles function by
+function returned one line:
+
+    functions present in both that differ: 1
+        +119  hashbrown::map::HashMap<K,V,S,A>::insert
+    only in x4: 0   only in x5: 0
+    sum of diffs: 119
+
+Every other function in the profile is identical to the instruction. The whole
+delta is one hash table's inserts.
+
+Which table: this branch declared `proven` three times as
+`std::collections::HashSet<crate::diag::Span>` — `src/infer.rs:61`,
+`src/infer.rs:156`, `src/check.rs:803` — where the rest of the compiler uses
+`crate::hash::Set`. `std` defaults to `RandomState`, keyed from the OS once per
+process, so the probe sequence differs on every run and so does the work of
+building the same set. The base, `claude/bare-err-refused`, has no such
+container in either file. Spelling the three as `crate::hash::Set` put six
+consecutive runs of the library measurement on 146,522,240, spread zero.
+
+So the gate was right and its case (2) did its job: one binary counting two
+numbers is a reproduction failure, and hunting it to its source is the rule.
+The 2026-09-05 ruling "one row, one value" needs nothing; the escalation raised
+against it is withdrawn. `src/hash.rs` says iteration order changing is
+harmless because nothing observable depends on it, which holds for what the
+compiler writes and not for what it costs — three goldens count the cost to the
+instruction. `tests/the_compile_path_hashes_with_a_fixed_seed.rs` now reads
+`src/` and fails on a std-hashed container outside a named exception, watched
+red on all three sites before it went green.
+
+
+**The ruling's two cost levers, censused: one is built and the objective cannot
+see it, the other is DECLINED before building.** STATUS.md's explicit-box row
+owes "an inlined bind for a pure index read and bound discharge for a literal
+index into a known-length list, each measured". Both were named on 2026-09-16,
+the same day as the respell, and the respell is what decides them.
+
+LEVER ONE is built here. `emit_call_full` matches a `.>` whose subject is a
+strict index and emits the read, the callback and the settle inline: the bind
+node, its closure and the box under it are never constructed. It fires on ten
+sites in the tree — four book samples, six goldens — and on five lines of
+`scripts/welfare/welfare.kso`. Zero in `lib/`, `hako/` or `bench/`. Nothing the
+objective measures writes `xs[i]! .>`, so the emission is right and no counter
+in welfare can price it. It stays because it is the correct shape for the
+construct, not because a row moved.
+
+LEVER TWO reaches eighteen sites and not one of them is hot. Nine index a list
+literal directly, nine index a name bound to one, and every one is a sample or
+a golden demonstrating a MISS: `flavors[9]`, `xs[9]`, `prices[9]`, `xs[5]`,
+`[10 20 30][9]`. The benchmarks' literal indexes are `xs[1]`, `es[1]` and
+`bulk[100000]`, whose containers are parameters and built lists — no length the
+checker could know. So discharge would add a length-tracking analysis to the
+checker, paid for on all three compile rows, to fold a branch in nine programs
+that run once. The objective reads that as a fall with no term to set against
+it. Declined, before building.
+
+Why both come out this way is the same fact. The respell took the shipped
+corpus from 570 bang-index sites to five: `lib/` 107 to 0, `hako/` 55 to 1,
+`bench/` 17 to 0, `scripts/` 391 to 7, and three of the eight survivors are
+comments. That is the ruling's "no bang where the bound is provable" half doing
+its work, and it removed the construct the levers were written to optimise. The
+levers were sized against the corpus as it stood before the respell they
+shipped beside.
+
+
+**CI's sitting on the fixed head, and the floor corrected upward.** The rows
+above were all measured against a randomly-seeded table, so none of them was
+the respell's cost. With `proven` spelled `crate::hash::Set` the measurement
+repeats, and CI on `647e58f7` reads `compile_instructions` 40,703,283,
+`entry_instructions` 144,436,311 and `library_instructions` 145,118,874. Only
+those three veins moved. `compile_allocs` held at 27,395, `compile_memory` at
+787,956 byte-identical, and every work row, text row, emitted row and
+machine-code row AGREED — which is what a hasher swap predicts, since the same
+table is built with the same number of allocations and a different probe
+sequence. The profile shows it directly: the top frames now carry
+`hashbrown::map::HashMap<&str, (), BuildHasherDefault<kanso::hash::Fx>>::insert`
+at 3,392,241 and no std-hashed table at all.
+
+So the respell's cost against kanso#1444's base is smaller than round two
+recorded: +430,256 on the module row (+1.068%, not +476,131), +3,821,483 on the
+entry row (+2.718%, not +4,041,046), +4,263,481 on the library row (+3.027%,
+not +4,481,418). The objective reads 69.5960 where the hand-set floor stood at
+69.5936, so the floor is ratcheted to 69.59603943391699. Round two lowered it
+under the 2026-09-13 ironclad clause, which was the right clause and the wrong
+number: it was computed on one draw from a distribution.
+
+`tests/the_score_says_what_it_was_made_of.rs` caught the gap between the two
+before this entry was written — the rescored column read 69.5936 where welfare
+scored 69.5960 — and goes green on the banked floor. Eight `data-golden` spans
+on `docs/compiler.html` quoted the old rows and were rewritten by
+`golden_prose --write`.
 
 ## 2026-09-16 — The lazy-verdict ratchet row proved nothing, and scan_counters
 ## had no row at all (DONE)
@@ -4126,6 +4494,595 @@ making `k_beat_iter` stop rewinding leaves the scan gate GREEN. scanbench's
 `beat_iters` is 15, so the beat rewind barely runs there and removing it moves
 nothing the golden pins.
 
+## 2026-09-16 — a box handed to a binding parameter reaches the dispatch, and the dispatch answers wrong (OPEN)
+
+Found while respelling kq for this change, and it is this change's own, so it
+is recorded here rather than filed elsewhere.
+
+`check.rs`'s effect refusal covers an operator, an index, a field read, an
+`if` condition and a builtin that reads a value. At a call it refuses a box
+argument too — unless the callee's group BINDS at that position:
+
+    if found.is_some() && (pos >= 64 || binds & (1u64 << pos) != 0) {
+        continue;
+    }
+
+A bare binder can hold a box, so the licence is not wrong on its face. What
+it does not ask is what the binder's own body then does with the name, and
+one hop later the box is standing in front of a dispatch that was written for
+values.
+
+Eleven lines, and check says `ok`:
+
+    fn seen 7
+      "seven"
+
+    fn seen _
+      "other"
+
+    fn step x
+      seen x
+
+    pub fn run xs
+      step xs[1]!
+
+`run [7]` prints **other**. Drop the bang and spell the bound — `return "empty"
+if length xs < 1` then `step xs[1]` — and the same program prints **seven**.
+The box misses the `7` arm, falls to `_`, and nothing anywhere says so.
+
+Take the `_` arm away and it is louder but no earlier:
+`error[runtime]: no overload of `g/seen` matches these arguments`, at run
+time, from a program the checker passed. That is the shape kq hit: three of
+its ten unit tests failed that way before the respell — `encode_onto`,
+`pretty_onto`, `pretty_entry` — each one an `xs[i]!` carried through
+`elem_onto`/`elem_row`'s binding parameter into a group with no arm for a box.
+
+**Both halves are one question, and it is a design question rather than a
+bug with an obvious patch: how far does a binding position licence a box?**
+Three answers are available and they are not equally cheap. Refusing a box at
+any position of a group whose other arms are literals would catch both halves
+here and would also refuse `bind`-shaped code that means it. Tracking the box
+through the parameter is the honest answer and is a typing change, not a
+check. Leaving it and letting the dispatch answer is what ships today, and
+the first half of this entry is what that costs: a wrong answer, silently.
+
+Nothing here blocks the respell — every site in this tree and in kq is spelled
+so that no box reaches a dispatch — so this is a hole in the checking rather
+than in the change. It stays OPEN.
+
+---
+
+## 2026-09-16 — the bare-binder answer is measured and DECLINED; the import check could not read a qualified yield (DONE)
+
+Two things, and the second is what the first turned up.
+
+### The bare binder: measured, and it contradicts ten pinned fixtures
+
+The entry above — "a box handed to a binding parameter reaches the dispatch,
+and the dispatch answers wrong" — offered three answers. The cheapest is
+already half built: `check.rs` keeps one bit per position per dispatch group
+saying the group takes a box there, and three spellings set it, a bare name,
+a `_`, and an arm annotated `e:<int>effect`. Taking a bare name off that list
+is a five-line change. It was built and swept.
+
+**Against the tree's modules it costs one site.** Every module under `lib/`,
+`scripts/`, `bench/`, `hako/`, `examples/` and `docs/` checked against the
+patched compiler and against an unpatched one: only
+`scripts/module_differential` moves, where `laid`, `laying` and `made` thread
+an unopened `os/run` chain so a directory's files are written in order.
+
+**Against the corpora it costs TEN fixtures, and two of them are the ruling.**
+`a_description_reaches_a_dispatch` pins that a description handed to
+`seen v:cell` / `seen _` takes the bare arm on all three engines.
+`a_plain_dot_hands_the_box_over` pins that `held e` receives the box and hands
+it back, with the comment "the words are the only doors; the dot opens
+nothing". Eight more say the same in other containers:
+`a_container_does_not_run_what_it_holds`, `a_description_renders_in_an_interpolation`,
+`_rides_in_a_constructor`, `_rides_in_a_field`, `_rides_in_a_list`,
+`_rides_in_a_map`, `_rides_through_a_builtin`, and `the_box_built_by_hand`.
+
+So carrying a box through a plain parameter is not the defect. It is the
+language, pinned, on three engines. The first half of the entry above —
+`step (os/read_file "missing.txt")` printing `step got: <io>` — is
+`a_description_renders_in_an_interpolation` doing its job.
+
+What is left is the second half, and it narrows to one sentence: **a box that
+travels through a parameter into a LATER call is invisible to the checker.**
+`encode_onto` handed a box directly is refused today; the same box handed to
+`elem_onto x` and then to `encode_onto x` inside that body is not, because
+nothing says `x` holds a box. That is the typing change the entry above called
+the honest answer, and the ten fixtures are why the blunt substitute is not
+available. Filed to the ledger as the design question it is; the entry above
+stays OPEN, and this entry is its measurement.
+
+### The import check read `<os/process>effect` as the module `<os`
+
+Writing the annotation the declined rule would have needed turned up a defect
+of its own, older than either branch. A module file that says
+
+    fn laid root files at after:<os/process>effect
+
+is refused:
+
+    error[import]: `<os` is not imported here — a module's files share their
+    declarations, not their imports
+
+The import check asks each file which module qualifiers it uses and asked by
+splitting a type name at its first slash, so the whole spelling
+`<os/process>effect` answered `<os`. No import matches that, so the file is
+refused for borrowing an import it wrote, and in the same run that import
+reads as unused: two diagnostics, both wrong, for a program that compiles.
+`map[string os/process]` splits the same way, and `[]os/process` would.
+
+The check scans the runs of name characters now and marks the ones holding a
+slash, so a shell of any shape carries its names through. Module fixture
+`tests/golden/qualified_yield` with `tests/a_qualified_yield_inside_an_effect_type.rs`,
+watched red on the unpatched compiler on both engines; ratchet row
+`qualified_yield`.
+
+Nothing reached this before because the only way to write a qualified yield
+was to want one, and the annotation is rare. It is reachable from any module
+that names another module's type inside a shell.
+
+## 2026-09-16 — a measured decision was filed to nobody for a day, and STATUS.md disagreed with itself about the queue (DONE)
+
+The 2026-09-15 entry "the per-call floors, mapped after the inlines" ends by
+measuring a change and saying, in its own words, that it "goes to Clay with
+this number and is not built here". No entry was ever written in
+`design/pending-gavels.md`, so it went to nobody. The change is a byte-position
+scan on a string for the JSON escape path, worth runbench 1,823,814,374 ->
+1,801,576,724 on the kanso#1437 leaves, −22,237,650 and −1.2193%, and it sat
+where only a reader of the log's middle would find it. It is filed now under
+Open, not blocking, with the measurement and a recommendation.
+
+**Found by re-deriving a map that was already right.** The queue's two biggest
+run rows were profiled again on this branch to look for a fresh lead:
+`d_json/encode_onto_2'2` reads 392,547,176 of 1,840,366,969 (21.33%) against
+the 2026-09-15 sitting's 382,082,442 of 1,823,814,374 (20.95%), the same shape
+one stack later, and `obj_key_start` the same. Both are mapped and both have
+had their removable parts found — encode_onto's is the view above, and
+obj_key_start's was largely refuted on 2026-09-14. The profile turned up no new
+lead, which is the result: the run term's two largest rows are closed, and one
+of them is closed on a question waiting for Clay.
+
+Worth naming for a later session: callgrind shows `encode_onto_2'2` with three
+kanso callees missing from its callee list — `escape_onto_2`, `encode_map_2`
+and `encode_list_2` are all inlined into it under the 2000 threshold
+kanso#1391 set. So the 21.33% row is the whole encoder, not one function's
+overhead, and the 2026-09-15 map already reads it that way. A session that
+takes the row for one function's dispatch will chase twenty-seven instructions
+and find nothing.
+
+The same reading applies one row down and in the other direction.
+`d_runbench/tally_4` is 91,704,604 (4.98%) and `tally` is four lines of
+benchmark harness, which invites reading five per cent of the objective's
+headline term as bookkeeping. It is not: `escape/total`, `index/total`,
+`split/total` and `digested` are all inlined into it, and the row calls `k_b_at`
+690,000 times and `k_beat_iter` 1,552,821 times directly. Those are the
+benchmarks. Nothing in the harness is worth removing, and a session that tried
+would be editing the corpus to make a number smaller.
+
+**And STATUS.md contradicted itself.** The file indexes the ledger three times
+— an overview sentence near the top, a detail sentence with the split, and a
+paragraph that lists the open entries one by one — and only the detail one was
+pinned by `tests/the_status_index_counts_the_ledger.rs`. The overview read
+"Three questions are waiting — one blocking" while the file's own opening
+paragraph read "Blocking right now: zero" and the ledger held no Blocking
+entry, and the list paragraph read "The two open, not blocking" while naming
+an entry that had been ruled and built on 2026-09-15. All three are read off
+the ledger now, each watched red on the stale text before it was corrected.
+
+The gap this does NOT close: nothing checks that a log paragraph saying a
+question goes to Clay has an entry to go to. A scan for the phrase would pass
+over every historical entry that has since been ruled, so it would either be
+noisy or would need a list of exemptions that goes stale the way the counts
+did. The count spec catches an entry filed and miscounted; it cannot catch one
+never filed. That is written down rather than guessed at.
+
+## 2026-09-16 — the next three run rows, all closed by reading them (DONE)
+
+Below `encode_onto` and `obj_key_start` the profile's next rows are
+`array_delim` at 85,720,338 (4.66%), `scan` at 77,645,700 (4.22%) and
+`str_escape` at 65,074,779 (3.54%). None of the three holds a lead.
+
+**`array_delim` is the array and object openers inlined into it.** Its callee
+list is `array_open` and `obj_open`, each in both recursion contexts, at
+374,499,500 and 279,024,609 inclusive. The row is the container walk, and the
+work under it is `scan` and `str_chars`, which have rows of their own.
+
+**`scan` converts each number exactly once, and the counts prove it.** It calls
+`k_b_to_float` 210,177 times and `k_b_to_int` 207,306, which reads like a
+double parse until you add them: 417,483, and `k_b_slice_raw` is called 417,483
+times, one slice per number. `number_done` dispatches on the mark the scan
+carries and takes one arm. The corpus is about half floats. Per conversion the
+float path is 190 instructions and the int path 93, both already worked by
+kanso#1423, kanso#1427 and kanso#1428.
+
+**`str_escape`'s residue is `k_b_utf8`, 175,527 calls at 170 instructions.**
+That is one per escape event on the decode side, and it is 1.63% of the run
+program. Small, and the escape path is where kanso#1291 and kanso#1367 have
+already been.
+
+So the run term's five largest rows are all read: two mapped with their one
+removable piece now waiting on Clay, and three with nothing under them. The
+queue's next run-side lead is not in this profile at this granularity.
+
+## 2026-09-16 — CI's rows for the shell's several names, and what the early-out took back (DONE)
+
+Round one priced the first shape of the fix and it was expensive: `mark` runs
+on every identifier in every body, and scanning the runs of name characters
+built a split iterator for each one. CI read library 145,118,874 ->
+146,911,031, +1,792,157 and +1.23 per cent, with entry +1,572,425 and module
++484,887; every other vein AGREED.
+
+The no-slash early-out in dd9ffcc9 answers the common name — one holding no
+slash, and so no qualifier anywhere inside it — on one scan, and never reaches
+the iterator. CI's round two, all three rows against this branch's base:
+
+| row | base | round one | round two | recovered |
+| --- | --- | --- | --- | --- |
+| `compile_instructions` | 40,703,283 | +484,887 | **+127,436** (+0.3131%) | 357,451 (73.7%) |
+| `entry_instructions` | 144,436,311 | +1,572,425 | **+363,524** (+0.2517%) | 1,208,901 (76.9%) |
+| `library_instructions` | 145,118,874 | +1,792,157 | **+363,516** (+0.2505%) | 1,428,641 (79.7%) |
+
+`compile_allocs` held at 27,395 and `compile_memory` is byte-identical; the
+emitted, machine-code and every runtime vein agreed in both rounds.
+
+The three rows land at `compile_instructions` 40,830,719,
+`entry_instructions` 144,799,835 and `library_instructions` 145,482,390.
+All three rise, and the rise is what the qualified-name scan costs after the
+early-out has taken back three quarters of it.
+
+**The local A/B tracked CI to 0.77 per cent.** This container refuses to
+compare the absolute rows — other silicon, other glibc — so the fix was priced
+here as a three-point delta on one box, same path, three builds: pre-fix
+146,522,240, the run scan 148,311,311 (+1,789,071), the early-out 146,882,961
+(+360,721). CI reads the same two deltas as +1,792,157 and +363,516. The
+first pair agree to 0.17 per cent and the second to 0.77, which is the
+cross-check that a host-refused local measurement is measuring what the gate
+measures. Worth writing down because the refusal is easy to read as "this box
+can say nothing": it can say the delta, and the delta is the claim.
+
+The residue is what a slash-bearing name costs to scan properly, and that is
+the fix rather than an overhead on it. The mutation still applies and the spec
+still goes red under it with the same `error[import]: `<g` is not imported
+here`, watched again after the early-out went in: the names the early-out lets
+through are exactly the ones the fix protects.
+
+**The floor comes down 69.59603943391699 -> 69.59152459326125**, a fall of
+0.0045, under the 2026-09-13 ironclad clause. Effects are types is ruled
+(kanso#1372, kanso#1395); a qualified name inside a type shell is how that
+spelling is written; and a program the compiler accepts cannot be one the
+import check refuses for an import the file wrote. That is the specification,
+and this is what it costs.
+## 2026-09-16 — a second decision found sitting in the log with nobody to receive it, and the check that now reads for them (DONE)
+
+The entry above this one closed by naming a gap it did not fix: nothing checked
+that a log paragraph saying a question goes to Clay had an entry in
+`design/pending-gavels.md` to go to. It found one such paragraph, a
+byte-position scan worth −1.2193% of the run term, filed a day late.
+
+Sweeping the same file for the rest of the family found a second, from the
+2026-09-15 entry "the maps parse is outside all three compile rows". Pinning
+`.rodata` to a fixed page removes the "by layout" term from the compile rows
+for anything growing ahead of it: on two sources differing by a hundred
+functions, `program` reads 43,471,592 on both against an unpinned pair that
+differed by 5,849. The paragraph prices it — about 1 per cent of binary at
+0x100000, or 52 KiB at 0x40000 with a loud link failure when outgrown — and
+closes "is Clay's, and goes to him with these numbers rather than to the
+ledger". `design/pending-gavels.md` is the only channel a waiting decision
+has. A session cites entries by heading, never by a task id, because task ids
+resolve nowhere outside the session that made them, so "to him rather than to
+the ledger" is a decision addressed to no one who can receive it. It is filed
+there now, under Open, not blocking, with a recommendation to decline it.
+
+Two instances two days apart is a process defect rather than a slip, so the
+check is built: `tests/a_question_sent_to_clay_has_a_ledger_entry.rs`.
+
+**What the check reads, and the two objections it had to answer.** The gap
+paragraph's own words were that a scan for the phrase "would pass over every
+historical entry that has since been ruled, so it would either be noisy or
+would need a list of exemptions that goes stale the way the counts did". Both
+halves are answered rather than worked around.
+
+The noise is answered by what a send carries. A decision that goes to Clay goes
+with its measurement — the filing rule says an entry carries the numbers behind
+it — so a paragraph counts as a send only when it holds a grouped number of
+five figures or a percentage. That is the whole difference between the two real
+sends above and the paragraph that merely describes the phrase; the latter
+names no number, and it is skipped for that reason rather than by name.
+
+The exemption list is answered by not having one. The live log is append-only,
+so the 2026-09-15 paragraph cannot be edited to cite an entry filed on
+2026-09-16 — and it does not need to be. A send is satisfied when its own
+paragraph names the ledger file, OR when a later paragraph names it and quotes
+one of the send's own measurements, which is exactly the shape a filing entry
+takes. So the byte-position send reads as answered by the entry that filed it,
+through the shared 1,823,814,374, with nothing to keep up to date. This
+paragraph does the same for the `.rodata` send, through 43,471,592.
+
+Watched red first, and for the right reason: on the tree before this entry the
+spec named exactly one paragraph, the `.rodata` one, and quoted it in full.
+Ratchet row `clay_send_filed`.
+
+**What it does not do.** It cannot tell a decision that is Clay's from one the
+implementer should settle, and it does not try; it reads the log's own words
+for a send and asks only that the send have somewhere to land. A question
+settled without ever being written down as Clay's stays invisible to it. The
+count spec catches an entry filed and miscounted, this one catches an entry
+never filed, and neither catches a decision never written.
+
+## 2026-09-16 — the railway's remainder: one false claim, and a page sentence that was owed and is paid
+
+The 2026-09-15 ruling's "What is left" says cloud builds the constructor and
+retires the railway. The constructor is kanso#1440. The railway's retirement
+turned out to be mostly built already, inside kanso#1444, and reading main
+rather than the part-3 tree is what made it look owed: ch04 carries the
+checker's rule beside the metaphor now, §"nothing is asked of the signature"
+already asks its question at the call, ch07's railway sentence is gone and
+appendix B's "passes straight through, unlooked-at" with it.
+
+What the survey found still owing, measured on the tree that holds part 3:
+
+**ch08 said every caller, and the chapter's own library is the counter-example.**
+"the railway from chapter 04 carries it out through every caller with its
+position intact" was written before a caller the checker can see had to name
+the err. lib/json now holds five hand-back arms for exactly those callers —
+`finish` in json.kso, `array_step`, `obj_key` and `obj_value` in value.kso,
+`str_low` in text.kso — so the sentence is refuted by the code the paragraph
+is walking. It names them now and says which callers pay.
+
+**ch04's metaphor outran the rule it introduces.** "no station on the line can
+flag the train down" is followed immediately by a paragraph saying the checker
+refuses the program where it can see a raised err arriving. A station stops
+the train where the checker can see it coming, which is what the next
+paragraph then explains.
+
+**The compiler page's owing list had gone stale.** §"what the ruling leaves
+owing" said chapter 4 "needs re-premising on explicit bind". kanso#1444 did
+that re-premising; the sentence records it as done and names what the section
+says now.
+
+Every ch04 sample `kanso play` can run answers its committed `.out`
+byte-for-byte on this tree, `railway.kso` among them: `share_of` raises,
+`with_tip`'s `share + share / 10` compiles because `share` is a name and the
+checker reads calls, and the endpoint reports it. The railway retires exactly
+as far as the checker can see, which is the bound ch04 now documents and the
+reason these three sentences were the whole of the remainder.
+
+## 2026-09-16 — a build hole is spelled `_`, and the checker fills it exactly once
+
+**DONE.** The 2026-08-24 gavel, "a build hole is spelled `_`, and fills
+exactly once" in the archive, built end to end. It sat unbuilt for
+twenty-three days because it was never on the unbuilt list; the entry above,
+"a ruling from 2026-08-24 was never on the unbuilt list, and the sample it
+condemned still ships", put it there, and this is the build.
+
+**The rule.** Inside a `build` block, a construction's argument may be `_`:
+a hole for a field the block fills later. A hole is filled by exactly one
+field write, made through the name of the record built with it, before the
+block freezes. `none` keeps its one meaning and never stands in for a field
+that is coming.
+
+**What the parser does.** `_` is an atom (`Expr::Hole`), and the parser
+admits it where an argument starts; until now a bare `_` after a
+constructor was `unexpected trailing tokens`, which is what STATUS.md's row
+probed. The pattern refusal is untouched: `_` in a binding pattern still
+says "omit fields with a keyed read", and appendix A's paragraph now says
+the character has one job and a pattern is never where it goes.
+
+**What the checker does.** The block-born walk (kanso#1359's proof, folded
+into the one descent in kanso#1386) already knows which names a block made
+and which fields they were made with. A construction bound to a name inside
+a block pushes a hole per `_` argument, keyed by the record's birth and the
+field. A field write asks the holes before it asks anything else, and there
+are seven refusals, each with an errors fixture:
+
+- `_` anywhere else — a top-level construction, a list element, an argument
+  to a function — is refused where it stands: nothing could fill it
+  (`a_hole_outside_a_build_block`, two spellings in one fixture).
+- a write to a field that was built with a value is refused: the field the
+  block fills is built with `_`
+  (`a_field_written_that_was_not_left_as_a_hole`). This is the retired
+  spelling, `ada = person "ada" none` then `ada.partner = bob`, and it is
+  now a compile error rather than the idiom the book taught.
+- a second write to a filled hole is refused (`a_hole_filled_twice`).
+- a write inside an `if` arm may not run, and a hole is filled exactly once,
+  so it is refused with "fill it outside the arm"
+  (`a_birth_recorded_inside_an_if_arm`, which now reports three diagnostics
+  where it reported one: the conditional fill, the write through a name the
+  arm's answer left unproven, and the hole nobody filled).
+- a write through a record an `if` chose, or an element a list literal
+  holds, is two records to the checker, and would fill one hole and leave
+  the other open; it is refused, and the hole it would have filled is
+  reported unfilled at the freeze (`a_hole_filled_through_a_chosen_record`,
+  `a_hole_filled_through_an_element`;
+  `build_write_a_field_an_if_may_have_overwritten` gains this diagnostic
+  ahead of the one it had).
+- a hole nobody filled is refused when the block freezes, at the `_`'s own
+  span (`a_hole_never_filled_before_the_freeze`).
+- a write to a field the type never declared is refused before the hole
+  question is asked, with the sentence a READ of that field gets, `` `node`
+  has no field `nope` ``. That fixture,
+  `a_field_write_names_a_field_the_type_lacks`, lived in the runtime corpus
+  pinning the sentence native and the interpreter say when the write runs;
+  it moves to the errors corpus, because no checked program reaches the
+  runtime site now. The two `has no field` sites at the write in runtime.c
+  stay, and the read path still pins their words.
+
+**What the engines do.** Nothing. A hole is the `none` word on all three
+engines until its fill runs — the emitter writes the none constant, the
+interpreter binds `NoneV`, the page emits the `none` identifier — and the
+checker is the whole of the enforcement. So a read of a hole before its fill
+sees `none`, and `a_hole_read_before_its_fill_is_a_none` pins that on both
+engines rather than leaving it to be discovered: the block
+`ada = person "ada" _`, `early = ada.partner`, `ada.partner = bob` reads
+`<none> bob`. The alternative, a runtime sentinel the engines would have to
+carry and test on every field read, buys nothing the checker does not
+already prove.
+
+**Fill is by name, and an alias counts.** `born_of` resolves a name bound to
+another born name, or a field read that lands on one born record, to that
+record's birth, so `pair = ada` then `pair.partner = bob` fills ada's hole
+exactly as `ada.partner = bob` would. What cannot fill a hole is a name
+whose birth is `Either`: the checker cannot say which record the write
+reaches, so it cannot say the hole was filled once.
+
+**The corpus.** Beyond the errors fixtures:
+`a_build_writes_what_it_can_prove_was_born` rewritten with holes where it
+had `none` placeholders and an untouched `.out`;
+`a_knot_equals_the_same_cycle_built_in_a_block`,
+`a_description_rides_in_a_field`, `build_after_guard` and
+`build_nested_cohort` respelled; the runtime fixture `build_set_err` respelled
+with the err in the first field and the hole in the second; the mem fixture
+`build_cycle` respelled, and its vein moved — `allocs` 70 -> 66,
+`alloc_bytes` 3,264 -> 3,072, `sh_buf` 304 -> 144 — because the two `[]`
+placeholders it built and then overwrote were two buffers the hole does not
+allocate. Four examples respelled (`build_blocks`, `build_contained`,
+`build_cyclic_eq`, `none_is_a_value`), stdout goldens unchanged. The book:
+ch03's `knot.kso` reads `ada = person "ada" _`, its panel regenerated, and
+the paragraph under it teaches the hole and the four refusals instead of
+"`none` holds ada's place". The playground's `build` and `contained` samples
+respelled. STATUS.md's row also names `tests/golden/micro/bare_field.kso` as
+the same defect; it is not — `p = person "ada" none` there is a top-level
+construction with a genuine absence and no write, and it stands as written.
+
+**The ratchet.** Seven rows, one per refusal, each patching check.rs to
+disarm one test and each proved by the applies pass: `hole_unfilled`,
+`hole_twice`, `hole_placeholder`, `hole_in_arm`, `hole_chosen`,
+`hole_outside`, `hole_type_lacks`.
+
+**The counters.** CI's sitting on the kanso#1444 base, all three compile
+rows falling: `compile_instructions` 40,273,027 -> 40,184,361 (−88,666,
+−0.2202%), `entry_instructions` 140,614,828 -> 140,399,833 (−214,995,
+−0.1529%), `library_instructions` 140,855,393 -> 140,641,362 (−214,031,
+−0.1520%). The fall is the two `none` placeholders `build_cycle` used to
+construct: a `none` argument is an expression the checker walks and the
+emitter writes, and a hole is neither. `machine_code`, `compile_allocs`,
+`compile_peak_bytes` and every runtime row agreed. The mem vein's three
+moves are named above. Welfare rises 69.63579260553377 ->
+69.63860211489504, banked with `--set` in this PR; eight page spans across
+five paragraphs quote the three compile goldens and moved with them.
+
+**ROUND THREE, and the first reading was measured on a tree the base had
+moved out from under.** The rows above were read before main's kanso#1448
+reached this branch through kanso#1444's tip. CI's fresh sitting on the
+merged tree, against the same base, reads `compile_instructions` 40,273,027
+-> 40,269,818 (−3,209, −0.0080%), `entry_instructions` 140,614,828 ->
+140,695,826 (+80,998, +0.0576%), `library_instructions` 140,855,393 ->
+140,935,957 (+80,564, +0.0572%). The base row is the same number on both
+trees and CI verified it either side, so the base did not move; the two
+single-file rows fell 214,995 and 214,031 in the earlier round and rise here.
+kanso#1448 moves `src/linear.rs` and the layout under it, the hole's edit
+lands in `src/check.rs` on top of that, and compile_instructions is a layout
+vein — it has recorded layout-only moves before. So the hole's own effect on
+these rows is smaller than one sitting made it look, and neither sitting is
+wrong about the tree it was taken on.
+
+`compile_allocs` held at 27,173, `compile_memory` is byte-identical, and
+`machine_code`, `emitted_code`, `compiler_libraries` and all fourteen runtime
+rows agreed. The summed compile term rises, so welfare falls 69.63860 ->
+69.63510 and the floor moves with it, by hand, under CLAUDE.md's ironclad
+clause: `_` is the 2026-08-24 gavel, and a change that builds a ruled part of
+the language lowers the floor by exactly what it costs.
+
+## 2026-09-16 — five pull requests land as one tip, and a priced counter went unpriced the moment its neighbour landed
+
+**DONE.** kanso#1444 merged at 16:22Z as `fd789b8c`, and took kanso#1440,
+kanso#1441 and kanso#1442 with it. The four branches left standing —
+kanso#1447's build hole, kanso#1449's `!` respell, kanso#1452's qualified
+yield with kanso#1453's ledger check on top of it, and kanso#1450's railway
+remainder — are merged into `claude/ledger-reachable` and land as one tip.
+
+**Why one tip.** Branch protection refuses a head that is behind main, so
+every landing sends every other open pull request back for a fresh round. The
+ratchet's touched pass is what prices that: it selects the rows patching a
+file the branch changed and proves each by a release rebuild and a gate run,
+and on this diff it selects 88 of the 143. kanso#1444's ran 2h26m, which is
+88 rows at about 100 seconds apiece. Five landings are five of those sittings.
+kanso#1444's own body made the same argument for the four it carried, and the
+arithmetic has not changed.
+
+**Eight conflicts, none of them blanket-resolved.** The log, the three
+instruction goldens, `bench/welfare_floor.json` and `scripts/ratchet/
+ratchet.kso` are all append-only, so both sides are kept and ordered. The
+floor is merged entry by entry rather than by `max()` — 284 from the base,
+four from the chain, two from the hole, baselines byte-identical — because
+`max()` across a language change sets a floor the merged tree cannot reach,
+which is written down at `c332f9c0`. The ratchet's fifteen new rows chain
+through `rows_c1ya`, `rows_c1yb` and `rows_c1yc` where both sides had reached
+for `rows_c1z`. `tests/golden/micro/a_build_writes_what_it_can_prove_was_born
+.kso` takes the hole's side: the chain's only edit there dropped the bang from
+`middle = ring[2]!`, and the hole deletes that line with `ring` and `chosen`
+because a record an `if` chose and an element of a list are refused now and
+live in the error corpus. `docs/compiler.html`'s five paragraphs differ only
+in their `data-golden` spans and take the chain's, so `golden_prose` agrees
+with the goldens beside them.
+
+**A priced counter went unpriced the moment its neighbour landed.** The trend
+gate refused this tree over three counters kanso#1449's own entry describes:
+"the decoder's emitted code reads `calls` 1,209 -> 1,212, `branches` 795 ->
+807, `lines` 9,161 -> 9,258". That sentence names each counter by its bare
+suffix, and it satisfied the gate for as long as kanso#1444's entry sat beside
+it in the same delta spelling `emitted_calls`, `emitted_branches` and
+`emitted_lines` in full. kanso#1444 is on main now, its entry left the delta,
+and the branch's added lines hold zero occurrences of any of the three names.
+So a paragraph that prices a counter through a neighbour's spelling is priced
+only until that neighbour lands, and nothing warns you: the gate was green on
+kanso#1449 and is red here with the same words in the file.
+
+The three land at `emitted_calls` 1,209 -> 1,212, `emitted_branches` 795 ->
+807 and `emitted_lines` 9,161 -> 9,258, for the reason kanso#1449 gives: the
+guard-bound fixes hand the beat back to loops the respell had cost it, and a
+beat loop is more code than a call. `emitted_other_lines` 133,514 -> 136,463,
+`emitted_other_calls` 20,231 -> 20,323, `emitted_other_branches` 12,689 ->
+13,099 and `emitted_other_defines` 2,350 -> 2,342 are the same cause across
+the thirteen benchmarks, and `text` 1,737,148 -> 1,755,372 is that code
+arriving in the binary.
+
+**What this round is expected to be red on.** The three compile instruction
+goldens carry the chain's values and the merged tree is neither branch, so CI
+measures them and round two writes them in. welfare reads those goldens, so it
+is red with them, and the floor is left at 69.59152459326125 rather than set
+from a projection: a floor banked before the goldens carry CI's rows freezes a
+number this container guessed.
+
+## Round two: CI's sitting on the merged tree, and three rows that fell
+
+Round one came back red on exactly the three the body predicted and on nothing
+else. The cost-goldens job's own vein summary — the authority, because its
+nineteen counter steps are `continue-on-error` and the API's per-step
+conclusions read SUCCESS either way — listed `compile instructions:failure`,
+`entry instructions:failure`, `library instructions:failure` and `success` for
+the other sixteen, `compile memory` and `compile allocations` among them.
+Fifteen of the run's nineteen jobs were green, three were still running, and
+welfare was skipped behind the goldens it reads.
+
+The merged tree is neither branch, so CI measured the three fresh and all three
+FELL:
+
+| vein | the chain's golden | CI on the fold | |
+| --- | --- | --- | --- |
+| `compile_instructions` | 40,830,719 | 40,794,557 | −36,162 (−0.0886 per cent) |
+| `entry_instructions` | 144,799,835 | 144,656,649 | −143,186 (−0.0989 per cent) |
+| `library_instructions` | 145,482,390 | 145,339,594 | −142,796 (−0.0982 per cent) |
+
+Summed, −322,144. Nothing in the fold set out to make the front end cheaper:
+the tip carries the `!` respell, the build hole and the qualified-yield fix
+together, and this is the layout under all three. `compile_allocs` holds at
+27,395 and `compile_memory` is byte-identical, which is what says the fall is
+layout rather than a pass doing less — an actual reduction in work would have
+moved the allocation row with it. The three land at 40,794,557, 144,656,649
+and 145,339,594.
+
+The rows went in first, then `all_pages.sh --write` rewrote the eight
+golden-quoting spans that name them (four `compile`, two `entry`, two
+`library`), and only then was the floor banked: 69.59152459326125 ->
+69.59317353129765. That order matters and is the rule — `--set` records
+whatever score the committed goldens produce, so banking before they carry
+CI's rows freezes a number this container projected rather than the one CI
+measured. The rise is small and it is still a rise, and a gain nobody ratchets
+is one the next change is free to spend.
 ## 2026-09-16 — the compile term never counted codegen, and the 2026-08-25 gavel says it must
 
 Clay, told in the design chat that an optimizer taking twice as long is

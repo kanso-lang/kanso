@@ -1,0 +1,4 @@
+error[build]: `ada.partner = ...` fills a hole, and `ada` was built with a value in `partner`: a field the block fills is built with `_`
+  --> a_field_written_that_was_not_left_as_a_hole.kso:13:9
+  13 |     ada.partner = bob
+               ^

@@ -44,7 +44,7 @@ fn walking_names _ _ _ acc true
   acc
 
 fn walking_names path names at acc false
-  kid = "{path}/{names[at]!}"
+  kid = "{path}/{names[at]}"
   os/is_dir kid .> (d -> walk_kid path names at acc kid d)
 
 fn walk_kid path names at acc kid true

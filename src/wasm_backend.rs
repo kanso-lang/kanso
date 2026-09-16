@@ -753,6 +753,11 @@ impl<'a> WasmBackend<'a> {
                 let lit = self.nullary_lit("none");
                 ctx.body.i32_const(lit as i64);
             }
+            // A hole is a none until the block fills it, the way the other two
+            // engines build it.
+            Expr::Hole(span) => {
+                self.emit_expr(ctx, &Expr::Ident(Name::new("none"), *span), tail)?
+            }
             Expr::Int(n, _) => {
                 let lit = self.lit(LitKey::Int(n.clone()), || Lit::Int(n.clone()));
                 ctx.body.i32_const(lit as i64);
@@ -796,6 +801,13 @@ impl<'a> WasmBackend<'a> {
                         let origin = self.origin_lit(&ctx.prefix, &ctx.hako, *span);
                         ctx.body.i32_const(origin as i64);
                         ctx.body.call(RT_ERR_STAMP);
+                        // the read settles a box (ruled 2026-09-16), built the
+                        // way `effect v` is
+                        ctx.body.call(RT_ARG);
+                        let lit = self.str_lit("effect");
+                        ctx.body.i32_const(lit as i64);
+                        ctx.body.i32_const(1);
+                        ctx.body.call(RT_BUILTIN);
                     }
                     false => ctx.body.call(RT_AT),
                 }
@@ -816,7 +828,11 @@ impl<'a> WasmBackend<'a> {
             }
             Expr::Guard { cond, early, rest, .. } => {
                 // a fired guard makes the tail unreachable, which is exactly
-                // the untaken branch of a conditional
+                // the untaken branch of a conditional. Both sides keep the
+                // tail position they were written in: `return x if c` over a
+                // self-call is how the library spells a fold, and emitting
+                // that call plainly grew the page's stack a frame a turn
+                // where native and the oracle looped.
                 let c = ctx.body.local();
                 self.emit_expr(ctx, cond, false)?;
                 ctx.body.local_tee(c);
@@ -827,9 +843,9 @@ impl<'a> WasmBackend<'a> {
                 ctx.body.local_get(c);
                 ctx.body.call(RT_TRUTHY);
                 ctx.body.if_i32();
-                self.emit_expr(ctx, early, false)?;
+                self.emit_expr(ctx, early, tail)?;
                 ctx.body.else_();
-                self.emit_body(ctx, rest, false)?;
+                self.emit_body(ctx, rest, tail)?;
                 ctx.body.end();
                 ctx.body.end();
             }
@@ -1361,9 +1377,9 @@ impl<'a> WasmBackend<'a> {
             ctx.body.local_get(cond);
             ctx.body.call(RT_TRUTHY);
             ctx.body.if_i32();
-            self.emit_expr(ctx, &args[1], false)?;
+            self.emit_expr(ctx, &args[1], tail)?;
             ctx.body.else_();
-            self.emit_expr(ctx, &args[2], false)?;
+            self.emit_expr(ctx, &args[2], tail)?;
             ctx.body.end();
             ctx.body.end();
             return Ok(());
@@ -1659,7 +1675,7 @@ fn free_idents(expr: &Expr, visit: &mut dyn FnMut(&str)) {
         }
         Expr::Field { base, .. } => free_idents(base, visit),
         Expr::Upcast { expr, .. } => free_idents(expr, visit),
-        Expr::Int(..) | Expr::Float(..) => {}
+        Expr::Int(..) | Expr::Float(..) | Expr::Hole(..) => {}
         Expr::Str(parts, _) => {
             for part in parts {
                 if let TemplatePart::Interp(inner) = part {

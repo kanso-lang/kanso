@@ -162,7 +162,7 @@ type person
   partner
 
 build
-  ada = person "ada" none
+  ada = person "ada" _
   bob = person "bob" ada
   ada.partner = bob
 
@@ -180,8 +180,8 @@ type node
 
 fn tie label
   build
-    here = node label none
-    there = node "pong" none
+    here = node label _
+    there = node "pong" _
     here.peer = there
     there.peer = here
   here

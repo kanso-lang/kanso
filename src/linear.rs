@@ -505,16 +505,31 @@ impl<'a> Analysis<'a> {
         {
             return self.linear_params.contains(&(ctx.name.clone(), ctx.params.len(), idx));
         }
-        // a local binding `var = e`
-        for stmt in &ctx.body {
-            if let Stmt::Bind { pattern: Pattern::Var(n, _), expr } = stmt {
-                if n == var {
-                    return self.unique_in_with(expr, ctx, scoped, exempt);
+        // a local binding `var = e`, read through the guards above it: the
+        // lines under a `return x if c` are the guard's `rest`, one arm of
+        // the same body, so a name bound there is a binding like any other
+        match bound_in(&ctx.body, var) {
+            Some(expr) => self.unique_in_with(expr, ctx, scoped, exempt),
+            None => false,
+        }
+    }
+}
+
+/// The expression `var` is bound to in `body`, looking under each guard's
+/// `rest` for the lines written below it.
+fn bound_in<'a>(body: &'a [Stmt], var: &str) -> Option<&'a Expr> {
+    for stmt in body {
+        match stmt {
+            Stmt::Bind { pattern: Pattern::Var(n, _), expr } if n == var => return Some(expr),
+            Stmt::Expr(Expr::Guard { rest, .. }) => {
+                if let Some(e) = bound_in(rest, var) {
+                    return Some(e);
                 }
             }
+            _ => {}
         }
-        false
     }
+    None
 }
 
 /// Collect in-place push sites in `body`: a `push` whose list argument is a
@@ -792,7 +807,7 @@ fn child_exprs(e: &Expr) -> Vec<&Expr> {
                 crate::ast::TemplatePart::Lit(_) => None,
             })
             .collect(),
-        Expr::Int(..) | Expr::Float(..) | Expr::Ident(..) => vec![],
+        Expr::Int(..) | Expr::Float(..) | Expr::Ident(..) | Expr::Hole(..) => vec![],
     }
 }
 

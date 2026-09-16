@@ -1,0 +1,8 @@
+error[build]: `_` is a hole for a field a `build` block fills; it stands only where a construction's argument goes, inside one
+  --> a_hole_outside_a_build_block.kso:8:20
+   8 | ada = person "ada" _
+                          ^
+error[build]: `_` is a hole for a field a `build` block fills; it stands only where a construction's argument goes, inside one
+  --> a_hole_outside_a_build_block.kso:11:11
+  11 |   length [_]
+                 ^

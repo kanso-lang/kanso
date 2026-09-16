@@ -35,24 +35,27 @@ fn bump_on _
   []
 
 fn map_step acc k
-  now = list/fold (bump_on k) acc[1]! (m _ -> put m "n" 2)
-  [now (put acc[2]! k now)]
+  return acc if length acc < 2
+  now = list/fold (bump_on k) acc[1] (m _ -> put m "n" 2)
+  [now (put acc[2] k now)]
 
 fn list_step acc k
-  now = list/fold (bump_on k) acc[1]! (l _ -> push l 9)
-  [now (put acc[2]! k now)]
+  return acc if length acc < 2
+  now = list/fold (bump_on k) acc[1] (l _ -> push l 9)
+  [now (put acc[2] k now)]
 
 fn byte_step acc k
-  now = list/fold (bump_on k) acc[1]! (b _ -> append b "y")
-  [now (put acc[2]! k now)]
+  return acc if length acc < 2
+  now = list/fold (bump_on k) acc[1] (b _ -> append b "y")
+  [now (put acc[2] k now)]
 
-maps = (list/fold ["a" "b"] [(put {} "n" 1) {}] map_step)[2]!
+maps = (list/fold ["a" "b"] [(put {} "n" 1) {}] map_step)[2]
 
-lists = (list/fold ["a" "b"] [(push [] 1) {}] list_step)[2]!
+lists = (list/fold ["a" "b"] [(push [] 1) {}] list_step)[2]
 
-bytes = (list/fold ["a" "b"] [(append (text/bytes "x") "") {}] byte_step)[2]!
+bytes = (list/fold ["a" "b"] [(append (text/bytes "x") "") {}] byte_step)[2]
 
-kept = maps["a"]!
+kept = maps["a"]
 
 fresh = list/fold ["once"] (put {} "n" 1) (m _ -> put m "n" 2)
 
@@ -60,5 +63,5 @@ pub play =
   print "maps: {maps}"
   print "lists: {lists}"
   print "bytes: {bytes}"
-  print "kept: {kept["n"]!}"
-  print "fresh: {fresh["n"]!}"
+  print "kept: {kept["n"]}"
+  print "fresh: {fresh["n"]}"

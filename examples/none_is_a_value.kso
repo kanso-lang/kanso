@@ -4,7 +4,7 @@ type node
 
 fn ring_from head tail
   build
-    a = node head none
+    a = node head _
     b = node tail 0
     a.peer = b
   a

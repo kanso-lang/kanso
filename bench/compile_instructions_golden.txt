@@ -1557,4 +1557,73 @@
 # stated, not reasoned from. compile_allocs held at 27,937 and compile_memory
 # is byte-identical.
 #
-compile_instructions=40273027
+# 2026-09-16 (kanso#1449): the `!` box respell, and the row FALLS because a
+# randomly-seeded table left the compile path. The module row: `kanso check compile_corpus`
+# reads 40,703,283 against 40,749,158, -45,875 (-0.1126%).
+#
+# This is not the respell's own cost. Three rounds of this pull request
+# declared `proven` as `std::collections::HashSet<Span>` in src/infer.rs and
+# src/check.rs, where the rest of the compiler uses crate::hash::Set, and
+# std's RandomState reseeds every process. The row stopped reproducing: three
+# CI rounds returned three distinct values, a fourth machine (the ratchet
+# runner) a fourth, and eight local repeats of one binary spread 313
+# instructions. A callgrind function diff put the whole delta in one frame,
+# hashbrown's insert. Spelled crate::hash::Set the spread is zero, and the
+# fall recorded here is SipHash leaving a path Fx now walks.
+#
+# The header of bench/compile_instructions_golden.txt already said this, in
+# the paragraph beginning THIS ROW COULD NOT HAVE EXISTED BEFORE THAT CHANGE,
+# written on 2026-08-24 against a spread of forty thousand. The lesson was
+# recorded and reintroduced anyway, so it is a spec now:
+# tests/the_compile_path_hashes_with_a_fixed_seed.rs reads src/ and fails on a
+# std-hashed container outside a named exception.
+#
+# Regenerated from the CI sitting on 647e58f7, stated, not reasoned from.
+# compile_allocs held at 27,395 and compile_memory is byte-identical at
+# 787,956; every work row, every text row, emitted, machine code and the
+# linked-library list all AGREED.
+#
+# 2026-09-16 (kanso#1452): a type name inside a shell is several names, and
+# the import check read only the first. `mark` decides which module qualifiers
+# a file uses, and it split a type name at its first slash, so
+# `<os/process>effect` answered `<os` -- a qualifier no import can match. It
+# scans the runs of name characters now. That runs on every identifier in
+# every body, so round one cost this row 484,887 (1.1913 per
+# cent); a no-slash early-out, added in dd9ffcc9, answers the common name on
+# one scan and never builds the iterator, taking 357,451 of that back. This
+# row is a RISE of 127,436 (0.3131 per cent), and the residue is what a
+# slash-bearing name costs to scan properly, which is the fix. Regenerated
+# from CI's own reading, stated, not reasoned from. compile_allocs held at
+# 27,395; every other vein AGREED.
+#
+# 2026-09-16 (kanso#1447): the build hole, and this row is a FALL: 40,273,027 ->
+# 40,184,361, -88,666 (-0.2202%), on the base kanso#1444 left. `_` is an atom the
+# parser reads where an argument starts and the block-born walk records as a
+# hole; the two `none` placeholders it replaces stop being constructed and
+# stop being walked, and a hole answers the field's fill rather than a value
+# the later write has to reconcile. Regenerated from CI's own reading, stated,
+# not reasoned from. compile_allocs held at 27,173 and compile_memory is
+# byte-identical; the emitted, machine-code and every runtime vein agreed.
+#
+# 2026-09-16 (kanso#1447, round three): the same change re-read on the merged
+# tree, and this row FALLS: 40,273,027 -> 40,269,818, -3,209
+# (-0.0080%), against the base kanso#1444 left. The round above read
+# 40,184,361 on a branch that had not yet merged main's kanso#1448 through
+# the base. The base row is the same number on both trees, CI-verified either
+# side, so the swing is not the base moving: kanso#1448 moves `src/linear.rs`
+# and the layout under it, and the hole's edit lands in `src/check.rs` on top
+# of that. Regenerated from CI's own reading, stated, not reasoned from.
+# compile_allocs held at 27,173 and compile_memory is byte-identical; the
+# emitted, machine-code, compiler-libraries and every runtime vein agreed.
+#
+# 2026-09-16, the five-PR fold (kanso#1453). The merged tree is neither
+# branch, so this row was re-measured rather than carried: 40,830,719
+# -> 40,794,557, a fall of 36,162 (0.0886 per cent) on `kanso check compile_corpus`.
+# Nothing in the fold set out to make the front end cheaper; the tip
+# carries the `!` respell, the build hole and the qualified-yield fix
+# together, and this is the layout under all three. compile_allocs holds
+# at 27,395 and compile_memory is byte-identical; emitted, machine code,
+# compiler libraries and every runtime vein agreed. CI's own reading,
+# stated, not reasoned from.
+#
+compile_instructions=40794557

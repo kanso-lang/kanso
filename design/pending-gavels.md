@@ -232,6 +232,126 @@ ruling is what releases it. Still nothing here for Clay.
 explicit, an err is a value, and a bare err halts where it lands" (the live
 log). ch04's paragraph moves with that build. Still nothing here for Clay.
 
+### How far does a binding position carry a box?
+
+**Cited:** the live log's "a box handed to a binding parameter reaches the
+dispatch, and the dispatch answers wrong" (2026-09-16), which names three
+possible answers and rules none of them; the entry below it of the same date,
+which measures the cheapest one; the archive's "gavel: effects are types, and
+the words are the only doors" (2026-08-29), which says a box is opened by
+`bind`, `annotate` and `rescue` and by nothing else, and does not say what a
+box handed to an ordinary parameter does. Ten micro and runtime fixtures pin
+today's answer on three engines, `a_description_reaches_a_dispatch` and
+`a_plain_dot_hands_the_box_over` first among them.
+
+**The question.** A box carried through a plain parameter is invisible to the
+checker from then on. `encode_onto` handed a box directly is refused;
+`elem_onto x` then `encode_onto x` inside that body is not, because nothing
+says `x` holds a box. kq lost three unit tests to that shape and kanso-json
+two sites, each a box arriving at a group with no arm that could match it, so
+the program died at run time with a diagnostic about arguments rather than
+about the box.
+
+Refusing a box at every bare-binder position closes it and was built and
+measured: one refusal across the whole tree's modules, and TEN in the corpora,
+two of which are the ruled behaviour itself — a description reaching a
+dispatch lands on the bare arm, and `held e` receives a box and hands it back.
+So the blunt rule is not available without reversing those.
+
+**Recommendation:** track the box through the parameter — a position bound to
+a box carries a box into the body, and the existing refusal then fires at the
+call inside it. That is a typing change rather than a check, it leaves every
+one of the ten fixtures alone, and it is the answer the log entry that opened
+this thread already called the honest one. Cloud does not build it until Clay
+rules, because it changes what the checker proves about every program, and it
+does not block anything in flight: every site in kanso, kq and kanso-json is
+spelled today so that no box reaches a group with no arm for it.
+
+### A byte-position scan on a string, for the escape path
+
+**Cited:** the live log's "the per-call floors, mapped after the inlines"
+(2026-09-15), whose closing paragraph measures this change and says in its own
+words that it "goes to Clay with this number and is not built here" — and then
+no entry was ever filed here, so it went to nobody. Searched this ledger, the
+live log and `design/log/compiler-log-archive.md` for `byte-position`,
+`find2_below_str` and the escape path: those two log paragraphs are the only
+mentions, and the question has never been asked. Also read: kanso#1291's escape
+scan, which skipped and then iterated, and kanso#1276's proven length, both of
+which worked inside the view rather than removing it.
+
+**The question.** `escape_onto` looks through a string for the three bytes JSON
+escapes. It cannot look at the string: `text/find2_below` takes bytes, so
+`escape_onto` builds a thirty-two-byte bytes view of the string first, every
+time, and drops it unused when the string is clean, which is nearly always.
+That is seventeen instructions and thirty-two arena bytes per string,
+16,026,750 instructions a run.
+
+A scratch builtin `text/find2_below_str` looks through the string's own bytes
+and answers 0 for a miss, and `escape_onto` builds the view only when it hits.
+Container A/B on the kanso#1437 leaves, output byte-identical on both programs:
+runbench 1,823,814,374 -> 1,801,576,724, −22,237,650 (−1.2193%), the decoder
+unmoved. That is more than the view's own seventeen instructions because the
+element loop's beat and the view's arena bytes go with it. The patch sits in
+the session scratchpad as `escape_str.patch`.
+
+What the measurement cannot settle is the surface. A string's positions are
+codepoints everywhere else in `text`, and this primitive takes a byte floor and
+answers a byte offset.
+
+**Recommendation:** add it, spelled so the byte offset is never a position. What
+this call site asks is where the clean prefix ends, and the answer is consumed
+as a bound for building the view rather than as an index into the string; every
+`text` operation a program can reach still counts in codepoints. If that reading
+is too fine a distinction, the other answer is to keep the view and close the
+question — 1.22% of the run term is the price, written down, and the queue
+stops re-finding it.
+
+
+### Pinning `.rodata` to a fixed page, so code growth stops moving the compile rows
+
+**Cited:** the live log's 2026-09-15 entry "the maps parse is outside all three
+compile rows", whose closing paragraph measures this and says the choice "is
+Clay's, and goes to him with these numbers rather than to the ledger" — where
+this ledger is the only channel a waiting decision has, so it went nowhere.
+Searched this ledger, the live log and `design/log/compiler-log-archive.md` for
+`rodata`, `section-start` and the page-pin family: that one log paragraph is the
+only mention, and the question has never been asked here. Also read: kanso#1234,
+which chased the same "by layout" noise to glibc's `/proc/self/maps` parse and
+was ruled with `setarch` and sorts rather than a link change; and kanso#1404,
+which took the checkout path out of the rows. Neither touches section placement.
+
+**The question.** The three compile instruction rows move when code that sits
+ahead of `.rodata` in the binary grows, because every literal after it shifts.
+Most of this month's pull requests carry a line in their body naming some part
+of their compile-row delta as "by layout", and that term is what those words
+mean.
+
+Pinning the section to a fixed address removes the term for anything growing
+ahead of it. Built with `-C link-arg=-Wl,--section-start=.rodata=0x100000` on
+two sources differing by a hundred functions: `program` reads 43,471,592 on
+both, identical to the instruction, where the unpinned pair differed by 5,849.
+
+The price is the gap the linker writes. The binary grows from 4,677,120 to
+5,724,880 bytes at that address — about 1 per cent — or roughly 52 KiB at
+0x40000, one page above today's `.rodata`, which fails the link loudly the day
+the sections ahead of it outgrow it.
+
+What the pin cannot reach is growth *inside* `.rodata`. `src/runtime.c` and
+`lib/*.kso` are `include_str!`'d into it, so a runtime or library edit shifts
+every literal after them whatever the section's start — and those are the edits
+behind most of the "by layout" lines. So the pin buys the code-only case and
+leaves the common one alone.
+
+**Recommendation:** decline it, and record the decline. A 1 per cent larger
+shipped binary, or a measurement build linked differently from the shipped one,
+is a real cost against a term the pin only partly removes; and this repository
+has already ruled once, on kanso#1234, that the measurement should not be
+special-cased away from what ships. The "by layout" lines are honest — they say
+a row moved for a reason the change did not choose — and the rows are read as
+deltas against a named base, which is what makes them useful either way. If the
+answer is the other one, 0x40000 with the loud link failure is the shape to
+take, not 0x100000.
+
 ## Stale — the July campaign's unclosed letters (GAVELS.md, retired here)
 
 EMPTY. Clay ruled the last five in one sitting on 2026-08-26 — C struck,

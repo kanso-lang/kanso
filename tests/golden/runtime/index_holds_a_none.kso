@@ -4,4 +4,4 @@
 # way it can: a demanded read of a stored none is the missing-index err, the
 # same answer an out-of-range read gives.
 xs = push (push [] 1) none
-print "second: {xs[2]!}"
+xs[2]! .> (v -> print "second: {v}")

@@ -18,25 +18,24 @@
 # fixture can pin it, and is the answer to the gap rather than a fixture for
 # it.
 #
-# Three shapes because the twin has three answers. `x[1]!` demands. `x[1]`
-# does not, and the interpolation that reads it does. `plain[2]!` indexes past
-# the thunk to a plain element, which is the fast arm with a thunk sitting in
-# the same list — the shape that breaks if the twin ever decides by the LIST
-# rather than by the element it found.
+# Three shapes because the twin has three answers. `x[1]!` answers a box, and
+# opening it with `.>` demands the element. `x[1]` does not, and the
+# interpolation that reads it does. `plain[2]` indexes past the thunk to a
+# plain element, which is the fast arm with a thunk sitting in the same list
+# — the shape that breaks if the twin ever decides by the LIST rather than by
+# the element it found.
 #
 # A knot unfolds to a one-element list holding itself, so `length` answers 1
 # without walking the cycle.
 x = [x]
 
-strict = x[1]!
-
 loose = x[1]
 
 plain = [x 7]
 
-past = plain[2]!
+past = plain[2]
 
 pub play =
-  print "strict: {length strict}"
+  x[1]! .> (strict -> print "strict: {length strict}")
   >> print "loose: {length loose}"
   >> print "past: {past}"

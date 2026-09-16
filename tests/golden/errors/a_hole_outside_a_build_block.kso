@@ -1,0 +1,13 @@
+# `_` is a hole for a field a `build` block fills. Outside a block nothing
+# could fill it, and away from a construction's argument there is no field
+# for it to be, so both spellings are refused where they stand.
+type person
+  name
+  partner
+
+ada = person "ada" _
+
+fn count _
+  length [_]
+
+pub play = print "{ada.name} {count 0}"

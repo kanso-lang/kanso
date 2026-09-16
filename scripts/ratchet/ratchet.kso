@@ -184,7 +184,7 @@ fn host_bound? gate
 
 fn why_bound gate
   found = list/to_list (list/select host_bound (e -> e.gate == gate))
-  found[1]!.why
+  found[1].why
 
 formatting = row
   "a file rustfmt would rewrite"
@@ -229,6 +229,19 @@ rescue_licence = row
   "cargo test --test golden micro_corpus_agrees_across_engines"
   "specs (unit, golden, differential)"
   (breaking "a_rescue_that_enters_its_own_packages_callback")
+  no_setup
+
+# A measured decision that goes to Clay must have an entry in the ledger to
+# go to. Two sends were found sitting in the log with none, two days apart,
+# so the spec reads the log for the family. The mutation takes the ledger's
+# name out of the paragraph that files the `.rodata` page pin, and the spec
+# names that send as unanswered.
+clay_send_filed = row
+  "a measured decision sent to Clay with no ledger entry to go to"
+  true
+  "cargo test --release --test a_question_sent_to_clay_has_a_ledger_entry"
+  "specs (unit, golden, differential)"
+  (breaking "a_send_to_clay_with_no_ledger_entry")
   no_setup
 
 # The 2026-09-15 ruling's third part: a raised err arriving where a value is
@@ -302,6 +315,159 @@ callback_err = row
   "specs (unit, golden, differential)"
   (breaking "a_chain_callbacks_parameter_never_fails")
   release
+
+# `xs[i]!` answers a box, the element or the missing-index err bubbling
+# through it, and the words are what open it (ruled 2026-09-16, reversing
+# the same morning's reading). The site walk refuses the box at an operator,
+# a field read and a builtin the way it refuses any other effect there; this
+# row is the arm of `yields_box` that says a strict index is one.
+bang_box = row
+  "a strict index the words cannot open"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_strict_index_the_words_cannot_open")
+  release
+
+# The plain read is the element or a none, and the bound written where the
+# read is discharges the none: a guard returning before an out-of-range read
+# leaves the element as the only answer. Two rows because the prover has two
+# doors, the facts an `if` pushes and the length a literal list spells out.
+guard_bound = row
+  "a bound the guard never discharges"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_bound_the_guard_never_discharges")
+  release
+
+literal_bound = row
+  "a literal list of unknown length"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_literal_list_of_unknown_length")
+  release
+
+# A type name inside a shell is several names: `<g/cell>effect` holds one
+# qualified name and one bare one, and the import check has to see the
+# qualified one. Splitting the whole spelling at its first slash answered
+# `<g`, which no import matches, so a file was refused for borrowing an
+# import it wrote and that import read as unused in the same run.
+qualified_yield = row
+  "a type name split at its first slash"
+  true
+  "cargo test --release --test a_qualified_yield_inside_an_effect_type"
+  "specs (unit, golden, differential)"
+  (breaking "a_type_name_split_at_its_first_slash")
+  release
+
+# The lines below a `return x if c` guard are the guard's untaken arm, and a
+# name bound there is a binding of the same body. Two analyses follow an
+# accumulator through the names it is bound to, and until 2026-09-16 both
+# read the top level only; the mem fixture pins the beat and the flat
+# allocation count a loop keeps when its accumulator passes through such a
+# name. One row per reader: the linearity analysis, whose lookup decides the
+# in-place appends, and the beat's chain test, whose decides the bracket.
+guard_bind_linear = row
+  "a binding under a guard the linearity analysis cannot see"
+  true
+  "cargo test --release --test golden mem_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_binding_under_a_guard_the_linearity_analysis_cannot_see")
+  release
+
+guard_bind_chain = row
+  "a binding under a guard the chain cannot pass through"
+  true
+  "cargo test --release --test golden mem_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_binding_under_a_guard_the_chain_cannot_pass_through")
+  release
+
+# The boundary rule lets a byte builder cross a rewind when the self-call's
+# argument chains from the builder that arrived, and it reads the builder at
+# the position under test as well as the first parameter; builder_transient
+# carries its builder third and pins the beat (beat_iters 1,360).
+bytes_acc_position = row
+  "a byte builder carried anywhere but first"
+  true
+  "cargo test --release --test golden mem_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_byte_builder_carried_anywhere_but_first")
+  release
+
+# A tail call under `return x if c` is the shape the library's folds took on
+# 2026-09-16, and the oracle nested a frame for every turn of it: a fold over
+# ten thousand elements ran out of stack on the interpreter where native
+# looped. The mutation evaluates a guard's rest as a nested block again.
+guard_tail_oracle = row
+  "a guard's rest evaluated as a nested block on the oracle"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_guard_that_nests_a_frame_on_the_oracle")
+  release
+
+# A build hole is spelled `_` and fills exactly once, ruled 2026-08-24. The
+# seven rows below each disarm one of the checker's refusals, and the error
+# corpus reads a program compiling, or a different sentence, where its golden
+# holds the refusal.
+hole_unfilled = row
+  "a hole nobody filled freezing quietly"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_hole_nobody_filled_freezes_quietly")
+  no_setup
+
+hole_twice = row
+  "a hole filled a second time"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_hole_filled_a_second_time")
+  no_setup
+
+hole_placeholder = row
+  "a none standing in for a hole"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_none_standing_in_for_a_hole")
+  no_setup
+
+hole_in_arm = row
+  "a hole filled inside an if arm that may not run"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_hole_filled_inside_an_if_arm")
+  no_setup
+
+hole_chosen = row
+  "a hole filled through a record an if or a list chose"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_hole_filled_through_a_chosen_record")
+  no_setup
+
+hole_outside = row
+  "a hole standing outside a build block"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_hole_outside_a_build_block")
+  no_setup
+
+hole_type_lacks = row
+  "a field the type lacks written as a hole"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_field_the_type_lacks_written_as_a_hole")
+  no_setup
 
 # The four `cargo test --test golden` rows above and below all point at the
 # micro corpus or the mem corpus. The error corpus — 161 fixtures pinning
@@ -1770,13 +1936,29 @@ rows_c1k = text/concat rows_c1j [coverage_oracle coverage_oracle_format]
 
 rows_c1l = text/concat rows_c1k [coverage_page coverage_page_format]
 
-rows_c1m = text/concat rows_c1l [beat_cursor rescue_licence raised_err]
+rows_c1m0 = text/concat rows_c1l [beat_cursor rescue_licence raised_err]
+
+rows_c1m = text/concat rows_c1m0 [clay_send_filed]
 
 rows_c1n = text/concat rows_c1m [carry_failure err_as_pattern force_chain]
 
 rows_c1o = text/concat rows_c1n [hand_box callback_err]
 
-rows_c = text/concat rows_c1o [itself]
+rows_c1w = text/concat rows_c1o [bang_box guard_bound literal_bound]
+
+rows_c1x = text/concat rows_c1w [guard_bind_linear guard_bind_chain]
+
+rows_c1y = text/concat rows_c1x [bytes_acc_position guard_tail_oracle]
+
+rows_c1ya = text/concat rows_c1y [qualified_yield]
+
+rows_c1yb = text/concat rows_c1ya [hole_unfilled hole_twice hole_placeholder]
+
+rows_c1yc = text/concat rows_c1yb [hole_in_arm hole_chosen hole_outside]
+
+rows_c1z = text/concat rows_c1yc [hole_type_lacks]
+
+rows_c = text/concat rows_c1z [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
@@ -1885,7 +2067,7 @@ fn applied dir _ _ acc true
   os/run "git" ["worktree" "remove" "--force" dir] .> (_ -> intact acc)
 
 fn applied dir list at acc false
-  r = list[at]!
+  r = list[at]
   shell dir r.mutation .> (m -> after_try dir list at acc r m.status)
 
 # The worktree is restored between rows so one stale mutation cannot make the
@@ -1987,7 +2169,7 @@ fn winnowed mode _ _ _ acc true
   handful mode acc
 
 fn winnowed mode files list at acc false
-  r = list[at]!
+  r = list[at]
   os/read_file! (script_of r) .> (s -> read_it mode files list at acc r s)
 
 # A row's mutation is a shell command and its script is the word after `sh `.
@@ -2131,7 +2313,7 @@ fn pair_seen _ _ acc true
   acc
 
 fn pair_seen list at acc false
-  r = list[at]!
+  r = list[at]
   same? = (p -> p.gate == r.gate and p.setup == r.setup)
   kept list at acc r (list/any? acc same?)
 
@@ -2158,7 +2340,7 @@ fn greened picked pairs _ acc true
     .> (_ -> unmutated picked pairs acc)
 
 fn greened picked pairs at acc false
-  p = pairs[at]!
+  p = pairs[at]
   shell base_dir p.setup .> (s -> base_setup picked pairs at acc p s.status)
 
 fn base_setup picked pairs at acc p 0
@@ -2304,7 +2486,7 @@ fn proven list _ acc true
   reported list acc
 
 fn proven list at acc false
-  r = list[at]!
+  r = list[at]
   dir = "/tmp/kanso-ratchet-{at}"
   made = ["worktree" "add" "--detach" "--force" dir "HEAD"]
   os/run "git" made .> (_ -> after_worktree list at acc r dir)
@@ -2392,7 +2574,8 @@ fn asked given
   verb given (length given > 0)
 
 fn verb given true
-  chosen given[1]! given
+  return verb given false if length given < 1
+  chosen given[1] given
 
 fn verb _ false
   cover
@@ -2424,7 +2607,7 @@ fn second given fallback
   beyond given fallback (length given > 1)
 
 fn beyond given _ true
-  given[2]!
+  given[2]
 
 fn beyond _ fallback false
   fallback
@@ -2433,7 +2616,7 @@ fn third given fallback
   past given fallback (length given > 2)
 
 fn past given _ true
-  given[3]!
+  given[3]
 
 fn past _ fallback false
   fallback

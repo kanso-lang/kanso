@@ -1,3 +1,2 @@
 steeps = []
-n = steeps[1]!
-print "{n}"
+steeps[1]! .> (n -> print "{n}")

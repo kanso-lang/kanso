@@ -1,2 +1,3 @@
 xs = [10 20 30]
-print "hit {xs[2]} miss {xs[9]} asserted {xs[2]!}"
+print "hit {xs[2]} miss {xs[9]}"
+>> xs[2]! .> (v -> print "asserted {v}")

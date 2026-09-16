@@ -145,7 +145,8 @@ pub fn kill p
   builtin_kill p
 
 fn answered r
-  process r[1]! r[3]! r[2]!
+  return err "a finished process answers three fields" if length r < 3
+  process r[1] r[3] r[2]
 
 pub fn write_file path content
   builtin_write_file path content

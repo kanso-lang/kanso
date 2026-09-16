@@ -20,10 +20,14 @@ fn against_remotes pins
   os/env "KANSO_HAKO_REMOTE" .> (set -> walked pins set "")
 
 fn walked pins set acc
+  if (length pins == 0) (io/write acc) (walked_on pins set acc)
+
+fn walked_on pins set acc
+  return io/write acc if length pins < 1
+  p = pins[1]
   rest = list/to_list (list/drop pins 1)
-  grown = (mark -> walked rest set "{acc}{line pins[1]! mark}")
-  more = marked pins[1]! set .> grown
-  if (length pins == 0) (io/write acc) more
+  grown = (mark -> walked rest set "{acc}{line p mark}")
+  marked p set .> grown
 
 # An interim pin is not on the tag series staleness is measured along, so the
 # only thing worth saying about it is that it is interim.
@@ -35,7 +39,8 @@ fn against p set
   newest set p.name .> (latest -> settled (compared latest p.tag))
 
 fn compared latest tag
-  if (latest == none) " (unreachable)" (behind latest[1]! tag)
+  return " (unreachable)" if latest == none or length latest < 1
+  behind latest[1] tag
 
 fn behind latest tag
   if (latest == tag) "" " (stale: {latest} is out)"
@@ -50,10 +55,12 @@ fn line p mark
 # The verb and its arguments arrive the way any program's do. `kanso list`
 # and `kanso update` hand them in; there is no third caller.
 pub fn ran argv
-  verb = argv[1]!
-  dir = argv[2]!
+  usage = "kanso <install|list|update> <dir> [name]\n"
+  return io/write usage if length argv < 2
+  verb = argv[1]
+  dir = argv[2]
   rest = list/to_list (list/drop argv 2)
-  only = if (length rest == 0) none rest[1]!
+  only = if (length rest == 0) none rest[1]
   pinned = installing dir (overrides rest)
   if (verb == "install") pinned (walked_or_listed verb dir only)
 
@@ -68,6 +75,7 @@ fn overrides rest
 
 fn split_at spec
   halves = text/split spec "@"
-  [halves[1]! halves[2]!]
+  return err "an override is owner/repo@branch" if length halves < 2
+  [halves[1] halves[2]]
 
 pub play = os/args .> ran

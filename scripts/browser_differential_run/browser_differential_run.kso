@@ -23,7 +23,7 @@ dirs = ["examples" "tests/golden/runtime" "tests/golden/micro"]
 
 fn kso? name
   parts = text/split name "."
-  parts[length parts]! == "kso"
+  parts[length parts] == "kso"
 
 fn library? src
   starts = text/slice src 1 8 == "pub play"
@@ -41,7 +41,7 @@ fn looked? _ _ _ true
   true
 
 fn looked? line heads at false
-  head = heads[at]!
+  head = heads[at]
   seen? line heads at (text/slice line 1 (length head) == head)
 
 fn seen? _ _ _ true
@@ -172,11 +172,13 @@ fn searched _ _ _ _ true
   io/write "no chrome found: set KANSO_CHROME\n" .> (_ -> os/exit 1)
 
 fn searched progs set paths at false
+  return searched progs set paths at true if at < 1 or length paths < at
   on = (there -> found_at progs set paths at there)
-  os/exists paths[at]! .> on
+  os/exists paths[at] .> on
 
 fn found_at progs set paths at true
-  watching progs set paths[at]!
+  return searched progs set paths at true if at < 1 or length paths < at
+  watching progs set paths[at]
 
 fn found_at progs set paths at false
   first_chrome progs set paths (at + 1)
@@ -190,7 +192,8 @@ fn keeping acc path src false
   text/concat acc [one]
 
 fn one_file paths at acc book src
-  kept = keeping acc paths[at]! src (local_import? src)
+  return read_all paths (at + 1) acc book if at < 1 or length paths < at
+  kept = keeping acc paths[at] src (local_import? src)
   read_all paths (at + 1) kept book
 
 fn read_all paths at acc book
@@ -200,8 +203,9 @@ fn more_files _ _ acc book true
   book_read book 1 acc
 
 fn more_files paths at acc book false
+  return more_files paths at acc book true if at < 1 or length paths < at
   on = (src -> one_file paths at acc book src)
-  os/read_file! paths[at]! .> on
+  os/read_file! paths[at] .> on
 
 fn book_read paths at acc
   more_book_files paths at acc (at > length paths)
@@ -222,12 +226,12 @@ fn more_written written _ acc true
   counted (text/concat acc written)
 
 fn more_written written at acc false
-  one = written[at]!
+  one = written[at]
   on = (_ -> laid_out written (at + 1) acc)
   os/write_file one.path one.src .> on
 
 fn more_book_files paths at acc false
-  path = paths[at]!
+  path = paths[at]
   recorded = recorded_of path
   on = (there -> book_maybe paths at acc path there)
   os/exists recorded .> on
@@ -249,7 +253,7 @@ fn book_one paths at acc path said src
   book_read paths (at + 1) kept
 
 fn with_names ds at acc names
-  here = ds[at]!
+  here = ds[at]
   kept = list/to_list (list/select names kso?)
   paths = list/to_list (list/map kept (n -> "{here}/{n}"))
   gather_dirs ds (at + 1) (text/concat acc paths)
@@ -271,7 +275,7 @@ fn more_book simple _ _ acc true
   read_all simple 1 [] acc
 
 fn more_book simple ds at acc false
-  here = "docs/book/samples/{ds[at]!}"
+  here = "docs/book/samples/{ds[at]}"
   on = (names -> book_files simple ds at acc here names)
   os/list_dir here .> on
 
@@ -282,8 +286,9 @@ fn book_files simple ds at acc here names
   book_walk simple ds (at + 1) (text/concat acc wanted)
 
 fn more_dirs ds at acc false
+  return more_dirs ds at acc true if at < 1 or length ds < at
   on = (names -> with_names ds at acc names)
-  os/list_dir ds[at]! .> on
+  os/list_dir ds[at] .> on
 
 pub play = gather_dirs dirs 1 []
 
@@ -305,18 +310,19 @@ fn hunted? _ _ _ true
   false
 
 fn hunted? src needles at false
-  here = length (text/split src needles[at]!) > 1
+  return false if at < 1 or length needles < at
+  here = length (text/split src needles[at]) > 1
   rest = names_any? src needles (at + 1)
   either? here rest
 
 fn a_test? path
   parts = text/split path "/"
-  name = parts[length parts]!
+  name = parts[length parts]
   length (text/split name "_test.kso") > 1
 
 fn recorded_of path
   parts = text/split path ".kso"
-  "{parts[1]!}.out"
+  "{parts[1]}.out"
 
 fn book_keep acc path src said
   refused = text/slice said 1 5 == "error"
@@ -338,7 +344,7 @@ fn put_unless acc path src false
 # ship uncovered.
 fn examples_body js
   parts = text/split js "const EXAMPLES = \{"
-  parts[length parts]!
+  parts[length parts]
 
 # What the browser receives, not what the file holds: a template literal's
 # backslash escapes are resolved by JavaScript before the source reaches the
@@ -354,9 +360,10 @@ fn replaced text from to
 
 fn name_before piece
   lines = text/split piece "\n"
-  last = lines[length lines]!
+  last = lines[length lines]
   named = text/split last ":"
-  text/trim named[1]!
+  return "" if length named < 1
+  text/trim named[1]
 
 fn sample_at parts at acc
   gathered_samples parts at acc (at + 1 > length parts)
@@ -365,8 +372,9 @@ fn gathered_samples _ _ acc true
   acc
 
 fn gathered_samples parts at acc false
-  which = name_before parts[at]!
-  src = unescaped parts[at + 1]!
+  return acc if at < 1 or length parts < at + 1
+  which = name_before parts[at]
+  src = unescaped parts[at + 1]
   where = "target/playground-corpus/{which}.kso"
   one = program (door_of src) where src
   sample_at parts (at + 2) (text/concat acc [one])
@@ -387,15 +395,15 @@ fn shell script
 
 fn dir_of path
   parts = text/split path "/"
-  text/slice path 1 (length path - length parts[length parts]! - 1)
+  text/slice path 1 (length path - length parts[length parts] - 1)
 
 fn file_of path
   parts = text/split path "/"
-  parts[length parts]!
+  parts[length parts]
 
 fn stem_of path
   parts = text/split (file_of path) ".kso"
-  parts[1]!
+  parts[1]
 
 # The shell starts where the harness was run from, which is the repo, so it
 # can name the toolchain absolutely before it changes directory. A path
@@ -578,7 +586,8 @@ fn more_cases _ _ acc true
   "[{text/join acc ","}]"
 
 fn more_cases progs at acc false
-  one = case_json progs[at]!
+  return more_cases progs at acc true if at < 1 or length progs < at
+  one = case_json progs[at]
   cases_json progs (at + 1) (text/concat acc [one])
 
 fn page_for progs
@@ -602,7 +611,8 @@ fn body_for _ _
 
 fn kind_of path
   parts = text/split path "."
-  named_type parts[length parts]!
+  return named_type path if length parts < 1
+  named_type parts[length parts]
 
 fn named_type "wasm"
   "content-type: application/wasm"
@@ -664,7 +674,7 @@ fn noted_crashes _ true
   ""
 
 fn noted_crashes crashed false
-  "\nfirst of {length crashed}: {crashed[1]!}"
+  "\nfirst of {length crashed}: {crashed[1]}"
 
 fn crashes results at acc
   more_crashes results at acc (at > length results)
@@ -673,11 +683,14 @@ fn more_crashes _ _ acc true
   acc
 
 fn more_crashes results at acc false
-  one = results[at]!
-  crashes results (at + 1) (kept_crash acc one one["kind"]!)
+  one = results[at]
+  crashes results (at + 1) (kept_crash acc one one["kind"])
 
 fn kept_crash acc one "crash"
   text/concat acc ["{one["name"]}: {one["reason"]}"]
+
+fn kept_crash acc _ none
+  acc
 
 fn kept_crash acc _ _
   acc
@@ -700,7 +713,7 @@ fn more_gaps _ _ acc true
   acc
 
 fn more_gaps lines at acc false
-  line = lines[at]!
+  line = lines[at]
   gathered_gaps lines (at + 1) (noted_gap acc line)
 
 fn noted_gap acc line
@@ -711,7 +724,7 @@ fn gap_line acc _ false
   acc
 
 fn gap_line acc parts true
-  put acc parts[1]! parts[2]!
+  put acc parts[1] parts[2]
 
 # The answers, by the name the case carried, so a program can be looked up
 # rather than trusted to arrive in order.
@@ -722,7 +735,7 @@ fn more_keys _ _ acc true
   acc
 
 fn more_keys results at acc false
-  one = results[at]!
+  one = results[at]
   named = one["name"]
   keyed results (at + 1) (put acc named one)
 
@@ -733,7 +746,7 @@ fn more_kinds _ _ acc true
   acc
 
 fn more_kinds results at acc false
-  one = results[at]!
+  one = results[at]
   which = one["kind"]
   by_kind results (at + 1) (bumped acc which)
 
@@ -756,7 +769,7 @@ fn more_pairs _ _ _ _ bad agreed skipped true
   verdict bad agreed skipped
 
 fn more_pairs progs seen gaps at bad agreed skipped false
-  p = progs[at]!
+  p = progs[at]
   on = (r -> compared progs seen gaps at bad agreed skipped p r)
   native_of p .> on
 
@@ -792,7 +805,7 @@ fn filed progs seen gaps at bad agreed skipped _ _ _ true
 
 fn filed progs seen gaps at bad agreed skipped p r said false
   mine = "native {r.status} {said_natively r}"
-  theirs = tab_said said said["kind"]!
+  theirs = tab_said said said["kind"]
   why = "{p.path}: {mine} — {theirs}"
   against progs seen gaps (at + 1) (text/concat bad [why]) agreed skipped
 
@@ -800,6 +813,9 @@ fn filed progs seen gaps at bad agreed skipped p r said false
 # `tab <none> <none>` and throws away the reason the tab already captured.
 fn tab_said said "crash"
   "tab crashed: {said["reason"]}"
+
+fn tab_said said none
+  "tab {said["code"]} {said["text"]}"
 
 fn tab_said said _
   "tab {said["code"]} {said["text"]}"

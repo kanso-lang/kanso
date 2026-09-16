@@ -175,7 +175,7 @@ twice_over = shape
   "aa"
 
 from_a_list = shape
-  "ws = [(io/write \"a\") (io/write \"b\")]\n  ws[1]! >> ws[2]!"
+  "ws = [(io/write \"a\") (io/write \"b\")]\n  ws[1] >> ws[2]"
   "a description from a list"
   "ab"
 
@@ -321,7 +321,7 @@ fn onward _ count true
   io/write "" .> (_ -> count)
 
 fn onward exprs count false
-  s = exprs[1]!
+  s = exprs[1]
   more = list/to_list (list/drop exprs 1)
   ran (shaped s.body)
     .> (v -> told (judged s v) .> (n -> swept more (count + n)))

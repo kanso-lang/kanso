@@ -36,7 +36,7 @@ fn onward _ found true
 
 fn onward items found false
   more = list/to_list (list/drop items 1)
-  x = items[1]!
+  x = items[1]
   ran x .> (v -> swept more (noted found (judged x v)))
 
 pub play = swept ["a" "b"] [] .> told

@@ -352,7 +352,9 @@ fn judged a ""
   "  {a.label}: printed nothing\n"
 
 fn judged a took
-  right a (text/split took "\n")[1]!
+  lines = text/split took "\n"
+  return right a took if length lines < 1
+  right a lines[1]
 
 fn right a line
   verdict a line (line == a.wants)
@@ -377,7 +379,7 @@ fn onward _ count true
 
 fn onward arms count false
   rest = list/to_list (list/drop arms 1)
-  a = arms[1]!
+  a = arms[1]
   ran (source_for a) .> (v -> reported a rest count v)
 
 fn reported a rest count v

@@ -1,0 +1,16 @@
+error[effect]: this is an effect — a box the words open — and `length` takes a value; open it with `.>`
+  --> a_strict_index_where_a_value_is_expected.kso:16:23
+  16 |   >> print "{length ns[1]!}"
+                             ^
+error[effect]: this is an effect — a box the words open — and `==` takes a value; open it with `.>`
+  --> a_strict_index_where_a_value_is_expected.kso:15:16
+  15 |   >> print "{ns[2]! == 20}"
+                      ^
+error[effect]: this is an effect — a box the words open — and `.from` takes a value; open it with `.>`
+  --> a_strict_index_where_a_value_is_expected.kso:14:16
+  14 |   >> print "{xs[2]!.from}"
+                      ^
+error[effect]: this is an effect — a box the words open — and `+` takes a value; open it with `.>`
+  --> a_strict_index_where_a_value_is_expected.kso:13:13
+  13 |   print "{ns[1]! + 1}"
+                   ^

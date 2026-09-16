@@ -37,7 +37,8 @@ fn usage true _
   io/write_err "usage: fingerprint.kso <site-dir>\n" .> (_ -> os/exit 2)
 
 fn usage false given
-  over_assets given[1]! 1 []
+  return usage true given if length given < 1
+  over_assets given[1] 1 []
 
 fn over_assets site at names
   walking site at names (at > length assets)
@@ -46,7 +47,7 @@ fn walking site _ names true
   over_pages site names
 
 fn walking site at names false
-  asset = assets[at]!
+  asset = assets[at]
   source = path/join site asset
   os/exists source .> (there -> one_asset site at names asset source there)
 
@@ -84,7 +85,7 @@ fn quoting raw _ _ true
   raw
 
 fn quoting raw names at false
-  one = names[at]!
+  one = names[at]
   swapped = text/join (text/split raw "'{one.asset}'") "'{one.digested}'"
   self_references swapped names (at + 1)
 
@@ -108,7 +109,7 @@ fn paging _ _ names _ true
   reported names 1
 
 fn paging pages at names site false
-  page = pages[at]!
+  page = pages[at]
   on = (raw -> one_page pages at names site page raw)
   os/read_file! page .> on
 
@@ -126,7 +127,7 @@ fn pointing raw _ _ true
   raw
 
 fn pointing raw names at false
-  one = names[at]!
+  one = names[at]
   pattern = "/{quoted one.asset}(\\?[^\"']*)?"
   swapped = regexp/replace_all pattern raw "/{one.digested}"
   references swapped names (at + 1)
@@ -167,7 +168,8 @@ fn walking_names _ _ _ acc true
   acc
 
 fn walking_names dir names at acc false
-  kid = path/join dir names[at]!
+  return acc if at < 1 or length names < at
+  kid = path/join dir names[at]
   os/is_dir kid .> (d -> walk_kid dir names at acc kid d)
 
 fn walk_kid dir names at acc kid true
@@ -199,7 +201,7 @@ fn telling _ _ true
   io/write ""
 
 fn telling names at false
-  one = names[at]!
+  one = names[at]
   io/write "{padded one.asset} -> {one.digested}\n"
     .> (_ -> reported names (at + 1))
 

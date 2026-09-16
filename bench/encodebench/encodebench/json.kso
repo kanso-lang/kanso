@@ -26,14 +26,17 @@ pub fn encode v
   text/utf8 (encode_onto (text/bytes "") v)
 
 fn encode_items acc xs i
-  if (length xs < i) acc (encode_items (elem_onto acc xs[i]!) xs (i + 1))
+  return acc if i < 1 or length xs < i
+  encode_items (elem_onto acc xs[i]) xs (i + 1)
 
 fn encode_list acc xs
-  opened = encode_onto (text/append acc 91) xs[1]!
+  return text/append acc "[]" if length xs == 0
+  opened = encode_onto (text/append acc 91) xs[1]
   text/append (encode_items opened xs 2) 93
 
 fn encode_map acc es
-  opened = entry_onto (text/append acc 123) es[1]!
+  return text/append acc "\{}" if length es == 0
+  opened = entry_onto (text/append acc 123) es[1]
   text/append (encode_pairs opened es 2) 125
 
 fn encode_onto acc true
@@ -56,14 +59,14 @@ fn encode_onto acc s:string
   text/append opened 34
 
 fn encode_onto acc xs:[]some
-  if (length xs == 0) (text/append acc "[]") (encode_list acc xs)
+  encode_list acc xs
 
 fn encode_onto acc m:map[string some]
-  es = entries m
-  if (length es == 0) (text/append acc "\{}") (encode_map acc es)
+  encode_map acc (entries m)
 
 fn encode_pairs acc es i
-  if (length es < i) acc (encode_pairs (pair_onto acc es[i]!) es (i + 1))
+  return acc if i < 1 or length es < i
+  encode_pairs (pair_onto acc es[i]) es (i + 1)
 
 fn entry_onto acc (entry k v)
   keyed = encode_onto acc k

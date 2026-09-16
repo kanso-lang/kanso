@@ -8,8 +8,8 @@
 import "std/io"
 
 pub fn opaque v
-  (push [] v)[1]!
+  (push [] v)[1]
 
 d = io/write "a\n" >> io/write "b\n"
 
-pub play = print "{(opaque d)[1]!}"
+pub play = (opaque d)[1]! .> (v -> print "{v}")

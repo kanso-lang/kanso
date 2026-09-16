@@ -24,8 +24,8 @@ fn shifted s 0
   s
 
 fn shifted s n
-  head = cell n (s[1]!.mark + n * 7 % 97)
-  shifted [head s[1]! s[2]! s[3]! s[4]! s[5]! s[6]! s[7]!] (n - 1)
+  head = cell n (s[1].mark + n * 7 % 97)
+  shifted [head s[1] s[2] s[3] s[4] s[5] s[6] s[7]] (n - 1)
 
 nil = cell 0 0
 
@@ -33,4 +33,4 @@ zeros = [nil nil nil nil nil nil nil nil]
 
 final = shifted zeros 400
 
-pub play = print "{final[8]!.tag} {final[8]!.mark} {final[1]!.mark}"
+pub play = print "{final[8].tag} {final[8].mark} {final[1].mark}"

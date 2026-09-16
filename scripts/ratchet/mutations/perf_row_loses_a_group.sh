@@ -9,7 +9,7 @@
 # than a stand-in for it: every pair in a group gets one name, `list/to_h`
 # keeps the last, and the row loses every counter but one per group.
 set -e
-sed -i.bak 's|^  \["{prefix}{parts\[1\]!}" tally\]$|  ["{prefix}x" tally]|' \
+sed -i.bak 's|^  \["{prefix}{parts\[1\]}" tally\]$|  ["{prefix}x" tally]|' \
   scripts/perf_record/perf_record.kso
 rm -f scripts/perf_record/perf_record.kso.bak
 grep -q '^  \["{prefix}x" tally\]$' scripts/perf_record/perf_record.kso

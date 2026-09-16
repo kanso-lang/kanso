@@ -59,7 +59,7 @@ ratio <span class="o">=</span> <span class="f">text/to_int</span> word
   </div>
 </div>
 
-<p>count the lines of error handling in this program: zero. <code>share_of</code> decides that a bill split no ways is a failure and says so; the err flows into <code>with_tip</code>, which never runs; back out to <code>main</code>; into <code>receipt</code>, which never runs; through <code>print</code>; and off the end of the program, where the endpoint rule files the report. this is the railway: the sad track runs parallel to the happy one, and no station on the line can flag the train down. functions state their happy-path logic and nothing else.</p>
+<p>count the lines of error handling in this program: zero. <code>share_of</code> decides that a bill split no ways is a failure and says so; the err flows into <code>with_tip</code>, which never runs; back out to <code>main</code>; into <code>receipt</code>, which never runs; through <code>print</code>; and off the end of the program, where the endpoint rule files the report. this is the railway: the sad track runs parallel to the happy one, and a station stops the train only where the checker can see it coming. functions state their happy-path logic and nothing else.</p>
 
 <p>one rule sits beside this, and the checker enforces it. an err is data, and a function that is handed one either names it with an <code>(err _)</code> arm or does not take it. where the checker can see a raised err arriving—the argument is itself a call to a function with an <code>err</code> arm, as <code>with_tip (share_of cents people)</code> would be—it refuses the program and names the function that has no arm. <code>share</code> above is a name, and the checker reads calls, not the names they are bound to, so the failure rides past <code>with_tip</code> at run time and the endpoint reports it. an operator and an index are held to the same rule: <code>share_of cents people + 1</code> does not compile, because <code>+</code> wants a value and an err is not one.</p>
 
@@ -169,15 +169,15 @@ sorry, no tea</code></pre>
 
 <h2>none is for asking</h2>
 
-<p>so meet the handleable one. the standard library is opinionated about where you meet it. indexing with the sigil, <code>xs[i]!</code>, is <em>strict</em>: it means "i know this element exists," and a miss is a broken promise—an err:</p>
+<p>so meet the handleable one. the standard library is opinionated about where you meet it. indexing with the sigil, <code>xs[i]!</code>, is <em>strict</em>: it means "i know this element exists." the read answers an effect, a box holding the element, and <code>.&gt;</code> opens it. a miss is a broken promise—a failure that bubbles through the box to the endpoint:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">ninth.kso</div>
   <pre><code>flavors <span class="o">=</span> [<span class="s">"matcha"</span> <span class="s">"ube"</span> <span class="s">"hojicha"</span>]
-<span class="f">print</span> <span class="s">"ninth: <span class="i">{flavors[9]!}</span>"</span></code></pre>
+flavors[<span class="n">9</span>]! <span class="o">.&gt;</span> (f <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"ninth: <span class="i">{f}</span>"</span>)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run ninth.kso</div>
-    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: "missing index 9"
+    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the executor: "missing index 9"
   born in the entry at ninth.kso:2</code></pre>
   </div>
 </div>
@@ -240,15 +240,15 @@ third <span class="o">=</span> flavors[<span class="n">3</span>]
 
 <h2>access is a decision</h2>
 
-<p>the last section handed you a choice. the same missing key can be an err that rises or a none you dispatch on—and <em>you</em> pick, per call site, by one character. the sigil <code>xs[i]!</code> documents an invariant: this key exists, and if it doesn't, that's a bug, fail here. the plain <code>xs[i]</code> documents a question: this may be absent, and absence is a case my code handles. you can't assume by accident, and you can't cope by accident:</p>
+<p>the last section handed you a choice. the same missing key can be a failure that rises or a none you dispatch on—and <em>you</em> pick, per call site, by one character. the sigil <code>xs[i]!</code> documents an invariant: this key exists, and if it doesn't, that's a bug, fail here. it answers a box, and the failure bubbles from it. the plain <code>xs[i]</code> documents a question: this may be absent, and absence is a case my code handles. you can't assume by accident, and you can't cope by accident:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">pocky.kso</div>
   <pre><code>menu <span class="o">=</span> { <span class="s">"dango"</span>:<span class="n">350</span> <span class="s">"taiyaki"</span>:<span class="n">500</span> }
-<span class="f">print</span> <span class="s">"pocky: <span class="i">{menu[</span>"</span>pocky<span class="s">"]!}"</span></code></pre>
+menu[<span class="s">"pocky"</span>]! <span class="o">.&gt;</span> (yen <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"pocky: <span class="i">{yen}</span>"</span>)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run pocky.kso</div>
-    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: "missing index "pocky""
+    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the executor: "missing index "pocky""
   born in the entry at pocky.kso:2</code></pre>
   </div>
 </div>
@@ -396,15 +396,15 @@ not a flag</code></pre>
   <div class="code-panel-title">teas.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"std/text"</span>
 
-steeps <span class="o">=</span> []
-word <span class="o">=</span> <span class="f">text/trim</span> <span class="s">" two "</span>
+sencha <span class="o">=</span> <span class="f">text/trim</span> <span class="s">" one "</span>
+hojicha <span class="o">=</span> <span class="f">text/trim</span> <span class="s">" two "</span>
 
-<span class="f">print</span> <span class="s">"sencha: <span class="i">{steeps[1]!}</span> steeps left"</span>
-<span class="f">print</span> <span class="s">"hojicha: <span class="i">{text/to_int word}</span> steeps left"</span>
+<span class="f">print</span> <span class="s">"sencha: <span class="i">{text/to_int sencha}</span> steeps left"</span>
+<span class="f">print</span> <span class="s">"hojicha: <span class="i">{text/to_int hojicha}</span> steeps left"</span>
 <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"serving"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run teas.kso</div>
-    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: ["missing index 1" ""two" is not an integer"]</code></pre>
+    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: [""one" is not an integer" ""two" is not an integer"]</code></pre>
   </div>
 </div>
 
@@ -414,15 +414,15 @@ word <span class="o">=</span> <span class="f">text/trim</span> <span class="s">"
   <div class="code-panel-title">seq.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"std/text"</span>
 
-steeps <span class="o">=</span> []
-word <span class="o">=</span> <span class="f">text/trim</span> <span class="s">" two "</span>
+sencha <span class="o">=</span> <span class="f">text/trim</span> <span class="s">" one "</span>
+hojicha <span class="o">=</span> <span class="f">text/trim</span> <span class="s">" two "</span>
 
-<span class="f">print</span> <span class="s">"sencha: <span class="i">{steeps[1]!}</span> steeps left"</span>
-<span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"hojicha: <span class="i">{text/to_int word}</span> steeps left"</span></code></pre>
+<span class="f">print</span> <span class="s">"sencha: <span class="i">{text/to_int sencha}</span> steeps left"</span>
+<span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"hojicha: <span class="i">{text/to_int hojicha}</span> steeps left"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run seq.kso</div>
-    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: "missing index 1"
-  born in the entry at seq.kso:6</code></pre>
+    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: ""one" is not an integer"
+  born in text/to_int at std/text/text.kso:92</code></pre>
   </div>
 </div>
 

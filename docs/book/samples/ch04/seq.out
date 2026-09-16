@@ -1,2 +1,2 @@
-error[endpoint]: unhandled err reached the entry: "missing index 1"
-  born in the entry at seq.kso:6
+error[endpoint]: unhandled err reached the entry: ""one" is not an integer"
+  born in text/to_int at std/text/text.kso:92
