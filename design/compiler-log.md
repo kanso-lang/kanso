@@ -3817,8 +3817,7 @@ thirteen programs `emitted_other_lines` 133,110 -> 133,514,
 20,164 -> 20,231, defines 2,350 held. Four programs fall (basket,
 pendbench, indexbench, readbench: a getter the check no longer walks emits
 less), the rest rise by the arms std/regexp and std/json gained. The
-front end's visits on the compile
-corpus read 15,076 -> 15,119 for the same five decoder arms; rounds hold
+front end's visits on the compile corpus read 15,076 -> 15,119 for the same five decoder arms; rounds hold
 at 47. The three host-keyed compile rows, the machine-code vein and the
 compile allocations are CI's to measure, and welfare on this box reads
 69.58 against a floor of 69.58 with the runtime side unmoved. A fall on CI
