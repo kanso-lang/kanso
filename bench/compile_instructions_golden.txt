@@ -1626,4 +1626,79 @@
 # compiler libraries and every runtime vein agreed. CI's own reading,
 # stated, not reasoned from.
 #
-compile_instructions=40794557
+# 2026-09-16, the compiler's allocator (kanso#1456). mimalloc replaces
+# glibc's malloc under the counting wrapper, with its eager arena commit
+# turned off from the process's constructor table: 40,794,557 ->
+# 36,886,838, a fall of -3,907,719 (9.579 per cent) on
+# `kanso check compile_corpus`. glibc's allocator was 15.17 per cent of this
+# compile (6,325,284 of 41,698,193 profiled instructions) and
+# more than any function the compiler owns; mimalloc's own work on the same
+# profile is 7.39 per cent, and the two reconcile to within about 244k.
+#
+# The container projected -9.485 per cent for this row and CI read -9.579
+# — within one per cent of the projection, and slightly further. Nothing
+# else the tree pins moved: compile_allocs holds at 27,395, compile_memory
+# is byte-identical, the emitted LLVM IR hashes the same either way,
+# compiler libraries reads the same five entries because libmimalloc-sys
+# links no shared object, and every runtime vein agreed. CI's own reading,
+# stated, not reasoned from.
+#
+#
+# 2026-09-16, round three: mimalloc never purges (kanso#1456). The allocator
+# returns free pages to the operating system on a timer, and every pass over
+# an arena asks `clock_gettime` whether a deadline has gone by — 163 asks on
+# this workload, a count that tracks how long the process has been running
+# rather than what it compiled. The whole purge machinery costs 8,288
+# instructions on the module row against 44,608 on entry and 48,487 on
+# library: five times the cost for three and a half times the work, which is
+# what a term keyed to elapsed time looks like. `mi_option_purge_delay = -1`
+# removes it, leaving the three unconditional reads mimalloc takes when it
+# initialises.
+#
+# 36,886,838 -> 36,878,550, a fall of 8,288. THIS IS A PROJECTION, not a
+# sitting: the container measured the purge machinery's cost and it is
+# subtracted from CI's round-one row, on the assumption that the same pages
+# are purged on the runner. CI re-measures and this line is replaced by what
+# it read.
+#
+#
+# CI's row, replacing the projection above: 36,878,537. The projection said
+# 36,878,550 and was 13 out.
+#
+# The gap is the finding, not an error in the arithmetic. The projection
+# subtracted the purge machinery's cost as this container measured it
+# (8,288); CI saved 8,301. On the module row the two agree to within 13.
+# On the entry and library rows CI saved far more, because how many purge
+# deadlines expire is a function of how long the process has been running,
+# and the runner is slower under callgrind than this box. A fixed per-process
+# cost would have carried across all three. A term keyed to elapsed time does
+# exactly this, and CI reading one number where the container read another is
+# the reason the option is off.
+#
+#
+# 2026-09-16, round five: THE SAME SOURCE, TWO BINARIES, THIRTEEN INSTRUCTIONS.
+# Round four merged origin/main in to clear a "behind" head. The merge carried
+# design/compiler-log.md and design/log/compiler-log-archive.md and nothing
+# else -- neither is `include_str!`'d, so the compiler's own bytes are built
+# from identical source -- and all three compile rows came back exactly 13
+# higher. The gate's own test settles which of its two cases this is, and it is
+# neither a regression nor a reproduction failure:
+#
+#     round four   sha bd05a61f3a68   library row 132,025,154
+#     round five   sha 45b8072b4ea7   library row 132,025,167
+#
+# TWO shas. `.text` 2,805,762, `.data` 12,672 and `.bss` 29,976 are identical
+# to the byte across the pair, so the heap starts at the same break and the
+# variance compile_instructions.sh's header describes -- a differing data and
+# bss moving malloc's work -- is not this. Every frame callgrind prints above
+# the 90%% threshold is identical to the instruction on both runs, mi_free
+# 2,016,114 and mi_theap_malloc_aligned 1,971,116 included, so the 13 is not in
+# any function large enough to name. What did move is the block count:
+# 27,583,359 against 27,583,361, two basic blocks apart. Thirteen instructions
+# in two blocks, inside `main`, below every frame the profile prints.
+#
+# Recorded rather than explained. Rounds three and four read one value on two
+# runs and round five read another, so the row is stable per binary and moves
+# between them; 13 in 132 million is 1.0e-7, against the 508 the same shape
+# cost under glibc, which is the one thing here that is an improvement.
+compile_instructions=36878550

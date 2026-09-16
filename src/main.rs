@@ -12,6 +12,94 @@ use std::sync::atomic::{AtomicU64, Ordering};
 /// point, and no reader depends on seeing them in any particular order.
 struct Counting;
 
+/// The allocator under the tally. mimalloc on every target that can build it:
+/// glibc's malloc and free were 15.17% of `kanso check compile_corpus` and the
+/// compiler's demand — every counter above — does not move by a byte.
+#[cfg(not(target_arch = "wasm32"))]
+const UNDER: mimalloc::MiMalloc = mimalloc::MiMalloc;
+#[cfg(target_arch = "wasm32")]
+const UNDER: std::alloc::System = std::alloc::System;
+
+/// mimalloc's `mi_option_arena_eager_commit`, by its position in the
+/// `mi_option_t` enum. The Rust bindings stop naming options well before this
+/// one, so the number is written here rather than imported: libmimalloc-sys
+/// 0.1.49 builds v3 of the C library, whose header declares the option fifth,
+/// after `show_errors`, `show_stats`, `verbose` and `deprecated_eager_commit`.
+/// `tests/the_allocator_option_is_the_one_the_header_names.rs` reads that
+/// header and goes red if the position ever moves.
+#[cfg(not(target_arch = "wasm32"))]
+const ARENA_EAGER_COMMIT: i32 = 4;
+
+/// mimalloc's `mi_option_purge_delay`, sixteenth in the same enum and read
+/// from the same header by the same spec.
+#[cfg(not(target_arch = "wasm32"))]
+const PURGE_DELAY: i32 = 15;
+
+/// Two options, both set before the first allocation, both for a reason a
+/// counter could not see.
+///
+/// **Reserve the first arena without committing it.**
+///
+/// Left alone, mimalloc commits that arena up front, and the six megabytes it
+/// costs are resident in every process the compiler starts. Nothing in the
+/// objective can see them: `compile_peak_bytes` is the compiler's own demand,
+/// counted in the tally above, not the operating system's number.
+/// `tests/bind_chain_depth.rs` reads resident memory, and it is what caught
+/// this — a constant six megabytes under both of its readings squeezed a
+/// ten-fold depth ratio from 3.16 to 1.97, and the shape that nests stopped
+/// looking like one.
+///
+/// Turning the option off costs 24,330 instructions against the 3.84 million
+/// the allocator saves. It has to happen here rather than at the top of
+/// `main`, because by then the arena is already committed: Rust's runtime
+/// allocates before it hands over. A constructor runs ahead of all of it.
+///
+/// **Never purge, so a timer stops deciding what the vein counts.** mimalloc
+/// returns free pages to the operating system on a clock. Each arena carries
+/// a deadline, and a pass over one asks `_mi_clock_now` — glibc's
+/// `clock_gettime`, through the vDSO — whether that deadline has gone by. How
+/// many of those asks a process makes depends on how long it has been
+/// running, and how long it has been running is wall time. On
+/// `kanso check compile_corpus` it asks 163 times; on the entry and library
+/// corpora, which take about three and a half times the work, the whole purge
+/// machinery costs five times as much. That is the signature of a term keyed
+/// to elapsed time. A counter golden holding it is a number the next host,
+/// or the next busy afternoon, is free to disagree with.
+///
+/// `-1` disables purging, which takes `_mi_prim_clock_now` from 163 calls to
+/// 3 and removes 8,288 instructions from the module row, 44,608 from the
+/// entry row and 48,487 from the library row. The three that remain are
+/// `_mi_clock_start`'s calibration: it reads the clock twice to measure what
+/// a read costs, then a third time for the process's start stamp, behind a
+/// `mi_clock_diff == 0` guard that lets the whole thing happen once. The
+/// compiler is a short-lived process that exits and gives everything back at
+/// once, so never purging removes work.
+///
+/// This was found while hunting a reproduction failure — the three compile
+/// rows came back 13 instructions apart on two CI runs of one commit, and the
+/// 2026-09-05 ruling is one row, one value, so a disagreement halts the vein
+/// and is neither keyed nor averaged. The timer does not explain that 13: the
+/// same gap on all three rows points at something that happens once per
+/// process, and purge asks scale with the run instead. So this removes a
+/// wall-clock dependence that was real and would have bitten later, and the
+/// original disagreement is still open. If it returns, those three reads are
+/// the next place to look: their count cannot vary, but their cost is the
+/// host's vDSO — 33 instructions here, 11 a call — so a clocksource priced
+/// differently moves all three rows by the same small amount, which is the
+/// shape that was seen. Three does not divide 13, so that is a suspect
+/// rather than an answer.
+#[cfg(not(target_arch = "wasm32"))]
+extern "C" fn set_the_allocator_before_it_runs() {
+    unsafe { libmimalloc_sys::mi_option_set(ARENA_EAGER_COMMIT, 0) };
+    unsafe { libmimalloc_sys::mi_option_set(PURGE_DELAY, -1) };
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[used]
+#[cfg_attr(target_vendor = "apple", link_section = "__DATA,__mod_init_func")]
+#[cfg_attr(not(target_vendor = "apple"), link_section = ".init_array")]
+static BEFORE_THE_FIRST_ALLOCATION: extern "C" fn() = set_the_allocator_before_it_runs;
+
 static ALLOC_BYTES: AtomicU64 = AtomicU64::new(0);
 static ALLOC_CALLS: AtomicU64 = AtomicU64::new(0);
 static LIVE_BYTES: AtomicU64 = AtomicU64::new(0);
@@ -24,11 +112,11 @@ unsafe impl std::alloc::GlobalAlloc for Counting {
         ALLOC_CALLS.fetch_add(1, Ordering::Relaxed);
         let live = LIVE_BYTES.fetch_add(n, Ordering::Relaxed) + n;
         PEAK_BYTES.fetch_max(live, Ordering::Relaxed);
-        unsafe { std::alloc::System.alloc(layout) }
+        unsafe { UNDER.alloc(layout) }
     }
     unsafe fn dealloc(&self, ptr: *mut u8, layout: std::alloc::Layout) {
         LIVE_BYTES.fetch_sub(layout.size() as u64, Ordering::Relaxed);
-        unsafe { std::alloc::System.dealloc(ptr, layout) }
+        unsafe { UNDER.dealloc(ptr, layout) }
     }
 }
 
