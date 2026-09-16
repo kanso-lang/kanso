@@ -846,7 +846,7 @@ fn effect_discarded_at(e: &Expr, tables: &AfterInfer, diags: &mut Vec<Diagnostic
 fn raised_err_at(
     e: &Expr,
     raisers: &crate::hash::Map<(&str, usize), Vec<&[Pattern]>>,
-    consts: &crate::hash::Map<&str, &str>,
+    consts: &crate::infer::Consts<'_>,
     err_arms: &crate::hash::Map<(&str, usize), u64>,
     owner: &str,
     diags: &mut Vec<Diagnostic>,

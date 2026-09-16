@@ -4183,6 +4183,23 @@ inside a lambda, and only the named folder reached the grant by the other
 route. Without that pair the fixture would pass under a licence that had
 simply been switched off.
 
+**CI's rows, and the floor.** All three compile veins FELL:
+`compile_instructions` 42,873,153 -> 42,872,854 (−299), `entry_instructions`
+144,046,325 -> 144,044,890 (−1,435), `library_instructions` 144,845,876 ->
+144,844,867 (−1,009). `compile_allocs` held at 27,937 and `compile_memory` is
+byte-identical, so the move is the walk that no longer runs plus the layout
+under src/linear.rs. `callers_hand_over` puts `is_operator` and
+`escapes_as_value` in front of the walk, and a group either one refuses now
+stops there instead of walking the program to be told the same thing. Welfare
+rose on the compile term and was banked: floor 69.57819815695791 ->
+69.57821407078485. The runtime veins did not move at all, which
+`all_counters.sh` reported before the round and CI agreed with after it.
+
+**§69 on the compiler page.** A walk that finds no call site has two readings —
+nobody does this, and nobody here can see who does — and an analysis that
+cannot tell them apart grants on the second. That is the presented design this
+change fixed, and the page owed it an entry.
+
 **The family, swept.** §69's shape is an analysis that grants a licence when a
 walk finds no objection, where the walk cannot see every use. Two whole-program
 `.all()` walks exist in the compiler and only one had it. `src/escape.rs:185`
@@ -4394,4 +4411,3 @@ before this entry was written — the rescored column read 69.5936 where welfare
 scored 69.5960 — and goes green on the banked floor. Eight `data-golden` spans
 on `docs/compiler.html` quoted the old rows and were rewritten by
 `golden_prose --write`.
-
