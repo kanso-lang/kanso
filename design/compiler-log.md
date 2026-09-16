@@ -4367,3 +4367,31 @@ its work, and it removed the construct the levers were written to optimise. The
 levers were sized against the corpus as it stood before the respell they
 shipped beside.
 
+
+**CI's sitting on the fixed head, and the floor corrected upward.** The rows
+above were all measured against a randomly-seeded table, so none of them was
+the respell's cost. With `proven` spelled `crate::hash::Set` the measurement
+repeats, and CI on `647e58f7` reads `compile_instructions` 40,703,283,
+`entry_instructions` 144,436,311 and `library_instructions` 145,118,874. Only
+those three veins moved. `compile_allocs` held at 27,395, `compile_memory` at
+787,956 byte-identical, and every work row, text row, emitted row and
+machine-code row AGREED — which is what a hasher swap predicts, since the same
+table is built with the same number of allocations and a different probe
+sequence. The profile shows it directly: the top frames now carry
+`hashbrown::map::HashMap<&str, (), BuildHasherDefault<kanso::hash::Fx>>::insert`
+at 3,392,241 and no std-hashed table at all.
+
+So the respell's cost against kanso#1444's base is smaller than round two
+recorded: +430,256 on the module row (+1.068%, not +476,131), +3,821,483 on the
+entry row (+2.718%, not +4,041,046), +4,263,481 on the library row (+3.027%,
+not +4,481,418). The objective reads 69.5960 where the hand-set floor stood at
+69.5936, so the floor is ratcheted to 69.59603943391699. Round two lowered it
+under the 2026-09-13 ironclad clause, which was the right clause and the wrong
+number: it was computed on one draw from a distribution.
+
+`tests/the_score_says_what_it_was_made_of.rs` caught the gap between the two
+before this entry was written — the rescored column read 69.5936 where welfare
+scored 69.5960 — and goes green on the banked floor. Eight `data-golden` spans
+on `docs/compiler.html` quoted the old rows and were rewritten by
+`golden_prose --write`.
+

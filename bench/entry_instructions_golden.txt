@@ -381,4 +381,30 @@
 # CI last ran, stated, not reasoned from. compile_allocs held at 27,937 and
 # compile_memory is byte-identical.
 #
-entry_instructions=144655874
+# 2026-09-16 (kanso#1449): the `!` box respell, and the row FALLS because a
+# randomly-seeded table left the compile path. The entry row: `kanso check entry_corpus/main.kso`
+# reads 144,436,311 against 144,655,874, -219,563 (-0.1518%).
+#
+# This is not the respell's own cost. Three rounds of this pull request
+# declared `proven` as `std::collections::HashSet<Span>` in src/infer.rs and
+# src/check.rs, where the rest of the compiler uses crate::hash::Set, and
+# std's RandomState reseeds every process. The row stopped reproducing: three
+# CI rounds returned three distinct values, a fourth machine (the ratchet
+# runner) a fourth, and eight local repeats of one binary spread 313
+# instructions. A callgrind function diff put the whole delta in one frame,
+# hashbrown's insert. Spelled crate::hash::Set the spread is zero, and the
+# fall recorded here is SipHash leaving a path Fx now walks.
+#
+# The header of bench/compile_instructions_golden.txt already said this, in
+# the paragraph beginning THIS ROW COULD NOT HAVE EXISTED BEFORE THAT CHANGE,
+# written on 2026-08-24 against a spread of forty thousand. The lesson was
+# recorded and reintroduced anyway, so it is a spec now:
+# tests/the_compile_path_hashes_with_a_fixed_seed.rs reads src/ and fails on a
+# std-hashed container outside a named exception.
+#
+# Regenerated from the CI sitting on 647e58f7, stated, not reasoned from.
+# compile_allocs held at 27,395 and compile_memory is byte-identical at
+# 787,956; every work row, every text row, emitted, machine code and the
+# linked-library list all AGREED.
+#
+entry_instructions=144436311
