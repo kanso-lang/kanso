@@ -3913,6 +3913,41 @@ across two runs (clang -cc1 532,991,920, the clang driver 31,648,129, ld
 87,120,997) while kanso's own process varies by 480. The anchor sits inside
 `kanso::main`, and four sittings say the variance does not reach it.
 
+**AND THEN CI COUNTED IT TWICE.** Round two wrote 6,018,394 in and read
+6,018,427 on identical compiler source -- round two's whole diff was goldens,
+the log, the floor and one page -- a move of 33. The three compile rows beside
+it agreed exactly across the same pair, so it is this row alone. kanso#1459's
+two rounds did the same thing with 13 on all three compile rows, and the same
+13 hit kanso#1460, whose whole diff was a log entry.
+
+Thirty-three has an obvious suspect and it is wrong. `clock_gettime` costs
+exactly 33 instructions in this profile -- three calls at 11 apiece, which is
+`_mi_clock_start`'s calibration, the three reads the purge-delay setting left
+behind and which src/main.rs's own comment names as a term whose cost is the
+host's vDSO. Walking the profile's call graph settles it: the chain is `(below
+main)` -> `_mi_auto_process_init` -> `mi_process_attach` -> `mi_process_init`
+-> `_mi_stats_init` -> `_mi_clock_start`, and `kanso::main` is not an ancestor
+of any of it. mimalloc calibrates from `.init_array`, before main, so those
+three reads are already outside the anchor and cannot be what moved.
+
+So the 33 is unexplained, like the 13, and both are outside the diff. What this
+round adds is the machinery to settle the next one: the gate now counts a
+SECOND time on the same binary in the same job when the first reading
+disagrees, and says in its own error text whether the binary is stable or
+counted two numbers. kanso#1463 does the same for the three compile gates.
+
+**One more measurement, on a real build rather than a one-liner.** Gate-shaped
+with `--trace-children`, five processes counted, on a forty-line corpus that
+imports std/list and std/text:
+
+    kanso build, whole process tree, main         1,834,946,532
+    kanso build, whole process tree, this branch  1,765,595,173
+                                                    -69,351,359   -3.78%
+
+So the declares fix is worth 69.35 million instructions on a build that spawns
+clang and links, not only on the one-line program the vein counts. kanso's own
+share of that tree is 1,238,699,420 on main and 1,169,347,956 here.
+
 **Three layout moves came with the change**, and they are small and do not
 move together: `compile_instructions` -194 (-0.0005%), `entry_instructions`
 -346 (-0.0003%), `library_instructions` -18 (-0.00001%). `kanso check` stops
