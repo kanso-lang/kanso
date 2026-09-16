@@ -424,16 +424,20 @@ zero non-positive</code></pre>
 
 <h3 id="b-effect"><code>effect</code> <span class="desc-tag">description</span></h3>
 <p class="builtin-sig"><code>effect value → io (yields value)</code></p>
-<p>a description that yields the value it was handed. it builds the box by hand, so a chain can start from a plain value and a function that sometimes has work to describe and sometimes has an answer ready can return a description either way. a failure handed to it is content: <code>effect (err "missing")</code> is a description that yields the <code>err</code>, which the <code>.?</code> step sees and the <code>.&gt;</code> step skips, the same as a failure a read raised. the value stays boxed until a chain word opens it, so <code>effect 5 + 1</code> is refused at compile time.</p>
+<p>a description that yields the value it was handed. it builds the box by hand, so a chain can start from a plain value and a function that sometimes has work to describe and sometimes has an answer ready can return a description either way. a failure handed to it is content: with <code>broken</code> holding a failure <code>std/text</code> raised, <code>effect broken</code> is a description that yields the <code>err</code>, which the <code>.?</code> step sees and the <code>.&gt;</code> step skips, the same as a failure a read raised. the rescue licence is foreign-only, so a box built over this file's own <code>err</code> hands it on to the endpoint instead. the value stays boxed until a chain word opens it, so <code>effect 5 + 1</code> is refused at compile time.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">effect.kso</div>
-  <pre><code><span class="f">effect</span> <span class="n">5</span> <span class="o">.&gt;</span> (n <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"got <span class="i">{n}</span>"</span>)
-  <span class="o">&gt;&gt;</span> <span class="f">effect</span> (<span class="f">err</span> <span class="s">"missing"</span>) <span class="o">.?</span> (e <span class="o">-&gt;</span> <span class="s">"rescued <span class="i">{e.reason}</span>"</span>) <span class="o">.&gt;</span> <span class="f">print</span></code></pre>
+  <pre><code><span class="k">import</span> <span class="s">"std/text"</span>
+
+broken <span class="o">=</span> <span class="f">text/split</span> <span class="s">"a"</span> <span class="s">""</span>
+
+<span class="f">effect</span> <span class="n">5</span> <span class="o">.&gt;</span> (n <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"got <span class="i">{n}</span>"</span>)
+  <span class="o">&gt;&gt;</span> <span class="f">effect</span> broken <span class="o">.?</span> (e <span class="o">-&gt;</span> <span class="s">"rescued <span class="i">{e.reason}</span>"</span>) <span class="o">.&gt;</span> <span class="f">print</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run effect.kso</div>
     <pre><code>got 5
-rescued missing</code></pre>
+rescued split needs a separator; text/chars answers the characters</code></pre>
   </div>
 </div>
 

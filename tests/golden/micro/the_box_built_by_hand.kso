@@ -1,18 +1,22 @@
+import "std/text"
+
 # `effect v` builds the box by hand: the value it is handed is the answer the
 # box settles to when it runs, so a chain can start from a value, and a
 # failure handed to it is content the rescue arm sees rather than a failure
-# the whole chain is.
+# the whole chain is. The failure is std/text's: a `.?` enters its callback
+# only for a failure another package raised, so a box built over this
+# file's own `err` would hand it on to the endpoint instead.
 fn held e
   e
 
 fn shown e
   "held {e}"
 
+broken = text/split "a" ""
+
 pub play =
   effect 5 .> (n -> print "{n + 1}")
-  >> effect (err "bad") .? (e -> "rescued {e.reason}") .> print
-  >> effect (err "bad") .! (_ -> "worse")
-    .? (e -> "{e.reason} after {e.cause.reason}") .> print
+  >> effect broken .? (e -> "rescued {e.reason}") .> print
   >> print "{shown (effect 5)} {shown (held (effect 5))}"
-  >> effect (err "bad") .> (v -> print "never {v}")
+  >> effect broken .> (v -> print "never {v}")
     .? (e -> "skipped, {e.reason}") .> print

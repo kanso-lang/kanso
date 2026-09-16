@@ -1,0 +1,4 @@
+error[endpoint]: unhandled err reached the executor: "worse"
+  born in a_hand_built_box_annotated_reaches_the_endpoint/play at a_hand_built_box_annotated_reaches_the_endpoint.kso:10
+  caused by: "split needs a separator; text/chars answers the characters"
+  born in text/split at std/text/text.kso:35

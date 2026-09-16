@@ -1,0 +1,10 @@
+# A box built by hand over another package's failure, annotated here: the
+# `.!` step re-raises under this file's own name, and a `.?` written in the
+# same file hands an own failure on rather than entering its callback (the
+# rescue licence is foreign-only), so the annotated failure reaches the
+# endpoint with both links of its chain.
+import "std/text"
+
+broken = text/split "a" ""
+
+pub play = effect broken .! (_ -> "worse") .? (e -> "never {e.reason}") .> print
