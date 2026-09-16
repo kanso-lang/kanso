@@ -142,7 +142,11 @@ into the welfare function!!!!" Owes: the term extended to codegen, the
 baselines rebased and the floor re-ratcheted as a model correction. BLOCKED on
 the ledger's "What the compile term counts once codegen is in it" — how far
 down the pipeline (emitter alone, or clang too) and which tier (`dev_clang`
-at `-O0`, `release_clang` at `-O3 -flto`), both of which set the numbers.
+at `-O0`, `release_clang` at `-O3 -flto`), both of which set the numbers. That
+entry now carries Clay's 2026-09-16 proposal to split the objective in two —
+a development welfare over the edit-test loop and a production welfare over
+the binary, with a meta-welfare across them — which counts both tiers rather
+than choosing one, and is the entry's recommendation.
 
 ### A build hole is spelled `_`, and fills exactly once (2026-08-24)
 
