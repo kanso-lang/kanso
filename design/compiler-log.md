@@ -4026,3 +4026,15 @@ construction with a genuine absence and no write, and it stands as written.
 disarm one test and each proved by the applies pass: `hole_unfilled`,
 `hole_twice`, `hole_placeholder`, `hole_in_arm`, `hole_chosen`,
 `hole_outside`, `hole_type_lacks`.
+
+**The counters.** CI's sitting on the kanso#1444 base, all three compile
+rows falling: `compile_instructions` 40,273,027 -> 40,184,361 (−88,666,
+−0.2202%), `entry_instructions` 140,614,828 -> 140,399,833 (−214,995,
+−0.1529%), `library_instructions` 140,855,393 -> 140,641,362 (−214,031,
+−0.1520%). The fall is the two `none` placeholders `build_cycle` used to
+construct: a `none` argument is an expression the checker walks and the
+emitter writes, and a hole is neither. `machine_code`, `compile_allocs`,
+`compile_peak_bytes` and every runtime row agreed. The mem vein's three
+moves are named above. Welfare rises 69.63579260553377 ->
+69.63860211489504, banked with `--set` in this PR; eight page spans across
+five paragraphs quote the three compile goldens and moved with them.
