@@ -4596,3 +4596,31 @@ over every historical entry that has since been ruled, so it would either be
 noisy or would need a list of exemptions that goes stale the way the counts
 did. The count spec catches an entry filed and miscounted; it cannot catch one
 never filed. That is written down rather than guessed at.
+
+## 2026-09-16 — the next three run rows, all closed by reading them (DONE)
+
+Below `encode_onto` and `obj_key_start` the profile's next rows are
+`array_delim` at 85,720,338 (4.66%), `scan` at 77,645,700 (4.22%) and
+`str_escape` at 65,074,779 (3.54%). None of the three holds a lead.
+
+**`array_delim` is the array and object openers inlined into it.** Its callee
+list is `array_open` and `obj_open`, each in both recursion contexts, at
+374,499,500 and 279,024,609 inclusive. The row is the container walk, and the
+work under it is `scan` and `str_chars`, which have rows of their own.
+
+**`scan` converts each number exactly once, and the counts prove it.** It calls
+`k_b_to_float` 210,177 times and `k_b_to_int` 207,306, which reads like a
+double parse until you add them: 417,483, and `k_b_slice_raw` is called 417,483
+times, one slice per number. `number_done` dispatches on the mark the scan
+carries and takes one arm. The corpus is about half floats. Per conversion the
+float path is 190 instructions and the int path 93, both already worked by
+kanso#1423, kanso#1427 and kanso#1428.
+
+**`str_escape`'s residue is `k_b_utf8`, 175,527 calls at 170 instructions.**
+That is one per escape event on the decode side, and it is 1.63% of the run
+program. Small, and the escape path is where kanso#1291 and kanso#1367 have
+already been.
+
+So the run term's five largest rows are all read: two mapped with their one
+removable piece now waiting on Clay, and three with nothing under them. The
+queue's next run-side lead is not in this profile at this granularity.
