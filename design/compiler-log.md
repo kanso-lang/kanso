@@ -3561,3 +3561,75 @@ the bound is provable. `!` names in lib answer a box. The explicit-box row in
 STATUS.md carries this; nothing waits on a ruling. This entry exists so the
 worker stops building the morning's reading the moment it next reads the
 list.
+
+---
+
+## 2026-09-16 — A folder handed to `fold` is never called by name, and a
+## walk that found no call site answered yes (DONE)
+
+**The defect.** `param_is_linear` in src/linear.rs marked a parameter an
+accumulator when every call site handed over a uniquely-owned value at that
+position. It asked that by walking the program itself, which is the same walk
+`callers_hand_over` does — and `callers_hand_over` runs two refusals in front
+of it, for a group whose calls the walk cannot see. Because the walk was
+written out a second time, those refusals sat in a caller half that nothing on
+the granting path consulted.
+
+`escapes_as_value` is the refusal that matters here, and its own doc comment
+describes this case: a group handed to a fold is mentioned as a value and
+never called by name, so the walk finds no call site to object to and answers
+yes for free. On that silence the folder's first parameter was marked an
+accumulator it may write through. The seed the caller still holds is then
+written in place, and every reference to it reads the last write.
+
+**Not new.** Reproduced on main's own binary at b7a85b6a and on kanso#1444's
+tree. `callers_hand_over` grew the refusals; `param_is_linear` never had them.
+
+**How it surfaced.** kanso#1446's respell hoisted `(m e -> put m e[2]
+(m[e[2]] / e[3]))` out of `crossed` into a named `divided`, and
+scripts/welfare_rescore started reading every compile epoch's divisor as 1.0:
+one map, written in place, with every stored copy pointing at it.
+`tests/the_compile_epochs_flatten_their_own_boundaries.rs` read 98.8758 and
+99.4822 where two rows straddling a boundary must read the same number. The
+oracle read 98.6441 twice throughout.
+
+**The fix.** `param_is_linear` asks `callers_hand_over` for its caller half.
+
+**What it costs: nothing measurable.** `all_counters.sh` reports the twelve
+cost veins and the lazy tier all agreeing, so no runtime counter moves and the
+floor holds. The reason is checkable rather than lucky: the shape has four
+instances in the tree — `seen_once` in trend_gate, `tallest` in
+diagnostic_coverage, `guarding` in trmc_differential, `one_of` in hako/install
+— and none of them is under `lib/` or `bench/`, which is what the runtime
+goldens measure. The grant was live rather than dormant: `one_of` writes `push
+seen name` and `guarding` writes `push acc (...)`, both in place, and both were
+right only because their seeds are held nowhere else. `divided` is where that
+ran out. The compile veins are host-keyed and go to CI.
+
+**The fixture.**
+`tests/golden/micro/a_folder_handed_to_a_fold_is_never_called_by_name.kso`:
+two folds over one seed, in all three accumulator kinds, beside an inline
+lambda doing the same thing. Watched red — map `1 11` against `1 10`, list
+`[1 9 8] [1 9 8]` against `[1 9] [1 8]`, bytes `[120 121 122]` twice against
+`[120 121] [120 122]`. The lambda pair was right before the fix and after it:
+the fold's own arm asks whether the seed is unique before licensing a write
+inside a lambda, and only the named folder reached the grant by the other
+route. Without that pair the fixture would pass under a licence that had
+simply been switched off.
+
+**CI's rows, and the floor.** All three compile veins FELL:
+`compile_instructions` 42,873,153 -> 42,872,854 (−299), `entry_instructions`
+144,046,325 -> 144,044,890 (−1,435), `library_instructions` 144,845,876 ->
+144,844,867 (−1,009). `compile_allocs` held at 27,937 and `compile_memory` is
+byte-identical, so the move is the walk that no longer runs plus the layout
+under src/linear.rs. `callers_hand_over` puts `is_operator` and
+`escapes_as_value` in front of the walk, and a group either one refuses now
+stops there instead of walking the program to be told the same thing. Welfare
+rose on the compile term and was banked: floor 69.57819815695791 ->
+69.57821407078485. The runtime veins did not move at all, which
+`all_counters.sh` reported before the round and CI agreed with after it.
+
+**§69 on the compiler page.** A walk that finds no call site has two readings —
+nobody does this, and nobody here can see who does — and an analysis that
+cannot tell them apart grants on the second. That is the presented design this
+change fixed, and the page owed it an entry.

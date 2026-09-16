@@ -405,4 +405,13 @@
 # CI last ran, stated, not reasoned from. compile_allocs held at 27,937 and
 # compile_memory is byte-identical.
 #
-library_instructions=144845876
+# 2026-09-16 (kanso#1448): `param_is_linear` asks `callers_hand_over` for its
+# caller half instead of writing the same walk out a second time, and this row
+# is a FALL: 144,845,876 -> 144,844,867, -1,009 (-0.0007%). `callers_hand_over` puts two
+# refusals in front of that walk, so a group refused by either one no longer
+# walks the program to be told the same thing. src/linear.rs moves, so the
+# layout under it moves with it. Regenerated from the base CI last ran,
+# stated, not reasoned from. compile_allocs held at 27,937 and compile_memory
+# is byte-identical.
+#
+library_instructions=144844867
