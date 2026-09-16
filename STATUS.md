@@ -7,11 +7,10 @@ is stale — say so.
 ## Waiting on Clay
 
 The decisions live in design/pending-gavels.md — the single ledger; this file
-only indexes it. **Blocking right now: one** — what `!` promises the checker, filed
-2026-09-15 the hour the box-wrapping question was ruled. That ruling — the
-box is explicit, an err is a value, and a bare err is refused at check —
-settled where the box wraps and left what `xs[i]!` reads as, on which 710
-sites in the tree wait. The reconstruction coverage
+only indexes it. **Blocking right now: zero.** The last one, what `!` promises the
+checker, was ruled 2026-09-16 on its recommendation: `xs[i]!` reads as
+data and a miss halts at runtime. The box-wrapping question before it was
+ruled 2026-09-15. The reconstruction coverage
 question was ruled on 2026-09-10, taking cloud's recommendation: rows 15..390
 stay unscored on the run terms, the eight-phase half stays built, and
 re-measuring the old commits is filed as a lead with a feasibility probe in
@@ -101,8 +100,10 @@ not audited. Swept again on 2026-09-14 against merged main: the effect-type
 row came off, built and merged as kanso#1372, and the exhaustiveness row came
 off with kanso#1369. The book row came off with kanso#1412, which its own
 log entry calls the live remainder of that ruling. Two rows stand on
-2026-09-15: the explicit box, whose `!` half waits on a ruling, and the
-compile row's normalization, which waits on nothing.
+2026-09-16: the explicit box, fully ruled once its `!` half went on
+2026-09-16, and the build hole, ruled 2026-08-24 and found off this list on
+2026-09-16. The compile row's normalization, ruled 2026-09-15, was built the
+same night (kanso#1439) and came off. Neither remaining row waits on anything.
 
 ### The box is explicit, an err is a value, and a bare err halts where it lands (2026-09-15)
 
@@ -115,21 +116,27 @@ constructor's spelling" recommends `effect`, and the build does not wait on
 it); a bare err becoming data an `(err _)` arm can match anywhere; a bare err
 arriving at an operator, an index or an arm-less call being refused at
 check, like a `none`; the railway retiring; and ch04's "nothing is asked of
-the signature" paragraph, the last of the book ruling, moving with it. What
-`xs[i]!` answers as the checker reads it is NOT ruled — the ledger's Blocking
-entry "What `!` promises the checker" — and the 710 operator sites wait on it.
+the signature" paragraph, the last of the book ruling, moving with it. Its
+`!` half was ruled 2026-09-16 (the log's "`!` is the value on the
+programmer's word"): `xs[i]!` reads as data, the 710 operator sites stand
+as written, and a miss halts at runtime. Nothing here waits on a ruling.
 
-### The compile row is normalized so the maps parse is not counted (2026-09-15)
+### A build hole is spelled `_`, and fills exactly once (2026-08-24)
 
-The live log's entry of that name. `pthread_getattr_np`'s parse of
-`/proc/self/maps` at Rust startup is 0.27% of the compile row and 100% of
-its movement between two binaries that do the same compiler work; its cost
-follows the binary's section layout, not the code under test. Clay: "this
-has nothing to do with compiler performance and obviously shouldn't be part
-of what we measure." Supersedes the 2026-09-03 NO EXCLUSION on this term.
-Owes: the normalization — count from the compiler's `main` rather than
-process entry (kanso#1234's dropped toggle is the starting point), or pin
-the layout — chosen by measurement, and the compile goldens re-sat on it.
+The archive entry of that name, filed by Clay in the developer chat on
+2026-08-24 — "build doesn't work this way, as i said many times. you don't
+supply 'none', you supply _" — and it says in its own text that the shipping
+ch03 sample does the thing he rejected. Twenty-three days later it still
+does: `docs/book/samples/ch03/knot.kso` reads `ada = person "ada" none`, and
+`tests/golden/micro/bare_field.kso` the same. Probed 2026-09-16: the compiler
+refuses the ruled spelling outright, `error[syntax]: unexpected trailing
+tokens` at `person "ada" _`, so this is a build and not a sample edit. Owes:
+the parser and checker taking `_` inside `build` as a field held open, the
+write-once fill (the archive entry: "then you can update with a real value
+exactly once"), the two samples and their goldens, and ch03's panel. This
+ruling was never on this list: the 2026-09-09 audit that seeded it probed the
+2026-08-29 sitting and called itself a floor, and this row is what the floor
+was missing.
 
 ## In flight
 
@@ -348,7 +355,7 @@ else. Chains that tested for `none` after an effect migrate.
     checked from here on two days and both refused by the tooling
   - whether an err gains readers a lambda callback can use
 
-**Three questions wait in `design/pending-gavels.md`** — one blocking, two
+**Two questions wait in `design/pending-gavels.md`** — zero blocking, two
 open — each with a recommendation. Recounted on 2026-09-15, when the
 box-wrapping entry left Blocking ruled, the `!` question it left behind
 joined Blocking, the constructor's spelling joined Open with a
@@ -365,9 +372,7 @@ four of the six it named had been ruled or shipped since. A count maintained
 by hand goes stale by default, so `tests/the_status_index_counts_the_ledger.rs`
 now reads both files and fails when this sentence and the ledger disagree.
 
-The one blocking is what `!` promises the checker: a box at the read, or
-the value on the programmer's word, with a miss halting at runtime; the
-recommendation is the second. The two open are the box constructor's spelling,
+Nothing is blocking. The two open are the box constructor's spelling,
 recommended `effect`, which cloud builds against unless Clay names another;
 and the book teaching the boundary language, whose campaign ran on 2026-09-13
 and which now owes only ch04's "nothing is asked of the signature" framing,

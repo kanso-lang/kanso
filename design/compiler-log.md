@@ -3817,8 +3817,8 @@ thirteen programs `emitted_other_lines` 133,110 -> 133,514,
 20,164 -> 20,231, defines 2,350 held. Four programs fall (basket,
 pendbench, indexbench, readbench: a getter the check no longer walks emits
 less), the rest rise by the arms std/regexp and std/json gained. The
-front end's visits on the compile corpus read 15,076 -> 15,119 for the same five decoder arms; rounds hold
-at 47. The three host-keyed compile rows, the machine-code vein and the
+front end's visits on the compile corpus read 15,076 -> 15,119 for the
+same five decoder arms; rounds hold at 47. The three host-keyed compile rows, the machine-code vein and the
 compile allocations are CI's to measure, and welfare on this box reads
 69.58 against a floor of 69.58 with the runtime side unmoved. A fall on CI
 from the compile rows is the language's to pay under the 2026-09-13
@@ -3834,3 +3834,66 @@ clause and the floor moves with it in the second round.
   checker sees. A `text/contains?` would be surface, so it is not added
   here; the scripts bind instead.
 - Division's `ERR` and the strict index's miss, as above.
+
+## 2026-09-16 — gavel: `!` is the value on the programmer's word, and a miss halts at runtime
+
+Clay ruled the ledger's "What `!` promises the checker", filed 2026-09-15 the
+hour the box-wrapping question was ruled, by taking its recommendation: "oh
+yeah your recommendation is right i think."
+
+**The ruling.** `!` tells the checker to drop the miss from the answer set.
+`xs[i]!` reads as data: the element's type, no `none`, no err, no box. The
+710 sites in the tree that hand `xs[i]!` straight to an operator, a group or
+a field stand as written. A miss at runtime is an err value reaching an
+operator, and it halts with the report the way `+` on a string halts today.
+`!` is the recorded decision "I have checked this", and it is the one place
+the checker takes a promise instead of a proof.
+
+**What it closes.** The in-range read. sha256's compress and regexp's
+scanner keep `s[5] + s[6]` at 9 allocations and 21 ms on two million
+elements; the 8,000,014-allocation bind shape the retired entry priced is
+never written. The literal rider's reading — `xs[i]!` as the manual box
+applied at the read, every one of the 710 sites owing a `.>` — is declined,
+and the bound-discharging checker that would have made it free is not on
+the table.
+
+**What it settles about the name.** `!` means the same thing at the index
+and at the name: a promise the checker takes and the runtime enforces. A `!`
+declaration still answers a failure, per the 2026-09-03 suffix contracts;
+what it answers is a bare err, which its caller either matches with an
+`(err _)` arm or hands on to something that halts.
+
+**Together with the 2026-09-15 gavel.** The box is explicit and IO applies
+it; a bare err is data; a bare err where a value is wanted is refused at
+check unless `!` said otherwise, in which case the runtime enforces the
+promise. That is the whole failure model, and nothing about it waits on a
+ruling. The entry leaves the ledger in this commit. STATUS.md's row for the
+explicit box drops the clause that said its `!` half was unruled.
+
+## 2026-09-16 — a ruling from 2026-08-24 was never on the unbuilt list, and the sample it condemned still ships
+
+Clay, reading ch03's knot sample: "this is still out of date ... you use _
+not none." The archive's "gavel: a build hole is spelled `_`, and fills
+exactly once" (2026-08-24) records him saying the same thing then — "build
+doesn't work this way, as i said many times" — and records, in its own text,
+that the shipping ch03 sample does the thing he rejected.
+
+Read off main on 2026-09-16: `docs/book/samples/ch03/knot.kso` still reads
+`ada = person "ada" none`, so does `tests/golden/micro/bare_field.kso`, and
+the compiler refuses the ruled spelling — `person "ada" _` is `error[syntax]:
+unexpected trailing tokens`. Twenty-three days, ruled and recorded and
+unbuilt, and Clay found it by reading the book.
+
+**Why the list did not catch it.** STATUS.md's "Ruled, unbuilt" was seeded on
+2026-09-09 by probing the 2026-08-29 sitting, and its preamble said so: "the
+list is a floor, since the rest of the 2026-08-29 sitting was not audited."
+This ruling is from 2026-08-24, five days before the sitting the audit
+started at. The floor was honest about its edge and nobody walked past the
+edge. The row is on the list now, with the probe.
+
+**The other row moved the other way.** The compile-row normalization was
+ruled on 2026-09-15 at about 20:40Z and kanso#1439 landed it before 21:30Z
+the same night — the maps parse outside all three compile rows, measured,
+with a spec holding it there. Its row came off in this commit. A ruling
+built in under an hour beside one unbuilt for twenty-three days is the
+difference between a row on the list and a row off it.
