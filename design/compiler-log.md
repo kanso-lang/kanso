@@ -4289,3 +4289,47 @@ regenerated. The remedy reopens the 2026-09-05 ruling "one row, one value; the
 pair and the per-chip key are retired", so it went to Clay. It exposes every
 open pull request carrying a compile vein: which chip a round lands on decides
 whether that vein is red.
+
+**THE ATTRIBUTION ABOVE IS WRONG, AND THE CAUSE IS IN THIS PULL REQUEST.** The
+two paragraphs before this one blamed the host CPU, and a third CI round
+refuted them: at `11b282d1`, on source identical again, the rows read
+`compile_instructions` 40,749,259, `entry_instructions` 144,655,962,
+`library_instructions` 145,336,861. Three rounds, three distinct values on
+every row, over a pool of two chips. A per-chip story predicts two.
+
+The measurement that found it runs on one machine. Eight repeats of the library
+gate's own command, same binary, same box, same tunables, gave 146,776,367 /
+146,776,546 / 146,776,647 / 146,776,453 / 146,776,334 / 146,776,489 /
+146,776,401 / 146,776,335 — a spread of 313 instructions with the process total
+minus the `kanso::main` row constant at 470,409 throughout, so the variance is
+inside the compiler's own frame. Five more under `setarch -R` varied the same
+way, which rules out ASLR. Diffing two of those callgrind profiles function by
+function returned one line:
+
+    functions present in both that differ: 1
+        +119  hashbrown::map::HashMap<K,V,S,A>::insert
+    only in x4: 0   only in x5: 0
+    sum of diffs: 119
+
+Every other function in the profile is identical to the instruction. The whole
+delta is one hash table's inserts.
+
+Which table: this branch declared `proven` three times as
+`std::collections::HashSet<crate::diag::Span>` — `src/infer.rs:61`,
+`src/infer.rs:156`, `src/check.rs:803` — where the rest of the compiler uses
+`crate::hash::Set`. `std` defaults to `RandomState`, keyed from the OS once per
+process, so the probe sequence differs on every run and so does the work of
+building the same set. The base, `claude/bare-err-refused`, has no such
+container in either file. Spelling the three as `crate::hash::Set` put six
+consecutive runs of the library measurement on 146,522,240, spread zero.
+
+So the gate was right and its case (2) did its job: one binary counting two
+numbers is a reproduction failure, and hunting it to its source is the rule.
+The 2026-09-05 ruling "one row, one value" needs nothing; the escalation raised
+against it is withdrawn. `src/hash.rs` says iteration order changing is
+harmless because nothing observable depends on it, which holds for what the
+compiler writes and not for what it costs — three goldens count the cost to the
+instruction. `tests/the_compile_path_hashes_with_a_fixed_seed.rs` now reads
+`src/` and fails on a std-hashed container outside a named exception, watched
+red on all three sites before it went green.
+

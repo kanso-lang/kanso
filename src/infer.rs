@@ -58,7 +58,7 @@ pub struct Inference {
     /// the index in range, so the read answers its element and never the
     /// miss; the checker's none question and the bang's respell both read
     /// it. See `Fact`.
-    pub proven: std::collections::HashSet<crate::diag::Span>,
+    pub proven: crate::hash::Set<crate::diag::Span>,
 }
 
 impl Inference {
@@ -153,7 +153,7 @@ struct Ctx<'a> {
     /// innermost last; see `Fact`.
     facts: Vec<Fact<'a>>,
     /// The plain index reads the facts prove in range, by span.
-    proven: std::collections::HashSet<crate::diag::Span>,
+    proven: crate::hash::Set<crate::diag::Span>,
 }
 
 /// What compiling actually did, as opposed to what it wrote. Emitted text

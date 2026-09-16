@@ -800,7 +800,7 @@ struct AfterInfer<'a, 'r> {
     /// The plain index reads inference proved in range, by span: a read
     /// its `if`s bound cannot miss, so it is not a none the caller owes an
     /// arm for.
-    proven: &'r std::collections::HashSet<crate::diag::Span>,
+    proven: &'r crate::hash::Set<crate::diag::Span>,
 }
 
 /// An effect handed to a position every arm throws away never happens.
