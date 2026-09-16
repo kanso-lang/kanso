@@ -82,6 +82,8 @@ fn every_float_literal_parses_like_strtod() {
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+/* the lifted text guards its counters; a harness counts nothing */
+#define K_COUNTING 0
 
 {el}
 

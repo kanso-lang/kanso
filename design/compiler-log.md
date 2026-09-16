@@ -2545,6 +2545,694 @@ The three compile rows FALL by layout: compile_instructions 42,872,288 ->
 (-5,191), library_instructions 144,841,869 -> 144,836,225 (-5,644).
 compile_allocs held at 27,937 and compile_memory is byte-identical.
 
+## 2026-09-15 — a long copy is a cold call, and the slice door's rare arms are too
+
+Two more frames of the shape the preserve_most entry above describes.
+
+`k_map_lit` and `k_mklist` copy their items inline when there are a few
+and call memcpy when there are more, and the call is why both opened with
+three pushes: 273,339 map literals and 300,479 list literals a run paid
+them for a copy 98 of them and 16,011 of them respectively make. The
+same call sat inside `k_copy_short`, the string copy inlined into every
+string builder, behind its sixteen-byte threshold. All three go through
+`k_copy_cold` now, a preserve_most wrapper around memcpy, and the three
+functions open with no pushes. The wrapper costs twenty-one a call over
+26,551 calls, and `k_b_join`, whose copies are long and many, pays
+199,822 of them alone.
+
+`k_b_utf8_slice_raw`, the decoder's token door at 861,498 calls a run,
+opened with three pushes for the two utf-8 validators it calls 16,929
+times, and the validators could not carry preserve_most themselves:
+`k_b_utf8` calls the scalar one 117,513 times a run on its own strings,
+and measured that way the attribute cost 1,613,304 there for what it
+saved here. So the slice door validates through `k_utf8_bad_rare`, the
+same ascii test with the two validators behind preserve_most wrappers,
+and its entry is one `push %rax`; the wrappers cost seventeen a call over
+16,929.
+
+Measured on the container, `env -i` under callgrind, both binaries in one
+directory under equal-length names, run from the repository root, on the
+base kanso#1429 leaves:
+
+    runbench    1,969,066,916 -> 1,962,311,522    -6,755,394   -0.3431%
+    jsonbench   1,211,697,168 -> 1,200,857,142   -10,840,026   -0.8946%
+
+`k_b_utf8_slice_raw` falls five a call, `k_map_lit` six, `k_mklist` five,
+`k_b_append_grow` two, to the instruction, and `k_utf8_bad_scalar` does
+not move. Output is byte-identical on both programs.
+
+Rows `cold_copy` and `rare_door`. The first mutation inlines the wrapper
+back, the second sends the slice door through the plain validator door.
+
+**CI's sitting, on the base kanso#1429 left.** The work vein reads
+jsonbench 1,229,738,040 -> 1,218,898,014 (-10,840,026, -0.8815%), the
+container's A/B to the instruction, and runbench 1,977,087,740 ->
+1,970,132,223 (-6,955,517, -0.3518%), 200,123 deeper than the container's
+-6,755,394. Seven more rows fall: deepbench -259,997, oneshot -72,222,
+encodebench -70,214, livebench -63,843, work_escapebench 82,999,058 ->
+82,993,058 (-6,000), scanbench -4,817, pendbench -3,407. Five RISE, and they are the wrapper's price:
+work_digestbench 9,813,332 -> 9,944,479 (+131,147, +1.3364%), work_basket
+34,433,106 -> 34,534,020 (+100,914, +0.2931%), work_widebench 32,837,013
+-> 32,845,030 (+8,017), work_indexbench 3,085,763 -> 3,086,146 (+383),
+work_readbench 4,629,808 -> 4,629,832 (+24). A copy of sixteen bytes or
+more goes through `k_copy_cold` now, which saves every register it touches
+before memcpy, so a program whose copies are long and frequent pays that on
+each one and keeps no frame it did not already keep. The digest builds
+such copies.
+
+Machine code: six rows RISE by 96 or 64 bytes and four FALL by 16 or 32;
+summed text 1,707,852 -> 1,708,284 (+432). The six that rise link the
+slice door and its two new wrappers; the four that fall link
+`k_copy_short` and lost the inline memcpy dispatch a call replaces.
+
+The three compile rows RISE by layout, and to the instruction they are the
+values the rows held before kanso#1429: compile_instructions 42,870,366 ->
+42,871,412 (+1,046), entry_instructions 144,035,949 -> 144,040,625
+(+4,676), library_instructions 144,836,225 -> 144,841,583 (+5,358).
+compile_allocs held at 27,937 and compile_memory is byte-identical.
+
+**Round three: the render harness lifts the copy it calls.**
+`tests/every_rendered_float_reads_back_as_itself.rs` cuts `k_copy_short`
+out of runtime.c by its declaration line and compiles it beside ryū. This
+change made the short copy hand its long case to `k_copy_cold`, and the
+lifted text called a function the harness never carried, so the spec
+failed to compile on both hosts and the ratchet reported its gate ALREADY
+RED. The cut now runs from `k_copy_cold`'s declaration to the short copy's
+closing brace, one span, so a later change to either shape is still read
+from the source and not from a copy. Green on the container in 4.09s.
+
+## 2026-09-15 — the third cold-frame sweep: nine more rare arms, and a scan that `cold` cost its vector loop
+
+kanso#1429 and kanso#1430 took the frames the arena refill, the index's
+arms and the long copy were charging. This entry took the attribution
+again on the cold-copy build, per function: callgrind's dynamic call
+counts against each function's prologue push count, ranked by calls times
+pushes. Seven hot functions still opened with five to seven pushes for
+calls a run makes a few thousand times: `k_b_at` (six, 690,000 calls),
+`k_b_entries` and `k_map_sorted` (six each, 248,490), `k_b_push_grow`
+(six, 252,499), `k_b_slice` (seven, 183,682), `k_b_append_grow` (six,
+176,697), `k_closure` (five, 243,978) and `k_copy_alloc` (seven, 74,551).
+
+**Nine rare arms become preserve_most helpers.** The character scan
+behind `k_str_chars` (`k_str_chars_scan`: an index and a slice ask it,
+and it runs once per string, 163 times a run); a map view's first build
+(`k_map_sort_build`, 2,761 of 248,490 asks, so `k_map_sorted` inlines into
+`entries`); `entries`' failing-field record (`k_rec_cold`); a list grow's
+permanent buffer, its registration and its release (`k_buf_perm`,
+`k_permreg_add`, `k_buf_release`: 15,488, 15,488 and 11,616 of 252,499
+grows); a bytes grow's malloc regime and the free of a malloced
+predecessor (`k_bytes_buf_malloc`, `k_bytes_buf_release`: 1,080 and 990 of
+176,697); and the tenure tier's block opener (`k_ten_block_open`, 14 of
+74,551 carves). Two more shapes ride with them: `k_closure` copies up to
+eight captures as inline words and hands longer environments to
+`k_copy_cold` (memcpy had been a plain call on 92,235 of its calls), and
+`k_b_slice`'s multibyte walk is its own function in tail position, so the
+ascii and list arms open with no pushes where the inline walk cost seven.
+`k_copy_short` is `always_inline` as well: `k_b_slice` was calling it out
+of line, and inlining it is worth 236,052 against the same tree.
+
+Prologues after, read off the linked run program: `k_b_at` 6 -> 1,
+`k_b_slice` 7 -> 1, `k_copy_alloc` 7 -> 1, `k_closure` 5 -> 1,
+`k_b_push_grow` 6 -> 4, `k_b_entries` 6 -> 3, `k_b_append_grow` 6 -> 3.
+The three that keep pushes hold more values live than the nine
+caller-saved registers can carry; that is pressure, and no attribute
+reaches it. (This paragraph first said `k_b_at` 5 -> 1 and
+`k_b_push_grow` 6 -> 0. The linked binary says six and four: the grow's
+four pushes and an alignment slot sit below its doubling loop now, so
+the entry opens with none, and every one of its 252,499 calls still
+reaches them. Corrected in round two from the per-instruction profile.)
+
+Container A/B, `env -i` under callgrind, equal-length names in one
+directory, on the kanso#1430 leaves:
+
+    runbench    1,962,311,522 -> 1,938,188,043   -24,123,479   -1.2293%
+    jsonbench   1,200,857,142 -> 1,193,215,104    -7,642,038   -0.6364%
+
+Per function on runbench: `k_b_slice` 18,864,651 -> 8,265,702, with the
+walk's 8,027,391 now standing on its own two calls; `k_b_at` -7,633,165;
+`k_map_sorted` 6,341,332 -> 0 against `k_map_sort_build`'s 710,389;
+`k_b_entries` -3,236,127; `k_b_length` -3,207,837 where the scan it inlined
+now stands as `k_str_chars_scan`'s 4,290,788; `k_b_append_grow`
+-2,368,359; `k_b_push_grow` -2,152,826; glibc's memcpy -2,029,170;
+`k_copy_alloc` 2,255,292 -> 1,360,457. The helpers' own price: `k_buf_perm`
+557,572 over 15,488 calls, `k_buf_release` 313,632, `k_permreg_add`
++247,806, `k_copy_cold` +316,701 on 15,081 more calls. And `k_eq_rec`
++279,330, four pushes to seven: it asks `k_map_sorted` twice, and the inline
+copy carries the build's call into a function that compares maps 92,252
+times a run without ever building one. Output byte-identical on both
+programs at every step.
+
+**`cold` on a loop is a different decision from `cold` on a tail.** The
+first cut marked `k_str_chars_scan` `cold` like the other helpers, and the
+composite read runbench -7,518,671. The scan inside it is `k_utf8_chars`,
+a word-at-a-time loop clang vectorizes at -O3; a cold function is compiled
+for size, and the loop came out scalar: 17,797,006 instructions over 163
+calls, against 4,290,788 for the same helper without the attribute. That
+one word was 13,506,218 of runbench, more than half of what the sweep
+found. The helper keeps `noinline, preserve_most` and nothing else, and
+the rule this leaves: `cold` is for an arm that does a few instructions'
+work, never for one that carries a loop worth vectorizing.
+
+Rows `sweep_helpers` (the mutation strips `preserve_most` from the nine
+and leaves kanso#1429's six), `slice_walk` (inlines the walk back) and
+`closure_caps` (four inline words and memcpy above), each proved red
+locally against 1,938,188,043: the first reads runbench 1,945,409,548
+(+7,221,505) and jsonbench +4,035,972, the second 1,940,575,869
+(+2,387,826), the third 1,940,317,281 (+2,129,238). `k_map_sorted` spelt
+`static` without `inline` builds byte-identically, so the word stays for
+the reader and decides nothing.
+
+**Declined on the way.** `k_b_append_range`'s fast-path memcpy replaced by
+the short ladder: five pushes to none on the standalone compile, and
+runbench +328,995, jsonbench -863,400, encodebench -1,200; the objective
+declines it. Outlining `k_b_to_float`'s strtod tail left it at seven
+pushes; that frame is the parse body's and no tail reaches it.
+
+**CI's sitting, on the base kanso#1430 left.** The work vein reads
+runbench 1,970,132,223 -> 1,945,875,866 (-24,256,357, -1.2312%), 132,878
+deeper than the container's -24,123,479, and jsonbench 1,218,898,014 ->
+1,211,426,976 (-7,471,038, -0.6129%), 171,000 shallower than the
+container's -7,642,038. Eleven more rows fall: livebench -40,670,538
+(-1.3156%), encodebench -40,612,772 (-1.1230%), scanbench -20,527,342
+(-3.8814%), deepbench -14,043,480 (-3.8064%), basket -577,785 (-1.6731%),
+indexbench -190,206 (-6.1632%), oneshot -56,233, widebench -49,649,
+pendbench -30,424, digestbench -3,137, readbench -123. Against main the
+digest row still stands above where the chain found it, work_digestbench
+9,813,332 -> 9,941,342: that is kanso#1430's wrapper price less this
+sweep's 3,137, and it is priced in that entry. One RISES here:
+work_escapebench 82,993,058 -> 83,901,717 (+908,659, +1.0949%). That is
+the list grow's price. Its permanent buffer, its registration and its
+release are preserve_most helpers now, and escapebench grows a list
+12,000 times a run, 9,000 of them releasing a predecessor: on the
+container the three helpers and the long copy cost it 1,752,029
+(`k_permreg_add` 888,017, `k_buf_perm` 432,004, `k_buf_release` 243,004,
+`k_copy_cold` 189,004) against 846,030 the push itself no longer pays,
+905,659 summed where CI read 908,659.
+
+Machine code: nine rows RISE and five FALL, summed 1,708,284 ->
+1,708,652 (+368). Nine helpers are out of line now, each with a
+preserve_most prologue and epilogue, and the callers they left keep no
+frame; which side is larger is per program, and runbench falls 832.
+
+The three compile rows FALL by layout: compile_instructions 42,871,412 ->
+42,869,908 (-1,504), entry_instructions 144,040,625 -> 144,035,862
+(-4,763), library_instructions 144,841,583 -> 144,837,205 (-4,378).
+compile_allocs held at 27,937 and compile_memory is byte-identical.
+
+## 2026-09-15 — an empty list literal opens with room for four
+
+The per-instruction profile of kanso#1431's run program put `k_b_push_grow`
+at 25,260,844 instructions over 252,499 calls, a hundred a call, and the
+calls were nearly all one shape: 225,621 came from `array_delim` in
+lib/json, and the copy loop inside the grow ran 238,750 times over 238,498
+calls, one element a call. The decoder opens every array with `[]`, and an
+empty literal's buffer held one slot, so the first push fit and the second
+one copied one element into a buffer of four. Every JSON array of two or
+more elements paid the grow once. A one-slot buffer is also below the size
+classes the free list keeps (a class needs `tzcnt >= 2`), so the outgrown
+buffer was garbage the moment it was left, where a four-slot one is
+recycled.
+
+The empty literal's buffer opens with room for four now: `k_mklist` asks
+`k_buf` for four slots where it asked for one. Nothing else changes. A
+second variant rounded every literal under four elements up to four as
+well; it read identical to the first within 80 instructions on both
+programs, so the one-, two- and three-element literals are not pushed into,
+and the smaller change ships.
+
+Container A/B, `env -i` under callgrind, equal-length names in one
+directory, on the kanso#1431 leaves:
+
+    runbench    1,938,188,043 -> 1,923,227,681   -14,960,362   -0.7719%
+    jsonbench   1,193,215,104 -> 1,177,989,804   -15,225,300   -1.2760%
+
+Output byte-identical on both. The run program's counters move in the
+direction the shape predicts: `push_mut_slow` 1,777,129 -> 1,638,371 and
+`push_mut_fast` 961,384 -> 1,100,142 (138,758 grows become in-place
+pushes), `buf_reuse` 56,614 -> 145,461 (the four-slot buffers come back
+through the free list), `sh_buf` 119,476,704 -> 111,160,896, allocs
+5,958,961 -> 5,730,654, `evac_allocs` 74,551 -> 68,315 and `survive_slots`
+159,393 -> 110,799 (fewer one-slot buffers survive a rewind to be carried).
+`arena_peak_bytes` falls 39,653,072 -> 38,604,496, exactly one 1 MiB block
+(`arena_blocks` 37 -> 36). Two counters rise: `alloc_bytes` 426,179,869 ->
+459,964,461 (+7.93%), because an empty literal that stays empty costs 80
+bytes where it cost 32, and `perm_peak_bytes` 10,272 -> 20,512, because a
+list that escapes its beat now escapes with a four-slot buffer. The
+objective reads the peak, not the bytes allocated, and the peak fell:
+welfare 68.95 -> 69.10 on the container from `run_peak_bytes` 40,391,384 ->
+39,353,048 alone, with the instruction rows still CI's from kanso#1431.
+Eleven cost goldens and twenty-five mem fixtures regenerated by the sweep.
+
+`tests/sha256_peak.rs` pins the arena peak of hashing a pushed-together
+message, and the four-slot literal moved where that message's buffer lands:
+at 65,536 bytes the arena peak rises two blocks (17,825,808 -> 19,922,976)
+while the permanent peak falls 1,310,720; at 131,072 the arena falls eight
+blocks (40,894,496 -> 32,505,888) and the permanent peak rises 2,621,440.
+CI turned the spec red on round two and the pins are re-set with those
+figures beside them.
+
+Row `empty_room`, mutation `an_empty_list_literal_has_no_room_for_a_push`
+(puts the one-slot buffer back). Under the mutation the source is
+kanso#1431's to the byte outside comments, so its count is the base's:
+runbench +14,960,362.
+
+**Every counter the trend gate calls worse, with the value it landed on.** A four-slot buffer where a one-slot one stood is 48 more bytes for every empty literal that stays empty, so `alloc_bytes` and `sh_buf` rise on the programs whose empty lists never grow, `perm_peak_bytes` and `perm_live_bytes` rise where a list escapes its beat with the larger buffer, and `bytes_freed` falls where fewer grows meant fewer permanent buffers to free: run_alloc_bytes 426,179,869 -> 459,964,461, run_perm_peak_bytes 10,272 -> 20,512, encode_alloc_bytes 658,041,744 -> 658,094,320, encode_sh_buf 73,214,624 -> 73,267,200, basket_alloc_bytes 4,900,609 -> 7,503,425, basket_bytes_freed 12 -> 11, basket_perm_live_bytes 2,228,256 -> 4,259,872, basket_perm_peak_bytes 2,752,560 -> 5,308,464, escape_alloc_bytes 32,976,112 -> 65,760,112, escape_perm_peak_bytes 10,272 -> 20,512, escape_sh_buf 96,000 -> 240,000, scan_alloc_bytes 160,539,964 -> 160,587,964, scan_sh_buf 33,024 -> 81,024, a_class_asks_by_the_byte_alloc_bytes 432,271 -> 468,175, a_class_asks_by_the_byte_sh_buf 82,448 -> 118,352, a_loop_invariant_capture_is_copied_every_rewind_alloc_bytes 91,136 -> 102,064, a_loop_invariant_capture_is_copied_every_rewind_sh_buf 10,976 -> 21,904, a_pushed_call_keeps_the_sweep_alloc_bytes 6,595,280 -> 13,152,080, a_pushed_call_keeps_the_sweep_perm_peak_bytes 10,272 -> 20,512, a_pushed_call_keeps_the_sweep_sh_buf 19,200 -> 48,000, an_escaped_list_gives_its_buffer_back_bytes_freed 400 -> 200, an_escaped_list_gives_its_buffer_back_sh_buf 6,400 -> 16,000, an_inner_beat_opens_its_tenure_in_the_block_outside_allocs 177,420 -> 180,196, an_inner_beat_opens_its_tenure_in_the_block_outside_evac_allocs 29,377 -> 48,531, an_inner_beat_opens_its_tenure_in_the_block_outside_evac_bytes 2,339,344 -> 3,006,224, an_inner_beat_opens_its_tenure_in_the_block_outside_ten_blocks 2 -> 3, build_cycle_alloc_bytes 3,168 -> 3,264, build_cycle_sh_buf 208 -> 304, early_exit_alloc_bytes 44,368 -> 88,064, early_exit_perm_live_bytes 32,784 -> 65,552, early_exit_perm_peak_bytes 40,992 -> 81,952, early_exit_sh_buf 32 -> 80, effect_push_shape_alloc_bytes 3,264 -> 3,456, effect_push_shape_sh_buf 704 -> 896, fold_push_shape_bytes_freed 5 -> 4, fused_map_shape_bytes_freed 5 -> 4, fused_reducer_bytes_freed 4 -> 3, fused_reducer_sh_buf 32 -> 80, fused_select_shape_bytes_freed 5 -> 4, fused_tally_alloc_bytes 32,240 -> 42,880, fused_tally_perm_live_bytes 8,208 -> 16,400, fused_tally_perm_peak_bytes 10,272 -> 20,512, piped_reducer_bytes_freed 4 -> 3, piped_reducer_sh_buf 32 -> 80, skip_shape_bytes_freed 5 -> 4, sort_shape_perm_live_bytes 8,208 -> 16,400, sort_shape_perm_peak_bytes 10,272 -> 20,512, take_shape_bytes_freed 5 -> 4, tally_shape_bytes_freed 5 -> 4, tally_shape_sh_buf 2,016 -> 2,064, the_same_capture_built_below_the_mark_is_shared_alloc_bytes 91,040 -> 101,968, the_same_capture_built_below_the_mark_is_shared_sh_buf 10,976 -> 21,904, unsafe_wrap_alloc_bytes 128 -> 176, unsafe_wrap_sh_buf 32 -> 80. The inner-beat tenure fixture moves the other way for the same reason, its `allocs`, `evac_allocs`, `evac_bytes` and `ten_blocks` landing where the list above says. The peak is what the objective reads, and it fell.
+
+**CI's sitting, on the base kanso#1431 left.** The work vein reads runbench
+1,945,875,866 -> 1,930,572,613 (-15,303,253, -0.7864%), 342,891 deeper
+than the container's -14,960,362, and jsonbench 1,211,426,976 ->
+1,195,571,676 (-15,855,300, -1.3088%), 630,000 deeper than the container's
+-15,225,300. Seven more fall: pendbench -11,284,328 (-5.1424%), basket
+-270,465, encodebench -128,117, oneshot -105,043, digestbench -102,348,
+livebench -96,070, widebench -83,118; indexbench and readbench hold.
+Against main the digest row still stands above where the chain found it,
+work_digestbench 9,813,332 -> 9,838,994: kanso#1430's wrapper price less
+kanso#1431's and this entry's falls, priced in that entry. Three RISE
+here: work_scanbench 508,340,742 -> 508,351,545 (+10,803), work_deepbench
+354,898,747 -> 355,470,728 (+571,981, +0.1612%), and work_escapebench
+83,901,717 -> 85,995,606 (+2,093,889, +2.4956%). escapebench's rise is the
+container's to the instruction (83,868,738 -> 85,962,627) and it is the
+accumulator's new lifetime: a list a loop pushes into stays in the arena
+through four pushes where one push filled the old buffer, and every rewind
+in between carries it, where before the second push moved it to permanent
+storage. On the container that is memcpy +738,000, malloc +626,895, the
+free path +441,000, `k_beat_rewind_slow` +183,000, `k_b_push_mut`
++162,000. deepbench pays the same carry on a smaller scale.
+
+Machine code: every row FALLS by 112 or 144 bytes, summed 1,708,652 ->
+1,706,956 (-1,696): the one-slot buffer sat below the free list's size
+classes and the grow had a branch for it, laid out once per program.
+
+The three compile rows RISE by layout: compile_instructions 42,869,908 ->
+42,871,308 (+1,400), entry_instructions 144,035,862 -> 144,038,199
+(+2,337), library_instructions 144,837,205 -> 144,838,028 (+823).
+compile_allocs held at 27,937 and compile_memory is byte-identical.
+
+The book's two counter panels (ch10 `counters`, ch12 `fused`) quote the
+allocation counters of a sample that opens an empty list, and the sweep
+does not regenerate them; CI's book job caught both, allocs 10 -> 9 and
+alloc_bytes 43,888 -> 22,032 on each, and they are rewritten here.
+
+## 2026-09-15 — the two byte scanners are inlined, and their constants fold
+
+`k_b_find2_raw` and `k_b_find2_below_raw` are the decoder's inner scans:
+sixteen bytes a step under SSE, looking for the first of two bytes. On
+kanso#1432's run program the per-instruction profile put them at
+58,181,994 and 84,989,250 self over 1,756,429 and 1,353,330 calls, and
+the loop body ran 1.01 times a call: the hit is in the first sixteen
+bytes 99.99% of the time. Half of each call was setup, the two bytes
+broadcast into vector registers, `movd`, `shl`, `or`, `movd`, `movd`,
+`pxor`, two `pshufb`, rebuilt from the argument registers on every call.
+Every emitted caller hands those bytes as literals (`text/find2 cs p 34
+92`, and the same 34 92 at `find2_below`), so inlined they are constant
+vectors loaded from rodata.
+
+The link is LTO, so `__attribute__((always_inline))` on the two doors is
+enough: LLVM honours it at every emitted call site and the out-of-line
+copies vanish from the binary. Nothing else changes.
+
+Container A/B, `env -i` under callgrind, equal-length names in one
+directory, on the kanso#1432 leaves:
+
+    runbench    1,923,227,681 -> 1,898,278,815   -24,948,866   -1.2972%
+    jsonbench   1,177,989,804 -> 1,171,809,954    -6,179,850   -0.5246%
+
+The first door alone read runbench -18,619,812 and jsonbench -6,179,850;
+the second adds -6,329,054 to runbench and nothing to jsonbench, which
+never calls it. Output byte-identical on both. Per function, the two
+doors' 143,171,244 become 118,222,370 inside their callers:
+`encode_onto` +78,660,646, `obj_key_start` +17,251,938 and +958,320 on
+its two clones, `str_escape` +7,891,587, `array_delim` +4,526,379 and
++88,506, `str_chars` +3,510,540, `parse_value` +3,029,202,
+`in_class?` +2,295,180, `worth_trying?` +10,272. No counter moves: the
+scan allocates nothing and the sweep agrees with every golden.
+
+Row `scan_inline`, mutation
+`the_byte_scanners_rebuild_their_constants_on_every_call` (strips both
+attributes). Under the mutation the source is kanso#1432's to the byte
+outside comments, so its count is the base's: runbench +24,948,866.
+
+**CI's sitting, on the base kanso#1432 left.** The work vein reads runbench
+1,930,572,613 -> 1,904,577,350 (-25,995,263, -1.3465%), 1,046,397 deeper
+than the container's -24,948,866, and jsonbench 1,195,571,676 ->
+1,187,809,626 (-7,762,050, -0.6492%), 1,582,200 deeper than the container's
+-6,179,850. Four more fall: livebench -32,587,731 (-1.0682%), encodebench
+-8,047,675 (-0.2251%), scanbench -7,521,638 (-1.4796%), oneshot -133,071
+(-0.7055%). The other eight hold to the instruction; none of them calls
+either scanner. Against main two work rows still stand above it, neither
+moved here: work_escapebench 82,969,017 -> 85,995,606 (+3,026,589), the
+accumulator's lifetime priced in kanso#1432's entry, and work_digestbench
+9,837,152 -> 9,838,994 (+1,842), kanso#1430's wrapper price less the falls
+since.
+
+Machine code: seven rows RISE and seven hold, summed text 1,706,956 ->
+1,718,924 (+11,968): runbench +3,536, oneshot +2,816, livebench +2,816,
+jsonbench +2,128, scanbench +464, widebench +160, encodebench +48. Every
+emitted call site carries its own copy of the sixteen-byte scan loop now,
+with the two bytes as rodata vectors, where before it carried a call.
+Against main the sum is a fall, 1,730,204 -> 1,718,924, on the chain's
+earlier links.
+
+The three compile rows RISE by layout, both on the base and against main:
+compile_instructions 42,871,308 -> 42,873,185 (+1,877; main 42,872,288),
+entry_instructions 144,038,199 -> 144,044,710 (+6,511; main 144,041,140),
+library_instructions 144,838,028 -> 144,845,808 (+7,780; main 144,841,869).
+compile_allocs held at 27,937 and compile_memory is byte-identical.
+
+Welfare 69.16 -> 69.26, banked in this pull request; the three page spans
+quoting the moved compile goldens were rewritten by `golden_prose --write`.
+
+## 2026-09-15 — a scan's short tail is one masked load
+
+`k_b_find2_raw` and `k_b_find2_below_raw` scan sixteen bytes a step and then
+finish whatever is shorter than a vector one byte at a time. On kanso#1433's
+run program the per-instruction profile put 8,042,860 bytes a run through
+those byte loops (counted at the loops' `cmp $0x22`, which the vector path
+never executes), at eight instructions a byte: 5,375,790 in `encode_onto`,
+1,655,478 in `obj_key_start`, 509,751 in `parse_value`, 326,304 in
+`array_delim`, 175,537 in `str_escape`. The loop is reached whenever fewer
+than sixteen bytes remain from the scan position, which for a json key or a
+short value is every time: the two copies in `encode_onto` entered 860,130
+and 347,220 times and walked 4.9 and 3.7 bytes an entry. kanso#1294 had
+declined a word-at-a-time tail for the below-floor scan at +2.2879%, because
+the mask's setup per entry cost more than the few bytes it replaced. With the
+scanners inlined since kanso#1433 the setup is different: the byte pair and
+the floor are rodata vectors already, so a tail is one unaligned load, the
+same three compares the loop does, and a mask over the bytes that are the
+string's.
+
+The load reads sixteen bytes from a string that may hold three, so it is
+taken only when `k_tail_window` says the sixteen stay inside the page the
+string's next byte is in (`(p & 4095) <= 4080`): the page holding a valid
+byte is mapped whole, so the load cannot fault, and the bytes past the end
+are loaded and then masked off, so nothing the answer depends on is read from
+outside the string. A tail that does cross a page edge takes the byte walk it
+always took. aarch64 gets the same shape with the shrn-by-4 mask, four bits a
+byte.
+
+Container A/B, `env -i` under callgrind, equal-length names in one directory,
+on the kanso#1433 leaves:
+
+    runbench    1,898,278,815 -> 1,867,578,425   -30,700,390   -1.6173%
+    jsonbench   1,171,809,954 -> 1,172,409,354      +599,400   +0.0512%
+
+jsonbench RISES by a twentieth of a per cent: the decoder's tails are a byte
+or two long (the closing quote right after the key), where two trips of the
+byte walk are cheaper than one masked load with its window test. The run
+program's tails average four to five bytes and it is the objective's term.
+Output byte-identical on both.
+
+The harness `a_short_scan_tail_answers_like_the_byte_walk` lifts both
+scanners and the window test out of src/runtime.c and sweeps them against a
+byte-at-a-time reference: every length 0..40, every start position, four byte
+pairs, five floors, with the string placed at every offset in the last 64
+bytes of a page whose next page is PROT_NONE, 836,400 cases. Watched red two
+ways: the mask's `- 1` removed disagreed on 259,631 cases; the window test
+answering yes unconditionally died on the guard page with SIGSEGV.
+
+Row `scan_tail`, mutation `a_short_scan_tail_walks_a_byte_at_a_time` (the
+window test answers no, so the byte walk is the only tail again).
+
+The harness assumed a 4,096-byte page and the macOS job refused it: Apple
+silicon maps 16 KiB pages, so `mprotect` at +4096 came back unaligned and the
+harness exited 2 before a single case ran. It asks `sysconf(_SC_PAGESIZE)`
+now. The window test in the runtime keeps its 4,095 mask, which is
+conservative on a larger page: a sixteen-byte load that stays inside a
+4 KiB-aligned window stays inside any page that contains it.
+
+**CI's sitting, on the base kanso#1433 left.** The work vein reads runbench
+1,904,577,350 -> 1,871,522,584 (-33,054,766, -1.7356%), 2,354,376 deeper than
+the container's -30,700,390, and jsonbench 1,187,809,626 -> 1,185,398,676
+(-2,410,950, -0.2030%) where the container had read +599,400. Four more
+fall, and the two the container never measured fall furthest: livebench
+-138,629,673 (-4.5934%), encodebench -110,038,475 (-3.0844%), oneshot
+-362,607 (-1.9360%), scanbench -502,488 (-0.1003%). An escape scan's runs
+between specials are a few bytes each, so nearly every one of them was a
+tail and ended in the byte walk. The other eight hold to the instruction.
+Against main two work rows still stand above it, neither moved here:
+work_escapebench 82,999,058 -> 85,995,606 (+2,996,548), the accumulator's
+lifetime priced in kanso#1432's entry, and work_digestbench 9,813,332 ->
+9,838,994 (+25,662), kanso#1430's wrapper price less the falls since.
+
+Machine code: seven rows RISE and seven hold, summed text 1,718,924 ->
+1,746,636 (+27,712): runbench +7,088, oneshot +6,368, livebench +6,368,
+jsonbench +5,984, scanbench +976, widebench +496, encodebench +432. Each
+inlined scan site carries the masked tail load beside its loop, and the
+below-floor scanners carry it twice. Against main the summed `text` vein is
+a RISE, 1,707,852 -> 1,746,636 (+38,784), the tail and kanso#1433's inlining
+priced together and bought with the falls above. The three compile rows fall
+on the base by layout, -3,385, -9,386 and -9,562, and against main
+`library_instructions` reads 144,836,225 -> 144,836,246 (+21), the layout
+vein's noise.
+
+## 2026-09-15 — the counters a shipped binary was still counting
+
+kanso#1396 put the runtime's counter sites behind `K_COUNTING`, the macro
+that is 1 in a counted build and 0 in the binary a program ships as, and
+recorded twenty-seven of them leaving. Forty more never did. They were the
+bare increments, `k_stat_beat_iters++` and its kind, with no guard at all:
+the macro guards the dump that reads them, so in a shipped binary the
+counters are written and never read, and the assumption was that a store
+nobody reads is removed at link time. It is not, at least not here: the
+per-instruction profile of kanso#1435's run program shows 6,425,360 counter
+increments a run executing in the shipped binary, `k_stat_beat_iters`
+2,692,767 of them, `k_stat_find2_calls` 2,072,753, `k_stat_append_fast`
+385,040, `k_stat_append_rendered` 379,530, `k_stat_el_parses` 210,177,
+`k_stat_ryu_renders` 191,070, `k_stat_append_grow` 176,697,
+`k_stat_utf8_zerocopy` 175,617, and eleven smaller. Each is a read-modify-
+write of a global, on paths the emitter inlines into every caller.
+
+Every one of the forty now reads `if (K_COUNTING) k_stat_x++;`. A counted
+build increments exactly as before, so every cost golden and every `.mem`
+fixture holds to the byte, and the counters sweep agrees with all of them.
+
+Four more sites were not increments and the sweep for `++` walked past them:
+`k_stat_utf8_bytes += len` at both utf-8 validators, `k_stat_evac_bytes +=
+n` at the evacuation, `k_stat_str_scan_bytes += s->len` at the character
+scan, and the arena peak's `if (live > peak) peak = live` at every block. The
+disassembly of the shipped run program still named all four; they carry the
+same guard now and it names none. Measured alone on the forty-site build,
+runbench -1,012,853 (-0.0546%) and jsonbench -1,426,835 (-0.1231%), output
+byte-identical; the sweep agrees with every golden. A shipped build carries
+no counter at all now, and the check that says so is `objdump -d runbench |
+grep -c k_stat_`, which reads 0.
+
+Container A/B, `env -i` under callgrind, equal-length names in one directory,
+on the kanso#1435 leaves:
+
+    runbench    1,867,578,425 -> 1,854,886,339   -12,692,086   -0.6796%
+    jsonbench   1,172,409,354 -> 1,158,934,066   -13,475,288   -1.1494%
+
+Twice the increments counted. The other half is what the increments cost
+around them: a memory read-modify-write on a global in the middle of an
+inlined fast path holds a register and orders the stores either side of it,
+and the code around each site got shorter when it left. Output
+byte-identical on both.
+
+Row `counters_out`, mutation
+`the_beat_iteration_counter_is_counted_in_a_shipped_binary` (the two
+`k_beat_iter` sites unguarded again, 2,692,767 increments a run).
+
+Three harnesses lift runtime text and compile it on their own: the float
+parse spec, the bytes-capacity spec and the utf-8 differential. The lifted
+text now names `K_COUNTING`, which only src/runtime.c defines, so the first
+and third failed to compile on CI and the second lost its anchor line. The
+float and utf-8 harnesses define `K_COUNTING 0` in front of the lifted text,
+as the scan-tail harness already did, and the capacity spec cuts from the
+guarded line. Seen red on CI at 727cb321 and d7b6acad; the two specs and the
+differential pass here (45,189,025 checked, 0 mismatches).
+
+The guard blinded the utf-8 differential's two ratchet rows on CI a round
+later, at ed7c51b5, and the define was not why. The differential builds the
+door by text and strips the counter line, `k_stat_utf8_bytes += len;`, to
+nothing; with the guard in front of it the strip left a bare
+`if (K_COUNTING)` standing over the next statement, the ascii check, so the
+harness's door skipped straight to the validators on every input and
+`k_all_ascii` was never reached. Both mutations live in `k_all_ascii`, so
+the gate stayed green under each. The strip takes the whole guarded
+statement now; both rows read red again here (`MISMATCH len=1 bytes=80` and
+`len=12 ... e4 5d 13`), and the clean sweep passes.
+
+**CI's sitting, on the base kanso#1435 left.** All fourteen work rows fall:
+work_jsonbench 1,185,398,676 -> 1,169,790,503 (-15,608,173, -1.3167%),
+work_runbench 1,871,522,584 -> 1,857,535,269 (-13,987,315, -0.7474%),
+work_livebench -6,326,619 (-0.2197%), work_encodebench -5,013,110
+(-0.1450%), work_escapebench -1,215,014 (-1.4129%), work_deepbench -965,492
+(-0.2716%), and the other eight by between 232 and 128,315. The container
+had read runbench -13,704,939 and jsonbench -14,902,123 for the two commits
+together; the runner reads both a little deeper. Against main two work rows
+still stand above it, both falling here: work_escapebench 82,999,058 ->
+84,780,592 (+1,781,534), the accumulator's lifetime priced in kanso#1432's
+entry, and work_digestbench 9,813,332 -> 9,830,211 (+16,879), kanso#1430's
+wrapper price less the falls since.
+
+Machine code: all fourteen rows fall, summed `text` 1,746,636 -> 1,737,068
+(-9,568), oneshot and livebench -1,824 each, runbench -1,808, jsonbench
+-1,728; a guarded site compiles to nothing and the code around it shortens.
+Against main the summed text vein is still a RISE, 1,707,852 -> 1,737,068
+(+29,216), kanso#1433's inlining and kanso#1435's masked tail less this. The
+three compile rows rise by layout on the base, compile_instructions
+42,869,800 -> 42,871,759 (+1,959), entry_instructions 144,035,324 ->
+144,040,457 (+5,133), library_instructions 144,836,246 -> 144,840,900
+(+4,654); against main +1,393, +4,508 and +4,675, the compiler's bytes moving
+with src/runtime.c. compile_allocs holds at 27,937 and compile_memory is
+byte-identical. Welfare 69.39 -> 69.44, banked.
+
+## 2026-09-15 — a capture is a load, an own-err check is a tag test
+
+Two runtime calls sat at the top of the run program's call-count table on
+kanso#1436's leaves, above every emitted function but `encode_onto`:
+`k_not_own_err` 1,454,508 times and `k_env_get` 1,279,648 times. Neither does
+anything a call should be paid for. `k_env_get` is `((KValue*)env)[i]`, three
+instructions behind a call and a return, and the emitter called it once per
+captured name in every lambda's entry block. `k_not_own_err` is the gavel-24
+check in front of an arm that admits err, whether the value is an err its own
+package raised; its first line is `if (v.tag != K_ERR) return 1`, and nearly
+every value an arm is tried against is not an err at all, so the package
+compare behind that line ran 1,454,508 times for the handful of errs the
+program ever raises.
+
+Both stop being calls. A capture read is a `getelementptr` and a `load` in
+the lambda's entry block. The own-err check is an alwaysinline twin,
+`k_not_own_err_fast`, that tests the tag in the caller and calls the C
+function only for an err; the two sites the emitter writes it at call the
+twin.
+
+Container A/B, `env -i` under callgrind, equal-length names in one directory,
+on the kanso#1436 leaves, each half measured alone by applying the other
+half's mutation:
+
+    both                runbench  1,854,886,339 -> 1,823,814,374  -31,071,965  -1.6751%
+                        jsonbench 1,158,934,066 -> 1,124,895,296  -34,038,770  -2.9371%
+    the capture load    runbench  -7,751,327 (-0.4179%)   jsonbench -20
+    the own-err twin    runbench -23,077,569 (-1.2442%)   jsonbench -34,038,750 (-2.9371%)
+
+The two sum to within 243,069 of the pair. The own-err half is worth more
+than its 1,454,508 calls at a few instructions each: the decoder's
+`obj_key_start`, `scan` and `str_escape` each dispatch on a value that has
+just been switched on by tag, and with the check inline LLVM folds the twin's
+tag test into the switch it already made, so the call, the argument moves
+and the spill around them all leave. Output byte-identical on both programs at
+every step. The decoder has no lambda with a capture, which is why the
+capture half reads twenty instructions on jsonbench.
+
+The emitted vein moves in every program, in one direction. The prelude gains
+one define, one branch and one call, the twin's body; every capture read
+that was a call is a load, so a program's `calls` fall by its capture reads
+less one: runbench 5,943 -> 5,895, scanbench 3,260 -> 3,234, deepbench 841
+-> 827, the decoder 1,210 -> 1,207. Summed over the thirteen programs
+beside the decoder, emitted_other_defines 2,350 -> 2,363 and
+emitted_other_branches 12,663 -> 12,676 (one each per program, the twin),
+emitted_other_lines 133,020 -> 133,303 (its nine lines per program, less
+the call lines that became loads), and emitted_other_calls 20,330 ->
+20,187; the decoder alone, emitted_defines 142 -> 143, emitted_branches
+793 -> 794, emitted_lines 9,142 -> 9,155, emitted_calls 1,210 -> 1,207.
+The compile-cost goldens move the same way, one define and one branch per
+program and lines up by the twin: bench/compile_golden.txt's five programs
+each gain a define, a branch and eleven lines (recursion `lines` 1,195 ->
+1,206, dispatch 1,187 -> 1,198, guards 1,180 -> 1,191, records 1,236 ->
+1,247, build_block 1,161 -> 1,172, summed `lines` 5,959 -> 6,014), and the
+module row reads module_lines
+5,317 -> 5,334, module_defines 101 -> 102, module_branches 438 -> 439,
+module_calls 754 -> 748. The
+runtime cost veins and the lazy tier are byte-identical: nothing here
+allocates. The three host-keyed compile rows and machine code are CI's until
+round two.
+
+Rows `capture_load`, mutation `a_capture_is_read_through_a_call` (the call
+put back through the same slot pointer; gated on the emitted vein, which
+sees the calls return), and `own_err_inline`, mutation
+`an_own_err_check_is_a_call_on_every_value` (the bare call at both sites;
+gated on the work vein, since the emitted text counts the same one call).
+
+**CI's sitting, on the base kanso#1436 left.** Twelve work rows fall and two
+hold: work_jsonbench 1,169,790,503 -> 1,130,225,294 (-39,565,209, -3.3822%),
+work_scanbench 500,324,263 -> 460,784,763 (-39,539,500, -7.9028%),
+work_runbench 1,857,535,269 -> 1,823,669,249 (-33,866,020, -1.8232%),
+work_deepbench -9,376,000 (-2.6448%), work_widebench -448,019 (-1.3750%),
+work_oneshot -263,777 (-1.4455%), and six more by between 8 and 305,191;
+work_escapebench and work_indexbench hold, having no capture read and no
+own-err check on their paths. The container had read runbench -31,071,965
+and jsonbench -34,038,770; the runner reads both deeper, and scanbench,
+which the container never measured, falls furthest: its scanners dispatch
+on every byte class and each dispatch asked the own-err question through a
+call. Against main two work rows still stand above it, neither moved here:
+work_escapebench 82,999,058 -> 84,780,592 (+1,781,534), the accumulator's
+lifetime priced in kanso#1432's entry, and work_digestbench 9,813,332 ->
+9,830,203 (+16,871), kanso#1430's wrapper price less the falls since.
+
+Machine code: twelve rows fall and two hold, summed `text` 1,737,068 ->
+1,735,116 (-1,952), runbench -560, scanbench -256, widebench -224; a load is
+shorter than the call it replaces and the inline tag test folds into the
+dispatcher's switch. Against main the summed text vein is still a RISE,
+1,707,852 -> 1,735,116 (+27,264), kanso#1433's inlining and kanso#1435's
+masked tail less kanso#1436 and this. The three compile rows rise on the
+base, a codegen change writing one more define per program and a load per
+capture read: compile_instructions 42,871,759 -> 42,873,153 (+1,394),
+entry_instructions 144,040,457 -> 144,046,325 (+5,868), library_instructions
+144,840,900 -> 144,845,876 (+4,976); against main +2,787, +10,376 and
++9,651. compile_allocs holds at 27,937 and compile_memory is byte-identical.
+Welfare 69.44 -> 69.58, banked.
+
+## 2026-09-15 — the per-call floors, mapped after the inlines
+
+Where the run program's instructions go on the kanso#1437 leaves, read off
+the per-instruction profile and bucketed by how often each instruction
+runs, so a per-call cost separates from a per-byte one. Every figure is a
+count of instructions the shipped binary executes.
+
+`d_json/encode_onto` is 382,082,442 of 1,823,814,374 (20.95%), 2,380,950
+calls. Twenty-six instructions run on every call: fifteen of frame (six
+pushes, the stack adjust, six pops, the return) and the tag switch. Fifty-five
+run once per string (942,750): the in-place quote append, the thirty-two-byte
+bytes view `escape_onto` builds for its scan, and the scan's setup. Sixty-six
+run once per map pair past the first (504,000) and thirty-eight once per
+list element past the first (628,200), each with a `k_beat_iter` beside it,
+because the element loop allocates the view and is a beat. A hundred and
+twenty run once per map (248,490), `k_b_entries` and the empty check. None of
+these buckets holds a loop the code walks a byte at a time; each is a stack
+of ten-instruction steps the library's shape asks for. The one bucket with a
+removable part is the view: seventeen instructions and thirty-two arena
+bytes per string, 16,026,750 a run (0.88%), and removing it needs the escape
+scan to read a string's bytes without a view, which is a byte-position
+primitive on strings that the library does not have. That is surface, so it
+is written down here and not built. The frame was priced by kanso#1338
+(outlining the arm that sizes it, +2.5582%) and is not retried.
+
+The decoder's `obj_key_start` is 236,081,850 of the decode program's
+1,124,895,296 (20.99%), 1,254,150 keys, and 158 of its instructions run on
+every key: the frame, the quote test, the `find2` scan's setup and one
+sixteen-byte step, the byte at the close quote, the `k_b_utf8_slice_raw` call
+and its result checks, the colon, the `parse_value` call and its checks, the
+map's in-place insert. Ten steps, none over twenty instructions, four of
+them re-testing the input's bytes tag and four re-testing a result for
+failure across block edges LLVM did not fold. `str_escape` runs 81 to 86 per
+escape, in four copies, one per escape arm: the in-place append, the `find2`
+to the next special, the fused slice-append of the clean run and the dispatch
+on the byte found. `k_b_utf8_slice_raw` is 49 per call on a short ascii key:
+the bounds clamp, two overlapping four-byte loads for the high-bit test, a
+thirty-two-byte string and two overlapping stores. `k_b_to_float` is 104 per
+float plus fourteen per digit, and the 104 are the Clinger exact path, one
+`divsd` against a power of ten. `k_beat_iter` is 23 per iteration, 2,685,021
+a run; two of the 23 are the call and return, and a settled top-of-stack
+mark was declined at +0.3210% (kanso#1293).
+
+So the two programs are at the floor their emitted shape sets: per-call
+frames, per-step tag tests, and library steps of ten instructions each. The
+next run-speed win of a per cent or more is a library or emitter shape, not a
+runtime kernel, and the bytes-free escape scan above is the one with a
+number on it.
+
+Measured, not built: a scratch builtin `text/find2_below_str` that scans a
+string's own bytes for the two specials below a floor and answers 0 for a
+miss, with `escape_onto` building the view only when it hits. Container A/B
+on the same leaves, output byte-identical on both programs: runbench
+1,823,814,374 -> 1,801,576,724 (-22,237,650, -1.2193%), the decoder
+unmoved. More than the view's seventeen instructions predicted, because the
+element loop's beat and the view's arena bytes go with it. It is surface, a
+byte-position scan on a string in a library whose string positions are
+codepoints, so it goes to Clay with this number and is not built here. The
+patch is in the session's scratchpad as escape_str.patch.
 ## 2026-09-15 — gavel: the box is explicit, an err is a value, and a bare err halts where it lands
 
 Clay ruled the ledger's one Blocking entry, "Where the box wraps under the
