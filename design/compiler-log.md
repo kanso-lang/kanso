@@ -3452,6 +3452,52 @@ STATUS.md's row comes off when this lands, which is the chat's. The
 `.rodata` pin is a measured option, recorded above, and not a question the
 ledger needs.
 
+## 2026-09-15 — the box built by hand: `effect v` on all three engines
+
+The first slice of the 2026-09-15 gavel "the box is explicit, an err is a
+value, and a bare err halts where it lands", part 1: the constructor. The
+word is the ledger's Open recommendation, `effect`, the type's own name in
+prefix position, and the build does not wait on the entry.
+
+**What it is.** `effect v` is an ambient one-argument builtin that answers a
+description settling to `v` when it runs. It is value-shaped in its argument
+and box-shaped in its answer, so `effect 5 .> f` hands `f` a 5, and
+`effect (err "bad")` is a box whose content is the failure: `.?` sees it,
+`.>` skips it, `.!` annotates it, the same three doors a failure that a read
+raised has. A box answered by `effect` is refused wherever a value is wanted,
+the way a box a library function answers already was: `effect 5 + 1`,
+`length (effect [1 2])` and a call of a function whose tail is the
+constructor all read the effect diagnostic at check.
+
+**Where it lives.** One arm in each engine and one in the checker. The
+interpreter's `Desc` gains a `Settled(Value)` variant, executed by handing
+the value back and rendered `settled` in `--plan`; the page runs the same
+interpreter through the generic builtin bridge, so it needs nothing of its
+own. Native gains `k_settled`, description tag 31, with `k_exec` answering
+`d->x` for it, and the emitter calls `k_b_effect` like any other builtin. The
+checker's box question, `yields_box`, answers yes for an application of the
+unshadowed name before its short circuit, because a hand-built box is the one
+case where a program with no boxed declaration still holds a box; and `infer`
+gives the builtin the description bit and nothing else, since the argument's
+failure bits are held as content rather than carried.
+
+**Watched red.** The micro fixture `the_box_built_by_hand` starts a chain
+from a value, from a failure through `.?`, from a failure through `.!` then
+`.?`, holds a box through a function and an interpolation, and skips a `.>`
+on a boxed failure; native and the interpreter agree byte for byte. The ratchet
+row `hand_box` mutates the interpreter to hand the value over unboxed, and the
+micro corpus goes red. The errors fixture
+`a_hand_built_box_where_a_value_is_expected` pins the three refusals on both
+the direct and the imported path.
+
+**What it costs.** No runtime vein moves: no benchmark program builds a box by
+hand. The text vein and the three compile rows move as they do for any edit
+to runtime.c and the emitter, and CI's sitting is written in the next round.
+
+**What is left of the gavel.** Part 2, a bare err matched by an `(err _)` arm
+anywhere, retiring the own-origin skip; and part 3, a bare err refused at an
+operator at check, on the sites that are not `!`. The `!` sites wait on the
+ledger's Blocking entry "What `!` promises the checker".
 ## 2026-09-15 — a bare err is data: the arm skip retires, and the rescue licence moves to the word
 
 Part 2 of the 2026-09-15 ruling "the box is explicit, an err is a value, and

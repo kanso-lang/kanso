@@ -1125,6 +1125,7 @@ declare %KValue @k_str_n(ptr, i64)
 declare %KValue @k_str_lit(ptr, i64, ptr)
 declare %KValue @k_err(%KValue, ptr)
 declare %KValue @k_b_wrap_err(%KValue, %KValue, ptr)
+declare %KValue @k_b_effect(%KValue)
 declare %KValue @k_err_hop(%KValue, ptr)
 declare %KValue @k_rec(i64, i64, ptr)
 declare %KValue @k_pair_failure(%KValue, %KValue)
@@ -1281,7 +1282,8 @@ declare %KValue @k_force_unless_black(%KValue)
 
 "#;
 
-pub(crate) const BUILTIN_CALLS: [&str; 56] = [
+pub(crate) const BUILTIN_CALLS: [&str; 57] = [
+    "effect",
     "net_port",
     "start",
     "kill",

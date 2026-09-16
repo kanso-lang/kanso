@@ -325,6 +325,12 @@ pub enum Desc {
     Sleep(u64),
     Random(u64),
     Nil,
+    /// A box whose outcome is already known: the value, or the err, that
+    /// `effect v` was handed. The box is only ever explicit (ruled
+    /// 2026-09-15), and this is the hand-applied one; nothing about it is
+    /// deferred, so it holds its answer from the moment it is built and
+    /// running it hands the answer over.
+    Settled(Value),
 }
 
 /// A read that found nothing answers `none`, the shape `env` already uses for
@@ -2289,6 +2295,12 @@ impl<'a> Interp<'a> {
                 })));
             }
             return self.worded_step(word, subject, &callback, &raised, span);
+        }
+        // the box built by hand: `effect (err r)` holds the failure as its
+        // content, so it is the second hole in err's infectiousness
+        if name == "effect" {
+            let [v] = arity(args, name, span)?;
+            return Ok(Value::Desc(Rc::new(Desc::Settled(v))));
         }
         if args.iter().any(is_failure) {
             return Ok(merged_failures(&args));
@@ -4297,6 +4309,7 @@ impl<'a> Interp<'a> {
             }
             Desc::Random(n) => Ok(Value::Int(executor.random(*n).into())),
             Desc::Nil => Ok(Value::Done),
+            Desc::Settled(v) => Ok(v.clone()),
             Desc::Args => {
                 let list = executor.args().into_iter().map(Value::Str).collect();
                 Ok(Value::List(Rc::new(list)))
@@ -4678,6 +4691,7 @@ pub fn render_plan(desc: &Desc, out: &mut String, force: &dyn Fn(&Value) -> Opti
         Desc::Sleep(ms) => out.push_str(&format!("  sleep {ms}\n")),
         Desc::Random(n) => out.push_str(&format!("  random {n}\n")),
         Desc::Nil => {}
+        Desc::Settled(_) => out.push_str("  settled\n"),
     }
 }
 

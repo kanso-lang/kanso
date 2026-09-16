@@ -52,6 +52,7 @@ extra_css: /book/book.css
 <a href="#b-chars"><code>text/chars</code></a>
 <a href="#b-concat"><code>text/concat</code></a>
 <a href="#b-entries"><code>entries</code></a>
+<a href="#b-effect"><code>effect</code></a>
 <a href="#b-find2"><code>text/find2</code></a>
 <a href="#b-from_code"><code>text/from_code</code></a>
 <a href="#b-if"><code>if</code></a>
@@ -370,7 +371,7 @@ zero non-positive</code></pre>
 
 <h2>effects</h2>
 
-<p>the seven functions in this group return <code>io</code> values—descriptions of work, not results. evaluating them performs no i/o; they build a value the runtime executes afterward, which is why the same program can be run, planned with <code>--plan</code>, or fed to a scripted executor in a test (chapter 05). <code>&gt;&gt;</code> sequences two descriptions that pass no data; <code>.&gt;</code> pipes the value a description will yield into a function.</p>
+<p>the eight functions in this group return <code>io</code> values—descriptions of work, not results. evaluating them performs no i/o; they build a value the runtime executes afterward, which is why the same program can be run, planned with <code>--plan</code>, or fed to a scripted executor in a test (chapter 05). <code>&gt;&gt;</code> sequences two descriptions that pass no data; <code>.&gt;</code> pipes the value a description will yield into a function.</p>
 
 <h3 id="b-args"><code>os/args</code> <span class="desc-tag">description</span></h3>
 <p class="builtin-sig"><code>os/args → io (yields string[])</code></p>
@@ -418,6 +419,21 @@ zero non-positive</code></pre>
   born in relabel at wrap_err.kso:10
   caused by: "invalid utf-8"
   born in text/utf8 at std/text/text.kso:95</code></pre>
+  </div>
+</div>
+
+<h3 id="b-effect"><code>effect</code> <span class="desc-tag">description</span></h3>
+<p class="builtin-sig"><code>effect value → io (yields value)</code></p>
+<p>a description that yields the value it was handed. it builds the box by hand, so a chain can start from a plain value and a function that sometimes has work to describe and sometimes has an answer ready can return a description either way. a failure handed to it is content: <code>effect (err "missing")</code> is a description that yields the <code>err</code>, which the <code>.?</code> step sees and the <code>.&gt;</code> step skips, the same as a failure a read raised. the value stays boxed until a chain word opens it, so <code>effect 5 + 1</code> is refused at compile time.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">effect.kso</div>
+  <pre><code><span class="f">effect</span> <span class="n">5</span> <span class="o">.&gt;</span> (n <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"got <span class="i">{n}</span>"</span>)
+  <span class="o">&gt;&gt;</span> <span class="f">effect</span> (<span class="f">err</span> <span class="s">"missing"</span>) <span class="o">.?</span> (e <span class="o">-&gt;</span> <span class="s">"rescued <span class="i">{e.reason}</span>"</span>) <span class="o">.&gt;</span> <span class="f">print</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run effect.kso</div>
+    <pre><code>got 5
+rescued missing</code></pre>
   </div>
 </div>
 

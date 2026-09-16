@@ -277,6 +277,16 @@ force_chain = row
   "cargo test --release --test golden micro_corpus_agrees_across_engines"
   "specs (unit, golden, differential)"
   (breaking "a_deferred_answer_is_forced_one_level")
+# `effect v` is the box built by hand, ruled 2026-09-15. The interpreter is
+# the oracle for what it settles to, and native is compared with it on the
+# fixture that starts every chain shape from one. The mutation makes the
+# interpreter hand the value over unboxed.
+hand_box = row
+  "the box built by hand answering its value bare on one engine"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "the_hand_built_box_answers_its_value_bare")
   release
 
 # The four `cargo test --test golden` rows above and below all point at the
@@ -1725,7 +1735,7 @@ rows_c1l = text/concat rows_c1k [coverage_page coverage_page_format]
 
 rows_c1m = text/concat rows_c1l [beat_cursor rescue_licence raised_err]
 
-rows_c1n = text/concat rows_c1m [carry_failure err_as_pattern force_chain]
+rows_c1n = text/concat rows_c1m [carry_failure err_as_pattern force_chain hand_box]
 
 rows_c = text/concat rows_c1n [itself]
 

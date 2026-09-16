@@ -410,7 +410,8 @@ struct KDesc { long long dtag; KValue x; KValue y; };
 /* dtag: 0 print, 1 seq, 2 args, 3 stdin, 4 read_file, 5 write_file, 6 bind,
    7 join, 8 sleep, 9 random, 10 nil, 11 write (stdout, no newline),
    12 write_err, 13 env, 14 exists, 15 list_dir, 16 now, 17 run,
-   18 is_dir, 26 start, 27 kill, 29 rescue, 30 read_bytes */
+   18 is_dir, 26 start, 27 kill, 29 rescue, 30 read_bytes,
+   31 settled (a box already holding its answer: what `effect v` was handed) */
 
 /* An err's propagation trace rides on the err value alone: the origin
    ("fn at file:line", interned at the construction site; NULL for
@@ -4863,6 +4864,11 @@ KValue k_seq(KValue a, KValue b) {
 }
 
 KValue k_desc_args(void) { return k_mkdesc(2, k_none(), k_none()); }
+/* The box built by hand (ruled 2026-09-15). Nothing about it is deferred, so
+   it is built holding what it was handed, value or err, and running it hands
+   that over. An err arrives as content, never as a failure to propagate. */
+KValue k_settled(KValue v) { return k_mkdesc(31, v, k_none()); }
+KValue k_b_effect(KValue v) { return k_settled(v); }
 KValue k_desc_stdin(void) { return k_mkdesc(3, k_none(), k_none()); }
 KValue k_desc_now(void) { return k_mkdesc(16, k_none(), k_none()); }
 
@@ -5291,6 +5297,7 @@ static char** k_argv_global = NULL;
 
 static KValue k_exec(KDesc* d) {
     switch (d->dtag) {
+        case 31: return d->x;
         case 0: {
             KStr* s = k_as_str(d->x);
             fwrite(s->data, 1, s->len, stdout);
