@@ -4246,3 +4246,37 @@ The objective weighs the two sides together and comes out 0.0422 down. The
 floor moves with it, 69.63579260553377 -> 69.59359812089627, under the
 2026-09-13 ironclad clause, with the reason recorded in
 `bench/welfare_floor.json`'s history entry beside the number.
+
+**CORRECTION, and a reproduction failure: one binary counted two compile rows
+on two CPUs.** The paragraph above writes round one's sitting, and round two
+disagreed with it on the three compile rows: `compile_instructions` +149,
+`entry_instructions` +41, `library_instructions` -127. The two rounds ran
+identical source for everything the measurement reads — ten files changed
+between them, seven goldens and `bench/welfare_floor.json`, this log and
+`docs/compiler.html`, and nothing under `src/`, `lib/`, `hako/` or
+`bench/*_corpus/`; there is no `build.rs`, `include_str!` reaches only `lib/`
+and `hako/`, and `library_box.sh` stages the binary, `lib/` and the three
+corpora at a fixed path with the environment emptied. All fourteen work rows
+and all fourteen text rows agree to the instruction across the pair.
+
+The gates print the hunt's first question and answer it:
+
+    round one  library_sample cpu="cpu family 0x19 model 0x1" sha=75988d5b311a row=145336811
+    round two  library_sample cpu="cpu family 0x1a model 0x2" sha=75988d5b311a row=145336684
+
+One sha, two CPUs, two rows, which is case (2) by the gate's own text: a
+reproduction failure, hunted to its source and never pinned as a second value.
+Family 0x19 is Zen 3 and family 0x1a model 0x2 is Zen 5, new to the pool.
+`compile_instructions.sh` rests on eight within-binary sittings across two
+vendors and four CPU generations agreeing to the instruction, and those
+sittings predate this silicon. The neighbourhood is glibc's ifunc-selected
+string routines — `__memcmp_avx2_movbe` is 3.19% of the library compile and
+`__memcpy_avx_unaligned_erms` 2.06% — and the tunables the gate prints are
+derived from the CPU rather than pinned: cache sizes,
+`non_temporal_threshold`, `rep_movsb_threshold`.
+
+So the three goldens here hold round one's numbers and are deliberately not
+regenerated. The remedy reopens the 2026-09-05 ruling "one row, one value; the
+pair and the per-chip key are retired", so it went to Clay. It exposes every
+open pull request carrying a compile vein: which chip a round lands on decides
+whether that vein is red.
