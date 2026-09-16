@@ -303,6 +303,30 @@ callback_err = row
   (breaking "a_chain_callbacks_parameter_never_fails")
   release
 
+# `!` is the programmer's word that the read is in range, ruled 2026-09-16,
+# and the checker takes it: `xs[i]!` carries no miss. The mutation puts the
+# miss back as an err, and a `!` declaration whose only failure is a strict
+# index compiles clean where the error corpus holds the naming refusal.
+bang_promise = row
+  "a strict index whose miss the checker still sees"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_strict_miss_carries_an_err_for_the_checker")
+  no_setup
+
+# A bare err arriving at an operator halts there, ruled 2026-09-16; the
+# railway carried it past. The mutation restores the carry at native's `+`,
+# and the runtime corpus reads the endpoint's report where the golden holds
+# the operator's.
+err_at_operator = row
+  "an operator carrying a bare err past itself"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "an_operator_carries_a_failure_past_it")
+  release
+
 # The four `cargo test --test golden` rows above and below all point at the
 # micro corpus or the mem corpus. The error corpus — 161 fixtures pinning
 # every diagnostic the language emits — had no row at all, so nothing had
@@ -1751,9 +1775,11 @@ rows_c1m = text/concat rows_c1l [beat_cursor rescue_licence raised_err]
 
 rows_c1n = text/concat rows_c1m [carry_failure err_as_pattern force_chain]
 
-rows_c1o = text/concat rows_c1n [hand_box callback_err]
+rows_c1o = text/concat rows_c1n [hand_box callback_err bang_promise]
 
-rows_c = text/concat rows_c1o [itself]
+rows_c1w = text/concat rows_c1o [err_at_operator]
+
+rows_c = text/concat rows_c1w [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

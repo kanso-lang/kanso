@@ -6,7 +6,8 @@
 # The wall is the other half: it is ordered, so the first failure is the answer
 # and what follows never speaks. Both rules are here because the sweep that
 # gave every operator the merge gave it to `>>` too, on one engine only, and
-# nothing said so.
+# nothing said so; the operators lost the merge on 2026-09-16 and the
+# constructions keep it.
 #
 # The reasons are read through `std/testing`'s `when_failed`: foreign to this
 # module, so it is licensed to separate a reason from a failure this module
@@ -16,9 +17,15 @@
 # to a group with no arm for it does not compile, so the failures here are
 # bound to names first. The checker reads a call's arguments and not the names
 # it is handed, the same deliberate blind spot the none rule keeps, and the
-# runtime contract these lines pin is reached through it. What the runtime
-# does with a bare err it was not warned about is the ledger's open question.
+# runtime contract these lines pin is reached through it. Since 2026-09-16 an
+# operator halts on a bare err rather than merging, so the merges here are
+# constructions, which still merge: a record's fields are unordered and
+# neither caused the other.
 import "std/testing"
+
+type couple
+  left
+  right
 
 fn boom what
   err what
@@ -38,11 +45,11 @@ c = boom "c"
 
 ab = listed 0
 
-left = a + b + c
+left = couple (couple a b) c
 
-right = a + (b + c)
+right = couple a (couple b c)
 
-nested = ab + c
+nested = couple ab c
 
 walled = a >> b
 

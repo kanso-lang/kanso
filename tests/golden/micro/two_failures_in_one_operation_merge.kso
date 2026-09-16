@@ -1,5 +1,7 @@
 # Two failures in one operation merge; one failure propagates as itself. The
-# comparison merges too, because neither side caused the other.
+# operation is a construction: an operator merged too until 2026-09-16, when
+# a bare err at an operator became a halt, and the record is what is left of
+# the 2026-08-05 rule that neither side of an operation caused the other.
 #
 # The reasons are read through `std/testing`'s `when_failed`, foreign to this
 # module and therefore licensed to separate a reason from a failure this
@@ -9,9 +11,15 @@
 # to a group with no arm for it does not compile, so the failures here are
 # bound to names first. The checker reads a call's arguments and not the names
 # it is handed, the same deliberate blind spot the none rule keeps, and the
-# runtime contract these lines pin is reached through it. What the runtime
-# does with a bare err it was not warned about is the ledger's open question.
+# runtime contract these lines pin is reached through it. Since 2026-09-16 an
+# operator halts on a bare err rather than merging, so the merges here are
+# constructions, which still merge: a record's fields are unordered and
+# neither caused the other.
 import "std/testing"
+
+type couple
+  left
+  right
 
 fn boom what
   err what
@@ -23,16 +31,13 @@ a = boom "a"
 
 b = boom "b"
 
-both = a + b
+both = couple a b
 
-left = a + 1
+left = couple a 1
 
-right = 1 + b
-
-compared? = a < b
+right = couple 1 b
 
 pub play =
   print "both: {testing/when_failed both as_text}"
   >> print "left: {testing/when_failed left as_text}"
   >> print "right: {testing/when_failed right as_text}"
-  >> print "compared: {testing/when_failed compared? as_text}"

@@ -20,8 +20,10 @@
 # to a group with no arm for it does not compile, so the failures here are
 # bound to names first. The checker reads a call's arguments and not the names
 # it is handed, the same deliberate blind spot the none rule keeps, and the
-# runtime contract these lines pin is reached through it. What the runtime
-# does with a bare err it was not warned about is the ledger's open question.
+# runtime contract these lines pin is reached through it. The operator rows
+# left this file on 2026-09-16: an operator, a comparison and a bitwise join
+# no longer merge two failures or carry one past, they halt on the first, and
+# each halt is its own fixture in the runtime corpus.
 import "std/testing"
 
 type couple
@@ -42,13 +44,7 @@ ea = boom "a"
 eb = boom "b"
 
 # merge: neither operand caused the other
-operated = ea + eb
-
-compared? = ea < eb
-
 built = couple ea eb
-
-grouped = ea & eb
 
 # first: the sites that are ordered
 called = joined ea eb
@@ -70,10 +66,7 @@ indexed = [1 2 3][ea]!
 sized = length ea
 
 pub play =
-  print "operated:  {testing/when_failed operated as_text}"
-  >> print "compared:  {testing/when_failed compared? as_text}"
-  >> print "built:     {testing/when_failed built as_text}"
-  >> print "grouped:   {testing/when_failed grouped as_text}"
+  print "built:     {testing/when_failed built as_text}"
   >> print "called:    {testing/when_failed called as_text}"
   >> print "woven:     {testing/when_failed woven as_text}"
   >> print "sequenced: {testing/when_failed sequenced as_text}"

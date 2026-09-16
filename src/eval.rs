@@ -3594,6 +3594,15 @@ pub fn is_failure(value: &Value) -> bool {
     matches!(value, Value::ErrV(_))
 }
 
+/// The failure a value is, when it is one: what a site that halts on an err
+/// reads the reason off.
+fn failure_of(value: &Value) -> Option<&Rc<ErrInfo>> {
+    match value {
+        Value::ErrV(info) => Some(info),
+        _ => None,
+    }
+}
+
 /// Whether an operand sends an operator to its user arms. A record does, and
 /// so does a subtype of one, which is the same value wearing a narrower name.
 /// An err does not: it carries the operation's failure past the operator
@@ -3836,15 +3845,20 @@ pub fn eval_binop(
     span: Span,
     cells: &Cells<'_>,
 ) -> EvalResult {
-    // Two failures in one operation merge, exactly as two failures in a
-    // parallel group do (Clay, 2026-08-05): neither side caused the other, so
-    // neither deserves top billing, and the one that loses would otherwise be
-    // discarded without a word. One failure propagates as itself.
-    match (is_failure(&left), is_failure(&right)) {
-        (true, true) => return Ok(accumulate_failures(left, right)),
-        (true, false) => return Ok(left),
-        (false, true) => return Ok(right),
-        (false, false) => {}
+    // An operator handed a bare err halts, ruled 2026-09-16. An err is data
+    // and the checker refuses a raised one at an operator, so one arriving
+    // here is a promise broken (`xs[i]!` on a miss) or a name the checker
+    // could not read through, and the report says which operator and what
+    // the err said. Until then two failures merged here and one carried
+    // past, the 2026-08-05 reading of the railway; the 2026-09-15 ruling
+    // retired the railway, and nothing outside a box propagates. The left
+    // operand is the one reported when both fail. Native and the page halt
+    // through the same sentence.
+    if let Some(info) = failure_of(&left).or_else(|| failure_of(&right)) {
+        return Err(RuntimeError {
+            message: format!("`{op}` was handed an err: {}", render_demanded(&info.reason, true)),
+            span,
+        });
     }
     if op == "==" || op == "!=" {
         // Asking whether two functions are the same function is asking which

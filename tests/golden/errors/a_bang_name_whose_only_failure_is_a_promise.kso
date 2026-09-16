@@ -1,0 +1,10 @@
+# `!` on an index is the programmer's word that the read is in range, ruled
+# 2026-09-16, and the checker takes it: `xs[1]!` is the element and nothing
+# else. So a `!` declaration whose only failure was that read answers no
+# failure the checker can see, and the suffix contract (2026-09-03) refuses
+# the name: a bang that cannot fail is a lie in the name. Under the earlier
+# reading the miss carried an err into the answer set and this compiled clean.
+fn first! xs
+  xs[1]!
+
+pub play = print (first! [1 2])

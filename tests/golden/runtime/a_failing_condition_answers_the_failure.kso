@@ -1,8 +1,9 @@
 # The other half of tests/golden/micro/a_condition_is_asked_rather_than_read.
 # When codegen fuses a comparison into its branch, the fast arm answers from
 # the icmp and cannot fail, so the whole failure path belongs to the slow arm:
-# the runtime compares, the answer is a failure, and the `if` answers it
-# rather than choosing a side.
+# the runtime compares, and since 2026-09-16 a bare err at the comparison
+# halts there with the operator's report, before the `if` chooses a side.
+# Until then the comparison answered the failure and the `if` handed it on.
 #
 # The failure has to be BOUND INSIDE the body rather than handed in as an
 # argument. A failing argument short-circuits the arm before its body runs, so

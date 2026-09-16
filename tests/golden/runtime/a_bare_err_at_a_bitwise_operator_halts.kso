@@ -1,0 +1,10 @@
+# `&` on two bare errs merged them like a parallel group under the railway.
+# Since 2026-09-16 a bare err arriving at any operator halts there, and the
+# bitwise three are operators: native's fast twin falls to the C entry on a
+# tag that is not an int, and that entry is where the halt is written.
+fn boom what
+  err what
+
+ea = boom "a"
+
+pub play = print "{ea & 1}"

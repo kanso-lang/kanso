@@ -30,9 +30,10 @@ pub const TOP: Set = (1 << 15) - 1;
 /// own: `err reason`, or an err bound by name and handed on. The bit rides
 /// with ERR everywhere ERR goes and is set at the two places a program
 /// spells one, so a set carrying it is proof of a bare err at that site.
-/// A strict index's miss and a division's zero divisor carry ERR alone,
-/// because what the checker should make of those is the ledger's open
-/// question, and the 2026-09-15 ruling refuses only what a program raised.
+/// A division's zero divisor carries ERR alone, because the 2026-09-15
+/// ruling refuses only what a program raised; a strict index carries no miss
+/// at all, since 2026-09-16, because `!` is the programmer's word that the
+/// read is in range.
 /// It sits above TOP on purpose: TOP is "any value", and a proof is not a
 /// value.
 pub const RAISED: Set = 1 << 15;
@@ -858,10 +859,15 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut Env<'a>) -> Set {
         Expr::Index { base, index, strict, .. } => {
             let b = eval_expr(ctx, base, env);
             let k = eval_expr(ctx, index, env);
-            // a miss errs under the sigil (xs[i]!) and nones under the plain
-            // lenient form (xs[i])
+            // A miss nones under the plain form (xs[i]) and the checker demands
+            // an arm for it. Under the sigil (xs[i]!) the programmer has said
+            // the read is in range, ruled 2026-09-16: `!` drops the miss from
+            // the answer set, so the read is the element and nothing else,
+            // and a miss at runtime is an err arriving at whatever the read
+            // feeds, which halts there. It is the one place the checker takes
+            // a promise instead of a proof.
             let miss = match strict {
-                true => ERR,
+                true => 0,
                 false => NONE,
             };
             let mut out = (b & FAIL) | (k & FAIL) | miss;

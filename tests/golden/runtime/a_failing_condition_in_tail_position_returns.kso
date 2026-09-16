@@ -3,6 +3,8 @@
 # rather than joining a merge. Codegen emits the two forms through one
 # routine, and the only difference is where the failure goes, so a change that
 # got one right and the other wrong would pass the value-position spec alone.
+# Since 2026-09-16 the comparison halts on the bare err before either form
+# sees it, and both fixtures pin that the slow arm is where the halt lives.
 fn asked n
   h = if (n == 0) (err "there is no number here") 5
   if (h < 3) "lt" "ge"

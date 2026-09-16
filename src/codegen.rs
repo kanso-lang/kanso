@@ -5682,7 +5682,7 @@ impl<'a> Backend<'a> {
             f.line(&format!(
                 "{t} = phi %KValue [ {hit}, %{load} ], [ {miss_value}, %{miss_from} ]"
             ));
-            f.record(&t, if strict { INT | ERR } else { INT | NONE });
+            f.record(&t, if strict { INT } else { INT | NONE });
             if !strict {
                 // The same merge as one i64: the byte, or 256 for none. A byte
                 // discriminator wants exactly this and would otherwise rebuild

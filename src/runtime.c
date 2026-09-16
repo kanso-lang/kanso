@@ -4671,10 +4671,40 @@ long long k_check_str(KValue v, const char* data, long long len) {
     return s->len == len && memcmp(s->data, data, len) == 0;
 }
 
+/* An operator handed a bare err halts, ruled 2026-09-16. An err is data and
+   the checker refuses a raised one at an operator, so one arriving here at
+   runtime is a promise broken (`xs[i]!` on a miss) or a name the checker
+   could not read through, and the report says which operator and what the
+   err said. Until then the failure carried past the operator to whoever
+   ended the chain, merging with a failure on the other side; that was the
+   railway, and the 2026-09-15 ruling retired it: nothing outside a box
+   propagates. The left operand is the one reported when both fail, the
+   order the interpreter reads them in. */
+__attribute__((noreturn, noinline)) static void k_die_err_operand(const char* op, KValue a, KValue b) {
+    KValue e = k_not_failure(a) ? b : a;
+    KStr* said = k_as_str(k_render(k_err_inner(e), 1));
+    size_t n = strlen(op) + said->len + 32;
+    char* msg = (char*)malloc(n);
+    snprintf(msg, n, "`%s` was handed an err: %s", op, said->data);
+    k_die(msg);
+}
+
+/* The comparison's spelling, from the code the emitter hands `k_cmp`. */
+static const char* k_cmp_spelling(long long op) {
+    switch (op) {
+        case 0: return "==";
+        case 1: return "!=";
+        case 2: return "<";
+        case 3: return "<=";
+        case 4: return ">";
+        default: return ">=";
+    }
+}
+
 KValue k_add(KValue a, KValue b) {
     if (a.tag == K_SUB) a = k_sub_base(a);
     if (b.tag == K_SUB) b = k_sub_base(b);
-    if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
+    if (!k_not_failure(a) || !k_not_failure(b)) k_die_err_operand("+", a, b);
     if (a.tag == K_INT && b.tag == K_INT) {
         long long r;
         if (__builtin_add_overflow(a.payload, b.payload, &r)) k_die("integer overflow (int64 native build; spec int is arbitrary precision)");
@@ -4690,7 +4720,7 @@ KValue k_add(KValue a, KValue b) {
 KValue k_sub(KValue a, KValue b) {
     if (a.tag == K_SUB) a = k_sub_base(a);
     if (b.tag == K_SUB) b = k_sub_base(b);
-    if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
+    if (!k_not_failure(a) || !k_not_failure(b)) k_die_err_operand("-", a, b);
     if (a.tag == K_INT && b.tag == K_INT) {
         long long r;
         if (__builtin_sub_overflow(a.payload, b.payload, &r)) k_die("integer overflow (int64 native build; spec int is arbitrary precision)");
@@ -4706,7 +4736,7 @@ KValue k_sub(KValue a, KValue b) {
 KValue k_mul(KValue a, KValue b) {
     if (a.tag == K_SUB) a = k_sub_base(a);
     if (b.tag == K_SUB) b = k_sub_base(b);
-    if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
+    if (!k_not_failure(a) || !k_not_failure(b)) k_die_err_operand("*", a, b);
     if (a.tag == K_INT && b.tag == K_INT) {
         long long r;
         if (__builtin_mul_overflow(a.payload, b.payload, &r)) k_die("integer overflow (int64 native build; spec int is arbitrary precision)");
@@ -4744,7 +4774,7 @@ static KValue k_math_failure(const char* reason) {
 KValue k_div(KValue a, KValue b, const char* origin) {
     if (a.tag == K_SUB) a = k_sub_base(a);
     if (b.tag == K_SUB) b = k_sub_base(b);
-    if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
+    if (!k_not_failure(a) || !k_not_failure(b)) k_die_err_operand("/", a, b);
     if (a.tag == K_INT && b.tag == K_INT) {
         if (b.payload == 0) return k_math_failure("division by zero");
         /* the one signed division that overflows: the least integer over -1
@@ -4772,7 +4802,7 @@ KValue k_div(KValue a, KValue b, const char* origin) {
 KValue k_mod(KValue a, KValue b, const char* origin) {
     if (a.tag == K_SUB) a = k_sub_base(a);
     if (b.tag == K_SUB) b = k_sub_base(b);
-    if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
+    if (!k_not_failure(a) || !k_not_failure(b)) k_die_err_operand("%", a, b);
     if (a.tag == K_INT && b.tag == K_INT) {
         if (b.payload == 0) return k_math_failure("modulo by zero");
         /* the least integer modulo -1 is zero, and zero fits — but the
@@ -4816,7 +4846,7 @@ static int k_order(KValue a, KValue b) {
 KValue k_cmp(KValue a, KValue b, long long op) {
     if (a.tag == K_SUB) a = k_sub_base(a);
     if (b.tag == K_SUB) b = k_sub_base(b);
-    if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
+    if (!k_not_failure(a) || !k_not_failure(b)) k_die_err_operand(k_cmp_spelling(op), a, b);
     if (op == 0) return k_bool(k_eq(a, b));
     if (op == 1) return k_bool(!k_eq(a, b));
     int c = k_order(a, b);
@@ -8884,17 +8914,17 @@ static long long k_shift_of(KValue v, const char* what) {
 }
 
 KValue k_b_bit_and(KValue a, KValue b) {
-    if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
+    if (!k_not_failure(a) || !k_not_failure(b)) k_die_err_operand("&", a, b);
     return k_int(k_bits_of(a, "and") & k_bits_of(b, "and"));
 }
 
 KValue k_b_bit_or(KValue a, KValue b) {
-    if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
+    if (!k_not_failure(a) || !k_not_failure(b)) k_die_err_operand("|", a, b);
     return k_int(k_bits_of(a, "or") | k_bits_of(b, "or"));
 }
 
 KValue k_b_bit_xor(KValue a, KValue b) {
-    if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
+    if (!k_not_failure(a) || !k_not_failure(b)) k_die_err_operand("^", a, b);
     return k_int(k_bits_of(a, "xor") ^ k_bits_of(b, "xor"));
 }
 

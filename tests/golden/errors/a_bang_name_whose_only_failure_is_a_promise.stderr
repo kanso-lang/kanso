@@ -1,0 +1,4 @@
+error[naming]: `first!` wears a bang: a `!` function's answer must be able to be a failure
+  --> tests/golden/errors/a_bang_name_whose_only_failure_is_a_promise.kso:7:4
+   7 | fn first! xs
+          ^

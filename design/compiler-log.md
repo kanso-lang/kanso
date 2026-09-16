@@ -3898,3 +3898,67 @@ the same night — the maps parse outside all three compile rows, measured,
 with a spec holding it there. Its row came off in this commit. A ruling
 built in under an hour beside one unbuilt for twenty-three days is the
 difference between a row on the list and a row off it.
+
+## 2026-09-16 — `!` is a promise the checker takes, and a bare err at an operator halts where it stands
+
+Builds the 2026-09-16 gavel "`!` is the value on the programmer's word, and
+a miss halts at runtime" (kanso#1443), the last unruled part of the failure
+model. Two halves, on all three engines.
+
+**The checker takes the promise.** A strict index carried ERR into its
+answer set since the sigil existed, so `xs[i]!` fed to an operator was a
+possible failure the emitter guarded and, under the 2026-09-15 ruling's
+third part, a site the checker could have refused had the miss been
+counted as raised. It carries no miss now: `xs[i]!` is the element, the
+710 sites that hand it straight to an operator stand as written, and the
+guards the emitter wrote for a failure that the programmer promised away
+are gone with them. The suffix contract of 2026-09-03 reads the same set,
+so a `!` declaration whose only failure was a strict index answers no
+failure the checker can see and is refused as a bang that cannot fail:
+`a_bang_name_whose_only_failure_is_a_promise` in the error corpus, watched
+red under the mutation that puts the miss back (ratchet row
+`bang_promise`). The tree holds two `!` declarations, both in std/os, and
+both answer an io err, so nothing in it changed spelling.
+
+**The runtime enforces it.** A bare err arriving at an operator halts with
+a report that names the operator and what the err said:
+
+    error[runtime]: `+` was handed an err: "missing index 9"
+
+The nine runtime entries (`+ - * / %`, the comparison, and the three
+bitwise joins) and the interpreter's `eval_binop` say the same sentence,
+and the page runs the interpreter's through `rt_binop`. The left operand is
+the one reported when both fail. Until this the operator carried the
+failure past itself, and two failures merged into one whose reason listed
+both, the 2026-08-05 reading of the railway; the 2026-09-15 ruling retired
+the railway ("nothing outside a box propagates"), and this is the operator
+half of that retirement at runtime. The merge is still the rule where
+nothing is ordered: a construction with two failing fields answers one err
+with both reasons, and so do two unordered statements.
+
+**Pins.** Runtime corpus: `a_miss_under_the_bang_halts_at_the_operator`
+(the ruling's own case), `a_bare_err_at_a_comparison_halts`,
+`a_bare_err_at_a_bitwise_operator_halts`; the two failing-condition
+fixtures now read the comparison's report rather than the endpoint's, and
+still pin that the fused comparison's slow arm is where the failure path
+lives. Ratchet row `err_at_operator` restores the carry at native's `+` and
+the runtime corpus reads the endpoint's report where the golden holds the
+operator's. Five micro fixtures pinned the merge AT an operator
+(`what_a_failure_does_at_every_site`'s operated, compared and grouped
+rows, `a_construction_merges_its_failures`' operated row,
+`two_failures_in_one_operation_merge`, `merged_failures_stay_flat`,
+`a_merged_err_stays_flat_across_a_hop`); each now merges through a
+construction, which is the site that keeps the rule, and the fold and
+flatness properties they pin are unchanged. compiler.html §17 and §22 and
+ch04's sentence on operators say halt where they said merge; §22's table
+loses its three operator rows.
+
+**Two edges named, not built.** A builtin that answers an err on its own
+(`to_int`, `to_float`, `utf8`, `from_code`, `to_bytes`) carries ERR without
+RAISED, so `to_int s + 1` is not refused at check and halts at runtime
+instead; whether a builtin's err counts as raised is a question for the
+ledger. And a bare err at a site that is not an operator — an
+interpolation, a call with no arm, an index, `length`, a field read —
+still carries past it at runtime, the rows §22 keeps as FIRST and
+THROUGH; the ruling names operators, and this entry does not reach past
+them.

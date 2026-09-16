@@ -12,9 +12,15 @@
 # to a group with no arm for it does not compile, so the failures here are
 # bound to names first. The checker reads a call's arguments and not the names
 # it is handed, the same deliberate blind spot the none rule keeps, and the
-# runtime contract these lines pin is reached through it. What the runtime
-# does with a bare err it was not warned about is the ledger's open question.
+# runtime contract these lines pin is reached through it. Since 2026-09-16 an
+# operator halts on a bare err rather than merging, so the merges here are
+# constructions, which still merge: a record's fields are unordered and
+# neither caused the other.
 import "std/testing"
+
+type couple
+  left
+  right
 
 fn boom n
   err "e{n}"
@@ -34,8 +40,8 @@ e2 = boom 2
 
 e3 = boom 3
 
-merged = e1 + e2
+merged = couple e1 e2
 
-three = through merged + e3
+three = couple (through merged) e3
 
 pub play = print "{testing/when_failed three how_many}"

@@ -1,0 +1,9 @@
+# `!` is the programmer's word that the read is in range, ruled 2026-09-16.
+# The checker takes it: `prices[9]!` is the element and nothing else, so the
+# `+` compiles with no arm asked for. A miss at runtime is the promise broken,
+# an err arriving at the operator the read feeds, and it halts there with the
+# report the way `+` on a string halts. Under the railway this failure carried
+# past `+` to the endpoint and was reported there instead.
+prices = [30 10 20]
+
+pub play = print "{prices[9]! + 1}"

@@ -1068,7 +1068,7 @@ pub play = print "{graph["a"]!.peers[1]!.name}"</code></pre>
 
 <h2 id="failures"><span class="sec-num">17</span>two failures, and which one you hear about</h2>
 
-<p>a failure in an operation propagates: hand an err to anything and you get the err back. when both sides fail, the answer carries both — the reason becomes the list of reasons, and neither failure is billed above the other, because neither caused the other. that merge is a fold rather than a pairing, so three failures answer three reasons however they were grouped, and the shape of the expression that produced them is not recoverable from the result. an err whose reason is <em>itself</em> a list stays one reason; the mark saying which is which is structural, because it cannot be read off the shape.</p>
+<p>a bare err arriving at an operator halts the program there, since 2026-09-16. <code>!</code> is the programmer's word that a read is in range and the checker takes it, so a miss at runtime is an err reaching the operator the read feeds, and the report names the operator and what the err said. the merge lives where nothing is ordered: two failures arriving at a construction, or from two unordered statements, answer one err whose reason is the list of both, and neither failure is billed above the other, because neither caused the other. that merge is a fold rather than a pairing, so three failures answer three reasons however they were grouped, and the shape of the expression that produced them is not recoverable from the result. an err whose reason is <em>itself</em> a list stays one reason; the mark saying which is which is structural, because it cannot be read off the shape.</p>
 
 <p>the wall is the other rule. <code>&gt;&gt;</code> is ordered, so the first failure is the answer and what follows it never speaks. adjacency accumulates because nothing there is first. short-circuit where there is order, accumulate where there is none — you never choose between the two, because each is the only behaviour its structure permits.</p>
 
@@ -1162,14 +1162,13 @@ text/to_bytes [104 300]               # err "to_bytes takes byte values (0-255)"
 
 <p>none of them was hard to find. what was missing was the question being asked site by site, and somewhere to write the answer down. both sentences are tables now, and both tables are fixtures that run on every engine.</p>
 
-<p>the first says what an operation does with a failure that arrives at it, and the answer is not the same everywhere. an operator, a comparison, a constructor and a <code>&amp;</code> join MERGE—neither operand caused the other, so both reasons survive. a call with no matching arm, an interpolation and a <code>&gt;&gt;</code> sequence take the FIRST, because those are ordered. a list literal and a map literal HOLD it, because a container is not its contents: the list has a length, it can be indexed, and printing it shows the failure sitting inside. a field read, an index and a builtin pass it THROUGH, because the operation does not happen at all.</p>
+<p>the first says what an operation does with a failure that arrives at it, and the answer is not the same everywhere. an operator, a comparison and a <code>&amp;</code> join HALT, since 2026-09-16: a bare err is data, the checker refuses a raised one at an operator, and one that arrives anyway is a promise broken or a name the checker could not read through, so the operator reports it where it stands—each of the three is its own fixture in the runtime corpus. a constructor MERGES—neither field caused the other, so both reasons survive. a call with no matching arm, an interpolation and a <code>&gt;&gt;</code> sequence take the FIRST, because those are ordered. a list literal and a map literal HOLD it, because a container is not its contents: the list has a length, it can be indexed, and printing it shows the failure sitting inside. a field read, an index and a builtin pass it THROUGH, because the operation does not happen at all.</p>
 
-<pre><code>operated:  ["a" "b"]      compared:  ["a" "b"]
-built:     ["a" "b"]      grouped:   ["a" "b"]
-called:    a              woven:     a
-sequenced: a              listed:    [err "a" 2]
-mapped:    { "k":err "a" } reached:  a
-indexed:   a              sized:     a</code></pre>
+<pre><code>built:     ["a" "b"]      called:    a
+woven:     a              sequenced: a
+listed:    [err "a" 2]    mapped:    { "k":err "a" }
+reached:   a              indexed:   a
+sized:     a</code></pre>
 
 <p>the second says which patterns can hold an err at all. three can—the <code>(err …)</code> destructure, an <code>:err</code> annotation, and a typeset with err among its members—and the other seven decline one. that is ten pattern forms against two origins, and the two columns read the same: since the 2026-09-15 ruling made a bare err data, an arm takes a failure whoever raised it. until that day the own column was <code>past</code> in every row, which was what "your own failures only bubble" meant when written out; the licence that sentence named now lives at the rescue word, where a <code>.?</code> written in the package that raised the failure hands it on.</p>
 

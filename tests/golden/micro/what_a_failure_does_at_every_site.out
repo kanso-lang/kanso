@@ -1,7 +1,4 @@
-operated:  ["a" "b"]
-compared:  ["a" "b"]
 built:     ["a" "b"]
-grouped:   ["a" "b"]
 called:    a
 woven:     a
 sequenced: a

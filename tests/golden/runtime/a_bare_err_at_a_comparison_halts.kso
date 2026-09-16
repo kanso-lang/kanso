@@ -1,0 +1,14 @@
+# The 2026-09-15 ruling refuses a raised err at an operator at check, reading
+# a call's arguments and not the names it is handed; bound to a name, a failure
+# still reaches the comparison at runtime. Under the railway two failures
+# merged here into one reason listing both, the 2026-08-05 reading; since
+# 2026-09-16 the operator halts on the first, the left, and says so. The
+# report is the interpreter's sentence, and native and the page say it too.
+fn boom what
+  err what
+
+ea = boom "a"
+
+eb = boom "b"
+
+pub play = print "{ea < eb}"
