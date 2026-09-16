@@ -5350,10 +5350,14 @@ difference in how many deadlines expired would land on the long compiles and
 not the short one, where the observed gap was the same on all three. So this
 change removes a wall-clock dependence that was real and would have surfaced
 eventually, and the original disagreement is still unexplained. If it returns,
-the three remaining init reads are where to look next: their count cannot
-vary, but their cost is the host's vDSO, 33 instructions here, and a
-clocksource priced differently would shift all three rows by the same small
-amount — which is the shape that was observed.
+the three remaining reads are where to look next. They are
+`_mi_clock_start`'s calibration: it reads the clock twice to measure what a
+read costs, then a third time for the process's start stamp, behind a
+`mi_clock_diff == 0` guard that lets it happen once. So their count cannot
+vary, and their cost is the host's vDSO — 33 instructions here, 11 a call.
+A clocksource priced differently would shift all three rows by the same
+small amount, which is the shape that was observed; it does not divide 13
+by three, so that is a suspect rather than an answer.
 
 The option index is pinned the same way the first one is.
 `tests/the_allocator_option_is_the_one_the_header_names.rs` now carries a

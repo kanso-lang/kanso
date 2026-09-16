@@ -68,10 +68,12 @@ const PURGE_DELAY: i32 = 15;
 ///
 /// `-1` disables purging, which takes `_mi_prim_clock_now` from 163 calls to
 /// 3 and removes 8,288 instructions from the module row, 44,608 from the
-/// entry row and 48,487 from the library row. The three reads that remain are
-/// the stamp mimalloc takes when it initialises; that runs once whatever the
-/// timing. The compiler is a short-lived process that exits and gives
-/// everything back at once, so never purging removes work.
+/// entry row and 48,487 from the library row. The three that remain are
+/// `_mi_clock_start`'s calibration: it reads the clock twice to measure what
+/// a read costs, then a third time for the process's start stamp, behind a
+/// `mi_clock_diff == 0` guard that lets the whole thing happen once. The
+/// compiler is a short-lived process that exits and gives everything back at
+/// once, so never purging removes work.
 ///
 /// This was found while hunting a reproduction failure — the three compile
 /// rows came back 13 instructions apart on two CI runs of one commit, and the
@@ -80,8 +82,12 @@ const PURGE_DELAY: i32 = 15;
 /// same gap on all three rows points at something that happens once per
 /// process, and purge asks scale with the run instead. So this removes a
 /// wall-clock dependence that was real and would have bitten later, and the
-/// original disagreement is still open. If it returns, the three init reads
-/// are the next place to look.
+/// original disagreement is still open. If it returns, those three reads are
+/// the next place to look: their count cannot vary, but their cost is the
+/// host's vDSO — 33 instructions here, 11 a call — so a clocksource priced
+/// differently moves all three rows by the same small amount, which is the
+/// shape that was seen. Three does not divide 13, so that is a suspect
+/// rather than an answer.
 #[cfg(not(target_arch = "wasm32"))]
 extern "C" fn set_the_allocator_before_it_runs() {
     unsafe { libmimalloc_sys::mi_option_set(ARENA_EAGER_COMMIT, 0) };
