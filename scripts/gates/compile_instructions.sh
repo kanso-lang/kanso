@@ -236,6 +236,31 @@ if [ "$got" = "$want" ]; then
   exit 0
 fi
 
+# THE SAME BINARY, COUNTED AGAIN, BEFORE ANYTHING IS CONCLUDED.
+#
+# The two cases below are settled differently and the job log could not tell
+# them apart. A reader had to compare sha lines across two runs by hand, and on
+# 2026-09-16 that comparison came back confounded: kanso#1459's two rounds
+# carried identical compiler source -- round two changed goldens, the log, the
+# floor and one page and nothing the compiler compiles -- and all three rows
+# read exactly 13 higher, with BOTH a different binary sha and a different
+# runner CPU model between them (AMD family 0x19 model 0x1 against model 0x11).
+# Two variables, one observation, and no way to separate them from outside.
+#
+# One more reading inside this job separates the halves for nothing. It costs a
+# second callgrind pass and only on a run that was going to fail anyway, and it
+# answers the question the error text below has always asked a reader to answer
+# by hand.
+(
+  cd "$box"
+  env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" valgrind --tool=callgrind \
+    --callgrind-out-file=/tmp/cg.compile2 ./kanso check compile_corpus \
+    >/dev/null 2>/dev/null
+)
+again=$(callgrind_annotate --inclusive=yes --threshold=100 /tmp/cg.compile2 2>/dev/null \
+        | awk '/kanso::main/ && !seen { gsub(/,/, "", $1); print $1; seen = 1 }')
+printf 'compile_again row=%s (the first reading was %s)\n' "$again" "$got"
+
 echo "::error::compile_instructions counted $got against $want in $golden,"
 echo "::error::a move of $((got - want)). Exactly one of two things is true,"
 echo "::error::and they are settled differently."
@@ -254,7 +279,17 @@ echo "::error::    The last one was Rust's stack guard parsing /proc/self/maps"
 echo "::error::    at startup, and the answer was to anchor the count at"
 echo "::error::    kanso::main so the measurement stopped depending on it."
 echo "::error::"
-echo "::error::The compile_binary sha256 and compile_sample lines above are"
-echo "::error::where the hunt starts: one sha counting two rows is (2); two"
-echo "::error::shas is (1) until the pair is built and both are read."
+if [ "$again" = "$got" ]; then
+  echo "::error::THIS BINARY IS STABLE. A second count in this same job, on"
+  echo "::error::this same binary, read $again -- the same number. So the"
+  echo "::error::disagreement is with the GOLDEN and not within the run, and"
+  echo "::error::this is (1) unless the golden's own sitting differed in"
+  echo "::error::something outside the diff. The compile_binary sha256 and the"
+  echo "::error::silicon line above are what to compare against that sitting."
+else
+  echo "::error::THIS BINARY COUNTED TWO NUMBERS IN ONE JOB: $got and then"
+  echo "::error::$again, on one binary, one corpus and one machine. That is"
+  echo "::error::(2), settled here rather than by comparing runs, and it halts"
+  echo "::error::this vein."
+fi
 exit 1

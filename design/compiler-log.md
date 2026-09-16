@@ -3716,6 +3716,65 @@ turns on is how many of the 49,229 calls belong to collections a phase-scoped
 arena could own. That is not answered here. Recorded as an open lead with
 nothing above it that sizes it.
 
+## 2026-09-16 — the compile rows moved by thirteen and the job log could not say why
+
+kanso#1459's two rounds carry identical compiler source. Round two changed the
+three goldens, design/compiler-log.md, bench/welfare_floor.json and one page,
+and nothing the compiler compiles. All three compile rows came back exactly 13
+higher:
+
+    compile_instructions    36,695,922 ->  36,695,935
+    entry_instructions     130,618,857 -> 130,618,870
+    library_instructions   130,762,703 -> 130,762,716
+
+PROGRAM TOTALS moves by the same 13 and so does the `main` frame, so it is
+inside the run rather than in the loader. The same 13 hit kanso#1460, whose
+whole diff was a log entry, and a re-run of that commit came back on the
+golden.
+
+## What the gate printed, and why it was not enough
+
+The gate has printed a binary sha and a silicon line on every run since the
+last time this happened, precisely so a reader could settle case (1) against
+case (2). Here is what the two rounds carry:
+
+    round one   cpu="cpu family 0x19 model 0x1"    sha=c234bfc0577c   row=130762703
+    round two   cpu="cpu family 0x19 model 0x11"   sha=770141d59043   row=130762716
+
+Two variables and one observation. The runner's CPU MODEL moved, from AMD Zen 3
+to Zen 4, and the BINARY'S SHA moved with it. Either could own the 13 and
+nothing in either job separates them.
+
+Two things are ruled out. Cargo is reproducible: three release builds of one
+source on this container land on one sha, and three more with
+`codegen-units = 1` land on one sha, so "the build is not deterministic" is a
+hypothesis with no evidence under it. And a different glibc ifunc variant is
+not it by size -- masking AVX-512 through `glibc.cpu.hwcaps` on this container
+moves the library row by 393,285 instructions where the CI gap is 13. Thirteen
+is a branch taken once per process on a CPU-feature test, not a different
+memcpy.
+
+## The fix is one more reading, and it costs nothing on a green run
+
+The question "did this binary count two numbers, or did two binaries count one
+each" is answerable inside the job that asks it. So each of the three compile
+gates now counts a second time, on the same binary in the same box, and only
+when the first reading disagreed with the golden. It prints both and then says
+which case it is in its own words:
+
+    library_again row=133327398 (the first reading was 133327398)
+    ::error::THIS BINARY IS STABLE. A second count in this same job, on
+    ::error::this same binary, read 133327398 -- the same number.
+
+A run that is going to pass pays nothing. A run that is going to fail pays one
+callgrind pass, about thirty seconds, and hands back the thing a reader has
+twice had to reconstruct by comparing two job logs by hand.
+
+This does not settle the 13. It makes the NEXT occurrence settle itself:
+readings that agree inside one job put the difference outside the run, where
+the sha and the silicon lines are, and readings that disagree are case (2) on
+the spot.
+
 ## 2026-09-16 — gavel: two welfares and a meta-welfare over them, and the floor re-ratchets
 
 Clay ruled the ledger's "What the compile term counts once codegen is in it"
