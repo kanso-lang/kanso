@@ -3716,6 +3716,65 @@ turns on is how many of the 49,229 calls belong to collections a phase-scoped
 arena could own. That is not answered here. Recorded as an open lead with
 nothing above it that sizes it.
 
+## 2026-09-16 — the linearity analysis asked the whole program once per question
+
+Clay's gavel that morning made development-loop cost its own welfare, and the
+first thing measured under that heading was not the front end. Callgrind on
+`kanso build` of a FORTY-LINE corpus, kanso's own process:
+
+    kanso::build                           1,150,998,944   97.91%
+    codegen::emit_ir                       1,144,148,711   97.32%
+    linear::Analysis::new                    760,255,840   64.67%
+    linear::Analysis::callers_hand_over      747,681,475   63.60%
+    linear::Analysis::callsites_unique_in    623,488,195   53.04%
+
+Two thirds of a build, in the pass that decides which `push` call sites own
+their list. `kanso check` never runs it — linearity is a codegen-time analysis
+— so not one of the three compile veins has ever seen a byte of it, and the
+model that would is the one ruled this morning.
+
+**The shape is the declares quadratic again.** `fixpoint()` loops; each round,
+for every (name, arity, index) still believed linear it asks
+`callers_hand_over`, which walks every function, every statement and every
+expression in the program looking for calls to that one name. `escapes_as_value`
+does a second full-program walk per (name, arity) per round.
+
+`escapes_as_value` is exact in one pass, and that is what this change is.
+`mentioned_as_value(e, name, arity)` was true exactly when some occurrence of
+`Ident(name)` was not the head of an application of `arity` arguments. So the
+question needs two facts per name: whether it ever occurs outside an
+application head, and which argument counts it heads an application with. Both
+are properties of the program alone — nothing the fixpoint does can change
+either — so one walk before the fixpoint starts answers every ask.
+
+    kanso::main             1,238,723,077 -> 1,065,298,291   -173,424,786   -14.00%
+    linear::Analysis::new     760,290,312 ->   586,876,488   -173,413,824   -22.81%
+
+The two falls agree to eleven thousand instructions, which is the check that
+the win is where the reading said it was and not somewhere else.
+
+**The emitted IR is byte-identical on all fourteen benchmarks**, runbench
+included at 36,085 lines. The analysis feeds codegen, so that is the claim
+worth making about a rewrite of it: what the compiler decides has not moved,
+only what it spends deciding.
+
+**And the walk it replaced is kept as the oracle.** `mentioned_as_value` is
+`#[cfg(test)]` now rather than deleted, and a spec runs both it and the index
+over lib/json and bench/compile_corpus for every (name, arity) pair
+`escapes_as_value` can be handed — several thousand questions, both ways, on
+programs this repository actually compiles. Watched red before it was trusted:
+with `escapes` answering `bare.contains` alone, so that an application head
+with the wrong argument count stopped escaping, it names the first
+disagreement — "lib/json: the index and the walk disagree about
+`Get_position` at arity 0".
+
+**What is left, and it is the larger half.** `callers_hand_over` is 63.60%
+against `escapes_as_value`'s share, and it wants the same treatment from the
+other side: an index from callee name to the declarations that call it, built
+once per fixpoint round instead of walked once per parameter. That is a bigger
+change because what it asks depends on the fixpoint's current state, so the
+index has to be rebuilt per round rather than once. It is not attempted here.
+
 ## 2026-09-16 — gavel: two welfares and a meta-welfare over them, and the floor re-ratchets
 
 Clay ruled the ledger's "What the compile term counts once codegen is in it"
