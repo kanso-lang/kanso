@@ -4624,3 +4624,47 @@ already been.
 So the run term's five largest rows are all read: two mapped with their one
 removable piece now waiting on Clay, and three with nothing under them. The
 queue's next run-side lead is not in this profile at this granularity.
+
+## 2026-09-16 — CI's rows for the shell's several names, and what the early-out took back (DONE)
+
+Round one priced the first shape of the fix and it was expensive: `mark` runs
+on every identifier in every body, and scanning the runs of name characters
+built a split iterator for each one. CI read library 145,118,874 ->
+146,911,031, +1,792,157 and +1.23 per cent, with entry +1,572,425 and module
++484,887; every other vein AGREED.
+
+The no-slash early-out in dd9ffcc9 answers the common name — one holding no
+slash, and so no qualifier anywhere inside it — on one scan, and never reaches
+the iterator. CI's round two, all three rows against this branch's base:
+
+| row | base | round one | round two | recovered |
+| --- | --- | --- | --- | --- |
+| `compile_instructions` | 40,703,283 | +484,887 | **+127,436** (+0.3131%) | 357,451 (73.7%) |
+| `entry_instructions` | 144,436,311 | +1,572,425 | **+363,524** (+0.2517%) | 1,208,901 (76.9%) |
+| `library_instructions` | 145,118,874 | +1,792,157 | **+363,516** (+0.2505%) | 1,428,641 (79.7%) |
+
+`compile_allocs` held at 27,395 and `compile_memory` is byte-identical; the
+emitted, machine-code and every runtime vein agreed in both rounds.
+
+**The local A/B tracked CI to 0.77 per cent.** This container refuses to
+compare the absolute rows — other silicon, other glibc — so the fix was priced
+here as a three-point delta on one box, same path, three builds: pre-fix
+146,522,240, the run scan 148,311,311 (+1,789,071), the early-out 146,882,961
+(+360,721). CI reads the same two deltas as +1,792,157 and +363,516. The
+first pair agree to 0.17 per cent and the second to 0.77, which is the
+cross-check that a host-refused local measurement is measuring what the gate
+measures. Worth writing down because the refusal is easy to read as "this box
+can say nothing": it can say the delta, and the delta is the claim.
+
+The residue is what a slash-bearing name costs to scan properly, and that is
+the fix rather than an overhead on it. The mutation still applies and the spec
+still goes red under it with the same `error[import]: `<g` is not imported
+here`, watched again after the early-out went in: the names the early-out lets
+through are exactly the ones the fix protects.
+
+**The floor comes down 69.59603943391699 -> 69.59152459326125**, a fall of
+0.0045, under the 2026-09-13 ironclad clause. Effects are types is ruled
+(kanso#1372, kanso#1395); a qualified name inside a type shell is how that
+spelling is written; and a program the compiler accepts cannot be one the
+import check refuses for an import the file wrote. That is the specification,
+and this is what it costs.

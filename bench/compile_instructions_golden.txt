@@ -1583,4 +1583,17 @@
 # 787,956; every work row, every text row, emitted, machine code and the
 # linked-library list all AGREED.
 #
-compile_instructions=40703283
+# 2026-09-16 (kanso#1452): a type name inside a shell is several names, and
+# the import check read only the first. `mark` decides which module qualifiers
+# a file uses, and it split a type name at its first slash, so
+# `<os/process>effect` answered `<os` -- a qualifier no import can match. It
+# scans the runs of name characters now. That runs on every identifier in
+# every body, so round one cost this row 484,887 (1.1913 per
+# cent); a no-slash early-out, added in dd9ffcc9, answers the common name on
+# one scan and never builds the iterator, taking 357,451 of that back. This
+# row is a RISE of 127,436 (0.3131 per cent), and the residue is what a
+# slash-bearing name costs to scan properly, which is the fix. Regenerated
+# from CI's own reading, stated, not reasoned from. compile_allocs held at
+# 27,395; every other vein AGREED.
+#
+compile_instructions=40830719
