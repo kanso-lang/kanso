@@ -453,4 +453,4 @@
 # care what else got cheaper; the three instruction rows beside it are a
 # share of a pile kanso#1414 shrank, and every one of them came back
 # smaller. Same branch, same run, the two halves of CLAUDE.md's rule.
-compile_allocs=27173
+compile_allocs=27395

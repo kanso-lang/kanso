@@ -4196,3 +4196,53 @@ and each carries a stronger condition besides. The fold's own lambda arm grants
 on evidence rather than silence: `fold_owns_accumulator` needs the folder
 unique AND the seed unique before it licenses a write. Nothing else in the
 compiler grants on a walk's silence.
+
+**CI's sitting, and every row that worsened.** Round one measured the seven
+host-keyed veins and this is what they landed on. Every before-value below is
+this branch's base, kanso#1444's stack, which is where the goldens sat when
+round one ran. The trend gate's own table compares against main instead, so it
+reads five of these rows from a different starting point (`work_runbench`
+1,823,669,249, `work_scanbench` 460,784,763, `work_widebench` 32,135,929,
+`work_readbench` 4,629,430 and `text` 1,735,116 are main's).
+
+The compile side is the prover: infer now records a bound proof per indexed span and the none rule
+reads it, which is work the front end did not do before, on every `xs[i]` in
+the corpus. `entry_instructions` 140,614,828 -> **144,655,874** (+4,041,046,
++2.87%) and `library_instructions` 140,855,393 -> **145,336,811** (+4,481,418,
++3.18%) are that work counted over the two compile paths; `compile_allocs`
+27,173 -> **27,395** (+222) and `compile_peak_bytes` 781,895 -> **787,956**
+(+6,061) are the per-span proof table the walk holds while it runs.
+`compile_instructions` 40,273,027 -> **40,749,158** (+476,131) rises against
+this branch's base and is a FALL of 2,123,696 against main, which has not yet
+taken the base's retired provenance fixpoint.
+
+The run side is the 208 guards. A guard the respell wrote is a real branch in
+emitted code, and the programs that run one pay for it: `work_encodebench`
+3,452,269,515 -> **3,497,149,260** (+44,879,745, +1.3000%) is the largest rise;
+`work_widebench` 32,103,964 -> **33,516,094** (+1,412,130, +4.3986%) is the
+steepest, the widest program taking the most guards per element;
+`work_deepbench` 345,129,236 -> **347,289,236** (+2,160,000, +0.6259%);
+`work_scanbench` 459,778,477 -> **462,269,296** (+2,490,819, +0.5417%);
+`work_digestbench` 9,830,546 -> **9,967,039** (+136,493, +1.3885%);
+`work_basket` 33,549,379 -> **33,678,746** (+129,367, +0.3856%); and
+`work_pendbench` 208,133,415 -> **208,138,815** (+5,400, +0.0026%), the
+smallest of them. `work_jsonbench`, `work_escapebench`, `work_indexbench` and
+`work_readbench` are byte-identical.
+
+Three rows fall. `work_runbench` 1,827,443,530 -> **1,821,933,936**
+(-5,509,594, -0.3015%), `work_livebench` 2,872,813,523 -> **2,825,430,323**
+(-47,383,200, -1.6494%) and `work_oneshot` 18,006,613 -> **17,888,155**
+(-118,458, -0.6579%). Where the bound is proven the read emits no check at all,
+and those three read more than they guard.
+
+The `text` vein moves both ways and comes out +18,224 summed, 1,737,148 ->
+**1,755,372**. Eight rows shrink between 480 and 1,152 bytes each; `scanbench`
++16,000 and `runbench` +9,472 grow, and those two are the whole of the rise. A
+guard is an emitted branch and a retired `]!` site is a call that goes away, so
+both directions are expected here; which one wins is per program and is not
+attributed further.
+
+The objective weighs the two sides together and comes out 0.0422 down. The
+floor moves with it, 69.63579260553377 -> 69.59359812089627, under the
+2026-09-13 ironclad clause, with the reason recorded in
+`bench/welfare_floor.json`'s history entry beside the number.
