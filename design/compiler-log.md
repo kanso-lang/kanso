@@ -3498,6 +3498,44 @@ to runtime.c and the emitter, and CI's sitting is written in the next round.
 anywhere, retiring the own-origin skip; and part 3, a bare err refused at an
 operator at check, on the sites that are not `!`. The `!` sites wait on the
 ledger's Blocking entry "What `!` promises the checker".
+## 2026-09-15 — a chain callback is handed the err itself, and native's guard on the group behind it was left out
+
+Found while mapping the arm-dispatch sites for part 2 of the 2026-09-15
+explicit-box gavel. A probe program with a rescue callback that hands the
+err on to a bare-binder group printed `took mine` on native and died at the
+endpoint on the interpreter with `passed through lam`. The interpreter is
+the oracle, and it is right: a bare binder refuses every failure, and the
+callback's parameter holds the err `rescue` handed it.
+
+**Why native differed.** A group's entry guard is emitted only when
+inference says the parameter can be a failure, and the parameter's set is
+the union of what every call site hands it. The one call site here hands
+the callback lambda's parameter, and inference seeds every lambda parameter
+as never failing, because an ordinary call refuses to hand a closure a
+failure. That seed is wrong for exactly two callers: `rescue` and
+`annotate` hand their callback the failure on purpose. So the group's
+parameter proved never-failing, the guard was left out, and the err walked
+into the body. A direct call `lam (mine 1)` guards, because the argument's
+set carries the failure, which is why no fixture had caught the shape.
+
+**The fix.** Inference walks a lambda written as a rescue or annotate
+callback with its parameter seeded to everything, err included. The group's
+parameter then carries the failure bit and the emitter writes the guard.
+Nothing changes for any other lambda.
+
+**Watched red.** Micro fixture `a_chain_callback_is_handed_the_err_itself`:
+two chains, one through `.?` and one through `.!`, each handing the err to a
+bare-binder group, each read by std's `when_failed` so the fixture prints
+what came out rather than dying. Native read `the callback's group took the
+failure` and `passed lam, reason took mine` against the interpreter's
+`passed lam, reason mine` twice; both engines print the interpreter's lines
+now. Ratchet row `callback_err`, mutation
+`a_chain_callbacks_parameter_never_fails`, puts the old seed back and the
+micro corpus goes red on that fixture.
+
+**What it costs.** An inference change moves the three compile rows and
+possibly the compile allocations; CI's sitting is written in the next round.
+The wasm engine runs the interpreter and needed nothing.
 ## 2026-09-15 — a bare err is data: the arm skip retires, and the rescue licence moves to the word
 
 Part 2 of the 2026-09-15 ruling "the box is explicit, an err is a value, and

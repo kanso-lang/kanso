@@ -1095,6 +1095,24 @@ fn widen_param(ctx: &mut Ctx<'_>, decl: usize, param: usize, set: Set) {
     }
 }
 
+/// A chain word's callback, walked with its parameter holding the failure
+/// the word hands it. The Lambda arm of `eval_expr` seeds every parameter
+/// as never failing, because an ordinary call refuses to hand a closure a
+/// failure; `rescue` and `annotate` are the two callers that do it on
+/// purpose, so their callback's parameter can be anything, an err included.
+/// A callback that is not a lambda literal is a value, walked as one.
+fn eval_callback<'a>(ctx: &mut Ctx<'a>, callee: &'a Expr, env: &mut Env<'a>) -> Set {
+    let Expr::Lambda { body, params, .. } = callee else {
+        return eval_expr(ctx, callee, env);
+    };
+    let mut inner = env.child(params.len());
+    for (p, _) in params {
+        inner.insert(p, TOP);
+    }
+    let _ = eval_expr(ctx, body, &mut inner);
+    FN
+}
+
 fn eval_call<'a>(
     ctx: &mut Ctx<'a>,
     head: &'a Expr,
@@ -1108,10 +1126,22 @@ fn eval_call<'a>(
     // vectors holding one to three sixteen-bit values.
     let mut inline = [0 as Set; 8];
     let mut spill: Vec<Set> = Vec::new();
+    // `rescue` and `annotate` are the two callers that hand a closure the
+    // failure itself, so a lambda written as their callback is entered with
+    // an err in its parameter where every other lambda never is. The Lambda
+    // arm of `eval_expr` seeds a parameter as never failing, which is right
+    // for every other call and wrong here: native trusted that seed, left
+    // the entry guard out of a group the callback handed the err on to, and
+    // let the err into its body while the interpreter refused it.
+    let hands_err = matches!(head, Expr::Ident(n, _)
+        if (n == "rescue" || n == "annotate") && !env.contains_key(n.as_str()));
     let arg_sets: &mut [Set] = match args.len() <= inline.len() {
         true => {
-            for (slot, a) in inline.iter_mut().zip(args) {
-                *slot = eval_expr(ctx, a, env);
+            for (i, (slot, a)) in inline.iter_mut().zip(args).enumerate() {
+                *slot = match hands_err && i == 1 {
+                    true => eval_callback(ctx, a, env),
+                    false => eval_expr(ctx, a, env),
+                };
             }
             &mut inline[..args.len()]
         }
