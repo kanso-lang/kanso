@@ -130,6 +130,26 @@ if [ "$got" = "$want" ]; then
   exit 0
 fi
 
+# THE SAME BINARY, COUNTED AGAIN, BEFORE ANYTHING IS CONCLUDED.
+#
+# The two cases below are settled differently and the job log could not tell
+# them apart: a reader had to compare sha lines across two runs by hand. On
+# 2026-09-16 the compile rows did that twice in one evening -- kanso#1459's two
+# rounds carried identical compiler source and read 13 apart on all three, and
+# the start-up row read 33 apart on the same kind of pair. One more reading
+# inside this job separates "this binary counted two numbers" from "two runs
+# differed in something outside the diff", for one callgrind pass on a run that
+# was going to fail anyway. kanso#1463 does the same for the compile gates.
+(
+  cd "$box"
+  env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" valgrind --tool=callgrind \
+    --callgrind-out-file=/tmp/cg.interp2 ./kanso run interp_corpus --interp \
+    >/dev/null 2>/dev/null
+)
+again=$(callgrind_annotate --inclusive=yes --threshold=100 /tmp/cg.interp2 2>/dev/null \
+        | awk '/kanso::run_interpreted_on_stack/ && !seen { gsub(/,/, "", $1); print $1; seen = 1 }')
+printf 'interp_again row=%s (the first reading was %s)\n' "$again" "$got"
+
 echo "::error::interp_instructions counted $got against $want in $golden,"
 echo "::error::a move of $((got - want)). Exactly one of two things is true,"
 echo "::error::and they are settled differently."
@@ -147,7 +167,17 @@ echo "::error::    FAILURE. It halts this vein and is hunted to its source --"
 echo "::error::    never pinned as a second value, and never recorded as a mode."
 echo "::error::    compile_instructions.sh carries the last one and its answer."
 echo "::error::"
-echo "::error::The interp_binary sha256 and interp_sample lines above are where"
-echo "::error::the hunt starts: one sha counting two rows is (2); two shas is"
-echo "::error::(1) until the pair is built and both are read."
+if [ "$again" = "$got" ]; then
+  echo "::error::THIS BINARY IS STABLE. A second count in this same job, on"
+  echo "::error::this same binary, read $again -- the same number. So the"
+  echo "::error::disagreement is with the GOLDEN and not within the run, and"
+  echo "::error::this is (1) unless the golden's own sitting differed in"
+  echo "::error::something outside the diff. The interp_binary sha256 and the"
+  echo "::error::silicon line above are what to compare against that sitting."
+else
+  echo "::error::THIS BINARY COUNTED TWO NUMBERS IN ONE JOB: $got and then"
+  echo "::error::$again, on one binary, one corpus and one machine. That is"
+  echo "::error::(2), settled here rather than by comparing runs, and it halts"
+  echo "::error::this vein."
+fi
 exit 1

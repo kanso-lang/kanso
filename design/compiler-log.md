@@ -3619,6 +3619,102 @@ read another, so the row is stable for a given binary and moves between them.
 Under glibc the same shape cost 508 instructions and the header carries seven
 readings and four distinct values for it. At 13 it is 39 times smaller, which
 is the one part of this that got better.
+## 2026-09-16 — the compile side re-read once the allocator stops being the answer
+
+kanso#1456 took glibc's malloc out of the compiler, and a profile that has been
+read the same way for a month changes shape enough to be worth reading again.
+This is that reading: the mimalloc binary with `arena_eager_commit` off,
+`kanso check compile_corpus` under callgrind at gate settings, 37,911,833
+instructions for the whole process. THE CONTAINER'S, not CI's — its rustc is
+1.94.1 against the runner's 1.98.1 and its anchored row reads 37,317,886 where
+CI reads 36,878,550, about 1.2 per cent high. Every figure below is a share of
+one profile taken in one place, so the shares carry and the absolutes do not.
+
+**The tables are now twice the allocator.** Every mimalloc symbol's self cost,
+summed over the 150 of them the profile names, is 2,771,809 — 7.31%. hashbrown
+comes to 5,415,908 across six rows: `insert` 1,634,418, `rustc_entry`
+1,435,071, `reserve_rehash` 1,043,739, `get_mut` 463,841, `contains_key`
+460,418, `get` 378,421. That is 14.29%, and `__memcmp_avx2_movbe` sits under it
+at 1,147,976 (3.03%) comparing keys that missed. For the month the archive's
+"the runtime is a minority of what a decode costs now" (2026-08-31) has been
+right that "the front end's remaining 13.2% is malloc and free"; it is 7.31%
+now, and the largest dimension on the compile side is the hash tables.
+
+**And the tables are diffuse, on both corpora.** Attributed to the compiler
+frame that owns each table, `insert` on the module corpus is 2,727,637
+instructions over 15,097 calls from 40 callers, the largest `qualify` at 15.7%;
+`rustc_entry` is 1,899,327 over 13,843 calls from 14, the largest
+`check_merged_after_aliases` at 19.1%. The library corpus says the same thing
+at three times the scale: `insert` 8,341,795 (6.28%) over 47,168 calls from 47
+callers with `qualify` again the largest at 13.0%, `rustc_entry` 6,538,220
+(4.92%) over 46,900 calls from 14 with `check_merged_after_aliases` at 18.9%.
+The 2026-09-07 reading of the rehash family — twenty-odd owning sites, the
+largest 0.68% — holds for the whole table family and for both corpora, so the
+14.29% is a dimension rather than a change.
+
+**The second-largest row is flat.** `infer::eval_expr'2` is 5,612,486
+instructions on the library corpus, 4.23%, and the archive has only ever
+carried it as a witness that two binaries agree — never as an attributed lead.
+It is 117 self-instructions over 47,749 calls, 28,495 of them its own
+recursion, with no callee above thirty per cent of what it hands out:
+`try_fold` 1,662,080, `HashMap::get` 862,238, `widen_param` 677,454, `memcmp`
+532,875, `Name as PartialEq<str>::eq` 382,974. A tree walk spending 117
+instructions a node across every expression form is the shape `encode_onto`
+turned out to have on the run side, and the answer is the same — there is no
+block to remove. What the callee list does say is that 27,254 name comparisons
+and 32,152 memcmps sit under one pass, which is the string-key theme again
+rather than a lead of its own.
+
+**What the compiler asks the allocator for.** 24,936 allocations, 23,241
+deallocations, 1,052 reallocations — 49,229 calls. Inclusive they read
+2,150,252, 576,072 and 524,026 instructions, which is 86, 25 and 498 apiece.
+The per-call numbers are close to what an allocator costs; what is left on this
+dimension is the number of calls.
+
+**The pre-sizing seam is closed, and there is now a mechanism beside the
+measurement.** "a set nobody read, and one that grew from empty" (2026-08-30)
+measured the six filtered collects at 4,514 instructions and declined them.
+"the runtime is a minority of what a decode costs now" (2026-08-31) called the
+seam kanso#1158 opened exhausted, with `reserve_rehash` at 0.10% for its
+largest named caller. "the front end is flat too, and one of its leads is an
+artefact of the profiler's environment" (2026-09-07, fifth) priced the rehash
+family at 4.22% over twenty-odd sites and declined it as twenty guesses at a
+final size. All three readings stand. What none of them had was the reason so
+little was there, and the split gives it: of the 8,543 `finish_grow` calls,
+7,491 reach `__rust_alloc` and 1,052 reach `__rust_realloc`. Seven vector grows
+in eight are that vector's first allocation rather than a doubling.
+`with_capacity` replaces the grow path and keeps the allocation, so the most it
+can reach is the bookkeeping — 611,974 instructions of self cost across
+`finish_grow`, `grow_one` and `do_reserve_and_handle`, 1.61% — and only at a
+site where the count is already in hand.
+
+At the largest single growth site the arithmetic runs the other way.
+`parser::P::parse_app` and its recursion twin own 314,363 instructions of grow,
+0.83%, the biggest of the 41 callers. The argument vector is a `Vec::new()`
+filled by pushing, and the match under it hands back the head unchanged when
+the vector came out empty, so a call with no arguments allocates nothing at
+all. A `with_capacity` there buys a grow in the minority case and pays an
+allocation in the majority.
+
+**The rehash reading, re-taken.** 1,912 rehashes at 1,540,385 instructions
+inclusive is 806 apiece, and 87.9% of them are called from `insert` and
+`rustc_entry` themselves rather than from a compiler frame — tables growing
+during ordinary insertion. The 2026-09-07 count of twenty-odd owning sites is
+unchanged by the allocator swap.
+
+**What no entry in the log or the archive has proposed.** A bump arena for the
+compiler. The runtime has had one since the beats landed and every kanso value
+is served from it; the compiler asks libc for every String, every Vec and every
+table it grows, one call at a time, and gives each back the same way. Searched
+both files for `bump`, `bumpalo`, `allocator_api` and `arena`: 607 lines, and
+every one of them is the runtime's arena, the beat, or a fixture that happens
+to name a function `bump`. Neither `bumpalo` nor `allocator_api` appears. The
+shape is the only one on this dimension that reaches the call count rather than
+the per-call cost, and it is unsized: `alloc::vec::Vec` and `String` take a
+custom allocator only behind the unstable `allocator_api`, so the question it
+turns on is how many of the 49,229 calls belong to collections a phase-scoped
+arena could own. That is not answered here. Recorded as an open lead with
+nothing above it that sizes it.
 ## 2026-09-16 — the interpreter hashed against an attacker it does not have
 
 Clay's gavel that morning ordered three counters for the interpreted engine and
@@ -3639,7 +3735,7 @@ against 2,700,128,254 for the whole process on the first sitting.
 `run_interpreted_on_stack` is that thread's entry, it is not recursive, and it
 excludes the loader for the same reason the compile rows exclude it.
 
-## The vein opened onto a reproduction failure
+**The vein opened onto a reproduction failure.**
 
 Two runs of one binary over one corpus read 2,651,460,189 and 2,648,375,305 —
 3,084,884 apart, 0.116% — while the front end's own anchor read 48,026,664
@@ -3665,7 +3761,7 @@ Both halves were true when they were written and the second half is what this
 change falsifies. The excuse is gone, `src/eval.rs` is spelled `crate::hash`,
 and the spec covers the file that had the defect.
 
-## It is a fall as well as a fix
+**It is a fall as well as a fix.**
 
 Three consecutive runs read 2,375,580,224. Against the higher of the two
 disagreeing readings that is 275,879,965 fewer instructions, a fall of 10.40%:
@@ -3679,7 +3775,7 @@ The two memory rows read identically before the change and after it —
 on what it touched. A probe sequence moves how much work a table does and not
 how many bytes it asks for.
 
-## What the veins are and are not
+**What the veins are and are not.**
 
 `bench/interp_instructions_golden.txt` and `bench/interp_memory_golden.txt` are
 exact veins of their own and NOT objective terms, the way `.text` is under the
@@ -3693,8 +3789,35 @@ excludes the front end, because it is the SPEED row and the front end has a
 speed row of its own.
 
 The rows recorded are this container's. It runs rustc 1.94.1 against the
-runner's 1.98.1, so both gates refuse to compare here; round one is
+runner's 1.98.1, so both gates refuse to compare here; round one was
 deliberately red on both and CI's own reading is what stands.
+
+**What CI read, and the one row that did not move between the hosts.**
+
+    interp_instructions  container 2,375,580,224   CI 2,324,888,431   -2.18%
+    interp_allocs        container     5,313,431   CI     5,313,431    0
+    interp_peak_bytes    container       933,202   CI       933,202    0
+
+The two memory rows came back EXACTLY as this container measured them, across
+rustc 1.94.1 here and 1.98.1 there, while the instruction row beside them
+diverged 2.18% between the same two hosts. That is worth writing down rather
+than assuming: what a run ASKS the allocator for is the program's own shape,
+and what it COSTS to ask is the toolchain's. The container reads about 1.2%
+HIGH on the three compile rows, so the interpreted row's divergence is the same
+sign and about twice the size, which is what an interpreted run being mostly
+the interpreter's own loop would predict.
+
+Three layout moves came with the change: compile_instructions -483,
+entry_instructions -2,874, library_instructions -1,722. `kanso check` never
+constructs an interpreter, so none of them is this change doing work
+differently -- src/eval.rs IS the compiler, and editing it moves the compiler's
+bytes and what sits around them. Three different magnitudes for one edit is the
+signature of layout rather than of work. Welfare holds at 69.75.
+
+The gate gains the in-job second reading kanso#1463 adds to the three compile
+gates, for the reason that entry gives: the compile rows read 13 apart on two
+runs of identical source that evening and the start-up row read 33 apart, and
+a reader had to reconstruct which case that was by comparing job logs by hand.
 
 ## 2026-09-16 — gavel: two welfares and a meta-welfare over them, and the floor re-ratchets
 

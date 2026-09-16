@@ -560,4 +560,9 @@
 # runs and round five read another, so the row is stable per binary and moves
 # between them; 13 in 132 million is 1.0e-7, against the 508 the same shape
 # cost under glibc, which is the one thing here that is an improvement.
-library_instructions=132025167
+# 2026-09-16 (the interpreter hashes with a fixed seed; kanso#1462):
+# library_instructions 132,025,167 -> 132,023,445, a FALL of 1,722 (-0.0013%).
+# A layout move. The three fall by -483, -2,874 and -1,722, three different
+# magnitudes for one edit the check path never reaches, which is the signature
+# of layout rather than of work.
+library_instructions=132023445

@@ -1701,4 +1701,10 @@
 # runs and round five read another, so the row is stable per binary and moves
 # between them; 13 in 132 million is 1.0e-7, against the 508 the same shape
 # cost under glibc, which is the one thing here that is an improvement.
-compile_instructions=36878550
+# 2026-09-16 (the interpreter hashes with a fixed seed; kanso#1462):
+# compile_instructions 36,878,550 -> 36,878,067, a FALL of 483 (-0.0013%). A
+# LAYOUT move. `kanso check` never constructs an interpreter, so nothing this
+# change does can reach what this row counts -- but src/eval.rs is the
+# compiler, so editing it moves the compiler's bytes and what sits around
+# them. The note on this row in CLAUDE.md is about exactly this case.
+compile_instructions=36878067

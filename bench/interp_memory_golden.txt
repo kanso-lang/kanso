@@ -32,9 +32,12 @@
 # a table does and not how many bytes it asks for. The instruction row beside
 # this one moved 10.40% across the same change and these did not.
 #
-# The rows below are THIS CONTAINER's, rustc 1.94.1 against the runner's
-# 1.98.1, so the gate refuses to compare them here. Round one is deliberately
-# red and CI's own reading is what stands.
+# 2026-09-16: CI's first sitting read BOTH ROWS EXACTLY as this container did,
+# interp_allocs 5,313,431 and interp_peak_bytes 933,202, across rustc 1.94.1
+# here and 1.98.1 there. That is worth writing down rather than assuming: the
+# instruction row beside these diverged 2.18% between the same two hosts, and
+# these did not move at all. What a run ASKS the allocator for is the
+# program's own shape; what it COSTS to ask is the toolchain's.
 interp_allocs=5313431
 interp_peak_bytes=933202
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

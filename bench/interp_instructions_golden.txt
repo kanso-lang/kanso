@@ -40,5 +40,11 @@
 # The row below is THIS CONTAINER's, rustc 1.94.1 against the runner's 1.98.1,
 # so the gate refuses to compare it here. Round one is deliberately red and
 # CI's own reading is what stands.
-interp_instructions=2375580224
+# 2026-09-16 (CI's own first sitting): the row above was this container's
+# 2,375,580,224 and the runner reads 2,324,888,431, 2.18% lower. The container
+# reads about 1.2% HIGH on the three compile rows, so this row's divergence is
+# the same sign and about twice the size -- an interpreted run is mostly the
+# interpreter's own loop, where a compile is mostly the front end's, and the
+# two do not have to move together between toolchains. CI's is the number.
+interp_instructions=2324888431
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
