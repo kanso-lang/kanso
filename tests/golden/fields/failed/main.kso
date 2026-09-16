@@ -1,3 +1,9 @@
 import "./lib"
 
-print (lib/joined (lib/make 0))
+# Since the 2026-09-15 ruling a raised err handed straight to a group with no
+# arm for it does not compile; the checker reads a call's arguments and not
+# the names it is handed, so the failure is bound first and the register
+# convention this fixture pins is reached through the name.
+made = lib/make 0
+
+print (lib/joined made)

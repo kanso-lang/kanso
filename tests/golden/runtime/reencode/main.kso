@@ -1,4 +1,8 @@
 import "./loop"
 import "std/json"
 
-loop/reencode (json/decode loop/doc) { "a":[4.5 6.7] "b":[8.9] } 2 0
+# Since the 2026-09-15 ruling a decoded document, which can be an err, is
+# bound to a name before it is handed to a group with no arm for it.
+decoded = json/decode loop/doc
+
+loop/reencode decoded { "a":[4.5 6.7] "b":[8.9] } 2 0

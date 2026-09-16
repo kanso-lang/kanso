@@ -1548,4 +1548,4 @@
 # CI last ran, stated, not reasoned from. compile_allocs held at 27,937 and
 # compile_memory is byte-identical.
 #
-compile_instructions=42873153
+compile_instructions=40273027
