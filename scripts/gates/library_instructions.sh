@@ -147,6 +147,12 @@ fi
 again=$(callgrind_annotate --inclusive=yes --threshold=100 /tmp/cg.library2 2>/dev/null \
         | awk '/kanso::main/ && !seen { gsub(/,/, "", $1); print $1; seen = 1 }')
 printf 'library_again row=%s (the first reading was %s)\n' "$again" "$got"
+# AND INTO THE ARTIFACT, because the job log is the expensive place to read it
+# from. The `*_got.txt` files are catted in one step at the end of the job,
+# eighty lines from its tail, where the callgrind output above this is several
+# hundred. A reader who has to fetch the whole job to learn whether the binary
+# was stable is a reader who will not bother.
+printf 'library_again=%s\n' "$again" >> library_ir_got.txt
 
 echo "::error::library_instructions counted $got against $want in $golden,"
 echo "::error::a move of $((got - want)). Exactly one of two things is true,"

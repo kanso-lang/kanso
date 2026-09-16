@@ -3732,7 +3732,7 @@ inside the run rather than in the loader. The same 13 hit kanso#1460, whose
 whole diff was a log entry, and a re-run of that commit came back on the
 golden.
 
-## What the gate printed, and why it was not enough
+**What the gate printed, and why it was not enough.**
 
 The gate has printed a binary sha and a silicon line on every run since the
 last time this happened, precisely so a reader could settle case (1) against
@@ -3754,7 +3754,7 @@ moves the library row by 393,285 instructions where the CI gap is 13. Thirteen
 is a branch taken once per process on a CPU-feature test, not a different
 memcpy.
 
-## The fix is one more reading, and it costs nothing on a green run
+**The fix is one more reading, and it costs nothing on a green run.**
 
 The question "did this binary count two numbers, or did two binaries count one
 each" is answerable inside the job that asks it. So each of the three compile
@@ -3774,6 +3774,22 @@ This does not settle the 13. It makes the NEXT occurrence settle itself:
 readings that agree inside one job put the difference outside the run, where
 the sha and the silicon lines are, and readings that disagree are case (2) on
 the spot.
+
+**And the second reading goes into the artifact, not only into the log.** The
+`*_got.txt` files are catted in one step at the end of the job, about eighty
+lines from its tail; the callgrind output the error block sits under is several
+hundred. Reading the first occurrence of this cost four fetches of whole job
+logs to recover two sha lines and two cpu lines, and the `*_again` row would
+have cost a fifth. A reader who has to fetch the whole job to learn whether the
+binary was stable is a reader who will not bother, so `compile_again`,
+`entry_again` and `library_again` are appended to the three `*_got.txt` files
+and arrive with the rows they belong to.
+
+**A third observation arrived while this was being written.** kanso#1463's own
+first run read 36,878,537, 131,884,271 and 132,025,154 — the same exact −13 on
+all three rows that kanso#1460 read, on a branch whose whole diff is gate
+scripts, a log entry and a mutation. Three pull requests now, none of which
+compiles differently from main, and the same thirteen.
 
 ## 2026-09-16 — gavel: two welfares and a meta-welfare over them, and the floor re-ratchets
 
