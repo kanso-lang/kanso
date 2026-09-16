@@ -186,7 +186,13 @@ front_end_rounds=47
 # 22,437, a FALL of 12 (-0.0534%); front_end_rounds unchanged at 62. One
 # binding fewer in lib/json/number.kso is one expression fewer for the
 # front end to visit on each round it is dirty.
-front_end_visits=15119
+# 2026-09-16 (`!` is a promise the checker takes): front_end_visits 15,119
+# -> 15,037, a FALL of 82 (-0.5424%); front_end_rounds unchanged at 47. A
+# strict index carries no miss into its answer set, so the sets the fixpoint
+# carries are narrower where a `]!` read feeds them and fewer declarations
+# re-dirty. compile_peak_bytes is CI's: this container is not the host the
+# row names.
+front_end_visits=15037
 # 2026-08-31 (the AST's identifiers are inline names): 728,030 -> 713,606, a
 # fall of 14,424, or 1.98%. Banked. The peak falls with the traffic because a
 # short name's bytes now live inside the AST node the allocator already gave

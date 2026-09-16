@@ -3962,3 +3962,17 @@ interpolation, a call with no arm, an index, `length`, a field read —
 still carries past it at runtime, the rows §22 keeps as FIRST and
 THROUGH; the ruling names operators, and this entry does not reach past
 them.
+
+**What moved.** The guards the emitter wrote for a miss the programmer
+promised away are the whole of the move, and every one is a fall. The
+decoder's `emitted_lines` 9,161 -> 9,137, `emitted_calls` 1,209 -> 1,204,
+`emitted_branches` 795 -> 790, defines held at 141; over the other
+thirteen programs `emitted_other_lines` 133,514 -> 132,468,
+`emitted_other_calls` 20,231 -> 19,960, `emitted_other_branches` 12,689
+-> 12,484, defines held at 2,350, with runbench alone 35,087 -> 34,592
+lines and scanbench 19,956 -> 19,604. The front end's visits on the
+compile corpus read 15,119 -> 15,037 (`front_end_visits`), rounds hold at
+47. Every runtime allocation vein and the lazy tier agree with their
+goldens: a guard is instructions, never an allocation. The work rows, the
+text vein, the machine-code vein and the compile rows are CI's to measure,
+and the 710 sites the ruling counted are where the work rows should fall.
