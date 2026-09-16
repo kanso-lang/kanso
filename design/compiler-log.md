@@ -4571,6 +4571,15 @@ overhead, and the 2026-09-15 map already reads it that way. A session that
 takes the row for one function's dispatch will chase twenty-seven instructions
 and find nothing.
 
+The same reading applies one row down and in the other direction.
+`d_runbench/tally_4` is 91,704,604 (4.98%) and `tally` is four lines of
+benchmark harness, which invites reading five per cent of the objective's
+headline term as bookkeeping. It is not: `escape/total`, `index/total`,
+`split/total` and `digested` are all inlined into it, and the row calls `k_b_at`
+690,000 times and `k_beat_iter` 1,552,821 times directly. Those are the
+benchmarks. Nothing in the harness is worth removing, and a session that tried
+would be editing the corpus to make a number smaller.
+
 **And STATUS.md contradicted itself.** The file indexes the ledger three times
 — an overview sentence near the top, a detail sentence with the split, and a
 paragraph that lists the open entries one by one — and only the detail one was
