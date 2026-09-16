@@ -231,6 +231,19 @@ rescue_licence = row
   (breaking "a_rescue_that_enters_its_own_packages_callback")
   no_setup
 
+# A measured decision that goes to Clay must have an entry in the ledger to
+# go to. Two sends were found sitting in the log with none, two days apart,
+# so the spec reads the log for the family. The mutation takes the ledger's
+# name out of the paragraph that files the `.rodata` page pin, and the spec
+# names that send as unanswered.
+clay_send_filed = row
+  "a measured decision sent to Clay with no ledger entry to go to"
+  true
+  "cargo test --release --test a_question_sent_to_clay_has_a_ledger_entry"
+  "specs (unit, golden, differential)"
+  (breaking "a_send_to_clay_with_no_ledger_entry")
+  no_setup
+
 # The 2026-09-15 ruling's third part: a raised err arriving where a value is
 # wanted does not compile. The mutation deletes the one call that asks, and
 # the three error fixtures that pin the refusal then compile clean, which the
@@ -1840,7 +1853,9 @@ rows_c1k = text/concat rows_c1j [coverage_oracle coverage_oracle_format]
 
 rows_c1l = text/concat rows_c1k [coverage_page coverage_page_format]
 
-rows_c1m = text/concat rows_c1l [beat_cursor rescue_licence raised_err]
+rows_c1m0 = text/concat rows_c1l [beat_cursor rescue_licence raised_err]
+
+rows_c1m = text/concat rows_c1m0 [clay_send_filed]
 
 rows_c1n = text/concat rows_c1m [carry_failure err_as_pattern force_chain]
 

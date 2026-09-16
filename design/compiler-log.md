@@ -4624,3 +4624,60 @@ already been.
 So the run term's five largest rows are all read: two mapped with their one
 removable piece now waiting on Clay, and three with nothing under them. The
 queue's next run-side lead is not in this profile at this granularity.
+
+## 2026-09-16 — a second decision found sitting in the log with nobody to receive it, and the check that now reads for them (DONE)
+
+The entry above this one closed by naming a gap it did not fix: nothing checked
+that a log paragraph saying a question goes to Clay had an entry in
+`design/pending-gavels.md` to go to. It found one such paragraph, a
+byte-position scan worth −1.2193% of the run term, filed a day late.
+
+Sweeping the same file for the rest of the family found a second, from the
+2026-09-15 entry "the maps parse is outside all three compile rows". Pinning
+`.rodata` to a fixed page removes the "by layout" term from the compile rows
+for anything growing ahead of it: on two sources differing by a hundred
+functions, `program` reads 43,471,592 on both against an unpinned pair that
+differed by 5,849. The paragraph prices it — about 1 per cent of binary at
+0x100000, or 52 KiB at 0x40000 with a loud link failure when outgrown — and
+closes "is Clay's, and goes to him with these numbers rather than to the
+ledger". `design/pending-gavels.md` is the only channel a waiting decision
+has. A session cites entries by heading, never by a task id, because task ids
+resolve nowhere outside the session that made them, so "to him rather than to
+the ledger" is a decision addressed to no one who can receive it. It is filed
+there now, under Open, not blocking, with a recommendation to decline it.
+
+Two instances two days apart is a process defect rather than a slip, so the
+check is built: `tests/a_question_sent_to_clay_has_a_ledger_entry.rs`.
+
+**What the check reads, and the two objections it had to answer.** The gap
+paragraph's own words were that a scan for the phrase "would pass over every
+historical entry that has since been ruled, so it would either be noisy or
+would need a list of exemptions that goes stale the way the counts did". Both
+halves are answered rather than worked around.
+
+The noise is answered by what a send carries. A decision that goes to Clay goes
+with its measurement — the filing rule says an entry carries the numbers behind
+it — so a paragraph counts as a send only when it holds a grouped number of
+five figures or a percentage. That is the whole difference between the two real
+sends above and the paragraph that merely describes the phrase; the latter
+names no number, and it is skipped for that reason rather than by name.
+
+The exemption list is answered by not having one. The live log is append-only,
+so the 2026-09-15 paragraph cannot be edited to cite an entry filed on
+2026-09-16 — and it does not need to be. A send is satisfied when its own
+paragraph names the ledger file, OR when a later paragraph names it and quotes
+one of the send's own measurements, which is exactly the shape a filing entry
+takes. So the byte-position send reads as answered by the entry that filed it,
+through the shared 1,823,814,374, with nothing to keep up to date. This
+paragraph does the same for the `.rodata` send, through 43,471,592.
+
+Watched red first, and for the right reason: on the tree before this entry the
+spec named exactly one paragraph, the `.rodata` one, and quoted it in full.
+Ratchet row `clay_send_filed`.
+
+**What it does not do.** It cannot tell a decision that is Clay's from one the
+implementer should settle, and it does not try; it reads the log's own words
+for a send and asks only that the send have somewhere to land. A question
+settled without ever being written down as Clay's stays invisible to it. The
+count spec catches an entry filed and miscounted, this one catches an entry
+never filed, and neither catches a decision never written.

@@ -215,6 +215,52 @@ is too fine a distinction, the other answer is to keep the view and close the
 question — 1.22% of the run term is the price, written down, and the queue
 stops re-finding it.
 
+
+### Pinning `.rodata` to a fixed page, so code growth stops moving the compile rows
+
+**Cited:** the live log's 2026-09-15 entry "the maps parse is outside all three
+compile rows", whose closing paragraph measures this and says the choice "is
+Clay's, and goes to him with these numbers rather than to the ledger" — where
+this ledger is the only channel a waiting decision has, so it went nowhere.
+Searched this ledger, the live log and `design/log/compiler-log-archive.md` for
+`rodata`, `section-start` and the page-pin family: that one log paragraph is the
+only mention, and the question has never been asked here. Also read: kanso#1234,
+which chased the same "by layout" noise to glibc's `/proc/self/maps` parse and
+was ruled with `setarch` and sorts rather than a link change; and kanso#1404,
+which took the checkout path out of the rows. Neither touches section placement.
+
+**The question.** The three compile instruction rows move when code that sits
+ahead of `.rodata` in the binary grows, because every literal after it shifts.
+Most of this month's pull requests carry a line in their body naming some part
+of their compile-row delta as "by layout", and that term is what those words
+mean.
+
+Pinning the section to a fixed address removes the term for anything growing
+ahead of it. Built with `-C link-arg=-Wl,--section-start=.rodata=0x100000` on
+two sources differing by a hundred functions: `program` reads 43,471,592 on
+both, identical to the instruction, where the unpinned pair differed by 5,849.
+
+The price is the gap the linker writes. The binary grows from 4,677,120 to
+5,724,880 bytes at that address — about 1 per cent — or roughly 52 KiB at
+0x40000, one page above today's `.rodata`, which fails the link loudly the day
+the sections ahead of it outgrow it.
+
+What the pin cannot reach is growth *inside* `.rodata`. `src/runtime.c` and
+`lib/*.kso` are `include_str!`'d into it, so a runtime or library edit shifts
+every literal after them whatever the section's start — and those are the edits
+behind most of the "by layout" lines. So the pin buys the code-only case and
+leaves the common one alone.
+
+**Recommendation:** decline it, and record the decline. A 1 per cent larger
+shipped binary, or a measurement build linked differently from the shipped one,
+is a real cost against a term the pin only partly removes; and this repository
+has already ruled once, on kanso#1234, that the measurement should not be
+special-cased away from what ships. The "by layout" lines are honest — they say
+a row moved for a reason the change did not choose — and the rows are read as
+deltas against a named base, which is what makes them useful either way. If the
+answer is the other one, 0x40000 with the loud link failure is the shape to
+take, not 0x100000.
+
 ## Stale — the July campaign's unclosed letters (GAVELS.md, retired here)
 
 EMPTY. Clay ruled the last five in one sitting on 2026-08-26 — C struck,
