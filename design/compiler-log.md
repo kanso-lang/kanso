@@ -3836,6 +3836,32 @@ clause and the floor moves with it in the second round.
   here; the scripts bind instead.
 - Division's `ERR` and the strict index's miss, as above.
 
+### CI's sitting, written in the second round (kanso#1444)
+
+The stack of four landed as one pull request and CI sat it once, on the
+kanso#1443 base. The compile term falls as the provenance fixpoint retires:
+`compile_instructions` 42,873,153 -> 40,273,027, `entry_instructions`
+144,046,325 -> 140,614,828, `library_instructions` 144,845,876 ->
+140,855,393, `compile_allocs` 27,937 -> 27,173. The front end's peak rises,
+`compile_peak_bytes` 776,055 -> 781,895 (+5,840, +0.7525%): the RAISED bit
+rides in every inference set, the callback guard's seed table and the
+provenance walk are held for the whole of inference, and the effect type is
+one more declaration the front end holds. The run program pays for the
+arms it gained and the two runtime calls the emitter makes at a rescue
+site: `work_runbench` 1,823,669,249 -> 1,827,443,530 (+3,774,281,
++0.2070%), `work_jsonbench` 1,130,225,294 -> 1,133,644,520 (+0.3025%,
+the decoder's five `(err _)` arms), `work_encodebench` 3,452,224,040 ->
+3,452,269,515, `work_livebench` 2,872,789,146 -> 2,872,813,523,
+`work_oneshot` 17,983,841 -> 18,006,613, `work_digestbench` 9,830,203 ->
+9,830,546; five rows fall (basket, pendbench, readbench, scanbench,
+widebench). Machine code rises with the arms, `text` 1,735,116 ->
+1,737,148 summed over the fourteen. Welfare on CI's rows reads 69.58 ->
+69.64 and is banked. The standalone scanbench takes the split's respell so
+the shapes spec finds the pair identical, and two fixtures the ruling
+refused — the register-convention failure and the module-boundary
+reencode — bind the raised answer before handing it on, the shape every
+other reshaped fixture took.
+
 ## 2026-09-16 — gavel: `!` is the value on the programmer's word, and a miss halts at runtime
 
 Clay ruled the ledger's "What `!` promises the checker", filed 2026-09-15 the
