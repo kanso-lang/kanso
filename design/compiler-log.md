@@ -4411,3 +4411,59 @@ before this entry was written — the rescored column read 69.5936 where welfare
 scored 69.5960 — and goes green on the banked floor. Eight `data-golden` spans
 on `docs/compiler.html` quoted the old rows and were rewritten by
 `golden_prose --write`.
+
+## 2026-09-16 — a box handed to a binding parameter reaches the dispatch, and the dispatch answers wrong (OPEN)
+
+Found while respelling kq for this change, and it is this change's own, so it
+is recorded here rather than filed elsewhere.
+
+`check.rs`'s effect refusal covers an operator, an index, a field read, an
+`if` condition and a builtin that reads a value. At a call it refuses a box
+argument too — unless the callee's group BINDS at that position:
+
+    if found.is_some() && (pos >= 64 || binds & (1u64 << pos) != 0) {
+        continue;
+    }
+
+A bare binder can hold a box, so the licence is not wrong on its face. What
+it does not ask is what the binder's own body then does with the name, and
+one hop later the box is standing in front of a dispatch that was written for
+values.
+
+Eleven lines, and check says `ok`:
+
+    fn seen 7
+      "seven"
+
+    fn seen _
+      "other"
+
+    fn step x
+      seen x
+
+    pub fn run xs
+      step xs[1]!
+
+`run [7]` prints **other**. Drop the bang and spell the bound — `return "empty"
+if length xs < 1` then `step xs[1]` — and the same program prints **seven**.
+The box misses the `7` arm, falls to `_`, and nothing anywhere says so.
+
+Take the `_` arm away and it is louder but no earlier:
+`error[runtime]: no overload of `g/seen` matches these arguments`, at run
+time, from a program the checker passed. That is the shape kq hit: three of
+its ten unit tests failed that way before the respell — `encode_onto`,
+`pretty_onto`, `pretty_entry` — each one an `xs[i]!` carried through
+`elem_onto`/`elem_row`'s binding parameter into a group with no arm for a box.
+
+**Both halves are one question, and it is a design question rather than a
+bug with an obvious patch: how far does a binding position licence a box?**
+Three answers are available and they are not equally cheap. Refusing a box at
+any position of a group whose other arms are literals would catch both halves
+here and would also refuse `bind`-shaped code that means it. Tracking the box
+through the parameter is the honest answer and is a typing change, not a
+check. Leaving it and letting the dispatch answer is what ships today, and
+the first half of this entry is what that costs: a wrong answer, silently.
+
+Nothing here blocks the respell — every site in this tree and in kq is spelled
+so that no box reaches a dispatch — so this is a hole in the checking rather
+than in the change. It stays OPEN.
