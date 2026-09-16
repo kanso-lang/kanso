@@ -1033,7 +1033,7 @@ fn mark_reader(ctx: &mut Ctx<'_>, decl: usize) {
 /// literal counts as that literal (a declaration's name cannot be rebound,
 /// so the constant is the only thing the name can mean), and an
 /// interpolated string with fixed text in it cannot match a shorter one.
-pub fn arm_can_run(params: &[Pattern], args: &[Expr], consts: &HashMap<&str, &str>) -> bool {
+pub fn arm_can_run(params: &[Pattern], args: &[Expr], consts: &Consts<'_>) -> bool {
     params.iter().zip(args).all(|(param, arg)| {
         // (exact text if the argument is one literal, the least length it
         // can have)
@@ -1076,7 +1076,16 @@ pub fn arm_can_run(params: &[Pattern], args: &[Expr], consts: &HashMap<&str, &st
 
 /// A program's constants that are one string literal, by name: the only
 /// value such a name can mean, since a declaration's name cannot be rebound.
-pub fn literal_consts(program: &Program) -> HashMap<&str, &str> {
+/// The module constants a reader may take as their literal text.
+///
+/// The type is named here because inference owns the map: a reader outside
+/// this module that spells the hasher itself goes out of step the moment
+/// this module changes it, and the ratchet's `compile_ir` mutation changes
+/// exactly that. It did, and the mutation stopped building rather than
+/// turning its gate red.
+pub type Consts<'a> = HashMap<&'a str, &'a str>;
+
+pub fn literal_consts(program: &Program) -> Consts<'_> {
     let mut consts: HashMap<&str, &str> = HashMap::default();
     for d in program.fns.iter().filter(|d| d.params.is_empty()) {
         if let [Stmt::Expr(Expr::Str(parts, _))] = d.body.as_slice() {
