@@ -1,3 +1,2 @@
 error[endpoint]: unhandled err reached the entry: "a lookbehind matches one fixed width"
-  born in regexp/refused at std/regexp/regexp.kso:353
-  passed through regexp/taken ← regexp/scanned
+  born in regexp/refused at std/regexp/regexp.kso:397

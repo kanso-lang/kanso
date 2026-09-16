@@ -101,12 +101,22 @@ fn analyze_inner(program: &Program, inference: &crate::infer::Inference) -> Esca
     // The convention is a property of the position, not of one arm: if any arm
     // there names the whole value, every arm at that position is passed boxed,
     // or the arm that named it would be handed two words and no record.
+    //
+    // An `e@(err _)` arm is the exception, and it costs nothing to admit: the
+    // dispatcher already reads the two words back as one KValue, and on the
+    // failure path that KValue IS the failure, so the name is bound to the
+    // value that arrived and no record was ever wanted. Until 2026-09-16 the
+    // arm counted as an as-pattern like any other, and the five hand-back arms
+    // the 2026-09-15 ruling asked of the json decoder turned the convention
+    // off at every carried slot: sh_rec 0 -> 253,968,000 on the decode.
     carries.retain(|(name, arity, at), _| {
         let as_bound = program
             .fns
             .iter()
             .filter(|f| f.name == *name && f.params.len() == *arity)
-            .any(|f| matches!(f.params.get(*at), Some(Pattern::Ctor { whole: Some(_), .. })));
+            .any(|f| {
+                matches!(f.params.get(*at), Some(Pattern::Ctor { ty, whole: Some(_), .. }) if ty != "err")
+            });
         !as_bound
     });
     carries.retain(|(name, arity, at), _| {

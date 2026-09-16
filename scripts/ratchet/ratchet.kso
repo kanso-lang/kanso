@@ -243,6 +243,29 @@ raised_err = row
   (breaking "a_raised_err_reaching_a_value_site_compiles")
   no_setup
 
+# A failure crossing a beat carry in the two-word record convention was boxed
+# as a record and read back out of one; the mutation puts the read back and
+# the mem fixture a_failure_crosses_a_beat_carry_in_two_words dies on native
+# where the interpreter answers.
+carry_failure = row
+  "a failure read as a record on the far side of a carry"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_failure_read_as_a_record_at_a_carry_take")
+  release
+
+# An `e@(err _)` arm at a carried slot needs no record, and the mutation makes
+# it ask for one: the fixture an_err_as_pattern_keeps_a_carried_slot_unboxed
+# reads sh_rec=64000 against its 0.
+err_as_pattern = row
+  "an err as-pattern that boxes a carried slot"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "an_err_as_pattern_boxes_a_carried_slot")
+  release
+
 # The four `cargo test --test golden` rows above and below all point at the
 # micro corpus or the mem corpus. The error corpus — 161 fixtures pinning
 # every diagnostic the language emits — had no row at all, so nothing had
@@ -1689,7 +1712,9 @@ rows_c1l = text/concat rows_c1k [coverage_page coverage_page_format]
 
 rows_c1m = text/concat rows_c1l [beat_cursor rescue_licence raised_err]
 
-rows_c = text/concat rows_c1m [itself]
+rows_c1n = text/concat rows_c1m [carry_failure err_as_pattern]
+
+rows_c = text/concat rows_c1n [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

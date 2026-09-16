@@ -2990,6 +2990,33 @@ KValue k_field(KValue v, long long i) {
     if (v.tag == K_SUB) v = k_sub_base(v);
     return k_as_rec(v)->fields[i];
 }
+
+/* The by-value record convention packs a two-field record into two words:
+   field 0's int payload shifted above field 1's tag in the first word,
+   field 1's payload in the second. A failure crosses in the same two words
+   untouched: its first word is exactly K_ERR, and no packed value's first
+   word is, since a packed word carries a position above bit eight over a
+   field the analysis proved is never a failure. These two are the only
+   conversions between the two shapes, and both pass a failure through.
+   Until 2026-09-16 the emitter inlined them and neither did: a failure
+   staged through a beat carry was boxed as a record whose second field was
+   the failure, k_rec merged that into a failure, and the unpack on the far
+   side read two fields off it and handed the consumer a value whose first
+   word was not K_ERR. The consumer's record arm matched a failure. */
+KValue k_parsed_box(long long type_id, long long w0, long long w1) {
+    KValue words; words.tag = w0; words.payload = w1;
+    if (!k_not_failure(words)) return words;
+    KValue fields[2];
+    fields[0].tag = K_INT; fields[0].payload = (long long)((unsigned long long)w0 >> 8);
+    fields[1].tag = w0 & 255; fields[1].payload = w1;
+    return k_rec(type_id, 2, fields);
+}
+KValue k_parsed_words(KValue v) {
+    if (!k_not_failure(v)) return v;
+    KValue f0 = k_field(v, 0), f1 = k_field(v, 1);
+    KValue out; out.tag = (f0.payload << 8) | f1.tag; out.payload = f1.payload;
+    return out;
+}
 KValue k_err_inner(KValue v) { return k_err_box(v)->reason; }
 
 /* An err's three readers, `.reason`, `.cause` and `.origin` — the second

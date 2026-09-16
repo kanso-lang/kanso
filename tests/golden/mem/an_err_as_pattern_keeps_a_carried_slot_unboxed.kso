@@ -1,0 +1,43 @@
+# A scanner's answer is a two-field record that travels in two registers:
+# the position packed above the value's tag in one word, the value's payload
+# in the other. A consumer whose arm destructures the record reads the words
+# directly and no record is ever built. An arm that names the whole value,
+# like `r@(parsed p v)`, wants the record itself, so a slot with such an arm
+# is passed boxed for every arm, and the scanner builds a record per answer.
+#
+# `e@(err _)` is not that arm. The dispatcher reads the two words back as one
+# value before it matches, and on the failure path that value is the failure
+# that arrived, so the name binds to exactly what the caller sent and nothing
+# has to be built. The 2026-09-15 ruling asks every consumer of a fallible
+# scanner for an arm like this one, and until 2026-09-16 the arm turned the
+# two-register convention off: the json decoder built 253,968,000 bytes of
+# records it had built none of the day before.
+#
+# Every group in this loop hands back a `parsed`, so the loop is not a beat
+# and nothing crosses a carry; the only record this program could build is
+# the one the as-pattern would ask for. `sh_rec` is the pin: 0 with the arm
+# read as the failure case it is, 64,000 with it read as an ordinary
+# as-pattern, a record for each of the thousand scans.
+type parsed
+  pos
+  val
+
+fn scan 0
+  err "end of input"
+
+fn scan n
+  parsed n (n * 2)
+
+fn step (parsed p v) acc
+  walk (p - 1) (acc + v)
+
+fn step e@(err _) acc
+  parsed acc (length e.reason)
+
+fn walk n acc
+  step (scan n) acc
+
+fn report (parsed total reason_length)
+  "total {total}, stopped by a reason {reason_length} characters long"
+
+pub play = print (report (walk 1000 0))

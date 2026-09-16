@@ -907,6 +907,14 @@ fn raised_err_at(
         }
         Expr::App { head, args, piped: false, .. } => {
             let Expr::Ident(name, _) = head.as_ref() else { return };
+            // A getter is synthesized from a field read, so nobody can give it
+            // an arm, and the two routes check on opposite sides of the
+            // rewrite that makes one: refusing here would refuse `xs[i].x`
+            // through an import and run it direct. A field read of an err
+            // stays the runtime's sentence on every route, as a none's does.
+            if crate::ast::getter_field(name).is_some() {
+                return;
+            }
             if !args.iter().any(&raised) {
                 return;
             }

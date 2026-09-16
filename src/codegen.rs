@@ -1129,6 +1129,8 @@ declare %KValue @k_err_hop(%KValue, ptr)
 declare %KValue @k_rec(i64, i64, ptr)
 declare %KValue @k_pair_failure(%KValue, %KValue)
 declare %KValue @k_rec_reuse(i64, i64, ptr, %KValue)
+declare %KValue @k_parsed_box(i64, i64, i64)
+declare %KValue @k_parsed_words(%KValue)
 declare %KValue @k_concat_arr_mut(i64, ptr)
 declare %KValue @k_b_str_builder(%KValue)
 declare %KValue @k_field(%KValue, i64)
@@ -1802,34 +1804,16 @@ impl FnEmit {
     /// Undo the by-value convention: rebuild the record the two words hold.
     /// The type is whatever produced the value, which the escape analysis
     /// already knows, because only a returnable type is ever in this shape.
+    /// A failure rides in the same two words and comes back as itself: the
+    /// runtime asks before it builds, which the inline build here did not.
     fn box_parsed(&mut self, e: &str) -> String {
         let (_, id) = self.parsed[e];
         let w0 = self.tmp();
         self.raw(&format!("{w0} = extractvalue %parsed {e}, 0"));
         let w1 = self.tmp();
         self.raw(&format!("{w1} = extractvalue %parsed {e}, 1"));
-        let pos = self.tmp();
-        self.raw(&format!("{pos} = lshr i64 {w0}, 8"));
-        let vtag = self.tmp();
-        self.raw(&format!("{vtag} = and i64 {w0}, 255"));
-        let f0a = self.tmp();
-        self.raw(&format!("{f0a} = insertvalue %KValue undef, i64 0, 0"));
-        let f0 = self.tmp();
-        self.raw(&format!("{f0} = insertvalue %KValue {f0a}, i64 {pos}, 1"));
-        let f1a = self.tmp();
-        self.raw(&format!("{f1a} = insertvalue %KValue undef, i64 {vtag}, 0"));
-        let f1 = self.tmp();
-        self.raw(&format!("{f1} = insertvalue %KValue {f1a}, i64 {w1}, 1"));
-        let arr = self.tmp();
-        self.raw(&format!("{arr} = alloca [2 x %KValue]"));
-        let p0 = self.tmp();
-        self.raw(&format!("{p0} = getelementptr [2 x %KValue], ptr {arr}, i64 0, i64 0"));
-        self.raw(&format!("store %KValue {f0}, ptr {p0}"));
-        let p1 = self.tmp();
-        self.raw(&format!("{p1} = getelementptr [2 x %KValue], ptr {arr}, i64 0, i64 1"));
-        self.raw(&format!("store %KValue {f1}, ptr {p1}"));
         let t = self.tmp();
-        self.raw(&format!("{t} = call %KValue @k_rec(i64 {id}, i64 2, ptr {arr})"));
+        self.raw(&format!("{t} = call %KValue @k_parsed_box(i64 {id}, i64 {w0}, i64 {w1})"));
         t
     }
 
@@ -2261,21 +2245,16 @@ impl<'a> Backend<'a> {
                 return format!("%parsed {e}");
             }
             // a boxed record reached a by-value slot (a construction bound or
-            // passed outside tail position): unpack it into the convention
-            let f0 = f.tmp();
-            f.line(&format!("{f0} = call %KValue @k_field_fast(%KValue {e}, i64 0)"));
-            let f1 = f.tmp();
-            f.line(&format!("{f1} = call %KValue @k_field_fast(%KValue {e}, i64 1)"));
-            let posp = f.tmp();
-            f.line(&format!("{posp} = extractvalue %KValue {f0}, 1"));
-            let sh = f.tmp();
-            f.line(&format!("{sh} = shl i64 {posp}, 8"));
-            let vt = f.tmp();
-            f.line(&format!("{vt} = extractvalue %KValue {f1}, 0"));
+            // passed outside tail position, or a carry take): unpack it into
+            // the convention. A failure in the slot is its own two words, and
+            // the runtime hands them over unread rather than reading fields
+            // off a value that has none.
+            let u = f.tmp();
+            f.line(&format!("{u} = call %KValue @k_parsed_words(%KValue {e})"));
             let w0 = f.tmp();
-            f.line(&format!("{w0} = or i64 {sh}, {vt}"));
+            f.line(&format!("{w0} = extractvalue %KValue {u}, 0"));
             let w1 = f.tmp();
-            f.line(&format!("{w1} = extractvalue %KValue {f1}, 1"));
+            f.line(&format!("{w1} = extractvalue %KValue {u}, 1"));
             let a = f.tmp();
             f.line(&format!("{a} = insertvalue %parsed undef, i64 {w0}, 0"));
             let p = f.tmp();

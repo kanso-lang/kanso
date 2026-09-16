@@ -11,7 +11,10 @@
 #
 # So: a failure reaches neither arm, and leaves with a hop, the way it does
 # past any group whose arms all refuse it. A value still reaches the `some`
-# arm, which is what the annotation is for.
+# arm, which is what the annotation is for. The failure arrives by name: the
+# checker refuses a raised err handed straight to a group with no arm for
+# it, and reads calls rather than names, so the binding is what lets this
+# pin the runtime's answer.
 import "std/json"
 import "std/testing"
 
@@ -24,7 +27,9 @@ fn taken _:some
 fn taken v
   "a value: {v}"
 
-broken = taken (json/decode "[1, 2")
+decoded = json/decode "[1, 2"
+
+broken = taken decoded
 
 fine = taken 7
 

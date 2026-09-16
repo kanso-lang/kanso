@@ -1,0 +1,47 @@
+# A scanner's answer is a two-field record that travels in two registers,
+# the position packed above the value's tag in one word and the value's
+# payload in the other. A failure travels in the same two words untouched:
+# its first word is the err tag, which no packed record's first word can be.
+#
+# This loop is a beat: it allocates nothing it keeps, so the arena rewinds
+# every trip, and the scanner's answer has to cross the rewind through the
+# carry. The carry stages boxed values, so the two words are built into a
+# record on the way in and read back out of one on the way out. Until
+# 2026-09-16 both conversions assumed a record: the failure's words were
+# built into a record whose second field was the failure, k_rec merged that
+# into a failure, and the read on the far side pulled two fields off a value
+# that has none. `step`'s record arm then matched the failure, and `+` was
+# asked to add a garbage word to the total. The program printed
+# `error[runtime]: `+` is not defined for these values` on native and
+# `stopped: end of input` on the interpreter. Both conversions now ask
+# first, and a failure comes out of the carry as the failure that went in.
+#
+# The record built for the carry is the reason `sh_rec` reads 64,000 here
+# and not 0: a thousand scans, sixty-four bytes each. A beat that could
+# stage the two words themselves would not build them, and does not yet.
+type parsed
+  pos
+  val
+
+fn scan 0
+  err "end of input"
+
+fn scan n
+  parsed n (n * 2)
+
+fn step (parsed p v) acc
+  walk (p - 1) (acc + v)
+
+fn step e@(err _) _
+  e
+
+fn walk n acc
+  step (scan n) acc
+
+fn report e@(err _)
+  "stopped: {e.reason}"
+
+fn report total
+  "total {total}"
+
+pub play = print (report (walk 1000 0))
