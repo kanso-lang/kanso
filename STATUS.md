@@ -7,8 +7,9 @@ is stale — say so.
 ## Waiting on Clay
 
 The decisions live in design/pending-gavels.md — the single ledger; this file
-only indexes it. **Blocking right now: one** — what the compile term counts once codegen is
-in it, filed 2026-09-16. The `!` question before it was ruled 2026-09-16 and
+only indexes it. **Blocking right now: zero.** The last one, what the compile term counts
+once codegen is in it, was ruled 2026-09-16 the day it was filed: two
+welfares and a meta-welfare over them, with the floor re-ratcheted. The `!` question before it was ruled 2026-09-16 and
 reversed the same day: the bang is the channel that bubbles, so `xs[i]!` and
 every `!` name answer a box. The box-wrapping question before it was
 ruled 2026-09-15. The reconstruction coverage
@@ -39,8 +40,10 @@ kanso — sat here and was bounced on 2026-08-29: a performance question with no
 surface area is the implementer's, per the ledger's own charter, and the log
 carries the research mandate it left with.
 
-**Six questions are waiting** — one blocking, what the compile term counts
-once codegen is in it, filed 2026-09-16. The welfare-floor entry left
+**Five questions are waiting** — zero blocking. The last one, what the
+compile term counts once codegen is in it, was filed and ruled on 2026-09-16:
+two welfares and a meta-welfare over them, with the floor re-ratcheted. The
+welfare-floor entry left
 Blocking on 2026-09-14 with all three of its asks already answered: its two
 builds merged on 2026-09-13, the `git add bench/welfare_floor.json` permission
 it wanted is moot under Clay's ironclad rule of the same day, and its options
@@ -140,23 +143,24 @@ inlined bind for a pure index read and bound discharge for a literal index
 into a known-length list, each measured, with the floor moving under the
 ironclad rule where they come in short. Nothing here waits on a ruling.
 
-### The compile term counts what compiling costs, codegen included (2026-08-25)
+### Two welfares and a meta-welfare over them (2026-09-16)
 
-The archive's "gavel: welfare measures what compiling costs, not what it
-counts", found half-built on 2026-09-16. Every compile counter the objective
-weighs runs `kanso check` and stops before codegen, so the emitter, the `.ll`
-write and the clang invocation are outside the index; welfare pays for the
-optimizer's output through `run_instructions` and charges nothing for its
-time. Clay: "that was explicitly supposed to be one of the core scalars going
-into the welfare function!!!!" Owes: the term extended to codegen, the
-baselines rebased and the floor re-ratcheted as a model correction. BLOCKED on
-the ledger's "What the compile term counts once codegen is in it" — how far
-down the pipeline (emitter alone, or clang too) and which tier (`dev_clang`
-at `-O0`, `release_clang` at `-O3 -flto`), both of which set the numbers. That
-entry now carries Clay's 2026-09-16 proposal to split the objective in two —
-a development welfare over the edit-test loop and a production welfare over
-the binary, with a meta-welfare across them — which counts both tiers rather
-than choosing one, and is the entry's recommendation.
+The live log's gavel of that name, which supersedes the row "The compile term
+counts what compiling costs, codegen included" and closes the defect that row
+named: every compile counter the objective weighed ran `kanso check` and
+stopped before codegen, so the optimiser's cost sat outside the index while
+its output was paid for. The objective becomes development welfare (front-end
+cost, dev-tier codegen at `-O0`, interpreter start-up, speed and memory),
+production welfare (native run instructions and memory, release-tier codegen
+at `-O3 -flto`), and a meta-welfare over the two, which is what CI gates on.
+Owes: the development-side counters, none of which exist — interpreter
+start-up reusing kanso#1439's count-from-`main`, interpreter speed,
+interpreter memory, dev-tier codegen cost — release-tier codegen cost, every
+one of them joining `bench/objective_sources.txt` and its replay spec in the
+commit that adds it, weights and satiations priced from evidence per the
+2026-08-25 gavel, and the meta floor re-ratcheted from the rescored model in
+the same change. Clay: "yeah you've got to re-ratchet." Nothing here waits on
+a ruling.
 
 ### A build hole is spelled `_`, and fills exactly once (2026-08-24)
 
@@ -392,7 +396,7 @@ else. Chains that tested for `none` after an effect migrate.
     checked from here on two days and both refused by the tooling
   - whether an err gains readers a lambda callback can use
 
-**Six questions wait in `design/pending-gavels.md`** — one blocking, five
+**Five questions wait in `design/pending-gavels.md`** — zero blocking, five
 open — each with a recommendation. Recounted four times on 2026-09-16: the
 binding-position question joined Open with its measurement, the escape
 path's byte-position scan joined it, measured on 2026-09-15 and filed to
@@ -417,12 +421,15 @@ four of the six it named had been ruled or shipped since. A count maintained
 by hand goes stale by default, so `tests/the_status_index_counts_the_ledger.rs`
 now reads both files and fails when this sentence and the ledger disagree.
 
-The one blocking is what the compile term counts once codegen is in it: how
-far down the pipeline, and which of the two clang tiers. The two open are the box constructor's spelling,
+Nothing is blocking. The five open are the box constructor's spelling,
 recommended `effect`, which cloud builds against unless Clay names another;
-and the book teaching the boundary language, whose campaign ran on 2026-09-13
+the book teaching the boundary language, whose campaign ran on 2026-09-13
 and which now owes only ch04's "nothing is asked of the signature" framing,
-released by the 2026-09-15 gavel and moving with its build.
+released by the 2026-09-15 gavel and moving with its build; how far a binding
+position carries a box; a byte-position scan on a string for the escape path;
+and pinning `.rodata` to a fixed page so code growth stops moving the compile
+rows. The last three were filed on 2026-09-16 and this sentence named two of
+five until it was recounted the same day.
 
 This sentence named three blocking entries that Clay ruled on 2026-09-08 and
 went on naming them for six days. The count above it is pinned by a spec and
