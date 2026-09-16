@@ -141,6 +141,41 @@ ruling is what releases it. Still nothing here for Clay.
 explicit, an err is a value, and a bare err halts where it lands" (the live
 log). ch04's paragraph moves with that build. Still nothing here for Clay.
 
+### How far does a binding position carry a box?
+
+**Cited:** the live log's "a box handed to a binding parameter reaches the
+dispatch, and the dispatch answers wrong" (2026-09-16), which names three
+possible answers and rules none of them; the entry below it of the same date,
+which measures the cheapest one; the archive's "gavel: effects are types, and
+the words are the only doors" (2026-08-29), which says a box is opened by
+`bind`, `annotate` and `rescue` and by nothing else, and does not say what a
+box handed to an ordinary parameter does. Ten micro and runtime fixtures pin
+today's answer on three engines, `a_description_reaches_a_dispatch` and
+`a_plain_dot_hands_the_box_over` first among them.
+
+**The question.** A box carried through a plain parameter is invisible to the
+checker from then on. `encode_onto` handed a box directly is refused;
+`elem_onto x` then `encode_onto x` inside that body is not, because nothing
+says `x` holds a box. kq lost three unit tests to that shape and kanso-json
+two sites, each a box arriving at a group with no arm that could match it, so
+the program died at run time with a diagnostic about arguments rather than
+about the box.
+
+Refusing a box at every bare-binder position closes it and was built and
+measured: one refusal across the whole tree's modules, and TEN in the corpora,
+two of which are the ruled behaviour itself — a description reaching a
+dispatch lands on the bare arm, and `held e` receives a box and hands it back.
+So the blunt rule is not available without reversing those.
+
+**Recommendation:** track the box through the parameter — a position bound to
+a box carries a box into the body, and the existing refusal then fires at the
+call inside it. That is a typing change rather than a check, it leaves every
+one of the ten fixtures alone, and it is the answer the log entry that opened
+this thread already called the honest one. Cloud does not build it until Clay
+rules, because it changes what the checker proves about every program, and it
+does not block anything in flight: every site in kanso, kq and kanso-json is
+spelled today so that no box reaches a group with no arm for it.
+
 ## Stale — the July campaign's unclosed letters (GAVELS.md, retired here)
 
 EMPTY. Clay ruled the last five in one sitting on 2026-08-26 — C struck,

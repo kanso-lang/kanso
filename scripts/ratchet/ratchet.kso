@@ -336,6 +336,19 @@ literal_bound = row
   (breaking "a_literal_list_of_unknown_length")
   release
 
+# A type name inside a shell is several names: `<g/cell>effect` holds one
+# qualified name and one bare one, and the import check has to see the
+# qualified one. Splitting the whole spelling at its first slash answered
+# `<g`, which no import matches, so a file was refused for borrowing an
+# import it wrote and that import read as unused in the same run.
+qualified_yield = row
+  "a type name split at its first slash"
+  true
+  "cargo test --release --test a_qualified_yield_inside_an_effect_type"
+  "specs (unit, golden, differential)"
+  (breaking "a_type_name_split_at_its_first_slash")
+  release
+
 # The lines below a `return x if c` guard are the guard's untaken arm, and a
 # name bound there is a binding of the same body. Two analyses follow an
 # accumulator through the names it is bound to, and until 2026-09-16 both
@@ -1839,7 +1852,9 @@ rows_c1x = text/concat rows_c1w [guard_bind_linear guard_bind_chain]
 
 rows_c1y = text/concat rows_c1x [bytes_acc_position guard_tail_oracle]
 
-rows_c = text/concat rows_c1y [itself]
+rows_c1z = text/concat rows_c1y [qualified_yield]
+
+rows_c = text/concat rows_c1z [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

@@ -4467,3 +4467,77 @@ the first half of this entry is what that costs: a wrong answer, silently.
 Nothing here blocks the respell — every site in this tree and in kq is spelled
 so that no box reaches a dispatch — so this is a hole in the checking rather
 than in the change. It stays OPEN.
+
+---
+
+## 2026-09-16 — the bare-binder answer is measured and DECLINED; the import check could not read a qualified yield (DONE)
+
+Two things, and the second is what the first turned up.
+
+### The bare binder: measured, and it contradicts ten pinned fixtures
+
+The entry above — "a box handed to a binding parameter reaches the dispatch,
+and the dispatch answers wrong" — offered three answers. The cheapest is
+already half built: `check.rs` keeps one bit per position per dispatch group
+saying the group takes a box there, and three spellings set it, a bare name,
+a `_`, and an arm annotated `e:<int>effect`. Taking a bare name off that list
+is a five-line change. It was built and swept.
+
+**Against the tree's modules it costs one site.** Every module under `lib/`,
+`scripts/`, `bench/`, `hako/`, `examples/` and `docs/` checked against the
+patched compiler and against an unpatched one: only
+`scripts/module_differential` moves, where `laid`, `laying` and `made` thread
+an unopened `os/run` chain so a directory's files are written in order.
+
+**Against the corpora it costs TEN fixtures, and two of them are the ruling.**
+`a_description_reaches_a_dispatch` pins that a description handed to
+`seen v:cell` / `seen _` takes the bare arm on all three engines.
+`a_plain_dot_hands_the_box_over` pins that `held e` receives the box and hands
+it back, with the comment "the words are the only doors; the dot opens
+nothing". Eight more say the same in other containers:
+`a_container_does_not_run_what_it_holds`, `a_description_renders_in_an_interpolation`,
+`_rides_in_a_constructor`, `_rides_in_a_field`, `_rides_in_a_list`,
+`_rides_in_a_map`, `_rides_through_a_builtin`, and `the_box_built_by_hand`.
+
+So carrying a box through a plain parameter is not the defect. It is the
+language, pinned, on three engines. The first half of the entry above —
+`step (os/read_file "missing.txt")` printing `step got: <io>` — is
+`a_description_renders_in_an_interpolation` doing its job.
+
+What is left is the second half, and it narrows to one sentence: **a box that
+travels through a parameter into a LATER call is invisible to the checker.**
+`encode_onto` handed a box directly is refused today; the same box handed to
+`elem_onto x` and then to `encode_onto x` inside that body is not, because
+nothing says `x` holds a box. That is the typing change the entry above called
+the honest answer, and the ten fixtures are why the blunt substitute is not
+available. Filed to the ledger as the design question it is; the entry above
+stays OPEN, and this entry is its measurement.
+
+### The import check read `<os/process>effect` as the module `<os`
+
+Writing the annotation the declined rule would have needed turned up a defect
+of its own, older than either branch. A module file that says
+
+    fn laid root files at after:<os/process>effect
+
+is refused:
+
+    error[import]: `<os` is not imported here — a module's files share their
+    declarations, not their imports
+
+The import check asks each file which module qualifiers it uses and asked by
+splitting a type name at its first slash, so the whole spelling
+`<os/process>effect` answered `<os`. No import matches that, so the file is
+refused for borrowing an import it wrote, and in the same run that import
+reads as unused: two diagnostics, both wrong, for a program that compiles.
+`map[string os/process]` splits the same way, and `[]os/process` would.
+
+The check scans the runs of name characters now and marks the ones holding a
+slash, so a shell of any shape carries its names through. Module fixture
+`tests/golden/qualified_yield` with `tests/a_qualified_yield_inside_an_effect_type.rs`,
+watched red on the unpatched compiler on both engines; ratchet row
+`qualified_yield`.
+
+Nothing reached this before because the only way to write a qualified yield
+was to want one, and the annotation is rare. It is reachable from any module
+that names another module's type inside a shell.

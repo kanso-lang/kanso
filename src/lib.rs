@@ -2942,9 +2942,18 @@ fn mark_bare_quals(
 /// Every module qualifier the program references: `json/decode` marks
 /// `json` as used, in expressions, patterns, and typeset members alike.
 fn used_quals(program: &ast::Program, quals: &mut crate::hash::Set<String>) {
+    // A TYPE NAME IS NOT ALWAYS ONE NAME. `<os/process>effect`, `map[string
+    // os/process]` and `[]os/process` each carry a qualified name inside a
+    // shell, and splitting the whole spelling at its first slash reads `<os`
+    // or `map[string os` as the qualifier -- a name no import can match, so
+    // the file is refused for borrowing an import it wrote and the import
+    // itself reads as unused. Every run of name characters is a name, and the
+    // ones holding a slash are the qualified ones.
     fn mark(name: &str, quals: &mut crate::hash::Set<String>) {
-        if let Some((qual, _)) = ast::split_module(name) {
-            quals.insert(qual.to_string());
+        for part in name.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '/')) {
+            if let Some((qual, _)) = ast::split_module(part) {
+                quals.insert(qual.to_string());
+            }
         }
     }
     fn walk_pattern(p: &ast::Pattern, quals: &mut crate::hash::Set<String>) {

@@ -364,8 +364,10 @@ else. Chains that tested for `none` after an effect migrate.
     checked from here on two days and both refused by the tooling
   - whether an err gains readers a lambda callback can use
 
-**Two questions wait in `design/pending-gavels.md`** — zero blocking, two
-open — each with a recommendation. Recounted on 2026-09-15, when the
+**Three questions wait in `design/pending-gavels.md`** — zero blocking, three
+open — each with a recommendation. Recounted on 2026-09-16, when the
+binding-position question joined Open with its measurement. Recounted on
+2026-09-15 before that, when the
 box-wrapping entry left Blocking ruled, the `!` question it left behind
 joined Blocking, the constructor's spelling joined Open with a
 recommendation the build does not wait on, and the maps-parse entry left
