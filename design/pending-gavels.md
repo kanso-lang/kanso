@@ -55,45 +55,6 @@ went to the log rather than here.
 implementer's, per this file's own charter. The log carries the
 research mandate it left with.)
 
-### What `!` promises the checker
-
-**Cited:** the live log's "gavel: the box is explicit, an err is a value, and
-a bare err halts where it lands" (2026-09-15), part 3 as corrected by Clay
-the same day — a bare err reaching an operator, an index or an arm-less call
-is refused at check, like a `none`; the archive's "gavel: the suffix
-contracts are refusals, as ruled in July" (2026-09-03), which says a `!` name
-must be able to answer a failure; and the retired Blocking entry's
-measurement of 2026-09-10: 723 `]!` sites in the tree, 13 opening their
-answer with a word, 710 handing it straight to an operator, a group or a
-field, and a two-million-element loop at 9 allocations and 21 ms as
-`acc + xs[i]!` against 8,000,014 allocations, 352 MB and 65 ms as
-`xs[i]! .> (v -> go (acc + v))`.
-
-**The question.** `xs[i]` answers `none` on a miss and the checker demands an
-arm. What does `xs[i]!` answer, as the checker reads it?
-
-1. **A box.** `xs[i]!` is the manual box applied at the read: `<t>effect`
-   holding the element or the err. Consistent with the errors page's "a
-   promise; a miss is a failure" and with a failure being something only a
-   foreign `rescue` ends. Every one of the 710 operator sites owes a `.>`,
-   and sha256's compress and regexp's scanner pay the closure-per-element
-   price measured above, or the checker learns to discharge bounds it can
-   see and those sites write nothing.
-2. **The value, on the programmer's word.** `!` tells the checker to drop
-   the miss from the answer set: `xs[i]!` reads as data, the 710 sites stand
-   as written, and a miss at runtime is an err value reaching an operator,
-   which halts with the report the way `+` on a string halts today. `!` is
-   then the recorded decision "I have checked this", which is what a
-   language whose source contains only decisions would spell it as. The cost
-   is that it is the one place the checker takes a promise instead of a
-   proof.
-
-**Recommendation:** 2. It is what the tree already assumes at 710 sites, it
-keeps the kernels free, and it gives `!` one meaning at the index and at the
-name — a promise the checker takes and the runtime enforces. Reading 1 is
-the purer one and should win only if a bound-discharging checker is on the
-table, which is a build with a measurement in front of it, not a ruling.
-
 ## Open, not blocking
 
 ### The box constructor's spelling

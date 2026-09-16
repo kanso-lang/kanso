@@ -2763,3 +2763,38 @@ goldens need no re-sit because they were never sat on the other reading.
 STATUS.md's row comes off when this lands, which is the chat's. The
 `.rodata` pin is a measured option, recorded above, and not a question the
 ledger needs.
+
+## 2026-09-16 — gavel: `!` is the value on the programmer's word, and a miss halts at runtime
+
+Clay ruled the ledger's "What `!` promises the checker", filed 2026-09-15 the
+hour the box-wrapping question was ruled, by taking its recommendation: "oh
+yeah your recommendation is right i think."
+
+**The ruling.** `!` tells the checker to drop the miss from the answer set.
+`xs[i]!` reads as data: the element's type, no `none`, no err, no box. The
+710 sites in the tree that hand `xs[i]!` straight to an operator, a group or
+a field stand as written. A miss at runtime is an err value reaching an
+operator, and it halts with the report the way `+` on a string halts today.
+`!` is the recorded decision "I have checked this", and it is the one place
+the checker takes a promise instead of a proof.
+
+**What it closes.** The in-range read. sha256's compress and regexp's
+scanner keep `s[5] + s[6]` at 9 allocations and 21 ms on two million
+elements; the 8,000,014-allocation bind shape the retired entry priced is
+never written. The literal rider's reading — `xs[i]!` as the manual box
+applied at the read, every one of the 710 sites owing a `.>` — is declined,
+and the bound-discharging checker that would have made it free is not on
+the table.
+
+**What it settles about the name.** `!` means the same thing at the index
+and at the name: a promise the checker takes and the runtime enforces. A `!`
+declaration still answers a failure, per the 2026-09-03 suffix contracts;
+what it answers is a bare err, which its caller either matches with an
+`(err _)` arm or hands on to something that halts.
+
+**Together with the 2026-09-15 gavel.** The box is explicit and IO applies
+it; a bare err is data; a bare err where a value is wanted is refused at
+check unless `!` said otherwise, in which case the runtime enforces the
+promise. That is the whole failure model, and nothing about it waits on a
+ruling. The entry leaves the ledger in this commit. STATUS.md's row for the
+explicit box drops the clause that said its `!` half was unruled.
