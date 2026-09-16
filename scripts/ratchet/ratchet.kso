@@ -270,12 +270,33 @@ pend_counters = row
   (breaking "pending_cells_proven_strict")
   benchmarks
 
-scan_counters = row
+# The leak is caught by the micro corpus, not by a counter, and the row said
+# otherwise for months. A lazy verdict is per (group, arity, index) and codegen
+# consults it with no arm to disambiguate, so a leaked verdict makes the
+# emitter build a thunk in one arm and release it at the group's merged tail,
+# which the other arm reaches -- IR whose release does not dominate its thunk.
+# clang runs with -disable-llvm-verifier and so takes the broken module and
+# SIGSEGVs in the Register Coalescer rather than rejecting it, which read here
+# as UNBUILT: the tree would not compile, the counter gate never ran, and the
+# row proved nothing on main from whenever the library grew the shape until
+# 2026-09-16. `no_setup` and a gate that builds is what the header above
+# prescribes for a defect that IS a build failure.
+scan_leak = row
   "a lazy verdict leaking from one arm of a group to another"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "lazy_verdict_leaks_between_arms")
+  no_setup
+
+# And scan_counters, left with no row when the one above moved off it, gets
+# one aimed at what it is for.
+scan_counters = row
+  "a library loop admitted to the carry tier"
   true
   (gating "scan_counters")
   "cost goldens (deterministic ratchet, no clocks)"
-  (breaking "lazy_verdict_leaks_between_arms")
+  (breaking "the_carry_tier_admits_library_loops")
   benchmarks
 
 # readbench joined on 2026-09-04 and this row with it, in the same pull request,
@@ -1427,7 +1448,9 @@ digest_counters = row
   (breaking "an_arena_block_that_grew_unmeasured")
   benchmarks
 
-rows_a = [formatting linting python_free goldens mem_shapes release_profile]
+rows_a0 = [formatting linting python_free goldens scan_leak]
+
+rows_a = text/concat rows_a0 [mem_shapes release_profile]
 
 rows_b1a = [decode_counters escape_counters pend_counters digest_counters]
 
