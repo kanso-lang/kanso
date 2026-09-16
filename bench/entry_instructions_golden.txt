@@ -536,4 +536,8 @@
 # runs and round five read another, so the row is stable per binary and moves
 # between them; 13 in 132 million is 1.0e-7, against the 508 the same shape
 # cost under glibc, which is the one thing here that is an improvement.
-entry_instructions=131884284
+# 2026-09-16 (the linearity analysis indexed both ways; kanso#1464):
+# entry_instructions 131,884,284 -> 131,837,650, a FALL of 46,634 (-0.0354%).
+# The module row's note carries the reasoning; this row falls by the same
+# proportion, which is what makes it layout rather than work.
+entry_instructions=131837650

@@ -3793,6 +3793,20 @@ What is genuinely left is `callsites_unique_in` itself, which is still the
 work that remains inside those few declarations, and `codegen::Backend::emit`,
 which was 12.54% of the old build and is a much larger share of the new one.
 
+**What CI read, and it is not what this change did.** The three compile rows
+fell -13,771 (-0.0373%), -46,634 (-0.0354%) and -46,344 (-0.0351%). None of
+them is this change doing less work on that path: `kanso check` does not run
+the linearity analysis at all. `in_place_pushes` is called from `emit_ir`, and
+from main.rs only behind `KANSO_BEAT_REPORT`, which no gate sets.
+
+So it is the layout family, and a larger member of it than the seven before it.
+The falls are proportional to the row rather than a fixed amount per process,
+which rules out the maps parse; what they most likely are is
+`mentioned_as_value` leaving the release build — it is `#[cfg(test)]` now — and
+the generic instantiations linear.rs shares with the check path being inlined
+differently without it. Recorded as unattributed rather than explained, which
+is the honest state of it. Welfare holds at 69.75.
+
 ## 2026-09-16 — gavel: two welfares and a meta-welfare over them, and the floor re-ratchets
 
 Clay ruled the ledger's "What the compile term counts once codegen is in it"

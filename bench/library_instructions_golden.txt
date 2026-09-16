@@ -560,4 +560,9 @@
 # runs and round five read another, so the row is stable per binary and moves
 # between them; 13 in 132 million is 1.0e-7, against the 508 the same shape
 # cost under glibc, which is the one thing here that is an improvement.
-library_instructions=132025167
+# 2026-09-16 (the linearity analysis indexed both ways; kanso#1464):
+# library_instructions 132,025,167 -> 131,978,823, a FALL of 46,344 (-0.0351%).
+# The third of three falls at -0.0373%, -0.0354% and -0.0351% -- close enough
+# to proportional that a fixed per-process term is ruled out, and the analysis
+# this change rewrites is not on the path any of them walks.
+library_instructions=131978823
