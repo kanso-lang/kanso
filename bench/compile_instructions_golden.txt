@@ -1566,4 +1566,15 @@
 # not reasoned from. compile_allocs held at 27,173 and compile_memory is
 # byte-identical; the emitted, machine-code and every runtime vein agreed.
 #
-compile_instructions=40184361
+# 2026-09-16 (kanso#1447, round three): the same change re-read on the merged
+# tree, and this row FALLS: 40,273,027 -> 40,269,818, -3,209
+# (-0.0080%), against the base kanso#1444 left. The round above read
+# 40,184,361 on a branch that had not yet merged main's kanso#1448 through
+# the base. The base row is the same number on both trees, CI-verified either
+# side, so the swing is not the base moving: kanso#1448 moves `src/linear.rs`
+# and the layout under it, and the hole's edit lands in `src/check.rs` on top
+# of that. Regenerated from CI's own reading, stated, not reasoned from.
+# compile_allocs held at 27,173 and compile_memory is byte-identical; the
+# emitted, machine-code, compiler-libraries and every runtime vein agreed.
+#
+compile_instructions=40269818

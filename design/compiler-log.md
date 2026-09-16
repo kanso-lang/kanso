@@ -4157,3 +4157,25 @@ emitter writes, and a hole is neither. `machine_code`, `compile_allocs`,
 moves are named above. Welfare rises 69.63579260553377 ->
 69.63860211489504, banked with `--set` in this PR; eight page spans across
 five paragraphs quote the three compile goldens and moved with them.
+
+**ROUND THREE, and the first reading was measured on a tree the base had
+moved out from under.** The rows above were read before main's kanso#1448
+reached this branch through kanso#1444's tip. CI's fresh sitting on the
+merged tree, against the same base, reads `compile_instructions` 40,273,027
+-> 40,269,818 (−3,209, −0.0080%), `entry_instructions` 140,614,828 ->
+140,695,826 (+80,998, +0.0576%), `library_instructions` 140,855,393 ->
+140,935,957 (+80,564, +0.0572%). The base row is the same number on both
+trees and CI verified it either side, so the base did not move; the two
+single-file rows fell 214,995 and 214,031 in the earlier round and rise here.
+kanso#1448 moves `src/linear.rs` and the layout under it, the hole's edit
+lands in `src/check.rs` on top of that, and compile_instructions is a layout
+vein — it has recorded layout-only moves before. So the hole's own effect on
+these rows is smaller than one sitting made it look, and neither sitting is
+wrong about the tree it was taken on.
+
+`compile_allocs` held at 27,173, `compile_memory` is byte-identical, and
+`machine_code`, `emitted_code`, `compiler_libraries` and all fourteen runtime
+rows agreed. The summed compile term rises, so welfare falls 69.63860 ->
+69.63510 and the floor moves with it, by hand, under CLAUDE.md's ironclad
+clause: `_` is the 2026-08-24 gavel, and a change that builds a ruled part of
+the language lowers the floor by exactly what it costs.
