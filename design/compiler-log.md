@@ -5046,3 +5046,40 @@ measures them and round two writes them in. welfare reads those goldens, so it
 is red with them, and the floor is left at 69.59152459326125 rather than set
 from a projection: a floor banked before the goldens carry CI's rows freezes a
 number this container guessed.
+
+## Round two: CI's sitting on the merged tree, and three rows that fell
+
+Round one came back red on exactly the three the body predicted and on nothing
+else. The cost-goldens job's own vein summary — the authority, because its
+nineteen counter steps are `continue-on-error` and the API's per-step
+conclusions read SUCCESS either way — listed `compile instructions:failure`,
+`entry instructions:failure`, `library instructions:failure` and `success` for
+the other sixteen, `compile memory` and `compile allocations` among them.
+Fifteen of the run's nineteen jobs were green, three were still running, and
+welfare was skipped behind the goldens it reads.
+
+The merged tree is neither branch, so CI measured the three fresh and all three
+FELL:
+
+| vein | the chain's golden | CI on the fold | |
+| --- | --- | --- | --- |
+| `compile_instructions` | 40,830,719 | 40,794,557 | −36,162 (−0.0886 per cent) |
+| `entry_instructions` | 144,799,835 | 144,656,649 | −143,186 (−0.0989 per cent) |
+| `library_instructions` | 145,482,390 | 145,339,594 | −142,796 (−0.0982 per cent) |
+
+Summed, −322,144. Nothing in the fold set out to make the front end cheaper:
+the tip carries the `!` respell, the build hole and the qualified-yield fix
+together, and this is the layout under all three. `compile_allocs` holds at
+27,395 and `compile_memory` is byte-identical, which is what says the fall is
+layout rather than a pass doing less — an actual reduction in work would have
+moved the allocation row with it. The three land at 40,794,557, 144,656,649
+and 145,339,594.
+
+The rows went in first, then `all_pages.sh --write` rewrote the eight
+golden-quoting spans that name them (four `compile`, two `entry`, two
+`library`), and only then was the floor banked: 69.59152459326125 ->
+69.59317353129765. That order matters and is the rule — `--set` records
+whatever score the committed goldens produce, so banking before they carry
+CI's rows freezes a number this container projected rather than the one CI
+measured. The rise is small and it is still a rise, and a gain nobody ratchets
+is one the next change is free to spend.

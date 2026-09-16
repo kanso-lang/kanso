@@ -475,4 +475,14 @@
 # compile_allocs held at 27,173 and compile_memory is byte-identical; the
 # emitted, machine-code, compiler-libraries and every runtime vein agreed.
 #
-library_instructions=145482390
+# 2026-09-16, the five-PR fold (kanso#1453). The merged tree is neither
+# branch, so this row was re-measured rather than carried: 145,482,390
+# -> 145,339,594, a fall of 142,796 (0.0982 per cent) on the library path.
+# Nothing in the fold set out to make the front end cheaper; the tip
+# carries the `!` respell, the build hole and the qualified-yield fix
+# together, and this is the layout under all three. compile_allocs holds
+# at 27,395 and compile_memory is byte-identical; emitted, machine code,
+# compiler libraries and every runtime vein agreed. CI's own reading,
+# stated, not reasoned from.
+#
+library_instructions=145339594
