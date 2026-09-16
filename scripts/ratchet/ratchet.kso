@@ -1745,9 +1745,11 @@ rows_c1l = text/concat rows_c1k [coverage_page coverage_page_format]
 
 rows_c1m = text/concat rows_c1l [beat_cursor rescue_licence raised_err]
 
-rows_c1n = text/concat rows_c1m [carry_failure err_as_pattern force_chain hand_box callback_err]
+rows_c1n = text/concat rows_c1m [carry_failure err_as_pattern force_chain]
 
-rows_c = text/concat rows_c1n [itself]
+rows_c1o = text/concat rows_c1n [hand_box callback_err]
+
+rows_c = text/concat rows_c1o [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
