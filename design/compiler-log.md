@@ -2353,8 +2353,7 @@ at 5,377, `module_visits` at 2,656, `emitted_other_branches` at 13,099,
 
 ---
 
-## 2026-09-16 — A folder handed to `fold` is never called by name, and a
-## walk that found no call site answered yes (DONE)
+## 2026-09-16 — A folder handed to `fold` is never called by name, and a walk that found no call site answered yes (DONE)
 
 **The defect.** `param_is_linear` in src/linear.rs marked a parameter an
 accumulator when every call site handed over a uniquely-owned value at that
@@ -2635,8 +2634,7 @@ scored 69.5960 — and goes green on the banked floor. Eight `data-golden` spans
 on `docs/compiler.html` quoted the old rows and were rewritten by
 `golden_prose --write`.
 
-## 2026-09-16 — The lazy-verdict ratchet row proved nothing, and scan_counters
-## had no row at all (DONE)
+## 2026-09-16 — The lazy-verdict ratchet row proved nothing, and scan_counters had no row at all (DONE)
 
 **The row reported UNBUILT, and it was main's.** kanso#1447's ratchet run
 returned 113 rows, 112 red and one refused: `a lazy verdict leaking from one arm
@@ -3370,3 +3368,38 @@ numbers argue otherwise, which is a separate argument made about the weights.
 earlier that the trade he wanted — longer compiles for a faster binary — was
 "already free," and presented that as the model working. It is the defect,
 described approvingly. The gradient it creates is real and so is the hole.
+
+---
+
+## 2026-09-16 — a log heading wrapped onto a second line, and the drift gate counted it twice
+
+`scripts/page_drift` decides how far the log has run ahead of
+docs/compiler.html by counting the lines a commit adds that begin `## `, and
+fails past a budget of three. Its `heading?` is one line: `text/slice l 1 4 ==
+"+## "`. Nothing else in the gate asks what a heading is.
+
+kanso#1448 and kanso#1451 each landed a title hard-wrapped at the column limit,
+and the wrap put `## ` at the start of the second line too:
+
+    ## 2026-09-16 — A folder handed to `fold` is never called by name, and a
+    ## walk that found no call site answered yes (DONE)
+
+Markdown renders that as two h2s, the second a sentence fragment. The gate
+reads it as two entries, so each of those pull requests spent two of the three
+where it owed one, and any later branch inherits a budget already half gone.
+Both are joined onto one line here; the words are unchanged.
+
+**The property, and why it is not "a heading is short".** Non-dated `## `
+sections are a real convention in this file — an entry carries `## the
+measurement`, `## CI's sitting`, `## CORRECTION: ...` as its own sub-sections,
+and fourteen of them stand in the live log. What separates one of those from a
+wrap is what precedes it: a section heading follows a blank line, a wrap
+follows the line it broke from. So the rule
+`tests/a_log_heading_is_one_line.rs` reads is that no `## ` line is
+immediately preceded by another `## ` line. Measured when it was written: two
+violations in the live log, zero across the archive's 1,272 entries, so the
+convention was already universal and only these two entries broke it. It reads
+both files, so an archived wrap is caught too.
+
+Watched red on the unfixed log, naming both pairs in the failure message, then
+green on the join.
