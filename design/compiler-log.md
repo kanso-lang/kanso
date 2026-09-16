@@ -3716,6 +3716,77 @@ turns on is how many of the 49,229 calls belong to collections a phase-scoped
 arena could own. That is not answered here. Recorded as an open lead with
 nothing above it that sizes it.
 
+## 2026-09-16 — a function named for an imported type, and the backend that could not find it
+
+Seven lines, and `kanso check` says ok while the two engines disagree:
+
+    import "std/json"
+
+    pub play = print "{entry 1} {length (json/decode "[1]")}"
+
+    fn entry i
+      i + 1
+
+The interpreter prints `2 1`, which is right. The native backend answers
+`error: native backend: unknown type `<module>/entry``. Rename the function to
+`row` and everything passes; drop the json import and everything passes. So the
+trigger is a module declaring a function whose name one of its imports exports
+as a TYPE — and that is a thing the language allows, because the two are
+different namespaces and the checker has always said so.
+
+## The chain, end to end
+
+1. `enroll_bare` gives json's exported type `entry` a bare twin named `entry`.
+2. `check::declared_names` returns ONE flat set holding both `program.types`
+   names and `program.fns` names.
+3. `qualify` builds its spelling map from that set, so this module's `fn entry`
+   puts `entry -> <module>/entry` in it.
+4. `rewrite_pattern` rewrites a `Pattern::Ctor`'s TYPE name through that same
+   map, so the bare `entry` type becomes `<module>/entry`.
+5. `codegen.rs`'s `emit_pattern` looks that up in `type_ids`, which holds
+   `json/entry` and `entry` and not it, and returns the internal error.
+
+Three other lookups share the map and the bug: `Pattern::Annotated`'s type,
+`Expr::Upcast`'s target, and a typeset member inside `qualify` itself. Each is
+a type position reading a map that also holds function names.
+
+## The fix, and why it is one map rather than two
+
+A constructor is CALLED by its type's name, so a VALUE position has to be able
+to find a type in this map. What must not happen is the reverse. So the map's
+value gains a flag — the spelling, and whether the name it replaces is a type —
+and the four type positions require it while the one value position does not.
+Two maps would have meant threading a second parameter through
+`rewrite_pattern`, `rewrite_stmt`, `rewrite_scope` and `rewrite_expr` and their
+thirty call sites; one flag changes the five lookups and nothing else.
+
+## The spec
+
+`tests/golden/micro/a_function_named_for_an_imported_type.kso`. The micro
+corpus runs every fixture as a LIBRARY through the harness's generated entry,
+which is the import path this bug lives on — `golden.rs`'s own comment says
+"the library path is also where four separate qualification bugs lived, none of
+which could fail a corpus that only ran files", and this is the fifth.
+
+Watched red before it went green. With the type flag taken off the constructor
+arm alone:
+
+    a_function_named_for_an_imported_type answers differently as a library
+      left: ""
+     right: "2 1\n"
+
+— the program produces nothing, because the backend refuses it, which is the
+failure as a user meets it rather than a claim about a map.
+
+## What it is not
+
+It is not a design decision about whether a function may share a name with an
+imported type. The checker already permits it and the interpreter already runs
+it; the loader disagreed with both, and the native backend's way of saying so
+was an internal error rather than a diagnostic. The differential law allows an
+engine to REFUSE a feature with a clear diagnostic and forbids it to diverge
+silently, and `unknown type <module>/entry` is neither clear nor a diagnostic.
+
 ## 2026-09-16 — gavel: two welfares and a meta-welfare over them, and the floor re-ratchets
 
 Clay ruled the ledger's "What the compile term counts once codegen is in it"
