@@ -16,4 +16,4 @@ d = io/write "a\n" >> io/write "b\n"
 
 xs = [(opaque d)]
 
-pub play = xs[1]!
+pub play = xs[1]

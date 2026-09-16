@@ -389,13 +389,26 @@ fn chain_groups(program: &Program, mut_sites: &MutSites) -> HashSet<Group> {
 /// The single-assignment locals of an arm, so a chain can pass through a
 /// named intermediate — a binding is pure naming, which preserves identity.
 fn local_binds(decl: &crate::ast::FnDecl) -> HashMap<&str, &Expr> {
-    decl.body
-        .iter()
-        .filter_map(|st| match st {
-            Stmt::Bind { pattern: Pattern::Var(n, _), expr } => Some((n.as_str(), expr)),
-            _ => None,
-        })
-        .collect()
+    let mut out = HashMap::default();
+    binds_into(&decl.body, &mut out);
+    out
+}
+
+/// The bindings of a body, read through its guards: everything under a
+/// `return x if c` is folded into the guard's `rest`, so a line bound below
+/// one is a statement of the same arm and a chain may pass through it. Until
+/// 2026-09-16 only the top level was read, and an accumulator handed on
+/// through a name bound under a guard was an alias the chain could not see.
+fn binds_into<'a>(body: &'a [Stmt], out: &mut HashMap<&'a str, &'a Expr>) {
+    for st in body {
+        match st {
+            Stmt::Bind { pattern: Pattern::Var(n, _), expr } => {
+                out.insert(n.as_str(), expr);
+            }
+            Stmt::Expr(Expr::Guard { rest, .. }) => binds_into(rest, out),
+            _ => {}
+        }
+    }
 }
 
 fn is_chain(
@@ -1256,7 +1269,7 @@ fn expr_allocates(
             expr_allocates(a, fn_names, allocating, seed_pass, site)
                 || expr_allocates(b, fn_names, allocating, seed_pass, site)
         }
-        Expr::Ident(..) | Expr::Int(..) | Expr::Float(..) => false,
+        Expr::Ident(..) | Expr::Int(..) | Expr::Float(..) | Expr::Hole(..) => false,
     }
 }
 
@@ -1544,16 +1557,22 @@ fn arg_ok(
     // that arrived at this arm's entry, threaded through mut appends, so its
     // header is below the mark and its growth is outside the arena. Raw
     // bytes hold no pointers, so nothing in it can dangle across a rewind —
-    // which is why this license reads BYTES and no other heap set.
-    if let Some(Pattern::Var(own, _)) = decl.params.first() {
-        let set0 = inference.param(decl_index, 0);
-        let locals = local_binds(decl);
-        let folds = crate::linear::fold_spellings(program);
-        if set0 != 0
-            && set0 & !FAIL & !BYTES == 0
-            && is_chain(arg, own, decl, &locals, mut_sites, chains, &folds)
-        {
-            return true;
+    // which is why this license reads BYTES and no other heap set. The
+    // builder is read at the position under test and at the first parameter:
+    // `assemble cs p acc` carries it third, and until 2026-09-16 only the
+    // first parameter was asked, so a builder anywhere else read as heap the
+    // moment its loop became a direct self-call.
+    let folds = crate::linear::fold_spellings(program);
+    let locals = local_binds(decl);
+    for slot in [position, 0] {
+        if let Some(Pattern::Var(own, _)) = decl.params.get(slot) {
+            let set = inference.param(decl_index, slot);
+            if set != 0
+                && set & !FAIL & !BYTES == 0
+                && is_chain(arg, own, decl, &locals, mut_sites, chains, &folds)
+            {
+                return true;
+            }
         }
     }
     // The list accumulator is read at the position under test rather than at
@@ -1561,7 +1580,6 @@ fn arg_ok(
     // and the list it is building second, which is the ordinary shape.
     if let Some(Pattern::Var(own, _)) = decl.params.get(position) {
         let set = inference.param(decl_index, position);
-        let locals = local_binds(decl);
         if set != 0
             && set & !FAIL & !LIST == 0
             && is_scalar_list_chain(
@@ -1688,7 +1706,7 @@ fn collect_names(e: &Expr, out: &mut HashSet<String>) {
                 }
             }
         }
-        Expr::Int(..) | Expr::Float(..) => {}
+        Expr::Int(..) | Expr::Float(..) | Expr::Hole(..) => {}
     }
 }
 
@@ -1739,7 +1757,7 @@ fn value_use(e: &Expr, name: &str) -> bool {
             TemplatePart::Interp(inner) => value_use(inner, name),
             TemplatePart::Lit(_) => false,
         }),
-        Expr::Int(..) | Expr::Float(..) => false,
+        Expr::Int(..) | Expr::Float(..) | Expr::Hole(..) => false,
     }
 }
 

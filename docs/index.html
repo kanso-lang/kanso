@@ -279,7 +279,7 @@ three</code></pre>
   ninth <span class="o">=</span> prices[<span class="n">9</span>]
   <span class="f">print</span> <span class="s">"sorted: <span class="i">{sort prices}</span>"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"doubled: <span class="i">{doubled}</span>"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">describe</span> ninth)</code></pre>
         </div>
-        <p>one import enrolls <code>std/list</code>'s names into the file's overload space—<code>map</code> and <code>sort</code> arrive bare, and dispatch resolves shared names by specificity, the same mechanism as everything else. no panicking access anywhere: <code>prices[9]</code> returns <code>none</code>, which propagates until a <code>describe</code> overload dispatches on it (assert presence with <code>prices[9]!</code> and a miss errs instead). indexing is 1-based, everywhere, no exceptions.</p>
+        <p>one import enrolls <code>std/list</code>'s names into the file's overload space—<code>map</code> and <code>sort</code> arrive bare, and dispatch resolves shared names by specificity, the same mechanism as everything else. no panicking access anywhere: <code>prices[9]</code> returns <code>none</code>, which propagates until a <code>describe</code> overload dispatches on it (insist with <code>prices[9]!</code> and the read answers an effect whose failure is the miss). indexing is 1-based, everywhere, no exceptions.</p>
       </div>
 
       <div class="showcase-cell">

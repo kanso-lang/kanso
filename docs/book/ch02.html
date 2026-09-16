@@ -129,7 +129,7 @@ sum 6 len 3 first 3</code></pre>
   </div>
 </div>
 
-<p>the plain subscript <em>asks</em>: a miss answers <code>none</code> rather than failing. and a <code>none</code> is loud—interpolate it and it prints as <code>&lt;none&gt;</code>, so a miss you forgot to plan for shows up in the output instead of passing as a plausible value. when the index must be there, add the sigil—<code>xs[i]!</code>—and a miss becomes an <code>err</code> that rides to the endpoint (chapter 04 draws this line carefully). asking for the ninth element of a three-element list:</p>
+<p>the plain subscript <em>asks</em>: a miss answers <code>none</code> rather than failing. and a <code>none</code> is loud—interpolate it and it prints as <code>&lt;none&gt;</code>, so a miss you forgot to plan for shows up in the output instead of passing as a plausible value. when the index must be there, add the sigil—<code>xs[i]!</code>—and the read answers an effect: a box holding the element, which <code>.&gt;</code> opens, and a miss is a failure that bubbles through the box to the endpoint (chapter 04 draws this line carefully). asking for the ninth element of a three-element list:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">at_miss.kso</div>
@@ -141,7 +141,7 @@ sum 6 len 3 first 3</code></pre>
   </div>
 </div>
 
-<p>one operation with two spellings. <code>xs[i]!</code> says the element is there; plain <code>xs[i]</code> says it might not be. which one you write is a claim about your data, and the compiler holds you to it.</p>
+<p>one operation with two spellings. <code>xs[i]!</code> says the element is there and hands you a box to open; plain <code>xs[i]</code> says it might not be and hands you the value, or <code>none</code>. which one you write is a claim about your data, and the compiler holds you to it.</p>
 
 <h2>maps</h2>
 
@@ -159,15 +159,15 @@ all: [entry "clay" 47 entry "mai" 8 entry "sam" 30]</code></pre>
   </div>
 </div>
 
-<p>the entries came back <code>clay</code>, <code>mai</code>, <code>sam</code>—alphabetical, though <code>mai</code> was inserted last. a map in kanso has no incidental order to accidentally depend on. and like a list, its lookup carries both spellings. the strict <code>ages["nobody"]!</code> promises the key exists, and a broken promise is an <code>err</code>:</p>
+<p>the entries came back <code>clay</code>, <code>mai</code>, <code>sam</code>—alphabetical, though <code>mai</code> was inserted last. a map in kanso has no incidental order to accidentally depend on. and like a list, its lookup carries both spellings. the strict <code>ages["nobody"]!</code> promises the key exists, and a broken promise is a failure bubbling from the box:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">map_miss.kso</div>
   <pre><code>ages <span class="o">=</span> { <span class="s">"clay"</span>:<span class="n">47</span> }
-<span class="f">print</span> <span class="s">"<span class="i">{ages[</span>"</span>nobody<span class="s">"]!}"</span></code></pre>
+ages[<span class="s">"nobody"</span>]! <span class="o">.&gt;</span> (age <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"<span class="i">{age}</span>"</span>)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run map_miss.kso</div>
-    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: "missing index "nobody""
+    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the executor: "missing index "nobody""
   born in the entry at map_miss.kso:2</code></pre>
   </div>
 </div>

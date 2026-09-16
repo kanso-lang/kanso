@@ -59,6 +59,10 @@ pub enum Expr {
         ty: String,
         span: Span,
     },
+    /// `_` where a construction argument goes, inside a `build` block: a
+    /// hole for a field the block fills exactly once, ruled 2026-08-24. A
+    /// none is genuine absence and never a placeholder.
+    Hole(Span),
     /// The last expression freezes to an ordinary immutable value.
     Build(Vec<Stmt>, Span),
     /// Everything below a fired guard is folded into the untaken branch,
@@ -96,6 +100,7 @@ impl Expr {
             | Expr::Join { span: s, .. }
             | Expr::Block(_, s)
             | Expr::Upcast { span: s, .. }
+            | Expr::Hole(s)
             | Expr::Build(_, s)
             | Expr::Guard { span: s, .. } => *s,
         }

@@ -1,0 +1,12 @@
+import "./g"
+
+# The yield inside an effect type is a type like any other, so it can be a
+# QUALIFIED one. The import check reads the names a file uses out of its
+# declarations, and a type name inside a shell is several names: splitting
+# `<g/cell>effect` at its first slash read `<g` as the qualifier, which no
+# import matches, so this file was refused for borrowing an import it wrote
+# and the import itself read as unused. Both in one program.
+fn opened e:<g/cell>effect
+  e .> (c -> print "cell {c.n}")
+
+pub play = opened (effect (g/made 7))

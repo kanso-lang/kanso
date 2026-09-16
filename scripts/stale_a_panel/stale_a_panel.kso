@@ -31,9 +31,11 @@ stale = "STALE"
 # marker in the second piece is the first one after the title.
 fn staled src title
   parts = text/split src title
-  bits = text/split parts[2]! marker
+  return src if length parts < 2
+  bits = text/split parts[2] marker
+  return src if length bits < 1
   rest = text/slice bits 2 (length bits)
-  "{parts[1]!}{title}{bits[1]!}{marker}{stale}{text/join rest marker}"
+  "{parts[1]}{title}{bits[1]}{marker}{stale}{text/join rest marker}"
 
 fn once? src title
   length (text/split src title) == 2
@@ -60,7 +62,7 @@ fn usage true _
   io/write_err "usage: stale_a_panel <chapter.html>\n" .> (_ -> os/exit 2)
 
 fn usage false given
-  chapter = given[1]!
+  chapter = given[1]
   os/read_file! chapter .> (src -> onto chapter src)
 
 pub play = os/args .> with_args

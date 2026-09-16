@@ -64,7 +64,8 @@ fn tokens l
 # outside the set is not a plain name either — `pub fn split _ ""` names a
 # literal, and its group answers elsewhere.
 fn plain? parts
-  well_named = all_in? name_chars parts[1]!
+  return false if length parts < 1
+  well_named = all_in? name_chars parts[1]
   args = list/to_list (list/drop parts 1)
   plain_args? = list/all? args (p -> all_in? param_chars p)
   well_named and plain_args? and not_shaped? args
@@ -80,7 +81,7 @@ fn kept _ _ false
   ""
 
 fn kept module parts true
-  "{module} {parts[1]!} {length parts - 1}"
+  "{module} {parts[1]} {length parts - 1}"
 
 fn entries_in module src
   lines = list/to_list (list/select (text/split src "\n") signature?)
@@ -96,7 +97,7 @@ fn deduped sorted
   list/to_list (list/fold sorted [] once)
 
 fn once acc e
-  fresh acc e (length acc == 0 or acc[length acc]! != e)
+  fresh acc e (length acc == 0 or acc[length acc] != e)
 
 fn fresh acc e true
   push acc e
@@ -112,7 +113,7 @@ fn onward_file _ _ found true
 
 fn onward_file module names found false
   rest = list/to_list (list/drop names 1)
-  name = names[1]!
+  name = names[1]
   os/read_file! "lib/{module}/{name}" .> (src -> gathered module rest found src)
 
 fn gathered module rest found src
@@ -131,8 +132,9 @@ fn onward_module _ found true
   found
 
 fn onward_module mods found false
+  return found if length mods < 1
   rest = list/to_list (list/drop mods 1)
-  in_module mods[1]! found .> (grown -> walked_modules rest grown)
+  in_module mods[1] found .> (grown -> walked_modules rest grown)
 
 surface = os/list_dir "lib" .> (mods -> walked_modules (list/to_list mods) [])
 
@@ -144,9 +146,10 @@ fn args_for n
 
 fn program_for line
   parts = text/split line " "
-  module = parts[1]!
-  name = parts[2]!
-  arity = text/to_int parts[3]!
+  return "" if length parts < 3
+  module = parts[1]
+  name = parts[2]
+  arity = text/to_int parts[3]
   call = "{module}/{name}{args_for arity}"
   """
     import "std/{module}"
@@ -204,7 +207,7 @@ lange_says = "a strict index past the end"
 
 lange_src = """
   xs = [1 2]
-  print "\{xs[9]!}"
+  print "\{xs[9]}"
 """
 
 lange = [lange_says lange_src]
@@ -213,7 +216,7 @@ langf_says = "a strict index at zero"
 
 langf_src = """
   xs = [1 2]
-  print "\{xs[0]!}"
+  print "\{xs[0]}"
 """
 
 langf = [langf_says langf_src]
@@ -307,7 +310,7 @@ langn_says = "indexing something that is not a collection"
 
 langn_src = """
   n = 5
-  print "\{n[1]!}"
+  print "\{n[1]}"
 """
 
 langn = [langn_says langn_src]
@@ -407,9 +410,11 @@ fn onward _ found true
   found
 
 fn onward sources found false
+  return found if length sources < 1
   rest = list/to_list (list/drop sources 1)
-  s = sources[1]!
-  ran s[2]! .> (v -> reported rest found s[1]! v.finding)
+  s = sources[1]
+  return found if length s < 2
+  ran s[2] .> (v -> reported rest found s[1] v.finding)
 
 fn reported rest found label v
   swept rest (kept found (named label v))
@@ -428,7 +433,7 @@ fn named label line
 
 fn labelled line
   parts = text/split line " "
-  name = "{parts[1]!}/{parts[2]!}"
+  name = "{parts[1]}/{parts[2]}"
   [name (program_for line)]
 
 fn std_probes found
@@ -436,7 +441,8 @@ fn std_probes found
   list/to_list (list/map ordered labelled)
 
 fn worth? p
-  length (text/split p[2]! " bad") > 1
+  return false if length p < 2
+  length (text/split p[2] " bad") > 1
 
 fn sound_enough v
   ok = v.native_ok and v.interp_ok

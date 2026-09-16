@@ -26,7 +26,7 @@ fn wide n
   list/to_list (list/map (list/take list/naturals n) fat)
 
 fn gathered n xs acc keep
-  stepped (n - 1) xs (push acc xs[n]!) (push keep acc[1]!)
+  stepped (n - 1) xs (push acc xs[n]) (push keep acc[1])
 
 fn stepped 0 _ _ keep
   keep
@@ -39,7 +39,7 @@ fn stepped n xs acc keep
 
 fn loaded acc keep
   xs = wide 400
-  stepped (length xs) xs (push acc xs[1]!) keep
+  stepped (length xs) xs (push acc xs[1]) keep
 
 fn read_back out
   io/write "kept {length out}\n"

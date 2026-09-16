@@ -1,1 +1,1 @@
-error[naming]: `shout!` wears a bang: a `!` function's answer must be able to be a failure (module a_bang_name_that_cannot_fail)
+error[naming]: `shout!` wears a bang: a `!` function answers an effect, the box a failure bubbles through (module a_bang_name_that_cannot_fail)

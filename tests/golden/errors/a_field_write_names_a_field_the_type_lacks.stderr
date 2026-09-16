@@ -1,0 +1,4 @@
+error[name]: `node` has no field `nope`
+  --> a_field_write_names_a_field_the_type_lacks.kso:13:7
+  13 |     n.nope = 2
+             ^

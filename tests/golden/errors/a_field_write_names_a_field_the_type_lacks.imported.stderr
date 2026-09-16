@@ -1,0 +1,1 @@
+error[name]: `node` has no field `nope` (module a_field_write_names_a_field_the_type_lacks)

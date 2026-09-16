@@ -1,0 +1,28 @@
+import "std/text"
+
+# The lines below a `return x if c` guard are the guard's untaken arm, and a
+# name bound there is a binding of the same body. The linearity and chain
+# analyses follow an accumulator through the names it is bound to, and until
+# 2026-09-16 both read a body's top level only: `opened` here was invisible,
+# the accumulator handed on through it read as an alias, every group in the
+# chain lost its in-place append, and the items loop lost its beat.
+# beat_iters below counts that loop's iterations, and allocs stays flat
+# because each iteration's rendered element is freed by the rewind.
+fn items acc xs i
+  return acc if i < 1 or length xs < i
+  items (text/append (text/append acc 44) "{xs[i]}") xs (i + 1)
+
+fn listed acc xs
+  return text/append acc "[]" if length xs == 0
+  opened = text/append (text/append acc 91) "{xs[1]}"
+  text/append (items opened xs 2) 93
+
+fn rounds acc 0 _
+  acc
+
+fn rounds acc n xs
+  rounds (listed acc xs) (n - 1) xs
+
+pub play =
+  built = rounds (text/bytes "") 1000 [1 2 3 4 5 6 7 8]
+  print "{length (text/utf8 built)}"

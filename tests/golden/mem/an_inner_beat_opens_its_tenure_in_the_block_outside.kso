@@ -17,7 +17,7 @@ fn wide n
   list/to_list (list/map (list/take list/naturals n) fat)
 
 fn gathered n xs acc
-  stepped (n - 1) xs (push acc xs[n]!)
+  stepped (n - 1) xs (push acc xs[n])
 
 fn stepped 0 _ acc
   acc
@@ -43,7 +43,7 @@ fn laps n acc
   loaded acc .> (next -> laps (n - 1) next)
 
 fn read_back out
-  io/write "kept {length out}, first {out[1]!}, last {out[2000]!}\n"
+  io/write "kept {length out}, first {out[1]}, last {out[2000]}\n"
 
 fn begin acc0
   io/write "" .> (_ -> laps 5 acc0) .> read_back

@@ -51,7 +51,7 @@ quote_head = "<div class=\"code-panel-title\">({title_path})</div>"
 
 # `ch08.html` samples live in `docs/book/samples/ch08`.
 fn samples_of name
-  "{chapters}/samples/{(text/split name ".")[1]!}"
+  "{chapters}/samples/{(text/split name ".")[1]}"
 
 quote_pattern = "(?s){quote_head}\\s*<pre><code>(.*?)</code></pre>"
 
@@ -115,7 +115,8 @@ fn heading _ _ acc _ true
   acc
 
 fn heading ls at acc pattern false
-  grown = with_head acc ls[at]! pattern
+  return acc if at < 1 or length ls < at
+  grown = with_head acc ls[at] pattern
   head_loop ls (at + 1) grown pattern
 
 fn with_head acc line pattern
@@ -129,7 +130,7 @@ fn taken acc _ true
   acc
 
 fn taken acc hits false
-  push acc hits[1]!.groups[1]!
+  push acc hits[1].groups[1]
 
 # The identifier pattern captures nothing, so each hit is read back off the
 # body by the span it matched.
@@ -144,7 +145,7 @@ fn identing _ _ _ acc true
   acc
 
 fn identing body hits at acc false
-  h = hits[at]!
+  h = hits[at]
   word = text/slice body h.from (h.to - 1)
   ident_loop body hits (at + 1) (push acc word)
 
@@ -165,7 +166,7 @@ fn joining _ _ acc true
   acc
 
 fn joining bodies at acc false
-  join_loop bodies (at + 1) "{acc}\n{bodies[at]!}"
+  join_loop bodies (at + 1) "{acc}\n{bodies[at]}"
 
 # The three literals the grammar provides. Every other name a panel may use
 # has to be one the package itself uses or declares, but these are spellings
@@ -190,7 +191,7 @@ fn named_in panel
 
 fn dir_of path
   parts = text/split path "/"
-  last = parts[length parts]!
+  last = parts[length parts]
   text/slice path 1 (length path - length last - 1)
 
 fn kso? n
@@ -207,8 +208,9 @@ fn reading _ _ acc after true
   after acc
 
 fn reading wanted at acc after false
+  return after acc if at < 1 or length wanted < at
   on = (body -> read_next wanted at acc after body)
-  os/read_file! wanted[at]! .> on
+  os/read_file! wanted[at] .> on
 
 fn read_next wanted at acc after body
   read_each wanted (at + 1) (push acc body) after
@@ -219,10 +221,10 @@ fn body_for wanted bodies title
   pick wanted bodies title 1
 
 fn pick wanted bodies title at
-  picking wanted bodies title at (wanted[at]! == title)
+  picking wanted bodies title at (wanted[at] == title)
 
 fn picking _ bodies _ at true
-  bodies[at]!
+  bodies[at]
 
 fn picking wanted bodies title at false
   pick wanted bodies title (at + 1)
@@ -244,7 +246,7 @@ fn first _ true
   "its first line"
 
 fn first names false
-  "`{names[1]!}`"
+  "`{names[1]}`"
 
 fn as_findings q lead kind names acc
   finding_loop q lead kind names 1 acc
@@ -256,7 +258,7 @@ fn finding_step _ _ _ _ _ acc true
   acc
 
 fn finding_step q lead kind names at acc false
-  one = finding q.chapter q.title lead kind names[at]!
+  one = finding q.chapter q.title lead kind names[at]
   finding_loop q lead kind names (at + 1) (once acc one)
 
 # One line per name: a panel naming `at` five times has one thing wrong with
@@ -285,8 +287,8 @@ fn quoting_at _ _ _ acc true
   acc
 
 fn quoting_at name hits at acc false
-  m = hits[at]!
-  one = quote name (samples_of name) m.groups[1]! m.groups[2]!
+  m = hits[at]
+  one = quote name (samples_of name) m.groups[1] m.groups[2]
   quote_loop_of name hits (at + 1) (push acc one)
 
 fn checked qs at found after
@@ -302,7 +304,7 @@ fn checking _ _ found after true
 # sample directory one level in (ch07 writes `teahouse/menu.kso` for
 # `samples/ch07/teahouse/teahouse/menu.kso`, ch09 the same shape for `vse`).
 fn checking qs at found after false
-  q = qs[at]!
+  q = qs[at]
   on = (there -> as_file qs at found after q there)
   os/exists q.title .> on
 
@@ -341,10 +343,10 @@ fn elsewhere q
   ["{chapters}/{q.title}" "{q.samples}/{first_of q.title}/{q.title}"]
 
 fn first_of title
-  (text/split title "/")[1]!
+  (text/split title "/")[1]
 
 fn module_of q
-  stem = (text/split q.title ".")[1]!
+  stem = (text/split q.title ".")[1]
   "{q.samples}/{stem}"
 
 fn as_module qs at found after q kids
@@ -363,14 +365,15 @@ fn rooting qs at found after _ _ _ true
   checked qs (at + 1) found after
 
 fn rooting qs at found after q roots n false
+  return checked qs (at + 1) found after if n < 1 or length roots < n
   on = (there -> rooted qs at found after q roots n there)
-  os/exists roots[n]! .> on
+  os/exists roots[n] .> on
 
 fn rooted qs at found after q roots n false
   try_roots qs at found after q roots (n + 1)
 
 fn rooted qs at found after q roots n true
-  path = roots[n]!
+  path = roots[n]
   on = (names -> beside_root qs at found after q path names)
   os/list_dir (dir_of path) .> on
 
@@ -402,7 +405,8 @@ fn picking_each _ _ _ _ acc true
   acc
 
 fn picking_each mine wanted bodies at acc false
-  one = body_for wanted bodies mine[at]!
+  return acc if at < 1 or length mine < at
+  one = body_for wanted bodies mine[at]
   pick_loop mine wanted bodies (at + 1) "{acc}\n{one}"
 
 fn chapter? n
@@ -423,8 +427,10 @@ fn walking _ _ found true
   reported found
 
 fn walking names at found false
-  on = (raw -> one_chapter names at found names[at]! raw)
-  os/read_file! "{chapters}/{names[at]!}" .> on
+  return reported found if at < 1 or length names < at
+  name = names[at]
+  on = (raw -> one_chapter names at found name raw)
+  os/read_file! "{chapters}/{name}" .> on
 
 fn one_chapter names at found name raw
   after = (more -> chapter_loop names (at + 1) more)
@@ -447,7 +453,7 @@ fn saying _ _ true
   io/write "the panels above quote a file that has moved on\n"
 
 fn saying found at false
-  f = found[at]!
+  f = found[at]
   where = "{f.chapter}, the panel for {f.title} at {f.lead}"
   line = "{where}: {f.kind} `{f.name}`\n"
   io/write line .> (_ -> say_each found (at + 1))
@@ -473,7 +479,7 @@ fn walking_names _ _ _ acc after true
   after acc
 
 fn walking_names path names at acc after false
-  kid = "{path}/{names[at]!}"
+  kid = "{path}/{names[at]}"
   os/is_dir kid .> (d -> walk_kid path names at acc after kid d)
 
 fn walk_kid path names at acc after kid true

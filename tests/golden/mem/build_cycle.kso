@@ -4,12 +4,12 @@ type node
 
 pub play =
   build
-    a = node "a" []
+    a = node "a" _
     b = node "b" [a]
     a.peers = [b]
   graph = [a b]
   build
-    base = node "seed" []
+    base = node "seed" _
     base.peers = [base]
   print "{graph}"
   >> print "{base}"

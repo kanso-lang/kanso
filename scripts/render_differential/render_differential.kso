@@ -164,7 +164,7 @@ fn onward _ _ found true
 
 fn onward shape exprs found false
   rest = list/to_list (list/drop exprs 1)
-  expr = exprs[1]!
+  expr = exprs[1]
   ran (shape expr) .> (verdict -> swept shape rest (noted found expr verdict))
 
 fn noted found _ ""

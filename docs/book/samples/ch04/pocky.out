@@ -1,2 +1,2 @@
-error[endpoint]: unhandled err reached the entry: "missing index "pocky""
+error[endpoint]: unhandled err reached the executor: "missing index "pocky""
   born in the entry at pocky.kso:2

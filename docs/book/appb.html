@@ -197,7 +197,7 @@ concat [1 2 3 4]</code></pre>
 
 <h3 id="b-at"><code>xs[k]</code></h3>
 <p class="builtin-sig"><code>(list | string | map)[index] → value | none</code></p>
-<p>indexing. a list or string is indexed by a 1-based position; a map is indexed by its key. a missing position or absent key returns <code>none</code>—a dispatchable value, not an exception—so the caller decides what "not there" means. the strict form <code>xs[i]!</code> instead <em>raises</em> on a miss, for the position that must be there. there is no bare function spelling; the subscript is the surface.</p>
+<p>indexing. a list or string is indexed by a 1-based position; a map is indexed by its key. a missing position or absent key returns <code>none</code>—a dispatchable value, not an exception—so the caller decides what "not there" means. the strict form <code>xs[i]!</code> answers an effect, <code>&lt;t&gt;effect</code>, for the position that must be there: <code>.&gt;</code> opens it, and a miss is the failure inside it. there is no bare function spelling; the subscript is the surface.</p>
 
 <h3 id="b-concat"><code>text/concat</code></h3>
 <p class="builtin-sig"><code>text/concat (list | string) (list | string) → (list | string)</code></p>
@@ -564,7 +564,7 @@ third</code></pre>
 <ol>
 <li>write a program that reads a file of numbers, one per line, and prints their sum. you will need <code>os/read_file</code>, <code>text/chars</code> or a split, <code>text/to_int</code>, and <code>list/sum</code>—decide how a non-numeric line should behave, and make that behavior visible in the output.</li>
 <li>using only <code>text/bytes</code>, <code>text/find2</code>, and <code>text/slice</code>, split a string on its first comma into a "before" and an "after". confirm with <code>--plan</code> that no i/o happens until you print the two halves.</li>
-<li>the lenient subscript <code>xs[i]</code> answers a missing index with <code>none</code> while the strict form <code>xs[i]!</code> raises an <code>err</code>. write one small program that shows both on the same out-of-range access, and explain in a comment which you would choose for a lookup that is <em>expected</em> to miss.</li>
+<li>the lenient subscript <code>xs[i]</code> answers a missing index with <code>none</code> while the strict form <code>xs[i]!</code> answers a box whose failure is the miss. write one small program that shows both on the same out-of-range access, and explain in a comment which you would choose for a lookup that is <em>expected</em> to miss.</li>
 <li>write a two-overload <code>label</code> function—one arm matching <code>none</code>, one matching a value—and drive it from a <code>math/random</code> roll that indexes into a short list. run it a few times and note that the roll is the same each run.</li>
 </ol>
 

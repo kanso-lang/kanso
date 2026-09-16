@@ -293,7 +293,11 @@ impl<'a> Analysis<'a> {
     /// appears in a container, index, binop, lambda, or template.
     fn expr_safe_calls(&self, ty: &str, e: &Expr) -> bool {
         match e {
-            Expr::Int(..) | Expr::Float(..) | Expr::Ident(..) | Expr::Partial(..) => true,
+            Expr::Int(..)
+            | Expr::Float(..)
+            | Expr::Ident(..)
+            | Expr::Partial(..)
+            | Expr::Hole(..) => true,
             Expr::Upcast { expr, .. } => self.expr_safe_calls(ty, expr),
             Expr::Block(stmts, _) | Expr::Build(stmts, _) => stmts.iter().all(|st| match st {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
@@ -471,7 +475,7 @@ impl<'a> Analysis<'a> {
                 crate::ast::TemplatePart::Interp(x) => self.expr_mentions_ty(ty, x),
                 crate::ast::TemplatePart::Lit(_) => false,
             }),
-            Expr::Int(..) | Expr::Float(..) => false,
+            Expr::Int(..) | Expr::Float(..) | Expr::Hole(..) => false,
         }
     }
 }

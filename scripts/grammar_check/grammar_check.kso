@@ -77,8 +77,8 @@ fn checked grammar
 # Three shapes reach a reader: a rule that matches text, a rule that opens and
 # closes around it, and a rule that is only a list of the other two.
 fn rules_of grammar
-  named = grammar["patterns"]!
-  repo = grammar["repository"]!
+  named = grammar["patterns"]
+  repo = grammar["repository"]
   gathered named repo 1 []
 
 fn gathered named repo at acc
@@ -88,27 +88,27 @@ fn gathering _ _ _ acc true
   acc
 
 fn gathering named repo at acc false
-  one = named[at]!
+  one = named[at]
   carried named repo at acc one (one["include"] == none)
 
 fn carried named repo at acc _ true
   gathered named repo (at + 1) acc
 
 fn carried named repo at acc one false
-  found = repo[without_hash one["include"]!]!
+  found = repo[without_hash one["include"]]
   gathered named repo (at + 1) (kept acc found)
 
 fn kept acc found
   as_match acc found (found["match"] == none)
 
 fn as_match acc found false
-  push acc (rule found["match"]! found["name"] found["captures"] none)
+  push acc (rule found["match"] found["name"] found["captures"] none)
 
 fn as_match acc found true
   as_span acc found (found["begin"] == none)
 
 fn as_span acc found false
-  push acc (rule found["begin"]! found["name"] none found["end"]!)
+  push acc (rule found["begin"] found["name"] none found["end"])
 
 fn as_span acc found true
   as_group acc found (found["patterns"] == none)
@@ -117,7 +117,10 @@ fn as_group acc _ true
   acc
 
 fn as_group acc found false
-  each_sub acc found["patterns"]! 1
+  each_sub acc found["patterns"] 1
+
+fn each_sub acc none _
+  acc
 
 fn each_sub acc subs at
   subbing acc subs at (at > length subs)
@@ -126,7 +129,11 @@ fn subbing acc _ _ true
   acc
 
 fn subbing acc subs at false
-  each_sub (kept acc subs[at]!) subs (at + 1)
+  return acc if at < 1 or length subs < at
+  each_sub (kept acc subs[at]) subs (at + 1)
+
+fn without_hash none
+  ""
 
 fn without_hash name
   bare name (text/slice name 1 1 == "#")
@@ -156,7 +163,7 @@ fn trying line rules _ at acc true
   paint line rules (at + 1) acc
 
 fn trying line rules i at acc false
-  one = rules[i]!
+  one = rules[i]
   m = regexp/match_at one.pattern line at
   landed line rules i at acc one m
 
@@ -232,7 +239,7 @@ fn capturing acc _ _ _ true
   acc
 
 fn capturing acc caps groups at false
-  text = groups[at]!
+  text = groups[at]
   found = caps["{at}"]
   named_capture acc caps groups at text found (text == "" or found == none)
 
@@ -240,7 +247,7 @@ fn named_capture acc caps groups at _ _ true
   each_capture acc caps groups (at + 1)
 
 fn named_capture acc caps groups at text found false
-  grown = push acc (painted text found["name"]!)
+  grown = push acc (painted text found["name"])
   each_capture grown caps groups (at + 1)
 
 fn over_lines rules at acc
@@ -250,7 +257,7 @@ fn walking _ _ acc true
   acc
 
 fn walking rules at acc false
-  one = expectations[at]!
+  one = expectations[at]
   out = paint one.line rules 1 []
   seen = list/to_list (list/map (in_scope out one.scope) (p -> p.text))
   gaps = missing one seen 1 []
@@ -269,7 +276,7 @@ fn checking _ _ _ acc true
   acc
 
 fn checking one seen at acc false
-  want = one.wanted[at]!
+  want = one.wanted[at]
   missing one seen (at + 1) (noted acc one want seen (has? seen want))
 
 fn has? seen want
@@ -298,6 +305,6 @@ fn telling _ _ acc true
   acc
 
 fn telling faults at acc false
-  spelled faults (at + 1) "{acc}FAIL  {faults[at]!}\n"
+  spelled faults (at + 1) "{acc}FAIL  {faults[at]}\n"
 
 pub play = os/read_file! grammar_path .> (raw -> read_grammar raw)

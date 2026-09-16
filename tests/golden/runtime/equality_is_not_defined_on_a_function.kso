@@ -6,6 +6,6 @@
 # sentence), so the box travels through a list, where nothing can prove it.
 import "std/io"
 
-w = (push [] (io/write "x"))[1]!
+w = (push [] (io/write "x"))[1]
 
 pub play = print "{w == w}"

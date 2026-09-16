@@ -1,0 +1,5 @@
+pub type cell
+  n
+
+pub fn made n
+  cell n

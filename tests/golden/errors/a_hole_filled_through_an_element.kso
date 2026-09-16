@@ -1,0 +1,18 @@
+# The same refusal through a list: an element the block indexed is any of
+# the records the literal holds, and a write through it would fill one hole
+# and leave the others open.
+type node
+  id
+  up
+
+fn tie _
+  build
+    a = node 1 _
+    b = node 2 _
+    ring = [a b]
+    middle = ring[2]!
+    middle.up = a
+    a.up = b
+  a.id
+
+pub play = print "{tie 0}"

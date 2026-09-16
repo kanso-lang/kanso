@@ -244,7 +244,7 @@ fn onward _ _ count true
 
 fn onward module exprs count false
   rest = list/to_list (list/drop exprs 1)
-  expr = exprs[1]!
+  expr = exprs[1]
   ran (shaped module expr) .> (v -> reported module rest count expr v)
 
 fn reported module rest count expr v

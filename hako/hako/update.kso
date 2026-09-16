@@ -46,15 +46,17 @@ fn walked dir only pins root origin lines moved held
   if (length pins == 0) finished more
 
 fn stepped dir only pins root origin lines moved held
-  p = pins[1]!
+  return written dir lines moved held if length pins < 1
+  p = pins[1]
   rest = list/to_list (list/drop pins 1)
   onward = (got -> advanced dir only rest root origin lines moved held got)
   speakable p .> (_ -> resolved p only root origin .> onward)
 
 fn advanced dir only rest root origin lines moved held got
-  ls = "{lines}{got[1]!}"
-  ms = "{moved}{got[2]!}"
-  hs = "{held}{got[3]!}"
+  return walked dir only rest root origin lines moved held if length got < 3
+  ls = "{lines}{got[1]}"
+  ms = "{moved}{got[2]}"
+  hs = "{held}{got[3]}"
   walked dir only rest root origin ls ms hs
 
 # A protocol is a protocol rather than a host, and this toolchain speaks one.
@@ -82,10 +84,11 @@ fn taken p root origin found
   if (found == none) stay (moved_to p root origin found)
 
 fn moved_to p root origin found
-  row = "{p.name} {found[1]!} {found[2]!} {p.protocol}\n"
-  note = if (found[1]! == p.tag) "" "  {p.name} {p.tag} -> {found[1]!}\n"
+  return kept p false if length found < 2
+  row = "{p.name} {found[1]} {found[2]} {p.protocol}\n"
+  note = if (found[1] == p.tag) "" "  {p.name} {p.tag} -> {found[1]}\n"
   got = [row note ""]
-  pulled = fetched root p.name found[1]! found[2]! (url origin p.name)
+  pulled = fetched root p.name found[1] found[2] (url origin p.name)
   pulled .> (_ -> answered got)
 
 fn answered x

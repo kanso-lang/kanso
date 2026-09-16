@@ -6,7 +6,7 @@ fn attack old
   build
     young = cell "young" none
     pair = [young old]
-    second = pair[2]!
+    second = pair[2]
     second.link = young
   young
 

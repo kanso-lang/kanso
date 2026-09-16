@@ -10,4 +10,4 @@ d = io/write "a\n" >> io/write "b\n"
 
 ys = push [] (opaque d)
 
-pub play = ys[1]!
+pub play = ys[1]

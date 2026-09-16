@@ -120,7 +120,8 @@ fn stepped _ _ _ c false
   c
 
 fn cut segs i
-  stop segs i (i > length segs or starts_word? segs[i]!)
+  return stop segs i true if i < 1
+  stop segs i (i > length segs or starts_word? segs[i])
 
 fn stop segs i true
   upto segs (i - 1) ","
@@ -181,12 +182,12 @@ fn keeping s piece true
 # order, on one line — specificity the leading run could not reach because it
 # threw the rest away.
 fn shape_of lit
-  unescaped = (text/split lit "\\")[1]!
+  unescaped = (text/split lit "\\")[1]
   squeezed (rejoined (text/split unescaped "\{"))
 
 fn rejoined parts
   tails = list/to_list (list/map (list/to_list (list/drop parts 1)) after_brace)
-  text/join (text/concat [parts[1]!] tails) "\{}"
+  text/join (text/concat [parts[1]] tails) "\{}"
 
 fn after_brace piece
   after_first (text/split piece "}") "}"
@@ -202,7 +203,7 @@ fn run_units s
 fn shape_runs msg
   parts = text/split msg "\{"
   rest = list/to_list (list/map (list/to_list (list/drop parts 1)) after_brace)
-  list/to_list (list/reject (text/concat [parts[1]!] rest) (r -> r == ""))
+  list/to_list (list/reject (text/concat [parts[1]] rest) (r -> r == ""))
 
 fn message_in group
   pieces = text/split group "\""
@@ -213,7 +214,8 @@ fn chosen _ true
   ""
 
 fn chosen wanted false
-  shape_of wanted[1]!
+  return "" if length wanted < 1
+  shape_of wanted[1]
 
 # A site the pattern reaches: an open paren, whitespace, then a bare kind.
 fn site_of chunk
@@ -224,7 +226,8 @@ fn shaped _ _ true
   ""
 
 fn shaped chunk q false
-  kinded chunk q[2]! (length (squeezed q[1]!) == 0 and all_in? lower q[2]!)
+  return "" if length q < 2
+  kinded chunk q[2] (length (squeezed q[1]) == 0 and all_in? lower q[2])
 
 fn kinded _ _ false
   ""
@@ -237,7 +240,8 @@ fn kinded chunk kind true
 fn bodied kind rest
   segs = text/split rest ","
   group = cut segs 3
-  headed kind group (length (squeezed segs[1]!) == 0)
+  return "" if length segs < 1
+  headed kind group (length (squeezed segs[1]) == 0)
 
 fn headed _ _ _ false
   ""
@@ -279,7 +283,9 @@ fn driver_in src
   list/to_list (list/reject found (s -> s == ""))
 
 fn driver_site chunk
-  told_driver (shape_of (text/split chunk "\"")[1]!)
+  qs = text/split chunk "\""
+  return "" if length qs < 1
+  told_driver (shape_of qs[1])
 
 fn told_driver ""
   ""
@@ -307,7 +313,9 @@ fn kinded_in src
   list/to_list (list/reject found (s -> s == ""))
 
 fn kinded_site chunk
-  told_kinded (shape_of (text/split chunk "\"")[1]!)
+  qs = text/split chunk "\""
+  return "" if length qs < 1
+  told_kinded (shape_of qs[1])
 
 fn told_kinded ""
   ""
@@ -339,7 +347,9 @@ fn native_in src
   list/to_list (list/reject found (s -> s == ""))
 
 fn native_site chunk
-  told_native (shape_of (text/split chunk "\"")[1]!)
+  qs = text/split chunk "\""
+  return "" if length qs < 1
+  told_native (shape_of qs[1])
 
 fn told_native ""
   ""
@@ -380,7 +390,9 @@ fn oracle_in src
   list/to_list (list/reject found (s -> s == ""))
 
 fn oracle_site chunk
-  told_oracle (shape_of (text/split chunk "\"")[1]!)
+  qs = text/split chunk "\""
+  return "" if length qs < 1
+  told_oracle (shape_of qs[1])
 
 fn oracle_format_in src
   chunks = list/to_list (list/drop (text/split src oracle_format_opener) 1)
@@ -397,7 +409,8 @@ fn opening _ true
   ""
 
 fn opening pieces false
-  shape_of pieces[2]!
+  return "" if length pieces < 2
+  shape_of pieces[2]
 
 fn told_oracle ""
   ""
@@ -427,7 +440,9 @@ fn page_in src
   list/to_list (list/reject found (s -> s == ""))
 
 fn page_site chunk
-  told_page (shape_of (text/split chunk "\"")[1]!)
+  qs = text/split chunk "\""
+  return "" if length qs < 1
+  told_page (shape_of qs[1])
 
 fn page_format_in src
   chunks = list/to_list (list/drop (text/split src page_format_opener) 1)
@@ -461,7 +476,7 @@ fn deduped sorted
   list/to_list (list/fold sorted [] once)
 
 fn once acc e
-  fresh acc e (length acc == 0 or acc[length acc]! != e)
+  fresh acc e (length acc == 0 or acc[length acc] != e)
 
 fn fresh acc e true
   push acc e
@@ -499,10 +514,10 @@ fn out_file? name
   text/slice name (length name - 3) (length name) == ".out"
 
 fn kind_of pair
-  (text/split pair "\n")[1]!
+  (text/split pair "\n")[1]
 
 fn message_of pair
-  (text/split pair "\n")[2]!
+  (text/split pair "\n")[2]
 
 fn clipped s n
   shorter s n (length s > n)
@@ -521,7 +536,7 @@ fn onward_src _ found true
 
 fn onward_src names found false
   rest = list/to_list (list/drop names 1)
-  name = names[1]!
+  name = names[1]
   read_src name (source? name) rest found
 
 fn read_src _ false rest found
@@ -584,7 +599,7 @@ fn onward_test _ parts true
 
 fn onward_test names parts false
   rest = list/to_list (list/drop names 1)
-  name = names[1]!
+  name = names[1]
   read_test name (source? name) rest parts
 
 fn read_test _ false rest parts
@@ -634,7 +649,7 @@ fn onward_corpus _ _ parts true
 
 fn onward_corpus dir names parts false
   rest = list/to_list (list/drop names 1)
-  here = "{dir}/{names[1]!}"
+  here = "{dir}/{names[1]}"
   os/is_dir here .> (d -> descend here d dir rest parts)
 
 fn descend here true dir rest parts
@@ -695,8 +710,9 @@ fn ran? _ _ true
   true
 
 fn ran? line runs false
-  pieces = text/split line runs[1]!
-  stepped_run? line runs runs[1]! pieces
+  return true if length runs < 1
+  pieces = text/split line runs[1]
+  stepped_run? line runs runs[1] pieces
 
 fn stepped_run? line runs r pieces
   onward? line runs r pieces (length pieces == 1)

@@ -1,0 +1,4 @@
+error[build]: `ada.partner = ...` fills a hole that is already filled: a hole is filled exactly once
+  --> a_hole_filled_twice.kso:12:9
+  12 |     ada.partner = ada
+               ^

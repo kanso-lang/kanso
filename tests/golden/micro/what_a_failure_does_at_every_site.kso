@@ -65,7 +65,7 @@ mapped = { "k":ea }
 # through: the operation does not happen
 reached = ea.left
 
-indexed = [1 2 3][ea]!
+indexed = [1 2 3][ea]
 
 sized = length ea
 

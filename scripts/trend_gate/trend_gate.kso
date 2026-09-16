@@ -373,7 +373,7 @@ fn numeric? v
 
 fn pair_of prefix f
   parts = text/split f "="
-  ["{prefix}{parts[1]!}" parts[2]!]
+  ["{prefix}{parts[1]}" parts[2]]
 
 fn body? l
   text/slice l 1 1 != "#" and length l > 0
@@ -403,7 +403,7 @@ fn lead_of line
   leader toks (length fields > 0 and length toks > length fields)
 
 fn leader toks true
-  toks[1]!
+  toks[1]
 
 fn leader _ false
   ""
@@ -432,7 +432,7 @@ fn shaped _ _ named _
   named
 
 fn lone prefix toks true
-  [["{prefix}{toks[1]!}" toks[2]!]]
+  [["{prefix}{toks[1]}" toks[2]]]
 
 fn lone _ _ false
   []
@@ -446,24 +446,28 @@ fn counted text prefix
   lines = list/select (text/split text "\n") body?
   all = list/to_list (list/map lines (l -> on_line prefix l))
   flat = list/to_list (list/fold all [] joined)
-  list/to_list (list/select flat (p -> numeric? p[2]!))
+  list/to_list (list/select flat (p -> length p > 1 and numeric? p[2]))
 
 fn totals pairs
   by_name = list/group_by pairs first_of
   list/transform_values by_name total_of
 
 fn total_of ps
-  list/sum (list/to_list (list/map ps (p -> text/to_int p[2]!)))
+  list/sum (list/to_list (list/map ps count_of))
+
+fn count_of p
+  return 0 if length p < 2
+  text/to_int p[2]
 
 fn names_of pairs
   sorted = list/to_list (list/sort (list/to_list (list/map pairs first_of)))
   list/to_list (list/fold sorted [] once)
 
 fn first_of p
-  p[1]!
+  p[1]
 
 fn once acc name
-  fresh acc name (length acc == 0 or acc[length acc]! != name)
+  fresh acc name (length acc == 0 or acc[length acc] != name)
 
 fn fresh acc name true
   push acc name
@@ -580,8 +584,9 @@ fn inner _ true
   ""
 
 fn inner parts false
-  rest = text/split parts[2]! "}"
-  rest[1]!
+  return "" if length parts < 2
+  rest = text/split parts[2] "}"
+  rest[1]
 
 # The block carries no braces, so a split on "," gives one `"name":value` pair
 # a piece and the name is quoted on both sides. Quoting is what keeps
@@ -596,8 +601,9 @@ fn taken _ true
   ""
 
 fn taken parts false
-  rest = text/split parts[2]! ","
-  rest[1]!
+  return "" if length parts < 2
+  rest = text/split parts[2] ","
+  rest[1]
 
 # A name the baseline carries on one side and not the other is a term joining
 # or leaving the objective, which is its own kind of news and not this one.
@@ -624,11 +630,11 @@ fn linkage theirs ours src
 
 fn name_of row
   parts = text/split row " "
-  parts[1]!
+  parts[1]
 
 fn key_of row
   parts = text/split row " "
-  parts[2]!
+  parts[2]
 
 # A counter that is a sum has a row per pool, so its name comes back once a
 # pool and the listing would say it three times.
@@ -645,7 +651,8 @@ fn added_once seen n false
   text/concat seen [n]
 
 fn shifted? pins key
-  found? key pins[1]!
+  return false if length pins < 1
+  found? key pins[1]
 
 fn log_delta base
   argv = ["diff" base "--" "design/compiler-log.md"]
@@ -661,8 +668,10 @@ fn against _ "" found _
   io/write "" .> (_ -> found)
 
 fn against golden base_text found pins
-  os/read_file! golden[1]!
-    .> (ours -> weighed golden golden[2]! base_text ours found pins)
+  return io/write "" .> (_ -> found) if length golden < 2
+  prefix = golden[2]
+  os/read_file! golden[1]
+    .> (ours -> weighed golden prefix base_text ours found pins)
 
 # The sums run over the samples BOTH sides have.
 #
@@ -693,7 +702,7 @@ fn named_new _ _ true
 
 fn named_new golden joiners false
   listing = text/join joiners ", "
-  said_it = "a sample joined {golden[1]!} ({listing}); the sums"
+  said_it = "a sample joined {golden[1]} ({listing}); the sums"
   io/write "{said_it} below are over the samples both sides have.\n"
 
 fn scored golden mine theirs found pins
@@ -742,14 +751,15 @@ fn minted _ _ 0
   move "" true false "" false 0 false
 
 fn minted golden name after
-  line = "minted: {name} = {commas after}  ({golden[1]!})\n"
+  line = "minted: {name} = {commas after}  ({golden[1]})\n"
   move name true false line false after false
 
 fn unchanged _ _ _ _ true _
   move "" false false "" false 0 false
 
 fn unchanged golden name before after false pins
-  bare = bare_name name golden[2]!
+  return unchanged golden name before after true pins if length golden < 2
+  bare = bare_name name golden[2]
   worse = worsened? bare before after
   # `name` and not `bare`: the link file names the gate's key, prefix and
   # all, where `bare` is what the direction tables look up. They differ for
@@ -781,7 +791,7 @@ fn bare_name name prefix
 
 fn told golden name before after worse ruled rebased
   arrow = arrow_when rebased worse ruled
-  line = "{arrow}: {name} {commas before} -> {commas after}  ({golden[1]!})\n"
+  line = "{arrow}: {name} {commas before} -> {commas after}  ({golden[1]})\n"
   move name false ruled line worse after rebased
 
 # `rebased` answers first and alone: a ratio between two definitions cannot
@@ -827,9 +837,11 @@ fn onward _ _ found _ true
   io/write "" .> (_ -> found)
 
 fn onward base goldens found pins false
+  return onward base goldens found pins true if length goldens < 1
   rest = list/to_list (list/drop goldens 1)
-  g = goldens[1]!
-  from_git base g[1]!
+  g = goldens[1]
+  return onward base goldens found pins true if length g < 1
+  from_git base g[1]
     .> (base_text -> against g base_text found pins)
     .> (grown -> walked base rest grown pins)
 
@@ -840,7 +852,7 @@ fn given _ true
   "origin/main"
 
 fn given args false
-  args[1]!
+  args[1]
 
 fn started base
   from_git base floor_file
@@ -860,6 +872,10 @@ fn priced base ms pins
   log_delta base
     .> (added -> attributed? base .> (att -> verdict ms added att pins))
 
+fn unclaimed_of pins shifted
+  return [] if length pins < 3
+  unclaimed pins[2] pins[3] shifted
+
 fn verdict moves added att pins
   new_ones = list/to_list (list/select moves (m -> m.minted))
   aged = list/to_list (list/reject moves (m -> m.minted))
@@ -869,7 +885,7 @@ fn verdict moves added att pins
   worse = list/to_list (list/select known (m -> m.worse))
   better = list/to_list (list/reject known (m -> m.worse))
   adrift = list/to_list (list/reject held (m -> m.ruled))
-  orphans = unclaimed pins[2]! pins[3]! shifted
+  orphans = unclaimed_of pins shifted
   reb = [shifted orphans]
   seen = [worse better adrift]
   said moves .> (_ -> weighed_up moves seen new_ones reb added att)
@@ -888,11 +904,11 @@ fn claimed? rows shifted n
 # it stand in for one is what the rule exists to stop. A minted counter is
 # out for a different reason: it has a direction and no baseline to aim it.
 fn weighed_up moves seen new_ones reb added att
-  worse = seen[1]!
-  better = seen[2]!
-  adrift = seen[3]!
-  shifted = reb[1]!
-  orphans = reb[2]!
+  worse = seen[1]
+  better = seen[2]
+  adrift = seen[3]
+  shifted = reb[1]
+  orphans = reb[2]
   owed = text/concat worse shifted
   quiet = list/to_list (list/select owed (m -> silent? added m))
   mute = list/to_list (list/reject orphans (k -> named_in? added k))

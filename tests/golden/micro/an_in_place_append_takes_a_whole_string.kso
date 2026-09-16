@@ -21,7 +21,7 @@ fn summed acc _ 0
   acc
 
 fn summed acc cs i
-  summed (acc + cs[i]!) cs (i - 1)
+  summed (acc + cs[i]) cs (i - 1)
 
 pub play =
   seed = text/append (text/bytes "!") 33

@@ -11,7 +11,7 @@ type cell
 fn wire old
   build
     inner = cell "inner" none
-    outer = cell "outer" none
+    outer = cell "outer" _
     q = if (old.tag == "old")
       outer.link = inner
       outer

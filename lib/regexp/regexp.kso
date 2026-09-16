@@ -39,6 +39,11 @@ type rep
   most
   greedy
 
+# what a quantifier allows: the fewest and the most repeats
+type bounds
+  least
+  most
+
 type group
   node
   slot
@@ -363,7 +368,8 @@ fn seeking _ _ best _ true
   best
 
 fn seeking caught i best at false
-  one = caught[i]!
+  return best if i < 1 or length caught < i
+  one = caught[i]
   latest caught (i + 1) (kept_slot best one at) at
 
 fn kept_slot best (grabbed slot text) at
@@ -424,7 +430,8 @@ fn seeking_loose? _ _ true
   false
 
 fn seeking_loose? parts at false
-  found_loose? parts at (loose_behind? parts[at]!)
+  return false if at < 1 or length parts < at
+  found_loose? parts at (loose_behind? parts[at])
 
 fn found_loose? _ _ true
   true
@@ -457,7 +464,8 @@ fn joining _ _ acc true
   acc
 
 fn joining branches at acc false
-  one = starters branches[at]!
+  return acc if at < 1 or length branches < at
+  one = starters branches[at]
   widened branches at acc one (one == "")
 
 fn widened _ _ _ _ true
@@ -478,7 +486,8 @@ fn ahead_of _ _ _ true
   ""
 
 fn ahead_of parts at acc false
-  one = starters parts[at]!
+  return "" if at < 1 or length parts < at
+  one = starters parts[at]
   widened_seq parts at acc one (one == "")
 
 fn widened_seq _ _ _ _ true
@@ -489,7 +498,8 @@ fn widened_seq _ _ _ _ true
 # wrong — `a*b` never tried a position holding an `a`, and answered with the
 # `b` alone.
 fn widened_seq parts at acc one false
-  moved_past parts at "{acc}{one}" (may_skip? parts[at]!)
+  return "{acc}{one}" if at < 1 or length parts < at
+  moved_past parts at "{acc}{one}" (may_skip? parts[at])
 
 fn moved_past _ _ acc false
   acc
@@ -661,7 +671,8 @@ fn walking_parts _ _ acc at true
   slotted (seq acc) at
 
 fn walking_parts parts i acc at false
-  one = numbered parts[i]! at
+  return slotted (seq acc) at if i < 1 or length parts < i
+  one = numbered parts[i] at
   walk_parts parts (i + 1) (push acc one.node) one.next
 
 fn numbered (alt branches) at
@@ -674,7 +685,8 @@ fn walking_branches _ _ acc at true
   slotted (alt acc) at
 
 fn walking_branches branches i acc at false
-  one = numbered branches[i]! at
+  return slotted (alt acc) at if i < 1 or length branches < i
+  one = numbered branches[i] at
   walk_branches branches (i + 1) (push acc one.node) one.next
 
 fn numbered (rep node least most greedy) at
@@ -701,7 +713,7 @@ fn more_alt chars p acc
   splitting chars p branches (bar? chars p.pos)
 
 fn bar? chars at
-  at <= length chars and chars[at]! == "|"
+  at <= length chars and chars[at] == "|"
 
 fn splitting _ p branches false
   parsed (one_or_alt branches) p.pos
@@ -714,7 +726,7 @@ fn one_or_alt branches
   sole branches (length branches == 1)
 
 fn sole branches true
-  branches[1]!
+  if (length branches < 1) (alt branches) branches[1]
 
 fn sole branches false
   alt branches
@@ -726,7 +738,7 @@ fn gather_seq chars at acc
   gathering_seq chars at acc (done_seq? chars at)
 
 fn done_seq? chars at
-  at > length chars or chars[at]! == "|" or chars[at]! == ")"
+  at > length chars or chars[at] == "|" or chars[at] == ")"
 
 fn gathering_seq _ at acc true
   parsed (seq acc) at
@@ -740,7 +752,7 @@ fn read_repeat chars at
   suffixed chars base (at_quantifier? chars base.pos)
 
 fn at_quantifier? chars at
-  at <= length chars and in? "*+?\{" chars[at]!
+  at >= 1 and at <= length chars and in? "*+?\{" chars[at]
 
 # Whether the one-character string `c` is in `set`. A character one byte wide
 # is found by its byte: a member wider than a byte has no byte below 128 in
@@ -755,7 +767,8 @@ fn in? set c
   member? set c (text/bytes set) cb (length cb == 1)
 
 fn member? _ _ bs cb true
-  text/find2 bs 1 cb[1]! cb[1]! <= length bs
+  return false if length cb < 1
+  text/find2 bs 1 cb[1] cb[1] <= length bs
 
 fn member? set c _ _ false
   among? (text/chars set) c 1
@@ -767,32 +780,33 @@ fn found_at? _ _ _ true
   false
 
 fn found_at? cs c i false
-  cs[i]! == c or among? cs c (i + 1)
+  cs[i] == c or among? cs c (i + 1)
 
 fn suffixed _ base false
   base
 
 fn suffixed chars base true
-  braced chars base (chars[base.pos]! == "\{")
+  braced chars base (chars[base.pos] == "\{")
 
 fn braced chars base false
-  mark = chars[base.pos]!
+  return base if base.pos < 1 or length chars < base.pos
+  mark = chars[base.pos]
   after = base.pos + 1
-  lazy = after <= length chars and chars[after]! == "?"
-  bounds = spans mark
-  parsed (rep base.node bounds[1]! bounds[2]! (not lazy)) (past after lazy)
+  lazy = after <= length chars and chars[after] == "?"
+  b = spans mark
+  parsed (rep base.node b.least b.most (not lazy)) (past after lazy)
 
 # `{3,60}`, `{3,}` and `{3}`. The comma decides whether there is a ceiling and
 # the digit after it decides what the ceiling is.
 fn braced chars base true
   low = digits chars (base.pos + 1) 0
-  with_ceiling chars base low (chars[low.pos]! == ",")
+  with_ceiling chars base low (chars[low.pos] == ",")
 
 fn with_ceiling chars base low false
   closed chars base low.node low.node (low.pos + 1)
 
 fn with_ceiling chars base low true
-  unbounded chars base low (chars[low.pos + 1]! == "}")
+  unbounded chars base low (chars[low.pos + 1] == "}")
 
 fn unbounded chars base low true
   closed chars base low.node no_ceiling (low.pos + 2)
@@ -802,18 +816,22 @@ fn unbounded chars base low false
   closed chars base low.node high.node (high.pos + 1)
 
 fn closed chars base least most after
-  lazy = after <= length chars and chars[after]! == "?"
+  lazy = after <= length chars and chars[after] == "?"
   parsed (rep base.node least most (not lazy)) (past after lazy)
 
 fn digits chars at acc
-  taking chars at acc (at <= length chars and in? "0123456789" chars[at]!)
+  taking chars at acc (digit_at? chars at)
+
+fn digit_at? chars at
+  at >= 1 and at <= length chars and in? "0123456789" chars[at]
 
 fn taking _ at acc false
   parsed acc at
 
 fn taking chars at acc true
+  return parsed acc at if at < 1 or length chars < at
   ten = acc * 10
-  digit = text/char_code chars[at]! - text/char_code "0"
+  digit = text/char_code chars[at] - text/char_code "0"
   digits chars (at + 1) (ten + digit)
 
 fn past after true
@@ -825,30 +843,33 @@ fn past after false
 no_ceiling = 0 - 1
 
 fn spans "*"
-  [0 no_ceiling]
+  bounds 0 no_ceiling
 
 fn spans "+"
-  [1 no_ceiling]
+  bounds 1 no_ceiling
 
 fn spans _
-  [0 1]
+  bounds 0 1
 
 fn read_atom chars at
-  opened chars at chars[at]!
+  return parsed (lit "") at if at < 1 or length chars < at
+  opened chars at chars[at]
 
 fn opened chars at "("
-  special chars at (at + 1 <= length chars and chars[at + 1]! == "?")
+  special chars at (at + 1 <= length chars and chars[at + 1] == "?")
 
 fn special chars at false
   inner = read_alt chars (at + 1)
   parsed (group inner.node 0) (inner.pos + 1)
 
 fn special chars at true
-  marked chars at chars[at + 2]!
+  return special chars at false if at < 0 or length chars < at + 2
+  marked chars at chars[at + 2]
 
 # `(?:` groups without capturing, `(?=` and `(?!` look ahead without consuming.
 fn marked chars at "<"
-  looking chars at chars[at + 3]!
+  return special chars at false if at < 0 or length chars < at + 3
+  looking chars at chars[at + 3]
 
 fn looking chars at "="
   inner = read_alt chars (at + 4)
@@ -888,7 +909,8 @@ fn summing _ _ acc true
   acc
 
 fn summing parts at acc false
-  one = wide_as parts[at]!
+  return acc if at < 1 or length parts < at
+  one = wide_as parts[at]
   summed parts (at + 1) (added acc one (one < 0))
 
 fn added _ _ true
@@ -898,7 +920,7 @@ fn added acc one false
   acc + one
 
 fn wide_as (alt branches)
-  agreed branches 2 (wide_as branches[1]!)
+  if (length branches < 1) 0 (agreed branches 2 (wide_as branches[1]))
 
 fn agreed branches at so_far
   agreeing branches at so_far (at > length branches or so_far < 0)
@@ -907,7 +929,8 @@ fn agreeing _ _ so_far true
   so_far
 
 fn agreeing branches at so_far false
-  one = wide_as branches[at]!
+  return so_far if at < 1 or length branches < at
+  one = wide_as branches[at]
   agreed branches (at + 1) (matched_width so_far one (one == so_far))
 
 fn matched_width so_far _ true
@@ -948,7 +971,8 @@ fn opened _ at "$"
   parsed (edge "end") (at + 1)
 
 fn opened chars at "\\"
-  escaped chars (at + 1) chars[at + 1]!
+  return parsed (lit "\\") (at + 1) if at < 0 or length chars < at + 1
+  escaped chars (at + 1) chars[at + 1]
 
 fn opened _ at c
   parsed (lit c) (at + 1)
@@ -977,7 +1001,7 @@ fn escaped _ at c
 word_chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"
 
 fn read_class chars at
-  negated = chars[at]! == "^"
+  negated = chars[at] == "^"
   start = shifted at negated
   members chars start "" negated
 
@@ -988,7 +1012,7 @@ fn shifted at false
   at
 
 fn members chars at set negated
-  collecting chars at set negated (chars[at]! == "]")
+  collecting chars at set negated (at > length chars or chars[at] == "]")
 
 fn collecting _ at set negated true
   parsed (cls set negated) (at + 1)
@@ -997,10 +1021,11 @@ fn collecting chars at set negated false
   ranged chars at set negated (range? chars at)
 
 fn range? chars at
-  at + 2 <= length chars and chars[at + 1]! == "-" and chars[at + 2]! != "]"
+  at + 2 <= length chars and chars[at + 1] == "-" and chars[at + 2] != "]"
 
 fn ranged chars at set negated true
-  span = spread chars[at]! chars[at + 2]!
+  return members chars (at + 1) set negated if at < 1 or length chars < at + 2
+  span = spread chars[at] chars[at + 2]
   members chars (at + 3) "{set}{span}" negated
 
 fn ranged chars at set negated false
@@ -1008,14 +1033,16 @@ fn ranged chars at set negated false
   members chars one.pos "{set}{one.node}" negated
 
 fn literal_member chars at
-  member_of chars at (chars[at]! == "\\")
+  member_of chars at (chars[at] == "\\")
 
 fn member_of chars at true
-  esc = escaped chars (at + 1) chars[at + 1]!
+  return parsed "\\" (at + 1) if at < 0 or length chars < at + 1
+  esc = escaped chars (at + 1) chars[at + 1]
   parsed (class_text esc.node) esc.pos
 
 fn member_of chars at false
-  parsed chars[at]! (at + 1)
+  return parsed "" (at + 1) if at < 1 or length chars < at
+  parsed chars[at] (at + 1)
 
 fn class_text (lit c)
   c
@@ -1050,8 +1077,9 @@ fn stepping _ _ _ at slots k true
   k at slots
 
 fn stepping parts i s at slots k false
+  return k at slots if i < 1 or length parts < i
   on = (next caught -> through parts (i + 1) s next caught k)
-  walked parts[i]! s at slots on
+  walked parts[i] s at slots on
 
 fn walked (alt branches) s at slots k
   branching branches 1 s at slots k
@@ -1063,7 +1091,8 @@ fn trying _ _ _ _ _ _ true
   none
 
 fn trying branches i s at slots k false
-  won = walked branches[i]! s at slots k
+  return none if i < 1 or length branches < i
+  won = walked branches[i] s at slots k
   or_else branches i s at slots k won
 
 fn or_else branches i s at slots k none

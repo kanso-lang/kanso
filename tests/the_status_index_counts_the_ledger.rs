@@ -27,6 +27,16 @@
 //! once, and the count above stays right while the ledger is wrong. Parked is a
 //! list of one-liners; anything longer belongs under a heading in one of the
 //! two live sections, or in the log.
+//!
+//! The count test guards one more hole, found on 2026-09-16. STATUS.md indexes
+//! the ledger TWICE — an overview sentence near the top and the detail
+//! sentence this test was written for — and only the detail one was pinned.
+//! The overview read "Three questions are waiting — one blocking" while
+//! STATUS.md's own opening paragraph read "Blocking right now: zero" and the
+//! ledger held no Blocking entry at all. A file contradicting itself about the
+//! queue is worse than one merely behind it: a reader cannot tell which half to
+//! believe, and the file's own history paragraph records that this had already
+//! happened once before. Both sentences are read off the ledger now.
 
 use std::path::Path;
 
@@ -89,6 +99,19 @@ fn word_before(text: &str, phrase: &str) -> String {
         .to_ascii_lowercase()
 }
 
+/// The word standing immediately after a phrase, lowercased and stripped of the
+/// punctuation STATUS.md ends its lead-ins with.
+fn word_after(text: &str, phrase: &str) -> String {
+    text.split_once(phrase)
+        .unwrap_or_else(|| panic!("STATUS.md says {phrase:?}"))
+        .1
+        .split_whitespace()
+        .next()
+        .expect("a word stands after it")
+        .trim_matches(|c: char| !c.is_ascii_alphanumeric())
+        .to_ascii_lowercase()
+}
+
 /// Parked is bullets. Prose appended there is an entry nothing can cite.
 #[test]
 fn the_parked_section_holds_only_its_list() {
@@ -134,16 +157,35 @@ fn the_status_index_counts_the_ledger() {
     let claimed_blocking = word_before(&flat, "blocking,");
     let claimed_open = word_before(&flat, "open — each with a recommendation");
 
+    // STATUS.md indexes the ledger TWICE: the sentence above, and an overview
+    // one near the top of the file. Only the first was pinned, so on 2026-09-16
+    // the overview still read "Three questions are waiting — one blocking"
+    // while the same file's opening paragraph said "Blocking right now: zero"
+    // and the ledger held none. A file that contradicts itself about the queue
+    // is worse than one that is merely stale: a reader cannot tell which half
+    // to believe. Both sentences are pinned to the ledger now.
+    let overview_total = word_before(&flat, "questions are waiting**");
+    let overview_blocking = word_after(&flat, "questions are waiting** —");
+
+    // And a third: the paragraph that lists the open entries one by one counts
+    // them in its own lead-in. On 2026-09-16 it read "The two open, not
+    // blocking" and named an entry that had left the ledger ruled the day
+    // before, while two it had never heard of stood under the heading.
+    let listed_open = word_before(&flat, "open, not blocking** —");
+
     for (claimed, counted, what) in [
         (claimed_total, total, "questions in total"),
         (claimed_blocking, blocking, "blocking"),
         (claimed_open, open, "open, not blocking"),
+        (overview_total, total, "questions in total, in the overview sentence"),
+        (overview_blocking, blocking, "blocking, in the overview sentence"),
+        (listed_open, open, "open, not blocking, in the paragraph that lists them"),
     ] {
         let want = SPELLED.get(counted).copied().unwrap_or("");
         assert!(
             claimed == want || claimed == counted.to_string(),
             "design/pending-gavels.md holds {counted} {what} and STATUS.md calls them \
-             {claimed:?} — the index is maintained by hand and has gone stale twice, \
+             {claimed:?} — the index is maintained by hand and has gone stale more than once, \
              so it is pinned to the ledger rather than trusted"
         );
     }

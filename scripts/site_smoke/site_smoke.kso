@@ -370,7 +370,8 @@ fn cut text true
 
 fn kind path
   parts = text/split path "."
-  named parts[length parts]!
+  return named path if length parts < 1
+  named parts[length parts]
 
 fn named "js"
   "content-type: text/javascript; charset=utf-8"
@@ -430,6 +431,9 @@ fn visiting set chrome at path on
 # this harness, so it is what identifies the browser to stop.
 fn stopping on
   os/run "pkill" ["-f" "kanso-smoke-profile"] .> on
+
+fn saw? none _
+  false
 
 fn saw? text needle
   length (text/split text needle) > 1
@@ -598,8 +602,9 @@ fn paint_step _ acc _ true
   acc
 
 fn paint_step painted acc at false
-  one = paint_wants[at]!
-  seen = saw? painted[one.at]! one.needle
+  return acc if at < 1 or length paint_wants < at
+  one = paint_wants[at]
+  seen = saw? painted[one.at] one.needle
   grown = noted acc one.why seen
   paint_faults painted grown (at + 1)
 
@@ -674,8 +679,9 @@ fn gathered _ _ acc true
   with_all acc
 
 fn gathered paths at acc false
+  return with_all acc if at < 1 or length paths < at
   on = (body -> read_each paths (at + 1) (text/concat acc [body]))
-  read_one paths[at]! .> on
+  read_one paths[at] .> on
 
 # The engine is bytes and everything else is text; read_file refuses bytes
 # that are not text, on every engine, so the module is read as what it is.
@@ -686,19 +692,20 @@ fn read_one path
   os/read_file! path
 
 fn with_all bodies
-  header = bodies[5]!
-  index = document "" header bodies[6]! "" landing
-  shown = document "" header bodies[7]! "" board
-  read = document "" header bodies[9]! chapter_scripts story
-  drawn = document chart_head header bodies[10]! "" trend
+  return io/write "site_smoke: fewer than ten pages\n" if length bodies < 10
+  header = bodies[5]
+  index = document "" header bodies[6] "" landing
+  shown = document "" header bodies[7] "" board
+  read = document "" header bodies[9] chapter_scripts story
+  drawn = document chart_head header bodies[10] "" trend
   assembled bodies shown read drawn index
 
 fn assembled bodies shown read drawn index
-  engine = bodies[1]!
-  wasm = bodies[2]!
-  hero = bodies[3]!
-  js = bodies[4]!
-  book = bodies[8]!
+  engine = bodies[1]
+  wasm = bodies[2]
+  hero = bodies[3]
+  js = bodies[4]
+  book = bodies[8]
   painted = document "" "" "" engine_tag paint
   set = pages shown book read drawn engine hero index painted js wasm
   wanted set
@@ -728,11 +735,13 @@ fn searched _ _ _ true
   io/write "no chrome found: set KANSO_CHROME\n" .> (_ -> os/exit 1)
 
 fn searched set paths at false
+  return searched set paths at true if at < 1 or length paths < at
   on = (there -> found_at set paths at there)
-  os/exists paths[at]! .> on
+  os/exists paths[at] .> on
 
 fn found_at set paths at true
-  running set paths[at]!
+  return searched set paths at true if at < 1 or length paths < at
+  running set paths[at]
 
 fn found_at set paths at false
   first_chrome set paths (at + 1)

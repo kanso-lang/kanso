@@ -55,18 +55,15 @@ pub fn stop value
 # are; the body is whatever the read brought with it.
 pub fn parsed raw
   head = text/split raw "\r\n\r\n"
-  lines = text/split head[1]! "\r\n"
-  start = text/split lines[1]! " "
-  request start[1]! start[2]! (body_of head)
+  return err "an empty request" if length head < 1
+  lines = text/split head[1] "\r\n"
+  return err "an empty request" if length lines < 1
+  start = text/split lines[1] " "
+  return err "a request line without a method and a path" if length start < 2
+  request start[1] start[2] (body_of head)
 
 fn body_of head
-  present head[2]! (length head > 1)
-
-fn present body true
-  body
-
-fn present _ false
-  ""
+  if (length head > 1) head[2] ""
 
 pub fn rendered r
   "{preamble r}{r.body}"
@@ -164,7 +161,8 @@ fn joined c handler carried raw nxt
 # second part keeps a body that itself contains a blank line intact.
 fn whole? raw
   parts = text/split raw "\r\n\r\n"
-  complete? raw parts[1]! (length parts > 1)
+  return false if length parts < 1
+  complete? raw parts[1] (length parts > 1)
 
 fn complete? _ _ false
   false
@@ -186,8 +184,10 @@ fn counted _ false
   0
 
 fn counted parts true
-  digits = text/split parts[2]! "\r\n"
-  text/to_int (text/trim digits[1]!)
+  return 0 if length parts < 2
+  digits = text/split parts[2] "\r\n"
+  return 0 if length digits < 1
+  text/to_int (text/trim digits[1])
 
 fn answered_with c handler carried raw
   took = handler (parsed raw) carried
