@@ -536,4 +536,10 @@
 # runs and round five read another, so the row is stable per binary and moves
 # between them; 13 in 132 million is 1.0e-7, against the 508 the same shape
 # cost under glibc, which is the one thing here that is an improvement.
-entry_instructions=131884284
+# 2026-09-16 (a binder pays for a lookup it never reads; kanso#1459):
+# entry_instructions 131,884,284 -> 130,618,857, a FALL of 1,265,427
+# (-0.9595%). The same change as the module row, and it falls about twice as
+# hard there: this corpus names ten imports where the module corpus names
+# four, so it walks far more declarations and far more calls into groups.
+# CI's reading.
+entry_instructions=130618857

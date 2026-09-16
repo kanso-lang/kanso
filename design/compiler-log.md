@@ -3660,8 +3660,18 @@ long rows walk far more declarations and far more calls into groups than the
 short one does.
 
 CONTAINER FIGURES, not CI's. This box reads about 1.2 per cent high on these
-rows and the goldens are CI's; round one is deliberately red on all three and
-CI's own reading replaces the numbers above.
+rows and the goldens are CI's; round one was deliberately red on all three and
+CI's own reading is what the goldens carry:
+
+    compile_instructions    36,878,550 ->  36,695,922    -182,628   -0.4952%
+    entry_instructions     131,884,284 -> 130,618,857  -1,265,427   -0.9595%
+    library_instructions   132,025,167 -> 130,762,703  -1,262,464   -0.9562%
+    summed                 300,788,001 -> 298,077,482  -2,710,519   -0.9011%
+
+The projection held on all three: the container said -0.4880%, -0.9140% and
+-0.9114% where CI reads -0.4952%, -0.9595% and -0.9562%, so a box 1.2 per cent
+high on the absolutes was within seven hundredths of a point on every
+percentage. Welfare 69.75 -> 69.76, banked with the rows in.
 
 Nothing else the compiler counts moves, and that was measured rather than
 argued. `KANSO_COUNTERS=1` on both binaries off the same staging reads

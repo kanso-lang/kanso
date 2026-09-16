@@ -560,4 +560,9 @@
 # runs and round five read another, so the row is stable per binary and moves
 # between them; 13 in 132 million is 1.0e-7, against the 508 the same shape
 # cost under glibc, which is the one thing here that is an improvement.
-library_instructions=132025167
+# 2026-09-16 (a binder pays for a lookup it never reads; kanso#1459):
+# library_instructions 132,025,167 -> 130,762,703, a FALL of 1,262,464
+# (-0.9562%). The same change, and this row and the entry row track each other
+# to within 3,000 instructions of their falls, as they have since both opened.
+# CI's reading.
+library_instructions=130762703
