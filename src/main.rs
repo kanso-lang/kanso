@@ -30,7 +30,15 @@ const UNDER: std::alloc::System = std::alloc::System;
 #[cfg(not(target_arch = "wasm32"))]
 const ARENA_EAGER_COMMIT: i32 = 4;
 
-/// Reserve the first arena without committing it.
+/// mimalloc's `mi_option_purge_delay`, sixteenth in the same enum and read
+/// from the same header by the same spec.
+#[cfg(not(target_arch = "wasm32"))]
+const PURGE_DELAY: i32 = 15;
+
+/// Two options, both set before the first allocation, both for a reason a
+/// counter could not see.
+///
+/// **Reserve the first arena without committing it.**
 ///
 /// Left alone, mimalloc commits that arena up front, and the six megabytes it
 /// costs are resident in every process the compiler starts. Nothing in the
@@ -45,16 +53,46 @@ const ARENA_EAGER_COMMIT: i32 = 4;
 /// the allocator saves. It has to happen here rather than at the top of
 /// `main`, because by then the arena is already committed: Rust's runtime
 /// allocates before it hands over. A constructor runs ahead of all of it.
+///
+/// **Never purge, so a timer stops deciding what the vein counts.** mimalloc
+/// returns free pages to the operating system on a clock. Each arena carries
+/// a deadline, and a pass over one asks `_mi_clock_now` — glibc's
+/// `clock_gettime`, through the vDSO — whether that deadline has gone by. How
+/// many of those asks a process makes depends on how long it has been
+/// running, and how long it has been running is wall time. On
+/// `kanso check compile_corpus` it asks 163 times; on the entry and library
+/// corpora, which take about three and a half times the work, the whole purge
+/// machinery costs five times as much. That is the signature of a term keyed
+/// to elapsed time. A counter golden holding it is a number the next host,
+/// or the next busy afternoon, is free to disagree with.
+///
+/// `-1` disables purging, which takes `_mi_prim_clock_now` from 163 calls to
+/// 3 and removes 8,288 instructions from the module row, 44,608 from the
+/// entry row and 48,487 from the library row. The three reads that remain are
+/// the stamp mimalloc takes when it initialises; that runs once whatever the
+/// timing. The compiler is a short-lived process that exits and gives
+/// everything back at once, so never purging removes work.
+///
+/// This was found while hunting a reproduction failure — the three compile
+/// rows came back 13 instructions apart on two CI runs of one commit, and the
+/// 2026-09-05 ruling is one row, one value, so a disagreement halts the vein
+/// and is neither keyed nor averaged. The timer does not explain that 13: the
+/// same gap on all three rows points at something that happens once per
+/// process, and purge asks scale with the run instead. So this removes a
+/// wall-clock dependence that was real and would have bitten later, and the
+/// original disagreement is still open. If it returns, the three init reads
+/// are the next place to look.
 #[cfg(not(target_arch = "wasm32"))]
-extern "C" fn reserve_the_arena_without_committing_it() {
+extern "C" fn set_the_allocator_before_it_runs() {
     unsafe { libmimalloc_sys::mi_option_set(ARENA_EAGER_COMMIT, 0) };
+    unsafe { libmimalloc_sys::mi_option_set(PURGE_DELAY, -1) };
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 #[used]
 #[cfg_attr(target_vendor = "apple", link_section = "__DATA,__mod_init_func")]
 #[cfg_attr(not(target_vendor = "apple"), link_section = ".init_array")]
-static BEFORE_THE_FIRST_ALLOCATION: extern "C" fn() = reserve_the_arena_without_committing_it;
+static BEFORE_THE_FIRST_ALLOCATION: extern "C" fn() = set_the_allocator_before_it_runs;
 
 static ALLOC_BYTES: AtomicU64 = AtomicU64::new(0);
 static ALLOC_CALLS: AtomicU64 = AtomicU64::new(0);

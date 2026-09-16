@@ -1992,7 +1992,22 @@ rows_c1za = text/concat rows_c1z [compiler_allocator]
 
 rows_c1zb = text/concat rows_c1za [allocator_option]
 
-rows_c = text/concat rows_c1zb [itself]
+# And the second option the same constructor sets, for the same reason. This
+# one stops mimalloc reading the clock: its purge timer calls clock_gettime,
+# whose instruction count belongs to the host's clocksource rather than to
+# this program, and CI read the three compile rows 13 apart on two runs of one
+# commit before it came off.
+purge_delay_option = row
+  "the purge delay named one past the option that disables the timer"
+  true
+  "cargo test --release --test the_allocator_option_is_the_one_the_header_names"
+  "specs (unit, golden, differential)"
+  (breaking "a_purge_delay_that_is_not_the_purge_delay")
+  no_setup
+
+rows_c1zc = text/concat rows_c1zb [purge_delay_option]
+
+rows_c = text/concat rows_c1zc [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

@@ -1,15 +1,17 @@
-//! The compiler turns one mimalloc option off before its first allocation, and
-//! it names that option by a number. mimalloc's Rust bindings stop naming
-//! options well before `mi_option_arena_eager_commit`, so the number in
-//! src/main.rs is copied out of the C library's own header — and a copied
-//! number goes stale silently. A crate bump that inserts one option above it
-//! would leave the compiler turning off whatever now sits at position four,
-//! with the eager commit back on and nobody told.
+//! The compiler sets two mimalloc options before its first allocation, and it
+//! names each by a number. mimalloc's Rust bindings stop naming options well
+//! before either, so the numbers in src/main.rs are copied out of the C
+//! library's own header — and a copied number goes stale silently. A crate
+//! bump that inserts one option above them would leave the compiler setting
+//! whatever now sits at those positions, with the eager commit back on, the
+//! purge timer back on, and nobody told.
 //!
 //! So this reads the header the build compiles, counts the enum, and asserts
-//! the two agree. The behaviour that depends on it is pinned next door in
-//! tests/bind_chain_depth.rs, which reads resident memory and goes red when
-//! the arena comes back; this spec exists to say WHY when that happens.
+//! every number agrees. The behaviour each one buys is pinned elsewhere:
+//! tests/bind_chain_depth.rs reads resident memory and goes red when the arena
+//! comes back, and the three compile instruction goldens go red when the purge
+//! timer returns, because its `clock_gettime` makes the row a property of the
+//! host's clocksource. This spec exists to say WHY when either happens.
 
 use std::path::PathBuf;
 
@@ -65,14 +67,15 @@ fn the_header_the_build_compiles() -> PathBuf {
     found.pop().unwrap_or_else(|| panic!("no libmimalloc-sys header under {}", registry.display()))
 }
 
-/// The number src/main.rs hands `mi_option_set`.
-fn the_number_the_compiler_uses() -> usize {
+/// A number src/main.rs hands `mi_option_set`, read off its constant.
+fn the_number_the_compiler_uses(constant: &str) -> usize {
     let source = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/main.rs"))
         .expect("src/main.rs reads");
+    let want = format!("const {constant}:");
     let line = source
         .lines()
-        .find(|l| l.trim_start().starts_with("const ARENA_EAGER_COMMIT:"))
-        .expect("src/main.rs names the option");
+        .find(|l| l.trim_start().starts_with(&want))
+        .unwrap_or_else(|| panic!("src/main.rs declares {constant}"));
     line.rsplit_once('=')
         .expect("the constant is assigned")
         .1
@@ -82,20 +85,69 @@ fn the_number_the_compiler_uses() -> usize {
         .expect("the constant is a number")
 }
 
+/// Every option the compiler sets, as (its constant in src/main.rs, the name
+/// the header declares). Adding an option to the constructor and not to this
+/// list leaves the new number unpinned, which is the whole failure this spec
+/// exists to prevent — so `the_constructor_sets_only_options_this_spec_pins`
+/// reads the constructor back and asserts the list is complete.
+const OPTIONS: &[(&str, &str)] = &[
+    ("ARENA_EAGER_COMMIT", "mi_option_arena_eager_commit"),
+    ("PURGE_DELAY", "mi_option_purge_delay"),
+];
+
 #[test]
-fn the_number_is_where_the_header_declares_the_option() {
+fn every_number_is_where_the_header_declares_its_option() {
     let header = the_header_the_build_compiles();
     let text = std::fs::read_to_string(&header).expect("the header reads");
-    let declared = position_in_the_enum(&text, "mi_option_arena_eager_commit")
-        .expect("the header declares mi_option_arena_eager_commit");
 
+    for (constant, option) in OPTIONS {
+        let declared = position_in_the_enum(&text, option)
+            .unwrap_or_else(|| panic!("the header declares {option}"));
+        let used = the_number_the_compiler_uses(constant);
+        assert_eq!(
+            used,
+            declared,
+            "src/main.rs sets option {used} as {constant} and {} declares \
+             {option} at {declared} — the compiler is setting the wrong option",
+            header.display()
+        );
+    }
+}
+
+/// The list above has to be complete or the numbers it does not carry are
+/// unpinned. The constructor is one function and it calls `mi_option_set` once
+/// per option, so reading its body back names every constant in play.
+#[test]
+fn the_constructor_sets_only_options_this_spec_pins() {
+    let source = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/src/main.rs"))
+        .expect("src/main.rs reads");
+    let body = source
+        .split_once("fn set_the_allocator_before_it_runs()")
+        .expect("src/main.rs declares the constructor")
+        .1
+        .split_once("\n}")
+        .expect("the constructor has a body")
+        .0;
+
+    let mut set: Vec<&str> = Vec::new();
+    for call in body.split("mi_option_set(").skip(1) {
+        let arg = call.split(',').next().expect("mi_option_set takes an option").trim();
+        set.push(arg);
+    }
+
+    assert!(!set.is_empty(), "the constructor sets no option at all");
+    for constant in &set {
+        assert!(
+            OPTIONS.iter().any(|(named, _)| named == constant),
+            "the constructor sets {constant} and OPTIONS does not name it, so \
+             that number is copied out of the header and pinned by nothing"
+        );
+    }
     assert_eq!(
-        the_number_the_compiler_uses(),
-        declared,
-        "src/main.rs turns off option {} and {} declares \
-         mi_option_arena_eager_commit at {declared} — the compiler is \
-         setting the wrong option",
-        the_number_the_compiler_uses(),
-        header.display()
+        set.len(),
+        OPTIONS.len(),
+        "OPTIONS names {} options and the constructor sets {}: {set:?}",
+        OPTIONS.len(),
+        set.len()
     );
 }

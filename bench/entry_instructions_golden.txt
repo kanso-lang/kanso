@@ -478,4 +478,22 @@
 # links no shared object, and every runtime vein agreed. CI's own reading,
 # stated, not reasoned from.
 #
-entry_instructions=131957599
+#
+# 2026-09-16, round three: mimalloc never purges (kanso#1456). The allocator
+# returns free pages to the operating system on a timer, and every pass over
+# an arena asks `clock_gettime` whether a deadline has gone by — 163 asks on
+# this workload, a count that tracks how long the process has been running
+# rather than what it compiled. The whole purge machinery costs 8,288
+# instructions on the module row against 44,608 on entry and 48,487 on
+# library: five times the cost for three and a half times the work, which is
+# what a term keyed to elapsed time looks like. `mi_option_purge_delay = -1`
+# removes it, leaving the three unconditional reads mimalloc takes when it
+# initialises.
+#
+# 131,957,599 -> 131,912,991, a fall of 44,608. THIS IS A PROJECTION, not a
+# sitting: the container measured the purge machinery's cost and it is
+# subtracted from CI's round-one row, on the assumption that the same pages
+# are purged on the runner. CI re-measures and this line is replaced by what
+# it read.
+#
+entry_instructions=131912991

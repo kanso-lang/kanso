@@ -5310,3 +5310,62 @@ narrative delta and a live span cannot sit in one clause, because the delta
 is historical and the span is whatever the golden says today. The one that
 had already gone wrong read "it reads X today, 1,056 lower" about a change
 that predated two more.
+
+## Round three: a reproduction failure, and the wall clock inside the allocator
+
+CI measured the three compile rows twice on one commit and got two answers,
+13 instructions apart on all three. The 2026-09-05 ruling is one row, one
+value — a disagreement halts the vein and is neither keyed nor averaged — so
+the round went to hunting it instead of to landing.
+
+Ten runs in this container gave 37,317,886 every time, so whatever it is does
+not vary run to run on one host. The CPU model, the glibc build and the rustc
+build were identical on the two runners, so it is not silicon and not a
+toolchain. And the same 13 on three compiles that differ in size by more than
+three to one puts it in what the process does once, rather than in the work.
+
+The profile then found something the hunt was not looking for. mimalloc
+returns free pages to the operating system on a clock: each arena carries a
+deadline, and a pass over one asks `_mi_clock_now` — glibc's `clock_gettime`,
+through the vDSO — whether that deadline has gone by. On
+`kanso check compile_corpus` it asks 163 times. **How many times it asks
+depends on how long the process has been running, and that is wall time, not
+work.** The whole purge machinery costs 8,288 instructions on the module row
+against 44,608 on entry and 48,487 on library — five times as much for three
+and a half times the work, which is the shape of a term keyed to elapsed time
+rather than to anything the compiler did.
+
+A deterministic vein cannot hold that. `mi_option_purge_delay = -1` disables
+purging, takes `_mi_prim_clock_now` from 163 calls to 3, and removes those
+same 8,288 / 44,608 / 48,487 instructions. The three that remain are the
+stamp mimalloc takes when it initialises, which runs once whatever the timing.
+The compiler is a short-lived process that exits and gives everything back at
+once, so never purging removes work rather than adding it, and
+`bind_chain_depth` still passes — not purging does not raise the resident
+floor when nothing frees at scale. Reproduced three times at 37,309,598 /
+133,285,762 / 133,429,679, identical each time.
+
+**The timer does not explain the 13, and that thread stays open.** A
+difference in how many deadlines expired would land on the long compiles and
+not the short one, where the observed gap was the same on all three. So this
+change removes a wall-clock dependence that was real and would have surfaced
+eventually, and the original disagreement is still unexplained. If it returns,
+the three remaining init reads are where to look next: their count cannot
+vary, but their cost is the host's vDSO, 33 instructions here, and a
+clocksource priced differently would shift all three rows by the same small
+amount — which is the shape that was observed.
+
+The option index is pinned the same way the first one is.
+`tests/the_allocator_option_is_the_one_the_header_names.rs` now carries a
+table of (constant, option name) pairs and reads the enum position of each out
+of the header libmimalloc-sys vendors. A second test splits the constructor,
+collects every first argument to `mi_option_set`, and fails if the table does
+not name it — because a list of pinned numbers that is allowed to be
+incomplete pins nothing. Both watched red: the first under a new mutation,
+`a_purge_delay_that_is_not_the_purge_delay`, which moves the constant to 16;
+the second under a hand-added `show_errors` call, which it named as a number
+copied out of the header and pinned by nothing.
+
+The three compile goldens go back deliberately red this round. CI has to
+re-measure them on the runner, because the container reads about one per cent
+high and the whole point of the change is that these rows now hold still.
