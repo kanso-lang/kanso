@@ -21,7 +21,7 @@ ratio <span class="o">=</span> <span class="f">text/to_int</span> word
   <div class="code-output">
     <div class="code-panel-title">kanso run ratio.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: ""many" is not an integer"
-  born in text/to_int at std/text/text.kso:89</code></pre>
+  born in text/to_int at std/text/text.kso:92</code></pre>
   </div>
 </div>
 
@@ -71,8 +71,9 @@ ratio <span class="o">=</span> <span class="f">text/to_int</span> word
 
 <div class="code-panel">
   <div class="code-panel-title">unasked.kso</div>
-  <pre><code><span class="f">print</span> (<span class="f">label</span> <span class="s">"soup"</span> (<span class="f">price</span> <span class="s">"soup"</span>))
-<span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">label</span> <span class="s">"flan"</span> (<span class="f">price</span> <span class="s">"flan"</span>))
+  <pre><code>seasonal <span class="o">=</span> <span class="f">price</span> <span class="s">"flan"</span>
+<span class="f">print</span> (<span class="f">label</span> <span class="s">"soup"</span> (<span class="f">price</span> <span class="s">"soup"</span>))
+<span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">label</span> <span class="s">"flan"</span> seasonal)
 
 <span class="k">fn</span> <span class="f">price</span> <span class="s">"flan"</span>
   <span class="f">err</span> <span class="s">"flan is seasonal"</span>
@@ -87,7 +88,7 @@ ratio <span class="o">=</span> <span class="f">text/to_int</span> word
 <div class="code-panel">
   <div class="code-panel-title">kanso play unasked.kso</div>
   <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the executor: "flan is seasonal"
-  born in price at unasked.kso:5
+  born in price at unasked.kso:6
   passed through label
 soup: 450 cents</code></pre>
 </div>
@@ -358,7 +359,7 @@ not a flag</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso play garbage.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the executor: ""seven point four" is not an integer"
-  born in text/to_int at std/text/text.kso:89</code></pre>
+  born in text/to_int at std/text/text.kso:92</code></pre>
   </div>
 </div>
 

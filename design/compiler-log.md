@@ -3579,3 +3579,157 @@ on those, and CI's sitting is what gets written.
 
 Welfare cannot see any of this until CI's rows land, because the priced
 compile rows are host-keyed; the floor is banked after they do.
+
+## 2026-09-15 — a bare err where a value is wanted is refused at check
+
+Part 3 of the 2026-09-15 ruling "the box is explicit, an err is a value, and
+a bare err halts where it lands", built on kanso#1442's tree (part 2). The
+ruling's sentence: "An operator, an index, or a call with no `(err _)` arm
+at that position does not compile, exactly as it does not compile today when
+a `none` can reach it."
+
+### What the checker proves, and what it does not
+
+The none rule (kanso#1369) reads infer's answer sets: a call whose group can
+answer `none`, handed to a group with no `none` arm at that position, is
+refused. This rule reads the same sets for an err, with one bit added.
+`RAISED` sits above `TOP` in infer, and only three things set it: the `err`
+call, an `e:err` annotation, and an `(err _)` arm's catch. `bind_pattern`
+now binds an as-pattern's name to what the pattern caught, so
+`fn taken e@(err _) = e` hands the err on as a raised err and a caller that
+reads `taken x` is refused like the raise itself. A strict index's miss and
+a division's zero answer `ERR` without the bit: what the checker should make
+of those is the ledger's Blocking entry "What `!` promises the checker",
+and this rule does not pre-empt it. A description is skipped whatever it
+carries, since a boxed failure is not a bare one.
+
+The first cut refused 191 sites. Reading them: 43 were `text/split s "\n"`
+and the like, refused because `split _ ""` raises and the group's joined
+answer carries the bit whatever the separator. So infer's call join reads a
+group one arm at a time and skips an arm a literal argument cannot reach:
+`arm_can_run` compares a string or int literal against a literal pattern, a
+module constant bound to a string literal counts as that literal (a
+declaration's name cannot be rebound), and an interpolated string with fixed
+text cannot match a shorter pattern. The check makes the same test at the
+call. That took the count to 127, and the rest were real: every site left
+was a raised err handed to a group with no arm for it.
+
+**What the checker reads is calls, not names.** `x = decode s` then `f x`
+compiles: a bare local binding drops the failure bits (`bind_pattern`'s
+"generics never bind failures", the rule the none check already lives
+with), so what a name holds is not something this rule sees. The
+`some_is_a_value_not_a_failure` fixture pins the runtime's answer for that
+shape on purpose, and says so.
+
+### What the tree had to say to compile
+
+std/regexp raises in one place, a variable-width lookbehind, and every entry
+point could hand that err to its walk. Eight entry points now have an arm:
+`taken` and `named` directly, and six through a wrapper (`gathered`,
+`anchored`, `located`, `replaced`, `divided`, `begun`), so the walk is not
+asked at every position whether its program is an err. `in?`'s
+wide-character arm walked `text/split set c` and now walks the set's
+characters, because the checker cannot see that `c` is never empty.
+
+std/json's decoder threads a parse failure through `finish`, `array_step`,
+`obj_key`, `obj_value` and `str_low`; each has an `e@(err _)` arm, last where
+the group's other arms are constructor patterns and first where one is a
+bare name. Its tests dispatch on what they decoded before comparing
+(`decodes?`, `same?`, `encodes_back?`). The three vendored decoders
+(encodebench, widebench, kq's query) take the same arms, kq's own
+`obj_colon` included; kq#106 lands them first, since kanso's CI runs kq's
+suite against the compiler on the pull request.
+
+Four benchmark programs (encodebench, livebench, widebench, runbench), hako
+and fourteen scripts bind a raised answer to a name before handing it on, or
+give the receiving group an arm: 13 arms in lib, 22 in bench and kq, and
+the rest bindings. The three micro fixtures that handed `json/decode "[1, 2"`
+straight to an arm-less group to pin "a failure reaches none of the arms"
+are reshaped: two write the err as an arm, the way the none rule had them
+write `none` as one, and the third arrives by name. Two runtime trails lose a
+`passed through` line, because an arm that answers an err is not a hop.
+
+### Watched red
+
+The three error-corpus fixtures, `an_err_reaches_an_operator`,
+`an_err_reaches_an_index` and `an_err_reaches_a_group_with_no_arm_for_it`,
+compile with `raised_err_at` deleted and refuse with it present; the ratchet
+row `raised_err` carries that mutation.
+
+### What the sweep found under the arms
+
+The first counter sweep read the decode's `sh_rec` at 253,968,000 against
+a golden of 0, with `allocs` 4,390,215 -> 8,358,465, and the run program
+5,730,654 -> 8,348,673. Every scanner answer in the decoder travels in two
+registers, the position packed above the value's tag in one word and the
+payload in the other, and a consumer whose arm destructures `(parsed p v)`
+reads those words with no record built. The escape analysis boxes a slot
+whenever any arm at it names the whole value, since `r@(parsed p v)` wants
+the record. The five `e@(err _)` arms this entry asked of the decoder sit at
+exactly those slots, and the rule read them as as-patterns like any other.
+
+An err as-pattern needs no record. The dispatcher reads the two words back
+as one value before it matches, and on the failure path that value is the
+failure that arrived; the name binds to it. The rule exempts `err`, and the
+decode's counters read the golden to the byte again. The mem fixture
+`an_err_as_pattern_keeps_a_carried_slot_unboxed` pins it at `sh_rec=0`; with
+the exemption reverted it reads 64,000, a record for each of its thousand
+scans (ratchet row `err_as_pattern`).
+
+The fixture's first draft found something older. Written as a loop whose
+groups hand back a value rather than a record, it is a beat, and the
+scanner's answer crosses the rewind through the carry. The carry stages
+boxed values, so the two words were built into a record on the way in and
+read back out of one on the way out, and neither conversion asked whether
+the words were a failure. A failure's words became a record whose second
+field was the failure, `k_rec` merged that into a failure, the unpack read
+two fields off it, and the consumer got a value whose first word was not
+the err tag. `step`'s record arm matched it, and `+` was handed a garbage
+word: native printed `error[runtime]: `+` is not defined for these values`
+where the interpreter printed `stopped: end of input`. The #1393 compiler
+does the same with a plain `(err _)` arm, so this is main's, and the
+ruling makes it reachable everywhere an err arm now stands. `k_parsed_box`
+and `k_parsed_words` in the runtime ask first and hand a failure through as
+its own two words; the emitter calls them in place of the inline build and
+the inline field reads. `a_failure_crosses_a_beat_carry_in_two_words` pins
+the answer on both engines (ratchet row `carry_failure`). Its `sh_rec` reads
+64,000: the carry still boxes a two-word value it could stage as words,
+which is a gap left open here, not a regression.
+
+The check also skips getters, as the none check has since kanso#1369 and
+for the same reason: the play route checks before a field read is rewritten
+into a getter call and the module route after, so `xs[i].x` would be
+refused through an import and run direct. A field read of an err stays the
+runtime's sentence on every route, and `accessor_hop_is_silent` keeps its
+trail.
+
+### What moved, and which way
+
+Every runtime allocation vein and the lazy tier agree with their goldens:
+the arms cost the decoder nothing once the as-pattern rule admits them,
+and the run program's counters are the ones kanso#1437 left. The emitted
+code moves with the arms and the two runtime calls the emitter now makes:
+the decoder's `emitted_lines` 9,134 -> 9,161 and `emitted_branches` 791 ->
+795, calls 1,204 -> 1,209, defines 142 -> 141; over the other thirteen
+programs `emitted_other_lines` 133,110 -> 133,514 and
+`emitted_other_branches` 12,653 -> 12,689, calls 20,164 -> 20,231, defines
+2,350 held. Four programs fall (basket, pendbench, indexbench, readbench:
+a getter the check no longer walks emits less), the rest rise by the arms
+std/regexp and std/json gained. The front end's visits on the compile
+corpus read 15,076 -> 15,119 for the same five decoder arms; rounds hold
+at 47. The three host-keyed compile rows, the machine-code vein and the
+compile allocations are CI's to measure, and welfare on this box reads
+69.58 against a floor of 69.58 with the runtime side unmoved. A fall on CI
+from the compile rows is the language's to pay under the 2026-09-13
+clause and the floor moves with it in the second round.
+
+### Left open, on purpose
+
+- The runtime railway stays. "Halts where it lands" is the ruling's title
+  and not one of its three built parts; it reads through the `!` entry, and
+  retiring the railway before that entry is ruled would decide the entry.
+- The containment idiom. `length (text/split hay needle) > 1` is how five
+  scripts ask whether a string holds another, and each is a raise the
+  checker sees. A `text/contains?` would be surface, so it is not added
+  here; the scripts bind instead.
+- Division's `ERR` and the strict index's miss, as above.
