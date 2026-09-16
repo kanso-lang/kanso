@@ -4043,3 +4043,85 @@ rose on the compile term and was banked: floor 69.57819815695791 ->
 nobody does this, and nobody here can see who does — and an analysis that
 cannot tell them apart grants on the second. That is the presented design this
 change fixed, and the page owed it an entry.
+
+## 2026-09-16 — The lazy-verdict ratchet row proved nothing, and scan_counters
+## had no row at all (DONE)
+
+**The row reported UNBUILT, and it was main's.** kanso#1447's ratchet run
+returned 113 rows, 112 red and one refused: `a lazy verdict leaking from one arm
+of a group to another: it would not build`. The first thing to establish was
+whose it was, because a row that fails only on a branch is that branch's work.
+It is not: the same mutation on origin/main at 1e4c7129 fails identically, so
+the row has been proving nothing on main for as long as the shape has been
+there.
+
+**What the mutation does now.** `lazy_verdict_leaks_between_arms.sh` flips
+src/demand.rs's per-arm fold from `*seen = *seen && qualifies` to `||`, so a
+bind goes lazy when ANY arm qualifies rather than every one. A lazy verdict is
+keyed `(group, arity, index)` and codegen consults it with no arm to
+disambiguate, which is what the fold's own comment says. Under `||` the emitter
+builds a thunk in the arm that qualified and releases it at the group's merged
+tail, which the other arm reaches. In the mutated scanbench.ll: `%t10 =
+k_thunk_new` in block `arm0`, `%t123 = k_thunk_release_unless(%t10)` in block
+`L24`, reached from `nomatch` as well. `opt -passes=verify` says `Instruction
+does not dominate all uses!`; clang runs with `-disable-llvm-verifier`, so
+instead of rejecting the module it SIGSEGVs in the Register Coalescer on
+`@"d_regexp/braced_3"`, inside `llvm::LiveRange::join`. Ruled out on the way:
+not LTO (it fails with `-flto` off), not the inline threshold (250, 1000 and
+2000 all die), not the stack (64 MB does not help).
+
+So the row's claim — thunk_allocs 0 becoming 501,502, peak RSS up about 92 MB —
+is stale. The leak now kills `build_benchmarks.sh` before a counter exists, and
+a setup that fails reads UNBUILT, which scores not-ok. The ratchet's own header
+has said since #988 that a row whose defect IS a build failure carries
+`no_setup` and builds inside its gate, and that is where this one belongs: the
+micro corpus already catches it, in 1.56 seconds, at
+`a_callable_that_is_a_value answers differently as a library`. The row is
+re-pointed at `cargo test --release --test golden
+micro_corpus_agrees_across_engines` as `scan_leak`.
+
+**The smallest program that fails is fourteen lines**, and it is recorded here
+rather than added to the corpus, because the corpus already has a home for this
+defect and a second fixture that can never be the one that speaks proves
+nothing. Two arms of one group, both binding at index 0, one qualifying and one
+not:
+
+    fn cost n
+      n + n + n
+
+    fn keep v
+      v
+
+    pub fn spend x false
+      held = cost x
+      keep held
+
+    pub fn spend x true
+      held = x + 1
+      held + held
+
+Built as a module with `print "{spend 3 false} {spend 3 true}"`, the real
+compiler answers `9 8` and the mutated one writes `%t7 = k_thunk_new` in `arm0`,
+`%t9` in `arm1`, and both releases in `L8`.
+
+**And moving the row left `scan_counters` with none.** It was the only row that
+named that gate, so re-pointing it would have traded a loud failure for a quiet
+one — the thing this repository calls a gate nobody has proved can fail. A new
+mutation, `the_carry_tier_admits_library_loops.sh`, clears beat_loops' `std/`
+and `lib/` prefix filter so library loops enter the carry tier, which is the
+mechanism bench/scanbench's own header names as the reason its peak grows with
+the subject.
+
+MEASURED 2026-09-16, and the header is stale on the numbers: clearing the filter
+moves `beat_iters` 15 -> 16 and `survive_slots` 0 -> 2, and `arena_blocks` does
+NOT move. The 2026-09-08 sitting the header records cleared the BYTES condition
+and the unbracketed-entry check as well, and the filter is one of its three
+parts; a third of the change is not a third of the effect. The gate diffs the
+whole golden, so two moved rows turn it red exactly as arena_blocks would, and
+the row's claim is written as what it does rather than as what the header
+predicted.
+
+REFUTED first, and recorded because the next session will think of it too:
+making `k_beat_iter` stop rewinding leaves the scan gate GREEN. scanbench's
+`beat_iters` is 15, so the beat rewind barely runs there and removing it moves
+nothing the golden pins.
