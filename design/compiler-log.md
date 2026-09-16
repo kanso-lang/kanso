@@ -5283,3 +5283,30 @@ two hashes collide. Not one function, so not one fix, and kanso#1033 already
 declined the interned symbol for the AST's own field at 365 conversion sites.
 The map keys are a different question from the AST field and nobody has
 measured them. Open, and the largest thing left on the compile side.
+
+## CI's sitting, and the floor
+
+CI measured the three rows on the runner and they agree with this container
+to within one per cent, in the same direction and slightly further:
+
+    row                    golden         CI          delta       CI      container
+    compile_instructions   40,794,557   36,886,838   -3,907,719  -9.579%   -9.485%
+    entry_instructions    144,656,649  131,957,599  -12,699,050  -8.779%   -8.720%
+    library_instructions  145,339,594  132,092,011  -13,247,583  -9.115%   -9.044%
+    summed                330,790,800  300,936,448  -29,854,352  -9.025%
+
+The cost-goldens job failed on exactly three steps and its own vein summary
+names the same three. Everything else agreed: compile_allocs 27,395,
+compile_memory byte-identical, the five compiler libraries unchanged, and
+all fourteen runtime work rows, the emitted vein and the machine-code vein
+untouched. The container's projection and CI's reading were the same
+measurement on different silicon, which is the only claim this change needed
+them to support.
+
+Welfare 69.59 -> 69.75, banked with `--set` after the goldens carried CI's
+rows rather than before. Eight page spans quoting the three goldens were
+rewritten, and three sentences around them were rewritten by hand: a
+narrative delta and a live span cannot sit in one clause, because the delta
+is historical and the span is whatever the golden says today. The one that
+had already gone wrong read "it reads X today, 1,056 lower" about a change
+that predated two more.

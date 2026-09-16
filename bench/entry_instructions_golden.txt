@@ -461,4 +461,21 @@
 # compiler libraries and every runtime vein agreed. CI's own reading,
 # stated, not reasoned from.
 #
-entry_instructions=144656649
+# 2026-09-16, the compiler's allocator (kanso#1456). mimalloc replaces
+# glibc's malloc under the counting wrapper, with its eager arena commit
+# turned off from the process's constructor table: 144,656,649 ->
+# 131,957,599, a fall of -12,699,050 (8.779 per cent) on
+# the entry path. glibc's allocator was 15.17 per cent of this
+# compile (6,325,284 of 41,698,193 profiled instructions) and
+# more than any function the compiler owns; mimalloc's own work on the same
+# profile is 7.39 per cent, and the two reconcile to within about 244k.
+#
+# The container projected -8.720 per cent for this row and CI read -8.779
+# — within one per cent of the projection, and slightly further. Nothing
+# else the tree pins moved: compile_allocs holds at 27,395, compile_memory
+# is byte-identical, the emitted LLVM IR hashes the same either way,
+# compiler libraries reads the same five entries because libmimalloc-sys
+# links no shared object, and every runtime vein agreed. CI's own reading,
+# stated, not reasoned from.
+#
+entry_instructions=131957599
