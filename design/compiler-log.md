@@ -3768,12 +3768,30 @@ with the wrong argument count stopped escaping, it names the first
 disagreement — "lib/json: the index and the walk disagree about
 `Get_position` at arity 0".
 
-**What is left, and it is the larger half.** `callers_hand_over` is 63.60%
-against `escapes_as_value`'s share, and it wants the same treatment from the
-other side: an index from callee name to the declarations that call it, built
-once per fixpoint round instead of walked once per parameter. That is a bigger
-change because what it asks depends on the fixpoint's current state, so the
-index has to be rebuilt per round rather than once. It is not attempted here.
+**And then the larger half turned out to need no state at all.**
+`callers_hand_over` walks every function looking for calls to one name, and
+`callsites_unique` has exactly ONE `return false` of its own: the bad call site
+for that name. Every other path recurses or falls through to
+`child_exprs(..).all(..)`. So a declaration whose body never mentions the name
+can only answer true, and walking it is the whole of the cost. The same walk
+that built the escape index records, per name, which declarations mention it —
+which is a property of the program and needs no round of the fixpoint — and
+`callers_hand_over` iterates those and no others.
+
+    kanso::main             1,238,723,077 ->   495,523,498   -743,199,579   -60.00%
+    linear::Analysis::new     760,290,312 ->    17,129,979   -743,160,333   -97.75%
+
+The pass that was two thirds of a build is 3.5% of what is left of one.
+`Analysis::new` falls 44.4x and the build falls 2.5x, and the two absolute
+falls agree to thirty-nine thousand instructions, which says again that the
+whole of it is inside that pass.
+
+The emitted IR is byte-identical on all fourteen benchmarks after both changes,
+checked separately for each.
+
+What is genuinely left is `callsites_unique_in` itself, which is still the
+work that remains inside those few declarations, and `codegen::Backend::emit`,
+which was 12.54% of the old build and is a much larger share of the new one.
 
 ## 2026-09-16 — gavel: two welfares and a meta-welfare over them, and the floor re-ratchets
 

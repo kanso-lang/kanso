@@ -87,27 +87,33 @@ struct Mentions<'a> {
     bare: HashSet<&'a str>,
     /// For each name, the argument counts it heads an application with.
     heads: HashMap<&'a str, Vec<usize>>,
+    /// For each name, the declarations whose body mentions it at all, as
+    /// indices into `program.fns`. A declaration that never names a group
+    /// cannot hold a call to it, so `callers_hand_over` has nothing to find
+    /// there and walking it is the whole of the cost.
+    in_decl: HashMap<&'a str, Vec<usize>>,
 }
 
 impl<'a> Mentions<'a> {
     fn of(program: &'a Program) -> Self {
         let mut m = Mentions::default();
-        for decl in &program.fns {
+        for (d, decl) in program.fns.iter().enumerate() {
             for stmt in &decl.body {
                 let e = match stmt {
                     Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
                     Stmt::Set { value, .. } => value,
                 };
-                m.walk(e);
+                m.walk(e, d);
             }
         }
         m
     }
 
-    fn walk(&mut self, e: &'a Expr) {
+    fn walk(&mut self, e: &'a Expr, d: usize) {
         match e {
             Expr::Ident(n, _) => {
                 self.bare.insert(n.as_str());
+                self.saw(n.as_str(), d);
             }
             Expr::App { head, args, .. } => {
                 match head.as_ref() {
@@ -116,19 +122,34 @@ impl<'a> Mentions<'a> {
                         if !seen.contains(&args.len()) {
                             seen.push(args.len());
                         }
+                        self.saw(n.as_str(), d);
                     }
-                    other => self.walk(other),
+                    other => self.walk(other, d),
                 }
                 for a in args {
-                    self.walk(a);
+                    self.walk(a, d);
                 }
             }
             _ => {
                 for c in child_exprs(e) {
-                    self.walk(c);
+                    self.walk(c, d);
                 }
             }
         }
+    }
+
+    /// Declarations are walked in order, so the last index recorded for a name
+    /// is the only one that can repeat.
+    fn saw(&mut self, name: &'a str, d: usize) {
+        let seen = self.in_decl.entry(name).or_default();
+        if seen.last() != Some(&d) {
+            seen.push(d);
+        }
+    }
+
+    /// The declarations that could hold a call to `name`, and no others.
+    fn mentioning(&self, name: &str) -> &[usize] {
+        self.in_decl.get(name).map_or(&[], |v| v.as_slice())
     }
 
     /// The same answer `mentioned_as_value` gave, read off the two sets: a bare
@@ -252,7 +273,15 @@ impl<'a> Analysis<'a> {
         if crate::is_operator(name) || self.escapes_as_value(name, arity) {
             return false;
         }
-        self.program.fns.iter().all(|caller| {
+        // ONLY THE DECLARATIONS THAT NAME IT. `callsites_unique` answers false
+        // only where it finds a call to `name`, so a declaration whose body
+        // never mentions the name at all can only answer true, and walking it
+        // is pure cost. This was every function in the program, asked once per
+        // parameter per fixpoint round: 63.60% of a `kanso build` on a
+        // forty-line corpus, where most names are mentioned in one or two
+        // declarations.
+        self.mentions.mentioning(name).iter().all(|&d| {
+            let caller = &self.program.fns[d];
             caller.body.iter().all(|stmt| {
                 let e = match stmt {
                     Stmt::Bind { expr, .. } => expr,
