@@ -1956,9 +1956,43 @@ rows_c1yb = text/concat rows_c1ya [hole_unfilled hole_twice hole_placeholder]
 
 rows_c1yc = text/concat rows_c1yb [hole_in_arm hole_chosen hole_outside]
 
+# THE COMPILER'S ALLOCATOR. glibc's malloc and free were 12.7% of
+# `kanso check compile_corpus` — 5.27 million of 41.5 million instructions,
+# larger than any kanso function on the profile. mimalloc sits UNDER the
+# counting wrapper in src/main.rs, so the compiler's demand is unchanged and
+# every counter the objective reads is byte-identical: compile_allocs 27,395,
+# compile_alloc_bytes 4,612,036, compile_peak_bytes 787,956. The emitted IR is
+# byte-identical too. So nothing in the tree can see this swap except the three
+# instruction veins, and if a merge or a revert ever put the system allocator
+# back, every counter would agree and only the goldens would object. That is
+# what this row watches. Host-bound like the other compile rows: the gate
+# refuses on a toolchain the golden does not name, so it is proved where the
+# gate is green.
+compiler_allocator = row
+  "the compiler back on the system allocator, rows still pinned to mimalloc"
+  false
+  "sh scripts/gates/compile_instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_compiler_on_the_system_allocator")
+  release
+
 rows_c1z = text/concat rows_c1yc [hole_type_lacks]
 
-rows_c = text/concat rows_c1z [itself]
+# The number the compiler hands mi_option_set is read out of a vendored C
+# header, so a crate bump can move the option out from under it in silence.
+allocator_option = row
+  "the allocator option named one past the one that matters"
+  true
+  "cargo test --release --test the_allocator_option_is_the_one_the_header_names"
+  "specs (unit, golden, differential)"
+  (breaking "an_allocator_option_off_by_one")
+  no_setup
+
+rows_c1za = text/concat rows_c1z [compiler_allocator]
+
+rows_c1zb = text/concat rows_c1za [allocator_option]
+
+rows_c = text/concat rows_c1zb [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

@@ -12,6 +12,50 @@ use std::sync::atomic::{AtomicU64, Ordering};
 /// point, and no reader depends on seeing them in any particular order.
 struct Counting;
 
+/// The allocator under the tally. mimalloc on every target that can build it:
+/// glibc's malloc and free were 15.17% of `kanso check compile_corpus` and the
+/// compiler's demand — every counter above — does not move by a byte.
+#[cfg(not(target_arch = "wasm32"))]
+const UNDER: mimalloc::MiMalloc = mimalloc::MiMalloc;
+#[cfg(target_arch = "wasm32")]
+const UNDER: std::alloc::System = std::alloc::System;
+
+/// mimalloc's `mi_option_arena_eager_commit`, by its position in the
+/// `mi_option_t` enum. The Rust bindings stop naming options well before this
+/// one, so the number is written here rather than imported: libmimalloc-sys
+/// 0.1.49 builds v3 of the C library, whose header declares the option fifth,
+/// after `show_errors`, `show_stats`, `verbose` and `deprecated_eager_commit`.
+/// `tests/the_allocator_option_is_the_one_the_header_names.rs` reads that
+/// header and goes red if the position ever moves.
+#[cfg(not(target_arch = "wasm32"))]
+const ARENA_EAGER_COMMIT: i32 = 4;
+
+/// Reserve the first arena without committing it.
+///
+/// Left alone, mimalloc commits that arena up front, and the six megabytes it
+/// costs are resident in every process the compiler starts. Nothing in the
+/// objective can see them: `compile_peak_bytes` is the compiler's own demand,
+/// counted in the tally above, not the operating system's number.
+/// `tests/bind_chain_depth.rs` reads resident memory, and it is what caught
+/// this — a constant six megabytes under both of its readings squeezed a
+/// ten-fold depth ratio from 3.16 to 1.97, and the shape that nests stopped
+/// looking like one.
+///
+/// Turning the option off costs 24,330 instructions against the 3.84 million
+/// the allocator saves. It has to happen here rather than at the top of
+/// `main`, because by then the arena is already committed: Rust's runtime
+/// allocates before it hands over. A constructor runs ahead of all of it.
+#[cfg(not(target_arch = "wasm32"))]
+extern "C" fn reserve_the_arena_without_committing_it() {
+    unsafe { libmimalloc_sys::mi_option_set(ARENA_EAGER_COMMIT, 0) };
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[used]
+#[cfg_attr(target_vendor = "apple", link_section = "__DATA,__mod_init_func")]
+#[cfg_attr(not(target_vendor = "apple"), link_section = ".init_array")]
+static BEFORE_THE_FIRST_ALLOCATION: extern "C" fn() = reserve_the_arena_without_committing_it;
+
 static ALLOC_BYTES: AtomicU64 = AtomicU64::new(0);
 static ALLOC_CALLS: AtomicU64 = AtomicU64::new(0);
 static LIVE_BYTES: AtomicU64 = AtomicU64::new(0);
@@ -24,11 +68,11 @@ unsafe impl std::alloc::GlobalAlloc for Counting {
         ALLOC_CALLS.fetch_add(1, Ordering::Relaxed);
         let live = LIVE_BYTES.fetch_add(n, Ordering::Relaxed) + n;
         PEAK_BYTES.fetch_max(live, Ordering::Relaxed);
-        unsafe { std::alloc::System.alloc(layout) }
+        unsafe { UNDER.alloc(layout) }
     }
     unsafe fn dealloc(&self, ptr: *mut u8, layout: std::alloc::Layout) {
         LIVE_BYTES.fetch_sub(layout.size() as u64, Ordering::Relaxed);
-        unsafe { std::alloc::System.dealloc(ptr, layout) }
+        unsafe { UNDER.dealloc(ptr, layout) }
     }
 }
 

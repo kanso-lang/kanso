@@ -13,6 +13,12 @@ num-traits = "0.2"
 # no terminal, and rustyline's dependency tree does not build for wasm32.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 rustyline = "18.0.1"
+# The compiler's allocator. glibc's malloc was 15.17% of `kanso check`; mimalloc
+# is a static C library with no new shared object, and the same reason keeps it
+# native-only — it does not build for wasm32, where the playground has no
+# global allocator of its own anyway.
+mimalloc = { version = "0.1", default-features = false }
+libmimalloc-sys = { version = "0.1", default-features = false, features = ["extended"] }
 
 [[bin]]
 name = "kanso"

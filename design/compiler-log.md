@@ -5147,3 +5147,139 @@ numbers argue otherwise, which is a separate argument made about the weights.
 earlier that the trade he wanted — longer compiles for a faster binary — was
 "already free," and presented that as the model working. It is the defect,
 described approvingly. The gradient it creates is real and so is the hole.
+
+## 2026-09-16 — glibc's malloc was a seventh of the compile, and nothing had ever tried another allocator
+
+Found by profiling `kanso check compile_corpus` on the explicit-box fold's tip.
+Every row callgrind attributes to glibc's `malloc.c` and `arena.c` comes to
+6,325,284 of the 41,698,193 instructions the process executes — 15.17%. That is
+larger than any kanso function on the profile and larger than the three next
+ones together: `HashMap::insert` 3.94%, `infer::eval_expr'2` 3.61%,
+`check_after_infer` 2.81%.
+
+The first draft of this entry said 12.69%, which was the four rows callgrind
+prints above its default threshold — `_int_malloc`, `_int_free`, `malloc` and
+`free`. Thirteen more sit under it, `malloc_consolidate` and `unlink_chunk`
+among them, and they are the same allocator doing the same work.
+
+The archive and the live log were searched for an allocator swap before this
+was built. Neither carries one; the words mimalloc, jemalloc and
+`#[global_allocator]` appear nowhere in either. The compiler has had a
+`GlobalAlloc` of its own since the compile counters were minted, but it is a
+tally over `std::alloc::System` and the allocator under it had never been the
+subject.
+
+**The change is where mimalloc goes, not that it is used.** It goes UNDER the
+counting wrapper in src/main.rs rather than beside it, so `Counting::alloc`
+still adds the layout's size to `ALLOC_BYTES`, still bumps `ALLOC_CALLS`, still
+takes the running maximum into `PEAK_BYTES`, and only the call it forwards to
+changes. Every counter the objective reads is therefore the compiler's own
+demand and not the allocator's bookkeeping, which is what makes the measurement
+below a clean one.
+
+**The three rows, gate-shaped.** Measured with `env -i` and the pinned
+`GLIBC_TUNABLES` the gates use, `kanso::main` inclusive, one build each on this
+container:
+
+    row                    glibc         mimalloc        delta
+    compile_instructions    41,228,435    37,317,886    -3,910,549  -9.485%
+    entry_instructions     146,066,668   133,330,370   -12,736,298  -8.720%
+    library_instructions   146,749,935   133,478,166   -13,271,769  -9.044%
+    summed                 334,045,038   304,126,422   -29,918,616  -8.956%
+
+For scale, the last ten compile-side merges moved these rows between 0.13% and
+1.14% each.
+
+**Reproducibility is the disqualifying test, and it passes.** The 2026-09-05
+ruling is one row, one value: a run that disagrees halts the vein rather than
+being recorded beside it. An allocator with its own heuristics is exactly the
+kind of thing that could make the row a distribution instead of a number, so it
+was measured three times on one mimalloc binary before anything else was
+decided: 37,317,886, 37,317,886, 37,317,886. Identical to the instruction.
+
+**Nothing else moves.** `compile_allocs` 27,395, `compile_alloc_bytes`
+4,612,036, `compile_peak_bytes` 787,956, `compile_passes` 7, `compile_rounds`
+47, `compile_visits` 15,474 — byte-identical on both. The emitted LLVM IR is
+byte-identical too: the same program built by both compilers gives
+`45e0851958630978e6f23e6de2f57cf6` either way, so the `emitted_code` and
+`machine_code` veins have nothing to see. `ldd` reads the same five entries, so
+`compile_libraries` is unmoved: libmimalloc-sys compiles C into the binary and
+links no shared object.
+
+**What it costs.** Five packages join the lock file — mimalloc,
+libmimalloc-sys, and cc with its own find-msvc-tools and shlex — and `cc`
+compiles C at build time, so a C compiler becomes a build requirement rather
+than only a run one. The dependency is gated to non-wasm targets the way
+rustyline is; mimalloc does not build for wasm32 and the playground's cdylib
+carries no global allocator of its own. The wasm blob builds RC=0 with the gate
+in place.
+
+Because nothing but the three instruction veins can see the swap, a revert
+would leave every counter agreeing and only the goldens objecting. Row
+`compiler_allocator` watches that, host-bound like its neighbours and proved
+where its gate is green.
+
+**Six megabytes of resident memory, and one test in the tree could see them.**
+mimalloc reserves its first arena and commits it up front, so a process that
+has allocated almost nothing is already holding about six megabytes the
+compiler never asked for. Nothing in the objective can see that: the
+`run_peak_bytes` term is the runtime's arena counters and `compile_peak_bytes`
+is the tally in src/main.rs, and both are the program's own demand rather than
+the operating system's number.
+
+`tests/bind_chain_depth.rs` reads the operating system's number, through
+`ru_maxrss` at `wait4`, and it is the only thing here that does.
+`the_measurement_sees_a_shape_that_nests` went red on the swap. It is the
+falsifier for its neighbour — a chain that runs as a loop stays flat, and that
+claim is worth nothing unless the same instrument can see a shape that does not
+— and it asserts that a nesting shape ten times deeper costs more than twice
+the memory. A constant six megabytes sits under both of its readings and
+squeezes the ratio toward one: 3.16 on glibc, 1.97 on mimalloc with its
+defaults. The growth itself had barely moved. The shape at four hundred cost
+1.84 MB above an empty program either way, and the shape at four thousand cost
+17.1 MB on glibc against 14.9 MB on mimalloc.
+
+So the option comes off. `mi_option_arena_eager_commit` set to zero returns the
+floor to 5.69 MB against glibc's 5.23 MB, and costs 79,036 instructions of the
+3,989,585 the swap saves — under two per cent of the win, and the table above
+is the measurement with the option already off. The call has to reach mimalloc
+before the first allocation does. From the top of `main` it is too late and
+measures 26.4 MB at four thousand exactly as though it had never been made,
+because Rust's runtime allocates on the way in; it runs from the process's own
+constructor table instead.
+
+The number it passes is copied out of the C library's header, because the Rust
+bindings stop naming options well before this one. A copied number goes stale
+in silence, so `tests/the_allocator_option_is_the_one_the_header_names.rs`
+reads the header libmimalloc-sys vendors, counts the enum, and asserts the two
+agree. Both specs were watched red under `an_allocator_option_off_by_one`,
+which moves the constant to five: the header spec names the disagreement, and
+bind_chain_depth reports 26,435,584 bytes against 13,451,264 — the arena back,
+and the falsifier no longer falsifying.
+
+**And the same swap is worth nothing at runtime, which is the arena's doing.**
+The first question this raises is whether the run program wants it too, where
+the objective weighs a fall far more heavily. It does not. On the same fold tip,
+runbench's whole allocator bill is 6,023,245 of 1,840,366,983 instructions —
+`_int_malloc` 2,455,724, `_int_free_merge_chunk` 883,298, `malloc` 864,125,
+`_int_free` 760,003, `free` 465,319, `_int_free_maybe_consolidate` 349,529,
+`unlink_chunk` 245,247. That is 0.3273%, against 15.17% on the compile side:
+nearly forty times less, on a workload nine hundred times longer.
+
+The reason is the thing the runtime was built around. A kanso program serves
+its values out of the arena and reclaims them at the beat, so glibc sees the
+arena's block requests and almost nothing else; the compiler has no arena and
+asks libc for every String, every Vec and every table it grows. So this lever
+is the compile side's alone, and it is large there precisely because that side
+never got the design the other one did. Declined for the runtime by arithmetic
+before building — mimalloc's own text would cost the `.text` vein more than
+0.33% can return.
+
+**And with the allocator out of the way, the profile's top is hashing.** On the
+mimalloc build, `HashMap::insert` is 4.31%, `rustc_entry` 3.78% and
+`reserve_rehash` 2.75% — 10.84% in hashbrown — with `__memcmp_avx2_movbe` a
+further 3.03% underneath them, which is what comparing String keys costs when
+two hashes collide. Not one function, so not one fix, and kanso#1033 already
+declined the interned symbol for the AST's own field at 365 conversion sites.
+The map keys are a different question from the AST field and nobody has
+measured them. Open, and the largest thing left on the compile side.
