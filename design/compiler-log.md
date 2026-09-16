@@ -3702,3 +3702,61 @@ adds them, with `tests/the_objective_reads_what_the_gate_watches.rs` replaying
 the file, because this model's PROSE has gone stale twice while the file never
 did. Weights and satiations priced from evidence. The entry leaves the ledger
 with this commit and STATUS.md carries the build.
+
+## 2026-09-16 — the first development counter measured, and it found a quadratic
+
+Clay's gavel that morning made interpreter start-up a first-class term: it is
+paid on every `kanso test` invocation and never once in production, and no
+single scalar can hold both readings of the same microsecond. The entry says
+the development counters do not exist. This is the first of them measured, and
+measuring it was enough.
+
+`kanso play` on a file holding one `print "x"` cost **69,207,585 instructions**
+at the `kanso::main` anchor, 70,258,769 for the whole process. That is nearly
+twice what the whole module corpus costs to check, to print one line.
+
+**Three quarters of it was substring search.** `memchr_aligned` 30.88%,
+`<&str as Pattern>::is_contained_in` 24.76%, `CharSearcher::next_match`
+18.06%. Followed through an inlined closure to a `Vec::from_iter` making 1,204
+closure calls, and from there to one owner: `codegen::Backend::emit`, three
+calls, 65,049,261 instructions, 21,683,087 apiece — 92.6% of start-up in one
+expression.
+
+The expression is the `declares` filter. `DECLARES` holds about 1,204 lines,
+the filter asks `referenced(sym)` for each, and `referenced` built a probe with
+`format!` and then searched the emitted body, the call twins, and — the
+quadratic — `DECLARES.lines().filter(..).any(|l| l.contains(&probe))`, which
+re-split `DECLARES` and re-scanned its non-declare lines on every one of the
+1,204 asks. About one and a half million line scans to decide which
+declarations to keep.
+
+Two changes, measured one at a time.
+
+**The helper text is built once.** Joining the non-declare lines into one
+string ahead of the filter is exactly equivalent: the probe is `@sym(`, which
+holds no newline, so no probe can match across a join made with one.
+69,207,585 -> 8,460,712, a fall of 87.8%.
+
+**And then the haystacks are read once rather than per candidate.** The
+question asked of each text is whether `@sym(` appears in it, and the set of
+symbols satisfying that can be read off in a single pass: every `@` begins a
+name and the next `(` ends it. That is the same answer for the same reason the
+`DECLARES` parser below it already reads a declared name as the span between
+those two characters — a symbol holds no `(`, so the first one after an `@` is
+exactly where the name stops. `referenced` becomes a set lookup.
+8,460,712 -> 5,010,935.
+
+    kanso::main     69,207,585 -> 5,010,935   -64,196,650   -92.76%
+    whole process   70,258,769 -> 6,064,399
+
+Thirteen point eight times. The emitted IR is byte-identical across the pair on
+the largest program in the tree — runbench, 36,085 lines, md5
+`ebd24064f1a55e8effeb3ed5f08d4cf4` before and after — so nothing about what the
+compiler produces has changed, only what it spends deciding it.
+
+**Nothing in the tree can see this.** `compile_instructions` and its two
+neighbours stop before codegen, and `emitted_code` and `machine_code` read
+output that did not move. A win of this size with no golden against it is a win
+the next change is free to give back, which is the ironclad rule's whole
+subject — so the counter comes with it rather than after it, and the gavel
+orders that counter anyway.
