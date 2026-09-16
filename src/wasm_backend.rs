@@ -823,7 +823,11 @@ impl<'a> WasmBackend<'a> {
             }
             Expr::Guard { cond, early, rest, .. } => {
                 // a fired guard makes the tail unreachable, which is exactly
-                // the untaken branch of a conditional
+                // the untaken branch of a conditional. Both sides keep the
+                // tail position they were written in: `return x if c` over a
+                // self-call is how the library spells a fold, and emitting
+                // that call plainly grew the page's stack a frame a turn
+                // where native and the oracle looped.
                 let c = ctx.body.local();
                 self.emit_expr(ctx, cond, false)?;
                 ctx.body.local_tee(c);
@@ -834,9 +838,9 @@ impl<'a> WasmBackend<'a> {
                 ctx.body.local_get(c);
                 ctx.body.call(RT_TRUTHY);
                 ctx.body.if_i32();
-                self.emit_expr(ctx, early, false)?;
+                self.emit_expr(ctx, early, tail)?;
                 ctx.body.else_();
-                self.emit_body(ctx, rest, false)?;
+                self.emit_body(ctx, rest, tail)?;
                 ctx.body.end();
                 ctx.body.end();
             }
@@ -1368,9 +1372,9 @@ impl<'a> WasmBackend<'a> {
             ctx.body.local_get(cond);
             ctx.body.call(RT_TRUTHY);
             ctx.body.if_i32();
-            self.emit_expr(ctx, &args[1], false)?;
+            self.emit_expr(ctx, &args[1], tail)?;
             ctx.body.else_();
-            self.emit_expr(ctx, &args[2], false)?;
+            self.emit_expr(ctx, &args[2], tail)?;
             ctx.body.end();
             ctx.body.end();
             return Ok(());
