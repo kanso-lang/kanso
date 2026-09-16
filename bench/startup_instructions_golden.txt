@@ -47,9 +47,17 @@
 # binaries differing only in that expression:
 #
 #     base    69,183,407
-#     fixed    4,996,663
-#     delta  -64,186,744   -92.78%   13.85x
+#     fixed    4,919,980
+#     delta  -64,263,427   -92.89%   14.06x
+#
+# Read twice on two stagings of the fixed binary, identical both times. It is
+# deterministic by construction as well as by measurement: the symbol set this
+# change introduces is `crate::hash::Set`, which seeds its hasher fixed, and
+# not std's, which seeds per process -- a randomly seeded table would make this
+# row differ between two runs of one binary, which is the reproduction failure
+# the ruling above forbids. tests/the_compile_path_hashes_with_a_fixed_seed.rs
+# named the line before it could happen.
 #
 # THE VALUE BELOW IS THE CONTAINER'S, and round one is deliberately red on it.
 # CI measures and its own reading replaces this line.
-startup_instructions=4996663
+startup_instructions=4919980

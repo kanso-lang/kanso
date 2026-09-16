@@ -3751,12 +3751,12 @@ name and the next `(` ends it. That is the same answer for the same reason the
 `DECLARES` parser below it already reads a declared name as the span between
 those two characters — a symbol holds no `(`, so the first one after an `@` is
 exactly where the name stops. `referenced` becomes a set lookup.
-8,460,712 -> 5,010,935.
+8,460,712 -> 4,934,340.
 
-    kanso::main     69,207,585 -> 5,010,935   -64,196,650   -92.76%
-    whole process   70,258,769 -> 6,064,399
+    kanso::main     69,207,585 -> 4,934,340   -64,273,245   -92.87%
+    whole process   70,258,769 -> 5,991,364
 
-Thirteen point eight times.
+Fourteen times.
 
 **What it does not do is make a big build faster, and the reason is worth
 having.** `kanso build bench/runbench` reads 10.1 seconds before and after. Its
@@ -3765,7 +3765,7 @@ wall clock belongs to clang — `clang -O3 -c` on the emitted 1.25 MB of IR is
 the emitter's saving disappears into the noise. The row this change moves is
 kanso's own work on a program small enough for that work to be the whole of it.
 Wall time on the one-liner moves with it but by much less than the instruction
-count does, 0.0496s to 0.0398s, for the same reason: `kanso play` still spawns
+count does, 0.0496s to about 0.040s, for the same reason: `kanso play` still spawns
 clang and links.
 
 The emitted IR is byte-identical across the pair on
@@ -3789,8 +3789,8 @@ own sitting on this container, one box and one corpus, the two binaries
 differing in nothing else:
 
     base    69,183,407
-    fixed    4,996,663
-    delta  -64,186,744   -92.78%   13.85x
+    fixed    4,919,980
+    delta  -64,263,427   -92.89%   14.06x
 
 It is an exact vein of its own and NOT an objective term, the way `.text` is
 pinned under the 2026-09-05 ruling. The objective takes it when the model

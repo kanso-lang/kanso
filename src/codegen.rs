@@ -2828,7 +2828,14 @@ impl<'a> Backend<'a> {
             // reads a declared name as the span between them. Names are bounded
             // at whitespace as well, which cannot change an answer: every name
             // this is asked about comes from a `declare` line and holds none.
-            let called: std::collections::HashSet<&str> =
+            //
+            // `crate::hash::Set` rather than std's, and that is not a style
+            // choice: std seeds its hasher per process, and a randomly seeded
+            // table makes this count differ between two runs of one binary --
+            // which the compile rows read as a reproduction failure and halt
+            // the vein over. `tests/the_compile_path_hashes_with_a_fixed_seed
+            // .rs` is what says so, and it named this line.
+            let called: crate::hash::Set<&str> =
                 [body.as_str(), call_twins.as_str(), helper_text.as_str()]
                     .into_iter()
                     .flat_map(|hay| {

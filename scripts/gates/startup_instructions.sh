@@ -20,8 +20,8 @@
 # Opening it was enough to find something. `codegen::Backend::emit`'s
 # `declares` filter re-split DECLARES and re-scanned its non-declare lines on
 # each of about 1,204 asks; three quarters of start-up was substring search and
-# 92.6% of it had that one owner. The row fell from 69,183,407 to 4,996,663 on
-# the container, 13.85x, with the emitted IR byte-identical.
+# 92.6% of it had that one owner. The row fell from 69,183,407 to 4,919,980 on
+# the container, 14.06x, with the emitted IR byte-identical.
 #
 # EVERYTHING THIS SHARES WITH THE MODULE ROW IS EXPLAINED THERE, at length and
 # with the measurements behind it: why the environment is emptied, why the
