@@ -4269,11 +4269,20 @@ reproduction failure, hunted to its source and never pinned as a second value.
 Family 0x19 is Zen 3 and family 0x1a model 0x2 is Zen 5, new to the pool.
 `compile_instructions.sh` rests on eight within-binary sittings across two
 vendors and four CPU generations agreeing to the instruction, and those
-sittings predate this silicon. The neighbourhood is glibc's ifunc-selected
-string routines — `__memcmp_avx2_movbe` is 3.19% of the library compile and
-`__memcpy_avx_unaligned_erms` 2.06% — and the tunables the gate prints are
-derived from the CPU rather than pinned: cache sizes,
-`non_temporal_threshold`, `rep_movsb_threshold`.
+sittings predate this silicon.
+
+WHERE IT IS NOT. libc was the first guess and the profiles refute it. Every
+libc frame the annotation shows is identical across the two chips:
+`_int_free` 5,479,699, `_int_malloc` 5,428,597, `__memcmp_avx2_movbe`
+4,656,489, `malloc` 4,015,271, `__memcpy_avx_unaligned_erms` 2,998,404. The
+same memcmp implementation is selected on both and counts the same on both, so
+the ifunc choice the tunables do not pin is not what moved, and neither are the
+cache-derived thresholds the gate already pins. The one frame in the top
+fifteen that differs is the compiler's own: `kanso::check::check_after_infer`
+4,020,015 -> 4,019,967, -48, with the remaining -79 below the annotation
+threshold. So the compiler's own instruction count moves with the host CPU
+under valgrind, which is a sharper thing than a libc path and is not yet
+attributed further.
 
 So the three goldens here hold round one's numbers and are deliberately not
 regenerated. The remedy reopens the 2026-09-05 ruling "one row, one value; the
