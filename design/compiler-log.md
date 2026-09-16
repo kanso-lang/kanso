@@ -3924,3 +3924,41 @@ the same night — the maps parse outside all three compile rows, measured,
 with a spec holding it there. Its row came off in this commit. A ruling
 built in under an hour beside one unbuilt for twenty-three days is the
 difference between a row on the list and a row off it.
+
+## 2026-09-16 — the railway's remainder: one false claim, and a page sentence that was owed and is paid
+
+The 2026-09-15 ruling's "What is left" says cloud builds the constructor and
+retires the railway. The constructor is kanso#1440. The railway's retirement
+turned out to be mostly built already, inside kanso#1444, and reading main
+rather than the part-3 tree is what made it look owed: ch04 carries the
+checker's rule beside the metaphor now, §"nothing is asked of the signature"
+already asks its question at the call, ch07's railway sentence is gone and
+appendix B's "passes straight through, unlooked-at" with it.
+
+What the survey found still owing, measured on the tree that holds part 3:
+
+**ch08 said every caller, and the chapter's own library is the counter-example.**
+"the railway from chapter 04 carries it out through every caller with its
+position intact" was written before a caller the checker can see had to name
+the err. lib/json now holds five hand-back arms for exactly those callers —
+`finish` in json.kso, `array_step`, `obj_key` and `obj_value` in value.kso,
+`str_low` in text.kso — so the sentence is refuted by the code the paragraph
+is walking. It names them now and says which callers pay.
+
+**ch04's metaphor outran the rule it introduces.** "no station on the line can
+flag the train down" is followed immediately by a paragraph saying the checker
+refuses the program where it can see a raised err arriving. A station stops
+the train where the checker can see it coming, which is what the next
+paragraph then explains.
+
+**The compiler page's owing list had gone stale.** §"what the ruling leaves
+owing" said chapter 4 "needs re-premising on explicit bind". kanso#1444 did
+that re-premising; the sentence records it as done and names what the section
+says now.
+
+Every ch04 sample `kanso play` can run answers its committed `.out`
+byte-for-byte on this tree, `railway.kso` among them: `share_of` raises,
+`with_tip`'s `share + share / 10` compiles because `share` is a name and the
+checker reads calls, and the endpoint reports it. The railway retires exactly
+as far as the checker can see, which is the bound ch04 now documents and the
+reason these three sentences were the whole of the remainder.
