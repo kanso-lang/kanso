@@ -167,12 +167,19 @@ fn the_status_index_counts_the_ledger() {
     let overview_total = word_before(&flat, "questions are waiting**");
     let overview_blocking = word_after(&flat, "questions are waiting** —");
 
+    // And a third: the paragraph that lists the open entries one by one counts
+    // them in its own lead-in. On 2026-09-16 it read "The two open, not
+    // blocking" and named an entry that had left the ledger ruled the day
+    // before, while two it had never heard of stood under the heading.
+    let listed_open = word_before(&flat, "open, not blocking** —");
+
     for (claimed, counted, what) in [
         (claimed_total, total, "questions in total"),
         (claimed_blocking, blocking, "blocking"),
         (claimed_open, open, "open, not blocking"),
         (overview_total, total, "questions in total, in the overview sentence"),
         (overview_blocking, blocking, "blocking, in the overview sentence"),
+        (listed_open, open, "open, not blocking, in the paragraph that lists them"),
     ] {
         let want = SPELLED.get(counted).copied().unwrap_or("");
         assert!(

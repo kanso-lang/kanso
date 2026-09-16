@@ -39,7 +39,7 @@ kanso — sat here and was bounced on 2026-08-29: a performance question with no
 surface area is the implementer's, per the ledger's own charter, and the log
 carries the research mandate it left with.
 
-**Three questions are waiting** — zero blocking. The welfare-floor entry left
+**Four questions are waiting** — zero blocking. The welfare-floor entry left
 Blocking on 2026-09-14 with all three of its asks already answered: its two
 builds merged on 2026-09-13, the `git add bench/welfare_floor.json` permission
 it wanted is moot under Clay's ironclad rule of the same day, and its options
@@ -62,14 +62,19 @@ entry cites the search behind it and proposes an answer, and a sitting can be a
 yes or a no rather than a fresh design conversation. On 2026-08-29 every
 remaining question was ruled in one pass.
 
-**The two open, not blocking** — the book teaching the boundary language,
-queued P1 by Clay on 2026-08-26 and re-premised on the effects-are-types gavel.
-Measured on 2026-09-08, both halves wait on the same thing: the engines still
-short-circuit at an ordinary call and `<int>effect` is not spellable, so ch04
-describes the language as it runs and compiler.html entry 23 moves with it,
-after the surface lands. The second is the maps parse's share of the compile
-row's drift, which had been filed under Parked without a heading. The assert
-hako left this list by being built — `lib/expect`, kanso#1233, 2026-09-03.
+**The four open, not blocking** — the box constructor's spelling, recommending
+`effect`, which no build waits on; the book teaching the boundary language,
+queued P1 by Clay on 2026-08-26 and re-premised on the effects-are-types
+gavel, whose two halves wait on the same thing (the engines still short-circuit
+at an ordinary call and `<int>effect` is not spellable, so ch04 describes the
+language as it runs and compiler.html entry 23 moves with it, after the surface
+lands); how far a binding position carries a box, filed 2026-09-16 with the ten
+fixtures that refuse the blunt answer; and a byte-position scan on a string for
+the JSON escape path, filed 2026-09-16 carrying a −1.2193% runbench measurement
+that had been taken on 2026-09-15 and filed to nobody. The maps parse's share
+of the compile row's drift left this list ruled on 2026-09-15 and built the
+same night, kanso#1439. The assert hako left it by being built — `lib/expect`,
+kanso#1233, 2026-09-03.
 
 **The July letters are closed.** C struck, `done` minted for D, G struck on the
 July provenance measurement, Z confirmed declined, AA explicit-cast only. Every
@@ -365,10 +370,12 @@ else. Chains that tested for `none` after an effect migrate.
     checked from here on two days and both refused by the tooling
   - whether an err gains readers a lambda callback can use
 
-**Three questions wait in `design/pending-gavels.md`** — zero blocking, three
-open — each with a recommendation. Recounted on 2026-09-16, when the
-binding-position question joined Open with its measurement. Recounted on
-2026-09-15 before that, when the
+**Four questions wait in `design/pending-gavels.md`** — zero blocking, four
+open — each with a recommendation. Recounted twice on 2026-09-16: the
+binding-position question joined Open with its measurement, and the escape
+path's byte-position scan joined it, measured on 2026-09-15 and filed to
+nobody until the sweep that found this paragraph's own overview stale.
+Recounted on 2026-09-15 before that, when the
 box-wrapping entry left Blocking ruled, the `!` question it left behind
 joined Blocking, the constructor's spelling joined Open with a
 recommendation the build does not wait on, and the maps-parse entry left

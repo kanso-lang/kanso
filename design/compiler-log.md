@@ -4541,3 +4541,49 @@ watched red on the unpatched compiler on both engines; ratchet row
 Nothing reached this before because the only way to write a qualified yield
 was to want one, and the annotation is rare. It is reachable from any module
 that names another module's type inside a shell.
+
+## 2026-09-16 — a measured decision was filed to nobody for a day, and STATUS.md disagreed with itself about the queue (DONE)
+
+The 2026-09-15 entry "the per-call floors, mapped after the inlines" ends by
+measuring a change and saying, in its own words, that it "goes to Clay with
+this number and is not built here". No entry was ever written in
+`design/pending-gavels.md`, so it went to nobody. The change is a byte-position
+scan on a string for the JSON escape path, worth runbench 1,823,814,374 ->
+1,801,576,724 on the kanso#1437 leaves, −22,237,650 and −1.2193%, and it sat
+where only a reader of the log's middle would find it. It is filed now under
+Open, not blocking, with the measurement and a recommendation.
+
+**Found by re-deriving a map that was already right.** The queue's two biggest
+run rows were profiled again on this branch to look for a fresh lead:
+`d_json/encode_onto_2'2` reads 392,547,176 of 1,840,366,969 (21.33%) against
+the 2026-09-15 sitting's 382,082,442 of 1,823,814,374 (20.95%), the same shape
+one stack later, and `obj_key_start` the same. Both are mapped and both have
+had their removable parts found — encode_onto's is the view above, and
+obj_key_start's was largely refuted on 2026-09-14. The profile turned up no new
+lead, which is the result: the run term's two largest rows are closed, and one
+of them is closed on a question waiting for Clay.
+
+Worth naming for a later session: callgrind shows `encode_onto_2'2` with three
+kanso callees missing from its callee list — `escape_onto_2`, `encode_map_2`
+and `encode_list_2` are all inlined into it under the 2000 threshold
+kanso#1391 set. So the 21.33% row is the whole encoder, not one function's
+overhead, and the 2026-09-15 map already reads it that way. A session that
+takes the row for one function's dispatch will chase twenty-seven instructions
+and find nothing.
+
+**And STATUS.md contradicted itself.** The file indexes the ledger three times
+— an overview sentence near the top, a detail sentence with the split, and a
+paragraph that lists the open entries one by one — and only the detail one was
+pinned by `tests/the_status_index_counts_the_ledger.rs`. The overview read
+"Three questions are waiting — one blocking" while the file's own opening
+paragraph read "Blocking right now: zero" and the ledger held no Blocking
+entry, and the list paragraph read "The two open, not blocking" while naming
+an entry that had been ruled and built on 2026-09-15. All three are read off
+the ledger now, each watched red on the stale text before it was corrected.
+
+The gap this does NOT close: nothing checks that a log paragraph saying a
+question goes to Clay has an entry to go to. A scan for the phrase would pass
+over every historical entry that has since been ruled, so it would either be
+noisy or would need a list of exemptions that goes stale the way the counts
+did. The count spec catches an entry filed and miscounted; it cannot catch one
+never filed. That is written down rather than guessed at.
