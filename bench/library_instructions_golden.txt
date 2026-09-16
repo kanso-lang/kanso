@@ -534,4 +534,30 @@
 # exactly this, and CI reading one number where the container read another is
 # the reason the option is off.
 #
-library_instructions=132025154
+#
+# 2026-09-16, round five: THE SAME SOURCE, TWO BINARIES, THIRTEEN INSTRUCTIONS.
+# Round four merged origin/main in to clear a "behind" head. The merge carried
+# design/compiler-log.md and design/log/compiler-log-archive.md and nothing
+# else -- neither is `include_str!`'d, so the compiler's own bytes are built
+# from identical source -- and all three compile rows came back exactly 13
+# higher. The gate's own test settles which of its two cases this is, and it is
+# neither a regression nor a reproduction failure:
+#
+#     round four   sha bd05a61f3a68   library row 132,025,154
+#     round five   sha 45b8072b4ea7   library row 132,025,167
+#
+# TWO shas. `.text` 2,805,762, `.data` 12,672 and `.bss` 29,976 are identical
+# to the byte across the pair, so the heap starts at the same break and the
+# variance compile_instructions.sh's header describes -- a differing data and
+# bss moving malloc's work -- is not this. Every frame callgrind prints above
+# the 90%% threshold is identical to the instruction on both runs, mi_free
+# 2,016,114 and mi_theap_malloc_aligned 1,971,116 included, so the 13 is not in
+# any function large enough to name. What did move is the block count:
+# 27,583,359 against 27,583,361, two basic blocks apart. Thirteen instructions
+# in two blocks, inside `main`, below every frame the profile prints.
+#
+# Recorded rather than explained. Rounds three and four read one value on two
+# runs and round five read another, so the row is stable per binary and moves
+# between them; 13 in 132 million is 1.0e-7, against the 508 the same shape
+# cost under glibc, which is the one thing here that is an improvement.
+library_instructions=132025167

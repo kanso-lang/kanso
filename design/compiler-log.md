@@ -3581,3 +3581,41 @@ and the arithmetic that would have — three fixed init reads at 11 instructions
 a call — does not divide 13. What this round establishes is narrower and worth
 having on its own: the compile veins no longer contain a term that counts wall
 time.
+
+## Round five: the same source, two binaries, thirteen instructions
+
+Round four's head went "behind" when kanso#1457 landed, so origin/main was
+merged in to clear it. That merge carried `design/compiler-log.md` and
+`design/log/compiler-log-archive.md` and nothing else. Neither is
+`include_str!`'d into the compiler, so the bytes the build compiles are
+identical, and all three compile rows came back exactly 13 higher.
+
+`compile_instructions.sh` prints the binary's sha and the row together for
+exactly this, and its two cases are settled differently: one sha counting two
+rows halts the vein as a reproduction failure, two shas is an ordinary move
+until the pair is built and both are read. The pair:
+
+    round four   sha bd05a61f3a68   library row 132,025,154
+    round five   sha 45b8072b4ea7   library row 132,025,167
+
+Two shas. What the header's own account of this variance describes — a binary
+whose data and bss differ starting the heap at a different break — is not what
+happened here: `.text` 2,805,762, `.data` 12,672 and `.bss` 29,976 are
+identical to the byte on both. Every frame callgrind prints above the ninety
+per cent threshold is identical to the instruction, `mi_free` at 2,016,114 and
+`mi_theap_malloc_aligned` at 1,971,116 with it, so the 13 is not inside any
+function large enough for the profile to name. The block count is what moved:
+27,583,359 against 27,583,361. Thirteen instructions in two basic blocks,
+inside `main`, below every frame the profile prints.
+
+The three rows are written to CI's round-five reading and the eight page spans
+that quote them move with it. Welfare holds the floor at 69.75 — 39
+instructions summed across a 168,762,834-instruction term is 2.3e-7, which the
+score cannot see.
+
+Recorded rather than explained, and this is the third reading rather than the
+first: rounds three and four agreed on one value across two runs and round five
+read another, so the row is stable for a given binary and moves between them.
+Under glibc the same shape cost 508 instructions and the header carries seven
+readings and four distinct values for it. At 13 it is 39 times smaller, which
+is the one part of this that got better.
