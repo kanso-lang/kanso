@@ -4985,3 +4985,64 @@ rows agreed. The summed compile term rises, so welfare falls 69.63860 ->
 69.63510 and the floor moves with it, by hand, under CLAUDE.md's ironclad
 clause: `_` is the 2026-08-24 gavel, and a change that builds a ruled part of
 the language lowers the floor by exactly what it costs.
+
+## 2026-09-16 — five pull requests land as one tip, and a priced counter went unpriced the moment its neighbour landed
+
+**DONE.** kanso#1444 merged at 16:22Z as `fd789b8c`, and took kanso#1440,
+kanso#1441 and kanso#1442 with it. The four branches left standing —
+kanso#1447's build hole, kanso#1449's `!` respell, kanso#1452's qualified
+yield with kanso#1453's ledger check on top of it, and kanso#1450's railway
+remainder — are merged into `claude/ledger-reachable` and land as one tip.
+
+**Why one tip.** Branch protection refuses a head that is behind main, so
+every landing sends every other open pull request back for a fresh round. The
+ratchet's touched pass is what prices that: it selects the rows patching a
+file the branch changed and proves each by a release rebuild and a gate run,
+and on this diff it selects 88 of the 143. kanso#1444's ran 2h26m, which is
+88 rows at about 100 seconds apiece. Five landings are five of those sittings.
+kanso#1444's own body made the same argument for the four it carried, and the
+arithmetic has not changed.
+
+**Eight conflicts, none of them blanket-resolved.** The log, the three
+instruction goldens, `bench/welfare_floor.json` and `scripts/ratchet/
+ratchet.kso` are all append-only, so both sides are kept and ordered. The
+floor is merged entry by entry rather than by `max()` — 284 from the base,
+four from the chain, two from the hole, baselines byte-identical — because
+`max()` across a language change sets a floor the merged tree cannot reach,
+which is written down at `c332f9c0`. The ratchet's fifteen new rows chain
+through `rows_c1ya`, `rows_c1yb` and `rows_c1yc` where both sides had reached
+for `rows_c1z`. `tests/golden/micro/a_build_writes_what_it_can_prove_was_born
+.kso` takes the hole's side: the chain's only edit there dropped the bang from
+`middle = ring[2]!`, and the hole deletes that line with `ring` and `chosen`
+because a record an `if` chose and an element of a list are refused now and
+live in the error corpus. `docs/compiler.html`'s five paragraphs differ only
+in their `data-golden` spans and take the chain's, so `golden_prose` agrees
+with the goldens beside them.
+
+**A priced counter went unpriced the moment its neighbour landed.** The trend
+gate refused this tree over three counters kanso#1449's own entry describes:
+"the decoder's emitted code reads `calls` 1,209 -> 1,212, `branches` 795 ->
+807, `lines` 9,161 -> 9,258". That sentence names each counter by its bare
+suffix, and it satisfied the gate for as long as kanso#1444's entry sat beside
+it in the same delta spelling `emitted_calls`, `emitted_branches` and
+`emitted_lines` in full. kanso#1444 is on main now, its entry left the delta,
+and the branch's added lines hold zero occurrences of any of the three names.
+So a paragraph that prices a counter through a neighbour's spelling is priced
+only until that neighbour lands, and nothing warns you: the gate was green on
+kanso#1449 and is red here with the same words in the file.
+
+The three land at `emitted_calls` 1,209 -> 1,212, `emitted_branches` 795 ->
+807 and `emitted_lines` 9,161 -> 9,258, for the reason kanso#1449 gives: the
+guard-bound fixes hand the beat back to loops the respell had cost it, and a
+beat loop is more code than a call. `emitted_other_lines` 133,514 -> 136,463,
+`emitted_other_calls` 20,231 -> 20,323, `emitted_other_branches` 12,689 ->
+13,099 and `emitted_other_defines` 2,350 -> 2,342 are the same cause across
+the thirteen benchmarks, and `text` 1,737,148 -> 1,755,372 is that code
+arriving in the binary.
+
+**What this round is expected to be red on.** The three compile instruction
+goldens carry the chain's values and the merged tree is neither branch, so CI
+measures them and round two writes them in. welfare reads those goldens, so it
+is red with them, and the floor is left at 69.59152459326125 rather than set
+from a projection: a floor banked before the goldens carry CI's rows freezes a
+number this container guessed.
