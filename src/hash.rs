@@ -12,9 +12,26 @@
 //! interner since 2015. It is not collision-resistant and is not meant to be;
 //! the keys are the program's own names.
 //!
-//! Iteration order changes, and nothing observable depends on it: `std`'s
-//! random key already reseeds every process, so a compiler whose output moved
-//! with map order would have had flaky goldens from the day it was written.
+//! Iteration order changes, and nothing the compiler WRITES depends on it:
+//! `std`'s random key already reseeds every process, so a compiler whose
+//! output moved with map order would have had flaky goldens from the day it
+//! was written.
+//!
+//! What the compiler COSTS is a different question, and the fixed seed is load
+//! bearing for it. `bench/compile_instructions_golden.txt`,
+//! `bench/entry_instructions_golden.txt` and
+//! `bench/library_instructions_golden.txt` each hold one exact value, so two
+//! runs of one binary over one input must retire the same instructions. Under
+//! `RandomState` they do not: the probe sequence differs per process and the
+//! work of building the same table with it. kanso#1449 declared one set with
+//! std's default and the three rows returned three distinct values over three
+//! CI rounds; eight local runs of one binary spread 313 instructions, and a
+//! profile diff put the entire delta in `hashbrown`'s insert.
+//!
+//! So a container on the path `kanso check` walks belongs here rather than in
+//! `std::collections`, and
+//! `tests/the_compile_path_hashes_with_a_fixed_seed.rs` reads `src/` and says
+//! so.
 
 use std::hash::{BuildHasherDefault, Hasher};
 
