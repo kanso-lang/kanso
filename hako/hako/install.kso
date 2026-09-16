@@ -25,8 +25,16 @@ fn divided here rest found names dirs files
   more = weighed here rest found names dirs files
   if (length names == 0) finished more
 
+# `divided` binds `more = weighed ...`, so the empty-names answer here may not
+# be `divided` again with the same empty list: that is a cycle the `if` never
+# gets to cut, and the walk runs out of stack. It answers what `divided`'s own
+# empty arm answers instead. The retired `names[1]!` raised here and the `if`
+# threw the raise away, which is why the shape only appears now.
+fn emptied rest found dirs files
+  gathered (text/concat rest dirs) (text/concat found files)
+
 fn weighed here rest found names dirs files
-  return divided here rest found [] dirs files if length names < 1
+  return emptied rest found dirs files if length names < 1
   full = path/join here names[1]
   left = list/to_list (list/drop names 1)
   onward = (d -> placed here rest found left dirs files full d)

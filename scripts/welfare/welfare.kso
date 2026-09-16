@@ -241,13 +241,20 @@ fn total_for lines key
 
 # The compile golden is many fields to a line, one line per sample, and the
 # term is the total across them.
+# A body line with no value is not a counter, so it is dropped rather than
+# entered under a name of its own: the retired `parts[2]!` raised here and the
+# raise made the line vanish, and a `[l 0]` in its place is a zero-valued
+# counter the objective then weighs. `work_line?` is what drops it now.
+fn work_line? l
+  body? l and length (text/split l " ") > 1
+
 fn work_pair l
   parts = text/split l " "
-  return [l 0] if length parts < 2
+  return ["" 0] if length parts < 2
   [parts[1] (text/to_int parts[2])]
 
 fn work_of text
-  lines = list/to_list (list/select (text/split text "\n") body?)
+  lines = list/to_list (list/select (text/split text "\n") work_line?)
   list/to_h (list/to_list (list/map lines work_pair))
 
 fn compile_totals text

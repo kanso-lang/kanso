@@ -21,9 +21,11 @@ fn peak_bytes(n: u64) -> u64 {
     // `junk` is bound, measured and dropped: it is the per-iteration garbage
     // the rewind exists to reclaim. The map holds one key throughout.
     let program = format!(
-        "fn go 0 m\n  print (length (entries m))\n\n\
+        "fn added none k\n  k\n\n\
+         fn added v k\n  v + k\n\n\
+         fn go 0 m\n  print (length (entries m))\n\n\
          fn go n m\n  junk = \"k{{n % 17}}\"\n  \
-         go (n - 1) (put m \"k1\" (m[\"k1\"]! + length junk))\n\n\
+         go (n - 1) (put m \"k1\" (added m[\"k1\"] (length junk)))\n\n\
          go {n} {{ \"k1\":0 }}\n"
     );
     std::fs::write(dir.join("run.kso"), program).expect("the program writes");
