@@ -3722,13 +3722,20 @@ closure calls, and from there to one owner: `codegen::Backend::emit`, three
 calls, 65,049,261 instructions, 21,683,087 apiece — 92.6% of start-up in one
 expression.
 
-The expression is the `declares` filter. `DECLARES` holds about 1,204 lines,
-the filter asks `referenced(sym)` for each, and `referenced` built a probe with
-`format!` and then searched the emitted body, the call twins, and — the
+The expression is the `declares` filter. `DECLARES` holds 1,187 lines: 163
+`declare` lines and 1,024 lines of inline helper body. The filter walks all of
+them and asks `referenced(sym)` for the 163, and `referenced` built a probe
+with `format!` and then searched the emitted body, the call twins, and — the
 quadratic — `DECLARES.lines().filter(..).any(|l| l.contains(&probe))`, which
-re-split `DECLARES` and re-scanned its non-declare lines on every one of the
-1,204 asks. About one and a half million line scans to decide which
-declarations to keep.
+re-split `DECLARES` and re-scanned its 1,024 helper lines.
+
+**The `||` is why the shape of the program decides the cost.** A symbol the
+body actually calls answers on the first clause and never reaches the third.
+Counted on the two ends of the range: the one-line program references 33 of the
+163, so 130 fall through and re-scan 1,024 lines apiece — about 133,000 line
+scans; runbench references 82, so 81 fall through. The quadratic bites hardest
+on the program that uses the least, which is the program `kanso test` compiles
+over and over.
 
 Two changes, measured one at a time.
 
@@ -3749,7 +3756,19 @@ exactly where the name stops. `referenced` becomes a set lookup.
     kanso::main     69,207,585 -> 5,010,935   -64,196,650   -92.76%
     whole process   70,258,769 -> 6,064,399
 
-Thirteen point eight times. The emitted IR is byte-identical across the pair on
+Thirteen point eight times.
+
+**What it does not do is make a big build faster, and the reason is worth
+having.** `kanso build bench/runbench` reads 10.1 seconds before and after. Its
+wall clock belongs to clang — `clang -O3 -c` on the emitted 1.25 MB of IR is
+3.2 seconds on its own — and against that the front end is 0.057 seconds and
+the emitter's saving disappears into the noise. The row this change moves is
+kanso's own work on a program small enough for that work to be the whole of it.
+Wall time on the one-liner moves with it but by much less than the instruction
+count does, 0.0496s to 0.0398s, for the same reason: `kanso play` still spawns
+clang and links.
+
+The emitted IR is byte-identical across the pair on
 the largest program in the tree — runbench, 36,085 lines, md5
 `ebd24064f1a55e8effeb3ed5f08d4cf4` before and after — so nothing about what the
 compiler produces has changed, only what it spends deciding it.
