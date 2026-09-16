@@ -1945,6 +1945,25 @@ error[name]: `builtin_probe/hello` is internal to the standard library
 
 <p>the renderer costs <strong>468.5</strong> instructions a float, and it cost that in both benchmarks that call it &#8212; 191,070 calls in the run program and 849,200 in the encode benchmark, agreeing to one decimal place. two corpora with nothing in common except that the numbers in them are numbers people wrote.</p>
 
+<h2 id="nocallsite"><span class="sec-num">69</span>a question with no call sites answers yes</h2>
+
+<p>the licence to write through a parameter has two halves. one is about the function: does this parameter thread through to what the function returns, so that writing into it writes into something the caller is handing over anyway. the other is about everybody who calls it: does every call site pass a value it uniquely owns. the second half is a walk over the whole program, gathering the call sites of a group and asking each one.</p>
+
+<p>a folder handed to <code>list/fold</code> is mentioned and never called. the program writes <code>list/fold xs seed step</code> and <code>step</code> sits there as a value; the call happens inside fold, at a site no walk of this program will find. the walk gathered nothing, found nothing to object to, and returned yes. every named folder in the tree had its first parameter marked an accumulator the compiler may write through.</p>
+
+<p>so the seed was written in place while the caller still held it, and two folds over one seed read each other&#39;s writes:</p>
+
+<pre><code>seed = { &quot;k&quot;:0 }
+first  = (list/fold [1] seed put_step)[&quot;k&quot;]
+second = (list/fold [10] seed put_step)[&quot;k&quot;]
+</code></pre>
+
+<p>the interpreter reads <strong>1</strong> and <strong>10</strong>. native read <strong>1</strong> and <strong>11</strong>, because <code>second</code> folded over the map <code>first</code> had already written into. lists and byte builders went the same way, and an inline lambda in the same position was correct throughout &#8212; the fold&#39;s own arm asks whether the seed is unique before it licenses a write inside a lambda, and only a folder with a name reached the licence by the other route.</p>
+
+<p>the refusal for this exact case had been written, and its own comment said the thing: handing a group to a fold means it is called from somewhere no call site in this program describes, and a question about what every caller hands over then has no calls to look at. it sat in a function the granting path never called. the caller half existed twice &#8212; once with its refusals in front, once as a bare walk &#8212; and the licence asked the bare one. the two are one function now.</p>
+
+<p>a walk that finds nothing has two possible meanings, and they are opposite: nobody does this, or nobody here can see who does. an analysis that cannot tell them apart will grant on the second and call it a proof.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>
