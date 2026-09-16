@@ -144,28 +144,27 @@ impl<'a> Analysis<'a> {
                 _ => return false,
             }
         }
-        // Every call site must pass a uniquely-owned list at position i.
-        self.program.fns.iter().all(|caller| {
-            caller.body.iter().all(|stmt| {
-                let e = match stmt {
-                    Stmt::Bind { expr, .. } => expr,
-                    Stmt::Expr(e) => e,
-                    Stmt::Set { value, .. } => value,
-                };
-                self.callsites_unique(caller, e, name, arity, i)
-            })
-        })
+        // Every call site must pass a uniquely-owned list at position i, asked
+        // through `callers_hand_over` — which is this same walk, in front of
+        // the two refusals for a group whose calls the walk cannot see. It was
+        // written out a second time here instead, so those refusals sat in a
+        // caller half that the granting path never consulted: a folder handed
+        // to `fold` is mentioned as a value and never called by name, the walk
+        // found no call site to object to, and the first parameter was marked
+        // an accumulator on that silence.
+        self.callers_hand_over(name, arity, i)
     }
 
     /// Every call site of this group hands over a uniquely-owned value at `i`.
     ///
-    /// This is the caller half of `param_is_linear`, asked on its own. The
-    /// other half — used at most once — is deliberately not asked, because a
-    /// record read twice for its fields is used twice and is still finished
-    /// afterwards. The reuse site replaces it with a stricter local test: every
-    /// mention of the parameter anywhere in the arm is inside the one
-    /// expression that consumes it. Nothing here touches `linear_params`, so
-    /// what a push or a put is allowed to do is unchanged.
+    /// This is the caller half of `param_is_linear`, and `param_is_linear`
+    /// asks it — so the two refusals below reach the grant, which is the whole
+    /// point of them. It is also asked on its own at the reuse sites, without
+    /// the other half. That half — used at most once — is deliberately not
+    /// asked there, because a record read twice for its fields is used twice
+    /// and is still finished afterwards; the reuse site replaces it with a
+    /// stricter local test: every mention of the parameter anywhere in the arm
+    /// is inside the one expression that consumes it.
     fn callers_hand_over(&self, name: &str, arity: usize, i: usize) -> bool {
         // An operator is called by syntax, so its calls are `a * b` rather
         // than a named call this walk can find — the same blindness
