@@ -31,7 +31,10 @@ own = mine 1 .? (e -> "claimed {e.reason}")
 
 far = json/decode "[1, 2" .? (e -> "claimed {e.reason}")
 
-far_boxed = os/read_file! "no_such_file" .? (e -> "claimed {e.reason}")
+# The boxed reason is not printed: the playground has no filesystem and
+# says so in its own words, and what this line pins is that a foreign
+# boxed failure enters the callback at all.
+far_boxed = os/read_file! "no_such_file" .? (_ -> "claimed")
 
 pub play =
   print "own: {testing/when_failed own still}"
