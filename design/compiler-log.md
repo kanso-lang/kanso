@@ -3791,6 +3791,51 @@ all three rows that kanso#1460 read, on a branch whose whole diff is gate
 scripts, a log entry and a mutation. Three pull requests now, none of which
 compiles differently from main, and the same thirteen.
 
+## The second reading landed, and it is case (2)
+
+The run after that one carried the new row into its artifact dump:
+
+    library_instructions=132025619
+    library_again=132025167
+
+One binary, one corpus, one box, ONE JOB. Two callgrind runs minutes apart, 452
+instructions apart, and the second landed exactly on the golden. On the same
+run `compile instructions` and `entry instructions` both passed, so it is not
+one fixed term per process either.
+
+**So the compile vein does not reproduce on the runner**, and the 2026-09-05
+ruling's case (2) applies: it halts the vein and is hunted rather than pinned.
+
+**And the reading published for it a few hours earlier was wrong.** The CPU
+model and the binary sha were put forward as the two candidates, on the
+evidence of kanso#1459's two rounds, where both had moved together. Neither is
+it. The same binary on one machine does not reproduce, which no comparison
+across two job logs could ever have shown — and which is the whole argument for
+reading it inside the job. Cargo's build reproducibility, three builds landing
+on one sha, was never the question.
+
+The container is why four rounds of cross-run comparison could not reach it.
+Eight runs of the library gate's own command here, one binary, one box, one
+sitting: `kanso::main` 133,335,824 and the whole process 133,939,674, EIGHT
+TIMES, to the instruction. The object is now the difference between this
+container and the runner, rather than the difference between two runners.
+
+That also rules out per-process randomness as the cause, which was the first
+guess worth having: a hasher seeded from the OS, or anything else drawn fresh
+per process, would vary here too and does not. Two more are ruled out by the
+corpus. `library_corpus` is a single FILE, so the loader's directory walk never
+runs for it — and that walk sorts anyway. And the row is anchored at
+`kanso::main`, which is inside `lang_start_internal`, so the `/proc/self/maps`
+parse the 2026-09-15 ruling called external state is already outside it.
+
+What the magnitudes say, across four veins: +6 on the interpreted run's 2.3
+billion, ±13 on the compile rows' 131 million, +33 on start-up's 6 million, and
++452 on the library row in the sighting above. Small, not proportional to the
+row, and not equal across rows — so neither a term that scales with the work
+nor one fixed cost per process. It is a small number of instructions in
+something whose iteration count moves slightly, and every red compile row from
+here carries its own second reading to narrow it with.
+
 ## 2026-09-16 — gavel: two welfares and a meta-welfare over them, and the floor re-ratchets
 
 Clay ruled the ledger's "What the compile term counts once codegen is in it"
