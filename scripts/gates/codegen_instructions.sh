@@ -233,12 +233,12 @@ done
 # at this row read two where a real build is five. The first reading already
 # counts them into `seen`; the second did not, so a drop was invisible and
 # read as a reproduction failure.
-printf 'codegen_again_%s row=%s (the first reading was %s)\n' "$tier" "$again" "$got"
+printf 'codegen_%s_again row=%s (the first reading was %s)\n' "$tier" "$again" "$got"
 # As a notice too, so it survives as an annotation: plain stdout reaches only
 # the job log, which is the one place a reader may not be able to fetch.
-echo "::notice::codegen_again_${tier}=${again} first_reading=${got} again_procs=${again_seen} first_procs=${seen}"
+echo "::notice::codegen_${tier}_again=${again} first_reading=${got} again_procs=${again_seen} first_procs=${seen}"
 echo "::notice::codegen_procs_${tier} again=[$(processes_in /tmp/cg.codegen.${tier}b.*)]"
-printf 'codegen_again_%s=%s\n' "$tier" "$again" >> codegen_${tier}_got.txt
+printf 'codegen_%s_again=%s\n' "$tier" "$again" >> codegen_${tier}_got.txt
 
 echo "::error::codegen_instructions_${tier} counted $got against $want in $golden,"
 echo "::error::a move of $((got - want)). Exactly one of two things is true,"
