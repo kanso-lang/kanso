@@ -79,8 +79,13 @@ reading() {
   out=$1
   stage_and_warm
   rm -f "$out"
-  ( cd "$box" && env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" valgrind \
-      --tool=callgrind --callgrind-out-file="$out" --cache-sim=no --branch-sim=no \
+  # `valgrind --tool=callgrind` stays on ONE line. What declares a gate
+  # host-bound is `host_gate.sh`, and what makes it eligible is running
+  # callgrind -- and `a_host_bound_gate_is_reported_not_credited` reads for
+  # both words on a single operative line. Wrapped across a continuation it
+  # found the host_gate call and not the callgrind one, and said so.
+  ( cd "$box" && env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" \
+      valgrind --tool=callgrind --callgrind-out-file="$out" --cache-sim=no --branch-sim=no \
       ./kanso build pkg/codegen_corpus >/dev/null 2>/dev/null )
 }
 
