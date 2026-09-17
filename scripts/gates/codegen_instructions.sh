@@ -68,6 +68,28 @@ if [ "$host" -ne 0 ] && [ "$host" -ne 3 ]; then
 fi
 
 sh scripts/gates/dispatch.sh name
+
+# WHICH PROCESSES A READING SAW, by name. A count says a process is missing; it
+# does not say which, and on 2026-09-17 that cost a round: the count read 6 then
+# 5, the cause was guessed as an incremental build, the box was re-staged, and
+# the next sitting read 6 then 5 again. Every callgrind profile carries a `cmd:`
+# line naming the command it counted, so the answer was in the files the whole
+# time. This prints the leading word of each, which separates `./kanso`, the two
+# `clang` invocations and `ld` without printing the temp paths that differ per
+# pid.
+processes_in() {
+  for f in "$@"; do
+    [ -f "$f" ] || continue
+    sed -n 's/^cmd: *//p' "$f" | head -1 | awk '{
+      n = split($1, p, "/"); name = p[n]
+      tag = ""
+      if ($0 ~ /kanso_pn_probe/) tag = ":probe"
+      else if ($0 ~ /runtime[^ ]*\.c/) tag = ":runtime.c"
+      printf "%s%s ", name, tag
+    }'
+  done
+}
+
 box=/tmp/kanso-codegen
 
 # THE BOX IS RE-STAGED BEFORE EACH MEASURED RUN, and that is the whole of what
@@ -81,20 +103,6 @@ box=/tmp/kanso-codegen
 # measured. So both readings start from a box `codegen_box.sh` has just
 # rebuilt, with both tiers warmed in the same order, and a disagreement after
 # that is the compiler's.
-stage_and_warm() {
-  sh scripts/gates/codegen_box.sh
-  # Warm BOTH tiers, whichever one this run counts, so the row does not depend
-  # on which of the two the job happened to ask for first.
-  ( cd "$box" && ./kanso build pkg/codegen_corpus >/dev/null 2>&1 )
-  ( cd "$box" && ./kanso build pkg/codegen_corpus --release >/dev/null 2>&1 )
-}
-stage_and_warm
-
-printf 'codegen_binary sha256=%s\n' "$(sha256sum "$box/kanso" | cut -d' ' -f1)"
-size --format=sysv "$box/kanso" \
-  | awk '/^\.(text|data|bss)[ \t]/ { printf "codegen_binary %s=%s\n", $1, $2 }'
-printf 'codegen_clang %s\n' "$(clang --version | head -1)"
-
 tune=glibc.cpu.x86_data_cache_size=0x8000
 tune=$tune:glibc.cpu.x86_shared_cache_size=0x2000000
 tune=$tune:glibc.cpu.x86_non_temporal_threshold=0x1800000
@@ -105,6 +113,38 @@ tune=$tune:glibc.malloc.mmap_threshold=131072
 tune=$tune:glibc.malloc.trim_threshold=131072
 tune=$tune:glibc.malloc.top_pad=131072
 tune=$tune:glibc.malloc.tcache_count=7
+
+# AND THE WARM-UP RUNS UNDER THE MEASUREMENT'S OWN ENVIRONMENT. Re-staging the
+# box alone did not settle it: kanso#1470's next sitting still read
+# `again_procs=5 first_procs=6`, with the dev row 9,273,832,677 and then
+# 1,071,605,357. The profiles name the missing process. Each one carries a
+# `cmd:` line, and the extra process in the first reading compiles runtime.c --
+# `cached_runtime_object` writes that object to `std::env::temp_dir()`, keyed by
+# profile and runtime hash, and keeps it across processes. The box is staged
+# fresh; that cache is not in the box.
+#
+# The warm-ups were meant to fill it and could not, because they ran under the
+# job's environment while the measurement runs under `env -i`, and `temp_dir()`
+# reads TMPDIR. Two directories, two caches: the first MEASURED run paid for
+# runtime.c and the second found it. So the warm-up now runs the identical
+# command in the identical environment, which is what the 2026-09-15 rule asks
+# for and what "re-stage the box" only half did.
+stage_and_warm() {
+  sh scripts/gates/codegen_box.sh
+  # Warm BOTH tiers, whichever one this run counts, so the row does not depend
+  # on which of the two the job happened to ask for first.
+  for warm_flag in "" "--release"; do
+    ( cd "$box" && env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" \
+        ./kanso build pkg/codegen_corpus $warm_flag >/dev/null 2>&1 )
+  done
+}
+stage_and_warm
+
+printf 'codegen_binary sha256=%s\n' "$(sha256sum "$box/kanso" | cut -d' ' -f1)"
+size --format=sysv "$box/kanso" \
+  | awk '/^\.(text|data|bss)[ \t]/ { printf "codegen_binary %s=%s\n", $1, $2 }'
+printf 'codegen_clang %s\n' "$(clang --version | head -1)"
+
 
 rm -f /tmp/cg.codegen.$tier.*
 (
@@ -128,6 +168,7 @@ for f in /tmp/cg.codegen.$tier.*; do
   seen=$((seen + 1))
 done
 printf 'codegen_processes %s=%s\n' "$tier" "$seen"
+echo "::notice::codegen_procs_${tier} first=[$(processes_in /tmp/cg.codegen.$tier.*)]"
 printf 'codegen_instructions_%s=%s\n' "$tier" "$sum" > codegen_${tier}_got.txt
 cat codegen_${tier}_got.txt
 
@@ -196,6 +237,7 @@ printf 'codegen_again_%s row=%s (the first reading was %s)\n' "$tier" "$again" "
 # As a notice too, so it survives as an annotation: plain stdout reaches only
 # the job log, which is the one place a reader may not be able to fetch.
 echo "::notice::codegen_again_${tier}=${again} first_reading=${got} again_procs=${again_seen} first_procs=${seen}"
+echo "::notice::codegen_procs_${tier} again=[$(processes_in /tmp/cg.codegen.${tier}b.*)]"
 printf 'codegen_again_%s=%s\n' "$tier" "$again" >> codegen_${tier}_got.txt
 
 echo "::error::codegen_instructions_${tier} counted $got against $want in $golden,"

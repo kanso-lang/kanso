@@ -4757,3 +4757,40 @@ alone and says why.
 - **OPEN** what the row actually reads once it is one. This host refuses the
   golden's toolchain (glibc 2.39-0ubuntu8.7 against 8.9, clang 18 against 19),
   so the first honest sitting of this gate is CI's.
+
+## 2026-09-17 — the warm-up filled a different temp directory from the one the measurement reads
+
+Re-staging the box was half the fix. The sitting on `84ec8001` read
+`again_procs=5 first_procs=6` again, dev 9,273,832,677 then 1,071,605,357, with
+the box rebuilt between the two readings. So the second reading was still
+finding work done, and the box was not where it was finding it.
+
+The profiles had the answer and nothing was reading it. Every callgrind file
+carries a `cmd:` line. Listed for one local first reading:
+
+```
+kanso clang:probe clang clang ld
+```
+
+Five here, six on CI, and the sixth is the one that matters:
+`cached_runtime_object` compiles `src/runtime.c` once per profile and runtime
+hash and writes the object to `std::env::temp_dir()`. That cache is not in the
+box, so `codegen_box.sh` clearing the box never touched it. The warm-ups were
+put there to fill it, and could not: they ran under the job's environment while
+the measurement runs under `env -i`, and `temp_dir()` reads TMPDIR. Two
+directories, two caches. The first MEASURED run paid for runtime.c and the
+second found it.
+
+The warm-up now runs the identical command under the identical environment,
+which is what the 2026-09-15 rule asks for and what re-staging alone did not
+reach. And `codegen_procs_<tier> first=[...] again=[...]` joins the notices, so
+a reading that loses a process names it rather than being counted.
+
+Guessing cost a round here. The first entry on this read the gap as an
+incremental build and patched the box; the profiles said runtime.c and were
+never opened. The instrument goes in with the fix for that reason.
+
+- **DONE** the warm-up and the measurement share an environment; the processes
+  are named, not counted.
+- **OPEN** what the row reads once the two agree. This host refuses the
+  golden's toolchain, so CI's is the first honest sitting.

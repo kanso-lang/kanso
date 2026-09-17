@@ -83,6 +83,14 @@ fn staging_clears_the_box_rather_than_writing_over_it() {
     );
 }
 
+/// Both tiers are warmed on every staging, and the test RUNS the function
+/// rather than reading it.
+///
+/// It used to count the literal `./kanso build` lines, and went red the day the
+/// two became a loop over the two flags -- the property held and the spelling
+/// moved, which is a spec pinned to the wrong thing. So `stage_and_warm` is
+/// extracted, the box staging is stubbed out, a fake `kanso` on PATH records
+/// what it was called with, and the assertion is on what ran.
 #[test]
 fn staging_warms_both_tiers_every_time() {
     let s = gate();
@@ -93,16 +101,102 @@ fn staging_warms_both_tiers_every_time() {
         .split_once("\n}\n")
         .expect("stage_and_warm closes on a line of its own")
         .0;
-    assert!(
-        body.contains("sh scripts/gates/codegen_box.sh"),
-        "stage_and_warm does not re-stage the box"
+
+    let dir = std::env::temp_dir().join(format!("kanso_warm_probe_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("the probe directory is made");
+    let log = dir.join("calls");
+    std::fs::write(
+        dir.join("kanso"),
+        format!("#!/bin/sh\nprintf '%s\\n' \"$*\" >> {}\n", log.display()),
+    )
+    .expect("the fake kanso writes");
+    let mut perm = std::fs::metadata(dir.join("kanso")).expect("stat").permissions();
+    {
+        use std::os::unix::fs::PermissionsExt;
+        perm.set_mode(0o755);
+    }
+    std::fs::set_permissions(dir.join("kanso"), perm).expect("chmod");
+
+    // The box staging builds the compiler; it is not what this is testing.
+    let body = body.replace("sh scripts/gates/codegen_box.sh", ":");
+    let script = format!(
+        "set -e\ntune=t\nbox={dir}\nstage_and_warm() {{\n{body}\n}}\nstage_and_warm\n",
+        dir = dir.display(),
     );
-    let warms = body.matches("./kanso build pkg/codegen_corpus").count();
+    let out = std::process::Command::new("sh")
+        .arg("-c")
+        .arg(&script)
+        .env("PATH", format!("{}:/usr/bin:/bin", dir.display()))
+        .output()
+        .expect("sh runs");
+    assert!(
+        out.status.success(),
+        "stage_and_warm did not run: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    let calls = std::fs::read_to_string(&log).unwrap_or_default();
+    let tiers: std::collections::BTreeSet<String> = calls
+        .lines()
+        .filter(|l| l.contains("build"))
+        .map(|l| if l.contains("--release") { "release" } else { "dev" }.to_string())
+        .collect();
+    let _ = std::fs::remove_dir_all(&dir);
     assert_eq!(
-        warms, 2,
+        tiers.len(),
+        2,
         "both tiers are warmed on every staging, or the reading that follows \
          counts a runtime.c compile the other one does not -- which is the \
          start-up row's kanso#1461 bug, one binary reading 6,018,427 and then \
-         4,869,632"
+         4,869,632. The warm-up ran: {calls:?}"
     );
+}
+
+/// And the warm-up runs the measurement's own command in the measurement's own
+/// environment.
+///
+/// Re-staging the box was half the fix and the sitting said so: the next run
+/// still read `again_procs=5 first_procs=6`. The profiles named the missing
+/// process. `cached_runtime_object` keys runtime.c's object on profile and
+/// runtime hash and keeps it in `std::env::temp_dir()`, which is not in the
+/// box and which reads TMPDIR -- so a warm-up under the job's environment
+/// filled a different directory from the one the measurement reads, the first
+/// measured run paid for runtime.c and the second found it cached.
+#[test]
+fn the_warm_up_runs_under_the_measurements_environment() {
+    let s = gate();
+    let body = s
+        .split_once("stage_and_warm() {")
+        .expect("the staging step is a shell function named stage_and_warm")
+        .1
+        .split_once("\n}\n")
+        .expect("stage_and_warm closes on a line of its own")
+        .0;
+    let (first, _) = readings(&s);
+    let measured = s[..first]
+        .rsplit_once("env -i ")
+        .map(|(_, r)| r)
+        .unwrap_or_else(|| panic!("the first measured run does not empty its environment"));
+    // The environment the measurement sets, up to the callgrind invocation.
+    let wanted: Vec<&str> = measured
+        .split_whitespace()
+        .take_while(|t| *t != "valgrind")
+        .collect();
+    assert!(
+        !wanted.is_empty(),
+        "the measured run names no environment between `env -i` and valgrind"
+    );
+    assert!(
+        body.contains("env -i "),
+        "the warm-up runs under the job's environment while the measurement \
+         runs under `env -i`, so the two fill different caches"
+    );
+    for t in wanted {
+        assert!(
+            body.contains(t),
+            "the measurement sets {t} and the warm-up does not, so the warm-up \
+             is not the run it is warming"
+        );
+    }
 }
