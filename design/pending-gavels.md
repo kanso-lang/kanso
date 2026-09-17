@@ -323,14 +323,23 @@ is, and every reading so far puts it small.
 - kanso#1473 and kanso#1478 measured the same three rows to the instruction on
   two different binaries, which says the term is quantized rather than noisy
   and that most changes do not move it at all.
-- Against that, kanso#1480 moves `compile_instructions` 140,122 and
-  `entry_instructions` 487,035 and was escalated as a layout move. 140,122 is
-  two orders of magnitude above both calibrations, and 487,035 exceeds the
-  330,496 separating that branch's parent from main — so attributing it to
-  layout would make the term larger than the algorithmic effect of a whole run
-  of indexing changes. Recorded here because an escalation reaching for this
-  term is what the entry is about, and because the pin would not have helped:
-  whatever carries 140,122 is not the thing the seven binaries measured.
+- kanso#1480 moves `compile_instructions` 140,122 and `entry_instructions`
+  487,035 — two orders of magnitude above both readings above. Bisected by
+  cloud on 2026-09-17: 105 added lines in the linearity analysis cost 357,
+  and 74 lines REWRITING two private emitter functions cost 145,472. Both
+  are unreachable from a check.
+
+**What that exposes, and it is the reason this entry is worth ruling rather
+than declining on the numbers above.** The two calibrations measured ADDING
+code nothing reaches, which leaves every existing decision in place. A rewrite
+of existing unreachable code moves what sits around it, and costs three
+hundred times more — 145,472 against the 1,503 an `#[inline(never)]` in the
+same module cost the same afternoon. So the term this entry prices is not the
+small one the seven binaries found; it is small for additions and large for
+rewrites, and most changes rewrite. The recommendation below was written
+against the small reading and should be re-weighed against this one, including
+whether the pin reaches a rewrite at all — it removes the shift of literals
+after `.rodata` and says nothing about `.text` moving under itself.
 
 **Recommendation:** decline it, and record the decline. A 1 per cent larger
 shipped binary, or a measurement build linked differently from the shipped one,
