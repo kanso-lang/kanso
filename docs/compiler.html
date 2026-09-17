@@ -2069,6 +2069,21 @@ second = (list/fold [10] seed put_step)[&quot;k&quot;]
 
 <p>the thing that sent anyone looking was six instructions, and the new instrument ruled itself out of explaining them. the two jobs above printed the same block, all 123 rows, and their four short veins agree to the instruction while the interpreted run is six apart on <strong>2,178,502,266</strong>. six in 2.18 billion is three parts per billion; on the other four rows, which run from 4.8 million to 128 million, the same proportion is a fraction of one instruction and could not be seen. that is the shape of a term proportional to work rather than a constant, and the interpreted run is also the allocation-heavy one — <strong>5,313,434</strong> allocations against a compile&#39;s <strong>27,397</strong>. where the allocator&#39;s heap starts moves with the size of the file the loader mapped. that is an argument and not yet a measurement, and the page says so.</p>
 
+<h2 id="widthbound"><span class="sec-num">78</span>a width bound cannot see past the first step</h2>
+
+<p>rendering a double is 4.58% of the run program &#8212; 84,209,220 instructions over 191,070 calls, 440.7 each &#8212; and a quarter of that is one loop walking digits off the significand two at a time. it takes 5.35 trips a float on the encode corpus, because the significand starts with seventeen digits and the shortest form needs six or seven.</p>
+
+<p>so compute the count instead of searching for it. the two ends of the rounding interval agree above the first place where their difference has a digit, which makes <code>declen(vp - vm) - 1</code> a lower bound on how many digits can come off, and one division by a power of ten takes them all at once. written guarded by the same test the loop uses, the step can never take a digit the loop would have left.</p>
+
+<p>it costs <strong>38.3 instructions a float</strong>. the function goes to 91,522,440 and the whole run program rises 7,313,220, 0.397%, with every instruction of the rise inside that one function.</p>
+
+<p>a counter says why. over 190,890 calls the step fired every time and the count it computed was <strong>1 on 58,680 of them and 2 on the other 132,210</strong>. never more. the bound reads the interval at full width, and the interval renormalises after every removal: dividing both ends by ten narrows the absolute gap but leaves the loop&#39;s test true for many more steps than the starting width predicts. the step pays sixteen comparisons and three divisions to take 1.69 digits where one trip of the loop takes two for twenty-one instructions.</p>
+
+<p>declined. the reason belongs to the quantity rather than to the code, which is why no amount of tightening the step would rescue it.</p>
+
+<p>the same probe priced the idea that would have come next. of the 191,070 doubles this corpus renders, 152,460 need seven significant digits and 32,940 need six &#8212; and <strong>none of them is a whole number</strong>. a fast path for small integral doubles, the standard trick in every float renderer, would fire zero times here. measuring the corpus cost one afternoon and saved writing it.</p>
+
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>
