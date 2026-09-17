@@ -112,4 +112,11 @@
 # change working; a one-line program emits few enough lines that the saving
 # and the layout term the four rows above show are the same size, and this
 # reading does not separate them. Both point the same way.
-startup_instructions=4837381
+#
+# 2026-09-17, kanso#1493 on the tree merged with main 5e256ce0, CI's sitting.
+# 4,837,381 -> 3,712,181, a FALL of 1,125,200 (-23.26%). WORK, and it is the
+# whole of what this branch does: `kanso play` on a one-line program hashed
+# the 450,100 bytes of src/runtime.c twice to key its two caches, and the
+# digest is computed at build time now. The row measured here is the merged
+# tree's, not the branch's own base -- kanso#1491 landed under it.
+startup_instructions=3712181
