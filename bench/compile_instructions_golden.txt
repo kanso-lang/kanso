@@ -1918,7 +1918,46 @@
 # base, so the merged tree is reading neither number. The value below is
 # main's, carried forward so the gate has one value to fail against
 # rather than none; the merged sitting is CI's to take.
-compile_instructions=35964325
+#
+# 2026-09-17 (kanso#1478): compile_instructions 35,964,325 -> 35,869,543, a FALL
+# of 94,782 (-0.2635%). Against the parent kanso#1476 the fall is 27,425
+# (-0.0764%), and that part is this branch's: the beat's seventh whole-program
+# question reads an index now. CI's sitting on 938653c6.
+# 2026-09-17 (kanso#1476): compile_instructions 35,964,325 -> 35,896,968, a FALL
+# of 67,357 (-0.1873%). The fall is the parent's, kanso#1475. This row came back
+# byte-identical to the one that branch measured: `kanso check` stops before
+# codegen and this change is in the emitter, so there is nothing here for it to
+# move. CI's sitting on fb28abb2.
+# 2026-09-17, kanso#1475 on the excluded anchor. 67,357 below main, and 27,425
+# ABOVE its own base kanso#1473. The linearity fixpoint's group scan is indexed
+# here and `kanso check` does run that analysis, so this row is not purely
+# layout -- but the direction is a rise, and what the change buys is on the
+# build path: kanso build falls 9.61% with the emitted IR byte-identical.
+# 2026-09-17, kanso#1473 on the excluded anchor. 94,782 below main and 17,090
+# below its own base, kanso#1468: the beat's tail-call question is asked once
+# per name now. Layout, as the other two compile rows are -- `kanso check`
+# stops before codegen.
+# 2026-09-17, kanso#1468 on the excluded row. 77,692 lower. The emitter's two
+# whole-body questions are asked once per name now instead of once per name per
+# declaration, and this is the layout half of that: `kanso check` stops before
+# codegen, so what moved the row is the compiler binary carrying different
+# bytes.
+#
+# 2026-09-17, merged with the base. The base moved this row's FILE and not
+# the compiler: since this branch measured, the only thing that landed
+# under it is a row written into a golden, so the value below is this
+# branch's own sitting and it still stands.
+#
+# 2026-09-17, merged with the base. The base moved this row's FILE and not
+# the compiler: since this branch measured, the only thing that landed
+# under it is a row written into a golden, so the value below is this
+# branch's own sitting and it still stands.
+#
+# 2026-09-17, merged with the base. The base moved this row's FILE and not
+# the compiler: since this branch measured, the only thing that landed
+# under it is a row written into a golden, so the value below is this
+# branch's own sitting and it still stands.
+compile_instructions=35869543
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

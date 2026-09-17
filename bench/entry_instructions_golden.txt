@@ -733,7 +733,32 @@
 # base, so the merged tree is reading neither number. The value below is
 # main's, carried forward so the gate has one value to fail against
 # rather than none; the merged sitting is CI's to take.
-entry_instructions=128204133
+#
+# 2026-09-17 (kanso#1478): entry_instructions 128,204,133 -> 127,873,637, a FALL
+# of 330,496 (-0.2578%); 88,438 (-0.0691%) of it against the parent. Same sitting
+# as the compile row.
+# 2026-09-17 (kanso#1476): entry_instructions 128,204,133 -> 127,962,075, a FALL
+# of 242,058 (-0.1888%). The parent's fall, again byte-identical to kanso#1475's
+# reading. Same sitting as the compile row.
+# 2026-09-17, kanso#1475. 242,058 below main, 88,438 above kanso#1473.
+# 2026-09-17, kanso#1473. 330,496 below main, 49,140 below kanso#1468.
+# 2026-09-17, kanso#1468 on the excluded row. 281,356 lower, layout.
+#
+# 2026-09-17, merged with the base. The base moved this row's FILE and not
+# the compiler: since this branch measured, the only thing that landed
+# under it is a row written into a golden, so the value below is this
+# branch's own sitting and it still stands.
+#
+# 2026-09-17, merged with the base. The base moved this row's FILE and not
+# the compiler: since this branch measured, the only thing that landed
+# under it is a row written into a golden, so the value below is this
+# branch's own sitting and it still stands.
+#
+# 2026-09-17, merged with the base. The base moved this row's FILE and not
+# the compiler: since this branch measured, the only thing that landed
+# under it is a row written into a golden, so the value below is this
+# branch's own sitting and it still stands.
+entry_instructions=127873637
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.
