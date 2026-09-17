@@ -4679,3 +4679,42 @@ frames of bucket zero, by name and cost, in one notice.
 
 - **DONE** the bucket is named, and the digest earned its place doing it.
 - **OPEN** the frame. One line in the next pair of sittings.
+
+## 2026-09-17 — the stack-slot check reads the first space, and the lever was a tenth the size advertised
+
+`FnEmit::write` diverts every `alloca` to the head of the entry block so LLVM
+does not keep a frame pointer for the function, and it recognised one by
+searching the whole line for ` = alloca `. A slot reads `%name = alloca <type>`
+and `%name` holds no space, so the needle begins at the line's first space or it
+is nowhere. Measured on runbench's 36,086 emitted lines: all 235 slots put it
+between offsets five and seven, and each of those is that line's first space.
+
+```
+kanso build pkg/runbench, kanso's own process
+  before  31,280,056,421
+  after   31,279,771,548   -284,873
+```
+
+IR byte-identical, 1,250,754 bytes.
+
+**And the figure this was chosen on was wrong.** The 2026-09-16 build profile
+put 18.2 million instructions over 144,261 lines against this search, about a
+hundred and ten a line. The measurement above is eight a line. The 18.2 million
+was an inclusive cost read as a self cost — the same mistake the hand-written
+caller-tree parser made on 2026-09-15, arrived at by a different route. A lever
+priced from a profile is a hypothesis; this one was worth a sixty-fourth of its
+price and is recorded at what it is.
+
+It is still worth having: free, exact, and pinned. `kanso check` stops before
+codegen, so no welfare term can see it at all until the codegen rows land on
+kanso#1470.
+
+`tests/a_stack_slot_is_found_where_the_first_space_is.rs` compiles the module
+fixture, runbench and a list-literal sample and asserts the narrow reading and
+the whole-line one agree for every emitted line — 235 slots among them, so the
+agreement is not between two functions that both said no. Watched red with the
+reading pinned to offset zero; it named `%t77 = alloca [2 x %KValue]`.
+
+- **DONE** the check is narrow and the two readings agree over real IR.
+- **NOTE** a profile's inclusive cost has now mispriced a lever twice in three
+  days. Price a frame from its SELF cost, or build it and measure the whole.
