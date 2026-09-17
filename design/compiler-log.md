@@ -8435,3 +8435,76 @@ counting them swept.
 - **OPEN** whether any other counter diverges between the engines. Nothing
   compares them, so the answer is unknown rather than no, and the mem vein
   running on one engine is the cheapest place to change that.
+
+## 2026-09-17 — the beat rewind's fast path: 23 instructions to 15
+
+`k_beat_iter` is what a compiler-proven beat loop calls between iterations to
+give the arena back. runbench calls it 2,692,766 times and it was 61,672,983
+instructions, 3.35% of the whole program. A task note from a fortnight ago
+put it at 0.6%; the note was an estimate and the profile is not.
+
+Per call that is 22.9 instructions, against a fast path of six stores and
+three tests. Disassembled, the path was 23 instructions and nine of them
+existed to turn `k_beat_depth` into `&k_beat_stack[depth - 1]`:
+
+    mov k_beat_depth,%eax / dec / cmp $0x3f / ja
+    mov %eax,%edx / mov %rdx,%rax / shl $5
+    lea k_beat_stack,%rcx / lea (%rcx,%rax,1),%rdi
+
+That address cannot change for the life of the loop, and the compiler cannot
+know it: the loop body calls other functions, any of which might push a beat.
+
+Two changes, measured separately.
+
+**The registry summary moves into the mark it describes.** `k_reg_any` was a
+parallel `int[K_BEAT_MAX]` indexed by depth, so the rewind — which has the
+mark pointer in hand — had to turn it back into a depth to read the flag. It
+is a field of `KMark` now, read at a displacement. In the same step the two
+flag tests become one: `k_buf_dirty` and `reg_any` are both zero on
+essentially every rewind, and `!(k_buf_dirty | m->reg_any)` is one branch
+where two predicted-taken jumps stood. 23 instructions to 20, and runbench
+1,840,367,648 → 1,832,202,462, −0.4437%.
+
+**The innermost mark is cached beside the depth.** `k_beat_top` holds
+`&k_beat_stack[k_beat_depth - 1]`, or NULL at depth zero, and the eight
+remaining address instructions become a load and a test. 20 to 15.
+
+The cache is not free, and where it is paid is worth writing down. Seven
+sites move the depth and each now maintains the pointer. At `k_beat_push`
+the new top is the mark just written and the range test is dead code, so
+that site is one store: +500,595 over 507,685 pushes. At `k_beat_pop` the
+new depth may be zero or past the top, so the cmov stays: eight instructions,
++4,004,752. Against those, `k_beat_iter` gives back 21,468,255.
+
+    k_beat_iter   61,672,983 -> 40,204,728   -21,468,255   -34.81%
+    k_beat_pop    14,517,216 -> 18,521,968    +4,004,752
+    k_beat_push   15,017,844 -> 15,518,439      +500,595
+    runbench   1,840,367,648 -> 1,823,406,517  -16,961,131   -0.9216%
+
+The three account for the total within 1,777 instructions. The ratio is what
+makes it pay: runbench iterates 2,692,766 times against 507,685 pops, five to
+one, so five instructions moved off the iteration buy eight onto the pop.
+
+These are this container's callgrind readings. `bench/instructions_golden.txt`
+refuses comparison here — the rows were measured on glibc 2.39-0ubuntu8.9 and
+clang 19.1.1 against this box's 8.7 and 18.1.3 — so CI takes the row and the
+floor is banked after it lands.
+
+**What the cache costs in safety, and what pays for it.** A stale `k_beat_top`
+is not a crash. It rewinds the arena to an OUTER loop's mark, freeing memory
+the inner loop is still reading, and what surfaces is a wrong answer somewhere
+else entirely. So the counting build asks at every iteration whether the
+cached pointer is the one the depth names, and dies by name when it is not.
+`tests/the_cached_beat_top_tracks_the_depth.rs` runs beats nested three deep
+under `--counters`; dropping the maintenance from `k_beat_pop` turns it red
+with `the cached beat top and the beat depth disagree`.
+
+Getting that spec to fail took two tries, and both failures are the reason it
+is worth having. The first program built strings into its accumulator, which
+compiles to a CARRY beat: `k_beat_iter_carry` computes its own mark and never
+reads the cache, so the emitted code called it four times, called `k_beat_iter`
+not at all, and the spec passed with the maintenance removed. The second
+carried a scalar and allocated nothing — and a loop with nothing to reclaim
+emits no beat at all. What the spec needs is both: laps that allocate, and a
+carried value that is a scalar. Each lap builds a padded string and keeps only
+its length.

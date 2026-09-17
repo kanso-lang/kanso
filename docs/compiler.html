@@ -2120,6 +2120,26 @@ second = (list/fold [10] seed put_step)[&quot;k&quot;]
 
 <p>the habit underneath all of this is cheaper than any of the findings. a list that describes its own coverage &mdash; a floor, an audit, a sitting not yet swept &mdash; is telling you where to look. so is a gate that prints a binary's hash on every run: somebody wrote that line down because they expected to need it, and reading it first would have saved an attribution that was wrong.</p>
 
+<h2 id="beattop"><span class="sec-num">80</span>nine instructions to find a pointer that never moved</h2>
+
+<p>a beat loop is one the compiler proved gives its arena back between laps, and <code>k_beat_iter</code> is what it calls to do that. the run program calls it <strong>2,692,766</strong> times for <strong>61,672,983</strong> instructions &#8212; 3.35% of everything it does, and 22.9 instructions a call against a fast path that is six stores and three tests.</p>
+
+<p>disassembled, the path was 23 instructions. nine of them turned <code>k_beat_depth</code> into <code>&amp;k_beat_stack[depth - 1]</code>: a load, a decrement, a range test, a zero-extend, a shift and two <code>lea</code>s. that address cannot change for the life of the loop. the c compiler cannot know it, because the loop body calls other functions and any of them might push a beat.</p>
+
+<p>two changes. the registry summary was a parallel array indexed by depth, so the rewind &#8212; holding the mark pointer already &#8212; had to turn it back into a depth to read the flag; it is a field of the mark now, read at a displacement, and the shelf flag beside it folds into the same branch. then the innermost mark is cached beside the depth, and the eight remaining address instructions become a load and a test.</p>
+
+<pre><code>k_beat_iter   61,672,983 -&gt; 40,204,728   -21,468,255   -34.81%
+k_beat_pop    14,517,216 -&gt; 18,521,968    +4,004,752
+k_beat_push   15,017,844 -&gt; 15,518,439      +500,595
+runbench   1,840,367,648 -&gt; 1,823,406,517  -16,961,131   -0.9216%</code></pre>
+
+<p>the cache is maintained at seven sites and two of them are hot, which is the part worth reading. a push writes the mark it just built, so its range test is dead code and the site costs one store. a pop may land at depth zero or past the top of the stack, so its cmov stays and the site costs eight. the loop iterates five times for every pop it does, and that ratio is the whole trade: five instructions off the iteration buy eight onto the pop.</p>
+
+<p>a cached pointer is an invariant, and this one fails quietly. a stale <code>k_beat_top</code> rewinds to an outer loop&#39;s mark, which frees memory the inner loop is still reading, and what a reader sees is a wrong answer somewhere else. so the counting build asks at every iteration whether the cached pointer is the one the depth names, and dies by name when it is not. the shipped binary compiles the question out.</p>
+
+<p>the spec for that took two tries and both failures say something about the language. the first program accumulated strings, which compiles to a <em>carry</em> beat &#8212; that one computes its own mark, never reads the cache, and the spec passed with the maintenance torn out. the second carried a scalar and allocated nothing, and a loop with nothing to reclaim emits no beat at all. what it takes is both at once: laps that allocate, and a carried value small enough to cross one. each lap builds a padded string and keeps its length.</p>
+
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>

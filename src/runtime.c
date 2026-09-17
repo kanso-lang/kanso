@@ -705,10 +705,35 @@ static inline __attribute__((always_inline)) void* k_alloc(size_t n) {
    arena only grows, exactly as before. */
 static int k_is_heap(long long tag);
 
-typedef struct { KBlock* block; char* ptr; size_t left; long long bytes; } KMark;
+/* `reg_any` summarises the three registries for THIS mark: a bitmask of
+   K_REG_CHUNK/VIEW/PERM, set when something is registered at this depth and
+   cleared by the rewind. It lived in a parallel `k_reg_any[K_BEAT_MAX]` until
+   2026-09-17. The rewind's fast path had the mark pointer in hand and had to
+   turn it back into a depth to index that array -- a subtract and a shift on
+   the hot path, once an iteration -- and reading it off the mark costs one
+   displacement instead. */
+typedef struct { KBlock* block; char* ptr; size_t left; long long bytes;
+                 int reg_any; } KMark;
 #define K_BEAT_MAX 64
 static KMark k_beat_stack[K_BEAT_MAX];
 static int k_beat_depth = 0;
+/* The innermost mark, or NULL at depth zero. It is what `k_beat_depth` says
+   and is kept beside it because the rewind's fast path wants the pointer and
+   never the number: deriving it took a load, a decrement, a range test and
+   three address instructions, once an iteration, to arrive at a value that
+   does not change for the life of the loop. Every write to the depth goes
+   through `k_beat_set_depth`, and the counting build checks the two agree at
+   every iteration -- see `tests/the_cached_beat_top_tracks_the_depth.rs`. */
+static KMark* k_beat_top = NULL;
+
+static inline void k_beat_set_depth(int d) {
+    k_beat_depth = d;
+    /* `d > 0 && d <= K_BEAT_MAX` as one unsigned compare: a depth of zero
+       wraps to a huge index and fails the same test a depth past the top
+       does. Two compares and two branches become one compare and a cmov. */
+    k_beat_top = ((unsigned)(d - 1) < (unsigned)K_BEAT_MAX)
+               ? &k_beat_stack[d - 1] : NULL;
+}
 
 /* Whether anything is on the buffer shelf. The shelf is twelve pointers and
    the flush is a 96-byte memset, which a beat loop paid once an iteration to
@@ -751,7 +776,7 @@ static void k_buf_flush(void);
 #define K_REG_CHUNK 1
 #define K_REG_VIEW  2
 #define K_REG_PERM  4
-static int k_reg_any[K_BEAT_MAX];
+#define k_reg_any_at(d) (k_beat_stack[d].reg_any)
 
 static KMap** k_viewreg[K_BEAT_MAX];
 static long long k_viewreg_n[K_BEAT_MAX];
@@ -767,7 +792,7 @@ static void k_viewreg_push(int d, KMap* m) {
         k_viewreg_cap[d] = grown;
     }
     k_viewreg[d][k_viewreg_n[d]++] = m;
-    k_reg_any[d] |= K_REG_VIEW;
+    k_reg_any_at(d) |= K_REG_VIEW;
 }
 
 static void k_viewreg_flush(int d) {
@@ -797,7 +822,7 @@ static void k_viewreg_migrate_held(int d) {
 
 static inline __attribute__((always_inline)) void k_viewreg_migrate(int d) {
     if (d < 0 || d >= K_BEAT_MAX || k_viewreg_n[d] == 0) return;
-    k_reg_any[d] &= ~K_REG_VIEW;
+    k_reg_any_at(d) &= ~K_REG_VIEW;
     k_viewreg_migrate_held(d);
 }
 
@@ -843,7 +868,7 @@ static void k_permreg_flush_held(int d);
 
 static inline __attribute__((always_inline)) void k_permreg_flush(int d) {
     if (!k_permreg_any || k_permreg_n[d] == 0) return;
-    k_reg_any[d] &= ~K_REG_PERM;
+    k_reg_any_at(d) &= ~K_REG_PERM;
     k_permreg_flush_held(d);
 }
 
@@ -851,7 +876,7 @@ static void k_permreg_migrate_held(int d);
 
 static inline __attribute__((always_inline)) void k_permreg_migrate(int d) {
     if (!k_permreg_any || d < 0 || d >= K_BEAT_MAX || k_permreg_n[d] == 0) return;
-    k_reg_any[d] &= ~K_REG_PERM;
+    k_reg_any_at(d) &= ~K_REG_PERM;
     k_permreg_migrate_held(d);
 }
 
@@ -865,7 +890,7 @@ static void k_permreg_push(int d, KValue** slot) {
     }
     k_permreg_any = 1;
     k_permreg[d][k_permreg_n[d]++] = slot;
-    k_reg_any[d] |= K_REG_PERM;
+    k_reg_any_at(d) |= K_REG_PERM;
 }
 
 static void k_permreg_migrate_held(int d) {
@@ -889,7 +914,7 @@ static void k_chunkreg_flush(int d) {
     }
     k_chunkreg_n[d] = 0;
     k_chunkreg_spill[d] = 0;
-    k_reg_any[d] &= ~K_REG_CHUNK;
+    k_reg_any_at(d) &= ~K_REG_CHUNK;
 }
 
 /* A pop that keeps its region alive keeps the region's strings alive, so
@@ -905,12 +930,12 @@ static void k_chunkreg_migrate(int d) {
             } else {
                 k_chunkreg_spill[up]++;
             }
-            k_reg_any[up] |= K_REG_CHUNK;
+            k_reg_any_at(up) |= K_REG_CHUNK;
         }
     }
     k_chunkreg_n[d] = 0;
     k_chunkreg_spill[d] = 0;
-    k_reg_any[d] &= ~K_REG_CHUNK;
+    k_reg_any_at(d) &= ~K_REG_CHUNK;
 }
 
 static void k_beat_rewind_slow(KMark* m) {
@@ -920,7 +945,7 @@ static void k_beat_rewind_slow(KMark* m) {
         k_chunkreg_flush((int)d);
         k_viewreg_flush((int)d);
         k_permreg_flush((int)d);
-        k_reg_any[d] = 0;
+        k_reg_any_at(d) = 0;
     }
     while (k_blocks != m->block) {
         KBlock* b = k_blocks;
@@ -970,10 +995,13 @@ static void k_beat_rewind_slow(KMark* m) {
    registry got 500 and 500. That the two travel together is a property of the
    programs, not of the code, so the tests stay. */
 static inline void k_beat_rewind(KMark* m) {
-    long long d = m - k_beat_stack;
-    if (__builtin_expect(d >= 0 && d < K_BEAT_MAX
-                         && !k_buf_dirty
-                         && !k_reg_any[d]
+    /* ONE test for the shelf and the registries together. Both are zero on
+       essentially every rewind -- the comment above counts how rarely either
+       decides anything -- so the two branches were two predicted-taken jumps
+       where an `or` of two zero words is one. The bounds check the fast path
+       used to carry went with the array: every caller derives `m` from a
+       depth it has already ranged, and `k_beat_rewind_slow` keeps its own. */
+    if (__builtin_expect(!(k_buf_dirty | m->reg_any)
                          && k_blocks == m->block, 1)) {
         k_arena = m->ptr;
         k_arena_left = m->left;
@@ -1006,15 +1034,23 @@ void k_beat_push(void) {
             k_die("a beat mark and the arena disagree about the room that is left");
         }
         k_carry_clear(k_beat_depth);
+        /* In range by the test above, so the new top is the mark just written
+           and the general setter's range test would be dead code. */
+        k_beat_depth++;
+        k_beat_top = m;
+        return;
     }
-    k_beat_depth++;
+    k_beat_set_depth(k_beat_depth + 1);
 }
 
 void k_beat_iter(void) {
     if (K_COUNTING) k_stat_beat_iters++;
-    if (k_beat_depth > 0 && k_beat_depth <= K_BEAT_MAX) {
-        k_beat_rewind(&k_beat_stack[k_beat_depth - 1]);
+    KMark* m = k_beat_top;
+    if (K_COUNTING && m != ((k_beat_depth > 0 && k_beat_depth <= K_BEAT_MAX)
+                            ? &k_beat_stack[k_beat_depth - 1] : NULL)) {
+        k_die("the cached beat top and the beat depth disagree");
     }
+    if (m) k_beat_rewind(m);
 }
 
 KValue k_beat_pop(KValue r);
@@ -2270,15 +2306,15 @@ static __attribute__((noinline)) KValue k_beat_pop_slow(KValue r, long long d,
 
 KValue k_beat_pop(KValue r) {
     if (k_beat_depth > 0) {
-        k_beat_depth--;
+        k_beat_set_depth(k_beat_depth - 1);
         long long d = k_beat_depth;
         if (d < K_BEAT_MAX) {
             int rewound = !k_is_heap(r.tag) && r.tag != K_THUNK;
-            /* k_reg_any[d] summarises the three registries: every add sets
+            /* k_reg_any_at(d) summarises the three registries: every add sets
                its bit and every migrate or flush clears it, and the chunk
                spill count travels with the chunk bit. An empty migrate wrote
                three zeros over zeros. */
-            if (!rewound && !k_carries[d].used_flag && !k_reg_any[d]
+            if (!rewound && !k_carries[d].used_flag && !k_reg_any_at(d)
                 && !k_ten_blocks[d]) {
                 return r;
             }
@@ -2304,20 +2340,20 @@ void k_beat_iter_carry(void);
    priced by the one-shot welfare term. */
 KValue k_cohort_pop(KValue r) {
     if (k_beat_depth <= 0 || k_beat_depth > K_BEAT_MAX) {
-        if (k_beat_depth > 0) k_beat_depth--;
+        if (k_beat_depth > 0) k_beat_set_depth(k_beat_depth - 1);
         return r;
     }
     KMark* m = &k_beat_stack[k_beat_depth - 1];
     long long grown = k_live_block_bytes - m->bytes;
     if (grown < (long long)(1 << 19)) {
-        k_beat_depth--;
+        k_beat_set_depth(k_beat_depth - 1);
         k_chunkreg_migrate(k_beat_depth);
         k_viewreg_migrate(k_beat_depth);
         k_permreg_migrate(k_beat_depth);
         return r;
     }
     if (!k_is_heap(r.tag) && r.tag != K_THUNK) {
-        k_beat_depth--;
+        k_beat_set_depth(k_beat_depth - 1);
         k_beat_rewind(m);
         k_spare_release(2);
         if (K_COUNTING) k_stat_cohort_frees++;
@@ -2342,7 +2378,7 @@ KValue k_cohort_pop(KValue r) {
        twice on top of the garbage it frees */
     if ((long long)(2 * survivor) > grown || survivor > cap) {
         if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) k_stat_cohort_kept++;
-        k_beat_depth--;
+        k_beat_set_depth(k_beat_depth - 1);
         k_chunkreg_migrate(k_beat_depth);
         k_viewreg_migrate(k_beat_depth);
         k_permreg_migrate(k_beat_depth);
@@ -5755,7 +5791,7 @@ static KValue k_exec(KDesc* d) {
                 size_t nsz = k_copy_size(next, &k_beat_stack[k_beat_depth - 1]);
                 k_copy_size_budget = 0;
                 if (nsz > (size_t)(1 << 18)) {
-                    k_beat_depth--;
+                    k_beat_set_depth(k_beat_depth - 1);
                     k_chunkreg_migrate(k_beat_depth);
                     k_viewreg_migrate(k_beat_depth);
                     k_permreg_migrate(k_beat_depth);
@@ -7502,7 +7538,7 @@ static KValue k_utf8_finish(KValue bv, const char* origin) {
                 } else {
                     k_chunkreg_spill[d]++;
                 }
-                k_reg_any[d] |= K_REG_CHUNK;
+                k_reg_any_at(d) |= K_REG_CHUNK;
             }
             KStr* s = k_alloc(sizeof(KStr));
             s->len = (long)b->len;
