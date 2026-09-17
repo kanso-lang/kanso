@@ -5024,3 +5024,63 @@ frames of bucket zero, by name and cost, in one notice.
 
 - **DONE** the bucket is named, and the digest earned its place doing it.
 - **OPEN** the frame. One line in the next pair of sittings.
+
+## 2026-09-17 — the compile rows stop counting the line the run prints
+
+Five CI builds today, across trees whose compiler source is byte-identical:
+
+```
+  main            ae5183a8   35,965,150   128,204,911   128,340,030
+  kanso#1477      716fcfc4   35,965,150   128,204,911   128,340,030
+  kanso#1481      e005650f   35,965,150   128,204,911   128,340,030
+  kanso#1477      8e4e5665   35,965,137   128,204,898   128,340,017
+  kanso#1485      4c5b282b   35,965,137   128,204,898   128,340,017
+```
+
+Two faces, thirteen apart on every row, and `startup_instructions` reads
+4,838,323 on all five. Within a build the reading is exact — every job's
+`<row>_again` has matched its first. A re-run of main's own failed job, a
+second build of the same source, came back green on the other face, which is
+the control.
+
+kanso#1485 tried writing one face into the goldens and its own build measured
+the face it had just replaced. So a value cannot settle this.
+
+`kanso check` prints one line when it finishes and `kanso::main` inclusive
+counted it. Under it `LineWriter` runs `core::slice::memchr::memrchr` over the
+formatted bytes to find the last newline, and what that frame costs moves with
+the binary's layout. The start-up gate prints nothing, which is why it never
+drew.
+
+Not printing costs more than it saves, because both ways of asking change the
+process the gate measures:
+
+```
+  env -i, two variables, printing      36,817,649
+  env -i, three variables, printing    36,829,255   +11,606
+  env -i, three variables, KANSO_QUIET 36,828,139    -1,116
+  two variables, printing              36,817,388
+  two variables, --quiet               36,818,319      +931
+```
+
+The compiler asks getenv about seven thousand times and each ask walks the
+environment block, so a third variable costs ten times what the quiet saves;
+an argv entry costs about twice it. Both move the initial process layout,
+which is the same class of thing the thirteen is. kanso#1483 as built is a
+regression on its own row and does not land.
+
+What is left is the 2026-09-15 rule: a term that cannot be normalized is
+excluded and the exclusion is named in the golden's header. The three gates
+subtract `std::io::stdio::_print` inclusive from the anchored reading, on both
+of their measured runs. `_print` is reached once per run, from
+`kanso::driven`, its whole subtree is the line — 828 instructions on the
+profile this was read from, with `memrchr`'s 133 inside it — and nothing else
+in a `kanso check` prints to stdout, because diagnostics go to stderr.
+
+A spec reads the three gates off disk, finds the six readings that become a
+row, and fails on one that does not take the print off. Watched red with the
+entry gate's second reading put back the old way, which it named by line.
+
+- **DONE** built; the exclusion parses out of a real profile here (828).
+- **OPEN** whether both faces land on one row, which this branch's CI answers,
+  and the three rows it re-baselines once they do.
