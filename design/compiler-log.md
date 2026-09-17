@@ -4045,6 +4045,93 @@ main's 36,864,779, 131,837,650 and 131,978,823. Asking the pattern before the
 binder is what this branch's share of that is; the rest of the move against
 round three is kanso#1464 arriving underneath it.
 
+## 2026-09-17 — the thirteen is not compiler work
+
+**All three compile rows move by the same thirteen.** DONE. The module, entry
+and library rows have disagreed with their goldens by exactly thirteen
+instructions across several sittings, and until now each was read on its own.
+Put side by side on kanso#1463 they read 36,864,766 against 36,864,779,
+131,837,637 against 131,837,650, and 131,978,810 against 131,978,823. Three
+routes through the compiler, one of them 3.6 times the size of another, each
+off by thirteen. A term that costs the same thirteen on a 36.9-million-
+instruction compile and a 132.0-million-instruction compile does not scale with
+the input, so it is not the compiling. Every account that put the thirteen in
+the front end is dead: the lexer, inference, the emitter and a layout effect on
+hot code all grow with the source, and this does not.
+
+**The two sittings of one commit agreed.** DONE. kanso#1463's job was re-run on
+its own head to try for two profiles differing in nothing but the run. Both
+attempts read the same three numbers. So the row reproduces within a commit
+since kanso#1466 took mimalloc's randomised base address out, and the thirteen
+separates a sitting from the sitting the golden was taken on.
+
+**The same tree, twice, thirteen apart.** DONE. kanso#1462 was green on
+`fc3305f8`. Its branch was updated — protection wants the checks on an
+up-to-date head — and the identical work came back thirteen out on all three
+rows: 36,862,804 to 36,862,817, 131,830,523 to 131,830,536, 131,972,417 to
+131,972,430. What the update brought in was `hooks/post-merge`,
+`scripts/install_hooks.sh` and one test file, 132 lines, none of them compiled
+into the binary, `include_str!`'d, or read by a compile gate, with no golden
+moving. Same compiler, same corpus, same goldens, measured twice. This is the
+experiment the re-run above was trying to manufacture, and it arrived on its
+own.
+
+**Two re-runs of one head agreed, which the coin-flip reading does not
+predict.** OPEN. kanso#1462's failed jobs were re-run on `b8327112` and read
+the same three numbers again, +13 from its own earlier green sitting of
+`fc3305f8`. Nothing compiled into the binary differs between those two trees:
+there is no build.rs, and every `include_str!` in src/lib.rs names a file
+under lib/. So the value is a function of something that holds across two
+separately-allocated runners of one head and changes between two heads whose
+compiled input is identical. Two runs agreeing is a one-in-two event and
+proves nothing on its own, but it is enough to stop calling this a per-run
+flip until a sitting says otherwise. The host facts now printed beside the
+floor -- the kernel release and version, which no job has ever printed --
+are there because a per-host term is what this shape looks like and the CPU
+model has already been refuted.
+
+**Where it can be.** DONE. The three profiles the job already writes name the
+candidates by themselves: 588 frames carry the same self cost across all three
+workloads, 556,052 instructions in all. Restricted to frames the row can see —
+reachable from `kanso::main`, which is the figure the gates read — 38 remain,
+51,269 instructions, and not one of them is compiler work. The largest block is
+mimalloc's scan of the environment for its own options, 49,449 instructions.
+`getauxval`, called twice from std's stack-overflow handler at 146 each, the
+`sbrk`/`brk`/`__glibc_morecore` trio, `sigaltstack`, the argv walk and the
+stdout flush make up the rest. A near-empty compile carries 36 of the 38 at
+byte-identical cost, which is what a per-process term looks like.
+
+**What the environment actually is.** DONE. The gates run under
+`env -i PATH=... GLIBC_TUNABLES=...` and believe they have pinned it. The child
+sees seven variables: valgrind adds `LD_PRELOAD`, `LD_LIBRARY_PATH`,
+`GLIBCPP_FORCE_NEW`, `GLIBCXX_FORCE_NEW` and `PWD` on top of the two. On one
+runner image those are fixed, so this is not shown to be the thirteen — it is a
+normalisation the gate claims and does not have, and mimalloc's scan of it is
+the single largest per-process term inside the row.
+
+**Ruled out by measurement.** DONE. Visible CPU count does not move the row:
+four runs of `kanso check compile_corpus` on this box, bare, under `taskset -c
+0` and under `taskset -c 0,1`, all read 37,285,436. The runner's CPU model was
+refuted earlier by two sittings on different models reading the same number and
+two on the same model reading different ones.
+
+**The instrument.** DONE. `scripts/gates/per_process_floor.sh` prints that
+floor — the frames whose self cost held across every workload given, and their
+sum — derived from the profiles rather than from a list, so a frame that
+appears or disappears is reported. It runs in the cost-goldens job, gates
+nothing and pins nothing. Two jobs whose `per_process_floor=` lines differ by
+thirteen name the frame between them, which turns a hunt nobody can reproduce
+on demand into a comparison of two job logs. `scripts/gates/callgrind_self.sh`
+is the reader under it: `callgrind_annotate`'s `--threshold` is a percentage
+and stops once the running total rounds to the figure asked for, so the tail it
+drops is where a thirteen-instruction frame lives.
+
+**Still open.** OPEN. Which of the 38 carries the thirteen. The next sitting
+that reads the other value answers it, and the answer arrives in a job log
+rather than in an argument. kanso#1463 stays blocked until then: it is the
+change that would pin a disagreeing row as a second value, which is what the
+rule it implements forbids.
+
 ## 2026-09-17 — the wall is bind with a discarded value, and the one thing that made it more than that is gone
 
 Clay, reading a book sample: "wasn't this convention always a mistake? we
