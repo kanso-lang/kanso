@@ -4811,6 +4811,14 @@ frame. (`kanso::main` moved 14,177 the other way on that pair, which is the
 path-length term this file's header already carries at about 160 instructions a
 character; a different effect, an order of magnitude larger, and not this one.)
 
+**And the control holds.** Run 35204603108 was re-run on one commit,
+`ef0a028e`: two attempts, two CPU models (25/1 and 25/17), and every printed
+quantity byte-identical — the three rows, the floor at 558338/604, all
+thirty-two digest buckets, and all forty frames of bucket zero including
+`memrchr`. So within a commit the measurement reproduces exactly; the thirteen
+appears only BETWEEN commits, which is where the binary can move under a frame
+whose section sizes do not.
+
 - **DONE** the frame is named, with the digest diff that names it, and its
   cost is shown to follow the printed text.
 - **OPEN** taking the print out of the row. Three welfare-weighted rows
