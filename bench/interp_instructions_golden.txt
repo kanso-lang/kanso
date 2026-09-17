@@ -62,5 +62,16 @@
 # 2026-09-17, kanso#1462, same sitting. A FALL of 97,472 (-0.0045%), and this
 # one is the change: the interpreted run is what this branch touches, and the
 # fixed-seed hashing is what it does. The objective does not weigh this vein.
-interp_instructions=2178559085
+#
+# 2026-09-17, kanso#1468 on the tree merged with kanso#1462. CI reads
+# 2,178,796,919 against main's 2,178,559,085, a RISE of 237,834 -- 0.0109%.
+# LAYOUT, and the profile says so rather than the reasoning alone. `kanso run
+# --interp` returns from run_interpreted before codegen is reached
+# (src/main.rs, the early return on both the run and play paths), so nothing
+# this branch edits executes on this corpus. A callgrind profile of the
+# corpus on the branch carries exactly one codegen frame, an instantiated
+# prune_unnamed closure worth 284 instructions in the whole run; the other
+# 237,550 are the compiler's bytes moving under an interpreter that never
+# enters them. The objective does not weigh this vein.
+interp_instructions=2178796919
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
