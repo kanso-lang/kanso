@@ -84,8 +84,12 @@ lower_g = ["compile_instructions" "compile_allocs"]
 # down: a rise printed as drift and counted toward neither side of the
 # pure-regression rule. Running the gate on kanso#1338's own diff is what
 # surfaced it, and tests/every_compile_vein_row_has_a_direction.rs derives the
-# veins off disk so a fourth compile path cannot open one blind.
-lower_gg = ["entry_instructions" "library_instructions"]
+# veins off disk so a fourth compile path cannot open one blind. It caught the
+# fourth on the day it opened: `startup_instructions`, added 2026-09-16, named
+# here in the same change that mints it rather than a round later.
+lower_gh = ["library_instructions" "startup_instructions"]
+
+lower_gg = text/concat ["entry_instructions"] lower_gh
 
 lower_gs = text/concat lower_g lower_gg
 
@@ -247,6 +251,14 @@ bench_library = [["bench/library_instructions_golden.txt" ""]]
 
 bench_traffic = [["bench/compile_allocs_golden.txt" ""]]
 
+# Start-up, added with its vein on 2026-09-16. It is the only row here that
+# sees codegen: the three compile rows run `kanso check`, which stops before
+# it. Listed in the commit that opens the vein, for the reason the library row
+# gives — the spec reads bench/ off disk and keys on the word `golden`, so it
+# goes red the moment the file exists. No prefix: `startup_instructions`
+# collides with nothing.
+bench_startup = [["bench/startup_instructions_golden.txt" ""]]
+
 bench_pend = [["bench/cost_golden_pend.txt" "pend_"]]
 
 # The three RUNTIME veins, none of which this gate could read. `work_` and
@@ -308,7 +320,9 @@ bench_ab = text/concat bench_a (text/concat bench_encode bench_b)
 
 bench_cd = text/concat bench_c (text/concat bench_compile bench_modules)
 
-bench_libcheck = text/concat bench_library bench_traffic
+bench_traffic_up = text/concat bench_traffic bench_startup
+
+bench_libcheck = text/concat bench_library bench_traffic_up
 
 bench_compiled = text/concat bench_ir (text/concat bench_entry bench_libcheck)
 

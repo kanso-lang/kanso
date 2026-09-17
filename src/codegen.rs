@@ -3280,6 +3280,22 @@ impl<'a> Backend<'a> {
             .map(|n| call_twin(n, self.convention))
             .collect();
         let declares: String = {
+            // BOTH SIDES OF THIS BUILT THE SAME INDEX. kanso#1461 landed one
+            // inline, joining DECLARES’s non-declare lines and scanning the
+            // three haystacks in place; this branch had already factored the
+            // scan into `called_symbols` and cached the DECLARES half in a
+            // `OnceLock`, so `body_calls` is computed once above and reused by
+            // the call-twin filter rather than rebuilt here. The sets are the
+            // same for every query the emitter makes: a symbol from a
+            // `declare` line holds no whitespace and no `(`, so bounding the
+            // span at the first `(` and bounding it at the first `(` or space
+            // cannot disagree about one.
+            //
+            // `crate::hash::Set` and not std’s, which kanso#1461’s comment
+            // gives the reason for and `tests/the_compile_path_hashes_with_a
+            // _fixed_seed.rs` pins: std seeds per process, and a randomly
+            // seeded table makes this count differ between two runs of one
+            // binary, which the compile rows read as a reproduction failure.
             let twin_calls = called_symbols(&call_twins);
             let referenced = |sym: &str| {
                 body_calls.contains(sym)
