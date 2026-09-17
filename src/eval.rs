@@ -1,10 +1,11 @@
 use crate::ast::*;
 use crate::diag::{article, Span};
+use crate::hash::{Map, Set};
 use crate::name::Name;
 use num_bigint::BigInt;
 use num_traits::{ToPrimitive, Zero};
 use std::cell::{Cell, RefCell};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::rc::Rc;
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -492,8 +493,8 @@ thread_local! {
     /// nothing else: the compiler's own `entry` record, which no module
     /// declares, stays bare on every engine. Set when an interpreter is built
     /// over a program, which is how the page's host learns it too.
-    static ROOT: std::cell::RefCell<(String, std::collections::HashSet<String>)> =
-        std::cell::RefCell::new((String::new(), std::collections::HashSet::new()));
+    static ROOT: std::cell::RefCell<(String, Set<String>)> =
+        std::cell::RefCell::new((String::new(), Set::default()));
 }
 
 pub fn set_root(program: &Program) {
@@ -679,14 +680,14 @@ thread_local! {
 #[derive(Default)]
 struct Kids {
     next: i64,
-    running: std::collections::HashMap<i64, std::process::Child>,
+    running: Map<i64, std::process::Child>,
 }
 
 #[derive(Default)]
 struct Sockets {
     next: i64,
-    listeners: std::collections::HashMap<i64, std::net::TcpListener>,
-    conns: std::collections::HashMap<i64, std::net::TcpStream>,
+    listeners: Map<i64, std::net::TcpListener>,
+    conns: Map<i64, std::net::TcpStream>,
 }
 
 impl Sockets {
@@ -1019,7 +1020,7 @@ pub struct ScriptedExecutor {
     pub transcript: Vec<String>,
     pub script_args: Vec<String>,
     pub script_stdin: String,
-    pub files: std::collections::HashMap<String, String>,
+    pub files: Map<String, String>,
     pub rng: Rng,
 }
 
@@ -1105,8 +1106,8 @@ impl Executor for ScriptedExecutor {
 }
 
 pub struct Interp<'a> {
-    fns: HashMap<&'a str, Vec<&'a FnDecl>>,
-    types: HashMap<&'a str, &'a TypeDecl>,
+    fns: Map<&'a str, Vec<&'a FnDecl>>,
+    types: Map<&'a str, &'a TypeDecl>,
     entry_decl: TypeDecl,
     demand: crate::demand::DemandInfo<'a>,
     pub thunk_stats: ThunkStats,
@@ -1117,7 +1118,7 @@ pub struct Interp<'a> {
     /// One cell per self-referential constant. A mention that arrives while
     /// the constant is still being computed gets the unforced cell, which is
     /// how a value that names itself gets a value at all.
-    knots: RefCell<HashMap<String, Rc<RefCell<ThunkState>>>>,
+    knots: RefCell<Map<String, Rc<RefCell<ThunkState>>>>,
 }
 
 /// Engine-shared semantic counters: evaluation counts are semantics, so
@@ -1139,7 +1140,7 @@ impl ThunkStats {
 impl<'a> Interp<'a> {
     pub fn new(program: &'a Program) -> Self {
         set_root(program);
-        let mut fns: HashMap<&str, Vec<&FnDecl>> = HashMap::new();
+        let mut fns: Map<&str, Vec<&FnDecl>> = Map::default();
         for decl in &program.fns {
             fns.entry(&decl.name).or_default().push(decl);
         }
@@ -1180,7 +1181,7 @@ impl<'a> Interp<'a> {
             thunk_stats: ThunkStats::default(),
             depth: Cell::new(0),
             stack_hint: crate::stack_hint(program),
-            knots: RefCell::new(HashMap::new()),
+            knots: RefCell::new(Map::default()),
         }
     }
 
@@ -3651,8 +3652,8 @@ pub fn routes_to_arms(value: &Value) -> bool {
 }
 
 thread_local! {
-    static TYPESETS: std::cell::RefCell<std::collections::HashMap<String, Vec<String>>> =
-        std::cell::RefCell::new(std::collections::HashMap::new());
+    static TYPESETS: std::cell::RefCell<Map<String, Vec<String>>> =
+        std::cell::RefCell::new(Map::default());
 }
 
 /// The typeset ladder rung: below every concrete type, above the bare
@@ -4010,12 +4011,12 @@ fn opaque_to_equality(v: &Value) -> bool {
 }
 
 fn values_equal(a: &Value, b: &Value, cells: &Cells<'_>) -> Result<bool, RuntimeError> {
-    values_equal_seen(a, b, &mut std::collections::HashSet::new(), cells)
+    values_equal_seen(a, b, &mut Set::default(), cells)
 }
 
 /// Two cyclic graphs would compare forever, so a pair of cells is assumed
 /// equal once seen and any contradiction still returns false.
-type Seen = std::collections::HashSet<(usize, usize)>;
+type Seen = Set<(usize, usize)>;
 
 /// How a comparison reaches a cell. `id` names one — a stable identity that
 /// survives forcing, which is what makes arriving twice recognisable — and
@@ -4192,7 +4193,7 @@ pub fn sub_base(value: Value) -> Value {
 }
 
 pub fn render(interp: &Interp, value: &Value, quote_strings: bool) -> String {
-    render_seen(Some(interp), value, quote_strings, &mut std::collections::HashSet::new())
+    render_seen(Some(interp), value, quote_strings, &mut Set::default())
 }
 
 /// Rendering for the three free functions that name an operand in a
@@ -4206,7 +4207,7 @@ pub fn render(interp: &Interp, value: &Value, quote_strings: bool) -> String {
 /// already demanded. A cell reaching here would print `<thunk>`, which is the
 /// old word and a signal that this reasoning is wrong somewhere.
 pub fn render_demanded(value: &Value, quote_strings: bool) -> String {
-    render_seen(None, value, quote_strings, &mut std::collections::HashSet::new())
+    render_seen(None, value, quote_strings, &mut Set::default())
 }
 
 /// A cycle would render forever, so re-entering a cell on the current path
@@ -4215,7 +4216,7 @@ fn render_seen(
     interp: Option<&Interp>,
     value: &Value,
     quote_strings: bool,
-    seen: &mut std::collections::HashSet<usize>,
+    seen: &mut Set<usize>,
 ) -> String {
     match value {
         // a subtype renders as its base until a user arm claims it

@@ -548,6 +548,14 @@
 # (kanso#1466). The merge brought main's value in; this writes the branch's
 # back, and the two runs agree to the instruction.
 #
+# 2026-09-16 (the interpreter hashes with a fixed seed; kanso#1462):
+# entry_instructions 131,884,284 -> 131,881,410, a FALL of 2,874 (-0.0022%). A
+# layout move, like the module row beside it.
+#
+# 2026-09-17, kanso#1462, round three. Read on the merged head, where the
+# allocator no longer picks a random base address (kanso#1466). The
+# interpreter's fixed-seed hashing is what moves it, and the interp row that
+# had been six instructions off its golden every other run is now on it.
 # 2026-09-16 (the declares scan asks once; kanso#1461): entry_instructions
 # 131,884,284 -> 131,883,938, a FALL of 346 (-0.0003%). A layout move, like the
 # module row beside it: `kanso check` never reaches the emitter this change
@@ -603,6 +611,9 @@
 # before codegen and neither touches a pass it runs -- so both are the layout
 # move CLAUDE.md's own note on this row describes, and this is the reading
 # that matters rather than either projection.
+# 2026-09-17, kanso#1462, round four. Read on the head merged with
+# kanso#1464, against main's 36,864,779 / 131,837,650 / 131,978,823. The
+# fixed-seed hashing this branch puts on the compile path is the fall.
 # 2026-09-17, kanso#1461, round four. Read on the head merged with
 # kanso#1464, against main's 36,864,779 / 131,837,650 / 131,978,823. The
 # declares scan this branch removes is what the fall is.
@@ -616,6 +627,12 @@
 # main's, carried forward so the gate has one value to fail against rather than
 # none; the merged sitting is CI's to take.
 #
+# 2026-09-17, kanso#1462 merged with kanso#1459, CI's sitting. A FALL of
+# 6,729 (-0.0052%). The value the merge carried forward was kanso#1459's, and
+# this is the merged tree's own reading. `kanso check` does not run the
+# interpreter, so the hashing this branch changes is not on this corpus: the
+# move is the layout kind the header above describes, src/eval.rs being the
+# compiler's own bytes.
 # 2026-09-17, kanso#1461 merged with kanso#1459, CI's sitting. A FALL of
 # 9,715 (-0.0074%). The value the merge carried forward was kanso#1459's, and
 # this is the merged tree's own reading. `kanso check` does not run the
@@ -650,6 +667,11 @@
 # calls are read once from an index rather than re-derived per group, and
 # `kanso check` runs the pass that asks, so this is work removed from the corpus
 # rather than layout.
+# 2026-09-17, kanso#1462 merged with kanso#1472, CI's sitting on the merged tree.
+# The value the merge carried forward was main's; this is the merged tree's own
+# reading. `kanso check` does not run the interpreter, so the hashing this branch
+# changes is not on this corpus: the move is the layout kind the header above
+# describes, src/eval.rs being the compiler's own bytes.
 # 2026-09-17, kanso#1461 merged with kanso#1472, CI's sitting on the merged tree.
 # The value the merge carried forward was main's; this is the merged tree's own
 # reading. `kanso check` does not run the interpreter, so the start-up work this
@@ -690,6 +712,8 @@
 # 2026-09-17, kanso#1468, same sitting. CI reads 127,923,542 against 128,204,898,
 # a FALL of 281,356 (-0.219%), the same layout move as the module row above and
 # in the same proportion.
+# 2026-09-17, kanso#1462, same sitting. A RISE of 13,863 (+0.011%), the same
+# layout move as the module row.
 # WHAT THIS ROW LEAVES OUT, and why it is left out rather than normalized.
 #
 # `std::io::stdio::_print` inclusive is subtracted from the anchored reading.
@@ -747,7 +771,24 @@
 # the compiler: since this branch measured, the only thing that landed
 # under it is a row written into a golden, so the value below is this
 # branch's own sitting and it still stands.
-entry_instructions=127962075
+# 2026-09-17 (kanso#1462): entry_instructions 128,204,133 -> 128,217,983, a RISE
+# of 13,850 (+0.0108%). Same sitting as the compile row.
+#
+# 2026-09-17, merged with main. Both branches moved this row on their own
+# base, so the merged tree is reading neither number. The value below is
+# main's, carried forward so the gate has one value to fail against
+# rather than none; the merged sitting is CI's to take.
+#
+# 2026-09-17, merged with main. Both branches moved this row on their own
+# base, so the merged tree is reading neither number. The value below is
+# main's, carried forward so the gate has one value to fail against
+# rather than none; the merged sitting is CI's to take.
+#
+# 2026-09-17, merged with main. Both branches moved this row on their own
+# base, so the merged tree is reading neither number. The value below is
+# main's, carried forward so the gate has one value to fail against
+# rather than none; the merged sitting is CI's to take.
+entry_instructions=128217983
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.
