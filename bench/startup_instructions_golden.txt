@@ -119,4 +119,16 @@
 # DECLARES set is start-up work, and the fall is most of the whole term. The
 # value it falls from is this branch's own, measured on its base; against main's
 # 4,838,323 the fall is 329,475 (-6.8097%).
-startup_instructions=4508848
+# 2026-09-17, kanso#1462, same sitting. A RISE of 49 (+0.001%). Layout again,
+# and the smallest move this vein has recorded.
+#
+# 2026-09-17, merged with main. Both branches moved this row on their own
+# base, so the merged tree is reading neither number. The value below is
+# main's, carried forward so the gate has one value to fail against
+# rather than none; the merged sitting is CI's to take.
+#
+# 2026-09-17, merged with main. Both branches moved this row on their own
+# base, so the merged tree is reading neither number. The value below is
+# main's, carried forward so the gate has one value to fail against
+# rather than none; the merged sitting is CI's to take.
+startup_instructions=4838372

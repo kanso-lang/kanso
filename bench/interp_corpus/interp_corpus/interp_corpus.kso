@@ -1,0 +1,35 @@
+import "std/json"
+import "std/list"
+import "std/text"
+
+pub play = print "interp {rounds 6}"
+
+fn rounds n
+  source = document 220
+  total source n 0
+
+fn total _ 0 acc
+  acc
+
+fn total source n acc
+  doc = json/decode source
+  back = json/encode doc
+  total source (n - 1) (acc + length back)
+
+fn document n
+  "[{text/join (list/to_list (list/map (span n) row)) ","}]"
+
+fn row i
+  "\{\"key\":\"row-{i}\",\"n\":{i},\"on\":true,\"half\":{i / 2}}"
+
+fn span n
+  climbed 1 n []
+
+fn climbed i stop acc
+  reached i stop acc (i > stop)
+
+fn reached _ _ acc true
+  acc
+
+fn reached i stop acc false
+  climbed (i + 1) stop (push acc i)
