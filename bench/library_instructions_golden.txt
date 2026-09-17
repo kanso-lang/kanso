@@ -697,7 +697,45 @@
 #
 # 2026-09-17, kanso#1462, same sitting. A RISE of 12,926 (+0.010%), the same
 # layout move as the other two.
-library_instructions=128352943
+# WHAT THIS ROW LEAVES OUT, and why it is left out rather than normalized.
+#
+# `std::io::stdio::_print` inclusive is subtracted from the anchored reading.
+# `kanso check` prints one line when it finishes, `kanso::main` inclusive
+# counted it, and under it LineWriter runs `core::slice::memchr::memrchr` over
+# the formatted bytes to find the last newline. What that frame costs moves
+# with the binary's layout. Five CI builds on 2026-09-17, across trees whose
+# compiler source was identical, gave two faces thirteen apart on this row and
+# on the entry and library rows -- while start-up, whose gate prints nothing,
+# gave one value on all five.
+#
+# Not printing was tried and costs more than it saves, because both ways of
+# asking change the process the gate measures. On one box,
+# `kanso check compile_corpus`:
+#
+#   env -i, two variables, printing      36,817,649
+#   env -i, three variables, printing    36,829,255   +11,606
+#   env -i, three variables, KANSO_QUIET 36,828,139    -1,116
+#   two variables, printing              36,817,388
+#   two variables, --quiet               36,818,319      +931
+#
+# The compiler asks getenv about seven thousand times and each ask walks the
+# environment block, so a third variable costs ten times what the quiet saves;
+# an argv entry costs about twice it. Both move the initial process layout,
+# which is the same class of thing the thirteen is.
+#
+# So the term is excluded, per the 2026-09-15 rule. `_print` is reached once
+# per run, from `kanso::driven`, and its whole subtree is the line -- 828
+# instructions on the profile this was read from, with `memrchr` inside it.
+# Nothing else in a `kanso check` prints to stdout; diagnostics go to stderr.
+#
+# 2026-09-17, kanso#1487's sitting, printed line excluded. The two faces were
+# 128,340,017 and 128,340,030; the excluded subtree is 756 and 769.
+#
+# 2026-09-17, merged with main. Both branches moved this row on their own
+# base, so the merged tree is reading neither number. The value below is
+# main's, carried forward so the gate has one value to fail against
+# rather than none; the merged sitting is CI's to take.
+library_instructions=128339261
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.
