@@ -103,5 +103,11 @@
 # source changes across src/codegen.rs, src/linear.rs and src/beat.rs, where
 # every earlier reading on this vein came from a single file. The objective
 # does not weigh this vein.
-interp_instructions=2182341803
+#
+# 2026-09-17, kanso#1480 on kanso#1478's tree. CI reads 2,182,730,567 against
+# its base's 2,182,341,803, a rise of 388,764 -- 0.018%. Layout: the gate
+# anchors at `run_interpreted_on_stack` and the interpreter runs none of
+# what this branch edits. A tenth the size of its base's move on this vein,
+# for a change a tenth the size.
+interp_instructions=2182730567
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

@@ -6381,3 +6381,48 @@ listings were truncated differently is not a difference, and the check that
 caught it — `nm` on both binaries — took one command.
 
 - **DONE** the rows are CI's, and the two that rose are attributed.
+
+## 2026-09-17 — kanso#1480's rows, and the saving no term can see
+
+CI's sitting on b6c09c17, against its base kanso#1478:
+
+    compile_instructions    35,868,792 -> 36,015,420      +146,628   +0.409%
+    entry_instructions     127,871,094 -> 128,377,413      +506,319   +0.396%
+    library_instructions   128,008,929 -> 128,513,972      +505,043   +0.395%
+    startup_instructions     5,082,497 -> 5,145,322         +62,825   +1.24%
+    interp_instructions  2,182,341,803 -> 2,182,730,567    +388,764   +0.018%
+
+**The bisection predicted the first row and CI agrees to 1,156.** Split on the
+runner's compiler, 105 added lines in the linearity analysis cost 357 and 74
+lines rewriting two private emitter functions cost 145,472; CI reads 146,628.
+Those functions are reachable only from `emit_ir`, which `kanso check` never
+calls.
+
+**Welfare falls 0.01, and the reason is not that the change is bad.** What the
+branch does is build one linearity `Analysis` where three were built, which
+takes 51,082,187 instructions off a `kanso build` — 7.77% — with the emitted IR
+byte-identical. Every counter the objective weighs is blind to that:
+
+- The three compile rows run `kanso check`, which stops before codegen.
+- `startup_instructions` runs the emitter, but on a one-line program.
+- `codegen_instructions_dev` counts the CHILD tree and **excludes kanso's own
+  process** under the 2026-09-15 rule. kanso's own process is exactly where
+  this saving is.
+- `emit_instructions`, anchored at `codegen::emit_ir` inclusive, is the one row
+  that can see it — and the welfare split does not weigh it.
+
+**So the ruled term is half-measured.** The 2026-09-16 gavel put "dev-tier
+codegen (`-O0`)" on the development side. The exclusion then split what a dev
+build costs into two rows — the child tree under clang and the linker, and
+kanso's own emit — and weighing the first alone leaves half of what the gavel
+named outside the score. That is not a preference to argue about; it is the
+list not yet fully implemented.
+
+`emit_instructions` joins the development side on kanso#1491, which is where
+the split lives. This branch waits for it rather than asking for the floor to
+move: a floor lowered to admit a change whose gain the model cannot see is a
+statement that the model is right and the change is bad, and neither half of
+that is what was measured here.
+
+- **DONE** the rows are CI's, and the first is the bisection confirmed.
+- **BLOCKED** on kanso#1491 weighing `emit_instructions`.

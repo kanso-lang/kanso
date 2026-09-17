@@ -840,7 +840,10 @@
 #
 # 2026-09-17, kanso#1478 as the one tip, on main 298636b7. CI reads
 # 128,008,929 against main's 128,352,174, a fall of 343,245 -- 0.267%. Work.
-library_instructions=128008929
+#
+# 2026-09-17, kanso#1480 on kanso#1478's tree. CI reads 128,513,972 against
+# its base's 128,008,929, a RISE of 505,043 -- 0.395%. Against main, +161,798.
+library_instructions=128513972
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

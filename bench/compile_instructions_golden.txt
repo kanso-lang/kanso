@@ -2031,7 +2031,19 @@
 # WORK: the beat and linearity indexes run inside `kanso check`, which is
 # what this corpus measures. The round hundred thousand is a coincidence of
 # the sitting and not a rounded figure.
-compile_instructions=35868792
+#
+# 2026-09-17, kanso#1480 on kanso#1478's tree. CI reads 36,015,420 against its
+# base's 35,868,792, a RISE of 146,628 -- 0.409%. Against main it is +46,628.
+# #
+# THE NUMBER WAS BISECTED BEFORE CI CONFIRMED IT, and the two agree to 1,156.
+# Split on the runner's compiler, 105 added lines in the linearity analysis
+# cost 357 on this row and 74 lines rewriting two private emitter functions
+# cost 145,472. Those functions are reachable only from `emit_ir`, which
+# `kanso check` never calls, so the rise is the binary moving under a
+# rewrite of code this corpus does not run. The 2026-09-04 ladder bounded
+# only ADDITIONS of unreachable code (span 1,028 over seven binaries); a
+# rewrite re-decides what sits around it, and nothing had measured that.
+compile_instructions=36015420
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

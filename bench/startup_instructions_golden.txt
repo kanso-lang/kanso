@@ -212,4 +212,9 @@
 # one-line program is the corpus with nothing to spread it over, which is
 # what this vein is for. kanso#1484, stacked on kanso#1468, writes the
 # DECLARES set down as a sorted constant and takes the larger part back.
-startup_instructions=5082497
+#
+# 2026-09-17, kanso#1480 on kanso#1478's tree. CI reads 5,145,322 against its
+# base's 5,082,497, a rise of 62,825 -- 1.24%. `kanso play` DOES run the
+# emitter, so unlike the three rows above this one has the rewrite's own code
+# executing in it as well as under it.
+startup_instructions=5145322

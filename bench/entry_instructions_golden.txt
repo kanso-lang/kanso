@@ -817,7 +817,12 @@
 # 2026-09-17, kanso#1478 as the one tip, on main 298636b7. CI reads
 # 127,871,094 against main's 128,217,983, a fall of 346,889 -- 0.270%. Work,
 # as the module row above it: the entry route runs the same analyses.
-entry_instructions=127871094
+#
+# 2026-09-17, kanso#1480 on kanso#1478's tree. CI reads 128,377,413 against
+# its base's 127,871,094, a RISE of 506,319 -- 0.396%. Against main, +159,430.
+# The same rewrite as the module row above, on the route that loads ten
+# imports rather than four.
+entry_instructions=128377413
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.
