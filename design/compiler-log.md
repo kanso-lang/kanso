@@ -8002,3 +8002,436 @@ without asking. Both stand, the later one narrower.
 - **DONE** all 73 rulings probed — 50 under the `— gavel:` spelling, 23 under
   `GAVEL:` and its variants. Nothing unbuilt in either set.
 - **OPEN** the two welfare.kso sentences, which are cloud's file.
+## 2026-09-17 — the 2026-08-29 sweep runs, and one ruling lost its purpose to a later build
+
+Closes the OPEN item above. The "Ruled, unbuilt" preamble has called its list
+a FLOOR since 2026-09-09 because the rest of the 2026-08-29 sitting was never
+audited, and the section went empty an hour ago, which is the state in which a
+floor is easiest to read as a total.
+
+**What the sitting holds.** Twenty-six entries carry that date in the archive.
+Six are bounces, corrections or infrastructure notes; twenty are rulings.
+Probed one at a time against a release build of `5e256ce0` rather than read off
+their own text:
+
+| ruling | found |
+|---|---|
+| `--explain-copies` declined | declined; nothing owed |
+| the three words replace the no-bind surface | superseded by the effect gavel |
+| the one-keyword world declined | declined |
+| effects are types, the words are the only doors | built, kanso#1372 |
+| `read_file` is text, `read_bytes` is bytes | built; `read_bytes` in check, codegen, the wasm imports |
+| the chain line keeps its dot | built, and respelled since by the fused `.>` `.!` `.?` |
+| an err has readers | built; `ERR_READERS` in ast.rs, `an_err_has_readers` in micro |
+| the drop question closes | declined; no rule was minted, so none is owed |
+| a qualified name is its module's declaration | built |
+| records print qualified, everywhere | built; `entry_file.rs` carries the citation |
+| an instruction is a cost, whoever put it there | in force; the attribution ritual is the floor's `why` |
+| the backends build the partial over a value | built on both; `partial.rs`, `wasm_engine.rs`, `wasm_rt.rs` |
+| block-born is the whole cohort | **built, then narrowed; see below** |
+| the ambiguous-bare-call refusal is final | stands as built |
+| arms travel with the type, under the ownership rule | built |
+| no `first coll n`; `take` is the answer | built; `pub fn first coll`, one arity |
+| std ships inside the binary | built; `include_str!` in lib.rs |
+| the frame guard's standing offer closes | stands as built |
+| saturate each counter, then average | built; `welfare_saturates_each_counter` cites the words |
+| bring binary size back down | a directive, softened the same day |
+
+Two of those were probed rather than grepped because a grep would have
+answered the wrong question. `a qualified name is its module's declaration`
+asked for a red spec against one measured hazard: a dependency that declares
+one arm of a name while importing another module's arm of the same name. Built
+as a hako pair, `dep` declaring `pub fn join x` and importing `std/text`, the
+bare call inside dep at text's arity says `no 2-argument arm of `join` (arms
+take 1)`. The clone does not enroll. And `arms travel with the type` needed the
+group's real name: an arm written `render m:money` does nothing, because
+interpolation dispatches `to_string`. Spelled `to_string`, money's arm prints
+`$250` in a module that imports money and declares no interface, and a
+`to_string s:string` arm beside it is refused at the declaration with
+`error[ownership]`. Both halves hold.
+
+**The one that moved.** `block-born is the whole cohort` was built on
+2026-09-09 as kanso#1359 with all four of the shapes the gavel names: an
+alias, a field of a born node, an element of a born list, and a node an `if`
+chose. On 2026-09-16 the build-hole gavel landed, and two of the four went.
+The golden that pins the rule says so in its own header — *what the proof
+declines: a field built with a value, a record an `if` chose, an element of a
+list* — where seven days earlier the same file's header had named all four as
+admitted.
+
+The reason is good and the hole entry states it: a hole is filled exactly
+once, and a name whose birth is `Either` cannot be shown to fill one. Nothing
+about that reasoning is wrong.
+
+What went with the two shapes is the cohort gavel's stated purpose. Its words
+were *cyclic structures sized by data (a graph parsed from input, N linked
+nodes from a map) gain a spelling*. Run against a build of main today, that
+spelling is gone in every direction the tree offers. An indexed element cannot
+fill a hole: `xs[1]!` then a write is refused with the once-ness sentence. A
+field built with a value cannot be written at all since the hole gavel, so the
+pre-hole idiom is not a fallback. And birth does not flow through a call, which
+the 2026-09-09 entry says plainly and files as the implementer's next
+widening. N nodes cannot carry N names, so a data-sized cycle has nowhere left
+to go.
+
+**Nobody recorded the trade.** The narrowing appears twice. The hole entry
+lists it as one of seven refusals, with its fixtures. A merge-conflict
+paragraph a day later says which lines of the golden were deleted and why.
+Neither says an earlier ruling's reason for existing had been given up, and
+the two rulings were never set beside each other. Clay's hole gavel is silent
+on chosen records and list elements — it rules `_` against `none` and
+fill-exactly-once, and ends *Implementation is the implementer's* — so the
+narrowing was a build decision, not a ruling that outranks the cohort gavel.
+
+**So one row goes back on the list**, for the part of the cohort gavel that is
+no longer built rather than for the gavel entire: the data-sized cycle, whose
+route is the widening cloud has already named as its own. Birth through a call
+would restore it if a call returning one record resolves to one birth, and
+that is a thing to measure rather than a thing to assume; the row says so. The
+alias and the field of a born node stay built and are not part of the row.
+
+- **DONE** the sitting swept, twenty rulings probed, nineteen built or
+  declined.
+- **OPEN** the other eighteen sittings. Counted off the tree the same
+  afternoon, the live log and the archive carry 56 entries headed `gavel:`;
+  seventeen are 2026-08-29 and the other 39 are spread over 18 further dates,
+  none swept. The preamble's word FLOOR stays for that reason — auditing the
+  largest sitting does not make the list a total, and the first draft of this
+  entry said it did.
+- **OPEN** whether birth through a call actually restores the data-sized
+  cycle under the once-ness proof, or whether the cohort gavel's purpose needs
+  a spelling the hole discipline can admit. Cloud's, and the row carries it.
+- **OPEN** `tests/partial.rs`'s module header still reads *the two backends
+  decline it out loud*, which the 2026-08-29 partial gavel retired and the
+  file's own test at line 70 refutes by name. A stale comment rather than a
+  behavior, and cloud's file to fix.
+
+## 2026-09-17 — the six instructions, and three explanations published before one held
+
+Found by kanso#1499 going red on a diff of two markdown files:
+`interp_instructions` counted 2,178,502,272 against a golden of
+2,178,502,266.
+
+**Cloud answered the instrument question in kanso#1492 while this was being
+written, and its answer supersedes most of what is below.** The live log's
+entry "seven silicons, one recorded block, and a reader that was never
+called" and `docs/compiler.html` §77 carry it: the gates printed a CPU family
+and model and stopped, a reader for the whole 123-row feature block existed
+and had nothing recorded to compare against, and across ninety-odd job logs
+there are seven distinct blocks differing in 57 rows — three basic families,
+level-three cache from 32 MB to 480 MB, and `Fast_Unaligned_Load`,
+`Prefer_No_AVX512` and `Prefer_PMINUB_for_stringop` flipping between them.
+That is a real instrument where the family-and-model string was a guess, and
+on these two jobs it rules the silicon out: the same block, all 123 rows.
+
+What this entry keeps is the part that is its own, which is the shape of
+getting it wrong three times in an afternoon.
+
+**First: the host moved it.** From two job conclusions — main's run passing
+step 27 where kanso#1499's failed. The gate prints `interp_binary sha256=`
+on every run and the two differ, which says the artifact moved and says
+nothing about the box.
+
+**Second: the release build does not repeat.** From those two checksums. The
+source is identical — two markdown files, every `include_str!` in `src/` a
+`.kso` or `runtime.c`, `Cargo.lock` tracked, no `build.rs`, nothing embedding
+a commit — so two builds of one tree gave two files. What that misses is the
+converse, which kanso#1492 states plainly: a container builds the same tree
+three times and gets one binary each time, so the build is deterministic on a
+machine and the file varies between machines, and a checksum that differs is
+not evidence that the executed code moved.
+
+**Third, and the one worth keeping: the other counters do not carry the
+exposure.** Both jobs dump every `*_got.txt`, and ten of the eleven agree to
+the instruction — `compile_allocs` 27,397, both codegen rows,
+`compile_instructions` 35,968,173, `emit_instructions`, `entry_instructions`,
+`library_instructions`, `startup_instructions`, `interp_allocs`,
+`interp_peak_bytes` — as do `work.txt`'s fourteen benchmarks and the emitted
+and text veins. That was written down here as the nine sharing the binary not
+sharing the divergence.
+
+It is not evidence of that, and kanso#1492's arithmetic is why. Six in
+2,178,502,266 is three parts per billion. The other instruction rows run from
+4.8 million to 128 million, where three parts per billion is a fraction of
+one instruction. None of them could have shown this either way, so their
+agreement carries no information about whether they are exposed. An identical
+reading on a row too small to resolve the effect is the same shape of mistake
+as a golden's header saying two numbers may not be compared.
+
+Cloud's own candidate is left where cloud left it, as an argument and not a
+measurement: the interpreted run is the allocation-heavy one at 5,313,434
+allocations against a compile's 27,397, so a term proportional to work fits
+where a constant does not, and where the allocator's heap starts moves with
+the size of the file the loader mapped.
+
+**One thing the instrument is still missing, and it is small.**
+`interp_instructions.sh` prints `.text`, `.data` and `.bss`.
+`compile_instructions.sh` — which the interp gate's own header tells the
+reader to consult for everything the two share — prints `.text`, `.bss` and
+`.rodata`, and its header carries the seven-binary calibration behind that:
+one of the seven is `+64 KiB .rodata`, and the row moved for it. The newer
+gate dropped the section the older one had learned to watch. Whether that
+calibration transports to this gate's anchor is not established here; the two
+gates anchor at different frames.
+
+- **DONE** three readings published and each withdrawn, with every surface
+  each reached corrected: the log, `STATUS.md`, `docs/compiler.html` and a
+  pull request comment, three times over.
+- **OPEN** what moves the six. Cloud's proportional-to-allocations argument
+  is the live candidate and is not yet measured.
+- **OPEN** `.rodata` in the interp gate, one awk alternation, so the next
+  occurrence has the section the compile gate already watches. Checked against
+  kanso#1492 rather than assumed: it added twenty-two lines to that gate for
+  the silicon comparison and left the section line reading `text|data|bss`.
+
+
+## 2026-09-17 — the five oldest sittings sweep clean, which is worth writing down
+
+The 2026-08-29 sweep left eighteen dates unaudited and found one unbuilt
+ruling in twenty, so the rate is not zero and the oldest sittings are where a
+ruling has had longest to sit. Five of them carry `gavel:` headings —
+2026-08-15, 08-17, 08-19, 08-20 and 08-23 — and hold nine entries between
+them.
+
+Three of the nine are BUILD RECORDS rather than rulings: "gavel 51 lands, and
+pays for itself", "gavel 15 built: the wall defers, and the loop runs", and
+"gavel 1b enforced: only a type's owner constructs one". An entry that records
+a build is not a ruling awaiting one, and reading the heading is enough to say
+so.
+
+The six rulings:
+
+| ruling | found |
+|---|---|
+| 08-15 gavel 1, the err rule collapses into three combinators | superseded by the 2026-08-29 effect gavel, which says so in its own first sentence and was probed built this afternoon |
+| 08-17 gavel 24, the boundary language | built; its ledger entry closed on kanso#1498 after ch04's paragraph was read on main rather than taken from the entry |
+| 08-17 gavel 51, one module | built, with a landing entry of its own, and cited by name in `diamond.rs` and `reexports.rs` |
+| 08-19 `==` refuses a value that names itself | built; `a_constant_that_names_itself` and `constant_knot` carry it |
+| 08-20 gavel 1b, only a type's owner constructs one | built, and run today: `money/money 250` from an importing module answers `error[opacity]` |
+| 08-23 an undemanded knot allocates nothing | built; the mem vein carries `an_undemanded_knot_allocates_nothing` |
+| 08-23 a list is never bytes, and acceptance is declared | built; run, below |
+
+That last one is the only one of the six with three separable claims, so it
+was run rather than read. Each answers byte-identically on both engines:
+
+```
+text/to_bytes [104 105]   ->  [104 105]        the constructor ships
+text/to_bytes [104 300]   ->  refuses, "to_bytes takes byte values (0-255)"
+text/append ["a"] "x"     ->  refuses, "append takes bytes and a string,
+                              bytes, or byte"
+text/utf8 [65 66]         ->  "AB"
+```
+
+The third is the ruling's substance. `["a" 120]` was the oracle's coercing
+answer for that call and the evidence the gavel turned on; it refuses now, and
+native and the interpreter refuse alike. The fourth is the rider rather than a
+hole in the third: the gavel says in its own words that whether utf8 keeps its
+list acceptance is a library decision made in the migration and not an engine
+property, so a declared acceptance surviving is the ruling working.
+
+**Nothing goes on the list from these five.** The sweep took about twenty
+minutes, against a list that had gone unaudited for nineteen days and, one
+sitting over, held a ruling whose purpose had been given up without anyone
+writing it down.
+
+- **DONE** five sittings, nine entries, three of them build records and six
+  rulings, all built or superseded.
+- **OPEN** thirteen dates and roughly thirty entries still unswept. Two
+  sittings are audited now and the rate across them is one unbuilt ruling in
+  twenty-six.
+
+## 2026-09-17 — a demanded knot still counts differently on the two engines, twenty-four days after it was ruled not to
+
+Sweeping the rest of August. The nine `gavel:` entries on 2026-08-24, 08-25,
+08-26 and 08-31 finish the month, and one of them is unbuilt.
+
+**The ruling.** 2026-08-23 found the divergence and left it open, in its own
+words: *the DEMANDED knot still disagrees. Native reports `thunk_allocs=1`
+where the oracle reports `0`, because the oracle's `knotted` builds its cell
+without touching the counter.* Clay ruled it the next day — "it seems so
+obvious" — and the entry is explicit about which side moves: *both engines
+report `thunk_allocs=1` for `x = [x]` that something reads. The engine that
+moves is the oracle... bookkeeping brought into line, no semantic change
+anywhere.* The entry left the ledger with that commit.
+
+**Measured today, on a release build of main.** The undemanded fixture in the
+mem vein was copied and its arm flipped so the knot is read, then run on both
+engines through an importing entry:
+
+```
+                 native   oracle
+thunk_allocs          1        0
+thunk_forces          1        1
+thunk_evals           1        1
+stdout                1        1
+```
+
+Both print `1`, so both demand it. Both agree it was forced and evaluated.
+`thunk_allocs` alone disagrees, in the direction the 2026-08-23 entry named
+and the 2026-08-24 gavel ruled against.
+
+**Nothing in the tree compares the two.** `tests/golden.rs:194` runs the mem
+vein with `run_kanso_as_library(&program, &[], ...)` — no `--interp` — so
+every `.mem` file is one engine's reading. No script under `scripts/` named
+`*_differential` mentions `KANSO_COUNTERS` or `thunk_allocs` at all. The
+comment sitting four lines above that loop says what was meant to close the
+gap, in the future tense it still carries: *the lazy fragment will extend
+these with engine-shared semantic counters (forces, evaluations, cells live at
+exit) asserted on both engines.* It never did, and the counter the two engines
+disagree on is the one that extension would have pinned.
+
+So this is the shape the unbuilt list exists for, twice in one evening: a
+ruling with no build, no row, and no spec that could have gone red for it.
+The 2026-08-24 entry's own closing line — "Unblocked: the fixture pinning a
+demanded knot's allocation shape" — names the fixture that would have caught
+it, and that fixture was never written either.
+
+**The rest of the month.** Eight of the nine are built, superseded or policy:
+no tolerance bands and the floor's absolute-against-refactorings rule both
+live in CLAUDE.md and are quoted back by later rulings; the build hole was
+built 2026-09-16; welfare measuring cost rather than counts is verifiable from
+`--counters`, which lists `compile_instructions` and `compile_allocs` where
+the gavel found rounds and visits; the arm never seeing its own err was
+retired on 2026-09-15 by the box ruling, which the fixture
+`an_arm_sees_its_own_hakos_err` records in its own header; the three explicit
+forms and the fused operators were both run this afternoon; and the July
+letters are closed, with the ledger's own section reading EMPTY.
+
+**August is finished.** Thirty-five of the fifty-six `gavel:` entries carry an
+August date and all of them are now swept, across three sittings' worth of
+work: seventeen on 2026-08-29, nine on the five oldest dates, nine here. Two
+unbuilt rulings in thirty-five entries. The twenty-one that remain are all
+September.
+
+**Thirteen of September's twenty-one, probed on the way past.** The 2026-09-06
+whole-float ruling — a float's rendering always carries a `.` or an `e`, and
+`.0` is appended where the shortest form has neither — is built:
+`a_whole_float_keeps_its_point` carries the RULED citation and its third line
+now pins `1.0e+15` where it used to read `1e+15`. The 2026-09-08 ruling that
+an infinite or nan float renders as `inf`, `-inf` and `nan` is built:
+`an_infinite_or_nan_float_renders_as_a_word` pins those three words on the
+first line of its output, and it is a micro golden, so all three engines
+answer them.
+
+And the 2026-09-03 suffix-contract ruling — *a `!` name must answer a result;
+a `?` name must answer bool; the checker refuses either violation at the
+declaration* — is built, which is worth saying because that entry's own text
+records the contract as unimplemented at the time: *`pub fn shout! x`
+answering a plain string compiles today.* It does not now. `pub fn shout! x`
+answering a string is refused with ``error[naming]: `shout!` wears a bang: a
+`!` function answers an effect, the box a failure bubbles through``, and `pub
+fn empty? x` answering a string with ``a `?` function answers true or false
+(err may ride along)``. The 2026-09-16 reversal strengthens that contract
+rather than retiring it: every `!` name answers `<t>effect`, which is the
+newer vocabulary for the same requirement. This is the DECLARATION side, and
+distinct from the use-site refusal the box row was probed against.
+
+The 2026-09-08 ruling that `page_drift` counts the wrong thing is built, and
+built as the first of the two shapes the gavel named. `scripts/page_drift/
+page_drift.kso` carries Clay's sentence in its own comments — *there is no
+specific correlation between a number of log entries and specific changes to
+the HTML* — and takes rulings out of the count, keyed on the heading's own
+convention: `gavel:` or `directive:` after the date. Three specs pin it,
+including the case that an entry merely MENTIONING a gavel keeps its place.
+That ruling was filed as cloud's in its own text, and cloud built it.
+
+And the 2026-09-06 consolidated-run ruling is built to its own terms.
+`--counters` prints one `run_instructions` and one `run_peak_bytes` rather
+than a row per shelf, CI's `work.txt` carries `runbench` equal to the counter
+the objective reads, and the run program's header writes the mix down as the
+gavel required it to be written down — decode and encode at 34.54% and 34.43%,
+six stress shapes between 4.87% and 6.23%, with the reason for that shape
+stated. The per-phase benchmarks survive as diagnostics, which is the other
+half of the ruling.
+
+The 2026-09-03 doctrine — *a failure is for the exceptional, an anticipated
+outcome is data; the bang chooses the channel, everywhere* — is built, and it
+took three fixtures to see, because the first two read like a contradiction.
+`os/read_file "/nope/absent.txt"` answers a box, not the bare
+`text | file_not_found` the gavel's example writes, and a `length` on it
+reports `not <io>`. That looks like the ruling unbuilt and is not: the
+2026-09-15 and 09-16 box rulings came later and apply the box to io, so the
+typeset rides INSIDE it. Opened, both arms dispatch as data, on both engines:
+
+```
+os/read_file "/nope/absent.txt" .> tell  ->  missing
+os/read_file "Cargo.toml"       .> tell  ->  got 1704 bytes
+```
+
+and the bang form takes the other channel, reaching the endpoint with
+provenance: ``error[endpoint]: unhandled err reached the executor: "cannot
+read /nope/absent.txt: no such file"``, born in `os/insisted`. The two
+rulings compose; neither supersedes the other. Two fixtures of mine were
+wrong before this one — a destructuring pattern the opacity rule refuses
+across an import, and a `print` of a held box — and both were my spelling
+rather than the compiler's.
+
+Two more from 2026-09-05, both checkable in one command each. *No
+machine-code-size term in welfare* — Clay: "guessing is not okay so I guess no
+size term" — holds: `--counters` prints nothing matching text, machine or
+size, and the ruling's other half holds too, since `.text` stays watched in
+its own vein at `bench/text_golden.txt` and CI's `text.txt` carries a row per
+program. *One row, one value* holds: `bench/compile_instructions_by_cpu.txt`
+is gone, collapsed as the gavel required, and
+`bench/compile_instructions_golden.txt` carries exactly one non-comment line.
+
+And the 2026-09-10 ruling on rows 15..390 is the odd one, because its content
+is that nothing further is owed: the rows stay unscored, keep the compile
+terms they carry, and the chart draws the coverage boundary at 2026-09-03. Its
+own last sentence says it leaves the ledger with the ruling. The one part with
+a surface is the boundary, and that is drawn and pinned —
+`scripts/site_smoke/site_smoke.kso` checks the scoring-coverage boundaries and
+the rows before them, and `docs/numbers.html` names the date with the coverage
+it takes.
+
+Two more, a line each. The 2026-09-06 clang-19 ruling is built with the
+feature detection it asked for: `ci.yml` installs `clang-19` and symlinks it,
+with a comment recording the failure mode that made detection necessary — an
+earlier attempt installed clang-19 while `clang --version` still answered the
+old one. And the 2026-09-08 ruling that the compile term reads a fixed corpus
+rather than whatever `lib/json` imports is built: `bench/compile_corpus`
+exists and `compile_instructions.sh` checks it by name.
+
+The 2026-09-05 corpus-first ruling is satisfied, by a mechanism other than the
+one it named, and it took reading one line to see which. Its concrete item was
+to promote the natural read loop into the benchmark corpus *as a run-speed and
+run-memory shelf under the granted-baseline machinery*, so the objective could
+see a hole `jsonbench` had been hand-written around. That shelf does not
+exist: `reading_insisted.kso` lives in `tests/golden/read_beat` with a spec
+pinning `beat_iters=201`, and `bench/runbench_phases.txt` names eight phases,
+none of them a read.
+
+Stopping there would have made it a row. It is not one, because
+`bench/runbench/main.kso` line 4 reads `os/read_file! "bench/large.json" .>
+run`. The consolidated run program opens by reading its document through the
+same bang wrapper the hole was about, so the read loop is inside
+`run_instructions` rather than beside it. The 2026-09-06 consolidation
+retired shelves the day after this gavel asked for one, and the workload the
+gavel wanted visible ended up in the one program instead. The purpose holds;
+the named mechanism is gone.
+
+The 2026-09-03 bimodal-row ruling is the ancestor of today's third row, and
+its first suspect is addressed. Clay's words were that glibc's instructions
+must be included but made consistent — *like how rspec can run with a seed...
+you run some instruction at the top to clear out the glibc state* — and the
+entry named directory read order first, since ext4's readdir is a hash order
+seeded per filesystem instance. `src/lib.rs:3591` sorts: the module loader
+collects its `.kso` paths and calls `paths.sort()` before reading any of them,
+so a fresh runner disk cannot reorder a compile. The wider question that
+ruling opened runs straight into the 2026-09-15 normalization gavel and into
+this afternoon's six instructions, which is already a row.
+
+Eight September entries are unread, and this entry says so rather than
+counting them swept.
+
+- **DONE** August swept end to end, and the demanded-knot counter measured
+  rather than read.
+- **OPEN** eight September entries, across 09-02, 09-05, 09-07, 09-15 and
+  09-16. Thirteen probed, thirteen built or satisfied: the yield is
+  lower here than in August, which is what a list that tracks recent rulings
+  should look like. Several are almost certainly built — the box
+  ruling, the maps normalization and the two welfares each came OFF the list
+  today — but "almost certainly" is what this sweep exists to replace.
+- **OPEN** whether any other counter diverges between the engines. Nothing
+  compares them, so the answer is unknown rather than no, and the mem vein
+  running on one engine is the cheapest place to change that.
