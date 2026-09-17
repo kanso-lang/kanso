@@ -154,6 +154,31 @@ inlined bind for a pure index read and bound discharge for a literal index
 into a known-length list, each measured, with the floor moving under the
 ironclad rule where they come in short. Nothing here waits on a ruling.
 
+**Probed 2026-09-17 against a release build of the tip, part by part**, after
+kanso#1477's body reported this row stale. Two parts are built and two are
+not, so the row stands:
+
+- the constructor is BUILT. `effect 5` and `effect (err "nope")` both answer a
+  box that `bind` and `rescue` take.
+- an `(err _)` arm matching a bare err anywhere is BUILT.
+- the check-time refusal is NOT BUILT, in all three of the shapes the ruling
+  names. A bare err reaching an operator (`x + 1`), an index (`x[0]`) and an
+  arm-less call each check clean and propagate at run time instead.
+- the railway is NOT RETIRED. `docs/book/samples/ch04/railway.kso` still
+  prints its checked-in output byte for byte, `passed through receipt` then
+  `with_tip`, which is the railway itself. `docs/compiler.html` says at its
+  effect-type section that the railway "retires with the sugar that implied
+  it", and in the owing paragraph that ch04 "was re-premised on the explicit
+  box when part 3 landed" -- and part 3 has not landed. ch04 still carries a
+  section headed "the railway" and the line "count the lines of error handling
+  in this program: zero", and the book index still blurbs the chapter "err,
+  none, the railway, and the taxonomy of things going wrong".
+
+The published prose is ahead of the compiler on this ruling, which is the one
+direction the project's own rules do not allow. Named here rather than fixed:
+the pages are the chat's, the refusal is cloud's, and the page edit wants the
+compiler under it first.
+
 ### Two welfares and a meta-welfare over them (2026-09-16)
 
 The live log's gavel of that name, which supersedes the row "The compile term

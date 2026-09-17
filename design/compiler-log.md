@@ -5500,3 +5500,61 @@ pins the ledger index's three sentences and does not reach this section.
 - **OPEN** whether a spec should read this section's headings and check the
   intro's count against them, the way the ledger index is already pinned.
   That spec has caught the ledger's count twice.
+
+## 2026-09-17 — the box row was reported stale; two of its four parts are not built
+
+kanso#1477's body reports the explicit-box ruling stale — "every part probeable
+this session is on main" — and kanso#1478 and kanso#1480 both cite that in
+their "Rulings weighed" paragraphs as the reason a self-generated optimisation
+lead came ahead of the unbuilt list. Probed part by part against a release
+build of the branch tip, two of the four are built and two are not.
+
+**Built.** The constructor exists: `effect 5` and `effect (err "nope")` both
+answer a box that `bind` and `rescue` take. And a bare err is data an `(err _)`
+arm matches anywhere — a two-arm `tell` with `(err e)` first catches one born
+three calls away.
+
+**Not built: the check-time refusal, in all three shapes the ruling names.**
+
+    x = boom 0          fn boom _
+    print "{x + 1}"       err "boom"
+
+checks clean and prints `error[endpoint]: unhandled err reached the entry` at
+run time. So does `x[0]`, and so does handing the err to an arm-less `fn plain
+v`, which reports `passed through plain`. Part 3 says each of those is refused
+at check, like a `none`. None of them is.
+
+**Not built: the railway's retirement.** `docs/book/samples/ch04/railway.kso`
+was run against the same build and its output is byte-identical to the
+checked-in `railway.out`:
+
+    error[endpoint]: unhandled err reached the entry: "no one to share the bill with"
+      born in share_of at railway.kso:8
+      passed through receipt ← with_tip
+
+That program is the railway in one screen: `share_of _ 0` answers a bare err,
+`with_tip` does arithmetic on it, `receipt` interpolates it, and neither
+mentions failure. It is precisely what part 3 forbids, and it runs.
+
+**The pages are ahead of the compiler.** `docs/compiler.html` says the railway
+"retires with the sugar that implied it", and that ch04 "was re-premised on the
+explicit box when part 3 landed". Part 3 has not landed. Meanwhile ch04 still
+carries a section headed "the railway" and the line *count the lines of error
+handling in this program: zero*, the book index still blurbs the chapter "err,
+none, the railway, and the taxonomy of things going wrong", and appb, ch05 and
+ch08 all teach it as current. So one page describes the ruling as built while
+five teach the model it retires, and the compiler agrees with the five.
+
+This is the 2026-09-09 shape again, and the "Ruled, unbuilt" rule exists
+because of it: a ruling reported built, a list that says otherwise, and work
+chosen against the report. The difference this time is that the report is in
+two pull request bodies rather than in a chart, and it was checkable in four
+minutes with a build that already existed.
+
+- **DONE** the row's four parts probed and the result written into STATUS.md
+  beside the row, which stands.
+- **OPEN** part 3's refusal and the railway's retirement, both cloud's.
+- **OPEN** the five book pages and the `docs/compiler.html` paragraph claiming
+  the retirement. The chat's, and they wait on the compiler rather than lead
+  it — a page corrected first would put the prose ahead in the other
+  direction.
