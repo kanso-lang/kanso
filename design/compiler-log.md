@@ -5928,3 +5928,46 @@ passes here had the answer one paragraph away.
 - **OPEN** what the probe did not reach and the row cannot retire without: the
   710 `xs[i]!` sites, `!` names in lib answering a box, and the two cost levers
   kanso#1477 reports built. Their own pass.
+
+## 2026-09-17 — a quarter of start-up was hashing a constant
+
+`kanso play` on a program holding one `print` retires 4,837,246 instructions
+under `kanso::main`. Callgrind puts 1,226,463 of them — **25.35%** — in
+`sip::Hasher::write`.
+
+Two cache keys ask for it. `cached_runtime_object` decides whether a staged
+`kanso_runtime_*.o` may be reused and `cached_program_binary` decides the same
+for a linked `kanso_run_*`; both must change when `src/runtime.c` changes, and
+both got that by handing the whole file to a `DefaultHasher`. `runtime.c` is
+450,100 bytes, it is hashed twice, and 900,200 bytes at roughly 1.36
+instructions a byte is the entire frame. The one-line program's own IR is
+rounding.
+
+A constant's digest is a constant. `hash::RUNTIME_DIGEST` is now computed by
+the compiler that builds this one, and the running compiler folds in eight
+bytes.
+
+    main                4,837,246
+    the digest          3,712,046     -1,125,200   -23.26%
+
+both built under rustc 1.98.1 and read through the gate's own box with the
+caches warm.
+
+`digest_of` is a const fn carrying two FNV-1a accumulators with different
+primes and offsets, folded in together so the key holds 128 bits rather than
+64. A collision here would not be a slow build: it would be a runtime object
+reused against IR compiled for a different one. The second pass costs the
+build and nothing else. The loop steps eight bytes at a time because `const`
+evaluation is interpreted and rustc denies a long-running one by default; a
+byte at a time over 450,100 bytes exceeds that budget, a word at a time is the
+same function at an eighth of the steps.
+
+Three specs, each watched red for its own reason before it was watched green:
+no cache key feeds the source to a hasher (the cost), the constant is the
+digest of the bytes it names (the drift that would be a miscompile), and a bit
+flipped at the first byte, the middle and the last moves it (the mixer).
+
+- **DONE** measured, spec'd, and the row is CI's to write.
+- **OPEN** the same shape one layer down: `declare_lines` parses DECLARES with
+  `str::Lines` at first use, 1,019,913 instructions on the branches that have
+  it. Named on kanso#1480 and not built.

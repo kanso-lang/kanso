@@ -949,7 +949,11 @@ fn cached_runtime_object(profile: &str, opt: &[&str]) -> std::io::Result<std::pa
     use std::hash::{Hash, Hasher};
     let source = include_str!("runtime.c");
     let mut hasher = std::hash::DefaultHasher::new();
-    source.hash(&mut hasher);
+    // THE SOURCE'S DIGEST, NOT THE SOURCE. `runtime.c` is a constant of this
+    // binary, so what it hashes to was settled by the compiler that built it;
+    // walking its 450,100 bytes here cost a quarter of `kanso play`'s
+    // start-up and told every process the same thing. See `hash::digest_of`.
+    kanso::hash::RUNTIME_DIGEST.hash(&mut hasher);
     profile.hash(&mut hasher);
     // THE CONVENTION IS NOT IN THE SOURCE -- it is a `-D` the probe decides,
     // so a machine that gains or loses clang 19 would otherwise reuse an
@@ -1108,7 +1112,9 @@ fn cached_program_binary(ir: &str) -> std::io::Result<std::path::PathBuf> {
     use std::hash::{Hash, Hasher};
     let mut hasher = std::hash::DefaultHasher::new();
     ir.hash(&mut hasher);
-    include_str!("runtime.c").hash(&mut hasher);
+    // The same swap, for the same reason: this key names the runtime the
+    // binary would be linked against, and that runtime is a constant.
+    kanso::hash::RUNTIME_DIGEST.hash(&mut hasher);
     let key = hasher.finish();
     let binary = std::env::temp_dir().join(format!("kanso_run_{key:016x}"));
     if binary.exists() {
