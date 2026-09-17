@@ -125,5 +125,12 @@
 # base, so the merged tree is reading neither number. The value below is
 # main's, carried forward so the gate has one value to fail against
 # rather than none; the merged sitting is CI's to take.
-interp_instructions=2178502266
+#
+# 2026-09-17, kanso#1480 on the tree merged with kanso#1478, CI's sitting.
+# LAYOUT, and here by construction. 2,178,502,266 -> 2,182,816,231, a RISE of
+# 4,313,965 (+0.198%). This row anchors at the interpreter's own thread, so the
+# front end under `kanso::main` is excluded from it entirely and a change to the
+# emitter can reach it only by moving the binary. See
+# bench/compile_instructions_golden.txt for the four-row reading.
+interp_instructions=2182816231
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

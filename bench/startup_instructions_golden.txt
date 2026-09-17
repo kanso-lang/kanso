@@ -237,4 +237,38 @@
 # base, so the merged tree is reading neither number. The value below is
 # main's, carried forward so the gate has one value to fail against
 # rather than none; the merged sitting is CI's to take.
-startup_instructions=4837381
+#
+# 2026-09-17, kanso#1480 on the tree merged with kanso#1478, CI's sitting.
+# 4,837,381 -> 5,144,307, a RISE of 306,926 (+6.345%). NOT LAYOUT, and the other
+# four rows' reading does not apply to this one. `kanso play` takes the native
+# path and runs the emitter, which is where both branches changed code.
+# 
+# WHAT IT IS. Both changes replace a scan the emitter ran once per name with an
+# index built once per process, and this workload is one `print`. There is
+# almost nothing to amortise the construction over, so the construction is very
+# nearly the whole reading. Profiled under rustc 1.98.1, three trees, the gate's
+# own box and warm caches, `kanso::main` inclusive:
+# 
+#     main             4,837,246
+#     kanso#1478       5,081,820   +244,574
+#     kanso#1480       5,144,232   + 62,412   (+306,986 in all)
+# 
+# which reproduces CI's +306,926 to within 60 instructions. The frames that
+# appear and disappear say the same thing twice. kanso#1478 adds the
+# `OnceLock<Set<&str>>` behind `declares_context_calls` (599,550) and
+# `called_symbols` (310,752) and takes away the per-name scans under it
+# (362,928 + 274,780 + 107,365 + 107,269 + 41,018 + 19,651). kanso#1480 replaces
+# that index with a richer one: `OnceLock<Vec<DeclareLine>>` (566,427) and
+# `declare_lines` over `str::Lines` (453,486) arrive, the 1,011,803-instruction
+# `Vec<&str>` build and the 714,987 emit closure leave.
+# 
+# THE TRADE IS THE RIGHT WAY ROUND AND IT IS WORTH SAYING OUT LOUD. The same
+# shape takes 69.64% off `kanso build bench/runbench`. A one-line program is the
+# one workload in the corpus where an index cannot pay for itself.
+# 
+# WHAT IT EXPOSES. `declare_lines` parses DECLARES, which is a constant in the
+# compiler's own source, with `str::Lines` at first use -- 1,019,913
+# instructions between the two frames, a fifth of this row, spent re-deriving
+# something a build step could hand over already parsed. That is a lever and it
+# is not this branch's.
+startup_instructions=5144307

@@ -2073,7 +2073,19 @@
 # base, so the merged tree is reading neither number. The value below is
 # main's, carried forward so the gate has one value to fail against
 # rather than none; the merged sitting is CI's to take.
-compile_instructions=35968171
+#
+# 2026-09-17, kanso#1480 on the tree merged with kanso#1478, CI's sitting.
+# LAYOUT. 35,968,171 -> 36,014,961, a RISE of 46,790 (+0.130%). Neither branch's
+# change executes on this workload: both edits are in the emitter and the
+# linearity analysis it drives, and `kanso check` stops before codegen. What
+# moved is the compiler binary carrying different bytes.
+# 
+# The three check rows and the interpreted row moved together and by the same
+# fraction -- +0.130%, +0.127%, +0.129%, +0.198% -- which is what a code-layout
+# shift looks like: no direction chosen by the change, and the same size
+# everywhere. The fifth row, start-up, moved fifty times that and is not layout;
+# its own golden carries the profile that names the frames.
+compile_instructions=36014961
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.
