@@ -735,6 +735,12 @@
 # rather than none; the merged sitting is CI's to take.
 #
 # 2026-09-17, kanso#1473. 330,496 below main, 49,140 below kanso#1468.
+# 2026-09-17, kanso#1468 on the excluded row. 281,356 lower, layout.
+#
+# 2026-09-17, merged with the base. The base moved this row's FILE and not
+# the compiler: since this branch measured, the only thing that landed
+# under it is a row written into a golden, so the value below is this
+# branch's own sitting and it still stands.
 entry_instructions=127873637
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
