@@ -123,4 +123,10 @@
 # base, so the merged tree is reading neither number. The value below is
 # main's, carried forward so the gate has one value to fail against
 # rather than none; the merged sitting is CI's to take.
-startup_instructions=4837381
+#
+# 2026-09-17, kanso#1470 against main, CI's sitting. 4,837,381 -> 4,836,950, a
+# FALL of 431 (-0.0089%). `kanso play` runs the emitter, which is where the new
+# counters sit; they are compiled out of a shipped binary and the gate builds one
+# that carries them, so what this reads is the same layout term as the rows
+# above, at the same scale.
+startup_instructions=4836950
