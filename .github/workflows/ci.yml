@@ -438,6 +438,19 @@ jobs:
           said="per_process_floor=$floor frames=$frames"
           said="$said kernel=$(uname -r) cpu=$cpu"
           echo "::notice::$said"
+          # AND THE WHOLE LISTING FOR ONE WORKLOAD, which is what the floor
+          # above turned out not to be able to name. On 2026-09-17 two jobs on
+          # this runner image printed the SAME floor -- 558610 over 605 frames,
+          # to the instruction -- while their three compile rows sat thirteen
+          # apart. So the thirteen is in a frame whose self cost DIFFERS across
+          # the three workloads, which is exactly the set the floor excludes.
+          #
+          # The floor stays, because it is the evidence for that. What names
+          # the frame is this: every frame's self cost in the module compile,
+          # sorted, so two job logs diff to one line. It is the row's own
+          # profile, so whatever moved the row is in here.
+          echo "=== every frame's self cost, module compile"
+          sh scripts/gates/callgrind_self.sh /tmp/cg.compile | sort
       - name: compile memory
         id: compile_memory
         if: always()
