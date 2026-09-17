@@ -419,15 +419,24 @@ jobs:
           for p in "$@"; do
             [ -f "$p" ] || { echo "no $p, so the floor cannot be read"; exit 0; }
           done
-          sh scripts/gates/per_process_floor.sh "$@"
-          # The host facts the sitting was taken on, beside the floor, because
-          # the floor is only half an answer without them. The CPU model was
-          # refuted as the variable; the kernel has never been printed, and two
-          # re-runs of one head agreeing while another head read thirteen away
-          # is what a per-HOST term looks like rather than a per-run one.
-          echo "kernel=$(uname -r)"
-          echo "kernel_version=$(uname -v)"
-          awk '/^(cpu family|model|stepping|microcode)\t/ { print; n++ } n >= 4 { exit }' /proc/cpuinfo || true
+          sh scripts/gates/per_process_floor.sh "$@" | tee /tmp/floor.txt
+          # The floor is 588 lines and the frame-naming comparison needs every
+          # one of them, but reading the TOTAL out of the middle of a job log
+          # costs a fetch of the whole log. A notice annotation is retrievable
+          # on its own and costs nothing, so the one line a reader wants goes
+          # out that way as well.
+          #
+          # The host facts ride with it, because the floor is half an answer
+          # without them. The CPU model is already refuted as the variable; the
+          # kernel has never been printed at all, and two re-runs of one head
+          # agreeing while another head read thirteen away is the shape of a
+          # per-HOST term rather than a per-run flip.
+          floor=$(sed -n 's/^per_process_floor=//p' /tmp/floor.txt)
+          frames=$(sed -n 's/^per_process_floor_frames=//p' /tmp/floor.txt)
+          cpu=$(awk -F': ' '/^cpu family/ { f = $2 } /^model\t/ { m = $2 }
+                            END { printf "%s/%s", f, m }' /proc/cpuinfo)
+          echo "::notice::per_process_floor=$floor frames=$frames \
+kernel=$(uname -r) cpu=$cpu"
       - name: compile memory
         id: compile_memory
         if: always()
