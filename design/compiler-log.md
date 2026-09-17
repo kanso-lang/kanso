@@ -6038,3 +6038,32 @@ rather than for arguing about this number.
 - **DONE** all four shapes measured, and the gate's header carries the table.
 - **DONE** kanso#1480's move named: the optimizer re-deciding, inside
   inference, on source the branch does not touch.
+
+## 2026-09-17 — reading each KANSO_ switch once: measured, declined, and L8 is what declines it
+
+The task stood on a real observation: adding one more variable to the
+environment a compile runs in moves this row 11,606 (kanso#1483), so reading
+the environment is not free, and kanso reads its `KANSO_` switches by asking
+each time. Caching them behind a `OnceLock` is the obvious fix.
+
+**It costs more than it saves.** On the module corpus's own profile:
+
+    std::env::var::inner            2,445   what kanso's own switch reads cost
+    std::sys::env::unix::getenv    46,172   inclusive, but see below
+      _mi_getenv                   29,685   mimalloc reading ITS config, not kanso's
+      getenv (glibc)               16,287
+
+So the whole of what kanso's switch reading costs on this corpus is about
+2,445 instructions. The ladder above measured what a `OnceLock`-backed function
+costs to add and have reached: **2,733**. The cache is more expensive than the
+thing it caches, before it has saved anything.
+
+**The 11,606 is a different quantity and the task conflated them.** That number
+is what one more variable in the ENVIRONMENT costs a compile — glibc's `getenv`
+walking a longer `environ` on every lookup, plus mimalloc's own reads at
+start-up. It is a property of the environment the gate runs in, which is why
+the gate empties it with `env -i`. It is not a lever inside the compiler.
+
+Declined, with the same shape as kanso#1483: withholding a line cost more than
+the line. Recorded so the idea stays declined rather than being re-derived from
+the 11,606.
