@@ -4744,3 +4744,59 @@ digests.
 - **DONE** the build reproduces in this container, four for four.
 - **OPEN** what costs exactly ten. The next pair of sittings that straddle the
   two floors has the digest to name it.
+
+## 2026-09-17 — the thirteen is `memrchr`, called from the line the gate prints
+
+Two sittings of this branch, one commit apart. The commit between them is
+`cargo fmt` over one test file: no compiler source, nothing `include_str!`'d,
+and both sittings printed
+`compile_binary sections .text=2803570 .data=12672 .bss=29912`, byte for byte,
+on the same runner family and model.
+
+```
+compile_instructions   35,967,913   ->   35,967,926      +13
+entry_instructions    128,214,733   ->  128,214,746      +13
+library_instructions  128,348,838   ->  128,348,851      +13
+per_process_floor         558,232   ->      558,232        0
+```
+
+kanso#1474's digest, diffed:
+
+```
+frame_digest   1 bucket differs:  b0 = 1,767,181/40  ->  1,767,194/40   +13
+floor_digest   0 buckets differ
+frame_bucket0  1 frame of 40 differs:
+               core::slice::memchr::memrchr   185  ->  198   +13
+```
+
+One frame. `core::slice::memchr::memrchr`, and its caller on this box is
+`<std::io::stdio::StdoutLock as std::io::Write>::write_all`, twice, for 185
+instructions. That is `LineWriter` looking backwards for the last newline in
+what the process printed — and what `kanso check` prints is one line, nineteen
+bytes: `compile_corpus: ok`.
+
+So the thirteen has never been the compiler. It is the cost of writing the
+gate's own result line, and it moves with the alignment of a heap buffer rather
+than with anything the front end decided. The floor could not name it because
+the floor is the set of frames whose self cost holds across all three
+workloads, and this one holds across all three — at two values.
+
+**Why it took this long.** Every earlier round asked what differed between the
+two readings and found nothing: same sha, same sections, same CPU, same
+floor, same kernel, same toolchain, and eight within-binary runs agreeing to
+the instruction. All of that was true and none of it was the question. The
+question was WHICH FRAME, and nothing printed a per-frame listing until
+kanso#1474. The instrument named it on its second pair.
+
+**What it costs.** `kanso::main` inclusive is the anchor, chosen on 2026-09-04
+so the row counts the compiler's own work and not the loader's; printing the
+result is inside that frame and is not compiling. The 2026-09-15 rule is the
+one that applies: external state is normalized before it is measured, and a
+term that cannot be normalized is excluded with the exclusion named in the
+golden's header. Buffer alignment cannot be normalized from here. So the print
+comes out of the measured region, which re-baselines all three rows at once and
+is its own change.
+
+- **DONE** the frame is named, with the digest diff that names it.
+- **OPEN** taking the print out of the row. Three welfare-weighted rows
+  re-baseline together, so it lands on its own with its own sitting.
