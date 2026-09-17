@@ -46,4 +46,13 @@
 # exactly one row and an empty file is not that shape. The first CI sitting
 # replaces it and writes the measured-on line under it; until then the row is
 # a shape rather than a claim.
-emit_instructions=394912504
+#
+# 2026-09-17, CI's first sitting. 382,309,867, anchored at
+# `codegen::emit_ir` inclusive.
+# #
+# This is the compiler's own half of a build -- what the two codegen rows
+# stopped counting when kanso's process was excluded from them. The container
+# read 394,912,504 from three stagings and 394,910,642 on four release-path
+# profiles; CI reads 12.6 million lower, which is the host difference this
+# golden's header said no box could compare away.
+emit_instructions=382309867

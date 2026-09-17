@@ -46,4 +46,18 @@
 # the scheduler's to size; the gate's header carries the measurement behind
 # that. The exclusion is not a change to what codegen costs, only to which
 # processes the row calls codegen.
-codegen_instructions_dev=1003426243
+#
+# 2026-09-17, CI's first sitting, which is the measurement this row was opened
+# for. 596,161,187, and `codegen_dev_again` read 596,161,187 -- the two
+# readings in one job agree to the instruction.
+# #
+# THAT AGREEMENT IS THE POINT. The row's first shape counted the WHOLE process
+# tree and two readings in one job differed by 3,105 while every child was
+# byte-identical; the parent sits in a wait loop for clang and the linker, and
+# what that loop costs is the box's scheduling. Excluding kanso's own process
+# under the 2026-09-15 rule is what made the row reproducible, and this sitting
+# is the evidence it worked.
+# #
+# The container's placeholder read 1,003,426,243, which was the pre-exclusion
+# shape and is not comparable to this.
+codegen_instructions_dev=596161187

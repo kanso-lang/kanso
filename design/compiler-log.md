@@ -6248,3 +6248,48 @@ passes here had the answer one paragraph away.
 - **OPEN** what the probe did not reach and the row cannot retire without: the
   710 `xs[i]!` sites, `!` names in lib answering a box, and the two cost levers
   kanso#1477 reports built. Their own pass.
+
+## 2026-09-17 — the codegen rows measured, and both tiers read twice the same
+
+CI's first sitting on aa57f47e, which is what this branch was opened to take:
+
+    codegen_instructions_dev        596,161,187   again 596,161,187
+    codegen_instructions_release  6,826,827,769   again 6,826,827,769
+    emit_instructions               382,309,867
+    compile_instructions             35,968,794   main 35,968,792    +2
+    entry_instructions              128,217,981   main 128,217,983   -2
+    library_instructions            128,352,174   main 128,352,174    0
+    interp_instructions           2,178,559,085   main 2,178,559,085  0
+    startup_instructions              4,837,941   main 4,838,372    -431
+
+**The `again` readings are the result, not the values.** This row's first shape
+counted the whole process tree, and two readings in one job differed by 3,105
+with every child byte-identical: the parent sits in a wait loop for clang and
+the linker, and what that loop costs is the box's scheduling rather than the
+compiler's work. Excluding kanso's own process under the 2026-09-15 rule is
+what made the row reproducible, and a job that reads 596,161,187 twice and
+6,826,827,769 twice is the evidence that it worked.
+
+**The release tier is 11.5x the development tier.** That is what `-O3 -flto`
+costs against `-O0`, and it is the reason the 2026-09-16 gavel put them on
+different sides: one is paid once per release and the other between a keystroke
+and an answer.
+
+**`emit_instructions` is 382,309,867**, the compiler's own half of a build —
+what the two codegen rows stopped counting when kanso's process left them. The
+container read 394,912,504 from three stagings and 394,910,642 on four
+release-path profiles; CI is 12.6 million lower, which is the host difference
+its golden's header said no box could compare away.
+
+**Three container placeholders are replaced and none was comparable.** The dev
+and release goldens carried 1,003,426,243 and 12,107,507,377, both measured
+before the exclusion, and the emit golden 394,912,504 from this host. They
+existed so each gate had one value to fail against rather than none; CI's
+sitting is what they are for.
+
+**What the branch costs the rows that already existed is two instructions.**
+compile +2, entry −2, library and interp byte-identical, start-up −431. The
+branch edits src/main.rs, so the rows can move; this is the smallest move the
+compile vein has recorded.
+
+- **DONE** the rows are CI's.

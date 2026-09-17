@@ -719,7 +719,11 @@
 # base, so the merged tree is reading neither number. The value below is
 # main's, carried forward so the gate has one value to fail against
 # rather than none; the merged sitting is CI's to take.
-entry_instructions=128217983
+#
+# 2026-09-17, kanso#1470 on main 298636b7. CI reads 128,217,981 against main's
+# 128,217,983 -- two instructions, downward. `library_instructions` and
+# `interp_instructions` are byte-identical to main in the same sitting.
+entry_instructions=128217981
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.
