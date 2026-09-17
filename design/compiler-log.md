@@ -4060,3 +4060,9 @@ the instruction, the figures round two took from CI and that the next run
 disagreed with by thirteen. The merge brought main's values in and this writes
 the branch's back. It is the first time this vein has reproduced across two
 runs since the compiler moved to mimalloc, which is what kanso#1466 was for.
+
+**Round four, after kanso#1464.** CI reads `compile_instructions` 36,885,953,
+`entry_instructions` 131,919,543 and `library_instructions` 132,022,229 against
+main's 36,864,779, 131,837,650 and 131,978,823. The set of a dependency's type
+names is the rise, and it is the same rise round three measured; the figures
+differ because kanso#1464 arrived underneath them.
