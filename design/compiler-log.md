@@ -4684,3 +4684,39 @@ between its header comment and the first definition.
 - **DONE** the discharge is pinned.
 - **OPEN** the explicit box's row in STATUS.md: every part of it this session
   could probe is built. The row is the chat's to remove, so this is a report.
+
+## 2026-09-17 — the thirteen is in bucket zero, and bucket zero has a candidate
+
+Two sittings of this head, same compiler source, printed frame digests that
+differ in exactly one bucket:
+
+    a8995bb9  b0=1765679/40    rows thirteen under the golden
+    e7a6b980  b0=1765692/40    rows on the golden, job green
+
+1,765,692 − 1,765,679 = **13**. The other thirty-one buckets are byte-identical
+and the frame count is forty in both, so no frame appeared or disappeared: one
+frame among forty changed cost by thirteen. Both sittings read
+`per_process_floor=558620 frames=605`, the fifth pair with the floor identical
+to the digit while the rows part.
+
+Bucket zero is the frames whose NAME LENGTH is a multiple of thirty-two.
+Listing them out of a local profile of the same workload gives forty, and one
+of them costs **exactly thirteen instructions**:
+
+    13   ./nptl/./nptl/pthread_attr_init.c:pthread_attr_init@@GLIBC_2.2.5
+
+That is the same family as the term Clay ruled out on 2026-09-15, when
+`pthread_getattr_np`'s parse of `/proc/self/maps` was found moving this row
+with the binary's layout: "this has nothing to do with compiler performance and
+obviously shouldn't be part of what we measure." The anchor at `kanso::main`
+was the answer to that one, and it drops the stack guard placed above it. This
+is thread-attribute setup reached from inside `kanso::main` instead.
+
+It is a candidate, not the answer. Two things are unchecked: whether CI's
+bucket-zero frames are the forty this box lists, and whether the thirteen in
+CI's digest is this frame's cost appearing and disappearing or another frame in
+the bucket moving by the same amount. The step below settles both — the forty
+frames of bucket zero, by name and cost, in one notice.
+
+- **DONE** the bucket is named, and the digest earned its place doing it.
+- **OPEN** the frame. One line in the next pair of sittings.
