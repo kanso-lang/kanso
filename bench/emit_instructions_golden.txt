@@ -10,13 +10,25 @@
 # scheduler is external state. Between the two sat the work this project
 # wrote, and nothing counted it.
 #
-# WHY THE ANCHOR IS EXACT. Measured 2026-09-17 on this project's container,
-# four profiles: two readings of the shipped binary and two of a probe binary
-# whose `pid_tag_of` returns a constant. Every one read the frame at
-# 394,910,642 inclusive, byte for byte, while the process around it moved 233
-# and then 112. That number is a CONTAINER's and is written here as evidence
-# of the anchor's determinism, never as the row: only CI's numbers may be
-# recorded, which is what scripts/gates/measured_on.sh exists to enforce.
+# WHY THE ANCHOR IS EXACT, measured two ways on 2026-09-17, on this project's
+# container:
+#
+#   the release path, four profiles under `--trace-children=yes` -- two
+#   readings of the shipped binary and two of a probe binary whose
+#   `pid_tag_of` returns a constant -- every one at 394,910,642, byte for
+#   byte, while the process around it moved 233 and then 112;
+#
+#   this gate's own command, three times, each from a freshly staged and
+#   warmed box -- every one at 394,912,504.
+#
+# The two numbers differ by 1,862 because they are two commands: a different
+# tier, and valgrind instrumenting child spawns in the first. That is the
+# reason a row is one command and not a family of them. What both say is the
+# thing worth having: repeat the command and the frame does not move.
+#
+# Both numbers are a CONTAINER's and are written here as evidence, never as
+# the row: only CI's numbers may be recorded, which is what
+# scripts/gates/measured_on.sh exists to enforce.
 #
 # The frame is 92.78% of what kanso's own process spends on a release build,
 # so what the codegen rows' exclusion drops is the wait and very little else.

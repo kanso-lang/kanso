@@ -5803,3 +5803,28 @@ drew, and the revert of the row bump that chased it, were both the frame
 kanso#1487 removed.
 
 - **DONE** merged onto main; the rows are main's.
+
+## 2026-09-17 — the emit row, read three times from three stagings
+
+The gate was run before it was shipped, with `GITHUB_ACTIONS` set so the host
+check measures rather than stopping. It stages the box, warms it, counts, and
+refuses with the sitting printed above the refusal, which is the bootstrap an
+empty golden is for.
+
+Then three readings, each from its own fresh staging and warm-up:
+
+```
+  394,912,504
+  394,912,504
+  394,912,504
+```
+
+The four release-path profiles read 394,910,642, and the difference is 1,862.
+They are two commands — a different tier, and valgrind instrumenting child
+spawns in the first — which is the reason a row is one command rather than a
+family of them. Both say the thing the anchor needed to say: repeat the
+command and the frame does not move, while the process around it does.
+
+- **DONE** the gate, smoke-run end to end, and the anchor's determinism read
+  three ways.
+- **OPEN** the row, which CI's first sitting writes.
