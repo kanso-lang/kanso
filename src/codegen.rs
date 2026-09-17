@@ -1748,6 +1748,31 @@ struct FnEmit {
     /// leave the box for the dead-code pass.
     raw_byte: crate::hash::Map<String, String>,
 }
+/// Whether a line the emitters wrote is a stack slot, asked at the ONE place
+/// the needle can be.
+///
+/// A slot reads `%name = alloca <type>`, and `%name` holds no space, so
+/// ` = alloca ` begins at the line's FIRST space or it is not there at all.
+/// Reading the whole line to learn that is what `FnEmit::write` used to do,
+/// and it was the emitter's fourth-largest frame: 18.2 million instructions
+/// over 144,261 lines on the build profile, about 126 a line to answer a
+/// question the first seven bytes settle. Measured on runbench's 36,086
+/// emitted lines, all 235 slots put the needle between offsets five and
+/// seven, and each of those is that line's first space.
+///
+/// The check stays in `write` rather than at the seven sites that emit an
+/// alloca, for the reason the comment there gives: the rule has to hold for a
+/// site nobody has written yet.
+/// `tests/a_stack_slot_is_found_where_the_first_space_is.rs` compiles the
+/// corpora and asserts this reading and the whole-line one agree for every
+/// line, so a line that ever carried the needle elsewhere is caught rather
+/// than quietly written into the wrong block.
+pub fn is_a_stack_slot(text: &str) -> bool {
+    match text.find(' ') {
+        Some(at) => text[at..].starts_with(" = alloca "),
+        None => false,
+    }
+}
 
 impl FnEmit {
     fn new() -> Self {
@@ -1808,7 +1833,7 @@ impl FnEmit {
     /// build their own storage — so nothing survives a pass to read the next
     /// pass's bytes.
     fn write(&mut self, text: &str) {
-        if text.contains(" = alloca ") {
+        if is_a_stack_slot(text) {
             self.entry_allocas.push(text.to_string());
             return;
         }

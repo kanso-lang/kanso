@@ -141,6 +141,10 @@
 # the compiler: since this branch measured, the only thing that landed
 # under it is a row written into a golden, so the value below is this
 # branch's own sitting and it still stands.
+# 2026-09-17, kanso#1482, CI's sitting. LAYOUT, same reason, and this one
+# fell: 956 lower. The four rows together are +93 +564 +511 -956, which is
+# what a code-layout shift looks like -- no direction, and no relation to
+# what the branch changed.
 # 2026-09-17, kanso#1462, same sitting. A RISE of 49 (+0.001%). Layout again,
 # and the smallest move this vein has recorded.
 #
@@ -217,4 +221,20 @@
 # base's 5,082,497, a rise of 62,825 -- 1.24%. `kanso play` DOES run the
 # emitter, so unlike the three rows above this one has the rewrite's own code
 # executing in it as well as under it.
-startup_instructions=5145322
+# 2026-09-17, kanso#1482 on the tree merged with kanso#1462. CI reads
+# 4,837,381 against main's 4,838,372, a fall of 991 -- 0.020%. `kanso play`
+# takes the native path and does run the emitter, so some of this is the
+# change working; a one-line program emits few enough lines that the saving
+# and the layout term the four rows above show are the same size, and this
+# reading does not separate them. Both point the same way.
+#
+# 2026-09-17, merged with main. Both branches moved this row on their own
+# base, so the merged tree is reading neither number. The value below is
+# main's, carried forward so the gate has one value to fail against
+# rather than none; the merged sitting is CI's to take.
+#
+# 2026-09-17, merged with main. Both branches moved this row on their own
+# base, so the merged tree is reading neither number. The value below is
+# main's, carried forward so the gate has one value to fail against
+# rather than none; the merged sitting is CI's to take.
+startup_instructions=4837381
