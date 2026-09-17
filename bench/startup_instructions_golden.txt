@@ -115,4 +115,11 @@
 # welfare question; the trade is stated because the row moved.
 #
 # 2026-09-17, kanso#1475. 3,354 above kanso#1473's reading.
+# 2026-09-17, kanso#1473. The start-up rise this stack carries, 1,724 below
+# kanso#1468's reading of it.
+#
+# 2026-09-17, merged with the base. The base moved this row's FILE and not
+# the compiler: since this branch measured, the only thing that landed
+# under it is a row written into a golden, so the value below is this
+# branch's own sitting and it still stands.
 startup_instructions=5079380
