@@ -861,47 +861,6 @@ fn pid_tag_of(pid: u32) -> String {
     format!("{pid:07}")
 }
 
-#[cfg(test)]
-mod a_temp_path_is_the_same_length_every_run {
-    use super::pid_tag_of;
-
-    /// Every pid Linux hands out under the default `pid_max` renders to the
-    /// same number of characters, so two runs of one binary build paths of
-    /// one length.
-    #[test]
-    fn every_pid_under_the_default_ceiling_is_seven_characters() {
-        for pid in [1u32, 2, 9, 10, 99, 100, 999, 1000, 65_535, 999_999, 4_194_303, 4_194_304] {
-            let tag = pid_tag_of(pid);
-            assert_eq!(
-                tag.len(),
-                7,
-                "pid {pid} rendered {tag:?}, {} characters. A path whose length \
-                 moves with the pid makes two runs of one binary count different \
-                 instructions for the same work.",
-                tag.len()
-            );
-        }
-    }
-
-    /// And it is still a pid: padding may not collide two of them.
-    #[test]
-    fn padding_keeps_every_pid_distinct() {
-        let pids = [1u32, 10, 100, 1000, 10_000, 100_000, 1_000_000, 4_194_303];
-        let tags: std::collections::BTreeSet<String> =
-            pids.iter().map(|p| pid_tag_of(*p)).collect();
-        assert_eq!(tags.len(), pids.len(), "padding collided two pids: {tags:?}");
-    }
-
-    /// Past the default ceiling the field widens rather than truncating. A
-    /// host with a larger `pid_max` loses the length guarantee and keeps
-    /// uniqueness, which is the right way round.
-    #[test]
-    fn a_wider_pid_widens_the_field() {
-        assert_eq!(pid_tag_of(12_345_678), "12345678");
-        assert_ne!(pid_tag_of(12_345_678), pid_tag_of(2_345_678));
-    }
-}
-
 /// Compile a two-define module: one carrying the convention, one calling
 /// through it. Both halves are there because a toolchain that parsed the
 /// define and refused the call site would still refuse what the emitter
@@ -1219,5 +1178,48 @@ fn run_plan(program: &ast::Program, file: &str, source: &str) -> ExitCode {
             eprintln!("error: main is not an io; there is no plan to show");
             ExitCode::FAILURE
         }
+    }
+}
+
+// THE TEST MODULE GOES LAST, and clippy insists: `items_after_test_module`
+// fires on anything declared after one, and CI lints with warnings denied.
+#[cfg(test)]
+mod a_temp_path_is_the_same_length_every_run {
+    use super::pid_tag_of;
+
+    /// Every pid Linux hands out under the default `pid_max` renders to the
+    /// same number of characters, so two runs of one binary build paths of
+    /// one length.
+    #[test]
+    fn every_pid_under_the_default_ceiling_is_seven_characters() {
+        for pid in [1u32, 2, 9, 10, 99, 100, 999, 1000, 65_535, 999_999, 4_194_303, 4_194_304] {
+            let tag = pid_tag_of(pid);
+            assert_eq!(
+                tag.len(),
+                7,
+                "pid {pid} rendered {tag:?}, {} characters. A path whose length \
+                 moves with the pid makes two runs of one binary count different \
+                 instructions for the same work.",
+                tag.len()
+            );
+        }
+    }
+
+    /// And it is still a pid: padding may not collide two of them.
+    #[test]
+    fn padding_keeps_every_pid_distinct() {
+        let pids = [1u32, 10, 100, 1000, 10_000, 100_000, 1_000_000, 4_194_303];
+        let tags: std::collections::BTreeSet<String> =
+            pids.iter().map(|p| pid_tag_of(*p)).collect();
+        assert_eq!(tags.len(), pids.len(), "padding collided two pids: {tags:?}");
+    }
+
+    /// Past the default ceiling the field widens rather than truncating. A
+    /// host with a larger `pid_max` loses the length guarantee and keeps
+    /// uniqueness, which is the right way round.
+    #[test]
+    fn a_wider_pid_widens_the_field() {
+        assert_eq!(pid_tag_of(12_345_678), "12345678");
+        assert_ne!(pid_tag_of(12_345_678), pid_tag_of(2_345_678));
     }
 }
