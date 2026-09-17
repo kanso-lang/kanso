@@ -1820,7 +1820,18 @@
 # never runs it. What moved the row is src/eval.rs being part of the compiler
 # binary. The grep that settles it: the changed code's callers all sit under the
 # run path, not under compile_module_inner.
-compile_instructions=35965137
+#
+# 2026-09-17, kanso#1477, CI's sitting. THIRTEEN HIGHER, and so are the entry
+# and library rows, to the instruction. The start-up row, which prints no
+# result line, did not move at all.
+# #
+# # That is the signature the 2026-09-17 log entry names: the thirteen lives in
+# # `core::slice::memchr::memrchr` under LineWriter, seeking the last newline in
+# # the line the gate's own run prints. Which side of it a binary draws is a
+# # property of that binary's layout, not of the branch's code. kanso#1483 stops
+# # the measured runs printing the line at all, and the three rows lose the
+# # thirteen with it.
+compile_instructions=35965150
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

@@ -5065,3 +5065,30 @@ frames of bucket zero, by name and cost, in one notice.
 
 - **DONE** the bucket is named, and the digest earned its place doing it.
 - **OPEN** the frame. One line in the next pair of sittings.
+
+## 2026-09-17 — kanso#1477's three rows take the thirteen, and the fourth does not
+
+CI's sitting on the merged head:
+
+```
+  compile_instructions   35,965,137 -> 35,965,150     +13
+  entry_instructions    128,204,898 -> 128,204,911     +13
+  library_instructions  128,340,017 -> 128,340,030     +13
+  startup_instructions    4,838,323 ->   4,838,323       0
+```
+
+Three rows move by the same thirteen and the fourth does not move at all.
+That pattern names itself: the thirteen lives in `core::slice::memchr::memrchr`
+under `LineWriter`, seeking the last newline in the result line each of the
+three gates' own runs prints. The start-up gate prints nothing, so it has no
+thirteen to draw.
+
+Which side of the thirteen a given binary lands on is a property of its layout.
+kanso#1483 stops the measured runs printing that line, and when it lands the
+three rows lose the thirteen and the whole family of moves with it.
+
+Welfare weighs the module and entry rows, so this costs +26 summed compile
+instructions against a dead band of about 105,000. The objective does not move.
+
+- **DONE** the three goldens carry CI's rows; two page spans follow them.
+- **OPEN** kanso#1483, after which this row family stops drawing lots.
