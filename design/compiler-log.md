@@ -5024,3 +5024,53 @@ frames of bucket zero, by name and cost, in one notice.
 
 - **DONE** the bucket is named, and the digest earned its place doing it.
 - **OPEN** the frame. One line in the next pair of sittings.
+
+## 2026-09-17 — the alias fixpoint ran twice over a program nothing changed
+
+`check_merged_after_aliases` and `inline_builtin_wrappers` run back to back on
+the same program, and each asked `inline::aliases` the same question of it. A
+third walk sat inside the inliner, counting group sizes the fixpoint had
+already counted. Profiling `kanso check compile_corpus`:
+
+```
+  inline::aliases        526,041  1.43%   14 calls (7 from each reader)
+    the group count      263,099  0.71%   1,436 entries, one walk per call
+    direct_aliases       206,496  0.56%   28 calls, exactly two per fixpoint
+  inline_builtin_wrappers' own group count
+                         141,876  0.39%   758 entries
+```
+
+Fourteen calls to `aliases` made twenty-eight to `direct_aliases`, so the
+fixpoint has never needed a third pass on this corpus: one pass to find the
+renames, one to confirm nothing grew. Both readers see a program the other
+does not touch — on the entry path they are consecutive statements, on the
+module path they are separated by the `phase::watched` wrapper alone.
+
+So the group sizes are counted once and the fixpoint run once, and both are
+handed to each reader. Measured end to end, two readings each side:
+
+```
+  before   36,816,573
+  after    36,387,408     -429,165   -1.166%
+```
+
+Emitted IR is byte-identical on encodebench, basket and runbench.
+
+One further pass is skipped: the first `direct_aliases` reads an empty map of
+known renames, so the arm that consults the group sizes never runs and the
+program is its only input. A pass that found nothing there would read the same
+two inputs again, so it already is the fixpoint. Four of the fourteen calls
+take that exit on this corpus (the 160-fn and 4-fn programs); the other ten
+find between 1 and 12 renames and run the confirming pass as before.
+
+The borrow checker holds half of the sharing: the alias map and the group
+count borrow the program, so a pass that rewrote it before their last use
+would not compile. It does not hold the other half — after `wrapper_table`
+only owned `String`s are left — so
+`tests/the_shared_alias_map_outlives_nothing_that_rewrites.rs` reads both call
+sites and fails on a pass slipped in between. Watched red on
+`canonicalize_types(&mut merged)` inserted there, which named the line.
+
+- **DONE** built and measured; 147 test binaries green, fmt and clippy clean.
+- **OPEN** the same shape in `check_per_node`'s `arities`, which is a third
+  walk over `program.fns` for a question two of these three already answer.
