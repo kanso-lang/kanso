@@ -5062,6 +5062,86 @@ the open question in the ledger.
 
 - **DONE** the rows are CI's and their cause is named correctly.
 
+## 2026-09-17 — a gate reached its verdict and buried it past the cap
+
+kanso#1463 gave the three compile gates a second reading: when a row parts
+from its golden, the same binary is counted again in the same job, and the
+gate says whether it read the same number (the change moved the row) or a
+different one (a reproduction failure, which halts the vein). That is the
+right machinery and it worked. Nobody could read what it said.
+
+GitHub keeps **fifty annotations per check run**. Each failing row emits about
+a dozen `::error::` lines, and the cross-run thirteen parts all three compile
+rows at once — so the job carries forty-odd lines of explanation and the two
+lines naming the verdict fall off the end. kanso#1477 is the cleanest case:
+its whole diff is one golden fixture and a log entry, it cannot reach the
+compiler at all, its three rows each read −13, and the job could be read as
+far as `a move of -13` and no further.
+
+The verdict now comes after the three lines naming the row and the size of the
+move, and before the explanation of the two cases. `<row>_again` also goes out
+as a `::notice::`; it was a `printf` to stdout and an append to the artifact,
+and both of those have to be fetched, where an annotation comes back over the
+ordinary API. `codegen_instructions.sh` took the same pair of fixes on
+claude/codegen-rows earlier today, for the same reason found the same way.
+
+`tests/a_gate_says_its_verdict_before_it_explains.rs` pins both, reading the
+four gates off disk. Watched red on each half: moving the verdict block back
+to the end of `entry_instructions.sh` names it at byte 9781 against an
+explanation at 7209, and deleting the notice from `library_instructions.sh`
+names that file.
+
+**The thirteen itself, four pairs deep.** Every pair is two sittings of one
+binary with the floor identical to the digit and the rows exactly thirteen
+apart:
+
+    kanso#1469   558610/605 twice        rows 13 apart
+    kanso#1465   558232/604 twice        rows 13 apart
+    kanso#1468   558726/605 twice        rows 13 apart
+    kanso#1474   558610 -> 558620, +10   rows -13
+
+and kanso#1477 adds the cleanest demonstration that it is not any diff: a
+golden fixture and a log entry moved all three rows by thirteen.
+
+- **DONE** the verdict is inside the cap.
+- **OPEN** what the verdict says. The gates are armed on every branch carrying
+  main; the next parting row answers from inside its own job.
+
+## 2026-09-17 — eight runs of one binary, identical to the instruction
+
+The thirteen had never been attempted locally. It has now, with the compile
+gate's own box, its own command and its pinned tunables:
+
+    run 1: 36384683      run 5: 36384683
+    run 2: 36384683      run 6: 36384683
+    run 3: 36384683      run 7: 36384683
+    run 4: 36384683      run 8: 36384683
+
+Eight sittings, one binary, one container, one corpus. Identical to the
+instruction. **So the cross-run thirteen is not two runs of one binary**, and
+`kanso#1463`'s second reading — which counts the same binary again inside the
+failing job — should print VERDICT (1) every time.
+
+What is left is two BINARIES. `compile_instructions.sh` has carried the reason
+in its own header since it was written: cargo builds are not bit-reproducible,
+a binary whose data and bss differ starts the heap at a different break, and
+the 508 that row once read was exactly that — sha 55fb850296d1 counted
+41,831,767 and sha de5bfab22fbd counted 41,832,275. Every CI job builds its own
+compiler. Two sittings of one commit are two builds.
+
+The sha is already printed on every run, green or red, put there so a hash
+could be paired with a value. It goes to stdout, and stdout reaches only the
+job log, which is the one artifact unreachable from a session reading over the
+API. Three notices fix that, and the spec pins them.
+
+That makes the next pair decisive either way. Two sittings of one head thirteen
+apart with DIFFERENT shas is the answer: the row moves with the binary and the
+fix is a reproducible build, not a compiler change. The same shas would refute
+it and leave something genuinely unexplained inside `kanso::main`.
+
+- **DONE** eight runs say it is not the run.
+- **OPEN** whether it is the build. The sha notice answers it on the next pair.
+
 **Round four: the warm-up holds.** CI read the start-up row 4,876,986 and then
 4,876,986 again in the same job, where the round before it read 6,018,427 and
 then 4,869,632. The row was counting a cold runtime-object cache and now it
@@ -5179,3 +5259,41 @@ frames of bucket zero, by name and cost, in one notice.
 
 - **DONE** the bucket is named, and the digest earned its place doing it.
 - **OPEN** the frame. One line in the next pair of sittings.
+
+**CI's sitting on the head merged with main after kanso#1461**, and one row of
+the four is a trade rather than a layout move.
+
+```
+compile_instructions   35,965,137 ->  35,887,445    -77,692   -0.216%   LAYOUT
+entry_instructions    128,204,898 -> 127,923,542   -281,356   -0.219%   LAYOUT
+library_instructions  128,340,017 -> 128,059,727   -280,290   -0.218%   LAYOUT
+startup_instructions    4,838,323 ->   5,077,750   +239,427   +4.95%    WORK
+```
+
+The three compile rows fall by layout: this branch's whole diff is
+`src/codegen.rs`, 484 lines added and 73 removed, and `kanso check` stops
+before codegen, so not one changed line runs on those corpora. What moved is
+the compiler's own bytes and the layout under them.
+
+The start-up row is the one that reaches codegen, and it rises. Reproduced in
+a container and attributed, main against this branch on the same corpus:
+
+```
+kanso::main               4,882,857  ->  5,148,482   +265,625
+codegen::called_symbols           0  ->    278,812   +278,812   (new)
+memchr_aligned              921,736  ->    879,487    -42,249
+is_contained_in             626,252  ->    577,318    -48,934
+next_match                  381,383  ->    379,562     -1,821
+```
+
+The index costs 278,812 to build and saves 93,556 on the three scans it
+replaces. Most of that cost is reading DECLARES — twelve hundred lines, a
+constant, the same for every process — while the saving grows with how much
+the program emits. A single `print` emits almost nothing, so the start-up
+corpus is exactly where this trade is worst, and `kanso build bench/runbench`
+falls 69.64% on the same change.
+
+The objective weighs neither the start-up row nor the library row; it weighs
+the module and entry rows, and their fall is the rise banked here. Welfare
+69.79153807658396 -> 69.79493424287482, `--set` run after the goldens carried
+CI's rows and not before.
