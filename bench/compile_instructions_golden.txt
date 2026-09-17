@@ -1779,7 +1779,12 @@
 # reading. The two whole-program questions the emitter asked once per name are
 # indexed, and `kanso check` runs the front end that asks them, so this is work
 # removed from this corpus rather than layout.
-compile_instructions=35887833
+#
+# 2026-09-17, kanso#1473 on the stacked head, CI's sitting. The beat's tail
+# calls are read once from an index rather than re-derived per group, and
+# `kanso check` runs the pass that asks, so this is work removed from the corpus
+# rather than layout.
+compile_instructions=35871357
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

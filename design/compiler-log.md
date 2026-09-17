@@ -4608,3 +4608,17 @@ into `Backend::emit` and callgrind attributes them there together.
 `per_process_floor=558726 frames=605 kernel=6.17.0-1022-azure cpu=25/17`.
 
 - **DONE** the rows are CI's.
+
+## 2026-09-17 — kanso#1473 on the stacked head: CI's sitting
+
+    compile_instructions  35,887,833 -> 35,871,357   -16,476  -0.046%
+    entry_instructions   127,849,537 -> 127,802,541  -46,996  -0.037%
+    library_instructions 127,988,399 -> 127,942,447  -45,952  -0.036%
+
+All three are work removed rather than layout: `kanso check` runs the pass that
+asks, and the beat reads every tail call once from an index rather than
+re-deriving them per group. Welfare rose and is banked at 69.79631238451805.
+
+`per_process_floor=558700 frames=605 kernel=6.17.0-1022-azure cpu=26/2`.
+
+- **DONE** the rows are CI's.
