@@ -449,6 +449,24 @@ jobs:
           said="per_process_floor=$floor frames=$frames"
           said="$said kernel=$(uname -r) cpu=$cpu"
           echo "::notice::$said"
+          # AND A DIGEST OF THE FLOOR'S OWN LISTING, for the ten. Measured
+          # 2026-09-17 over sixty sittings on eighteen branches: every branch
+          # that sat more than once without changing its frame count printed
+          # exactly TWO floors, ten apart, at four different absolute values.
+          # That is a two-valued flag rather than noise, and it is the first
+          # bimodal property these sittings have shown.
+          #
+          # The bucketing is kanso#1474's, name length modulo thirty-two, and
+          # for its reason: it survives a frame appearing or disappearing,
+          # where position would shift every later bucket. Two sittings that
+          # straddle the two floors differ in one bucket by ten, and the
+          # bucket names its frames.
+          sed -n 's/^ *\([0-9][0-9]*\)  *\(.*\)$/\1\t\2/p' /tmp/floor.txt \
+            | awk -F'\t' '{ b = length($2) % 32; s[b] += $1; n[b]++ }
+                           END { for (i = 0; i < 32; i++)
+                                   printf "f%d=%d/%d ", i, s[i], n[i] }' \
+            > /tmp/floordigest.txt
+          echo "::notice::floor_digest $(cat /tmp/floordigest.txt)"
           # AND THE WHOLE LISTING FOR ONE WORKLOAD, which is what the floor
           # above turned out not to be able to name. On 2026-09-17 two jobs on
           # this runner image printed the SAME floor -- 558610 over 605 frames,
