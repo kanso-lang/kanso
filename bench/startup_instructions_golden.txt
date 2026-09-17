@@ -113,4 +113,9 @@
 # corpus is where the trade is worst. `kanso build bench/runbench` falls 69.64%
 # on the same change. The objective weighs neither row, so nothing here is a
 # welfare question; the trade is stated because the row moved.
-startup_instructions=5077750
+#
+# 2026-09-17 (kanso#1478): startup_instructions 5,077,750 -> 5,082,671, a RISE of
+# 4,921 (+0.0969%), 2,719 of it against the parent. The seventh index is more
+# bytes for the loader to place, and the trade it buys is the 88,438 the entry
+# row above gives back.
+startup_instructions=5082671
