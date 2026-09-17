@@ -3970,3 +3970,15 @@ were written from a sitting that drew an unlucky address and have been
 thirteen high since. The entry row is where it shows plainly: with the hint on
 it read 131,884,793 and then 131,884,271 inside one job, and with the hint off
 it reads 131,884,271 and nothing else.
+
+**Round three, after kanso#1466: the interp row is on its golden.** The
+interpreted run had read 2,324,888,437 against a golden of 2,324,888,431 on
+every other run; on the merged head it reads 2,324,888,431 and CI says
+`interp_instructions: 2324888431, on the row`. Both memory rows are
+byte-exact. The six instructions were the allocator picking a random base
+address, which is the same fault the three compile rows had at thirteen.
+
+The three compile rows come back at `compile_instructions` 36,878,080,
+`entry_instructions` 131,881,423 and `library_instructions` 132,023,458,
+against main's 36,878,537, 131,884,271 and 132,025,154. That fall is the
+fixed-seed hashing this branch puts on the compile path.
