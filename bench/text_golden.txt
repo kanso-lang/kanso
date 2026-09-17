@@ -801,4 +801,4 @@ livebench text=134018
 # src/runtime.c, which is linked into every program. The 336-byte spread is the
 # arms a program's own dispatch makes reachable. Machine-code size carries no
 # welfare term (ruled 2026-09-05); this vein is exact and watched on its own.
-runbench text=319954
+runbench text=320514

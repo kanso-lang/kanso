@@ -2076,8 +2076,13 @@
 # so nothing the split does can reach a decision this corpus makes, and moving
 # the compiler's bytes moves what sits around them. Against main's own
 # 35,968,173 the branch is 98,818 below, which is the work.
-compile_instructions=35869355
-
+#
+# 2026-09-17, kanso#1504 on the tree merged with main 2a0cec7c, CI's sitting.
+# compile_instructions 35,869,355 -> 35,870,761, a RISE of 1,406 (+0.0039%).
+# LAYOUT. `src/runtime.c` is include_str!'d into the compiler, so changing it
+# changes the compiler's own bytes and what the linker does with them. This
+# branch does not touch a decision any of these rows counts.
+compile_instructions=35870761
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.
 # The row did not move for that -- the same figure came back on the run before

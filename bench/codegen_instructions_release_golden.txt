@@ -102,4 +102,21 @@
 # a row whose `-O3 -flto` tier is the largest number this tree counts. The
 # same C-toolchain layout the dev row shows, at the scale that tier runs at.
 # A second count in the same job read 6,826,829,520.
-codegen_instructions_release=6826829520
+#
+# 2026-09-17, kanso#1504 on the tree merged with main 2a0cec7c, CI's sitting.
+# codegen_instructions_release 6,826,829,520 -> 6,838,057,035, a RISE of
+# 11,227,515 (+0.1645%). A second count in the same job read 6,838,057,035.
+#
+# THIS ONE IS WORK, not layout, and it is the only row here that is. The row
+# counts the C toolchain and excludes kanso's own process, and this branch
+# changes `src/runtime.c` -- so clang has different source to compile at
+# `-O3 -flto`, over a KMark that grew a field and a new global beside it. The
+# other seven compile-side rows move by four thousandths of a per cent or less
+# because they carry runtime.c's bytes without compiling them; this one
+# compiles them.
+#
+# It is what the change costs at build time, against 16,935,366 instructions a
+# run of the program gives back. The objective weighs both -- release build at
+# 0.15 on the production side against run speed at 0.45 -- and says the trade
+# is worth taking.
+codegen_instructions_release=6838057035

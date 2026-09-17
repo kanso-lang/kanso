@@ -8760,3 +8760,52 @@ emits no beat at all. What the spec needs is both: laps that allocate, and a
 carried value that is a scalar. Each lap builds a padded string and keeps only
 its length.
 
+
+## 2026-09-17 — kanso#1504 on CI: the beat rewind's row, and the one thing it costs
+
+The container projected runbench 1,840,367,648 → 1,823,406,517, −16,961,131,
+−0.9216%. CI, on its own machine and its own baseline, reads 1,821,933,936 →
+1,804,998,570: a fall of **16,935,366, 0.9295%**. The two deltas are 25,765
+apart, 0.0014% of the number, which is as close as this vein gets between
+machines — and is why the per-frame attribution taken on the container can be
+trusted even though its absolute figures cannot be compared with CI's.
+
+    k_beat_iter   61,672,983 -> 40,204,728   -21,468,255   -34.81%
+    k_beat_pop    14,517,216 -> 18,521,968    +4,004,752
+    k_beat_push   15,017,844 -> 15,518,439      +500,595
+
+Eight compile-side rows moved, and seven of them are layout. `src/runtime.c`
+is `include_str!`'d into the compiler, so changing it changes the compiler's
+own bytes and what the linker does with them:
+
+    compile_instructions      35,869,355 ->     35,870,761      +1,406   +0.0039%
+    entry_instructions       127,872,255 ->    127,877,328      +5,073   +0.0040%
+    library_instructions     128,010,052 ->    128,015,155      +5,103   +0.0040%
+    interp_instructions    2,182,307,043 ->  2,182,420,936    +113,893   +0.0052%
+    startup_instructions       3,955,899 ->      3,957,812      +1,913   +0.0484%
+    codegen_instructions_dev 596,161,166 ->    596,182,348     +21,182   +0.0036%
+    emit_instructions         60,197,743 ->     60,201,844      +4,101   +0.0068%
+    runbench text                319,954 ->        320,514        +560
+
+The eighth is not layout. `codegen_instructions_release` rises **11,227,515,
+0.1645%** — that row counts the C toolchain and excludes kanso's own process,
+so it is the only one that COMPILES runtime.c rather than carrying its bytes,
+and clang at `-O3 -flto` now has a mark with a field more and a global beside
+it. Both readings in the job were identical.
+
+So the trade is: 11.2 million instructions once per release build, against
+16.9 million on every run of the program. The objective weighs run speed at
+0.45 on the production side and the release build at 0.15, and takes it —
+welfare 76.65 → 76.71, banked.
+
+**A span that quotes a number nothing checks.** Publishing CI's row, the page
+got `data-golden="run.runbench"` and `golden_prose` answered `UNKNOWN KEY
+run.runbench` — and the sweep still reported that the three page gates agree,
+exit 0. `golden_for` knows three families, decode, encode and compile, and
+anything else resolves against an empty golden; `bench/instructions_golden.txt`
+also writes `name value` rows where the parser wants `name=value`. So there is
+no way for any page to quote the run-side vein today, and an unknown key is a
+warning rather than a failure. The attribute came off and the row is plain text
+on the page. The gate's own comment names this exact shape as the failure it
+was widened to stop, and kanso#1337 cost a run to the same gap on the library
+vein; making an unknown key red is a separate change and is filed.

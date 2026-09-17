@@ -70,4 +70,11 @@
 # is where this branch shows: codegen_dev_kanso_excluded=406,043,465 against
 # main's 407,173,801, a fall of 1,130,336. A build pays the same start-up a
 # run does.
-codegen_instructions_dev=596161166
+#
+# 2026-09-17, kanso#1504 on the tree merged with main 2a0cec7c, CI's sitting.
+# codegen_instructions_dev 596,161,166 -> 596,182,348, a RISE of 21,182 (+0.0036%).
+# This row counts the C toolchain compiling the IR kanso wrote, excluding
+# kanso's own process. The dev tier is -O0, so a changed runtime.c costs it
+# almost nothing: 21,182 on 596 million. A second count in the same job read
+# 596,182,348.
+codegen_instructions_dev=596182348

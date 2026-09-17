@@ -75,4 +75,10 @@
 # main's 407,173,801 -- kanso's own process on the codegen corpus falls 79.1%
 # while clang and ld count the same to the instruction. That is the emitted IR
 # being byte-identical, measured rather than asserted.
-emit_instructions=60197743
+#
+# 2026-09-17, kanso#1504 on the tree merged with main 2a0cec7c, CI's sitting.
+# emit_instructions 60,197,743 -> 60,201,844, a RISE of 4,101 (+0.0068%).
+# LAYOUT. `src/runtime.c` is include_str!'d into the compiler, so changing it
+# changes the compiler's own bytes and what the linker does with them. This
+# branch does not touch a decision any of these rows counts.
+emit_instructions=60201844

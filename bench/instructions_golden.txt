@@ -760,4 +760,19 @@ livebench 2825430323
 #
 # The uniform -8 across six rows is one instruction on a path each program
 # takes eight times, and the four flat rows never take it at all.
-runbench 1821933936
+# 2026-09-17, kanso#1504 on the tree merged with main 2a0cec7c, CI's sitting.
+# runbench 1,821,933,936 -> 1,804,998,570, a FALL of 16,935,366 (-0.9295%).
+# The beat rewind's fast path went from 23 instructions to 15: the registry
+# summary moved into the mark it describes and folded its test into the shelf
+# flag's, then the innermost mark is cached beside the depth instead of being
+# derived from it once an iteration. The container projected -16,961,131 on
+# the same change and CI reads 25,765 fewer -- 0.0014% of the total, which is
+# as close as two machines get on this vein.
+#
+# Attributed on the container, and the shape is what the trade is:
+#   k_beat_iter   61,672,983 -> 40,204,728   -21,468,255   -34.81%
+#   k_beat_pop    14,517,216 -> 18,521,968    +4,004,752
+#   k_beat_push   15,017,844 -> 15,518,439      +500,595
+# The loop iterates five times for every pop, so five instructions off the
+# iteration buy eight onto the pop.
+runbench 1804998570

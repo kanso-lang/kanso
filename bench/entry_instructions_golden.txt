@@ -830,8 +830,13 @@
 # 2026-09-17, kanso#1478 on the tree merged with main 5e256ce0, CI's sitting.
 # 127,871,143 -> 127,872,255, a RISE of 1,112 (+0.0009%). The same layout term
 # as the module row; against main's 128,213,970 the branch is 341,715 below.
-entry_instructions=127872255
-
+#
+# 2026-09-17, kanso#1504 on the tree merged with main 2a0cec7c, CI's sitting.
+# entry_instructions 127,872,255 -> 127,877,328, a RISE of 5,073 (+0.0040%).
+# LAYOUT. `src/runtime.c` is include_str!'d into the compiler, so changing it
+# changes the compiler's own bytes and what the linker does with them. This
+# branch does not touch a decision any of these rows counts.
+entry_instructions=127877328
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.
 # The row did not move for that -- the same figure came back on the run before

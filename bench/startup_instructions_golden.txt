@@ -265,4 +265,9 @@
 #
 # The value the merge carried forward was main's, so this diff is the whole of
 # what the branch does to today's main, taken in one job.
-startup_instructions=3955899
+#
+# 2026-09-17, kanso#1504 on the tree merged with main 2a0cec7c, CI's sitting.
+# startup_instructions 3,955,899 -> 3,957,812, a RISE of 1,913 (+0.0484%).
+# LAYOUT. `kanso play` takes the native path and does link the runtime, so this
+# row sees the wider binary; 1,913 is what 560 more bytes of .text weigh here.
+startup_instructions=3957812

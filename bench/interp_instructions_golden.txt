@@ -127,5 +127,11 @@
 # nothing is claimed about which. A second count in the same job read
 # 2,182,307,043, so the binary is stable and the disagreement was with the
 # golden.
-interp_instructions=2182307043
+#
+# 2026-09-17, kanso#1504 on the tree merged with main 2a0cec7c, CI's sitting.
+# interp_instructions 2,182,307,043 -> 2,182,420,936, a RISE of 113,893 (+0.0052%).
+# LAYOUT, and the largest of the layout moves in absolute terms because this is
+# the largest row. 113,893 on 2.18 billion is five thousandths of a per cent.
+# The interpreter does not run the C beat; it carries runtime.c's bytes.
+interp_instructions=2182420936
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
