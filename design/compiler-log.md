@@ -6908,3 +6908,101 @@ the list, and an empty list is the easiest state in which to forget that.
 - **OPEN** whether a sweep of the 2026-08-29 sitting would add rows nobody has
   listed. It has never been run, and an empty section is the moment it would
   be worth most.
+
+## 2026-09-17 — the 2026-08-29 sweep runs, and one ruling lost its purpose to a later build
+
+Closes the OPEN item above. The "Ruled, unbuilt" preamble has called its list
+a FLOOR since 2026-09-09 because the rest of the 2026-08-29 sitting was never
+audited, and the section went empty an hour ago, which is the state in which a
+floor is easiest to read as a total.
+
+**What the sitting holds.** Twenty-six entries carry that date in the archive.
+Six are bounces, corrections or infrastructure notes; twenty are rulings.
+Probed one at a time against a release build of `5e256ce0` rather than read off
+their own text:
+
+| ruling | found |
+|---|---|
+| `--explain-copies` declined | declined; nothing owed |
+| the three words replace the no-bind surface | superseded by the effect gavel |
+| the one-keyword world declined | declined |
+| effects are types, the words are the only doors | built, kanso#1372 |
+| `read_file` is text, `read_bytes` is bytes | built; `read_bytes` in check, codegen, the wasm imports |
+| the chain line keeps its dot | built, and respelled since by the fused `.>` `.!` `.?` |
+| an err has readers | built; `ERR_READERS` in ast.rs, `an_err_has_readers` in micro |
+| the drop question closes | declined; no rule was minted, so none is owed |
+| a qualified name is its module's declaration | built |
+| records print qualified, everywhere | built; `entry_file.rs` carries the citation |
+| an instruction is a cost, whoever put it there | in force; the attribution ritual is the floor's `why` |
+| the backends build the partial over a value | built on both; `partial.rs`, `wasm_engine.rs`, `wasm_rt.rs` |
+| block-born is the whole cohort | **built, then narrowed; see below** |
+| the ambiguous-bare-call refusal is final | stands as built |
+| arms travel with the type, under the ownership rule | built |
+| no `first coll n`; `take` is the answer | built; `pub fn first coll`, one arity |
+| std ships inside the binary | built; `include_str!` in lib.rs |
+| the frame guard's standing offer closes | stands as built |
+| saturate each counter, then average | built; `welfare_saturates_each_counter` cites the words |
+| bring binary size back down | a directive, softened the same day |
+
+Two of those were probed rather than grepped because a grep would have
+answered the wrong question. `a qualified name is its module's declaration`
+asked for a red spec against one measured hazard: a dependency that declares
+one arm of a name while importing another module's arm of the same name. Built
+as a hako pair, `dep` declaring `pub fn join x` and importing `std/text`, the
+bare call inside dep at text's arity says `no 2-argument arm of `join` (arms
+take 1)`. The clone does not enroll. And `arms travel with the type` needed the
+group's real name: an arm written `render m:money` does nothing, because
+interpolation dispatches `to_string`. Spelled `to_string`, money's arm prints
+`$250` in a module that imports money and declares no interface, and a
+`to_string s:string` arm beside it is refused at the declaration with
+`error[ownership]`. Both halves hold.
+
+**The one that moved.** `block-born is the whole cohort` was built on
+2026-09-09 as kanso#1359 with all four of the shapes the gavel names: an
+alias, a field of a born node, an element of a born list, and a node an `if`
+chose. On 2026-09-16 the build-hole gavel landed, and two of the four went.
+The golden that pins the rule says so in its own header — *what the proof
+declines: a field built with a value, a record an `if` chose, an element of a
+list* — where seven days earlier the same file's header had named all four as
+admitted.
+
+The reason is good and the hole entry states it: a hole is filled exactly
+once, and a name whose birth is `Either` cannot be shown to fill one. Nothing
+about that reasoning is wrong.
+
+What went with the two shapes is the cohort gavel's stated purpose. Its words
+were *cyclic structures sized by data (a graph parsed from input, N linked
+nodes from a map) gain a spelling*. Run against a build of main today, that
+spelling is gone in every direction the tree offers. An indexed element cannot
+fill a hole: `xs[1]!` then a write is refused with the once-ness sentence. A
+field built with a value cannot be written at all since the hole gavel, so the
+pre-hole idiom is not a fallback. And birth does not flow through a call, which
+the 2026-09-09 entry says plainly and files as the implementer's next
+widening. N nodes cannot carry N names, so a data-sized cycle has nowhere left
+to go.
+
+**Nobody recorded the trade.** The narrowing appears twice. The hole entry
+lists it as one of seven refusals, with its fixtures. A merge-conflict
+paragraph a day later says which lines of the golden were deleted and why.
+Neither says an earlier ruling's reason for existing had been given up, and
+the two rulings were never set beside each other. Clay's hole gavel is silent
+on chosen records and list elements — it rules `_` against `none` and
+fill-exactly-once, and ends *Implementation is the implementer's* — so the
+narrowing was a build decision, not a ruling that outranks the cohort gavel.
+
+**So one row goes back on the list**, for the part of the cohort gavel that is
+no longer built rather than for the gavel entire: the data-sized cycle, whose
+route is the widening cloud has already named as its own. Birth through a call
+would restore it if a call returning one record resolves to one birth, and
+that is a thing to measure rather than a thing to assume; the row says so. The
+alias and the field of a born node stay built and are not part of the row.
+
+- **DONE** the sitting swept, twenty rulings probed, nineteen built or
+  declined.
+- **OPEN** whether birth through a call actually restores the data-sized
+  cycle under the once-ness proof, or whether the cohort gavel's purpose needs
+  a spelling the hole discipline can admit. Cloud's, and the row carries it.
+- **OPEN** `tests/partial.rs`'s module header still reads *the two backends
+  decline it out loud*, which the 2026-08-29 partial gavel retired and the
+  file's own test at line 70 refutes by name. A stale comment rather than a
+  behavior, and cloud's file to fix.

@@ -113,20 +113,22 @@ whole section before choosing what to build next, and chooses with
 discretion; a pull request on something else says which of these it weighed.
 The chat adds a row the day a ruling lands and removes it the day the build
 lands on main. Verified against the tree on 2026-09-09 by probing the
-compiler; the list is a floor, since the rest of the 2026-08-29 sitting was
-not audited. Swept again on 2026-09-14 against merged main: the effect-type
+compiler. The list called itself a floor from that day until 2026-09-17,
+because the rest of the 2026-08-29 sitting had never been audited; the sweep
+recorded below closed that gap, and the phrase goes with it. Swept again on
+2026-09-14 against merged main: the effect-type
 row came off, built and merged as kanso#1372, and the exhaustiveness row came
 off with kanso#1369. The book row came off with kanso#1412, which its own
-log entry calls the live remainder of that ruling. NO row stands as of
-2026-09-17 20:15Z, and that is the first time this section has been empty
-since it was created on 2026-09-09. The two welfares came off when kanso#1491
-landed the second half of the 2026-09-16 gavel; every item on its Owes list
-was probed against a build of main rather than read off a report. So cloud
-chooses freely: there is no ruled-and-unbuilt work a self-generated lead would
-be displacing, and the "which rulings did you weigh" paragraph a pull request
-body owes has, for now, an empty list to weigh against. That changes the day
-anything is ruled, and the chat adds the row that day. The build hole came off
-built as kanso#1447, the day after it was found twenty-three days off this
+log entry calls the live remainder of that ruling. The two welfares came off
+when kanso#1491 landed the second half of the 2026-09-16 gavel; every item on
+its Owes list was probed against a build of main rather than read off a
+report, and for about an hour on 2026-09-17 the section was empty for the
+first time since it was created. ONE row stands as of 2026-09-17 21:00Z, and
+the sweep that found it is why the list is no longer only a floor: every one
+of the twenty rulings in the 2026-08-29 sitting was probed against a release
+build of `5e256ce0`, nineteen came back built or declined, and the twentieth
+is the row below. The build hole came off built as kanso#1447, the day after
+it was found twenty-three days off this
 list; the compile row's normalization, ruled 2026-09-15, was built the same
 night (kanso#1439); and the explicit box came off the same afternoon it was
 probed part by part against a release build of main. It does not wait on
@@ -152,6 +154,38 @@ as a standing row and as one that had come off, in the same breath, and did not
 name the two welfares at all. This paragraph is the first thing cloud reads
 before choosing work, so a row miscounted here is a row chosen or skipped
 wrongly.
+
+### The cohort gavel's data-sized cycle (2026-08-29, narrowed 2026-09-16)
+
+The archive entry "block-born is the whole cohort", Clay: "okay whole cohort
+it is." Built on 2026-09-09 as kanso#1359 with all four shapes the gavel
+names. The build-hole gavel of 2026-09-16 took two of them back: a record an
+`if` chose and an element of a born list can no longer be written through,
+because a hole is filled exactly once and a name whose birth is `Either`
+cannot be shown to fill one. That reasoning is sound and this row does not
+ask for it to be undone.
+
+What the row asks for is the purpose the two shapes carried. The cohort
+gavel's words are "cyclic structures sized by data (a graph parsed from
+input, N linked nodes from a map) gain a spelling", and against a build of
+main there is no such spelling left: an indexed element cannot fill a hole, a
+field built with a value cannot be written at all, birth does not flow through
+a call, and N nodes cannot carry N names. The alias and the field of a born
+node stay built and are not part of this row.
+
+Route, and the reason this is a build rather than a question: the 2026-09-09
+entry names birth through a call as the next widening of this analysis and
+claims it as the implementer's. A call that returns one record may resolve to
+one birth, which would give the fill its uniqueness back. That is a thing to
+measure before it is a thing to build on, and if the measurement says no, the
+finding goes to the ledger as a question about what the cohort gavel's
+purpose is owed instead.
+
+Owes: a measurement of whether birth through a call resolves to one birth;
+if it does, the widening and a micro golden building a cycle over a
+data-sized list; if it does not, a ledger entry stating what the gavel's
+purpose needs. Either way the golden's header stops claiming four shapes
+while the checker admits two.
 
 ## In flight
 
