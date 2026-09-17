@@ -5461,6 +5461,138 @@ reads, so it is the record of that commit rather than a draft of the branch.
 - **OPEN** the golden. This host refuses the recorded toolchain, so the values
   are CI's to take on the first green sitting.
 
+## 2026-09-17 — the stack-slot check reads the first space, and the lever was a tenth the size advertised
+
+`FnEmit::write` diverts every `alloca` to the head of the entry block so LLVM
+does not keep a frame pointer for the function, and it recognised one by
+searching the whole line for ` = alloca `. A slot reads `%name = alloca <type>`
+and `%name` holds no space, so the needle begins at the line's first space or it
+is nowhere. Measured on runbench's 36,086 emitted lines: all 235 slots put it
+between offsets five and seven, and each of those is that line's first space.
+
+```
+kanso build pkg/runbench, kanso's own process
+  before  31,280,056,421
+  after   31,279,771,548   -284,873
+```
+
+IR byte-identical, 1,250,754 bytes.
+
+**And the figure this was chosen on was wrong.** The 2026-09-16 build profile
+put 18.2 million instructions over 144,261 lines against this search, about a
+hundred and ten a line. The measurement above is eight a line. The 18.2 million
+was an inclusive cost read as a self cost — the same mistake the hand-written
+caller-tree parser made on 2026-09-15, arrived at by a different route. A lever
+priced from a profile is a hypothesis; this one was worth a sixty-fourth of its
+price and is recorded at what it is.
+
+It is still worth having: free, exact, and pinned. `kanso check` stops before
+codegen, so no welfare term can see it at all until the codegen rows land on
+kanso#1470.
+
+`tests/a_stack_slot_is_found_where_the_first_space_is.rs` compiles the module
+fixture, runbench and a list-literal sample and asserts the narrow reading and
+the whole-line one agree for every emitted line — 235 slots among them, so the
+agreement is not between two functions that both said no. Watched red with the
+reading pinned to offset zero; it named `%t77 = alloca [2 x %KValue]`.
+
+- **DONE** the check is narrow and the two readings agree over real IR.
+- **NOTE** a profile's inclusive cost has now mispriced a lever twice in three
+  days. Price a frame from its SELF cost, or build it and measure the whole.
+
+## 2026-09-17 — the compile profile by SELF cost, and the map keys measured at last
+
+The entry above says to price a frame from its self cost. This is that profile,
+taken the same afternoon on main: `kanso check compile_corpus`, 36,830,740
+instructions, staged in the box the gate uses.
+
+```
+  1,636,363  4.44%  hashbrown HashMap::insert
+  1,476,482  4.01%  infer::eval_expr'2
+  1,435,071  3.90%  hashbrown rustc_entry
+  1,165,325  3.16%  check::check_after_infer
+  1,158,417  3.15%  infer::infer
+  1,149,825  3.12%  __memcmp_avx2_movbe
+  1,124,080  3.05%  check::check_merged_after_aliases
+  1,043,583  2.83%  RawTable::reserve_rehash
+    985,190  2.67%  lexer::lex_line
+    755,027  2.05%  infer::eval_expr
+    692,234  1.88%  parser::parse
+    680,372  1.85%  check::per_node_walk'2
+    656,191  1.78%  __memcpy_avx_unaligned_erms
+    616,257  1.67%  lexer::lex
+    603,907  1.64%  mi_free
+```
+
+Hash tables come to 17.9% with the lookups added — insert, rustc_entry,
+reserve_rehash, contains_key, get_mut, get — and `__memcmp_avx2_movbe` at 3.12%
+sits underneath them, which is what comparing string keys costs on a collision.
+The allocator adds 5.1%.
+
+**The map keys are the question the 2026-09-14 entry left open, and here they
+are.** That entry recorded kanso#1033 declining an interned symbol for the AST's
+own field at 365 conversion sites, and said in the same paragraph that the MAP
+KEYS are a different question nobody had measured. Measured now, by caller:
+
+```
+  428,500  1.16%  < RawIterRange::fold_impl        (2,180 calls)
+  291,898  0.79%  < qualify                        (1,531)
+  218,600  0.59%  < Resolver::flush_unused           (831)
+  181,262  0.49%  < Map::fold                        (868)
+  169,058  0.46%  < bound_in_pattern               (1,454)
+  151,997  0.41%  < HashSet IntoIter::fold           (750)
+  148,308  0.40%  < compile_module_loaded'2          (797)
+  135,045  0.37%  < Vec SpecFromIterNested::from_iter (519)
+  126,238  0.34%  < collect_pattern_names          (1,302)
+  115,956  0.31%  < fuse_enumerable                  (588)
+```
+
+Twenty-four more callers below these, none above 0.10%. So the keys are the
+same shape as the rehash lever: one habit repeated in thirty places, largest
+1.16%. Interning reaches all of it from underneath, which is the case for
+doing it, and it lands on thirty sites across check.rs, infer.rs, name.rs and
+codegen.rs, which is the case for not doing it while fourteen pull requests
+are open against those files.
+
+`reserve_rehash`'s own callers are `HashMap::insert` over 1,171 rehashes and
+`rustc_entry` over 295. (The `phase::watched` rows the caller tree prints at
+20.93% and 19.93% are inclusive chains — the whole compile passes through them
+— and are not attributions. Reading one as a self cost is the mistake the entry
+above corrects.)
+
+- **DONE** the map keys are measured; the 2026-09-14 entry's open line closes.
+- **OPEN** the refactor itself, and it wants a quiet tree.
+
+## 2026-09-17 — kanso#1482's four rows, merged with main and measured by CI
+
+The stack-slot branch merged main and the conflict resolution carried main's
+four instruction rows forward, so the tree was reading numbers no sitting on it
+had produced. CI's sitting on the merged head:
+
+```
+  compile_instructions   35,965,137 -> 35,965,230     +93
+  entry_instructions    128,204,898 -> 128,205,462    +564
+  library_instructions  128,340,017 -> 128,340,528    +511
+  startup_instructions    4,838,323 ->   4,837,367    -956
+```
+
+All four are LAYOUT. `kanso check` stops before codegen and this branch changes
+src/codegen.rs alone, so nothing any of these rows counts as work went near the
+change; what moved them is the compiler binary carrying different bytes. The
+signs say the same thing — three up, one down, no direction.
+
+Welfare weighs the first two and not the other two, so the change costs +657
+summed compile instructions. The dead band is ±0.001 points, about 105,000
+summed, so the objective does not move and there is nothing to bank. The gate
+agrees: it exits 0 with the value and the floor both reading 69.79.
+
+What the branch buys is 284,873 instructions off `kanso build bench/runbench`,
+and no vein on main counts that yet — the codegen rows are kanso#1470's. So
+this is a change whose cost is measured and whose gain is not, until that lands.
+
+- **DONE** the four goldens carry CI's rows; eight page spans follow them.
+- **OPEN** kanso#1470's codegen rows, which would put a number on the gain.
+
 **CI's sitting on the head merged with main after kanso#1479.** Five rows move
 and only one of them is this change.
 
@@ -5980,6 +6112,34 @@ tree" until this morning.
   spec's prefix list.
 - **OPEN** the row itself, which the next sitting writes.
 
+## 2026-09-17 — kanso#1482's three rows, priced: layout, upward
+
+The first sitting this branch has taken on the anchor kanso#1487 left, so
+each number is one value rather than a face of the thirteen.
+
+```
+  compile_instructions   35,964,325 ->  35,964,418   +93 (+0.00026%)
+  entry_instructions    128,204,133 -> 128,204,697  +564 (+0.00044%)
+  library_instructions  128,339,261 -> 128,339,772  +511 (+0.00040%)
+  startup_instructions    4,838,323 ->   4,837,367  -956 (-0.0198%)
+```
+
+`compile_allocs` came back 27,397 and compile memory byte-identical, so no
+decision the compiler makes changed.
+
+Three of the four worsened and they are named here because the trend gate
+asks for that and it is right to: a row that moves without a sentence is the
+thing the rule exists to catch. What moved them is the binary's layout. The
+change is the emitter's stack-slot check reading the line's first space
+instead of searching it for a substring, and the three rows above count
+`kanso check`, which stops before codegen. The pass cannot run on any of
+them.
+
+The row the change is for is start-up, and it falls 956.
+
+welfare weighs 657 of this against a dead band of about 105,000 and does not
+move.
+
 ## 2026-09-17 — kanso#1462's rows, priced: the compiler compiles with the hasher it changes
 
 CI's sitting on the anchor kanso#1487 left, so each number is one value rather
@@ -6209,6 +6369,32 @@ says the trend gate cannot tell a re-basing of it from a win.
   disagree about is the evidence that would move them, and there has not been
   one yet.
 
+## 2026-09-17 — kanso#1482 on the tree merged with kanso#1462: five rows, all down
+
+    compile_instructions    35,968,792 -> 35,968,171        -621   -0.0017%
+    entry_instructions     128,217,983 -> 128,213,972      -4,011   -0.0031%
+    library_instructions   128,352,174 -> 128,348,205      -3,969   -0.0031%
+    interp_instructions  2,178,559,085 -> 2,178,502,266   -56,819   -0.0026%
+    startup_instructions     4,838,372 -> 4,837,381          -991   -0.020%
+
+Nothing worsened. Four of the five are layout: `is_a_stack_slot` is asked from
+`FnEmit::write`, which sits under `emit_ir`, and neither `kanso check` nor
+`kanso run --interp` reaches codegen at all. src/codegen.rs is the compiler,
+so editing it moves the compiler's bytes and what sits around them.
+
+The interpreted row's 56,819 is worth writing down as a scale for that vein.
+kanso#1468 moves the same row 237,834 in the other direction in this same
+round, from an edit in the same file that likewise never executes on the
+corpus. A layout term of tens to hundreds of thousands is what this row has,
+and a move of that size on it means nothing on its own.
+
+Start-up is the one corpus where the change does run, because `kanso play`
+takes the native path. A one-line program emits few enough lines that the 991
+saved and the layout term the other four rows show are the same size, so this
+reading does not separate them; both point down and the row takes the number.
+
+- **DONE** the rows are CI's.
+
 ## 2026-09-17 — kanso#1480's rows challenged, bisected, and the calibration's blind spot found
 
 kanso#1480 shares one linearity `Analysis` where three were built, takes
@@ -6382,3 +6568,48 @@ enough 0.16 against 0.06.
   be the same measurement counted twice. Left unweighed on that side
   deliberately, and recorded here so the asymmetry is a decision rather than an
   oversight.
+
+## 2026-09-17 — the codegen rows measured, and both tiers read twice the same
+
+CI's first sitting on aa57f47e, which is what this branch was opened to take:
+
+    codegen_instructions_dev        596,161,187   again 596,161,187
+    codegen_instructions_release  6,826,827,769   again 6,826,827,769
+    emit_instructions               382,309,867
+    compile_instructions             35,968,794   main 35,968,792    +2
+    entry_instructions              128,217,981   main 128,217,983   -2
+    library_instructions            128,352,174   main 128,352,174    0
+    interp_instructions           2,178,559,085   main 2,178,559,085  0
+    startup_instructions              4,837,941   main 4,838,372    -431
+
+**The `again` readings are the result, not the values.** This row's first shape
+counted the whole process tree, and two readings in one job differed by 3,105
+with every child byte-identical: the parent sits in a wait loop for clang and
+the linker, and what that loop costs is the box's scheduling rather than the
+compiler's work. Excluding kanso's own process under the 2026-09-15 rule is
+what made the row reproducible, and a job that reads 596,161,187 twice and
+6,826,827,769 twice is the evidence that it worked.
+
+**The release tier is 11.5x the development tier.** That is what `-O3 -flto`
+costs against `-O0`, and it is the reason the 2026-09-16 gavel put them on
+different sides: one is paid once per release and the other between a keystroke
+and an answer.
+
+**`emit_instructions` is 382,309,867**, the compiler's own half of a build —
+what the two codegen rows stopped counting when kanso's process left them. The
+container read 394,912,504 from three stagings and 394,910,642 on four
+release-path profiles; CI is 12.6 million lower, which is the host difference
+its golden's header said no box could compare away.
+
+**Three container placeholders are replaced and none was comparable.** The dev
+and release goldens carried 1,003,426,243 and 12,107,507,377, both measured
+before the exclusion, and the emit golden 394,912,504 from this host. They
+existed so each gate had one value to fail against rather than none; CI's
+sitting is what they are for.
+
+**What the branch costs the rows that already existed is two instructions.**
+compile +2, entry −2, library and interp byte-identical, start-up −431. The
+branch edits src/main.rs, so the rows can move; this is the smallest move the
+compile vein has recorded.
+
+- **DONE** the rows are CI's.

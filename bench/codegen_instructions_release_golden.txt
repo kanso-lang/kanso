@@ -87,4 +87,14 @@
 # the gate's header with the two measurements that put it there. The value
 # below is the old whole-tree number and stands only so the gate has one
 # value to fail against; the first sitting under the new shape writes it.
-codegen_instructions_release=12107507377
+#
+# 2026-09-17, CI's first sitting. 6,826,827,769, with
+# `codegen_release_again` reading 6,826,827,769 -- deterministic in one job,
+# like the dev tier beside it.
+# #
+# The release tier is 11.5x the development tier, which is what `-O3 -flto`
+# against `-O0` costs and the reason the 2026-09-16 gavel put the two on
+# different sides: one is paid once per release and the other between a
+# keystroke and an answer. The container's placeholder read 12,107,507,377,
+# pre-exclusion and not comparable.
+codegen_instructions_release=6826827769
