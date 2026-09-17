@@ -1820,7 +1820,17 @@
 # never runs it. What moved the row is src/eval.rs being part of the compiler
 # binary. The grep that settles it: the changed code's callers all sit under the
 # run path, not under compile_module_inner.
-compile_instructions=35965137
+#
+# 2026-09-17, kanso#1482 on the tree merged with main, CI's sitting. LAYOUT.
+# `kanso check` stops before codegen, and this branch changes src/codegen.rs
+# alone, so nothing the row counts as work went near the change. What moved it
+# is the compiler binary carrying different bytes: the narrowed slot check is
+# shorter code and the layout under it shifted. 93 higher.
+# #
+# # What the change buys is on the build path, which no landed vein counts yet:
+# # 284,873 instructions off `kanso build bench/runbench`, measured end to end.
+# # The codegen rows that would pin it are kanso#1470's and not on main.
+compile_instructions=35965230
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

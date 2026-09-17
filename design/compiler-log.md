@@ -5046,3 +5046,33 @@ above corrects.)
 
 - **DONE** the map keys are measured; the 2026-09-14 entry's open line closes.
 - **OPEN** the refactor itself, and it wants a quiet tree.
+
+## 2026-09-17 — kanso#1482's four rows, merged with main and measured by CI
+
+The stack-slot branch merged main and the conflict resolution carried main's
+four instruction rows forward, so the tree was reading numbers no sitting on it
+had produced. CI's sitting on the merged head:
+
+```
+  compile_instructions   35,965,137 -> 35,965,230     +93
+  entry_instructions    128,204,898 -> 128,205,462    +564
+  library_instructions  128,340,017 -> 128,340,528    +511
+  startup_instructions    4,838,323 ->   4,837,367    -956
+```
+
+All four are LAYOUT. `kanso check` stops before codegen and this branch changes
+src/codegen.rs alone, so nothing any of these rows counts as work went near the
+change; what moved them is the compiler binary carrying different bytes. The
+signs say the same thing — three up, one down, no direction.
+
+Welfare weighs the first two and not the other two, so the change costs +657
+summed compile instructions. The dead band is ±0.001 points, about 105,000
+summed, so the objective does not move and there is nothing to bank. The gate
+agrees: it exits 0 with the value and the floor both reading 69.79.
+
+What the branch buys is 284,873 instructions off `kanso build bench/runbench`,
+and no vein on main counts that yet — the codegen rows are kanso#1470's. So
+this is a change whose cost is measured and whose gain is not, until that lands.
+
+- **DONE** the four goldens carry CI's rows; eight page spans follow them.
+- **OPEN** kanso#1470's codegen rows, which would put a number on the gain.

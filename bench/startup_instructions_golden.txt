@@ -93,4 +93,9 @@
 # row this branch is for, re-read on the merged tree: 23 instructions above the
 # previous sitting's 4,838,300 on a different tree. This is the interpreter's own
 # start-up and the 13.8x fall this branch bought is already in the value.
-startup_instructions=4838323
+#
+# 2026-09-17, kanso#1482, CI's sitting. LAYOUT, same reason, and this one
+# fell: 956 lower. The four rows together are +93 +564 +511 -956, which is
+# what a code-layout shift looks like -- no direction, and no relation to
+# what the branch changed.
+startup_instructions=4837367
