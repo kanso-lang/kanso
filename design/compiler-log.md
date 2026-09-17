@@ -7330,5 +7330,36 @@ what it measured*: a statement that something is in a certain state, repeated,
 with no reading behind it. The sweep is cheap. It goes in the check-in as a
 count of what was open rather than as a sentence saying it happened.
 
-- **DONE** all 21 September rulings probed, 35 of August before them, 56 of 56.
+### The count of rulings was wrong, and it was wrong on the page for an hour
+
+This entry shipped saying 56 rulings, 35 of them August, all swept. Both
+numbers came from kanso#1500 and neither reproduces off disk. Counted twice,
+with the commands:
+
+```
+grep -hE "^## " design/compiler-log.md design/log/compiler-log-archive.md \
+  | grep -cE "— gavel[:,]"          -> 50   (29 August, 21 September)
+  | grep -cE "GAVEL(ED)?[:,(]"      -> 23   (14 July, 6 undated, 3 August)
+```
+
+No heading matches both, so the two partition **73** rulings exactly.
+
+The convention moved. September and most of August write `— gavel:`; July
+writes `GAVEL:`, `GAVELED:`, `GAVEL (syntax):`, `GAVEL (extension):`,
+`GAVEL (amendment):` and `GAVEL, IMPLEMENTED:`, and three August entries still
+use the old spelling — the as-patterns ruling, equality refusing a
+self-naming value, and two definitions with one unfolding. A grep for the
+newer shape walks past all twenty-three.
+
+**So the sweep covered 50 of 73, and 23 rulings have never been read against a
+build.** August was reported as "all of it" and is 29 of 32.
+
+This is the fifth claim in two days to rest on a count nobody re-derived, and
+the first one I published to the compiler page before checking. The page
+carried it for about an hour. Both surfaces are corrected in the same commit,
+and the page now states the two commands rather than the number.
+
+- **DONE** 50 of 73 rulings probed: all 21 of September, 29 of August, none of
+  the 23 under the older spelling.
+- **OPEN** the 23 unswept rulings — 14 July, 6 undated, 3 August.
 - **OPEN** the two welfare.kso sentences, which are cloud's file.
