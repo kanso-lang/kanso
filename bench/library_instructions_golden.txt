@@ -765,6 +765,8 @@
 # 2026-09-17, kanso#1487's sitting, printed line excluded. The two faces were
 # 128,340,017 and 128,340,030; the excluded subtree is 756 and 769.
 #
+# 2026-09-17 (kanso#1470): library_instructions 128,339,261 -> 128,339,061, a
+# FALL of 200 (-0.00016%). Layout, same sitting as the compile row.
 # 2026-09-17, merged with main. Both branches moved this row on their own
 # base, so the merged tree is reading neither number. The value below is
 # main's, carried forward so the gate has one value to fail against
@@ -804,14 +806,15 @@
 # base, so the merged tree is reading neither number. The value below is
 # main's, carried forward so the gate has one value to fail against
 # rather than none; the merged sitting is CI's to take.
+# 2026-09-17, merged with main at 5e256ce0 (kanso#1491), and retargeted from
+# claude/prune-indexed to main in the same round. The split edits src/main.rs
+# and moved the four compile-side rows under this branch. The value below is
+# this branch own CI sitting, taken on the old base; the merged number is
+# CI to take.
+#
 #
 # 2026-09-17, kanso#1484 on kanso#1468's tree. CI reads 128,348,221 against
 # its base's 128,340,895, a rise of 7,326 -- 0.006%. Layout.
-#
-# 2026-09-17, merged with main. Both branches moved this row on their own
-# base, so the merged tree is reading neither number. The value below is
-# main's, carried forward so the gate has one value to fail against
-# rather than none; the merged sitting is CI's to take.
 #
 # 2026-09-17, kanso#1468 against main, CI's sitting. 128,348,205 -> 128,344,827,
 # a FALL of 3,378 (-0.0026%). LAYOUT; see bench/compile_instructions_golden.txt.

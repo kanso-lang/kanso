@@ -1939,6 +1939,12 @@
 # the excluded subtree is 812 and 825, which is the same cost plus or minus the
 # thirteen that lived inside it.
 #
+# 2026-09-17 (kanso#1470): compile_instructions 35,964,325 -> 35,964,307, a FALL
+# of 18 (-0.00005%). This branch adds ninety lines to src/main.rs and nothing to
+# the compile path; `kanso check` never reaches the tier flag. The row is a
+# layout move, which is what compile_instructions has recorded eight times
+# before, and compile_allocs and compile memory came back byte-identical beside
+# it. CI's sitting on f5132e87.
 # 2026-09-17, merged with main. Both branches moved this row on their own
 # base, so the merged tree is reading neither number. The value below is
 # main's, carried forward so the gate has one value to fail against
@@ -1975,16 +1981,17 @@
 # main's, carried forward so the gate has one value to fail against
 # rather than none; the merged sitting is CI's to take.
 #
-# 2026-09-17, merged with main. Both branches moved this row on their own
-# base, so the merged tree is reading neither number. The value below is
-# main's, carried forward so the gate has one value to fail against
-# rather than none; the merged sitting is CI's to take.
 # 2026-09-17, kanso#1468 on the tree merged with kanso#1462. CI reads 35,964,985
 # against main's 35,968,792, a fall of 3,807 -- 0.0106%. LAYOUT, as every
 # sitting this branch has taken on this row: `kanso check` stops before
 # codegen, so neither the prune index nor the declares index runs on this
 # corpus at all. src/codegen.rs is the compiler, and moving its bytes moves
 # what sits around them.
+#
+# 2026-09-17, kanso#1470 on main 298636b7. CI reads 35,968,794 against main's
+# 35,968,792 -- TWO instructions. The branch edits src/main.rs, so the row can
+# move; two is the smallest move this vein has ever recorded and it is the
+# whole of it.
 # 2026-09-17, kanso#1482 on the tree merged with kanso#1462. CI reads
 # 35,968,171 against main's 35,968,792, a fall of 621 -- 0.0017%. LAYOUT.
 # `is_a_stack_slot` is asked from `FnEmit::write`, which sits under
@@ -1997,15 +2004,16 @@
 # main's, carried forward so the gate has one value to fail against
 # rather than none; the merged sitting is CI's to take.
 #
+# 2026-09-17, merged with main at 5e256ce0 (kanso#1491), and retargeted from
+# claude/prune-indexed to main in the same round. The split edits src/main.rs
+# and moved the four compile-side rows under this branch. The value below is
+# this branch own CI sitting, taken on the old base; the merged number is
+# CI to take.
+#
 # 2026-09-17, kanso#1484 on kanso#1468's tree. CI reads 35,967,553 against its
 # base's 35,964,985, a rise of 2,568 -- 0.007%. Layout: the symbol list is
 # read from `Backend::emit`, under `emit_ir`, and `kanso check` stops before
 # codegen.
-#
-# 2026-09-17, merged with main. Both branches moved this row on their own
-# base, so the merged tree is reading neither number. The value below is
-# main's, carried forward so the gate has one value to fail against
-# rather than none; the merged sitting is CI's to take.
 #
 # 2026-09-17, kanso#1468 against main, CI's sitting. 35,968,171 -> 35,966,422,
 # a FALL of 1,749 (-0.0049%). LAYOUT. `kanso check` stops before codegen and this
@@ -2021,6 +2029,12 @@
 # row on their own base, so the merged tree is reading neither number. The
 # value below is the base's, carried forward so the gate has one value to
 # fail against rather than none; the merged sitting is CI's to take.
+#
+# 2026-09-17, kanso#1470 against main, CI's sitting. 35,968,171 -> 35,968,173, a
+# RISE of 2. The entry row fell 2 and the library and interpreted rows are
+# byte-identical. This branch adds counters and the gates that read them and
+# changes no decision the front end makes; two instructions is the binary's
+# bytes and nothing else.
 compile_instructions=35966422
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that

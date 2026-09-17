@@ -182,6 +182,15 @@ interp_gate = "sh scripts/gates/interp_instructions.sh"
 # refusal read as a regression fails a job over the machine it ran on.
 startup_gate = "sh scripts/gates/startup_instructions.sh"
 
+# The two codegen rows. They count a whole `kanso build` tree under
+# callgrind with --trace-children, so they are host-bound for the same reason
+# the four above are: a runner the golden does not name refuses the
+# comparison, and a refusal read as a regression fails a job over the machine
+# it ran on. One script serves both tiers, so one entry covers them.
+codegen_gate = "sh scripts/gates/codegen_instructions.sh"
+
+emit_gate = "sh scripts/gates/emit_instructions.sh"
+
 bound_a = bound work_gate why_exact
 
 bound_b = bound front_gate why_exact
@@ -194,7 +203,11 @@ bound_e = bound interp_gate why_exact
 
 bound_f = bound startup_gate why_exact
 
-host_bound = [bound_a bound_b bound_c bound_d bound_e bound_f]
+bound_g = bound codegen_gate why_exact
+
+bound_h = bound emit_gate why_exact
+
+host_bound = [bound_a bound_b bound_c bound_d bound_e bound_f bound_g bound_h]
 
 fn host_bound? gate
   list/any? host_bound (e -> e.gate == gate)
@@ -1032,6 +1045,22 @@ compile_ir_from_main = row
   "cargo test --test the_compile_rows_start_at_the_compilers_main"
   "specs (unit, golden, differential)"
   (breaking "a_compile_row_that_counts_from_process_entry")
+  no_setup
+
+# A BUILD IS A TREE, and the codegen rows count all of it. `kanso check` stops
+# before codegen, so the emitter, the clang driver, `clang -cc1`, ld and the
+# linker's own child were uncounted by every other row, and they are the larger
+# half of what a build costs. `--trace-children=yes` is the whole of how the
+# tree is reached. The first measurement of this row was taken on a build that
+# had been REFUSED after emitting its IR -- two processes, both tiers within
+# 0.006% of each other -- so a short tree is the shape of a build that never
+# wrote anything, and the gate refuses one.
+codegen_one_process = row
+  "a codegen row counted on the compiler's process alone, not the build tree"
+  false
+  "sh scripts/gates/codegen_instructions.sh dev"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_codegen_row_that_counts_one_process")
   no_setup
 
 # A refusal is only as good as what it leaves a reader able to do. This one
@@ -2024,7 +2053,9 @@ purge_delay_option = row
 
 rows_c1zc = text/concat rows_c1zb [purge_delay_option]
 
-rows_c = text/concat rows_c1zc [itself]
+rows_c1zd = text/concat rows_c1zc [codegen_one_process]
+
+rows_c = text/concat rows_c1zd [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
