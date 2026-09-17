@@ -7496,7 +7496,7 @@ work: seventeen on 2026-08-29, nine on the five oldest dates, nine here. Two
 unbuilt rulings in thirty-five entries. The twenty-one that remain are all
 September.
 
-**Nine of September's twenty-one, probed on the way past.** The 2026-09-06
+**Eleven of September's twenty-one, probed on the way past.** The 2026-09-06
 whole-float ruling — a float's rendering always carries a `.` or an `e`, and
 `.0` is appended where the shortest form has neither — is built:
 `a_whole_float_keeps_its_point` carries the RULED citation and its third line
@@ -7577,13 +7577,21 @@ a surface is the boundary, and that is drawn and pinned —
 the rows before them, and `docs/numbers.html` names the date with the coverage
 it takes.
 
-Twelve September entries are unread, and this entry says so rather than
-counting them swept.
+Two more, a line each. The 2026-09-06 clang-19 ruling is built with the
+feature detection it asked for: `ci.yml` installs `clang-19` and symlinks it,
+with a comment recording the failure mode that made detection necessary — an
+earlier attempt installed clang-19 while `clang --version` still answered the
+old one. And the 2026-09-08 ruling that the compile term reads a fixed corpus
+rather than whatever `lib/json` imports is built: `bench/compile_corpus`
+exists and `compile_instructions.sh` checks it by name.
+
+Ten September entries are unread, and this entry says so rather than counting
+them swept.
 
 - **DONE** August swept end to end, and the demanded-knot counter measured
   rather than read.
-- **OPEN** twelve September entries, across 09-02, 09-03, 09-05, 09-07,
-  09-08, 09-15 and 09-16. Nine probed, nine built: the yield is
+- **OPEN** ten September entries, across 09-02, 09-03, 09-05, 09-07, 09-15
+  and 09-16. Eleven probed, eleven built: the yield is
   lower here than in August, which is what a list that tracks recent rulings
   should look like. Several are almost certainly built — the box
   ruling, the maps normalization and the two welfares each came OFF the list
