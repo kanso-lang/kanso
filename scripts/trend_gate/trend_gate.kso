@@ -245,6 +245,18 @@ bench_entry = [["bench/entry_instructions_golden.txt" ""]]
 # `library_instructions` collides with nothing.
 bench_library = [["bench/library_instructions_golden.txt" ""]]
 
+# The two codegen rows, added with their gate on 2026-09-17. They count what
+# every compile row above stops before: the emitter writing IR, the clang
+# driver, clang -cc1, the linker and the linker's own child. Two rows rather
+# than one because the development and production tiers are different builds
+# with different jobs, ruled 2026-09-16, and a single number over both would
+# let either pay for the other. No prefix, for the reason the three rows above
+# have none: `codegen_instructions_dev` and `codegen_instructions_release`
+# collide with nothing.
+bench_codegen_dev = [["bench/codegen_instructions_dev_golden.txt" ""]]
+
+bench_codegen_release = [["bench/codegen_instructions_release_golden.txt" ""]]
+
 bench_traffic = [["bench/compile_allocs_golden.txt" ""]]
 
 bench_pend = [["bench/cost_golden_pend.txt" "pend_"]]
@@ -310,7 +322,11 @@ bench_cd = text/concat bench_c (text/concat bench_compile bench_modules)
 
 bench_libcheck = text/concat bench_library bench_traffic
 
-bench_compiled = text/concat bench_ir (text/concat bench_entry bench_libcheck)
+bench_codegen = text/concat bench_codegen_dev bench_codegen_release
+
+bench_checked = text/concat bench_libcheck bench_codegen
+
+bench_compiled = text/concat bench_ir (text/concat bench_entry bench_checked)
 
 bench_de = text/concat bench_memory (text/concat bench_pend bench_compiled)
 

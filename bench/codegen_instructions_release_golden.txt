@@ -1,0 +1,32 @@
+# Retired instructions for a whole `kanso build` of bench/codegen_corpus on the
+# production tier: the build that ships, where the compiler is allowed to spend
+# to make the program fast.
+#
+# THE COMPILE ROWS STOP BEFORE CODEGEN. compile_instructions, entry_instructions
+# and library_instructions all count `kanso check`, which answers whether a
+# program is well formed and then stops. Everything after that — the emitter
+# writing LLVM IR, the clang driver, clang -cc1, the linker and the linker's own
+# child — was uncounted, and it is the larger half of what a build costs. This
+# row counts the whole tree: five processes under `--trace-children`, their
+# summary lines summed.
+#
+# WHY TWO TIERS. The two builds are different programs with different jobs, and
+# a single number over both would let one pay for the other. Ruled 2026-09-16.
+#
+# MEASURED IN A BOX, for the reason the other compile rows are: the count moves
+# with the length of the directory the compiler runs in. scripts/gates/
+# codegen_box.sh stages the package one level down, as pkg/codegen_corpus, so
+# that `kanso build` does not find a directory beside its argument's stem and
+# refuse — a refusal that still emits the IR first, so it looks like a build
+# and counts two processes instead of five. The gate refuses a tree shorter
+# than four.
+#
+# THIS ROW DEPENDS ON CLANG, which the other compile rows do not: most of the
+# tree is the C toolchain, so the measured-on line names it beside glibc and
+# rustc.
+#
+# UNMEASURED. This file names the toolchain its value must be read on and
+# carries no value yet, because a row this gate pins may only ever be counted
+# by CI. The first sitting fails on this line and prints its own count in
+# codegen_release_got.txt; that count is what goes here.
+# measured-on glibc=2.39-0ubuntu8.9 clang=19.1.1 rustc=1.98.1

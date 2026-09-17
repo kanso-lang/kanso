@@ -402,6 +402,21 @@ jobs:
         if: always()
         continue-on-error: true
         run: sh scripts/gates/library_instructions.sh
+      # The two codegen rows, which are the only ones here that reach codegen
+      # at all: the three above run `kanso check`, which stops before it. Each
+      # counts the whole process tree -- kanso, the clang driver, `clang -cc1`
+      # and ld -- because that is what a developer waits for, and the two tiers
+      # sit on opposite sides of the 2026-09-16 gavel's objective.
+      - name: dev-tier codegen
+        id: codegen_dev
+        if: always()
+        continue-on-error: true
+        run: sh scripts/gates/codegen_instructions.sh dev
+      - name: release-tier codegen
+        id: codegen_release
+        if: always()
+        continue-on-error: true
+        run: sh scripts/gates/codegen_instructions.sh release
       - name: compile memory
         id: compile_memory
         if: always()
@@ -509,6 +524,8 @@ jobs:
                       "compile instructions:${{ steps.compile_ir.outcome }}" \
                       "entry instructions:${{ steps.entry_ir.outcome }}" \
                       "library instructions:${{ steps.library_ir.outcome }}" \
+                      "dev-tier codegen:${{ steps.codegen_dev.outcome }}" \
+                      "release-tier codegen:${{ steps.codegen_release.outcome }}" \
                       "encode counters:${{ steps.encode.outcome }}" \
                       "wide counters:${{ steps.wide.outcome }}" \
                       "pending-cell counters:${{ steps.pend.outcome }}" \

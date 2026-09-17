@@ -58,6 +58,15 @@ fn named() -> BTreeSet<String> {
 /// `contains("golden")` instead and went red on its own the moment the file
 /// existed.
 ///
+/// AND IT WENT STALE A SECOND TIME, on 2026-09-17, when `bench/codegen_*`
+/// joined for the two rows the 2026-09-16 gavel owes -- dev-tier and
+/// release-tier codegen, the only rows here that count what clang does. Twice
+/// is a pattern rather than an accident, and the prefix list stays only
+/// because the alternative -- every golden under bench/ that is not a runtime
+/// cost golden -- is a second list of the same shape wearing a negation. What
+/// is worth writing down is that this comment has now predicted its own
+/// failure twice and been read late both times.
+///
 /// One is excluded for a reason that is not "it was inconvenient":
 /// `build_benchmarks` is not a gate and says so in its own first line.
 /// `all_compile` matches its own list and is not a gate; `all_counters` reads
@@ -81,6 +90,7 @@ fn compile_gates_on_disk() -> BTreeSet<String> {
             (l.contains("bench/compile_") && l.contains("golden"))
                 || (l.contains("bench/entry_") && l.contains("golden"))
                 || (l.contains("bench/library_") && l.contains("golden"))
+                || (l.contains("bench/codegen_") && l.contains("golden"))
                 || l.contains("bench/text_golden")
                 || l.contains("bench/emitted_golden")
         });

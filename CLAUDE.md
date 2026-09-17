@@ -184,8 +184,15 @@ make a PR and then merge it."
   adding a line to lib/json is a line the compiler carries and compiles.
   `all_counters.sh` names the runtime cost goldens only; `machine_code`,
   `emitted_code`, `compile_memory`, `compile_allocs`, `compile_instructions`,
-  `entry_instructions`, `library_instructions` and `compile_libraries`
-  are separate gates and two of their counters are welfare terms. THE LAST TWO OF
+  `entry_instructions`, `library_instructions`, `compile_libraries` and
+  `codegen_instructions`
+  are separate gates and two of their counters are welfare terms.
+  `codegen_instructions` is the odd one and joined on 2026-09-17: it runs
+  `kanso build` rather than `kanso check`, so it is the only row here that
+  reaches codegen at all, and it counts the WHOLE process tree -- kanso, the
+  clang driver, `clang -cc1` and ld. Named without an argument it runs both
+  tiers, `-O0` and `-O3 -flto`, which the 2026-09-16 gavel puts on opposite
+  sides of the objective. THE LAST TWO OF
   THOSE NAMES ARE ONE LETTER APART AND ARE UNRELATED: `compile_libraries` diffs
   the list of shared objects the compiler links against, where
   `library_instructions` counts instructions. `kanso check` routes a single file
@@ -482,14 +489,17 @@ Only Clay arms, disarms or retimes it.
   otherwise is false reporting. (Auto-merge silently failed to fire on
   green PRs more than once, and stale docs sat live for hours.)
 - **Reading the cost-goldens job takes two sources, and neither alone is it.**
-  Its nineteen counter steps are `continue-on-error`, so the per-step
+  Its counter steps are `continue-on-error`, so the per-step
   conclusions the API returns say SUCCESS even when the gate failed — on
   kanso#1262 the API reported `how much work` and `compile instructions` green
   while the job's own vein summary said `work:failure` and `compile
   instructions:failure`, and that summary is the step that fails the job. So
   the summary block (`for vein in "emitted:success" ...`) is the authority for
-  those nineteen, AND it omits the trend gate and `page_drift`, whose own
-  step conclusions are reliable. Read both. Every other job in the run can be
+  every step it lists, AND it omits the trend gate and `page_drift`, whose own
+  step conclusions are reliable. This sentence said NINETEEN until
+  2026-09-17, when the two codegen rows made it twenty-one; a count in prose
+  goes stale the first time anybody adds a row, so read the summary block's
+  own list rather than a number written here. Read both. Every other job in the run can be
   read from its steps.
 - **Opening a PR without arming a wake is how one gets abandoned.** In a
   container nothing runs between turns: a session is woken by a subscription
