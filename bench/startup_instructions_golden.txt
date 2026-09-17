@@ -137,4 +137,10 @@
 # counters sit; they are compiled out of a shipped binary and the gate builds one
 # that carries them, so what this reads is the same layout term as the rows
 # above, at the same scale.
-startup_instructions=3712181
+# 2026-09-17, kanso#1493 on the tree merged with main 5e256ce0, CI's sitting.
+# 3,712,181 -> 3,711,750, a FALL of 431 (-0.0116%). That is the split's own
+# layout term and exactly the 431 the note above predicted it would be: the
+# reading it corrects was taken on the pre-split tree, and kanso#1491 edits
+# src/main.rs beside this branch. Against main's 4,836,950 the branch is
+# 1,125,200 below, which is the change.
+startup_instructions=3711750

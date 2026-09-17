@@ -7047,3 +7047,37 @@ whatever score the committed goldens produce.
 
 - **DONE** the row measured, attributed and written.
 - **OPEN** the merged row and the ratchet, both one CI sitting away.
+
+## 2026-09-17 — kanso#1493's three rows on the merged tree, and the 0.28 banked
+
+    startup_instructions             3,712,181 ->         3,711,750      -431
+    codegen_instructions_dev       596,161,187 ->       596,161,166       -21
+    codegen_instructions_release 6,826,827,769 ->     6,826,829,520    +1,751
+
+The start-up fall of 431 is the split's layout term and exactly the figure the
+entry before this one predicted: the 3,712,181 was measured before kanso#1491
+landed, and the split edits src/main.rs beside this branch. Against main's
+4,836,950 the branch is **1,125,200 below, 23.26%**, which is the change.
+
+The two codegen rows are new since the reading above and were not expected to
+move. Twenty-one instructions in 596 million is 35 parts per billion and 1,751
+in 6.8 billion is 256; both rows exclude kanso's own process and count clang
+and ld, which compiled IR they had compiled the same way. Both reproduced
+exactly on a second count in the same job, so the moves are the C toolchain's
+own layout rather than a reading that will not settle.
+
+What those rows exclude is where the branch shows.
+`codegen_dev_kanso_excluded=406,043,465` against main's 407,173,801 — kanso's
+own process on the codegen corpus falls 1,130,336, within 5,136 of the
+start-up row's 1,125,200. A build pays the same start-up a run does, and the
+two measurements of it agree to four parts in ten thousand without being the
+same measurement.
+
+Under the three-score model the branch reads **76.41 against a floor of
+76.13**. Start-up carries 0.25 on the development side and the release codegen
+row 0.15 on the production side; a 23.26% fall against a 256-parts-per-billion
+rise is not a trade the objective has to think about, and the term that got
+worse costs 0.000 points. Banked in this same pull request.
+
+- **DONE** three rows measured, written and attributed; the floor at 76.41.
+- **OPEN** what is left of start-up. The bound recorded on this branch stands.

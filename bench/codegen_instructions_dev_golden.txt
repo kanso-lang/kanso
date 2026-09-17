@@ -60,4 +60,14 @@
 # #
 # The container's placeholder read 1,003,426,243, which was the pre-exclusion
 # shape and is not comparable to this.
-codegen_instructions_dev=596161187
+# 2026-09-17, kanso#1493 on the tree merged with main 5e256ce0, CI's sitting.
+# 596,161,187 -> 596,161,166, a FALL of 21 -- 35 parts per billion. This row
+# excludes kanso's own process and counts the C toolchain, so twenty-one
+# instructions is clang and ld landing marginally differently on IR they
+# compiled the same way. A second count in the same job read 596,161,166.
+#
+# kanso's own process, which the row excludes and the gate prints as a notice,
+# is where this branch shows: codegen_dev_kanso_excluded=406,043,465 against
+# main's 407,173,801, a fall of 1,130,336. A build pays the same start-up a
+# run does.
+codegen_instructions_dev=596161166
