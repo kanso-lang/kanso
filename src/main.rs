@@ -112,6 +112,33 @@ unsafe impl std::alloc::GlobalAlloc for Counting {
         ALLOC_CALLS.fetch_add(1, Ordering::Relaxed);
         let live = LIVE_BYTES.fetch_add(n, Ordering::Relaxed) + n;
         PEAK_BYTES.fetch_max(live, Ordering::Relaxed);
+        // The mimalloc crate's `GlobalAlloc` hands every allocation to
+        // `mi_malloc_aligned`, whatever alignment it asked for. That wrapper
+        // checks the alignment is a power of two, builds a mask from it, takes
+        // a candidate block off the small-page free list and tests whether the
+        // block is aligned, before it can hand back the block `mi_malloc`
+        // would have handed back on its own. Every block mimalloc gives out is
+        // at least eight-aligned, so an allocation that asks for no more than
+        // eight has nothing to check.
+        //
+        // EIGHT AND NOT SIXTEEN. `MI_MAX_ALIGN_SIZE` is 16 and mimalloc
+        // guarantees that for a block big enough to hold it, but a block
+        // SMALLER than sixteen bytes can sit at an eight-aligned offset inside
+        // a page whose first block is sixteen-aligned. `Layout` carries a size
+        // and an alignment independently, so `align 16, size 8` is spellable
+        // and would be wrong here. Eight is the bound that holds for every
+        // size, and it is where the allocations are: a `Vec<u8>`, a `String`,
+        // and any record whose widest field is a pointer or a u64.
+        //
+        // Only where mimalloc is the allocator under the tally. On wasm32
+        // `UNDER` is `std::alloc::System` and `libmimalloc_sys` is not linked
+        // at all, so the bypass is not merely pointless there, it does not
+        // compile — and `src/main.rs` IS in the wasm build, which is how six
+        // jobs went red on the first round of this change.
+        #[cfg(not(target_arch = "wasm32"))]
+        if layout.align() <= 8 {
+            return unsafe { libmimalloc_sys::mi_malloc(layout.size()) }.cast();
+        }
         unsafe { UNDER.alloc(layout) }
     }
     unsafe fn dealloc(&self, ptr: *mut u8, layout: std::alloc::Layout) {

@@ -4185,6 +4185,180 @@ rather than in an argument. kanso#1463 stays blocked until then: it is the
 change that would pin a disagreeing row as a second value, which is what the
 rule it implements forbids.
 
+## 2026-09-17 — the wall is bind with a discarded value, and the one thing that made it more than that is gone
+
+Clay, reading a book sample: "wasn't this convention always a mistake? we
+invented >> to deal with no return value. but then we realized that you always
+have a return value, which is the effect. so this was really just .> i
+believe. one of the fused combinators."
+
+**Measured, on the binary at `cc180f2f`.** `a >> b` and `a .> (_ -> b)` are
+indistinguishable on every shape the chat could build:
+
+    print "one" >> print "two"                  one / two
+    print "one" .> (_ -> print "two")           one / two
+    os/read_file! "nope" >> print "after"       short-circuits, nothing after
+    print "left ok" >> print "right {boom}"     left ok, then the endpoint
+    print "left ok" .> (_ -> print "right {boom}")   identical
+    print "left {boom 1}" >> print "right {boom 2}"  boom 1 alone
+    print "left {boom 1}" .> (_ -> print "right {boom 2}")  identical
+
+**The archive says the last two used to differ, and that is the finding.** The
+2026-08-24 entry measuring the wall recorded:
+
+    print "left {boom a}"  >> print "right ok"        -> a
+    print "left ok"        >> print "right {boom b}"  -> b
+    print "left {boom a}"  >> print "right {boom b}"  -> [a b]
+
+with "Nothing prints in any of the three. `>>` orders effects, and both
+descriptions are built before either runs, so a failure raised while building
+is not ordered by the wall — two of them are simultaneous and merge, the same
+reasoning the parallel group uses. Haskell's `>>` answers `a` in the third
+case because it is lazy in its right side; kanso builds both and learns more."
+
+Eager construction of both operands was the one thing a lambda could not
+imitate, and it does not hold on today's build: the third case answers `boom
+1` rather than `[boom 1, boom 2]`, and `left ok` prints where the entry says
+nothing printed. The chat could not find the entry that moved it. So the
+semantic that earned `>>` its own operator went away unrecorded, and what is
+left is sugar for a bind whose callback ignores its argument.
+
+**The tree is split between the two spellings.** 570 sites write `>>` — 1 in
+lib, 67 in scripts, 83 in book samples, 419 in tests — and 184 write
+`.> (_ -> ...)`, four of them in lib/net/http alone. One operation, two
+spellings, and nothing in the language says which. CLAUDE.md's own reason for
+having no formatter and no linter is that "the grammar decides every question
+a linter would ask", and here it has stopped.
+
+**Three rules bear on it and none was applied to the wall.** The 2026-08-26
+gavel minted `done`, which removed the premise that an effect answers nothing.
+The 2026-08-29 gavel made effects a type whose only doors are the three words.
+The 2026-08-31 gavel said that in chain position the fused form is the ONLY
+spelling — and `>>` is a fourth chain-position operator over effects that
+predates the effect type and was never held against that rule.
+
+**The parked objection does not apply.** design/pending-gavels.md's Parked
+list carries "dot-absorbs-`>>`: argued no — erases the visible then/bind
+split." That was about the PLAIN dot absorbing the wall. The plain dot stopped
+binding on 2026-08-29 and is an ordinary application now, so the entry argues
+against a proposal nobody is making.
+
+Both questions go to the ledger: whether the wall survives the fused
+operators, and whether the simultaneous-failure merge was meant to go.
+
+## 2026-09-17 — the sweep, and two rulings built inside a day
+
+Fired 03:47:17Z, run at 03:47. Eight pull requests open in kanso, none in kq,
+the oldest 5.9 hours, so nothing aged. Four are red on `cost goldens` — the
+welfare and counter work moving veins under a model change — and three are
+blocked or behind. Fifteen merged since the 2026-09-16 sweep; twelve name the
+rulings they weighed and the three that do not are a log trim, a ratchet row
+and a build-artifact hook, none of them a self-generated lead.
+
+**The build hole is built.** kanso#1447 landed the 2026-08-24 ruling the day
+after the chat found it twenty-three days off the unbuilt list.
+`person "ada" _` runs, and `docs/book/samples/ch03/knot.kso` carries `_` where
+it carried `none` for three weeks. Its row comes off. One site still reads
+`none`: `tests/golden/micro/bare_field.kso`, which is likely correct rather
+than missed — the 2026-08-24 entry says "a field may legitimately hold `none`
+forever" — and is noted here so the next reader does not re-derive it.
+
+**The explicit box is most of the way built and one probe says not all.**
+`effect 5` answers a box, so the constructor landed on the ledger's
+recommended spelling. `menu["dango"]!` answers a box, so the 2026-09-16
+reversal is built. What did not reproduce is part 3, the check-time refusal:
+
+    fn boom _
+      err "b"
+
+    n = boom 1
+
+    print "{n + 1}"
+
+reaches the endpoint at run time rather than being refused at check, on a
+one-arm group whose answer is provably an err. Whether that is a limit of what
+infer proves or a gap in the pass is cloud's to determine; the program is
+recorded here so the question starts from a fixture rather than a memory. The
+row stays until it is answered.
+
+**Cloud is already building the two-welfare ruling**, seventeen hours after it
+landed: kanso#1461 takes interpreter start-up down 14x and kanso#1470 opens
+the codegen row, which is the half of a build nothing counted.
+
+## 2026-09-17 — the allocator asked for an alignment it never needed
+
+**mimalloc's Rust shim sends every allocation through the aligned path.** DONE.
+`MiMalloc::alloc` calls `mi_malloc_aligned(size, align)` whatever the alignment
+is. That wrapper checks the alignment is a power of two, builds a mask from it,
+takes a candidate block off the small-page free list and tests whether the
+block is aligned, before it can hand back the block `mi_malloc` would have
+handed back on its own. `mi_theap_malloc_aligned` was 1,608,924 instructions of
+`kanso check compile_corpus`, which is more than any frame in check.rs.
+
+**Almost none of that work had anything to do.** DONE. A `Vec<u8>`, a `String`
+and any record whose widest field is a pointer or a u64 ask for eight, and every
+block mimalloc gives out is at least eight-aligned. Those go straight to
+`mi_malloc` now; anything wanting more still takes the aligned path. Measured on
+this container, three rows, before and after:
+
+    compile_instructions    36,956,079 -> 36,241,230   -1.93%
+    entry_instructions     131,550,570 -> 129,114,693  -1.85%
+    library_instructions   131,694,754 -> 129,252,791  -1.85%
+
+CI read it as:
+
+    compile_instructions    36,682,232 -> 35,969,565   -1.943%
+    entry_instructions     130,573,787 -> 128,144,579  -1.860%
+    library_instructions   130,716,747 -> 128,281,268  -1.863%
+
+against this container's projection of 1.93%, 1.85% and 1.85%, which is the
+projection working. The floor is ratcheted to 69.79 in the same commit.
+
+**Eight, and not sixteen, and mimalloc says why itself.** DONE. From
+v3/src/alloc.c: `mi_assert_internal(page->block_size < MI_MAX_ALIGN_SIZE ||
+_mi_is_aligned(block, MI_MAX_ALIGN_SIZE))`. A block is sixteen-aligned unless it
+is smaller than sixteen bytes, and `Layout` carries size and alignment
+independently, so `align 16, size 8` is spellable. Eight is the bound that holds
+for every size.
+
+**src/main.rs is in the wasm build, and the first round forgot it.** DONE.
+`UNDER` is mimalloc on every target that can build it and `std::alloc::System`
+on wasm32, and the bypass was written without that guard. On wasm
+`libmimalloc_sys` is not linked at all, so the branch did not compile there,
+`docs/kanso.wasm` never got built, and six jobs went red behind one missing
+blob: the browser differential, the site, the asset digests, the specs and the
+other host. The bypass carries the same `#[cfg(not(target_arch = "wasm32"))]`
+the allocator above it does; the System allocator honours its `Layout` and has
+nothing to skip.
+
+**A run-time spec cannot reach this code, and two were written before that was
+noticed.** DONE. The `#[global_allocator]` is in the binary crate; an
+integration test links the library, so every allocation a test makes goes
+through the harness's allocator instead. One of the two asked for alignment 4096
+in blocks of eight bytes and still passed with the bound raised to 8192, which
+is what a spec that reaches nothing looks like from the outside. What ships
+reads source: mimalloc's assertion where it is written, and the bound in
+src/main.rs against it. Both watched red — the first by altering the assertion
+it quotes, the second at 16.
+
+**mi_realloc is worse, measured and declined.** REFUTED. `GlobalAlloc`'s
+default `realloc` allocates, copies and frees, which is what a growing `Vec`
+pays at every doubling, and mimalloc can sometimes extend a block where it
+stands. Overriding `realloc` to call `mi_realloc` on the same alignment bound
+read 36,315,572 against the 36,241,230 above: a RISE of 74,342, 0.21%. Whatever
+the in-place extensions save on this workload, `mi_realloc`'s own path costs
+more. It also moved `compile_peak_bytes` by six bytes, because the live-bytes
+accounting cannot be made exactly equivalent through one call where the default
+route makes two. Not taken.
+
+**What is left here.** OPEN. The profile under this is flat: with the three
+quadratics gone (kanso#1464, kanso#1468 and the beat index), the top frame of
+`kanso check library_corpus` is `__memcmp_avx2_movbe` at 3.5%, and its callers
+are ten map lookups of which the largest is 0.94%. The structural lever is
+interning names to integers so the maps stop comparing strings at all, which
+would reach that 3.5% and part of the 2.6% in rehashing beside it. That is a
+refactor across check.rs, infer.rs and codegen.rs, and it is not costed yet.
+
 **The three compile rows moved, by layout.** CI reads 36,861,474, 131,826,563
 and 131,967,995 against main's 36,864,779, 131,837,650 and 131,978,823 — falls
 of 3,305, 11,087 and 10,828, which is 0.009% on the first. `kanso check` stops
