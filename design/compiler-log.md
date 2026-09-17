@@ -4227,6 +4227,193 @@ main's 36,864,779, 131,837,650 and 131,978,823. Asking the pattern before the
 binder is what this branch's share of that is; the rest of the move against
 round three is kanso#1464 arriving underneath it.
 
+## 2026-09-17 — the thirteen is not compiler work
+
+**All three compile rows move by the same thirteen.** DONE. The module, entry
+and library rows have disagreed with their goldens by exactly thirteen
+instructions across several sittings, and until now each was read on its own.
+Put side by side on kanso#1463 they read 36,864,766 against 36,864,779,
+131,837,637 against 131,837,650, and 131,978,810 against 131,978,823. Three
+routes through the compiler, one of them 3.6 times the size of another, each
+off by thirteen. A term that costs the same thirteen on a 36.9-million-
+instruction compile and a 132.0-million-instruction compile does not scale with
+the input, so it is not the compiling. Every account that put the thirteen in
+the front end is dead: the lexer, inference, the emitter and a layout effect on
+hot code all grow with the source, and this does not.
+
+**The two sittings of one commit agreed.** DONE. kanso#1463's job was re-run on
+its own head to try for two profiles differing in nothing but the run. Both
+attempts read the same three numbers. So the row reproduces within a commit
+since kanso#1466 took mimalloc's randomised base address out, and the thirteen
+separates a sitting from the sitting the golden was taken on.
+
+**The same tree, twice, thirteen apart.** DONE. kanso#1462 was green on
+`fc3305f8`. Its branch was updated — protection wants the checks on an
+up-to-date head — and the identical work came back thirteen out on all three
+rows: 36,862,804 to 36,862,817, 131,830,523 to 131,830,536, 131,972,417 to
+131,972,430. What the update brought in was `hooks/post-merge`,
+`scripts/install_hooks.sh` and one test file, 132 lines, none of them compiled
+into the binary, `include_str!`'d, or read by a compile gate, with no golden
+moving. Same compiler, same corpus, same goldens, measured twice. This is the
+experiment the re-run above was trying to manufacture, and it arrived on its
+own.
+
+**Two re-runs of one head agreed, which the coin-flip reading does not
+predict.** OPEN. kanso#1462's failed jobs were re-run on `b8327112` and read
+the same three numbers again, +13 from its own earlier green sitting of
+`fc3305f8`. Nothing compiled into the binary differs between those two trees:
+there is no build.rs, and every `include_str!` in src/lib.rs names a file
+under lib/. So the value is a function of something that holds across two
+separately-allocated runners of one head and changes between two heads whose
+compiled input is identical. Two runs agreeing is a one-in-two event and
+proves nothing on its own, but it is enough to stop calling this a per-run
+flip until a sitting says otherwise. The host facts now printed beside the
+floor -- the kernel release and version, which no job has ever printed --
+are there because a per-host term is what this shape looks like and the CPU
+model has already been refuted.
+
+**Where it can be.** DONE. The three profiles the job already writes name the
+candidates by themselves: 588 frames carry the same self cost across all three
+workloads, 556,052 instructions in all. Restricted to frames the row can see —
+reachable from `kanso::main`, which is the figure the gates read — 38 remain,
+51,269 instructions, and not one of them is compiler work. The largest block is
+mimalloc's scan of the environment for its own options, 49,449 instructions.
+`getauxval`, called twice from std's stack-overflow handler at 146 each, the
+`sbrk`/`brk`/`__glibc_morecore` trio, `sigaltstack`, the argv walk and the
+stdout flush make up the rest. A near-empty compile carries 36 of the 38 at
+byte-identical cost, which is what a per-process term looks like.
+
+**What the environment actually is.** DONE. The gates run under
+`env -i PATH=... GLIBC_TUNABLES=...` and believe they have pinned it. The child
+sees seven variables: valgrind adds `LD_PRELOAD`, `LD_LIBRARY_PATH`,
+`GLIBCPP_FORCE_NEW`, `GLIBCXX_FORCE_NEW` and `PWD` on top of the two. On one
+runner image those are fixed, so this is not shown to be the thirteen — it is a
+normalisation the gate claims and does not have, and mimalloc's scan of it is
+the single largest per-process term inside the row.
+
+**Ruled out by measurement.** DONE. Visible CPU count does not move the row:
+four runs of `kanso check compile_corpus` on this box, bare, under `taskset -c
+0` and under `taskset -c 0,1`, all read 37,285,436. The runner's CPU model was
+refuted earlier by two sittings on different models reading the same number and
+two on the same model reading different ones.
+
+**The instrument.** DONE. `scripts/gates/per_process_floor.sh` prints that
+floor — the frames whose self cost held across every workload given, and their
+sum — derived from the profiles rather than from a list, so a frame that
+appears or disappears is reported. It runs in the cost-goldens job, gates
+nothing and pins nothing. Two jobs whose `per_process_floor=` lines differ by
+thirteen name the frame between them, which turns a hunt nobody can reproduce
+on demand into a comparison of two job logs. `scripts/gates/callgrind_self.sh`
+is the reader under it: `callgrind_annotate`'s `--threshold` is a percentage
+and stops once the running total rounds to the figure asked for, so the tail it
+drops is where a thirteen-instruction frame lives.
+
+**Still open.** OPEN. Which of the 38 carries the thirteen. The next sitting
+that reads the other value answers it, and the answer arrives in a job log
+rather than in an argument. kanso#1463 stays blocked until then: it is the
+change that would pin a disagreeing row as a second value, which is what the
+rule it implements forbids.
+
+## 2026-09-17 — the wall is bind with a discarded value, and the one thing that made it more than that is gone
+
+Clay, reading a book sample: "wasn't this convention always a mistake? we
+invented >> to deal with no return value. but then we realized that you always
+have a return value, which is the effect. so this was really just .> i
+believe. one of the fused combinators."
+
+**Measured, on the binary at `cc180f2f`.** `a >> b` and `a .> (_ -> b)` are
+indistinguishable on every shape the chat could build:
+
+    print "one" >> print "two"                  one / two
+    print "one" .> (_ -> print "two")           one / two
+    os/read_file! "nope" >> print "after"       short-circuits, nothing after
+    print "left ok" >> print "right {boom}"     left ok, then the endpoint
+    print "left ok" .> (_ -> print "right {boom}")   identical
+    print "left {boom 1}" >> print "right {boom 2}"  boom 1 alone
+    print "left {boom 1}" .> (_ -> print "right {boom 2}")  identical
+
+**The archive says the last two used to differ, and that is the finding.** The
+2026-08-24 entry measuring the wall recorded:
+
+    print "left {boom a}"  >> print "right ok"        -> a
+    print "left ok"        >> print "right {boom b}"  -> b
+    print "left {boom a}"  >> print "right {boom b}"  -> [a b]
+
+with "Nothing prints in any of the three. `>>` orders effects, and both
+descriptions are built before either runs, so a failure raised while building
+is not ordered by the wall — two of them are simultaneous and merge, the same
+reasoning the parallel group uses. Haskell's `>>` answers `a` in the third
+case because it is lazy in its right side; kanso builds both and learns more."
+
+Eager construction of both operands was the one thing a lambda could not
+imitate, and it does not hold on today's build: the third case answers `boom
+1` rather than `[boom 1, boom 2]`, and `left ok` prints where the entry says
+nothing printed. The chat could not find the entry that moved it. So the
+semantic that earned `>>` its own operator went away unrecorded, and what is
+left is sugar for a bind whose callback ignores its argument.
+
+**The tree is split between the two spellings.** 570 sites write `>>` — 1 in
+lib, 67 in scripts, 83 in book samples, 419 in tests — and 184 write
+`.> (_ -> ...)`, four of them in lib/net/http alone. One operation, two
+spellings, and nothing in the language says which. CLAUDE.md's own reason for
+having no formatter and no linter is that "the grammar decides every question
+a linter would ask", and here it has stopped.
+
+**Three rules bear on it and none was applied to the wall.** The 2026-08-26
+gavel minted `done`, which removed the premise that an effect answers nothing.
+The 2026-08-29 gavel made effects a type whose only doors are the three words.
+The 2026-08-31 gavel said that in chain position the fused form is the ONLY
+spelling — and `>>` is a fourth chain-position operator over effects that
+predates the effect type and was never held against that rule.
+
+**The parked objection does not apply.** design/pending-gavels.md's Parked
+list carries "dot-absorbs-`>>`: argued no — erases the visible then/bind
+split." That was about the PLAIN dot absorbing the wall. The plain dot stopped
+binding on 2026-08-29 and is an ordinary application now, so the entry argues
+against a proposal nobody is making.
+
+Both questions go to the ledger: whether the wall survives the fused
+operators, and whether the simultaneous-failure merge was meant to go.
+
+## 2026-09-17 — the sweep, and two rulings built inside a day
+
+Fired 03:47:17Z, run at 03:47. Eight pull requests open in kanso, none in kq,
+the oldest 5.9 hours, so nothing aged. Four are red on `cost goldens` — the
+welfare and counter work moving veins under a model change — and three are
+blocked or behind. Fifteen merged since the 2026-09-16 sweep; twelve name the
+rulings they weighed and the three that do not are a log trim, a ratchet row
+and a build-artifact hook, none of them a self-generated lead.
+
+**The build hole is built.** kanso#1447 landed the 2026-08-24 ruling the day
+after the chat found it twenty-three days off the unbuilt list.
+`person "ada" _` runs, and `docs/book/samples/ch03/knot.kso` carries `_` where
+it carried `none` for three weeks. Its row comes off. One site still reads
+`none`: `tests/golden/micro/bare_field.kso`, which is likely correct rather
+than missed — the 2026-08-24 entry says "a field may legitimately hold `none`
+forever" — and is noted here so the next reader does not re-derive it.
+
+**The explicit box is most of the way built and one probe says not all.**
+`effect 5` answers a box, so the constructor landed on the ledger's
+recommended spelling. `menu["dango"]!` answers a box, so the 2026-09-16
+reversal is built. What did not reproduce is part 3, the check-time refusal:
+
+    fn boom _
+      err "b"
+
+    n = boom 1
+
+    print "{n + 1}"
+
+reaches the endpoint at run time rather than being refused at check, on a
+one-arm group whose answer is provably an err. Whether that is a limit of what
+infer proves or a gap in the pass is cloud's to determine; the program is
+recorded here so the question starts from a fixture rather than a memory. The
+row stays until it is answered.
+
+**Cloud is already building the two-welfare ruling**, seventeen hours after it
+landed: kanso#1461 takes interpreter start-up down 14x and kanso#1470 opens
+the codegen row, which is the half of a build nothing counted.
+
 **Round four: the warm-up holds.** CI read the start-up row 4,876,986 and then
 4,876,986 again in the same job, where the round before it read 6,018,427 and
 then 4,869,632. The row was counting a cold runtime-object cache and now it

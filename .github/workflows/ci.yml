@@ -413,6 +413,42 @@ jobs:
         if: always()
         continue-on-error: true
         run: sh scripts/gates/library_instructions.sh
+      # All three rows above read thirteen instructions from their goldens at
+      # once, on three compiles spanning 36.9 to 132.0 million instructions.
+      # A term that costs the same thirteen on both cannot be the compiling,
+      # so it is a cost the process pays to exist, and this prints it: the
+      # frames whose self cost held across all three workloads, and their sum.
+      # Compare `per_process_floor=` between two jobs. A sitting that reads
+      # the other value prints a floor thirteen away and names the frame that
+      # moved. Not a gate -- it pins nothing and fails nothing; it is the
+      # instrument the hunt needs and it runs whether the gates passed or not.
+      - name: the floor every process pays
+        if: always()
+        continue-on-error: true
+        run: |
+          set -- /tmp/cg.compile /tmp/cg.entry /tmp/cg.library
+          for p in "$@"; do
+            [ -f "$p" ] || { echo "no $p, so the floor cannot be read"; exit 0; }
+          done
+          sh scripts/gates/per_process_floor.sh "$@" | tee /tmp/floor.txt
+          # The floor is 588 lines and the frame-naming comparison needs every
+          # one of them, but reading the TOTAL out of the middle of a job log
+          # costs a fetch of the whole log. A notice annotation is retrievable
+          # on its own and costs nothing, so the one line a reader wants goes
+          # out that way as well.
+          #
+          # The host facts ride with it, because the floor is half an answer
+          # without them. The CPU model is already refuted as the variable; the
+          # kernel has never been printed at all, and two re-runs of one head
+          # agreeing while another head read thirteen away is the shape of a
+          # per-HOST term rather than a per-run flip.
+          floor=$(sed -n 's/^per_process_floor=//p' /tmp/floor.txt)
+          frames=$(sed -n 's/^per_process_floor_frames=//p' /tmp/floor.txt)
+          cpu=$(awk -F': ' '/^cpu family/ { f = $2 } /^model\t/ { m = $2 }
+                            END { printf "%s/%s", f, m }' /proc/cpuinfo)
+          said="per_process_floor=$floor frames=$frames"
+          said="$said kernel=$(uname -r) cpu=$cpu"
+          echo "::notice::$said"
       - name: compile memory
         id: compile_memory
         if: always()
