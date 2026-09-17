@@ -7432,3 +7432,73 @@ writing it down.
 - **OPEN** thirteen dates and roughly thirty entries still unswept. Two
   sittings are audited now and the rate across them is one unbuilt ruling in
   twenty-six.
+
+## 2026-09-17 — a demanded knot still counts differently on the two engines, twenty-four days after it was ruled not to
+
+Sweeping the rest of August. The nine `gavel:` entries on 2026-08-24, 08-25,
+08-26 and 08-31 finish the month, and one of them is unbuilt.
+
+**The ruling.** 2026-08-23 found the divergence and left it open, in its own
+words: *the DEMANDED knot still disagrees. Native reports `thunk_allocs=1`
+where the oracle reports `0`, because the oracle's `knotted` builds its cell
+without touching the counter.* Clay ruled it the next day — "it seems so
+obvious" — and the entry is explicit about which side moves: *both engines
+report `thunk_allocs=1` for `x = [x]` that something reads. The engine that
+moves is the oracle... bookkeeping brought into line, no semantic change
+anywhere.* The entry left the ledger with that commit.
+
+**Measured today, on a release build of main.** The undemanded fixture in the
+mem vein was copied and its arm flipped so the knot is read, then run on both
+engines through an importing entry:
+
+```
+                 native   oracle
+thunk_allocs          1        0
+thunk_forces          1        1
+thunk_evals           1        1
+stdout                1        1
+```
+
+Both print `1`, so both demand it. Both agree it was forced and evaluated.
+`thunk_allocs` alone disagrees, in the direction the 2026-08-23 entry named
+and the 2026-08-24 gavel ruled against.
+
+**Nothing in the tree compares the two.** `tests/golden.rs:194` runs the mem
+vein with `run_kanso_as_library(&program, &[], ...)` — no `--interp` — so
+every `.mem` file is one engine's reading. No script under `scripts/` named
+`*_differential` mentions `KANSO_COUNTERS` or `thunk_allocs` at all. The
+comment sitting four lines above that loop says what was meant to close the
+gap, in the future tense it still carries: *the lazy fragment will extend
+these with engine-shared semantic counters (forces, evaluations, cells live at
+exit) asserted on both engines.* It never did, and the counter the two engines
+disagree on is the one that extension would have pinned.
+
+So this is the shape the unbuilt list exists for, twice in one evening: a
+ruling with no build, no row, and no spec that could have gone red for it.
+The 2026-08-24 entry's own closing line — "Unblocked: the fixture pinning a
+demanded knot's allocation shape" — names the fixture that would have caught
+it, and that fixture was never written either.
+
+**The rest of the month.** Eight of the nine are built, superseded or policy:
+no tolerance bands and the floor's absolute-against-refactorings rule both
+live in CLAUDE.md and are quoted back by later rulings; the build hole was
+built 2026-09-16; welfare measuring cost rather than counts is verifiable from
+`--counters`, which lists `compile_instructions` and `compile_allocs` where
+the gavel found rounds and visits; the arm never seeing its own err was
+retired on 2026-09-15 by the box ruling, which the fixture
+`an_arm_sees_its_own_hakos_err` records in its own header; the three explicit
+forms and the fused operators were both run this afternoon; and the July
+letters are closed, with the ledger's own section reading EMPTY.
+
+**August is finished.** Thirty-five of the fifty-six `gavel:` entries carry an
+August date and all of them are now swept, across three sittings' worth of
+work: seventeen on 2026-08-29, nine on the five oldest dates, nine here. Two
+unbuilt rulings in thirty-five entries. The twenty-one that remain are all
+September.
+
+- **DONE** August swept end to end, and the demanded-knot counter measured
+  rather than read.
+- **OPEN** the twenty-one September entries.
+- **OPEN** whether any other counter diverges between the engines. Nothing
+  compares them, so the answer is unknown rather than no, and the mem vein
+  running on one engine is the cheapest place to change that.
