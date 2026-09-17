@@ -53,5 +53,10 @@
 # 2,320,967,932 and then 2,320,967,932 again in the same job -- the six
 # instructions this row used to move by were the allocator picking a
 # random base address, which kanso#1466 took away.
-interp_instructions=2320967932
+#
+# 2026-09-17, kanso#1462 on the tree merged with kanso#1472, CI's sitting. The
+# row this branch is for: the interpreter hashes with the compiler's own seedless
+# hash rather than against an attacker it does not have. A FALL of 142,311,375
+# (-6.13%) against the value the merge carried forward.
+interp_instructions=2178656557
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

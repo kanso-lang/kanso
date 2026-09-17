@@ -626,7 +626,13 @@
 # base, so the merged tree is reading neither number. The value below is main's,
 # carried forward so the gate has one value to fail against rather than none;
 # the merged sitting is CI's to take.
-library_instructions=128281268
+#
+# 2026-09-17, kanso#1462 merged with kanso#1472, CI's sitting on the merged tree.
+# The value the merge carried forward was main's; this is the merged tree's own
+# reading. `kanso check` does not run the interpreter, so the hashing this branch
+# changes is not on this corpus: the move is the layout kind the header above
+# describes, src/eval.rs being the compiler's own bytes.
+library_instructions=128275780
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

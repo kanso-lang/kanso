@@ -4454,3 +4454,21 @@ on cpu 25/1 and both printed 558,610 over 605 frames, to the instruction, with
 their three compile rows thirteen apart. A term the floor holds cannot move
 while the floor does not. kanso#1474 prints the module compile's whole listing
 beside it for that reason.
+
+## 2026-09-17 — kanso#1462 on the merged tree: CI's sitting
+
+The branch merged with kanso#1472 and CI measured the merged tree. Four rows
+moved against the values the merge carried forward:
+
+    interp_instructions  2,320,967,932 -> 2,178,656,557  -142,311,375  -6.13%
+    compile_instructions    35,969,565 -> 35,968,356           -1,209  -0.0034%
+    entry_instructions     128,144,579 -> 128,138,080          -6,499  -0.0051%
+    library_instructions   128,281,268 -> 128,275,780          -5,488  -0.0043%
+
+The interpreter row is the branch's own. The three compile rows are layout:
+`kanso check` does not run the interpreter, so none of the hashing this branch
+changes is on that corpus. Welfare rose and is banked at 69.7922205456612.
+
+`per_process_floor=556292 frames=605 kernel=6.17.0-1022-azure cpu=25/1`.
+
+- **DONE** the rows are CI's.
