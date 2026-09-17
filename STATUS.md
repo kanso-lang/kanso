@@ -130,7 +130,7 @@ log and the archive carry **56** entries whose heading begins `gavel:`.
 **Thirty-five carry an August date and all thirty-five are now swept**, on
 2026-09-17: seventeen on 08-29, nine across the five oldest dates, nine across
 08-24, 08-25, 08-26 and 08-31. **Two came back unbuilt**, and both are rows
-below. The **twenty-one** that remain are all September; twelve of them were
+below. The **twenty-one** that remain are all September; thirteen of them were
 probed on the way past and are built — the whole-float rendering of 09-06 and
 the inf/nan words of 09-08, each with a golden carrying its citation, and the
 09-03 suffix contracts, whose own entry recorded them as unimplemented and
@@ -145,8 +145,10 @@ compile golden carries exactly one value line, and the 09-10 rows-stay-unscored
 ruling, whose coverage boundary `site_smoke` pins, the 09-06 clang-19 bump
 with its feature detection, the 09-08 fixed compile corpus, and the 09-05
 corpus-first ruling, whose read loop sits inside the consolidated run
-program's own entry rather than on the shelf the gavel named — and **nine**
-are unread. Twelve probed and twelve built or satisfied: September's yield is lower than August's, which
+program's own entry rather than on the shelf the gavel named, and the 09-03
+bimodal row, whose first named suspect is addressed by `paths.sort()` in the
+module loader — and **eight** are unread. Thirteen probed and thirteen built
+or satisfied: September's yield is lower than August's, which
 is what a list that tracks recent rulings should look like. Two in thirty-five is not zero, so what September holds is a guess until
 somebody reads it. That is what "floor" means and why the word stays. The build hole came off built as kanso#1447, the day after
 it was found twenty-three days off this

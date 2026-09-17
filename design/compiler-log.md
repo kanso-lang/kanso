@@ -7496,7 +7496,7 @@ work: seventeen on 2026-08-29, nine on the five oldest dates, nine here. Two
 unbuilt rulings in thirty-five entries. The twenty-one that remain are all
 September.
 
-**Twelve of September's twenty-one, probed on the way past.** The 2026-09-06
+**Thirteen of September's twenty-one, probed on the way past.** The 2026-09-06
 whole-float ruling — a float's rendering always carries a `.` or an `e`, and
 `.0` is appended where the shortest form has neither — is built:
 `a_whole_float_keeps_its_point` carries the RULED citation and its third line
@@ -7603,13 +7603,24 @@ retired shelves the day after this gavel asked for one, and the workload the
 gavel wanted visible ended up in the one program instead. The purpose holds;
 the named mechanism is gone.
 
-Nine September entries are unread, and this entry says so rather than counting
-them swept.
+The 2026-09-03 bimodal-row ruling is the ancestor of today's third row, and
+its first suspect is addressed. Clay's words were that glibc's instructions
+must be included but made consistent — *like how rspec can run with a seed...
+you run some instruction at the top to clear out the glibc state* — and the
+entry named directory read order first, since ext4's readdir is a hash order
+seeded per filesystem instance. `src/lib.rs:3591` sorts: the module loader
+collects its `.kso` paths and calls `paths.sort()` before reading any of them,
+so a fresh runner disk cannot reorder a compile. The wider question that
+ruling opened runs straight into the 2026-09-15 normalization gavel and into
+this afternoon's six instructions, which is already a row.
+
+Eight September entries are unread, and this entry says so rather than
+counting them swept.
 
 - **DONE** August swept end to end, and the demanded-knot counter measured
   rather than read.
-- **OPEN** nine September entries, across 09-02, 09-03, 09-05, 09-07, 09-15
-  and 09-16. Twelve probed, twelve built or satisfied: the yield is
+- **OPEN** eight September entries, across 09-02, 09-05, 09-07, 09-15 and
+  09-16. Thirteen probed, thirteen built or satisfied: the yield is
   lower here than in August, which is what a list that tracks recent rulings
   should look like. Several are almost certainly built — the box
   ruling, the maps normalization and the two welfares each came OFF the list
