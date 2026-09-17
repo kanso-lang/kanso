@@ -6058,9 +6058,34 @@ So the win wants both halves at once: the derivation out of the process, and a
 qualification that writes into the importer's program rather than mutating a
 copy of the module's. Either alone costs what it saves.
 
+### And a blind spot, found by looking for the next lever in it
+
+After this change the largest remaining `sip::Hasher::write` is the IR's own
+hash in `cached_program_binary`, which has to stay: the IR varies. Beside it in
+`src/main.rs` is `narrow_tailcc`, which builds a `std::collections::HashSet<
+String>` — std's default hasher, against `src/hash.rs`'s whole argument — over
+every `define tailcc` and `declare tailcc` line of the emitted IR. On
+`kanso build bench/runbench` that is 144,261 lines.
+
+**No vein counts it.** The three `kanso check` rows stop before codegen.
+`emit_instructions` anchors at `codegen::emit_ir`, and this runs after, on the
+IR string. The two codegen rows exclude kanso's own process under the
+2026-09-15 rule. `startup_instructions` runs the emitter, but on a one-line
+program `narrow_tailcc` does not appear in the profile at all.
+
+So everything `kanso` does between `emit_ir` returning and `clang` starting —
+the tailcc narrowing, the two cache keys, writing the `.ll` — is measured by
+nothing, on the day the model gained five counters. That is not an argument
+against the change above, which is measured on the one vein that can see it;
+it is the next row somebody owes, and naming it is cheaper than finding it
+again.
+
 - **OPEN, and the largest number in this entry** the standard library is
   re-derived from a compiler constant on every process: 24,886,969 of a
   36,331,296-instruction compile. What a build-time derivation has to carry,
   and whether a module's compiled form can be serialised at all, is not
   answered here. The measurement is, the seam is the qualification step, and
   the paragraph above says what a half-measure costs.
+- **OPEN** a vein for what `kanso` spends after `emit_ir` returns. Until there
+  is one, `narrow_tailcc`'s SipHash over 144,261 IR lines is a lever nobody
+  can price.
