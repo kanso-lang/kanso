@@ -236,6 +236,7 @@ fn demotable_entries(
     mut_sites: &MutSites,
     chains: &HashSet<Group>,
 ) -> Vec<(Group, Vec<Group>, Vec<usize>)> {
+    let value_uses = ValueUses::of(program);
     let allocating = alloc_groups(program, mut_sites);
     let mut cyclic: HashSet<Group> = HashSet::default();
     // a group is cyclic when any tail path returns to it (self-edge or SCC)
@@ -268,7 +269,7 @@ fn demotable_entries(
                 let set = group_param_set(program, inference, &name, arity, p);
                 accumulator_grows(program, &name, arity, p) || set == 0 || set & BYTES != 0
             })
-            || used_as_value(program, &name)
+            || value_uses.has(&name)
             || !allocating.contains(name.as_str())
         {
             continue;
@@ -537,6 +538,7 @@ fn eligible_clusters(
     mut_sites: &MutSites,
     chains: &HashSet<Group>,
 ) -> Vec<Cluster> {
+    let value_uses = ValueUses::of(program);
     let groups: Vec<(String, usize)> = {
         let set: HashSet<(String, usize)> =
             program.fns.iter().map(|d| (d.name.clone(), d.params.len())).collect();
@@ -586,7 +588,7 @@ fn eligible_clusters(
                 continue;
             }
         }
-        if scc.iter().any(|&g| used_as_value(program, &groups[g].0)) {
+        if scc.iter().any(|&g| value_uses.has(&groups[g].0)) {
             continue;
         }
         if !scc.iter().any(|&g| allocating.contains(groups[g].0.as_str())) {
@@ -978,11 +980,15 @@ fn blockers(
     name: &str,
     arity: usize,
 ) -> Vec<Verdict> {
+    // One name, and this runs only to explain a verdict already reached, so
+    // the index is built here rather than threaded: it reads the program once,
+    // which is what the scan it replaces did for this single name anyway.
+    let value_uses = ValueUses::of(program);
     let mut found = Vec::new();
-    if outside_tails(program, name, arity) {
+    if TailCalls::of(program).outside_tails(name, arity) {
         found.push(Verdict::OutsideTailCall);
     }
-    if used_as_value(program, name) {
+    if value_uses.has(name) {
         found.push(Verdict::UsedAsValue);
     }
     // a loop that allocates nothing has nothing the others could cost it
@@ -1006,6 +1012,8 @@ fn classify_all(
     chains: &HashSet<Group>,
 ) -> Vec<(String, usize, Verdict)> {
     let allocating = alloc_groups(program, mut_sites);
+    let tails = TailCalls::of(program);
+    let value_uses = ValueUses::of(program);
     let mut groups: Vec<(String, usize)> = {
         let set: HashSet<(String, usize)> =
             program.fns.iter().map(|d| (d.name.clone(), d.params.len())).collect();
@@ -1015,58 +1023,90 @@ fn classify_all(
     groups
         .into_iter()
         .filter_map(|(name, arity)| {
-            classify(program, inference, mut_sites, chains, &allocating, &name, arity)
-                .map(|v| (name, arity, v))
+            let whole =
+                Whole { program, value_uses: &value_uses, inference, mut_sites, tails: &tails };
+            classify(&whole, chains, &allocating, &name, arity).map(|v| (name, arity, v))
         })
         .collect()
 }
 
-/// Does any arm of this group tail-call the group itself?
-fn has_self_tail(program: &Program, name: &str, arity: usize) -> bool {
-    tail_calls_to(program, name, arity).any(|in_group| in_group)
+/// Every tail call the program writes, read in one pass and asked by group.
+///
+/// `classify` asks two questions of each group -- does it tail-call itself,
+/// and does anything outside it tail-call it -- and both used to walk
+/// `program.fns` in full. `classify_all` asks them once per group, so the pass
+/// was groups times program. On `kanso build bench/runbench`, which emits 599
+/// defines, `has_self_tail` was 30.25% of the process and `classify_all`
+/// 33.00%, read with `#[inline(never)]` on both so the attribution was not a
+/// guess.
+///
+/// One walk answers both: for every tail call, record against the CALLED group
+/// whether the caller was that same group or something else.
+#[derive(Default)]
+struct TailCalls<'a> {
+    /// called group -> (some caller is the group itself, some caller is not)
+    to: crate::hash::Map<(&'a str, usize), (bool, bool)>,
 }
 
-/// Does anything *outside* the group tail-call it? Such an entry never passes
-/// through the loop's bracket, so the loop cannot rewind.
-fn outside_tails(program: &Program, name: &str, arity: usize) -> bool {
-    tail_calls_to(program, name, arity).any(|in_group| !in_group)
-}
+impl<'a> TailCalls<'a> {
+    fn of(program: &'a Program) -> Self {
+        let mut to: crate::hash::Map<(&'a str, usize), (bool, bool)> = Default::default();
+        for decl in &program.fns {
+            for tail in tail_exprs(decl.body.last()) {
+                let Expr::App { head, args, piped: false, .. } = tail else { continue };
+                let Expr::Ident(callee, _) = head.as_ref() else { continue };
+                let in_group = decl.name == *callee && decl.params.len() == args.len();
+                let seen = to.entry((callee.as_str(), args.len())).or_insert((false, false));
+                match in_group {
+                    true => seen.0 = true,
+                    false => seen.1 = true,
+                }
+            }
+        }
+        Self { to }
+    }
 
-/// Every tail call to `name`/`arity`, paired with whether the caller is the
-/// group itself.
-fn tail_calls_to<'a>(
-    program: &'a Program,
-    name: &'a str,
-    arity: usize,
-) -> impl Iterator<Item = bool> + 'a {
-    program.fns.iter().flat_map(move |decl| {
-        let in_group = decl.name == name && decl.params.len() == arity;
-        tail_exprs(decl.body.last()).into_iter().filter_map(move |tail| {
-            let Expr::App { head, args, piped: false, .. } = tail else { return None };
-            let Expr::Ident(callee, _) = head.as_ref() else { return None };
-            (callee == name && args.len() == arity).then_some(in_group)
-        })
-    })
+    /// Does any arm of this group tail-call the group itself?
+    fn has_self_tail(&self, name: &str, arity: usize) -> bool {
+        self.to.get(&(name, arity)).is_some_and(|seen| seen.0)
+    }
+
+    /// Does anything *outside* the group tail-call it? Such an entry never
+    /// passes through the loop's bracket, so the loop cannot rewind.
+    fn outside_tails(&self, name: &str, arity: usize) -> bool {
+        self.to.get(&(name, arity)).is_some_and(|seen| seen.1)
+    }
 }
 
 /// The verdict for one group, or None when it has no self-tail-call (not a
 /// loop, nothing to say).
+/// What `classify` reads about the WHOLE program, which is the same for every
+/// group it is asked about. `classify_all` builds each one once and hands this
+/// down; passing them one by one put the signature at eight parameters, and
+/// the four of them travel together anyway.
+struct Whole<'a> {
+    program: &'a Program,
+    value_uses: &'a ValueUses<'a>,
+    inference: &'a infer::Inference,
+    mut_sites: &'a MutSites,
+    tails: &'a TailCalls<'a>,
+}
+
 fn classify(
-    program: &Program,
-    inference: &infer::Inference,
-    mut_sites: &MutSites,
+    whole: &Whole<'_>,
     chains: &HashSet<Group>,
     allocating: &HashSet<&str>,
     name: &str,
     arity: usize,
 ) -> Option<Verdict> {
-    if !has_self_tail(program, name, arity) {
+    let Whole { program, value_uses, inference, mut_sites, tails } = whole;
+    if !tails.has_self_tail(name, arity) {
         return None;
     }
-    if outside_tails(program, name, arity) {
+    if tails.outside_tails(name, arity) {
         return Some(crate::beat::Verdict::OutsideTailCall);
     }
-    if used_as_value(program, name) {
+    if value_uses.has(name) {
         return Some(crate::beat::Verdict::UsedAsValue);
     }
     if !allocating.contains(name) {
@@ -1710,19 +1750,114 @@ fn collect_names(e: &Expr, out: &mut HashSet<String>) {
     }
 }
 
-fn used_as_value(program: &Program, name: &str) -> bool {
-    program.fns.iter().any(|d| {
-        d.body.iter().any(|stmt| {
-            let e = match stmt {
-                Stmt::Bind { expr, .. } => expr,
-                Stmt::Expr(e) => e,
-                Stmt::Set { value, .. } => value,
-            };
-            value_use(e, name)
-        })
-    })
+/// Every name the program uses AS A VALUE, read in one pass.
+///
+/// The question used to go to the whole program once per name: every
+/// function, every statement, every node of every expression, for each of the
+/// four callers below and for each group they ask about. On the tip of the
+/// index stack that walk is `beat::value_use` at 27,035,386 instructions in a
+/// `kanso build bench/runbench` -- the largest frame the compiler itself owns
+/// in that build, once the five whole-program scans before it are gone.
+///
+/// A name in call position is not a value use: `f x` uses `x` and not `f`,
+/// and `(g h) x` uses both because the head is not a plain name. That
+/// asymmetry is the whole reason `collect_names` above cannot answer this --
+/// it takes every head unconditionally, which is the right rule for the
+/// question it serves and the wrong one for this.
+struct ValueUses<'a> {
+    names: crate::hash::Set<&'a str>,
 }
 
+impl<'a> ValueUses<'a> {
+    fn of(program: &'a Program) -> Self {
+        let mut names = crate::hash::Set::default();
+        for decl in &program.fns {
+            for stmt in &decl.body {
+                let (Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. }) =
+                    stmt;
+                collect_value_uses(expr, &mut names);
+            }
+        }
+        Self { names }
+    }
+
+    fn has(&self, name: &str) -> bool {
+        self.names.contains(name)
+    }
+}
+
+/// `value_use`'s traversal with the name taken out of it: the same arms in the
+/// same order, collecting where it would have compared.
+fn collect_value_uses<'a>(e: &'a Expr, out: &mut crate::hash::Set<&'a str>) {
+    match e {
+        Expr::Ident(n, _) | Expr::Partial(n, _) => {
+            out.insert(n.as_str());
+        }
+        Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
+            for st in stmts {
+                let (Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. }) =
+                    st;
+                collect_value_uses(expr, out);
+            }
+        }
+        Expr::App { head, args, .. } => {
+            if !matches!(head.as_ref(), Expr::Ident(..)) {
+                collect_value_uses(head, out);
+            }
+            for a in args {
+                collect_value_uses(a, out);
+            }
+        }
+        Expr::Field { base, .. } => collect_value_uses(base, out),
+        Expr::Upcast { expr, .. } => collect_value_uses(expr, out),
+        Expr::Index { base, index, .. } => {
+            collect_value_uses(base, out);
+            collect_value_uses(index, out);
+        }
+        Expr::BinOp { lhs, rhs, .. } | Expr::Join { lhs, rhs, .. } => {
+            collect_value_uses(lhs, out);
+            collect_value_uses(rhs, out);
+        }
+        Expr::Guard { cond, early, rest, .. } => {
+            collect_value_uses(cond, out);
+            collect_value_uses(early, out);
+            for s in rest {
+                collect_value_uses(guard_stmt_expr(s), out);
+            }
+        }
+        Expr::Seq(a, b, _) => {
+            collect_value_uses(a, out);
+            collect_value_uses(b, out);
+        }
+        Expr::Lambda { body, .. } => collect_value_uses(body, out),
+        Expr::List(items, _) => {
+            for i in items {
+                collect_value_uses(i, out);
+            }
+        }
+        Expr::MapLit(pairs, _) => {
+            for (k, v) in pairs {
+                // The key walk mirrors the oracle and can never find a name:
+                // the grammar refuses a non-literal key outright -- `{ one:"a" }`
+                // is `error[syntax]: `one` is not a literal`. So a mutant that
+                // drops this line passes every spec, and that is the grammar
+                // speaking rather than a hole in the corpus.
+                collect_value_uses(k, out);
+                collect_value_uses(v, out);
+            }
+        }
+        Expr::Str(parts, _) => {
+            for p in parts {
+                if let TemplatePart::Interp(inner) = p {
+                    collect_value_uses(inner, out);
+                }
+            }
+        }
+        Expr::Int(..) | Expr::Float(..) | Expr::Hole(..) => {}
+    }
+}
+
+#[cfg(test)]
 fn value_use(e: &Expr, name: &str) -> bool {
     match e {
         Expr::Ident(n, _) | Expr::Partial(n, _) => n == name,
@@ -1762,8 +1897,130 @@ fn value_use(e: &Expr, name: &str) -> bool {
 }
 
 #[cfg(test)]
+mod the_value_use_index_answers_what_the_scan_answered {
+    use super::*;
+
+    /// What `used_as_value` did before the index existed, kept as the oracle.
+    /// `value_use` beside it is the original walk, untouched.
+    fn scanned(program: &Program, name: &str) -> bool {
+        program.fns.iter().any(|d| {
+            d.body.iter().any(|stmt| {
+                let (Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. }) =
+                    stmt;
+                value_use(expr, name)
+            })
+        })
+    }
+
+    /// Both ways, over every name the program writes anywhere plus a name it
+    /// does not. Every identifier is asked, not just the group names the four
+    /// callers happen to reach, because a name in call position is the case
+    /// the index has to get RIGHT BY EXCLUDING -- asking only names that are
+    /// used as values could not tell the two rules apart.
+    fn agrees_over(src: &str) {
+        let program = crate::compile("test.kso", src, false).expect("the sample compiles");
+        let index = ValueUses::of(&program);
+        let mut every: crate::hash::Set<&str> = crate::hash::Set::default();
+        for decl in &program.fns {
+            every.insert(decl.name.as_str());
+            for stmt in &decl.body {
+                let (Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. }) =
+                    stmt;
+                collect_names_borrowed(expr, &mut every);
+            }
+        }
+        every.insert("a name nothing writes");
+        let mut asked = 0;
+        for name in &every {
+            assert_eq!(
+                index.has(name),
+                scanned(&program, name),
+                "`{name}`: the index and the scan disagree"
+            );
+            asked += 1;
+        }
+        assert!(asked > 3, "the sample asked only {asked} names");
+    }
+
+    /// Every identifier anywhere, head position included -- deliberately
+    /// wider than what the index collects, so the queries reach names the
+    /// index must answer NO for.
+    fn collect_names_borrowed<'a>(e: &'a Expr, out: &mut crate::hash::Set<&'a str>) {
+        if let Expr::App { head, .. } = e {
+            if let Expr::Ident(n, _) = head.as_ref() {
+                out.insert(n.as_str());
+            }
+        }
+        collect_value_uses(e, out);
+        match e {
+            Expr::App { head, args, .. } => {
+                collect_names_borrowed(head, out);
+                for a in args {
+                    collect_names_borrowed(a, out);
+                }
+            }
+            Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
+                for st in stmts {
+                    let (Stmt::Bind { expr, .. }
+                    | Stmt::Expr(expr)
+                    | Stmt::Set { value: expr, .. }) = st;
+                    collect_names_borrowed(expr, out);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    #[test]
+    fn a_name_in_call_position_is_not_a_value_use() {
+        // `twice` is only ever called, `step` is handed over as a value, and
+        // `both` is both. A collector that took every head would say yes to
+        // `twice`, and the scan says no.
+        agrees_over(concat!(
+            "fn step x\n  x + 1\n\n",
+            "fn twice f x\n  f (f x)\n\n",
+            "fn both g\n  g 1\n\n",
+            "main = print \"{twice step 1} {both step}\"\n"
+        ));
+    }
+
+    #[test]
+    fn over_the_shapes_the_walk_has_arms_for() {
+        // A list, a map literal, an interpolation, an index, a field, a
+        // lambda body and a binop, each carrying a name as a value.
+        agrees_over(concat!(
+            "fn use_it a b\n  a + b\n\n",
+            "one = 1\n\n",
+            "two = 2\n\n",
+            "xs = [one two]\n\n",
+            "m = { 1:one 2:two }\n\n",
+            "main = print \"{one} {xs[two]} {use_it one two} {m[one]}\"\n"
+        ));
+    }
+
+    #[test]
+    fn over_the_library_the_compiler_carries() {
+        let program =
+            crate::compile_module(std::path::Path::new("lib/json"), false).expect("lib/json");
+        let index = ValueUses::of(&program);
+        let mut asked = 0;
+        for decl in &program.fns {
+            let name = decl.name.as_str();
+            assert_eq!(
+                index.has(name),
+                scanned(&program, name),
+                "`{name}`: the index and the scan disagree"
+            );
+            asked += 1;
+        }
+        assert!(asked > 100, "lib/json declared only {asked} names");
+    }
+}
+
+#[cfg(test)]
 mod tests {
-    use super::beat_loops;
+    use super::{beat_loops, tail_exprs, Program, TailCalls};
+    use crate::ast::Expr;
     use crate::infer;
 
     fn compiled(src: &str) -> (crate::ast::Program, infer::Inference) {
@@ -2182,5 +2439,79 @@ mod tests {
         assert_eq!(bare_builtin("builtin_append"), "append");
         assert_eq!(bare_builtin("text/slice"), "slice");
         assert_eq!(bare_builtin("find2_below"), "find2_below");
+    }
+
+    /// The two questions `classify` asks, answered the old way: a walk of the
+    /// whole program per group. Kept as the oracle for the index that replaced
+    /// it, which is 30.25% of `kanso build bench/runbench` cheaper.
+    fn tail_calls_to<'a>(
+        program: &'a Program,
+        name: &'a str,
+        arity: usize,
+    ) -> impl Iterator<Item = bool> + 'a {
+        program.fns.iter().flat_map(move |decl| {
+            let in_group = decl.name == name && decl.params.len() == arity;
+            tail_exprs(decl.body.last()).into_iter().filter_map(move |tail| {
+                let Expr::App { head, args, piped: false, .. } = tail else { return None };
+                let Expr::Ident(callee, _) = head.as_ref() else { return None };
+                (callee == name && args.len() == arity).then_some(in_group)
+            })
+        })
+    }
+
+    fn by_search(program: &Program, name: &str, arity: usize) -> (bool, bool) {
+        (
+            tail_calls_to(program, name, arity).any(|in_group| in_group),
+            tail_calls_to(program, name, arity).any(|in_group| !in_group),
+        )
+    }
+
+    /// Every group the program declares, asked both ways.
+    ///
+    /// Also every group NAMED by a tail call and not declared, and a handful
+    /// that appear nowhere: the index answers by lookup and a missing entry
+    /// has to read as "no", which a corpus of declared groups alone cannot
+    /// show.
+    fn agrees_over(source: &str) {
+        let program = crate::compile("sample.kso", source, false).expect("the sample compiles");
+        let tails = TailCalls::of(&program);
+        let mut asked = 0;
+        let mut groups: Vec<(String, usize)> =
+            program.fns.iter().map(|d| (d.name.clone(), d.params.len())).collect();
+        for (name, arity) in program.fns.iter().map(|d| (d.name.clone(), d.params.len())) {
+            groups.push((name.clone(), arity + 1));
+            groups.push((format!("{name}_no_such_group"), arity));
+        }
+        groups.push(("nothing_declares_this".to_string(), 0));
+        for (name, arity) in groups {
+            let want = by_search(&program, &name, arity);
+            let got = (tails.has_self_tail(&name, arity), tails.outside_tails(&name, arity));
+            assert_eq!(got, want, "the index and the search disagree on {name}/{arity}");
+            asked += 1;
+        }
+        assert!(asked > 6, "the sample asked only {asked} questions");
+    }
+
+    /// A self tail call, an outside tail call into the same group, and a group
+    /// with neither — which are the three answers `classify` reads.
+    #[test]
+    fn the_index_answers_what_the_walk_answered() {
+        agrees_over(
+            "fn count 0 acc\n  acc\n\nfn count n acc\n  count (n - 1) (acc + n)\n\n\
+             fn start n\n  count n 0\n\nfn plain n\n  n + 1\n\n\
+             main = print \"{start 10} {plain 3}\"\n",
+        );
+    }
+
+    /// The same program the emitter really sees, which is where a group named
+    /// by a tail call it does not declare turns up.
+    #[test]
+    fn a_real_program_reads_the_same_both_ways() {
+        agrees_over(
+            "fn climbed i stop acc\n  reached i stop acc (i > stop)\n\n\
+             fn reached _ _ acc true\n  acc\n\n\
+             fn reached i stop acc false\n  climbed (i + 1) stop (acc + i)\n\n\
+             fn summed n\n  climbed 1 n 0\n\nmain = print \"{summed 60}\"\n",
+        );
     }
 }
