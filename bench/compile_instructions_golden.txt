@@ -1846,6 +1846,15 @@
 # binary. The grep that settles it: the changed code's callers all sit under the
 # run path, not under compile_module_inner.
 #
+# 2026-09-17, kanso#1482 on the tree merged with main, CI's sitting. LAYOUT.
+# `kanso check` stops before codegen, and this branch changes src/codegen.rs
+# alone, so nothing the row counts as work went near the change. What moved it
+# is the compiler binary carrying different bytes: the narrowed slot check is
+# shorter code and the layout under it shifted. 93 higher.
+# #
+# # What the change buys is on the build path, which no landed vein counts yet:
+# # 284,873 instructions off `kanso build bench/runbench`, measured end to end.
+# # The codegen rows that would pin it are kanso#1470's and not on main.
 # 2026-09-17, merged with main. Both branches moved this row on their own
 # base, so the merged tree is reading neither number. The value below is
 # main's, carried forward so the gate has one value to fail against
@@ -1903,6 +1912,11 @@
 # main's, carried forward so the gate has one value to fail against
 # rather than none; the merged sitting is CI's to take.
 #
+# 2026-09-17 (kanso#1482): compile_instructions 35,964,325 -> 35,964,418, a RISE
+# of 93 (+0.00026%). The change is in the emitter and `kanso check` stops before
+# codegen, so this is layout; compile_allocs and compile memory came back
+# byte-identical. CI's sitting on 3e373510, the first with the printed line
+# excluded.
 # 2026-09-17 (kanso#1462): compile_instructions 35,964,325 -> 35,968,792, a RISE
 # of 4,467 (+0.0124%). The interpreter's hasher is compiler code and the compiler
 # compiles with it, so the three `kanso check` rows move together and by about
@@ -1918,7 +1932,18 @@
 # 35,968,792 -- TWO instructions. The branch edits src/main.rs, so the row can
 # move; two is the smallest move this vein has ever recorded and it is the
 # whole of it.
-compile_instructions=35968794
+# 2026-09-17, kanso#1482 on the tree merged with kanso#1462. CI reads
+# 35,968,171 against main's 35,968,792, a fall of 621 -- 0.0017%. LAYOUT.
+# `is_a_stack_slot` is asked from `FnEmit::write`, which sits under
+# `emit_ir`, and `kanso check` stops before codegen, so the branch's one
+# edit does not execute on this corpus. src/codegen.rs is the compiler and
+# its bytes moved.
+#
+# 2026-09-17, merged with main. Both branches moved this row on their own
+# base, so the merged tree is reading neither number. The value below is
+# main's, carried forward so the gate has one value to fail against
+# rather than none; the merged sitting is CI's to take.
+compile_instructions=35968171
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.
