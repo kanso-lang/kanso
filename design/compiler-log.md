@@ -5875,6 +5875,9 @@ build bench/runbench` falls 69.90%.
 own under the 2026-09-16 gavel and neither is a term yet, so welfare does not
 move on this and there is no floor question to put to anyone.
 
-- **OPEN** build the DECLARES set for less than a run of hashed inserts. A
-  constant's symbol set is knowable before the process starts, and 599,739
-  instructions is what not knowing it costs every build.
+- **IN HAND** on kanso#1484, which is stacked on this branch: DECLARES is a
+  `const`, so the sixty-two symbols it calls are the same in every process
+  kanso has ever run. Written down sorted and asked with `binary_search`,
+  start-up reads 615,754 lower than this branch and 350,129 below main, with
+  `kanso build`'s 69.90% kept. So this row's rise is paid back by the branch
+  above it rather than left standing.
