@@ -97,4 +97,9 @@
 # different sides: one is paid once per release and the other between a
 # keystroke and an answer. The container's placeholder read 12,107,507,377,
 # pre-exclusion and not comparable.
-codegen_instructions_release=6826827769
+# 2026-09-17, kanso#1493 on the tree merged with main 5e256ce0, CI's sitting.
+# 6,826,827,769 -> 6,826,829,520, a RISE of 1,751 -- 256 parts per billion, on
+# a row whose `-O3 -flto` tier is the largest number this tree counts. The
+# same C-toolchain layout the dev row shows, at the scale that tier runs at.
+# A second count in the same job read 6,826,829,520.
+codegen_instructions_release=6826829520

@@ -8002,6 +8002,7 @@ without asking. Both stand, the later one narrower.
 - **DONE** all 73 rulings probed — 50 under the `— gavel:` spelling, 23 under
   `GAVEL:` and its variants. Nothing unbuilt in either set.
 - **OPEN** the two welfare.kso sentences, which are cloud's file.
+
 ## 2026-09-17 — the 2026-08-29 sweep runs, and one ruling lost its purpose to a later build
 
 Closes the OPEN item above. The "Ruled, unbuilt" preamble has called its list
@@ -8436,6 +8437,256 @@ counting them swept.
   compares them, so the answer is unknown rather than no, and the mem vein
   running on one engine is the cheapest place to change that.
 
+## 2026-09-17 — a quarter of start-up was hashing a constant
+
+`kanso play` on a program holding one `print` retires 4,837,246 instructions
+under `kanso::main`. Callgrind puts 1,226,463 of them — **25.35%** — in
+`sip::Hasher::write`.
+
+Two cache keys ask for it. `cached_runtime_object` decides whether a staged
+`kanso_runtime_*.o` may be reused and `cached_program_binary` decides the same
+for a linked `kanso_run_*`; both must change when `src/runtime.c` changes, and
+both got that by handing the whole file to a `DefaultHasher`. `runtime.c` is
+450,100 bytes, it is hashed twice, and 900,200 bytes at roughly 1.36
+instructions a byte is the entire frame. The one-line program's own IR is
+rounding.
+
+A constant's digest is a constant. `hash::RUNTIME_DIGEST` is now computed by
+the compiler that builds this one, and the running compiler folds in eight
+bytes.
+
+    main                4,837,246
+    the digest          3,712,046     -1,125,200   -23.26%
+
+both built under rustc 1.98.1 and read through the gate's own box with the
+caches warm.
+
+`digest_of` is a const fn carrying two FNV-1a accumulators with different
+primes and offsets, folded in together so the key holds 128 bits rather than
+64. A collision here would not be a slow build: it would be a runtime object
+reused against IR compiled for a different one. The second pass costs the
+build and nothing else. The loop steps eight bytes at a time because `const`
+evaluation is interpreted and rustc denies a long-running one by default; a
+byte at a time over 450,100 bytes exceeds that budget, a word at a time is the
+same function at an eighth of the steps.
+
+Three specs, each watched red for its own reason before it was watched green:
+no cache key feeds the source to a hasher (the cost), the constant is the
+digest of the bytes it names (the drift that would be a miscompile), and a bit
+flipped at the first byte, the middle and the last moves it (the mixer).
+
+### What is left, and it is the same constant again
+
+With the digest gone, `kanso::main` reads 3,712,046 and `Backend::emit`
+inclusive is 3,279,374 of it — **88.34%** of what it costs to run a program
+holding one `print`. By self cost:
+
+        923,224  24.87%  memchr_aligned
+        605,157  16.30%  <&str as Pattern>::is_contained_in
+        371,953  10.02%  CharSearcher::next_match
+        314,688   8.48%  memcmp_avx2_movbe
+        239,303   6.45%  Backend::emit itself
+
+The first four are one activity: **2,215,022 instructions, 59.67% of start-up,
+searching DECLARES for substrings.** DECLARES is 1,187 lines of `const &'static
+str` in the compiler's own source. The program being emitted contributes almost
+nothing to that number.
+
+kanso#1468 and kanso#1478 replace those searches with an index, and their
+start-up rows go UP — +239,217 and +244,116 — because the index is built once
+per process too, and a one-line program has nothing to amortise it over. Both
+shapes pay per process for an answer that is the same in every process.
+
+The digest above is the third shape and the one that costs neither workload:
+derive it in the build. `hash::digest_of` shows a `const fn` handling 450,100
+bytes within rustc's const-eval budget when it steps a word at a time, so the
+technique is in the tree and measured.
+
+### And the third instance is two thirds of a compile
+
+The same question asked of `kanso check` gives a larger answer. On this box,
+on the compile corpus:
+
+        kanso::main                36,331,296
+        kanso::load_dependencies   24,886,969   68.50%
+
+`bench/compile_corpus/compile_corpus.kso` is twenty-five lines and names four
+imports: `std/json`, `std/list`, `std/testing`, `std/text`. All four resolve to
+`include_str!` of `lib/*.kso` — the loader checks the embedded copy BEFORE the
+filesystem, so a `std/` module is a constant of the compiler however the
+compiler was installed. So better than two thirds of what the compile term
+measures is the standard library being lexed, parsed, inferred and checked from
+scratch, from a constant, once per process, every time.
+
+That is worth saying about the term as well as about the compiler: a change to
+the front end moves the third of the row it can reach, and the other two thirds
+sit there.
+
+One seam is already visible in `load_dependencies`. The compiled module is
+qualified per importer — `qualify(&mut dep, qual, ...)` renames into the
+importer's namespace — but what it qualifies does not depend on the importer.
+The module's compiled form is a function of its own source, which is a
+constant, and the qualification is the cheap part applied after.
+
+- **DONE** measured, spec'd, and the row is CI's to write.
+- **OPEN** derive what the emitter asks of DECLARES at build time rather than
+  per process. The bound on this box is 2,215,022 instructions of start-up,
+  and it subsumes the `declare_lines` item named on kanso#1480's start-up
+  golden (1,019,913 on the branches that have it). It wants the index work in
+  flight to land first, since it replaces the thing those branches build.
+### The cheap version of that was built and measured, and it does not pay
+
+Before proposing the expensive shape, the cheap one was tried. `load_dependencies`
+threads a `visited` set through the nested compiles and that set is a cycle
+detector rather than a cache — it removes each path when the module finishes —
+so a module two importers both want is compiled twice. That is the ordinary
+shape rather than a corner: `bench/compile_corpus` imports `std/text` and also
+`std/json`, and `std/json` imports `std/text`. `KANSO_PHASES=1` printed
+`load std/text` twice for it.
+
+A per-process memo of the embedded modules, handing each importer a clone,
+takes it to one. Measured on this box against `origin/main`, distinct binaries,
+the gate's own box:
+
+    compile_instructions    36,330,494 -> 35,838,107    -492,387   -1.355%
+    front_end_rounds                47 ->         43          -4
+    compile_allocs              27,397 ->     29,637      +2,240   +8.18%
+    compile_peak_bytes         787,956 ->  1,093,270    +305,314  +38.75%
+
+**Welfare falls 0.75 under the model on main and 0.10 under the split.** Both
+decline it, so it is declined; the entry is here so the next reader does not
+spend the afternoon again.
+
+The memory is not an implementation slip. `qualify` renames a compiled module
+into the importer's namespace IN PLACE, so a shared module has to be handed
+out as a copy, and the memo's own copy is one more than the compile ever held.
+Three copies where there were two, per module, for the life of the process.
+
+So the win wants both halves at once: the derivation out of the process, and a
+qualification that writes into the importer's program rather than mutating a
+copy of the module's. Either alone costs what it saves.
+
+### And a blind spot, found by looking for the next lever in it
+
+After this change the largest remaining `sip::Hasher::write` is the IR's own
+hash in `cached_program_binary`, which has to stay: the IR varies. Beside it in
+`src/main.rs` is `narrow_tailcc`, which builds a `std::collections::HashSet<
+String>` — std's default hasher, against `src/hash.rs`'s whole argument — over
+every `define tailcc` and `declare tailcc` line of the emitted IR. On
+`kanso build bench/runbench` that is 144,261 lines.
+
+**No vein counts it.** The three `kanso check` rows stop before codegen.
+`emit_instructions` anchors at `codegen::emit_ir`, and this runs after, on the
+IR string. The two codegen rows exclude kanso's own process under the
+2026-09-15 rule. `startup_instructions` runs the emitter, but on a one-line
+program `narrow_tailcc` does not appear in the profile at all.
+
+So everything `kanso` does between `emit_ir` returning and `clang` starting —
+the tailcc narrowing, the two cache keys, writing the `.ll` — is measured by
+nothing, on the day the model gained five counters. That is not an argument
+against the change above, which is measured on the one vein that can see it;
+it is the next row somebody owes, and naming it is cheaper than finding it
+again.
+
+- **OPEN, and the largest number in this entry** the standard library is
+  re-derived from a compiler constant on every process: 24,886,969 of a
+  36,331,296-instruction compile. What a build-time derivation has to carry,
+  and whether a module's compiled form can be serialised at all, is not
+  answered here. The measurement is, the seam is the qualification step, and
+  the paragraph above says what a half-measure costs.
+- **OPEN** a vein for what `kanso` spends after `emit_ir` returns. Until there
+  is one, `narrow_tailcc`'s SipHash over 144,261 IR lines is a lever nobody
+  can price.
+
+
+## 2026-09-17 — the start-up row read on the merged tree, and the rise it leaves to bank
+
+kanso#1493's cost-goldens job on the tree merged with main counted the row:
+
+    startup_instructions  4,837,381 -> 3,712,181    -1,125,200   -23.26%
+
+which is the figure the branch claimed, measured by CI rather than projected.
+`kanso play` on a one-line program hashed the 450,100 bytes of src/runtime.c
+twice — once for each of the two caches main.rs keys — and `src/hash.rs`
+computes that digest at build time now. The three `kanso check` rows and the
+interpreted row are byte-identical to main in the same sitting, which is what
+a change confined to start-up should look like.
+
+That reading was taken before kanso#1491 landed. The split edits src/main.rs
+too and moved this row 431 instructions on its own; the two edits merged
+without a conflict, so the merged number is a few hundred off the one above
+and CI is what says which few hundred.
+
+Under the three-score model the branch reads **76.41 against a floor of
+76.13**, a rise of 0.28, and the whole of it is the development side: start-up
+carries 0.25 there and nothing else moved. The floor sentinel fails an
+unbanked rise, so `welfare --set` runs in this same pull request — after the
+golden carries CI's merged row and not before, because `--set` records
+whatever score the committed goldens produce.
+
+- **DONE** the row measured, attributed and written.
+- **OPEN** the merged row and the ratchet, both one CI sitting away.
+
+## 2026-09-17 — kanso#1493's three rows on the merged tree, and the 0.28 banked
+
+    startup_instructions             3,712,181 ->         3,711,750      -431
+    codegen_instructions_dev       596,161,187 ->       596,161,166       -21
+    codegen_instructions_release 6,826,827,769 ->     6,826,829,520    +1,751
+
+The start-up fall of 431 is the split's layout term and exactly the figure the
+entry before this one predicted: the 3,712,181 was measured before kanso#1491
+landed, and the split edits src/main.rs beside this branch. Against main's
+4,836,950 the branch is **1,125,200 below, 23.26%**, which is the change.
+
+The two codegen rows are new since the reading above and were not expected to
+move. Twenty-one instructions in 596 million is 35 parts per billion and 1,751
+in 6.8 billion is 256; both rows exclude kanso's own process and count clang
+and ld, which compiled IR they had compiled the same way. Both reproduced
+exactly on a second count in the same job, so the moves are the C toolchain's
+own layout rather than a reading that will not settle.
+
+What those rows exclude is where the branch shows.
+`codegen_dev_kanso_excluded=406,043,465` against main's 407,173,801 — kanso's
+own process on the codegen corpus falls 1,130,336, within 5,136 of the
+start-up row's 1,125,200. A build pays the same start-up a run does, and the
+two measurements of it agree to four parts in ten thousand without being the
+same measurement.
+
+Under the three-score model the branch reads **76.41 against a floor of
+76.13**. Start-up carries 0.25 on the development side and the release codegen
+row 0.15 on the production side; a 23.26% fall against a 256-parts-per-billion
+rise is not a trade the objective has to think about, and the term that got
+worse costs 0.000 points. Banked in this same pull request.
+
+- **DONE** three rows measured, written and attributed; the floor at 76.41.
+- **OPEN** what is left of start-up. The bound recorded on this branch stands.
+
+
+
+## 2026-09-17 — kanso#1493 on today's main: CI's start-up row, and the baseline that moved under it
+
+The branch measured its fall against main at 4,837,246 and published 3,712,046,
+−1,125,200, −23.26%. Between that sitting and this one, kanso#1478 landed seven
+whole-program scans as indexes and RAISED the start-up row 242,727 — seven
+indexes are more bytes for the loader to place, bought with a 61.6x fall in what
+`kanso build bench/runbench` costs. So the merge carried main's 5,081,099
+forward rather than the branch's own number, and CI re-read the pair in one job:
+
+    main        5,081,099
+    the digest  3,955,899    -1,125,200   -22.14%
+
+The saving is the same 1,125,200 to the instruction. That is what it should be:
+what stops happening is two hashes of a 450,100-byte constant, and the cost of
+that does not depend on what else start-up does. The percentage moved because
+the denominator did.
+
+Welfare 76.39 → 76.65, banked. The only vein that disagreed with its golden on
+the merged tree was start-up; the other twenty-six in the summary block read
+success, so nothing else this branch touches moved a counter.
+
+The published table on the compiler page now carries CI's base, with a sentence
+saying the profile above it predates the seven indexes.
+
 ## 2026-09-17 — the beat rewind's fast path: 23 instructions to 15
 
 `k_beat_iter` is what a compiler-proven beat loop calls between iterations to
@@ -8508,3 +8759,4 @@ carried a scalar and allocated nothing — and a loop with nothing to reclaim
 emits no beat at all. What the spec needs is both: laps that allocate, and a
 carried value that is a scalar. Each lap builds a padded string and keeps only
 its length.
+

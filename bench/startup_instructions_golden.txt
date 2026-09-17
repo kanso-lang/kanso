@@ -249,4 +249,20 @@
 # 5,081,497 -> 5,081,099, a FALL of 398 (-0.0078%). The merge moved this one
 # DOWNWARD where it moved the three check rows up, which is what a layout term
 # looks like: it has no sign of its own.
-startup_instructions=5081099
+# 2026-09-17, merged with main fcf6238e (kanso#1478). That branch RAISED this
+# row 242,727 -- seven indexes are more bytes for the loader to place -- so the
+# 3,711,750 this branch measured was against a baseline that no longer exists.
+# The value below is main's, carried forward so the gate has one number to fail
+# against rather than none, and so CI's diff reads exactly what this branch
+# does to today's main. The merged sitting is CI's to take.
+#
+# 2026-09-17, kanso#1493 on the tree merged with main fcf6238e, CI's sitting.
+# 5,081,099 -> 3,955,899, a FALL of 1,125,200 (-22.14%). The runtime source is
+# digested at BUILD time now, so a run no longer hashes 8,400 lines of C to
+# decide whether its cached runtime object is current. `kanso play` takes the
+# native path, which is why this vein sees it and the three `kanso check` rows
+# do not: they stop before codegen and never ask the question.
+#
+# The value the merge carried forward was main's, so this diff is the whole of
+# what the branch does to today's main, taken in one job.
+startup_instructions=3955899
