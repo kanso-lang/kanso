@@ -6728,6 +6728,146 @@ runner's own reading.
 
 - **DONE** CI's sitting, and the golden says which host it was taken on.
 
+## 2026-09-17 — the rewrite ladder: rewriting unreachable code costs nothing, and that corrects this morning's entry
+
+The entry "kanso#1480's rows challenged, bisected, and the calibration's blind
+spot found" says the row moved 145,472 *"because code that does not run on the
+measured path was rewritten"*, and separates ADDING unreachable code — which
+"leaves every existing decision where it was" — from REWRITING it, which
+"moves what sits around them". Its own OPEN item asked for the ladder that
+would bound the second shape. Here it is, and it does not support the sentence
+it was asked to support.
+
+**Eight rewrites of `without_stats_gate`, and the row does not move.** That
+function is reachable only from `emit_ir`, which `kanso check` never calls —
+the same position as the functions kanso#1480 touches. Each variant was built
+under rustc 1.98.1 and measured with the gate, which printed a distinct
+`compile_binary sha256` for every one:
+
+    variant        row          .text      what changed
+    L0 control     35,965,491   2,796,770  --
+    L1 rename      35,965,491   2,796,754  locals renamed
+    L2 hoist       35,965,491   2,796,882  the loop bound read once
+    L3 loop        35,965,491   2,796,882  `while` spelled as `loop`
+    L4 helper      35,965,491   2,796,914  two parses lifted into a helper
+    L5 match       35,965,491   2,796,770  early-continue spelled as `match`
+    L6 signature   35,965,491   2,796,658  `Vec<&str>` became `&[&str]`
+    L7 wrapper     35,965,491   2,796,770  body moved behind a thin wrapper
+
+`.text` spans 256 bytes. The row is identical to the instruction across all
+eight. L6 and L7 emit byte-identical IR, so for those two the behaviour is
+verified rather than argued; the other six are mechanical local edits.
+
+**Adding a function that IS reached moves it 2,733.** L8 adds a
+`OnceLock<Vec<_>>` built from DECLARES and calls it from `Backend::emit`,
+changing nothing else — which is structurally what kanso#1480 adds as
+`declare_lines`. 35,968,224 against the control, `.text` +3,088, IR
+byte-identical.
+
+**Three shapes, three answers, and none of them is 146,628.**
+
+    unreachable additions   ~402, span 1,028 over seven binaries (2026-09-04)
+    unreachable rewrites    0, over eight binaries
+    a reached addition      2,733
+
+CI reads kanso#1480 at +146,628 on this row against its base. That is fifty
+times the largest calibrated shape. **So the explanation this morning's entry
+gave is wrong**, and the correction matters more than the original claim did:
+"rewriting code the measured path does not run" is now measured, eight ways,
+at zero. Whatever moves that row on kanso#1480, it is not that.
+
+**What the ladder does not settle.** It perturbs one function of 34 lines.
+kanso#1480 changes 74 lines, adds a struct and a static, and changes an element
+type that flows through a call chain — a larger perturbation than any rung
+here, and the gap between 2,733 and 146,628 is where the answer lives. The
+frame-level diff of the two compile profiles is what would name it; CI uploads
+both as artifacts on every run, and this container's egress proxy refuses that
+blob host, so it wants either a local reproduction of the pair or the diff run
+where the artifacts are reachable.
+
+The correction is recorded rather than folded away, beside the two from earlier
+today, because it is the same failure a third time: an argument from a
+measurement whose scope was never checked. The 2026-09-04 ladder covered one
+perturbation. I read it as covering another, said so in a log entry, and only
+building the second ladder showed the difference.
+
+**The open item closed the same afternoon, and there is a FOURTH shape.** The
+pair reproduced here at +143,118 against CI's +146,628, and the frame diff at
+`--threshold=100`, comparing only frames present in both listings, puts the
+whole of it inside type inference:
+
+    check_merged_after_aliases    14,968,692 -> 15,109,213   +140,521
+      infer::infer                 7,789,154 ->  7,929,934   +140,780
+        for_each_child<expr_ctor_types>  267,606 -> 386,471  +118,865
+        for_each_child<expr_ctor_types>  209,740 -> 315,845  +106,105
+      demand::analyze                424,414 ->    456,238    +31,824
+    parser::parse                 4,144,914 ->  4,136,716     -8,198
+
+kanso#1480 changes src/codegen.rs and src/linear.rs and nothing else.
+src/infer.rs, src/check.rs and src/parser.rs are BYTE-IDENTICAL between the two
+trees. So the branch is not doing more inference work; the optimizer is
+compiling unchanged inference code differently because the crate around it
+changed.
+
+Two symbol-level tells confirm the mechanism rather than leaving it inferred.
+`parse_cmp` is a frame in the top profile and absent from the base, where it
+was inlined into `parse_not`; both functions exist in both sources.
+`stmt_ctor_types` is a frame in the base and gone in the top, where
+`expr_ctor_types` appears instead. Those are inlining and monomorphisation
+decisions moving.
+
+    unreachable additions       ~402, span 1,028   2026-09-04
+    unreachable rewrites        0, eight binaries  today
+    a reached addition          2,733              today
+    the optimizer re-deciding   ~143,000           kanso#1480
+
+The first three are small because none of them is large enough to flip an
+inlining decision. 161 lines across two modules is. **This is not the linker's
+placement**, which is what "layout" has meant in this repository, and it is two
+orders of magnitude larger. No ladder bounds it, because the perturbation is
+"the crate got meaningfully bigger" and that cannot be synthesised inside one
+small function.
+
+What it means for kanso#1480: the move is real instructions on the measured
+path, so the row is reporting honestly, and it is also not work the branch
+chose or can avoid. That is an argument for weighing what a build actually
+costs, which kanso#1470's rows and kanso#1491's `emit_instructions` term do,
+rather than for arguing about this number.
+
+- **DONE** all four shapes measured, and the gate's header carries the table.
+- **DONE** kanso#1480's move named: the optimizer re-deciding, inside
+  inference, on source the branch does not touch.
+
+## 2026-09-17 — reading each KANSO_ switch once: measured, declined, and L8 is what declines it
+
+The task stood on a real observation: adding one more variable to the
+environment a compile runs in moves this row 11,606 (kanso#1483), so reading
+the environment is not free, and kanso reads its `KANSO_` switches by asking
+each time. Caching them behind a `OnceLock` is the obvious fix.
+
+**It costs more than it saves.** On the module corpus's own profile:
+
+    std::env::var::inner            2,445   what kanso's own switch reads cost
+    std::sys::env::unix::getenv    46,172   inclusive, but see below
+      _mi_getenv                   29,685   mimalloc reading ITS config, not kanso's
+      getenv (glibc)               16,287
+
+So the whole of what kanso's switch reading costs on this corpus is about
+2,445 instructions. The ladder above measured what a `OnceLock`-backed function
+costs to add and have reached: **2,733**. The cache is more expensive than the
+thing it caches, before it has saved anything.
+
+**The 11,606 is a different quantity and the task conflated them.** That number
+is what one more variable in the ENVIRONMENT costs a compile — glibc's `getenv`
+walking a longer `environ` on every lookup, plus mimalloc's own reads at
+start-up. It is a property of the environment the gate runs in, which is why
+the gate empties it with `env -i`. It is not a lever inside the compiler.
+
+Declined, with the same shape as kanso#1483: withholding a line cost more than
+the line. Recorded so the idea stays declined rather than being re-derived from
+the 11,606.
+
+
 ## 2026-09-17 — the explicit box comes off the unbuilt list, item by item
 
 STATUS.md's "Ruled, unbuilt" carried the 2026-09-15 box ruling all afternoon
@@ -6770,6 +6910,7 @@ report that a row is stale is not a probe, and a probe is eight commands.
 - **DONE** the row off, with its evidence in STATUS.md.
 - **OPEN** whether a needless bang survives on a provable index anywhere in the
   tree. Cheap for cloud, which has the bound prover; not a row.
+
 ## 2026-09-17 — the `.rodata` entry had two voices, and the pin was never the instrument
 
 The ledger's `Pinning .rodata to a fixed page` entry gained cloud's bisection
@@ -6857,6 +6998,105 @@ artifacts on every run.
   the published page.
 - **OPEN** what carries the 146,628. Cloud's, and it needs the profile pair
   rather than another table.
+
+## 2026-09-17 — seven silicons, one recorded block, and a reader that was never called
+
+kanso#1492 carries no compiler source — a log entry and a gate header, neither
+compiled in — and its cost-goldens job came back red on one vein:
+
+    interp_instructions  2,178,502,266 -> 2,178,502,272   +6
+
+Chasing six instructions found something larger.
+
+### The sha256 is not the code
+
+Main's sitting on d1a7b058 and this branch's on e29fac05 compiled source that
+differs in `design/compiler-log.md` and `scripts/gates/compile_instructions.sh`
+and in nothing else. The gates print enough to compare the two builds:
+
+    main        .text=2796866 .data=12672 .bss=29912  sha=e00a8ed55945c640
+    kanso#1492  .text=2796866 .data=12672 .bss=29912  sha=1318a6776b335b6a
+
+The three loadable sections are byte-identical and the file is not. This
+container, on a third machine, builds the same tree three times and gets one
+binary each time — `6fc4575752756e8d`, `.text=2796866` — so the Rust build is
+deterministic on a box and the sha varies with the box.
+
+**So the gates print a sha256 as the proof that two variants were genuinely
+different builds, and that use holds: a different sha means the file differs.
+The converse does not. Two equal shas are not needed for equal code, and two
+different shas do not say the executed code moved.** The rewrite ladder leaned
+on that line for eight variants and its reading is still sound, because there
+the sections moved too.
+
+### Seven blocks, and 57 rows between them
+
+`scripts/gates/dispatch.sh` has carried a `differs` verb since the day it was
+written and `bench/dispatch.txt` was never recorded, so `differs` answered
+"cannot tell" every time and no gate called it. What the gates call is
+`dispatch.sh name`, which prints the basic family and the model.
+
+Ninety-odd cost-goldens job logs printed the candidate block (the `name` verb
+prints it whenever no block is recorded). Within any one job every printing is
+identical. Across jobs there are **seven distinct blocks, differing in 57
+rows**, and the basic family itself takes three values: 0x19, 0x1a and 0x6. The
+last is Intel. Level-3 cache spans 32 MB to 480 MB.
+`Fast_Unaligned_Load`, `Prefer_No_AVX512` and `Prefer_PMINUB_for_stringop` flip
+between them, and those are three of the switches glibc's ifunc resolvers read
+when they pick `memcpy`, `memcmp`, `strlen` and their neighbours.
+
+The gates pin the cache-derived thresholds through `GLIBC_TUNABLES`, which is
+why the rows hold as steady as they do. What a tunable does not reach is which
+implementation the resolver picks.
+
+kq has recorded its block and consulted it since its own instruction vein
+opened. kanso had the reader and never the block.
+
+### What lands here
+
+`bench/dispatch.txt` holds the block from this branch's own job, chosen because
+on that silicon the three `kanso check` rows and the start-up row read main's
+goldens to the instruction — it is the silicon those values belong to. The five
+instruction gates consult `differs` in the disagreement path and print what it
+says, before the verdict. It never decides the exit: a resolver difference is a
+candidate explanation, not a ruling.
+`tests/a_moved_row_is_told_what_the_silicon_did.rs` holds both halves, and both
+were watched red — one gate with the consult removed, and the block moved
+aside.
+
+### And it was not the answer to the six
+
+The instrument was built to ask that question, so the question was asked of the
+two jobs already in hand. Both printed `370db01a104c` — the same block, all 123
+rows. Same glibc, same rustc, same silicon, identical `.text`, `.data` and
+`.bss`, different sha256, and:
+
+    compile_instructions        35,968,171   both
+    entry_instructions         128,213,972   both
+    library_instructions       128,348,205   both
+    startup_instructions         4,837,381   both
+    interp_instructions      2,178,502,266  ->  2,178,502,272
+
+Four rows to the instruction and one six apart. So the silicon is ruled out
+rather than implicated, and the seven blocks above are a hazard nothing was
+checking rather than this hazard. The block earns its place either way; it just
+does not earn it here.
+
+What is left is narrow enough to state. Six against 2,178,502,266 is three
+parts per billion. The other four rows run 4.8 million to 128 million
+instructions, where the same proportion is a fraction of one instruction and
+could not be seen at all. The interpreted run is also the allocation-heavy one
+by a wide margin — `interp_allocs` 5,313,434 against `compile_allocs` 27,397 —
+and mimalloc's fast path branches on where its heap starts, which moves with
+the size of the file the loader mapped. Six of 5.3 million allocations taking
+the other branch is the shape that fits. That is an argument and not a
+measurement, and it is written down as one.
+
+- **DONE** the block is recorded, the five gates consult it, and the first
+  question it was asked came back "the silicon did not move".
+- **OPEN** the six instructions: a term proportional to work rather than a
+  constant, visible only on the longest vein. Pinning where the heap starts is
+  what would settle it.
 
 ## 2026-09-17 — a quarter of start-up was hashing a constant
 
@@ -7081,3 +7321,4 @@ worse costs 0.000 points. Banked in this same pull request.
 
 - **DONE** three rows measured, written and attributed; the floor at 76.41.
 - **OPEN** what is left of start-up. The bound recorded on this branch stands.
+
