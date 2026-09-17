@@ -4238,3 +4238,22 @@ CPU-model account that kanso#1466 retired.
 On the head merged with kanso#1464 the three compile rows read 36,862,211,
 131,827,785 and 131,970,557 against main's 36,864,779, 131,837,650 and
 131,978,823. That fall is the declares scan this branch removes.
+
+## 2026-09-17 — CI's sitting of the merged tree: the start-up change, priced
+
+kanso#1461 merged with main after kanso#1459 landed. The merge carried
+kanso#1459's values forward; CI read the merged tree below them:
+
+    compile_instructions    36,682,232 -> 36,679,432   -2,800   -0.0076%
+    entry_instructions     130,573,787 -> 130,564,072  -9,715   -0.0074%
+    library_instructions   130,716,747 -> 130,707,970  -8,777   -0.0067%
+
+**Not the change doing less work here.** DONE. `kanso check` does not run the
+interpreter, so the start-up scan this branch removes is not on this corpus at
+all. All three are the layout kind the row's header describes: src/eval.rs is
+the compiler's own bytes, and editing it moves them and what sits around them.
+The tenth such move recorded on this row.
+
+**The floor does not move.** DONE. welfare reads 69.76 against a floor of
+69.76. The interpreter start-up row is this branch's own vein and it is the one
+the change is for; these three are collateral.
