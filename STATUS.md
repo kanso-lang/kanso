@@ -42,7 +42,7 @@ kanso — sat here and was bounced on 2026-08-29: a performance question with no
 surface area is the implementer's, per the ledger's own charter, and the log
 carries the research mandate it left with.
 
-**Seven questions are waiting** — two blocking, both filed 2026-09-17 out of
+**Six questions are waiting** — two blocking, both filed 2026-09-17 out of
 one reading of a book sample: whether the wall `>>` survives the fused
 operators, and whether its simultaneous-failure merge was meant to go. The
 compile-term question before them was filed and ruled on 2026-09-16: two
@@ -70,13 +70,8 @@ entry cites the search behind it and proposes an answer, and a sitting can be a
 yes or a no rather than a fresh design conversation. On 2026-08-29 every
 remaining question was ruled in one pass.
 
-**The five open, not blocking** — the box constructor's spelling, recommending
-`effect`, which no build waits on; the book teaching the boundary language,
-queued P1 by Clay on 2026-08-26 and re-premised on the effects-are-types
-gavel, whose two halves wait on the same thing (the engines still short-circuit
-at an ordinary call and `<int>effect` is not spellable, so ch04 describes the
-language as it runs and compiler.html entry 23 moves with it, after the surface
-lands); how far a binding position carries a box, filed 2026-09-16 with the ten
+**The four open, not blocking** — the box constructor's spelling, recommending
+`effect`, which no build waits on; how far a binding position carries a box, filed 2026-09-16 with the ten
 fixtures that refuse the blunt answer; and a byte-position scan on a string for
 the JSON escape path, filed 2026-09-16 carrying a −1.2193% runbench measurement
 that had been taken on 2026-09-15 and filed to nobody; and pinning `.rodata`
@@ -370,7 +365,7 @@ else. Chains that tested for `none` after an effect migrate.
     checked from here on two days and both refused by the tooling
   - whether an err gains readers a lambda callback can use
 
-**Seven questions wait in `design/pending-gavels.md`** — two blocking, five
+**Six questions wait in `design/pending-gavels.md`** — two blocking, four
 open — each with a recommendation. Recounted four times on 2026-09-16: the
 binding-position question joined Open with its measurement, the escape
 path's byte-position scan joined it, measured on 2026-09-15 and filed to
@@ -395,12 +390,10 @@ four of the six it named had been ruled or shipped since. A count maintained
 by hand goes stale by default, so `tests/the_status_index_counts_the_ledger.rs`
 now reads both files and fails when this sentence and the ledger disagree.
 
-The two blocking are the wall's two questions, filed 2026-09-17. The five
+The two blocking are the wall's two questions, filed 2026-09-17. The four
 open are the box constructor's spelling,
 recommended `effect`, which cloud builds against unless Clay names another;
-the book teaching the boundary language, whose campaign ran on 2026-09-13
-and which now owes only ch04's "nothing is asked of the signature" framing,
-released by the 2026-09-15 gavel and moving with its build; how far a binding
+how far a binding
 position carries a box; a byte-position scan on a string for the escape path;
 and pinning `.rodata` to a fixed page so code growth stops moving the compile
 rows. The last three were filed on 2026-09-16 and this sentence named two of
