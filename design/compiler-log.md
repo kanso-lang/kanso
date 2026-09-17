@@ -7019,3 +7019,31 @@ again.
   is one, `narrow_tailcc`'s SipHash over 144,261 IR lines is a lever nobody
   can price.
 
+
+## 2026-09-17 — the start-up row read on the merged tree, and the rise it leaves to bank
+
+kanso#1493's cost-goldens job on the tree merged with main counted the row:
+
+    startup_instructions  4,837,381 -> 3,712,181    -1,125,200   -23.26%
+
+which is the figure the branch claimed, measured by CI rather than projected.
+`kanso play` on a one-line program hashed the 450,100 bytes of src/runtime.c
+twice — once for each of the two caches main.rs keys — and `src/hash.rs`
+computes that digest at build time now. The three `kanso check` rows and the
+interpreted row are byte-identical to main in the same sitting, which is what
+a change confined to start-up should look like.
+
+That reading was taken before kanso#1491 landed. The split edits src/main.rs
+too and moved this row 431 instructions on its own; the two edits merged
+without a conflict, so the merged number is a few hundred off the one above
+and CI is what says which few hundred.
+
+Under the three-score model the branch reads **76.41 against a floor of
+76.13**, a rise of 0.28, and the whole of it is the development side: start-up
+carries 0.25 there and nothing else moved. The floor sentinel fails an
+unbanked rise, so `welfare --set` runs in this same pull request — after the
+golden carries CI's merged row and not before, because `--set` records
+whatever score the committed goldens produce.
+
+- **DONE** the row measured, attributed and written.
+- **OPEN** the merged row and the ratchet, both one CI sitting away.
