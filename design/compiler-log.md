@@ -5471,3 +5471,32 @@ for repetition.
   already written. kanso#1480's.
 - **OPEN** whether the prose gates should read for a repeated block. The
   conflict-marker spec covers the loud shape of this and not the quiet one.
+
+## 2026-09-17 — STATUS.md counted the build hole twice and the two welfares not at all
+
+The "Ruled, unbuilt" intro is the paragraph cloud reads before choosing what
+to build. On 2026-09-17 it read: *Two rows stand on 2026-09-17, the build hole
+having come off built (kanso#1447 ...): the explicit box ... and the build
+hole, ruled 2026-08-24 and found off this list on 2026-09-16.*
+
+So it named the build hole as having come off and as one of the two standing
+rows, in one sentence, and did not name the two welfares at all — which is the
+larger of the two rows that actually stand, and the one with four counters
+outstanding. The headings below it were right the whole time; only the prose
+that counts them was wrong, left behind by the edit that removed the build
+hole's row on 2026-09-16.
+
+This is the same failure mode CLAUDE.md's counter bullets are written against:
+a count kept in a sentence and maintained by hand goes stale, and the thing it
+counts is read off the sentence rather than off the list. Here the cost is that
+cloud reads a standing row as retired and a retired row as standing on the one
+page whose job is to hold them.
+
+Corrected in place, with the correction recorded in the paragraph so a reader
+who saw the old one knows which is which. `tests/the_status_index_counts_the_ledger.rs`
+pins the ledger index's three sentences and does not reach this section.
+
+- **DONE** the paragraph names the two rows that stand.
+- **OPEN** whether a spec should read this section's headings and check the
+  intro's count against them, the way the ledger index is already pinned.
+  That spec has caught the ledger's count twice.

@@ -118,11 +118,17 @@ not audited. Swept again on 2026-09-14 against merged main: the effect-type
 row came off, built and merged as kanso#1372, and the exhaustiveness row came
 off with kanso#1369. The book row came off with kanso#1412, which its own
 log entry calls the live remainder of that ruling. Two rows stand on
-2026-09-17, the build hole having come off built (kanso#1447, the day after it
-was found twenty-three days off this list): the explicit box, fully ruled once its `!` half went on
-2026-09-16, and the build hole, ruled 2026-08-24 and found off this list on
-2026-09-16. The compile row's normalization, ruled 2026-09-15, was built the
+2026-09-17: the explicit box, fully ruled once its `!` half went on
+2026-09-16, and the two welfares, ruled 2026-09-16. The build hole came off
+built as kanso#1447, the day after it was found twenty-three days off this
+list, and the compile row's normalization, ruled 2026-09-15, was built the
 same night (kanso#1439) and came off. Neither remaining row waits on anything.
+
+That sentence named the build hole as a standing row and as one that had come
+off, in the same breath, and did not name the two welfares at all -- an edit
+that removed a row and left the count's prose behind it. Corrected 2026-09-17.
+This paragraph is the first thing cloud reads before choosing work, so a row
+miscounted here is a row chosen or skipped wrongly.
 
 ### The box is explicit, an err is a value, and a bare err halts where it lands (2026-09-15)
 
