@@ -166,6 +166,42 @@ tune=$tune:glibc.malloc.tcache_count=7
 # So a difference near a thousand on this row is not evidence on its own.
 # Build the pair and read them.
 #
+# WHAT THAT LADDER DOES NOT BOUND, measured 2026-09-17 because kanso#1480 moved
+# this row 146,628 and the ladder above was cited to call that layout. The
+# seven binaries above differ by code and data NOTHING REACHES. That is one
+# perturbation; a real change makes others, and two of them are measured here
+# on nine more binaries, each built under rustc 1.98.1 and each with its own
+# sha256 printed by this gate.
+#
+# REWRITING an unreachable function moves this row by NOTHING. Eight variants
+# of `without_stats_gate` -- reachable only from `emit_ir`, which `kanso check`
+# never calls -- all read 35,965,491 while `.text` spanned 256 bytes:
+#
+#   variant        row          .text      what changed
+#   L0 control     35,965,491   2,796,770  --
+#   L1 rename      35,965,491   2,796,754  locals renamed
+#   L2 hoist       35,965,491   2,796,882  the loop bound read once
+#   L3 loop        35,965,491   2,796,882  `while` spelled as `loop`
+#   L4 helper      35,965,491   2,796,914  two parses lifted into a helper
+#   L5 match       35,965,491   2,796,770  early-continue spelled as `match`
+#   L6 signature   35,965,491   2,796,658  `Vec<&str>` became `&[&str]`
+#   L7 wrapper     35,965,491   2,796,770  body moved behind a thin wrapper
+#
+# L6 and L7 emit byte-identical IR, so behaviour-preservation is verified for
+# them rather than argued.
+#
+# ADDING a function that IS reached moves it a little. L8 adds a
+# `OnceLock<Vec<_>>` built from DECLARES and calls it from `Backend::emit`,
+# changing nothing else: 35,968,224, which is +2,733 on the control, with
+# `.text` +3,088 and the IR byte-identical.
+#
+# THREE SHAPES, THREE ANSWERS: unreachable additions ~402 (span 1,028),
+# unreachable rewrites 0, a reached addition 2,733. None of them reaches
+# 146,628, and no ladder here explains a move that size. A number in the
+# hundreds of thousands on this row is NOT bounded by anything measured, and
+# calling it layout on the strength of these tables is a misreading of what
+# they cover.
+#
 # Startup work scales with what is loaded, so the one compiler change that can
 # move the dropped half is growing a dependency — one more shared object was
 # measured at 32,090. bench/compile_libraries_golden.txt watches that by name,

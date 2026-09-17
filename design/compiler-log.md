@@ -5928,3 +5928,71 @@ passes here had the answer one paragraph away.
 - **OPEN** what the probe did not reach and the row cannot retire without: the
   710 `xs[i]!` sites, `!` names in lib answering a box, and the two cost levers
   kanso#1477 reports built. Their own pass.
+
+## 2026-09-17 — the rewrite ladder: rewriting unreachable code costs nothing, and that corrects this morning's entry
+
+The entry "kanso#1480's rows challenged, bisected, and the calibration's blind
+spot found" says the row moved 145,472 *"because code that does not run on the
+measured path was rewritten"*, and separates ADDING unreachable code — which
+"leaves every existing decision where it was" — from REWRITING it, which
+"moves what sits around them". Its own OPEN item asked for the ladder that
+would bound the second shape. Here it is, and it does not support the sentence
+it was asked to support.
+
+**Eight rewrites of `without_stats_gate`, and the row does not move.** That
+function is reachable only from `emit_ir`, which `kanso check` never calls —
+the same position as the functions kanso#1480 touches. Each variant was built
+under rustc 1.98.1 and measured with the gate, which printed a distinct
+`compile_binary sha256` for every one:
+
+    variant        row          .text      what changed
+    L0 control     35,965,491   2,796,770  --
+    L1 rename      35,965,491   2,796,754  locals renamed
+    L2 hoist       35,965,491   2,796,882  the loop bound read once
+    L3 loop        35,965,491   2,796,882  `while` spelled as `loop`
+    L4 helper      35,965,491   2,796,914  two parses lifted into a helper
+    L5 match       35,965,491   2,796,770  early-continue spelled as `match`
+    L6 signature   35,965,491   2,796,658  `Vec<&str>` became `&[&str]`
+    L7 wrapper     35,965,491   2,796,770  body moved behind a thin wrapper
+
+`.text` spans 256 bytes. The row is identical to the instruction across all
+eight. L6 and L7 emit byte-identical IR, so for those two the behaviour is
+verified rather than argued; the other six are mechanical local edits.
+
+**Adding a function that IS reached moves it 2,733.** L8 adds a
+`OnceLock<Vec<_>>` built from DECLARES and calls it from `Backend::emit`,
+changing nothing else — which is structurally what kanso#1480 adds as
+`declare_lines`. 35,968,224 against the control, `.text` +3,088, IR
+byte-identical.
+
+**Three shapes, three answers, and none of them is 146,628.**
+
+    unreachable additions   ~402, span 1,028 over seven binaries (2026-09-04)
+    unreachable rewrites    0, over eight binaries
+    a reached addition      2,733
+
+CI reads kanso#1480 at +146,628 on this row against its base. That is fifty
+times the largest calibrated shape. **So the explanation this morning's entry
+gave is wrong**, and the correction matters more than the original claim did:
+"rewriting code the measured path does not run" is now measured, eight ways,
+at zero. Whatever moves that row on kanso#1480, it is not that.
+
+**What the ladder does not settle.** It perturbs one function of 34 lines.
+kanso#1480 changes 74 lines, adds a struct and a static, and changes an element
+type that flows through a call chain — a larger perturbation than any rung
+here, and the gap between 2,733 and 146,628 is where the answer lives. The
+frame-level diff of the two compile profiles is what would name it; CI uploads
+both as artifacts on every run, and this container's egress proxy refuses that
+blob host, so it wants either a local reproduction of the pair or the diff run
+where the artifacts are reachable.
+
+The correction is recorded rather than folded away, beside the two from earlier
+today, because it is the same failure a third time: an argument from a
+measurement whose scope was never checked. The 2026-09-04 ladder covered one
+perturbation. I read it as covering another, said so in a log entry, and only
+building the second ladder showed the difference.
+
+- **DONE** the second and third shapes are measured, and the gate's header
+  carries all three.
+- **OPEN** what kanso#1480's 146,628 actually is. Not layout by any calibration
+  this repository now holds.
