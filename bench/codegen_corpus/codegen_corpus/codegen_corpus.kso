@@ -1,0 +1,59 @@
+# The workload the two codegen terms are measured on, named once.
+#
+# Clay ruled on 2026-09-16 that the objective becomes a development welfare, a
+# production welfare and a meta over them, and that the two clang tiers land on
+# opposite sides of it: `-O0` is what a developer waits for on every build and
+# `-O3 -flto` is what the shipped binary was made with. Neither had a counter.
+#
+# THIS PACKAGE NAMES ITS IMPORTS, for the reason bench/compile_corpus does: a
+# corpus that reaches into a library moves when the library does, and a row
+# that moves for somebody else's edit measures nothing about the compiler.
+#
+# It deliberately does NOT import std/json. The emitted IR for a program that
+# does is about 320 KB and its release build is 3.7 seconds, which is 222
+# seconds under callgrind -- most of it clang optimising a library this row is
+# not about. What is here is enough shape to give the optimiser real work:
+# recursion, dispatch over several arms, string building and a fold.
+import "std/list"
+import "std/text"
+
+pub play = print "codegen {summed 60} {joined 40}"
+
+fn summed n
+  climbed 1 n 0
+
+fn climbed i stop acc
+  reached i stop acc (i > stop)
+
+fn reached _ _ acc true
+  acc
+
+fn reached i stop acc false
+  climbed (i + 1) stop (acc + weighed i)
+
+fn weighed 0
+  0
+
+fn weighed 1
+  1
+
+fn weighed n
+  n + weighed (n - 1) / 2
+
+fn joined n
+  length (text/join (list/to_list (list/map (spanned n) named)) ",")
+
+fn named i
+  "row-{i}-{weighed i}"
+
+fn spanned n
+  climbed_list 1 n []
+
+fn climbed_list i stop acc
+  reached_list i stop acc (i > stop)
+
+fn reached_list _ _ acc true
+  acc
+
+fn reached_list i stop acc false
+  climbed_list (i + 1) stop (push acc i)

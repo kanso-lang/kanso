@@ -71,14 +71,10 @@ yes or a no rather than a fresh design conversation. On 2026-08-29 every
 remaining question was ruled in one pass.
 
 **The five open, not blocking** — the box constructor's spelling, recommending
-`effect`, which no build waits on; the book teaching the boundary language,
-queued P1 by Clay on 2026-08-26 and re-premised on the effects-are-types
-gavel, whose two halves wait on the same thing (the engines still short-circuit
-at an ordinary call and `<int>effect` is not spellable, so ch04 describes the
-language as it runs and compiler.html entry 23 moves with it, after the surface
-lands); how far a binding position carries a box, filed 2026-09-16 with the ten
+`effect`, which no build waits on; how far a binding position carries a box, filed 2026-09-16 with the ten
 fixtures that refuse the blunt answer; and a byte-position scan on a string for
-the JSON escape path, filed 2026-09-16 carrying a −1.2193% runbench measurement
+the JSON escape path, filed 2026-09-16 carrying a −1.2193% runbench measurement; and raising escapebench's size so it pins the escape bracket's benefit and
+not only its cost, filed 2026-09-17 when a spec learned to read the archive
 that had been taken on 2026-09-15 and filed to nobody; and pinning `.rodata`
 to a fixed page so code growth stops moving the compile rows, filed 2026-09-16
 with a recommendation to decline it, the second measured decision in two days
@@ -117,8 +113,15 @@ compiler; the list is a floor, since the rest of the 2026-08-29 sitting was
 not audited. Swept again on 2026-09-14 against merged main: the effect-type
 row came off, built and merged as kanso#1372, and the exhaustiveness row came
 off with kanso#1369. The book row came off with kanso#1412, which its own
-log entry calls the live remainder of that ruling. ONE row stands as of
-2026-09-17 17:00Z: the two welfares, ruled 2026-09-16. The build hole came off
+log entry calls the live remainder of that ruling. NO row stands as of
+2026-09-17 20:15Z, and that is the first time this section has been empty
+since it was created on 2026-09-09. The two welfares came off when kanso#1491
+landed the second half of the 2026-09-16 gavel; every item on its Owes list
+was probed against a build of main rather than read off a report. So cloud
+chooses freely: there is no ruled-and-unbuilt work a self-generated lead would
+be displacing, and the "which rulings did you weigh" paragraph a pull request
+body owes has, for now, an empty list to weigh against. That changes the day
+anything is ruled, and the chat adds the row that day. The build hole came off
 built as kanso#1447, the day after it was found twenty-three days off this
 list; the compile row's normalization, ruled 2026-09-15, was built the same
 night (kanso#1439); and the explicit box came off the same afternoon it was
@@ -145,25 +148,6 @@ as a standing row and as one that had come off, in the same breath, and did not
 name the two welfares at all. This paragraph is the first thing cloud reads
 before choosing work, so a row miscounted here is a row chosen or skipped
 wrongly.
-
-### Two welfares and a meta-welfare over them (2026-09-16)
-
-The live log's gavel of that name, which supersedes the row "The compile term
-counts what compiling costs, codegen included" and closes the defect that row
-named: every compile counter the objective weighed ran `kanso check` and
-stopped before codegen, so the optimiser's cost sat outside the index while
-its output was paid for. The objective becomes development welfare (front-end
-cost, dev-tier codegen at `-O0`, interpreter start-up, speed and memory),
-production welfare (native run instructions and memory, release-tier codegen
-at `-O3 -flto`), and a meta-welfare over the two, which is what CI gates on.
-Owes: the development-side counters, none of which exist — interpreter
-start-up reusing kanso#1439's count-from-`main`, interpreter speed,
-interpreter memory, dev-tier codegen cost — release-tier codegen cost, every
-one of them joining `bench/objective_sources.txt` and its replay spec in the
-commit that adds it, weights and satiations priced from evidence per the
-2026-08-25 gavel, and the meta floor re-ratcheted from the rescored model in
-the same change. Clay: "yeah you've got to re-ratchet." Nothing here waits on
-a ruling.
 
 ## In flight
 
@@ -410,9 +394,7 @@ now reads both files and fails when this sentence and the ledger disagree.
 The two blocking are the wall's two questions, filed 2026-09-17. The five
 open are the box constructor's spelling,
 recommended `effect`, which cloud builds against unless Clay names another;
-the book teaching the boundary language, whose campaign ran on 2026-09-13
-and which now owes only ch04's "nothing is asked of the signature" framing,
-released by the 2026-09-15 gavel and moving with its build; how far a binding
+how far a binding
 position carries a box; a byte-position scan on a string for the escape path;
 and pinning `.rodata` to a fixed page so code growth stops moving the compile
 rows. The last three were filed on 2026-09-16 and this sentence named two of
