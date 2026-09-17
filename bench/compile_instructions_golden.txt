@@ -2070,7 +2070,13 @@
 # byte-identical. This branch adds counters and the gates that read them and
 # changes no decision the front end makes; two instructions is the binary's
 # bytes and nothing else.
-compile_instructions=35868982
+# 2026-09-17, kanso#1478 on the tree merged with main 5e256ce0, CI's sitting.
+# 35,868,982 -> 35,869,355, a RISE of 373 (+0.0010%). LAYOUT. kanso#1491 landed
+# under this branch and edits src/main.rs; `kanso check` stops before codegen,
+# so nothing the split does can reach a decision this corpus makes, and moving
+# the compiler's bytes moves what sits around them. Against main's own
+# 35,968,173 the branch is 98,818 below, which is the work.
+compile_instructions=35869355
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

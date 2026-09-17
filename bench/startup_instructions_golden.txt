@@ -245,4 +245,8 @@
 # counters sit; they are compiled out of a shipped binary and the gate builds one
 # that carries them, so what this reads is the same layout term as the rows
 # above, at the same scale.
-startup_instructions=5081497
+# 2026-09-17, kanso#1478 on the tree merged with main 5e256ce0, CI's sitting.
+# 5,081,497 -> 5,081,099, a FALL of 398 (-0.0078%). The merge moved this one
+# DOWNWARD where it moved the three check rows up, which is what a layout term
+# looks like: it has no sign of its own.
+startup_instructions=5081099

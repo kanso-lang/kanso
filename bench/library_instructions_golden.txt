@@ -860,7 +860,10 @@
 #
 # 2026-09-17, kanso#1478 against main, CI's sitting. 128,348,205 -> 128,009,282,
 # a FALL of 338,923 (-0.264%). WORK; see bench/compile_instructions_golden.txt.
-library_instructions=128009282
+# 2026-09-17, kanso#1478 on the tree merged with main 5e256ce0, CI's sitting.
+# 128,009,282 -> 128,010,052, a RISE of 770 (+0.0006%). Layout, as above;
+# against main's 128,348,205 the branch is 338,153 below.
+library_instructions=128010052
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

@@ -7406,3 +7406,50 @@ Welfare holds at its floor.
 
 - **DONE** five rows, CI's, with both risers attributed.
 
+
+## 2026-09-17 — kanso#1478 on the merged tree: six rows from CI, and the 0.26 banked
+
+The branch was re-based on main `5e256ce0` after the welfare split landed, and
+its cost-goldens job counted every row it moves:
+
+    compile_instructions     35,868,982 ->     35,869,355        +373
+    entry_instructions      127,871,143 ->    127,872,255      +1,112
+    library_instructions    128,009,282 ->    128,010,052        +770
+    startup_instructions      5,081,497 ->      5,081,099        -398
+    interp_instructions   2,182,337,099 ->  2,182,307,043     -30,056
+    emit_instructions       382,212,543 ->     60,197,743-322,014,800
+
+The first four are the merge. kanso#1491 edits src/main.rs and nothing it does
+can reach a decision `kanso check` makes, so three rows rise by about a
+thousandth of a per cent and one falls by the same order — a layout term has no
+sign of its own, and here it took both.
+
+**The sixth row is the change.** `emit_instructions` falls 84.25%, which is the
+largest single move that vein has recorded, and it is the row that counts the
+phase this branch's five indexes run in. Against main the three check rows are
+98,818, 341,715 and 338,153 lower.
+
+The C toolchain did not move. `codegen_instructions_dev` and
+`codegen_instructions_release` both passed unchanged in the same job, and the
+dev gate's notice reads `codegen_dev_kanso_excluded=85,091,397` against main's
+407,173,801: kanso's own process on the codegen corpus falls 79.1% while clang
+and ld count the same to the instruction. That is the emitted IR being
+byte-identical, measured on a corpus this branch was never tuned against
+rather than asserted from the diff.
+
+Two terms got worse and the objective was shown both. Start-up rises 242,727
+and costs 0.274 points; the interpreted row rises 3,747,958 and costs 0.005.
+Against them the emit fall and the three check falls carry the development
+side to 73.87, and the index reads **76.39 against a floor of 76.13**. The
+0.26 is banked in this same pull request, per the rule that a rise nobody
+ratchets is a rise the next change is free to spend.
+
+The projection made before this round, from a local reading of emit on two
+worktrees, was +0.26. CI's rows give +0.26. The local emit reading was
+60,201,040 against CI's 60,197,743 — 0.005% apart.
+
+- **DONE** six rows measured, written and attributed; the floor at 76.39.
+- **OPEN** what is left in the emitter. Profiling kanso's own process at this
+  branch's head leaves a flat 85 million with one cluster in it: substring
+  search over IR lines, 7,929,096 instructions inclusive, 9.32%, all of it
+  reached from `Backend::emit`.
