@@ -341,15 +341,46 @@ against the small reading and should be re-weighed against this one, including
 whether the pin reaches a rewrite at all — it removes the shift of literals
 after `.rodata` and says nothing about `.text` moving under itself.
 
-**Recommendation:** decline it, and record the decline. A 1 per cent larger
-shipped binary, or a measurement build linked differently from the shipped one,
-is a real cost against a term the pin only partly removes; and this repository
-has already ruled once, on kanso#1234, that the measurement should not be
-special-cased away from what ships. The "by layout" lines are honest — they say
-a row moved for a reason the change did not choose — and the rows are read as
-deltas against a named base, which is what makes them useful either way. If the
-answer is the other one, 0x40000 with the loud link failure is the shape to
-take, not 0x100000.
+**Recommendation, rewritten 2026-09-17 after the bisection.** Still decline the
+section pin, but for a sharper reason than the first version had, and do not
+close the question with it — because the pin was never the right instrument and
+there is a better one to rule on.
+
+*Why the pin fails on its own terms.* Every measurement behind it used the
+small perturbation. Two sources a hundred functions apart is an ADDITION, the
+same family the seven-binary ladder used, and the pin was shown to remove that
+term. Nobody has run the pin against a REWRITE, which is the case that costs
+145,472. So the pin's evidence does not reach the term this entry now exists
+to price, and adopting it on that evidence would be adopting it on a
+measurement of something else — the mistake this whole entry is a record of.
+
+*And the mechanism points elsewhere.* `scripts/gates/compile_instructions.sh`'s
+header names what it found when it chased this: *a binary whose data and bss
+differ starts the heap at a different break. That moves how much work malloc
+does to service an identical request sequence without moving a single
+instruction the compiler executes* — seven readings, four distinct values,
+every kanso symbol identical to the instruction and only glibc's allocator
+moving. If that is also what carries the 145,472, then pinning `.rodata` does
+nothing for it: the heap break is set by where `.bss` ENDS, and a fixed
+`.rodata` start does not fix that.
+
+*The instrument worth ruling on instead.* Give the measured run a heap that
+starts at the same address every time, and the term goes away for additions and
+rewrites alike without the shipped binary changing by a byte — which answers
+the kanso#1234 objection the first recommendation leaned on, since nothing is
+special-cased away from what ships. This is the 2026-09-15 rule applied
+literally, in Clay's words: *you clear it out so it's identical every single
+run or you do something that puts it into a persistent known initial state.*
+The gate already pins ten `GLIBC_TUNABLES` for exactly this reason; where the
+heap begins is the one it does not pin.
+
+*What this entry needs before it is ruled, and it is cheap.* Two readings of
+cloud's own kanso#1480 pair: once with `.rodata` pinned, once with the heap
+start fixed. If the 145,472 survives the section pin, the pin is answered for
+good. If it dies under a fixed heap start, the instrument is chosen and the
+ruling is a formality. Neither costs more than a build and two callgrind runs,
+and both are cloud's. That measurement is what turns this from an argument into
+a decision, and nothing here should be ruled without it.
 
 ## Stale — the July campaign's unclosed letters (GAVELS.md, retired here)
 

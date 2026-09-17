@@ -5742,3 +5742,44 @@ passes here had the answer one paragraph away.
 - **OPEN** what the probe did not reach and the row cannot retire without: the
   710 `xs[i]!` sites, `!` names in lib answering a box, and the two cost levers
   kanso#1477 reports built. Their own pass.
+
+## 2026-09-17 — the `.rodata` entry had two voices, and the pin was never the instrument
+
+The ledger's `Pinning .rodata to a fixed page` entry gained cloud's bisection
+this afternoon and came out contradicting itself: a body saying the term it
+prices is three hundred times larger than anybody thought, and a
+recommendation, written weeks earlier, declining the pin on the strength of the
+small reading. An entry with two voices cannot be ruled, and the ledger's own
+rule is that every entry carries a recommendation so a sitting can be a yes or
+a no.
+
+Rewritten, and the decline stands on different ground. **The pin's own evidence
+never reached the case that matters.** Its demonstration was two sources a
+hundred functions apart — an ADDITION, the same perturbation family as the
+seven-binary ladder, and the family the pin was shown to fix. Nobody has run it
+against a REWRITE, which is what costs 145,472. Adopting the pin on that
+evidence would be adopting it on a measurement of something else, which is the
+error this entry is now a record of twice over.
+
+**And the gate's own header points at a different mechanism.** It says what it
+found chasing this row's variance: a binary whose data and bss differ starts
+the heap at a different break, which moves how much work malloc does to service
+an identical request sequence, with every kanso symbol identical to the
+instruction and only glibc's allocator moving. The heap break is set by where
+`.bss` ends. A fixed `.rodata` start does not fix it.
+
+So the instrument worth ruling on is a heap that starts at the same address
+every run. It removes the term for additions and rewrites alike, and it changes
+the shipped binary by nothing — which answers the kanso#1234 objection the old
+recommendation leaned on, since nothing gets special-cased away from what ships.
+It is also the 2026-09-15 rule read literally. The gate already pins ten
+`GLIBC_TUNABLES` for this exact reason and where the heap begins is the one it
+does not pin.
+
+The entry now names the measurement that settles it, and says it should not be
+ruled without one: cloud's kanso#1480 pair read twice, once with `.rodata`
+pinned and once with the heap start fixed. A build and two callgrind runs.
+
+- **DONE** the entry has one voice and a recommendation a sitting can answer.
+- **OPEN** those two readings. Cloud's, and until they exist this is an
+  argument rather than a decision.
