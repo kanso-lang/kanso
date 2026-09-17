@@ -5298,6 +5298,161 @@ the module and entry rows, and their fall is the rise banked here. Welfare
 69.79153807658396 -> 69.79493424287482, `--set` run after the goldens carried
 CI's rows and not before.
 
+## 2026-09-17 — the floor is bimodal, and the gap is exactly ten
+
+Three measurements today, and the third is the one to keep.
+
+**The build reproduces here.** Four clean rebuilds of one tree in this
+container, each preceded by `touch src/main.rs` so nothing was cached:
+
+```
+n   sha256           .text     .data   .bss    kanso::main
+1   b8a64fe29f820c63 2841218   12664   29912   36377641
+2   b8a64fe29f820c63 2841218   12664   29912   36377641
+3   b8a64fe29f820c63 2841218   12664   29912   36377641
+4   b8a64fe29f820c63 2841218   12664   29912   36377641
+```
+
+So `cargo build --release` is bit-reproducible where the toolchain, the path
+and the environment hold still, and the row follows the binary exactly.
+
+**Two builds on CI disagree in their sha and agree on every row.** Run
+35197408041 was re-run on the same commit, 274c89ca, whose whole diff is three
+gate scripts, one test, the log and one page — nothing `include_str!`'d, nothing
+the compiler carries. Attempt one built sha `fde1fb87…` on cpu family 25 model
+17; attempt two built sha `13e6cf22…` on family 25 model 1. The three compile
+rows read 35,967,926 / 128,214,746 / 128,348,851 on both, to the instruction,
+and the floor read 558232/604 on both. That refutes the CPU model for the third
+time, now within one commit, and it says the sha difference CI shows between two
+builds is not a difference the count can see. The sections would say which part
+of the binary moved; they are printed and were not readable, which this change
+fixes.
+
+**The floor takes two values, ten apart.** Sixty sittings across eighteen
+branches, grouped by branch and by the floor's own frame count:
+
+```
+claude/name-spaces       frames=[604]  floors=[558222, 558232]          gap 10
+claude/welfare-split     frames=[605]  floors=[556282, 556292]          gap 10
+claude/linear-groups     frames=[605]  floors=[556432, 556442, 558665]  gap 10
+claude/group-indices     frames=[605]  floors=[558678, 558688]          gap 10
+claude/beat-indexed      frames=[605]  floors=[556457, 558690, 558700]  gap 10
+claude/prune-indexed     frames=[605]  floors=[558716, 558726]          gap 10
+claude/declares-scan     frames=[604,605] floors=[558259, 558649, 558659] gap 10
+claude/codegen-rows      frames=[604,605] floors=[558232, 558610, 558620] gap 10
+claude/self-dump         frames=[604,605] floors=[558232, 558610, 558620] gap 10
+main                     frames=[604,605] floors=[558232, 558610, 558620] gap 10
+```
+
+Every branch that sat more than once and did not change its frame count shows
+exactly two floors, ten apart. The other gaps in that table — 378, 390, 2223,
+2233 — are commits that changed the compiler. Ten is not one of those: it
+recurs on ten branches with unrelated diffs, at four different absolute values.
+
+It is not the thirteen. The floor is the set of frames whose self cost held
+across all three workloads, and a row moving by thirteen while the floor moves
+by ten in the other direction is two facts, not one. What it is, is the first
+property of these sittings that is BIMODAL rather than noisy, and a two-valued
+flag is a thing that can be chased. The frame that carries the ten is named the
+same way kanso#1474 names the thirteen: bucket the floor listing and diff two
+digests.
+
+- **DONE** the sections join the sha as notices, on all three compile gates,
+  pinned by `tests/a_gates_binary_is_described_where_it_can_be_read.rs`.
+- **DONE** the build reproduces in this container, four for four.
+- **OPEN** what costs exactly ten. The next pair of sittings that straddle the
+  two floors has the digest to name it.
+
+## 2026-09-17 — the thirteen is `memrchr`, called from the line the gate prints
+
+Two sittings of this branch, one commit apart. The commit between them is
+`cargo fmt` over one test file: no compiler source, nothing `include_str!`'d,
+and both sittings printed
+`compile_binary sections .text=2803570 .data=12672 .bss=29912`, byte for byte,
+on the same runner family and model.
+
+```
+compile_instructions   35,967,913   ->   35,967,926      +13
+entry_instructions    128,214,733   ->  128,214,746      +13
+library_instructions  128,348,838   ->  128,348,851      +13
+per_process_floor         558,232   ->      558,232        0
+```
+
+kanso#1474's digest, diffed:
+
+```
+frame_digest   1 bucket differs:  b0 = 1,767,181/40  ->  1,767,194/40   +13
+floor_digest   0 buckets differ
+frame_bucket0  1 frame of 40 differs:
+               core::slice::memchr::memrchr   185  ->  198   +13
+```
+
+One frame. `core::slice::memchr::memrchr`, and its caller on this box is
+`<std::io::stdio::StdoutLock as std::io::Write>::write_all`, twice, for 185
+instructions. That is `LineWriter` looking backwards for the last newline in
+what the process printed — and what `kanso check` prints is one line, nineteen
+bytes: `compile_corpus: ok`.
+
+So the thirteen has never been the compiler. It is the cost of writing the
+gate's own result line, and it moves with the alignment of a heap buffer rather
+than with anything the front end decided. The floor could not name it because
+the floor is the set of frames whose self cost holds across all three
+workloads, and this one holds across all three — at two values.
+
+**Why it took this long.** Every earlier round asked what differed between the
+two readings and found nothing: same sha, same sections, same CPU, same
+floor, same kernel, same toolchain, and eight within-binary runs agreeing to
+the instruction. All of that was true and none of it was the question. The
+question was WHICH FRAME, and nothing printed a per-frame listing until
+kanso#1474. The instrument named it on its second pair.
+
+**What it costs.** `kanso::main` inclusive is the anchor, chosen on 2026-09-04
+so the row counts the compiler's own work and not the loader's; printing the
+result is inside that frame and is not compiling. The 2026-09-15 rule is the
+one that applies: external state is normalized before it is measured, and a
+term that cannot be normalized is excluded with the exclusion named in the
+golden's header. Buffer alignment cannot be normalized from here. So the print
+comes out of the measured region, which re-baselines all three rows at once and
+is its own change.
+
+**Demonstrated, not inferred.** The frame's cost scales with what the process
+prints. Same binary, same box, one `kanso check` against two corpora whose only
+difference is the length of the name that goes into the printed line:
+
+```
+compile_corpus                           memrchr = 63
+compile_corpus_with_a_much_longer_name   memrchr = 81
+```
+
+Twenty-four more characters on the line, eighteen more instructions in the
+frame. (`kanso::main` moved 14,177 the other way on that pair, which is the
+path-length term this file's header already carries at about 160 instructions a
+character; a different effect, an order of magnitude larger, and not this one.)
+
+**And the control holds.** Run 35204603108 was re-run on one commit,
+`ef0a028e`: two attempts, two CPU models (25/1 and 25/17), and every printed
+quantity byte-identical — the three rows, the floor at 558338/604, all
+thirty-two digest buckets, and all forty frames of bucket zero including
+`memrchr`. So within a commit the measurement reproduces exactly; the thirteen
+appears only BETWEEN commits, which is where the binary can move under a frame
+whose section sizes do not.
+
+- **DONE** the frame is named, with the digest diff that names it, and its
+  cost is shown to follow the printed text.
+**What is still open underneath it.** A test-file-only edit does not rebuild
+`target/release/kanso`: the sha was `b8a64fe29f820c63` before and after adding
+a comment to a test crate, in this container. And four clean rebuilds of one
+source here give one sha. So the two sittings above should have been built from
+the same bytes, and the frame that carries the thirteen should not have moved.
+Whether CI's two independent builds of one source actually agree is the
+question, and kanso#1479's `compile_binary sha256=` notice answers it the next
+time a pair parts — which is the reason to land that one first.
+
+- **OPEN** whether CI's two builds of one source are the same binary. One line
+  in the next pair, once kanso#1479 is on main.
+- **OPEN** taking the print out of the row. Three welfare-weighted rows
+  re-baseline together, so it lands on its own with its own sitting.
+
 ## 2026-09-17 — the compile rows stop counting the line the run prints
 
 Five CI builds today, across trees whose compiler source is byte-identical:
@@ -5394,3 +5549,79 @@ this is a change in what is counted rather than a gain to bank.
 
 - **DONE** the three rows carry the excluded sitting; one page span follows.
 - **OPEN** the second build, which is the whole claim.
+
+## 2026-09-17 — kanso#1475's rows, and the check path pays for what the build saves
+
+## 2026-09-17 — kanso#1473's rows on the excluded anchor
+
+CI's sitting, against main and against this branch's own base:
+
+```
+                          main          kanso#1473     this branch
+  compile_instructions   35,964,325    35,869,543    35,896,968    +27,425
+  entry_instructions    128,204,133   127,873,637   127,962,075    +88,438
+  library_instructions  128,339,261   128,011,551   128,099,426    +87,875
+  startup_instructions    4,838,323     5,076,026     5,079,380     +3,354
+```
+
+All four rise over the base, and that is worth saying plainly rather than
+filing under layout. `kanso check` does run the linearity analysis, so this
+row is not insulated from the change the way the emitter-only branches in
+this stack are. What the change buys is on the build path — `kanso build`
+falls 9.61% with the emitted IR byte-identical — and the check path pays
+27,425 for it.
+
+welfare exits 0: the rise is inside the dead band, and the objective does not
+see a trade worth refusing.
+
+Against main the branch is still well ahead on all three compile rows,
+because it carries kanso#1468 and kanso#1473 underneath it.
+
+- **DONE** four rows and eight page spans on the excluded anchor.
+
+                          main          kanso#1468     this branch
+  compile_instructions   35,964,325    35,886,633    35,869,543
+  entry_instructions    128,204,133   127,922,777   127,873,637
+  library_instructions  128,339,261   128,058,971   128,011,551
+  startup_instructions    4,838,323     5,077,750     5,076,026
+```
+
+So the beat's tail-call question, asked once per name instead of once per
+name per declaration, takes a further 17,090 off the module row on top of
+kanso#1468's 77,692, and the same shape on the other two. The three compile
+rows are layout: `kanso check` stops before codegen and this stack changes
+the emitter, so nothing they count as work went near it.
+
+The start-up row carries the rise this stack has had since kanso#1468 and is
+1,724 under that reading.
+
+welfare exits 0 — the move is inside the dead band, so there is nothing to
+bank here.
+
+- **DONE** four rows and eight page spans on the excluded anchor.
+
+## 2026-09-17 — kanso#1468's rows, re-measured on the excluded anchor
+
+The three rows were written this morning against an anchor that still counted
+the printed line, so they were a face of the thirteen. kanso#1487 took that
+frame out, and CI's sitting on the merged head reads:
+
+```
+  compile_instructions   35,964,325 -> 35,886,633    -77,692
+  entry_instructions    128,204,133 -> 127,922,777   -281,356
+  library_instructions  128,339,261 -> 128,058,971   -280,290
+  startup_instructions    5,077,750                  unchanged, green
+  compile_allocs             27,397                  unchanged, green
+```
+
+The three falls are the same three this morning measured, to the instruction,
+which is what a stable anchor was supposed to buy. All three are LAYOUT:
+`kanso check` stops before codegen, so nothing these rows count as work went
+near the emitter change, and what moved them is the compiler binary carrying
+different bytes.
+
+welfare exits 0. The floor already holds this branch's ratchet from the
+earlier sitting, and the excluded rows land inside its band, so there is
+nothing further to bank.
+
+- **DONE** the rows carry the sitting on the excluded anchor; one page span follows.

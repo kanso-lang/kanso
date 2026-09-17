@@ -118,4 +118,27 @@
 # 4,921 (+0.0969%), 2,719 of it against the parent. The seventh index is more
 # bytes for the loader to place, and the trade it buys is the 88,438 the entry
 # row above gives back.
+# 2026-09-17 (kanso#1476): startup_instructions 5,077,750 -> 5,079,952, a RISE of
+# 2,202 (+0.0434%). Against the parent's 5,079,380 the rise is 572, and that is
+# the only row this branch moves on its own: the index it builds is a few more
+# bytes for the loader to place. The three `kanso check` rows above are the
+# parent's to the instruction.
+# 2026-09-17, kanso#1475. 3,354 above kanso#1473's reading.
+# 2026-09-17, kanso#1473. The start-up rise this stack carries, 1,724 below
+# kanso#1468's reading of it.
+#
+# 2026-09-17, merged with the base. The base moved this row's FILE and not
+# the compiler: since this branch measured, the only thing that landed
+# under it is a row written into a golden, so the value below is this
+# branch's own sitting and it still stands.
+#
+# 2026-09-17, merged with the base. The base moved this row's FILE and not
+# the compiler: since this branch measured, the only thing that landed
+# under it is a row written into a golden, so the value below is this
+# branch's own sitting and it still stands.
+#
+# 2026-09-17, merged with the base. The base moved this row's FILE and not
+# the compiler: since this branch measured, the only thing that landed
+# under it is a row written into a golden, so the value below is this
+# branch's own sitting and it still stands.
 startup_instructions=5082671
