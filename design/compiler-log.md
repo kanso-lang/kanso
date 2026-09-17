@@ -3784,6 +3784,214 @@ arena could own. That is not answered here. Recorded as an open lead with
 nothing above it that sizes it.
 
 
+
+## 2026-09-16 — the compile rows moved by thirteen and the job log could not say why
+
+kanso#1459's two rounds carry identical compiler source. Round two changed the
+three goldens, design/compiler-log.md, bench/welfare_floor.json and one page,
+and nothing the compiler compiles. All three compile rows came back exactly 13
+higher:
+
+    compile_instructions    36,695,922 ->  36,695,935
+    entry_instructions     130,618,857 -> 130,618,870
+    library_instructions   130,762,703 -> 130,762,716
+
+PROGRAM TOTALS moves by the same 13 and so does the `main` frame, so it is
+inside the run rather than in the loader. The same 13 hit kanso#1460, whose
+whole diff was a log entry, and a re-run of that commit came back on the
+golden.
+
+**What the gate printed, and why it was not enough.**
+
+The gate has printed a binary sha and a silicon line on every run since the
+last time this happened, precisely so a reader could settle case (1) against
+case (2). Here is what the two rounds carry:
+
+    round one   cpu="cpu family 0x19 model 0x1"    sha=c234bfc0577c   row=130762703
+    round two   cpu="cpu family 0x19 model 0x11"   sha=770141d59043   row=130762716
+
+Two variables and one observation. The runner's CPU MODEL moved, from AMD Zen 3
+to Zen 4, and the BINARY'S SHA moved with it. Either could own the 13 and
+nothing in either job separates them.
+
+Two things are ruled out. Cargo is reproducible: three release builds of one
+source on this container land on one sha, and three more with
+`codegen-units = 1` land on one sha, so "the build is not deterministic" is a
+hypothesis with no evidence under it. And a different glibc ifunc variant is
+not it by size -- masking AVX-512 through `glibc.cpu.hwcaps` on this container
+moves the library row by 393,285 instructions where the CI gap is 13. Thirteen
+is a branch taken once per process on a CPU-feature test, not a different
+memcpy.
+
+**The fix is one more reading, and it costs nothing on a green run.**
+
+The question "did this binary count two numbers, or did two binaries count one
+each" is answerable inside the job that asks it. So each of the three compile
+gates now counts a second time, on the same binary in the same box, and only
+when the first reading disagreed with the golden. It prints both and then says
+which case it is in its own words:
+
+    library_again row=133327398 (the first reading was 133327398)
+    ::error::THIS BINARY IS STABLE. A second count in this same job, on
+    ::error::this same binary, read 133327398 -- the same number.
+
+A run that is going to pass pays nothing. A run that is going to fail pays one
+callgrind pass, about thirty seconds, and hands back the thing a reader has
+twice had to reconstruct by comparing two job logs by hand.
+
+This does not settle the 13. It makes the NEXT occurrence settle itself:
+readings that agree inside one job put the difference outside the run, where
+the sha and the silicon lines are, and readings that disagree are case (2) on
+the spot.
+
+**And the second reading goes into the artifact, not only into the log.** The
+`*_got.txt` files are catted in one step at the end of the job, about eighty
+lines from its tail; the callgrind output the error block sits under is several
+hundred. Reading the first occurrence of this cost four fetches of whole job
+logs to recover two sha lines and two cpu lines, and the `*_again` row would
+have cost a fifth. A reader who has to fetch the whole job to learn whether the
+binary was stable is a reader who will not bother, so `compile_again`,
+`entry_again` and `library_again` are appended to the three `*_got.txt` files
+and arrive with the rows they belong to.
+
+**A third observation arrived while this was being written.** kanso#1463's own
+first run read 36,878,537, 131,884,271 and 132,025,154 — the same exact −13 on
+all three rows that kanso#1460 read, on a branch whose whole diff is gate
+scripts, a log entry and a mutation. Three pull requests now, none of which
+compiles differently from main, and the same thirteen.
+
+## The second reading landed, and it is case (2)
+
+The run after that one carried the new row into its artifact dump:
+
+    library_instructions=132025619
+    library_again=132025167
+
+One binary, one corpus, one box, ONE JOB. Two callgrind runs minutes apart, 452
+instructions apart, and the second landed exactly on the golden. On the same
+run `compile instructions` and `entry instructions` both passed, so it is not
+one fixed term per process either.
+
+**So the compile vein does not reproduce on the runner**, and the 2026-09-05
+ruling's case (2) applies: it halts the vein and is hunted rather than pinned.
+
+**And the reading published for it a few hours earlier was wrong.** The CPU
+model and the binary sha were put forward as the two candidates, on the
+evidence of kanso#1459's two rounds, where both had moved together. Neither is
+it. The same binary on one machine does not reproduce, which no comparison
+across two job logs could ever have shown — and which is the whole argument for
+reading it inside the job. Cargo's build reproducibility, three builds landing
+on one sha, was never the question.
+
+The container is why four rounds of cross-run comparison could not reach it.
+Eight runs of the library gate's own command here, one binary, one box, one
+sitting: `kanso::main` 133,335,824 and the whole process 133,939,674, EIGHT
+TIMES, to the instruction. The object is now the difference between this
+container and the runner, rather than the difference between two runners.
+
+That also rules out per-process randomness as the cause, which was the first
+guess worth having: a hasher seeded from the OS, or anything else drawn fresh
+per process, would vary here too and does not. Two more are ruled out by the
+corpus. `library_corpus` is a single FILE, so the loader's directory walk never
+runs for it — and that walk sorts anyway. And the row is anchored at
+`kanso::main`, which is inside `lang_start_internal`, so the `/proc/self/maps`
+parse the 2026-09-15 ruling called external state is already outside it.
+
+What the magnitudes say, across four veins: +6 on the interpreted run's 2.3
+billion, ±13 on the compile rows' 131 million, +33 on start-up's 6 million, and
++452 on the library row in the sighting above. Small, not proportional to the
+row, and not equal across rows — so neither a term that scales with the work
+nor one fixed cost per process. It is a small number of instructions in
+something whose iteration count moves slightly, and every red compile row from
+here carries its own second reading to narrow it with.
+
+## 2026-09-16 — a function named for an imported type, and the backend that could not find it
+
+Seven lines, and `kanso check` says ok while the two engines disagree:
+
+    import "std/json"
+
+    pub play = print "{entry 1} {length (json/decode "[1]")}"
+
+    fn entry i
+      i + 1
+
+The interpreter prints `2 1`, which is right. The native backend answers
+`error: native backend: unknown type `<module>/entry``. Rename the function to
+`row` and everything passes; drop the json import and everything passes. So the
+trigger is a module declaring a function whose name one of its imports exports
+as a TYPE — and that is a thing the language allows, because the two are
+different namespaces and the checker has always said so.
+
+**The chain, end to end.**
+
+1. `enroll_bare` gives json's exported type `entry` a bare twin named `entry`.
+2. `check::declared_names` returns ONE flat set holding both `program.types`
+   names and `program.fns` names.
+3. `qualify` builds its spelling map from that set, so this module's `fn entry`
+   puts `entry -> <module>/entry` in it.
+4. `rewrite_pattern` rewrites a `Pattern::Ctor`'s TYPE name through that same
+   map, so the bare `entry` type becomes `<module>/entry`.
+5. `codegen.rs`'s `emit_pattern` looks that up in `type_ids`, which holds
+   `json/entry` and `entry` and not it, and returns the internal error.
+
+Three other lookups share the map and the bug: `Pattern::Annotated`'s type,
+`Expr::Upcast`'s target, and a typeset member inside `qualify` itself. Each is
+a type position reading a map that also holds function names.
+
+**The fix, and why it is one map rather than two.**
+
+A constructor is CALLED by its type's name, so a VALUE position has to be able
+to find a type in this map. What must not happen is the reverse. So the map's
+value gains a flag — the spelling, and whether the name it replaces is a type —
+and the four type positions require it while the one value position does not.
+Two maps would have meant threading a second parameter through
+`rewrite_pattern`, `rewrite_stmt`, `rewrite_scope` and `rewrite_expr` and their
+thirty call sites; one flag changes the five lookups and nothing else.
+
+**The spec.**
+
+`tests/golden/micro/a_function_named_for_an_imported_type.kso`. The micro
+corpus runs every fixture as a LIBRARY through the harness's generated entry,
+which is the import path this bug lives on — `golden.rs`'s own comment says
+"the library path is also where four separate qualification bugs lived, none of
+which could fail a corpus that only ran files", and this is the fifth.
+
+Watched red before it went green. With the type flag taken off the constructor
+arm alone:
+
+    a_function_named_for_an_imported_type answers differently as a library
+      left: ""
+     right: "2 1\n"
+
+— the program produces nothing, because the backend refuses it, which is the
+failure as a user meets it rather than a claim about a map.
+
+**What it is not.**
+
+It is not a design decision about whether a function may share a name with an
+imported type. The checker already permits it and the interpreter already runs
+it; the loader disagreed with both, and the native backend's way of saying so
+was an internal error rather than a diagnostic. The differential law allows an
+engine to REFUSE a feature with a clear diagnostic and forbids it to diverge
+silently, and `unknown type <module>/entry` is neither clear nor a diagnostic.
+
+**What it costs, measured on CI.** `compile_instructions` 36,878,550 →
+36,900,512, `entry_instructions` 131,884,284 → 131,966,724,
+`library_instructions` 132,025,167 → 132,070,594, and `compile_allocs`
+27,395 → 27,397. That is one set of type names per dependency, built once
+where the qualifier already walks the dependency's declarations. Welfare falls
+0.00106 and the floor moves by exactly that: a name the language says means a
+constructor has to mean one, which is the case CLAUDE.md rules needs no gavel.
+
+**Round two's allocation row failed on a number that agreed.** CI measured
+`compile_allocs=27397`, the golden said `compile_allocs=27397`, and the job
+said `compile allocations disagrees with its golden`. `compile_allocs.sh`
+strips its golden with `grep -v '^#'` and hands the result to `diff`, and the
+note added after the value left a blank line between them — a line that
+survives the strip and that the gate's output has no counterpart for. Nine
+gates read a golden that way. `tests/a_golden_diffed_line_by_line_holds_no_blank_line.rs`
+finds them off the scripts and refuses a golden that carries one.
 ## 2026-09-16 — the linearity analysis asked the whole program once per question
 
 Clay's gavel that morning made development-loop cost its own welfare, and the
@@ -3958,6 +4166,76 @@ the file, because this model's PROSE has gone stale twice while the file never
 did. Weights and satiations priced from evidence. The entry leaves the ledger
 with this commit and STATUS.md carries the build.
 
+## 2026-09-17 — where two readings part, function by function
+
+The three compile rows each read one figure out of a callgrind profile:
+`kanso::main` inclusive. When two readings of one binary on one machine
+disagree, that figure says how much and nothing about where. Every hunt
+through 2026-09-16 had to guess from the size of the move, and the guesses
+have been wrong twice: the runner's CPU model and the binary's sha were both
+published as the cause of the 13 and neither was.
+
+`scripts/gates/profile_diff.sh` totals each function's SELF cost in two
+profiles, joins on the name, and prints every function that moved. The three
+gates call it in the branch that has already established case (2) — the same
+binary counting two numbers in one job — where the two profiles are still on
+disk and nothing else in the job can say which frame carries the difference.
+
+**The profile is parsed here rather than through `callgrind_annotate`, and
+that is not a preference.** `--threshold` is a percentage of the total and 100
+is its maximum, so the tool stops as soon as the running percentage rounds to
+100. On a profile whose hot function is 99.999% of it, the entire tail is
+dropped — and the tail is this instrument's whole subject, because thirteen
+instructions in a hundred and thirty-two million live nowhere else. The first
+draft read the annotated table and reported two profiles differing by exactly
+that as identical. `tests/two_readings_that_part_name_the_frame.rs` is built
+from a frame one ten-thousandth of its profile for that reason, and it was
+watched red against the first draft before the parser replaced it.
+
+**Two real library profiles on this container agree function by function.**
+Eight runs had already read 133,335,824 identically; this is the same fact at
+a far finer resolution, and it says the container is not where the flutter
+lives. The parser's self-cost sum matches `callgrind_annotate`'s PROGRAM
+TOTALS exactly on a real profile, which is the check that it reads the format
+rather than something near it.
+
+**The temp files are named for the process.** Three gates diff their own pair
+and the spec runs two comparisons at once; a fixed path had one of them
+reading the other's answer, which is how the second spec first went red.
+
+**The two CI runs that differ by 13 differ in one thing.** kanso#1464's rounds
+carried identical compiler source — round two changed goldens, the log, the
+floor and one page. Same glibc 2.39-0ubuntu8.9, same rustc 1.98.1, identical
+`.text=2799906 .data=12672 .bss=29976`, and all three compile rows exactly 13
+lower in round two. Identical section sizes rule out layout. The binary sha
+differs because mimalloc's `options.c` prints a banner built from `__DATE__`
+and `__TIME__` — `libmimalloc-sys` passes `-Wno-error=date-time` for it — and
+those are fixed-length strings, so every offset in the binary is unmoved. What
+is left is the runner: AMD family 0x19 model 0x11 in round one, model 0x1 in
+round two.
+
+**A single CPU feature bit moves the row by single digits.** On this container,
+`GLIBC_TUNABLES` `hwcaps=-AVX2_Usable` moves the library row by exactly +2,
+from 133,429,679 to 133,429,681. Larger masks move it by a great deal —
+`-ERMS` by −1.86M, `-AVX_Fast_Unaligned_Load` by −395k — and that is routine
+selection. The +2 is a per-process constant of the shape the 13 has.
+
+**Eager binding is not the lever, and the control says why.** `LD_BIND_NOW=1`
+raises the row by 2,511, and so does `XX_BIND_NOW=1`, which means nothing to
+the loader: the whole move is one more entry in the environment, not the
+binding mode. The row costs 2,511 instructions per environment variable
+regardless of that variable's length — 1, 2, 3, 4 and 8 characters all read
+identically. The gates run under `env -i` with two variables, so this is
+normalised on CI already; it is recorded because it is the same class of thing
+and it was very nearly published as a finding about the loader.
+
+**The profiles now leave the job.** The comparison left is between two runs on
+two runners, which no single job can make. The cost-goldens job uploads the
+three profiles it counted, and the host's CPU family, model, stepping, glibc,
+rustc and binary sha beside them, so `profile_diff.sh` can be run across a
+model 0x1 sitting and a model 0x11 one and name the frame that carries the 13.
+
+
 ## 2026-09-17 — the allocator was guessing at addresses, and the row was paying for it
 
 The three compile rows have disagreed with their goldens by thirteen
@@ -4031,6 +4309,12 @@ it reads 131,884,271 and nothing else.
 `library_instructions` 130,762,703 — the figures this branch had measured
 before, to the instruction. The merge brought main's values in and this writes
 the branch's back. Two runs agreeing is what the allocator fix bought.
+
+`compile_instructions` 36,900,512, `entry_instructions` 131,966,724 and
+`library_instructions` 132,070,594 — to the instruction, the figures round two
+measured and the next run then disagreed with by thirteen. The merge brought
+main's values in and this writes the branch's back. `compile_allocs` reads
+27,397 and agrees, now that the note sits above the value rather than after it.
 **Round three, after kanso#1466: the same three rows, read again and agreeing.**
 CI on the merged head reads `compile_instructions` 36,864,779,
 `entry_instructions` 131,837,650 and `library_instructions` 131,978,823 — to
@@ -4305,6 +4589,60 @@ are ten map lookups of which the largest is 0.94%. The structural lever is
 interning names to integers so the maps stop comparing strings at all, which
 would reach that 3.5% and part of the 2.6% in rehashing beside it. That is a
 refactor across check.rs, infer.rs and codegen.rs, and it is not costed yet.
+
+**Round four, after kanso#1464.** CI reads `compile_instructions` 36,885,953,
+`entry_instructions` 131,919,543 and `library_instructions` 132,022,229 against
+main's 36,864,779, 131,837,650 and 131,978,823. The set of a dependency's type
+names is the rise, and it is the same rise round three measured; the figures
+differ because kanso#1464 arrived underneath them.
+
+## 2026-09-17 — CI's sitting of the merged tree: a correctness fix that costs a little
+
+kanso#1465 merged with main after kanso#1459 landed. The merge carried
+kanso#1459's values forward so the gate had one value to fail against; CI read
+the merged tree above them:
+
+    compile_instructions    36,682,232 -> 36,703,489   +21,257   +0.0579%
+    entry_instructions     130,573,787 -> 130,655,644  +81,857   +0.0627%
+    library_instructions   130,716,747 -> 130,760,194  +43,447   +0.0332%
+
+**The rise is the fix.** DONE. `declared_names` returned types and functions in
+one set, so qualifying a function's name rewrote an imported type's constructor
+pattern with it, and a program that named both compiled into one that named the
+wrong thing. Keeping them apart costs the checker a little more work to be
+right, and a sixteen-hundredth of a per cent of a compile is what being right
+costs here.
+
+**The floor does not move.** DONE. welfare reads 69.76 against a floor of
+69.76: the merge's own resolution took the higher of the two floors and this
+tree clears it. Nothing to lower and nothing to bank.
+
+## 2026-09-17 — kanso#1465 on the merged tree: CI's sitting, and the floor drops
+
+The branch merged with kanso#1472 and CI measured the merged tree:
+
+    entry_instructions   128,144,579 -> 128,214,733   +70,154   +0.055%
+    library_instructions 128,281,268 -> 128,348,838   +67,570   +0.053%
+    compile_instructions  35,969,565 -> 35,967,913     -1,652   -0.0046%
+
+The two rises are the branch's own cost. The qualifier now keeps a set of the
+type names it must not rewrite, and the entry and library routes pay to build
+and read it. The module row falls, which is layout.
+
+Welfare falls to 69.79141882095341 and **the floor is lowered to meet it**,
+under the 2026-09-13 ironclad rule: the change makes the language work to its
+specification. A seven-line program that `kanso check` passed had the two
+engines printing different things — the interpreter `2 1`, the native backend
+`error: native backend: unknown type <module>/entry` — which is the differential
+law broken, not a preference. So the floor drops by exactly what the fix costs,
+the reason is in the ratchet history, and this does not go to the ledger.
+
+`per_process_floor=558232 frames=604 kernel=6.17.0-1022-azure cpu=25/1`. Note
+604 frames rather than 605: a frame this binary does not have. The floors are
+comparable only between two sittings of ONE binary, which is why a reading from
+another branch says nothing about this one.
+
+- **DONE** the rows are CI's and the floor is where the measurement put it.
 
 ## 2026-09-17 — the bound discharge had no golden, and it is built
 
