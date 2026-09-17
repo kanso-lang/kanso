@@ -2032,7 +2032,9 @@ purge_delay_option = row
 
 rows_c1zc = text/concat rows_c1zb [purge_delay_option]
 
-rows_c = text/concat rows_c1zc [itself]
+rows_c1zd = text/concat rows_c1zc [codegen_one_process]
+
+rows_c = text/concat rows_c1zd [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
