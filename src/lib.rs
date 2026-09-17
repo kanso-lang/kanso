@@ -1860,14 +1860,21 @@ fn qualify(
     }
     let mixed: crate::hash::Set<String> =
         own_bare.iter().filter(|n| twin_bare.contains(*n)).map(|n| n.to_string()).collect();
-    let owned: crate::hash::Map<String, String> = check::declared_names(dep)
+    // WHICH OF THESE NAMES IS A TYPE, recorded beside the spelling rather than
+    // asked for later, because `declared_names` merges the two namespaces and
+    // a caller downstream cannot tell them apart from the name alone.
+    let type_names: crate::hash::Set<&str> = dep.types.iter().map(|t| t.name.as_str()).collect();
+    let owned: crate::hash::Map<String, Owned> = check::declared_names(dep)
         .into_iter()
         .filter(|n| !getters.contains(*n))
         .filter(|n| !ast::has_slash(n))
         .filter(|n| *n != MATH_FAILURE && *n != DIVIDE_BY_ZERO)
-        .map(|n| match mixed.contains(n) {
-            true => (n.to_string(), ast::bare_space(qual, n)),
-            false => (n.to_string(), ast::qualified(qual, n)),
+        .map(|n| {
+            let spelling = match mixed.contains(n) {
+                true => ast::bare_space(qual, n),
+                false => ast::qualified(qual, n),
+            };
+            (n.to_string(), Owned { spelling, a_type: type_names.contains(n) })
         })
         .collect();
     // The prelude's own declarations go, rather than travelling under this
@@ -1915,8 +1922,8 @@ fn qualify(
         }
         for (_, members, _) in &mut ty.fields {
             for member in members {
-                if let Some(spelling) = owned.get(member.as_str()) {
-                    *member = spelling.clone();
+                if let Some(o) = owned.get(member.as_str()).filter(|o| o.a_type) {
+                    *member = o.spelling.clone();
                 }
             }
         }
@@ -2254,18 +2261,35 @@ fn pattern_binds(p: &ast::Pattern, out: &mut Vec<String>) {
     }
 }
 
-fn rewrite_pattern(p: &mut ast::Pattern, owned: &crate::hash::Map<String, String>) {
+/// A spelling this module owns, and whether the name it replaces is a TYPE.
+///
+/// Both namespaces live in one map because a constructor is CALLED by its
+/// type's name, so a value position has to be able to find a type here. A type
+/// position must not be able to find a function, and until 2026-09-16 it
+/// could: `check::declared_names` hands back one flat set of type names and
+/// function names, `qualify` built this map from it, and a module declaring
+/// `fn entry` beside an `import "std/json"` rewrote the bare `entry` TYPE in a
+/// constructor pattern to its own `ec3/entry`. `kanso check` said ok, the
+/// interpreter ran the program correctly, and the native backend answered
+/// `unknown type` on a name no type table has ever held.
+#[derive(Clone)]
+struct Owned {
+    spelling: String,
+    a_type: bool,
+}
+
+fn rewrite_pattern(p: &mut ast::Pattern, owned: &crate::hash::Map<String, Owned>) {
     match p {
         ast::Pattern::Ctor { ty, fields, .. } => {
-            if let Some(spelling) = owned.get(ty.as_str()) {
-                *ty = Name::new(spelling);
+            if let Some(o) = owned.get(ty.as_str()).filter(|o| o.a_type) {
+                *ty = Name::new(&o.spelling);
             }
             for f in fields {
                 rewrite_pattern(f, owned);
             }
         }
-        ast::Pattern::Annotated { ty, .. } if owned.contains_key(ty.as_str()) => {
-            *ty = Name::new(&owned[ty.as_str()]);
+        ast::Pattern::Annotated { ty, .. } if owned.get(ty.as_str()).is_some_and(|o| o.a_type) => {
+            *ty = Name::new(&owned[ty.as_str()].spelling);
         }
         _ => {}
     }
@@ -2273,7 +2297,7 @@ fn rewrite_pattern(p: &mut ast::Pattern, owned: &crate::hash::Map<String, String
 
 fn rewrite_stmt(
     stmt: &mut ast::Stmt,
-    owned: &crate::hash::Map<String, String>,
+    owned: &crate::hash::Map<String, Owned>,
     bound: &mut Vec<String>,
 ) {
     match stmt {
@@ -2289,7 +2313,7 @@ fn rewrite_stmt(
 
 fn rewrite_scope(
     stmts: &mut [ast::Stmt],
-    owned: &crate::hash::Map<String, String>,
+    owned: &crate::hash::Map<String, Owned>,
     bound: &[String],
 ) {
     let mut inner = bound.to_vec();
@@ -2298,7 +2322,7 @@ fn rewrite_scope(
     }
 }
 
-fn rewrite_expr(e: &mut ast::Expr, owned: &crate::hash::Map<String, String>, bound: &[String]) {
+fn rewrite_expr(e: &mut ast::Expr, owned: &crate::hash::Map<String, Owned>, bound: &[String]) {
     match e {
         ast::Expr::Guard { cond, early, rest, .. } => {
             rewrite_expr(cond, owned, bound);
@@ -2312,9 +2336,9 @@ fn rewrite_expr(e: &mut ast::Expr, owned: &crate::hash::Map<String, String>, bou
         // module the way a mention does. Left behind, the sigil holds a bare
         // name after every declaration has been qualified away from it.
         ast::Expr::Ident(name, _) | ast::Expr::Partial(name, _) => {
-            if let Some(spelling) = owned.get(name.as_str()) {
+            if let Some(o) = owned.get(name.as_str()) {
                 if !bound.iter().any(|b| b == name) {
-                    *name = Name::new(spelling);
+                    *name = Name::new(&o.spelling);
                 }
             }
         }
@@ -2325,8 +2349,8 @@ fn rewrite_expr(e: &mut ast::Expr, owned: &crate::hash::Map<String, String>, bou
         // nothing: the interpreter reports that the value is not a `num`
         // while holding one, and both backends refuse the module outright.
         ast::Expr::Upcast { expr, ty, .. } => {
-            if let Some(spelling) = owned.get(ty.as_str()) {
-                *ty = spelling.clone();
+            if let Some(o) = owned.get(ty.as_str()).filter(|o| o.a_type) {
+                *ty = o.spelling.clone();
             }
             rewrite_expr(expr, owned, bound);
         }
