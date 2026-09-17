@@ -94,6 +94,8 @@
 # previous sitting's 4,838,300 on a different tree. This is the interpreter's own
 # start-up and the 13.8x fall this branch bought is already in the value.
 #
+# 2026-09-17 (kanso#1470): startup_instructions 4,838,323 -> 4,837,892, a FALL of
+# 431 (-0.0089%). Layout, same sitting as the compile row.
 # 2026-09-17, kanso#1482, CI's sitting. LAYOUT, same reason, and this one
 # fell: 956 lower. The four rows together are +93 +564 +511 -956, which is
 # what a code-layout shift looks like -- no direction, and no relation to
@@ -106,6 +108,10 @@
 # main's, carried forward so the gate has one value to fail against
 # rather than none; the merged sitting is CI's to take.
 #
+# 2026-09-17, kanso#1470 on main 298636b7. CI reads 4,837,941 against main's
+# 4,838,372, a fall of 431 -- 0.009%. `kanso play` takes the native path and
+# this branch adds counter plumbing to src/main.rs; 431 is what that weighs
+# here.
 # 2026-09-17, kanso#1482 on the tree merged with kanso#1462. CI reads
 # 4,837,381 against main's 4,838,372, a fall of 991 -- 0.020%. `kanso play`
 # takes the native path and does run the emitter, so some of this is the
@@ -113,10 +119,22 @@
 # and the layout term the four rows above show are the same size, and this
 # reading does not separate them. Both point the same way.
 #
+# 2026-09-17, merged with main at 5e256ce0 (kanso#1491). That branch also
+# edits src/main.rs and moved this row 431 instructions on its own; the two
+# edits merged without conflict, so the value below is CI reading of this
+# branch on the pre-split tree and the merged number is a few hundred off it.
+# CI is what says which few hundred.
+#
 # 2026-09-17, kanso#1493 on the tree merged with main 5e256ce0, CI's sitting.
 # 4,837,381 -> 3,712,181, a FALL of 1,125,200 (-23.26%). WORK, and it is the
 # whole of what this branch does: `kanso play` on a one-line program hashed
 # the 450,100 bytes of src/runtime.c twice to key its two caches, and the
 # digest is computed at build time now. The row measured here is the merged
 # tree's, not the branch's own base -- kanso#1491 landed under it.
+#
+# 2026-09-17, kanso#1470 against main, CI's sitting. 4,837,381 -> 4,836,950, a
+# FALL of 431 (-0.0089%). `kanso play` runs the emitter, which is where the new
+# counters sit; they are compiled out of a shipped binary and the gate builds one
+# that carries them, so what this reads is the same layout term as the rows
+# above, at the same scale.
 startup_instructions=3712181

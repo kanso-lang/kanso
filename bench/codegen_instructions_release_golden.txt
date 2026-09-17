@@ -1,0 +1,100 @@
+# Retired instructions for a whole `kanso build` of bench/codegen_corpus on the
+# production tier: the build that ships, where the compiler is allowed to spend
+# to make the program fast.
+#
+# THE COMPILE ROWS STOP BEFORE CODEGEN. compile_instructions, entry_instructions
+# and library_instructions all count `kanso check`, which answers whether a
+# program is well formed and then stops. Everything after that — the emitter
+# writing LLVM IR, the clang driver, clang -cc1, the linker and the linker's own
+# child — was uncounted, and it is the larger half of what a build costs. This
+# row counts the whole tree: five processes under `--trace-children`, their
+# summary lines summed.
+#
+# WHY TWO TIERS. The two builds are different programs with different jobs, and
+# a single number over both would let one pay for the other. Ruled 2026-09-16.
+#
+# MEASURED IN A BOX, for the reason the other compile rows are: the count moves
+# with the length of the directory the compiler runs in. scripts/gates/
+# codegen_box.sh stages the package one level down, as pkg/codegen_corpus, so
+# that `kanso build` does not find a directory beside its argument's stem and
+# refuse — a refusal that still emits the IR first, so it looks like a build
+# and counts two processes instead of five. The gate refuses a tree shorter
+# than four.
+#
+# THIS ROW DEPENDS ON CLANG, which the other compile rows do not: most of the
+# tree is the C toolchain, so the measured-on line names it beside glibc and
+# rustc.
+#
+# 2026-09-17, the first sitting (kanso#1470). CI's reading; this container
+# read 7,684,965,191 on a different clang and a different machine, which is not
+# comparable. Five processes, and the second reading in the same job agreed
+# with the first. The release tier is 1.30x the development tier here, which is
+# the whole reason the ruling asked for two rows rather than one.
+# measured-on glibc=2.39-0ubuntu8.9 clang=19.1.1 rustc=1.98.1
+#
+# 2026-09-17 (kanso#1470): NOT WRITTEN, and the value below is the one this
+# row has always held. CI counted the release tier twice in one job and read
+# 7,239,553,333 and then 7,239,550,228 -- VERDICT (2), a reproduction failure,
+# 3,105 apart on a tree of about 7.24 billion. The dev tier, counted across
+# the same pair of runs on the same box, came back byte-identical at
+# 1,003,426,243, so the box and the box's staging are not the variable and
+# `-O3 -flto` is.
+#
+# A row this vein reads by an exact compare holds one value, so writing either
+# face would be writing a coin. The gate now prices every process it names
+# (`codegen_procs_release first=[...] again=[...]`), which is the one thing the
+# last sitting could not say: five processes moved by 3,105 between them and
+# the log named none of them. The next sitting says which, and the choice --
+# normalize what moves it, or exclude it and name the exclusion in this header
+# under the 2026-09-15 rule -- waits on that.
+#
+# 2026-09-17, later the same day: the instrument was run on this container
+# instead of waiting for CI, and it names the process on the first try.
+#
+#   reading a   kanso=425,656,322  clang=32,184,722  clang=31,624,903
+#               clang=1,617,293,611  ld=5,145,605,822   total 7,252,365,380
+#   reading b   kanso=425,656,555  clang=32,184,722  clang=31,624,903
+#               clang=1,617,293,611  ld=5,145,605,822   total 7,252,365,613
+#
+# Every child is byte-identical and kanso's own process moves 233. Inside it,
+# two frames of 1,346 differ: `kanso::build` +189 and `__memcmp_avx2_movbe`
+# +44.
+#
+# The memcmp is the pid. `pid_tag()` puts the process id into the names of the
+# .ll, the staging file and the runtime object; its WIDTH was pinned at seven
+# digits in an earlier round, and that left the CONTENT free, so a comparison
+# over those paths stops at a different byte each run. A probe binary with
+# `pid_tag_of` returning a constant was built and run twice: memcmp came back
+# byte-identical and the total moved 112 instead of 233.
+#
+# What the probe leaves is 112 instructions in ONE frame of 1,346 --
+# `kanso::build` itself, self cost, with every callee byte-identical. That is
+# an inlined loop inside `build` whose iteration count is not the compiler's
+# to choose. The dev tier, the same code against a child that finishes seven
+# times sooner, reproduces exactly; the release tier does not. Nothing here
+# has been shown to be the compiler's work.
+#
+# So the choice this header was waiting on is now a choice between: making the
+# temp names carry no pid (which is worth 121 of the 233 and is a fix worth
+# making on its own), and what to do about a row whose subject includes a
+# process that waits for another process. Counting the children alone, or
+# giving kanso's own half its own row, are the two shapes that would leave
+# every counted thing deterministic.
+#
+# 2026-09-17, later: the exclusion is built. The row is the child tree --
+# three `clang` processes and `ld`, every one of which came back byte for
+# byte across two readings -- and kanso's own process is out of it, named in
+# the gate's header with the two measurements that put it there. The value
+# below is the old whole-tree number and stands only so the gate has one
+# value to fail against; the first sitting under the new shape writes it.
+#
+# 2026-09-17, CI's first sitting. 6,826,827,769, with
+# `codegen_release_again` reading 6,826,827,769 -- deterministic in one job,
+# like the dev tier beside it.
+# #
+# The release tier is 11.5x the development tier, which is what `-O3 -flto`
+# against `-O0` costs and the reason the 2026-09-16 gavel put the two on
+# different sides: one is paid once per release and the other between a
+# keystroke and an answer. The container's placeholder read 12,107,507,377,
+# pre-exclusion and not comparable.
+codegen_instructions_release=6826827769

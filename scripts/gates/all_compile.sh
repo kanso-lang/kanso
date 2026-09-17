@@ -58,7 +58,7 @@ sh scripts/gates/build_benchmarks.sh > /dev/null
 # own first line. `compile_ir_row` used to be the second exclusion; it went with
 # the per-chip table on 2026-09-05, and the compile row now compares against its
 # single golden inside `compile_instructions` itself.
-gates="machine_code emitted_code compile_memory compile_allocs compile_instructions entry_instructions library_instructions compile_libraries"
+gates="machine_code emitted_code compile_memory compile_allocs compile_instructions entry_instructions library_instructions compile_libraries codegen_instructions emit_instructions"
 moved=""
 refused=""
 regen=""
