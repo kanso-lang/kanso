@@ -5928,3 +5928,46 @@ passes here had the answer one paragraph away.
 - **OPEN** what the probe did not reach and the row cannot retire without: the
   710 `xs[i]!` sites, `!` names in lib answering a box, and the two cost levers
   kanso#1477 reports built. Their own pass.
+
+## 2026-09-17 — the explicit box comes off the unbuilt list, item by item
+
+STATUS.md's "Ruled, unbuilt" carried the 2026-09-15 box ruling all afternoon
+while kanso#1477's body reported it stale and two of cloud's pull requests
+cited that report as their reason for working a self-generated lead. An earlier
+probe today said the opposite and was wrong twice over. So this one went
+through the row's own Owes list, item by item, against a release build of
+`298636b7`.
+
+    the `effect` constructor          `effect 5`, `effect (err "nope")` answer a box
+    an `(err _)` arm, anywhere         a two-arm `tell` catches one born three calls away
+    the check refusal, three shapes    `boom 0 + 1`, `(boom 0)[0]`, `add1 (boom 0)`
+    ch04 re-premised                   documents the rule and the name blind spot
+    the 710 `xs[i]!` sites respelt     no `[...]!` handed to an operator in lib,
+                                       scripts, bench or the book samples, and
+                                       `xs[1]! + 1` is refused naming `.>`
+    `!` names in lib answer a box      `read_file!` and `read_bytes!` both end `.>`
+    the two cost levers                on main, with the 2026-09-17 entry "the
+                                       bound discharge had no golden, and it is
+                                       built" carrying the probe and the fixture
+
+Every one built. The row is removed, and the removal is written into the
+section's own intro with the evidence beside it, so anybody who disagrees can
+put it back without re-deriving the list.
+
+**The one residue is a spelling convention and not a build.** The row asks for
+"no bang where the bound is provable", and that is not enforced: `xs[1]!` on a
+three-element literal compiles, because a bang on a provable index is legal and
+merely redundant. So the tree compiling proves the sites were respelt for the
+rule and proves nothing about a needless bang left behind. That is a tidy-up
+for whoever next reads those files, not a ruling waiting on a build, and it
+does not hold the row open.
+
+**What this cost by sitting.** The ruling landed 2026-09-15 and its `!` half
+2026-09-16. The row could have come off on the 16th. It did not, because
+nobody checked the list against the tree — the same failure the section exists
+to prevent, on a smaller scale than the 2026-09-09 one that created it. A
+report that a row is stale is not a probe, and a probe is eight commands.
+
+- **DONE** the row off, with its evidence in STATUS.md.
+- **OPEN** whether a needless bang survives on a provable index anywhere in the
+  tree. Cheap for cloud, which has the bound prover; not a row.
