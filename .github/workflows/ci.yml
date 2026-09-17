@@ -438,6 +438,55 @@ jobs:
           said="per_process_floor=$floor frames=$frames"
           said="$said kernel=$(uname -r) cpu=$cpu"
           echo "::notice::$said"
+          # AND THE WHOLE LISTING FOR ONE WORKLOAD, which is what the floor
+          # above turned out not to be able to name. On 2026-09-17 two jobs on
+          # this runner image printed the SAME floor -- 558610 over 605 frames,
+          # to the instruction -- while their three compile rows sat thirteen
+          # apart. So the thirteen is in a frame whose self cost DIFFERS across
+          # the three workloads, which is exactly the set the floor excludes.
+          #
+          # The floor stays, because it is the evidence for that. What names
+          # the frame is this: every frame's self cost in the module compile,
+          # sorted, so two job logs diff to one line. It is the row's own
+          # profile, so whatever moved the row is in here.
+          echo "=== every frame's self cost, module compile"
+          sh scripts/gates/callgrind_self.sh /tmp/cg.compile | sort > /tmp/frames.txt
+          cat /tmp/frames.txt
+          # AND A DIGEST OF IT, because the listing is a thousand lines and
+          # the job log cannot be fetched as a file: the blob host GitHub
+          # redirects to is not reachable from where this gets read, so
+          # comparing two sittings line by line means pulling two thousand
+          # lines through a context window. This is the same information in
+          # one line. Frames are bucketed by the LENGTH of their name, which
+          # is stable under a frame appearing or disappearing -- position
+          # would shift every later bucket, and two sittings have already
+          # differed by one frame. Two sittings whose compile rows sit
+          # thirteen apart differ in exactly one bucket, by thirteen; the
+          # filter below then prints that bucket's frames and names it.
+          #
+          # It goes out as a `::notice::`, not as plain stdout. Plain stdout
+          # lands only in the job log, and the job log is the thing that
+          # cannot be fetched -- which is the whole reason the digest exists.
+          # A notice becomes a check-run ANNOTATION, and annotations come back
+          # over the ordinary API, so the digest is readable from anywhere the
+          # rows are. The floor line above has always been a notice; the first
+          # digest was not, and it was unreadable on the sitting it was
+          # written for.
+          digest=$(awk -F'\t' '{ b = length($1) % 32; s[b] += $2; n[b]++ }
+                                 END { for (i = 0; i < 32; i++)
+                                         printf "b%d=%d/%d ", i, s[i], n[i] }' \
+                       /tmp/frames.txt)
+          echo "::notice::frame_digest $digest"
+          # AND BUCKET ZERO BY NAME, because the digest has already done its
+          # job. Two sittings of this head, one reading the golden and one
+          # thirteen under it, printed digests differing in exactly one
+          # bucket: b0=1765679/40 against b0=1765692/40, thirty-one buckets
+          # byte-identical and the frame count forty in both. So the thirteen
+          # is one frame whose name length is a multiple of thirty-two, and
+          # the forty of them fit in one line.
+          awk -F'\t' 'length($1) % 32 == 0 { printf "%s=%s ", $1, $2 }' \
+              /tmp/frames.txt > /tmp/b0.txt
+          echo "::notice::frame_bucket0 $(cat /tmp/b0.txt)"
       # The two codegen rows, which are the only ones here that reach codegen
       # at all: the three above run `kanso check`, which stops before it. Each
       # counts the whole process tree -- kanso, the clang driver, `clang -cc1`
