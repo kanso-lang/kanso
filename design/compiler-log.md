@@ -4145,3 +4145,24 @@ round three is kanso#1464 arriving underneath it.
 main's 36,864,779, 131,837,650 and 131,978,823. The set of a dependency's type
 names is the rise, and it is the same rise round three measured; the figures
 differ because kanso#1464 arrived underneath them.
+
+## 2026-09-17 — CI's sitting of the merged tree: a correctness fix that costs a little
+
+kanso#1465 merged with main after kanso#1459 landed. The merge carried
+kanso#1459's values forward so the gate had one value to fail against; CI read
+the merged tree above them:
+
+    compile_instructions    36,682,232 -> 36,703,489   +21,257   +0.0579%
+    entry_instructions     130,573,787 -> 130,655,644  +81,857   +0.0627%
+    library_instructions   130,716,747 -> 130,760,194  +43,447   +0.0332%
+
+**The rise is the fix.** DONE. `declared_names` returned types and functions in
+one set, so qualifying a function's name rewrote an imported type's constructor
+pattern with it, and a program that named both compiled into one that named the
+wrong thing. Keeping them apart costs the checker a little more work to be
+right, and a sixteen-hundredth of a per cent of a compile is what being right
+costs here.
+
+**The floor does not move.** DONE. welfare reads 69.76 against a floor of
+69.76: the merge's own resolution took the higher of the two floors and this
+tree clears it. Nothing to lower and nothing to bank.

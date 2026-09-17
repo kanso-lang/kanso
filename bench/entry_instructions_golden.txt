@@ -585,7 +585,13 @@
 # row on its own base, so the merged tree is neither reading. The value is
 # main's, carried forward so the gate has one value to fail against rather than
 # none; the merged sitting is CI's to take.
-entry_instructions=130573787
+#
+# 2026-09-17, kanso#1465, CI's sitting of the merged tree. A RISE of 81,857
+# (+0.0627%): qualifying a function's name stops rewriting an imported type's Ctor
+# pattern, which is a correctness fix and costs the checker a little more work
+# to be right. The value the merge carried forward was kanso#1459's; this is
+# the merged tree's own reading.
+entry_instructions=130655644
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.
