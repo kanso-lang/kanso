@@ -7256,6 +7256,57 @@ first time nothing had to notice it by eye.
   and the spec green.
 - **OPEN** nothing here. The six that remain are questions.
 
+## 2026-09-17 — the unbuilt list empties, for the first time since it was made
+
+kanso#1491 landed the second half of the 2026-09-16 gavel, and with it the
+last row in STATUS.md's "Ruled, unbuilt" comes off. The section is empty for
+the first time since 2026-09-09, the day it was created because five rulings
+had sat unbuilt across 296 pull requests with nothing showing it.
+
+Probed item by item against a build of main, the way the box row was, rather
+than read off a report:
+
+    what the row owed                        found
+    interpreter start-up                     startup_instructions
+    interpreter speed                        interp_instructions
+    interpreter memory                       interp_peak_bytes
+    dev-tier codegen cost                    codegen_instructions_dev
+    release-tier codegen cost                codegen_instructions_release
+    each in objective_sources.txt + spec     14 pairs; the replay spec passes
+    weights and satiations priced            sourced in welfare.kso's header
+    the meta floor re-ratcheted              76.12766770905162, "THE MODEL CHANGED"
+
+`kanso run scripts/welfare` reads three numbers now: meta 76.13 against a
+floor of 76.13, production 57.11, development 72.59. `--counters` lists ten,
+including `emit_instructions`, the seam kanso#1491 found between the
+2026-09-15 exclusion rule and the 2026-09-16 gavel — the exclusion took
+kanso's own process out of the codegen rows, rightly, and the emitter runs in
+that process, so a build's children were weighed and the compiler's own half
+was not. That is the row kanso#1480's 51,082,187 fell into.
+
+The weights are argued from named evidence rather than asserted: runtime 0.60
+because it recurs per request forever, compile 0.40 rather than the third it
+looks like from inside because 45 per cent of people who stopped using Rust
+named long compile times among their reasons. The split renormalises the four
+that predate it rather than carrying them over, and says why.
+
+**What an empty section means, since nothing has said it before.** Cloud
+chooses freely: no self-generated lead displaces ruled work, and the "which
+rulings did you weigh" paragraph a pull request body owes has an empty list to
+weigh against. That holds until something is ruled, and the chat adds the row
+the day it is.
+
+**What it does not mean.** The section's own preamble says the list is a
+FLOOR, because the rest of the 2026-08-29 sitting was never audited. Empty
+means nothing on the list is unbuilt; it does not mean nothing ruled anywhere
+is unbuilt. The 2026-09-09 lesson was precisely that a ruling can sit outside
+the list, and an empty list is the easiest state in which to forget that.
+
+- **DONE** the row off, the section empty, and the probe recorded beside it.
+- **OPEN** whether a sweep of the 2026-08-29 sitting would add rows nobody has
+  listed. It has never been run, and an empty section is the moment it would
+  be worth most.
+
 ## 2026-09-17 — kanso#1486 on the merged tree: three check rows down, the interpreted row up
 
 The rows this branch carried were main's, carried forward by the merge so the
