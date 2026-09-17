@@ -4389,3 +4389,34 @@ reading that matters rather than either projection.
 **The floor is ratcheted to 69.77.** DONE. The rise is the two changes together
 and it is banked in this same commit, after the goldens carry CI's rows and not
 before. Raising a floor is arithmetic; there was nothing to decide.
+
+## 2026-09-17 — kanso#1468 on the merged tree: CI's sitting
+
+The branch merged with kanso#1472 and CI measured the merged tree:
+
+    compile_instructions  35,969,565 -> 35,887,833    -81,732  -0.227%
+    entry_instructions   128,144,579 -> 127,849,537   -295,042  -0.230%
+    library_instructions 128,281,268 -> 127,988,399   -292,869  -0.228%
+
+All three are work removed rather than layout: `kanso check` runs the front end
+that asks the two questions this branch indexes. Welfare rose and is banked at
+69.79571178806425.
+
+**The 69.64% this branch takes off `kanso build bench/runbench` is almost all
+`prune_unnamed`.** Measured separately on `15e182b1` by indexing only the
+declares filter and leaving `prune_unnamed` alone: 31,281,380,592 to
+30,850,141,536, a fall of 431,239,056, 1.38%. So the declares filter is 431M of
+the build and `prune_unnamed` is the rest. `callgrind_annotate --tree=caller`
+puts the rest exactly: `names_symbol` formats `@{sym}` and calls
+`match_indices` on it, inside an `any` over every block, inside a `position`
+over every block, inside a loop that removes one block per round — 12,454,172
+calls, 8.93 billion instructions of two-way searcher construction and 6.28
+billion of `format!`, about 15.2 billion of a 30.85 billion build.
+
+`StrSearcher::new` reads 8,658,103,311 with and without the declares-filter
+index, to the instruction, which is what separates the two frames: both inline
+into `Backend::emit` and callgrind attributes them there together.
+
+`per_process_floor=558726 frames=605 kernel=6.17.0-1022-azure cpu=25/17`.
+
+- **DONE** the rows are CI's.
