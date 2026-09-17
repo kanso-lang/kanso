@@ -310,6 +310,28 @@ every literal after them whatever the section's start — and those are the edit
 behind most of the "by layout" lines. So the pin buys the code-only case and
 leaves the common one alone.
 
+**Three more measurements of the term, gathered 2026-09-17, all pointing the
+same way.** They matter because the pin is priced against how large the term
+is, and every reading so far puts it small.
+
+- `scripts/gates/compile_instructions.sh`'s own header carries a seven-binary
+  ladder from 2026-09-04, sources differing only in code nothing reaches. The
+  anchored frame spans 1,028 across all seven, 7,632 bytes of unreachable code
+  moves it 402, and the movement is not monotone in `.text`. Data-only changes
+  leave the frame identical to the instruction. The header's conclusion is that
+  a difference near a thousand on this row is not evidence on its own.
+- kanso#1473 and kanso#1478 measured the same three rows to the instruction on
+  two different binaries, which says the term is quantized rather than noisy
+  and that most changes do not move it at all.
+- Against that, kanso#1480 moves `compile_instructions` 140,122 and
+  `entry_instructions` 487,035 and was escalated as a layout move. 140,122 is
+  two orders of magnitude above both calibrations, and 487,035 exceeds the
+  330,496 separating that branch's parent from main — so attributing it to
+  layout would make the term larger than the algorithmic effect of a whole run
+  of indexing changes. Recorded here because an escalation reaching for this
+  term is what the entry is about, and because the pin would not have helped:
+  whatever carries 140,122 is not the thing the seven binaries measured.
+
 **Recommendation:** decline it, and record the decline. A 1 per cent larger
 shipped binary, or a measurement build linked differently from the shipped one,
 is a real cost against a term the pin only partly removes; and this repository
