@@ -5625,3 +5625,30 @@ earlier sitting, and the excluded rows land inside its band, so there is
 nothing further to bank.
 
 - **DONE** the rows carry the sitting on the excluded anchor; one page span follows.
+
+## 2026-09-17 — kanso#1478's rows, and the seventh index's own bytes
+
+CI's sitting on the anchor kanso#1487 left.
+
+```
+  compile_instructions   35,964,325 ->  35,869,543   -94,782 (-0.2635%)
+  entry_instructions    128,204,133 -> 127,873,637  -330,496 (-0.2578%)
+  library_instructions  128,339,261 -> 128,011,551  -327,710 (-0.2553%)
+  startup_instructions    4,838,323 ->   5,082,671  +244,348 (+5.0503%)
+```
+
+`compile_allocs` came back 27,397 and every other vein agreed.
+
+Against the parent kanso#1476 this branch's own share is -27,425 on the
+compile row, -88,438 on entry and -87,875 on library. The beat's seventh
+whole-program question reads an index now, and the entry route asks it of a
+much larger program, which is why that row gives back three times what the
+module row does.
+
+The start-up row is named here because it worsened. Most of the 244,348 is
+the stack below it; against kanso#1476's 5,079,952 this branch adds 2,719.
+A start-up reading is a loader reading a binary, and each index is more
+bytes to place. The trade is the 88,438 the entry row gives back.
+
+- **DONE** the four rows, priced.
+- **OPEN** nothing; the branch is CI's to confirm.
