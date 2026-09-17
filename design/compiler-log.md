@@ -3956,3 +3956,35 @@ rather than something near it.
 **The temp files are named for the process.** Three gates diff their own pair
 and the spec runs two comparisons at once; a fixed path had one of them
 reading the other's answer, which is how the second spec first went red.
+
+**The two CI runs that differ by 13 differ in one thing.** kanso#1464's rounds
+carried identical compiler source — round two changed goldens, the log, the
+floor and one page. Same glibc 2.39-0ubuntu8.9, same rustc 1.98.1, identical
+`.text=2799906 .data=12672 .bss=29976`, and all three compile rows exactly 13
+lower in round two. Identical section sizes rule out layout. The binary sha
+differs because mimalloc's `options.c` prints a banner built from `__DATE__`
+and `__TIME__` — `libmimalloc-sys` passes `-Wno-error=date-time` for it — and
+those are fixed-length strings, so every offset in the binary is unmoved. What
+is left is the runner: AMD family 0x19 model 0x11 in round one, model 0x1 in
+round two.
+
+**A single CPU feature bit moves the row by single digits.** On this container,
+`GLIBC_TUNABLES` `hwcaps=-AVX2_Usable` moves the library row by exactly +2,
+from 133,429,679 to 133,429,681. Larger masks move it by a great deal —
+`-ERMS` by −1.86M, `-AVX_Fast_Unaligned_Load` by −395k — and that is routine
+selection. The +2 is a per-process constant of the shape the 13 has.
+
+**Eager binding is not the lever, and the control says why.** `LD_BIND_NOW=1`
+raises the row by 2,511, and so does `XX_BIND_NOW=1`, which means nothing to
+the loader: the whole move is one more entry in the environment, not the
+binding mode. The row costs 2,511 instructions per environment variable
+regardless of that variable's length — 1, 2, 3, 4 and 8 characters all read
+identically. The gates run under `env -i` with two variables, so this is
+normalised on CI already; it is recorded because it is the same class of thing
+and it was very nearly published as a finding about the loader.
+
+**The profiles now leave the job.** The comparison left is between two runs on
+two runners, which no single job can make. The cost-goldens job uploads the
+three profiles it counted, and the host's CPU family, model, stepping, glibc,
+rustc and binary sha beside them, so `profile_diff.sh` can be run across a
+model 0x1 sitting and a model 0x11 one and name the frame that carries the 13.
