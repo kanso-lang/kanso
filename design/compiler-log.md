@@ -7170,3 +7170,40 @@ somebody counts.
   rather than a patch, and it is now worth pricing: 18.49% of the weighted
   vein is memcpy, and 180 MB of it is this one builtin.
 
+
+## 2026-09-17 — a docs branch re-based a row again, and the row was a different one
+
+kanso#1497 adds 72 lines to `design/compiler-log.md` and nothing else.
+`git diff --name-only origin/main...HEAD -- src/ lib/` is empty. Three CI
+rounds on it have now moved a golden:
+
+    round 1   interp_instructions          2,178,502,266 -> 2,178,502,272    +6
+    round 2   (interp row agreed)
+    round 3   codegen_instructions_release 6,826,827,769 -> 6,826,827,780   +11
+
+Eleven instructions in 6.8 billion is 1.6 parts per billion. The interpreted
+row agreed in the same job that moved this one, which is the part worth having:
+**the row it lands on changes between rounds.** kanso#1492 carries the table
+for the first reading — three heads compiling identical bytes, two answers, and
+kanso#1495 adding MORE lines to the same file and reading main's number
+exactly.
+
+The gates are exact compares and have to hold one value each, so a docs branch
+re-bases whatever row drew the short straw, and main carries that value until
+the next branch draws a different one. The ratchet is turning on something the
+code did not do.
+
+CLAUDE.md's 2026-09-15 rule already says what to do about it: a counter reads
+the code under test and nothing else, and a term that cannot be normalized is
+excluded with the exclusion named in the golden's header. Nothing here needs a
+ruling; it needs the experiment kanso#1492's entry names — pin where the
+allocator's heap starts and re-read two heads that differ only in markdown. If
+the readings agree, the term is normalizable and the gates normalize it. If
+they do not, the headers say so and stop pretending an exact compare means
+anything on that row.
+
+- **DONE** the row re-based so this branch can land, and the pattern recorded
+  with all three readings rather than the one.
+- **OPEN** the pinned-heap experiment. It scores nothing — the largest of the
+  three moves is 1.6 parts per billion against terms weighted 0.11 and 0.15 —
+  and costs a red gate and a churned golden every round.

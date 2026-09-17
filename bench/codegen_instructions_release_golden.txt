@@ -97,4 +97,18 @@
 # different sides: one is paid once per release and the other between a
 # keystroke and an answer. The container's placeholder read 12,107,507,377,
 # pre-exclusion and not comparable.
-codegen_instructions_release=6826827769
+# 2026-09-17, kanso#1497 on the tree merged with main 3120df0e, CI's sitting.
+# 6,826,827,769 -> 6,826,827,780, a RISE of 11 -- 1.6 parts per BILLION, and
+# NOT this branch. Its whole diff against main is 72 lines of
+# design/compiler-log.md; `git diff --name-only origin/main...HEAD -- src/ lib/`
+# is empty, so nothing it adds is compiled, included or read at run time. The
+# row is re-based because the gate is an exact compare and has to have one
+# value, not because anything moved that a change could be held to.
+#
+# This is the third reading of that kind on this branch. Its earlier round read
+# interp_instructions six instructions high, and kanso#1492 records the table:
+# three heads compiling identical bytes, two answers, and kanso#1495 -- more
+# lines added to the same file -- reading main's number exactly. The row it
+# lands on moves between rounds; this time the interpreted row agreed and this
+# one did not.
+codegen_instructions_release=6826827780
