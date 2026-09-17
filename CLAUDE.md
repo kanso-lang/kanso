@@ -69,6 +69,18 @@ STATUS.md joined that list on 2026-09-14, having been missing from it since the
 keeping STATUS.md current the chat's job, in those words. A session reading the
 lane sentence strictly would have found its own assignment out of lane.
 
+docs/compiler.html joined it on 2026-09-17 for the same reason, having been
+missing the whole time. The `page_drift` gate fails a tree carrying more than
+three log entries the page has not covered, and the chat writes the log, so
+every third or fourth chat entry makes the page owe a section — which the
+chat is then the only session positioned to write, because the section is
+about what the chat found. Four of them had already landed under this
+session's id by the day this paragraph was added, so the practice preceded
+the permission by some weeks. The page is the chat's for PROSE about findings
+and rulings. Its `data-golden` spans are a different thing: a span quotes a
+number out of a golden, `golden_prose` checks the quote against the file, and
+moving one means the golden moved, which is cloud's. So a chat pull request
+writes paragraphs and never edits a span to make a gate agree with it.
 Each session merges its own pull requests on green. Clay named the alternative
 on the same day and is content with either: cloud sweeping and landing what the
 chat opened. This one is in force because it waits on neither session noticing
@@ -615,12 +627,15 @@ So, before an argument rests on a number:
   compiler's own half of what a build costs. Weighing the child tree alone left
   kanso#1480's 51,082,187-instruction saving invisible to every term in the
   model, which is how the gap was found.
-  `bench/objective_sources.txt` is the list — thirteen `<counter> <gate key>`
+  `bench/objective_sources.txt` is the list — FOURTEEN `<counter> <gate key>`
   pairs for those eleven — and
   `tests/the_objective_reads_what_the_gate_watches.rs` replays it, so the list
-  is checkable rather than remembered. **This sentence has now been wrong
-  three times, and the third is why the counts above are not to be trusted from
-  memory either.** Until 2026-09-06 it said fixpoint rounds, expression visits and
+  is checkable rather than remembered. **This sentence has now been wrong FOUR
+  times, and the fourth was wrong on the day it was written.** It said THIRTEEN
+  pairs when the file held fourteen, in the same paragraph that tells you not
+  to trust a count here — and the pull request landing the split said fourteen
+  in its own body while this line said thirteen. Read the file:
+  `grep -vcE '^\s*(#|$)' bench/objective_sources.txt`. Until 2026-09-06 it said fixpoint rounds, expression visits and
   emitted lines, none of which the objective has weighed since the 2026-09-03
   rebuild, and a session spent a round expecting a 4.5% rise in emitted lines
   to cost welfare when the objective cannot see that vein at all. Until
