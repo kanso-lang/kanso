@@ -3619,6 +3619,73 @@ read another, so the row is stable for a given binary and moves between them.
 Under glibc the same shape cost 508 instructions and the header carries seven
 readings and four distinct values for it. At 13 it is 39 times smaller, which
 is the one part of this that got better.
+
+## 2026-09-16 — a binder pays for a lookup it never reads
+
+`infer::arm_can_run` decides whether an arm's patterns could match a call's
+arguments, from the literals alone. CI's library-corpus profile names its
+closure at 4,023,145 instructions, 3.03% of that compile, and it is the only
+frame in the top ten that is one expression rather than a pass.
+
+The shape is the one this queue has shipped against before. For every
+(pattern, argument) pair the closure computed the argument's string shape —
+which asks `consts` for an `Ident` and walks every template part of a `Str` —
+then its integer literal, then whether it was a literal at all, and only then
+looked at the pattern. Four of the match's arms read one of those three each;
+the fifth reads none of them. That fifth arm is `_ => true`, the binder, and a
+binder matches whatever it is handed. Most patterns are binders, so most pairs
+paid for a hash lookup and a walk and threw both answers away.
+
+Each arm asks for what it reads now, and `str_shape` and `is_literal` are named
+functions rather than expressions in the prelude. Both are pure — a `HashMap`
+read and a match over the expression — so computing them later, or not at all,
+cannot change the answer. The literal-dispatch rules the doc comment states are
+untouched: a module constant bound to a string literal still counts as that
+literal, and an interpolated string with fixed text in it still cannot match a
+shorter one.
+
+Gate-shaped on this container, `env -i` with the pinned tunables, `kanso::main`
+inclusive, one build each:
+
+    compile_instructions    37,309,598 ->  37,127,534    -182,064   -0.4880%
+    entry_instructions     133,285,762 -> 132,067,512  -1,218,250   -0.9140%
+    library_instructions   133,429,679 -> 132,213,543  -1,216,136   -0.9114%
+    summed                 304,025,039 -> 301,408,589  -2,616,450   -0.8606%
+
+The module row was read twice on two stagings and came back identical both
+times. It also falls about half as hard as the other two, and the corpora are
+why rather than the change: the entry corpus names ten imports and the library
+corpus is the whole of `lib/`, where the module corpus names four, so the two
+long rows walk far more declarations and far more calls into groups than the
+short one does.
+
+CONTAINER FIGURES, not CI's. This box reads about 1.2 per cent high on these
+rows and the goldens are CI's; round one was deliberately red on all three and
+CI's own reading is what the goldens carry:
+
+    compile_instructions    36,878,550 ->  36,695,922    -182,628   -0.4952%
+    entry_instructions     131,884,284 -> 130,618,857  -1,265,427   -0.9595%
+    library_instructions   132,025,167 -> 130,762,703  -1,262,464   -0.9562%
+    summed                 300,788,001 -> 298,077,482  -2,710,519   -0.9011%
+
+The projection held on all three: the container said -0.4880%, -0.9140% and
+-0.9114% where CI reads -0.4952%, -0.9595% and -0.9562%, so a box 1.2 per cent
+high on the absolutes was within seven hundredths of a point on every
+percentage. Welfare 69.75 -> 69.76, banked with the rows in.
+
+Nothing else the compiler counts moves, and that was measured rather than
+argued. `KANSO_COUNTERS=1` on both binaries off the same staging reads
+`compile_alloc_bytes` 4,612,036, `compile_allocs` 27,395, `compile_peak_bytes`
+787,956, `compile_passes` 7, `compile_rounds` 47 and `compile_visits` 15,474 on
+each. The last two carry the correctness argument: an identical round count and
+an identical visit count mean the fixpoint did the same work in the same order,
+so inference reached the same answers. A reorder that had changed one would
+have moved them.
+
+No ratchet row. The compile goldens are already the objection to a revert —
+put the three computations back in front of the match and the rows disagree by
+the amounts above — which is how kanso#1382 through kanso#1387 shipped the same
+kind of reordering, none of which minted a row either.
 ## 2026-09-16 — the compile side re-read once the allocator stops being the answer
 
 kanso#1456 took glibc's malloc out of the compiler, and a profile that has been
@@ -3716,6 +3783,7 @@ turns on is how many of the 49,229 calls belong to collections a phase-scoped
 arena could own. That is not answered here. Recorded as an open lead with
 nothing above it that sizes it.
 
+
 ## 2026-09-16 — the linearity analysis asked the whole program once per question
 
 Clay's gavel that morning made development-loop cost its own welfare, and the
@@ -3806,7 +3874,6 @@ which rules out the maps parse; what they most likely are is
 the generic instantiations linear.rs shares with the check path being inlined
 differently without it. Recorded as unattributed rather than explained, which
 is the honest state of it. Welfare holds at 69.75.
-
 ## 2026-09-16 — gavel: two welfares and a meta-welfare over them, and the floor re-ratchets
 
 Clay ruled the ledger's "What the compile term counts once codegen is in it"
@@ -3959,6 +4026,12 @@ thirteen high since. The entry row is where it shows plainly: with the hint on
 it read 131,884,793 and then 131,884,271 inside one job, and with the hint off
 it reads 131,884,271 and nothing else.
 
+**Round three, after kanso#1466.** CI on the merged head reads
+`compile_instructions` 36,695,922, `entry_instructions` 130,618,857 and
+`library_instructions` 130,762,703 — the figures this branch had measured
+before, to the instruction. The merge brought main's values in and this writes
+the branch's back. Two runs agreeing is what the allocator fix bought.
+
 ## 2026-09-17 — the emitter asked two whole-body questions once per name
 
 `kanso build bench/runbench` spent 72.10% of itself in `prune_unnamed` and
@@ -4018,6 +4091,12 @@ the instruction, the figures round two took from CI and that the next run
 disagreed with by thirteen. The merge brought main's values in and this writes
 the branch's back. It is the first time this vein has reproduced across two
 runs since the compiler moved to mimalloc, which is what kanso#1466 was for.
+
+**Round four, after kanso#1464.** CI reads `compile_instructions` 36,682,232,
+`entry_instructions` 130,573,787 and `library_instructions` 130,716,747 against
+main's 36,864,779, 131,837,650 and 131,978,823. Asking the pattern before the
+binder is what this branch's share of that is; the rest of the move against
+round three is kanso#1464 arriving underneath it.
 
 **The three compile rows moved, by layout.** CI reads 36,861,474, 131,826,563
 and 131,967,995 against main's 36,864,779, 131,837,650 and 131,978,823 — falls

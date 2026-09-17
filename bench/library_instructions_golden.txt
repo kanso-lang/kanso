@@ -560,6 +560,16 @@
 # runs and round five read another, so the row is stable per binary and moves
 # between them; 13 in 132 million is 1.0e-7, against the 508 the same shape
 # cost under glibc, which is the one thing here that is an improvement.
+# 2026-09-16 (a binder pays for a lookup it never reads; kanso#1459):
+# library_instructions 132,025,167 -> 130,762,703, a FALL of 1,262,464
+# (-0.9562%). The same change, and this row and the entry row track each other
+# to within 3,000 instructions of their falls, as they have since both opened.
+# CI's reading.
+#
+# 2026-09-17, kanso#1459, round three. The figure this branch measured before,
+# read again on a binary whose allocator no longer picks a random base address
+# (kanso#1466). The merge brought main's value in; this writes the branch's
+# back, and the two runs agree to the instruction.
 # 2026-09-16 (the linearity analysis indexed both ways; kanso#1464):
 # library_instructions 132,025,167 -> 131,978,823, a FALL of 46,344 (-0.0351%).
 # The third of three falls at -0.0373%, -0.0354% and -0.0351% -- close enough
@@ -573,13 +583,24 @@
 # first time this vein has reproduced across two runs since the compiler
 # moved to mimalloc.
 #
+# 2026-09-17, kanso#1459, round four. Read on the head merged with
+# kanso#1464, against main's 36,864,779 / 131,837,650 / 131,978,823. Asking
+# the pattern before the binder is what the fall is; the rest of the move
+# against round three is kanso#1464 arriving underneath it.
+#
 # 2026-09-17, kanso#1468. A LAYOUT MOVE, and the documented kind: `kanso
 # check` stops before codegen, so nothing this change does to the emitter
 # runs on this corpus at all -- but src/codegen.rs IS the compiler, and its
 # bytes and the layout under them moved. 3,305 on 36.8M is 0.009%, and it
 # fell. CLAUDE.md's bullet on this says never to write down that the row
 # cannot move, and never to write down that it did before CI has said so.
-library_instructions=131967995
+#
+# 2026-09-17, kanso#1468 merged with kanso#1459's tree. Both notes below
+# stand: each change moved this row on its own base, and the merged tree is
+# neither reading. The value here is kanso#1459's, carried forward so the
+# gate has one value to fail against rather than none; the merged sitting is
+# CI's to take, and it replaces this line in the round after it.
+library_instructions=130716747
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.
