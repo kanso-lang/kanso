@@ -5929,6 +5929,136 @@ passes here had the answer one paragraph away.
   710 `xs[i]!` sites, `!` names in lib answering a box, and the two cost levers
   kanso#1477 reports built. Their own pass.
 
+## 2026-09-17 — the explicit box comes off the unbuilt list, item by item
+
+STATUS.md's "Ruled, unbuilt" carried the 2026-09-15 box ruling all afternoon
+while kanso#1477's body reported it stale and two of cloud's pull requests
+cited that report as their reason for working a self-generated lead. An earlier
+probe today said the opposite and was wrong twice over. So this one went
+through the row's own Owes list, item by item, against a release build of
+`298636b7`.
+
+    the `effect` constructor          `effect 5`, `effect (err "nope")` answer a box
+    an `(err _)` arm, anywhere         a two-arm `tell` catches one born three calls away
+    the check refusal, three shapes    `boom 0 + 1`, `(boom 0)[0]`, `add1 (boom 0)`
+    ch04 re-premised                   documents the rule and the name blind spot
+    the 710 `xs[i]!` sites respelt     no `[...]!` handed to an operator in lib,
+                                       scripts, bench or the book samples, and
+                                       `xs[1]! + 1` is refused naming `.>`
+    `!` names in lib answer a box      `read_file!` and `read_bytes!` both end `.>`
+    the two cost levers                on main, with the 2026-09-17 entry "the
+                                       bound discharge had no golden, and it is
+                                       built" carrying the probe and the fixture
+
+Every one built. The row is removed, and the removal is written into the
+section's own intro with the evidence beside it, so anybody who disagrees can
+put it back without re-deriving the list.
+
+**The one residue is a spelling convention and not a build.** The row asks for
+"no bang where the bound is provable", and that is not enforced: `xs[1]!` on a
+three-element literal compiles, because a bang on a provable index is legal and
+merely redundant. So the tree compiling proves the sites were respelt for the
+rule and proves nothing about a needless bang left behind. That is a tidy-up
+for whoever next reads those files, not a ruling waiting on a build, and it
+does not hold the row open.
+
+**What this cost by sitting.** The ruling landed 2026-09-15 and its `!` half
+2026-09-16. The row could have come off on the 16th. It did not, because
+nobody checked the list against the tree — the same failure the section exists
+to prevent, on a smaller scale than the 2026-09-09 one that created it. A
+report that a row is stale is not a probe, and a probe is eight commands.
+
+- **DONE** the row off, with its evidence in STATUS.md.
+- **OPEN** whether a needless bang survives on a provable index anywhere in the
+  tree. Cheap for cloud, which has the bound prover; not a row.
+## 2026-09-17 — the `.rodata` entry had two voices, and the pin was never the instrument
+
+The ledger's `Pinning .rodata to a fixed page` entry gained cloud's bisection
+this afternoon and came out contradicting itself: a body saying the term it
+prices is three hundred times larger than anybody thought, and a
+recommendation, written weeks earlier, declining the pin on the strength of the
+small reading. An entry with two voices cannot be ruled, and the ledger's own
+rule is that every entry carries a recommendation so a sitting can be a yes or
+a no.
+
+Rewritten, and the decline stands on different ground. **The pin's own evidence
+never reached the case that matters.** Its demonstration was two sources a
+hundred functions apart — an ADDITION, the same perturbation family as the
+seven-binary ladder, and the family the pin was shown to fix. Nobody has run it
+against a REWRITE, which is what costs 145,472. Adopting the pin on that
+evidence would be adopting it on a measurement of something else, which is the
+error this entry is now a record of twice over.
+
+**And the gate's own header points at a different mechanism.** It says what it
+found chasing this row's variance: a binary whose data and bss differ starts
+the heap at a different break, which moves how much work malloc does to service
+an identical request sequence, with every kanso symbol identical to the
+instruction and only glibc's allocator moving. The heap break is set by where
+`.bss` ends. A fixed `.rodata` start does not fix it.
+
+So the instrument worth ruling on is a heap that starts at the same address
+every run. It removes the term for additions and rewrites alike, and it changes
+the shipped binary by nothing — which answers the kanso#1234 objection the old
+recommendation leaned on, since nothing gets special-cased away from what ships.
+It is also the 2026-09-15 rule read literally. The gate already pins ten
+`GLIBC_TUNABLES` for this exact reason and where the heap begins is the one it
+does not pin.
+
+The entry now names the measurement that settles it, and says it should not be
+ruled without one: cloud's kanso#1480 pair read twice, once with `.rodata`
+pinned and once with the heap start fixed. A build and two callgrind runs.
+
+- **DONE** the entry has one voice and a recommendation a sitting can answer.
+- **OPEN** those two readings. Cloud's, and until they exist this is an
+  argument rather than a decision.
+
+## 2026-09-17 — the rewrite explanation withdrawn, and what the ledger said on it
+
+kanso#1492 built the ladder this morning's entry asked for and the answer
+refutes the entry. Eight rewrites of `without_stats_gate`, unreachable from a
+check, eight distinct binaries: the row is identical to the instruction across
+all of them, `.text` spanning 256 bytes. Rewriting unreachable code costs
+nothing.
+
+So the sentence in "kanso#1480's rows challenged, bisected, and the
+calibration's blind spot found" — that a rewrite moves what sits around it, and
+costs three hundred times what an addition does — is wrong. It was an
+attribution read as a mechanism: the bisection established that 145,472 arrived
+with 74 rewritten lines, and this chat wrote that down as rewriting being the
+cause. A difference-in-differences is not a mechanism until something isolates
+it, and the isolating experiment says zero.
+
+**Where that claim had already travelled, and what each cost.**
+
+    design/compiler-log.md   the entry above, on main       cloud corrects in kanso#1492
+    docs/compiler.html §73   published, stating the rule     corrected here
+    design/pending-gavels.md the `.rodata` recommendation    withdrawn here, unmerged
+
+The ledger one is the one that mattered. kanso#1489 rewrote that entry's
+recommendation around "the term is small for additions and large for rewrites,
+and most changes rewrite", and asked for the entry to be re-weighed on it. That
+is the sentence a sitting would have been ruling against. It is withdrawn
+before the pull request lands rather than corrected after.
+
+**What survives, and the entry is stronger for it.** The pin's decline no
+longer rests on a contested reading of the term's size, because all three
+calibrated shapes now agree it is small — about 402 for an unreachable
+addition, zero for an unreachable rewrite, 2,733 for a reached one. A pin that
+removes part of a few-thousand-instruction term, at the price of a one per cent
+larger shipped binary, is a bad trade on any of those numbers. And the second
+argument is untouched: the gate header's own mechanism is the heap break, set
+by where `.bss` ends, which a fixed `.rodata` start does not reach.
+
+**The 146,628 is open again**, fifty times the largest calibrated shape and
+belonging to no shape anybody has measured. kanso#1492 names what would settle
+it: the frame-level diff of the two compile profiles, which CI uploads as
+artifacts on every run.
+
+- **DONE** the claim withdrawn from the ledger before it was ruled on, and from
+  the published page.
+- **OPEN** what carries the 146,628. Cloud's, and it needs the profile pair
+  rather than another table.
+
 ## 2026-09-17 — a quarter of start-up was hashing a constant
 
 `kanso play` on a program holding one `print` retires 4,837,246 instructions
@@ -6089,3 +6219,4 @@ again.
 - **OPEN** a vein for what `kanso` spends after `emit_ir` returns. Until there
   is one, `narrow_tailcc`'s SipHash over 144,261 IR lines is a lever nobody
   can price.
+

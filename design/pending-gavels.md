@@ -329,27 +329,66 @@ is, and every reading so far puts it small.
   and 74 lines REWRITING two private emitter functions cost 145,472. Both
   are unreachable from a check.
 
-**What that exposes, and it is the reason this entry is worth ruling rather
-than declining on the numbers above.** The two calibrations measured ADDING
-code nothing reaches, which leaves every existing decision in place. A rewrite
-of existing unreachable code moves what sits around it, and costs three
-hundred times more — 145,472 against the 1,503 an `#[inline(never)]` in the
-same module cost the same afternoon. So the term this entry prices is not the
-small one the seven binaries found; it is small for additions and large for
-rewrites, and most changes rewrite. The recommendation below was written
-against the small reading and should be re-weighed against this one, including
-whether the pin reaches a rewrite at all — it removes the shift of literals
-after `.rodata` and says nothing about `.text` moving under itself.
+**Withdrawn: the rewrite explanation, measured and false.** This entry briefly
+said the term is small for ADDITIONS and large for REWRITES, on the strength of
+kanso#1480's bisection attributing 145,472 to 74 rewritten lines. kanso#1492
+built the ladder that tests it — eight rewrites of `without_stats_gate`, which
+`kanso check` never reaches, each a distinct binary — and the row is IDENTICAL
+TO THE INSTRUCTION across all eight, with `.text` spanning 256 bytes. So
+rewriting unreachable code costs nothing, and the sentence that was going to
+re-weigh this entry is void.
 
-**Recommendation:** decline it, and record the decline. A 1 per cent larger
-shipped binary, or a measurement build linked differently from the shipped one,
-is a real cost against a term the pin only partly removes; and this repository
-has already ruled once, on kanso#1234, that the measurement should not be
-special-cased away from what ships. The "by layout" lines are honest — they say
-a row moved for a reason the change did not choose — and the rows are read as
-deltas against a named base, which is what makes them useful either way. If the
-answer is the other one, 0x40000 with the loud link failure is the shape to
-take, not 0x100000.
+**What the three calibrated shapes now say, and they all say small.**
+
+    unreachable additions   ~402, span 1,028 over seven binaries   (2026-09-04)
+    unreachable rewrites    0, over eight binaries                 (kanso#1492)
+    a reached addition      2,733                                  (kanso#1492)
+
+kanso#1480 reads +146,628 on CI, fifty times the largest of those. So the term
+this entry prices is SMALL in every shape anybody has measured, and the 146,628
+is not it — it is unexplained, and it belongs to whichever frame the profile
+diff names rather than to the layout term at all.
+
+**Recommendation, rewritten 2026-09-17 after the ladders.** Still decline the
+section pin, and do not close the question with it — the pin was never the
+right instrument and there is a better one to rule on.
+
+*Why the pin is not worth its price.* Every calibrated shape of the term is
+small: ~402 for an unreachable addition, 0 for an unreachable rewrite, 2,733
+for a reached one. The pin removes part of a term that costs at most a few
+thousand instructions on a 36-million-instruction row, and it costs a 1 per
+cent larger shipped binary or a measurement build linked unlike the shipped
+one. That trade was the first recommendation's reasoning and the ladders have
+only strengthened it.
+
+*And the mechanism points elsewhere.* `scripts/gates/compile_instructions.sh`'s
+header names what it found when it chased this: *a binary whose data and bss
+differ starts the heap at a different break. That moves how much work malloc
+does to service an identical request sequence without moving a single
+instruction the compiler executes* — seven readings, four distinct values,
+every kanso symbol identical to the instruction and only glibc's allocator
+moving. If that is also what carries the 146,628, then pinning `.rodata` does
+nothing for it: the heap break is set by where `.bss` ENDS, and a fixed
+`.rodata` start does not fix that.
+
+*The instrument worth ruling on instead.* Give the measured run a heap that
+starts at the same address every time, and the term goes away for additions and
+rewrites alike without the shipped binary changing by a byte — which answers
+the kanso#1234 objection the first recommendation leaned on, since nothing is
+special-cased away from what ships. This is the 2026-09-15 rule applied
+literally, in Clay's words: *you clear it out so it's identical every single
+run or you do something that puts it into a persistent known initial state.*
+The gate already pins ten `GLIBC_TUNABLES` for exactly this reason; where the
+heap begins is the one it does not pin.
+
+*What this entry needs before it is ruled, and it is cheap.* One reading of
+kanso#1480's own commit pair with the heap start fixed. If the 146,628 dies
+under a fixed heap start, the instrument is chosen and the ruling is a
+formality; if it survives, the move is not a layout term of any kind and this
+entry is not where it belongs. Either way the frame-level diff of the two
+compile profiles names it, and kanso#1492 says CI uploads both as artifacts on
+every run. A build and two callgrind runs, and cloud's. Nothing here should be
+ruled without it.
 
 ## Stale — the July campaign's unclosed letters (GAVELS.md, retired here)
 
