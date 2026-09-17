@@ -7200,7 +7200,11 @@ the list, and an empty list is the easiest state in which to forget that.
 The August sweep left September half-read. This finishes it. Twenty-one entries
 in the log and its archive record a September ruling — twenty headed
 `gavel:` and one headed `gavel, reversed the same day:` — and the thirteen
-below are the ones no session had run against a build.
+below are the ones no session had run against a build. kanso#1500 ran the other
+eight, so thirteen and eight partition the twenty-one exactly. Its own body says
+eleven and its last commit says "Eight left"; the commit is the one that
+reconciles, and this entry is written against the count on disk rather than
+against either.
 
 **Every one is built, or superseded by a later ruling that Clay made. Nothing
 goes on the unbuilt list.**
@@ -7211,6 +7215,7 @@ goes on the unbuilt list.**
 | 09-05 corpus first | `bench/readbench`, `cost_golden_read.txt` pins `beat_iters=201` |
 | 09-05 no machine-code-size term | `objective_sources.txt` holds no `machine_code` row |
 | 09-05 one row, one value | `compile_instructions_by_cpu.txt` is gone; the gate errors on a second value |
+| 09-05 one row, one value; and no term for machine-code size | the combined entry, same two subjects |
 | 09-06 clang 19, with detection | CI asserts `clang version 19`; `preserve_none_probe` falls back |
 | 09-06 a whole float keeps its point | golden reads `1.0e+15`, both engines |
 | 09-06 one consolidated run program | `run_instructions work_runbench`, one row |
@@ -7223,7 +7228,7 @@ goes on the unbuilt list.**
 The two float rulings were run rather than read: `micro_corpus_agrees_across_engines`
 passes today, so both are pinned across the engines the differential law names.
 
-## The chart's left edge is blank for a reason nobody wrote down
+### The chart's left edge is blank for a reason nobody wrote down
 
 The welfare history is 500 rows, 2026-08-20 through today. Sixty-two of them
 carry no welfare, and they are rows 1 through 62, contiguous at the head. A
@@ -7257,7 +7262,7 @@ chart draws at the left is a defect in sixty-two rows rather than the
 2026-09-07 ruling working, and anybody about to explain the blank edge by that
 ruling should stop.
 
-## Two sentences in welfare.kso that the 2026-09-16 split left behind
+### Two sentences in welfare.kso that the 2026-09-16 split left behind
 
 Both are in `scripts/welfare/welfare.kso`, which is cloud's, and neither changes
 a score.
@@ -7278,7 +7283,7 @@ Worth 0.007 of the meta if it were put back, so this is a wording repair rather
 than a weights argument. The weights themselves are the implementer's under the
 2026-08-25 charter, which the 2026-09-16 ruling restates in those words.
 
-## The 2026-09-02 ordering, and why it is not a finding
+### The 2026-09-02 ordering, and why it is not a finding
 
 That ruling put compile speed above run speed — 0.32 against 0.30, funded from
 run memory, because compile latency is an adoption gate. Under the model built
@@ -7291,7 +7296,7 @@ welfare," and the same ruling hands weights and satiations to the implementer.
 Within its own side compile speed is still the largest term. The 09-02 ruling
 stands superseded rather than unbuilt.
 
-## One heading the drift gate cannot exempt
+### One heading the drift gate cannot exempt
 
 `## 2026-09-16 — gavel, reversed the same day: ...` is a ruling, and
 `page_drift`'s `ruling?` reads `— gavel:` and `— directive:` as the whole
@@ -7299,6 +7304,31 @@ convention. A comma after `gavel` puts a ruling back in the page's budget. The
 2026-09-08 ruling names the colon convention explicitly, so the gate matches
 what was ruled and the heading is what broke it. One entry in a month, costing
 one slot of three.
+
+### The maps ruling, which is kanso#1500's eight and is built
+
+Recorded here because kanso#1500 is pushed and nothing should go on it. The
+2026-09-15 ruling normalising the `/proc/self/maps` parse out of the compile row
+is built: `scripts/gates/compile_instructions.sh` anchors at `kanso::main`
+inclusive and drops the 465,122 instructions above that frame — the loader
+mapping five shared objects, and Rust placing its stack guard. The gate's own
+header carries the seven-binary calibration the anchor was chosen on, and its
+error text names the term by name.
+
+### The sweep this session asserted five times and had not run
+
+CLAUDE.md requires every check-in to sweep all open pull requests in kanso and
+kq. Five check-ins in this session said it had been done. It had not.
+
+Run today: **kanso has eleven open, kq has none.** All eleven were opened today,
+the oldest at 07:00Z, so none is near the day the rule allows and none needed
+driving. The result is uninteresting and that is the point — the assertion was
+worth nothing until somebody ran the list, and it had been made five times.
+
+This is the same shape as the four claims in CLAUDE.md's *A measurement bounds
+what it measured*: a statement that something is in a certain state, repeated,
+with no reading behind it. The sweep is cheap. It goes in the check-in as a
+count of what was open rather than as a sentence saying it happened.
 
 - **DONE** all 21 September rulings probed, 35 of August before them, 56 of 56.
 - **OPEN** the two welfare.kso sentences, which are cloud's file.
