@@ -6281,3 +6281,33 @@ for a landing 350,129 below the branch point. CI on the current tree reads
 will merge.
 
 - **DONE** the rows are CI's.
+
+## 2026-09-17 — kanso#1484 rebased on kanso#1468's CI sitting
+
+The base moved: kanso#1468 wrote CI's own reading into the five instruction
+goldens, and this branch carried main's until the merge. Both sides had moved
+every one of them, so the merged tree reads none of the values on either side
+and the base's are carried forward here — one number for the gate to fail
+against rather than none. CI takes the merged sitting.
+
+The rows this branch now carries, all kanso#1468's:
+
+    compile_instructions    35,966,422
+    entry_instructions     128,209,791
+    library_instructions   128,344,827
+    interp_instructions  2,178,711,730
+    startup_instructions     5,076,598
+
+**Two of them are worse than main and land at the values above.**
+`interp_instructions` at 2,178,711,730 is layout — that row anchors at the
+interpreter's own thread, so the front end is outside it. `startup_instructions`
+at 5,076,598 is kanso#1468's index being built once per process against a
+program holding one `print`, which is the trade that branch's entry prices in
+full. Neither is this branch's, and neither is this branch's to argue: what
+kanso#1484 does on top is precompute DECLARES' symbol set, and its own sitting
+comes when CI measures the merged tree.
+
+Welfare holds at its floor.
+
+- **DONE** rebased on the base's CI sitting.
+- **OPEN** this branch's own rows, which are CI's to take.
