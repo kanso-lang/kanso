@@ -87,7 +87,12 @@ lower_g = ["compile_instructions" "compile_allocs"]
 # veins off disk so a fourth compile path cannot open one blind. It caught the
 # fourth on the day it opened: `startup_instructions`, added 2026-09-16, named
 # here in the same change that mints it rather than a round later.
-lower_gh = ["library_instructions" "startup_instructions"]
+# `emit_instructions` joined on 2026-09-17 and is named here in the change that
+# mints it, for the reason the line above records: this table is what
+# tests/every_compile_vein_row_has_a_direction.rs reads, and it caught the
+# FIFTH vein the hour its file landed. Lower is better, and the row is the
+# compiler's own emitting: `codegen::emit_ir` inclusive.
+lower_gh = ["library_instructions" "startup_instructions" "emit_instructions"]
 
 lower_gg = text/concat ["entry_instructions"] lower_gh
 
@@ -261,6 +266,16 @@ bench_codegen_dev = [["bench/codegen_instructions_dev_golden.txt" ""]]
 
 bench_codegen_release = [["bench/codegen_instructions_release_golden.txt" ""]]
 
+# What the compiler spends emitting, added with its gate on 2026-09-17. It is
+# the row between the two above and the three compile rows: a check stops
+# before codegen, and the codegen rows count the child tree with kanso's own
+# process excluded, because that process waits for a child and a loop the
+# scheduler sizes is external state. `codegen::emit_ir` is what was left, and
+# it is listed here in the commit that creates the file, because the spec
+# beside this one reads bench/ off disk and keys on the word `golden`. No
+# prefix: `emit_instructions` collides with nothing.
+bench_emit = [["bench/emit_instructions_golden.txt" ""]]
+
 bench_traffic = [["bench/compile_allocs_golden.txt" ""]]
 
 # Start-up, added with its vein on 2026-09-16. It is the only row here that
@@ -336,7 +351,9 @@ bench_traffic_up = text/concat bench_traffic bench_startup
 
 bench_libcheck = text/concat bench_library bench_traffic_up
 
-bench_codegen = text/concat bench_codegen_dev bench_codegen_release
+bench_codegen_tiers = text/concat bench_codegen_dev bench_codegen_release
+
+bench_codegen = text/concat bench_codegen_tiers bench_emit
 
 bench_checked = text/concat bench_libcheck bench_codegen
 

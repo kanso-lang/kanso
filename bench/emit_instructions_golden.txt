@@ -38,10 +38,12 @@
 # size is part of the row. A change under `lib/` moves it too, because
 # `lib/*.kso` is `include_str!`'d into the compiler.
 #
-# THE ROW IS EMPTY ON PURPOSE. This gate ships before its first CI sitting, so
-# the gate refuses with the number it measured printed above the refusal. The
-# sitting that follows writes the value and the measured-on line under it.
-#
-# The measured-on line is written beside the first value, by the sitting that
-# produces it. There is deliberately none here: a line shaped like neither a
-# field list nor prose is the trap measured_on.sh's own header describes.
+# THE VALUE BELOW IS A PLACEHOLDER AND NO HOST WILL EVER COMPARE AGAINST IT.
+# There is no `measured-on` line, so scripts/gates/measured_on.sh refuses every
+# host: a container stops, and CI measures, prints and fails without comparing.
+# The number is this container's, and it is here because
+# tests/every_compile_vein_row_has_a_direction.rs asks every compile vein for
+# exactly one row and an empty file is not that shape. The first CI sitting
+# replaces it and writes the measured-on line under it; until then the row is
+# a shape rather than a claim.
+emit_instructions=394912504

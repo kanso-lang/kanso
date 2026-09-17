@@ -106,8 +106,7 @@ case "$want" in
   "")
     echo "::error::$golden holds no emit_instructions line, so there is nothing"
     echo "::error::to compare the sitting above against. This vein is read by an"
-    echo "::error::exact compare and holds exactly one value; the number printed"
-    echo "::error::above is this host's, and only CI's may be recorded."
+    echo "::error::exact compare and holds exactly one value."
     exit 1
     ;;
 esac

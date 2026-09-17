@@ -5828,3 +5828,41 @@ command and the frame does not move, while the process around it does.
 - **DONE** the gate, smoke-run end to end, and the anchor's determinism read
   three ways.
 - **OPEN** the row, which CI's first sitting writes.
+
+## 2026-09-17 — the new row's file broke two specs, and a pipe nearly hid them
+
+The gate and its golden were written, `all_pages.sh` was green, and the suite
+was run as `cargo test --release 2>&1 | tail -25`. The background task
+reported exit 0 and it was believed. **That exit code is `tail`'s.** The same
+mistake was made twice in one afternoon, on a suite that was failing both
+times, and the second time it was caught only because the gate specs were
+re-run one at a time. Redirect and read `$?`; never read a pipeline's exit as
+the program's.
+
+What it was hiding, both of them real:
+
+**`every_counter_golden_is_walked_by_the_trend_gate`.** A golden the trend
+gate does not walk is one whose regressions arrive unpriced. The gate lists
+its veins by hand in kanso, and `bench/emit_instructions_golden.txt` was not
+among them. Fixed by listing it beside the two codegen goldens, in the commit
+that creates the file — which is what that spec's own comment asks for and
+what `startup_instructions` did on 2026-09-16.
+
+**`every_compile_vein_row_has_a_direction`.** It reads every
+`bench/*instructions_golden.txt` off disk, asks for exactly one row in each,
+and asks that every row's counter be named in one of the trend gate's
+`lower_*` tables. The new file matched that glob where the codegen goldens do
+not, so it was the FIFTH compile vein the hour it landed, and it had no row
+at all: the golden had shipped empty on purpose, so the gate would refuse with
+its own measurement printed above the refusal.
+
+That plan does not survive the spec, and the spec is right: a vein with no row
+is a vein nothing can diff. So the file carries a value, and the header says
+plainly what it is — a placeholder no host will ever compare against, because
+there is no `measured-on` line and `measured_on.sh` therefore refuses every
+host. A container stops; CI measures, prints and fails without comparing. The
+first CI sitting replaces the number and writes the measured-on line under it.
+
+- **DONE** both specs, and the value that satisfies the shape without making
+  a claim.
+- **OPEN** the row itself, unchanged: CI's first sitting writes it.
