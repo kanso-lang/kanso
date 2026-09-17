@@ -4035,3 +4035,17 @@ were written from a sitting that drew an unlucky address and have been
 thirteen high since. The entry row is where it shows plainly: with the hint on
 it read 131,884,793 and then 131,884,271 inside one job, and with the hint off
 it reads 131,884,271 and nothing else.
+
+**Round three: the start-up row was counting a cold cache.** One binary, one
+job, read 6,018,427 and then 4,869,632 — 1,148,795 apart, a fifth of the row.
+`kanso play` takes the native path, so the first process writes
+`kanso_runtime_<profile>_<key>.o` and `kanso_run_<key>` into the temp
+directory and every process after it reuses them. The gate now runs the
+program once before it counts, which puts the cache in the state every reading
+after the first would have seen. That is the 2026-09-15 rule applied to a
+cache rather than to a clock: put the external state into a known state, do
+not explain it afterwards.
+
+The three compile rows come back on the merged head at `compile_instructions`
+36,878,356, `entry_instructions` 131,883,938 and `library_instructions`
+132,025,149, against main's 36,878,537, 131,884,271 and 132,025,154.

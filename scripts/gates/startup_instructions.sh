@@ -61,6 +61,25 @@ tune=$tune:glibc.malloc.tcache_count=7
 # the absolute path is copied and walked — so `entry_corpus/main.kso` and
 # `/tmp/kanso-compile-ir/entry_corpus/main.kso` are different numbers for the
 # same compile. library_box.sh carries the measurement.
+# THE CACHES ARE WARMED BEFORE ANYTHING IS COUNTED, and this is not a nicety.
+#
+# `kanso play` takes the native path: it lowers the program, compiles
+# `runtime.c` into `kanso_runtime_<profile>_<key>.o` in the temp directory and
+# links a `kanso_run_<key>` beside it, both keyed on a hash and both reused by
+# the next process that wants them. So the FIRST process of a job pays for
+# staging and writing them and every one after it does not.
+#
+# It cost this vein a reproduction failure on 2026-09-17: one binary, one job,
+# read 6,018,427 and then 4,869,632 -- 1,148,795 apart, which is a fifth of the
+# row. The 2026-09-15 ruling says external state is put into a known state
+# before it is measured rather than explained afterwards, and a cache is
+# exactly that: this run puts it into the warm one, which is the state every
+# reading after the first would have seen anyway.
+(
+  cd "$box"
+  env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" \
+    ./kanso play startup_corpus/main.kso >/dev/null 2>/dev/null
+)
 (
   cd "$box"
   env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" valgrind --tool=callgrind \

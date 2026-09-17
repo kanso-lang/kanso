@@ -69,4 +69,13 @@
 # its rustc rather than to anything the compiler does. The compile rows are
 # dominated by the compiler's own passes and this one is not, which is why the
 # projection that holds for them does not hold here. CI's is the number.
-startup_instructions=6018394
+#
+# 2026-09-17, kanso#1461, round three. The row is taken with the caches
+# WARM now. `kanso play` takes the native path, so the first process of a
+# job writes kanso_runtime_<profile>_<key>.o and kanso_run_<key> into the
+# temp directory and every one after it reuses them. On 2026-09-17 one
+# binary in one job read 6,018,427 and then 4,869,632 -- 1,148,795 apart,
+# a fifth of the row. The gate now runs the program once before it counts,
+# which is the state every reading after the first would have seen. This
+# figure is that second reading; CI takes the next one.
+startup_instructions=4869632
