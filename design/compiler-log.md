@@ -2027,7 +2027,34 @@ checked, and the first caught by the rule the other four bought — CLAUDE.md's
 control run is the whole of it: a conflict count means nothing without the
 count the change is supposed to have caused it to rise from.
 
-- **DONE** the live log back under its cap, with the archive fed and the count
-  reconciled.
-- **OPEN** nothing. The next trim is due when the live file passes a few
-  thousand lines again.
+**And the move disarmed a spec, which the ratchet caught and this entry did
+not predict.** `tests/a_question_sent_to_clay_has_a_ledger_entry.rs` reads
+`design/compiler-log.md` for paragraphs that send a measured decision to Clay
+and checks each has a ledger entry to go to. Both sends it was written against
+are 2026-09-15 entries, and both moved. The live log now holds ZERO such
+paragraphs and the archive holds eight, so the spec passes over an empty
+population and `scripts/ratchet/mutations/a_send_to_clay_with_no_ledger_entry.sh`
+can no longer break it:
+
+    ratchet: 1 mutations no longer apply
+      STALE specs (unit, golden, differential) — a measured decision sent to
+      Clay with no ledger entry to go to
+
+**The hazard generalises and is worth the sentence.** Archiving moves content
+out from under every check that reads the live log for HISTORY rather than for
+the tail. Surveyed: twenty-nine files read `design/compiler-log.md` and exactly
+one, `tests/a_log_heading_is_one_line.rs`, also reads the archive. Most of the
+rest read the tail — the trend gate's worsened-counter sentence, the gates'
+measured-on lines, page_drift's budget — and are unaffected. The Clay-send spec
+is the one that reads history, and it is the one that went quiet.
+
+So the archive move waits on the spec reading both files, which is a change to
+`tests/` and therefore cloud's. The property it pins is about the log's
+history, and the log is two files now.
+
+- **DONE** the move prepared, the counts reconciled, and the conflict cost
+  measured at zero against all eleven open branches.
+- **OPEN** `a_question_sent_to_clay_has_a_ledger_entry` reading the archive as
+  well as the live log. Cloud's, and this move should not land before it: a
+  trim that silently empties a spec's population is a coverage regression
+  whatever the line count says.
