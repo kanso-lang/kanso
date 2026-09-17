@@ -1731,7 +1731,11 @@
 # thirteen; this reading and that one agree to the instruction, which is the
 # first time this vein has reproduced across two runs since the compiler
 # moved to mimalloc.
-compile_instructions=36864779
+#
+# 2026-09-17, kanso#1462, round four. Read on the head merged with
+# kanso#1464, against main's 36,864,779 / 131,837,650 / 131,978,823. The
+# fixed-seed hashing this branch puts on the compile path is the fall.
+compile_instructions=36862804
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

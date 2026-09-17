@@ -46,5 +46,12 @@
 # the same sign and about twice the size -- an interpreted run is mostly the
 # interpreter's own loop, where a compile is mostly the front end's, and the
 # two do not have to move together between toolchains. CI's is the number.
-interp_instructions=2324888431
+#
+# 2026-09-17, kanso#1462, round four. The interpreted run falls 3,920,499
+# on the head merged with kanso#1464: the linearity analysis runs on the
+# interpreter's compile path too, and indexing it is felt here. CI read
+# 2,320,967,932 and then 2,320,967,932 again in the same job -- the six
+# instructions this row used to move by were the allocator picking a
+# random base address, which kanso#1466 took away.
+interp_instructions=2320967932
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

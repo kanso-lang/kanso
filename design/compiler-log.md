@@ -4080,3 +4080,10 @@ the instruction, the figures round two took from CI and that the next run
 disagreed with by thirteen. The merge brought main's values in and this writes
 the branch's back. It is the first time this vein has reproduced across two
 runs since the compiler moved to mimalloc, which is what kanso#1466 was for.
+
+**Round four, after kanso#1464.** The interpreted run falls 3,920,499 to
+2,320,967,932: the linearity analysis runs on the interpreter's compile path
+too, and indexing it is felt here. CI read that figure and then read it again
+in the same job. The three compile rows come back at 36,862,804, 131,830,523
+and 131,972,417 against main's 36,864,779, 131,837,650 and 131,978,823, and
+both interpreter memory rows are byte-identical to the round before.
