@@ -7496,7 +7496,7 @@ work: seventeen on 2026-08-29, nine on the five oldest dates, nine here. Two
 unbuilt rulings in thirty-five entries. The twenty-one that remain are all
 September.
 
-**Five of September's twenty-one, probed on the way past.** The 2026-09-06
+**Six of September's twenty-one, probed on the way past.** The 2026-09-06
 whole-float ruling — a float's rendering always carries a `.` or an `e`, and
 `.0` is appended where the shortest form has neither — is built:
 `a_whole_float_keeps_its_point` carries the RULED citation and its third line
@@ -7537,12 +7537,34 @@ six stress shapes between 4.87% and 6.23%, with the reason for that shape
 stated. The per-phase benchmarks survive as diagnostics, which is the other
 half of the ruling.
 
-Sixteen September entries are unread, and this entry says so rather than
+The 2026-09-03 doctrine — *a failure is for the exceptional, an anticipated
+outcome is data; the bang chooses the channel, everywhere* — is built, and it
+took three fixtures to see, because the first two read like a contradiction.
+`os/read_file "/nope/absent.txt"` answers a box, not the bare
+`text | file_not_found` the gavel's example writes, and a `length` on it
+reports `not <io>`. That looks like the ruling unbuilt and is not: the
+2026-09-15 and 09-16 box rulings came later and apply the box to io, so the
+typeset rides INSIDE it. Opened, both arms dispatch as data, on both engines:
+
+```
+os/read_file "/nope/absent.txt" .> tell  ->  missing
+os/read_file "Cargo.toml"       .> tell  ->  got 1704 bytes
+```
+
+and the bang form takes the other channel, reaching the endpoint with
+provenance: ``error[endpoint]: unhandled err reached the executor: "cannot
+read /nope/absent.txt: no such file"``, born in `os/insisted`. The two
+rulings compose; neither supersedes the other. Two fixtures of mine were
+wrong before this one — a destructuring pattern the opacity rule refuses
+across an import, and a `print` of a held box — and both were my spelling
+rather than the compiler's.
+
+Fifteen September entries are unread, and this entry says so rather than
 counting them swept.
 
 - **DONE** August swept end to end, and the demanded-knot counter measured
   rather than read.
-- **OPEN** sixteen September entries, across 09-02, 09-03, 09-05, 09-07,
+- **OPEN** fifteen September entries, across 09-02, 09-03, 09-05, 09-07,
   09-08, 09-10, 09-15 and 09-16. Several are almost certainly built — the box
   ruling, the maps normalization and the two welfares each came OFF the list
   today — but "almost certainly" is what this sweep exists to replace.
