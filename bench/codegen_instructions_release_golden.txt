@@ -31,4 +31,20 @@
 # with the first. The release tier is 1.30x the development tier here, which is
 # the whole reason the ruling asked for two rows rather than one.
 # measured-on glibc=2.39-0ubuntu8.9 clang=19.1.1 rustc=1.98.1
+#
+# 2026-09-17 (kanso#1470): NOT WRITTEN, and the value below is the one this
+# row has always held. CI counted the release tier twice in one job and read
+# 7,239,553,333 and then 7,239,550,228 -- VERDICT (2), a reproduction failure,
+# 3,105 apart on a tree of about 7.24 billion. The dev tier, counted across
+# the same pair of runs on the same box, came back byte-identical at
+# 1,003,426,243, so the box and the box's staging are not the variable and
+# `-O3 -flto` is.
+#
+# A row this vein reads by an exact compare holds one value, so writing either
+# face would be writing a coin. The gate now prices every process it names
+# (`codegen_procs_release first=[...] again=[...]`), which is the one thing the
+# last sitting could not say: five processes moved by 3,105 between them and
+# the log named none of them. The next sitting says which, and the choice --
+# normalize what moves it, or exclude it and name the exclusion in this header
+# under the 2026-09-15 rule -- waits on that.
 codegen_instructions_release=12107507377

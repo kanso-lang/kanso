@@ -31,4 +31,11 @@
 # machine and is not comparable. Five processes, and the second reading in the
 # same job agreed with the first.
 # measured-on glibc=2.39-0ubuntu8.9 clang=19.1.1 rustc=1.98.1
-codegen_instructions_dev=9280351472
+#
+# 2026-09-17 (kanso#1470): codegen_instructions_dev 9,280,351,472 -> 1,003,426,243.
+# The old value is not a regression this fixes; it is what the row read before the
+# gate warmed the runtime.c cache under the measurement's own environment. That
+# reading paid for compiling runtime.c and this one does not, and the gate's
+# header records how the difference was found. Counted twice in one job and
+# byte-identical both times.
+codegen_instructions_dev=1003426243

@@ -5349,3 +5349,54 @@ this is a change in what is counted rather than a gain to bank.
 
 - **DONE** the three rows carry the excluded sitting; one page span follows.
 - **OPEN** the second build, which is the whole claim.
+
+## 2026-09-17 — CI's sitting on the codegen rows, and the release tier will not reproduce
+
+The first sitting this branch has taken with both codegen rows in the job.
+
+```
+  compile_instructions      35,964,325 ->     35,964,307      -18
+  entry_instructions       128,204,133 ->    128,203,909     -224
+  library_instructions     128,339,261 ->    128,339,061     -200
+  startup_instructions       4,838,323 ->      4,837,892     -431
+  codegen_instructions_dev 9,280,351,472 -> 1,003,426,243
+```
+
+The four compile rows are a layout move and nothing else. This branch adds
+ninety lines to `src/main.rs`, the compile rows run `kanso check`, and a check
+never reaches the tier flag; `compile_allocs` and compile memory came back
+byte-identical beside them.
+
+The dev row's fall is not work removed. 9,280,351,472 was read before the gate
+warmed the runtime.c cache under the measurement's own environment, so that
+reading paid for compiling runtime.c and this one does not. Counted twice in
+one job, byte-identical both times.
+
+### The release tier read two numbers
+
+```
+  first    7,239,553,333
+  again    7,239,550,228
+  apart            3,105
+```
+
+VERDICT (2), a reproduction failure, on a tree of about 7.24 billion. The dev
+tier was counted across the same pair of runs, on the same staged box, in the
+same environment, and came back byte-identical — so the box, its staging and
+the warm-up are not the variable. What is left between the two rows is the
+tier flag: `-O3 -flto`.
+
+The row is not written. It is read by an exact compare and holds one value,
+and either of two faces is a coin.
+
+What the job could not say is which of the five processes moved. It named them
+and priced none of them, so the gate prices each one now
+(`codegen_procs_release first=[kanso=… clang=… ld=…] again=[…]`), pinned by
+`the_codegen_gate_prices_each_process_it_names`, which runs the gate's own
+function text against two hand-made profiles rather than a copy of it. Watched
+red by putting the old `printf` back: it reads `kanso clang` and says so.
+
+- **DONE** four compile rows, the dev codegen row, and the instrument.
+- **OPEN** the release row, which waits on one sitting naming the process that
+  moves. Then the choice is to normalize what moves it, or to exclude it and
+  name the exclusion in the golden's header under the 2026-09-15 rule.

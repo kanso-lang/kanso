@@ -77,15 +77,24 @@ sh scripts/gates/dispatch.sh name
 # time. This prints the leading word of each, which separates `./kanso`, the two
 # `clang` invocations and `ld` without printing the temp paths that differ per
 # pid.
+#
+# AND EACH NAME CARRIES ITS OWN COST, because a row that moves between two
+# readings moves inside ONE of these processes. On 2026-09-17 the release
+# tier read 7,239,553,333 and then 7,239,550,228 in one job -- 3,105 apart --
+# while the dev tier came back byte-identical across the same pair of runs.
+# Five processes moved by 3,105 between them and the job log named none of
+# them, so the next question had nothing to start from. `name=cost` costs one
+# grep per profile and answers it.
 processes_in() {
   for f in "$@"; do
     [ -f "$f" ] || continue
-    sed -n 's/^cmd: *//p' "$f" | head -1 | awk '{
+    cost=$(grep -o '^summary: [0-9]*' "$f" | tr -dc 0-9)
+    sed -n 's/^cmd: *//p' "$f" | head -1 | awk -v cost="$cost" '{
       n = split($1, p, "/"); name = p[n]
       tag = ""
       if ($0 ~ /kanso_pn_probe/) tag = ":probe"
       else if ($0 ~ /runtime[^ ]*\.c/) tag = ":runtime.c"
-      printf "%s%s ", name, tag
+      printf "%s%s=%s ", name, tag, cost
     }'
   done
 }

@@ -1856,7 +1856,14 @@
 # faces this row had been drawing were 35,965,137 and 35,965,150; against them
 # the excluded subtree is 812 and 825, which is the same cost plus or minus the
 # thirteen that lived inside it.
-compile_instructions=35964325
+#
+# 2026-09-17 (kanso#1470): compile_instructions 35,964,325 -> 35,964,307, a FALL
+# of 18 (-0.00005%). This branch adds ninety lines to src/main.rs and nothing to
+# the compile path; `kanso check` never reaches the tier flag. The row is a
+# layout move, which is what compile_instructions has recorded eight times
+# before, and compile_allocs and compile memory came back byte-identical beside
+# it. CI's sitting on f5132e87.
+compile_instructions=35964307
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.
