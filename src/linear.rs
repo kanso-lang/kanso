@@ -63,6 +63,102 @@ struct Analysis<'a> {
     returns_unique: HashSet<(String, usize)>,
     /// The spellings that resolve to std/list's `fold` in this program.
     folds: HashSet<String>,
+    /// Every name the program mentions as a VALUE rather than calls, read off
+    /// the program in one walk instead of once per question.
+    mentions: Mentions<'a>,
+}
+
+/// Where a name occurs, gathered once, so `escapes_as_value` stops re-walking
+/// the whole program for every (name, arity) it is asked about.
+///
+/// `mentioned_as_value(e, name, arity)` was true exactly when some occurrence
+/// of `Ident(name)` was not the head of an application of `arity` arguments.
+/// So the question needs two facts per name and nothing else: whether it ever
+/// occurs OUTSIDE an application head, and which argument counts it heads an
+/// application with. Both are properties of the program alone, so neither
+/// moves while the fixpoint runs and both can be read before it starts.
+///
+/// It was 8.77% of a `kanso build` on a forty-line program, with its share of
+/// `child_exprs` on top, because the fixpoint asked it once per parameter per
+/// round and each ask walked every expression in the program.
+#[derive(Default)]
+struct Mentions<'a> {
+    /// Names that occur somewhere other than as an application head.
+    bare: HashSet<&'a str>,
+    /// For each name, the argument counts it heads an application with.
+    heads: HashMap<&'a str, Vec<usize>>,
+    /// For each name, the declarations whose body mentions it at all, as
+    /// indices into `program.fns`. A declaration that never names a group
+    /// cannot hold a call to it, so `callers_hand_over` has nothing to find
+    /// there and walking it is the whole of the cost.
+    in_decl: HashMap<&'a str, Vec<usize>>,
+}
+
+impl<'a> Mentions<'a> {
+    fn of(program: &'a Program) -> Self {
+        let mut m = Mentions::default();
+        for (d, decl) in program.fns.iter().enumerate() {
+            for stmt in &decl.body {
+                let e = match stmt {
+                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
+                    Stmt::Set { value, .. } => value,
+                };
+                m.walk(e, d);
+            }
+        }
+        m
+    }
+
+    fn walk(&mut self, e: &'a Expr, d: usize) {
+        match e {
+            Expr::Ident(n, _) => {
+                self.bare.insert(n.as_str());
+                self.saw(n.as_str(), d);
+            }
+            Expr::App { head, args, .. } => {
+                match head.as_ref() {
+                    Expr::Ident(n, _) => {
+                        let seen = self.heads.entry(n.as_str()).or_default();
+                        if !seen.contains(&args.len()) {
+                            seen.push(args.len());
+                        }
+                        self.saw(n.as_str(), d);
+                    }
+                    other => self.walk(other, d),
+                }
+                for a in args {
+                    self.walk(a, d);
+                }
+            }
+            _ => {
+                for c in child_exprs(e) {
+                    self.walk(c, d);
+                }
+            }
+        }
+    }
+
+    /// Declarations are walked in order, so the last index recorded for a name
+    /// is the only one that can repeat.
+    fn saw(&mut self, name: &'a str, d: usize) {
+        let seen = self.in_decl.entry(name).or_default();
+        if seen.last() != Some(&d) {
+            seen.push(d);
+        }
+    }
+
+    /// The declarations that could hold a call to `name`, and no others.
+    fn mentioning(&self, name: &str) -> &[usize] {
+        self.in_decl.get(name).map_or(&[], |v| v.as_slice())
+    }
+
+    /// The same answer `mentioned_as_value` gave, read off the two sets: a bare
+    /// occurrence escapes at every arity, and an application head escapes at
+    /// every arity but its own.
+    fn escapes(&self, name: &str, arity: usize) -> bool {
+        self.bare.contains(name)
+            || self.heads.get(name).is_some_and(|ks| ks.iter().any(|k| *k != arity))
+    }
 }
 
 impl<'a> Analysis<'a> {
@@ -75,12 +171,14 @@ impl<'a> Analysis<'a> {
         // ever aliases it — the sound direction for an in-place mutation.
         let types: HashSet<String> = program.types.iter().map(|t| t.name.clone()).collect();
         let folds = fold_spellings(program);
+        let mentions = Mentions::of(program);
         let mut a = Analysis {
             program,
             types,
             linear_params: HashSet::default(),
             returns_unique: HashSet::default(),
             folds,
+            mentions,
         };
         for decl in real_fns(program) {
             a.returns_unique.insert((decl.name.clone(), decl.params.len()));
@@ -175,7 +273,15 @@ impl<'a> Analysis<'a> {
         if crate::is_operator(name) || self.escapes_as_value(name, arity) {
             return false;
         }
-        self.program.fns.iter().all(|caller| {
+        // ONLY THE DECLARATIONS THAT NAME IT. `callsites_unique` answers false
+        // only where it finds a call to `name`, so a declaration whose body
+        // never mentions the name at all can only answer true, and walking it
+        // is pure cost. This was every function in the program, asked once per
+        // parameter per fixpoint round: 63.60% of a `kanso build` on a
+        // forty-line corpus, where most names are mentioned in one or two
+        // declarations.
+        self.mentions.mentioning(name).iter().all(|&d| {
+            let caller = &self.program.fns[d];
             caller.body.iter().all(|stmt| {
                 let e = match stmt {
                     Stmt::Bind { expr, .. } => expr,
@@ -196,15 +302,7 @@ impl<'a> Analysis<'a> {
     /// site, so a parameter marked an accumulator on that answer arrives at
     /// the runtime as a plain string it was promised it could write into.
     fn escapes_as_value(&self, name: &str, arity: usize) -> bool {
-        self.program.fns.iter().any(|d| {
-            d.body.iter().any(|s| {
-                let e = match s {
-                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
-                    Stmt::Set { value, .. } => value,
-                };
-                mentioned_as_value(e, name, arity)
-            })
-        })
+        self.mentions.escapes(name, arity)
     }
 
     /// True unless some call to `name`/`arity` in `e` passes a non-unique list
@@ -906,6 +1004,12 @@ fn sole_finished_record(a: &Analysis, decl: &FnDecl, args: &[Expr]) -> Option<St
 
 /// Every mention of `name` in `e` that is not the head of an application of
 /// exactly `arity` arguments — a bare reference, or a partial application.
+///
+/// This was `escapes_as_value`'s inner walk until 2026-09-16, and it is kept as
+/// the reference `Mentions` is checked against: the index is the same answer
+/// read off one pass, and the spec below runs both over the programs this
+/// repository actually compiles.
+#[cfg(test)]
 fn mentioned_as_value(e: &Expr, name: &str, arity: usize) -> bool {
     if let Expr::Ident(n, _) = e {
         return n == name;
@@ -1234,7 +1338,7 @@ fn builder_param(a: &Analysis, decl: &FnDecl, name: &str, here: &Expr) -> Option
 
 #[cfg(test)]
 mod tests {
-    use super::in_place_pushes;
+    use super::*;
     use std::path::Path;
 
     #[test]
@@ -1258,5 +1362,64 @@ mod tests {
         let src = "fn dup xs\n  a = push xs 1\n  b = push xs 2\n  push a b\n\nmain = print \"{length (dup [1 2 3])}\"\n";
         let program = crate::compile("test.kso", src, false).unwrap();
         assert!(in_place_pushes(&program).is_empty(), "aliased pushes must not be marked in-place");
+    }
+
+    /// The walk this replaced, asked the way `escapes_as_value` asked it.
+    fn walked(program: &Program, name: &str, arity: usize) -> bool {
+        program.fns.iter().any(|d| {
+            d.body.iter().any(|s| {
+                let e = match s {
+                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
+                    Stmt::Set { value, .. } => value,
+                };
+                mentioned_as_value(e, name, arity)
+            })
+        })
+    }
+
+    /// Every name the index could be asked about, at every arity the program
+    /// uses, on real programs rather than a fixture.
+    ///
+    /// The index is not an approximation of the walk and this says so on the
+    /// programs this repository compiles: the same question, both ways, for
+    /// every (name, arity) pair `escapes_as_value` can be handed. Watched red
+    /// before it was trusted: with `escapes` answering `self.bare.contains`
+    /// alone, so that an application head with the wrong argument count
+    /// stopped escaping, it names the first disagreement it finds —
+    /// "lib/json: the index and the walk disagree about `Get_position` at
+    /// arity 0".
+    fn agrees_on(dir: &str) {
+        let program = crate::compile_module(std::path::Path::new(dir), false)
+            .unwrap_or_else(|e| panic!("{dir} compiles: {e}"));
+        let index = Mentions::of(&program);
+        let mut arities: Vec<usize> = program.fns.iter().map(|d| d.params.len()).collect();
+        arities.push(0);
+        arities.sort_unstable();
+        arities.dedup();
+        let names: Vec<&str> = {
+            let mut v: Vec<&str> = program.fns.iter().map(|d| d.name.as_str()).collect();
+            v.sort_unstable();
+            v.dedup();
+            v
+        };
+        let mut asked = 0usize;
+        for name in &names {
+            for arity in &arities {
+                let want = walked(&program, name, *arity);
+                let got = index.escapes(name, *arity);
+                assert_eq!(
+                    want, got,
+                    "{dir}: the index and the walk disagree about `{name}` at arity {arity}"
+                );
+                asked += 1;
+            }
+        }
+        assert!(asked > 500, "{dir} asks {asked} questions, too few to prove anything");
+    }
+
+    #[test]
+    fn the_value_mention_index_agrees_with_the_walk_it_replaced() {
+        agrees_on("lib/json");
+        agrees_on("bench/compile_corpus");
     }
 }
