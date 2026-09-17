@@ -5967,7 +5967,36 @@ no cache key feeds the source to a hasher (the cost), the constant is the
 digest of the bytes it names (the drift that would be a miscompile), and a bit
 flipped at the first byte, the middle and the last moves it (the mixer).
 
+### What is left, and it is the same constant again
+
+With the digest gone, `kanso::main` reads 3,712,046 and `Backend::emit`
+inclusive is 3,279,374 of it — **88.34%** of what it costs to run a program
+holding one `print`. By self cost:
+
+        923,224  24.87%  memchr_aligned
+        605,157  16.30%  <&str as Pattern>::is_contained_in
+        371,953  10.02%  CharSearcher::next_match
+        314,688   8.48%  memcmp_avx2_movbe
+        239,303   6.45%  Backend::emit itself
+
+The first four are one activity: **2,215,022 instructions, 59.67% of start-up,
+searching DECLARES for substrings.** DECLARES is 1,187 lines of `const &'static
+str` in the compiler's own source. The program being emitted contributes almost
+nothing to that number.
+
+kanso#1468 and kanso#1478 replace those searches with an index, and their
+start-up rows go UP — +239,217 and +244,116 — because the index is built once
+per process too, and a one-line program has nothing to amortise it over. Both
+shapes pay per process for an answer that is the same in every process.
+
+The digest above is the third shape and the one that costs neither workload:
+derive it in the build. `hash::digest_of` shows a `const fn` handling 450,100
+bytes within rustc's const-eval budget when it steps a word at a time, so the
+technique is in the tree and measured.
+
 - **DONE** measured, spec'd, and the row is CI's to write.
-- **OPEN** the same shape one layer down: `declare_lines` parses DECLARES with
-  `str::Lines` at first use, 1,019,913 instructions on the branches that have
-  it. Named on kanso#1480 and not built.
+- **OPEN** derive what the emitter asks of DECLARES at build time rather than
+  per process. The bound on this box is 2,215,022 instructions of start-up,
+  and it subsumes the `declare_lines` item named on kanso#1480's start-up
+  golden (1,019,913 on the branches that have it). It wants the index work in
+  flight to land first, since it replaces the thing those branches build.
