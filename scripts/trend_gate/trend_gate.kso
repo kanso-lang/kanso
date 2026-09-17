@@ -84,10 +84,12 @@ lower_g = ["compile_instructions" "compile_allocs"]
 # down: a rise printed as drift and counted toward neither side of the
 # pure-regression rule. Running the gate on kanso#1338's own diff is what
 # surfaced it, and tests/every_compile_vein_row_has_a_direction.rs derives the
-# veins off disk so a fifth compile path cannot open one blind. The interpreted
-# run's two rows, added 2026-09-16, are named here in the same change that
-# mints them rather than a round later.
-lower_gh = ["library_instructions" "interp_instructions"]
+# veins off disk so a fifth compile path cannot open one blind. Two sets of
+# rows were added on 2026-09-16 and both are named here in the change that
+# mints them rather than a round later: `startup_instructions`, the only row
+# on this list that sees codegen, and the interpreted run’s three, the only
+# ones that count a program EXECUTING.
+lower_gh = ["library_instructions" "startup_instructions" "interp_instructions"]
 
 lower_gi = text/concat lower_gh ["interp_allocs" "interp_peak_bytes"]
 
@@ -253,17 +255,22 @@ bench_library = [["bench/library_instructions_golden.txt" ""]]
 
 bench_traffic = [["bench/compile_allocs_golden.txt" ""]]
 
-# The interpreted run's two veins, added with them on 2026-09-16. They are the
-# first rows here that count a program EXECUTING rather than a program being
-# compiled: `kanso run --interp` parses, infers and then runs in one process.
-# Listed in the commit that opens them, for the reason the library row gives —
-# the spec reads bench/ off disk and keys on the word `golden`, so it goes red
-# the moment the file exists. No prefix: neither name collides.
+# Start-up and the interpreted run, five veins added on 2026-09-16. Start-up
+# is the only row here that sees codegen: the three compile rows run
+# `kanso check`, which stops before it. The interpreted run’s two are the
+# first that count a program EXECUTING rather than one being compiled.
+# Listed in the commits that open them, for the reason the library row gives
+# — the spec reads bench/ off disk and keys on the word `golden`, so it goes
+# red the moment the file exists. No prefix: none of the names collides.
+bench_startup = [["bench/startup_instructions_golden.txt" ""]]
+
 bench_interp_ir = [["bench/interp_instructions_golden.txt" ""]]
 
 bench_interp_mem = [["bench/interp_memory_golden.txt" ""]]
 
 bench_interp = text/concat bench_interp_ir bench_interp_mem
+
+bench_new = text/concat bench_startup bench_interp
 
 bench_pend = [["bench/cost_golden_pend.txt" "pend_"]]
 
@@ -326,7 +333,7 @@ bench_ab = text/concat bench_a (text/concat bench_encode bench_b)
 
 bench_cd = text/concat bench_c (text/concat bench_compile bench_modules)
 
-bench_traffic_up = text/concat bench_traffic bench_interp
+bench_traffic_up = text/concat bench_traffic bench_new
 
 bench_libcheck = text/concat bench_library bench_traffic_up
 

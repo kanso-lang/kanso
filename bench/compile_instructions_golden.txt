@@ -1728,6 +1728,16 @@
 # allocator no longer picks a random base address (kanso#1466). The
 # interpreter's fixed-seed hashing is what moves it, and the interp row that
 # had been six instructions off its golden every other run is now on it.
+# 2026-09-16 (the declares scan asks once; kanso#1461): compile_instructions
+# 36,878,550 -> 36,878,356, a FALL of 194 (-0.0005%). `kanso check` stops
+# before codegen, so this is not the change doing work differently -- it is the
+# LAYOUT move CLAUDE.md's own note on this row describes: src/codegen.rs is the
+# compiler, so editing it moves the compiler's bytes and what sits around them.
+# The eighth such move recorded on this row.
+#
+# 2026-09-17, kanso#1461, round three. Read on the merged head, where the
+# allocator no longer picks a random base address (kanso#1466). The scan
+# this branch removes is worth what the fall says.
 # 2026-09-17, kanso#1465. The qualifier now builds a set of each dependency's
 # TYPE names and consults it at the four positions that spell a type, so a
 # function named for an imported type stops rewriting its callers' Ctor
@@ -1766,6 +1776,9 @@
 # 2026-09-17, kanso#1462, round four. Read on the head merged with
 # kanso#1464, against main's 36,864,779 / 131,837,650 / 131,978,823. The
 # fixed-seed hashing this branch puts on the compile path is the fall.
+# 2026-09-17, kanso#1461, round four. Read on the head merged with
+# kanso#1464, against main's 36,864,779 / 131,837,650 / 131,978,823. The
+# declares scan this branch removes is what the fall is.
 # 2026-09-17, kanso#1465, round four. Read on the head merged with
 # kanso#1464, against main's 36,864,779 / 131,837,650 / 131,978,823. The set
 # of a dependency's type names is the rise; kanso#1464 arriving underneath is
@@ -1782,6 +1795,12 @@
 # interpreter, so the hashing this branch changes is not on this corpus: the
 # move is the layout kind the header above describes, src/eval.rs being the
 # compiler's own bytes.
+# 2026-09-17, kanso#1461 merged with kanso#1459, CI's sitting. A FALL of
+# 2,800 (-0.0076%). The value the merge carried forward was kanso#1459's, and
+# this is the merged tree's own reading. `kanso check` does not run the
+# interpreter, so the start-up work this branch removes is not on this corpus
+# at all: the move is the layout kind the header above describes, src/eval.rs
+# being the compiler's own bytes.
 # 2026-09-17, kanso#1465, CI's sitting of the merged tree. A RISE of 21,257
 # (+0.0579%): qualifying a function's name stops rewriting an imported type's Ctor
 # pattern, which is a correctness fix and costs the checker a little more work
@@ -1805,6 +1824,11 @@
 # reading. `kanso check` does not run the interpreter, so the hashing this branch
 # changes is not on this corpus: the move is the layout kind the header above
 # describes, src/eval.rs being the compiler's own bytes.
+# 2026-09-17, kanso#1461 merged with kanso#1472, CI's sitting on the merged tree.
+# The value the merge carried forward was main's; this is the merged tree's own
+# reading. `kanso check` does not run the interpreter, so the start-up work this
+# branch removes is not on this corpus at all: the move is the layout kind the
+# header above describes, src/eval.rs being the compiler's own bytes.
 # 2026-09-17, kanso#1465 merged with kanso#1472, CI's sitting on the merged tree.
 # The value the merge carried forward was main's; this is the merged tree's own
 # reading. The qualifier now keeps a set of the type names it must not rewrite,
@@ -1815,7 +1839,18 @@
 # base, so the merged tree is reading neither number. The value below is
 # main's, carried forward so the gate has one value to fail against
 # rather than none; the merged sitting is CI's to take.
-compile_instructions=35967913
+#
+# 2026-09-17, kanso#1461 on the tree merged with kanso#1465, CI's sitting. LAYOUT,
+# not work: this branch changes src/eval.rs, the interpreter, and `kanso check`
+# never runs it. What moved the row is src/eval.rs being part of the compiler
+# binary. The grep that settles it: the changed code's callers all sit under the
+# run path, not under compile_module_inner.
+#
+# 2026-09-17, merged with main. Both branches moved this row on their own
+# base, so the merged tree is reading neither number. The value below is
+# main's, carried forward so the gate has one value to fail against
+# rather than none; the merged sitting is CI's to take.
+compile_instructions=35965137
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.
