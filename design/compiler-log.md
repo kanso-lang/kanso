@@ -6082,9 +6082,16 @@ on both engines:
     (d c -> label d c) "flan" seasonal          no hop line at all
 
 **Both engines agree in every one.** The divergence that killed the
-optimization is gone, and ch05's own golden has moved with it —
-`docs/book/samples/ch05/welcome.out` now reads `born in first` and nothing
-else, where July's native reading added the `greet` hop.
+optimization is gone.
+
+A claim that did not survive checking, recorded because the checking is the
+point: the first draft of this entry said ch05's golden "has moved with it".
+It has not. `docs/book/samples/ch05/welcome.out` has read `born in first` and
+nothing else since the book landed — `git log -S"passed through"` over that
+file is empty. It is the oracle's answer, and what July's change did was make
+NATIVE print a line the golden never carried. Nothing about the golden moved.
+What moved is the rule below, which the three fixtures measure directly rather
+than inferring from a file that was never going to say.
 
 The rule the three readings describe is simple: **a hop names the function the
 err was about to enter, so a named function records one and an anonymous one
