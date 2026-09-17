@@ -7496,7 +7496,7 @@ work: seventeen on 2026-08-29, nine on the five oldest dates, nine here. Two
 unbuilt rulings in thirty-five entries. The twenty-one that remain are all
 September.
 
-**Eleven of September's twenty-one, probed on the way past.** The 2026-09-06
+**Twelve of September's twenty-one, probed on the way past.** The 2026-09-06
 whole-float ruling — a float's rendering always carries a `.` or an `e`, and
 `.0` is appended where the shortest form has neither — is built:
 `a_whole_float_keeps_its_point` carries the RULED citation and its third line
@@ -7585,13 +7585,31 @@ old one. And the 2026-09-08 ruling that the compile term reads a fixed corpus
 rather than whatever `lib/json` imports is built: `bench/compile_corpus`
 exists and `compile_instructions.sh` checks it by name.
 
-Ten September entries are unread, and this entry says so rather than counting
+The 2026-09-05 corpus-first ruling is satisfied, by a mechanism other than the
+one it named, and it took reading one line to see which. Its concrete item was
+to promote the natural read loop into the benchmark corpus *as a run-speed and
+run-memory shelf under the granted-baseline machinery*, so the objective could
+see a hole `jsonbench` had been hand-written around. That shelf does not
+exist: `reading_insisted.kso` lives in `tests/golden/read_beat` with a spec
+pinning `beat_iters=201`, and `bench/runbench_phases.txt` names eight phases,
+none of them a read.
+
+Stopping there would have made it a row. It is not one, because
+`bench/runbench/main.kso` line 4 reads `os/read_file! "bench/large.json" .>
+run`. The consolidated run program opens by reading its document through the
+same bang wrapper the hole was about, so the read loop is inside
+`run_instructions` rather than beside it. The 2026-09-06 consolidation
+retired shelves the day after this gavel asked for one, and the workload the
+gavel wanted visible ended up in the one program instead. The purpose holds;
+the named mechanism is gone.
+
+Nine September entries are unread, and this entry says so rather than counting
 them swept.
 
 - **DONE** August swept end to end, and the demanded-knot counter measured
   rather than read.
-- **OPEN** ten September entries, across 09-02, 09-03, 09-05, 09-07, 09-15
-  and 09-16. Eleven probed, eleven built: the yield is
+- **OPEN** nine September entries, across 09-02, 09-03, 09-05, 09-07, 09-15
+  and 09-16. Twelve probed, twelve built or satisfied: the yield is
   lower here than in August, which is what a list that tracks recent rulings
   should look like. Several are almost certainly built — the box
   ruling, the maps normalization and the two welfares each came OFF the list
