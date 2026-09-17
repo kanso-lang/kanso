@@ -580,7 +580,11 @@
 # thirteen; this reading and that one agree to the instruction, which is the
 # first time this vein has reproduced across two runs since the compiler
 # moved to mimalloc.
-library_instructions=131978823
+#
+# 2026-09-17, kanso#1461, round four. Read on the head merged with
+# kanso#1464, against main's 36,864,779 / 131,837,650 / 131,978,823. The
+# declares scan this branch removes is what the fall is.
+library_instructions=131970557
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

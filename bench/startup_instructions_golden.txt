@@ -78,4 +78,9 @@
 # a fifth of the row. The gate now runs the program once before it counts,
 # which is the state every reading after the first would have seen. This
 # figure is that second reading; CI takes the next one.
-startup_instructions=4869632
+#
+# 2026-09-17, kanso#1461, round four. The warm-up works: CI read
+# 4,876,986 and then 4,876,986 again in the same job, where the round
+# before it read 6,018,427 and then 4,869,632. The row was counting a cold
+# runtime-object cache, and now it counts the compile.
+startup_instructions=4876986

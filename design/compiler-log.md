@@ -4147,3 +4147,15 @@ the instruction, the figures round two took from CI and that the next run
 disagreed with by thirteen. The merge brought main's values in and this writes
 the branch's back. It is the first time this vein has reproduced across two
 runs since the compiler moved to mimalloc, which is what kanso#1466 was for.
+
+**Round four: the warm-up holds.** CI read the start-up row 4,876,986 and then
+4,876,986 again in the same job, where the round before it read 6,018,427 and
+then 4,869,632. The row was counting a cold runtime-object cache and now it
+counts the compile. It landed on a runner of yet another generation — AMD
+family 0x1a model 0x2, where the last two rounds were 0x19 model 0x1 and model
+0x11 — and read the same number twice there, which is the fleet answering the
+CPU-model account that kanso#1466 retired.
+
+On the head merged with kanso#1464 the three compile rows read 36,862,211,
+131,827,785 and 131,970,557 against main's 36,864,779, 131,837,650 and
+131,978,823. That fall is the declares scan this branch removes.
