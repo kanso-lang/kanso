@@ -6685,3 +6685,20 @@ another prices the difference between the two boxes, and prices it as though
 the compiler had earned it.
 
 - **DONE** the three origins are CI's, and the score sits on its floor.
+
+## 2026-09-17 — the split rebased on kanso#1470's CI sitting
+
+kanso#1470 wrote CI's reading into four goldens and gave
+`bench/emit_instructions_golden.txt` the measured-on line it had never carried.
+This branch merges that.
+
+**`compile_instructions` worsened and lands at 35,968,173.** Two instructions,
+kanso#1470's, and that entry prices them: the branch under it adds counters and
+the gates that read them and changes no decision the front end makes, so what
+moved is the binary's bytes. The entry row fell by the same two.
+
+The split's own arithmetic is unchanged by the merge: with the three container
+baselines corrected, the three welfares read 76.13 against a floor of
+76.12766770905162.
+
+- **DONE** rebased, and the score still sits on its floor.
