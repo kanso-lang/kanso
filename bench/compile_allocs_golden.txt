@@ -465,4 +465,7 @@
 # inside a comment block becomes a line the output does not carry, and the
 # gate fails on a row that agrees. It did, on this file, on kanso#1465's
 # round two.
-compile_allocs=27397
+#
+# 2026-09-17, kanso#1486. 84 fewer allocations: one alias map and one group
+# count per compile where there had been two of each.
+compile_allocs=27313

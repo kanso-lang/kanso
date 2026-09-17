@@ -5171,3 +5171,30 @@ this is a change in what is counted rather than a gain to bank.
 
 - **DONE** the three rows carry the excluded sitting; one page span follows.
 - **OPEN** the second build, which is the whole claim.
+
+## 2026-09-17 — kanso#1486's rows on the excluded anchor, and the floor moves
+
+CI's sitting with the print out of the reading:
+
+```
+  compile_instructions   35,964,325 -> 35,550,945    -413,380   -1.15%
+  entry_instructions    128,204,133 -> 126,735,456  -1,468,677   -1.15%
+  library_instructions  128,339,261 -> 127,191,484  -1,147,777   -0.89%
+  startup_instructions    4,838,323 ->   4,833,787      -4,536
+  compile_allocs             27,397 ->      27,313         -84
+```
+
+The module row's 413,380 against 429,165 measured here in a container is the
+same number read on two machines. The entry row falls three and a half times
+as far in absolute terms and the same 1.15% in relative terms, which is what
+the shape predicts: the entry route merges and checks everything its imports
+bring, so it asks the alias question of a much larger program.
+
+The eighty-four allocations are the second alias map and the second group
+count, which no longer exist.
+
+welfare rose 0.02 and is banked at 69.81. A rise nobody ratchets is one the
+next change spends, and the sentinel says so rather than leaving it to
+memory — it refused the tree until the floor moved.
+
+- **DONE** five rows and eleven page spans; welfare held at 69.81.

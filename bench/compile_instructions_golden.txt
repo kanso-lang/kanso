@@ -1856,7 +1856,11 @@
 # faces this row had been drawing were 35,965,137 and 35,965,150; against them
 # the excluded subtree is 812 and 825, which is the same cost plus or minus the
 # thirteen that lived inside it.
-compile_instructions=35964325
+#
+# 2026-09-17, kanso#1486 on the excluded anchor. 413,380 lower, 1.15%. The
+# alias fixpoint and the group count are built once for the two passes that read
+# them, where each built its own.
+compile_instructions=35550945
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

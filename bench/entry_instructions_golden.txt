@@ -675,7 +675,11 @@
 #
 # 2026-09-17, kanso#1487's sitting, printed line excluded. The two faces were
 # 128,204,898 and 128,204,911; the excluded subtree is 765 and 778.
-entry_instructions=128204133
+#
+# 2026-09-17, kanso#1486. 1,468,677 lower, 1.15%. The entry route merges and
+# checks everything its imports bring, so it asks the alias question of a much
+# larger program than the module route does.
+entry_instructions=126735456
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.
