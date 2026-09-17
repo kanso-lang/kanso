@@ -1550,6 +1550,7 @@ pub fn emit_ir(program: &Program, convention: ClosureConvention) -> Result<Strin
             .filter(|t| !t.members.is_empty())
             .map(|t| (t.name.clone(), t.members.clone()))
             .collect(),
+        group_by_name: group_indices_by_name(program),
         inference,
         escape,
         byte_disc,
@@ -1582,6 +1583,21 @@ struct Backend<'a> {
     /// see `ClosureConvention`; decided by the caller, never probed here
     convention: ClosureConvention,
     program: &'a Program,
+    /// Which declarations make up each group, by name, in program order.
+    ///
+    /// `group_indices` used to answer this by scanning `program.fns` end to
+    /// end and collecting the matches into a fresh `Vec<usize>`, and
+    /// `group_param_set` and `group_return_set` ask it once per parameter and
+    /// once per call site. That is a question about the whole program asked
+    /// once per name -- the shape kanso#1464, kanso#1468, kanso#1473 and
+    /// kanso#1475 each removed from somewhere else -- and it cost 66,271,847
+    /// instructions of `kanso build bench/runbench` over 7,556 calls.
+    ///
+    /// Keyed by NAME, with arity filtered off the result, for the reason
+    /// kanso#1475's index is: the names come from the program's own
+    /// declarations but also from call sites, and a `&str` key borrows as
+    /// `str` where a tuple key would demand the program's lifetime.
+    group_by_name: HashMap<&'a str, Vec<usize>>,
     inference: infer::Inference,
     forwarders: HashMap<(String, usize), String>,
     /// subtype name -> parent name; non-empty programs get chain-aware
@@ -1902,37 +1918,334 @@ impl FnEmit {
 /// wrapper is named by the cell rather than by a call, and a site that loads
 /// the cell is what keeps it.
 fn prune_unnamed(body: &str, entry: &str, cells: &[(String, String, usize)]) -> String {
-    let mut blocks = ir_defines(body);
-    loop {
-        let named = |at: usize, sym: &str| {
-            if blocks.iter().enumerate().any(|(k, (_, text))| k != at && names_symbol(text, sym)) {
-                return true;
+    let blocks = ir_defines(body);
+    let mut alive = vec![true; blocks.len()];
+    {
+        // Every name this prune will ever ask about: one per block, plus the
+        // closure cells. The index is keyed on exactly these, so a name
+        // nothing asks about costs nothing to walk past.
+        let queries: crate::hash::Set<&str> = blocks
+            .iter()
+            .map(|(sym, _)| sym.as_str())
+            .chain(cells.iter().map(|(cell, _, _)| cell.as_str()))
+            .filter(|sym| !sym.is_empty())
+            .collect();
+        // Which of those names each block writes, read off once per block, and
+        // how many LIVE blocks write each name. The search this replaced asked
+        // the question once per (block, name) pair and built a fresh two-way
+        // searcher for each: 72.10% of `kanso build bench/runbench`, with
+        // `names_symbol` 71.71% of the process on its own.
+        // A name the one-pass scan cannot tokenise is answered the old way,
+        // per block, rather than assumed away. Emitted symbols are all one of
+        // the two shapes `queries_named` reads, so this list is empty in
+        // practice -- and the correctness of the index does not rest on that
+        // being true, which is the point of having it.
+        let odd: Vec<&str> = queries.iter().copied().filter(|sym| !one_pass_reads(sym)).collect();
+        let mut names: Vec<crate::hash::Set<&str>> =
+            blocks.iter().map(|(_, text)| queries_named(text, &queries)).collect();
+        for (written, (_, text)) in names.iter_mut().zip(blocks.iter()) {
+            for sym in &odd {
+                if names_symbol(text, sym) {
+                    written.insert(sym);
+                }
             }
-            cells.iter().any(|(cell, w, _)| {
-                w == sym
-                    && blocks
-                        .iter()
-                        .enumerate()
-                        .any(|(k, (_, text))| k != at && names_symbol(text, cell))
-            })
-        };
-        let doomed = blocks.iter().enumerate().position(|(at, (sym, _))| {
-            // The runtime calls the thunk dispatcher itself, from `k_force`,
-            // so no emitted line names it and it would go on the first sweep.
-            sym != entry
-                && sym != "d_thunk_eval"
-                && (sym.starts_with("d_")
-                    || sym.starts_with("w_")
-                    || sym.starts_with("\"d_")
-                    || sym.starts_with("\"w_"))
-                && !named(at, sym)
-        });
-        match doomed {
-            Some(at) => blocks.remove(at),
-            None => break,
-        };
+        }
+        let mut mentions: crate::hash::Map<&str, usize> = crate::hash::Map::default();
+        for written in &names {
+            for name in written {
+                *mentions.entry(name).or_insert(0) += 1;
+            }
+        }
+        loop {
+            let elsewhere = |at: usize, name: &str| {
+                mentions.get(name).copied().unwrap_or(0) > usize::from(names[at].contains(name))
+            };
+            let named = |at: usize, sym: &str| {
+                elsewhere(at, sym)
+                    || cells.iter().any(|(cell, w, _)| w == sym && elsewhere(at, cell.as_str()))
+            };
+            let doomed = blocks.iter().enumerate().position(|(at, (sym, _))| {
+                // The runtime calls the thunk dispatcher itself, from
+                // `k_force`, so no emitted line names it and it would go on
+                // the first sweep.
+                alive[at]
+                    && sym != entry
+                    && sym != "d_thunk_eval"
+                    && (sym.starts_with("d_")
+                        || sym.starts_with("w_")
+                        || sym.starts_with("\"d_")
+                        || sym.starts_with("\"w_"))
+                    && !named(at, sym)
+            });
+            match doomed {
+                // The block is struck off rather than removed, so `names` and
+                // `mentions` keep their indices; the counts drop by what it
+                // wrote, which is what the search would have stopped finding.
+                Some(at) => {
+                    alive[at] = false;
+                    for name in &names[at] {
+                        if let Some(n) = mentions.get_mut(name) {
+                            *n -= 1;
+                        }
+                    }
+                }
+                None => break,
+            }
+        }
     }
-    blocks.into_iter().map(|(_, text)| text).collect()
+    blocks.into_iter().zip(alive).filter(|(_, alive)| *alive).map(|((_, text), _)| text).collect()
+}
+
+/// Whether `queries_named` can tokenise this symbol, which is to say whether
+/// it is one of the two shapes the emitter writes: an unquoted run of
+/// `[alnum _]`, or a quoted name from `"` to its closing `"` with no other
+/// quote inside. Anything else is answered by `names_symbol` per block, so
+/// the index stays exact without assuming the emitter's spellings.
+fn one_pass_reads(sym: &str) -> bool {
+    match sym.strip_prefix('"') {
+        Some(rest) => match rest.strip_suffix('"') {
+            Some(inner) => !inner.contains('"'),
+            None => false,
+        },
+        None => !sym.is_empty() && sym.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_'),
+    }
+}
+
+/// Which of `queries` this text names, in one pass, answering exactly what
+/// `names_symbol` answers for each of them.
+///
+/// The delimiter rule is `names_symbol`'s: `@sym` counts only where the byte
+/// after it is not alphanumeric, `_` or `"`. Two token shapes cover every
+/// symbol the emitter writes, and `the_only_two_shapes_a_symbol_takes` pins
+/// it: an unquoted name is a run of those same bytes, and a quoted one runs
+/// from `"` to the next `"`, which is how `quoted()` spells a name holding a
+/// slash or an operator character. Scanning the unquoted run alone would stop
+/// at the slash inside `@"d_add/2"` and miss it.
+fn queries_named<'a>(text: &str, queries: &crate::hash::Set<&'a str>) -> crate::hash::Set<&'a str> {
+    let held = |b: u8| b.is_ascii_alphanumeric() || b == b'_' || b == b'"';
+    let bytes = text.as_bytes();
+    let mut found = crate::hash::Set::default();
+    let mut at = 0;
+    while let Some(next) = bytes[at..].iter().position(|b| *b == b'@') {
+        let from = at + next + 1;
+        at = from;
+        let end = match bytes.get(from) {
+            Some(b'"') => match bytes[from + 1..].iter().position(|b| *b == b'"') {
+                Some(close) => from + close + 2,
+                None => continue,
+            },
+            _ => {
+                let mut end = from;
+                while end < bytes.len() && held(bytes[end]) {
+                    end += 1;
+                }
+                end
+            }
+        };
+        if matches!(bytes.get(end), Some(b) if held(*b)) {
+            continue;
+        }
+        if let Some(name) = queries.get(&text[from..end]) {
+            found.insert(*name);
+        }
+    }
+    found
+}
+
+/// Every declaration's index, by name, in program order.
+///
+/// `Backend::group_indices` scanned `program.fns` end to end and collected the
+/// matches into a fresh `Vec<usize>` on every call, and `group_param_set` and
+/// `group_return_set` ask it once per parameter and once per call site.
+fn group_indices_by_name(program: &Program) -> HashMap<&str, Vec<usize>> {
+    let mut by_name: HashMap<&str, Vec<usize>> = HashMap::default();
+    for (at, decl) in program.fns.iter().enumerate() {
+        by_name.entry(decl.name.as_str()).or_default().push(at);
+    }
+    by_name
+}
+
+/// The lookup over that index. Keyed by NAME with arity filtered off the
+/// result, because the names come from call sites as well as declarations and
+/// a `&str` key borrows as `str` where a tuple key would demand the program's
+/// lifetime.
+fn group_indices_in<'s>(
+    by_name: &'s HashMap<&str, Vec<usize>>,
+    program: &'s Program,
+    name: &str,
+    arity: usize,
+) -> impl Iterator<Item = usize> + 's {
+    by_name
+        .get(name)
+        .map_or(&[][..], |v| v.as_slice())
+        .iter()
+        .copied()
+        .filter(move |at| program.fns[*at].params.len() == arity)
+}
+
+/// Every `sym` for which `text` writes `@sym(`, collected in one pass.
+///
+/// This answers `text.contains(&format!("@{sym}("))` exactly, for any `sym`
+/// that holds no newline and no `(` -- which every LLVM symbol here does.
+/// From each `@` the scan runs to the first `(`, stopping at a newline, so a
+/// probe can never straddle two lines; that matters because one of the three
+/// places this replaces searched DECLARES line by line rather than whole.
+fn called_symbols(text: &str) -> crate::hash::Set<&str> {
+    let bytes = text.as_bytes();
+    let mut found = crate::hash::Set::default();
+    let mut at = 0;
+    while let Some(next) = bytes[at..].iter().position(|b| *b == b'@') {
+        let from = at + next + 1;
+        let mut to = from;
+        while to < bytes.len() && bytes[to] != b'(' && bytes[to] != b'\n' {
+            to += 1;
+        }
+        if to < bytes.len() && bytes[to] == b'(' {
+            found.insert(&text[from..to]);
+        }
+        at = from;
+    }
+    found
+}
+
+/// Every `sym` for which `text` writes `@sym\n`, collected in one pass.
+///
+/// A line can only end in `@sym`, so only the LAST `@` on each line can start
+/// a match and the whole text is read once. That makes the answer exact for a
+/// `sym` holding no `@` and no newline, which every symbol the emitter asks
+/// about is: `@a @b\n` would have to be found under the name `a @b`, and
+/// reading each line's last at alone cannot see it.
+///
+/// The forward scan this replaced ran from every `@` to the end of its line,
+/// which on a big emitted body is the text times the number of ats: it cost
+/// `kanso build bench/runbench` 209 million instructions, turning a fall into
+/// a rise.
+fn symbols_before_newline(text: &str) -> crate::hash::Set<&str> {
+    let mut found = crate::hash::Set::default();
+    let mut start = 0;
+    for (newline, _) in text.match_indices('\n') {
+        let line = &text[start..newline];
+        if let Some(at) = line.rfind('@') {
+            found.insert(&line[at + 1..]);
+        }
+        start = newline + 1;
+    }
+    found
+}
+
+/// The symbols DECLARES calls from its own inline definitions, which is every
+/// line of it that is not itself a `declare`. DECLARES is a constant, so this
+/// is read once for the life of the process rather than once per emit.
+fn declares_context_calls() -> &'static crate::hash::Set<&'static str> {
+    static CALLS: std::sync::OnceLock<crate::hash::Set<&'static str>> = std::sync::OnceLock::new();
+    CALLS.get_or_init(|| {
+        let mut found = crate::hash::Set::default();
+        for line in DECLARES.lines().filter(|l| !l.starts_with("declare")) {
+            found.extend(called_symbols(line));
+        }
+        found
+    })
+}
+
+#[cfg(test)]
+mod called_symbols_agrees {
+    use super::*;
+
+    /// What the emitter asked before the index existed, kept as the oracle.
+    fn searched(text: &str, sym: &str) -> bool {
+        text.contains(&format!("@{sym}("))
+    }
+
+    /// Every query the emitter makes, asked both ways, over a text.
+    ///
+    /// The symbols are DECLARES's own -- the real 163 -- plus every prefix and
+    /// suffix of each, because a span-based index can agree on a whole name
+    /// and still disagree on one letter of it, and the emitter's question is
+    /// `@sym(` where a prefix would answer for a longer symbol if the index
+    /// stored anything looser than the run up to the paren.
+    fn agrees_over(text: &str) {
+        let index = called_symbols(text);
+        let mut asked = 0;
+        for line in DECLARES.lines() {
+            let Some(rest) = line.strip_prefix("declare ") else { continue };
+            let Some(at) = rest.find('@') else { continue };
+            let sym = &rest[at + 1..];
+            let Some(paren) = sym.find('(') else { continue };
+            let sym = &sym[..paren];
+            for end in 1..=sym.len() {
+                for start in 0..end {
+                    let part = &sym[start..end];
+                    assert_eq!(
+                        index.contains(part),
+                        searched(text, part),
+                        "the index and the search disagree on `@{part}(`"
+                    );
+                    asked += 1;
+                }
+            }
+        }
+        assert!(asked > 10_000, "the corpus asked only {asked} questions");
+    }
+
+    #[test]
+    fn over_the_declares_block() {
+        agrees_over(DECLARES);
+    }
+
+    /// The `@cell` form, which matches only at the end of a line.
+    ///
+    /// The scan reads each line's LAST at, so this is the shape that goes
+    /// wrong when a line holds more than one.
+    #[test]
+    fn a_cell_is_named_only_where_its_line_ends() {
+        for text in [
+            "@a\n",
+            "@a",      // no newline, so nothing matches
+            "@a @b\n", // only the last at can end the line
+            "@a(\n",
+            "  @a\n  @b\n",
+            "@\n",
+            "",
+            "@a\n@a\n",
+        ] {
+            let index = symbols_before_newline(text);
+            // Every symbol the emitter asks about is a generated identifier,
+            // so the queries here hold no at and no newline -- see the note on
+            // symbols_before_newline for the one shape outside that.
+            for sym in ["a", "b", "", "a("] {
+                assert_eq!(
+                    index.contains(sym),
+                    text.contains(&format!("@{sym}\n")),
+                    "index and search disagree on `@{sym}\\n` in {text:?}"
+                );
+            }
+        }
+    }
+
+    /// The edges a span scan can get wrong, each as a whole text.
+    #[test]
+    fn the_shapes_a_span_scan_can_lose() {
+        for text in [
+            "@a(",              // the plain case
+            "@a",               // no paren at all
+            "@a\n(",            // a newline between the name and the paren
+            "@@a(",             // two ats, and `@a(` is still in there
+            "@a@b(",            // an at inside the span
+            "  call @a(i64 1)", // the shape a real line has
+            "@a(@b(@c(",        // three in one line
+            "",                 // nothing
+            "@",                // an at and nothing after it
+        ] {
+            let index = called_symbols(text);
+            for sym in ["a", "b", "c", "@a", "a@b", "", "ab"] {
+                assert_eq!(
+                    index.contains(sym),
+                    searched(text, sym),
+                    "index and search disagree on `@{sym}(` in {text:?}"
+                );
+            }
+        }
+    }
 }
 
 /// Whether this text names `@sym`. A call writes `@sym(`, but a closure hands
@@ -1946,6 +2259,166 @@ fn names_symbol(text: &str, sym: &str) -> bool {
             Some(b) if b.is_ascii_alphanumeric() || *b == b'_' || *b == b'"'
         )
     })
+}
+
+#[cfg(test)]
+mod the_prune_agrees_with_the_search {
+    use super::*;
+
+    /// The fixpoint as it was written before the index, kept as the oracle.
+    ///
+    /// It asks `names_symbol` once per (block, name) pair, which is what made
+    /// it 72.10% of `kanso build bench/runbench`. It is the definition of the
+    /// right answer and nothing else, so it stays here rather than in the
+    /// commit message.
+    fn by_search(body: &str, entry: &str, cells: &[(String, String, usize)]) -> String {
+        let mut blocks = ir_defines(body);
+        loop {
+            let named = |at: usize, sym: &str| {
+                if blocks
+                    .iter()
+                    .enumerate()
+                    .any(|(k, (_, text))| k != at && names_symbol(text, sym))
+                {
+                    return true;
+                }
+                cells.iter().any(|(cell, w, _)| {
+                    w == sym
+                        && blocks
+                            .iter()
+                            .enumerate()
+                            .any(|(k, (_, text))| k != at && names_symbol(text, cell))
+                })
+            };
+            let doomed = blocks.iter().enumerate().position(|(at, (sym, _))| {
+                sym != entry
+                    && sym != "d_thunk_eval"
+                    && (sym.starts_with("d_")
+                        || sym.starts_with("w_")
+                        || sym.starts_with("\"d_")
+                        || sym.starts_with("\"w_"))
+                    && !named(at, sym)
+            });
+            match doomed {
+                Some(at) => blocks.remove(at),
+                None => break,
+            };
+        }
+        blocks.into_iter().map(|(_, text)| text).collect()
+    }
+
+    fn define(sym: &str, body: &str) -> String {
+        format!("define %KValue @{sym}() {{\nentry:\n{body}\n}}\n")
+    }
+
+    fn agree_on(body: &str, entry: &str, cells: &[(String, String, usize)]) {
+        assert_eq!(
+            prune_unnamed(body, entry, cells),
+            by_search(body, entry, cells),
+            "the index and the search kept different blocks"
+        );
+    }
+
+    /// A chain the fixpoint has to walk down: the entry names nothing, so
+    /// `d_a` goes, and only then is `d_b` unnamed, and only then `d_c`.
+    #[test]
+    fn a_chain_that_falls_one_round_at_a_time() {
+        let body = [
+            define("d_entry", "  ret %KValue zeroinitializer"),
+            define("d_a", "  %x = call %KValue @d_b()\n  ret %KValue %x"),
+            define("d_b", "  %x = call %KValue @d_c()\n  ret %KValue %x"),
+            define("d_c", "  ret %KValue zeroinitializer"),
+        ]
+        .concat();
+        assert!(!prune_unnamed(&body, "d_entry", &[]).contains("@d_c("));
+        agree_on(&body, "d_entry", &[]);
+    }
+
+    /// The delimiter rule, which is the whole reason `names_symbol` exists:
+    /// `@w_klam1` must not answer for `@w_klam17`.
+    #[test]
+    fn a_longer_name_does_not_answer_for_a_shorter_one() {
+        let body = [
+            define("d_entry", "  %x = call %KValue @w_klam17()\n  ret %KValue %x"),
+            define("w_klam1", "  ret %KValue zeroinitializer"),
+            define("w_klam17", "  ret %KValue zeroinitializer"),
+        ]
+        .concat();
+        let kept = prune_unnamed(&body, "d_entry", &[]);
+        assert!(kept.contains("@w_klam17("), "the named wrapper was pruned");
+        assert!(!kept.contains("define %KValue @w_klam1()"), "the unnamed wrapper was kept");
+        agree_on(&body, "d_entry", &[]);
+    }
+
+    /// A quoted name, which is how `quoted()` spells one holding a slash. The
+    /// one-pass scan reads it from quote to quote; a run over the delimiter
+    /// class alone would stop at the slash and lose it.
+    #[test]
+    fn a_quoted_name_is_read_to_its_closing_quote() {
+        let body = [
+            define("d_entry", "  %x = call %KValue @\"d_add/2\"()\n  ret %KValue %x"),
+            define("\"d_add/2\"", "  ret %KValue zeroinitializer"),
+            define("\"d_sub/2\"", "  ret %KValue zeroinitializer"),
+        ]
+        .concat();
+        let kept = prune_unnamed(&body, "d_entry", &[]);
+        assert!(kept.contains("@\"d_add/2\"("), "the named quoted block was pruned");
+        assert!(!kept.contains("@\"d_sub/2\"()"), "the unnamed quoted block was kept");
+        agree_on(&body, "d_entry", &[]);
+    }
+
+    /// A wrapper is kept when a CELL that stands for it is named, which is the
+    /// second half of the question and the one that reads `cells`.
+    #[test]
+    fn a_wrapper_lives_while_its_cell_is_named() {
+        let body = [
+            define("d_entry", "  %x = load %KValue, ptr @k_clo_7\n  ret %KValue %x"),
+            define("w_klam3", "  ret %KValue zeroinitializer"),
+            define("w_klam4", "  ret %KValue zeroinitializer"),
+        ]
+        .concat();
+        let cells = [("k_clo_7".to_string(), "w_klam3".to_string(), 1usize)];
+        let kept = prune_unnamed(&body, "d_entry", &cells);
+        assert!(kept.contains("@w_klam3("), "the wrapper its cell names was pruned");
+        assert!(!kept.contains("@w_klam4("), "the wrapper nothing names was kept");
+        agree_on(&body, "d_entry", &cells);
+    }
+
+    /// A name the one-pass scan cannot tokenise falls back to the search, so
+    /// the index is exact without assuming how a symbol is spelled.
+    #[test]
+    fn an_odd_name_is_answered_the_old_way() {
+        assert!(one_pass_reads("d_foo"));
+        assert!(one_pass_reads("\"d_add/2\""));
+        assert!(!one_pass_reads("d_foo.bar"));
+        assert!(!one_pass_reads("\"un\"closed"));
+        let body = [
+            define("d_entry", "  %x = call %KValue @d_foo.bar()\n  ret %KValue %x"),
+            define("d_foo.bar", "  ret %KValue zeroinitializer"),
+            define("d_foo.baz", "  ret %KValue zeroinitializer"),
+        ]
+        .concat();
+        let kept = prune_unnamed(&body, "d_entry", &[]);
+        assert!(kept.contains("@d_foo.bar("), "the named odd block was pruned");
+        assert!(!kept.contains("@d_foo.baz("), "the unnamed odd block was kept");
+        agree_on(&body, "d_entry", &[]);
+    }
+
+    /// Real emitted IR, with the symbols the emitter really writes.
+    ///
+    /// The text is what `emit_ir` produced, so the prune has already run over
+    /// it once; feeding it back asks both implementations the same several
+    /// hundred questions about a body neither was written against.
+    #[test]
+    fn real_emitted_ir_reads_the_same_both_ways() {
+        let source = "fn count 0 acc\n  acc\n\nfn count n acc\n  count (n - 1) (acc + n)\n\nmain = print \"{count 10 0}\"\n";
+        let program = crate::compile("sample.kso", source, false).expect("the sample compiles");
+        let ir = emit_ir(&program, ClosureConvention::Absent).expect("the sample lowers");
+        assert!(ir.lines().count() > 200, "the sample emitted only {} lines", ir.lines().count());
+        for entry in ["d_main", "d_count"] {
+            agree_on(&ir, entry, &[]);
+        }
+    }
 }
 
 /// Split emitted IR into segments, keeping every byte. A `define` segment
@@ -2129,24 +2602,18 @@ fn not_failure_test(f: &mut FnEmit, value: &str) -> String {
 }
 
 impl<'a> Backend<'a> {
-    fn group_indices(&self, name: &str, arity: usize) -> Vec<usize> {
-        self.program
-            .fns
-            .iter()
-            .enumerate()
-            .filter(|(_, d)| d.name == name && d.params.len() == arity)
-            .map(|(i, _)| i)
-            .collect()
+    /// A group's declaration indices, read out of the index rather than
+    /// scanned for. Program order, which is what the scan gave.
+    fn group_indices<'s>(&'s self, name: &str, arity: usize) -> impl Iterator<Item = usize> + 's {
+        group_indices_in(&self.group_by_name, self.program, name, arity)
     }
 
     fn group_param_set(&self, name: &str, arity: usize, param: usize) -> Set {
-        self.group_indices(name, arity)
-            .iter()
-            .fold(0, |acc, i| acc | self.inference.param(*i, param))
+        self.group_indices(name, arity).fold(0, |acc, i| acc | self.inference.param(i, param))
     }
 
     fn group_return_set(&self, name: &str, arity: usize) -> Set {
-        self.group_indices(name, arity).iter().fold(0, |acc, i| acc | self.inference.returns[*i])
+        self.group_indices(name, arity).fold(0, |acc, i| acc | self.inference.returns[i])
     }
 
     /// A parameter proven to be exactly `int` crosses the tailcc boundary as a
@@ -2826,55 +3293,40 @@ impl<'a> Backend<'a> {
         // it does cost a line, a define and a branch in the emitted golden —
         // so the twins are generated against the body rather than carried in
         // DECLARES the way the other inline helpers are.
+        // Every `@sym(` the body writes, read off in one pass. The question
+        // below is asked once per declare line -- 163 of them -- and used to
+        // be answered by searching the whole emitted body for each, which is
+        // 163 scans of a text that grows with the program. On a build of
+        // bench/compile_corpus that search was 17.08% of the process.
+        let body_calls = called_symbols(&body);
+        let body_lines = symbols_before_newline(&body);
         let call_twins: String = (0..=4)
-            .filter(|n| body.contains(&format!("@k_call{n}_fast(")))
+            .filter(|n| body_calls.contains(format!("k_call{n}_fast").as_str()))
             .map(|n| call_twin(n, self.convention))
             .collect();
         let declares: String = {
-            // THE HAYSTACK IS BUILT ONCE. This filter asks `referenced` for
-            // every line in DECLARES, and `referenced` used to re-split
-            // DECLARES and re-scan its non-declare lines on each of those
-            // asks -- one thousand two hundred lines searched one thousand
-            // two hundred times. Joining them into one string ahead of the
-            // loop is exactly equivalent: the probe is `@sym(`, which holds
-            // no newline, so no probe can match across a join that uses one.
-            let helper_text: String = DECLARES
-                .lines()
-                .filter(|l| !l.starts_with("declare"))
-                .collect::<Vec<_>>()
-                .join("\n");
-            // AND THE HAYSTACKS ARE READ ONCE, not once per candidate. The
-            // question asked of each is `does `@sym(` appear`, and the set of
-            // symbols that satisfy it for a given text can be read off in a
-            // single pass: every `@` begins a name and the next `(` ends it.
-            // That is the same answer, because a symbol holds no `(` -- so the
-            // first `(` after an `@` is exactly where the name stops, which is
-            // the assumption the DECLARES parser below already makes when it
-            // reads a declared name as the span between them. Names are bounded
-            // at whitespace as well, which cannot change an answer: every name
-            // this is asked about comes from a `declare` line and holds none.
+            // BOTH SIDES OF THIS BUILT THE SAME INDEX. kanso#1461 landed one
+            // inline, joining DECLARES’s non-declare lines and scanning the
+            // three haystacks in place; this branch had already factored the
+            // scan into `called_symbols` and cached the DECLARES half in a
+            // `OnceLock`, so `body_calls` is computed once above and reused by
+            // the call-twin filter rather than rebuilt here. The sets are the
+            // same for every query the emitter makes: a symbol from a
+            // `declare` line holds no whitespace and no `(`, so bounding the
+            // span at the first `(` and bounding it at the first `(` or space
+            // cannot disagree about one.
             //
-            // `crate::hash::Set` rather than std's, and that is not a style
-            // choice: std seeds its hasher per process, and a randomly seeded
-            // table makes this count differ between two runs of one binary --
-            // which the compile rows read as a reproduction failure and halt
-            // the vein over. `tests/the_compile_path_hashes_with_a_fixed_seed
-            // .rs` is what says so, and it named this line.
-            let called: crate::hash::Set<&str> =
-                [body.as_str(), call_twins.as_str(), helper_text.as_str()]
-                    .into_iter()
-                    .flat_map(|hay| {
-                        hay.match_indices('@').filter_map(move |(at, _)| {
-                            let rest = &hay[at + 1..];
-                            let stop = rest.find(|c: char| c == '(' || c.is_whitespace())?;
-                            match rest.as_bytes()[stop] {
-                                b'(' if stop > 0 => Some(&rest[..stop]),
-                                _ => None,
-                            }
-                        })
-                    })
-                    .collect();
-            let referenced = |sym: &str| called.contains(sym);
+            // `crate::hash::Set` and not std’s, which kanso#1461’s comment
+            // gives the reason for and `tests/the_compile_path_hashes_with_a
+            // _fixed_seed.rs` pins: std seeds per process, and a randomly
+            // seeded table makes this count differ between two runs of one
+            // binary, which the compile rows read as a reproduction failure.
+            let twin_calls = called_symbols(&call_twins);
+            let referenced = |sym: &str| {
+                body_calls.contains(sym)
+                    || twin_calls.contains(sym)
+                    || declares_context_calls().contains(sym)
+            };
             let kept: Vec<&str> = DECLARES
                 .lines()
                 .filter(|line| {
@@ -2901,7 +3353,7 @@ impl<'a> Backend<'a> {
             let _ = writeln!(out, "@{cell} = internal global %KValue zeroinitializer");
         }
         for (cell, w, arity) in
-            self.closure_consts.iter().filter(|(cell, _, _)| body.contains(&format!("@{cell}\n")))
+            self.closure_consts.iter().filter(|(cell, _, _)| body_lines.contains(cell.as_str()))
         {
             // K_INT 0 is the env a zero-capture closure never reads; K_CLOSURE
             // is tag 11. The KClosure layout is the runtime's:
@@ -6943,5 +7395,67 @@ fn register_width(ty: &str) -> usize {
     match ty {
         "%KValue" | "%parsed" => 2,
         _ => 1,
+    }
+}
+
+#[cfg(test)]
+mod the_emitter_group_index_answers_what_the_scan_answered {
+    use super::*;
+
+    /// What `Backend::group_indices` did before the index existed, kept as the
+    /// oracle.
+    fn scanned(program: &Program, name: &str, arity: usize) -> Vec<usize> {
+        program
+            .fns
+            .iter()
+            .enumerate()
+            .filter(|(_, d)| d.name == name && d.params.len() == arity)
+            .map(|(i, _)| i)
+            .collect()
+    }
+
+    /// Every question the emitter can ask, asked both ways. `group_param_set`
+    /// and `group_return_set` FOLD over the answer, so a missing or extra
+    /// index is a wrong type set and a silently wrong ABI -- and the fold is
+    /// order-independent, which is why order is checked here anyway rather
+    /// than left to a future caller to discover.
+    fn agrees_over(program: &Program) {
+        let by_name = group_indices_by_name(program);
+        let mut arities: Vec<usize> = program.fns.iter().map(|d| d.params.len()).collect();
+        arities.sort_unstable();
+        arities.dedup();
+        let mut names: Vec<&str> = program.fns.iter().map(|d| d.name.as_str()).collect();
+        names.push("a name nothing declares");
+        for name in names {
+            for &arity in arities.iter().chain(std::iter::once(&99)) {
+                let want = scanned(program, name, arity);
+                let got: Vec<usize> = group_indices_in(&by_name, program, name, arity).collect();
+                assert_eq!(
+                    want, got,
+                    "`{name}` at arity {arity}: the scan found {want:?} and the index found {got:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn over_the_library_the_compiler_carries() {
+        let program =
+            crate::compile_module(std::path::Path::new("lib/json"), false).expect("lib/json");
+        agrees_over(&program);
+    }
+
+    #[test]
+    fn over_a_name_declared_at_two_arities() {
+        // One name at two arities, and a second sharing neither: the case a
+        // name-keyed index has to get right.
+        let src = concat!(
+            "fn f x\n  x\n\n",
+            "fn f x y\n  x + y\n\n",
+            "fn g x\n  x\n\n",
+            "main = print \"{f 1} {f 1 2} {g 3}\"\n"
+        );
+        let program = crate::compile("test.kso", src, false).expect("the fixture compiles");
+        agrees_over(&program);
     }
 }
