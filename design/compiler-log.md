@@ -7078,13 +7078,21 @@ the allocator. It is not any path the interpreter runs hot. Six instructions
 in a cold function is the shape of one branch taken once, or one loop running
 one extra time, in setup.
 
-**What differs is still open.** The gate prints `.text`, `.data` and `.bss`
-and does not print `.rodata`, so a difference living there is invisible to
-the line written to catch this, and `size --format=sysv` on the two artifacts
-would say in one command. The `compile-profiles` artifact both jobs upload
-does NOT help here: its copy step reads `for n in compile entry library`, so
-`cg.interp` is not among the files. The threshold-90 list above, printed in
-both job logs, is what there is, and it has already been read.
+**What differs is still open, and the instrument has a gap with a history.**
+`interp_instructions.sh` prints `.text`, `.data` and `.bss`.
+`compile_instructions.sh`, which the interp gate's own header tells the
+reader to consult for everything the two share, prints `.text`, `.bss` and
+**`.rodata`** — and its header carries the seven-binary calibration that is
+why: one of the seven is `+64 KiB .rodata`, and the row moved for it. The
+newer gate dropped the section the older one had learned to watch, so a
+difference living in `.rodata` is invisible to the very line written to catch
+this. Whether that calibration transports to this gate's anchor is not
+established and is not assumed here; the two anchors are different frames.
+`size --format=sysv` on the two artifacts would say in one command. The
+`compile-profiles` artifact both jobs upload does NOT help: its copy step
+iterates over compile, entry and library, so `cg.interp` is not among the
+files. The threshold-90 list above, printed in both job logs, is what there
+is, and it has already been read.
 
 **Fourteen counters, one disagreement.** Both jobs dump every `*_got.txt`
 before the summary step, so the whole sitting can be compared rather than the
@@ -7144,6 +7152,7 @@ artifact moves — is his, and this entry does not answer it in advance.
   source, the lock and same-machine build determinism each ruled out
   separately.
 - **OPEN** what differs between the two artifacts. `.rodata` is the section
-  the gate does not print, and is where to look first.
+  this gate does not print and the compile gate does, which makes printing it
+  the first move rather than the last.
 - **OPEN** whether the other nine weighted counters have the same exposure.
   They read the same binary, so the prior is that they do; nobody has looked.

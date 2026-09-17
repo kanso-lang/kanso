@@ -224,12 +224,19 @@ different memcpy by CPU feature, not the allocator, and not any path the
 interpreter runs hot; it is one cold function, the shape of a branch taken
 once in setup.
 
-What differs is still open. The gate prints `.text`, `.data` and `.bss` and
-does not print `.rodata`, so a difference living there is invisible to the
-line written to catch exactly this.
+What differs is still open, and the instrument has a gap with a history.
+`interp_instructions.sh` prints `.text`, `.data` and `.bss`;
+`compile_instructions.sh`, which the interp gate's header points the reader
+to for everything the two share, prints `.text`, `.bss` and `.rodata`, and
+its header carries the seven-binary calibration behind that — one of the
+seven is `+64 KiB .rodata` and the row moved for it. The newer gate dropped
+the section the older one had learned to watch. Whether that calibration
+transports to this gate's anchor is not established and is not assumed.
 
-Owes: finish the isolation. `size --format=sysv` on the two artifacts is the
-next command, and note that the `compile-profiles` artifact does not help —
+Owes: finish the isolation, starting with printing `.rodata` in
+`interp_instructions.sh` as `compile_instructions.sh` already does — one awk
+alternation, and the next occurrence answers itself. `size --format=sysv` on
+the two artifacts is the other half, and note that the `compile-profiles` artifact does not help —
 its copy step reads `for n in compile entry library`, so `cg.interp` is not
 in it; uploading that profile would make the next occurrence answerable
 without guessing. Then the ruling's first road, a build byte-identical from
