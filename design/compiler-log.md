@@ -6999,3 +6999,27 @@ before main moved under it.
 
 - **DONE** CI's sitting on the merged tree, six rows, five down and one up.
 
+
+## 2026-09-17 — kanso#1486's rows on the merged tree
+
+CI's sitting after the branch was re-based on main `5e256ce0`:
+
+    compile_instructions     35,559,408 ->    35,559,420        +12
+    entry_instructions      126,771,759 ->   126,771,750         -9
+    library_instructions    127,226,509 ->   127,226,515         +6
+    startup_instructions      4,833,450 ->     4,833,019       -431
+
+Nothing in that table is this branch. Twelve instructions in thirty-five
+million is four parts in ten million, the signs disagree across three rows
+that measure the same pass, and the start-up figure is the same 431 every
+branch re-based today took from kanso#1491's edit to src/main.rs.
+
+Where the branch shows is against main: the three check rows sit **408,753,
+1,442,220 and 1,121,690 below** it. The interpreted row rises 163,620, 75
+parts per million, and costs 0.000 points.
+
+The index reads 76.13 against a floor of 76.13 and the rise is 0.01. Banked
+here, because a rise nobody ratchets is a rise the next change is free to
+spend and the floor sentinel fails an unbanked one however small.
+
+- **DONE** four rows measured and written; the floor ratcheted.

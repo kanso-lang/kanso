@@ -147,4 +147,9 @@
 # counters sit; they are compiled out of a shipped binary and the gate builds one
 # that carries them, so what this reads is the same layout term as the rows
 # above, at the same scale.
-startup_instructions=4833450
+# 2026-09-17, kanso#1486 on the tree merged with main 5e256ce0, CI's sitting.
+# 4,833,450 -> 4,833,019, a FALL of 431. The split landed under this branch and
+# edits src/main.rs; a dozen instructions either way on a row of thirty-five
+# million is that, and nothing this branch does reaches it. The start-up row
+# takes the same 431 every branch re-based today took.
+startup_instructions=4833019

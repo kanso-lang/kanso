@@ -757,7 +757,12 @@
 #
 # 2026-09-17, kanso#1470 against main, CI's sitting. 128,213,972 -> 128,213,970,
 # a FALL of 2. See bench/compile_instructions_golden.txt.
-entry_instructions=126771759
+# 2026-09-17, kanso#1486 on the tree merged with main 5e256ce0, CI's sitting.
+# 126,771,759 -> 126,771,750, a FALL of 9. The split landed under this branch and
+# edits src/main.rs; a dozen instructions either way on a row of thirty-five
+# million is that, and nothing this branch does reaches it. The start-up row
+# takes the same 431 every branch re-based today took.
+entry_instructions=126771750
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

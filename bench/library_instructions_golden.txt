@@ -771,7 +771,12 @@
 # 2026-09-17, kanso#1486 on the tree merged with main, CI's sitting.
 # 128,348,205 -> 127,226,509, a FALL of 1,121,696 (-0.874%). WORK; see
 # bench/compile_instructions_golden.txt.
-library_instructions=127226509
+# 2026-09-17, kanso#1486 on the tree merged with main 5e256ce0, CI's sitting.
+# 127,226,509 -> 127,226,515, a RISE of 6. The split landed under this branch and
+# edits src/main.rs; a dozen instructions either way on a row of thirty-five
+# million is that, and nothing this branch does reaches it. The start-up row
+# takes the same 431 every branch re-based today took.
+library_instructions=127226515
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.
