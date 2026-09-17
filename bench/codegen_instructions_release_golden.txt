@@ -47,4 +47,37 @@
 # the log named none of them. The next sitting says which, and the choice --
 # normalize what moves it, or exclude it and name the exclusion in this header
 # under the 2026-09-15 rule -- waits on that.
+#
+# 2026-09-17, later the same day: the instrument was run on this container
+# instead of waiting for CI, and it names the process on the first try.
+#
+#   reading a   kanso=425,656,322  clang=32,184,722  clang=31,624,903
+#               clang=1,617,293,611  ld=5,145,605,822   total 7,252,365,380
+#   reading b   kanso=425,656,555  clang=32,184,722  clang=31,624,903
+#               clang=1,617,293,611  ld=5,145,605,822   total 7,252,365,613
+#
+# Every child is byte-identical and kanso's own process moves 233. Inside it,
+# two frames of 1,346 differ: `kanso::build` +189 and `__memcmp_avx2_movbe`
+# +44.
+#
+# The memcmp is the pid. `pid_tag()` puts the process id into the names of the
+# .ll, the staging file and the runtime object; its WIDTH was pinned at seven
+# digits in an earlier round, and that left the CONTENT free, so a comparison
+# over those paths stops at a different byte each run. A probe binary with
+# `pid_tag_of` returning a constant was built and run twice: memcmp came back
+# byte-identical and the total moved 112 instead of 233.
+#
+# What the probe leaves is 112 instructions in ONE frame of 1,346 --
+# `kanso::build` itself, self cost, with every callee byte-identical. That is
+# an inlined loop inside `build` whose iteration count is not the compiler's
+# to choose. The dev tier, the same code against a child that finishes seven
+# times sooner, reproduces exactly; the release tier does not. Nothing here
+# has been shown to be the compiler's work.
+#
+# So the choice this header was waiting on is now a choice between: making the
+# temp names carry no pid (which is worth 121 of the 233 and is a fix worth
+# making on its own), and what to do about a row whose subject includes a
+# process that waits for another process. Counting the children alone, or
+# giving kanso's own half its own row, are the two shapes that would leave
+# every counted thing deterministic.
 codegen_instructions_release=12107507377

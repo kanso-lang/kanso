@@ -5555,3 +5555,55 @@ red by putting the old `printf` back: it reads `kanso clang` and says so.
 - **OPEN** the release row, which waits on one sitting naming the process that
   moves. Then the choice is to normalize what moves it, or to exclude it and
   name the exclusion in the golden's header under the 2026-09-15 rule.
+
+## 2026-09-17 — the release row's two numbers, named on the first run of the instrument
+
+The gate now prices every process it names, and the answer came off this
+container rather than off a CI round.
+
+```
+  reading a   kanso=425,656,322  clang=32,184,722  clang=31,624,903
+              clang=1,617,293,611  ld=5,145,605,822    total 7,252,365,380
+  reading b   kanso=425,656,555  clang=32,184,722  clang=31,624,903
+              clang=1,617,293,611  ld=5,145,605,822    total 7,252,365,613
+```
+
+Three clang processes and the linker come back byte for byte. All 233
+instructions are kanso's own process, and inside it two frames of 1,346
+differ: `kanso::build` +189 and `__memcmp_avx2_movbe` +44.
+
+### The memcmp is the process id
+
+`pid_tag()` puts the pid into the names of the emitted `.ll`, the staging file
+and the cached runtime object. An earlier round pinned its WIDTH at seven
+digits, which fixed the length of every path built from it and left the
+content free, so a comparison over those paths stops at a different byte from
+one run to the next.
+
+A probe binary with `pid_tag_of` returning a constant was built and both
+readings taken again: `__memcmp_avx2_movbe` came back byte-identical and the
+total moved 112 rather than 233. The pid is worth 121 of the 233.
+
+### What is left is a wait
+
+The probe's remaining 112 sit in ONE frame of 1,346 — `kanso::build`, self
+cost, every callee byte-identical. That is an inlined loop inside `build`
+whose iteration count is not the compiler's to choose: `build` spawns clang
+and waits for it.
+
+The dev tier is the control. It is the same code waiting on a child that
+finishes seven times sooner, and it reproduces exactly across the same pair
+of runs, on CI and here.
+
+### What that leaves to decide
+
+The pid is worth fixing whatever else happens: temp names that carry no pid
+would take 121 out and cost nothing. What is left is a row whose subject
+includes a process that waits for another process, and the 2026-09-15 rule
+says a term that cannot be normalized is excluded and the exclusion named in
+the golden's header. Two shapes leave every counted thing deterministic:
+count the children alone, or give kanso's own half its own row.
+
+- **DONE** the instrument, and the process named.
+- **OPEN** the release row, which is not written and will not be until the
+  thing it counts reproduces.
