@@ -8798,14 +8798,20 @@ So the trade is: 11.2 million instructions once per release build, against
 0.45 on the production side and the release build at 0.15, and takes it —
 welfare 76.65 → 76.71, banked.
 
-**A span that quotes a number nothing checks.** Publishing CI's row, the page
-got `data-golden="run.runbench"` and `golden_prose` answered `UNKNOWN KEY
-run.runbench` — and the sweep still reported that the three page gates agree,
-exit 0. `golden_for` knows three families, decode, encode and compile, and
-anything else resolves against an empty golden; `bench/instructions_golden.txt`
-also writes `name value` rows where the parser wants `name=value`. So there is
-no way for any page to quote the run-side vein today, and an unknown key is a
-warning rather than a failure. The attribute came off and the row is plain text
-on the page. The gate's own comment names this exact shape as the failure it
-was widened to stop, and kanso#1337 cost a run to the same gap on the library
-vein; making an unknown key red is a separate change and is filed.
+**No page can quote the run-side vein.** Publishing CI's row, the page got
+`data-golden="run.runbench"` and `golden_prose` answered `UNKNOWN KEY
+run.runbench`. `golden_for` knows three families — decode, encode and compile —
+and anything else resolves against an empty golden;
+`bench/instructions_golden.txt` also writes `name value` rows where the
+parser wants `name=value`, so listing it would take widening the parser too.
+The attribute came off and the row is plain text on the page until both are
+done. kanso#1337 cost a run to the same gap on the library vein, and the
+gate's own comment records it.
+
+The gate itself is sound, and this entry nearly said otherwise. `--write`
+prints the unknown key and carries on, because there is nothing for it to
+rewrite, and reading that output alone it looks like a warning. Run plain,
+`golden_prose` exits 1 and `all_pages.sh` reports `pages objected:
+golden_prose` — checked by injecting the bogus key and reading the exit code
+rather than the text. A claim about what a guardrail does is worth the thirty
+seconds it takes to watch it fail.
