@@ -4707,3 +4707,42 @@ into `Backend::emit` and callgrind attributes them there together.
 - **DONE** the rows are CI's.
 >>>>>>> origin/claude/group-indices
 >>>>>>> claude/value-use-index
+
+## 2026-09-17 — DECLARES is a constant, parsed once per emit until now
+
+`Backend::emit` rebuilt the same parse on every module it emitted:
+`DECLARES.lines()` re-split 1,187 lines, and for each of the 163 `declare`
+lines a `strip_prefix`, a `find('@')` and a `find('(')` recovered the symbol.
+`without_stats_gate` then searched every kept line for
+`"load i32, ptr @k_stats_on"`. All of it reads a `const &'static str` and none
+of it can differ between two emits.
+
+A `OnceLock` holds the parse: the line, the symbol it declares if it is a
+`declare`, and whether it opens a stats gate. The gate flag travels with the
+line rather than being searched for again, which is sound because a gate line
+is a non-`declare` line and a non-`declare` line is kept unconditionally — the
+three lines of a gate always survive the filter together and in order.
+
+`kanso build bench/runbench` falls **944,444 instructions, 0.16%**, IR
+byte-identical.
+
+**The prediction was fifty million and it was wrong, which is the part worth
+recording.** `callgrind_annotate --tree=caller` put 35,293,382 instructions of
+`CharSearcher::next_match` and 18,216,126 of `is_contained_in` under
+`Backend::emit`, over 179,009 and 144,261 calls. 144,261 is close to 1,187
+lines times the number of emits, and the arithmetic looked like a proof. After
+the change `is_contained_in` reads 17,368,306 against 17,476,134 and
+`memchr_aligned` is unmoved at 25.9M, so almost none of that was this.
+
+The lesson is about the tool rather than the arithmetic. `Backend::emit` is
+enormous and everything inlines into it, so an edge attributed to it names a
+CALLER that is really a hundred call sites wearing one name. A caller-tree edge
+is evidence about a frame, not about a line. Naming the line needs line-level
+debug info in the profile, which no measurement in this session has had.
+
+So the searches are still there, they are still 8.8% of a build, and where they
+are is open. This entry closes the smaller thing it actually found.
+
+- **DONE** the constant is parsed once.
+- **OPEN** the 53.5M of substring searching inside `Backend::emit`. It needs a
+  profile built with debug info to name the line; a caller tree cannot.

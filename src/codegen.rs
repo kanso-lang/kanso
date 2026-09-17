@@ -39,19 +39,61 @@ enum ArmCase {
 /// The gate is exactly three lines wherever it appears, and this REFUSES to
 /// proceed on anything else rather than silently leaving one in: a ninth site
 /// written a different way must turn the build red, not go quietly unstripped.
-fn without_stats_gate(lines: Vec<&str>) -> Vec<String> {
+/// DECLARES, split and parsed ONCE.
+///
+/// The emitter rebuilt this on every module it emitted: `DECLARES.lines()`
+/// re-split 1,187 lines, and for each of the 163 `declare` lines it ran a
+/// `strip_prefix`, a `find('@')` and a `find('(')` to recover the symbol. All
+/// of it reads a `const &'static str` and none of it can differ between two
+/// emits. On a `kanso build bench/runbench` the char searches under
+/// `Backend::emit` were 35,293,382 instructions over 179,009 calls, and the
+/// stats-gate scan below another 18,216,126 over 144,261 -- together 8.8% of
+/// the build, spent re-reading a constant.
+///
+/// `gate_start` is carried here rather than searched for later because a gate
+/// line is a non-`declare` line, and a non-`declare` line is kept
+/// unconditionally: the three lines of a gate always survive the filter
+/// together and in order, so the flag travels with the line.
+struct DeclareLine {
+    text: &'static str,
+    /// The symbol this line declares, when it is a `declare`.
+    declares: Option<&'static str>,
+    /// Whether this line opens a three-line `k_stats_on` gate.
+    gate_start: bool,
+}
+
+fn declare_lines() -> &'static [DeclareLine] {
+    static LINES: std::sync::OnceLock<Vec<DeclareLine>> = std::sync::OnceLock::new();
+    LINES.get_or_init(|| {
+        DECLARES
+            .lines()
+            .map(|text| DeclareLine {
+                text,
+                declares: text.strip_prefix("declare ").and_then(|rest| {
+                    let at = rest.find('@')?;
+                    let sym = &rest[at + 1..];
+                    let paren = sym.find('(')?;
+                    Some(&sym[..paren])
+                }),
+                gate_start: text.contains("load i32, ptr @k_stats_on"),
+            })
+            .collect()
+    })
+}
+
+fn without_stats_gate(lines: Vec<(&str, bool)>) -> Vec<String> {
     let mut out: Vec<String> = Vec::with_capacity(lines.len());
     let mut i = 0;
     let mut stripped = 0;
     while i < lines.len() {
-        let line = lines[i];
-        if !line.contains("load i32, ptr @k_stats_on") {
+        let (line, gate_start) = lines[i];
+        if !gate_start {
             out.push(line.to_string());
             i += 1;
             continue;
         }
-        let icmp = lines.get(i + 1).copied().unwrap_or("");
-        let br = lines.get(i + 2).copied().unwrap_or("");
+        let icmp = lines.get(i + 1).map(|(l, _)| *l).unwrap_or("");
+        let br = lines.get(i + 2).map(|(l, _)| *l).unwrap_or("");
         assert!(
             icmp.contains("= icmp ne i32 ") && icmp.trim_end().ends_with(", 0"),
             "the stats gate's second line is not the icmp this expects: {icmp}"
@@ -3287,18 +3329,13 @@ impl<'a> Backend<'a> {
                     || twin_calls.contains(sym)
                     || declares_context_calls().contains(sym)
             };
-            let kept: Vec<&str> = DECLARES
-                .lines()
-                .filter(|line| {
-                    let Some(rest) = line.strip_prefix("declare ") else { return true };
-                    let Some(at) = rest.find('@') else { return true };
-                    let sym = &rest[at + 1..];
-                    let Some(paren) = sym.find('(') else { return true };
-                    referenced(&sym[..paren])
-                })
+            let kept: Vec<(&str, bool)> = declare_lines()
+                .iter()
+                .filter(|line| line.declares.is_none_or(&referenced))
+                .map(|line| (line.text, line.gate_start))
                 .collect();
             match counters_wanted() {
-                true => kept.join("\n"),
+                true => kept.iter().map(|(l, _)| *l).collect::<Vec<_>>().join("\n"),
                 false => without_stats_gate(kept).join("\n"),
             }
         };
