@@ -69,6 +69,18 @@ STATUS.md joined that list on 2026-09-14, having been missing from it since the
 keeping STATUS.md current the chat's job, in those words. A session reading the
 lane sentence strictly would have found its own assignment out of lane.
 
+docs/compiler.html joined it on 2026-09-17 for the same reason, having been
+missing the whole time. The `page_drift` gate fails a tree carrying more than
+three log entries the page has not covered, and the chat writes the log, so
+every third or fourth chat entry makes the page owe a section — which the
+chat is then the only session positioned to write, because the section is
+about what the chat found. Four of them had already landed under this
+session's id by the day this paragraph was added, so the practice preceded
+the permission by some weeks. The page is the chat's for PROSE about findings
+and rulings. Its `data-golden` spans are a different thing: a span quotes a
+number out of a golden, `golden_prose` checks the quote against the file, and
+moving one means the golden moved, which is cloud's. So a chat pull request
+writes paragraphs and never edits a span to make a gate agree with it.
 Each session merges its own pull requests on green. Clay named the alternative
 on the same day and is content with either: cloud sweeping and landing what the
 chat opened. This one is in force because it waits on neither session noticing
