@@ -62,5 +62,12 @@
 # 2026-09-17, kanso#1462, same sitting. A FALL of 97,472 (-0.0045%), and this
 # one is the change: the interpreted run is what this branch touches, and the
 # fixed-seed hashing is what it does. The objective does not weigh this vein.
-interp_instructions=2178559085
+#
+# 2026-09-17, kanso#1482 on the tree merged with kanso#1462. CI reads
+# 2,178,502,266 against main's 2,178,559,085, a fall of 56,819 -- 0.0026%.
+# LAYOUT: `kanso run --interp` returns from run_interpreted before codegen,
+# so `FnEmit::write` never runs on this corpus. The size of the move is what
+# this vein's layout term looks like -- kanso#1468 moves it 237,834 the other
+# way in the same round from an edit in the same file.
+interp_instructions=2178502266
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
