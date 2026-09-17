@@ -4518,3 +4518,27 @@ The tenth such move recorded on this row.
 **The floor does not move.** DONE. welfare reads 69.76 against a floor of
 69.76. The interpreter start-up row is this branch's own vein and it is the one
 the change is for; these three are collateral.
+
+## 2026-09-17 — kanso#1461 on the merged tree: CI's sitting
+
+The branch merged with kanso#1472 (the allocator's alignment) and CI measured
+the merged tree. Four rows moved against the values the merge carried forward:
+
+    startup_instructions   4,876,986 -> 4,838,300   -38,686   -0.793%
+    compile_instructions  35,969,565 -> 35,966,784    -2,781   -0.0077%
+    entry_instructions   128,144,579 -> 128,134,739   -9,840   -0.0077%
+    library_instructions 128,281,268 -> 128,272,434   -8,834   -0.0069%
+
+The start-up row is the branch's own: the interpreter stops asking the declares
+scan once per name. The three compile rows are the layout kind — `kanso check`
+does not run the interpreter, so none of the work this branch removes is on
+that corpus, and what moves them is src/eval.rs being bytes the compiler
+carries. Welfare rose and is banked at 69.79226700979217.
+
+`per_process_floor=558659 frames=605 kernel=6.17.0-1022-azure cpu=26/2`. A
+fifth distinct floor reading, and the floors are only comparable between two
+sittings of ONE binary — every branch links a different compiler, so a floor
+that differs across branches says nothing. The pair that matters is still two
+sittings of one head.
+
+- **DONE** the rows are CI's.

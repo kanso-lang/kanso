@@ -83,4 +83,9 @@
 # 4,876,986 and then 4,876,986 again in the same job, where the round
 # before it read 6,018,427 and then 4,869,632. The row was counting a cold
 # runtime-object cache, and now it counts the compile.
-startup_instructions=4876986
+#
+# 2026-09-17, kanso#1461 on the tree merged with kanso#1472, CI's sitting. The
+# row this branch is for: the interpreter's start-up stops asking the declares
+# scan once per name. A FALL of 38,686 (-0.793%) against the value the merge
+# carried forward.
+startup_instructions=4838300
