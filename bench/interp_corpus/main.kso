@@ -1,0 +1,3 @@
+import "./interp_corpus"
+
+play
