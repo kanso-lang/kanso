@@ -5084,3 +5084,40 @@ entry gate's second reading put back the old way, which it named by line.
 - **DONE** built; the exclusion parses out of a real profile here (828).
 - **OPEN** whether both faces land on one row, which this branch's CI answers,
   and the three rows it re-baselines once they do.
+
+## 2026-09-17 — the excluded row, measured
+
+CI's sitting with the printed line taken out of the anchored reading:
+
+```
+  compile_instructions   35,964,325
+  entry_instructions    128,204,133
+  library_instructions  128,339,261
+  startup_instructions    4,838,323   (unchanged, and green throughout)
+```
+
+Against the two faces the rows had been drawing, the excluded subtree is:
+
+```
+            low face      high face     subtracted
+  compile   35,965,137    35,965,150    812 / 825
+  entry    128,204,898   128,204,911    765 / 778
+  library  128,340,017   128,340,030    756 / 769
+```
+
+Thirteen apart in each pair, which is the thirteen — it was inside the
+subtree, as `startup_instructions` and the frame dumps had said. Which face
+this build drew is not knowable from one sitting, and the thing that settles
+it is a second build reading 35,964,325 again.
+
+The gate now emits the excluded amount as a notice (`compile_printed=`,
+`entry_printed=`, `library_printed=`). A number that only ever appears
+subtracted cannot answer the first question a future drift raises, which is
+whether the printed line's own cost moved.
+
+Welfare weighs the module and entry rows and they fall 812 and 765 together,
+1,577 against a dead band of about 105,000. The objective does not move, and
+this is a change in what is counted rather than a gain to bank.
+
+- **DONE** the three rows carry the excluded sitting; one page span follows.
+- **OPEN** the second build, which is the whole claim.

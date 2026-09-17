@@ -696,7 +696,10 @@
 # per run, from `kanso::driven`, and its whole subtree is the line -- 828
 # instructions on the profile this was read from, with `memrchr` inside it.
 # Nothing else in a `kanso check` prints to stdout; diagnostics go to stderr.
-library_instructions=128340017
+#
+# 2026-09-17, kanso#1487's sitting, printed line excluded. The two faces were
+# 128,340,017 and 128,340,030; the excluded subtree is 756 and 769.
+library_instructions=128339261
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

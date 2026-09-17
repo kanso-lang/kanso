@@ -1851,7 +1851,12 @@
 # per run, from `kanso::driven`, and its whole subtree is the line -- 828
 # instructions on the profile this was read from, with `memrchr` inside it.
 # Nothing else in a `kanso check` prints to stdout; diagnostics go to stderr.
-compile_instructions=35965137
+#
+# 2026-09-17, kanso#1487's sitting, with the printed line excluded. The two
+# faces this row had been drawing were 35,965,137 and 35,965,150; against them
+# the excluded subtree is 812 and 825, which is the same cost plus or minus the
+# thirteen that lived inside it.
+compile_instructions=35964325
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

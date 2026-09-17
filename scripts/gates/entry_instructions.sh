@@ -117,6 +117,11 @@ own=$(callgrind_annotate --inclusive=yes --threshold=100 /tmp/cg.entry 2>/dev/nu
 printed=$(printed_cost /tmp/cg.entry)
 case "$printed" in '' | *[!0-9]*) printed=0 ;; esac
 own=$((own - printed))
+# WHAT WAS TAKEN OFF, where a reader can see it. If this row ever drifts
+# again, the first question is whether the printed line's own cost moved --
+# and that question is unanswerable from a number that only ever appears
+# subtracted.
+echo "::notice::entry_printed=${printed}"
 case "$own" in
   '' | *[!0-9]*)
     echo "::error::the profile carries no kanso::main frame, so the compiler's"
