@@ -4881,3 +4881,30 @@ that differs across branches says nothing. The pair that matters is still two
 sittings of one head.
 
 - **DONE** the rows are CI's.
+
+## 2026-09-17 — kanso#1461 on the merged tree, and the rows read the right way
+
+CI's sitting on the tree merged with kanso#1465:
+
+    compile_instructions  35,967,913 -> 35,965,137    -2,776
+    entry_instructions   128,214,733 -> 128,204,898    -9,835
+    library_instructions 128,348,838 -> 128,340,017    -8,821
+    startup_instructions   4,838,300 -> 4,838,323        +23
+
+**The three compile rows are LAYOUT.** This branch changes `src/eval.rs`, the
+interpreter, and `kanso check` never runs it. The entry above on this row said
+so and was right; two entries written later the same day said "work removed
+from the corpus" about changes that could not run either, and both have been
+corrected. The grep that settles it takes a second: find the callers of the
+changed function, and if they all sit under `emit_ir` or under the run path,
+the compile corpora never reached them.
+
+`startup_instructions` is the row this branch is for, and it is a
+re-measurement rather than a regression: the previous 4,838,300 was read on a
+different tree. The 13.8x fall is in the value either way.
+
+Welfare rose and is banked at 69.79153807658396. A rise is banked whatever
+moved it; what moved this one is the compiler's bytes, and whether the ratchet
+should be banking that at all is the open question in the ledger.
+
+- **DONE** the rows are CI's, and their cause is named correctly.

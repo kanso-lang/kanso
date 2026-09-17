@@ -88,4 +88,9 @@
 # row this branch is for: the interpreter's start-up stops asking the declares
 # scan once per name. A FALL of 38,686 (-0.793%) against the value the merge
 # carried forward.
-startup_instructions=4838300
+#
+# 2026-09-17, kanso#1461 on the tree merged with kanso#1465, CI's sitting. The
+# row this branch is for, re-read on the merged tree: 23 instructions above the
+# previous sitting's 4,838,300 on a different tree. This is the interpreter's own
+# start-up and the 13.8x fall this branch bought is already in the value.
+startup_instructions=4838323
