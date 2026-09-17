@@ -4044,3 +4044,60 @@ runs since the compiler moved to mimalloc, which is what kanso#1466 was for.
 main's 36,864,779, 131,837,650 and 131,978,823. Asking the pattern before the
 binder is what this branch's share of that is; the rest of the move against
 round three is kanso#1464 arriving underneath it.
+
+## 2026-09-17 — the allocator asked for an alignment it never needed
+
+**mimalloc's Rust shim sends every allocation through the aligned path.** DONE.
+`MiMalloc::alloc` calls `mi_malloc_aligned(size, align)` whatever the alignment
+is. That wrapper checks the alignment is a power of two, builds a mask from it,
+takes a candidate block off the small-page free list and tests whether the
+block is aligned, before it can hand back the block `mi_malloc` would have
+handed back on its own. `mi_theap_malloc_aligned` was 1,608,924 instructions of
+`kanso check compile_corpus`, which is more than any frame in check.rs.
+
+**Almost none of that work had anything to do.** DONE. A `Vec<u8>`, a `String`
+and any record whose widest field is a pointer or a u64 ask for eight, and every
+block mimalloc gives out is at least eight-aligned. Those go straight to
+`mi_malloc` now; anything wanting more still takes the aligned path. Measured on
+this container, three rows, before and after:
+
+    compile_instructions    36,956,079 -> 36,241,230   -1.93%
+    entry_instructions     131,550,570 -> 129,114,693  -1.85%
+    library_instructions   131,694,754 -> 129,252,791  -1.85%
+
+CI's sitting is the one that goes in the goldens and it is the next round.
+
+**Eight, and not sixteen, and mimalloc says why itself.** DONE. From
+v3/src/alloc.c: `mi_assert_internal(page->block_size < MI_MAX_ALIGN_SIZE ||
+_mi_is_aligned(block, MI_MAX_ALIGN_SIZE))`. A block is sixteen-aligned unless it
+is smaller than sixteen bytes, and `Layout` carries size and alignment
+independently, so `align 16, size 8` is spellable. Eight is the bound that holds
+for every size.
+
+**A run-time spec cannot reach this code, and two were written before that was
+noticed.** DONE. The `#[global_allocator]` is in the binary crate; an
+integration test links the library, so every allocation a test makes goes
+through the harness's allocator instead. One of the two asked for alignment 4096
+in blocks of eight bytes and still passed with the bound raised to 8192, which
+is what a spec that reaches nothing looks like from the outside. What ships
+reads source: mimalloc's assertion where it is written, and the bound in
+src/main.rs against it. Both watched red — the first by altering the assertion
+it quotes, the second at 16.
+
+**mi_realloc is worse, measured and declined.** REFUTED. `GlobalAlloc`'s
+default `realloc` allocates, copies and frees, which is what a growing `Vec`
+pays at every doubling, and mimalloc can sometimes extend a block where it
+stands. Overriding `realloc` to call `mi_realloc` on the same alignment bound
+read 36,315,572 against the 36,241,230 above: a RISE of 74,342, 0.21%. Whatever
+the in-place extensions save on this workload, `mi_realloc`'s own path costs
+more. It also moved `compile_peak_bytes` by six bytes, because the live-bytes
+accounting cannot be made exactly equivalent through one call where the default
+route makes two. Not taken.
+
+**What is left here.** OPEN. The profile under this is flat: with the three
+quadratics gone (kanso#1464, kanso#1468 and the beat index), the top frame of
+`kanso check library_corpus` is `__memcmp_avx2_movbe` at 3.5%, and its callers
+are ten map lookups of which the largest is 0.94%. The structural lever is
+interning names to integers so the maps stop comparing strings at all, which
+would reach that 3.5% and part of the 2.6% in rehashing beside it. That is a
+refactor across check.rs, infer.rs and codegen.rs, and it is not costed yet.
