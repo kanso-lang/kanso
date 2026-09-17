@@ -7194,3 +7194,111 @@ the list, and an empty list is the easiest state in which to forget that.
 - **OPEN** whether a sweep of the 2026-08-29 sitting would add rows nobody has
   listed. It has never been run, and an empty section is the moment it would
   be worth most.
+
+## 2026-09-17 — September's remaining thirteen rulings, and a blank chart edge that is not the ruling it resembles
+
+The August sweep left September half-read. This finishes it. Twenty-one entries
+in the log and its archive record a September ruling — twenty headed
+`gavel:` and one headed `gavel, reversed the same day:` — and the thirteen
+below are the ones no session had run against a build.
+
+**Every one is built, or superseded by a later ruling that Clay made. Nothing
+goes on the unbuilt list.**
+
+| ruled | probe |
+|---|---|
+| 09-02 the weights | superseded 09-16; see below |
+| 09-05 corpus first | `bench/readbench`, `cost_golden_read.txt` pins `beat_iters=201` |
+| 09-05 no machine-code-size term | `objective_sources.txt` holds no `machine_code` row |
+| 09-05 one row, one value | `compile_instructions_by_cpu.txt` is gone; the gate errors on a second value |
+| 09-06 clang 19, with detection | CI asserts `clang version 19`; `preserve_none_probe` falls back |
+| 09-06 a whole float keeps its point | golden reads `1.0e+15`, both engines |
+| 09-06 one consolidated run program | `run_instructions work_runbench`, one row |
+| 09-07 the history's baseline | built; see below |
+| 09-08 page_drift skips rulings | `ruling?` reads `— gavel:` and `— directive:` |
+| 09-08 a fixed compile corpus | `bench/compile_corpus/compile_corpus.kso`, four imports, each used |
+| 09-08 inf, -inf, nan | golden reads `inf -inf nan`, both engines |
+| 09-10 rows 15..390 stay unscored | the ruling says nothing further is owed |
+
+The two float rulings were run rather than read: `micro_corpus_agrees_across_engines`
+passes today, so both are pinned across the engines the differential law names.
+
+## The chart's left edge is blank for a reason nobody wrote down
+
+The welfare history is 500 rows, 2026-08-20 through today. Sixty-two of them
+carry no welfare, and they are rows 1 through 62, contiguous at the head. A
+reader who knows the 2026-09-07 ruling reads that as its work: the rows before
+the baseline stay unscored. That reading is wrong, and the dates say so. The
+window opens on 2026-08-20, ten days after the 2026-08-10 row that ruling
+baselines from, so every row now in the file sits inside the scored range.
+
+What those rows actually carry is counter names run together. Row 62:
+
+```
+"allocsalloc_bytesarena_blocksperm_allocsbeat_itersel_parsesutf8_bytesfind2_callsheld_peak_bytes": 0
+"basket_allocsarena_blocksarena_peak_bytesbeat_itersutf8_bytesheld_peak_bytes": 71136
+"compile_alloc_bytescompile_allocscompile_peak_bytescompile_passes": 5
+```
+
+Row 63, the next commit, writes those same counters as twenty separate keys.
+Each run holds only the last name's value — `compile_passes` is 5 on both rows,
+and the three figures that should have preceded it are gone. Today's rescore
+walked all 500 and stamped the mangled block `scored_weight: 0.00`, against
+0.23 for row 63.
+
+**It is old and it is shrinking.** The same block read 151 rows on 2026-08-27,
+long before the rewrite the 2026-09-07 ruling ordered, and it loses one row per
+append as the 500-row window rolls. Sixty-two more commits clear it without
+anyone touching it. What produced the runs is outside what this file can answer:
+those rows were written before the window's current opening.
+
+So there is nothing to fix and one thing to know. The coverage boundary the
+chart draws at the left is a defect in sixty-two rows rather than the
+2026-09-07 ruling working, and anybody about to explain the blank edge by that
+ruling should stop.
+
+## Two sentences in welfare.kso that the 2026-09-16 split left behind
+
+Both are in `scripts/welfare/welfare.kso`, which is cloud's, and neither changes
+a score.
+
+`d_compile_memory` carries 0.08 under a comment reading `Unchanged at 0.12`.
+The number was renormalised onto the development side and the sentence quoting
+the 2026-09-02 ruling was not.
+
+The header above the weights claims more than the renormalisation did: *what
+survives the renormalisation is every RATIO the reasoning below argues for
+... compile speed still outweighs compile memory better than three to one.*
+The reasoning below argues two to one, which is what 0.32 against 0.12 was.
+The built pair is 0.30 against 0.08, which is 3.75. The ratio widened by 40%
+in the renormalisation, and the sentence claiming ratios survived states the
+new one.
+
+Worth 0.007 of the meta if it were put back, so this is a wording repair rather
+than a weights argument. The weights themselves are the implementer's under the
+2026-08-25 charter, which the 2026-09-16 ruling restates in those words.
+
+## The 2026-09-02 ordering, and why it is not a finding
+
+That ruling put compile speed above run speed — 0.32 against 0.30, funded from
+run memory, because compile latency is an adoption gate. Under the model built
+today compile speed carries 0.30 of a development side worth 0.30 of the meta,
+which is 0.090 of the whole, against run speed's 0.315.
+
+The ordering inverted, and Clay inverted it. His 2026-09-16 framing is that
+compile performance "becomes more like a very dialed-down input to the overall
+welfare," and the same ruling hands weights and satiations to the implementer.
+Within its own side compile speed is still the largest term. The 09-02 ruling
+stands superseded rather than unbuilt.
+
+## One heading the drift gate cannot exempt
+
+`## 2026-09-16 — gavel, reversed the same day: ...` is a ruling, and
+`page_drift`'s `ruling?` reads `— gavel:` and `— directive:` as the whole
+convention. A comma after `gavel` puts a ruling back in the page's budget. The
+2026-09-08 ruling names the colon convention explicitly, so the gate matches
+what was ruled and the heading is what broke it. One entry in a month, costing
+one slot of three.
+
+- **DONE** all 21 September rulings probed, 35 of August before them, 56 of 56.
+- **OPEN** the two welfare.kso sentences, which are cloud's file.
