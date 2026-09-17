@@ -139,67 +139,6 @@ spelled `effect` read as one thing, the way `err reason` builds an err. No
 chain spelling until a chain wants one. Cloud builds against this unless
 Clay names a different word; it does not block the build.
 
-### The book teaches the boundary language (queued P1, Clay 2026-08-26)
-
-**RE-PREMISED AGAIN 2026-08-29 by the effects-are-types gavel, which
-supersedes the three-chain-words form.** The call-site story the book
-owes is now: `<t>effect` as a first-class passable outcome type;
-`bind`, `annotate`, `rescue` as ordinary effect-first functions and the
-sole eliminators; no automatic bind — a box where the unwrapped type is
-expected is refused, and propagation is bind's contract.
-
-**BOTH HALVES WAIT ON THE IMPLEMENTATION. Measured 2026-09-08 on
-`2abcedaf`.** Since 2026-08-29 this entry has said that half one — ch04's
-"nothing is asked of the signature" — does not survive as written and can
-be rewritten ahead of the surface. Two probes say otherwise. A lambda
-handed a failing argument does not run its body, and the call answers the
-failure: that is the railway ch04 teaches, live, word for word. And
-`<int>effect` is not spellable: the canonical-spacing rule refuses the form
-outright, and no checker ever sees a type, because there is no `effect` type
-in the tree for one to see. The gavel retired the design. The engines still
-run the railway, and the book is present tense, so a rewritten ch04 would
-describe a language nobody can run.
-
-What has landed is the smaller part, and the book already has it: `bind`,
-`annotate` and `rescue` ship on all three engines (kanso#1116), and ch05
-teaches them as ordinary two-argument functions taking the effect first.
-Missing is the type — passing a box, and the refusal of a box where the
-unwrapped value is expected.
-
-**RECOMMENDATION: hold until `<t>effect` exists, then run the campaign
-once.** ch04, ch05's framing and compiler.html entry 23 move together in
-that pass. Nothing here is a question for Clay; the entry stays as the
-record of what the book owes and what it is waiting for.
-
-**ch05 and entry 23 done with the type's build, 2026-09-10.** ch05 gained
-"a box has a type": `counted` holds a `<string>effect` and hands it on,
-`unopened` shows the refusal of a box where `length` reads a value, and the
-sentence "no effect type to declare" is gone. compiler.html's entry 23
-points at the section. Sizing the refusal sample found the check blind to
-a library function whose tail is a `.>` step (`os/read_file`), fixed in the
-same build. ch04's "nothing is asked of the signature" still describes the
-railway, which still runs, and waits on the 2026-08-31 rider.
-
-**The campaign has run, 2026-09-14.** The recommendation above was to hold
-until `<t>effect` exists and then run it once. It exists (kanso#1372, merged
-2026-09-13) and the pass landed in four pieces: kanso#1392 gave ch05 the
-three chain words and their fused spellings, kanso#1394 gave ch04 its rescue
-collision and boundary panel, kanso#1406 gave ch05 `done`, and kanso#1412
-gave ch04 the clause naming the type — the live remainder, by its own log
-entry. Counted on merged main: ch04 carries the type once, eleven fused
-operators and `done`; ch05 carries the type twice, thirty-five operators and
-`done` five times.
-
-What is left is the single paragraph this entry has named since 2026-08-29:
-ch04's "nothing is asked of the signature", which describes the railway and
-waits on the 2026-08-31 rider. STATUS.md's row for this ruling came off on
-2026-09-14 and that paragraph moved into the rider's row, since the rider's
-ruling is what releases it. Still nothing here for Clay.
-
-**Released, 2026-09-15.** The rider is retired by the gavel "the box is
-explicit, an err is a value, and a bare err halts where it lands" (the live
-log). ch04's paragraph moves with that build. Still nothing here for Clay.
-
 ### How far does a binding position carry a box?
 
 **Cited:** the live log's "a box handed to a binding parameter reaches the
