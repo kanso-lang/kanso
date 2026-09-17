@@ -5480,3 +5480,46 @@ this is a change in what is counted rather than a gain to bank.
 
 - **DONE** the three rows carry the excluded sitting; one page span follows.
 - **OPEN** the second build, which is the whole claim.
+
+## 2026-09-17 — the build profile after the five indexing changes, and why the series ends
+
+`kanso build bench/runbench` on the top of this stack, under callgrind on this
+container: 605,702,022 instructions. The shape that paid five times over — a
+pass asking the whole program once per name — is no longer anywhere near the
+top.
+
+The largest kanso frame left is the dispatcher emitter:
+
+```
+  111,596,308 (18.42%)  codegen::Backend::emit_dispatcher_as
+   76,121,325 (12.57%)  codegen::Backend::emit_fn_body
+   72,869,582 (12.03%)  linear::for_the_emitter
+   68,944,826 (11.38%)  codegen::Backend::emit_tail
+```
+
+all inclusive. The dispatcher's helpers are the ones an index would fix, and
+they are already cheap: `group_param_set` 1,406,445, `carries_ty` 1,634,658,
+`intern` 1,897,682. What the 111 million buys is emission — building the
+lines and writing them.
+
+Self cost tells the same story. The four largest frames in the whole build are
+library code, and none of them has one caller to fix:
+
+```
+   33,819,777 ( 5.58%)  __memcmp_avx2_movbe
+   25,954,535 ( 4.29%)  Vec::from_iter
+   25,894,715 ( 4.28%)  core::slice::memchr::memchr_aligned
+   20,700,690 ( 3.42%)  __memcpy_avx_unaligned_erms
+```
+
+The largest kanso self frame is `Backend::emit` at 14,540,787, 2.40%. The two
+string-search frames under it, `is_contained_in` 17,368,694 and
+`CharSearcher::next_match` 16,956,094, are the emitter reading its own lines
+back, and kanso#1482 takes that on a branch of its own.
+
+So there is no sixth instance of the shape to find, and the next compiler
+build goes to the list in STATUS.md rather than to another profile: the two
+welfares, whose first piece is kanso#1470, and what the box ruling still owes.
+
+- **DONE** the profile, read on the merged top of the stack.
+- **OPEN** nothing here; the series closes with kanso#1480.
