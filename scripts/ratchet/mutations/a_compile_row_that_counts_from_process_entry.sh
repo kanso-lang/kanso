@@ -23,11 +23,23 @@ fi
 # The anchored read is two lines: the callgrind_annotate pipe and the awk.
 # Replace the pair with a read of the profile's summary line.
 sed -i "/^own=\$(callgrind_annotate --inclusive=yes --threshold=100 \/tmp\/cg.compile/{N;s|.*|own=\$(grep -o '^summary: [0-9]*' /tmp/cg.compile \| tr -dc 0-9)|}" "$gate"
+# THERE ARE TWO ANCHORED READS SINCE 2026-09-16, and the assertion below counts
+# them both. The gate counts a second time on the same binary when the first
+# reading disagrees with the golden, so that a job can say for itself whether
+# the binary is stable or counted two numbers; that second read is anchored the
+# same way and the mutation has to move it too, or the "anchor is gone" check
+# fires on a line the first sed never reached. The mutation's subject is where
+# the row is read FROM, so both reads move to the summary line together.
+sed -i "/^again=\$(callgrind_annotate --inclusive=yes --threshold=100 \/tmp\/cg.compile2/{N;s|.*|again=\$(grep -o '^summary: [0-9]*' /tmp/cg.compile2 \| tr -dc 0-9)|}" "$gate"
 if grep -q "awk '/kanso::main/ && !seen" "$gate"; then
   echo "wanted the anchor gone from $gate, and it is still there" >&2
   exit 1
 fi
 if ! grep -q "^own=\$(grep -o '^summary: \[0-9\]\*' /tmp/cg.compile" "$gate"; then
   echo "the summary read did not land in $gate" >&2
+  exit 1
+fi
+if ! grep -q "^again=\$(grep -o '^summary: \[0-9\]\*' /tmp/cg.compile2" "$gate"; then
+  echo "the second summary read did not land in $gate" >&2
   exit 1
 fi
