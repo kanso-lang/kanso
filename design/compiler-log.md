@@ -5222,3 +5222,100 @@ The objective weighs neither the start-up row nor the library row; it weighs
 the module and entry rows, and their fall is the rise banked here. Welfare
 69.79153807658396 -> 69.79493424287482, `--set` run after the goldens carried
 CI's rows and not before.
+
+## 2026-09-17 — the compile rows stop counting the line the run prints
+
+Five CI builds today, across trees whose compiler source is byte-identical:
+
+```
+  main            ae5183a8   35,965,150   128,204,911   128,340,030
+  kanso#1477      716fcfc4   35,965,150   128,204,911   128,340,030
+  kanso#1481      e005650f   35,965,150   128,204,911   128,340,030
+  kanso#1477      8e4e5665   35,965,137   128,204,898   128,340,017
+  kanso#1485      4c5b282b   35,965,137   128,204,898   128,340,017
+```
+
+Two faces, thirteen apart on every row, and `startup_instructions` reads
+4,838,323 on all five. Within a build the reading is exact — every job's
+`<row>_again` has matched its first. A re-run of main's own failed job, a
+second build of the same source, came back green on the other face, which is
+the control.
+
+kanso#1485 tried writing one face into the goldens and its own build measured
+the face it had just replaced. So a value cannot settle this.
+
+`kanso check` prints one line when it finishes and `kanso::main` inclusive
+counted it. Under it `LineWriter` runs `core::slice::memchr::memrchr` over the
+formatted bytes to find the last newline, and what that frame costs moves with
+the binary's layout. The start-up gate prints nothing, which is why it never
+drew.
+
+Not printing costs more than it saves, because both ways of asking change the
+process the gate measures:
+
+```
+  env -i, two variables, printing      36,817,649
+  env -i, three variables, printing    36,829,255   +11,606
+  env -i, three variables, KANSO_QUIET 36,828,139    -1,116
+  two variables, printing              36,817,388
+  two variables, --quiet               36,818,319      +931
+```
+
+The compiler asks getenv about seven thousand times and each ask walks the
+environment block, so a third variable costs ten times what the quiet saves;
+an argv entry costs about twice it. Both move the initial process layout,
+which is the same class of thing the thirteen is. kanso#1483 as built is a
+regression on its own row and does not land.
+
+What is left is the 2026-09-15 rule: a term that cannot be normalized is
+excluded and the exclusion is named in the golden's header. The three gates
+subtract `std::io::stdio::_print` inclusive from the anchored reading, on both
+of their measured runs. `_print` is reached once per run, from
+`kanso::driven`, its whole subtree is the line — 828 instructions on the
+profile this was read from, with `memrchr`'s 133 inside it — and nothing else
+in a `kanso check` prints to stdout, because diagnostics go to stderr.
+
+A spec reads the three gates off disk, finds the six readings that become a
+row, and fails on one that does not take the print off. Watched red with the
+entry gate's second reading put back the old way, which it named by line.
+
+- **DONE** built; the exclusion parses out of a real profile here (828).
+- **OPEN** whether both faces land on one row, which this branch's CI answers,
+  and the three rows it re-baselines once they do.
+
+## 2026-09-17 — the excluded row, measured
+
+CI's sitting with the printed line taken out of the anchored reading:
+
+```
+  compile_instructions   35,964,325
+  entry_instructions    128,204,133
+  library_instructions  128,339,261
+  startup_instructions    4,838,323   (unchanged, and green throughout)
+```
+
+Against the two faces the rows had been drawing, the excluded subtree is:
+
+```
+            low face      high face     subtracted
+  compile   35,965,137    35,965,150    812 / 825
+  entry    128,204,898   128,204,911    765 / 778
+  library  128,340,017   128,340,030    756 / 769
+```
+
+Thirteen apart in each pair, which is the thirteen — it was inside the
+subtree, as `startup_instructions` and the frame dumps had said. Which face
+this build drew is not knowable from one sitting, and the thing that settles
+it is a second build reading 35,964,325 again.
+
+The gate now emits the excluded amount as a notice (`compile_printed=`,
+`entry_printed=`, `library_printed=`). A number that only ever appears
+subtracted cannot answer the first question a future drift raises, which is
+whether the printed line's own cost moved.
+
+Welfare weighs the module and entry rows and they fall 812 and 765 together,
+1,577 against a dead band of about 105,000. The objective does not move, and
+this is a change in what is counted rather than a gain to bank.
+
+- **DONE** the three rows carry the excluded sitting; one page span follows.
+- **OPEN** the second build, which is the whole claim.
