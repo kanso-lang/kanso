@@ -5092,3 +5092,49 @@ instructions against a dead band of about 105,000. The objective does not move.
 
 - **DONE** the three goldens carry CI's rows; two page spans follow them.
 - **OPEN** kanso#1483, after which this row family stops drawing lots.
+
+## 2026-09-17 — the rows are a coin, and the thirteen is not a branch's to bank
+
+The entry above wrote CI's sitting into this branch's three rows. Its next
+build measured the numbers it had just replaced, so the rows are reverted and
+this correction stands in their place.
+
+Five builds today, on trees whose compiler source is byte-identical apart from
+kanso#1482's:
+
+```
+  main            ae5183a8   35,965,150   128,204,911   128,340,030
+  kanso#1477      716fcfc4   35,965,150   128,204,911   128,340,030
+  kanso#1481      e005650f   35,965,150   128,204,911   128,340,030
+  kanso#1477      8e4e5665   35,965,137   128,204,898   128,340,017
+  kanso#1485      4c5b282b   35,965,137   128,204,898   128,340,017
+```
+
+Two faces, thirteen apart on every row, and `startup_instructions` reads
+4,838,323 on all five. Within a build the reading is exact: every job's
+`<row>_again` has matched its first.
+
+Neither way of not printing helps, because both change the process the gate
+measures. On one box, `kanso check compile_corpus`:
+
+```
+  env -i, two variables, printing      36,817,649
+  env -i, three variables, printing    36,829,255   +11,606
+  env -i, three variables, KANSO_QUIET 36,828,139    -1,116
+  two variables, printing              36,817,388
+  two variables, --quiet               36,818,319      +931
+```
+
+The environment variable costs ten times what the quiet saves — the compiler
+asks getenv about seven thousand times and each ask walks the block — and an
+argv entry costs about twice it. So kanso#1483 as built is a regression.
+
+What is left is the 2026-09-15 rule: a term that cannot be normalized is
+excluded and the exclusion is named in the golden's header.
+`std::io::stdio::_print` is reached once per run, from `kanso::driven`, and
+`core::slice::memchr::memrchr` has no other caller in a `kanso check`.
+`claude/row-excludes-the-print` subtracts that subtree from `kanso::main`
+inclusive, which should map both faces onto one row.
+
+- **DONE** the rows here are back to main's, and this branch waits on that one.
+- **OPEN** whether the exclusion holds across builds, which its own CI answers.
