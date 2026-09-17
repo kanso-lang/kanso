@@ -1918,7 +1918,13 @@
 # base, so the merged tree is reading neither number. The value below is
 # main's, carried forward so the gate has one value to fail against
 # rather than none; the merged sitting is CI's to take.
-compile_instructions=35964325
+#
+# 2026-09-17 (kanso#1476): compile_instructions 35,964,325 -> 35,896,968, a FALL
+# of 67,357 (-0.1873%). The fall is the parent's, kanso#1475. This row came back
+# byte-identical to the one that branch measured: `kanso check` stops before
+# codegen and this change is in the emitter, so there is nothing here for it to
+# move. CI's sitting on fb28abb2.
+compile_instructions=35896968
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

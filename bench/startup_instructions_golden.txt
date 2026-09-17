@@ -113,4 +113,10 @@
 # corpus is where the trade is worst. `kanso build bench/runbench` falls 69.64%
 # on the same change. The objective weighs neither row, so nothing here is a
 # welfare question; the trade is stated because the row moved.
-startup_instructions=5077750
+#
+# 2026-09-17 (kanso#1476): startup_instructions 5,077,750 -> 5,079,952, a RISE of
+# 2,202 (+0.0434%). Against the parent's 5,079,380 the rise is 572, and that is
+# the only row this branch moves on its own: the index it builds is a few more
+# bytes for the loader to place. The three `kanso check` rows above are the
+# parent's to the instruction.
+startup_instructions=5079952
