@@ -4389,3 +4389,50 @@ reading that matters rather than either projection.
 **The floor is ratcheted to 69.77.** DONE. The rise is the two changes together
 and it is banked in this same commit, after the goldens carry CI's rows and not
 before. Raising a floor is arithmetic; there was nothing to decide.
+
+## 2026-09-17 — the beat asked the whole program once per name, a seventh time
+
+Seventh instance of the shape, and the largest frame the compiler still owned
+in a build once the six before it were gone.
+
+`used_as_value(program, name)` walked every function, every statement and every
+node of every expression to answer one yes-or-no about one name. Four callers
+ask it, two of them inside a loop over groups. On the tip of the index stack
+that walk is `beat::value_use` at **27,035,386 instructions**, the largest
+frame in `kanso build bench/runbench` that belongs to the compiler rather than
+to libc, hashbrown or the allocator.
+
+`ValueUses::of` collects the same names in one pass and the four callers read a
+set. `kanso build bench/runbench` falls **36,974,119 instructions, 5.32%**,
+694,705,777 to 657,731,658. The emitted IR is byte-identical, 36,085 lines
+either way. The walk's replacement, `collect_value_uses`, costs 955,425 across
+both its arms, so the 27.0M becomes 0.96M and the rest of the fall is the map
+and vector work the repeated walk dragged behind it.
+
+**A name in call position is not a value use** — `f x` uses `x` and not `f`,
+while `(g h) x` uses both because the head is not a plain name. That asymmetry
+is why `collect_names`, sitting ten lines above in the same file and walking
+the same tree, could not be reused: it takes every head unconditionally, which
+is right for the question it serves and wrong for this one. The spec asks over
+every identifier the program writes INCLUDING heads, so the names the index
+must answer NO for are in the corpus rather than absent from it.
+
+Two mutants were tried. Taking every head fails all three tests and names
+`both`, `print` and `testing/when_failed`. Dropping the MapLit key walk passes
+everything — and that is the grammar rather than a hole: a map's keys must be
+literals, `{ one:"a" }` is `error[syntax]: `one` is not a literal`, so the key
+arm can never find a name. The walk keeps it to mirror the oracle and the code
+says why.
+
+`blockers` builds its own index rather than taking one. It runs only to explain
+a verdict already reached, for a single name, and the scan it replaces read the
+whole program for that one name too — so building the index there is the same
+order of work and costs no signature.
+
+- **DONE** the seventh whole-program question is indexed.
+- **OPEN** what is left is flat. Top frame is `memcmp` at 35.2M of 657.7M,
+  5.4%, and the hash-and-compare cluster around it — memcmp, memchr, the
+  hashbrown inserts, lookups and rehashes — is about 17% of the build. That is
+  name hashing, which is what interning names to integers would remove, and it
+  is the refactor design/compiler-log.md has called the only structural lever
+  left on the check side. The build side now says the same thing.

@@ -236,6 +236,7 @@ fn demotable_entries(
     mut_sites: &MutSites,
     chains: &HashSet<Group>,
 ) -> Vec<(Group, Vec<Group>, Vec<usize>)> {
+    let value_uses = ValueUses::of(program);
     let allocating = alloc_groups(program, mut_sites);
     let mut cyclic: HashSet<Group> = HashSet::default();
     // a group is cyclic when any tail path returns to it (self-edge or SCC)
@@ -268,7 +269,7 @@ fn demotable_entries(
                 let set = group_param_set(program, inference, &name, arity, p);
                 accumulator_grows(program, &name, arity, p) || set == 0 || set & BYTES != 0
             })
-            || used_as_value(program, &name)
+            || value_uses.has(&name)
             || !allocating.contains(name.as_str())
         {
             continue;
@@ -537,6 +538,7 @@ fn eligible_clusters(
     mut_sites: &MutSites,
     chains: &HashSet<Group>,
 ) -> Vec<Cluster> {
+    let value_uses = ValueUses::of(program);
     let groups: Vec<(String, usize)> = {
         let set: HashSet<(String, usize)> =
             program.fns.iter().map(|d| (d.name.clone(), d.params.len())).collect();
@@ -586,7 +588,7 @@ fn eligible_clusters(
                 continue;
             }
         }
-        if scc.iter().any(|&g| used_as_value(program, &groups[g].0)) {
+        if scc.iter().any(|&g| value_uses.has(&groups[g].0)) {
             continue;
         }
         if !scc.iter().any(|&g| allocating.contains(groups[g].0.as_str())) {
@@ -978,11 +980,15 @@ fn blockers(
     name: &str,
     arity: usize,
 ) -> Vec<Verdict> {
+    // One name, and this runs only to explain a verdict already reached, so
+    // the index is built here rather than threaded: it reads the program once,
+    // which is what the scan it replaces did for this single name anyway.
+    let value_uses = ValueUses::of(program);
     let mut found = Vec::new();
     if TailCalls::of(program).outside_tails(name, arity) {
         found.push(Verdict::OutsideTailCall);
     }
-    if used_as_value(program, name) {
+    if value_uses.has(name) {
         found.push(Verdict::UsedAsValue);
     }
     // a loop that allocates nothing has nothing the others could cost it
@@ -1007,6 +1013,7 @@ fn classify_all(
 ) -> Vec<(String, usize, Verdict)> {
     let allocating = alloc_groups(program, mut_sites);
     let tails = TailCalls::of(program);
+    let value_uses = ValueUses::of(program);
     let mut groups: Vec<(String, usize)> = {
         let set: HashSet<(String, usize)> =
             program.fns.iter().map(|d| (d.name.clone(), d.params.len())).collect();
@@ -1016,7 +1023,7 @@ fn classify_all(
     groups
         .into_iter()
         .filter_map(|(name, arity)| {
-            let whole = Whole { program, inference, mut_sites, tails: &tails };
+            let whole = Whole { program, value_uses: &value_uses, inference, mut_sites, tails: &tails };
             classify(&whole, chains, &allocating, &name, arity).map(|v| (name, arity, v))
         })
         .collect()
@@ -1078,6 +1085,7 @@ impl<'a> TailCalls<'a> {
 /// the four of them travel together anyway.
 struct Whole<'a> {
     program: &'a Program,
+    value_uses: &'a ValueUses<'a>,
     inference: &'a infer::Inference,
     mut_sites: &'a MutSites,
     tails: &'a TailCalls<'a>,
@@ -1090,14 +1098,14 @@ fn classify(
     name: &str,
     arity: usize,
 ) -> Option<Verdict> {
-    let Whole { program, inference, mut_sites, tails } = whole;
+    let Whole { program, value_uses, inference, mut_sites, tails } = whole;
     if !tails.has_self_tail(name, arity) {
         return None;
     }
     if tails.outside_tails(name, arity) {
         return Some(crate::beat::Verdict::OutsideTailCall);
     }
-    if used_as_value(program, name) {
+    if value_uses.has(name) {
         return Some(crate::beat::Verdict::UsedAsValue);
     }
     if !allocating.contains(name) {
@@ -1741,19 +1749,116 @@ fn collect_names(e: &Expr, out: &mut HashSet<String>) {
     }
 }
 
-fn used_as_value(program: &Program, name: &str) -> bool {
-    program.fns.iter().any(|d| {
-        d.body.iter().any(|stmt| {
-            let e = match stmt {
-                Stmt::Bind { expr, .. } => expr,
-                Stmt::Expr(e) => e,
-                Stmt::Set { value, .. } => value,
-            };
-            value_use(e, name)
-        })
-    })
+/// Every name the program uses AS A VALUE, read in one pass.
+///
+/// The question used to go to the whole program once per name: every
+/// function, every statement, every node of every expression, for each of the
+/// four callers below and for each group they ask about. On the tip of the
+/// index stack that walk is `beat::value_use` at 27,035,386 instructions in a
+/// `kanso build bench/runbench` -- the largest frame the compiler itself owns
+/// in that build, once the five whole-program scans before it are gone.
+///
+/// A name in call position is not a value use: `f x` uses `x` and not `f`,
+/// and `(g h) x` uses both because the head is not a plain name. That
+/// asymmetry is the whole reason `collect_names` above cannot answer this --
+/// it takes every head unconditionally, which is the right rule for the
+/// question it serves and the wrong one for this.
+struct ValueUses<'a> {
+    names: crate::hash::Set<&'a str>,
 }
 
+impl<'a> ValueUses<'a> {
+    fn of(program: &'a Program) -> Self {
+        let mut names = crate::hash::Set::default();
+        for decl in &program.fns {
+            for stmt in &decl.body {
+                let (Stmt::Bind { expr, .. }
+                | Stmt::Expr(expr)
+                | Stmt::Set { value: expr, .. }) = stmt;
+                collect_value_uses(expr, &mut names);
+            }
+        }
+        Self { names }
+    }
+
+    fn has(&self, name: &str) -> bool {
+        self.names.contains(name)
+    }
+}
+
+/// `value_use`'s traversal with the name taken out of it: the same arms in the
+/// same order, collecting where it would have compared.
+fn collect_value_uses<'a>(e: &'a Expr, out: &mut crate::hash::Set<&'a str>) {
+    match e {
+        Expr::Ident(n, _) | Expr::Partial(n, _) => {
+            out.insert(n.as_str());
+        }
+        Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
+            for st in stmts {
+                let (Stmt::Bind { expr, .. }
+                | Stmt::Expr(expr)
+                | Stmt::Set { value: expr, .. }) = st;
+                collect_value_uses(expr, out);
+            }
+        }
+        Expr::App { head, args, .. } => {
+            if !matches!(head.as_ref(), Expr::Ident(..)) {
+                collect_value_uses(head, out);
+            }
+            for a in args {
+                collect_value_uses(a, out);
+            }
+        }
+        Expr::Field { base, .. } => collect_value_uses(base, out),
+        Expr::Upcast { expr, .. } => collect_value_uses(expr, out),
+        Expr::Index { base, index, .. } => {
+            collect_value_uses(base, out);
+            collect_value_uses(index, out);
+        }
+        Expr::BinOp { lhs, rhs, .. } | Expr::Join { lhs, rhs, .. } => {
+            collect_value_uses(lhs, out);
+            collect_value_uses(rhs, out);
+        }
+        Expr::Guard { cond, early, rest, .. } => {
+            collect_value_uses(cond, out);
+            collect_value_uses(early, out);
+            for s in rest {
+                collect_value_uses(guard_stmt_expr(s), out);
+            }
+        }
+        Expr::Seq(a, b, _) => {
+            collect_value_uses(a, out);
+            collect_value_uses(b, out);
+        }
+        Expr::Lambda { body, .. } => collect_value_uses(body, out),
+        Expr::List(items, _) => {
+            for i in items {
+                collect_value_uses(i, out);
+            }
+        }
+        Expr::MapLit(pairs, _) => {
+            for (k, v) in pairs {
+                // The key walk mirrors the oracle and can never find a name:
+                // the grammar refuses a non-literal key outright -- `{ one:"a" }`
+                // is `error[syntax]: `one` is not a literal`. So a mutant that
+                // drops this line passes every spec, and that is the grammar
+                // speaking rather than a hole in the corpus.
+                collect_value_uses(k, out);
+                collect_value_uses(v, out);
+            }
+        }
+        Expr::Str(parts, _) => {
+            for p in parts {
+                if let TemplatePart::Interp(inner) = p {
+                    collect_value_uses(inner, out);
+                }
+            }
+        }
+        Expr::Int(..) | Expr::Float(..) | Expr::Hole(..) => {}
+    }
+}
+
+#[cfg(test)]
 fn value_use(e: &Expr, name: &str) -> bool {
     match e {
         Expr::Ident(n, _) | Expr::Partial(n, _) => n == name,
@@ -1789,6 +1894,129 @@ fn value_use(e: &Expr, name: &str) -> bool {
             TemplatePart::Lit(_) => false,
         }),
         Expr::Int(..) | Expr::Float(..) | Expr::Hole(..) => false,
+    }
+}
+
+#[cfg(test)]
+mod the_value_use_index_answers_what_the_scan_answered {
+    use super::*;
+
+    /// What `used_as_value` did before the index existed, kept as the oracle.
+    /// `value_use` beside it is the original walk, untouched.
+    fn scanned(program: &Program, name: &str) -> bool {
+        program.fns.iter().any(|d| {
+            d.body.iter().any(|stmt| {
+                let (Stmt::Bind { expr, .. }
+                | Stmt::Expr(expr)
+                | Stmt::Set { value: expr, .. }) = stmt;
+                value_use(expr, name)
+            })
+        })
+    }
+
+    /// Both ways, over every name the program writes anywhere plus a name it
+    /// does not. Every identifier is asked, not just the group names the four
+    /// callers happen to reach, because a name in call position is the case
+    /// the index has to get RIGHT BY EXCLUDING -- asking only names that are
+    /// used as values could not tell the two rules apart.
+    fn agrees_over(src: &str) {
+        let program = crate::compile("test.kso", src, false).expect("the sample compiles");
+        let index = ValueUses::of(&program);
+        let mut every: crate::hash::Set<&str> = crate::hash::Set::default();
+        for decl in &program.fns {
+            every.insert(decl.name.as_str());
+            for stmt in &decl.body {
+                let (Stmt::Bind { expr, .. }
+                | Stmt::Expr(expr)
+                | Stmt::Set { value: expr, .. }) = stmt;
+                collect_names_borrowed(expr, &mut every);
+            }
+        }
+        every.insert("a name nothing writes");
+        let mut asked = 0;
+        for name in &every {
+            assert_eq!(
+                index.has(name),
+                scanned(&program, name),
+                "`{name}`: the index and the scan disagree"
+            );
+            asked += 1;
+        }
+        assert!(asked > 3, "the sample asked only {asked} names");
+    }
+
+    /// Every identifier anywhere, head position included -- deliberately
+    /// wider than what the index collects, so the queries reach names the
+    /// index must answer NO for.
+    fn collect_names_borrowed<'a>(e: &'a Expr, out: &mut crate::hash::Set<&'a str>) {
+        if let Expr::App { head, .. } = e {
+            if let Expr::Ident(n, _) = head.as_ref() {
+                out.insert(n.as_str());
+            }
+        }
+        collect_value_uses(e, out);
+        match e {
+            Expr::App { head, args, .. } => {
+                collect_names_borrowed(head, out);
+                for a in args {
+                    collect_names_borrowed(a, out);
+                }
+            }
+            Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
+                for st in stmts {
+                    let (Stmt::Bind { expr, .. }
+                    | Stmt::Expr(expr)
+                    | Stmt::Set { value: expr, .. }) = st;
+                    collect_names_borrowed(expr, out);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    #[test]
+    fn a_name_in_call_position_is_not_a_value_use() {
+        // `twice` is only ever called, `step` is handed over as a value, and
+        // `both` is both. A collector that took every head would say yes to
+        // `twice`, and the scan says no.
+        agrees_over(concat!(
+            "fn step x\n  x + 1\n\n",
+            "fn twice f x\n  f (f x)\n\n",
+            "fn both g\n  g 1\n\n",
+            "main = print \"{twice step 1} {both step}\"\n"
+        ));
+    }
+
+    #[test]
+    fn over_the_shapes_the_walk_has_arms_for() {
+        // A list, a map literal, an interpolation, an index, a field, a
+        // lambda body and a binop, each carrying a name as a value.
+        agrees_over(concat!(
+            "fn use_it a b\n  a + b\n\n",
+            "one = 1\n\n",
+            "two = 2\n\n",
+            "xs = [one two]\n\n",
+            "m = { 1:one 2:two }\n\n",
+            "main = print \"{one} {xs[two]} {use_it one two} {m[one]}\"\n"
+        ));
+    }
+
+    #[test]
+    fn over_the_library_the_compiler_carries() {
+        let program =
+            crate::compile_module(std::path::Path::new("lib/json"), false).expect("lib/json");
+        let index = ValueUses::of(&program);
+        let mut asked = 0;
+        for decl in &program.fns {
+            let name = decl.name.as_str();
+            assert_eq!(
+                index.has(name),
+                scanned(&program, name),
+                "`{name}`: the index and the scan disagree"
+            );
+            asked += 1;
+        }
+        assert!(asked > 100, "lib/json declared only {asked} names");
     }
 }
 
