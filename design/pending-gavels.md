@@ -381,6 +381,20 @@ run or you do something that puts it into a persistent known initial state.*
 The gate already pins ten `GLIBC_TUNABLES` for exactly this reason; where the
 heap begins is the one it does not pin.
 
+*And a second thread arrived at the same instrument, from the other end.*
+kanso#1492's entry "seven silicons, one recorded block, and a reader that was
+never called" chases six instructions on `interp_instructions` — 2,178,502,266
+against 2,178,502,272 across two CI jobs at one source. It built a reader for
+the whole 123-row CPU feature block and ruled the silicon out: identical on
+both jobs. Its live candidate is stated as an argument rather than a
+measurement, and it is this entry's mechanism in different words — the
+interpreted run is the allocation-heavy workload, 5,313,434 allocations
+against a compile's 27,397, and *where the allocator's heap starts moves with
+the size of the file the loader mapped*. So a fixed heap start is the
+instrument two independent chases now want, on two different veins. Whichever
+one measures it first answers the other, and that raises what the reading
+below is worth without changing what it is.
+
 *What this entry needs before it is ruled, and it is cheap.* One reading of
 kanso#1480's own commit pair with the heap start fixed. If the 146,628 dies
 under a fixed heap start, the instrument is chosen and the ruling is a
