@@ -6650,3 +6650,38 @@ three charts grouped by the model's sides, with three lines on production and
 eight on development. The eight failed all-pairs, which is the same wall one
 step further along. Two, three or one line to a plot works; eight does not,
 whatever the grouping.
+
+## 2026-09-17 — three of the split's baselines were this container's, and the objective scored the host
+
+The three welfares came back 1.30 above their floor on a tree whose compiler
+nothing had changed. The gain was not in the code.
+
+`bench/welfare_floor.json` carries a baseline per counter, and the split added
+six. Three of them were readings this container took:
+
+    codegen_instructions_dev      1,003,426,243   ->   596,161,187
+    codegen_instructions_release 12,107,507,377   -> 6,826,827,769
+    emit_instructions               394,912,504   ->   382,212,543
+
+The left column is what a container measured; the right is CI's. Each golden's
+own header says the two cannot be compared — `codegen_instructions_dev_golden`
+puts it as "a different clang and a different machine and is not comparable" —
+and the objective was comparing them anyway, as +68.3%, +77.4% and +3.3%.
+
+With the three baselines set to CI's first sitting the score reads 76.13
+against a floor of 76.12766770905162. The floor had been right the whole time:
+it was banked as the new model's reading of an unchanged tree, and an unchanged
+tree reads it exactly once the origins are honest. A rise of 1.30 with no
+change behind it is what a wrong origin looks like.
+
+The other three new baselines were already CI's, from main's own goldens, and
+sit at parity: `startup_instructions` 4,838,372 against 4,836,950,
+`interp_instructions` 2,178,559,085 against 2,178,502,266, `interp_peak_bytes`
+byte-identical.
+
+**A new term's baseline and its golden are one sitting or neither is worth
+anything.** A term whose origin came from one host and whose reading comes from
+another prices the difference between the two boxes, and prices it as though
+the compiler had earned it.
+
+- **DONE** the three origins are CI's, and the score sits on its floor.
