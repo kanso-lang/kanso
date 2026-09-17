@@ -6037,3 +6037,32 @@ passes here had the answer one paragraph away.
 - **OPEN** what the probe did not reach and the row cannot retire without: the
   710 `xs[i]!` sites, `!` names in lib answering a box, and the two cost levers
   kanso#1477 reports built. Their own pass.
+
+## 2026-09-17 — kanso#1486 on the merged tree: three check rows down, the interpreted row up
+
+The rows this branch carried were main's, carried forward by the merge so the
+gate had one number to fail against rather than none while both sides had
+moved. CI has measured the merged tree:
+
+    compile_instructions    35,968,171 ->    35,559,408    -408,763   -1.136%
+    entry_instructions     128,213,972 ->   126,771,759  -1,442,213   -1.125%
+    library_instructions   128,348,205 ->   127,226,509  -1,121,696   -0.874%
+    compile_allocs              27,397 ->        27,313         -84   -0.307%
+    startup_instructions     4,837,381 ->     4,833,450      -3,931   -0.081%
+    interp_instructions  2,178,502,266 -> 2,178,722,705    +220,439   +0.010%
+
+The first five are the alias fixpoint and the group count running once over a
+program nothing changed between the two runs. That is the whole of the branch.
+
+**The sixth worsened and lands at 2,178,722,705.** It is layout, and here by
+construction rather than by argument: `interp_instructions` anchors at the
+interpreter's own thread, so the front end under `kanso::main` is outside the
+count entirely, and this branch changes nothing else. A front-end change can
+reach that row only by moving the bytes of the binary the interpreter is
+running inside. 0.010% is the size such a move has taken on this vein all
+week.
+
+Welfare comes back to 69.81, its floor, which is the number this branch banked
+before main moved under it.
+
+- **DONE** CI's sitting on the merged tree, six rows, five down and one up.
