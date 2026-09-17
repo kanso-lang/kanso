@@ -402,6 +402,24 @@ jobs:
         if: always()
         continue-on-error: true
         run: sh scripts/gates/library_instructions.sh
+      # All three rows above read thirteen instructions from their goldens at
+      # once, on three compiles spanning 36.9 to 132.0 million instructions.
+      # A term that costs the same thirteen on both cannot be the compiling,
+      # so it is a cost the process pays to exist, and this prints it: the
+      # frames whose self cost held across all three workloads, and their sum.
+      # Compare `per_process_floor=` between two jobs. A sitting that reads
+      # the other value prints a floor thirteen away and names the frame that
+      # moved. Not a gate -- it pins nothing and fails nothing; it is the
+      # instrument the hunt needs and it runs whether the gates passed or not.
+      - name: the floor every process pays
+        if: always()
+        continue-on-error: true
+        run: |
+          set -- /tmp/cg.compile /tmp/cg.entry /tmp/cg.library
+          for p in "$@"; do
+            [ -f "$p" ] || { echo "no $p, so the floor cannot be read"; exit 0; }
+          done
+          sh scripts/gates/per_process_floor.sh "$@"
       - name: compile memory
         id: compile_memory
         if: always()

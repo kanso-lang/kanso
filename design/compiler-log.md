@@ -3966,3 +3966,65 @@ the instruction, the figures round two took from CI and that the next run
 disagreed with by thirteen. The merge brought main's values in and this writes
 the branch's back. It is the first time this vein has reproduced across two
 runs since the compiler moved to mimalloc, which is what kanso#1466 was for.
+
+## 2026-09-17 — the thirteen is not compiler work
+
+**All three compile rows move by the same thirteen.** DONE. The module, entry
+and library rows have disagreed with their goldens by exactly thirteen
+instructions across several sittings, and until now each was read on its own.
+Put side by side on kanso#1463 they read 36,864,766 against 36,864,779,
+131,837,637 against 131,837,650, and 131,978,810 against 131,978,823. Three
+routes through the compiler, one of them 3.6 times the size of another, each
+off by thirteen. A term that costs the same thirteen on a 36.9-million-
+instruction compile and a 132.0-million-instruction compile does not scale with
+the input, so it is not the compiling. Every account that put the thirteen in
+the front end is dead: the lexer, inference, the emitter and a layout effect on
+hot code all grow with the source, and this does not.
+
+**The two sittings of one commit agreed.** DONE. kanso#1463's job was re-run on
+its own head to try for two profiles differing in nothing but the run. Both
+attempts read the same three numbers. So the row reproduces within a commit
+since kanso#1466 took mimalloc's randomised base address out, and the thirteen
+separates a sitting from the sitting the golden was taken on.
+
+**Where it can be.** DONE. The three profiles the job already writes name the
+candidates by themselves: 588 frames carry the same self cost across all three
+workloads, 556,052 instructions in all. Restricted to frames the row can see —
+reachable from `kanso::main`, which is the figure the gates read — 38 remain,
+51,269 instructions, and not one of them is compiler work. The largest block is
+mimalloc's scan of the environment for its own options, 49,449 instructions.
+`getauxval`, called twice from std's stack-overflow handler at 146 each, the
+`sbrk`/`brk`/`__glibc_morecore` trio, `sigaltstack`, the argv walk and the
+stdout flush make up the rest. A near-empty compile carries 36 of the 38 at
+byte-identical cost, which is what a per-process term looks like.
+
+**What the environment actually is.** DONE. The gates run under
+`env -i PATH=... GLIBC_TUNABLES=...` and believe they have pinned it. The child
+sees seven variables: valgrind adds `LD_PRELOAD`, `LD_LIBRARY_PATH`,
+`GLIBCPP_FORCE_NEW`, `GLIBCXX_FORCE_NEW` and `PWD` on top of the two. On one
+runner image those are fixed, so this is not shown to be the thirteen — it is a
+normalisation the gate claims and does not have, and mimalloc's scan of it is
+the single largest per-process term inside the row.
+
+**Ruled out by measurement.** DONE. Visible CPU count does not move the row:
+four runs of `kanso check compile_corpus` on this box, bare, under `taskset -c
+0` and under `taskset -c 0,1`, all read 37,285,436. The runner's CPU model was
+refuted earlier by two sittings on different models reading the same number and
+two on the same model reading different ones.
+
+**The instrument.** DONE. `scripts/gates/per_process_floor.sh` prints that
+floor — the frames whose self cost held across every workload given, and their
+sum — derived from the profiles rather than from a list, so a frame that
+appears or disappears is reported. It runs in the cost-goldens job, gates
+nothing and pins nothing. Two jobs whose `per_process_floor=` lines differ by
+thirteen name the frame between them, which turns a hunt nobody can reproduce
+on demand into a comparison of two job logs. `scripts/gates/callgrind_self.sh`
+is the reader under it: `callgrind_annotate`'s `--threshold` is a percentage
+and stops once the running total rounds to the figure asked for, so the tail it
+drops is where a thirteen-instruction frame lives.
+
+**Still open.** OPEN. Which of the 38 carries the thirteen. The next sitting
+that reads the other value answers it, and the answer arrives in a job log
+rather than in an argument. kanso#1463 stays blocked until then: it is the
+change that would pin a disagreeing row as a second value, which is what the
+rule it implements forbids.
