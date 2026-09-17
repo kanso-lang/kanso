@@ -6176,7 +6176,36 @@ candidate explanation, not a ruling.
 were watched red — one gate with the consult removed, and the block moved
 aside.
 
-- **DONE** the block is recorded and the five gates consult it.
-- **OPEN** the six instructions. The next job on this branch will say whether
-  the silicon moved with the row, which is the question this instrument was
-  missing.
+### And it was not the answer to the six
+
+The instrument was built to ask that question, so the question was asked of the
+two jobs already in hand. Both printed `370db01a104c` — the same block, all 123
+rows. Same glibc, same rustc, same silicon, identical `.text`, `.data` and
+`.bss`, different sha256, and:
+
+    compile_instructions        35,968,171   both
+    entry_instructions         128,213,972   both
+    library_instructions       128,348,205   both
+    startup_instructions         4,837,381   both
+    interp_instructions      2,178,502,266  ->  2,178,502,272
+
+Four rows to the instruction and one six apart. So the silicon is ruled out
+rather than implicated, and the seven blocks above are a hazard nothing was
+checking rather than this hazard. The block earns its place either way; it just
+does not earn it here.
+
+What is left is narrow enough to state. Six against 2,178,502,266 is three
+parts per billion. The other four rows run 4.8 million to 128 million
+instructions, where the same proportion is a fraction of one instruction and
+could not be seen at all. The interpreted run is also the allocation-heavy one
+by a wide margin — `interp_allocs` 5,313,434 against `compile_allocs` 27,397 —
+and mimalloc's fast path branches on where its heap starts, which moves with
+the size of the file the loader mapped. Six of 5.3 million allocations taking
+the other branch is the shape that fits. That is an argument and not a
+measurement, and it is written down as one.
+
+- **DONE** the block is recorded, the five gates consult it, and the first
+  question it was asked came back "the silicon did not move".
+- **OPEN** the six instructions: a term proportional to work rather than a
+  constant, visible only on the longest vein. Pinning where the heap starts is
+  what would settle it.

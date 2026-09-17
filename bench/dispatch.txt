@@ -23,10 +23,15 @@
 # why the rows are as steady as they are. What the tunables do not reach is
 # which implementation the resolver picks, and that is what this block is for.
 #
-# THE ROWS BELOW are from the cost-goldens job of kanso#1492 on e29fac05,
-# chosen because on that silicon the three `kanso check` rows and the start-up
-# row read main's goldens to the instruction. It is the silicon those values
-# belong to.
+# THE ROWS BELOW are from the cost-goldens job of kanso#1492 on e29fac05.
+# Main's own job on d1a7b058 printed the same block, and on it the three
+# `kanso check` rows and the start-up row read main's goldens to the
+# instruction. It is the silicon those values belong to.
+#
+# It is NOT the explanation for the six instructions that sent anyone looking:
+# the two jobs above agree on all 123 rows and their interpreted rows are six
+# apart. The block is here because seven silicons is a hazard nothing was
+# checking, not because it caught this one.
 #
 # kq has done this since its own instruction vein opened; kanso had the reader
 # and never the block.
