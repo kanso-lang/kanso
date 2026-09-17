@@ -130,8 +130,10 @@ log and the archive carry **56** entries whose heading begins `gavel:`.
 **Thirty-five carry an August date and all thirty-five are now swept**, on
 2026-09-17: seventeen on 08-29, nine across the five oldest dates, nine across
 08-24, 08-25, 08-26 and 08-31. **Two came back unbuilt**, and both are rows
-below. The **twenty-one** that remain are all September, and none has been
-read. Two in thirty-five is not zero, so what September holds is a guess until
+below. The **twenty-one** that remain are all September; two of them were
+probed on the way past and are built (the whole-float rendering of 09-06 and
+the inf/nan words of 09-08, each with a golden carrying its citation), and
+**nineteen** are unread. Two in thirty-five is not zero, so what September holds is a guess until
 somebody reads it. That is what "floor" means and why the word stays. The build hole came off built as kanso#1447, the day after
 it was found twenty-three days off this
 list; the compile row's normalization, ruled 2026-09-15, was built the same
