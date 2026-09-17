@@ -450,7 +450,23 @@ jobs:
           # sorted, so two job logs diff to one line. It is the row's own
           # profile, so whatever moved the row is in here.
           echo "=== every frame's self cost, module compile"
-          sh scripts/gates/callgrind_self.sh /tmp/cg.compile | sort
+          sh scripts/gates/callgrind_self.sh /tmp/cg.compile | sort > /tmp/frames.txt
+          cat /tmp/frames.txt
+          # AND A DIGEST OF IT, because the listing is a thousand lines and
+          # the job log cannot be fetched as a file: the blob host GitHub
+          # redirects to is not reachable from where this gets read, so
+          # comparing two sittings line by line means pulling two thousand
+          # lines through a context window. This is the same information in
+          # one line. Frames are bucketed by the LENGTH of their name, which
+          # is stable under a frame appearing or disappearing -- position
+          # would shift every later bucket, and two sittings have already
+          # differed by one frame. Two sittings whose compile rows sit
+          # thirteen apart differ in exactly one bucket, by thirteen; the
+          # filter below then prints that bucket's frames and names it.
+          awk -F'\t' '{ b = length($1) % 32; s[b] += $2; n[b]++ }
+                       END { for (i = 0; i < 32; i++)
+                               printf "b%d=%d/%d ", i, s[i], n[i]; print "" }' \
+              /tmp/frames.txt | sed 's/^/frame_digest /'
       - name: compile memory
         id: compile_memory
         if: always()
