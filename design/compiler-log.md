@@ -7237,6 +7237,12 @@ alias and the field of a born node stay built and are not part of the row.
 
 - **DONE** the sitting swept, twenty rulings probed, nineteen built or
   declined.
+- **OPEN** the other eighteen sittings. Counted off the tree the same
+  afternoon, the live log and the archive carry 56 entries headed `gavel:`;
+  seventeen are 2026-08-29 and the other 39 are spread over 18 further dates,
+  none swept. The preamble's word FLOOR stays for that reason — auditing the
+  largest sitting does not make the list a total, and the first draft of this
+  entry said it did.
 - **OPEN** whether birth through a call actually restores the data-sized
   cycle under the once-ness proof, or whether the cohort gavel's purpose needs
   a spelling the hole discipline can admit. Cloud's, and the row carries it.

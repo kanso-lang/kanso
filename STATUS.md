@@ -113,23 +113,32 @@ whole section before choosing what to build next, and chooses with
 discretion; a pull request on something else says which of these it weighed.
 The chat adds a row the day a ruling lands and removes it the day the build
 lands on main. Verified against the tree on 2026-09-09 by probing the
-compiler. The list called itself a floor from that day until 2026-09-17,
-because the rest of the 2026-08-29 sitting had never been audited; the sweep
-recorded below closed that gap, and the phrase goes with it. Swept again on
-2026-09-14 against merged main: the effect-type
+compiler. The list has called itself a floor since that day because the
+2026-08-29 sitting had never been audited; the sweep recorded below audits
+that one sitting, and the phrase stays, because it is still true for the
+rest. Swept again on 2026-09-14 against merged main: the effect-type
 row came off, built and merged as kanso#1372, and the exhaustiveness row came
 off with kanso#1369. The book row came off with kanso#1412, which its own
 log entry calls the live remainder of that ruling. The two welfares came off
 when kanso#1491 landed the second half of the 2026-09-16 gavel; every item on
 its Owes list was probed against a build of main rather than read off a
 report, and for about an hour on 2026-09-17 the section was empty for the
-first time since it was created. TWO rows stand as of 2026-09-17 21:00Z. The
-first came from the sweep that is also why the list is no longer only a
-floor: every one of the twenty rulings in the 2026-08-29 sitting was probed
-against a release build of `5e256ce0`, nineteen came back built or declined,
-and the twentieth is the first row below. The second is the 2026-09-15
-normalization ruling, which is ironclad and which a counter minted a day
-later does not satisfy, because two builds of one source are two binaries. The build hole came off built as kanso#1447, the day after
+first time since it was created. TWO rows stand as of 2026-09-17 21:15Z. The
+first came from the 2026-08-29 sweep: every one of the twenty rulings in that
+sitting was probed against a release build of `5e256ce0`, nineteen came back
+built or declined, and the twentieth is the first row below. The second is
+the 2026-09-15 normalization ruling, which is ironclad and which a counter
+minted a day later does not satisfy.
+
+**And the floor is still a floor, because one sitting is not the log.** The
+sweep below audits 2026-08-29 and nothing else. Counted off the tree the same
+afternoon, the live log and the archive carry **56** entries whose heading
+begins `gavel:`; seventeen of them are 2026-08-29, and the other **39** are
+spread over **18** further dates, none of which has been swept. The 2026-08-29
+sitting was the largest single one and it was worth doing first, and it found
+one unbuilt ruling in twenty. What that rate says about the other thirty-nine
+is a guess until somebody reads them, which is what "floor" means and why the
+word stays here. The build hole came off built as kanso#1447, the day after
 it was found twenty-three days off this
 list; the compile row's normalization, ruled 2026-09-15, was built the same
 night (kanso#1439); and the explicit box came off the same afternoon it was
