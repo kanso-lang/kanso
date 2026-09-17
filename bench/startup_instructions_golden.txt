@@ -159,4 +159,21 @@
 # base, so the merged tree is reading neither number. The value below is
 # main's, carried forward so the gate has one value to fail against
 # rather than none; the merged sitting is CI's to take.
-startup_instructions=5077523
+#
+# 2026-09-17, kanso#1484 on kanso#1468's tree. CI reads 4,509,234 against its
+# base's 5,077,523, a fall of 568,289 -- 11.19%. Against MAIN's 4,838,372 it is
+# 329,138 BELOW, a fall of 6.80%.
+# #
+# THIS IS THE ROW THE BRANCH EXISTS FOR, and the pair is the thing to read.
+# kanso#1468 indexed two whole-body questions in the emitter and took 69.90%
+# off `kanso build bench/runbench`, at the cost of 239,151 here: it built
+# DECLARES's symbol set once per process out of 1,187 lines, and a one-line
+# program has nothing to spread that over. DECLARES is a `const`, so the
+# answer is the same in every process kanso has ever run -- sixty-two names,
+# written down sorted and asked with `binary_search`. The table goes with the
+# scan, so there is no build and no hash per query, which is why this takes
+# back more than the rise was.
+# #
+# Net over the two branches: 4,838,372 -> 4,509,234, with kanso#1468's
+# 69.90% kept.
+startup_instructions=4509234

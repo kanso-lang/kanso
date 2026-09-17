@@ -6058,3 +6058,40 @@ passes here had the answer one paragraph away.
 - **OPEN** what the probe did not reach and the row cannot retire without: the
   710 `xs[i]!` sites, `!` names in lib answering a box, and the two cost levers
   kanso#1477 reports built. Their own pass.
+
+## 2026-09-17 — kanso#1484: DECLARES calls sixty-two symbols, and start-up lands below main
+
+CI's sitting on a9d673e9, against its base kanso#1468:
+
+    startup_instructions     5,077,523 -> 4,509,234     -568,289   -11.19%
+    compile_instructions    35,964,985 -> 35,967,553      +2,568    +0.007%
+    entry_instructions     128,205,992 -> 128,213,280      +7,288    +0.006%
+    library_instructions   128,340,895 -> 128,348,221      +7,326    +0.006%
+    interp_instructions  2,178,796,919 -> 2,178,532,696   -264,223   -0.012%
+
+**The pair is the thing to read, not either row alone.** kanso#1468 indexed two
+whole-body questions in the emitter and took 69.90% off `kanso build
+bench/runbench`. It cost 239,151 on this row, because it built DECLARES's
+symbol set once per process out of 1,187 lines and a one-line program has
+nothing to spread that over. This branch writes the answer down: DECLARES is a
+`const`, so the sixty-two names it calls are the same in every process kanso
+has ever run, and a sorted list asked with `binary_search` is six comparisons
+against a hash table that has to be built first.
+
+The table goes with the scan, which is why the fall is larger than the rise
+was. Over the two branches together, start-up reads 4,838,372 -> **4,509,234**,
+a fall of 329,138 and 6.80%, with kanso#1468's 69.90% on `kanso build` kept.
+
+**The other four rows are layout.** The list is read from `Backend::emit`,
+under `emit_ir`, so `kanso check` never reaches it and neither does the
+interpreter. Three move by seven thousand or less, and the interpreted row's
+264,223 lands it 26,389 below main — the layout term wandering, not something
+the branch did.
+
+**The PR body's numbers are from an older base and are corrected here.** It
+quoted 5,148,482 and 4,532,728 for a saving of 615,754, and main at 4,882,857
+for a landing 350,129 below the branch point. CI on the current tree reads
+568,289 saved and 329,138 below main. Same result, measured on the tree that
+will merge.
+
+- **DONE** the rows are CI's.

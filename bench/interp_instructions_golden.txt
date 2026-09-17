@@ -73,5 +73,11 @@
 # prune_unnamed closure worth 284 instructions in the whole run; the other
 # 237,550 are the compiler's bytes moving under an interpreter that never
 # enters them. The objective does not weigh this vein.
-interp_instructions=2178796919
+#
+# 2026-09-17, kanso#1484 on kanso#1468's tree. CI reads 2,178,532,696 against
+# its base's 2,178,796,919, a fall of 264,223 -- 0.012%. Layout: the gate
+# anchors at `run_interpreted_on_stack` and the interpreter reaches no part of
+# the emitter. It lands 26,389 BELOW main on this vein, which is the layout
+# term wandering rather than anything the branch did.
+interp_instructions=2178532696
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
