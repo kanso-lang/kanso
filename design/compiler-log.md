@@ -7217,3 +7217,46 @@ at the direct spelling.
 - **DECLINED STILL** eta-reduction changes the trace, now by adding a line.
 - **FOR THE LEDGER** what a hop means for an anonymous function. Not blocking.
 
+
+## 2026-09-17 — four jobs, three values, one golden: the release codegen row does not reproduce
+
+kanso#1495 adds 73 lines to `design/compiler-log.md` and four fixtures under
+`tests/fixtures/provenance`. Nothing it adds is compiled into a program the
+release codegen row measures. Its cost-goldens job:
+
+    codegen_instructions_release  6,826,827,769 -> 6,826,827,780   +11
+
+kanso#1497 — 72 lines of markdown and nothing else — read **the same
+6,826,827,780** on its own head in the same hour. Two branches, one row, the
+same eleven.
+
+Set beside the other two jobs on that golden today:
+
+    kanso#1478   6,826,827,769   agreed
+    kanso#1493   6,826,829,520   +1,751
+    kanso#1495   6,826,827,780   +11
+    kanso#1497   6,826,827,780   +11
+
+Four jobs, three values. The largest spread is 1,751 in 6.8 billion — 256
+parts per billion — and the row is the C toolchain's own work on IR the branch
+did not change. `codegen_instructions.sh`'s header says of the children that
+`clang -cc1` counted 532,991,920 twice and the driver and `ld` likewise, "byte
+for byte", which is true within one job and is what the second reading each
+job takes still confirms. It is across jobs that the row moves.
+
+That the two markdown branches agree with each other and not with main is the
+part that says this is not a coin. Something the two merge commits share and
+main does not is reaching the count. What it is remains open; the rule it runs
+into is the 2026-09-15 one, that a counter reads the code under test and
+nothing else.
+
+The exact compare has to hold one value, so whichever branch is red re-bases
+the golden and main carries that value until the next branch draws differently.
+The ratchet is turning on something no change made.
+
+- **DONE** the row re-based, and the four readings set out together for the
+  first time.
+- **OPEN** what the two merge commits share. The experiment named on
+  kanso#1492 — pin where the allocator's heap starts and re-read two heads that
+  differ only in markdown — is still the way in, and it costs a red gate per
+  round until somebody runs it.

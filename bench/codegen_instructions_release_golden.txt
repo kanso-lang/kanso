@@ -97,4 +97,16 @@
 # different sides: one is paid once per release and the other between a
 # keystroke and an answer. The container's placeholder read 12,107,507,377,
 # pre-exclusion and not comparable.
-codegen_instructions_release=6826827769
+# 2026-09-17, kanso#1495 on the tree merged with main ebab38e3, CI's sitting.
+# 6,826,827,769 -> 6,826,827,780, a RISE of 11 -- 1.6 parts per billion, and
+# NOT this branch. Its whole diff is 73 lines of design/compiler-log.md and
+# four test fixtures under tests/fixtures/provenance; nothing it adds is
+# compiled into a program this row measures.
+#
+# kanso#1497 read the same 6,826,827,780 on its own head in the same hour,
+# from a branch that is 72 lines of markdown and nothing else. Two branches,
+# one row, the same eleven. Against them kanso#1478's job read 6,826,827,769
+# and kanso#1493's read 6,826,829,520: four jobs, three values, one golden.
+# The row does not reproduce across jobs, and the exact compare has to hold
+# one value, so whichever branch is red re-bases it.
+codegen_instructions_release=6826827780
