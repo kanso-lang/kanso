@@ -55,4 +55,8 @@
 # read 394,912,504 from three stagings and 394,910,642 on four release-path
 # profiles; CI reads 12.6 million lower, which is the host difference this
 # golden's header said no box could compare away.
-emit_instructions=382309867
+#
+# 2026-09-17, kanso#1470 against main, CI's sitting. 382,309,867 -> 382,212,543,
+# a FALL of 97,324 (-0.025%). The value it replaces was not CI's; this is the
+# first sitting of this vein on a runner.
+emit_instructions=382212543
