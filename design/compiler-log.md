@@ -5346,3 +5346,30 @@ this is a change in what is counted rather than a gain to bank.
 
 - **DONE** the three rows carry the excluded sitting; one page span follows.
 - **OPEN** the second build, which is the whole claim.
+
+## 2026-09-17 — kanso#1475's rows, and the check path pays for what the build saves
+
+CI's sitting, against main and against this branch's own base:
+
+```
+                          main          kanso#1473     this branch
+  compile_instructions   35,964,325    35,869,543    35,896,968    +27,425
+  entry_instructions    128,204,133   127,873,637   127,962,075    +88,438
+  library_instructions  128,339,261   128,011,551   128,099,426    +87,875
+  startup_instructions    4,838,323     5,076,026     5,079,380     +3,354
+```
+
+All four rise over the base, and that is worth saying plainly rather than
+filing under layout. `kanso check` does run the linearity analysis, so this
+row is not insulated from the change the way the emitter-only branches in
+this stack are. What the change buys is on the build path — `kanso build`
+falls 9.61% with the emitted IR byte-identical — and the check path pays
+27,425 for it.
+
+welfare exits 0: the rise is inside the dead band, and the objective does not
+see a trade worth refusing.
+
+Against main the branch is still well ahead on all three compile rows,
+because it carries kanso#1468 and kanso#1473 underneath it.
+
+- **DONE** four rows and eight page spans on the excluded anchor.
