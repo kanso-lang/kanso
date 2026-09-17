@@ -6,9 +6,20 @@
 //! of work getting the same answer. `src/hash.rs` says that iteration order
 //! changing is harmless because nothing observable depends on it, and that is
 //! true of what the compiler WRITES. It is not true of what the compiler
-//! COSTS, and three goldens count exactly that:
-//! `bench/compile_instructions_golden.txt`, `bench/entry_instructions_golden.txt`
-//! and `bench/library_instructions_golden.txt` hold one exact value each.
+//! COSTS, and every exact instruction golden counts that: the three compile
+//! rows, and since 2026-09-16 the interpreted run's own row in
+//! `bench/interp_instructions_golden.txt`. Each holds one value, and one value
+//! is what two runs of one binary have to produce.
+//!
+//! `src/eval.rs` was excused here until that day, on the ground that "no
+//! compile golden runs a program, and the interpreter's own cost is not
+//! counted by any exact vein". Opening that vein made the excuse false and
+//! proved the defect in the same hour: the interpreted corpus read
+//! 2,651,460,189 and 2,648,375,305 on two runs of one binary, 3,084,884 apart,
+//! where the front end's own anchor read 48,026,664 twice. The interpreter's
+//! tables -- `fns`, `types`, `knots`, the typeset cache and the cycle-guard
+//! sets -- were `std::collections`, so every run probed them in a different
+//! order.
 //!
 //! kanso#1449 declared `proven` as `std::collections::HashSet<Span>` in two
 //! places in `src/infer.rs` and one in `src/check.rs`, and the three rows
@@ -38,11 +49,6 @@ fn root() -> &'static Path {
 /// `kanso check` is the whole of what the three compile gates run. A container
 /// only these paths build is never constructed while that command is counted.
 const OFF_THE_COUNTED_PATH: &[(&str, &str)] = &[
-    (
-        "src/eval.rs",
-        "the interpreter. No compile golden runs a program, and the interpreter's \
-         own cost is not counted by any exact vein.",
-    ),
     (
         "src/wasm_rt.rs",
         "the wasm runtime shim, compiled into the wasm blob rather than into a \
@@ -97,8 +103,8 @@ fn the_compile_path_hashes_with_a_fixed_seed() {
 
     assert!(
         loose.is_empty(),
-        "these hash with std's per-process random seed, on a path the three \
-         compile instruction goldens count:\n\n{}\n\nEach golden holds ONE exact \
+        "these hash with std's per-process random seed, on a path an exact \
+         instruction golden counts:\n\n{}\n\nEach golden holds ONE exact \
          value, and a randomly-seeded table makes the number differ between two \
          runs of the same binary -- which reads as the gate's case (2), a \
          reproduction failure, and halts the vein. Spell them \
