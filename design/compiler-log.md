@@ -3845,6 +3845,13 @@ to its own flags. `mi_option_max_vabits` looked like a runtime lever and is
 not one: it sizes the page map and never reaches the
 `mi_os_mem_config.virtual_address_bits` the hint reads.
 
+**One mutation had to be rewritten, and it said so in advance.** `a_library_the_row_cannot_see.sh` writes a `.cargo/config.toml` carrying
+`-C prefer-dynamic`, so the compiler grows a shared object the instruction row
+cannot see. Its own comment anticipated this: "a repo that grows its own cargo
+config has somewhere for this flag to be lost, so the mutation stops rather
+than appending into it." It appends now, and refuses only if a `[build]`
+section is already there to collide with.
+
 **It costs nothing measurable.** The library row read 133,429,679 with the
 hint and 133,429,679 without it, and three runs without it agree function by
 function. `tests/the_allocator_does_not_guess_at_addresses.rs` reads
