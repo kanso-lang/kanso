@@ -95,6 +95,9 @@
 # start-up and the 13.8x fall this branch bought is already in the value.
 #
 # 2026-09-17, kanso#1486. 4,536 lower.
+#
+# 2026-09-17 (kanso#1470): startup_instructions 4,838,323 -> 4,837,892, a FALL of
+# 431 (-0.0089%). Layout, same sitting as the compile row.
 # 2026-09-17, kanso#1482, CI's sitting. LAYOUT, same reason, and this one
 # fell: 956 lower. The four rows together are +93 +564 +511 -956, which is
 # what a code-layout shift looks like -- no direction, and no relation to
@@ -112,6 +115,11 @@
 # runs the front end too, so the saving is real here; on a one-line program
 # there is almost nothing for the fixpoint to walk, which is why the fall is
 # 0.083% where the module corpus sees 1.14%.
+#
+# 2026-09-17, kanso#1470 on main 298636b7. CI reads 4,837,941 against main's
+# 4,838,372, a fall of 431 -- 0.009%. `kanso play` takes the native path and
+# this branch adds counter plumbing to src/main.rs; 431 is what that weighs
+# here.
 # 2026-09-17, kanso#1482 on the tree merged with kanso#1462. CI reads
 # 4,837,381 against main's 4,838,372, a fall of 991 -- 0.020%. `kanso play`
 # takes the native path and does run the emitter, so some of this is the
@@ -124,8 +132,19 @@
 # main's, carried forward so the gate has one value to fail against
 # rather than none; the merged sitting is CI's to take.
 #
+# 2026-09-17, merged with main at 5e256ce0 (kanso#1491). The split edits
+# src/main.rs and moved the four compile-side rows a few hundred instructions
+# under this branch. The value below is this branch own CI sitting, taken
+# before that landed; the merged number is CI to take.
+#
 # 2026-09-17, kanso#1486 on the tree merged with main, CI's sitting.
 # 4,837,381 -> 4,833,450, a FALL of 3,931 (-0.081%). The alias fixpoint runs on
 # the native path too, and a one-line program gives it almost nothing to do;
 # this is the front end's share of a workload that is mostly start-up.
+#
+# 2026-09-17, kanso#1470 against main, CI's sitting. 4,837,381 -> 4,836,950, a
+# FALL of 431 (-0.0089%). `kanso play` runs the emitter, which is where the new
+# counters sit; they are compiled out of a shipped binary and the gate builds one
+# that carries them, so what this reads is the same layout term as the rows
+# above, at the same scale.
 startup_instructions=4833450

@@ -1904,6 +1904,13 @@
 # 2026-09-17, kanso#1486 on the excluded anchor. 413,380 lower, 1.15%. The
 # alias fixpoint and the group count are built once for the two passes that read
 # them, where each built its own.
+#
+# 2026-09-17 (kanso#1470): compile_instructions 35,964,325 -> 35,964,307, a FALL
+# of 18 (-0.00005%). This branch adds ninety lines to src/main.rs and nothing to
+# the compile path; `kanso check` never reaches the tier flag. The row is a
+# layout move, which is what compile_instructions has recorded eight times
+# before, and compile_allocs and compile memory came back byte-identical beside
+# it. CI's sitting on f5132e87.
 # 2026-09-17, merged with main. Both branches moved this row on their own
 # base, so the merged tree is reading neither number. The value below is
 # main's, carried forward so the gate has one value to fail against
@@ -1929,6 +1936,10 @@
 # 35,559,376 against main's 35,968,792, a fall of 409,416 -- 1.14%. WORK, not
 # layout: the alias fixpoint and the group count run in `kanso check`, which
 # is what this corpus measures. Running them once instead of twice is the
+#
+# 2026-09-17, kanso#1470 on main 298636b7. CI reads 35,968,794 against main's
+# 35,968,792 -- TWO instructions. The branch edits src/main.rs, so the row can
+# move; two is the smallest move this vein has ever recorded and it is the
 # whole of it.
 # 2026-09-17, kanso#1482 on the tree merged with kanso#1462. CI reads
 # 35,968,171 against main's 35,968,792, a fall of 621 -- 0.0017%. LAYOUT.
@@ -1942,6 +1953,11 @@
 # main's, carried forward so the gate has one value to fail against
 # rather than none; the merged sitting is CI's to take.
 #
+# 2026-09-17, merged with main at 5e256ce0 (kanso#1491). The split edits
+# src/main.rs and moved the four compile-side rows a few hundred instructions
+# under this branch. The value below is this branch own CI sitting, taken
+# before that landed; the merged number is CI to take.
+#
 # 2026-09-17, kanso#1486 on the tree merged with main, CI's sitting.
 # 35,968,171 -> 35,559,408, a FALL of 408,763 (-1.136%). WORK, not layout: the
 # alias fixpoint and the group count each ran twice over a program nothing had
@@ -1952,6 +1968,12 @@
 # The value this row carried until now was main's, put there by the merge so the
 # gate would have one number to fail against rather than none while both sides
 # had moved. This is the merged tree's own reading.
+#
+# 2026-09-17, kanso#1470 against main, CI's sitting. 35,968,171 -> 35,968,173, a
+# RISE of 2. The entry row fell 2 and the library and interpreted rows are
+# byte-identical. This branch adds counters and the gates that read them and
+# changes no decision the front end makes; two instructions is the binary's
+# bytes and nothing else.
 compile_instructions=35559408
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that

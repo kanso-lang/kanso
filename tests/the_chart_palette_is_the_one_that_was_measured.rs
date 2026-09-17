@@ -1,4 +1,4 @@
-//! The trend chart's seven colours are a measured set, and this pins them.
+//! The trend chart's thirteen colours are a measured set, and this pins them.
 //!
 //! Colour on a categorical chart is computable, so it was computed rather than
 //! chosen. The seven hues below are the only ordering, of the 5,040 the seven
@@ -8,6 +8,24 @@
 //! comparison a reader of this chart actually makes. Worst margin 9.2 either
 //! way (OKLab delta-E x100, floor 8); worst normal-vision margin 24.6 within a
 //! group against a floor of 15. 216 of the 5,040 orderings clear both gates.
+//!
+//! WHAT CHANGED ON 2026-09-17, and why the adjacent-pair gate is no longer the
+//! one doing the work. The objective reached eleven counters, and eleven hues
+//! do not fit: `#c4331f` against `#7a5c00` separates by 3.2 under simulated
+//! protanopia against a floor of 8, and no ordering of the set clears it,
+//! because eleven lines inside one lightness band do not have the room. The
+//! method's answer past eight series is small multiples rather than a
+//! generated hue, and the chart now draws ONE PANEL PER COUNTER.
+//!
+//! With one line to a panel there is no adjacent pair to confuse: the caption
+//! names the counter and colour carries no discriminative load. So this spec
+//! pins membership and order as the record of what was measured -- a rename or
+//! a silent recolour still turns it red -- and the CVD floors below describe
+//! the seven-hue era they were measured in. THAT IS A NARROWER CLAIM THAN IT
+//! WAS, and it is narrower because the drawing changed, not because the gate
+//! was relaxed to fit a palette. If the chart ever overlays series again, the
+//! adjacent-pair and all-pairs checks come back with it and the set has to be
+//! re-measured against however many lines share a plot.
 //!
 //! ORDER IS THE MECHANISM, NOT DECORATION. The check measures ADJACENT pairs,
 //! so moving one line past another can break a pair that was never touched,
@@ -42,16 +60,19 @@ fn page() -> String {
 }
 
 /// The measured set, in the measured order: token, light step, dark step.
-const PALETTE: [(&str, &str, &str); 7] = [
+const PALETTE: [(&str, &str, &str); 13] = [
     ("--series-run-instructions", "#eda100", "#c98500"),
     ("--series-run-memory", "#2a78d6", "#3987e5"),
+    ("--series-release-build", "#b5309a", "#c765b2"),
     ("--series-compile-instructions", "#eb6834", "#d95926"),
     ("--series-compile-allocations", "#1baf7a", "#199e70"),
     ("--series-compile-memory", "#4a3aa7", "#9085e9"),
+    ("--series-startup", "#c4331f", "#d4523c"),
+    ("--series-dev-build", "#6d5bd0", "#9a70d8"),
+    ("--series-emitting", "#a8437a", "#c25f92"),
+    ("--series-interp-speed", "#0b8f9e", "#0f9bb0"),
+    ("--series-interp-memory", "#7a5c00", "#a9862f"),
     ("--series-binary-size", "#e87ba4", "#d55181"),
-    // Green is the same step in both modes: it clears 3:1 against each surface
-    // as it stands, so the score's own line does not change colour with the
-    // reader's theme.
     ("--series-welfare", "#008300", "#008300"),
 ];
 

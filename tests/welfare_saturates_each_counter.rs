@@ -115,16 +115,27 @@ fn now_of(told: &str, name: &str) -> Option<u128> {
     after.split_whitespace().next()?.replace(',', "").parse().ok()
 }
 
-/// Every ratio exactly one, so the score is the weights and nothing else.
-/// The three run terms saturate at 1/(1+2.0) and carry 0.15, 0.15 and 0.26;
-/// the two compile terms at 1/(1+0.5) carry 0.32 and 0.12.
-/// 100 * (0.05 + 0.05 + 0.08667 + 0.21333 + 0.08).
+/// Every ratio exactly one, so each side is its weights and nothing else, and
+/// the meta is the saturating combination of the two.
 ///
-/// It read 46.67 under the weights before Clay's 2026-09-02 gavel, when run
-/// speed was one term of 0.30, run memory 0.30 and compile speed 0.28.
+/// PRODUCTION: run speed and run memory saturate at 1/(1+2.0) carrying 0.45 and
+/// 0.40, release build at 1/(1+0.5) carrying 0.15.
+/// 0.15 + 0.13333 + 0.10 = 0.38333.
+///
+/// DEVELOPMENT: compile speed, compile memory, dev build and start-up all
+/// saturate at 1/(1+0.5) and carry 0.30, 0.08, 0.22 and 0.25; the two
+/// interpreter terms at 1/(1+1.0) carry 0.11 and 0.04.
+/// 0.85 * 0.66667 + 0.15 * 0.5 = 0.64167.
+///
+/// META: f(x) = x/(x+1), and the sum is divided by f(1) = 0.5 to put the
+/// ceiling back at a hundred.
+/// 100 * (0.70 * 0.27711 + 0.30 * 0.39086) / 0.5 = 62.25.
+///
+/// It read 48.00 between the 2026-09-06 consolidation and the 2026-09-16
+/// split, and 46.67 before Clay's 2026-09-02 gavel.
 #[test]
 fn every_counter_at_parity_scores_the_weights_alone() {
-    assert_eq!(scored("parity", &[]), "welfare 48.00");
+    assert_eq!(scored("parity", &[]), "welfare 62.25");
 }
 
 /// COMPILE SPEED'S two counters, one of them a thousand times better than its
@@ -146,7 +157,7 @@ fn every_counter_at_parity_scores_the_weights_alone() {
 /// fraction above from the new count.
 #[test]
 fn one_counter_running_away_cannot_carry_its_term() {
-    assert_eq!(scored("runaway", &[("compile_instructions", 1024)]), "welfare 53.33");
+    assert_eq!(scored("runaway", &[("compile_instructions", 1024)]), "welfare 63.33");
 }
 
 /// WEIGHT SAYS HOW MUCH A DIMENSION MATTERS; SATIATION SAYS HOW LONG IT KEEPS
@@ -162,14 +173,24 @@ fn one_counter_running_away_cannot_carry_its_term() {
 /// no halves to compare. The asymmetry this asserts is the one the model
 /// still has, and it is a property of the weights rather than of the compiler.
 ///
-/// 53.00 against 50.13: a doubling buys the run side 0.05 of the index and the
-/// compile side 0.0213, and compile speed carries the LARGER weight of the two.
+/// SINCE THE 2026-09-16 SPLIT THE GAP HAS TWO CAUSES, and saying it is all
+/// satiation would be wrong. Run speed satiates later AND sits on the
+/// production side, which the meta weighs 0.70 against development's 0.30. The
+/// assertion below still holds and is still worth pinning, but a reader who
+/// wants satiation ALONE has to compare two terms on the same side -- compile
+/// speed at 0.5 against interpreter speed at 1.0 -- because a cross-side
+/// comparison carries the meta's weights with it.
+///
+/// 67.45 against 62.69. Doubling run instructions takes production from
+/// 0.38333 to 0.45833; doubling compile instructions takes development from
+/// 0.64167 to 0.66167, since compile speed averages its two counters and only
+/// one of them moved.
 #[test]
 fn a_doubling_is_worth_more_on_the_run_side_than_the_compile_side() {
     let run = scored("doubled-run", &[("run_instructions", 2)]);
     let compile = scored("doubled-compile", &[("compile_instructions", 2)]);
-    assert_eq!(run, "welfare 53.00", "a doubling of the run program's work");
-    assert_eq!(compile, "welfare 50.13", "the same doubling of what compiling costs");
+    assert_eq!(run, "welfare 67.45", "a doubling of the run program's work");
+    assert_eq!(compile, "welfare 62.69", "the same doubling of what compiling costs");
     assert!(
         run > compile,
         "the run side satiates later, so it keeps paying: {run} against {compile}"

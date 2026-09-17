@@ -549,15 +549,24 @@ fn drew? none
 fn drew? series
   series == [2 2 2 5 6 6 6 6]
 
-# One coverage change in the stub is one rule on the chart, labelled with the
+# One coverage change in the stub is one rule PER PANEL, each labelled with the
 # share the rows to its right are scored on. `scored_weight` arrives as TEXT in
 # every row of the real history -- "0.00", "0.28", "0.44", "1.00" -- and a
 # `typeof === 'number'` guard read every row as unscored and drew no rule at
 # all. This is the check that would have caught it: a silent no-op leaves the
 # list empty.
+#
+# It read a single-element list until 2026-09-17, when eleven counters stopped
+# fitting on one plot and the chart became small multiples. Seven panels for
+# seven series means seven rules, because panels do not share a canvas and a
+# boundary drawn once would be drawn on one of them. The count is the stub's
+# series count, which `missing_series` pins two functions up, so the two
+# numbers move together or one of them goes red.
 fn missing_bounds read acc
-  why = "the chart did not mark the coverage change, or labelled it wrong"
-  noted acc why (read["marks"] == ["coverage 1.00"])
+  why = "a panel went unmarked at the coverage change, or was labelled wrong"
+  one = "coverage 1.00"
+  marked = [one one one one one one one]
+  noted acc why (read["marks"] == marked)
 
 # The panel leads with the chart's own lines, in the chart's own order, because
 # it is built from the same list rather than from a second one written by hand.

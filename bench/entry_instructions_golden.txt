@@ -711,6 +711,9 @@
 # 2026-09-17, kanso#1486. 1,468,677 lower, 1.15%. The entry route merges and
 # checks everything its imports bring, so it asks the alias question of a much
 # larger program than the module route does.
+#
+# 2026-09-17 (kanso#1470): entry_instructions 128,204,133 -> 128,203,909, a FALL
+# of 224 (-0.00017%). Layout, same sitting as the compile row.
 # 2026-09-17, merged with main. Both branches moved this row on their own
 # base, so the merged tree is reading neither number. The value below is
 # main's, carried forward so the gate has one value to fail against
@@ -730,6 +733,10 @@
 # 126,771,382 against main's 128,217,983, a fall of 1,446,601 -- 1.13%. Work,
 # and the entry route pays the two readers as consecutive statements, so it
 # takes the largest share of the three.
+#
+# 2026-09-17, kanso#1470 on main 298636b7. CI reads 128,217,981 against main's
+# 128,217,983 -- two instructions, downward. `library_instructions` and
+# `interp_instructions` are byte-identical to main in the same sitting.
 # 2026-09-17, kanso#1482 on the tree merged with kanso#1462. CI reads
 # 128,213,972 against main's 128,217,983, a fall of 4,011 -- 0.0031%. Layout,
 # as the module row above it.
@@ -739,9 +746,17 @@
 # main's, carried forward so the gate has one value to fail against
 # rather than none; the merged sitting is CI's to take.
 #
+# 2026-09-17, merged with main at 5e256ce0 (kanso#1491). The split edits
+# src/main.rs and moved the four compile-side rows a few hundred instructions
+# under this branch. The value below is this branch own CI sitting, taken
+# before that landed; the merged number is CI to take.
+#
 # 2026-09-17, kanso#1486 on the tree merged with main, CI's sitting.
 # 128,213,972 -> 126,771,759, a FALL of 1,442,213 (-1.125%). WORK; see
 # bench/compile_instructions_golden.txt.
+#
+# 2026-09-17, kanso#1470 against main, CI's sitting. 128,213,972 -> 128,213,970,
+# a FALL of 2. See bench/compile_instructions_golden.txt.
 entry_instructions=126771759
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
