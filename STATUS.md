@@ -154,38 +154,36 @@ inlined bind for a pure index read and bound discharge for a literal index
 into a known-length list, each measured, with the floor moving under the
 ironclad rule where they come in short. Nothing here waits on a ruling.
 
-**Probed 2026-09-17 against a release build of the tip.** kanso#1477's body
-reports this row stale, and the probe mostly agrees with it -- but only after
-a first pass got it wrong, which is worth writing down because the trap is in
-the ruling's own text.
+**Probed 2026-09-17 against a release build of the tip, and the probe was
+wrong twice before it was right.** On the parts reachable this way the row's
+work is BUILT, which agrees with kanso#1477's report:
 
-- the constructor is BUILT. `effect 5` and `effect (err "nope")` both answer a
-  box that `bind` and `rescue` take.
-- an `(err _)` arm matching a bare err anywhere is BUILT.
-- **the check-time refusal is BUILT, in all three shapes.** `boom 0 + 1`,
-  `(boom 0)[0]` and `add1 (boom 0)` each stop at check with
-  `error[exhaustive]: this can be an err and ... wants a value -- dispatch on
-  it first with an `(err _)` arm`.
+- the constructor. `effect 5` and `effect (err "nope")` both answer a box that
+  `bind` and `rescue` take.
+- an `(err _)` arm matching a bare err anywhere.
+- the check-time refusal, in all three shapes. `boom 0 + 1`, `(boom 0)[0]` and
+  `add1 (boom 0)` each stop at check with `error[exhaustive]: this can be an
+  err and ... wants a value`.
 
-The first pass reported all three unbuilt, on three fixtures that each bound
-the err to a name -- `x = boom 0` then `x + 1`. The rule DOES NOT READ NAMES,
-which `docs/compiler.html` section 71 states outright as a blind spot kept on
-purpose, the same one the `none` rule has always had. So those fixtures tested
-the blind spot and found it working as documented. Write the err into the
-position directly and the refusal fires. A probe that confirms a claim of
-absence has to reach past the documented exception first.
+**Both wrong passes made one mistake, and it is worth the space.** The first
+reported the refusal missing, on fixtures that each bound the err to a name --
+`x = boom 0` then `x + 1`. The rule reads calls and not names, deliberately.
+The second, correcting the first, reported that ch04 fails to document that
+blind spot although `docs/compiler.html` section 71 claims it does. ch04
+documents it plainly: *`share` above is a name, and the checker reads calls,
+not the names they are bound to, so the failure rides past `with_tip` at run
+time and the endpoint reports it.* The grep behind that second claim searched
+for the words "blind spot" rather than reading the paragraph.
 
-`docs/book/samples/ch04/railway.kso` still runs and still prints its
-checked-in output byte for byte, and that is the blind spot too: `share =
-share_of cents people` binds a name before `with_tip share` reads it.
+So nothing on the page or in the book is owed here, `railway.kso` runs because
+the chapter says it runs, and the lesson is the one both passes broke: a claim
+that something is ABSENT is only as good as the search for it being present,
+and a search by phrase is not that.
 
-**What the probe does leave owing**, narrower than the first pass claimed and
-checkable: section 71 says the name blind spot is one "chapter 4 says so
-rather than leaving a reader to find it". Chapter 4 does not say so -- no
-mention of it anywhere in the file. And ch04's railway section still teaches
-"an err flows through functions, not into them ... the function body never
-runs" as an unconditional rule, which now holds only through a name binding.
-That is the chat's to fix, and it is a page edit rather than a build.
+**What this probe did NOT reach**, and so cannot retire the row on: the 710
+sites handing `xs[i]!` to an operator, `!` names in lib answering a box, and
+the two cost levers. kanso#1477 reports the levers built. Those want their own
+pass before the row comes off.
 
 ### Two welfares and a meta-welfare over them (2026-09-16)
 

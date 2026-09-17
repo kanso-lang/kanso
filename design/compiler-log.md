@@ -5501,61 +5501,52 @@ pins the ledger index's three sentences and does not reach this section.
   intro's count against them, the way the ledger index is already pinned.
   That spec has caught the ledger's count twice.
 
-## 2026-09-17 — the box row probed, and the probe's first pass was wrong
+## 2026-09-17 — the box row probed, and the probe was wrong twice first
 
 kanso#1477's body reports the explicit-box ruling stale, and kanso#1478 and
-kanso#1480 both cite that in their "Rulings weighed" paragraphs. Probed part by
-part against a release build of the branch tip. The report is broadly right,
-and the first pass of this probe said it was wrong, so the mistake goes in
-first.
-
-**The first pass.** Three fixtures, each of the shapes part 3 names:
-
-    x = boom 0          x = boom 0          x = boom 0
-    print "{x + 1}"     print "{x[0]}"      print (plain x)
-
-All three check clean and propagate at run time, and
-`docs/book/samples/ch04/railway.kso` still prints its checked-in output byte
-for byte. That was written up as part 3 unbuilt and the railway unretired, and
-it is wrong.
-
-**Why.** Every one of those fixtures binds the err to a NAME before the
-position reads it, and the rule does not read names. `docs/compiler.html`
-section 71 says so in as many words -- *`x = decode s` followed by `f x` is
-accepted, which is the same blind spot the `none` rule has always kept*. The
-fixtures tested the documented exception and found it behaving as documented.
-`railway.kso` is the same shape: `share = share_of cents people`, then
-`with_tip share`.
-
-**The rule, probed where it applies.** Written into the position directly, all
-three refuse:
+kanso#1480 cite that in their "Rulings weighed" paragraphs. Probed against a
+release build of the branch tip, the report holds on everything the probe
+reached: the `effect` constructor answers a box `bind` and `rescue` take, an
+`(err _)` arm matches a bare err anywhere, and the check-time refusal fires in
+all three shapes part 3 names --
 
     print "{boom 0 + 1}"     error[exhaustive]: this can be an err and `+` wants a value
     print "{(boom 0)[0]}"    error[exhaustive]: this can be an err and an index wants a value
     print (add1 (boom 0))    error[exhaustive]: this can be an err and `add1` has no arm for it
 
-each naming the position and telling the reader to dispatch with an `(err _)`
-arm. Part 3 is built. The constructor is built -- `effect 5` and
-`effect (err "nope")` both answer a box `bind` and `rescue` take -- and so is
-an `(err _)` arm matching a bare err anywhere.
+-- each naming the position and pointing at an `(err _)` arm.
 
-**The lesson is about probing for absence.** A probe that reports a feature
-missing has to reach past the feature's own documented exceptions before its
-report means anything, and the exception here was written down in the section
-that describes the rule. Reading the rule's page first would have cost a
-minute; not reading it produced a confident finding, a pull request body, a
-STATUS.md row and a comment on kanso#1480, all wrong, inside ten minutes. The
-correction went out on the same three surfaces.
+**The entry is here for the two wrong answers that came first, because they
+were the same mistake twice in ten minutes.**
 
-**What survives, and it is narrow.** Section 71 says the name blind spot is
-one "chapter 4 says so rather than leaving a reader to find it". Chapter 4
-does not say so: the string does not appear in the file. And ch04's railway
-section still teaches *an err flows through functions, not into them ... the
-function body never runs* as an unconditional rule, when under the built rule
-it holds only through a name binding. A reader who writes the direct form gets
-a refusal the chapter does not prepare them for.
+The first pass reported the refusal unbuilt. Its three fixtures each bound the
+err to a name, `x = boom 0` then `x + 1`, and the rule reads calls rather than
+names. That is deliberate, it is the blind spot the `none` rule has always had,
+and `docs/compiler.html` section 71 states it in the paragraph describing the
+rule. The probe had found the documented exception and called it a hole.
 
-- **DONE** the row's parts probed where the rule applies, and the first pass's
-  error corrected on STATUS.md, in kanso#1488 and on kanso#1480.
-- **OPEN** ch04 naming the name blind spot, which section 71 already claims it
-  does, and the railway section's unconditional wording. The chat's.
+The second pass corrected the first and added a narrower claim: that section 71
+says *chapter 4 says so rather than leaving a reader to find it*, and chapter 4
+does not. Chapter 4 does, in the paragraph immediately after the railway
+sample: *`share` above is a name, and the checker reads calls, not the names
+they are bound to, so the failure rides past `with_tip` at run time and the
+endpoint reports it.* The search behind that claim was `grep` for the words
+"blind spot", which is a search for a phrasing rather than for a fact.
+
+So nothing is owed on the page or in the book, and `railway.kso` runs because
+the chapter says it runs. Both wrong answers reached three surfaces before
+being caught -- a STATUS.md row, a pull request body and a comment on
+kanso#1480 -- and each correction went to the same three.
+
+**The rule this leaves.** A report that a feature is ABSENT is worth what the
+search for it being PRESENT was worth. Running the fixture is not that search;
+the fixture only shows what happened, and what was supposed to happen is
+written in the section that describes the rule. Read that first, then probe,
+and where the probe contradicts the documentation suspect the probe. Both
+passes here had the answer one paragraph away.
+
+- **DONE** the constructor, the `(err _)` arm and the check refusal probed
+  built, and both wrong answers corrected on all three surfaces.
+- **OPEN** what the probe did not reach and the row cannot retire without: the
+  710 `xs[i]!` sites, `!` names in lib answering a box, and the two cost levers
+  kanso#1477 reports built. Their own pass.
