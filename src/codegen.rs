@@ -2831,15 +2831,50 @@ impl<'a> Backend<'a> {
             .map(|n| call_twin(n, self.convention))
             .collect();
         let declares: String = {
-            let referenced = |sym: &str| {
-                let probe = format!("@{sym}(");
-                body.contains(&probe)
-                    || call_twins.contains(&probe)
-                    || DECLARES
-                        .lines()
-                        .filter(|l| !l.starts_with("declare"))
-                        .any(|l| l.contains(&probe))
-            };
+            // THE HAYSTACK IS BUILT ONCE. This filter asks `referenced` for
+            // every line in DECLARES, and `referenced` used to re-split
+            // DECLARES and re-scan its non-declare lines on each of those
+            // asks -- one thousand two hundred lines searched one thousand
+            // two hundred times. Joining them into one string ahead of the
+            // loop is exactly equivalent: the probe is `@sym(`, which holds
+            // no newline, so no probe can match across a join that uses one.
+            let helper_text: String = DECLARES
+                .lines()
+                .filter(|l| !l.starts_with("declare"))
+                .collect::<Vec<_>>()
+                .join("\n");
+            // AND THE HAYSTACKS ARE READ ONCE, not once per candidate. The
+            // question asked of each is `does `@sym(` appear`, and the set of
+            // symbols that satisfy it for a given text can be read off in a
+            // single pass: every `@` begins a name and the next `(` ends it.
+            // That is the same answer, because a symbol holds no `(` -- so the
+            // first `(` after an `@` is exactly where the name stops, which is
+            // the assumption the DECLARES parser below already makes when it
+            // reads a declared name as the span between them. Names are bounded
+            // at whitespace as well, which cannot change an answer: every name
+            // this is asked about comes from a `declare` line and holds none.
+            //
+            // `crate::hash::Set` rather than std's, and that is not a style
+            // choice: std seeds its hasher per process, and a randomly seeded
+            // table makes this count differ between two runs of one binary --
+            // which the compile rows read as a reproduction failure and halt
+            // the vein over. `tests/the_compile_path_hashes_with_a_fixed_seed
+            // .rs` is what says so, and it named this line.
+            let called: crate::hash::Set<&str> =
+                [body.as_str(), call_twins.as_str(), helper_text.as_str()]
+                    .into_iter()
+                    .flat_map(|hay| {
+                        hay.match_indices('@').filter_map(move |(at, _)| {
+                            let rest = &hay[at + 1..];
+                            let stop = rest.find(|c: char| c == '(' || c.is_whitespace())?;
+                            match rest.as_bytes()[stop] {
+                                b'(' if stop > 0 => Some(&rest[..stop]),
+                                _ => None,
+                            }
+                        })
+                    })
+                    .collect();
+            let referenced = |sym: &str| called.contains(sym);
             let kept: Vec<&str> = DECLARES
                 .lines()
                 .filter(|line| {

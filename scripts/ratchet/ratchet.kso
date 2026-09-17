@@ -169,6 +169,12 @@ entry_gate = "sh scripts/gates/entry_instructions.sh"
 # regression fails a job over the machine it ran on.
 library_gate = "sh scripts/gates/library_instructions.sh"
 
+# Start-up, the fourth callgrind row and the only one that reaches codegen: the
+# three above run `kanso check`, which stops before it. It counts the same way
+# they do, so a runner the golden does not name refuses it the same way, and a
+# refusal read as a regression fails a job over the machine it ran on.
+startup_gate = "sh scripts/gates/startup_instructions.sh"
+
 bound_a = bound work_gate why_exact
 
 bound_b = bound front_gate why_exact
@@ -177,7 +183,9 @@ bound_c = bound entry_gate why_exact
 
 bound_d = bound library_gate why_exact
 
-host_bound = [bound_a bound_b bound_c bound_d]
+bound_e = bound startup_gate why_exact
+
+host_bound = [bound_a bound_b bound_c bound_d bound_e]
 
 fn host_bound? gate
   list/any? host_bound (e -> e.gate == gate)
