@@ -136,4 +136,9 @@
 # the gate one number to fail against rather than none, and makes CI's diff
 # read exactly what this branch does to today's main. The merged sitting is
 # CI's to take.
-interp_instructions=2182307043
+#
+# 2026-09-17, kanso#1486 on the tree merged with main 2a0cec7c, CI's sitting.
+# interp_instructions 2,182,307,043 -> 2,182,526,878, a RISE of 219,835 (+0.0101%).
+# LAYOUT. The interpreter does not run the alias fixpoint; it carries the
+# compiler's bytes, and 219,835 on 2.18 billion is a hundredth of a per cent.
+interp_instructions=2182526878

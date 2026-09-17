@@ -8862,3 +8862,40 @@ ratcheted above rather than above it.
 - **DONE** five rows measured and written; the floor ratcheted and held.
 
 
+
+## 2026-09-17 — kanso#1486 on today's main: a fixpoint round that rewrote nothing
+
+The alias canonicaliser runs to a fixpoint. It ran a second round over a
+program the first round had not rewritten, and a round that rewrites nothing
+still walks everything. CI's sitting on the merged tree:
+
+    compile_allocs            27,397 ->        27,313        -84   -0.307%
+    compile_instructions  35,869,355 ->    35,441,049   -428,306   -1.194%
+    entry_instructions   127,872,255 ->   126,348,616 -1,523,639   -1.192%
+    library_instructions 128,010,052 ->   126,804,150 -1,205,902   -0.942%
+    startup_instructions   3,955,899 ->     3,951,284     -4,615   -0.117%
+
+All three `kanso check` routes fall by about the same proportion, which is
+what a pass that runs once per program rather than once per name looks like:
+the entry route gives back four times the instructions of the module route at
+the same 1.19%, because it is four times the program.
+
+Two rows rose and both are layout — `interp_instructions` by 219,835, a
+hundredth of a per cent on 2.18 billion, and `emit_instructions` by 2,466.
+The run-side rows, the machine-code row and both codegen rows are
+byte-identical: this change is entirely in the front end.
+
+Welfare 76.65 → 76.66, banked.
+
+**Every golden on this branch was reset to main's before CI measured, and one
+of them did not need to be.** The branch was cut before kanso#1478, kanso#1491,
+kanso#1492 and kanso#1493 landed; its emit row read 382,216,372 where main now
+reads 60,197,743, a 6x gap that is kanso#1478's doing. So the merge carried
+main's values forward across the board, including `compile_allocs`, whose
+27,313 the branch had measured on its own base and whose gate this container
+cannot run — the golden was taken under rustc 1.98.1 and the container runs
+1.94.1. CI read 27,313. The branch had been right about that row the whole
+time, and resetting it cost nothing except the round it took to find out. The
+rule the reset follows is still the right one: a number measured against a
+base that is gone describes a tree that does not exist, and the only way to
+know which of those numbers survived the move is to let CI say so.

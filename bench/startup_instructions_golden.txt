@@ -274,4 +274,9 @@
 # the gate one number to fail against rather than none, and makes CI's diff
 # read exactly what this branch does to today's main. The merged sitting is
 # CI's to take.
-startup_instructions=3955899
+#
+# 2026-09-17, kanso#1486 on the tree merged with main 2a0cec7c, CI's sitting.
+# startup_instructions 3,955,899 -> 3,951,284, a FALL of 4,615 (-0.1167%).
+# Start-up reaches codegen but compiles one `print`, so most of this is the
+# same layout term the row above shows, at this row's scale.
+startup_instructions=3951284

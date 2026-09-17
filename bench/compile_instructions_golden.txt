@@ -2085,4 +2085,8 @@
 # the gate one number to fail against rather than none, and makes CI's diff
 # read exactly what this branch does to today's main. The merged sitting is
 # CI's to take.
-compile_instructions=35869355
+#
+# 2026-09-17, kanso#1486 on the tree merged with main 2a0cec7c, CI's sitting.
+# compile_instructions 35,869,355 -> 35,441,049, a FALL of 428,306 (-1.1941%).
+# The row this branch is for. A second count in the same job read 35,441,049.
+compile_instructions=35441049

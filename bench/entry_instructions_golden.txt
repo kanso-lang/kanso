@@ -839,4 +839,9 @@
 # the gate one number to fail against rather than none, and makes CI's diff
 # read exactly what this branch does to today's main. The merged sitting is
 # CI's to take.
-entry_instructions=127872255
+#
+# 2026-09-17, kanso#1486 on the tree merged with main 2a0cec7c, CI's sitting.
+# entry_instructions 127,872,255 -> 126,348,616, a FALL of 1,523,639 (-1.1915%).
+# The entry route pays the same fixpoint and pays it over more program, so it
+# gives back four times the instructions at the same proportion.
+entry_instructions=126348616
