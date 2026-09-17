@@ -6113,3 +6113,98 @@ own 3,105 was measured on a runner and is untouched by this.
 
 The script now traps and kills its spinners on EXIT, INT and TERM. A
 background loop with no trap is a loop that outlives the reason for it.
+
+## 2026-09-17 — two welfares and a meta, built
+
+The 2026-09-16 gavel's second half. `scripts/welfare/welfare.kso` scored one
+number over four terms; it scores three over nine.
+
+    production      run speed 0.45, run memory 0.40, release build 0.15
+    development     compile speed 0.30, compile memory 0.08, dev build 0.22,
+                    interpreter start-up 0.25, interpreter speed 0.11,
+                    interpreter memory 0.04
+    meta            0.70 production, 0.30 development, saturating
+
+On the tree this was built from: production 57.11, development 72.59, meta
+76.13.
+
+**The interpreted side is priced in Clay's order and nothing else.** "start-time
+is vastly more important than speed which is more important than memory usage"
+is 0.25, 0.11 and 0.04 — each better than two to one over the next. Start-up is
+the largest single term on that side because `kanso test` pays it on every
+invocation and production never pays it once, which is the dimension no single
+scalar could hold and the reason the split was ruled rather than a
+re-weighting.
+
+**The meta saturates, and that is the whole of what the third number adds.** A
+linear `a·W_prod + b·W_dev` is algebraically one flat term list — the same
+model with every weight multiplied through — so the split would buy nothing
+the old single scalar did not already have. Each side enters as its score over
+a hundred, `f w = w / (w + 1)` is concave across [0, 1], and the result is
+divided by `f 1.0` to put the ceiling back at a hundred.
+
+What that buys is an exchange rate between the two sides that MOVES with where
+they stand. The meta's derivative in each side, computed at four positions:
+
+    position                  meta    d/d prod   d/d dev   ratio
+    today (0.571, 0.726)     76.13      56.72     20.14     2.82
+    level (0.500, 0.500)     66.67      62.22     26.67     2.33
+    production ahead (0.9, 0.3)  80.16  38.78     35.50     1.09
+    development ahead (0.3, 0.9) 60.73  82.84     16.62     4.98
+
+So today a development gain has to be 2.82 times the production cost in
+sub-welfare points to be worth taking — which is what "development speed much
+better in exchange for a very small production performance cost" means with a
+number on it. Let production run far ahead and that threshold falls to 1.09: a
+point of development is then worth almost a point of production, because the
+side near its ceiling has little left to earn. A linear meta would hold the
+ratio at 2.33 forever whatever either side did, and that is the whole of what
+the third number adds.
+
+**The four pre-split weights are renormalised, not carried over.** They summed
+to one between them as shares of a single objective, and a share of the
+development side is a different quantity. Every ratio the old reasoning argued
+for survives: run speed still outweighs run memory, compile speed still
+outweighs compile memory better than three to one.
+
+**Carrying them over unrenormalised was the first thing that happened, and
+nothing said so.** Production summed to 0.71 and scored 40.97 where it should
+have read 57.11 — every term on that side scored a fifth low, and the meta read
+the shortfall as production sitting far from its ceiling. The number looked
+entirely plausible. So the program refuses now: `balanced?` checks each side
+sums to one before anything is scored, and `weighed` sits at the head of
+`gauge`'s chain beside the golden pins. Watched red by putting run speed back
+to 0.30 — exit 2, naming the rule — and green again restored.
+
+**The floor re-ratchets, as the gavel required.** 69.79 was a reading of a
+four-term single scalar that no longer exists, so it is not carried forward;
+the meta floor is set from the rescored model in the same change. One floor,
+on the meta, because the standing rule that the sum is the objective and the
+terms are diagnostics applies exactly as it did before — ratcheting the two
+sides separately would re-enable the part-against-whole optimisation that rule
+exists to stop.
+
+**The five new counters enter at PARITY.** Baseline equals current, so each
+contributes its satiation floor and nothing else, and the meta is above the old
+number without one instruction of the compiler having changed. The old rule
+that granted a new counter its dimension's standing is gone and was not
+revived: a counter joining at parity has headroom a counter granted a high
+standing does not, and that difference decided at least one verdict in 2026-09.
+
+**What CI owes this PR.** `kanso check` runs on src/main.rs, which kanso#1470
+edits, so the five goldens under this branch are not yet this tree's. CI's
+first sitting writes all five goldens AND their five baselines together —
+together, because writing the golden alone would leave the baseline behind and
+score a host difference as a regression. Parity is preserved when both move,
+and the meta stays 76.13.
+
+**`bench/objective_sources.txt` gains five lines and the replay spec covers
+them.** None of the five renames and none of them sums, so each is one pair.
+Watched red by deleting `interp_peak_bytes`: the spec names that counter and
+says the trend gate cannot tell a re-basing of it from a win.
+
+- **OPEN** the meta's 0.70/0.30 and its satiation of 1.0 are priced from the
+  gavel's framing rather than from a measurement, which is what the 2026-08-25
+  charter leaves to the implementer. The first real trade the two sides
+  disagree about is the evidence that would move them, and there has not been
+  one yet.

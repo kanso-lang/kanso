@@ -56,11 +56,21 @@ pub type term
   weight
   satiation
   counters
+  side
 
 pub type scoring
   terms
   base
   formula
+  meta
+
+# The meta's three numbers as the model states them, for the same reason the
+# formula date is read rather than held: a copy here would keep its value
+# through the gavel that moves it.
+pub type over
+  prod_share
+  dev_share
+  satiation
 
 pub type splice
   counters
@@ -81,7 +91,31 @@ fn scoring_rows m given
 # The model in one value, so the walk below takes an argument rather than
 # three that have to stay in step.
 fn read model
-  scoring (parsed_terms model) (parsed_base model) (parsed_formula model)
+  m = parsed_meta model
+  scoring (parsed_terms model) (parsed_base model) (parsed_formula model) m
+
+# A model with no meta line is an older welfare than this tool. Defaulting to
+# one side would rescore five hundred rows under a model nobody chose, so it
+# refuses the way the missing formula line does.
+fn parsed_meta model
+  rows = list/to_list (list/select (model_lines model) meta_line?)
+  over_read rows (length rows == 0)
+
+fn meta_line? l
+  text/slice l 1 5 == "meta "
+
+fn over_read _ true
+  over 1.0 0.0 1.0
+
+fn over_read rows false
+  return over_read rows true if length rows < 1
+  line = rows[1]
+  parts = text/split (text/slice line 6 (length line)) "|"
+  return over 1.0 0.0 1.0 if length parts < 3
+  a = text/to_float parts[1]
+  b = text/to_float parts[2]
+  c = text/to_float parts[3]
+  over a b c
 
 # --- the model, as `scripts/welfare -- --model` writes it -------------------
 fn model_lines model
@@ -93,9 +127,23 @@ fn parsed_terms model
 
 fn one_term line
   parts = text/split (text/slice line 6 (length line)) "|"
-  return term "" 0.0 0.0 [] if length parts < 4
-  term parts[1] (text/to_float parts[2]) (text/to_float parts[3])
-    (text/split parts[4] ",")
+  return term "" 0.0 0.0 [] "production" if length parts < 4
+  w = text/to_float parts[2]
+  sat = text/to_float parts[3]
+  cs = text/split parts[4] ","
+  term parts[1] w sat cs (sided parts)
+
+# A four-field term line is a welfare from before the split, and everything it
+# weighed is what the production side weighs now.
+fn sided parts
+  named_side parts (length parts < 5)
+
+fn named_side _ true
+  "production"
+
+fn named_side parts false
+  return named_side parts true if length parts < 5
+  parts[5]
 
 # Which definition scored these rows, as the model states it. Holding a copy
 # here would keep its old value through the gavel that moved the formula, and
@@ -442,8 +490,9 @@ fn epoch_value v f
 
 fn at_row m divs row
   found = divs[row["commit"]]
-  return scoring m.terms m.base m.formula if found == none or length found < 2
-  scoring m.terms (rebased m.base found[1]) m.formula
+  whole = scoring m.terms m.base m.formula m.meta
+  return whole if found == none or length found < 2
+  scoring m.terms (rebased m.base found[1]) m.formula m.meta
 
 # --- the rewrite ------------------------------------------------------------
 fn over_rows m given
@@ -489,7 +538,7 @@ fn rescored_at m divs r a phases found false
 
 fn rescored m row epoch
   weight = covered row m.terms m.base
-  told = columned row m.terms m.base (weight == 0.0)
+  told = columned row m.terms m.base m.meta (weight == 0.0)
   by = put told "scored_by" m.formula
   wt = put by "scored_weight" (fixed weight 2)
   json/encode (put wt "scored_base" epoch)
@@ -510,11 +559,11 @@ fn rescored m row epoch
 # The stale column goes rather than staying. A number the previous formula
 # produced, sitting under a `scored_by` naming the new one, is the one outright
 # lie this tool can tell.
-fn columned row _ _ true
+fn columned row _ _ _ true
   without row "welfare"
 
-fn columned row ts base false
-  put row "welfare" (fixed (score row ts base) 4)
+fn columned row ts base m false
+  put row "welfare" (fixed (score row ts base m) 4)
 
 fn without m key
   fold (entries m) {} (acc e -> unless_named acc e key)
@@ -534,10 +583,54 @@ fn kept acc k v false
 fn present row base t
   list/select t.counters (c -> row[c] != none and base[c] != none)
 
-fn score row ts base
-  shares = list/to_list (list/map ts (t -> share row base t))
+# EACH SIDE IS RENORMALISED ON ITS OWN, then the meta combines whichever sides
+# the row carries anything for. Renormalising the nine terms together would be
+# the pre-split formula with more terms in it, and would read a row that
+# carries only production counters as a row whose development side scored
+# nought -- which is what every row before 2026-09-17 is, all five hundred of
+# them. A side nothing was measured for is absent, not zero.
+fn score row ts base m
+  p = side_fraction row (on_side ts "production") base
+  d = side_fraction row (on_side ts "development") base
+  100.0 * combined m p d / saturated m.satiation 1.0
+
+fn on_side ts which
+  list/to_list (list/select ts (t -> t.side == which))
+
+# The fraction of a side a row earned, in [0, 1], or `none` when the row
+# carries no counter that side weighs.
+fn side_fraction row ts base
   weights = list/to_list (list/map ts (t -> carried_weight row base t))
-  100.0 * list/sum shares / list/sum weights
+  held = list/sum weights
+  fractioned row ts base held (held == 0.0)
+
+fn fractioned _ _ _ _ true
+  none
+
+fn fractioned row ts base held false
+  shares = list/to_list (list/map ts (t -> share row base t))
+  list/sum shares / held
+
+# Both sides, one side, or neither. With one side the meta is that side alone,
+# because a share of nothing is not a share -- renormalising 0.70 up to 1.00 is
+# the only reading that does not silently score the absent side as a loss.
+fn combined m p d
+  weigh m p d (p == none) (d == none)
+
+fn weigh _ _ _ true true
+  0.0
+
+fn weigh m _ d true false
+  saturated m.satiation d
+
+fn weigh m p _ false true
+  saturated m.satiation p
+
+fn weigh m p d false false
+  m.prod_share * saturated m.satiation p + m.dev_share * saturated m.satiation d
+
+fn saturated k w
+  w / (w + k)
 
 # How much of the formula this row's counters cover: each term's weight times
 # the share of its counters the row carries. One means the row was scored on

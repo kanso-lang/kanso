@@ -524,16 +524,25 @@ Only Clay arms, disarms or retimes it.
 
 ### The welfare number only goes up
 
-- **One scalar covers runtime and compile cost together**, because the
-  per-counter goldens cannot see a trade. `scripts/welfare/welfare.kso` weighs
-  FIVE counters into a single score: `run_instructions`, `run_peak_bytes` (the
-  arena, held and permanent peaks summed by `peak_of`), `compile_instructions`,
-  `compile_allocs` and `compile_peak_bytes`.
-  `bench/objective_sources.txt` is the list — seven `<counter> <gate key>`
-  pairs for those five — and
+- **TWO WELFARES AND A META cover production and development cost, because the
+  per-counter goldens cannot see a trade and one scalar could not hold
+  interpreter start-up.** Ruled 2026-09-16, built 2026-09-17.
+  `scripts/welfare/welfare.kso` scores a PRODUCTION number over
+  `run_instructions`, `run_peak_bytes` (the arena, held and permanent peaks
+  summed by `peak_of`) and `codegen_instructions_release`; a DEVELOPMENT number
+  over `compile_instructions`, `compile_allocs`, `compile_peak_bytes`,
+  `codegen_instructions_dev`, `startup_instructions`, `interp_instructions` and
+  `interp_peak_bytes`; and a META over the two, which is the number CI gates
+  on and the only one carrying a floor. A weight is a share of ITS OWN side and
+  each side sums to one — `balanced?` refuses to score when one does not, which
+  is a refusal that exists because carrying the four pre-split weights over
+  unrenormalised scored production a fifth low and looked entirely plausible.
+  `bench/objective_sources.txt` is the list — twelve `<counter> <gate key>`
+  pairs for those ten — and
   `tests/the_objective_reads_what_the_gate_watches.rs` replays it, so the list
   is checkable rather than remembered. **This sentence has now been wrong
-  twice.** Until 2026-09-06 it said fixpoint rounds, expression visits and
+  three times, and the third is why the counts above are not to be trusted from
+  memory either.** Until 2026-09-06 it said fixpoint rounds, expression visits and
   emitted lines, none of which the objective has weighed since the 2026-09-03
   rebuild, and a session spent a round expecting a 4.5% rise in emitted lines
   to cost welfare when the objective cannot see that vein at all. Until
@@ -541,8 +550,12 @@ Only Clay arms, disarms or retimes it.
   twelve memory rows — the shape before Clay's 2026-09-06 gavel made the
   runtime side one consolidated program, which turned twenty-five rows into
   five. A session reading that hand-computed a trade over the wrong model, got
-  its sign wrong, and only the real `welfare` run caught it. Run
-  `kanso run scripts/welfare -- --counters`; it prints the list in five lines.
+  its sign wrong, and only the real `welfare` run caught it. Until 2026-09-17 it
+  then said FIVE and SEVEN, which was true for exactly the eleven days between
+  the consolidation gavel and the split gavel being built. Run
+  `kanso run scripts/welfare -- --counters` for the list, and a bare
+  `kanso run scripts/welfare` prints the meta with production and development
+  under it.
   **It is an
   index, not a percentage** — the ceiling is a hundred, where every term costs
   nothing, and the origin is arbitrary. Only its direction and the size of its

@@ -80,3 +80,25 @@ compile_instructions compile_instructions
 compile_instructions entry_instructions
 compile_allocs compile_allocs
 compile_peak_bytes compile_peak_bytes
+
+# THE 2026-09-16 GAVEL'S FIVE, added when the objective became two welfares and
+# a meta. None of them renames and none of them sums: each golden holds one row
+# and the counter takes that row's name, which is why they are one line apiece
+# where the compile term above takes four.
+#
+# The two codegen rows are the halves of a build the three `kanso check` rows
+# above could not see at all. Dev-tier is a development term and release-tier a
+# production one, counted where their cost is paid -- which is what the gavel
+# closed rather than decided, since under two welfares there is nothing to pick.
+
+# development: the interpreted engine, in Clay's order -- start-up, then speed,
+# then memory
+startup_instructions startup_instructions
+interp_instructions interp_instructions
+interp_peak_bytes interp_peak_bytes
+
+# development: what `kanso build` costs between a keystroke and an answer
+codegen_instructions_dev codegen_instructions_dev
+
+# production: what building the binary that ships costs
+codegen_instructions_release codegen_instructions_release

@@ -81,9 +81,14 @@ divided by the weight those terms carry, times a hundred.</p>
 :root {
   --series-run-instructions: #eda100;
   --series-run-memory: #2a78d6;
+  --series-release-build: #b5309a;
   --series-compile-instructions: #eb6834;
   --series-compile-allocations: #1baf7a;
   --series-compile-memory: #4a3aa7;
+  --series-startup: #c4331f;
+  --series-dev-build: #6d5bd0;
+  --series-interp-speed: #0b8f9e;
+  --series-interp-memory: #7a5c00;
   --series-binary-size: #e87ba4;
   --series-welfare: #008300;
 }
@@ -91,14 +96,22 @@ divided by the weight those terms carry, times a hundred.</p>
   :root {
     --series-run-instructions: #c98500;
     --series-run-memory: #3987e5;
+    --series-release-build: #c765b2;
     --series-compile-instructions: #d95926;
     --series-compile-allocations: #199e70;
     --series-compile-memory: #9085e9;
+    --series-startup: #d4523c;
+    --series-dev-build: #9a70d8;
+    --series-interp-speed: #0f9bb0;
+    --series-interp-memory: #a9862f;
     --series-binary-size: #d55181;
     --series-welfare: #008300;
   }
 }
 #trend-chart { margin: 1.6rem 0; }
+.trend-caption { color: var(--muted); font-size: 0.95rem; font-weight: 600;
+  letter-spacing: 0.01em; margin: 1.4rem 0 0.2rem; }
+.trend-caption:first-child { margin-top: 0; }
 .trend { display: block; height: auto; width: 100%; }
 .perf-loading { color: var(--muted); font-size: 0.9rem; }
 .chart-legend { color: var(--muted); font-size: 0.86rem; line-height: 1.7; }
@@ -205,6 +218,15 @@ divided by the weight those terms carry, times a hundred.</p>
   // run_instructions and run_peak_bytes, which every row has carried since
   // 2026-09-06, were drawn nowhere at all, and the retired arena peak had two
   // distinct values across the rows that hold it, so it drew as a flat line.
+  // THREE CHARTS, NOT ONE, since the 2026-09-16 gavel split the objective.
+  // Twelve lines on one plot is past what a categorical palette can carry --
+  // the adjacent-pair check fails whatever order they go in, because twelve
+  // hues inside one lightness band do not have the room. Grouping them the way
+  // the model groups them puts three lines on the production plot and seven on
+  // the development one, and every set passes the palette checks on both
+  // surfaces. The meta and the binary size share the third, because neither
+  // belongs to a side: welfare is the number over both, and binary size the
+  // objective does not read at all.
   const TREND = [
     { token: 'run_instructions', hue: 'var(--series-run-instructions)',
       label: 'run instructions', read: (r) => r.run_instructions,
@@ -212,6 +234,9 @@ divided by the weight those terms carry, times a hundred.</p>
     { token: 'run_peak_bytes', hue: 'var(--series-run-memory)',
       label: 'run memory', read: (r) => r.run_peak_bytes,
       note: 'That program\u2019s high-water mark: the arena, what it holds, and its permanent peak, summed. Flat memory here is a guarantee rather than an average, so this moves when a program starts keeping something it used to discard.' },
+    { token: 'codegen_instructions_release', hue: 'var(--series-release-build)',
+      label: 'release build', read: (r) => r.codegen_instructions_release,
+      note: 'The <code>-O3 -flto</code> build, the same child tree as the dev row and the one that ships. It is a production cost because it buys the binary its speed, and it is weighted lightly because it is paid once per release rather than once per keystroke.' },
     { token: 'compile_instructions', hue: 'var(--series-compile-instructions)',
       label: 'compile instructions', read: (r) => r.compile_instructions,
       note: 'Instructions to compile the sample corpus, summed over the two paths <code>kanso check</code> takes on it: a directory as a module, and a file of definitions alone as a library. Deciding and emitting both land here.' },
@@ -221,6 +246,18 @@ divided by the weight those terms carry, times a hundred.</p>
     { token: 'compile_peak_bytes', hue: 'var(--series-compile-memory)',
       label: 'compile memory', read: (r) => r.compile_peak_bytes,
       note: 'Peak bytes the compiler held. The pair to compile allocations: a change can spend one to buy the other, and reading them apart is how you tell which happened.' },
+    { token: 'startup_instructions', hue: 'var(--series-startup)',
+      label: 'start-up', read: (r) => r.startup_instructions,
+      note: 'What a run costs before it has any work to do: the loader, the prelude, and the backend deciding what to emit for a one-line program. <code>kanso test</code> pays this on every invocation and a shipped binary never pays it once, which is why it is the largest single term on the development side.' },
+    { token: 'codegen_instructions_dev', hue: 'var(--series-dev-build)',
+      label: 'dev build', read: (r) => r.codegen_instructions_dev,
+      note: 'The <code>-O0</code> build, counted across the whole child tree \u2014 the emitter, clang, the linker and its own child. kanso\u2019s process is excluded: it sits in a wait loop, and what that loop costs is the box\u2019s scheduling rather than the compiler\u2019s work.' },
+    { token: 'interp_instructions', hue: 'var(--series-interp-speed)',
+      label: 'interpreter speed', read: (r) => r.interp_instructions,
+      note: 'The reference interpreter executing a corpus that builds its own input and decodes it six times. It is the semantics oracle, so this is the engine the specs run on rather than the one that ships.' },
+    { token: 'interp_peak_bytes', hue: 'var(--series-interp-memory)',
+      label: 'interpreter memory', read: (r) => r.interp_peak_bytes,
+      note: 'That run\u2019s high-water mark. Last of the three the 2026-09-16 gavel ordered for the interpreted engine: start-up matters most, then speed, then this.' },
     // The decoder's machine code. Only its own, because every binary links the
     // same runtime and summing them would count it four times. Dashed, and
     // second to last, because the score does not read it: a machine-code-size
@@ -273,9 +310,19 @@ divided by the weight those terms carry, times a hundred.</p>
     });
     return runs;
   }
-  function drawTrend(rows) {
-    const host = document.getElementById('trend-chart');
-    if (!host) return;
+  const bySide = (...tokens) => tokens.map((t) => {
+    const found = TREND.find((s) => s.token === t);
+    if (!found) throw new Error(`no series named ${t}`);
+    return found;
+  });
+  const TREND_PROD = bySide('run_instructions', 'run_peak_bytes',
+    'codegen_instructions_release');
+  const TREND_DEV = bySide('compile_instructions', 'compile_allocs',
+    'compile_peak_bytes', 'startup_instructions', 'codegen_instructions_dev',
+    'interp_instructions', 'interp_peak_bytes');
+  const TREND_META = bySide('welfare', 'text_bytes');
+
+  function drawTrend(rows, series, caption) {
     const W = 1200, H = 580, PAD = 64, TOP = PAD / 2, USABLE = H - PAD - TOP - 22;
     const total = rows.length;
     const at = (i) => PAD + (i * (W - 2 * PAD)) / Math.max(total - 1, 1);
@@ -302,7 +349,7 @@ divided by the weight those terms carry, times a hundred.</p>
       });
       return pts;
     };
-    const parts = TREND.map((series) => {
+    const parts = series.map((series) => {
       const pts = read(series);
       if (!pts.length) return '';
       const vals = pts.map((p) => p[1]);
@@ -339,13 +386,13 @@ divided by the weight those terms carry, times a hundred.</p>
     });
     // The keys are spaced by how many there are. A fixed pitch fit five and
     // ran off the right edge at six, and the next line added would do it again.
-    const perRow = Math.min(TREND.length, 4);
+    const perRow = Math.min(series.length, 4);
     const pitch = (W - 2 * PAD) / perRow;
-    const rows_ = Math.ceil(TREND.length / perRow);
+    const rows_ = Math.ceil(series.length / perRow);
     // The key is drawn as the mark it stands for, dash and all, so a reader
     // matching a line to a label never has to decide whether the dashes mean
     // something the swatch is not saying.
-    const keys = TREND.map((series, i) => {
+    const keys = series.map((series, i) => {
       const x = PAD + (i % perRow) * pitch;
       const ky = H - 16 - (rows_ - 1 - Math.floor(i / perRow)) * 22;
       const dash = series.dashed ? ' stroke-dasharray="5 4"' : '';
@@ -353,8 +400,9 @@ divided by the weight those terms carry, times a hundred.</p>
         `stroke="${series.hue}" stroke-width="3"${dash}/>` +
         `<text x="${x + 30}" y="${ky}" class="trend-key">${series.label}</text>`;
     });
-    host.innerHTML = `<svg class="trend" viewBox="0 0 ${W} ${H}" role="img" ` +
-      `aria-label="${TREND.length} measures across ${total} commits, ` +
+    return `<h3 class="trend-caption">${caption}</h3>` +
+      `<svg class="trend" viewBox="0 0 ${W} ${H}" role="img" ` +
+      `aria-label="${caption}: ${series.length} measures across ${total} commits, ` +
       `${runs.length} scoring-coverage runs">` +
       bounds.join('\n') + '\n' + parts.join('\n') + '\n' + keys.join('\n') + '</svg>';
   }
@@ -370,7 +418,10 @@ divided by the weight those terms carry, times a hundred.</p>
     return;
   }
   if (!rows.length) { host.innerHTML = '<p class="perf-loading">no history recorded yet.</p>'; return; }
-  drawTrend(rows);
+  host.innerHTML =
+    drawTrend(rows, TREND_PROD, 'production welfare \u2014 what the binary costs') +
+    drawTrend(rows, TREND_DEV, 'development welfare \u2014 what the edit-test loop costs') +
+    drawTrend(rows, TREND_META, 'the meta, and one line the score does not read');
   const last = rows[rows.length - 1];
   const prev = rows.length > 1 ? rows[rows.length - 2] : null;
   const spark = (read) => {
