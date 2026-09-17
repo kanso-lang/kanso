@@ -106,7 +106,7 @@ tune=$tune:glibc.malloc.tcache_count=7
 # already names the binary as a cause the cpu key cannot see.
 (
   cd "$box"
-  env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" valgrind --tool=callgrind \
+  env -i PATH=/usr/bin:/bin KANSO_QUIET=1 GLIBC_TUNABLES="$tune" valgrind --tool=callgrind \
     --callgrind-out-file=/tmp/cg.compile ./kanso check compile_corpus \
     >/dev/null 2>/dev/null
 )
@@ -253,7 +253,7 @@ fi
 # by hand.
 (
   cd "$box"
-  env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" valgrind --tool=callgrind \
+  env -i PATH=/usr/bin:/bin KANSO_QUIET=1 GLIBC_TUNABLES="$tune" valgrind --tool=callgrind \
     --callgrind-out-file=/tmp/cg.compile2 ./kanso check compile_corpus \
     >/dev/null 2>/dev/null
 )

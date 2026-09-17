@@ -64,7 +64,7 @@ tune=$tune:glibc.malloc.tcache_count=7
 # compiler.
 (
   cd "$box"
-  env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" valgrind --tool=callgrind \
+  env -i PATH=/usr/bin:/bin KANSO_QUIET=1 GLIBC_TUNABLES="$tune" valgrind --tool=callgrind \
     --callgrind-out-file=/tmp/cg.library ./kanso check \
     library_corpus/library_corpus.kso >/dev/null 2>/dev/null
 )
@@ -140,7 +140,7 @@ fi
 # by hand.
 (
   cd "$box"
-  env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" valgrind --tool=callgrind \
+  env -i PATH=/usr/bin:/bin KANSO_QUIET=1 GLIBC_TUNABLES="$tune" valgrind --tool=callgrind \
     --callgrind-out-file=/tmp/cg.library2 ./kanso check \
     library_corpus/library_corpus.kso >/dev/null 2>/dev/null
 )

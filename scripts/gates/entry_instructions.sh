@@ -54,7 +54,7 @@ tune=$tune:glibc.malloc.tcache_count=7
 # same compile. library_box.sh carries the measurement.
 (
   cd "$box"
-  env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" valgrind --tool=callgrind \
+  env -i PATH=/usr/bin:/bin KANSO_QUIET=1 GLIBC_TUNABLES="$tune" valgrind --tool=callgrind \
     --callgrind-out-file=/tmp/cg.entry ./kanso check entry_corpus/main.kso \
     >/dev/null 2>/dev/null
 )
@@ -130,7 +130,7 @@ fi
 # by hand.
 (
   cd "$box"
-  env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" valgrind --tool=callgrind \
+  env -i PATH=/usr/bin:/bin KANSO_QUIET=1 GLIBC_TUNABLES="$tune" valgrind --tool=callgrind \
     --callgrind-out-file=/tmp/cg.entry2 ./kanso check entry_corpus/main.kso \
     >/dev/null 2>/dev/null
 )

@@ -390,7 +390,36 @@ fn driven() -> ExitCode {
         if std::env::var_os("KANSO_COUNTERS").is_some() {
             eprint!("{}", compiler_counters());
         }
-        println!("{file}: ok");
+        // KANSO_QUIET, AND THE REASON IS THAT THIS LINE WAS IN THE ROW.
+        //
+        // The three compile gates count `kanso::main` inclusive, and this
+        // `println!` is inside it. It is 802 instructions all in -- 610 in
+        // `write_fmt`, 185 in `core::slice::memchr::memrchr`, which is
+        // `LineWriter` looking backwards for the last newline in the nineteen
+        // bytes below -- and the memrchr half is not constant. Measured
+        // 2026-09-17: two sittings of one branch, one `cargo fmt` over one test
+        // file apart, identical `.text`, `.data` and `.bss`, identical
+        // per-process floor, same runner model, and all three compile rows
+        // exactly thirteen apart. kanso#1474's frame digest found one bucket of
+        // thirty-two differing and one frame of the forty in it: memrchr, 185
+        // against 198. The cost follows what is printed -- a corpus name
+        // twenty-four characters longer read 63 against 81 on one binary.
+        //
+        // So the row carried a term that is not the compiler and does not
+        // reproduce, and the 2026-09-15 rule is to normalize such a term or
+        // exclude it and name the exclusion where the number lives. Excluding
+        // it costs 802 of 35,967,913, which is 0.0022%; the alternative
+        // considered was moving the anchor to `compile_module_inner`, which
+        // costs 1.1 million and re-baselines two welfare terms to remove the
+        // same thirteen.
+        //
+        // An environment variable rather than a flag, following KANSO_COUNTERS
+        // and KANSO_STRICT above: the gates run under `env -i` and set what
+        // they need, and `kanso check`'s own spelling stays what a reader of
+        // the book was told it is.
+        if std::env::var_os("KANSO_QUIET").is_none() {
+            println!("{file}: ok");
+        }
         return ExitCode::SUCCESS;
     }
     if command == "test" {

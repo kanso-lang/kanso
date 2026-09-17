@@ -4944,3 +4944,43 @@ frames of bucket zero, by name and cost, in one notice.
 
 - **DONE** the bucket is named, and the digest earned its place doing it.
 - **OPEN** the frame. One line in the next pair of sittings.
+
+## 2026-09-17 — the compile rows stop counting the line that says they finished
+
+kanso#1481 named the ±13: `core::slice::memchr::memrchr`, called from
+`StdoutLock::write_all`, which is `LineWriter` looking backwards for the last
+newline in what `kanso check` prints. Nineteen bytes, `compile_corpus: ok`.
+
+The remedy I first proposed was to move the anchor off `kanso::main`, and it was
+the wrong shape: I sized the fix before measuring the term. The term is small.
+
+```
+802   std::io::stdio::_print              inclusive
+610   <&Stdout as Write>::write_fmt
+185   core::slice::memchr::memrchr        <- the thirteen lives here
+```
+
+`kanso check` makes exactly one `println!`. So taking it out of the measured
+region costs **802 of 35,967,913, or 0.0022%**, against 1.1 million for the
+anchor move — which would also have re-baselined two welfare terms to remove the
+same thirteen.
+
+`KANSO_QUIET` withholds the line, and the three compile gates set it on every
+measured run. An environment variable rather than a flag, following
+`KANSO_COUNTERS` and `KANSO_STRICT`: the gates run under `env -i` and set what
+they need, and `kanso check`'s own spelling stays what the book says it is.
+
+This is the same normalization as emptying the environment and pinning the glibc
+tunables, and it is what the 2026-09-15 rule asks for — a term that cannot be
+normalized is excluded, and the exclusion is named where the number lives.
+
+`tests/the_compile_rows_do_not_count_their_own_result_line.rs` holds both
+halves: the binary prints by default and withholds under the variable, run
+through `CARGO_BIN_EXE_kanso` rather than asserted about the source; and every
+`valgrind` line in the three gates asks for quiet, so a gate that forgets
+measures the old thing loudly. Both watched red — the guard removed, and the
+entry gate's `KANSO_QUIET=1` taken away.
+
+- **DONE** the rows no longer carry the print.
+- **OPEN** the three goldens. All three fall by the print's 802-odd and this
+  host refuses the recorded toolchain, so CI's sitting takes them.
