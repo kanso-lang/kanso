@@ -227,4 +227,28 @@
 # base, so the merged tree is reading neither number. The value below is
 # main's, carried forward so the gate has one value to fail against
 # rather than none; the merged sitting is CI's to take.
-startup_instructions=4837381
+#
+# 2026-09-17, kanso#1478 against main, CI's sitting. 4,837,381 -> 5,081,497, a
+# RISE of 244,116 (+5.046%). NOT LAYOUT. `kanso play` takes the native path and
+# runs the emitter, which is where this run of five changed code.
+# 
+# WHAT IT IS. Each of the five replaces a whole-program scan run once per name
+# with an index built once per process, and this workload is a single `print`.
+# There is nothing to amortise the construction over. Profiled under rustc 1.98.1
+# in the gate's own box, `kanso::main` inclusive reads 4,837,246 on main and
+# 5,081,820 here -- 323 from CI's reading of the same pair, which is as close as
+# two containers get. The frames that arrive are the `OnceLock<Set<&str>>` behind
+# `declares_context_calls` at 599,550 and `called_symbols` at 310,752; the frames
+# that leave are the per-name scans, 362,928 + 274,780 + 107,365 + 107,269 +
+# 41,018 + 19,651.
+# 
+# ALMOST ALL OF IT IS ONE OF THE FIVE. kanso#1468 alone read +239,217 on its own
+# CI sitting, so the other four together add 4,899. One index accounts for the
+# row.
+# 
+# THE TRADE IS THE RIGHT WAY ROUND. The five take 61.6x off
+# `kanso build bench/runbench` between them, with the emitted IR byte-identical
+# on every one. A one-line program is the workload where an index is all cost,
+# and measuring what is left when the program is too small to cost anything is
+# what this row is for.
+startup_instructions=5081497

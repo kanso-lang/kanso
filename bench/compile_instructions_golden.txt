@@ -2056,7 +2056,17 @@
 # base, so the merged tree is reading neither number. The value below is
 # main's, carried forward so the gate has one value to fail against
 # rather than none; the merged sitting is CI's to take.
-compile_instructions=35968171
+#
+# 2026-09-17, kanso#1478 as the one tip for the run of five, against main,
+# CI's sitting. 35,968,171 -> 35,868,982, a FALL of 99,189 (-0.276%). WORK: five
+# passes that answered a whole-program question once per name answer it from an
+# index now. The entry path fell 0.267% and the library path 0.264% beside it,
+# on one binary in one job.
+# 
+# The row this file carried until now was main's, put there by the merge so the
+# gate would have one number to fail against rather than none. This is the tip's
+# own reading.
+compile_instructions=35868982
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.
