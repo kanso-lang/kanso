@@ -162,15 +162,25 @@ rm -f /tmp/cg.codegen.${tier}b.*
     ./kanso build pkg/codegen_corpus $flag >/dev/null 2>/dev/null
 )
 again=0
+again_seen=0
 for f in /tmp/cg.codegen.${tier}b.*; do
   [ -f "$f" ] || continue
   n=$(grep -o '^summary: [0-9]*' "$f" | tr -dc 0-9)
-  [ -n "$n" ] && again=$((again + n))
+  [ -n "$n" ] || continue
+  again=$((again + n))
+  again_seen=$((again_seen + 1))
 done
+# HOW MANY PROCESSES EACH READING SAW, because a second reading that counts
+# FEWER of them is not measuring the same thing and its disagreement says
+# nothing about the compiler. A build here is five processes -- kanso, clang
+# at two tiers, and ld -- and `codegen_box.sh` records that an early attempt
+# at this row read two where a real build is five. The first reading already
+# counts them into `seen`; the second did not, so a drop was invisible and
+# read as a reproduction failure.
 printf 'codegen_again_%s row=%s (the first reading was %s)\n' "$tier" "$again" "$got"
 # As a notice too, so it survives as an annotation: plain stdout reaches only
 # the job log, which is the one place a reader may not be able to fetch.
-echo "::notice::codegen_again_${tier}=${again} first_reading=${got}"
+echo "::notice::codegen_again_${tier}=${again} first_reading=${got} again_procs=${again_seen} first_procs=${seen}"
 printf 'codegen_again_%s=%s\n' "$tier" "$again" >> codegen_${tier}_got.txt
 
 echo "::error::codegen_instructions_${tier} counted $got against $want in $golden,"

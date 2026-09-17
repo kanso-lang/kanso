@@ -4527,3 +4527,44 @@ from inside the job; this merge brings it onto the branch.
 - **DONE** the verdict is readable.
 - **OPEN** what the codegen rows' 6,531,790 and 6,645,392 actually are. The
   next sitting says it in one line.
+
+## 2026-09-17 — the verdict became readable and immediately said something wrong
+
+Putting the verdict ahead of the explanation worked: this branch's next sitting
+printed, where nothing had been readable before,
+
+    VERDICT (2): REPRODUCTION FAILURE -- this binary counted 9273818206
+    and then 1071591479 in one job. This vein is halted.
+
+    VERDICT (2): REPRODUCTION FAILURE -- this binary counted 12100862133
+    and then 7307715328 in one job. This vein is halted.
+
+**Those are not two readings of one quantity.** The dev pair is 8.6x apart and
+the release pair 1.66x. A row whose value moves by that much between two runs
+in one job is not a noisy measurement; the second run measured something else.
+
+The shape of it points one way. A build here is five processes — kanso, clang
+at two tiers, and ld — and `codegen_box.sh` already records an early attempt at
+this row that read TWO where a real build is five, with dev and release within
+0.006% of each other. 1,071,591,479 against 9,273,818,206 is about what kanso's
+own process would be without its children. The first reading counts its
+processes into `seen`; the second never counted its own, so a drop was
+invisible and read as a reproduction failure of the compiler.
+
+The two runs issue an identical command. What differs is the BOX: before the
+first, it holds a staged compiler, a staged corpus and the two warm-up builds;
+before the second, it also holds whatever the first build wrote. That is the
+2026-09-15 rule exactly — external state normalized before it is measured — and
+the second reading normalizes the command while leaving the state alone.
+
+This entry does not fix it. It makes the next sitting say which it is:
+`again_procs` and `first_procs` join the notice, so a second reading that saw
+fewer processes is visible as that rather than as a verdict about the compiler.
+Guessing the cause and patching it would be the third prediction today to go
+wrong on a profile read by inference.
+
+- **DONE** the process counts are reported.
+- **OPEN** whether the second reading loses its children, and why. One line in
+  the next sitting.
+- **NOTE** the compile rows on this same head did not part at all, so #1463's
+  own second reading is not implicated — only this gate's.
