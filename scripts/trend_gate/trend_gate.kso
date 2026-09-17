@@ -84,12 +84,17 @@ lower_g = ["compile_instructions" "compile_allocs"]
 # down: a rise printed as drift and counted toward neither side of the
 # pure-regression rule. Running the gate on kanso#1338's own diff is what
 # surfaced it, and tests/every_compile_vein_row_has_a_direction.rs derives the
-# veins off disk so a fifth compile path cannot open one blind. Two sets of
-# rows were added on 2026-09-16 and both are named here in the change that
-# mints them rather than a round later: `startup_instructions`, the only row
-# on this list that sees codegen, and the interpreted run’s three, the only
-# ones that count a program EXECUTING.
-lower_gh = ["library_instructions" "startup_instructions" "interp_instructions"]
+# veins off disk so a fifth compile path cannot open one blind. Three sets of
+# rows were added across 2026-09-16 and 2026-09-17 and every one is named here
+# in the change that mints it rather than a round later: `startup_instructions`,
+# the interpreted run's three -- the only ones that count a program EXECUTING --
+# and `emit_instructions`, which is what the codegen rows stopped counting when
+# kanso's own process was excluded from them. Lower is better for all of them.
+lower_ge = ["library_instructions" "startup_instructions"]
+
+lower_gf = ["interp_instructions" "emit_instructions"]
+
+lower_gh = text/concat lower_ge lower_gf
 
 lower_gi = text/concat lower_gh ["interp_allocs" "interp_peak_bytes"]
 
@@ -253,6 +258,28 @@ bench_entry = [["bench/entry_instructions_golden.txt" ""]]
 # `library_instructions` collides with nothing.
 bench_library = [["bench/library_instructions_golden.txt" ""]]
 
+# The two codegen rows, added with their gate on 2026-09-17. They count what
+# every compile row above stops before: the emitter writing IR, the clang
+# driver, clang -cc1, the linker and the linker's own child. Two rows rather
+# than one because the development and production tiers are different builds
+# with different jobs, ruled 2026-09-16, and a single number over both would
+# let either pay for the other. No prefix, for the reason the three rows above
+# have none: `codegen_instructions_dev` and `codegen_instructions_release`
+# collide with nothing.
+bench_codegen_dev = [["bench/codegen_instructions_dev_golden.txt" ""]]
+
+bench_codegen_release = [["bench/codegen_instructions_release_golden.txt" ""]]
+
+# What the compiler spends emitting, added with its gate on 2026-09-17. It is
+# the row between the two above and the three compile rows: a check stops
+# before codegen, and the codegen rows count the child tree with kanso's own
+# process excluded, because that process waits for a child and a loop the
+# scheduler sizes is external state. `codegen::emit_ir` is what was left, and
+# it is listed here in the commit that creates the file, because the spec
+# beside this one reads bench/ off disk and keys on the word `golden`. No
+# prefix: `emit_instructions` collides with nothing.
+bench_emit = [["bench/emit_instructions_golden.txt" ""]]
+
 bench_traffic = [["bench/compile_allocs_golden.txt" ""]]
 
 # Start-up and the interpreted run, five veins added on 2026-09-16. Start-up
@@ -337,7 +364,13 @@ bench_traffic_up = text/concat bench_traffic bench_new
 
 bench_libcheck = text/concat bench_library bench_traffic_up
 
-bench_compiled = text/concat bench_ir (text/concat bench_entry bench_libcheck)
+bench_codegen_tiers = text/concat bench_codegen_dev bench_codegen_release
+
+bench_codegen = text/concat bench_codegen_tiers bench_emit
+
+bench_checked = text/concat bench_libcheck bench_codegen
+
+bench_compiled = text/concat bench_ir (text/concat bench_entry bench_checked)
 
 bench_de = text/concat bench_memory (text/concat bench_pend bench_compiled)
 

@@ -41,17 +41,34 @@ fn ask(root: &std::path::Path, args: &[&str]) -> String {
 #[test]
 fn the_counter_set_is_the_one_the_formula_reads() {
     let said = counters();
-    // Five since the 2026-09-06 gavel put the run side on one consolidated
-    // program. It was twenty-eight: thirteen work rows and twelve memory rows
-    // over thirteen benchmarks, plus the three compile rows. Every one of those
-    // goldens still exists and still fails CI when it moves; they stopped being
-    // objective INPUTS.
+    // Eleven since the 2026-09-16 gavel split the objective into a production
+    // welfare, a development welfare and a meta over them. The eleventh is
+    // `emit_instructions`: the 2026-09-15 exclusion took kanso's own process
+    // out of the codegen rows, and the emitter runs in that process, so the
+    // child-tree row alone left half of "dev-tier codegen" unweighed. It was five between
+    // 2026-09-06 and 2026-09-17, when the run side became one consolidated
+    // program, and twenty-eight before that: thirteen work rows and twelve
+    // memory rows over thirteen benchmarks, plus the three compile rows. Every
+    // one of those goldens still exists and still fails CI when it moves; they
+    // stopped being objective INPUTS.
+    //
+    // The five that arrived with the split are the ones no compile counter
+    // could see: the emitter and the linker on both tiers, and the interpreted
+    // engine that `kanso test` runs on every invocation.
     let want = [
+        // production
         "run_instructions",
         "run_peak_bytes",
+        "codegen_instructions_release",
+        // development
         "compile_instructions",
         "compile_allocs",
         "compile_peak_bytes",
+        "codegen_instructions_dev",
+        "emit_instructions",
+        "startup_instructions",
+        "interp_instructions",
+        "interp_peak_bytes",
     ];
     let named: Vec<&str> =
         said.lines().filter_map(|l| l.split('=').next()).filter(|l| !l.is_empty()).collect();
