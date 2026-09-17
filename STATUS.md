@@ -154,30 +154,38 @@ inlined bind for a pure index read and bound discharge for a literal index
 into a known-length list, each measured, with the floor moving under the
 ironclad rule where they come in short. Nothing here waits on a ruling.
 
-**Probed 2026-09-17 against a release build of the tip, part by part**, after
-kanso#1477's body reported this row stale. Two parts are built and two are
-not, so the row stands:
+**Probed 2026-09-17 against a release build of the tip.** kanso#1477's body
+reports this row stale, and the probe mostly agrees with it -- but only after
+a first pass got it wrong, which is worth writing down because the trap is in
+the ruling's own text.
 
 - the constructor is BUILT. `effect 5` and `effect (err "nope")` both answer a
   box that `bind` and `rescue` take.
 - an `(err _)` arm matching a bare err anywhere is BUILT.
-- the check-time refusal is NOT BUILT, in all three of the shapes the ruling
-  names. A bare err reaching an operator (`x + 1`), an index (`x[0]`) and an
-  arm-less call each check clean and propagate at run time instead.
-- the railway is NOT RETIRED. `docs/book/samples/ch04/railway.kso` still
-  prints its checked-in output byte for byte, `passed through receipt` then
-  `with_tip`, which is the railway itself. `docs/compiler.html` says at its
-  effect-type section that the railway "retires with the sugar that implied
-  it", and in the owing paragraph that ch04 "was re-premised on the explicit
-  box when part 3 landed" -- and part 3 has not landed. ch04 still carries a
-  section headed "the railway" and the line "count the lines of error handling
-  in this program: zero", and the book index still blurbs the chapter "err,
-  none, the railway, and the taxonomy of things going wrong".
+- **the check-time refusal is BUILT, in all three shapes.** `boom 0 + 1`,
+  `(boom 0)[0]` and `add1 (boom 0)` each stop at check with
+  `error[exhaustive]: this can be an err and ... wants a value -- dispatch on
+  it first with an `(err _)` arm`.
 
-The published prose is ahead of the compiler on this ruling, which is the one
-direction the project's own rules do not allow. Named here rather than fixed:
-the pages are the chat's, the refusal is cloud's, and the page edit wants the
-compiler under it first.
+The first pass reported all three unbuilt, on three fixtures that each bound
+the err to a name -- `x = boom 0` then `x + 1`. The rule DOES NOT READ NAMES,
+which `docs/compiler.html` section 71 states outright as a blind spot kept on
+purpose, the same one the `none` rule has always had. So those fixtures tested
+the blind spot and found it working as documented. Write the err into the
+position directly and the refusal fires. A probe that confirms a claim of
+absence has to reach past the documented exception first.
+
+`docs/book/samples/ch04/railway.kso` still runs and still prints its
+checked-in output byte for byte, and that is the blind spot too: `share =
+share_of cents people` binds a name before `with_tip share` reads it.
+
+**What the probe does leave owing**, narrower than the first pass claimed and
+checkable: section 71 says the name blind spot is one "chapter 4 says so
+rather than leaving a reader to find it". Chapter 4 does not say so -- no
+mention of it anywhere in the file. And ch04's railway section still teaches
+"an err flows through functions, not into them ... the function body never
+runs" as an unconditional rule, which now holds only through a name binding.
+That is the chat's to fix, and it is a page edit rather than a build.
 
 ### Two welfares and a meta-welfare over them (2026-09-16)
 

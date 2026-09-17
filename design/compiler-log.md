@@ -5501,60 +5501,61 @@ pins the ledger index's three sentences and does not reach this section.
   intro's count against them, the way the ledger index is already pinned.
   That spec has caught the ledger's count twice.
 
-## 2026-09-17 — the box row was reported stale; two of its four parts are not built
+## 2026-09-17 — the box row probed, and the probe's first pass was wrong
 
-kanso#1477's body reports the explicit-box ruling stale — "every part probeable
-this session is on main" — and kanso#1478 and kanso#1480 both cite that in
-their "Rulings weighed" paragraphs as the reason a self-generated optimisation
-lead came ahead of the unbuilt list. Probed part by part against a release
-build of the branch tip, two of the four are built and two are not.
+kanso#1477's body reports the explicit-box ruling stale, and kanso#1478 and
+kanso#1480 both cite that in their "Rulings weighed" paragraphs. Probed part by
+part against a release build of the branch tip. The report is broadly right,
+and the first pass of this probe said it was wrong, so the mistake goes in
+first.
 
-**Built.** The constructor exists: `effect 5` and `effect (err "nope")` both
-answer a box that `bind` and `rescue` take. And a bare err is data an `(err _)`
-arm matches anywhere — a two-arm `tell` with `(err e)` first catches one born
-three calls away.
+**The first pass.** Three fixtures, each of the shapes part 3 names:
 
-**Not built: the check-time refusal, in all three shapes the ruling names.**
+    x = boom 0          x = boom 0          x = boom 0
+    print "{x + 1}"     print "{x[0]}"      print (plain x)
 
-    x = boom 0          fn boom _
-    print "{x + 1}"       err "boom"
+All three check clean and propagate at run time, and
+`docs/book/samples/ch04/railway.kso` still prints its checked-in output byte
+for byte. That was written up as part 3 unbuilt and the railway unretired, and
+it is wrong.
 
-checks clean and prints `error[endpoint]: unhandled err reached the entry` at
-run time. So does `x[0]`, and so does handing the err to an arm-less `fn plain
-v`, which reports `passed through plain`. Part 3 says each of those is refused
-at check, like a `none`. None of them is.
+**Why.** Every one of those fixtures binds the err to a NAME before the
+position reads it, and the rule does not read names. `docs/compiler.html`
+section 71 says so in as many words -- *`x = decode s` followed by `f x` is
+accepted, which is the same blind spot the `none` rule has always kept*. The
+fixtures tested the documented exception and found it behaving as documented.
+`railway.kso` is the same shape: `share = share_of cents people`, then
+`with_tip share`.
 
-**Not built: the railway's retirement.** `docs/book/samples/ch04/railway.kso`
-was run against the same build and its output is byte-identical to the
-checked-in `railway.out`:
+**The rule, probed where it applies.** Written into the position directly, all
+three refuse:
 
-    error[endpoint]: unhandled err reached the entry: "no one to share the bill with"
-      born in share_of at railway.kso:8
-      passed through receipt ← with_tip
+    print "{boom 0 + 1}"     error[exhaustive]: this can be an err and `+` wants a value
+    print "{(boom 0)[0]}"    error[exhaustive]: this can be an err and an index wants a value
+    print (add1 (boom 0))    error[exhaustive]: this can be an err and `add1` has no arm for it
 
-That program is the railway in one screen: `share_of _ 0` answers a bare err,
-`with_tip` does arithmetic on it, `receipt` interpolates it, and neither
-mentions failure. It is precisely what part 3 forbids, and it runs.
+each naming the position and telling the reader to dispatch with an `(err _)`
+arm. Part 3 is built. The constructor is built -- `effect 5` and
+`effect (err "nope")` both answer a box `bind` and `rescue` take -- and so is
+an `(err _)` arm matching a bare err anywhere.
 
-**The pages are ahead of the compiler.** `docs/compiler.html` says the railway
-"retires with the sugar that implied it", and that ch04 "was re-premised on the
-explicit box when part 3 landed". Part 3 has not landed. Meanwhile ch04 still
-carries a section headed "the railway" and the line *count the lines of error
-handling in this program: zero*, the book index still blurbs the chapter "err,
-none, the railway, and the taxonomy of things going wrong", and appb, ch05 and
-ch08 all teach it as current. So one page describes the ruling as built while
-five teach the model it retires, and the compiler agrees with the five.
+**The lesson is about probing for absence.** A probe that reports a feature
+missing has to reach past the feature's own documented exceptions before its
+report means anything, and the exception here was written down in the section
+that describes the rule. Reading the rule's page first would have cost a
+minute; not reading it produced a confident finding, a pull request body, a
+STATUS.md row and a comment on kanso#1480, all wrong, inside ten minutes. The
+correction went out on the same three surfaces.
 
-This is the 2026-09-09 shape again, and the "Ruled, unbuilt" rule exists
-because of it: a ruling reported built, a list that says otherwise, and work
-chosen against the report. The difference this time is that the report is in
-two pull request bodies rather than in a chart, and it was checkable in four
-minutes with a build that already existed.
+**What survives, and it is narrow.** Section 71 says the name blind spot is
+one "chapter 4 says so rather than leaving a reader to find it". Chapter 4
+does not say so: the string does not appear in the file. And ch04's railway
+section still teaches *an err flows through functions, not into them ... the
+function body never runs* as an unconditional rule, when under the built rule
+it holds only through a name binding. A reader who writes the direct form gets
+a refusal the chapter does not prepare them for.
 
-- **DONE** the row's four parts probed and the result written into STATUS.md
-  beside the row, which stands.
-- **OPEN** part 3's refusal and the railway's retirement, both cloud's.
-- **OPEN** the five book pages and the `docs/compiler.html` paragraph claiming
-  the retirement. The chat's, and they wait on the compiler rather than lead
-  it — a page corrected first would put the prose ahead in the other
-  direction.
+- **DONE** the row's parts probed where the rule applies, and the first pass's
+  error corrected on STATUS.md, in kanso#1488 and on kanso#1480.
+- **OPEN** ch04 naming the name blind spot, which section 71 already claims it
+  does, and the railway section's unconditional wording. The chat's.
