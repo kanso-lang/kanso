@@ -1856,7 +1856,15 @@
 # base, so the merged tree is reading neither number. The value below is
 # main's, carried forward so the gate has one value to fail against
 # rather than none; the merged sitting is CI's to take.
-compile_instructions=35965137
+#
+# 2026-09-17, kanso#1468 on the head merged with main after kanso#1461.
+# CI reads 35,887,445 against 35,965,137, a FALL of 77,692 (-0.216%). LAYOUT.
+# This branch's whole diff is src/codegen.rs and nothing else, and `kanso check`
+# stops before codegen, so not one line it changes runs on this corpus. What
+# moved is the compiler's own bytes and the layout under them, which is the case
+# CLAUDE.md's bullet describes and the reason this row is taken from CI rather
+# than projected.
+compile_instructions=35887445
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

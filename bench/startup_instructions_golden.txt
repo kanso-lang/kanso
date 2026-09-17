@@ -93,4 +93,24 @@
 # row this branch is for, re-read on the merged tree: 23 instructions above the
 # previous sitting's 4,838,300 on a different tree. This is the interpreter's own
 # start-up and the 13.8x fall this branch bought is already in the value.
-startup_instructions=4838323
+#
+# 2026-09-17, kanso#1468. CI reads 5,077,750 against 4,838,323, a RISE of
+# 239,427 (+4.95%), and it is real work rather than layout. This row is the one
+# that reaches codegen, and the branch indexes two whole-body scans there.
+# Reproduced in a container and attributed, main against the branch on this
+# corpus:
+# 
+#     kanso::main            4,882,857 ->  5,148,482   +265,625
+#     codegen::called_symbols        0 ->    278,812   +278,812  (new)
+#     memchr_aligned           921,736 ->    879,487    -42,249
+#     is_contained_in          626,252 ->    577,318    -48,934
+#     next_match               381,383 ->    379,562     -1,821
+# 
+# The index costs 278,812 to build and saves 93,556 on the scans it replaces,
+# because most of that cost is reading DECLARES -- twelve hundred lines, a
+# constant, the same for every process -- while the saving is proportional to
+# how much the program emits. A single `print` emits almost nothing, so this
+# corpus is where the trade is worst. `kanso build bench/runbench` falls 69.64%
+# on the same change. The objective weighs neither row, so nothing here is a
+# welfare question; the trade is stated because the row moved.
+startup_instructions=5077750
