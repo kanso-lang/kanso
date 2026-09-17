@@ -332,7 +332,21 @@ divided by the weight those terms carry, times a hundred.</p>
   // With one line to a panel, colour carries no discriminative load at all --
   // the caption names the counter. Each keeps the hue it had, which is what
   // the panel below and its sparkline read.
-  const PANELS = TREND.map((s) => [s]);
+  // A COUNTER THE PUBLISHED HISTORY DOES NOT CARRY YET IS DRAWN BY NEITHER.
+  // The panel skips a series whose latest row holds no number for it, because
+  // there is nothing to put in the cell, and a newly minted counter is in that
+  // state until CI appends the first row carrying it. Filtering the chart the
+  // same way keeps the two in step by construction, which is what
+  // `missing_panel_rows` in scripts/site_smoke holds up: every line up there
+  // has a row down there carrying its number, and that table is what makes a
+  // faint line legal on the light page. A line whose number a reader cannot
+  // look up is the failure that check exists to catch, and adding five
+  // counters without this is how it was caught.
+  const carried = (t, rs) => {
+    const last = rs[rs.length - 1];
+    return last !== undefined && typeof t.read(last) === 'number';
+  };
+  const panelsFor = (rs) => TREND.filter((t) => carried(t, rs)).map((s) => [s]);
 
   function drawTrend(rows, series, caption) {
     const W = 1200, H = 580, PAD = 64, TOP = PAD / 2, USABLE = H - PAD - TOP - 22;
@@ -430,7 +444,7 @@ divided by the weight those terms carry, times a hundred.</p>
     return;
   }
   if (!rows.length) { host.innerHTML = '<p class="perf-loading">no history recorded yet.</p>'; return; }
-  host.innerHTML = PANELS.map((one) => drawTrend(rows, one, one[0].label)).join('');
+  host.innerHTML = panelsFor(rows).map((o) => drawTrend(rows, o, o[0].label)).join('');
   const last = rows[rows.length - 1];
   const prev = rows.length > 1 ? rows[rows.length - 2] : null;
   const spark = (read) => {
