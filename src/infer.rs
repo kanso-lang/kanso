@@ -1288,43 +1288,70 @@ fn mark_reader(ctx: &mut Ctx<'_>, decl: usize) {
 /// interpolated string with fixed text in it cannot match a shorter one.
 pub fn arm_can_run(params: &[Pattern], args: &[Expr], consts: &Consts<'_>) -> bool {
     params.iter().zip(args).all(|(param, arg)| {
-        // (exact text if the argument is one literal, the least length it
-        // can have)
-        let str_shape: Option<(Option<&str>, usize)> = match arg {
-            Expr::Str(parts, _) => {
-                let fixed: usize = parts
-                    .iter()
-                    .map(|p| match p {
-                        TemplatePart::Lit(s) => s.len(),
-                        TemplatePart::Interp(_) => 0,
-                    })
-                    .sum();
-                let exact = match parts.as_slice() {
-                    [] => Some(""),
-                    [TemplatePart::Lit(s)] => Some(s.as_str()),
-                    _ => None,
-                };
-                Some((exact, fixed))
-            }
-            Expr::Ident(name, _) => consts.get(name.as_str()).map(|s| (Some(*s), s.len())),
-            _ => None,
-        };
-        let literal_int = match arg {
-            Expr::Int(n, _) => Some(n),
-            _ => None,
-        };
-        let is_literal = str_shape.is_some() || matches!(arg, Expr::Int(..) | Expr::Float(..));
+        // THE PATTERN IS ASKED FIRST, and it is asked first because most
+        // patterns are binders. A binder matches whatever it is handed, so
+        // the `_` arm below needs nothing at all from the argument -- and
+        // reading the argument's shape up front meant every binder paid for
+        // a `consts` lookup on an `Ident` and a walk of every template part
+        // on a `Str`, then threw the answer away. Each arm now asks for
+        // exactly what it reads. The answers are identical: `str_shape` and
+        // `is_literal` are pure, so computing them later, or not at all,
+        // cannot change what this returns.
         match param {
-            Pattern::StrLit(s, _) => match str_shape {
+            Pattern::StrLit(s, _) => match str_shape(arg, consts) {
                 Some((Some(exact), _)) => exact == s,
                 Some((None, fixed)) => s.len() >= fixed,
                 None => true,
             },
-            Pattern::IntLit(n, _) => literal_int.is_none_or(|l| l == n),
-            Pattern::Nullary(..) | Pattern::Ctor { .. } | Pattern::Keyed { .. } => !is_literal,
+            Pattern::IntLit(n, _) => match arg {
+                Expr::Int(l, _) => l == n,
+                _ => true,
+            },
+            Pattern::Nullary(..) | Pattern::Ctor { .. } | Pattern::Keyed { .. } => {
+                !is_literal(arg, consts)
+            }
             _ => true,
         }
     })
+}
+
+/// The exact text an argument is, if it is one literal, and the least length
+/// it can have. `None` when the argument is not a string the reader can see
+/// through. Split out of `arm_can_run` so the arms that do not read it do
+/// not pay for it.
+#[inline(always)]
+fn str_shape<'a>(arg: &'a Expr, consts: &Consts<'a>) -> Option<(Option<&'a str>, usize)> {
+    match arg {
+        Expr::Str(parts, _) => {
+            let fixed: usize = parts
+                .iter()
+                .map(|p| match p {
+                    TemplatePart::Lit(s) => s.len(),
+                    TemplatePart::Interp(_) => 0,
+                })
+                .sum();
+            let exact = match parts.as_slice() {
+                [] => Some(""),
+                [TemplatePart::Lit(s)] => Some(s.as_str()),
+                _ => None,
+            };
+            Some((exact, fixed))
+        }
+        Expr::Ident(name, _) => consts.get(name.as_str()).map(|s| (Some(*s), s.len())),
+        _ => None,
+    }
+}
+
+/// Whether an argument is a literal a shape pattern cannot match. The string
+/// half asks `consts` only for an `Ident`, which is the one form whose answer
+/// is not already in the expression.
+#[inline(always)]
+fn is_literal(arg: &Expr, consts: &Consts<'_>) -> bool {
+    match arg {
+        Expr::Str(..) | Expr::Int(..) | Expr::Float(..) => true,
+        Expr::Ident(name, _) => consts.contains_key(name.as_str()),
+        _ => false,
+    }
 }
 
 /// A program's constants that are one string literal, by name: the only
