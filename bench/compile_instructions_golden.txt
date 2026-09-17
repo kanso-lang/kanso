@@ -1904,7 +1904,13 @@
 # base, so the merged tree is reading neither number. The value below is
 # main's, carried forward so the gate has one value to fail against
 # rather than none; the merged sitting is CI's to take.
-compile_instructions=35964325
+#
+# 2026-09-17 (kanso#1484): compile_instructions 35,964,325 -> 35,887,996, a FALL
+# of 76,329 (-0.2122%). DECLARES names sixty-two symbols and the compiler built
+# that set from scratch on every call; it is a constant now. CI's sitting on the
+# merged head 76f63007, the first this branch has taken with the printed line
+# excluded.
+compile_instructions=35887996
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

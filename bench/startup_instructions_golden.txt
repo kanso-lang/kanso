@@ -113,4 +113,10 @@
 # corpus is where the trade is worst. `kanso build bench/runbench` falls 69.64%
 # on the same change. The objective weighs neither row, so nothing here is a
 # welfare question; the trade is stated because the row moved.
-startup_instructions=5077750
+#
+# 2026-09-17 (kanso#1484): startup_instructions 5,077,750 -> 4,508,848, a FALL
+# of 568,902 (-11.2038%). This is the row the change was made for: building the
+# DECLARES set is start-up work, and the fall is most of the whole term. The
+# value it falls from is this branch's own, measured on its base; against main's
+# 4,838,323 the fall is 329,475 (-6.8097%).
+startup_instructions=4508848
