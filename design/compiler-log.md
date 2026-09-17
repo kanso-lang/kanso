@@ -7791,3 +7791,214 @@ worktrees, was +0.26. CI's rows give +0.26. The local emit reading was
   search over IR lines, 7,929,096 instructions inclusive, 9.32%, all of it
   reached from `Backend::emit`.
 
+## 2026-09-17 — September's remaining thirteen rulings, and a blank chart edge that is not the ruling it resembles
+
+The August sweep left September half-read. This finishes it. Twenty-one entries
+in the log and its archive record a September ruling — twenty headed
+`gavel:` and one headed `gavel, reversed the same day:` — and the thirteen
+below are the ones no session had run against a build. kanso#1500 ran the other
+eight, so thirteen and eight partition the twenty-one exactly. Its own body says
+eleven and its last commit says "Eight left"; the commit is the one that
+reconciles, and this entry is written against the count on disk rather than
+against either.
+
+**Every one is built, or superseded by a later ruling that Clay made. Nothing
+goes on the unbuilt list.**
+
+| ruled | probe |
+|---|---|
+| 09-02 the weights | superseded 09-16; see below |
+| 09-05 corpus first | `bench/readbench`, `cost_golden_read.txt` pins `beat_iters=201` |
+| 09-05 no machine-code-size term | `objective_sources.txt` holds no `machine_code` row |
+| 09-05 one row, one value | `compile_instructions_by_cpu.txt` is gone; the gate errors on a second value |
+| 09-05 one row, one value; and no term for machine-code size | the combined entry, same two subjects |
+| 09-06 clang 19, with detection | CI asserts `clang version 19`; `preserve_none_probe` falls back |
+| 09-06 a whole float keeps its point | golden reads `1.0e+15`, both engines |
+| 09-06 one consolidated run program | `run_instructions work_runbench`, one row |
+| 09-07 the history's baseline | built; see below |
+| 09-08 page_drift skips rulings | `ruling?` reads `— gavel:` and `— directive:` |
+| 09-08 a fixed compile corpus | `bench/compile_corpus/compile_corpus.kso`, four imports, each used |
+| 09-08 inf, -inf, nan | golden reads `inf -inf nan`, both engines |
+| 09-10 rows 15..390 stay unscored | the ruling says nothing further is owed |
+
+The two float rulings were run rather than read: `micro_corpus_agrees_across_engines`
+passes today, so both are pinned across the engines the differential law names.
+
+### The chart's left edge is blank for a reason nobody wrote down
+
+The welfare history is 500 rows, 2026-08-20 through today. Sixty-two of them
+carry no welfare, and they are rows 1 through 62, contiguous at the head. A
+reader who knows the 2026-09-07 ruling reads that as its work: the rows before
+the baseline stay unscored. That reading is wrong, and the dates say so. The
+window opens on 2026-08-20, ten days after the 2026-08-10 row that ruling
+baselines from, so every row now in the file sits inside the scored range.
+
+What those rows actually carry is counter names run together. Row 62:
+
+```
+"allocsalloc_bytesarena_blocksperm_allocsbeat_itersel_parsesutf8_bytesfind2_callsheld_peak_bytes": 0
+"basket_allocsarena_blocksarena_peak_bytesbeat_itersutf8_bytesheld_peak_bytes": 71136
+"compile_alloc_bytescompile_allocscompile_peak_bytescompile_passes": 5
+```
+
+Row 63, the next commit, writes those same counters as twenty separate keys.
+Each run holds only the last name's value — `compile_passes` is 5 on both rows,
+and the three figures that should have preceded it are gone. Today's rescore
+walked all 500 and stamped the mangled block `scored_weight: 0.00`, against
+0.23 for row 63.
+
+**It is old and it is shrinking.** The same block read 151 rows on 2026-08-27,
+long before the rewrite the 2026-09-07 ruling ordered, and it loses one row per
+append as the 500-row window rolls. Sixty-two more commits clear it without
+anyone touching it. What produced the runs is outside what this file can answer:
+those rows were written before the window's current opening.
+
+So there is nothing to fix and one thing to know. The coverage boundary the
+chart draws at the left is a defect in sixty-two rows rather than the
+2026-09-07 ruling working, and anybody about to explain the blank edge by that
+ruling should stop.
+
+### Two sentences in welfare.kso that the 2026-09-16 split left behind
+
+Both are in `scripts/welfare/welfare.kso`, which is cloud's, and neither changes
+a score.
+
+`d_compile_memory` carries 0.08 under a comment reading `Unchanged at 0.12`.
+The number was renormalised onto the development side and the sentence quoting
+the 2026-09-02 ruling was not.
+
+The header above the weights claims more than the renormalisation did: *what
+survives the renormalisation is every RATIO the reasoning below argues for
+... compile speed still outweighs compile memory better than three to one.*
+The reasoning below argues two to one, which is what 0.32 against 0.12 was.
+The built pair is 0.30 against 0.08, which is 3.75. The ratio widened by 40%
+in the renormalisation, and the sentence claiming ratios survived states the
+new one.
+
+Worth 0.007 of the meta if it were put back, so this is a wording repair rather
+than a weights argument. The weights themselves are the implementer's under the
+2026-08-25 charter, which the 2026-09-16 ruling restates in those words.
+
+### The 2026-09-02 ordering, and why it is not a finding
+
+That ruling put compile speed above run speed — 0.32 against 0.30, funded from
+run memory, because compile latency is an adoption gate. Under the model built
+today compile speed carries 0.30 of a development side worth 0.30 of the meta,
+which is 0.090 of the whole, against run speed's 0.315.
+
+The ordering inverted, and Clay inverted it. His 2026-09-16 framing is that
+compile performance "becomes more like a very dialed-down input to the overall
+welfare," and the same ruling hands weights and satiations to the implementer.
+Within its own side compile speed is still the largest term. The 09-02 ruling
+stands superseded rather than unbuilt.
+
+### One heading the drift gate cannot exempt
+
+`## 2026-09-16 — gavel, reversed the same day: ...` is a ruling, and
+`page_drift`'s `ruling?` reads `— gavel:` and `— directive:` as the whole
+convention. A comma after `gavel` puts a ruling back in the page's budget. The
+2026-09-08 ruling names the colon convention explicitly, so the gate matches
+what was ruled and the heading is what broke it. One entry in a month, costing
+one slot of three.
+
+### The maps ruling, which is kanso#1500's eight and is built
+
+Recorded here because kanso#1500 is pushed and nothing should go on it. The
+2026-09-15 ruling normalising the `/proc/self/maps` parse out of the compile row
+is built: `scripts/gates/compile_instructions.sh` anchors at `kanso::main`
+inclusive and drops the 465,122 instructions above that frame — the loader
+mapping five shared objects, and Rust placing its stack guard. The gate's own
+header carries the seven-binary calibration the anchor was chosen on, and its
+error text names the term by name.
+
+### The sweep this session asserted five times and had not run
+
+CLAUDE.md requires every check-in to sweep all open pull requests in kanso and
+kq. Five check-ins in this session said it had been done. It had not.
+
+Run today: **kanso has eleven open, kq has none.** All eleven were opened today,
+the oldest at 07:00Z, so none is near the day the rule allows and none needed
+driving. The result is uninteresting and that is the point — the assertion was
+worth nothing until somebody ran the list, and it had been made five times.
+
+This is the same shape as the four claims in CLAUDE.md's *A measurement bounds
+what it measured*: a statement that something is in a certain state, repeated,
+with no reading behind it. The sweep is cheap. It goes in the check-in as a
+count of what was open rather than as a sentence saying it happened.
+
+### The count of rulings was wrong, and it was wrong on the page for an hour
+
+This entry shipped saying 56 rulings, 35 of them August, all swept. Both
+numbers came from kanso#1500 and neither reproduces off disk. Counted twice,
+with the commands:
+
+```
+grep -hE "^## " design/compiler-log.md design/log/compiler-log-archive.md \
+  | grep -cE "— gavel[:,]"          -> 50   (29 August, 21 September)
+  | grep -cE "GAVEL(ED)?[:,(]"      -> 23   (14 July, 6 undated, 3 August)
+```
+
+No heading matches both, so the two partition **73** rulings exactly.
+
+The convention moved. September and most of August write `— gavel:`; July
+writes `GAVEL:`, `GAVELED:`, `GAVEL (syntax):`, `GAVEL (extension):`,
+`GAVEL (amendment):` and `GAVEL, IMPLEMENTED:`, and three August entries still
+use the old spelling — the as-patterns ruling, equality refusing a
+self-naming value, and two definitions with one unfolding. A grep for the
+newer shape walks past all twenty-three.
+
+**So the sweep covered 50 of 73, and 23 rulings have never been read against a
+build.** August was reported as "all of it" and is 29 of 32.
+
+This is the fifth claim in two days to rest on a count nobody re-derived, and
+the first one I published to the compiler page before checking. The page
+carried it for about an hour. Both surfaces are corrected in the same commit,
+and the page now states the two commands rather than the number.
+
+### And then the 23, swept the same afternoon
+
+They are language rulings almost to a one, which is why they are old and why
+they are cheap to check: every behaviour ships with a golden, so the corpus is
+the probe. `cargo test --release --test golden` passes on all eleven tests, 242
+seconds, and it carries a named fixture for most of the twenty-three.
+
+| ruled | where it is pinned |
+|---|---|
+| none is a value, err is the failure | `a_none_in_a_list_does_not_silence_the_rest` |
+| where none may live | the same corpus |
+| `any` excludes the absence channel | `no_any_type`, in the error corpus |
+| a bare field is unconstrained, `any` is `some` | `no_any_type`, second diagnostic |
+| a record field carries no type | `no_any_type` says it in the ruling's words |
+| a function accepting an err must return err | `an_err_reaches_a_group_with_no_arm_for_it` |
+| an operation on a none is a dispatch question | the same err corpus |
+| partial application is explicit | `a_partial_over_a_value`, `curry_every_argument`, `partial_chain` |
+| `&` merges named bundles only | `an_ampersand_with_nothing_to_hold`, `a_construction_merges_its_failures` |
+| declaration order is the author's | `generic_before_concrete` |
+| a field is written by assignment | `a_field_is_written_by_assignment` |
+| streaming stdout, io/write ships | `io_write` |
+| accessors are functions | `accessor_value`, `accessor_renders_opaque` |
+| text blocks | `a_one_line_text_block`, `a_newline_in_a_text_block_is_a_line_break` |
+| the compiler does not know the name `play` | `play_in_a_comment`, `play_file_with_a_syntax_error` |
+| the play verb runs little programs | the same two |
+| equality is about values, a function is not one | `equality_binds` |
+| equality refuses a value that names itself | `a_constant_that_names_itself` |
+| modules are Go-shaped | `a_module_that_moved` |
+| as-patterns | `an_as_pattern_binding_two_names` |
+| two definitions with one unfolding are one value | `a_knot_compares_by_its_unfolding` |
+| build tail-entry demotion + THREADED | `src/beat.rs:75`, `const THREADED` |
+| welfare cannot fall, two severities | `welfare.kso:864` refuses a lowering `--set` |
+
+`no_any_type` is the one worth looking at. Three separate rulings land in one
+fixture, and the diagnostic quotes the ruling: *a record field carries no type
+— write `name` and let the compiler infer what it holds.*
+
+The welfare ruling's first part has since been narrowed by name. It said `--set`
+refuses every fall and the only override is editing the floor file by hand; the
+2026-09-13 rule lets a ruled language feature lower the floor by what it costs,
+without asking. Both stand, the later one narrower.
+
+**Zero unbuilt across all 73.**
+
+- **DONE** all 73 rulings probed — 50 under the `— gavel:` spelling, 23 under
+  `GAVEL:` and its variants. Nothing unbuilt in either set.
+- **OPEN** the two welfare.kso sentences, which are cloud's file.
