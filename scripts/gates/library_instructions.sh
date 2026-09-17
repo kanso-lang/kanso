@@ -45,6 +45,19 @@ box=/tmp/kanso-compile-ir
 printf 'library_binary sha256=%s\n' "$(sha256sum "$box/kanso" | cut -d' ' -f1)"
 size --format=sysv "$box/kanso" \
   | awk '/^\.(text|data|bss)[ \t]/ { printf "library_binary %s=%s\n", $1, $2 }'
+# AND THE SAME THREE AS A NOTICE. kanso#1479 made the sha a notice for a
+# reason that applies here with more force: the sections are the only printed
+# property that distinguishes two BUILDS of one source, and stdout reaches
+# only the job log, whose blob host answers a fetch from here with `CONNECT
+# tunnel failed, response 403`. On 2026-09-17 two attempts of run 35197408041
+# -- one commit, two builds, two CPU models -- printed different sha256s and
+# byte-identical rows, while main's build of a tree that cannot change the
+# compiler read thirteen away. That is the shape of a layout difference
+# between BUILDS, and the sections are what would say so; they were printed
+# on both runs and readable on neither.
+size --format=sysv "$box/kanso" \
+  | awk '/^\.(text|data|bss)[ \t]/ { printf "%s=%s ", $1, $2 }' > /tmp/library.sections
+echo "::notice::library_binary sections $(cat /tmp/library.sections)"
 
 tune=glibc.cpu.x86_data_cache_size=0x8000
 tune=$tune:glibc.cpu.x86_shared_cache_size=0x2000000

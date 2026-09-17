@@ -4679,3 +4679,68 @@ frames of bucket zero, by name and cost, in one notice.
 
 - **DONE** the bucket is named, and the digest earned its place doing it.
 - **OPEN** the frame. One line in the next pair of sittings.
+
+## 2026-09-17 — the floor is bimodal, and the gap is exactly ten
+
+Three measurements today, and the third is the one to keep.
+
+**The build reproduces here.** Four clean rebuilds of one tree in this
+container, each preceded by `touch src/main.rs` so nothing was cached:
+
+```
+n   sha256           .text     .data   .bss    kanso::main
+1   b8a64fe29f820c63 2841218   12664   29912   36377641
+2   b8a64fe29f820c63 2841218   12664   29912   36377641
+3   b8a64fe29f820c63 2841218   12664   29912   36377641
+4   b8a64fe29f820c63 2841218   12664   29912   36377641
+```
+
+So `cargo build --release` is bit-reproducible where the toolchain, the path
+and the environment hold still, and the row follows the binary exactly.
+
+**Two builds on CI disagree in their sha and agree on every row.** Run
+35197408041 was re-run on the same commit, 274c89ca, whose whole diff is three
+gate scripts, one test, the log and one page — nothing `include_str!`'d, nothing
+the compiler carries. Attempt one built sha `fde1fb87…` on cpu family 25 model
+17; attempt two built sha `13e6cf22…` on family 25 model 1. The three compile
+rows read 35,967,926 / 128,214,746 / 128,348,851 on both, to the instruction,
+and the floor read 558232/604 on both. That refutes the CPU model for the third
+time, now within one commit, and it says the sha difference CI shows between two
+builds is not a difference the count can see. The sections would say which part
+of the binary moved; they are printed and were not readable, which this change
+fixes.
+
+**The floor takes two values, ten apart.** Sixty sittings across eighteen
+branches, grouped by branch and by the floor's own frame count:
+
+```
+claude/name-spaces       frames=[604]  floors=[558222, 558232]          gap 10
+claude/welfare-split     frames=[605]  floors=[556282, 556292]          gap 10
+claude/linear-groups     frames=[605]  floors=[556432, 556442, 558665]  gap 10
+claude/group-indices     frames=[605]  floors=[558678, 558688]          gap 10
+claude/beat-indexed      frames=[605]  floors=[556457, 558690, 558700]  gap 10
+claude/prune-indexed     frames=[605]  floors=[558716, 558726]          gap 10
+claude/declares-scan     frames=[604,605] floors=[558259, 558649, 558659] gap 10
+claude/codegen-rows      frames=[604,605] floors=[558232, 558610, 558620] gap 10
+claude/self-dump         frames=[604,605] floors=[558232, 558610, 558620] gap 10
+main                     frames=[604,605] floors=[558232, 558610, 558620] gap 10
+```
+
+Every branch that sat more than once and did not change its frame count shows
+exactly two floors, ten apart. The other gaps in that table — 378, 390, 2223,
+2233 — are commits that changed the compiler. Ten is not one of those: it
+recurs on ten branches with unrelated diffs, at four different absolute values.
+
+It is not the thirteen. The floor is the set of frames whose self cost held
+across all three workloads, and a row moving by thirteen while the floor moves
+by ten in the other direction is two facts, not one. What it is, is the first
+property of these sittings that is BIMODAL rather than noisy, and a two-valued
+flag is a thing that can be chased. The frame that carries the ten is named the
+same way kanso#1474 names the thirteen: bucket the floor listing and diff two
+digests.
+
+- **DONE** the sections join the sha as notices, on all three compile gates,
+  pinned by `tests/a_gates_binary_is_described_where_it_can_be_read.rs`.
+- **DONE** the build reproduces in this container, four for four.
+- **OPEN** what costs exactly ten. The next pair of sittings that straddle the
+  two floors has the digest to name it.
