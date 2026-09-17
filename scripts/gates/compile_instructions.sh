@@ -166,6 +166,62 @@ tune=$tune:glibc.malloc.tcache_count=7
 # So a difference near a thousand on this row is not evidence on its own.
 # Build the pair and read them.
 #
+# WHAT THAT LADDER DOES NOT BOUND, measured 2026-09-17 because kanso#1480 moved
+# this row 146,628 and the ladder above was cited to call that layout. The
+# seven binaries above differ by code and data NOTHING REACHES. That is one
+# perturbation; a real change makes others, and two of them are measured here
+# on nine more binaries, each built under rustc 1.98.1 and each with its own
+# sha256 printed by this gate.
+#
+# REWRITING an unreachable function moves this row by NOTHING. Eight variants
+# of `without_stats_gate` -- reachable only from `emit_ir`, which `kanso check`
+# never calls -- all read 35,965,491 while `.text` spanned 256 bytes:
+#
+#   variant        row          .text      what changed
+#   L0 control     35,965,491   2,796,770  --
+#   L1 rename      35,965,491   2,796,754  locals renamed
+#   L2 hoist       35,965,491   2,796,882  the loop bound read once
+#   L3 loop        35,965,491   2,796,882  `while` spelled as `loop`
+#   L4 helper      35,965,491   2,796,914  two parses lifted into a helper
+#   L5 match       35,965,491   2,796,770  early-continue spelled as `match`
+#   L6 signature   35,965,491   2,796,658  `Vec<&str>` became `&[&str]`
+#   L7 wrapper     35,965,491   2,796,770  body moved behind a thin wrapper
+#
+# L6 and L7 emit byte-identical IR, so behaviour-preservation is verified for
+# them rather than argued.
+#
+# ADDING a function that IS reached moves it a little. L8 adds a
+# `OnceLock<Vec<_>>` built from DECLARES and calls it from `Backend::emit`,
+# changing nothing else: 35,968,224, which is +2,733 on the control, with
+# `.text` +3,088 and the IR byte-identical.
+#
+# FOUR SHAPES, AND THE FOURTH IS THE ONE THAT BITES:
+#
+#   unreachable additions       ~402, span 1,028   2026-09-04
+#   unreachable rewrites        0, eight binaries  2026-09-17
+#   a reached addition          2,733              2026-09-17
+#   the optimizer re-deciding   ~143,000           kanso#1480
+#
+# The first three are small because none is large enough to flip an inlining
+# decision. kanso#1480 changes 161 lines across src/codegen.rs and
+# src/linear.rs, and that IS enough. Its pair reproduced here at +143,118
+# against CI's +146,628, and the frame diff puts the whole of it inside type
+# inference -- `check_merged_after_aliases` +140,521, `infer::infer` +140,780,
+# `for_each_child::<expr_ctor_types::{closure}>` +118,865 and +106,105 -- while
+# src/infer.rs, src/check.rs and src/parser.rs are BYTE-IDENTICAL between the
+# two trees. Two symbol-level tells confirm it: `parse_cmp` is a frame in one
+# build and inlined into `parse_not` in the other, and `stmt_ctor_types` is a
+# frame in one and replaced by `expr_ctor_types` in the other, with both
+# functions present in both sources.
+#
+# THAT IS NOT THE LINKER'S PLACEMENT, which is what "layout" means everywhere
+# else in this header and what the seven-binary ladder measured. It is rustc
+# compiling unchanged code differently because the crate around it changed, and
+# it is two orders of magnitude larger. No ladder bounds it, because the
+# perturbation is "the crate got meaningfully bigger" and that cannot be
+# synthesised inside one small function. A row that moves by a hundred thousand
+# on a corpus the diff cannot reach is this.
+#
 # Startup work scales with what is loaded, so the one compiler change that can
 # move the dropped half is growing a dependency — one more shared object was
 # measured at 32,090. bench/compile_libraries_golden.txt watches that by name,
@@ -338,6 +394,28 @@ printf 'compile_again=%s\n' "$again" >> compile_ir_got.txt
 # ordinary API, which is the only path a reader is guaranteed.
 echo "::notice::compile_again=${again} first_reading=${got}"
 
+
+# THE SILICON, COMPARED RATHER THAN NAMED. `dispatch.sh name` above prints the
+# family and the model, which are the two rows most likely to be equal between
+# two different runners. The block in bench/dispatch.txt is the whole feature
+# set glibc's ifunc resolvers read, and it is consulted HERE -- only when a row
+# has already moved -- because a resolver that picked a different memcpy is one
+# of the things "outside the diff" can mean. Seven distinct blocks were seen
+# across ninety-odd jobs on 2026-09-17, differing in 57 rows and in the basic
+# family itself. It never refuses on its own: `differs` answers 2 when it
+# cannot tell, and this reports whichever answer it gives.
+silicon=0
+sh scripts/gates/dispatch.sh differs || silicon=$?
+case "$silicon" in
+  0) echo "::error::THE SILICON MATCHES bench/dispatch.txt, so the resolvers"
+     echo "::error::glibc picked are the ones that block records." ;;
+  2) echo "::error::THE SILICON CANNOT BE COMPARED -- no block recorded, or"
+     echo "::error::this loader reports no features." ;;
+  *) echo "::error::THE SILICON DIFFERS from bench/dispatch.txt. The rows are"
+     echo "::error::printed above. A different resolver is one of the things"
+     echo "::error::a move outside the diff can be." ;;
+esac
+echo "::error::"
 echo "::error::compile_instructions counted $got against $want in $golden,"
 echo "::error::a move of $((got - want)). Exactly one of two things is true,"
 echo "::error::and they are settled differently."

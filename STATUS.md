@@ -189,7 +189,7 @@ data-sized list; if it does not, a ledger entry stating what the gavel's
 purpose needs. Either way the golden's header stops claiming four shapes
 while the checker admits two.
 
-### A welfare counter reads an artifact that moves (2026-09-15)
+### A welfare counter reads three parts per billion (2026-09-15)
 
 Clay's words, on the compile row's `/proc/self/maps` parse: "you want to set
 up the run so that any external State like this is normalized. you clear it
@@ -198,72 +198,42 @@ a persistent known initial state." Ironclad, and recorded in CLAUDE.md as
 superseding the kanso#1234 argument rather than reopening it.
 
 `interp_instructions` landed a day later in kanso#1491 and does not satisfy
-it. Two CI jobs read 2,178,502,266 and 2,178,502,272, six instructions apart,
-each stable across the gate's own second reading.
+it. Two CI jobs read 2,178,502,266 and 2,178,502,272, each stable across the
+gate's own second reading.
 
-The difference is the binary rather than the box. The gate prints
-`interp_binary sha256=` on every run for this purpose, and the two jobs carry
-`81c947470e0c…` and `59a47a9cbfb4…`. `.text` 2,797,410, `.data` 12,672,
-`.bss` 29,912, `cpu family 0x19 model 0x1`, `glibc=2.39-0ubuntu8.9` and
-`rustc=1.98.1` are identical on both.
+**Read kanso#1492 before this row.** Its log entry "seven silicons, one
+recorded block, and a reader that was never called" and `docs/compiler.html`
+§77 built the instrument this row was guessing at: the gates printed a CPU
+family and model and stopped, and the reader for the whole 123-row feature
+block had nothing recorded to compare against. Across ninety-odd job logs
+there are seven distinct blocks differing in 57 rows. On these two jobs the
+block is identical, all 123 rows, so the silicon is out.
 
-Three things are ruled out separately. The Rust source is identical: the two
-changed files are markdown, and every `include_str!` in `src/` is a `.kso`
-under `lib/` or `hako/`, or `runtime.c`. The dependency versions are pinned,
-since `Cargo.lock` is tracked. And a release build repeats on one machine —
-build, `touch src/main.rs src/lib.rs`, build again gives a byte-identical
-binary — which bounds only that container, whose rustc and `.text` both
-differ from CI's, but does rule out a toolchain that simply does not repeat.
+Cloud's candidate, left as cloud left it — an argument, not a measurement:
+six in 2,178,502,266 is three parts per billion, and the interpreted run is
+the allocation-heavy workload at 5,313,434 allocations against a compile's
+27,397, so a term proportional to work fits where a constant does not, and
+where the allocator's heap starts moves with the size of the file the loader
+mapped.
 
-The six are not in a hot function. Both job logs print the interpreted run's
-`--threshold=90` self-cost list, and the two are identical line for line —
-`__memcpy_avx_unaligned_erms` 402,818,464, `dispatch'2` 147,104,143,
-`mi_free` 117,641,168 and eleven more, every one matching to the instruction.
-`PROGRAM TOTALS` differs by exactly six. So it is not a glibc ifunc picking a
-different memcpy by CPU feature, not the allocator, and not any path the
-interpreter runs hot; it is one cold function, the shape of a branch taken
-once in setup.
+What this row adds is a correction to itself. The other ten counters in the
+same two jobs agree to the instruction, and that was written here as the nine
+sharing the binary not sharing the exposure. It is not evidence of that: the
+other instruction rows run from 4.8 million to 128 million, where three parts
+per billion is a fraction of one instruction, so none of them could have
+shown this either way.
 
-What differs is still open, and the instrument has a gap with a history.
-`interp_instructions.sh` prints `.text`, `.data` and `.bss`;
-`compile_instructions.sh`, which the interp gate's header points the reader
-to for everything the two share, prints `.text`, `.bss` and `.rodata`, and
-its header carries the seven-binary calibration behind that — one of the
-seven is `+64 KiB .rodata` and the row moved for it. The newer gate dropped
-the section the older one had learned to watch. Whether that calibration
-transports to this gate's anchor is not established and is not assumed.
+Owes: measure cloud's candidate, or replace it. And one small thing that is
+not blocked on it — `interp_instructions.sh` prints `.text`, `.data` and
+`.bss`, where `compile_instructions.sh`, which the interp gate's own header
+sends the reader to, prints `.rodata` too, with a seven-binary calibration in
+its header for why. One awk alternation, and the next occurrence starts with
+the section the compile gate already watches.
 
-Owes: finish the isolation, starting with printing `.rodata` in
-`interp_instructions.sh` as `compile_instructions.sh` already does — one awk
-alternation, and the next occurrence answers itself. `size --format=sysv` on
-the two artifacts is the other half, and note that the `compile-profiles` artifact does not help —
-its copy step reads `for n in compile entry library`, so `cg.interp` is not
-in it; uploading that profile would make the next occurrence answerable
-without guessing. Then the ruling's first road, a build byte-identical from
-one source on the runners that measure it, with the golden re-measured and
-the log saying what was moving.
-
-The sweep of the other nine is done and came back clean. Both jobs dump every
-`*_got.txt`, and `compile_allocs`, both codegen rows, `compile_instructions`,
-`emit_instructions`, `entry_instructions`, `library_instructions`,
-`startup_instructions`, `interp_allocs` and `interp_peak_bytes` are identical
-across the two, as are `work.txt`'s fourteen benchmarks and the emitted and
-text veins. One counter disagrees. `compile_instructions` being among the
-identical ones is the sharpest part: it is the row CLAUDE.md calls a layout
-vein, with seven recorded layout-only moves behind it, so whatever separates
-the two artifacts did not move code around.
-
-The lead to start from, named as a lead: the one counter that moves is the
-one whose workload spawns a thread. `kanso run --interp` pins a one-gigabyte
-stack and runs on a thread of its own; the other gates create none. On this
-container that path opens `/proc/self/maps` once, on the main thread, before
-the `clone3` — outside the frame the gate anchors at, which is the frame the
-row reads.
-
-If a byte-identical build turns out not to be reachable, the question that
+If the reading cannot be made to repeat between machines, the question that
 follows is whether an exact pin is the right instrument for a counter whose
-artifact moves. That one is Clay's, and this row does not decide it in
-advance.
+artifact and host both move under it. That one is Clay's, and this row does
+not decide it in advance.
 
 ## In flight
 
