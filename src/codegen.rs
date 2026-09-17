@@ -2078,6 +2078,15 @@ fn inline_payload(f: &mut FnEmit, value: &str) -> String {
 
 /// Calls the alwaysinline twin rather than restating its tag test, so the
 /// emitter cannot drift from the definition it inlines.
+// PROBE, NOT A CHANGE. `#[inline(never)]` constrains the optimiser and nothing
+// else: the same bytes are emitted for the same input, and this function is
+// reached only from the emitter, which `kanso check` stops before. It is here
+// to ask one question on CI -- can rustc re-deciding in code the check path
+// cannot run move the anchored compile row, and by how much -- because three
+// shas measured on two toolchains disagree about that row's DELTA by more than
+// the delta itself, and no calibration in this tree bounds the term. See
+// kanso#1480's thread. This branch is a measurement and is not for merging.
+#[inline(never)]
 fn inline_not_failure(f: &mut FnEmit, value: &str) -> String {
     let set = f.set_of(value);
     // An EMPTY set is not a proof. `group_param_set` answers 0 for a parameter
