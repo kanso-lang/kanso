@@ -38,6 +38,12 @@
 # instruction row beside these diverged 2.18% between the same two hosts, and
 # these did not move at all. What a run ASKS the allocator for is the
 # program's own shape; what it COSTS to ask is the toolchain's.
-interp_allocs=5313431
+#
+# 2026-09-17 (kanso#1462): interp_allocs 5,313,431 -> 5,313,434, a RISE of 3.
+# interp_peak_bytes came back 933,202, byte-identical, and interp_instructions
+# 2,178,559,085, on the row. Three allocations out of five million is the
+# Why three and not zero is not measured; the run's shape did not change, since
+# peak bytes and the instruction row both came back on the nose.
+interp_allocs=5313434
 interp_peak_bytes=933202
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
