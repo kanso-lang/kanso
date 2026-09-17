@@ -125,15 +125,17 @@ built or declined, and the twentieth is the first row below. The second is
 the 2026-09-15 normalization ruling, which is ironclad and which a counter
 minted a day later does not satisfy.
 
-**And the floor is still a floor, because one sitting is not the log.** The
-sweep below audits 2026-08-29 and nothing else. Counted off the tree the same
-afternoon, the live log and the archive carry **56** entries whose heading
-begins `gavel:`; seventeen of them are 2026-08-29, and the other **39** are
-spread over **18** further dates, none of which has been swept. The 2026-08-29
-sitting was the largest single one and it was worth doing first, and it found
-one unbuilt ruling in twenty. What that rate says about the other thirty-nine
-is a guess until somebody reads them, which is what "floor" means and why the
-word stays here. The build hole came off built as kanso#1447, the day after
+**And the floor is still a floor, because two sittings are not the log.** The
+live log and the archive carry **56** entries whose heading begins `gavel:`.
+Seventeen are 2026-08-29, swept the afternoon of 2026-09-17 and the source of
+the first row below. Nine more are the five oldest sittings — 2026-08-15,
+08-17, 08-19, 08-20 and 08-23 — swept the same evening and clean: three are
+build records rather than rulings, and the six rulings are all built or
+superseded, with the bytes gavel's three claims run on both engines rather
+than read. That leaves roughly **thirty** entries over **thirteen** dates
+unswept. Across the twenty-six rulings audited so far the rate is one unbuilt,
+which is not zero, so what the remainder holds is a guess until somebody reads
+it. That is what "floor" means and why the word stays here. The build hole came off built as kanso#1447, the day after
 it was found twenty-three days off this
 list; the compile row's normalization, ruled 2026-09-15, was built the same
 night (kanso#1439); and the explicit box came off the same afternoon it was

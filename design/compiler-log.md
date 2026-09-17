@@ -7377,3 +7377,58 @@ gates anchor at different frames.
   kanso#1492 rather than assumed: it added twenty-two lines to that gate for
   the silicon comparison and left the section line reading `text|data|bss`.
 
+
+## 2026-09-17 — the five oldest sittings sweep clean, which is worth writing down
+
+The 2026-08-29 sweep left eighteen dates unaudited and found one unbuilt
+ruling in twenty, so the rate is not zero and the oldest sittings are where a
+ruling has had longest to sit. Five of them carry `gavel:` headings —
+2026-08-15, 08-17, 08-19, 08-20 and 08-23 — and hold nine entries between
+them.
+
+Three of the nine are BUILD RECORDS rather than rulings: "gavel 51 lands, and
+pays for itself", "gavel 15 built: the wall defers, and the loop runs", and
+"gavel 1b enforced: only a type's owner constructs one". An entry that records
+a build is not a ruling awaiting one, and reading the heading is enough to say
+so.
+
+The six rulings:
+
+| ruling | found |
+|---|---|
+| 08-15 gavel 1, the err rule collapses into three combinators | superseded by the 2026-08-29 effect gavel, which says so in its own first sentence and was probed built this afternoon |
+| 08-17 gavel 24, the boundary language | built; its ledger entry closed on kanso#1498 after ch04's paragraph was read on main rather than taken from the entry |
+| 08-17 gavel 51, one module | built, with a landing entry of its own, and cited by name in `diamond.rs` and `reexports.rs` |
+| 08-19 `==` refuses a value that names itself | built; `a_constant_that_names_itself` and `constant_knot` carry it |
+| 08-20 gavel 1b, only a type's owner constructs one | built, and run today: `money/money 250` from an importing module answers `error[opacity]` |
+| 08-23 an undemanded knot allocates nothing | built; the mem vein carries `an_undemanded_knot_allocates_nothing` |
+| 08-23 a list is never bytes, and acceptance is declared | built; run, below |
+
+That last one is the only one of the six with three separable claims, so it
+was run rather than read. Each answers byte-identically on both engines:
+
+```
+text/to_bytes [104 105]   ->  [104 105]        the constructor ships
+text/to_bytes [104 300]   ->  refuses, "to_bytes takes byte values (0-255)"
+text/append ["a"] "x"     ->  refuses, "append takes bytes and a string,
+                              bytes, or byte"
+text/utf8 [65 66]         ->  "AB"
+```
+
+The third is the ruling's substance. `["a" 120]` was the oracle's coercing
+answer for that call and the evidence the gavel turned on; it refuses now, and
+native and the interpreter refuse alike. The fourth is the rider rather than a
+hole in the third: the gavel says in its own words that whether utf8 keeps its
+list acceptance is a library decision made in the migration and not an engine
+property, so a declared acceptance surviving is the ruling working.
+
+**Nothing goes on the list from these five.** The sweep took about twenty
+minutes, against a list that had gone unaudited for nineteen days and, one
+sitting over, held a ruling whose purpose had been given up without anyone
+writing it down.
+
+- **DONE** five sittings, nine entries, three of them build records and six
+  rulings, all built or superseded.
+- **OPEN** thirteen dates and roughly thirty entries still unswept. Two
+  sittings are audited now and the rate across them is one unbuilt ruling in
+  twenty-six.
