@@ -4718,3 +4718,66 @@ reading pinned to offset zero; it named `%t77 = alloca [2 x %KValue]`.
 - **DONE** the check is narrow and the two readings agree over real IR.
 - **NOTE** a profile's inclusive cost has now mispriced a lever twice in three
   days. Price a frame from its SELF cost, or build it and measure the whole.
+
+## 2026-09-17 — the compile profile by SELF cost, and the map keys measured at last
+
+The entry above says to price a frame from its self cost. This is that profile,
+taken the same afternoon on main: `kanso check compile_corpus`, 36,830,740
+instructions, staged in the box the gate uses.
+
+```
+  1,636,363  4.44%  hashbrown HashMap::insert
+  1,476,482  4.01%  infer::eval_expr'2
+  1,435,071  3.90%  hashbrown rustc_entry
+  1,165,325  3.16%  check::check_after_infer
+  1,158,417  3.15%  infer::infer
+  1,149,825  3.12%  __memcmp_avx2_movbe
+  1,124,080  3.05%  check::check_merged_after_aliases
+  1,043,583  2.83%  RawTable::reserve_rehash
+    985,190  2.67%  lexer::lex_line
+    755,027  2.05%  infer::eval_expr
+    692,234  1.88%  parser::parse
+    680,372  1.85%  check::per_node_walk'2
+    656,191  1.78%  __memcpy_avx_unaligned_erms
+    616,257  1.67%  lexer::lex
+    603,907  1.64%  mi_free
+```
+
+Hash tables come to 17.9% with the lookups added — insert, rustc_entry,
+reserve_rehash, contains_key, get_mut, get — and `__memcmp_avx2_movbe` at 3.12%
+sits underneath them, which is what comparing string keys costs on a collision.
+The allocator adds 5.1%.
+
+**The map keys are the question the 2026-09-14 entry left open, and here they
+are.** That entry recorded kanso#1033 declining an interned symbol for the AST's
+own field at 365 conversion sites, and said in the same paragraph that the MAP
+KEYS are a different question nobody had measured. Measured now, by caller:
+
+```
+  428,500  1.16%  < RawIterRange::fold_impl        (2,180 calls)
+  291,898  0.79%  < qualify                        (1,531)
+  218,600  0.59%  < Resolver::flush_unused           (831)
+  181,262  0.49%  < Map::fold                        (868)
+  169,058  0.46%  < bound_in_pattern               (1,454)
+  151,997  0.41%  < HashSet IntoIter::fold           (750)
+  148,308  0.40%  < compile_module_loaded'2          (797)
+  135,045  0.37%  < Vec SpecFromIterNested::from_iter (519)
+  126,238  0.34%  < collect_pattern_names          (1,302)
+  115,956  0.31%  < fuse_enumerable                  (588)
+```
+
+Twenty-four more callers below these, none above 0.10%. So the keys are the
+same shape as the rehash lever: one habit repeated in thirty places, largest
+1.16%. Interning reaches all of it from underneath, which is the case for
+doing it, and it lands on thirty sites across check.rs, infer.rs, name.rs and
+codegen.rs, which is the case for not doing it while fourteen pull requests
+are open against those files.
+
+`reserve_rehash`'s own callers are `HashMap::insert` over 1,171 rehashes and
+`rustc_entry` over 295. (The `phase::watched` rows the caller tree prints at
+20.93% and 19.93% are inclusive chains — the whole compile passes through them
+— and are not attributions. Reading one as a self cost is the mistake the entry
+above corrects.)
+
+- **DONE** the map keys are measured; the 2026-09-14 entry's open line closes.
+- **OPEN** the refactor itself, and it wants a quiet tree.
