@@ -6613,3 +6613,40 @@ branch edits src/main.rs, so the rows can move; this is the smallest move the
 compile vein has recorded.
 
 - **DONE** the rows are CI's.
+
+## 2026-09-17 — eleven counters do not fit on one plot, so the chart draws eleven plots
+
+Adding `emit_instructions` took the objective to eleven counters, and
+`tests/the_chart_palette_is_the_one_that_was_measured` caught what that does to
+the drawing before CI did.
+
+**Eleven hues do not fit.** `#c4331f` against `#7a5c00` separates by 3.2 under
+simulated protanopia against a floor of 8, and no ordering of the set clears
+it: the check measures adjacent pairs, so an ordering that fixes one collision
+opens another. Eleven lines inside one lightness band do not have the room, and
+a search over candidate hues for the two worst offenders returned nothing.
+
+**So the chart draws one panel per counter.** That is the method's answer past
+eight series — small multiples rather than a generated hue — and it is the
+right one here for a reason beyond the palette: these counters are on different
+scales and in different units, and overlaying `interp_instructions` at 2.18
+billion with `compile_allocs` at 27,397 was never a comparison anybody wanted.
+
+With one line to a panel there is no adjacent pair to confuse. The caption
+names the counter, and each keeps the hue the panel below and its sparkline
+read.
+
+**The palette spec's claim is narrower now, and the entry says so rather than
+letting the change pass quietly.** It pinned membership, order AND the CVD
+floors those were measured against; it now pins membership and order as the
+record, with the floors described as the seven-hue era they were measured in. A
+rename or a silent recolour still turns it red. That narrowing is because the
+drawing changed, not because a gate was relaxed to fit a palette — and the
+spec carries the sentence that brings the floors back the day anything overlays
+series again.
+
+An intermediate design is recorded because it was wrong in an instructive way:
+three charts grouped by the model's sides, with three lines on production and
+eight on development. The eight failed all-pairs, which is the same wall one
+step further along. Two, three or one line to a plot works; eight does not,
+whatever the grouping.

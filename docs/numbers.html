@@ -87,9 +87,9 @@ divided by the weight those terms carry, times a hundred.</p>
   --series-compile-memory: #4a3aa7;
   --series-startup: #c4331f;
   --series-dev-build: #6d5bd0;
+  --series-emitting: #a8437a;
   --series-interp-speed: #0b8f9e;
   --series-interp-memory: #7a5c00;
-  --series-emitting: #a8437a;
   --series-binary-size: #e87ba4;
   --series-welfare: #008300;
 }
@@ -103,9 +103,9 @@ divided by the weight those terms carry, times a hundred.</p>
     --series-compile-memory: #9085e9;
     --series-startup: #d4523c;
     --series-dev-build: #9a70d8;
+    --series-emitting: #c25f92;
     --series-interp-speed: #0f9bb0;
     --series-interp-memory: #a9862f;
-    --series-emitting: #c25f92;
     --series-binary-size: #d55181;
     --series-welfare: #008300;
   }
@@ -320,12 +320,19 @@ divided by the weight those terms carry, times a hundred.</p>
     if (!found) throw new Error(`no series named ${t}`);
     return found;
   });
-  const TREND_PROD = bySide('run_instructions', 'run_peak_bytes',
-    'codegen_instructions_release');
-  const TREND_DEV = bySide('compile_instructions', 'compile_allocs',
-    'compile_peak_bytes', 'startup_instructions', 'codegen_instructions_dev',
-    'interp_instructions', 'interp_peak_bytes', 'emit_instructions');
-  const TREND_META = bySide('welfare', 'text_bytes');
+  // ONE PANEL PER COUNTER, since the objective reached eleven. Eleven hues do
+  // not fit: `#c4331f` against `#7a5c00` separates by 3.2 under protanopia
+  // (floor 8) and no ordering of the set clears it, because eleven lines
+  // inside one lightness band do not have the room. The method's answer past
+  // eight series is small multiples rather than a generated hue, and it is the
+  // right one here for a reason beyond the palette: these counters are on
+  // different scales and in different units, so overlaying them was never the
+  // comparison a reader wanted.
+  //
+  // With one line to a panel, colour carries no discriminative load at all --
+  // the caption names the counter. Each keeps the hue it had, which is what
+  // the panel below and its sparkline read.
+  const PANELS = TREND.map((s) => [s]);
 
   function drawTrend(rows, series, caption) {
     const W = 1200, H = 580, PAD = 64, TOP = PAD / 2, USABLE = H - PAD - TOP - 22;
@@ -423,10 +430,7 @@ divided by the weight those terms carry, times a hundred.</p>
     return;
   }
   if (!rows.length) { host.innerHTML = '<p class="perf-loading">no history recorded yet.</p>'; return; }
-  host.innerHTML =
-    drawTrend(rows, TREND_PROD, 'production welfare \u2014 what the binary costs') +
-    drawTrend(rows, TREND_DEV, 'development welfare \u2014 what the edit-test loop costs') +
-    drawTrend(rows, TREND_META, 'the meta, and one line the score does not read');
+  host.innerHTML = PANELS.map((one) => drawTrend(rows, one, one[0].label)).join('');
   const last = rows[rows.length - 1];
   const prev = rows.length > 1 ? rows[rows.length - 2] : null;
   const spark = (read) => {
