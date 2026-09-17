@@ -119,6 +119,10 @@
 # DECLARES set is start-up work, and the fall is most of the whole term. The
 # value it falls from is this branch's own, measured on its base; against main's
 # 4,838,323 the fall is 329,475 (-6.8097%).
+# 2026-09-17, kanso#1482, CI's sitting. LAYOUT, same reason, and this one
+# fell: 956 lower. The four rows together are +93 +564 +511 -956, which is
+# what a code-layout shift looks like -- no direction, and no relation to
+# what the branch changed.
 # 2026-09-17, kanso#1462, same sitting. A RISE of 49 (+0.001%). Layout again,
 # and the smallest move this vein has recorded.
 #
@@ -154,6 +158,12 @@
 # corpus with no lines to spread it over. Building the set more cheaply than
 # a run of hashed inserts is the open lead; the objective does not weigh this
 # vein yet, so nothing waits on it.
+# 2026-09-17, kanso#1482 on the tree merged with kanso#1462. CI reads
+# 4,837,381 against main's 4,838,372, a fall of 991 -- 0.020%. `kanso play`
+# takes the native path and does run the emitter, so some of this is the
+# change working; a one-line program emits few enough lines that the saving
+# and the layout term the four rows above show are the same size, and this
+# reading does not separate them. Both point the same way.
 #
 # 2026-09-17, merged with main. Both branches moved this row on their own
 # base, so the merged tree is reading neither number. The value below is
@@ -176,4 +186,9 @@
 # #
 # Net over the two branches: 4,838,372 -> 4,509,234, with kanso#1468's
 # 69.90% kept.
-startup_instructions=4509234
+#
+# 2026-09-17, merged with main. Both branches moved this row on their own
+# base, so the merged tree is reading neither number. The value below is
+# main's, carried forward so the gate has one value to fail against
+# rather than none; the merged sitting is CI's to take.
+startup_instructions=4837381
