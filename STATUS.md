@@ -228,7 +228,9 @@ not blocked on it — `interp_instructions.sh` prints `.text`, `.data` and
 `.bss`, where `compile_instructions.sh`, which the interp gate's own header
 sends the reader to, prints `.rodata` too, with a seven-binary calibration in
 its header for why. One awk alternation, and the next occurrence starts with
-the section the compile gate already watches.
+the section the compile gate already watches. Checked against kanso#1492
+rather than assumed: it added twenty-two lines to that gate wiring in the
+silicon comparison and left the section line reading `text|data|bss`.
 
 If the reading cannot be made to repeat between machines, the question that
 follows is whether an exact pin is the right instrument for a counter whose

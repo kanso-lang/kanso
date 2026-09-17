@@ -7319,5 +7319,7 @@ gates anchor at different frames.
 - **OPEN** what moves the six. Cloud's proportional-to-allocations argument
   is the live candidate and is not yet measured.
 - **OPEN** `.rodata` in the interp gate, one awk alternation, so the next
-  occurrence has the section the compile gate already watches.
+  occurrence has the section the compile gate already watches. Checked against
+  kanso#1492 rather than assumed: it added twenty-two lines to that gate for
+  the silicon comparison and left the section line reading `text|data|bss`.
 
