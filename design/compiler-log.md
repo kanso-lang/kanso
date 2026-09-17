@@ -7268,40 +7268,50 @@ somebody counts.
   vein is memcpy, and 180 MB of it is this one builtin.
 
 
-## 2026-09-17 — a docs branch re-based a row again, and the row was a different one
+## 2026-09-17 — the eleven is `ld`, and the gate had already called it a reproduction failure
 
-kanso#1497 adds 72 lines to `design/compiler-log.md` and nothing else.
-`git diff --name-only origin/main...HEAD -- src/ lib/` is empty. Three CI
-rounds on it have now moved a golden:
+**This corrects the entry that stood here, which was mine.** It read
+`codegen_instructions_release counted 6,826,827,780 against 6,826,827,769`,
+concluded the row does not reproduce across jobs, and re-based the golden.
+The conclusion was right about the row and wrong about where to look, and the
+re-base was the one thing the gate's header forbids.
 
-    round 1   interp_instructions          2,178,502,266 -> 2,178,502,272    +6
-    round 2   (interp row agreed)
-    round 3   codegen_instructions_release 6,826,827,769 -> 6,826,827,780   +11
+The gate prints every process in the tree and takes a second reading. Both
+readings of that job, side by side:
 
-Eleven instructions in 6.8 billion is 1.6 parts per billion. The interpreted
-row agreed in the same job that moved this one, which is the part worth having:
-**the row it lands on changes between rounds.** kanso#1492 carries the table
-for the first reading — three heads compiling identical bytes, two answers, and
-kanso#1495 adding MORE lines to the same file and reading main's number
-exactly.
+    first   kanso=412,662,004  clang:probe=32,265,587  clang=31,705,914  clang=1,617,294,647  ld=5,145,561,632
+    again   kanso=412,661,592  clang:probe=32,265,587  clang=31,705,914  clang=1,617,294,647  ld=5,145,561,621
 
-The gates are exact compares and have to hold one value each, so a docs branch
-re-bases whatever row drew the short straw, and main carries that value until
-the next branch draws a different one. The ratchet is turning on something the
-code did not do.
+`ld` counted **5,145,561,632 and then 5,145,561,621** on one binary in one job,
+eleven apart. The three clang processes are identical to the instruction in
+every reading taken today, on every branch. The row's variance is the linker's
+and nothing else's.
 
-CLAUDE.md's 2026-09-15 rule already says what to do about it: a counter reads
-the code under test and nothing else, and a term that cannot be normalized is
-excluded with the exclusion named in the golden's header. Nothing here needs a
-ruling; it needs the experiment kanso#1492's entry names — pin where the
-allocator's heap starts and re-read two heads that differ only in markdown. If
-the readings agree, the term is normalizable and the gates normalize it. If
-they do not, the headers say so and stop pretending an exact compare means
-anything on that row.
+The gate said so in the same breath and the entry walked past it:
 
-- **DONE** the row re-based so this branch can land, and the pattern recorded
-  with all three readings rather than the one.
-- **OPEN** the pinned-heap experiment. It scores nothing — the largest of the
-  three moves is 1.6 parts per billion against terms weighted 0.11 and 0.15 —
-  and costs a red gate and a churned golden every round.
+    codegen_release_again=6826827769  first_reading=6826827780
 
+which is case (2) in `codegen_instructions.sh`'s own header — "THE SAME BUILD
+COUNTED TWO NUMBERS. That is a REPRODUCTION FAILURE. It halts this vein and is
+hunted to its source — never pinned as a second value, and never recorded as a
+mode." Reading the `counted X against Y` line and writing Y is exactly the move
+that header exists to stop.
+
+The cross-branch table the old entry built proves nothing either. This branch
+read 6,826,827,780 on one round and 6,826,827,769 on the next, from a diff of
+72 lines of markdown. A branch cannot move a row in two directions; both values
+were draws from the same coin.
+
+The golden goes back to **6,826,827,769**, here and on kanso#1495.
+
+**What is open is eleven instructions inside `ld`**, and by the 2026-09-15 rule
+it is not a curiosity to explain: a counter reads the code under test and
+nothing else, and the linker is external to every change this row is asked
+about. It is also 75% of the row — 5.15 billion of 6.83. Either what moves it
+is found and normalized, or `ld` comes out of the sum and the header says why.
+
+- **DONE** the wrong value withdrawn from two branches, and the variance
+  localised from "some job differs" to one process and eleven instructions.
+- **OPEN** those eleven. The gate already has the instrument: it takes the
+  second reading. What it needs is to keep `ld`'s two profiles when they
+  disagree and diff the frames.
