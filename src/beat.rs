@@ -1016,8 +1016,8 @@ fn classify_all(
     groups
         .into_iter()
         .filter_map(|(name, arity)| {
-            classify(program, inference, mut_sites, chains, &allocating, &tails, &name, arity)
-                .map(|v| (name, arity, v))
+            let whole = Whole { program, inference, mut_sites, tails: &tails };
+            classify(&whole, chains, &allocating, &name, arity).map(|v| (name, arity, v))
         })
         .collect()
 }
@@ -1072,16 +1072,25 @@ impl<'a> TailCalls<'a> {
 
 /// The verdict for one group, or None when it has no self-tail-call (not a
 /// loop, nothing to say).
+/// What `classify` reads about the WHOLE program, which is the same for every
+/// group it is asked about. `classify_all` builds each one once and hands this
+/// down; passing them one by one put the signature at eight parameters, and
+/// the four of them travel together anyway.
+struct Whole<'a> {
+    program: &'a Program,
+    inference: &'a infer::Inference,
+    mut_sites: &'a MutSites,
+    tails: &'a TailCalls<'a>,
+}
+
 fn classify(
-    program: &Program,
-    inference: &infer::Inference,
-    mut_sites: &MutSites,
+    whole: &Whole<'_>,
     chains: &HashSet<Group>,
     allocating: &HashSet<&str>,
-    tails: &TailCalls,
     name: &str,
     arity: usize,
 ) -> Option<Verdict> {
+    let Whole { program, inference, mut_sites, tails } = whole;
     if !tails.has_self_tail(name, arity) {
         return None;
     }
