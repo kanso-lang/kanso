@@ -167,6 +167,29 @@ fn compiler_counters() -> String {
     )
 }
 
+/// What an interpreted run holds, read off the same counting allocator the
+/// compiler's own row reads.
+///
+/// The interpreted engine is a deployment, not a stage of one: the program is
+/// parsed, inferred and then EXECUTED in this process, and nothing is emitted.
+/// So the number this prints covers the front end and the interpreter
+/// together, which is what an interpreted run actually costs. Clay's gavel of
+/// 2026-09-16 puts it on the development side, below start-up and speed:
+/// "start-time is vastly more important than speed which is more important
+/// than memory usage."
+///
+/// Printed at the interpreter's exit rather than at the process's, beside the
+/// thunk counters, because that is where the run has finished holding
+/// everything it is going to hold.
+fn interpreter_counters() -> String {
+    format!(
+        "interp_alloc_bytes={}\ninterp_allocs={}\ninterp_peak_bytes={}\n",
+        ALLOC_BYTES.load(Ordering::Relaxed),
+        ALLOC_CALLS.load(Ordering::Relaxed),
+        PEAK_BYTES.load(Ordering::Relaxed),
+    )
+}
+
 const VERBS: [&str; 8] = ["run", "check", "test", "build", "install", "list", "update", "repl"];
 
 const USAGE: &str = "usage: kanso <verb> [arguments]
@@ -509,6 +532,7 @@ fn run_interpreted_on_stack(program: &ast::Program, args: Vec<String>) -> ExitCo
         fn drop(&mut self) {
             if std::env::var_os("KANSO_COUNTERS").is_some() {
                 eprint!("{}", self.0.thunk_stats.render());
+                eprint!("{}", interpreter_counters());
             }
         }
     }
