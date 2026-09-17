@@ -453,4 +453,10 @@
 # care what else got cheaper; the three instruction rows beside it are a
 # share of a pile kanso#1414 shrank, and every one of them came back
 # smaller. Same branch, same run, the two halves of CLAUDE.md's rule.
-compile_allocs=27395
+compile_allocs=27397
+
+# 2026-09-17, kanso#1465. The qualifier learned which of a dependency's names
+# are TYPES, which costs one set of type names per dependency: two allocations.
+# A function named for an imported type used to have its callers' Ctor patterns
+# rewritten to the function's symbol, and the backend then looked for a
+# constructor that was not there.

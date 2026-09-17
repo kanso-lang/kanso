@@ -3734,7 +3734,7 @@ trigger is a module declaring a function whose name one of its imports exports
 as a TYPE — and that is a thing the language allows, because the two are
 different namespaces and the checker has always said so.
 
-## The chain, end to end
+**The chain, end to end.**
 
 1. `enroll_bare` gives json's exported type `entry` a bare twin named `entry`.
 2. `check::declared_names` returns ONE flat set holding both `program.types`
@@ -3750,7 +3750,7 @@ Three other lookups share the map and the bug: `Pattern::Annotated`'s type,
 `Expr::Upcast`'s target, and a typeset member inside `qualify` itself. Each is
 a type position reading a map that also holds function names.
 
-## The fix, and why it is one map rather than two
+**The fix, and why it is one map rather than two.**
 
 A constructor is CALLED by its type's name, so a VALUE position has to be able
 to find a type in this map. What must not happen is the reverse. So the map's
@@ -3760,7 +3760,7 @@ Two maps would have meant threading a second parameter through
 `rewrite_pattern`, `rewrite_stmt`, `rewrite_scope` and `rewrite_expr` and their
 thirty call sites; one flag changes the five lookups and nothing else.
 
-## The spec
+**The spec.**
 
 `tests/golden/micro/a_function_named_for_an_imported_type.kso`. The micro
 corpus runs every fixture as a LIBRARY through the harness's generated entry,
@@ -3778,7 +3778,7 @@ arm alone:
 — the program produces nothing, because the backend refuses it, which is the
 failure as a user meets it rather than a claim about a map.
 
-## What it is not
+**What it is not.**
 
 It is not a design decision about whether a function may share a name with an
 imported type. The checker already permits it and the interpreter already runs
@@ -3786,6 +3786,14 @@ it; the loader disagreed with both, and the native backend's way of saying so
 was an internal error rather than a diagnostic. The differential law allows an
 engine to REFUSE a feature with a clear diagnostic and forbids it to diverge
 silently, and `unknown type <module>/entry` is neither clear nor a diagnostic.
+
+**What it costs, measured on CI.** `compile_instructions` 36,878,550 →
+36,900,512, `entry_instructions` 131,884,284 → 131,966,724,
+`library_instructions` 132,025,167 → 132,070,594, and `compile_allocs`
+27,395 → 27,397. That is one set of type names per dependency, built once
+where the qualifier already walks the dependency's declarations. Welfare falls
+0.00106 and the floor moves by exactly that: a name the language says means a
+constructor has to mean one, which is the case CLAUDE.md rules needs no gavel.
 
 ## 2026-09-16 — gavel: two welfares and a meta-welfare over them, and the floor re-ratchets
 
@@ -3870,3 +3878,4 @@ adds them, with `tests/the_objective_reads_what_the_gate_watches.rs` replaying
 the file, because this model's PROSE has gone stale twice while the file never
 did. Weights and satiations priced from evidence. The entry leaves the ledger
 with this commit and STATUS.md carries the build.
+
