@@ -4586,9 +4586,16 @@ The branch merged with kanso#1472 and CI measured the merged tree:
     entry_instructions   128,144,579 -> 127,849,537   -295,042  -0.230%
     library_instructions 128,281,268 -> 127,988,399   -292,869  -0.228%
 
-All three are work removed rather than layout: `kanso check` runs the front end
-that asks the two questions this branch indexes. Welfare rose and is banked at
-69.79571178806425.
+**All three are LAYOUT, and the first draft of this entry said the opposite.**
+Both questions are asked inside `Backend::emit`, which sits under `emit_ir`,
+and `emit_ir` is reached only from `main.rs`'s build and run paths. `kanso
+check` stops before codegen, so neither scan runs on any of the three compile
+corpora and neither index can have saved them anything. What moved the rows is
+`src/codegen.rs` being part of the compiler binary.
+
+The change's own effect is on the build path, and it is the largest in the run:
+`kanso build bench/runbench` falls 69.64%. Welfare rose and is banked at
+69.79571178806425 -- a rise is banked whatever moved it.
 
 **The 69.64% this branch takes off `kanso build bench/runbench` is almost all
 `prune_unnamed`.** Measured separately on `15e182b1` by indexing only the
