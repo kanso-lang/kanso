@@ -8016,3 +8016,27 @@ worse costs 0.000 points. Banked in this same pull request.
 - **OPEN** what is left of start-up. The bound recorded on this branch stands.
 
 
+
+## 2026-09-17 — kanso#1493 on today's main: CI's start-up row, and the baseline that moved under it
+
+The branch measured its fall against main at 4,837,246 and published 3,712,046,
+−1,125,200, −23.26%. Between that sitting and this one, kanso#1478 landed seven
+whole-program scans as indexes and RAISED the start-up row 242,727 — seven
+indexes are more bytes for the loader to place, bought with a 61.6x fall in what
+`kanso build bench/runbench` costs. So the merge carried main's 5,081,099
+forward rather than the branch's own number, and CI re-read the pair in one job:
+
+    main        5,081,099
+    the digest  3,955,899    -1,125,200   -22.14%
+
+The saving is the same 1,125,200 to the instruction. That is what it should be:
+what stops happening is two hashes of a 450,100-byte constant, and the cost of
+that does not depend on what else start-up does. The percentage moved because
+the denominator did.
+
+Welfare 76.39 → 76.65, banked. The only vein that disagreed with its golden on
+the merged tree was start-up; the other twenty-six in the summary block read
+success, so nothing else this branch touches moved a counter.
+
+The published table on the compiler page now carries CI's base, with a sentence
+saying the profile above it predates the seven indexes.
