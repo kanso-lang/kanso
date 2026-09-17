@@ -4253,3 +4253,30 @@ too, and indexing it is felt here. CI read that figure and then read it again
 in the same job. The three compile rows come back at 36,862,804, 131,830,523
 and 131,972,417 against main's 36,864,779, 131,837,650 and 131,978,823, and
 both interpreter memory rows are byte-identical to the round before.
+
+## 2026-09-17 — CI's sitting of the merged tree, and the floor moves with the silicon
+
+kanso#1462 merged with main after kanso#1459 landed. CI read the merged tree
+below the values the merge carried forward:
+
+    compile_instructions    36,682,232 -> 36,681,044   -1,188   -0.0032%
+    entry_instructions     130,573,787 -> 130,567,058  -6,729   -0.0052%
+    library_instructions   130,716,747 -> 130,711,295  -5,452   -0.0042%
+
+`kanso check` does not run the interpreter, so the hashing this branch changes
+is not on this corpus; all three are the layout kind the row's header
+describes.
+
+**The per-process floor tracks the silicon, and it still does not explain the
+thirteen.** DONE. Three sittings, three CPUs, three floors:
+
+    cpu 25/1    558,610   605 frames
+    cpu 26/2    556,282   605 frames
+    cpu 6/173   558,222   604 frames
+
+So the floor is a host reading rather than a constant, which is what it should
+be. What it cannot do is carry the thirteen: kanso#1469 and kanso#1470 both ran
+on cpu 25/1 and both printed 558,610 over 605 frames, to the instruction, with
+their three compile rows thirteen apart. A term the floor holds cannot move
+while the floor does not. kanso#1474 prints the module compile's whole listing
+beside it for that reason.

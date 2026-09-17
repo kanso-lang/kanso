@@ -581,7 +581,14 @@
 # row on its own base, so the merged tree is neither reading. The value is
 # main's, carried forward so the gate has one value to fail against rather than
 # none; the merged sitting is CI's to take.
-entry_instructions=130573787
+#
+# 2026-09-17, kanso#1462 merged with kanso#1459, CI's sitting. A FALL of
+# 6,729 (-0.0052%). The value the merge carried forward was kanso#1459's, and
+# this is the merged tree's own reading. `kanso check` does not run the
+# interpreter, so the hashing this branch changes is not on this corpus: the
+# move is the layout kind the header above describes, src/eval.rs being the
+# compiler's own bytes.
+entry_instructions=130567058
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.
