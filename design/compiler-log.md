@@ -6343,3 +6343,42 @@ passes here had the answer one paragraph away.
 - **OPEN** what the probe did not reach and the row cannot retire without: the
   710 `xs[i]!` sites, `!` names in lib answering a box, and the two cost levers
   kanso#1477 reports built. Their own pass.
+
+## 2026-09-17 — the exclusion left half a build unweighed, and kanso#1480 found it
+
+`emit_instructions` joins the development side at 0.06, taken out of the dev
+build's 0.22, which drops to 0.16.
+
+**What went wrong is a seam between two correct decisions.** The 2026-09-16
+gavel put "dev-tier codegen (`-O0`)" on the development side. The 2026-09-15
+rule then excluded kanso's own process from the codegen rows, rightly: the
+parent sits in a wait loop for clang and the linker, and what that loop costs
+is the box's scheduling rather than the compiler's work. But the emitter runs
+in that process. So between them the two rulings weighed the children of a
+build and left the compiler's own half of it outside every counter.
+
+**kanso#1480 is what showed it.** That branch builds one linearity `Analysis`
+where three were built, takes 51,082,187 instructions off a `kanso build` —
+7.77% — with the emitted IR byte-identical, and welfare falls 0.01. Not one
+objective counter can see the saving: the three compile rows stop before
+codegen, start-up runs the emitter on a one-line program, and
+`codegen_instructions_dev` excludes exactly the process the saving is in.
+`emit_instructions`, anchored at `codegen::emit_ir` inclusive, is the only row
+that reaches it.
+
+**The split is score-neutral at parity, which is the point.** Both halves
+satiate at 0.5, so 0.22 × ⅔ and (0.16 + 0.06) × ⅔ are the same 0.1467, and the
+meta stays 76.13 with production 57.11 and development 72.59. This does not
+move the number; it makes a dimension the number was blind to visible, which is
+what the gavel asked for and what the exclusion inadvertently undid.
+
+**The weights are the two halves' measured sizes.** On this box a dev build's
+child tree is 1.00 billion instructions against the emit's 395 million, near
+enough 0.16 against 0.06.
+
+- **OPEN** whether the production side owes the same treatment.
+  `codegen_instructions_release` excludes kanso's process too, and the emit is
+  the same emit — one `emit_ir` serves both tiers, so a second emit row would
+  be the same measurement counted twice. Left unweighed on that side
+  deliberately, and recorded here so the asymmetry is a decision rather than an
+  oversight.

@@ -531,14 +531,20 @@ Only Clay arms, disarms or retimes it.
   `run_instructions`, `run_peak_bytes` (the arena, held and permanent peaks
   summed by `peak_of`) and `codegen_instructions_release`; a DEVELOPMENT number
   over `compile_instructions`, `compile_allocs`, `compile_peak_bytes`,
-  `codegen_instructions_dev`, `startup_instructions`, `interp_instructions` and
-  `interp_peak_bytes`; and a META over the two, which is the number CI gates
+  `codegen_instructions_dev`, `emit_instructions`, `startup_instructions`,
+  `interp_instructions` and `interp_peak_bytes`; and a META over the two, which is the number CI gates
   on and the only one carrying a floor. A weight is a share of ITS OWN side and
   each side sums to one — `balanced?` refuses to score when one does not, which
   is a refusal that exists because carrying the four pre-split weights over
   unrenormalised scored production a fifth low and looked entirely plausible.
-  `bench/objective_sources.txt` is the list — twelve `<counter> <gate key>`
-  pairs for those ten — and
+  **THE TWO CODEGEN-SIDE ROWS ARE BOTH WEIGHED AND ONE IS EASY TO FORGET.** The
+  2026-09-15 exclusion took kanso's own process out of `codegen_instructions_*`,
+  and the emitter runs in that process, so `emit_instructions` carries the
+  compiler's own half of what a build costs. Weighing the child tree alone left
+  kanso#1480's 51,082,187-instruction saving invisible to every term in the
+  model, which is how the gap was found.
+  `bench/objective_sources.txt` is the list — thirteen `<counter> <gate key>`
+  pairs for those eleven — and
   `tests/the_objective_reads_what_the_gate_watches.rs` replays it, so the list
   is checkable rather than remembered. **This sentence has now been wrong
   three times, and the third is why the counts above are not to be trusted from

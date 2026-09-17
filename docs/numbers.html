@@ -89,6 +89,7 @@ divided by the weight those terms carry, times a hundred.</p>
   --series-dev-build: #6d5bd0;
   --series-interp-speed: #0b8f9e;
   --series-interp-memory: #7a5c00;
+  --series-emitting: #a8437a;
   --series-binary-size: #e87ba4;
   --series-welfare: #008300;
 }
@@ -104,6 +105,7 @@ divided by the weight those terms carry, times a hundred.</p>
     --series-dev-build: #9a70d8;
     --series-interp-speed: #0f9bb0;
     --series-interp-memory: #a9862f;
+    --series-emitting: #c25f92;
     --series-binary-size: #d55181;
     --series-welfare: #008300;
   }
@@ -252,6 +254,9 @@ divided by the weight those terms carry, times a hundred.</p>
     { token: 'codegen_instructions_dev', hue: 'var(--series-dev-build)',
       label: 'dev build', read: (r) => r.codegen_instructions_dev,
       note: 'The <code>-O0</code> build, counted across the whole child tree \u2014 the emitter, clang, the linker and its own child. kanso\u2019s process is excluded: it sits in a wait loop, and what that loop costs is the box\u2019s scheduling rather than the compiler\u2019s work.' },
+    { token: 'emit_instructions', hue: 'var(--series-emitting)',
+      label: 'emitting', read: (r) => r.emit_instructions,
+      note: 'What writing the ir costs, anchored at <code>codegen::emit_ir</code> inclusive. It is the compiler\u2019s own half of a dev build: the 2026-09-15 exclusion took kanso\u2019s process out of the child-tree rows, and the emitter runs in that process, so without this line half of what a build costs is unweighed.' },
     { token: 'interp_instructions', hue: 'var(--series-interp-speed)',
       label: 'interpreter speed', read: (r) => r.interp_instructions,
       note: 'The reference interpreter executing a corpus that builds its own input and decodes it six times. It is the semantics oracle, so this is the engine the specs run on rather than the one that ships.' },
@@ -319,7 +324,7 @@ divided by the weight those terms carry, times a hundred.</p>
     'codegen_instructions_release');
   const TREND_DEV = bySide('compile_instructions', 'compile_allocs',
     'compile_peak_bytes', 'startup_instructions', 'codegen_instructions_dev',
-    'interp_instructions', 'interp_peak_bytes');
+    'interp_instructions', 'interp_peak_bytes', 'emit_instructions');
   const TREND_META = bySide('welfare', 'text_bytes');
 
   function drawTrend(rows, series, caption) {

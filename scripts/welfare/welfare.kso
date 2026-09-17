@@ -147,10 +147,24 @@ d_compile_memory = dimension compile_memory_counters "compile memory" 0.5 0.08
 d_codegen_release = dimension codegen_release_counters "release build" 0.5 0.15
 
 # Dev-tier codegen: `-O0`, the tree a `kanso build` waits on between a keystroke
-# and an answer. 0.22 is most of the front end's 0.30 because it is most of the
-# wait: on this box the dev tier is 1.00 billion instructions against the front
-# end's 164 million, and a developer feels the sum.
-d_codegen_dev = dimension codegen_dev_counters "dev codegen" 0.5 0.22
+# and an answer. It is most of the wait: on this box the dev tier is 1.00
+# billion instructions against the front end's 164 million.
+#
+# WHAT A DEV BUILD COSTS IS TWO ROWS, NOT ONE, and both are weighed here. The
+# 2026-09-15 exclusion took kanso's own process out of the codegen rows --
+# rightly, because the parent sits in a wait loop for clang and what that loop
+# costs is the box's scheduling. But the emitter runs in that process, so the
+# exclusion left the compiler's own half of a build outside every counter.
+# `emit_instructions`, anchored at `codegen::emit_ir` inclusive, is that half.
+#
+# Weighing only the child tree would leave the gavel's "dev-tier codegen" half
+# measured, and kanso#1480 is what showed it: that branch takes 51,082,187
+# instructions off a `kanso build` and not one objective counter could see the
+# saving. The 0.22 splits by what the two halves cost -- 1.00 billion for the
+# children against 395 million for the emit, near enough 0.16 and 0.06.
+d_codegen_dev = dimension codegen_dev_counters "dev codegen" 0.5 0.16
+
+d_emit = dimension emit_counters "emitting" 0.5 0.06
 
 # INTERPRETER START-UP, and Clay's order for the interpreted side is the whole
 # of the pricing: "start-time is vastly more important than speed which is more
@@ -221,6 +235,8 @@ codegen_release_counters = ["codegen_instructions_release"]
 
 codegen_dev_counters = ["codegen_instructions_dev"]
 
+emit_counters = ["emit_instructions"]
+
 start_counters = ["startup_instructions"]
 
 interp_speed_counters = ["interp_instructions"]
@@ -242,7 +258,9 @@ compile_terms = [d_compile_speed d_compile_memory]
 
 interp_terms = [d_start d_interp_speed d_interp_memory]
 
-dev_terms = text/concat (text/concat compile_terms [d_codegen_dev]) interp_terms
+build_terms = [d_codegen_dev d_emit]
+
+dev_terms = text/concat (text/concat compile_terms build_terms) interp_terms
 
 # Every term, for the reporting that is keyed by counter rather than by side.
 terms = text/concat prod_terms dev_terms
@@ -288,7 +306,8 @@ compile_counters = text/concat compile_speed_counters compile_memory_counters
 interp_counters = text/concat start_counters
   (text/concat interp_speed_counters interp_memory_counters)
 
-codegen_counters = text/concat codegen_dev_counters codegen_release_counters
+codegen_counters = text/concat (text/concat codegen_dev_counters emit_counters)
+  codegen_release_counters
 
 counter_names = text/concat (text/concat run_counters compile_counters)
   (text/concat interp_counters codegen_counters)
@@ -405,8 +424,10 @@ fn added veins
   imem = [["interp_peak_bytes" im["interp_peak_bytes"]]]
   dev = [["codegen_instructions_dev" cd["codegen_instructions_dev"]]]
   rel = [["codegen_instructions_release" cr["codegen_instructions_release"]]]
-  text/concat (text/concat start ispeed)
-    (text/concat imem (text/concat dev rel))
+  em = veins[10]
+  emit = [["emit_instructions" em["emit_instructions"]]]
+  built = text/concat (text/concat dev rel) emit
+  text/concat (text/concat start ispeed) (text/concat imem built)
 
 # ONE ROW OUT OF FOURTEEN. bench/instructions_golden.txt carries a row for
 # every benchmark the gate counts, and since the 2026-09-06 gavel the objective
@@ -613,7 +634,7 @@ fn asked path
 # known where the index is written; on a literal it is an index. Writing the
 # nine out is what lets `measured` read them by position without opening nine
 # boxes it has already had pinned for it.
-fn gauge run w ir ca held ent st ii im cd cr
+fn gauge run w ir ca held ent st ii im cd cr em
   work = work_of w
   vir = counters ir
   vca = counters ca
@@ -624,10 +645,12 @@ fn gauge run w ir ca held ent st ii im cd cr
   vim = counters im
   vcd = counters cd
   vcr = counters cr
-  veins = [vir vca vhe ven vst vii vim vcd vcr]
+  vem = counters em
+  veins = [vir vca vhe ven vst vii vim vcd vcr vem]
   weighed
     .> (_ -> pinned work vir vca vhe ven)
     .> (_ -> pinned_new vst vii vim vcd vcr)
+    .> (_ -> vem["emit_instructions"]!)
     .> (_ -> floored (measured (counters run) work veins))
 
 fn floored now
@@ -1044,6 +1067,10 @@ fn with_imem run w ir ca held e st ii im
 
 fn with_dev run w ir ca held e st ii im cd
   asked "bench/codegen_instructions_release_golden.txt"
-    .> (cr -> gauge run w ir ca held e st ii im cd cr)
+    .> (cr -> with_rel run w ir ca held e st ii im cd cr)
+
+fn with_rel run w ir ca held e st ii im cd cr
+  asked "bench/emit_instructions_golden.txt"
+    .> (em -> gauge run w ir ca held e st ii im cd cr em)
 
 pub play = asked "bench/cost_golden_run.txt" .> (r -> with_run r)

@@ -102,3 +102,9 @@ codegen_instructions_dev codegen_instructions_dev
 
 # production: what building the binary that ships costs
 codegen_instructions_release codegen_instructions_release
+
+# development: the compiler's own half of a dev build. The 2026-09-15 exclusion
+# took kanso's process out of the codegen rows, and the emitter runs in that
+# process, so this is the half of "dev-tier codegen" the child-tree row cannot
+# reach. Weighing one without the other left the gavel's term half measured.
+emit_instructions emit_instructions

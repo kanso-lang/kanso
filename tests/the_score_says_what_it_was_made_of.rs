@@ -41,8 +41,11 @@ fn ask(root: &std::path::Path, args: &[&str]) -> String {
 #[test]
 fn the_counter_set_is_the_one_the_formula_reads() {
     let said = counters();
-    // Ten since the 2026-09-16 gavel split the objective into a production
-    // welfare, a development welfare and a meta over them. It was five between
+    // Eleven since the 2026-09-16 gavel split the objective into a production
+    // welfare, a development welfare and a meta over them. The eleventh is
+    // `emit_instructions`: the 2026-09-15 exclusion took kanso's own process
+    // out of the codegen rows, and the emitter runs in that process, so the
+    // child-tree row alone left half of "dev-tier codegen" unweighed. It was five between
     // 2026-09-06 and 2026-09-17, when the run side became one consolidated
     // program, and twenty-eight before that: thirteen work rows and twelve
     // memory rows over thirteen benchmarks, plus the three compile rows. Every
@@ -62,6 +65,7 @@ fn the_counter_set_is_the_one_the_formula_reads() {
         "compile_allocs",
         "compile_peak_bytes",
         "codegen_instructions_dev",
+        "emit_instructions",
         "startup_instructions",
         "interp_instructions",
         "interp_peak_bytes",
