@@ -7,9 +7,11 @@ is stale — say so.
 ## Waiting on Clay
 
 The decisions live in design/pending-gavels.md — the single ledger; this file
-only indexes it. **Blocking right now: zero.** The last one, what the compile term counts
-once codegen is in it, was ruled 2026-09-16 the day it was filed: two
-welfares and a meta-welfare over them, with the floor re-ratcheted. The `!` question before it was ruled 2026-09-16 and
+only indexes it. **Blocking right now: two** — whether the wall `>>` survives the fused
+operators, and whether its simultaneous-failure merge was meant to go, both
+filed 2026-09-17. The compile-term question before them was ruled the day it
+was filed: two welfares and a meta-welfare over them, with the floor
+re-ratcheted. The `!` question before it was ruled 2026-09-16 and
 reversed the same day: the bang is the channel that bubbles, so `xs[i]!` and
 every `!` name answer a box. The box-wrapping question before it was
 ruled 2026-09-15. The reconstruction coverage
@@ -40,9 +42,11 @@ kanso — sat here and was bounced on 2026-08-29: a performance question with no
 surface area is the implementer's, per the ledger's own charter, and the log
 carries the research mandate it left with.
 
-**Five questions are waiting** — zero blocking. The last one, what the
-compile term counts once codegen is in it, was filed and ruled on 2026-09-16:
-two welfares and a meta-welfare over them, with the floor re-ratcheted. The
+**Seven questions are waiting** — two blocking, both filed 2026-09-17 out of
+one reading of a book sample: whether the wall `>>` survives the fused
+operators, and whether its simultaneous-failure merge was meant to go. The
+compile-term question before them was filed and ruled on 2026-09-16: two
+welfares and a meta-welfare over them, with the floor re-ratcheted. The
 welfare-floor entry left
 Blocking on 2026-09-14 with all three of its asks already answered: its two
 builds merged on 2026-09-13, the `git add bench/welfare_floor.json` permission
@@ -113,8 +117,9 @@ compiler; the list is a floor, since the rest of the 2026-08-29 sitting was
 not audited. Swept again on 2026-09-14 against merged main: the effect-type
 row came off, built and merged as kanso#1372, and the exhaustiveness row came
 off with kanso#1369. The book row came off with kanso#1412, which its own
-log entry calls the live remainder of that ruling. Three rows stand on
-2026-09-16: the explicit box, fully ruled once its `!` half went on
+log entry calls the live remainder of that ruling. Two rows stand on
+2026-09-17, the build hole having come off built (kanso#1447, the day after it
+was found twenty-three days off this list): the explicit box, fully ruled once its `!` half went on
 2026-09-16, and the build hole, ruled 2026-08-24 and found off this list on
 2026-09-16. The compile row's normalization, ruled 2026-09-15, was built the
 same night (kanso#1439) and came off. Neither remaining row waits on anything.
@@ -161,23 +166,6 @@ commit that adds it, weights and satiations priced from evidence per the
 2026-08-25 gavel, and the meta floor re-ratcheted from the rescored model in
 the same change. Clay: "yeah you've got to re-ratchet." Nothing here waits on
 a ruling.
-
-### A build hole is spelled `_`, and fills exactly once (2026-08-24)
-
-The archive entry of that name, filed by Clay in the developer chat on
-2026-08-24 — "build doesn't work this way, as i said many times. you don't
-supply 'none', you supply _" — and it says in its own text that the shipping
-ch03 sample does the thing he rejected. Twenty-three days later it still
-does: `docs/book/samples/ch03/knot.kso` reads `ada = person "ada" none`, and
-`tests/golden/micro/bare_field.kso` the same. Probed 2026-09-16: the compiler
-refuses the ruled spelling outright, `error[syntax]: unexpected trailing
-tokens` at `person "ada" _`, so this is a build and not a sample edit. Owes:
-the parser and checker taking `_` inside `build` as a field held open, the
-write-once fill (the archive entry: "then you can update with a real value
-exactly once"), the two samples and their goldens, and ch03's panel. This
-ruling was never on this list: the 2026-09-09 audit that seeded it probed the
-2026-08-29 sitting and called itself a floor, and this row is what the floor
-was missing.
 
 ## In flight
 
@@ -396,7 +384,7 @@ else. Chains that tested for `none` after an effect migrate.
     checked from here on two days and both refused by the tooling
   - whether an err gains readers a lambda callback can use
 
-**Five questions wait in `design/pending-gavels.md`** — zero blocking, five
+**Seven questions wait in `design/pending-gavels.md`** — two blocking, five
 open — each with a recommendation. Recounted four times on 2026-09-16: the
 binding-position question joined Open with its measurement, the escape
 path's byte-position scan joined it, measured on 2026-09-15 and filed to
@@ -421,7 +409,8 @@ four of the six it named had been ruled or shipped since. A count maintained
 by hand goes stale by default, so `tests/the_status_index_counts_the_ledger.rs`
 now reads both files and fails when this sentence and the ledger disagree.
 
-Nothing is blocking. The five open are the box constructor's spelling,
+The two blocking are the wall's two questions, filed 2026-09-17. The five
+open are the box constructor's spelling,
 recommended `effect`, which cloud builds against unless Clay names another;
 the book teaching the boundary language, whose campaign ran on 2026-09-13
 and which now owes only ch04's "nothing is asked of the signature" framing,
