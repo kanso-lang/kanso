@@ -63,14 +63,46 @@
 # one is the change: the interpreted run is what this branch touches, and the
 # fixed-seed hashing is what it does. The objective does not weigh this vein.
 #
-# 2026-09-17, kanso#1486 on the tree merged with kanso#1462. CI reads
-# 2,178,750,341 against main's 2,178,559,085, a RISE of 191,256 -- 0.0088%.
-# The front end runs on this corpus and got cheaper -- interp_allocs falls 102
-# in the same job -- but the corpus is one small program and 2.18 billion of
-# the row is the interpreter executing it. The layout term on this vein is of
-# this size and swamps the saving: kanso#1482 moves it 56,819 down and
-# kanso#1468 237,834 up in this same round, both from edits that never run on
-# it at all.
+# 2026-09-17, kanso#1468 on the tree merged with kanso#1462. CI reads
+# 2,178,796,919 against main's 2,178,559,085, a RISE of 237,834 -- 0.0109%.
+# LAYOUT, and the profile says so rather than the reasoning alone. `kanso run
+# --interp` returns from run_interpreted before codegen is reached
+# (src/main.rs, the early return on both the run and play paths), so nothing
+# this branch edits executes on this corpus. A callgrind profile of the
+# corpus on the branch carries exactly one codegen frame, an instantiated
+# prune_unnamed closure worth 284 instructions in the whole run; the other
+# 237,550 are the compiler's bytes moving under an interpreter that never
+# enters them. The objective does not weigh this vein.
+#
+# 2026-09-17, kanso#1478 as the one tip, on main 298636b7. CI reads
+# 2,182,341,803 against main's 2,178,559,085, a RISE of 3,782,718 -- 0.174%.
+# LAYOUT, and this one was measured rather than assumed, because 3.78 million
+# is sixteen times the largest move this vein had shown before.
+# #
+# THE ROW EXCLUDES THE FRONT END. The gate anchors at
+# `run_interpreted_on_stack`, the interpreter's own thread, so the 46.3
+# million `kanso::main` spends parsing and checking this corpus is not in the
+# number at all. A front-end change cannot move this row by working; it can
+# only move it by moving the binary.
+# #
+# BOTH SIDES REPRODUCED on the container under rustc 1.98.1: main
+# 2,178,694,946 and this head 2,182,308,031, a local delta of 3,613,085
+# against CI's 3,782,718. The delta is spread evenly over every frame of the
+# interpreter rather than sitting in one:
+# #
+#       eval           18,445,521,672 -> 18,479,680,323   +0.185%
+#       call           11,157,959,351 -> 11,181,808,771   +0.214%
+#       call_named     11,127,354,432 -> 11,151,189,142   +0.214%
+#       eval_tail       9,866,786,211 ->  9,888,320,078   +0.218%
+#       dispatch       10,516,297,101 -> 10,535,892,811   +0.186%
+#       run_main        2,178,075,324 ->  2,181,688,409   +0.166%
+# #
+# A uniform fifth of a per cent across the whole interpreter is what a moved
+# working set looks like; work concentrates in one frame and this does not.
+# The size of it is the size of the perturbation: this head carries five
+# source changes across src/codegen.rs, src/linear.rs and src/beat.rs, where
+# every earlier reading on this vein came from a single file. The objective
+# does not weigh this vein.
 # 2026-09-17, kanso#1482 on the tree merged with kanso#1462. CI reads
 # 2,178,502,266 against main's 2,178,559,085, a fall of 56,819 -- 0.0026%.
 # LAYOUT: `kanso run --interp` returns from run_interpreted before codegen,
@@ -83,9 +115,25 @@
 # main's, carried forward so the gate has one value to fail against
 # rather than none; the merged sitting is CI's to take.
 #
-# 2026-09-17, kanso#1486 on the tree merged with main, CI's sitting.
-# 2,178,502,266 -> 2,178,722,705, a RISE of 220,439 (+0.0101%). LAYOUT, by
-# construction: this row anchors at the interpreter's own thread and the front
-# end is outside it, so a front-end change reaches it only by moving the binary.
-interp_instructions=2178722705
-# measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
+# 2026-09-17, kanso#1478 against main, CI's sitting. 2,178,502,266 ->
+# 2,182,337,099, a RISE of 3,834,833 (+0.176%). LAYOUT, by construction: this row
+# anchors at the interpreter's own thread, the front end is outside it, and every
+# change in this run of five is in the front end or the emitter. A move of this
+# size spread evenly over every frame is what a shifted working set looks like.
+# 2026-09-17, kanso#1478 on the tree merged with main 5e256ce0, CI's sitting.
+# 2,182,337,099 -> 2,182,307,043, a FALL of 30,056 (-0.0014%). This row is the
+# one that reaches codegen, so some of the fall is the split's own emitting and
+# some is layout; at 14 parts per million the two cannot be separated here and
+# nothing is claimed about which. A second count in the same job read
+# 2,182,307,043, so the binary is stable and the disagreement was with the
+# golden.
+#
+# 2026-09-17, merged with main 2a0cec7c. Every row below is MAIN'S, carried
+# forward. This branch measured against a base that kanso#1478 (emitted code
+# -84.25%) and kanso#1493 (start-up -22.14%) have both moved since, so the
+# numbers it took are against a tree that no longer exists -- its emit row read
+# 382,216,372 where main now reads 60,197,743. Carrying main's forward gives
+# the gate one number to fail against rather than none, and makes CI's diff
+# read exactly what this branch does to today's main. The merged sitting is
+# CI's to take.
+interp_instructions=2182307043
