@@ -53,8 +53,8 @@ fn every_emitted_line() -> Vec<(String, String)> {
     let bench = root.join("bench/runbench/main.kso");
     if bench.exists() {
         let source = std::fs::read_to_string(&bench).expect("runbench reads");
-        let program = kanso::compile_entry(&bench.to_string_lossy(), &source)
-            .expect("runbench compiles");
+        let program =
+            kanso::compile_entry(&bench.to_string_lossy(), &source).expect("runbench compiles");
         let ir = emit_ir(&program, ClosureConvention::Absent).expect("runbench lowers");
         out.push(("bench/runbench".to_string(), ir));
     }
@@ -63,10 +63,7 @@ fn every_emitted_line() -> Vec<(String, String)> {
     // never all negatives: a list literal lowers to `alloca [N x %KValue]`.
     out.push((
         "a list literal".to_string(),
-        ir_for(
-            "slots.kso",
-            "pub play =\n  xs = [1 2 3]\n  ys = [xs xs]\n  print (length ys)\n",
-        ),
+        ir_for("slots.kso", "pub play =\n  xs = [1 2 3]\n  ys = [xs xs]\n  print (length ys)\n"),
     ));
 
     out

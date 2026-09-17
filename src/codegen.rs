@@ -1715,7 +1715,6 @@ pub fn is_a_stack_slot(text: &str) -> bool {
     }
 }
 
-
 impl FnEmit {
     fn new() -> Self {
         FnEmit {
