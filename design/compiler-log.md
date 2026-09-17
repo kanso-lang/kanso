@@ -6026,8 +6026,41 @@ constant, and the qualification is the cheap part applied after.
   and it subsumes the `declare_lines` item named on kanso#1480's start-up
   golden (1,019,913 on the branches that have it). It wants the index work in
   flight to land first, since it replaces the thing those branches build.
+### The cheap version of that was built and measured, and it does not pay
+
+Before proposing the expensive shape, the cheap one was tried. `load_dependencies`
+threads a `visited` set through the nested compiles and that set is a cycle
+detector rather than a cache — it removes each path when the module finishes —
+so a module two importers both want is compiled twice. That is the ordinary
+shape rather than a corner: `bench/compile_corpus` imports `std/text` and also
+`std/json`, and `std/json` imports `std/text`. `KANSO_PHASES=1` printed
+`load std/text` twice for it.
+
+A per-process memo of the embedded modules, handing each importer a clone,
+takes it to one. Measured on this box against `origin/main`, distinct binaries,
+the gate's own box:
+
+    compile_instructions    36,330,494 -> 35,838,107    -492,387   -1.355%
+    front_end_rounds                47 ->         43          -4
+    compile_allocs              27,397 ->     29,637      +2,240   +8.18%
+    compile_peak_bytes         787,956 ->  1,093,270    +305,314  +38.75%
+
+**Welfare falls 0.75 under the model on main and 0.10 under the split.** Both
+decline it, so it is declined; the entry is here so the next reader does not
+spend the afternoon again.
+
+The memory is not an implementation slip. `qualify` renames a compiled module
+into the importer's namespace IN PLACE, so a shared module has to be handed
+out as a copy, and the memo's own copy is one more than the compile ever held.
+Three copies where there were two, per module, for the life of the process.
+
+So the win wants both halves at once: the derivation out of the process, and a
+qualification that writes into the importer's program rather than mutating a
+copy of the module's. Either alone costs what it saves.
+
 - **OPEN, and the largest number in this entry** the standard library is
   re-derived from a compiler constant on every process: 24,886,969 of a
   36,331,296-instruction compile. What a build-time derivation has to carry,
   and whether a module's compiled form can be serialised at all, is not
-  answered here. The measurement is, and the seam is the qualification step.
+  answered here. The measurement is, the seam is the qualification step, and
+  the paragraph above says what a half-measure costs.
