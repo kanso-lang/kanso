@@ -1,0 +1,26 @@
+# A literal index into a list whose length the compiler knows cannot miss, so
+# the read is the element rather than an option over it, and `taken` receives
+# it without a `none` arm. Indices run from 1, so 1 through 3 are the whole of
+# a three-element list.
+#
+# The discharge is a bound the checker settles, and what it does NOT settle is
+# half of what this pins: an index past the end, an index at 0, and an index
+# the compiler cannot read off the source all stay options and go to `maybe`.
+# Without those three the fixture would pass on a compiler that discharged
+# every index read, which is the wrong rule and a quiet one.
+fn taken v
+  "{v}"
+
+fn maybe none
+  "<none>"
+
+fn maybe v
+  "{v}"
+
+pub play =
+  xs = [10 20 30]
+  where = 2
+  print "in range {taken xs[1]} {taken xs[3]} {taken [7 8][2]}"
+  print "past the end {maybe xs[4]} {maybe xs[900]}"
+  print "at zero {maybe xs[0]}"
+  print "not a literal {maybe xs[where]}"
