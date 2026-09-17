@@ -7007,7 +7007,7 @@ alias and the field of a born node stay built and are not part of the row.
   file's own test at line 70 refutes by name. A stale comment rather than a
   behavior, and cloud's file to fix.
 
-## 2026-09-17 — two builds of one source, and six instructions between them
+## 2026-09-17 — one source, two binaries, six instructions
 
 Found by kanso#1499 going red on a diff that changes `STATUS.md` and
 `design/compiler-log.md` and nothing else.
@@ -7018,62 +7018,67 @@ interp_instructions counted 2178502272 against 2178502266
 interp_again row=2178502272 (the first reading was 2178502272)
 ```
 
-Six instructions out of 2,178,502,266, and the gate's own second reading in
-the same run agrees with its first, so the reading is stable for the binary
-it measured.
+Six instructions out of 2,178,502,266, and the gate's second reading in the
+same run agrees with its first, so the reading is stable for the binary it
+measured.
 
-**The first reading of this was wrong and had reached three surfaces.** It
-said the host moved the count, on the strength of main's run passing the same
-step where kanso#1499's failed. Reading the two job logs side by side instead
-of stopping at their conclusions says otherwise, and the line that says it is
-one the gate prints on every run for exactly this purpose:
+**The first version of this entry said the host moved the count**, on the
+strength of main's job passing the same step where kanso#1499's failed. The
+gate prints a line on every run that settles it better than a pair of
+conclusions does:
 
 ```
 main   interp_binary sha256=81c947470e0ca0149ba2dfc399b50ca57e4b6eca6bb304ea312c62913a0a493c
 #1499  interp_binary sha256=59a47a9cbfb405f31960145b80b0d4b0ed19980fd5c688fcdfe580c5688d063b
 ```
 
-**Two different binaries.** `.text` 2,797,410, `.data` 12,672 and `.bss`
-29,912 on both, `cpu family 0x19 model 0x1` on both, and the gate's host line
-reads `glibc=2.39-0ubuntu8.9 rustc=1.98.1` for both. The sha differs anyway.
+**Two binaries.** `.text` 2,797,410, `.data` 12,672 and `.bss` 29,912 on
+both; `cpu family 0x19 model 0x1` on both; `glibc=2.39-0ubuntu8.9
+rustc=1.98.1` on both. The sha differs anyway.
 
-**And the source that produced them is identical.** kanso#1499 changes two
-files, both markdown. Nothing markdown reaches the binary: every
-`include_str!` in `src/` is a `.kso` under `lib/` or `hako/`, or `runtime.c`.
-There is no `build.rs`, and no `env!` or `option_env!` in `src/` embeds a
-commit or a time. So `cargo build --release` of one source tree on one
-toolchain produced two binaries, and six instructions of the interpreted run
-followed the difference.
+**The Rust source is identical**, ruled out by enumeration rather than by
+reading the diff. kanso#1499 changes two files, both markdown. Every
+`include_str!` in `src/` is a `.kso` under `lib/` or `hako/`, or `runtime.c`,
+so nothing markdown reaches the binary. `Cargo.lock` is tracked, so the
+dependency versions are pinned. There is no `build.rs`, and no `env!` or
+`option_env!` in `src/` embeds a commit or a time.
 
-That is a different defect from the one the first reading named, and a more
-useful one. The host was never the variable; the artifact was.
+**And the toolchain is not gratuitously nondeterministic.** On this
+container, `cargo build --release`, then `touch src/main.rs src/lib.rs`, then
+`cargo build --release` again, produced a byte-identical binary. That bounds
+only this box: its rustc is 1.94.1 against CI's 1.98.1, and its `.text` reads
+2,832,338 against CI's 2,797,410, so the two are different artifacts. What it
+rules out is the lazy answer that a release build here is simply not
+repeatable.
 
-**The mechanism is open and this entry does not guess it.** What is
-established is the list above. What would settle it is diffing the two
-binaries' symbol tables, which the job already uploads enough to do — both
-runs attach a `compile-profiles` artifact — and the profiles carry per-symbol
-counts, so the six can be attributed to a function before anything is
-changed.
+**So what differs is open, and this entry does not guess it.** What is
+established is the list above: same source, same lock, same rustc and glibc
+strings, same three section sizes, different binary. One thing worth saying
+about the instrument while the question is open — the gate prints `.text`,
+`.data` and `.bss` and does not print `.rodata`, so a difference living there
+is invisible to the line that exists to catch this. `size --format=sysv` on
+the two artifacts would say in one command, and both jobs already upload a
+`compile-profiles` artifact carrying per-symbol counts, so the six can be
+attributed to a function before anything is changed.
 
 **Why it outranks the one red round.** `interp_instructions` is one of the
 ten counters the meta welfare weighs, and it landed the same day in
-kanso#1491. If the release build is not reproducible then every exact
-instruction pin in the tree is a layout vein, which CLAUDE.md already says of
-`compile_instructions` in those words, with seven recorded layout-only moves
-behind it. Here that property has reached a counter the objective scores, and
-the failures land on whoever opened a pull request rather than on whoever
-owns the counter. This one surfaced on a documentation diff.
+kanso#1491. A counter read off an artifact that moves for reasons nobody has
+named fails unrelated pull requests, and it fails them on whoever opened
+them rather than on whoever owns the counter. This one surfaced on a
+documentation diff.
 
-Clay's 2026-09-15 ruling is the one that governs, and its first road applies
-without an argument: put the thing into a persistent known initial state.
-A reproducible release build is that road for this vein. If it turns out not
-to be reachable, the second question — whether an exact pin is the right
-instrument for a counter whose artifact moves — is his rather than anyone's
-to assume, and this entry does not assume it.
+Clay's 2026-09-15 ruling governs and its first road applies: put the thing
+into a persistent known initial state. Here the thing is the artifact, and
+the road is a build that is byte-identical from one source on the runners
+that measure it. If that turns out not to be reachable, the question that
+follows — whether an exact pin is the right instrument for a counter whose
+artifact moves — is his, and this entry does not answer it in advance.
 
-- **DONE** the divergence isolated to the binary rather than the host, with
-  the source ruled out by enumeration rather than by inspection of the diff.
-- **OPEN** which part of the build is not reproducible. The artifacts to
-  answer it are already uploaded by both jobs.
+- **DONE** the divergence located in the binary rather than the box, with the
+  source, the lock and same-machine build determinism each ruled out
+  separately.
+- **OPEN** what differs between the two artifacts. `.rodata` is the section
+  the gate does not print, and is where to look first.
 - **OPEN** whether the other nine weighted counters have the same exposure.
   They read the same binary, so the prior is that they do; nobody has looked.

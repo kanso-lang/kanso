@@ -189,7 +189,7 @@ data-sized list; if it does not, a ledger entry stating what the gavel's
 purpose needs. Either way the golden's header stops claiming four shapes
 while the checker admits two.
 
-### The release build is not reproducible, and a welfare counter reads it (2026-09-15)
+### A welfare counter reads an artifact that moves (2026-09-15)
 
 Clay's words, on the compile row's `/proc/self/maps` parse: "you want to set
 up the run so that any external State like this is normalized. you clear it
@@ -198,39 +198,38 @@ a persistent known initial state." Ironclad, and recorded in CLAUDE.md as
 superseding the kanso#1234 argument rather than reopening it.
 
 `interp_instructions` landed a day later in kanso#1491 and does not satisfy
-it. It reads 2,178,502,266 on one CI job and 2,178,502,272 on another, six
-instructions apart, each stable across the gate's own second reading.
+it. Two CI jobs read 2,178,502,266 and 2,178,502,272, six instructions apart,
+each stable across the gate's own second reading.
 
-The cause is the binary rather than the box. The gate prints
-`interp_binary sha256=` on every run for this purpose, and the two jobs
-carry `81c947470e0c…` and `59a47a9cbfb4…`. `.text` 2,797,410, `.data` 12,672,
-`.bss` 29,912 and `cpu family 0x19 model 0x1` are the same on both, as are
-`glibc=2.39-0ubuntu8.9` and `rustc=1.98.1`.
+The difference is the binary rather than the box. The gate prints
+`interp_binary sha256=` on every run for this purpose, and the two jobs carry
+`81c947470e0c…` and `59a47a9cbfb4…`. `.text` 2,797,410, `.data` 12,672,
+`.bss` 29,912, `cpu family 0x19 model 0x1`, `glibc=2.39-0ubuntu8.9` and
+`rustc=1.98.1` are identical on both.
 
-The source that produced them is identical. The diff between the two trees is
-two markdown files, and nothing markdown reaches the binary: every
-`include_str!` in `src/` is a `.kso` under `lib/` or `hako/`, or `runtime.c`.
-There is no `build.rs`, and no `env!` or `option_env!` in `src/` embeds a
-commit or a time.
+Three things are ruled out separately. The Rust source is identical: the two
+changed files are markdown, and every `include_str!` in `src/` is a `.kso`
+under `lib/` or `hako/`, or `runtime.c`. The dependency versions are pinned,
+since `Cargo.lock` is tracked. And a release build repeats on one machine —
+build, `touch src/main.rs src/lib.rs`, build again gives a byte-identical
+binary — which bounds only that container, whose rustc and `.text` both
+differ from CI's, but does rule out a toolchain that simply does not repeat.
 
-So `cargo build --release` of one source tree on one toolchain produced two
-binaries. If that holds generally then every exact instruction pin in the
-tree is a layout vein — which CLAUDE.md already says of `compile_instructions`
-in those words, with seven recorded layout-only moves behind it — and here
-the property has reached a counter the objective scores. It fails unrelated
-pull requests, on whoever opened them.
+What differs is open. Worth knowing while it is: the gate prints `.text`,
+`.data` and `.bss` and does not print `.rodata`, so a difference living there
+is invisible to the line written to catch exactly this.
 
-Owes: the isolation first — diff the two binaries' symbol tables and
-attribute the six to a function. Both jobs already upload a
-`compile-profiles` artifact with per-symbol counts, so nothing needs
-re-running to start. Then the ruling's first road, a release build that is
-byte-identical from one source, with the golden re-measured and the log
-saying what was not reproducible. And a sweep of the other nine weighted
-counters, which read the same binary and so carry the same prior.
+Owes: the isolation first, and nothing needs re-running to start it — `size
+--format=sysv` on the two artifacts, and the per-symbol counts in the
+`compile-profiles` artifact both jobs already upload, which attribute the six
+to a function. Then the ruling's first road, a build byte-identical from one
+source on the runners that measure it, with the golden re-measured and the
+log saying what was moving. And a sweep of the other nine weighted counters,
+which read the same binary and so carry the same prior.
 
-If a reproducible release build turns out not to be reachable, the question
-that follows is whether an exact pin is the right instrument for a counter
-whose artifact moves. That one is Clay's, and this row does not decide it in
+If a byte-identical build turns out not to be reachable, the question that
+follows is whether an exact pin is the right instrument for a counter whose
+artifact moves. That one is Clay's, and this row does not decide it in
 advance.
 
 ## In flight
