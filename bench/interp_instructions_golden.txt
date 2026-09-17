@@ -73,5 +73,35 @@
 # prune_unnamed closure worth 284 instructions in the whole run; the other
 # 237,550 are the compiler's bytes moving under an interpreter that never
 # enters them. The objective does not weigh this vein.
-interp_instructions=2178796919
+#
+# 2026-09-17, kanso#1478 as the one tip, on main 298636b7. CI reads
+# 2,182,341,803 against main's 2,178,559,085, a RISE of 3,782,718 -- 0.174%.
+# LAYOUT, and this one was measured rather than assumed, because 3.78 million
+# is sixteen times the largest move this vein had shown before.
+# #
+# THE ROW EXCLUDES THE FRONT END. The gate anchors at
+# `run_interpreted_on_stack`, the interpreter's own thread, so the 46.3
+# million `kanso::main` spends parsing and checking this corpus is not in the
+# number at all. A front-end change cannot move this row by working; it can
+# only move it by moving the binary.
+# #
+# BOTH SIDES REPRODUCED on the container under rustc 1.98.1: main
+# 2,178,694,946 and this head 2,182,308,031, a local delta of 3,613,085
+# against CI's 3,782,718. The delta is spread evenly over every frame of the
+# interpreter rather than sitting in one:
+# #
+#       eval           18,445,521,672 -> 18,479,680,323   +0.185%
+#       call           11,157,959,351 -> 11,181,808,771   +0.214%
+#       call_named     11,127,354,432 -> 11,151,189,142   +0.214%
+#       eval_tail       9,866,786,211 ->  9,888,320,078   +0.218%
+#       dispatch       10,516,297,101 -> 10,535,892,811   +0.186%
+#       run_main        2,178,075,324 ->  2,181,688,409   +0.166%
+# #
+# A uniform fifth of a per cent across the whole interpreter is what a moved
+# working set looks like; work concentrates in one frame and this does not.
+# The size of it is the size of the perturbation: this head carries five
+# source changes across src/codegen.rs, src/linear.rs and src/beat.rs, where
+# every earlier reading on this vein came from a single file. The objective
+# does not weigh this vein.
+interp_instructions=2182341803
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

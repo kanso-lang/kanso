@@ -196,4 +196,20 @@
 # base, so the merged tree is reading neither number. The value below is
 # main's, carried forward so the gate has one value to fail against
 # rather than none; the merged sitting is CI's to take.
-startup_instructions=5077523
+#
+# 2026-09-17, kanso#1478 as the one tip, on main 298636b7. CI reads 5,082,497
+# against main's 4,838,372, a RISE of 244,125 -- 5.05%.
+# #
+# IT DECOMPOSES, because kanso#1468 took its own sitting on this row two hours
+# earlier and read 5,077,523. So kanso#1468 is 239,151 of this and the four
+# branches above it are 4,974 between them. The 239,151 is measured and
+# attributed in that branch's own note: `declares_context_calls` builds its
+# set once per process out of DECLARES's 1,187 lines, 599,739 instructions
+# inclusive, against about 360,000 of per-line searching removed.
+# #
+# The shape is the same for all five: a fixed index built once per program,
+# against a saving proportional to what the program has. `kanso play` on a
+# one-line program is the corpus with nothing to spread it over, which is
+# what this vein is for. kanso#1484, stacked on kanso#1468, writes the
+# DECLARES set down as a sorted constant and takes the larger part back.
+startup_instructions=5082497
