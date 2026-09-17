@@ -30,4 +30,6 @@
 # the gate refuses with the number it measured printed above the refusal. The
 # sitting that follows writes the value and the measured-on line under it.
 #
-# measured-on (CI writes this beside the first value)
+# The measured-on line is written beside the first value, by the sitting that
+# produces it. There is deliberately none here: a line shaped like neither a
+# field list nor prose is the trap measured_on.sh's own header describes.
