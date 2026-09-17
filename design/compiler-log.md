@@ -3857,3 +3857,13 @@ hint and 133,429,679 without it, and three runs without it agree function by
 function. `tests/the_allocator_does_not_guess_at_addresses.rs` reads
 mimalloc's source and goes red if a crate bump renames the switch or a config
 edit drops it.
+
+**Round two: the three rows read thirteen lower, and always did.** CI on the
+no-hint binary reads `compile_instructions` 36,878,537, `entry_instructions`
+131,884,271 and `library_instructions` 132,025,154 — each thirteen below its
+golden. The change did not move them: the run before this one, with the hint
+still on, read 36,878,537 and 132,025,154 for two of the three. The goldens
+were written from a sitting that drew an unlucky address and have been
+thirteen high since. The entry row is where it shows plainly: with the hint on
+it read 131,884,793 and then 131,884,271 inside one job, and with the hint off
+it reads 131,884,271 and nothing else.

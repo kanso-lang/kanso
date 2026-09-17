@@ -560,4 +560,14 @@
 # runs and round five read another, so the row is stable per binary and moves
 # between them; 13 in 132 million is 1.0e-7, against the 508 the same shape
 # cost under glibc, which is the one thing here that is an improvement.
-library_instructions=132025167
+library_instructions=132025154
+
+# 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
+# the allocator stops picking a random base address for its OS allocations.
+# The row did not move for that -- the same figure came back on the run before
+# this one, with the hint still on, and on the run before that. The golden was
+# written from a sitting that drew an unlucky address and has been thirteen
+# high ever since; this is the first reading taken where the draw cannot
+# happen. The entry row is the one that shows it plainly: with the hint on it
+# read 131,884,793 and then 131,884,271 in one job, and with the hint off it
+# reads 131,884,271 and nothing else.
