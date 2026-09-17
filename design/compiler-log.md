@@ -3998,6 +3998,20 @@ moving. Same compiler, same corpus, same goldens, measured twice. This is the
 experiment the re-run above was trying to manufacture, and it arrived on its
 own.
 
+**Two re-runs of one head agreed, which the coin-flip reading does not
+predict.** OPEN. kanso#1462's failed jobs were re-run on `b8327112` and read
+the same three numbers again, +13 from its own earlier green sitting of
+`fc3305f8`. Nothing compiled into the binary differs between those two trees:
+there is no build.rs, and every `include_str!` in src/lib.rs names a file
+under lib/. So the value is a function of something that holds across two
+separately-allocated runners of one head and changes between two heads whose
+compiled input is identical. Two runs agreeing is a one-in-two event and
+proves nothing on its own, but it is enough to stop calling this a per-run
+flip until a sitting says otherwise. The host facts now printed beside the
+floor -- the kernel release and version, which no job has ever printed --
+are there because a per-host term is what this shape looks like and the CPU
+model has already been refuted.
+
 **Where it can be.** DONE. The three profiles the job already writes name the
 candidates by themselves: 588 frames carry the same self cost across all three
 workloads, 556,052 instructions in all. Restricted to frames the row can see —

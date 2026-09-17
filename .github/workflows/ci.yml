@@ -420,6 +420,14 @@ jobs:
             [ -f "$p" ] || { echo "no $p, so the floor cannot be read"; exit 0; }
           done
           sh scripts/gates/per_process_floor.sh "$@"
+          # The host facts the sitting was taken on, beside the floor, because
+          # the floor is only half an answer without them. The CPU model was
+          # refuted as the variable; the kernel has never been printed, and two
+          # re-runs of one head agreeing while another head read thirteen away
+          # is what a per-HOST term looks like rather than a per-run one.
+          echo "kernel=$(uname -r)"
+          echo "kernel_version=$(uname -v)"
+          awk '/^(cpu family|model|stepping|microcode)\t/ { print; n++ } n >= 4 { exit }' /proc/cpuinfo || true
       - name: compile memory
         id: compile_memory
         if: always()
