@@ -4493,3 +4493,48 @@ are ten map lookups of which the largest is 0.94%. The structural lever is
 interning names to integers so the maps stop comparing strings at all, which
 would reach that 3.5% and part of the 2.6% in rehashing beside it. That is a
 refactor across check.rs, infer.rs and codegen.rs, and it is not costed yet.
+
+## 2026-09-17 — a gate reached its verdict and buried it past the cap
+
+kanso#1463 gave the three compile gates a second reading: when a row parts
+from its golden, the same binary is counted again in the same job, and the
+gate says whether it read the same number (the change moved the row) or a
+different one (a reproduction failure, which halts the vein). That is the
+right machinery and it worked. Nobody could read what it said.
+
+GitHub keeps **fifty annotations per check run**. Each failing row emits about
+a dozen `::error::` lines, and the cross-run thirteen parts all three compile
+rows at once — so the job carries forty-odd lines of explanation and the two
+lines naming the verdict fall off the end. kanso#1477 is the cleanest case:
+its whole diff is one golden fixture and a log entry, it cannot reach the
+compiler at all, its three rows each read −13, and the job could be read as
+far as `a move of -13` and no further.
+
+The verdict now comes after the three lines naming the row and the size of the
+move, and before the explanation of the two cases. `<row>_again` also goes out
+as a `::notice::`; it was a `printf` to stdout and an append to the artifact,
+and both of those have to be fetched, where an annotation comes back over the
+ordinary API. `codegen_instructions.sh` took the same pair of fixes on
+claude/codegen-rows earlier today, for the same reason found the same way.
+
+`tests/a_gate_says_its_verdict_before_it_explains.rs` pins both, reading the
+four gates off disk. Watched red on each half: moving the verdict block back
+to the end of `entry_instructions.sh` names it at byte 9781 against an
+explanation at 7209, and deleting the notice from `library_instructions.sh`
+names that file.
+
+**The thirteen itself, four pairs deep.** Every pair is two sittings of one
+binary with the floor identical to the digit and the rows exactly thirteen
+apart:
+
+    kanso#1469   558610/605 twice        rows 13 apart
+    kanso#1465   558232/604 twice        rows 13 apart
+    kanso#1468   558726/605 twice        rows 13 apart
+    kanso#1474   558610 -> 558620, +10   rows -13
+
+and kanso#1477 adds the cleanest demonstration that it is not any diff: a
+golden fixture and a log entry moved all three rows by thirteen.
+
+- **DONE** the verdict is inside the cap.
+- **OPEN** what the verdict says. The gates are armed on every branch carrying
+  main; the next parting row answers from inside its own job.

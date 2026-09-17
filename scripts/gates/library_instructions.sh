@@ -153,10 +153,30 @@ printf 'library_again row=%s (the first reading was %s)\n' "$again" "$got"
 # hundred. A reader who has to fetch the whole job to learn whether the binary
 # was stable is a reader who will not bother.
 printf 'library_again=%s\n' "$again" >> library_ir_got.txt
+# And as a notice, so it survives as an ANNOTATION. The artifact and
+# the job log both need fetching; annotations come back over the
+# ordinary API, which is the only path a reader is guaranteed.
+echo "::notice::library_again=${again} first_reading=${got}"
 
 echo "::error::library_instructions counted $got against $want in $golden,"
 echo "::error::a move of $((got - want)). Exactly one of two things is true,"
 echo "::error::and they are settled differently."
+echo "::error::"
+# THE VERDICT GOES FIRST, and that is not style. GitHub keeps at most
+# fifty annotations per check run, and each failing row here emits a
+# dozen explanatory lines. When all three compile rows part at once --
+# which is what the cross-run thirteen does, every time -- the two
+# lines below fell past the cap, and the job could be read as far as
+# "a move of -13" and no further. A gate that had already settled the
+# question reported nothing. The explanation is worth having and it is
+# worth nothing ahead of the answer.
+if [ "$again" = "$got" ]; then
+  echo "::error::VERDICT (1): this binary is stable -- a second count in"
+  echo "::error::this same job read $again, the same number."
+else
+  echo "::error::VERDICT (2): REPRODUCTION FAILURE -- this binary counted"
+  echo "::error::$got and then $again in one job. This vein is halted."
+fi
 echo "::error::"
 echo "::error::(1) THE CHANGE UNDER TEST MOVED IT. Ordinary ratchet: regenerate"
 echo "::error::    $golden, and say in design/compiler-log.md which way it went"
