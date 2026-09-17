@@ -6202,3 +6202,39 @@ passes here had the answer one paragraph away.
 - **OPEN** what the probe did not reach and the row cannot retire without: the
   710 `xs[i]!` sites, `!` names in lib answering a box, and the two cost levers
   kanso#1477 reports built. Their own pass.
+
+## 2026-09-17 — kanso#1468's CI sitting: four rows of layout and one that is the index
+
+CI has measured this branch against main:
+
+    compile_instructions    35,968,171 ->    35,966,422      -1,749  -0.0049%
+    entry_instructions     128,213,972 ->   128,209,791      -4,181  -0.0033%
+    library_instructions   128,348,205 ->   128,344,827      -3,378  -0.0026%
+    interp_instructions  2,178,502,266 -> 2,178,711,730    +209,464  +0.0096%
+    startup_instructions     4,837,381 ->     5,076,598    +239,217   +4.945%
+
+**`interp_instructions` worsened and lands at 2,178,711,730.** It is layout by
+construction: the row anchors at the interpreter's own thread, so the front end
+is outside the count and an emitter change reaches it only by moving the bytes
+of the binary. The three check rows moved the other way by the same order of
+magnitude, and `kanso check` stops before codegen, so none of the four can be
+this branch's code running.
+
+**`startup_instructions` worsened and lands at 5,076,598.** That one IS the
+branch, and it is worth stating plainly rather than apologising for. The
+emitter's two whole-body scans are an index built once per process now, and
+this workload is a program holding one `print`: there is nothing to amortise
+the construction over, so on this corpus the construction is nearly the whole
+reading. Profiled, the arriving frames are the `OnceLock<Set<&str>>` behind
+`declares_context_calls` at 599,550 and `called_symbols` at 310,752, against
+departing per-name scans worth 362,928 + 274,780 + 107,365 + 107,269 + 41,018
++ 19,651.
+
+The same change takes 69.64% off `kanso build bench/runbench`. A one-line
+program is the one workload in the corpus where an index cannot pay for
+itself, and measuring what is left when the program is too small to cost
+anything is what the start-up row is for.
+
+Welfare holds at its floor.
+
+- **DONE** five rows, CI's, with the fifth attributed rather than assumed.
