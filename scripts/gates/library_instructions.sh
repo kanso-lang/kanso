@@ -43,6 +43,14 @@ sh scripts/gates/library_box.sh
 box=/tmp/kanso-compile-ir
 
 printf 'library_binary sha256=%s\n' "$(sha256sum "$box/kanso" | cut -d' ' -f1)"
+# AND AS A NOTICE, because this is the reading that decides the open
+# question about this row. Eight runs of ONE binary in one container,
+# with this gate's own box, command and tunables, read 36,384,683 every
+# time -- so the cross-run thirteen is not two runs of one binary. The
+# remaining candidate is two binaries, which is exactly what the 508
+# above turned out to be, and the sha is what tells them apart. It was
+# printed to stdout, and stdout reaches only the job log.
+echo "::notice::library_binary sha256=$(sha256sum "$box/kanso" | cut -d' ' -f1)"
 size --format=sysv "$box/kanso" \
   | awk '/^\.(text|data|bss)[ \t]/ { printf "library_binary %s=%s\n", $1, $2 }'
 # AND THE SAME THREE AS A NOTICE. kanso#1479 made the sha a notice for a
@@ -91,8 +99,51 @@ fi
 echo "=== the profile's top frames, inclusive"
 callgrind_annotate --inclusive=yes --threshold=99 /tmp/cg.library 2>&1 | head -30
 
+# THE RESULT LINE IS NOT COMPILER WORK, AND THE FRAME UNDER IT IS WHERE THE
+# THIRTEEN LIVED.
+#
+# `kanso check` prints one line when it finishes, and `kanso::main` inclusive
+# counts it. Under it LineWriter runs `core::slice::memchr::memrchr` over the
+# formatted bytes to find the last newline, and that frame's cost moves with
+# the binary's layout. Two CI builds of ONE source -- kanso#1477 at 716fcfc4
+# and at 8e4e5665, whose commit touched only goldens, the log and a page --
+# read 35,965,150 and 35,965,137 on this row. Within a build the reading is
+# exact; across builds it drew.
+#
+# Neither way of not printing helps, because both change the process the gate
+# measures. On one box, `kanso check compile_corpus`:
+#
+#   env -i, two variables, printing      36,817,649
+#   env -i, three variables, printing    36,829,255   +11,606
+#   env -i, three variables, quiet       36,828,139    -1,116
+#   two variables, printing              36,817,388
+#   two variables, --quiet               36,818,319      +931
+#
+# An environment variable costs ten times what the quiet saves (the compiler
+# asks getenv about seven thousand times and each ask walks the block), and an
+# argv entry costs about twice it. Both move the initial process layout, which
+# is the same class of thing the thirteen is.
+#
+# So the term is EXCLUDED instead, per the 2026-09-15 rule: what cannot be
+# normalized is left out and the exclusion is named in the golden's header.
+# `std::io::stdio::_print` is reached once per run, from `kanso::driven`, and
+# its whole subtree is the line -- 748 instructions on the profile this was
+# read from, with `memrchr`'s 133 inside it. Nothing else in a `kanso check`
+# prints to stdout; diagnostics go to stderr.
+printed_cost() {
+  callgrind_annotate --inclusive=yes --threshold=100 "$1" 2>/dev/null \
+    | awk '/:std::io::stdio::_print \[/ && !seen { gsub(/,/, "", $1); print $1; seen = 1 }'
+}
 own=$(callgrind_annotate --inclusive=yes --threshold=100 /tmp/cg.library 2>/dev/null \
       | awk '/kanso::main/ && !seen { gsub(/,/, "", $1); print $1; seen = 1 }')
+printed=$(printed_cost /tmp/cg.library)
+case "$printed" in '' | *[!0-9]*) printed=0 ;; esac
+own=$((own - printed))
+# WHAT WAS TAKEN OFF, where a reader can see it. If this row ever drifts
+# again, the first question is whether the printed line's own cost moved --
+# and that question is unanswerable from a number that only ever appears
+# subtracted.
+echo "::notice::library_printed=${printed}"
 case "$own" in
   '' | *[!0-9]*)
     echo "::error::the profile carries no kanso::main frame, so the compiler's"
@@ -159,6 +210,9 @@ fi
 )
 again=$(callgrind_annotate --inclusive=yes --threshold=100 /tmp/cg.library2 2>/dev/null \
         | awk '/kanso::main/ && !seen { gsub(/,/, "", $1); print $1; seen = 1 }')
+again_printed=$(printed_cost /tmp/cg.library2)
+case "$again_printed" in '' | *[!0-9]*) again_printed=0 ;; esac
+again=$((again - again_printed))
 printf 'library_again row=%s (the first reading was %s)\n' "$again" "$got"
 # AND INTO THE ARTIFACT, because the job log is the expensive place to read it
 # from. The `*_got.txt` files are catted in one step at the end of the job,
@@ -166,10 +220,30 @@ printf 'library_again row=%s (the first reading was %s)\n' "$again" "$got"
 # hundred. A reader who has to fetch the whole job to learn whether the binary
 # was stable is a reader who will not bother.
 printf 'library_again=%s\n' "$again" >> library_ir_got.txt
+# And as a notice, so it survives as an ANNOTATION. The artifact and
+# the job log both need fetching; annotations come back over the
+# ordinary API, which is the only path a reader is guaranteed.
+echo "::notice::library_again=${again} first_reading=${got}"
 
 echo "::error::library_instructions counted $got against $want in $golden,"
 echo "::error::a move of $((got - want)). Exactly one of two things is true,"
 echo "::error::and they are settled differently."
+echo "::error::"
+# THE VERDICT GOES FIRST, and that is not style. GitHub keeps at most
+# fifty annotations per check run, and each failing row here emits a
+# dozen explanatory lines. When all three compile rows part at once --
+# which is what the cross-run thirteen does, every time -- the two
+# lines below fell past the cap, and the job could be read as far as
+# "a move of -13" and no further. A gate that had already settled the
+# question reported nothing. The explanation is worth having and it is
+# worth nothing ahead of the answer.
+if [ "$again" = "$got" ]; then
+  echo "::error::VERDICT (1): this binary is stable -- a second count in"
+  echo "::error::this same job read $again, the same number."
+else
+  echo "::error::VERDICT (2): REPRODUCTION FAILURE -- this binary counted"
+  echo "::error::$got and then $again in one job. This vein is halted."
+fi
 echo "::error::"
 echo "::error::(1) THE CHANGE UNDER TEST MOVED IT. Ordinary ratchet: regenerate"
 echo "::error::    $golden, and say in design/compiler-log.md which way it went"

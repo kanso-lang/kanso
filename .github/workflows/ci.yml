@@ -393,6 +393,17 @@ jobs:
         if: always()
         continue-on-error: true
         run: sh scripts/gates/entry_instructions.sh
+      # And what a RUN costs before it has any work to do. The three rows
+      # around this one run `kanso check`, which stops before codegen, so this
+      # is the only one of the four that can see the backend at all. Clay's
+      # 2026-09-16 gavel made start-up a development-welfare term because
+      # `kanso test` pays it on every invocation and production never pays it
+      # once; this is the first counter that side has.
+      - name: start-up instructions
+        id: startup_ir
+        if: always()
+        continue-on-error: true
+        run: sh scripts/gates/startup_instructions.sh
       # And the THIRD compile path, which neither of the two above enters.
       # `kanso check` routes a single file by content: bare statements make it
       # an entry, definitions alone make it a library and take compile_library.
@@ -647,6 +658,7 @@ jobs:
                       "compile instructions:${{ steps.compile_ir.outcome }}" \
                       "entry instructions:${{ steps.entry_ir.outcome }}" \
                       "library instructions:${{ steps.library_ir.outcome }}" \
+                      "start-up instructions:${{ steps.startup_ir.outcome }}" \
                       "encode counters:${{ steps.encode.outcome }}" \
                       "wide counters:${{ steps.wide.outcome }}" \
                       "pending-cell counters:${{ steps.pend.outcome }}" \
