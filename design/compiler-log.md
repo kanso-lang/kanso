@@ -7496,7 +7496,7 @@ work: seventeen on 2026-08-29, nine on the five oldest dates, nine here. Two
 unbuilt rulings in thirty-five entries. The twenty-one that remain are all
 September.
 
-**Four of September's twenty-one, probed on the way past.** The 2026-09-06
+**Five of September's twenty-one, probed on the way past.** The 2026-09-06
 whole-float ruling — a float's rendering always carries a `.` or an `e`, and
 `.0` is appended where the shortest form has neither — is built:
 `a_whole_float_keeps_its_point` carries the RULED citation and its third line
@@ -7528,12 +7528,21 @@ convention: `gavel:` or `directive:` after the date. Three specs pin it,
 including the case that an entry merely MENTIONING a gavel keeps its place.
 That ruling was filed as cloud's in its own text, and cloud built it.
 
-Seventeen September entries are unread, and this entry says so rather than
+And the 2026-09-06 consolidated-run ruling is built to its own terms.
+`--counters` prints one `run_instructions` and one `run_peak_bytes` rather
+than a row per shelf, CI's `work.txt` carries `runbench` equal to the counter
+the objective reads, and the run program's header writes the mix down as the
+gavel required it to be written down — decode and encode at 34.54% and 34.43%,
+six stress shapes between 4.87% and 6.23%, with the reason for that shape
+stated. The per-phase benchmarks survive as diagnostics, which is the other
+half of the ruling.
+
+Sixteen September entries are unread, and this entry says so rather than
 counting them swept.
 
 - **DONE** August swept end to end, and the demanded-knot counter measured
   rather than read.
-- **OPEN** seventeen September entries, across 09-02, 09-03, 09-05, 09-07,
+- **OPEN** sixteen September entries, across 09-02, 09-03, 09-05, 09-07,
   09-08, 09-10, 09-15 and 09-16. Several are almost certainly built — the box
   ruling, the maps normalization and the two welfares each came OFF the list
   today — but "almost certainly" is what this sweep exists to replace.
