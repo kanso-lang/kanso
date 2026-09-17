@@ -4994,6 +4994,157 @@ another branch says nothing about this one.
 
 - **DONE** the rows are CI's and the floor is where the measurement put it.
 
+## 2026-09-17 — the verdict fell off the end of the annotation cap
+
+`codegen_instructions.sh` already counts a disagreeing row a second time and
+says which of the two cases it is: the change moved the row, or the same binary
+counted two numbers. On kanso#1470 both codegen rows and all three compile rows
+failed in one job, each printing a dozen lines of explanation, and GitHub keeps
+at most **fifty annotations per check run**. The two lines carrying the answer
+were past the cap. The job could be read as far as `a move of -6531790` and no
+further, so a gate that had already settled the question reported nothing.
+
+The verdict now goes immediately after the count and before the explanation.
+The explanation is worth having and it is worth nothing ahead of the answer.
+
+`codegen_again_<tier>` also goes out as a `::notice::`. It was a `printf`, so
+it reached the job log alone — the same trap the frame digest fell into on
+claude/self-dump the same afternoon, and the same fix. Anything a reader needs
+from a CI job has to be an annotation; stdout is for the reader who can fetch
+the log, and that is not always available.
+
+The three compile rows on this branch read −13 with no `src/` or `lib/` change
+in the diff at all:
+
+    $ git diff --name-only origin/main...origin/claude/codegen-rows
+    .github/workflows/ci.yml, CLAUDE.md, bench/codegen_corpus/**,
+    bench/codegen_instructions_*_golden.txt, scripts/**, tests/**
+
+so that one is the cross-run thirteen and not this branch's. kanso#1463 landed
+the second reading for the compile gates this morning, which is what settles it
+from inside the job; this merge brings it onto the branch.
+
+- **DONE** the verdict is readable.
+- **OPEN** what the codegen rows' 6,531,790 and 6,645,392 actually are. The
+  next sitting says it in one line.
+
+## 2026-09-17 — the verdict became readable and immediately said something wrong
+
+Putting the verdict ahead of the explanation worked: this branch's next sitting
+printed, where nothing had been readable before,
+
+    VERDICT (2): REPRODUCTION FAILURE -- this binary counted 9273818206
+    and then 1071591479 in one job. This vein is halted.
+
+    VERDICT (2): REPRODUCTION FAILURE -- this binary counted 12100862133
+    and then 7307715328 in one job. This vein is halted.
+
+**Those are not two readings of one quantity.** The dev pair is 8.6x apart and
+the release pair 1.66x. A row whose value moves by that much between two runs
+in one job is not a noisy measurement; the second run measured something else.
+
+The shape of it points one way. A build here is five processes — kanso, clang
+at two tiers, and ld — and `codegen_box.sh` already records an early attempt at
+this row that read TWO where a real build is five, with dev and release within
+0.006% of each other. 1,071,591,479 against 9,273,818,206 is about what kanso's
+own process would be without its children. The first reading counts its
+processes into `seen`; the second never counted its own, so a drop was
+invisible and read as a reproduction failure of the compiler.
+
+The two runs issue an identical command. What differs is the BOX: before the
+first, it holds a staged compiler, a staged corpus and the two warm-up builds;
+before the second, it also holds whatever the first build wrote. That is the
+2026-09-15 rule exactly — external state normalized before it is measured — and
+the second reading normalizes the command while leaving the state alone.
+
+This entry does not fix it. It makes the next sitting say which it is:
+`again_procs` and `first_procs` join the notice, so a second reading that saw
+fewer processes is visible as that rather than as a verdict about the compiler.
+Guessing the cause and patching it would be the third prediction today to go
+wrong on a profile read by inference.
+
+- **DONE** the process counts are reported.
+- **OPEN** whether the second reading loses its children, and why. One line in
+  the next sitting.
+- **NOTE** the compile rows on this same head did not part at all, so #1463's
+  own second reading is not implicated — only this gate's.
+
+## 2026-09-17 — the second reading was counting a build the first one had already done
+
+The previous entry left one line open: whether the codegen gate's second
+reading loses its children, and why. The sitting answered it in the notice it
+had just been given.
+
+```
+codegen_again_dev=1071604124     first_reading=9273832919    again_procs=5 first_procs=6
+codegen_again_release=7307726629 first_reading=12100874235   again_procs=5 first_procs=6
+```
+
+One fewer process, and the dev row down to a ninth. That is not a compiler that
+counted differently twice; it is an incremental build. `kanso build X` writes
+its output beside itself as `X`, so the first measured run leaves the box
+holding what it just produced, and the second run of the identical command
+finds most of its work done. The gate then read the gap as `VERDICT (2):
+REPRODUCTION FAILURE` and halted a vein over it.
+
+The fix is the 2026-09-15 rule applied where it was being skipped. Staging is
+now a function — `codegen_box.sh`, which opens `rm -rf "$box"`, then both tiers
+warmed in a fixed order — and it runs before EACH measured run rather than once
+at the top. Both readings start from bytes the gate chose. A disagreement after
+this is the compiler's, which is the only thing the second reading was ever for.
+
+`tests/the_second_reading_starts_where_the_first_did.rs` pins it: the staging
+call sits between the two profile prefixes, the first run is staged too, the box
+script clears rather than copies over, and both tiers are warmed on every
+staging. Watched red on each — removing the call between the readings, and
+dropping one warm-up.
+
+The other three compile gates run `kanso check`, which writes nothing, so their
+second readings were never asking a different question. The spec names this gate
+alone and says why.
+
+- **DONE** the row's second reading is a reproduction.
+- **OPEN** what the row actually reads once it is one. This host refuses the
+  golden's toolchain (glibc 2.39-0ubuntu8.7 against 8.9, clang 18 against 19),
+  so the first honest sitting of this gate is CI's.
+
+## 2026-09-17 — the warm-up filled a different temp directory from the one the measurement reads
+
+Re-staging the box was half the fix. The sitting on `84ec8001` read
+`again_procs=5 first_procs=6` again, dev 9,273,832,677 then 1,071,605,357, with
+the box rebuilt between the two readings. So the second reading was still
+finding work done, and the box was not where it was finding it.
+
+The profiles had the answer and nothing was reading it. Every callgrind file
+carries a `cmd:` line. Listed for one local first reading:
+
+```
+kanso clang:probe clang clang ld
+```
+
+Five here, six on CI, and the sixth is the one that matters:
+`cached_runtime_object` compiles `src/runtime.c` once per profile and runtime
+hash and writes the object to `std::env::temp_dir()`. That cache is not in the
+box, so `codegen_box.sh` clearing the box never touched it. The warm-ups were
+put there to fill it, and could not: they ran under the job's environment while
+the measurement runs under `env -i`, and `temp_dir()` reads TMPDIR. Two
+directories, two caches. The first MEASURED run paid for runtime.c and the
+second found it.
+
+The warm-up now runs the identical command under the identical environment,
+which is what the 2026-09-15 rule asks for and what re-staging alone did not
+reach. And `codegen_procs_<tier> first=[...] again=[...]` joins the notices, so
+a reading that loses a process names it rather than being counted.
+
+Guessing cost a round here. The first entry on this read the gap as an
+incremental build and patched the box; the profiles said runtime.c and were
+never opened. The instrument goes in with the fix for that reason.
+
+- **DONE** the warm-up and the measurement share an environment; the processes
+  are named, not counted.
+- **OPEN** what the row reads once the two agree. This host refuses the
+  golden's toolchain, so CI's is the first honest sitting.
+
 ## 2026-09-17 — the bound discharge had no golden, and it is built
 
 `STATUS.md`'s "Ruled, unbuilt" section carries the explicit box, and among what
@@ -5232,6 +5383,83 @@ frames of bucket zero, by name and cost, in one notice.
 
 - **DONE** the bucket is named, and the digest earned its place doing it.
 - **OPEN** the frame. One line in the next pair of sittings.
+
+## 2026-09-17 — the codegen row reproduces, and the last term was a pipe
+
+The warm-up fix landed and the sitting said so. `codegen_procs` now prints the
+same five processes for both readings — `kanso clang:probe clang clang ld` —
+where the first reading used to see six, and the dev row went from
+`9,273,832,677 then 1,071,605,357` to `1,071,604,729 then 1,071,604,609`. From
+a ninefold gap to 120 instructions in 1.07 billion.
+
+120 is not zero, and the vein is compared exactly, so the gate still halted.
+Two things were left and only one of them was what I expected.
+
+**The pid, which was real and was not it.** Five temp paths in `src/main.rs`
+interpolate `std::process::id()`, and a pid is one digit to seven. A path's
+LENGTH is a term in what a process costs — the bytes are copied, walked and
+handed to `open` — so two runs wrote paths of different lengths and counted
+different instructions for identical work. `pid_tag()` pads to seven, which
+covers every pid under the default `pid_max` of 4,194,304 and keeps every one
+of them distinct. Two specs: the width, beside the function, and that every
+site goes through it, so a path added later cannot put the variance back.
+
+It did not fix the row. Two passes with the padding read 1,016,046,470 and
+1,016,048,745 — 2,275 apart, further than before rather than closer.
+
+**What it actually was.** Diffing the two passes frame by frame: EIGHT frames of
+ten thousand six hundred and forty-two differ, and together they are the whole
+of the 2,275.
+
+```
+  +903   FileDesc::read_to_end
+  +591   default_read_to_end::small_probe_read
+  +253   process::unix::common::read_output
+  +220   read
+  +176   __memcpy_avx_unaligned_erms
+   +88   poll
+   +44   __errno_location
+```
+
+Every one of them is `Command::output()` draining a child's pipes, and how many
+`poll` and `read` calls that takes depends on when the child's bytes arrive.
+The only caller was `preserve_none_probe`, which reads `status.success()` and
+throws the output away. With the child's streams sent to null and `status()` in
+place of `output()` there is no pipe and no loop.
+
+```
+before   1,016,046,470   1,016,048,745                                   2,275 apart
+after    1,016,035,480 x 5                                                    exact
+```
+
+Five passes after the change, each re-staging the box and warming both tiers
+first, and every one reads the same digits. The row falls about eleven thousand
+besides, which is the pipes' own cost leaving the count.
+
+`src/main.rs` now holds no `Command::output()` at all.
+`tests/the_compiler_never_drains_a_childs_pipes.rs` pins that and the probe's
+null streams; `src/eval.rs` keeps its `output()` and must, because `os/run`
+hands a kanso program the child's stdout and stderr, and no compile row runs a
+kanso program's `os/run`.
+
+**Guessing cost a round again, and the instrument paid for itself again.** The
+pid was a good hypothesis, it was measured, and it was wrong about this row.
+What settled it was the same move that named the thirteen: diff the frames and
+read what differs.
+
+
+**And the queue was mostly reading commits nobody would look at.** Counted the
+same afternoon: twelve pull requests open, twelve latest runs, all `queued` —
+and ELEVEN of them on a head the branch had already moved past, three of them
+on one branch at once. Every push had left its predecessor running. The eleven
+were cancelled by hand, and `ci.yml` grows a `concurrency` guard so a newer head
+cancels the older one, keyed off the pull request number and deliberately NOT
+applied to `main`: a push there writes the perf history row the trend chart
+reads, so it is the record of that commit rather than a draft of the branch.
+
+- **DONE** the codegen row reproduces exactly on this box, five times.
+- **OPEN** the golden. This host refuses the recorded toolchain, so the values
+  are CI's to take on the first green sitting.
 
 ## 2026-09-17 — the stack-slot check reads the first space, and the lever was a tenth the size advertised
 
@@ -5695,6 +5923,195 @@ this is a change in what is counted rather than a gain to bank.
 - **DONE** the three rows carry the excluded sitting; one page span follows.
 - **OPEN** the second build, which is the whole claim.
 
+## 2026-09-17 — CI's sitting on the codegen rows, and the release tier will not reproduce
+
+The first sitting this branch has taken with both codegen rows in the job.
+
+```
+  compile_instructions      35,964,325 ->     35,964,307      -18
+  entry_instructions       128,204,133 ->    128,203,909     -224
+  library_instructions     128,339,261 ->    128,339,061     -200
+  startup_instructions       4,838,323 ->      4,837,892     -431
+  codegen_instructions_dev 9,280,351,472 -> 1,003,426,243
+```
+
+The four compile rows are a layout move and nothing else. This branch adds
+ninety lines to `src/main.rs`, the compile rows run `kanso check`, and a check
+never reaches the tier flag; `compile_allocs` and compile memory came back
+byte-identical beside them.
+
+The dev row's fall is not work removed. 9,280,351,472 was read before the gate
+warmed the runtime.c cache under the measurement's own environment, so that
+reading paid for compiling runtime.c and this one does not. Counted twice in
+one job, byte-identical both times.
+
+### The release tier read two numbers
+
+```
+  first    7,239,553,333
+  again    7,239,550,228
+  apart            3,105
+```
+
+VERDICT (2), a reproduction failure, on a tree of about 7.24 billion. The dev
+tier was counted across the same pair of runs, on the same staged box, in the
+same environment, and came back byte-identical — so the box, its staging and
+the warm-up are not the variable. What is left between the two rows is the
+tier flag: `-O3 -flto`.
+
+The row is not written. It is read by an exact compare and holds one value,
+and either of two faces is a coin.
+
+What the job could not say is which of the five processes moved. It named them
+and priced none of them, so the gate prices each one now
+(`codegen_procs_release first=[kanso=… clang=… ld=…] again=[…]`), pinned by
+`the_codegen_gate_prices_each_process_it_names`, which runs the gate's own
+function text against two hand-made profiles rather than a copy of it. Watched
+red by putting the old `printf` back: it reads `kanso clang` and says so.
+
+- **DONE** four compile rows, the dev codegen row, and the instrument.
+- **OPEN** the release row, which waits on one sitting naming the process that
+  moves. Then the choice is to normalize what moves it, or to exclude it and
+  name the exclusion in the golden's header under the 2026-09-15 rule.
+
+## 2026-09-17 — the release row's two numbers, named on the first run of the instrument
+
+The gate now prices every process it names, and the answer came off this
+container rather than off a CI round.
+
+```
+  reading a   kanso=425,656,322  clang=32,184,722  clang=31,624,903
+              clang=1,617,293,611  ld=5,145,605,822    total 7,252,365,380
+  reading b   kanso=425,656,555  clang=32,184,722  clang=31,624,903
+              clang=1,617,293,611  ld=5,145,605,822    total 7,252,365,613
+```
+
+Three clang processes and the linker come back byte for byte. All 233
+instructions are kanso's own process, and inside it two frames of 1,346
+differ: `kanso::build` +189 and `__memcmp_avx2_movbe` +44.
+
+### The memcmp is the process id
+
+`pid_tag()` puts the pid into the names of the emitted `.ll`, the staging file
+and the cached runtime object. An earlier round pinned its WIDTH at seven
+digits, which fixed the length of every path built from it and left the
+content free, so a comparison over those paths stops at a different byte from
+one run to the next.
+
+A probe binary with `pid_tag_of` returning a constant was built and both
+readings taken again: `__memcmp_avx2_movbe` came back byte-identical and the
+total moved 112 rather than 233. The pid is worth 121 of the 233.
+
+### What is left is a wait
+
+The probe's remaining 112 sit in ONE frame of 1,346 — `kanso::build`, self
+cost, every callee byte-identical. That is an inlined loop inside `build`
+whose iteration count is not the compiler's to choose: `build` spawns clang
+and waits for it.
+
+The dev tier is the control. It is the same code waiting on a child that
+finishes seven times sooner, and it reproduces exactly across the same pair
+of runs, on CI and here.
+
+### What that leaves to decide
+
+The pid is worth fixing whatever else happens: temp names that carry no pid
+would take 121 out and cost nothing. What is left is a row whose subject
+includes a process that waits for another process, and the 2026-09-15 rule
+says a term that cannot be normalized is excluded and the exclusion named in
+the golden's header. Two shapes leave every counted thing deterministic:
+count the children alone, or give kanso's own half its own row.
+
+- **DONE** the instrument, and the process named.
+- **OPEN** the release row, which is not written and will not be until the
+  thing it counts reproduces.
+
+## 2026-09-17 — the codegen row counts the processes that do codegen
+
+The finding above leaves one process in the row that does not reproduce, and
+the 2026-09-15 rule says what to do with a term that cannot be normalized.
+
+So both tiers count the child tree — the clang driver, the convention probe's
+clang, `clang -cc1` and `ld` — and kanso's own process is excluded, with the
+two measurements that put it there written into the gate's header. Every one
+of those four came back byte for byte across two readings at the release tier,
+which is the whole reason the row can hold one value.
+
+`is_kanso` reads the FIRST WORD of a profile's `cmd:` line and nothing else.
+kanso's name turns up inside other processes' arguments — the convention
+probe's clang compiles `/tmp/kanso_pn_probe_NNNNNNN.ll` — and a rule that
+matched anywhere in the line would call that clang the compiler and take a
+deterministic 32 million out of the row.
+`the_codegen_row_leaves_the_waiting_process_out` runs the gate's own function
+text against the five command lines a real build produced. Watched red by
+dropping the first-word rule and loosening the pattern: it answers `yes` for
+the probe's clang and says so.
+
+Both goldens now hold whole-tree numbers, which is one process too many. They
+are left where they are so each gate has a value to fail against, and the
+first sitting under the new shape writes them.
+
+What is still owed is kanso's own emitting, which is real compiler work and
+should not disappear from the index because the process it runs in also waits.
+It wants an anchored row of its own, counted at `codegen::emit_ir` the way
+kanso#1487 anchors the compile rows, where no wait is inside the anchor.
+
+- **DONE** the exclusion, its spec, and both headers.
+- **OPEN** both rows, which the next sitting writes; and an anchored row for
+  what the compiler itself spends emitting.
+
+## 2026-09-17 — what the compiler spends emitting, which nothing counted
+
+Excluding kanso's own process from the codegen rows leaves a hole, and it is
+not a small one. The three `kanso check` rows stop before codegen. The two
+codegen rows now count the child tree. Between them sits the work this project
+wrote — turning a checked program into LLVM IR — and no row reached it.
+
+`emit_instructions` is that row: `codegen::emit_ir` inclusive over
+`kanso build pkg/codegen_corpus` in the staged box.
+
+The anchor was chosen because it is exact rather than approximate, and that
+was measured before the gate was written. Four profiles were already on disk
+from the reproduction work above — two readings of the shipped binary and two
+of a probe binary whose `pid_tag_of` returns a constant — and every one of the
+four reads the frame at **394,910,642** inclusive, byte for byte, while the
+process around it moved 233 and then 112. Two binaries, four readings, one
+number. The wait for clang happens in `build` after `emit_ir` returns, so it
+is outside the anchor by construction rather than by luck.
+
+The frame is 92.78% of what kanso's own process spends on a release build, so
+what the exclusion drops is the wait and very little else.
+
+That number is a CONTAINER's. It is written into the golden's header as
+evidence that the anchor is deterministic and it is NOT the row: only CI's
+numbers may be recorded, which is what `scripts/gates/measured_on.sh` exists
+to enforce. The golden ships with an empty value on purpose, so the gate
+refuses with the sitting printed above the refusal and the next round writes
+it.
+
+### The prefix list went stale a third time, and was caught this time
+
+`tests/the_compile_sweep_names_every_compile_gate.rs` derives the compile
+gates from a list of golden-path prefixes, and its own comment says twice that
+the list goes stale when a vein arrives under a new name — once for
+`bench/library_*`, once for `bench/codegen_*`, both read late. `bench/emit_*`
+is the third, and it is in the list in the same commit that creates the file.
+
+`bench/emitted_golden` was already named there and is a DIFFERENT file: it
+counts what the compiler WROTE for the decoder, where this one counts what
+writing cost. One letter apart and unrelated, which that file has now had to
+say about two pairs of names.
+
+`all_compile.sh` runs it, and CLAUDE.md names it — that line is required by
+`the_instructions_name_every_compile_gate`, which is why a pull request from
+the compiler lane touches the instructions file at all. The same edit corrects
+what that file said about `codegen_instructions`, which was "the WHOLE process
+tree" until this morning.
+
+- **DONE** the gate, the golden's header, the sweep, the instructions, and the
+  spec's prefix list.
+- **OPEN** the row itself, which the next sitting writes.
+
 ## 2026-09-17 — kanso#1482's three rows, priced: layout, upward
 
 The first sitting this branch has taken on the anchor kanso#1487 left, so
@@ -5767,6 +6184,190 @@ drew, and the revert of the row bump that chased it, were both the frame
 kanso#1487 removed.
 
 - **DONE** merged onto main; the rows are main's.
+
+## 2026-09-17 — the emit row, read three times from three stagings
+
+The gate was run before it was shipped, with `GITHUB_ACTIONS` set so the host
+check measures rather than stopping. It stages the box, warms it, counts, and
+refuses with the sitting printed above the refusal, which is the bootstrap an
+empty golden is for.
+
+Then three readings, each from its own fresh staging and warm-up:
+
+```
+  394,912,504
+  394,912,504
+  394,912,504
+```
+
+The four release-path profiles read 394,910,642, and the difference is 1,862.
+They are two commands — a different tier, and valgrind instrumenting child
+spawns in the first — which is the reason a row is one command rather than a
+family of them. Both say the thing the anchor needed to say: repeat the
+command and the frame does not move, while the process around it does.
+
+- **DONE** the gate, smoke-run end to end, and the anchor's determinism read
+  three ways.
+- **OPEN** the row, which CI's first sitting writes.
+
+## 2026-09-17 — the new row's file broke two specs, and a pipe nearly hid them
+
+The gate and its golden were written, `all_pages.sh` was green, and the suite
+was run as `cargo test --release 2>&1 | tail -25`. The background task
+reported exit 0 and it was believed. **That exit code is `tail`'s.** The same
+mistake was made twice in one afternoon, on a suite that was failing both
+times, and the second time it was caught only because the gate specs were
+re-run one at a time. Redirect and read `$?`; never read a pipeline's exit as
+the program's.
+
+What it was hiding, both of them real:
+
+**`every_counter_golden_is_walked_by_the_trend_gate`.** A golden the trend
+gate does not walk is one whose regressions arrive unpriced. The gate lists
+its veins by hand in kanso, and `bench/emit_instructions_golden.txt` was not
+among them. Fixed by listing it beside the two codegen goldens, in the commit
+that creates the file — which is what that spec's own comment asks for and
+what `startup_instructions` did on 2026-09-16.
+
+**`every_compile_vein_row_has_a_direction`.** It reads every
+`bench/*instructions_golden.txt` off disk, asks for exactly one row in each,
+and asks that every row's counter be named in one of the trend gate's
+`lower_*` tables. The new file matched that glob where the codegen goldens do
+not, so it was the FIFTH compile vein the hour it landed, and it had no row
+at all: the golden had shipped empty on purpose, so the gate would refuse with
+its own measurement printed above the refusal.
+
+That plan does not survive the spec, and the spec is right: a vein with no row
+is a vein nothing can diff. So the file carries a value, and the header says
+plainly what it is — a placeholder no host will ever compare against, because
+there is no `measured-on` line and `measured_on.sh` therefore refuses every
+host. A container stops; CI measures, prints and fails without comparing. The
+first CI sitting replaces the number and writes the measured-on line under it.
+
+- **DONE** both specs, and the value that satisfies the shape without making
+  a claim.
+- **OPEN** the row itself, unchanged: CI's first sitting writes it.
+
+## 2026-09-17 — the box those readings were taken on had four runaway spinners
+
+Found by reading `ps` while wondering why a test suite was slow: four
+`sh /tmp/cpu_hunt.sh` processes, orphaned to init at 00:02, each burning a
+core. Forty-one hours of CPU on a four-core box. The script spawns four busy
+loops to measure a compile row under load and kills them at the end; it was
+interrupted before the kill, and nothing else was going to.
+
+What that does and does not touch:
+
+**It does not touch an instruction count.** callgrind counts instructions
+executed, not time, so every number this log recorded today — the compile
+rows, the emit row's three readings, the four release-path profiles — is what
+it would have been on an idle box.
+
+**It does touch the wait.** The 233 and then 112 that the release-tier
+reproduction moved by live in `kanso::build`'s inlined loop waiting for clang,
+and how many times that loop goes round is exactly what a loaded box changes.
+So the finding stands — the wait is the scheduler's and not the compiler's,
+which is what the dev tier's byte-identical control says independently — but
+neither 233 nor 112 is a clean estimate of its size on a quiet machine. CI's
+own 3,105 was measured on a runner and is untouched by this.
+
+The script now traps and kills its spinners on EXIT, INT and TERM. A
+background loop with no trap is a loop that outlives the reason for it.
+
+## 2026-09-17 — two welfares and a meta, built
+
+The 2026-09-16 gavel's second half. `scripts/welfare/welfare.kso` scored one
+number over four terms; it scores three over nine.
+
+    production      run speed 0.45, run memory 0.40, release build 0.15
+    development     compile speed 0.30, compile memory 0.08, dev build 0.22,
+                    interpreter start-up 0.25, interpreter speed 0.11,
+                    interpreter memory 0.04
+    meta            0.70 production, 0.30 development, saturating
+
+On the tree this was built from: production 57.11, development 72.59, meta
+76.13.
+
+**The interpreted side is priced in Clay's order and nothing else.** "start-time
+is vastly more important than speed which is more important than memory usage"
+is 0.25, 0.11 and 0.04 — each better than two to one over the next. Start-up is
+the largest single term on that side because `kanso test` pays it on every
+invocation and production never pays it once, which is the dimension no single
+scalar could hold and the reason the split was ruled rather than a
+re-weighting.
+
+**The meta saturates, and that is the whole of what the third number adds.** A
+linear `a·W_prod + b·W_dev` is algebraically one flat term list — the same
+model with every weight multiplied through — so the split would buy nothing
+the old single scalar did not already have. Each side enters as its score over
+a hundred, `f w = w / (w + 1)` is concave across [0, 1], and the result is
+divided by `f 1.0` to put the ceiling back at a hundred.
+
+What that buys is an exchange rate between the two sides that MOVES with where
+they stand. The meta's derivative in each side, computed at four positions:
+
+    position                  meta    d/d prod   d/d dev   ratio
+    today (0.571, 0.726)     76.13      56.72     20.14     2.82
+    level (0.500, 0.500)     66.67      62.22     26.67     2.33
+    production ahead (0.9, 0.3)  80.16  38.78     35.50     1.09
+    development ahead (0.3, 0.9) 60.73  82.84     16.62     4.98
+
+So today a development gain has to be 2.82 times the production cost in
+sub-welfare points to be worth taking — which is what "development speed much
+better in exchange for a very small production performance cost" means with a
+number on it. Let production run far ahead and that threshold falls to 1.09: a
+point of development is then worth almost a point of production, because the
+side near its ceiling has little left to earn. A linear meta would hold the
+ratio at 2.33 forever whatever either side did, and that is the whole of what
+the third number adds.
+
+**The four pre-split weights are renormalised, not carried over.** They summed
+to one between them as shares of a single objective, and a share of the
+development side is a different quantity. Every ratio the old reasoning argued
+for survives: run speed still outweighs run memory, compile speed still
+outweighs compile memory better than three to one.
+
+**Carrying them over unrenormalised was the first thing that happened, and
+nothing said so.** Production summed to 0.71 and scored 40.97 where it should
+have read 57.11 — every term on that side scored a fifth low, and the meta read
+the shortfall as production sitting far from its ceiling. The number looked
+entirely plausible. So the program refuses now: `balanced?` checks each side
+sums to one before anything is scored, and `weighed` sits at the head of
+`gauge`'s chain beside the golden pins. Watched red by putting run speed back
+to 0.30 — exit 2, naming the rule — and green again restored.
+
+**The floor re-ratchets, as the gavel required.** 69.79 was a reading of a
+four-term single scalar that no longer exists, so it is not carried forward;
+the meta floor is set from the rescored model in the same change. One floor,
+on the meta, because the standing rule that the sum is the objective and the
+terms are diagnostics applies exactly as it did before — ratcheting the two
+sides separately would re-enable the part-against-whole optimisation that rule
+exists to stop.
+
+**The five new counters enter at PARITY.** Baseline equals current, so each
+contributes its satiation floor and nothing else, and the meta is above the old
+number without one instruction of the compiler having changed. The old rule
+that granted a new counter its dimension's standing is gone and was not
+revived: a counter joining at parity has headroom a counter granted a high
+standing does not, and that difference decided at least one verdict in 2026-09.
+
+**What CI owes this PR.** `kanso check` runs on src/main.rs, which kanso#1470
+edits, so the five goldens under this branch are not yet this tree's. CI's
+first sitting writes all five goldens AND their five baselines together —
+together, because writing the golden alone would leave the baseline behind and
+score a host difference as a regression. Parity is preserved when both move,
+and the meta stays 76.13.
+
+**`bench/objective_sources.txt` gains five lines and the replay spec covers
+them.** None of the five renames and none of them sums, so each is one pair.
+Watched red by deleting `interp_peak_bytes`: the spec names that counter and
+says the trend gate cannot tell a re-basing of it from a win.
+
+- **OPEN** the meta's 0.70/0.30 and its satiation of 1.0 are priced from the
+  gavel's framing rather than from a measurement, which is what the 2026-08-25
+  charter leaves to the implementer. The first real trade the two sides
+  disagree about is the evidence that would move them, and there has not been
+  one yet.
 
 ## 2026-09-17 — kanso#1482 on the tree merged with kanso#1462: five rows, all down
 
@@ -5929,6 +6530,204 @@ passes here had the answer one paragraph away.
   710 `xs[i]!` sites, `!` names in lib answering a box, and the two cost levers
   kanso#1477 reports built. Their own pass.
 
+## 2026-09-17 — the exclusion left half a build unweighed, and kanso#1480 found it
+
+`emit_instructions` joins the development side at 0.06, taken out of the dev
+build's 0.22, which drops to 0.16.
+
+**What went wrong is a seam between two correct decisions.** The 2026-09-16
+gavel put "dev-tier codegen (`-O0`)" on the development side. The 2026-09-15
+rule then excluded kanso's own process from the codegen rows, rightly: the
+parent sits in a wait loop for clang and the linker, and what that loop costs
+is the box's scheduling rather than the compiler's work. But the emitter runs
+in that process. So between them the two rulings weighed the children of a
+build and left the compiler's own half of it outside every counter.
+
+**kanso#1480 is what showed it.** That branch builds one linearity `Analysis`
+where three were built, takes 51,082,187 instructions off a `kanso build` —
+7.77% — with the emitted IR byte-identical, and welfare falls 0.01. Not one
+objective counter can see the saving: the three compile rows stop before
+codegen, start-up runs the emitter on a one-line program, and
+`codegen_instructions_dev` excludes exactly the process the saving is in.
+`emit_instructions`, anchored at `codegen::emit_ir` inclusive, is the only row
+that reaches it.
+
+**The split is score-neutral at parity, which is the point.** Both halves
+satiate at 0.5, so 0.22 × ⅔ and (0.16 + 0.06) × ⅔ are the same 0.1467, and the
+meta stays 76.13 with production 57.11 and development 72.59. This does not
+move the number; it makes a dimension the number was blind to visible, which is
+what the gavel asked for and what the exclusion inadvertently undid.
+
+**The weights are the two halves' measured sizes.** On this box a dev build's
+child tree is 1.00 billion instructions against the emit's 395 million, near
+enough 0.16 against 0.06.
+
+- **OPEN** whether the production side owes the same treatment.
+  `codegen_instructions_release` excludes kanso's process too, and the emit is
+  the same emit — one `emit_ir` serves both tiers, so a second emit row would
+  be the same measurement counted twice. Left unweighed on that side
+  deliberately, and recorded here so the asymmetry is a decision rather than an
+  oversight.
+
+## 2026-09-17 — the codegen rows measured, and both tiers read twice the same
+
+CI's first sitting on aa57f47e, which is what this branch was opened to take:
+
+    codegen_instructions_dev        596,161,187   again 596,161,187
+    codegen_instructions_release  6,826,827,769   again 6,826,827,769
+    emit_instructions               382,309,867
+    compile_instructions             35,968,794   main 35,968,792    +2
+    entry_instructions              128,217,981   main 128,217,983   -2
+    library_instructions            128,352,174   main 128,352,174    0
+    interp_instructions           2,178,559,085   main 2,178,559,085  0
+    startup_instructions              4,837,941   main 4,838,372    -431
+
+**The `again` readings are the result, not the values.** This row's first shape
+counted the whole process tree, and two readings in one job differed by 3,105
+with every child byte-identical: the parent sits in a wait loop for clang and
+the linker, and what that loop costs is the box's scheduling rather than the
+compiler's work. Excluding kanso's own process under the 2026-09-15 rule is
+what made the row reproducible, and a job that reads 596,161,187 twice and
+6,826,827,769 twice is the evidence that it worked.
+
+**The release tier is 11.5x the development tier.** That is what `-O3 -flto`
+costs against `-O0`, and it is the reason the 2026-09-16 gavel put them on
+different sides: one is paid once per release and the other between a keystroke
+and an answer.
+
+**`emit_instructions` is 382,309,867**, the compiler's own half of a build —
+what the two codegen rows stopped counting when kanso's process left them. The
+container read 394,912,504 from three stagings and 394,910,642 on four
+release-path profiles; CI is 12.6 million lower, which is the host difference
+its golden's header said no box could compare away.
+
+**Three container placeholders are replaced and none was comparable.** The dev
+and release goldens carried 1,003,426,243 and 12,107,507,377, both measured
+before the exclusion, and the emit golden 394,912,504 from this host. They
+existed so each gate had one value to fail against rather than none; CI's
+sitting is what they are for.
+
+**What the branch costs the rows that already existed is two instructions.**
+compile +2, entry −2, library and interp byte-identical, start-up −431. The
+branch edits src/main.rs, so the rows can move; this is the smallest move the
+compile vein has recorded.
+
+- **DONE** the rows are CI's.
+
+## 2026-09-17 — eleven counters do not fit on one plot, so the chart draws eleven plots
+
+Adding `emit_instructions` took the objective to eleven counters, and
+`tests/the_chart_palette_is_the_one_that_was_measured` caught what that does to
+the drawing before CI did.
+
+**Eleven hues do not fit.** `#c4331f` against `#7a5c00` separates by 3.2 under
+simulated protanopia against a floor of 8, and no ordering of the set clears
+it: the check measures adjacent pairs, so an ordering that fixes one collision
+opens another. Eleven lines inside one lightness band do not have the room, and
+a search over candidate hues for the two worst offenders returned nothing.
+
+**So the chart draws one panel per counter.** That is the method's answer past
+eight series — small multiples rather than a generated hue — and it is the
+right one here for a reason beyond the palette: these counters are on different
+scales and in different units, and overlaying `interp_instructions` at 2.18
+billion with `compile_allocs` at 27,397 was never a comparison anybody wanted.
+
+With one line to a panel there is no adjacent pair to confuse. The caption
+names the counter, and each keeps the hue the panel below and its sparkline
+read.
+
+**The palette spec's claim is narrower now, and the entry says so rather than
+letting the change pass quietly.** It pinned membership, order AND the CVD
+floors those were measured against; it now pins membership and order as the
+record, with the floors described as the seven-hue era they were measured in. A
+rename or a silent recolour still turns it red. That narrowing is because the
+drawing changed, not because a gate was relaxed to fit a palette — and the
+spec carries the sentence that brings the floors back the day anything overlays
+series again.
+
+An intermediate design is recorded because it was wrong in an instructive way:
+three charts grouped by the model's sides, with three lines on production and
+eight on development. The eight failed all-pairs, which is the same wall one
+step further along. Two, three or one line to a plot works; eight does not,
+whatever the grouping.
+
+## 2026-09-17 — three of the split's baselines were this container's, and the objective scored the host
+
+The three welfares came back 1.30 above their floor on a tree whose compiler
+nothing had changed. The gain was not in the code.
+
+`bench/welfare_floor.json` carries a baseline per counter, and the split added
+six. Three of them were readings this container took:
+
+    codegen_instructions_dev      1,003,426,243   ->   596,161,187
+    codegen_instructions_release 12,107,507,377   -> 6,826,827,769
+    emit_instructions               394,912,504   ->   382,212,543
+
+The left column is what a container measured; the right is CI's. Each golden's
+own header says the two cannot be compared — `codegen_instructions_dev_golden`
+puts it as "a different clang and a different machine and is not comparable" —
+and the objective was comparing them anyway, as +68.3%, +77.4% and +3.3%.
+
+With the three baselines set to CI's first sitting the score reads 76.13
+against a floor of 76.12766770905162. The floor had been right the whole time:
+it was banked as the new model's reading of an unchanged tree, and an unchanged
+tree reads it exactly once the origins are honest. A rise of 1.30 with no
+change behind it is what a wrong origin looks like.
+
+The other three new baselines were already CI's, from main's own goldens, and
+sit at parity: `startup_instructions` 4,838,372 against 4,836,950,
+`interp_instructions` 2,178,559,085 against 2,178,502,266, `interp_peak_bytes`
+byte-identical.
+
+**A new term's baseline and its golden are one sitting or neither is worth
+anything.** A term whose origin came from one host and whose reading comes from
+another prices the difference between the two boxes, and prices it as though
+the compiler had earned it.
+
+- **DONE** the three origins are CI's, and the score sits on its floor.
+
+## 2026-09-17 — the split rebased on kanso#1470's CI sitting
+
+kanso#1470 wrote CI's reading into four goldens and gave
+`bench/emit_instructions_golden.txt` the measured-on line it had never carried.
+This branch merges that.
+
+**`compile_instructions` worsened and lands at 35,968,173.** Two instructions,
+kanso#1470's, and that entry prices them: the branch under it adds counters and
+the gates that read them and changes no decision the front end makes, so what
+moved is the binary's bytes. The entry row fell by the same two.
+
+The split's own arithmetic is unchanged by the merge: with the three container
+baselines corrected, the three welfares read 76.13 against a floor of
+76.12766770905162.
+
+- **DONE** rebased, and the score still sits on its floor.
+
+## 2026-09-17 — kanso#1470's CI sitting, and the emit vein's first reading on a runner
+
+    emit_instructions       382,309,867 ->   382,212,543     -97,324   -0.025%
+    compile_instructions     35,968,171 ->    35,968,173          +2
+    entry_instructions      128,213,972 ->   128,213,970          -2
+    startup_instructions      4,837,381 ->     4,836,950        -431  -0.0089%
+    library_instructions    128,348,205                   byte-identical
+    interp_instructions   2,178,502,266                   byte-identical
+    codegen_instructions_dev and _release agree with their goldens
+
+**`compile_instructions` worsened and lands at 35,968,173.** Two instructions.
+The entry row fell by the same two and the library and interpreted rows did
+not move at all. This branch adds counters and the gates that read them and
+changes no decision the front end makes, so what moved is the binary's bytes,
+at the smallest scale this vein has ever recorded.
+
+**The emit row's old value was not CI's.** The file carried 382,309,867 under a
+note calling it CI's first sitting; it was a container's, and the gate could
+not have caught the mislabelling because the golden named no host at all —
+`bench/emit_instructions_golden.txt names no host, so nothing can say whether
+its rows may be read here`. The measured-on line is there now, under the
+runner's own reading.
+
+- **DONE** CI's sitting, and the golden says which host it was taken on.
+
 ## 2026-09-17 — the rewrite ladder: rewriting unreachable code costs nothing, and that corrects this morning's entry
 
 The entry "kanso#1480's rows challenged, bisected, and the calibration's blind
@@ -6067,6 +6866,7 @@ the gate empties it with `env -i`. It is not a lever inside the compiler.
 Declined, with the same shape as kanso#1483: withholding a line cost more than
 the line. Recorded so the idea stays declined rather than being re-derived from
 the 11,606.
+
 
 ## 2026-09-17 — the explicit box comes off the unbuilt list, item by item
 
