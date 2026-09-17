@@ -979,7 +979,7 @@ fn blockers(
     arity: usize,
 ) -> Vec<Verdict> {
     let mut found = Vec::new();
-    if outside_tails(program, name, arity) {
+    if TailCalls::of(program).outside_tails(name, arity) {
         found.push(Verdict::OutsideTailCall);
     }
     if used_as_value(program, name) {
@@ -1006,6 +1006,7 @@ fn classify_all(
     chains: &HashSet<Group>,
 ) -> Vec<(String, usize, Verdict)> {
     let allocating = alloc_groups(program, mut_sites);
+    let tails = TailCalls::of(program);
     let mut groups: Vec<(String, usize)> = {
         let set: HashSet<(String, usize)> =
             program.fns.iter().map(|d| (d.name.clone(), d.params.len())).collect();
@@ -1015,38 +1016,58 @@ fn classify_all(
     groups
         .into_iter()
         .filter_map(|(name, arity)| {
-            classify(program, inference, mut_sites, chains, &allocating, &name, arity)
+            classify(program, inference, mut_sites, chains, &allocating, &tails, &name, arity)
                 .map(|v| (name, arity, v))
         })
         .collect()
 }
 
-/// Does any arm of this group tail-call the group itself?
-fn has_self_tail(program: &Program, name: &str, arity: usize) -> bool {
-    tail_calls_to(program, name, arity).any(|in_group| in_group)
+/// Every tail call the program writes, read in one pass and asked by group.
+///
+/// `classify` asks two questions of each group -- does it tail-call itself,
+/// and does anything outside it tail-call it -- and both used to walk
+/// `program.fns` in full. `classify_all` asks them once per group, so the pass
+/// was groups times program. On `kanso build bench/runbench`, which emits 599
+/// defines, `has_self_tail` was 30.25% of the process and `classify_all`
+/// 33.00%, read with `#[inline(never)]` on both so the attribution was not a
+/// guess.
+///
+/// One walk answers both: for every tail call, record against the CALLED group
+/// whether the caller was that same group or something else.
+#[derive(Default)]
+struct TailCalls<'a> {
+    /// called group -> (some caller is the group itself, some caller is not)
+    to: crate::hash::Map<(&'a str, usize), (bool, bool)>,
 }
 
-/// Does anything *outside* the group tail-call it? Such an entry never passes
-/// through the loop's bracket, so the loop cannot rewind.
-fn outside_tails(program: &Program, name: &str, arity: usize) -> bool {
-    tail_calls_to(program, name, arity).any(|in_group| !in_group)
-}
+impl<'a> TailCalls<'a> {
+    fn of(program: &'a Program) -> Self {
+        let mut to: crate::hash::Map<(&'a str, usize), (bool, bool)> = Default::default();
+        for decl in &program.fns {
+            for tail in tail_exprs(decl.body.last()) {
+                let Expr::App { head, args, piped: false, .. } = tail else { continue };
+                let Expr::Ident(callee, _) = head.as_ref() else { continue };
+                let in_group = decl.name == *callee && decl.params.len() == args.len();
+                let seen = to.entry((callee.as_str(), args.len())).or_insert((false, false));
+                match in_group {
+                    true => seen.0 = true,
+                    false => seen.1 = true,
+                }
+            }
+        }
+        Self { to }
+    }
 
-/// Every tail call to `name`/`arity`, paired with whether the caller is the
-/// group itself.
-fn tail_calls_to<'a>(
-    program: &'a Program,
-    name: &'a str,
-    arity: usize,
-) -> impl Iterator<Item = bool> + 'a {
-    program.fns.iter().flat_map(move |decl| {
-        let in_group = decl.name == name && decl.params.len() == arity;
-        tail_exprs(decl.body.last()).into_iter().filter_map(move |tail| {
-            let Expr::App { head, args, piped: false, .. } = tail else { return None };
-            let Expr::Ident(callee, _) = head.as_ref() else { return None };
-            (callee == name && args.len() == arity).then_some(in_group)
-        })
-    })
+    /// Does any arm of this group tail-call the group itself?
+    fn has_self_tail(&self, name: &str, arity: usize) -> bool {
+        self.to.get(&(name, arity)).is_some_and(|seen| seen.0)
+    }
+
+    /// Does anything *outside* the group tail-call it? Such an entry never
+    /// passes through the loop's bracket, so the loop cannot rewind.
+    fn outside_tails(&self, name: &str, arity: usize) -> bool {
+        self.to.get(&(name, arity)).is_some_and(|seen| seen.1)
+    }
 }
 
 /// The verdict for one group, or None when it has no self-tail-call (not a
@@ -1057,13 +1078,14 @@ fn classify(
     mut_sites: &MutSites,
     chains: &HashSet<Group>,
     allocating: &HashSet<&str>,
+    tails: &TailCalls,
     name: &str,
     arity: usize,
 ) -> Option<Verdict> {
-    if !has_self_tail(program, name, arity) {
+    if !tails.has_self_tail(name, arity) {
         return None;
     }
-    if outside_tails(program, name, arity) {
+    if tails.outside_tails(name, arity) {
         return Some(crate::beat::Verdict::OutsideTailCall);
     }
     if used_as_value(program, name) {
@@ -1763,7 +1785,8 @@ fn value_use(e: &Expr, name: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::beat_loops;
+    use super::{beat_loops, tail_exprs, Program, TailCalls};
+    use crate::ast::Expr;
     use crate::infer;
 
     fn compiled(src: &str) -> (crate::ast::Program, infer::Inference) {
@@ -2182,5 +2205,79 @@ mod tests {
         assert_eq!(bare_builtin("builtin_append"), "append");
         assert_eq!(bare_builtin("text/slice"), "slice");
         assert_eq!(bare_builtin("find2_below"), "find2_below");
+    }
+
+    /// The two questions `classify` asks, answered the old way: a walk of the
+    /// whole program per group. Kept as the oracle for the index that replaced
+    /// it, which is 30.25% of `kanso build bench/runbench` cheaper.
+    fn tail_calls_to<'a>(
+        program: &'a Program,
+        name: &'a str,
+        arity: usize,
+    ) -> impl Iterator<Item = bool> + 'a {
+        program.fns.iter().flat_map(move |decl| {
+            let in_group = decl.name == name && decl.params.len() == arity;
+            tail_exprs(decl.body.last()).into_iter().filter_map(move |tail| {
+                let Expr::App { head, args, piped: false, .. } = tail else { return None };
+                let Expr::Ident(callee, _) = head.as_ref() else { return None };
+                (callee == name && args.len() == arity).then_some(in_group)
+            })
+        })
+    }
+
+    fn by_search(program: &Program, name: &str, arity: usize) -> (bool, bool) {
+        (
+            tail_calls_to(program, name, arity).any(|in_group| in_group),
+            tail_calls_to(program, name, arity).any(|in_group| !in_group),
+        )
+    }
+
+    /// Every group the program declares, asked both ways.
+    ///
+    /// Also every group NAMED by a tail call and not declared, and a handful
+    /// that appear nowhere: the index answers by lookup and a missing entry
+    /// has to read as "no", which a corpus of declared groups alone cannot
+    /// show.
+    fn agrees_over(source: &str) {
+        let program = crate::compile("sample.kso", source, false).expect("the sample compiles");
+        let tails = TailCalls::of(&program);
+        let mut asked = 0;
+        let mut groups: Vec<(String, usize)> =
+            program.fns.iter().map(|d| (d.name.clone(), d.params.len())).collect();
+        for (name, arity) in program.fns.iter().map(|d| (d.name.clone(), d.params.len())) {
+            groups.push((name.clone(), arity + 1));
+            groups.push((format!("{name}_no_such_group"), arity));
+        }
+        groups.push(("nothing_declares_this".to_string(), 0));
+        for (name, arity) in groups {
+            let want = by_search(&program, &name, arity);
+            let got = (tails.has_self_tail(&name, arity), tails.outside_tails(&name, arity));
+            assert_eq!(got, want, "the index and the search disagree on {name}/{arity}");
+            asked += 1;
+        }
+        assert!(asked > 6, "the sample asked only {asked} questions");
+    }
+
+    /// A self tail call, an outside tail call into the same group, and a group
+    /// with neither — which are the three answers `classify` reads.
+    #[test]
+    fn the_index_answers_what_the_walk_answered() {
+        agrees_over(
+            "fn count 0 acc\n  acc\n\nfn count n acc\n  count (n - 1) (acc + n)\n\n\
+             fn start n\n  count n 0\n\nfn plain n\n  n + 1\n\n\
+             main = print \"{start 10} {plain 3}\"\n",
+        );
+    }
+
+    /// The same program the emitter really sees, which is where a group named
+    /// by a tail call it does not declare turns up.
+    #[test]
+    fn a_real_program_reads_the_same_both_ways() {
+        agrees_over(
+            "fn climbed i stop acc\n  reached i stop acc (i > stop)\n\n\
+             fn reached _ _ acc true\n  acc\n\n\
+             fn reached i stop acc false\n  climbed (i + 1) stop (acc + i)\n\n\
+             fn summed n\n  climbed 1 n 0\n\nmain = print \"{summed 60}\"\n",
+        );
     }
 }
