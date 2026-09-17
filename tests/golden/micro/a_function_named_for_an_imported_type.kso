@@ -1,0 +1,20 @@
+# A module may name a function after a type one of its imports exports. The two
+# are different namespaces and `kanso check` has always said so.
+#
+# Until 2026-09-16 the loader did not. `check::declared_names` hands back one
+# flat set of type names and function names, `qualify` built its spelling map
+# from that set, and this module's `entry` therefore rewrote the bare `entry`
+# TYPE that std/json exports -- in a constructor pattern -- to a name no type
+# table has ever held. The interpreter ran this program correctly and the
+# native backend answered `error: native backend: unknown type
+# `<module>/entry``, which is a silent divergence with an internal error for a
+# diagnostic.
+#
+# The corpus runs every fixture through the harness's generated entry, so this
+# file reaches the import path the bug lived on.
+import "std/json"
+
+pub play = print "{entry 1} {length (json/decode "[1]")}"
+
+fn entry i
+  i + 1
