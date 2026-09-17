@@ -79,6 +79,19 @@ entry_golden = "bench/entry_instructions_golden.txt"
 # listed HERE too before the page may name its row.
 library_golden = "bench/library_instructions_golden.txt"
 
+# The sixth and seventh, and they are not compile veins at all: they count an
+# INTERPRETED run, which `kanso check` never reaches. They join this family
+# anyway, because the family is the set of golden files a `compile.` span may
+# quote rather than a claim about what the row measures, and because
+# `golden_for` answers for exactly three names -- a span written
+# `interp.something` would resolve against an empty golden, which is the span
+# nothing watches that this gate was widened to stop. The key names still do
+# not collide: interp_instructions, interp_allocs and interp_peak_bytes are
+# spelled by nothing else.
+interp_ir_golden = "bench/interp_instructions_golden.txt"
+
+interp_mem_golden = "bench/interp_memory_golden.txt"
+
 fn counters src
   lines = text/split src "\n"
   list/to_list (list/select lines assignment?)
@@ -184,7 +197,14 @@ fn with_ir write decode encode s
   os/read_file! entry_golden .> (e -> with_entry write decode encode "{s}\n{e}")
 
 fn with_entry write decode encode s
-  os/read_file! library_golden .> (l -> whole write decode encode "{s}\n{l}")
+  os/read_file! library_golden .> (l -> with_lib write decode encode "{s}\n{l}")
+
+fn with_lib write decode encode s
+  os/read_file! interp_ir_golden
+    .> (i -> with_interp write decode encode "{s}\n{i}")
+
+fn with_interp write decode encode s
+  os/read_file! interp_mem_golden .> (m -> whole write decode encode "{s}\n{m}")
 
 fn whole write decode encode compile
   started (job (counters compile) decode encode write)
