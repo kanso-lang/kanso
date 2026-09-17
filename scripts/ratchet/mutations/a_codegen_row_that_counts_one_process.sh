@@ -20,7 +20,11 @@ if [ "$before" -lt 2 ]; then
   exit 1
 fi
 sed -i 's/--trace-children=yes //g' "$gate"
-if grep -q -- '--trace-children' "$gate"; then
-  echo "wanted --trace-children gone from $gate, and it is still there" >&2
+# The FLAG, not the word: the comment at the top of the gate explains
+# `--trace-children` in prose, and a check for the bare word sees that and
+# reports the mutation stale when it applied perfectly well. Which is what it
+# did on the first CI round of this row.
+if grep -q -- '--trace-children=yes' "$gate"; then
+  echo "wanted --trace-children=yes gone from $gate, and it is still there" >&2
   exit 1
 fi
