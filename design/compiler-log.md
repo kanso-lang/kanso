@@ -6058,3 +6058,69 @@ artifacts on every run.
   the published page.
 - **OPEN** what carries the 146,628. Cloud's, and it needs the profile pair
   rather than another table.
+
+## 2026-09-17 — the eta-reduction argument re-measured on the bind's ground
+
+The 2026-07-25 entry *"BUILT, MEASURED, DECLINED: eta-reduction is not
+semantics-preserving here"* declined `(a b -> f a b)` -> `f` on the differential
+law. An `err` recorded a hop for every function it passed through, the
+eta-expanded lambda was a function, and removing it made native print
+
+    born in first at welcome.kso:4
+    passed through greet
+
+where the interpreter printed only the first line. Native and the oracle
+disagreeing is the one thing not permitted, and the entry says so.
+
+The 2026-09-15 explicit-bind ruling moved that ground in its own words: the
+provenance hop "now accrues at binds rather than at skipped calls". So the
+argument was re-run rather than re-asserted. Three spellings of one call, each
+on both engines:
+
+    label "flan" seasonal                       passed through label
+    lab "flan" seasonal   (fn lab d c = label d c)   passed through lab
+    (d c -> label d c) "flan" seasonal          no hop line at all
+
+**Both engines agree in every one.** The divergence that killed the
+optimization is gone, and ch05's own golden has moved with it —
+`docs/book/samples/ch05/welcome.out` now reads `born in first` and nothing
+else, where July's native reading added the `greet` hop.
+
+The rule the three readings describe is simple: **a hop names the function the
+err was about to enter, so a named function records one and an anonymous one
+records nothing.** A lambda has no name to print.
+
+### What that does to the optimization, and what it does not
+
+Eta-reducing the third spelling to the first no longer makes the engines
+disagree. It makes the trace GAIN a line — `passed through label` — where the
+lambda spelling printed none. That is still a change to what a program prints,
+so the optimization is still not trace-preserving and stays declined here.
+
+The direction is worth noticing. July's entry already said the added line was
+arguably the truer one: "the value really does pass through `greet`, so the
+native line is arguably the honest one and the lambda was hiding a real hop."
+That reading now applies to source the author wrote rather than to a rewrite
+the emitter performed. Wrapping a call in a lambda silently drops its
+provenance line, on both engines, and a reader of ch04's story would not expect
+`(d c -> label d c)` and `label` to trace differently.
+
+### The question, and whose it is
+
+**Should a value passing into an anonymous function record a hop, and what
+names it?** July said that question "belongs to a gavel rather than to an
+optimization's side effects", and it still does. What has changed is that it is
+now answerable on its own terms rather than through a declined optimization:
+nothing is waiting on it, no engine disagrees, and the measurement is three
+fixtures long.
+
+`tests/a_hop_is_recorded_for_a_name.rs` pins all three readings and the
+agreement between engines, with the fixtures in the corpus rather than in this
+entry. All three were watched red first — the engine comparison pointed at a
+mismatched pair, the named expectation changed, and the anonymous one pointed
+at the direct spelling.
+
+- **DONE** the July decline's ground is re-measured and the differential
+  objection is gone.
+- **DECLINED STILL** eta-reduction changes the trace, now by adding a line.
+- **FOR THE LEDGER** what a hop means for an anonymous function. Not blocking.
