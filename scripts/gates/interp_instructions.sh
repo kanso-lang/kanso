@@ -150,6 +150,28 @@ again=$(callgrind_annotate --inclusive=yes --threshold=100 /tmp/cg.interp2 2>/de
         | awk '/kanso::run_interpreted_on_stack/ && !seen { gsub(/,/, "", $1); print $1; seen = 1 }')
 printf 'interp_again row=%s (the first reading was %s)\n' "$again" "$got"
 
+
+# THE SILICON, COMPARED RATHER THAN NAMED. `dispatch.sh name` above prints the
+# family and the model, which are the two rows most likely to be equal between
+# two different runners. The block in bench/dispatch.txt is the whole feature
+# set glibc's ifunc resolvers read, and it is consulted HERE -- only when a row
+# has already moved -- because a resolver that picked a different memcpy is one
+# of the things "outside the diff" can mean. Seven distinct blocks were seen
+# across ninety-odd jobs on 2026-09-17, differing in 57 rows and in the basic
+# family itself. It never refuses on its own: `differs` answers 2 when it
+# cannot tell, and this reports whichever answer it gives.
+silicon=0
+sh scripts/gates/dispatch.sh differs || silicon=$?
+case "$silicon" in
+  0) echo "::error::THE SILICON MATCHES bench/dispatch.txt, so the resolvers"
+     echo "::error::glibc picked are the ones that block records." ;;
+  2) echo "::error::THE SILICON CANNOT BE COMPARED -- no block recorded, or"
+     echo "::error::this loader reports no features." ;;
+  *) echo "::error::THE SILICON DIFFERS from bench/dispatch.txt. The rows are"
+     echo "::error::printed above. A different resolver is one of the things"
+     echo "::error::a move outside the diff can be." ;;
+esac
+echo "::error::"
 echo "::error::interp_instructions counted $got against $want in $golden,"
 echo "::error::a move of $((got - want)). Exactly one of two things is true,"
 echo "::error::and they are settled differently."
