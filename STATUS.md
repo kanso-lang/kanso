@@ -215,17 +215,27 @@ build, `touch src/main.rs src/lib.rs`, build again gives a byte-identical
 binary — which bounds only that container, whose rustc and `.text` both
 differ from CI's, but does rule out a toolchain that simply does not repeat.
 
-What differs is open. Worth knowing while it is: the gate prints `.text`,
-`.data` and `.bss` and does not print `.rodata`, so a difference living there
-is invisible to the line written to catch exactly this.
+The six are not in a hot function. Both job logs print the interpreted run's
+`--threshold=90` self-cost list, and the two are identical line for line —
+`__memcpy_avx_unaligned_erms` 402,818,464, `dispatch'2` 147,104,143,
+`mi_free` 117,641,168 and eleven more, every one matching to the instruction.
+`PROGRAM TOTALS` differs by exactly six. So it is not a glibc ifunc picking a
+different memcpy by CPU feature, not the allocator, and not any path the
+interpreter runs hot; it is one cold function, the shape of a branch taken
+once in setup.
 
-Owes: the isolation first, and nothing needs re-running to start it — `size
---format=sysv` on the two artifacts, and the per-symbol counts in the
-`compile-profiles` artifact both jobs already upload, which attribute the six
-to a function. Then the ruling's first road, a build byte-identical from one
-source on the runners that measure it, with the golden re-measured and the
-log saying what was moving. And a sweep of the other nine weighted counters,
-which read the same binary and so carry the same prior.
+What differs is still open. The gate prints `.text`, `.data` and `.bss` and
+does not print `.rodata`, so a difference living there is invisible to the
+line written to catch exactly this.
+
+Owes: finish the isolation. `size --format=sysv` on the two artifacts is the
+next command, and note that the `compile-profiles` artifact does not help —
+its copy step reads `for n in compile entry library`, so `cg.interp` is not
+in it; uploading that profile would make the next occurrence answerable
+without guessing. Then the ruling's first road, a build byte-identical from
+one source on the runners that measure it, with the golden re-measured and
+the log saying what was moving. And a sweep of the other nine weighted
+counters, which read the same binary and so carry the same prior.
 
 If a byte-identical build turns out not to be reachable, the question that
 follows is whether an exact pin is the right instrument for a counter whose

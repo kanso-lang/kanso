@@ -7051,15 +7051,40 @@ only this box: its rustc is 1.94.1 against CI's 1.98.1, and its `.text` reads
 rules out is the lazy answer that a release build here is simply not
 repeatable.
 
-**So what differs is open, and this entry does not guess it.** What is
-established is the list above: same source, same lock, same rustc and glibc
-strings, same three section sizes, different binary. One thing worth saying
-about the instrument while the question is open — the gate prints `.text`,
-`.data` and `.bss` and does not print `.rodata`, so a difference living there
-is invisible to the line that exists to catch this. `size --format=sysv` on
-the two artifacts would say in one command, and both jobs already upload a
-`compile-profiles` artifact carrying per-symbol counts, so the six can be
-attributed to a function before anything is changed.
+**The six are not in any hot function.** Both job logs print
+`callgrind_annotate --threshold=90` for the interpreted run, which is the
+self-cost list covering ninety per cent of the program, and the two lists are
+identical line for line:
+
+```
+402,818,464  __memcpy_avx_unaligned_erms          147,104,143  dispatch'2
+144,592,299  eval_ident'2                         117,641,168  mi_free
+104,394,489  _mi_theap_malloc_zero                 95,502,177  eval'2
+ 95,366,382  finish_grow                           73,018,440  __rust_alloc
+ 72,717,102  match_one                             58,822,706  type_decl
+ 54,605,979  Value::clone                          49,159,653  write_str
+ 48,520,757  do_reserve_and_handle                 47,336,369  drop_glue::<Value>
+ 44,291,051  HashMap::contains_key
+```
+
+Every one of those matches to the instruction across the two runs. What does
+not match is the line above them: `PROGRAM TOTALS` reads 2,225,567,668 on
+main and 2,225,567,674 here, a difference of exactly six, the same six the
+anchored row carries. So the difference lives in the tail below two per cent
+a function, and three explanations die on this table. It is not a different
+memcpy: `__memcpy_avx_unaligned_erms` is byte-identical, which is what a
+glibc ifunc picking differently by CPU feature would have moved. It is not
+the allocator. It is not any path the interpreter runs hot. Six instructions
+in a cold function is the shape of one branch taken once, or one loop running
+one extra time, in setup.
+
+**What differs is still open.** The gate prints `.text`, `.data` and `.bss`
+and does not print `.rodata`, so a difference living there is invisible to
+the line written to catch this, and `size --format=sysv` on the two artifacts
+would say in one command. The `compile-profiles` artifact both jobs upload
+does NOT help here: its copy step reads `for n in compile entry library`, so
+`cg.interp` is not among the files. The threshold-90 list above, printed in
+both job logs, is what there is, and it has already been read.
 
 **Why it outranks the one red round.** `interp_instructions` is one of the
 ten counters the meta welfare weighs, and it landed the same day in
