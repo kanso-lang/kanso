@@ -4615,9 +4615,22 @@ into `Backend::emit` and callgrind attributes them there together.
     entry_instructions   127,849,537 -> 127,802,541  -46,996  -0.037%
     library_instructions 127,988,399 -> 127,942,447  -45,952  -0.036%
 
-All three are work removed rather than layout: `kanso check` runs the pass that
-asks, and the beat reads every tail call once from an index rather than
-re-deriving them per group. Welfare rose and is banked at 69.79631238451805.
+**All three are LAYOUT, and the first draft of this entry said the opposite.**
+`beat_loops` is called from one place, `codegen.rs` inside `emit_ir`, and
+`emit_ir` is reached only from `main.rs`'s build and run paths. `beat::report`
+is the other door and it opens only under `KANSO_BEAT_REPORT`, which the gates
+do not set. So `kanso check` never runs the pass this branch changes, and the
+106 lines it adds cannot execute on any of the three compile corpora. What
+moved the rows is `src/beat.rs` being part of the compiler binary.
+
+The change's own effect is on the build path: `kanso build bench/runbench`
+falls 31.38% with the emitted IR byte-identical. Welfare rose and is banked at
+69.79631238451805 -- a rise is banked whatever moved it, and what moved this
+one was the compiler's bytes.
+
+The test for this is one grep, and it is worth doing before writing "work
+removed" on any compile row: find the callers of the changed function, and if
+they all sit under `emit_ir`, the compile rows cannot have seen it.
 
 `per_process_floor=558700 frames=605 kernel=6.17.0-1022-azure cpu=26/2`.
 
