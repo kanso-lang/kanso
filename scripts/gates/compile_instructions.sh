@@ -195,12 +195,32 @@ tune=$tune:glibc.malloc.tcache_count=7
 # changing nothing else: 35,968,224, which is +2,733 on the control, with
 # `.text` +3,088 and the IR byte-identical.
 #
-# THREE SHAPES, THREE ANSWERS: unreachable additions ~402 (span 1,028),
-# unreachable rewrites 0, a reached addition 2,733. None of them reaches
-# 146,628, and no ladder here explains a move that size. A number in the
-# hundreds of thousands on this row is NOT bounded by anything measured, and
-# calling it layout on the strength of these tables is a misreading of what
-# they cover.
+# FOUR SHAPES, AND THE FOURTH IS THE ONE THAT BITES:
+#
+#   unreachable additions       ~402, span 1,028   2026-09-04
+#   unreachable rewrites        0, eight binaries  2026-09-17
+#   a reached addition          2,733              2026-09-17
+#   the optimizer re-deciding   ~143,000           kanso#1480
+#
+# The first three are small because none is large enough to flip an inlining
+# decision. kanso#1480 changes 161 lines across src/codegen.rs and
+# src/linear.rs, and that IS enough. Its pair reproduced here at +143,118
+# against CI's +146,628, and the frame diff puts the whole of it inside type
+# inference -- `check_merged_after_aliases` +140,521, `infer::infer` +140,780,
+# `for_each_child::<expr_ctor_types::{closure}>` +118,865 and +106,105 -- while
+# src/infer.rs, src/check.rs and src/parser.rs are BYTE-IDENTICAL between the
+# two trees. Two symbol-level tells confirm it: `parse_cmp` is a frame in one
+# build and inlined into `parse_not` in the other, and `stmt_ctor_types` is a
+# frame in one and replaced by `expr_ctor_types` in the other, with both
+# functions present in both sources.
+#
+# THAT IS NOT THE LINKER'S PLACEMENT, which is what "layout" means everywhere
+# else in this header and what the seven-binary ladder measured. It is rustc
+# compiling unchanged code differently because the crate around it changed, and
+# it is two orders of magnitude larger. No ladder bounds it, because the
+# perturbation is "the crate got meaningfully bigger" and that cannot be
+# synthesised inside one small function. A row that moves by a hundred thousand
+# on a corpus the diff cannot reach is this.
 #
 # Startup work scales with what is loaded, so the one compiler change that can
 # move the dropped half is growing a dependency — one more shared object was

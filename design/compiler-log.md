@@ -5992,7 +5992,49 @@ measurement whose scope was never checked. The 2026-09-04 ladder covered one
 perturbation. I read it as covering another, said so in a log entry, and only
 building the second ladder showed the difference.
 
-- **DONE** the second and third shapes are measured, and the gate's header
-  carries all three.
-- **OPEN** what kanso#1480's 146,628 actually is. Not layout by any calibration
-  this repository now holds.
+**The open item closed the same afternoon, and there is a FOURTH shape.** The
+pair reproduced here at +143,118 against CI's +146,628, and the frame diff at
+`--threshold=100`, comparing only frames present in both listings, puts the
+whole of it inside type inference:
+
+    check_merged_after_aliases    14,968,692 -> 15,109,213   +140,521
+      infer::infer                 7,789,154 ->  7,929,934   +140,780
+        for_each_child<expr_ctor_types>  267,606 -> 386,471  +118,865
+        for_each_child<expr_ctor_types>  209,740 -> 315,845  +106,105
+      demand::analyze                424,414 ->    456,238    +31,824
+    parser::parse                 4,144,914 ->  4,136,716     -8,198
+
+kanso#1480 changes src/codegen.rs and src/linear.rs and nothing else.
+src/infer.rs, src/check.rs and src/parser.rs are BYTE-IDENTICAL between the two
+trees. So the branch is not doing more inference work; the optimizer is
+compiling unchanged inference code differently because the crate around it
+changed.
+
+Two symbol-level tells confirm the mechanism rather than leaving it inferred.
+`parse_cmp` is a frame in the top profile and absent from the base, where it
+was inlined into `parse_not`; both functions exist in both sources.
+`stmt_ctor_types` is a frame in the base and gone in the top, where
+`expr_ctor_types` appears instead. Those are inlining and monomorphisation
+decisions moving.
+
+    unreachable additions       ~402, span 1,028   2026-09-04
+    unreachable rewrites        0, eight binaries  today
+    a reached addition          2,733              today
+    the optimizer re-deciding   ~143,000           kanso#1480
+
+The first three are small because none of them is large enough to flip an
+inlining decision. 161 lines across two modules is. **This is not the linker's
+placement**, which is what "layout" has meant in this repository, and it is two
+orders of magnitude larger. No ladder bounds it, because the perturbation is
+"the crate got meaningfully bigger" and that cannot be synthesised inside one
+small function.
+
+What it means for kanso#1480: the move is real instructions on the measured
+path, so the row is reporting honestly, and it is also not work the branch
+chose or can avoid. That is an argument for weighing what a build actually
+costs, which kanso#1470's rows and kanso#1491's `emit_instructions` term do,
+rather than for arguing about this number.
+
+- **DONE** all four shapes measured, and the gate's header carries the table.
+- **DONE** kanso#1480's move named: the optimizer re-deciding, inside
+  inference, on source the branch does not touch.
