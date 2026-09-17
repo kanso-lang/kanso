@@ -6612,3 +6612,56 @@ that is what was measured here.
 
 - **DONE** the rows are CI's, and the first is the bisection confirmed.
 - **BLOCKED** on kanso#1491 weighing `emit_instructions`.
+
+## 2026-09-17 — the start-up row rose 6.3%, and an index cannot pay for itself on one line
+
+CI's sitting on 4266f485, the merged tree of kanso#1478 and kanso#1480 against
+main. Four rows moved together and one did not:
+
+    compile_instructions    35,968,171 -> 36,014,961       +46,790   +0.130%
+    entry_instructions     128,213,972 -> 128,377,400      +163,428   +0.127%
+    library_instructions   128,348,205 -> 128,513,855      +165,650   +0.129%
+    interp_instructions  2,178,502,266 -> 2,182,816,231    +4,313,965   +0.198%
+    startup_instructions     4,837,381 -> 5,144,307       +306,926   +6.345%
+
+The first four are layout, and for all four the change cannot execute: the
+three check rows run `kanso check`, which stops before codegen, and the
+interpreted row anchors at the interpreter's own thread with the front end
+outside it. Four rows within 0.071 percentage points of each other, on a
+workload none of them reaches, is the signature.
+
+**The fifth is fifty times that, so it was profiled rather than assumed.**
+Three trees, rustc 1.98.1, the gate's own box, warm caches, `kanso::main`
+inclusive:
+
+    main             4,837,246
+    kanso#1478       5,081,820   +244,574
+    kanso#1480       5,144,232   + 62,412
+
++306,986 in all, against CI's +306,926 — a reproduction to within 60
+instructions, and a split that says which branch owns which part.
+
+The frames name the mechanism twice. kanso#1478 brings in the
+`OnceLock<Set<&str>>` behind `declares_context_calls` at 599,550 and
+`called_symbols` at 310,752, and takes away the per-name scans under them:
+362,928 + 274,780 + 107,365 + 107,269 + 41,018 + 19,651. kanso#1480 then
+replaces that index with a richer one — `OnceLock<Vec<DeclareLine>>` at
+566,427 and `declare_lines` over `str::Lines` at 453,486 arrive, the
+1,011,803-instruction `Vec<&str>` build and the 714,987 emit closure leave.
+
+Both changes trade a per-name scan for an index built once per process, and
+this workload is a single `print`. There is nothing to amortise the
+construction over, so on this one corpus the construction is very nearly the
+whole reading. The same shape takes 69.64% off `kanso build bench/runbench`.
+A one-line program is where an index is all cost.
+
+**The lever this exposes is not kanso#1480's.** `declare_lines` parses
+DECLARES with `str::Lines` at first use. DECLARES is a constant in the
+compiler's own source, and the two frames that derive it cost 1,019,913
+instructions — a fifth of the start-up row — re-deriving at run time what a
+build step could hand over already parsed. Start-up carries weight 0.25 on the
+development side once the split lands, so this is worth building.
+
+- **DONE** the five rows are CI's, and the fifth is attributed by profile.
+- **OPEN** hand `declare_lines` a parsed constant rather than a string to
+  parse; the measurement above bounds the prize at 1,019,913 instructions.
