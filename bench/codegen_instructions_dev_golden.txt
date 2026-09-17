@@ -25,8 +25,10 @@
 # tree is the C toolchain, so the measured-on line names it beside glibc and
 # rustc.
 #
-# UNMEASURED. This file names the toolchain its value must be read on and
-# carries no value yet, because a row this gate pins may only ever be counted
-# by CI. The first sitting fails on this line and prints its own count in
-# codegen_dev_got.txt; that count is what goes here.
+# 2026-09-17, the first sitting (kanso#1470). CI's reading, taken on the
+# runner because a row this gate pins may only ever be counted there: this
+# container read 1,450,337,132, which is a different clang and a different
+# machine and is not comparable. Five processes, and the second reading in the
+# same job agreed with the first.
 # measured-on glibc=2.39-0ubuntu8.9 clang=19.1.1 rustc=1.98.1
+codegen_instructions_dev=9280351472

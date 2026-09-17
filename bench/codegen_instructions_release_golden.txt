@@ -25,8 +25,10 @@
 # tree is the C toolchain, so the measured-on line names it beside glibc and
 # rustc.
 #
-# UNMEASURED. This file names the toolchain its value must be read on and
-# carries no value yet, because a row this gate pins may only ever be counted
-# by CI. The first sitting fails on this line and prints its own count in
-# codegen_release_got.txt; that count is what goes here.
+# 2026-09-17, the first sitting (kanso#1470). CI's reading; this container
+# read 7,684,965,191 on a different clang and a different machine, which is not
+# comparable. Five processes, and the second reading in the same job agreed
+# with the first. The release tier is 1.30x the development tier here, which is
+# the whole reason the ruling asked for two rows rather than one.
 # measured-on glibc=2.39-0ubuntu8.9 clang=19.1.1 rustc=1.98.1
+codegen_instructions_release=12107507377
