@@ -3686,6 +3686,102 @@ No ratchet row. The compile goldens are already the objection to a revert —
 put the three computations back in front of the match and the rows disagree by
 the amounts above — which is how kanso#1382 through kanso#1387 shipped the same
 kind of reordering, none of which minted a row either.
+## 2026-09-16 — the compile side re-read once the allocator stops being the answer
+
+kanso#1456 took glibc's malloc out of the compiler, and a profile that has been
+read the same way for a month changes shape enough to be worth reading again.
+This is that reading: the mimalloc binary with `arena_eager_commit` off,
+`kanso check compile_corpus` under callgrind at gate settings, 37,911,833
+instructions for the whole process. THE CONTAINER'S, not CI's — its rustc is
+1.94.1 against the runner's 1.98.1 and its anchored row reads 37,317,886 where
+CI reads 36,878,550, about 1.2 per cent high. Every figure below is a share of
+one profile taken in one place, so the shares carry and the absolutes do not.
+
+**The tables are now twice the allocator.** Every mimalloc symbol's self cost,
+summed over the 150 of them the profile names, is 2,771,809 — 7.31%. hashbrown
+comes to 5,415,908 across six rows: `insert` 1,634,418, `rustc_entry`
+1,435,071, `reserve_rehash` 1,043,739, `get_mut` 463,841, `contains_key`
+460,418, `get` 378,421. That is 14.29%, and `__memcmp_avx2_movbe` sits under it
+at 1,147,976 (3.03%) comparing keys that missed. For the month the archive's
+"the runtime is a minority of what a decode costs now" (2026-08-31) has been
+right that "the front end's remaining 13.2% is malloc and free"; it is 7.31%
+now, and the largest dimension on the compile side is the hash tables.
+
+**And the tables are diffuse, on both corpora.** Attributed to the compiler
+frame that owns each table, `insert` on the module corpus is 2,727,637
+instructions over 15,097 calls from 40 callers, the largest `qualify` at 15.7%;
+`rustc_entry` is 1,899,327 over 13,843 calls from 14, the largest
+`check_merged_after_aliases` at 19.1%. The library corpus says the same thing
+at three times the scale: `insert` 8,341,795 (6.28%) over 47,168 calls from 47
+callers with `qualify` again the largest at 13.0%, `rustc_entry` 6,538,220
+(4.92%) over 46,900 calls from 14 with `check_merged_after_aliases` at 18.9%.
+The 2026-09-07 reading of the rehash family — twenty-odd owning sites, the
+largest 0.68% — holds for the whole table family and for both corpora, so the
+14.29% is a dimension rather than a change.
+
+**The second-largest row is flat.** `infer::eval_expr'2` is 5,612,486
+instructions on the library corpus, 4.23%, and the archive has only ever
+carried it as a witness that two binaries agree — never as an attributed lead.
+It is 117 self-instructions over 47,749 calls, 28,495 of them its own
+recursion, with no callee above thirty per cent of what it hands out:
+`try_fold` 1,662,080, `HashMap::get` 862,238, `widen_param` 677,454, `memcmp`
+532,875, `Name as PartialEq<str>::eq` 382,974. A tree walk spending 117
+instructions a node across every expression form is the shape `encode_onto`
+turned out to have on the run side, and the answer is the same — there is no
+block to remove. What the callee list does say is that 27,254 name comparisons
+and 32,152 memcmps sit under one pass, which is the string-key theme again
+rather than a lead of its own.
+
+**What the compiler asks the allocator for.** 24,936 allocations, 23,241
+deallocations, 1,052 reallocations — 49,229 calls. Inclusive they read
+2,150,252, 576,072 and 524,026 instructions, which is 86, 25 and 498 apiece.
+The per-call numbers are close to what an allocator costs; what is left on this
+dimension is the number of calls.
+
+**The pre-sizing seam is closed, and there is now a mechanism beside the
+measurement.** "a set nobody read, and one that grew from empty" (2026-08-30)
+measured the six filtered collects at 4,514 instructions and declined them.
+"the runtime is a minority of what a decode costs now" (2026-08-31) called the
+seam kanso#1158 opened exhausted, with `reserve_rehash` at 0.10% for its
+largest named caller. "the front end is flat too, and one of its leads is an
+artefact of the profiler's environment" (2026-09-07, fifth) priced the rehash
+family at 4.22% over twenty-odd sites and declined it as twenty guesses at a
+final size. All three readings stand. What none of them had was the reason so
+little was there, and the split gives it: of the 8,543 `finish_grow` calls,
+7,491 reach `__rust_alloc` and 1,052 reach `__rust_realloc`. Seven vector grows
+in eight are that vector's first allocation rather than a doubling.
+`with_capacity` replaces the grow path and keeps the allocation, so the most it
+can reach is the bookkeeping — 611,974 instructions of self cost across
+`finish_grow`, `grow_one` and `do_reserve_and_handle`, 1.61% — and only at a
+site where the count is already in hand.
+
+At the largest single growth site the arithmetic runs the other way.
+`parser::P::parse_app` and its recursion twin own 314,363 instructions of grow,
+0.83%, the biggest of the 41 callers. The argument vector is a `Vec::new()`
+filled by pushing, and the match under it hands back the head unchanged when
+the vector came out empty, so a call with no arguments allocates nothing at
+all. A `with_capacity` there buys a grow in the minority case and pays an
+allocation in the majority.
+
+**The rehash reading, re-taken.** 1,912 rehashes at 1,540,385 instructions
+inclusive is 806 apiece, and 87.9% of them are called from `insert` and
+`rustc_entry` themselves rather than from a compiler frame — tables growing
+during ordinary insertion. The 2026-09-07 count of twenty-odd owning sites is
+unchanged by the allocator swap.
+
+**What no entry in the log or the archive has proposed.** A bump arena for the
+compiler. The runtime has had one since the beats landed and every kanso value
+is served from it; the compiler asks libc for every String, every Vec and every
+table it grows, one call at a time, and gives each back the same way. Searched
+both files for `bump`, `bumpalo`, `allocator_api` and `arena`: 607 lines, and
+every one of them is the runtime's arena, the beat, or a fixture that happens
+to name a function `bump`. Neither `bumpalo` nor `allocator_api` appears. The
+shape is the only one on this dimension that reaches the call count rather than
+the per-call cost, and it is unsized: `alloc::vec::Vec` and `String` take a
+custom allocator only behind the unstable `allocator_api`, so the question it
+turns on is how many of the 49,229 calls belong to collections a phase-scoped
+arena could own. That is not answered here. Recorded as an open lead with
+nothing above it that sizes it.
 ## 2026-09-16 — gavel: two welfares and a meta-welfare over them, and the floor re-ratchets
 
 Clay ruled the ledger's "What the compile term counts once codegen is in it"
@@ -3769,3 +3865,71 @@ adds them, with `tests/the_objective_reads_what_the_gate_watches.rs` replaying
 the file, because this model's PROSE has gone stale twice while the file never
 did. Weights and satiations priced from evidence. The entry leaves the ledger
 with this commit and STATUS.md carries the build.
+
+## 2026-09-17 — the allocator was guessing at addresses, and the row was paying for it
+
+The three compile rows have disagreed with their goldens by thirteen
+instructions across runs of identical source since the compiler moved to
+mimalloc on 2026-09-15, and the 2026-09-05 ruling halts a vein that counts two
+numbers for one row. Two published diagnoses were wrong: the runner's CPU
+model and the binary's sha, which were confounded with each other on the only
+evidence available at the time.
+
+**The instrument that settled it prints where two profiles part.**
+kanso#1463 made each compile gate take a second reading inside the job when
+its row fails, and `scripts/gates/profile_diff.sh` totals every function's
+self cost in both profiles and lists the ones that moved. On the first run
+that carried it, the entry row read 131,884,793 and then 131,884,271 — one
+binary, one corpus, one job, 522 apart — and all sixteen functions that moved
+were mimalloc's OS-allocation path: `mi_page_map_set_range_prim`,
+`mi_os_prim_alloc_at`, `_mi_prim_alloc`, `_mi_os_alloc`, `_mi_os_zalloc`,
+`mmap`, `prctl`, `_mi_os_get_aligned_hint`, the stat counters and the mutex
+around them.
+
+**mimalloc's own source says why.** `v3/src/os.c`:
+
+```c
+#if (MI_SECURE>=1 || defined(NDEBUG))  // security: randomize start of aligned allocations
+    const uintptr_t r = _mi_theap_random_next(theap);
+    init = init + ((MI_HINT_ALIGN * ((r>>17) & 0xFFFFF)) % MI_HINT_AREA);
+```
+
+A release build defines `NDEBUG`, so every process draws a 4 MiB-aligned base
+out of a 4 TiB window from per-process entropy and hands it to `mmap` as a
+hint. The page map commits its entries by address, so the same allocation
+costs a different number of instructions depending on where it lands. Three
+runs on one container, one binary, one corpus and one environment, watched
+with `--trace-syscalls`, asked the kernel for `0x48e11400000`,
+`0x52844800000` and `0x38240c00000`.
+
+**So it is normalised rather than explained.** `MI_NO_ALIGNED_HINT` is
+mimalloc's switch for exactly this: the function then always returns NULL and
+the OS chooses, which under valgrind's address-space manager is the same
+address every run. `.cargo/config.toml` defines it through `CFLAGS`, because
+libmimalloc-sys exposes no feature for it and the `cc` crate appends `CFLAGS`
+to its own flags. `mi_option_max_vabits` looked like a runtime lever and is
+not one: it sizes the page map and never reaches the
+`mi_os_mem_config.virtual_address_bits` the hint reads.
+
+**One mutation had to be rewritten, and it said so in advance.** `a_library_the_row_cannot_see.sh` writes a `.cargo/config.toml` carrying
+`-C prefer-dynamic`, so the compiler grows a shared object the instruction row
+cannot see. Its own comment anticipated this: "a repo that grows its own cargo
+config has somewhere for this flag to be lost, so the mutation stops rather
+than appending into it." It appends now, and refuses only if a `[build]`
+section is already there to collide with.
+
+**It costs nothing measurable.** The library row read 133,429,679 with the
+hint and 133,429,679 without it, and three runs without it agree function by
+function. `tests/the_allocator_does_not_guess_at_addresses.rs` reads
+mimalloc's source and goes red if a crate bump renames the switch or a config
+edit drops it.
+
+**Round two: the three rows read thirteen lower, and always did.** CI on the
+no-hint binary reads `compile_instructions` 36,878,537, `entry_instructions`
+131,884,271 and `library_instructions` 132,025,154 — each thirteen below its
+golden. The change did not move them: the run before this one, with the hint
+still on, read 36,878,537 and 132,025,154 for two of the three. The goldens
+were written from a sitting that drew an unlucky address and have been
+thirteen high since. The entry row is where it shows plainly: with the hint on
+it read 131,884,793 and then 131,884,271 inside one job, and with the hint off
+it reads 131,884,271 and nothing else.
