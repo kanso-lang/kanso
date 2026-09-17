@@ -6111,6 +6111,94 @@ report that a row is stale is not a probe, and a probe is eight commands.
 - **OPEN** whether a needless bang survives on a provable index anywhere in the
   tree. Cheap for cloud, which has the bound prover; not a row.
 
+## 2026-09-17 — the `.rodata` entry had two voices, and the pin was never the instrument
+
+The ledger's `Pinning .rodata to a fixed page` entry gained cloud's bisection
+this afternoon and came out contradicting itself: a body saying the term it
+prices is three hundred times larger than anybody thought, and a
+recommendation, written weeks earlier, declining the pin on the strength of the
+small reading. An entry with two voices cannot be ruled, and the ledger's own
+rule is that every entry carries a recommendation so a sitting can be a yes or
+a no.
+
+Rewritten, and the decline stands on different ground. **The pin's own evidence
+never reached the case that matters.** Its demonstration was two sources a
+hundred functions apart — an ADDITION, the same perturbation family as the
+seven-binary ladder, and the family the pin was shown to fix. Nobody has run it
+against a REWRITE, which is what costs 145,472. Adopting the pin on that
+evidence would be adopting it on a measurement of something else, which is the
+error this entry is now a record of twice over.
+
+**And the gate's own header points at a different mechanism.** It says what it
+found chasing this row's variance: a binary whose data and bss differ starts
+the heap at a different break, which moves how much work malloc does to service
+an identical request sequence, with every kanso symbol identical to the
+instruction and only glibc's allocator moving. The heap break is set by where
+`.bss` ends. A fixed `.rodata` start does not fix it.
+
+So the instrument worth ruling on is a heap that starts at the same address
+every run. It removes the term for additions and rewrites alike, and it changes
+the shipped binary by nothing — which answers the kanso#1234 objection the old
+recommendation leaned on, since nothing gets special-cased away from what ships.
+It is also the 2026-09-15 rule read literally. The gate already pins ten
+`GLIBC_TUNABLES` for this exact reason and where the heap begins is the one it
+does not pin.
+
+The entry now names the measurement that settles it, and says it should not be
+ruled without one: cloud's kanso#1480 pair read twice, once with `.rodata`
+pinned and once with the heap start fixed. A build and two callgrind runs.
+
+- **DONE** the entry has one voice and a recommendation a sitting can answer.
+- **OPEN** those two readings. Cloud's, and until they exist this is an
+  argument rather than a decision.
+
+## 2026-09-17 — the rewrite explanation withdrawn, and what the ledger said on it
+
+kanso#1492 built the ladder this morning's entry asked for and the answer
+refutes the entry. Eight rewrites of `without_stats_gate`, unreachable from a
+check, eight distinct binaries: the row is identical to the instruction across
+all of them, `.text` spanning 256 bytes. Rewriting unreachable code costs
+nothing.
+
+So the sentence in "kanso#1480's rows challenged, bisected, and the
+calibration's blind spot found" — that a rewrite moves what sits around it, and
+costs three hundred times what an addition does — is wrong. It was an
+attribution read as a mechanism: the bisection established that 145,472 arrived
+with 74 rewritten lines, and this chat wrote that down as rewriting being the
+cause. A difference-in-differences is not a mechanism until something isolates
+it, and the isolating experiment says zero.
+
+**Where that claim had already travelled, and what each cost.**
+
+    design/compiler-log.md   the entry above, on main       cloud corrects in kanso#1492
+    docs/compiler.html §73   published, stating the rule     corrected here
+    design/pending-gavels.md the `.rodata` recommendation    withdrawn here, unmerged
+
+The ledger one is the one that mattered. kanso#1489 rewrote that entry's
+recommendation around "the term is small for additions and large for rewrites,
+and most changes rewrite", and asked for the entry to be re-weighed on it. That
+is the sentence a sitting would have been ruling against. It is withdrawn
+before the pull request lands rather than corrected after.
+
+**What survives, and the entry is stronger for it.** The pin's decline no
+longer rests on a contested reading of the term's size, because all three
+calibrated shapes now agree it is small — about 402 for an unreachable
+addition, zero for an unreachable rewrite, 2,733 for a reached one. A pin that
+removes part of a few-thousand-instruction term, at the price of a one per cent
+larger shipped binary, is a bad trade on any of those numbers. And the second
+argument is untouched: the gate header's own mechanism is the heap break, set
+by where `.bss` ends, which a fixed `.rodata` start does not reach.
+
+**The 146,628 is open again**, fifty times the largest calibrated shape and
+belonging to no shape anybody has measured. kanso#1492 names what would settle
+it: the frame-level diff of the two compile profiles, which CI uploads as
+artifacts on every run.
+
+- **DONE** the claim withdrawn from the ledger before it was ruled on, and from
+  the published page.
+- **OPEN** what carries the 146,628. Cloud's, and it needs the profile pair
+  rather than another table.
+
 ## 2026-09-17 — seven silicons, one recorded block, and a reader that was never called
 
 kanso#1492 carries no compiler source — a log entry and a gate header, neither
