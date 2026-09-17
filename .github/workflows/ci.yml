@@ -477,6 +477,16 @@ jobs:
                                          printf "b%d=%d/%d ", i, s[i], n[i] }' \
                        /tmp/frames.txt)
           echo "::notice::frame_digest $digest"
+          # AND BUCKET ZERO BY NAME, because the digest has already done its
+          # job. Two sittings of this head, one reading the golden and one
+          # thirteen under it, printed digests differing in exactly one
+          # bucket: b0=1765679/40 against b0=1765692/40, thirty-one buckets
+          # byte-identical and the frame count forty in both. So the thirteen
+          # is one frame whose name length is a multiple of thirty-two, and
+          # the forty of them fit in one line.
+          awk -F'\t' 'length($1) % 32 == 0 { printf "%s=%s ", $1, $2 }' \
+              /tmp/frames.txt > /tmp/b0.txt
+          echo "::notice::frame_bucket0 $(cat /tmp/b0.txt)"
       - name: compile memory
         id: compile_memory
         if: always()
