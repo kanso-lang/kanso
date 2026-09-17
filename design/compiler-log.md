@@ -7496,7 +7496,7 @@ work: seventeen on 2026-08-29, nine on the five oldest dates, nine here. Two
 unbuilt rulings in thirty-five entries. The twenty-one that remain are all
 September.
 
-**Two of September's twenty-one, probed on the way past.** The 2026-09-06
+**Three of September's twenty-one, probed on the way past.** The 2026-09-06
 whole-float ruling — a float's rendering always carries a `.` or an `e`, and
 `.0` is appended where the shortest form has neither — is built:
 `a_whole_float_keeps_its_point` carries the RULED citation and its third line
@@ -7506,12 +7506,25 @@ an infinite or nan float renders as `inf`, `-inf` and `nan` is built:
 first line of its output, and it is a micro golden, so all three engines
 answer them.
 
-Nineteen September entries are unread, and this entry says so rather than
+And the 2026-09-03 suffix-contract ruling — *a `!` name must answer a result;
+a `?` name must answer bool; the checker refuses either violation at the
+declaration* — is built, which is worth saying because that entry's own text
+records the contract as unimplemented at the time: *`pub fn shout! x`
+answering a plain string compiles today.* It does not now. `pub fn shout! x`
+answering a string is refused with ``error[naming]: `shout!` wears a bang: a
+`!` function answers an effect, the box a failure bubbles through``, and `pub
+fn empty? x` answering a string with ``a `?` function answers true or false
+(err may ride along)``. The 2026-09-16 reversal strengthens that contract
+rather than retiring it: every `!` name answers `<t>effect`, which is the
+newer vocabulary for the same requirement. This is the DECLARATION side, and
+distinct from the use-site refusal the box row was probed against.
+
+Eighteen September entries are unread, and this entry says so rather than
 counting them swept.
 
 - **DONE** August swept end to end, and the demanded-knot counter measured
   rather than read.
-- **OPEN** nineteen September entries, across 09-02, 09-03, 09-05, 09-07,
+- **OPEN** eighteen September entries, across 09-02, 09-03, 09-05, 09-07,
   09-08, 09-10, 09-15 and 09-16. Several are almost certainly built — the box
   ruling, the maps normalization and the two welfares each came OFF the list
   today — but "almost certainly" is what this sweep exists to replace.
