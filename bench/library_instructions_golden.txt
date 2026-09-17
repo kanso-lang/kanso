@@ -572,7 +572,14 @@
 # thirteen; this reading and that one agree to the instruction, which is the
 # first time this vein has reproduced across two runs since the compiler
 # moved to mimalloc.
-library_instructions=131978823
+#
+# 2026-09-17, kanso#1468. A LAYOUT MOVE, and the documented kind: `kanso
+# check` stops before codegen, so nothing this change does to the emitter
+# runs on this corpus at all -- but src/codegen.rs IS the compiler, and its
+# bytes and the layout under them moved. 3,305 on 36.8M is 0.009%, and it
+# fell. CLAUDE.md's bullet on this says never to write down that the row
+# cannot move, and never to write down that it did before CI has said so.
+library_instructions=131967995
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

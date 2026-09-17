@@ -4018,3 +4018,11 @@ the instruction, the figures round two took from CI and that the next run
 disagreed with by thirteen. The merge brought main's values in and this writes
 the branch's back. It is the first time this vein has reproduced across two
 runs since the compiler moved to mimalloc, which is what kanso#1466 was for.
+
+**The three compile rows moved, by layout.** CI reads 36,861,474, 131,826,563
+and 131,967,995 against main's 36,864,779, 131,837,650 and 131,978,823 — falls
+of 3,305, 11,087 and 10,828, which is 0.009% on the first. `kanso check` stops
+before codegen, so nothing this change does to the emitter runs on those
+corpora at all; `src/codegen.rs` is the compiler, and its bytes and the layout
+under them moved. That is the case CLAUDE.md's bullet describes, and it says
+what this entry is doing: take it from CI rather than predict it.
