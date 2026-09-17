@@ -463,10 +463,20 @@ jobs:
           # differed by one frame. Two sittings whose compile rows sit
           # thirteen apart differ in exactly one bucket, by thirteen; the
           # filter below then prints that bucket's frames and names it.
-          awk -F'\t' '{ b = length($1) % 32; s[b] += $2; n[b]++ }
-                       END { for (i = 0; i < 32; i++)
-                               printf "b%d=%d/%d ", i, s[i], n[i]; print "" }' \
-              /tmp/frames.txt | sed 's/^/frame_digest /'
+          #
+          # It goes out as a `::notice::`, not as plain stdout. Plain stdout
+          # lands only in the job log, and the job log is the thing that
+          # cannot be fetched -- which is the whole reason the digest exists.
+          # A notice becomes a check-run ANNOTATION, and annotations come back
+          # over the ordinary API, so the digest is readable from anywhere the
+          # rows are. The floor line above has always been a notice; the first
+          # digest was not, and it was unreadable on the sitting it was
+          # written for.
+          digest=$(awk -F'\t' '{ b = length($1) % 32; s[b] += $2; n[b]++ }
+                                 END { for (i = 0; i < 32; i++)
+                                         printf "b%d=%d/%d ", i, s[i], n[i] }' \
+                       /tmp/frames.txt)
+          echo "::notice::frame_digest $digest"
       - name: compile memory
         id: compile_memory
         if: always()
