@@ -3799,3 +3799,54 @@ adds them, with `tests/the_objective_reads_what_the_gate_watches.rs` replaying
 the file, because this model's PROSE has gone stale twice while the file never
 did. Weights and satiations priced from evidence. The entry leaves the ledger
 with this commit and STATUS.md carries the build.
+
+## 2026-09-17 — the allocator was guessing at addresses, and the row was paying for it
+
+The three compile rows have disagreed with their goldens by thirteen
+instructions across runs of identical source since the compiler moved to
+mimalloc on 2026-09-15, and the 2026-09-05 ruling halts a vein that counts two
+numbers for one row. Two published diagnoses were wrong: the runner's CPU
+model and the binary's sha, which were confounded with each other on the only
+evidence available at the time.
+
+**The instrument that settled it prints where two profiles part.**
+kanso#1463 made each compile gate take a second reading inside the job when
+its row fails, and `scripts/gates/profile_diff.sh` totals every function's
+self cost in both profiles and lists the ones that moved. On the first run
+that carried it, the entry row read 131,884,793 and then 131,884,271 — one
+binary, one corpus, one job, 522 apart — and all sixteen functions that moved
+were mimalloc's OS-allocation path: `mi_page_map_set_range_prim`,
+`mi_os_prim_alloc_at`, `_mi_prim_alloc`, `_mi_os_alloc`, `_mi_os_zalloc`,
+`mmap`, `prctl`, `_mi_os_get_aligned_hint`, the stat counters and the mutex
+around them.
+
+**mimalloc's own source says why.** `v3/src/os.c`:
+
+```c
+#if (MI_SECURE>=1 || defined(NDEBUG))  // security: randomize start of aligned allocations
+    const uintptr_t r = _mi_theap_random_next(theap);
+    init = init + ((MI_HINT_ALIGN * ((r>>17) & 0xFFFFF)) % MI_HINT_AREA);
+```
+
+A release build defines `NDEBUG`, so every process draws a 4 MiB-aligned base
+out of a 4 TiB window from per-process entropy and hands it to `mmap` as a
+hint. The page map commits its entries by address, so the same allocation
+costs a different number of instructions depending on where it lands. Three
+runs on one container, one binary, one corpus and one environment, watched
+with `--trace-syscalls`, asked the kernel for `0x48e11400000`,
+`0x52844800000` and `0x38240c00000`.
+
+**So it is normalised rather than explained.** `MI_NO_ALIGNED_HINT` is
+mimalloc's switch for exactly this: the function then always returns NULL and
+the OS chooses, which under valgrind's address-space manager is the same
+address every run. `.cargo/config.toml` defines it through `CFLAGS`, because
+libmimalloc-sys exposes no feature for it and the `cc` crate appends `CFLAGS`
+to its own flags. `mi_option_max_vabits` looked like a runtime lever and is
+not one: it sizes the page map and never reaches the
+`mi_os_mem_config.virtual_address_bits` the hint reads.
+
+**It costs nothing measurable.** The library row read 133,429,679 with the
+hint and 133,429,679 without it, and three runs without it agree function by
+function. `tests/the_allocator_does_not_guess_at_addresses.rs` reads
+mimalloc's source and goes red if a crate bump renames the switch or a config
+edit drops it.
