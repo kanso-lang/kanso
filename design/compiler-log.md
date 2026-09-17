@@ -3987,6 +3987,17 @@ attempts read the same three numbers. So the row reproduces within a commit
 since kanso#1466 took mimalloc's randomised base address out, and the thirteen
 separates a sitting from the sitting the golden was taken on.
 
+**The same tree, twice, thirteen apart.** DONE. kanso#1462 was green on
+`fc3305f8`. Its branch was updated — protection wants the checks on an
+up-to-date head — and the identical work came back thirteen out on all three
+rows: 36,862,804 to 36,862,817, 131,830,523 to 131,830,536, 131,972,417 to
+131,972,430. What the update brought in was `hooks/post-merge`,
+`scripts/install_hooks.sh` and one test file, 132 lines, none of them compiled
+into the binary, `include_str!`'d, or read by a compile gate, with no golden
+moving. Same compiler, same corpus, same goldens, measured twice. This is the
+experiment the re-run above was trying to manufacture, and it arrived on its
+own.
+
 **Where it can be.** DONE. The three profiles the job already writes name the
 candidates by themselves: 588 frames carry the same self cost across all three
 workloads, 556,052 instructions in all. Restricted to frames the row can see —
