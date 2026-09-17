@@ -5408,3 +5408,34 @@ this is a change in what is counted rather than a gain to bank.
 
 - **DONE** the three rows carry the excluded sitting; one page span follows.
 - **OPEN** the second build, which is the whole claim.
+
+## 2026-09-17 — kanso#1482's three rows, priced: layout, upward
+
+The first sitting this branch has taken on the anchor kanso#1487 left, so
+each number is one value rather than a face of the thirteen.
+
+```
+  compile_instructions   35,964,325 ->  35,964,418   +93 (+0.00026%)
+  entry_instructions    128,204,133 -> 128,204,697  +564 (+0.00044%)
+  library_instructions  128,339,261 -> 128,339,772  +511 (+0.00040%)
+  startup_instructions    4,838,323 ->   4,837,367  -956 (-0.0198%)
+```
+
+`compile_allocs` came back 27,397 and compile memory byte-identical, so no
+decision the compiler makes changed.
+
+Three of the four worsened and they are named here because the trend gate
+asks for that and it is right to: a row that moves without a sentence is the
+thing the rule exists to catch. What moved them is the binary's layout. The
+change is the emitter's stack-slot check reading the line's first space
+instead of searching it for a substring, and the three rows above count
+`kanso check`, which stops before codegen. The pass cannot run on any of
+them.
+
+The row the change is for is start-up, and it falls 956.
+
+welfare weighs 657 of this against a dead band of about 105,000 and does not
+move.
+
+- **DONE** the four rows, priced.
+- **OPEN** nothing; the branch is CI's to confirm.
