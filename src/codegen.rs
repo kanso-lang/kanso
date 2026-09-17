@@ -1550,6 +1550,7 @@ pub fn emit_ir(program: &Program, convention: ClosureConvention) -> Result<Strin
             .filter(|t| !t.members.is_empty())
             .map(|t| (t.name.clone(), t.members.clone()))
             .collect(),
+        group_by_name: group_indices_by_name(program),
         inference,
         escape,
         byte_disc,
@@ -1582,6 +1583,21 @@ struct Backend<'a> {
     /// see `ClosureConvention`; decided by the caller, never probed here
     convention: ClosureConvention,
     program: &'a Program,
+    /// Which declarations make up each group, by name, in program order.
+    ///
+    /// `group_indices` used to answer this by scanning `program.fns` end to
+    /// end and collecting the matches into a fresh `Vec<usize>`, and
+    /// `group_param_set` and `group_return_set` ask it once per parameter and
+    /// once per call site. That is a question about the whole program asked
+    /// once per name -- the shape kanso#1464, kanso#1468, kanso#1473 and
+    /// kanso#1475 each removed from somewhere else -- and it cost 66,271,847
+    /// instructions of `kanso build bench/runbench` over 7,556 calls.
+    ///
+    /// Keyed by NAME, with arity filtered off the result, for the reason
+    /// kanso#1475's index is: the names come from the program's own
+    /// declarations but also from call sites, and a `&str` key borrows as
+    /// `str` where a tuple key would demand the program's lifetime.
+    group_by_name: HashMap<&'a str, Vec<usize>>,
     inference: infer::Inference,
     forwarders: HashMap<(String, usize), String>,
     /// subtype name -> parent name; non-empty programs get chain-aware
@@ -2009,6 +2025,37 @@ fn queries_named<'a>(text: &str, queries: &crate::hash::Set<&'a str>) -> crate::
         }
     }
     found
+}
+
+/// Every declaration's index, by name, in program order.
+///
+/// `Backend::group_indices` scanned `program.fns` end to end and collected the
+/// matches into a fresh `Vec<usize>` on every call, and `group_param_set` and
+/// `group_return_set` ask it once per parameter and once per call site.
+fn group_indices_by_name(program: &Program) -> HashMap<&str, Vec<usize>> {
+    let mut by_name: HashMap<&str, Vec<usize>> = HashMap::default();
+    for (at, decl) in program.fns.iter().enumerate() {
+        by_name.entry(decl.name.as_str()).or_default().push(at);
+    }
+    by_name
+}
+
+/// The lookup over that index. Keyed by NAME with arity filtered off the
+/// result, because the names come from call sites as well as declarations and
+/// a `&str` key borrows as `str` where a tuple key would demand the program's
+/// lifetime.
+fn group_indices_in<'s>(
+    by_name: &'s HashMap<&str, Vec<usize>>,
+    program: &'s Program,
+    name: &str,
+    arity: usize,
+) -> impl Iterator<Item = usize> + 's {
+    by_name
+        .get(name)
+        .map_or(&[][..], |v| v.as_slice())
+        .iter()
+        .copied()
+        .filter(move |at| program.fns[*at].params.len() == arity)
 }
 
 /// Every `sym` for which `text` writes `@sym(`, collected in one pass.
@@ -2530,24 +2577,18 @@ fn not_failure_test(f: &mut FnEmit, value: &str) -> String {
 }
 
 impl<'a> Backend<'a> {
-    fn group_indices(&self, name: &str, arity: usize) -> Vec<usize> {
-        self.program
-            .fns
-            .iter()
-            .enumerate()
-            .filter(|(_, d)| d.name == name && d.params.len() == arity)
-            .map(|(i, _)| i)
-            .collect()
+    /// A group's declaration indices, read out of the index rather than
+    /// scanned for. Program order, which is what the scan gave.
+    fn group_indices<'s>(&'s self, name: &str, arity: usize) -> impl Iterator<Item = usize> + 's {
+        group_indices_in(&self.group_by_name, self.program, name, arity)
     }
 
     fn group_param_set(&self, name: &str, arity: usize, param: usize) -> Set {
-        self.group_indices(name, arity)
-            .iter()
-            .fold(0, |acc, i| acc | self.inference.param(*i, param))
+        self.group_indices(name, arity).fold(0, |acc, i| acc | self.inference.param(i, param))
     }
 
     fn group_return_set(&self, name: &str, arity: usize) -> Set {
-        self.group_indices(name, arity).iter().fold(0, |acc, i| acc | self.inference.returns[*i])
+        self.group_indices(name, arity).fold(0, |acc, i| acc | self.inference.returns[i])
     }
 
     /// A parameter proven to be exactly `int` crosses the tailcc boundary as a
@@ -7313,5 +7354,67 @@ fn register_width(ty: &str) -> usize {
     match ty {
         "%KValue" | "%parsed" => 2,
         _ => 1,
+    }
+}
+
+#[cfg(test)]
+mod the_emitter_group_index_answers_what_the_scan_answered {
+    use super::*;
+
+    /// What `Backend::group_indices` did before the index existed, kept as the
+    /// oracle.
+    fn scanned(program: &Program, name: &str, arity: usize) -> Vec<usize> {
+        program
+            .fns
+            .iter()
+            .enumerate()
+            .filter(|(_, d)| d.name == name && d.params.len() == arity)
+            .map(|(i, _)| i)
+            .collect()
+    }
+
+    /// Every question the emitter can ask, asked both ways. `group_param_set`
+    /// and `group_return_set` FOLD over the answer, so a missing or extra
+    /// index is a wrong type set and a silently wrong ABI -- and the fold is
+    /// order-independent, which is why order is checked here anyway rather
+    /// than left to a future caller to discover.
+    fn agrees_over(program: &Program) {
+        let by_name = group_indices_by_name(program);
+        let mut arities: Vec<usize> = program.fns.iter().map(|d| d.params.len()).collect();
+        arities.sort_unstable();
+        arities.dedup();
+        let mut names: Vec<&str> = program.fns.iter().map(|d| d.name.as_str()).collect();
+        names.push("a name nothing declares");
+        for name in names {
+            for &arity in arities.iter().chain(std::iter::once(&99)) {
+                let want = scanned(program, name, arity);
+                let got: Vec<usize> = group_indices_in(&by_name, program, name, arity).collect();
+                assert_eq!(
+                    want, got,
+                    "`{name}` at arity {arity}: the scan found {want:?} and the index found {got:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn over_the_library_the_compiler_carries() {
+        let program =
+            crate::compile_module(std::path::Path::new("lib/json"), false).expect("lib/json");
+        agrees_over(&program);
+    }
+
+    #[test]
+    fn over_a_name_declared_at_two_arities() {
+        // One name at two arities, and a second sharing neither: the case a
+        // name-keyed index has to get right.
+        let src = concat!(
+            "fn f x\n  x\n\n",
+            "fn f x y\n  x + y\n\n",
+            "fn g x\n  x\n\n",
+            "main = print \"{f 1} {f 1 2} {g 3}\"\n"
+        );
+        let program = crate::compile("test.kso", src, false).expect("the fixture compiles");
+        agrees_over(&program);
     }
 }
