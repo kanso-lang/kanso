@@ -1,0 +1,34 @@
+# The allocator is told not to guess at addresses, because the compile rows
+# count what it costs to guess.
+#
+# mimalloc v3 picks a 4 MiB-aligned hint address for its OS allocations out of
+# a 4 TiB window, and in any release build the base of that window is RANDOM
+# per process -- v3/src/os.c, `_mi_os_get_aligned_hint`, under
+# `#if (MI_SECURE>=1 || defined(NDEBUG))`. The page map commits its entries by
+# address, so the same allocation costs a different number of instructions
+# depending on where it lands. On CI that showed up as one binary reading
+# 131,884,793 and then 131,884,271 for the entry row inside a single job, and
+# every one of the sixteen functions that moved between the two profiles was
+# on mimalloc's OS path.
+#
+# Three runs on one container, one binary, one corpus, one environment, asked
+# the kernel for 0x48e11400000, 0x52844800000 and 0x38240c00000. That is
+# external state inside a measurement, and the 2026-09-15 ruling says to
+# normalise it rather than explain it.
+#
+# `MI_NO_ALIGNED_HINT` is mimalloc's own switch for this: with it the function
+# always returns NULL and the OS chooses, which under valgrind's address-space
+# manager is the same address every run. It costs nothing measurable -- the
+# library row read 133,429,679 with the hint and 133,429,679 without, and three
+# runs without it agree function by function.
+#
+# It reaches the C build through CFLAGS because libmimalloc-sys exposes no
+# feature for it, and the `cc` crate appends CFLAGS to its own flags. `force`
+# is there because a CFLAGS already in the environment would take precedence
+# otherwise, and one contributor's stray flag putting the randomisation back is
+# the whole failure this is here to stop -- any CFLAGS from outside would make
+# the build non-reproducible anyway, which is the thing being fixed.
+# `tests/the_allocator_does_not_guess_at_addresses.rs` reads mimalloc's source
+# and goes red if a crate bump moves the switch.
+[env]
+CFLAGS = { value = "-DMI_NO_ALIGNED_HINT", force = true }
