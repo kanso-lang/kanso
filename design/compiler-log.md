@@ -4493,3 +4493,37 @@ are ten map lookups of which the largest is 0.94%. The structural lever is
 interning names to integers so the maps stop comparing strings at all, which
 would reach that 3.5% and part of the 2.6% in rehashing beside it. That is a
 refactor across check.rs, infer.rs and codegen.rs, and it is not costed yet.
+
+## 2026-09-17 — the verdict fell off the end of the annotation cap
+
+`codegen_instructions.sh` already counts a disagreeing row a second time and
+says which of the two cases it is: the change moved the row, or the same binary
+counted two numbers. On kanso#1470 both codegen rows and all three compile rows
+failed in one job, each printing a dozen lines of explanation, and GitHub keeps
+at most **fifty annotations per check run**. The two lines carrying the answer
+were past the cap. The job could be read as far as `a move of -6531790` and no
+further, so a gate that had already settled the question reported nothing.
+
+The verdict now goes immediately after the count and before the explanation.
+The explanation is worth having and it is worth nothing ahead of the answer.
+
+`codegen_again_<tier>` also goes out as a `::notice::`. It was a `printf`, so
+it reached the job log alone — the same trap the frame digest fell into on
+claude/self-dump the same afternoon, and the same fix. Anything a reader needs
+from a CI job has to be an annotation; stdout is for the reader who can fetch
+the log, and that is not always available.
+
+The three compile rows on this branch read −13 with no `src/` or `lib/` change
+in the diff at all:
+
+    $ git diff --name-only origin/main...origin/claude/codegen-rows
+    .github/workflows/ci.yml, CLAUDE.md, bench/codegen_corpus/**,
+    bench/codegen_instructions_*_golden.txt, scripts/**, tests/**
+
+so that one is the cross-run thirteen and not this branch's. kanso#1463 landed
+the second reading for the compile gates this morning, which is what settles it
+from inside the job; this merge brings it onto the branch.
+
+- **DONE** the verdict is readable.
+- **OPEN** what the codegen rows' 6,531,790 and 6,645,392 actually are. The
+  next sitting says it in one line.

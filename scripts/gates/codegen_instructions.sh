@@ -168,11 +168,29 @@ for f in /tmp/cg.codegen.${tier}b.*; do
   [ -n "$n" ] && again=$((again + n))
 done
 printf 'codegen_again_%s row=%s (the first reading was %s)\n' "$tier" "$again" "$got"
+# As a notice too, so it survives as an annotation: plain stdout reaches only
+# the job log, which is the one place a reader may not be able to fetch.
+echo "::notice::codegen_again_${tier}=${again} first_reading=${got}"
 printf 'codegen_again_%s=%s\n' "$tier" "$again" >> codegen_${tier}_got.txt
 
 echo "::error::codegen_instructions_${tier} counted $got against $want in $golden,"
 echo "::error::a move of $((got - want)). Exactly one of two things is true,"
 echo "::error::and they are settled differently."
+echo "::error::"
+# THE VERDICT GOES FIRST, and that is not style. GitHub keeps at most fifty
+# annotations per check run, and this gate emits a dozen lines of explanation
+# per failing row. On kanso#1470 both codegen rows and all three compile rows
+# failed in one job; the two lines below, which say WHICH of the two cases it
+# is, fell off the end of the cap and the job could only be read as far as
+# "a move of -6531790". The explanation is worth having and it is worth
+# nothing ahead of the answer.
+if [ "$again" = "$got" ]; then
+  echo "::error::VERDICT (1): this binary is stable -- a second count in this"
+  echo "::error::same job read $again, the same number."
+else
+  echo "::error::VERDICT (2): REPRODUCTION FAILURE -- this binary counted $got"
+  echo "::error::and then $again in one job. This vein is halted."
+fi
 echo "::error::"
 echo "::error::(1) THE CHANGE UNDER TEST MOVED IT. Ordinary ratchet: regenerate"
 echo "::error::    $golden, and say in design/compiler-log.md which way it went"
