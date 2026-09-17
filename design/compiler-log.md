@@ -6184,3 +6184,71 @@ passes here had the answer one paragraph away.
 - **OPEN** what the probe did not reach and the row cannot retire without: the
   710 `xs[i]!` sites, `!` names in lib answering a box, and the two cost levers
   kanso#1477 reports built. Their own pass.
+
+## 2026-09-17 — kanso#1478 as the one tip: five changes, three rows down and two up
+
+The run of five landed as a single head rather than five merges, because each
+merge to main invalidates every other branch's measured rows. CI's sitting on
+1fda8d25, against main 298636b7:
+
+    compile_instructions    35,968,792 -> 35,868,792     -100,000   -0.278%
+    entry_instructions     128,217,983 -> 127,871,094     -346,889   -0.270%
+    library_instructions   128,352,174 -> 128,008,929     -343,245   -0.267%
+    startup_instructions     4,838,372 -> 5,082,497       +244,125   +5.05%
+    interp_instructions  2,178,559,085 -> 2,182,341,803 +3,782,718   +0.174%
+
+**The three check rows fall by WORK, which separates this head from kanso#1468
+alone.** That branch moved the same rows by layout, because everything it
+edited sits under `emit_ir`. The beat and linearity indexes above it run inside
+`kanso check`, so the corpora these three rows measure are exactly where they
+pay.
+
+**Two counters worsened: `startup_instructions` landed on 5,082,497 and
+`interp_instructions` on 2,182,341,803.**
+
+**Start-up decomposes, because kanso#1468 took its own sitting on this row two
+hours earlier and read 5,077,523.** So that branch is 239,151 of the 244,125
+and the four above it are 4,974 between them. The 239,151 is attributed in its
+own note: `declares_context_calls` builds its set once per process out of
+DECLARES's 1,187 lines, 599,739 instructions inclusive, against about 360,000
+of per-line searching removed. One shape, five times over — a fixed index
+against a saving proportional to what the program has, on the one corpus with
+nothing to spread it over. kanso#1484 takes the larger part of it back.
+
+**The interpreted row is layout, and this time that was measured rather than
+assumed.** 3.78 million is sixteen times the largest move this vein had shown,
+which is not a number to wave through on the argument that worked for the
+smaller ones.
+
+The row excludes the front end: the gate anchors at
+`run_interpreted_on_stack`, the interpreter's own thread, so the 46.3 million
+`kanso::main` spends parsing and checking that corpus is not in it. A
+front-end change cannot move this row by working — only by moving the binary.
+
+Both sides reproduced here under rustc 1.98.1, main 2,178,694,946 against
+2,182,308,031, a local delta of 3,613,085 against CI's 3,782,718. Where it
+sits:
+
+    eval           18,445,521,672 -> 18,479,680,323   +0.185%
+    call           11,157,959,351 -> 11,181,808,771   +0.214%
+    call_named     11,127,354,432 -> 11,151,189,142   +0.214%
+    eval_tail       9,866,786,211 ->  9,888,320,078   +0.218%
+    dispatch       10,516,297,101 -> 10,535,892,811   +0.186%
+    run_main        2,178,075,324 ->  2,181,688,409   +0.166%
+
+A uniform fifth of a per cent across every frame of the interpreter is what a
+moved working set looks like; work concentrates and this does not. The size
+follows the size of the perturbation — five source changes across three files,
+where every earlier reading on this vein came from one.
+
+**The first reading of that profile was wrong, and the way it was wrong is the
+day's third instance.** A frame diff at `--threshold=99.9` showed
+`Arc<str>::fmt` at 42,639,334 on main and `Rc<str>::fmt` at exactly that on the
+branch, which reads as the interpreter's string type having changed. It had
+not: `src/eval.rs` is byte-identical between the two trees and both binaries
+carry both symbols. The threshold cut fell differently in the two listings, so
+one named a frame the other omitted. A difference that appears only because two
+listings were truncated differently is not a difference, and the check that
+caught it — `nm` on both binaries — took one command.
+
+- **DONE** the rows are CI's, and the two that rose are attributed.
