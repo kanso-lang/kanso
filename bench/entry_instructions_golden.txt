@@ -723,6 +723,12 @@
 # 2026-09-17 (kanso#1484): entry_instructions 128,204,133 -> 127,927,341, a FALL
 # of 276,792 (-0.2159%). The DECLARES set, built once. Same sitting as the
 # compile row.
+# 2026-09-17, kanso#1468 on the excluded row. 281,356 lower, layout.
+#
+# 2026-09-17, merged with the base. The base moved this row's FILE and not
+# the compiler: since this branch measured, the only thing that landed
+# under it is a row written into a golden, so the value below is this
+# branch's own sitting and it still stands.
 entry_instructions=127927341
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that

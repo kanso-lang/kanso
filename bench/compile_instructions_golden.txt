@@ -1910,6 +1910,16 @@
 # that set from scratch on every call; it is a constant now. CI's sitting on the
 # merged head 76f63007, the first this branch has taken with the printed line
 # excluded.
+# 2026-09-17, kanso#1468 on the excluded row. 77,692 lower. The emitter's two
+# whole-body questions are asked once per name now instead of once per name per
+# declaration, and this is the layout half of that: `kanso check` stops before
+# codegen, so what moved the row is the compiler binary carrying different
+# bytes.
+#
+# 2026-09-17, merged with the base. The base moved this row's FILE and not
+# the compiler: since this branch measured, the only thing that landed
+# under it is a row written into a golden, so the value below is this
+# branch's own sitting and it still stands.
 compile_instructions=35887996
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
