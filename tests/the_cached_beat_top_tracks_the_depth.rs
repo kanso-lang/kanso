@@ -100,8 +100,7 @@ fn the_counting_build_finds_the_cached_top_where_the_depth_says() {
 
     // `build` names the binary for the program, which is the directory.
     let name = dir.file_name().expect("the stage has a name").to_owned();
-    let out =
-        Command::new(dir.join(name)).current_dir(&dir).output().expect("the binary runs");
+    let out = Command::new(dir.join(name)).current_dir(&dir).output().expect("the binary runs");
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(
         !err.contains("the cached beat top and the beat depth disagree"),
