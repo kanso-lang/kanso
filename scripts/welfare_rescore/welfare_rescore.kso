@@ -104,14 +104,20 @@ fn parsed_meta model
 fn meta_line? l
   text/slice l 1 5 == "meta "
 
+# A SATIATION OF NOUGHT MEANS NO META AT ALL, and that is what a model without
+# a meta line gets. `saturated` hands the fraction back untouched and the
+# divisor below is one, so the score is the plain renormalised sum the tool
+# computed before the 2026-09-16 split -- which is what a pre-split model asked
+# for and what five hundred rows were scored by. Saturating them anyway would
+# rewrite every historical number for a model nobody applied to them.
 fn over_read _ true
-  over 1.0 0.0 1.0
+  over 1.0 0.0 0.0
 
 fn over_read rows false
   return over_read rows true if length rows < 1
   line = rows[1]
   parts = text/split (text/slice line 6 (length line)) "|"
-  return over 1.0 0.0 1.0 if length parts < 3
+  return over 1.0 0.0 0.0 if length parts < 3
   a = text/to_float parts[1]
   b = text/to_float parts[2]
   c = text/to_float parts[3]
@@ -630,6 +636,7 @@ fn weigh m p d false false
   m.prod_share * saturated m.satiation p + m.dev_share * saturated m.satiation d
 
 fn saturated k w
+  return w if k == 0.0
   w / (w + k)
 
 # How much of the formula this row's counters cover: each term's weight times
