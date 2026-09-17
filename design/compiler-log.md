@@ -6702,3 +6702,28 @@ baselines corrected, the three welfares read 76.13 against a floor of
 76.12766770905162.
 
 - **DONE** rebased, and the score still sits on its floor.
+
+## 2026-09-17 — kanso#1470's CI sitting, and the emit vein's first reading on a runner
+
+    emit_instructions       382,309,867 ->   382,212,543     -97,324   -0.025%
+    compile_instructions     35,968,171 ->    35,968,173          +2
+    entry_instructions      128,213,972 ->   128,213,970          -2
+    startup_instructions      4,837,381 ->     4,836,950        -431  -0.0089%
+    library_instructions    128,348,205                   byte-identical
+    interp_instructions   2,178,502,266                   byte-identical
+    codegen_instructions_dev and _release agree with their goldens
+
+**`compile_instructions` worsened and lands at 35,968,173.** Two instructions.
+The entry row fell by the same two and the library and interpreted rows did
+not move at all. This branch adds counters and the gates that read them and
+changes no decision the front end makes, so what moved is the binary's bytes,
+at the smallest scale this vein has ever recorded.
+
+**The emit row's old value was not CI's.** The file carried 382,309,867 under a
+note calling it CI's first sitting; it was a container's, and the gate could
+not have caught the mislabelling because the golden named no host at all —
+`bench/emit_instructions_golden.txt names no host, so nothing can say whether
+its rows may be read here`. The measured-on line is there now, under the
+runner's own reading.
+
+- **DONE** CI's sitting, and the golden says which host it was taken on.
