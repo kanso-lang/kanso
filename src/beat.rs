@@ -1023,7 +1023,8 @@ fn classify_all(
     groups
         .into_iter()
         .filter_map(|(name, arity)| {
-            let whole = Whole { program, value_uses: &value_uses, inference, mut_sites, tails: &tails };
+            let whole =
+                Whole { program, value_uses: &value_uses, inference, mut_sites, tails: &tails };
             classify(&whole, chains, &allocating, &name, arity).map(|v| (name, arity, v))
         })
         .collect()
@@ -1772,9 +1773,8 @@ impl<'a> ValueUses<'a> {
         let mut names = crate::hash::Set::default();
         for decl in &program.fns {
             for stmt in &decl.body {
-                let (Stmt::Bind { expr, .. }
-                | Stmt::Expr(expr)
-                | Stmt::Set { value: expr, .. }) = stmt;
+                let (Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. }) =
+                    stmt;
                 collect_value_uses(expr, &mut names);
             }
         }
@@ -1795,9 +1795,8 @@ fn collect_value_uses<'a>(e: &'a Expr, out: &mut crate::hash::Set<&'a str>) {
         }
         Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
             for st in stmts {
-                let (Stmt::Bind { expr, .. }
-                | Stmt::Expr(expr)
-                | Stmt::Set { value: expr, .. }) = st;
+                let (Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. }) =
+                    st;
                 collect_value_uses(expr, out);
             }
         }
@@ -1906,9 +1905,8 @@ mod the_value_use_index_answers_what_the_scan_answered {
     fn scanned(program: &Program, name: &str) -> bool {
         program.fns.iter().any(|d| {
             d.body.iter().any(|stmt| {
-                let (Stmt::Bind { expr, .. }
-                | Stmt::Expr(expr)
-                | Stmt::Set { value: expr, .. }) = stmt;
+                let (Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. }) =
+                    stmt;
                 value_use(expr, name)
             })
         })
@@ -1926,9 +1924,8 @@ mod the_value_use_index_answers_what_the_scan_answered {
         for decl in &program.fns {
             every.insert(decl.name.as_str());
             for stmt in &decl.body {
-                let (Stmt::Bind { expr, .. }
-                | Stmt::Expr(expr)
-                | Stmt::Set { value: expr, .. }) = stmt;
+                let (Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. }) =
+                    stmt;
                 collect_names_borrowed(expr, &mut every);
             }
         }
