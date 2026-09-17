@@ -5994,9 +5994,40 @@ derive it in the build. `hash::digest_of` shows a `const fn` handling 450,100
 bytes within rustc's const-eval budget when it steps a word at a time, so the
 technique is in the tree and measured.
 
+### And the third instance is two thirds of a compile
+
+The same question asked of `kanso check` gives a larger answer. On this box,
+on the compile corpus:
+
+        kanso::main                36,331,296
+        kanso::load_dependencies   24,886,969   68.50%
+
+`bench/compile_corpus/compile_corpus.kso` is twenty-five lines and names four
+imports: `std/json`, `std/list`, `std/testing`, `std/text`. All four resolve to
+`include_str!` of `lib/*.kso` — the loader checks the embedded copy BEFORE the
+filesystem, so a `std/` module is a constant of the compiler however the
+compiler was installed. So better than two thirds of what the compile term
+measures is the standard library being lexed, parsed, inferred and checked from
+scratch, from a constant, once per process, every time.
+
+That is worth saying about the term as well as about the compiler: a change to
+the front end moves the third of the row it can reach, and the other two thirds
+sit there.
+
+One seam is already visible in `load_dependencies`. The compiled module is
+qualified per importer — `qualify(&mut dep, qual, ...)` renames into the
+importer's namespace — but what it qualifies does not depend on the importer.
+The module's compiled form is a function of its own source, which is a
+constant, and the qualification is the cheap part applied after.
+
 - **DONE** measured, spec'd, and the row is CI's to write.
 - **OPEN** derive what the emitter asks of DECLARES at build time rather than
   per process. The bound on this box is 2,215,022 instructions of start-up,
   and it subsumes the `declare_lines` item named on kanso#1480's start-up
   golden (1,019,913 on the branches that have it). It wants the index work in
   flight to land first, since it replaces the thing those branches build.
+- **OPEN, and the largest number in this entry** the standard library is
+  re-derived from a compiler constant on every process: 24,886,969 of a
+  36,331,296-instruction compile. What a build-time derivation has to carry,
+  and whether a module's compiled form can be serialised at all, is not
+  answered here. The measurement is, and the seam is the qualification step.
