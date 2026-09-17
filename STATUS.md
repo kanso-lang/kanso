@@ -118,11 +118,17 @@ not audited. Swept again on 2026-09-14 against merged main: the effect-type
 row came off, built and merged as kanso#1372, and the exhaustiveness row came
 off with kanso#1369. The book row came off with kanso#1412, which its own
 log entry calls the live remainder of that ruling. Two rows stand on
-2026-09-17, the build hole having come off built (kanso#1447, the day after it
-was found twenty-three days off this list): the explicit box, fully ruled once its `!` half went on
-2026-09-16, and the build hole, ruled 2026-08-24 and found off this list on
-2026-09-16. The compile row's normalization, ruled 2026-09-15, was built the
+2026-09-17: the explicit box, fully ruled once its `!` half went on
+2026-09-16, and the two welfares, ruled 2026-09-16. The build hole came off
+built as kanso#1447, the day after it was found twenty-three days off this
+list, and the compile row's normalization, ruled 2026-09-15, was built the
 same night (kanso#1439) and came off. Neither remaining row waits on anything.
+
+That sentence named the build hole as a standing row and as one that had come
+off, in the same breath, and did not name the two welfares at all -- an edit
+that removed a row and left the count's prose behind it. Corrected 2026-09-17.
+This paragraph is the first thing cloud reads before choosing work, so a row
+miscounted here is a row chosen or skipped wrongly.
 
 ### The box is explicit, an err is a value, and a bare err halts where it lands (2026-09-15)
 
@@ -147,6 +153,37 @@ provable; `!` names in lib answering a box; and the two cost levers, an
 inlined bind for a pure index read and bound discharge for a literal index
 into a known-length list, each measured, with the floor moving under the
 ironclad rule where they come in short. Nothing here waits on a ruling.
+
+**Probed 2026-09-17 against a release build of the tip, and the probe was
+wrong twice before it was right.** On the parts reachable this way the row's
+work is BUILT, which agrees with kanso#1477's report:
+
+- the constructor. `effect 5` and `effect (err "nope")` both answer a box that
+  `bind` and `rescue` take.
+- an `(err _)` arm matching a bare err anywhere.
+- the check-time refusal, in all three shapes. `boom 0 + 1`, `(boom 0)[0]` and
+  `add1 (boom 0)` each stop at check with `error[exhaustive]: this can be an
+  err and ... wants a value`.
+
+**Both wrong passes made one mistake, and it is worth the space.** The first
+reported the refusal missing, on fixtures that each bound the err to a name --
+`x = boom 0` then `x + 1`. The rule reads calls and not names, deliberately.
+The second, correcting the first, reported that ch04 fails to document that
+blind spot although `docs/compiler.html` section 71 claims it does. ch04
+documents it plainly: *`share` above is a name, and the checker reads calls,
+not the names they are bound to, so the failure rides past `with_tip` at run
+time and the endpoint reports it.* The grep behind that second claim searched
+for the words "blind spot" rather than reading the paragraph.
+
+So nothing on the page or in the book is owed here, `railway.kso` runs because
+the chapter says it runs, and the lesson is the one both passes broke: a claim
+that something is ABSENT is only as good as the search for it being present,
+and a search by phrase is not that.
+
+**What this probe did NOT reach**, and so cannot retire the row on: the 710
+sites handing `xs[i]!` to an operator, `!` names in lib answering a box, and
+the two cost levers. kanso#1477 reports the levers built. Those want their own
+pass before the row comes off.
 
 ### Two welfares and a meta-welfare over them (2026-09-16)
 
