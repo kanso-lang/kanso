@@ -1921,7 +1921,14 @@
 # base, so the merged tree is reading neither number. The value below is
 # main's, carried forward so the gate has one value to fail against
 # rather than none; the merged sitting is CI's to take.
-compile_instructions=35968792
+#
+# 2026-09-17, kanso#1482 on the tree merged with kanso#1462. CI reads
+# 35,968,171 against main's 35,968,792, a fall of 621 -- 0.0017%. LAYOUT.
+# `is_a_stack_slot` is asked from `FnEmit::write`, which sits under
+# `emit_ir`, and `kanso check` stops before codegen, so the branch's one
+# edit does not execute on this corpus. src/codegen.rs is the compiler and
+# its bytes moved.
+compile_instructions=35968171
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

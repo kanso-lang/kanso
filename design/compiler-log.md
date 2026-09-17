@@ -5767,3 +5767,29 @@ drew, and the revert of the row bump that chased it, were both the frame
 kanso#1487 removed.
 
 - **DONE** merged onto main; the rows are main's.
+
+## 2026-09-17 — kanso#1482 on the tree merged with kanso#1462: five rows, all down
+
+    compile_instructions    35,968,792 -> 35,968,171        -621   -0.0017%
+    entry_instructions     128,217,983 -> 128,213,972      -4,011   -0.0031%
+    library_instructions   128,352,174 -> 128,348,205      -3,969   -0.0031%
+    interp_instructions  2,178,559,085 -> 2,178,502,266   -56,819   -0.0026%
+    startup_instructions     4,838,372 -> 4,837,381          -991   -0.020%
+
+Nothing worsened. Four of the five are layout: `is_a_stack_slot` is asked from
+`FnEmit::write`, which sits under `emit_ir`, and neither `kanso check` nor
+`kanso run --interp` reaches codegen at all. src/codegen.rs is the compiler,
+so editing it moves the compiler's bytes and what sits around them.
+
+The interpreted row's 56,819 is worth writing down as a scale for that vein.
+kanso#1468 moves the same row 237,834 in the other direction in this same
+round, from an edit in the same file that likewise never executes on the
+corpus. A layout term of tens to hundreds of thousands is what this row has,
+and a move of that size on it means nothing on its own.
+
+Start-up is the one corpus where the change does run, because `kanso play`
+takes the native path. A one-line program emits few enough lines that the 991
+saved and the layout term the other four rows show are the same size, so this
+reading does not separate them; both point down and the row takes the number.
+
+- **DONE** the rows are CI's.
