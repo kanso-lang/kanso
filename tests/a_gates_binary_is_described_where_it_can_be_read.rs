@@ -37,10 +37,8 @@ fn every_compile_gate_reports_its_sections_as_a_notice() {
             s.contains("size --format=sysv"),
             "{gate} does not read its binary's sections at all"
         );
-        let notices: Vec<&str> = s
-            .lines()
-            .filter(|l| l.contains("::notice::") && l.contains("sections"))
-            .collect();
+        let notices: Vec<&str> =
+            s.lines().filter(|l| l.contains("::notice::") && l.contains("sections")).collect();
         assert_eq!(
             notices.len(),
             1,
