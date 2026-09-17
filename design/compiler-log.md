@@ -4987,6 +4987,47 @@ the open question in the ledger.
 
 - **DONE** the rows are CI's and their cause is named correctly.
 
+## 2026-09-17 — the bound discharge had no golden, and it is built
+
+`STATUS.md`'s "Ruled, unbuilt" section carries the explicit box, and among what
+that ruling owes are "the two cost levers, an inlined bind for a pure index
+read and bound discharge for a literal index into a known-length list, each
+measured". Both are on main. Probed against `15e182b1`:
+
+    xs = [10 20 30]
+    show xs[1]     runs, no `none` arm needed
+    show xs[3]     runs, no `none` arm needed
+    show [7 8][2]  runs, no `none` arm needed
+    show xs[0]     error[exhaustive]: this can be a none
+    show xs[4]     error[exhaustive]: this can be a none
+    show xs[n]     error[exhaustive]: this can be a none
+
+Indices run from 1, so 1 through 3 are the whole of a three-element list. The
+discharge is exact at both edges and does not fire for an index the compiler
+cannot read off the source. The inlined bind has a golden already —
+`an_index_without_the_bang_reaches_its_twin`, whose first line says the index
+written without the `!` inlines.
+
+The discharge had none. That corpus pins the MISS path and nothing pinned the
+hit: a compiler that discharged every index read, which is the wrong rule and a
+quiet one, passed every golden in the tree. This entry ships the fixture that
+fails on it, and it is the four cases above in one program so the two halves
+cannot drift apart.
+
+It was watched red before it was watched green: with `at zero` reading `10`
+instead of `<none>`, `micro_corpus_survives_a_release_build` names the file and
+prints both lines.
+
+Two notes on writing a micro golden, both learned the slow way here. A file
+without `\npub play` is SKIPPED by both micro tests, silently — the first draft
+of this fixture used bare statements, was read by nothing, and passed with its
+expected output deliberately wrong. And the file may not carry a blank line
+between its header comment and the first definition.
+
+- **DONE** the discharge is pinned.
+- **OPEN** the explicit box's row in STATUS.md: every part of it this session
+  could probe is built. The row is the chat's to remove, so this is a report.
+
 ## 2026-09-17 — a gate reached its verdict and buried it past the cap
 
 kanso#1463 gave the three compile gates a second reading: when a row parts
@@ -5223,6 +5264,42 @@ the module and entry rows, and their fall is the rise banked here. Welfare
 69.79153807658396 -> 69.79493424287482, `--set` run after the goldens carried
 CI's rows and not before.
 
+## 2026-09-17 — kanso#1477's three rows take the thirteen, and the fourth does not
+
+CI's sitting on the merged head:
+
+```
+  compile_instructions   35,965,137 -> 35,965,150     +13
+  entry_instructions    128,204,898 -> 128,204,911     +13
+  library_instructions  128,340,017 -> 128,340,030     +13
+  startup_instructions    4,838,323 ->   4,838,323       0
+```
+
+Three rows move by the same thirteen and the fourth does not move at all.
+That pattern names itself: the thirteen lives in `core::slice::memchr::memrchr`
+under `LineWriter`, seeking the last newline in the result line each of the
+three gates' own runs prints. The start-up gate prints nothing, so it has no
+thirteen to draw.
+
+Which side of the thirteen a given binary lands on is a property of its layout.
+kanso#1483 stops the measured runs printing that line, and when it lands the
+three rows lose the thirteen and the whole family of moves with it.
+
+Welfare weighs the module and entry rows, so this costs +26 summed compile
+instructions against a dead band of about 105,000. The objective does not move.
+
+- **DONE** the three goldens carry CI's rows; two page spans follow them.
+- **OPEN** kanso#1483, after which this row family stops drawing lots.
+
+## 2026-09-17 — the rows are a coin, and the thirteen is not a branch's to bank
+
+The entry above wrote CI's sitting into this branch's three rows. Its next
+build measured the numbers it had just replaced, so the rows are reverted and
+this correction stands in their place.
+
+Five builds today, on trees whose compiler source is byte-identical apart from
+kanso#1482's:
+
 ## 2026-09-17 — the floor is bimodal, and the gap is exactly ten
 
 Three measurements today, and the third is the one to keep.
@@ -5391,6 +5468,12 @@ Five CI builds today, across trees whose compiler source is byte-identical:
 ```
 
 Two faces, thirteen apart on every row, and `startup_instructions` reads
+4,838,323 on all five. Within a build the reading is exact: every job's
+`<row>_again` has matched its first.
+
+Neither way of not printing helps, because both change the process the gate
+measures. On one box, `kanso check compile_corpus`:
+
 4,838,323 on all five. Within a build the reading is exact — every job's
 `<row>_again` has matched its first. A re-run of main's own failed job, a
 second build of the same source, came back green on the other face, which is
@@ -5415,6 +5498,20 @@ process the gate measures:
   two variables, printing              36,817,388
   two variables, --quiet               36,818,319      +931
 ```
+
+The environment variable costs ten times what the quiet saves — the compiler
+asks getenv about seven thousand times and each ask walks the block — and an
+argv entry costs about twice it. So kanso#1483 as built is a regression.
+
+What is left is the 2026-09-15 rule: a term that cannot be normalized is
+excluded and the exclusion is named in the golden's header.
+`std::io::stdio::_print` is reached once per run, from `kanso::driven`, and
+`core::slice::memchr::memrchr` has no other caller in a `kanso check`.
+`claude/row-excludes-the-print` subtracts that subtree from `kanso::main`
+inclusive, which should map both faces onto one row.
+
+- **DONE** the rows here are back to main's, and this branch waits on that one.
+- **OPEN** whether the exclusion holds across builds, which its own CI answers.
 
 The compiler asks getenv about seven thousand times and each ask walks the
 environment block, so a third variable costs ten times what the quiet saves;
@@ -5500,3 +5597,16 @@ earlier sitting, and the excluded rows land inside its band, so there is
 nothing further to bank.
 
 - **DONE** the rows carry the sitting on the excluded anchor; one page span follows.
+
+## 2026-09-17 — the bound discharge, merged onto the excluded row
+
+kanso#1487 landed, so the three `kanso check` rows now exclude the line the
+run prints and read 35,964,325 / 128,204,133 / 128,339,261 on main. This
+branch changes no compiler source — a micro golden and the entries above —
+so it takes those rows as they stand and owes no regeneration of its own.
+
+The two earlier entries here are superseded by that: the thirteen this branch
+drew, and the revert of the row bump that chased it, were both the frame
+kanso#1487 removed.
+
+- **DONE** merged onto main; the rows are main's.
