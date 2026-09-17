@@ -3867,3 +3867,56 @@ were written from a sitting that drew an unlucky address and have been
 thirteen high since. The entry row is where it shows plainly: with the hint on
 it read 131,884,793 and then 131,884,271 inside one job, and with the hint off
 it reads 131,884,271 and nothing else.
+
+## 2026-09-17 — the emitter asked two whole-body questions once per name
+
+`kanso build bench/runbench` spent 72.10% of itself in `prune_unnamed` and
+71.71% in `names_symbol` alone, measured with `#[inline(never)]` on both so
+the attribution could not be guessed at. A second place in the same function
+spent 17.08% searching the emitted body once per `declare` line. Both are one
+shape: a question about the whole body, asked once per name.
+
+**`prune_unnamed` removes unnamed blocks in a fixpoint**, and each round asked
+`named(at, sym)`, which ran `names_symbol` over every OTHER block. runbench
+emits 599 defines, so a round is about 359,000 calls and the fixpoint runs
+several. `names_symbol` builds `format!("@{sym}")` and calls
+`text.match_indices(&needle)`, so the cost is CONSTRUCTING a two-way searcher:
+`StrSearcher::new` was 19.96% of the process while
+`StrSearcher::next_match` was 7,497 instructions in the whole run. An earlier
+read of the same profile dismissed the site for exactly that reason, looking
+at the search and not at its setup.
+
+Each block's set of named queries is read in one pass now; a count per name
+says how many live blocks name it; `named(at, sym)` is that count minus
+whether block `at` names it; and striking a block off decrements its names.
+`alive` replaces `remove` so the index keeps its subscripts.
+
+**The extraction has to answer what `names_symbol` answered**, which counts
+`@sym` only where the next byte is not alphanumeric, `_` or `"` — the rule
+that keeps `@w_klam1` from answering for `@w_klam17`. Two token shapes cover
+what the emitter writes: an unquoted run of those bytes, and a quoted name
+from `"` to its next `"`, which is how `quoted()` spells one holding a slash.
+Scanning the unquoted run alone stops at the slash inside `@"d_add/2"` and
+misses it. `one_pass_reads` says which symbols the scan covers and anything
+outside it falls back to `names_symbol` per block, so the index is exact
+without resting on how a name is spelled.
+
+**The declares scan is the same fix in the same function.** `referenced(sym)`
+searched the whole emitted body for each of DECLARES's 163 `declare` lines and
+then each of its 1,024 other lines; `called_symbols` reads every `@sym(` in
+one pass and the three questions become set lookups, with DECLARES's own set
+built once per process. The first draft of its `@cell\n` scan ran from every
+`@` to the end of its line, which is the text times the number of ats: it cost
+runbench 209 million instructions and turned a fall into a rise. Reading each
+line's LAST at instead is one pass.
+
+**Measured.** `kanso build bench/runbench` 43,494,934,382 → 13,091,628,531, a
+fall of 69.90%; `bench/scanbench` 9,472,189,300 → 5,611,854,193, a fall of
+40.75%. The emitted IR is byte-identical on scanbench, runbench, widebench and
+digestbench — 79,543 lines.
+
+**No vein watches this.** The three compile gates run `kanso check`, which
+stops before codegen, so thirty billion instructions came off a program
+nothing in the objective can see. That is what the 2026-09-16 gavel's
+dev-tier and release-tier codegen counters are for, and until they exist a
+change like this is invisible to the score in both directions.
