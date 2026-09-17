@@ -5884,3 +5884,53 @@ drew, and the revert of the row bump that chased it, were both the frame
 kanso#1487 removed.
 
 - **DONE** merged onto main; the rows are main's.
+
+## 2026-09-17 — kanso#1468 on the tree merged with kanso#1462, and start-up pays
+
+Five rows moved, and for the first time on this branch they did not all move
+the same way. CI's sitting:
+
+    compile_instructions    35,968,792 -> 35,964,985      -3,807   -0.0106%
+    entry_instructions     128,217,983 -> 128,205,992    -11,991   -0.0094%
+    library_instructions   128,352,174 -> 128,340,895    -11,279   -0.0088%
+    interp_instructions  2,178,559,085 -> 2,178,796,919  +237,834  +0.0109%
+    startup_instructions     4,838,372 -> 5,077,523      +239,151   +4.94%
+
+**Two counters worsened: `interp_instructions` landed on 2,178,796,919 and
+`startup_instructions` landed on 5,077,523.** They worsened for different
+reasons and only one of them is this change's doing.
+
+**The interpreted run is layout, and the profile says so rather than the
+argument.** `kanso run --interp` returns from `run_interpreted` before codegen
+is reached, so nothing the branch edits executes on that corpus. A callgrind
+profile of it on the branch carries exactly one `kanso::codegen` frame — an
+instantiated `prune_unnamed` closure worth 284 instructions in a run of 2.18
+billion. The remaining 237,550 are the compiler's bytes moving under an
+interpreter that never enters them. kanso#1482, whose edit is four lines in a
+different file, moves the same row 56,819 the other way in the same round;
+this vein has a layout term of that size and it is not news.
+
+**Start-up is work, and it is the trade.** `kanso play` takes the native path,
+so it runs the emitter — on a one-line program, which is the point of the vein
+and also the one corpus where an index has nothing to amortise over. Both sides
+were reproduced on the container under rustc 1.98.1 and landed 161 and 169
+instructions from CI's readings: main 4,838,211, the branch 5,077,692, a local
+delta of 239,481 against CI's 239,151.
+
+`declares_context_calls` builds its set once per process from DECLARES's 1,187
+lines and costs 599,739 instructions inclusive, 10.57% of the whole row and two
+and a half times the rise. The per-line searching it replaces was worth about
+360,000 on this program, and the difference is the row. On a program with
+lines, the same set answers 163 `declare` questions and 1,024 more, and `kanso
+build bench/runbench` falls 69.90%.
+
+**Nothing in the objective weighs either row.** Both are exact veins of their
+own under the 2026-09-16 gavel and neither is a term yet, so welfare does not
+move on this and there is no floor question to put to anyone.
+
+- **IN HAND** on kanso#1484, which is stacked on this branch: DECLARES is a
+  `const`, so the sixty-two symbols it calls are the same in every process
+  kanso has ever run. Written down sorted and asked with `binary_search`,
+  start-up reads 615,754 lower than this branch and 350,129 below main, with
+  `kanso build`'s 69.90% kept. So this row's rise is paid back by the branch
+  above it rather than left standing.
