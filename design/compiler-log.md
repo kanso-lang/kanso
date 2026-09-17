@@ -6110,3 +6110,73 @@ report that a row is stale is not a probe, and a probe is eight commands.
 - **DONE** the row off, with its evidence in STATUS.md.
 - **OPEN** whether a needless bang survives on a provable index anywhere in the
   tree. Cheap for cloud, which has the bound prover; not a row.
+
+## 2026-09-17 — seven silicons, one recorded block, and a reader that was never called
+
+kanso#1492 carries no compiler source — a log entry and a gate header, neither
+compiled in — and its cost-goldens job came back red on one vein:
+
+    interp_instructions  2,178,502,266 -> 2,178,502,272   +6
+
+Chasing six instructions found something larger.
+
+### The sha256 is not the code
+
+Main's sitting on d1a7b058 and this branch's on e29fac05 compiled source that
+differs in `design/compiler-log.md` and `scripts/gates/compile_instructions.sh`
+and in nothing else. The gates print enough to compare the two builds:
+
+    main        .text=2796866 .data=12672 .bss=29912  sha=e00a8ed55945c640
+    kanso#1492  .text=2796866 .data=12672 .bss=29912  sha=1318a6776b335b6a
+
+The three loadable sections are byte-identical and the file is not. This
+container, on a third machine, builds the same tree three times and gets one
+binary each time — `6fc4575752756e8d`, `.text=2796866` — so the Rust build is
+deterministic on a box and the sha varies with the box.
+
+**So the gates print a sha256 as the proof that two variants were genuinely
+different builds, and that use holds: a different sha means the file differs.
+The converse does not. Two equal shas are not needed for equal code, and two
+different shas do not say the executed code moved.** The rewrite ladder leaned
+on that line for eight variants and its reading is still sound, because there
+the sections moved too.
+
+### Seven blocks, and 57 rows between them
+
+`scripts/gates/dispatch.sh` has carried a `differs` verb since the day it was
+written and `bench/dispatch.txt` was never recorded, so `differs` answered
+"cannot tell" every time and no gate called it. What the gates call is
+`dispatch.sh name`, which prints the basic family and the model.
+
+Ninety-odd cost-goldens job logs printed the candidate block (the `name` verb
+prints it whenever no block is recorded). Within any one job every printing is
+identical. Across jobs there are **seven distinct blocks, differing in 57
+rows**, and the basic family itself takes three values: 0x19, 0x1a and 0x6. The
+last is Intel. Level-3 cache spans 32 MB to 480 MB.
+`Fast_Unaligned_Load`, `Prefer_No_AVX512` and `Prefer_PMINUB_for_stringop` flip
+between them, and those are three of the switches glibc's ifunc resolvers read
+when they pick `memcpy`, `memcmp`, `strlen` and their neighbours.
+
+The gates pin the cache-derived thresholds through `GLIBC_TUNABLES`, which is
+why the rows hold as steady as they do. What a tunable does not reach is which
+implementation the resolver picks.
+
+kq has recorded its block and consulted it since its own instruction vein
+opened. kanso had the reader and never the block.
+
+### What lands here
+
+`bench/dispatch.txt` holds the block from this branch's own job, chosen because
+on that silicon the three `kanso check` rows and the start-up row read main's
+goldens to the instruction — it is the silicon those values belong to. The five
+instruction gates consult `differs` in the disagreement path and print what it
+says, before the verdict. It never decides the exit: a resolver difference is a
+candidate explanation, not a ruling.
+`tests/a_moved_row_is_told_what_the_silicon_did.rs` holds both halves, and both
+were watched red — one gate with the consult removed, and the block moved
+aside.
+
+- **DONE** the block is recorded and the five gates consult it.
+- **OPEN** the six instructions. The next job on this branch will say whether
+  the silicon moved with the row, which is the question this instrument was
+  missing.
