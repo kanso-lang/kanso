@@ -1,0 +1,63 @@
+# Retired instructions for a whole `kanso build` of bench/codegen_corpus on the
+# development tier: the build a programmer runs while working, where the time
+# between a keystroke and an answer is the whole of what matters.
+#
+# THE COMPILE ROWS STOP BEFORE CODEGEN. compile_instructions, entry_instructions
+# and library_instructions all count `kanso check`, which answers whether a
+# program is well formed and then stops. Everything after that — the emitter
+# writing LLVM IR, the clang driver, clang -cc1, the linker and the linker's own
+# child — was uncounted, and it is the larger half of what a build costs. This
+# row counts the whole tree: five processes under `--trace-children`, their
+# summary lines summed.
+#
+# WHY TWO TIERS. The two builds are different programs with different jobs, and
+# a single number over both would let one pay for the other. Ruled 2026-09-16.
+#
+# MEASURED IN A BOX, for the reason the other compile rows are: the count moves
+# with the length of the directory the compiler runs in. scripts/gates/
+# codegen_box.sh stages the package one level down, as pkg/codegen_corpus, so
+# that `kanso build` does not find a directory beside its argument's stem and
+# refuse — a refusal that still emits the IR first, so it looks like a build
+# and counts two processes instead of five. The gate refuses a tree shorter
+# than four.
+#
+# THIS ROW DEPENDS ON CLANG, which the other compile rows do not: most of the
+# tree is the C toolchain, so the measured-on line names it beside glibc and
+# rustc.
+#
+# 2026-09-17, the first sitting (kanso#1470). CI's reading, taken on the
+# runner because a row this gate pins may only ever be counted there: this
+# container read 1,450,337,132, which is a different clang and a different
+# machine and is not comparable. Five processes, and the second reading in the
+# same job agreed with the first.
+# measured-on glibc=2.39-0ubuntu8.9 clang=19.1.1 rustc=1.98.1
+#
+# 2026-09-17 (kanso#1470): codegen_instructions_dev 9,280,351,472 -> 1,003,426,243.
+# The old value is not a regression this fixes; it is what the row read before the
+# gate warmed the runtime.c cache under the measurement's own environment. That
+# reading paid for compiling runtime.c and this one does not, and the gate's
+# header records how the difference was found. Counted twice in one job and
+# byte-identical both times.
+#
+# 2026-09-17, later: THE ROW IS THE CHILD TREE NOW, and the value below is a
+# whole-tree reading, so it will disagree by kanso's own process -- about
+# 425 million -- on the next sitting and that sitting writes it. kanso's own
+# process is excluded because it waits for clang, and the loop that waits is
+# the scheduler's to size; the gate's header carries the measurement behind
+# that. The exclusion is not a change to what codegen costs, only to which
+# processes the row calls codegen.
+#
+# 2026-09-17, CI's first sitting, which is the measurement this row was opened
+# for. 596,161,187, and `codegen_dev_again` read 596,161,187 -- the two
+# readings in one job agree to the instruction.
+# #
+# THAT AGREEMENT IS THE POINT. The row's first shape counted the WHOLE process
+# tree and two readings in one job differed by 3,105 while every child was
+# byte-identical; the parent sits in a wait loop for clang and the linker, and
+# what that loop costs is the box's scheduling. Excluding kanso's own process
+# under the 2026-09-15 rule is what made the row reproducible, and this sitting
+# is the evidence it worked.
+# #
+# The container's placeholder read 1,003,426,243, which was the pre-exclusion
+# shape and is not comparable to this.
+codegen_instructions_dev=596161187
