@@ -1,0 +1,25 @@
+#!/bin/sh
+# Rebuild target/release/kanso when a pull brings in something it is built from.
+#
+# `kanso` on the PATH is an alias for target/release/kanso, so a pull that is
+# not followed by a build leaves every later invocation answering for an older
+# compiler, with nothing on screen to say so. One sat three weeks stale that way.
+#
+# The roots below are pinned by tests/the_rebuild_hook_names_every_build_input.rs
+# against what src/ actually reads, so a new include_str! root turns CI red
+# instead of going unwatched here. `lib` and `hako` are in the list because
+# their .kso files are include_str!'d into the compiler, which makes a
+# library-only pull just as staling as a change under src/.
+
+roots="src lib hako Cargo.toml Cargo.lock"
+
+set -e
+
+changed=$(git diff-tree -r --name-only --no-commit-id ORIG_HEAD HEAD) || exit 0
+
+for root in $roots; do
+  if printf '%s\n' "$changed" | grep -qE "^${root}(/|$)"; then
+    echo "kanso: ${root} moved, rebuilding target/release/kanso"
+    exec cargo build --release
+  fi
+done
