@@ -2069,6 +2069,30 @@ second = (list/fold [10] seed put_step)[&quot;k&quot;]
 
 <p>the thing that sent anyone looking was six instructions, and the new instrument ruled itself out of explaining them. the two jobs above printed the same block, all 123 rows, and their four short veins agree to the instruction while the interpreted run is six apart on <strong>2,178,502,266</strong>. six in 2.18 billion is three parts per billion; on the other four rows, which run from 4.8 million to 128 million, the same proportion is a fraction of one instruction and could not be seen. that is the shape of a term proportional to work rather than a constant, and the interpreted run is also the allocation-heavy one — <strong>5,313,434</strong> allocations against a compile&#39;s <strong>27,397</strong>. where the allocator&#39;s heap starts moves with the size of the file the loader mapped. that is an argument and not yet a measurement, and the page says so.</p>
 
+<h2 id="carriedvalue"><span class="sec-num">82</span>the loop carried a value it only needed at the end</h2>
+
+<p>rendering a double is 4.58% of the run program, 440.7 instructions a float over 191,070 calls, and a quarter of that is one loop taking digits off two at a time. it divides three values a trip: the two ends of the rounding interval, to decide whether another pair comes off, and the significand, because the significand is the answer.</p>
+
+<p>only the first two decide anything. the third is carried through the loop and read once at the end, so it comes out: count the pairs with two divisions a trip, then take it down in one step.</p>
+
+<p>that was worth <strong>924,584</strong> instructions, 4.8 a float &#8212; and the number did not fit. disassembled, the loop went from 21 instructions with three multiply-highs and seven register moves to 15 with two and five. six a trip, and at 5.35 trips that is 32.1 a float. the tail was giving twenty-seven of it back.</p>
+
+<p>the tail divided twice by a table entry, and a divisor the compiler cannot see is a real division rather than a multiply-high. but the two entries are a hundred apart, so dividing by the smaller one first leaves both remaining steps with a <em>constant</em> divisor:</p>
+
+<pre><code>uint64_t q = vr / RYU_POW100[pairs - 1];
+round_up = (uint32_t)(q % 100) &gt;= 50;
+vr = q / 100;</code></pre>
+
+<p>one variable division instead of two, and the fall triples:</p>
+
+<pre><code>runbench    1,840,368,292 -&gt; 1,837,534,164   -2,834,128   -0.1540%
+render_ryu     84,209,220 -&gt;     81,375,750   -2,833,470   -3.365%
+a float             440.7 -&gt;          425.9        -14.8
+.text             319,346 -&gt;        317,954       -1,392</code></pre>
+
+<p>the lesson is about where a saving goes rather than about ryu. taking work out of a loop that runs five times only pays if what replaces it costs less than five times what was removed, and the first shape of this change failed that test while looking like a win. the disassembly is what said so; the instruction count alone would have been read as a small success and left there.</p>
+
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>
