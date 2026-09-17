@@ -5465,3 +5465,35 @@ this is a change in what is counted rather than a gain to bank.
 
 - **DONE** the three rows carry the excluded sitting; one page span follows.
 - **OPEN** the second build, which is the whole claim.
+
+## 2026-09-17 — kanso#1462's rows, priced: the compiler compiles with the hasher it changes
+
+CI's sitting on the anchor kanso#1487 left, so each number is one value rather
+than a face of the thirteen.
+
+```
+  compile_instructions   35,964,325 ->  35,968,792   +4,467 (+0.0124%)
+  entry_instructions    128,204,133 -> 128,217,983  +13,850 (+0.0108%)
+  library_instructions  128,339,261 -> 128,352,174  +12,913 (+0.0101%)
+  interp_allocs            5,313,431 ->   5,313,434       +3
+```
+
+`interp_instructions` came back 2,178,559,085 and `interp_peak_bytes` 933,202,
+both on the row; `startup_instructions` was green at 4,838,372, `compile_allocs`
+at 27,397, and compile memory byte-identical.
+
+The three `kanso check` rows rise together and by about the same fraction,
+which is what this change's shape predicts: the interpreter's hasher is part
+of the compiler, so the compiler's own maps are built with it. A hash that
+is cheaper to compute and worse at spreading costs a little more in a map
+that is read many times per entry, and the compile corpus is exactly that.
+
+The three allocations are not explained here. Peak bytes and the instruction
+row both came back unchanged, so nothing about the shape of the interpreted
+run moved.
+
+welfare weighs 18,317 of this against a dead band of about 105,000 and does
+not move.
+
+- **DONE** the four rows, priced.
+- **OPEN** nothing; the branch is CI's to confirm.
