@@ -4797,6 +4797,21 @@ golden's header. Buffer alignment cannot be normalized from here. So the print
 comes out of the measured region, which re-baselines all three rows at once and
 is its own change.
 
-- **DONE** the frame is named, with the digest diff that names it.
+**Demonstrated, not inferred.** The frame's cost scales with what the process
+prints. Same binary, same box, one `kanso check` against two corpora whose only
+difference is the length of the name that goes into the printed line:
+
+```
+compile_corpus                           memrchr = 63
+compile_corpus_with_a_much_longer_name   memrchr = 81
+```
+
+Twenty-four more characters on the line, eighteen more instructions in the
+frame. (`kanso::main` moved 14,177 the other way on that pair, which is the
+path-length term this file's header already carries at about 160 instructions a
+character; a different effect, an order of magnitude larger, and not this one.)
+
+- **DONE** the frame is named, with the digest diff that names it, and its
+  cost is shown to follow the printed text.
 - **OPEN** taking the print out of the row. Three welfare-weighted rows
   re-baseline together, so it lands on its own with its own sitting.
