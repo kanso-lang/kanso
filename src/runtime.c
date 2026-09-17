@@ -4128,8 +4128,15 @@ static int ryu_d2d(double f, char* dig, int* e10) {
             pairs++;
         }
         if (pairs) {
-            round_up = (uint32_t)((vr / RYU_POW100[pairs - 1]) % 100) >= 50;
-            vr /= RYU_POW100[pairs];
+            /* ONE variable division, not two. `RYU_POW100[pairs]` is
+               `RYU_POW100[pairs - 1] * 100`, so dividing by the smaller one
+               first leaves both remaining steps with a CONSTANT divisor, and
+               a constant divisor is a multiply-high rather than a `div`. The
+               first shape of this step divided by both table entries and gave
+               back most of what the loop saved. */
+            uint64_t q = vr / RYU_POW100[pairs - 1];
+            round_up = (uint32_t)(q % 100) >= 50;
+            vr = q / 100;
             removed += 2 * pairs;
         }
         for (;;) {

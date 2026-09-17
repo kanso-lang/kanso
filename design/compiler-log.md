@@ -7195,53 +7195,86 @@ the list, and an empty list is the easiest state in which to forget that.
   listed. It has never been run, and an empty section is the moment it would
   be worth most.
 
-## 2026-09-17 — the digit loop carried a value it only needed at the end
+## 2026-09-17 — the digit loop carried a value it only needed at the end, and then the tail gave it back
 
 `render_ryu` is 84,209,220 instructions of runbench, 4.58%, 440.7 a float over
-191,070 calls, and a quarter of that is one loop taking digits off two at a
-time. It divides three values a trip — `vp` and `vm` to decide whether another
+191,070 calls. A quarter of that is one loop taking digits off two at a time,
+and it divides three values a trip — `vp` and `vm` to decide whether another
 pair comes off, and `vr` because `vr` is the answer.
 
-Only the first two decide anything. `vr` is carried through the loop and read
-once at the end, so it can come out: count the pairs with two divisions a trip,
-then take `vr` down by `100^pairs` once. `round_up` is the top digit of the last
-pair removed, `(vr / 100^(pairs-1)) % 100 >= 50`, which is the value the last
-trip of the old loop wrote.
+Only the first two decide anything. `vr` is carried through and read once at
+the end, so it comes out: count the pairs with two divisions a trip, then take
+`vr` down in one step. Measured against main `3120df0e`:
 
-Measured on this box, main `3120df0e` against the change:
+    runbench    1,840,368,292 -> 1,837,534,164   -2,834,128   -0.1540%
+    render_ryu     84,209,220 ->     81,375,750   -2,833,470   -3.365%
+    a float             440.7 ->          425.9        -14.8
+    .text             319,346 ->        317,954       -1,392
 
-    runbench    1,840,368,292 -> 1,839,443,708    -924,584   -0.0502%
-    render_ryu     84,209,220 ->     83,284,650   -924,570   -1.098%
-    a float             440.7 ->          435.9       -4.8
+The whole of the fall is inside that one function, to 658 instructions, and
+`.text` comes down by the same 1,392 on every benchmark because the loop is
+one piece of code they all share.
 
-The whole of the fall is inside that function, to fourteen instructions. And
-`.text` comes down with it: **1,360 bytes smaller on every benchmark** —
-runbench 319,346 to 317,986, jsonbench 124,562 to 123,202, encodebench 137,842
-to 136,482, the same figure each time because the loop is one piece of code
-shared by all of them.
+### the first shape gave most of it back, and the disassembly says where
 
-This is the lead the 2026-09-14 entry named and left, answered differently than
-that entry framed it. It said seven of the loop's twenty-one instructions were
-moves shuttling `vp`, `vm` and `vr` around the back edge, worth 37 instructions
-a float. The moves are structural to doing three divide-by-hundreds on x86-64:
-each one needs its value in `rax` and its result out of `rdx`, so three
-divisions cost six moves whatever the C says. Removing a division removes its
-moves with it, and the measured 4.8 a float is what that is worth once the
-variable division at the bottom is paid back.
+Taking `vr` out of the loop was worth only **924,584** on its own — 4.8 a
+float. The loop really did get cheaper; the tail ate it. Disassembled, main
+against that first shape:
 
-### the harness found the bug before the measurement did
+    main   0x3e200..0x3e242   21 instructions, 3 mul, 7 mov
+    first  0x3dc50..0x3dc7d   15 instructions, 2 mul, 5 mov
+
+**Six instructions a trip**, and at 5.35 trips a float that is 32.1 — against
+4.8 measured. The tail was costing back twenty-seven.
+
+It was dividing twice by a table entry:
+
+    round_up = (vr / RYU_POW100[pairs - 1]) % 100 >= 50;
+    vr /= RYU_POW100[pairs];
+
+Two divisions by a value the compiler cannot see, so two real `div`
+sequences. But `RYU_POW100[pairs]` is `RYU_POW100[pairs - 1] * 100`, so
+dividing by the smaller one first leaves both remaining steps with a CONSTANT
+divisor, and a constant divisor is a multiply-high:
+
+    uint64_t q = vr / RYU_POW100[pairs - 1];
+    round_up = (uint32_t)(q % 100) >= 50;
+    vr = q / 100;
+
+One variable division instead of two. That recovers **1,909,544 more
+instructions** and takes the change from 4.8 a float to 14.8 — three times the
+first shape's worth.
+
+### the lead this answers, and the claim of mine it corrects
+
+The 2026-09-14 entry named seven of the loop's twenty-one instructions as moves
+shuttling `vp`, `vm` and `vr` around the back edge, sized them at 37
+instructions a float, and left them.
+
+I first explained the result by saying three divisions cost six moves whatever
+the C says, so removing a division removes two. **That was asserted, not
+counted, and the disassembly above does not support it**: the loop carries
+seven moves with three divisions and five with two. Removing one division
+removed two moves and one multiply-and-shift pair — six instructions a trip,
+which is close to the entry's seven and confirms its reading of the loop. What
+the entry could not have known is that the saving is only collectable if the
+step replacing the loop is cheaper than what it replaces.
+
+### the harness found two bugs before either number was taken
 
 `tests/every_rendered_float_reads_back_as_itself` sweeps 2,809,326 values
-against `strtod`, lifting `ryu_d2d` and `render_ryu` out of `src/runtime.c`.
+against `strtod`, lifting `ryu_d2d` and `render_ryu` out of `src/runtime.c`
+rather than copying them.
+
 The power table was written with nine entries, which is one short: a u64 sits
 below 1.9e19, so nine pairs can come off and index nine is the last the step
-reads. The harness crashed on that before any number was taken.
+reads. The harness crashed on that before any measurement.
 
-Watched red a second time on the subtlest thing the step could get wrong —
-`round_up` reading `RYU_POW100[pairs]` rather than `[pairs - 1]`, one pair
-over: **222,173 of 2,809,326 did not read back**.
+Watched red a second time, deliberately, on the subtlest thing the step could
+get wrong — `round_up` reading `RYU_POW100[pairs]` rather than `[pairs - 1]`,
+one pair over: **222,173 of 2,809,326 did not read back**.
 
-- **DONE** built, swept and measured; the rows are CI's to take.
-- **OPEN** the rest of `render_ryu`. At 435.9 a float it is still the largest
+- **DONE** built, swept, measured twice, and the second shape is what ships.
+  Rows are CI's to take.
+- **OPEN** the rest of `render_ryu`. At 425.9 a float it is still the largest
   leaf in the run program after the four kanso-level frames.
-
