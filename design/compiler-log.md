@@ -4038,3 +4038,9 @@ the instruction, the figures round two took from CI and that the next run
 disagreed with by thirteen. The merge brought main's values in and this writes
 the branch's back. It is the first time this vein has reproduced across two
 runs since the compiler moved to mimalloc, which is what kanso#1466 was for.
+
+**Round four, after kanso#1464.** CI reads `compile_instructions` 36,682,232,
+`entry_instructions` 130,573,787 and `library_instructions` 130,716,747 against
+main's 36,864,779, 131,837,650 and 131,978,823. Asking the pattern before the
+binder is what this branch's share of that is; the rest of the move against
+round three is kanso#1464 arriving underneath it.
