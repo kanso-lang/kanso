@@ -182,5 +182,12 @@ else
   echo "::error::$again, on one binary, one corpus and one machine. That is"
   echo "::error::(2), settled here rather than by comparing runs, and it halts"
   echo "::error::this vein."
+  echo "::error::"
+  echo "::error::The two profiles are still on disk and the diff below says"
+  echo "::error::WHERE they part, function by function. A per-process term"
+  echo "::error::names one or two frames near the process's entry; a compiler"
+  echo "::error::difference spreads across the passes that ran."
+  echo "=== where the two readings part"
+  sh scripts/gates/profile_diff.sh /tmp/cg.library /tmp/cg.library2 || true
 fi
 exit 1

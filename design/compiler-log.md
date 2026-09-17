@@ -3919,3 +3919,40 @@ adds them, with `tests/the_objective_reads_what_the_gate_watches.rs` replaying
 the file, because this model's PROSE has gone stale twice while the file never
 did. Weights and satiations priced from evidence. The entry leaves the ledger
 with this commit and STATUS.md carries the build.
+
+## 2026-09-17 — where two readings part, function by function
+
+The three compile rows each read one figure out of a callgrind profile:
+`kanso::main` inclusive. When two readings of one binary on one machine
+disagree, that figure says how much and nothing about where. Every hunt
+through 2026-09-16 had to guess from the size of the move, and the guesses
+have been wrong twice: the runner's CPU model and the binary's sha were both
+published as the cause of the 13 and neither was.
+
+`scripts/gates/profile_diff.sh` totals each function's SELF cost in two
+profiles, joins on the name, and prints every function that moved. The three
+gates call it in the branch that has already established case (2) — the same
+binary counting two numbers in one job — where the two profiles are still on
+disk and nothing else in the job can say which frame carries the difference.
+
+**The profile is parsed here rather than through `callgrind_annotate`, and
+that is not a preference.** `--threshold` is a percentage of the total and 100
+is its maximum, so the tool stops as soon as the running percentage rounds to
+100. On a profile whose hot function is 99.999% of it, the entire tail is
+dropped — and the tail is this instrument's whole subject, because thirteen
+instructions in a hundred and thirty-two million live nowhere else. The first
+draft read the annotated table and reported two profiles differing by exactly
+that as identical. `tests/two_readings_that_part_name_the_frame.rs` is built
+from a frame one ten-thousandth of its profile for that reason, and it was
+watched red against the first draft before the parser replaced it.
+
+**Two real library profiles on this container agree function by function.**
+Eight runs had already read 133,335,824 identically; this is the same fact at
+a far finer resolution, and it says the container is not where the flutter
+lives. The parser's self-cost sum matches `callgrind_annotate`'s PROGRAM
+TOTALS exactly on a real profile, which is the check that it reads the format
+rather than something near it.
+
+**The temp files are named for the process.** Three gates diff their own pair
+and the spec runs two comparisons at once; a fixed path had one of them
+reading the other's answer, which is how the second spec first went red.
