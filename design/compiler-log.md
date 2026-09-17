@@ -5386,3 +5386,88 @@ drew, and the revert of the row bump that chased it, were both the frame
 kanso#1487 removed.
 
 - **DONE** merged onto main; the rows are main's.
+
+## 2026-09-17 — kanso#1480's compile rows are not the layout term, and the tree says so twice
+
+kanso#1480 shares one linearity `Analysis` where three were built, takes
+51,082,187 instructions off a `kanso build` (−7.77%) with the emitted IR
+byte-identical, and raises the two rows welfare weighs by 627,157 together.
+Welfare falls 0.01. It was escalated as Clay's call, with three ways out
+offered: lower the floor, reweigh the objective, or park the branch until the
+two welfares are built. The reading under all three is that the rise is the
+layout term — the linker's placement rather than the compiler's work.
+
+**That reading does not fit either of the two controlled measurements this
+repository has of that term on this frame.**
+
+`scripts/gates/compile_instructions.sh` carries the first in its own header,
+dated 2026-09-04: seven binaries whose sources differ only in code or data
+nothing reaches, read on the anchored frame.
+
+    variant           .text     program
+    baseline          2550854   41,878,959
+    +50 dead fns      2552534   41,879,987
+    +200 dead fns     2558486   41,879,361
+    +400 dead fns     2565174   41,879,922
+
+The span across all seven is 1,028, and 7,632 bytes of unreachable code moves
+the frame 402. The header's own sentence: a difference near a thousand on this
+row is not evidence on its own.
+
+design/pending-gavels.md's `Pinning .rodata to a fixed page` entry carries
+the second. Two sources differing by a hundred functions read identically to
+the instruction when `.rodata` is pinned and differ by 5,849 when it is not.
+
+So the layout term on the anchored row, measured twice by experiment, lives in
+the thousands. kanso#1480 moves `compile_instructions` 140,122 and
+`entry_instructions` 487,035. For scale on the second: main reads 128,204,133
+on that row after kanso#1487, and the parent kanso#1478 reads 127,873,637 — so
+the branch's +487,035 is larger than the 330,496 separating the parent stack
+from main. A layout term cannot exceed the algorithmic effect of the whole run
+of indexing changes it sits on top of.
+
+**What the escalation's two pieces of evidence establish is narrower than what
+was claimed for them.** Zero `kanso::linear::` frames in a check profile rules
+out one mechanism, the shared analysis running on the check path; it does not
+cover the rest of the diff, which carries a `declare_lines()` rework in
+src/codegen.rs. And the opposite signs on two hosts compare two protocols
+rather than one: CI reads the row inside `library_box`, under `env -i`, with
+ten `GLIBC_TUNABLES` pinned, under callgrind, anchored at `kanso::main`, and a
+raw container reading is none of those. The gate's own refusal text draws that
+line — one sha counting two rows is a reproduction failure, two shas is the
+change under test.
+
+**The diagnosis is a round, not a decision, and the data is already on disk.**
+The cost-goldens job prints `compile_binary .text= / .data= / .bss=` and the
+inclusive top-frame listing on every run, green or red, on this branch and on
+its parent. Diffing the two listings names the frame carrying the 140,122,
+which is exactly what kanso#1487 did against `_print` two days ago. A third
+number points the same way: `startup_instructions` rose 62,728 on a row that
+runs no compiler work at all, the gate header prices one additional shared
+object at 32,090, and `compile_libraries` watches that set by name.
+
+If it resolves to work that scales with the binary, the 2026-09-15 rule already
+says what happens — normalize it, or exclude it and name the exclusion in the
+golden's header. The anchor drops the loader's mapping work already, but lazy
+PLT resolution happens on first call, inside `kanso::main`, so `LD_BIND_NOW=1`
+is the cheap discriminator for that case. If it resolves to real work on the
+check path, the ordinary ratchet applies and the floor question reaches Clay
+with a diagnosis attached rather than without one.
+
+**None of the three ways out is ripe**, because each is a different decision
+about one unattributed number. Holding the rows out of the branch was right and
+they stay out while the round runs.
+
+Separately, and unrelated: `docs/compiler.html` on that head carries the same
+paragraph twice, at lines 1898 and 1900, byte-identical, where the base has it
+once. It is the injury `tests/no_file_carries_a_conflict_marker.rs` was written
+for this morning in the shape that spec cannot see — a merge that duplicated a
+block rather than leaving markers around it — and the prose gates do not read
+for repetition.
+
+- **DONE** the escalation answered: the rise is not established as layout, and
+  the two calibrations that bound the term are written down here.
+- **OPEN** the frame carrying the 140,122, from the two profiles CI has
+  already written. kanso#1480's.
+- **OPEN** whether the prose gates should read for a repeated block. The
+  conflict-marker spec covers the loud shape of this and not the quiet one.
