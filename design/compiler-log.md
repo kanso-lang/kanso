@@ -5024,3 +5024,39 @@ frames of bucket zero, by name and cost, in one notice.
 
 - **DONE** the bucket is named, and the digest earned its place doing it.
 - **OPEN** the frame. One line in the next pair of sittings.
+
+## 2026-09-17 — main has been red for three pushes, and the rows were a pull request's
+
+`kanso check`'s three instruction rows on main read:
+
+```
+  compile_instructions   35,965,137 -> 35,965,150     +13
+  entry_instructions    128,204,898 -> 128,204,911     +13
+  library_instructions  128,340,017 -> 128,340,030     +13
+  startup_instructions    4,838,323 ->   4,838,323       0
+```
+
+The numbers on the left came from kanso#1461's run against its merge ref.
+Main's own build of the commit that merge became reads thirteen more on each
+of the three, and has done on every push since kanso#1474 — f31c0065,
+0bfd5731 and ae5183a8 were all red on the cost-goldens job, and the sweep read
+the branch list rather than main.
+
+Two things follow and both are worth writing down.
+
+The thirteen is the one the 2026-09-17 entries named: `memrchr` under
+LineWriter, seeking the last newline in the result line each of the three
+gates' runs prints. The start-up gate prints nothing and was green through all
+three pushes. A merge ref and the commit it becomes are two builds of one
+source, and nothing makes them land on the same side of that frame.
+
+So a pull request can be green on this job and leave main red. That is not a
+hypothesis any more; it is what these three pushes did. Two open branches,
+kanso#1477 and kanso#1481, read the same three values to the instruction —
+kanso#1481 changes no compiler source at all — which is how it was caught.
+
+kanso#1483 takes the printed line out of the measured runs and the frame with
+it, after which this cannot happen again.
+
+- **DONE** the three rows carry main's own sitting; two page spans follow.
+- **OPEN** kanso#1483, and a sweep that reads main's job and not only the branches.

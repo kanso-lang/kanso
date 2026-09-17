@@ -1820,7 +1820,23 @@
 # never runs it. What moved the row is src/eval.rs being part of the compiler
 # binary. The grep that settles it: the changed code's callers all sit under the
 # run path, not under compile_module_inner.
-compile_instructions=35965137
+#
+# 2026-09-17, MAIN's own sitting, and the row had been carrying a pull
+# request's. The value below it was written from kanso#1461's run against its
+# merge ref; main's build of the merged commit reads thirteen more, and has
+# done on every push since kanso#1474. Three main pushes were red on this job
+# before anyone read the job rather than the branch list.
+# #
+# # THE THIRTEEN IS THE SAME ONE. It lives in `core::slice::memchr::memrchr`
+# # under LineWriter, seeking the last newline in the line each of these three
+# # gates' own runs prints, and the start-up gate -- which prints nothing --
+# # was green through all of it. A merge ref and the commit it becomes are two
+# # builds of one source, and they do not have to land on the same side of it.
+# #
+# # So a pull request can be green on this job and leave main red, which is
+# # what happened. kanso#1483 stops the measured runs printing at all, which
+# # removes the frame and the choice with it.
+compile_instructions=35965150
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

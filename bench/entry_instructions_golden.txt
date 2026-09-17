@@ -641,7 +641,10 @@
 # never runs it. What moved the row is src/eval.rs being part of the compiler
 # binary. The grep that settles it: the changed code's callers all sit under the
 # run path, not under compile_module_inner.
-entry_instructions=128204898
+#
+# 2026-09-17, main's own sitting. Thirteen above the row kanso#1461's merge
+# ref produced, for the reason the module golden gives.
+entry_instructions=128204911
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.
