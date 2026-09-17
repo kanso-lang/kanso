@@ -4305,3 +4305,44 @@ are ten map lookups of which the largest is 0.94%. The structural lever is
 interning names to integers so the maps stop comparing strings at all, which
 would reach that 3.5% and part of the 2.6% in rehashing beside it. That is a
 refactor across check.rs, infer.rs and codegen.rs, and it is not costed yet.
+
+## 2026-09-17 — the bound discharge had no golden, and it is built
+
+`STATUS.md`'s "Ruled, unbuilt" section carries the explicit box, and among what
+that ruling owes are "the two cost levers, an inlined bind for a pure index
+read and bound discharge for a literal index into a known-length list, each
+measured". Both are on main. Probed against `15e182b1`:
+
+    xs = [10 20 30]
+    show xs[1]     runs, no `none` arm needed
+    show xs[3]     runs, no `none` arm needed
+    show [7 8][2]  runs, no `none` arm needed
+    show xs[0]     error[exhaustive]: this can be a none
+    show xs[4]     error[exhaustive]: this can be a none
+    show xs[n]     error[exhaustive]: this can be a none
+
+Indices run from 1, so 1 through 3 are the whole of a three-element list. The
+discharge is exact at both edges and does not fire for an index the compiler
+cannot read off the source. The inlined bind has a golden already —
+`an_index_without_the_bang_reaches_its_twin`, whose first line says the index
+written without the `!` inlines.
+
+The discharge had none. That corpus pins the MISS path and nothing pinned the
+hit: a compiler that discharged every index read, which is the wrong rule and a
+quiet one, passed every golden in the tree. This entry ships the fixture that
+fails on it, and it is the four cases above in one program so the two halves
+cannot drift apart.
+
+It was watched red before it was watched green: with `at zero` reading `10`
+instead of `<none>`, `micro_corpus_survives_a_release_build` names the file and
+prints both lines.
+
+Two notes on writing a micro golden, both learned the slow way here. A file
+without `\npub play` is SKIPPED by both micro tests, silently — the first draft
+of this fixture used bare statements, was read by nothing, and passed with its
+expected output deliberately wrong. And the file may not carry a blank line
+between its header comment and the first definition.
+
+- **DONE** the discharge is pinned.
+- **OPEN** the explicit box's row in STATUS.md: every part of it this session
+  could probe is built. The row is the chat's to remove, so this is a report.
