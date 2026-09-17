@@ -4765,3 +4765,41 @@ into `Backend::emit` and callgrind attributes them there together.
 `per_process_floor=558726 frames=605 kernel=6.17.0-1022-azure cpu=25/17`.
 
 - **DONE** the rows are CI's.
+
+## 2026-09-17 — kanso#1468 on the merged tree, and the layout term measured
+
+CI's sitting on the tree merged with kanso#1465:
+
+    compile_instructions  35,967,913 -> 35,887,458    -80,455
+    entry_instructions   128,214,733 -> 127,923,555   -291,178
+    library_instructions 128,348,838 -> 128,059,740   -289,098
+
+**LAYOUT.** Both questions this branch indexes are asked inside
+`Backend::emit`, which sits under `emit_ir`, and `emit_ir` is reached only from
+`main.rs`'s build and run paths. `kanso check` stops before codegen, so neither
+scan runs on any of these three corpora and neither index can have saved them
+anything.
+
+That used to be an argument. It is a measurement now. Three binaries built on
+this box whose only difference is Rust functions **that nothing calls**, read
+with this gate's own box, command and pinned tunables:
+
+    baseline                      36,377,641              .text 2,841,218
+    +20  pub fns that never run   36,322,623   -55,018    .text 2,842,034
+    +120 pub fns that never run   36,383,018    +5,377    .text 2,839,538
+
+60,395 instructions of span from code that cannot execute, non-monotone in
+`.text` exactly as this row's own header records. A first attempt at that
+experiment was invalid and nearly went in the other direction: with
+`#[allow(dead_code)]` private functions rustc eliminated all of them, `.text`
+read 2,841,218 in both runs, and the row did not move — which would have looked
+like a refutation. The `.text` column caught it. `pub` plus `#[inline(never)]`
+in a `pub mod` survives elimination.
+
+The change's own effect is on the build path and is the largest in the run:
+`kanso build bench/runbench` falls 69.64%. Welfare rose and is banked at
+69.79493399688721 — a rise is banked whatever moved it, and what moved this one
+is the compiler's bytes. Whether the ratchet should be banking that at all is
+the open question in the ledger.
+
+- **DONE** the rows are CI's and their cause is named correctly.
