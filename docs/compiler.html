@@ -2120,6 +2120,24 @@ second = (list/fold [10] seed put_step)[&quot;k&quot;]
 
 <p>the habit underneath all of this is cheaper than any of the findings. a list that describes its own coverage &mdash; a floor, an audit, a sitting not yet swept &mdash; is telling you where to look. so is a gate that prints a binary's hash on every run: somebody wrote that line down because they expected to need it, and reading it first would have saved an attribution that was wrong.</p>
 
+<h2 id="constdigest"><span class="sec-num">80</span>a quarter of start-up was hashing a constant</h2>
+
+<p>the interpreted engine's start-up became a weighted term on the 2026-09-16 gavel, so <code>kanso play</code> on a program holding one <code>print</code> was profiled. it retired 4,837,246 instructions, and callgrind put <strong>25.35%</strong> of them in one function: the hasher.</p>
+
+<p>two cache keys ask for it. one decides whether a staged runtime object may be reused, the other whether a linked binary may be; both must change when <code>src/runtime.c</code> changes, and both got that by handing the whole file to a hasher. <code>runtime.c</code> is 450,100 bytes, it is hashed twice, and 900,200 bytes at about 1.36 instructions a byte is the entire frame. the one-line program's own work is rounding beside it.</p>
+
+<p>a constant's digest is a constant. the compiler that builds this one computes it, and the running compiler folds in eight bytes:</p>
+
+<pre><code>main          5,081,099
+the digest    3,955,899     -1,125,200   -22.14%</code></pre>
+
+<p>the profile above was taken before seven whole-program scans landed underneath it, which raised the row to 5,081,099; the table is ci&#39;s sitting against that base. the saving is the same 1,125,200 either way, because it is the hashing that stops happening and it does not depend on what else the start-up does.</p>
+
+<p>the digest is two FNV-1a accumulators with different primes and offsets, folded together so the key holds 128 bits rather than 64. a collision here would not be a slow build &#8212; it would be a runtime object reused against ir compiled for a different one, so the second accumulator is cheap insurance paid once at build time. the loop steps eight bytes at a time because <code>const</code> evaluation is interpreted and rustc refuses a long-running one by default.</p>
+
+<p>the shape is worth naming because it is not about hashing. a cache key has to change when its input changes, and the cheapest way to write that is to hash the input &#8212; which is correct, and which quietly moves the cost from build time to every single run. what the input is fixed at compile time is the question worth asking before reaching for a hasher.</p>
+
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>
