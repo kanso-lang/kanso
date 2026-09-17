@@ -113,4 +113,7 @@
 # corpus is where the trade is worst. `kanso build bench/runbench` falls 69.64%
 # on the same change. The objective weighs neither row, so nothing here is a
 # welfare question; the trade is stated because the row moved.
-startup_instructions=5077750
+#
+# 2026-09-17, kanso#1473. The start-up rise this stack carries, 1,724 below
+# kanso#1468's reading of it.
+startup_instructions=5076026

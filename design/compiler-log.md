@@ -5346,3 +5346,29 @@ this is a change in what is counted rather than a gain to bank.
 
 - **DONE** the three rows carry the excluded sitting; one page span follows.
 - **OPEN** the second build, which is the whole claim.
+
+## 2026-09-17 — kanso#1473's rows on the excluded anchor
+
+CI's sitting, against main and against this branch's own base:
+
+```
+                          main          kanso#1468     this branch
+  compile_instructions   35,964,325    35,886,633    35,869,543
+  entry_instructions    128,204,133   127,922,777   127,873,637
+  library_instructions  128,339,261   128,058,971   128,011,551
+  startup_instructions    4,838,323     5,077,750     5,076,026
+```
+
+So the beat's tail-call question, asked once per name instead of once per
+name per declaration, takes a further 17,090 off the module row on top of
+kanso#1468's 77,692, and the same shape on the other two. The three compile
+rows are layout: `kanso check` stops before codegen and this stack changes
+the emitter, so nothing they count as work went near it.
+
+The start-up row carries the rise this stack has had since kanso#1468 and is
+1,724 under that reading.
+
+welfare exits 0 — the move is inside the dead band, so there is nothing to
+bank here.
+
+- **DONE** four rows and eight page spans on the excluded anchor.
