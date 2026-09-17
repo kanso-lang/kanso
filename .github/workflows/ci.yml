@@ -435,8 +435,9 @@ jobs:
           frames=$(sed -n 's/^per_process_floor_frames=//p' /tmp/floor.txt)
           cpu=$(awk -F': ' '/^cpu family/ { f = $2 } /^model\t/ { m = $2 }
                             END { printf "%s/%s", f, m }' /proc/cpuinfo)
-          echo "::notice::per_process_floor=$floor frames=$frames \
-kernel=$(uname -r) cpu=$cpu"
+          said="per_process_floor=$floor frames=$frames"
+          said="$said kernel=$(uname -r) cpu=$cpu"
+          echo "::notice::$said"
       - name: compile memory
         id: compile_memory
         if: always()
