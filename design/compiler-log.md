@@ -4718,3 +4718,42 @@ wrong on a profile read by inference.
   the next sitting.
 - **NOTE** the compile rows on this same head did not part at all, so #1463's
   own second reading is not implicated — only this gate's.
+
+## 2026-09-17 — the second reading was counting a build the first one had already done
+
+The previous entry left one line open: whether the codegen gate's second
+reading loses its children, and why. The sitting answered it in the notice it
+had just been given.
+
+```
+codegen_again_dev=1071604124     first_reading=9273832919    again_procs=5 first_procs=6
+codegen_again_release=7307726629 first_reading=12100874235   again_procs=5 first_procs=6
+```
+
+One fewer process, and the dev row down to a ninth. That is not a compiler that
+counted differently twice; it is an incremental build. `kanso build X` writes
+its output beside itself as `X`, so the first measured run leaves the box
+holding what it just produced, and the second run of the identical command
+finds most of its work done. The gate then read the gap as `VERDICT (2):
+REPRODUCTION FAILURE` and halted a vein over it.
+
+The fix is the 2026-09-15 rule applied where it was being skipped. Staging is
+now a function — `codegen_box.sh`, which opens `rm -rf "$box"`, then both tiers
+warmed in a fixed order — and it runs before EACH measured run rather than once
+at the top. Both readings start from bytes the gate chose. A disagreement after
+this is the compiler's, which is the only thing the second reading was ever for.
+
+`tests/the_second_reading_starts_where_the_first_did.rs` pins it: the staging
+call sits between the two profile prefixes, the first run is staged too, the box
+script clears rather than copies over, and both tiers are warmed on every
+staging. Watched red on each — removing the call between the readings, and
+dropping one warm-up.
+
+The other three compile gates run `kanso check`, which writes nothing, so their
+second readings were never asking a different question. The spec names this gate
+alone and says why.
+
+- **DONE** the row's second reading is a reproduction.
+- **OPEN** what the row actually reads once it is one. This host refuses the
+  golden's toolchain (glibc 2.39-0ubuntu8.7 against 8.9, clang 18 against 19),
+  so the first honest sitting of this gate is CI's.

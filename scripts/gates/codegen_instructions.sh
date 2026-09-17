@@ -68,8 +68,27 @@ if [ "$host" -ne 0 ] && [ "$host" -ne 3 ]; then
 fi
 
 sh scripts/gates/dispatch.sh name
-sh scripts/gates/codegen_box.sh
 box=/tmp/kanso-codegen
+
+# THE BOX IS RE-STAGED BEFORE EACH MEASURED RUN, and that is the whole of what
+# kanso#1470 found. `kanso build X` writes its output beside it as `X`, so the
+# first measured run leaves the box holding what it just built and the second
+# run of the same command is a different question asked of a different box: on
+# 2026-09-16 the second reading counted FIVE processes where the first counted
+# six, and the dev row fell from 9,273,832,919 to 1,071,604,124 -- a build that
+# skipped the work, printed as a REPRODUCTION FAILURE about the compiler. The
+# rule it broke is the project's: external state is normalized before it is
+# measured. So both readings start from a box `codegen_box.sh` has just
+# rebuilt, with both tiers warmed in the same order, and a disagreement after
+# that is the compiler's.
+stage_and_warm() {
+  sh scripts/gates/codegen_box.sh
+  # Warm BOTH tiers, whichever one this run counts, so the row does not depend
+  # on which of the two the job happened to ask for first.
+  ( cd "$box" && ./kanso build pkg/codegen_corpus >/dev/null 2>&1 )
+  ( cd "$box" && ./kanso build pkg/codegen_corpus --release >/dev/null 2>&1 )
+}
+stage_and_warm
 
 printf 'codegen_binary sha256=%s\n' "$(sha256sum "$box/kanso" | cut -d' ' -f1)"
 size --format=sysv "$box/kanso" \
@@ -86,11 +105,6 @@ tune=$tune:glibc.malloc.mmap_threshold=131072
 tune=$tune:glibc.malloc.trim_threshold=131072
 tune=$tune:glibc.malloc.top_pad=131072
 tune=$tune:glibc.malloc.tcache_count=7
-
-# Warm BOTH tiers, whichever one this run counts, so the row does not depend on
-# which of the two the job happened to ask for first.
-( cd "$box" && ./kanso build pkg/codegen_corpus >/dev/null 2>&1 )
-( cd "$box" && ./kanso build pkg/codegen_corpus --release >/dev/null 2>&1 )
 
 rm -f /tmp/cg.codegen.$tier.*
 (
@@ -154,6 +168,7 @@ fi
 # rows take this second reading for the reason kanso#1463 gives at length: a
 # number that disagrees says how much and nothing about where, and the two
 # cases below are settled differently.
+stage_and_warm
 rm -f /tmp/cg.codegen.${tier}b.*
 (
   cd "$box"
