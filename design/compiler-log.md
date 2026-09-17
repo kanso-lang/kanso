@@ -7496,7 +7496,7 @@ work: seventeen on 2026-08-29, nine on the five oldest dates, nine here. Two
 unbuilt rulings in thirty-five entries. The twenty-one that remain are all
 September.
 
-**Six of September's twenty-one, probed on the way past.** The 2026-09-06
+**Eight of September's twenty-one, probed on the way past.** The 2026-09-06
 whole-float ruling — a float's rendering always carries a `.` or an `e`, and
 `.0` is appended where the shortest form has neither — is built:
 `a_whole_float_keeps_its_point` carries the RULED citation and its third line
@@ -7559,13 +7559,24 @@ wrong before this one — a destructuring pattern the opacity rule refuses
 across an import, and a `print` of a held box — and both were my spelling
 rather than the compiler's.
 
-Fifteen September entries are unread, and this entry says so rather than
+Two more from 2026-09-05, both checkable in one command each. *No
+machine-code-size term in welfare* — Clay: "guessing is not okay so I guess no
+size term" — holds: `--counters` prints nothing matching text, machine or
+size, and the ruling's other half holds too, since `.text` stays watched in
+its own vein at `bench/text_golden.txt` and CI's `text.txt` carries a row per
+program. *One row, one value* holds: `bench/compile_instructions_by_cpu.txt`
+is gone, collapsed as the gavel required, and
+`bench/compile_instructions_golden.txt` carries exactly one non-comment line.
+
+Thirteen September entries are unread, and this entry says so rather than
 counting them swept.
 
 - **DONE** August swept end to end, and the demanded-knot counter measured
   rather than read.
-- **OPEN** fifteen September entries, across 09-02, 09-03, 09-05, 09-07,
-  09-08, 09-10, 09-15 and 09-16. Several are almost certainly built — the box
+- **OPEN** thirteen September entries, across 09-02, 09-03, 09-05, 09-07,
+  09-08, 09-10, 09-15 and 09-16. Eight probed, eight built: the yield is
+  lower here than in August, which is what a list that tracks recent rulings
+  should look like. Several are almost certainly built — the box
   ruling, the maps normalization and the two welfares each came OFF the list
   today — but "almost certainly" is what this sweep exists to replace.
 - **OPEN** whether any other counter diverges between the engines. Nothing
