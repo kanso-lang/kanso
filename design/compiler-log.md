@@ -3782,6 +3782,98 @@ custom allocator only behind the unstable `allocator_api`, so the question it
 turns on is how many of the 49,229 calls belong to collections a phase-scoped
 arena could own. That is not answered here. Recorded as an open lead with
 nothing above it that sizes it.
+
+
+## 2026-09-16 — the linearity analysis asked the whole program once per question
+
+Clay's gavel that morning made development-loop cost its own welfare, and the
+first thing measured under that heading was not the front end. Callgrind on
+`kanso build` of a FORTY-LINE corpus, kanso's own process:
+
+    kanso::build                           1,150,998,944   97.91%
+    codegen::emit_ir                       1,144,148,711   97.32%
+    linear::Analysis::new                    760,255,840   64.67%
+    linear::Analysis::callers_hand_over      747,681,475   63.60%
+    linear::Analysis::callsites_unique_in    623,488,195   53.04%
+
+Two thirds of a build, in the pass that decides which `push` call sites own
+their list. `kanso check` never runs it — linearity is a codegen-time analysis
+— so not one of the three compile veins has ever seen a byte of it, and the
+model that would is the one ruled this morning.
+
+**The shape is the declares quadratic again.** `fixpoint()` loops; each round,
+for every (name, arity, index) still believed linear it asks
+`callers_hand_over`, which walks every function, every statement and every
+expression in the program looking for calls to that one name. `escapes_as_value`
+does a second full-program walk per (name, arity) per round.
+
+`escapes_as_value` is exact in one pass, and that is what this change is.
+`mentioned_as_value(e, name, arity)` was true exactly when some occurrence of
+`Ident(name)` was not the head of an application of `arity` arguments. So the
+question needs two facts per name: whether it ever occurs outside an
+application head, and which argument counts it heads an application with. Both
+are properties of the program alone — nothing the fixpoint does can change
+either — so one walk before the fixpoint starts answers every ask.
+
+    kanso::main             1,238,723,077 -> 1,065,298,291   -173,424,786   -14.00%
+    linear::Analysis::new     760,290,312 ->   586,876,488   -173,413,824   -22.81%
+
+The two falls agree to eleven thousand instructions, which is the check that
+the win is where the reading said it was and not somewhere else.
+
+**The emitted IR is byte-identical on all fourteen benchmarks**, runbench
+included at 36,085 lines. The analysis feeds codegen, so that is the claim
+worth making about a rewrite of it: what the compiler decides has not moved,
+only what it spends deciding.
+
+**And the walk it replaced is kept as the oracle.** `mentioned_as_value` is
+`#[cfg(test)]` now rather than deleted, and a spec runs both it and the index
+over lib/json and bench/compile_corpus for every (name, arity) pair
+`escapes_as_value` can be handed — several thousand questions, both ways, on
+programs this repository actually compiles. Watched red before it was trusted:
+with `escapes` answering `bare.contains` alone, so that an application head
+with the wrong argument count stopped escaping, it names the first
+disagreement — "lib/json: the index and the walk disagree about
+`Get_position` at arity 0".
+
+**And then the larger half turned out to need no state at all.**
+`callers_hand_over` walks every function looking for calls to one name, and
+`callsites_unique` has exactly ONE `return false` of its own: the bad call site
+for that name. Every other path recurses or falls through to
+`child_exprs(..).all(..)`. So a declaration whose body never mentions the name
+can only answer true, and walking it is the whole of the cost. The same walk
+that built the escape index records, per name, which declarations mention it —
+which is a property of the program and needs no round of the fixpoint — and
+`callers_hand_over` iterates those and no others.
+
+    kanso::main             1,238,723,077 ->   495,523,498   -743,199,579   -60.00%
+    linear::Analysis::new     760,290,312 ->    17,129,979   -743,160,333   -97.75%
+
+The pass that was two thirds of a build is 3.5% of what is left of one.
+`Analysis::new` falls 44.4x and the build falls 2.5x, and the two absolute
+falls agree to thirty-nine thousand instructions, which says again that the
+whole of it is inside that pass.
+
+The emitted IR is byte-identical on all fourteen benchmarks after both changes,
+checked separately for each.
+
+What is genuinely left is `callsites_unique_in` itself, which is still the
+work that remains inside those few declarations, and `codegen::Backend::emit`,
+which was 12.54% of the old build and is a much larger share of the new one.
+
+**What CI read, and it is not what this change did.** The three compile rows
+fell -13,771 (-0.0373%), -46,634 (-0.0354%) and -46,344 (-0.0351%). None of
+them is this change doing less work on that path: `kanso check` does not run
+the linearity analysis at all. `in_place_pushes` is called from `emit_ir`, and
+from main.rs only behind `KANSO_BEAT_REPORT`, which no gate sets.
+
+So it is the layout family, and a larger member of it than the seven before it.
+The falls are proportional to the row rather than a fixed amount per process,
+which rules out the maps parse; what they most likely are is
+`mentioned_as_value` leaving the release build — it is `#[cfg(test)]` now — and
+the generic instantiations linear.rs shares with the check path being inlined
+differently without it. Recorded as unattributed rather than explained, which
+is the honest state of it. Welfare holds at 69.75.
 ## 2026-09-16 — gavel: two welfares and a meta-welfare over them, and the floor re-ratchets
 
 Clay ruled the ledger's "What the compile term counts once codegen is in it"
@@ -3939,3 +4031,10 @@ it reads 131,884,271 and nothing else.
 `library_instructions` 130,762,703 — the figures this branch had measured
 before, to the instruction. The merge brought main's values in and this writes
 the branch's back. Two runs agreeing is what the allocator fix bought.
+**Round three, after kanso#1466: the same three rows, read again and agreeing.**
+CI on the merged head reads `compile_instructions` 36,864,779,
+`entry_instructions` 131,837,650 and `library_instructions` 131,978,823 — to
+the instruction, the figures round two took from CI and that the next run
+disagreed with by thirteen. The merge brought main's values in and this writes
+the branch's back. It is the first time this vein has reproduced across two
+runs since the compiler moved to mimalloc, which is what kanso#1466 was for.
