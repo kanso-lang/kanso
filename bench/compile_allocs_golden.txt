@@ -453,4 +453,16 @@
 # care what else got cheaper; the three instruction rows beside it are a
 # share of a pile kanso#1414 shrank, and every one of them came back
 # smaller. Same branch, same run, the two halves of CLAUDE.md's rule.
-compile_allocs=27395
+#
+# 2026-09-17, kanso#1465. The qualifier learned which of a dependency's names
+# are TYPES, which costs one set of type names per dependency: two allocations.
+# A function named for an imported type used to have its callers' Ctor patterns
+# rewritten to the function's symbol, and the backend then looked for a
+# constructor that was not there.
+#
+# THE NOTE GOES ABOVE THE VALUE. compile_allocs.sh compares this file to the
+# gate's output with `grep -v '^#'` and a diff, so a blank line anywhere but
+# inside a comment block becomes a line the output does not carry, and the
+# gate fails on a row that agrees. It did, on this file, on kanso#1465's
+# round two.
+compile_allocs=27397
