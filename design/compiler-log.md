@@ -6058,3 +6058,51 @@ artifacts on every run.
   the published page.
 - **OPEN** what carries the 146,628. Cloud's, and it needs the profile pair
   rather than another table.
+
+## 2026-09-17 — the book entry leaves the ledger, having said four times it was not a question
+
+design/pending-gavels.md is the single ledger of decisions awaiting Clay. Its
+own rules say an entry cites its search or is invalid, and carries a
+recommendation so a sitting can be a yes or a no. Audited all seven entries
+against those two rules today; six pass and one fails both:
+
+    cited rec  entry
+      Y    Y   Does the wall survive the fused operators?
+      Y    Y   Was the wall's simultaneous-failure merge meant to go?
+      Y    Y   The box constructor's spelling
+      N    N   The book teaches the boundary language
+      Y    Y   How far does a binding position carry a box?
+      Y    Y   A byte-position scan on a string, for the escape path
+      Y    Y   Pinning `.rodata` to a fixed page
+
+It fails both because it was never a question. Its own text says so four
+times: *Nothing here is a question for Clay*, then *Still nothing here for
+Clay*, twice more. It is a work record of what the book owed, filed as a
+queued P1 on 2026-08-26 and kept in the ledger ever since.
+
+**And the work is done.** Its final note, 2026-09-15, says the last item is
+ch04's "nothing is asked of the signature", released by the box gavel and
+moving with that build. That build landed, and the paragraph moved with it.
+Read on main today, ch04 now says: *the checker asks its question at the call
+instead: can this argument be an err the program raised? where it can prove
+one, the function needs an `(err _)` arm at that position, or the caller
+dispatches before calling, or the program does not compile ... err-in,
+err-out is a fact about calls the checker cannot see into, not a contract
+anybody writes.* That is the built rule, blind spot included, and its
+`unasked.kso` sample binds to a name — the blind-spot case — and shows the
+endpoint report.
+
+So the entry leaves, and the ledger holds six questions, each of them a
+question, each with a recommendation.
+
+**STATUS.md's index took three edits, and the spec found two of them.** The
+index claims the count in three sentences, and
+`tests/the_status_index_counts_the_ledger.rs` pins each against the ledger's
+own headings. Fixing the first left the second wrong and the second left the
+third wrong, and the spec named each in turn rather than letting a stale one
+through. That is the third time this index has gone stale by hand and the
+first time nothing had to notice it by eye.
+
+- **DONE** the entry closed and removed, the index recounted to six and four,
+  and the spec green.
+- **OPEN** nothing here. The six that remain are questions.
