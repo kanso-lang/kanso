@@ -4152,7 +4152,14 @@ this container, three rows, before and after:
     entry_instructions     131,550,570 -> 129,114,693  -1.85%
     library_instructions   131,694,754 -> 129,252,791  -1.85%
 
-CI's sitting is the one that goes in the goldens and it is the next round.
+CI read it as:
+
+    compile_instructions    36,682,232 -> 35,969,565   -1.943%
+    entry_instructions     130,573,787 -> 128,144,579  -1.860%
+    library_instructions   130,716,747 -> 128,281,268  -1.863%
+
+against this container's projection of 1.93%, 1.85% and 1.85%, which is the
+projection working. The floor is ratcheted to 69.79 in the same commit.
 
 **Eight, and not sixteen, and mimalloc says why itself.** DONE. From
 v3/src/alloc.c: `mi_assert_internal(page->block_size < MI_MAX_ALIGN_SIZE ||
@@ -4160,6 +4167,16 @@ _mi_is_aligned(block, MI_MAX_ALIGN_SIZE))`. A block is sixteen-aligned unless it
 is smaller than sixteen bytes, and `Layout` carries size and alignment
 independently, so `align 16, size 8` is spellable. Eight is the bound that holds
 for every size.
+
+**src/main.rs is in the wasm build, and the first round forgot it.** DONE.
+`UNDER` is mimalloc on every target that can build it and `std::alloc::System`
+on wasm32, and the bypass was written without that guard. On wasm
+`libmimalloc_sys` is not linked at all, so the branch did not compile there,
+`docs/kanso.wasm` never got built, and six jobs went red behind one missing
+blob: the browser differential, the site, the asset digests, the specs and the
+other host. The bypass carries the same `#[cfg(not(target_arch = "wasm32"))]`
+the allocator above it does; the System allocator honours its `Layout` and has
+nothing to skip.
 
 **A run-time spec cannot reach this code, and two were written before that was
 noticed.** DONE. The `#[global_allocator]` is in the binary crate; an

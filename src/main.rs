@@ -129,6 +129,13 @@ unsafe impl std::alloc::GlobalAlloc for Counting {
         // and would be wrong here. Eight is the bound that holds for every
         // size, and it is where the allocations are: a `Vec<u8>`, a `String`,
         // and any record whose widest field is a pointer or a u64.
+        //
+        // Only where mimalloc is the allocator under the tally. On wasm32
+        // `UNDER` is `std::alloc::System` and `libmimalloc_sys` is not linked
+        // at all, so the bypass is not merely pointless there, it does not
+        // compile — and `src/main.rs` IS in the wasm build, which is how six
+        // jobs went red on the first round of this change.
+        #[cfg(not(target_arch = "wasm32"))]
         if layout.align() <= 8 {
             return unsafe { libmimalloc_sys::mi_malloc(layout.size()) }.cast();
         }
