@@ -5211,3 +5211,41 @@ frames of bucket zero, by name and cost, in one notice.
 
 - **DONE** the bucket is named, and the digest earned its place doing it.
 - **OPEN** the frame. One line in the next pair of sittings.
+
+**CI's sitting on the head merged with main after kanso#1461**, and one row of
+the four is a trade rather than a layout move.
+
+```
+compile_instructions   35,965,137 ->  35,887,445    -77,692   -0.216%   LAYOUT
+entry_instructions    128,204,898 -> 127,923,542   -281,356   -0.219%   LAYOUT
+library_instructions  128,340,017 -> 128,059,727   -280,290   -0.218%   LAYOUT
+startup_instructions    4,838,323 ->   5,077,750   +239,427   +4.95%    WORK
+```
+
+The three compile rows fall by layout: this branch's whole diff is
+`src/codegen.rs`, 484 lines added and 73 removed, and `kanso check` stops
+before codegen, so not one changed line runs on those corpora. What moved is
+the compiler's own bytes and the layout under them.
+
+The start-up row is the one that reaches codegen, and it rises. Reproduced in
+a container and attributed, main against this branch on the same corpus:
+
+```
+kanso::main               4,882,857  ->  5,148,482   +265,625
+codegen::called_symbols           0  ->    278,812   +278,812   (new)
+memchr_aligned              921,736  ->    879,487    -42,249
+is_contained_in             626,252  ->    577,318    -48,934
+next_match                  381,383  ->    379,562     -1,821
+```
+
+The index costs 278,812 to build and saves 93,556 on the three scans it
+replaces. Most of that cost is reading DECLARES — twelve hundred lines, a
+constant, the same for every process — while the saving grows with how much
+the program emits. A single `print` emits almost nothing, so the start-up
+corpus is exactly where this trade is worst, and `kanso build bench/runbench`
+falls 69.64% on the same change.
+
+The objective weighs neither the start-up row nor the library row; it weighs
+the module and entry rows, and their fall is the rise banked here. Welfare
+69.79153807658396 -> 69.79493424287482, `--set` run after the goldens carried
+CI's rows and not before.
