@@ -5684,3 +5684,37 @@ drew, and the revert of the row bump that chased it, were both the frame
 kanso#1487 removed.
 
 - **DONE** merged onto main; the rows are main's.
+
+## 2026-09-17 — kanso#1486 on the tree merged with kanso#1462: the three check rows fall by over a percent
+
+    compile_instructions    35,968,792 -> 35,559,376    -409,416   -1.14%
+    entry_instructions     128,217,983 -> 126,771,382  -1,446,601  -1.13%
+    library_instructions   128,352,174 -> 127,226,167  -1,126,007  -0.88%
+    startup_instructions     4,838,372 -> 4,834,337       -4,035   -0.083%
+    interp_allocs            5,313,434 -> 5,313,332         -102
+    interp_peak_bytes          933,202 -> 933,202              0
+    interp_instructions  2,178,559,085 -> 2,178,750,341  +191,256  +0.0088%
+
+**These are work, which separates this branch from the three beside it in the
+round.** The alias fixpoint and the group count run inside `kanso check`, so
+the corpora the three compile rows measure are exactly where running them once
+instead of twice shows up. The entry route pays both readers as consecutive
+statements and takes the largest share.
+
+Start-up falls 4,035, a tenth of the percentage the module corpus sees, which
+is what a one-line program gives a fixpoint to walk.
+
+**One counter worsened: `interp_instructions` landed on 2,178,750,341.** The
+front end runs on that corpus too and got cheaper there — `interp_allocs` falls
+102 in the same job, which is the same change counted a different way — but the
+corpus is one small program and 2.18 billion of the row is the interpreter
+executing it. The layout term on this vein is the size of the move: kanso#1482
+takes it down 56,819 and kanso#1468 puts it up 237,834 in this same round, both
+from edits that never execute on it. A saving of a few thousand front-end
+instructions cannot be read out from under that, and this row is not where this
+change is measured.
+
+`interp_peak_bytes` is unchanged at 933,202: the fixpoint's working sets were
+never the high-water mark.
+
+- **DONE** the rows are CI's.

@@ -102,4 +102,10 @@
 # base, so the merged tree is reading neither number. The value below is
 # main's, carried forward so the gate has one value to fail against
 # rather than none; the merged sitting is CI's to take.
-startup_instructions=4838372
+#
+# 2026-09-17, kanso#1486 on the tree merged with kanso#1462. CI reads
+# 4,834,337 against main's 4,838,372, a fall of 4,035 -- 0.083%. `kanso play`
+# runs the front end too, so the saving is real here; on a one-line program
+# there is almost nothing for the fixpoint to walk, which is why the fall is
+# 0.083% where the module corpus sees 1.14%.
+startup_instructions=4834337

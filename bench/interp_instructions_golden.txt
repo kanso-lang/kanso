@@ -62,5 +62,14 @@
 # 2026-09-17, kanso#1462, same sitting. A FALL of 97,472 (-0.0045%), and this
 # one is the change: the interpreted run is what this branch touches, and the
 # fixed-seed hashing is what it does. The objective does not weigh this vein.
-interp_instructions=2178559085
+#
+# 2026-09-17, kanso#1486 on the tree merged with kanso#1462. CI reads
+# 2,178,750,341 against main's 2,178,559,085, a RISE of 191,256 -- 0.0088%.
+# The front end runs on this corpus and got cheaper -- interp_allocs falls 102
+# in the same job -- but the corpus is one small program and 2.18 billion of
+# the row is the interpreter executing it. The layout term on this vein is of
+# this size and swamps the saving: kanso#1482 moves it 56,819 down and
+# kanso#1468 237,834 up in this same round, both from edits that never run on
+# it at all.
+interp_instructions=2178750341
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
