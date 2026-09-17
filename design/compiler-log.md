@@ -5577,3 +5577,31 @@ earlier sitting, and the excluded rows land inside its band, so there is
 nothing further to bank.
 
 - **DONE** the rows carry the sitting on the excluded anchor; one page span follows.
+
+## 2026-09-17 — kanso#1476's rows, and the start-up row that pays for the index
+
+CI's sitting on the anchor kanso#1487 left.
+
+```
+  compile_instructions   35,964,325 ->  35,896,968   -67,357 (-0.1873%)
+  entry_instructions    128,204,133 -> 127,962,075  -242,058 (-0.1888%)
+  library_instructions  128,339,261 -> 128,099,426  -239,835 (-0.1869%)
+  startup_instructions    4,838,323 ->   5,079,952  +241,629 (+4.9941%)
+```
+
+`compile_allocs` came back 27,397 and every other vein agreed.
+
+The three falls are the parent's, kanso#1475, and they are its readings byte
+for byte. That is the check a codegen-only change wants: `kanso check` stops
+before the emitter, so a row that counts a check has nothing of this branch in
+it, and a number identical to the parent's is what that predicts.
+
+The row that moves is start-up, and it is named here because it worsened and
+the trend gate is right to ask. Most of the 241,629 is the parent's; against
+kanso#1475's 5,079,380 this branch adds 572. A start-up reading is a loader
+reading a binary, and an index the emitter builds is a few more bytes for the
+loader to place. The work it saves is in a build, which this row does not
+reach.
+
+- **DONE** the four rows, priced.
+- **OPEN** nothing; the branch is CI's to confirm.
