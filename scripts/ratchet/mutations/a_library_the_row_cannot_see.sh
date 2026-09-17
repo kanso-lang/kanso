@@ -16,16 +16,25 @@
 # line of Rust changed to get it, which is the shape the instruction row could
 # never have caught anyway.
 #
-# The anchor is the absence of the file. A repo that grows its own cargo config
-# has somewhere for this flag to be lost, so the mutation stops rather than
-# appending into it.
+# The repo grew its own .cargo/config.toml on 2026-09-17 -- it defines
+# MI_NO_ALIGNED_HINT so the allocator stops picking random addresses -- and
+# this mutation used to stop dead when it found one, because writing over a
+# config it did not know about would have lost whatever was in it. So it
+# appends instead, and refuses only if a `[build]` section is already there for
+# it to collide with.
 set -e
-if [ -e .cargo/config.toml ] || [ -e .cargo/config ]; then
-  echo "the repo grew a cargo config; this mutation needs rewriting" >&2
+if [ -e .cargo/config ]; then
+  echo "the repo grew a .cargo/config as well; this mutation needs rewriting" >&2
+  exit 1
+fi
+if grep -q '^\[build\]' .cargo/config.toml 2>/dev/null; then
+  echo "the cargo config already has a [build] section; this mutation would" >&2
+  echo "have to merge with it and needs rewriting" >&2
   exit 1
 fi
 mkdir -p .cargo
-cat > .cargo/config.toml <<'EOF'
+cat >> .cargo/config.toml <<'EOF'
+
 [build]
 rustflags = ["-C", "prefer-dynamic"]
 EOF

@@ -1707,4 +1707,14 @@
 # change does can reach what this row counts -- but src/eval.rs is the
 # compiler, so editing it moves the compiler's bytes and what sits around
 # them. The note on this row in CLAUDE.md is about exactly this case.
-compile_instructions=36878067
+compile_instructions=36878537
+
+# 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
+# the allocator stops picking a random base address for its OS allocations.
+# The row did not move for that -- the same figure came back on the run before
+# this one, with the hint still on, and on the run before that. The golden was
+# written from a sitting that drew an unlucky address and has been thirteen
+# high ever since; this is the first reading taken where the draw cannot
+# happen. The entry row is the one that shows it plainly: with the hint on it
+# read 131,884,793 and then 131,884,271 in one job, and with the hint off it
+# reads 131,884,271 and nothing else.
