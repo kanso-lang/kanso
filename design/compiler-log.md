@@ -4427,3 +4427,30 @@ costs here.
 **The floor does not move.** DONE. welfare reads 69.76 against a floor of
 69.76: the merge's own resolution took the higher of the two floors and this
 tree clears it. Nothing to lower and nothing to bank.
+
+## 2026-09-17 — kanso#1465 on the merged tree: CI's sitting, and the floor drops
+
+The branch merged with kanso#1472 and CI measured the merged tree:
+
+    entry_instructions   128,144,579 -> 128,214,733   +70,154   +0.055%
+    library_instructions 128,281,268 -> 128,348,838   +67,570   +0.053%
+    compile_instructions  35,969,565 -> 35,967,913     -1,652   -0.0046%
+
+The two rises are the branch's own cost. The qualifier now keeps a set of the
+type names it must not rewrite, and the entry and library routes pay to build
+and read it. The module row falls, which is layout.
+
+Welfare falls to 69.79141882095341 and **the floor is lowered to meet it**,
+under the 2026-09-13 ironclad rule: the change makes the language work to its
+specification. A seven-line program that `kanso check` passed had the two
+engines printing different things — the interpreter `2 1`, the native backend
+`error: native backend: unknown type <module>/entry` — which is the differential
+law broken, not a preference. So the floor drops by exactly what the fix costs,
+the reason is in the ratchet history, and this does not go to the ledger.
+
+`per_process_floor=558232 frames=604 kernel=6.17.0-1022-azure cpu=25/1`. Note
+604 frames rather than 605: a frame this binary does not have. The floors are
+comparable only between two sittings of ONE binary, which is why a reading from
+another branch says nothing about this one.
+
+- **DONE** the rows are CI's and the floor is where the measurement put it.

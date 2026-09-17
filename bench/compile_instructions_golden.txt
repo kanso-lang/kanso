@@ -1780,7 +1780,13 @@
 # base, so the merged tree is reading neither number. The value below is main's,
 # carried forward so the gate has one value to fail against rather than none;
 # the merged sitting is CI's to take.
-compile_instructions=35969565
+#
+# 2026-09-17, kanso#1465 merged with kanso#1472, CI's sitting on the merged tree.
+# The value the merge carried forward was main's; this is the merged tree's own
+# reading. The qualifier now keeps a set of the type names it must not rewrite,
+# so the entry and library routes pay for building and reading it: the two rows
+# RISE. The module row falls, which is layout.
+compile_instructions=35967913
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.
