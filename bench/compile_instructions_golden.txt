@@ -1850,7 +1850,13 @@
 # base, so the merged tree is reading neither number. The value below is
 # main's, carried forward so the gate has one value to fail against
 # rather than none; the merged sitting is CI's to take.
-compile_instructions=35965137
+#
+# 2026-09-17, kanso#1462 on the head merged with main after kanso#1479. CI
+# reads 35,969,617 against 35,965,137, a RISE of 4,480 (+0.012%). LAYOUT. This
+# branch's whole compiler diff is src/eval.rs and a new `interpreter_counters`
+# in src/main.rs called only from the interpreter's Drop under KANSO_COUNTERS.
+# `kanso check` runs neither. What moved is the binary's bytes.
+compile_instructions=35969617
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

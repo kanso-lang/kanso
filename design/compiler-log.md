@@ -5111,3 +5111,25 @@ frames of bucket zero, by name and cost, in one notice.
 
 - **DONE** the bucket is named, and the digest earned its place doing it.
 - **OPEN** the frame. One line in the next pair of sittings.
+
+**CI's sitting on the head merged with main after kanso#1479.** Five rows move
+and only one of them is this change.
+
+```
+interp_instructions   2,178,656,557 -> 2,178,559,085    -97,472   -0.0045%  WORK
+compile_instructions     35,965,137 ->     35,969,617     +4,480   +0.012%  LAYOUT
+entry_instructions      128,204,898 ->    128,218,761    +13,863   +0.011%  LAYOUT
+library_instructions    128,340,017 ->    128,352,943    +12,926   +0.010%  LAYOUT
+startup_instructions      4,838,323 ->      4,838,372        +49   +0.001%  LAYOUT
+```
+
+The interpreted row is the change — this branch's whole compiler diff is
+`src/eval.rs` and one new `interpreter_counters` in `src/main.rs`, called only
+from the interpreter's `Drop` under `KANSO_COUNTERS`. `kanso check` runs
+neither, so the other four are the binary's bytes moving.
+
+**And the objective passes.** The four layout rows put 18,343 on the welfare
+term — 0.011% of 164,188,378, which at 9.49e-9 a point is 0.00017 — and
+`verdict` has a dead band of 0.001 either side of the floor, so a move this
+size neither fails nor asks to be banked. Worth writing down because the four
+rows look alarming and the score does not move.
