@@ -4821,5 +4821,16 @@ whose section sizes do not.
 
 - **DONE** the frame is named, with the digest diff that names it, and its
   cost is shown to follow the printed text.
+**What is still open underneath it.** A test-file-only edit does not rebuild
+`target/release/kanso`: the sha was `b8a64fe29f820c63` before and after adding
+a comment to a test crate, in this container. And four clean rebuilds of one
+source here give one sha. So the two sittings above should have been built from
+the same bytes, and the frame that carries the thirteen should not have moved.
+Whether CI's two independent builds of one source actually agree is the
+question, and kanso#1479's `compile_binary sha256=` notice answers it the next
+time a pair parts — which is the reason to land that one first.
+
+- **OPEN** whether CI's two builds of one source are the same binary. One line
+  in the next pair, once kanso#1479 is on main.
 - **OPEN** taking the print out of the row. Three welfare-weighted rows
   re-baseline together, so it lands on its own with its own sitting.
