@@ -543,6 +543,41 @@ jobs:
             cat "$f"
           done
           exit 0
+      # THE PROFILES LEAVE THE JOB, because the only comparison left is
+      # between two runs and the job cannot make it.
+      #
+      # A compile row that disagrees with its golden says how much and nothing
+      # about where. scripts/gates/profile_diff.sh answers that from two
+      # profiles, and the gate already runs it on the pair it takes inside one
+      # job. The pair it CANNOT reach is the golden's own sitting, on another
+      # runner, days ago -- and on kanso#1464 that is exactly the pair that
+      # matters: identical compiler source, identical .text/.data/.bss,
+      # identical glibc and rustc, all three rows thirteen apart, and the one
+      # thing that differed was the runner's CPU model. Keeping the profiles
+      # makes that comparison possible offline, once.
+      - name: the profiles this job counted
+        if: always()
+        run: |
+          mkdir -p /tmp/profiles
+          for n in compile entry library; do
+            if [ -f "/tmp/cg.$n" ]; then cp "/tmp/cg.$n" "/tmp/profiles/cg.$n"; fi
+            if [ -f "/tmp/cg.${n}2" ]; then cp "/tmp/cg.${n}2" "/tmp/profiles/cg.$n.again"; fi
+          done
+          {
+            awk '/^(cpu family|model|model name|stepping)\t/ { print; n++ } n >= 4 { exit }' /proc/cpuinfo || true
+            echo "glibc=$(ldd --version | head -1)"
+            echo "rustc=$(rustc --version)"
+            echo "binary=$(sha256sum /tmp/kanso-compile-ir/kanso 2>/dev/null | cut -d' ' -f1)"
+            echo "commit=${{ github.sha }}"
+          } > /tmp/profiles/host.txt
+          exit 0
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: compile-profiles-${{ github.run_id }}-${{ github.run_attempt }}
+          path: /tmp/profiles
+          if-no-files-found: ignore
+          retention-days: 7
       - name: every vein had its say
         if: always()
         run: |
