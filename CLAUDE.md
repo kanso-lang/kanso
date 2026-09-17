@@ -469,6 +469,48 @@ Only Clay arms, disarms or retimes it.
   0 failures"). The harness extracts the real function text from the
   source, never a copy.
 
+### A measurement bounds what it measured, and nothing that resembles it
+
+Four claims failed this way in one afternoon, across both sessions, and each
+cost at least a round. The shape is always the same: a number is taken from
+the context that produced it and applied to a context nobody checked it
+against.
+
+- **The name blind spot.** Three fixtures reported the box ruling's check
+  refusal missing. Each bound the err to a name first, and the rule reads
+  calls rather than names — deliberately, documented in the paragraph that
+  describes the rule. The fixtures exercised the documented exception.
+- **The grep for a phrasing.** The correction to that then said ch04 fails to
+  document the blind spot, on a `grep` for "blind spot". ch04 documents it in
+  the words *the checker reads calls, not the names they are bound to*.
+- **The rewrite family.** kanso#1480's bisection showed 145,472 arriving with
+  74 rewritten lines, and that was written down as rewriting being the cause,
+  into a log entry, a published page section and a ledger recommendation.
+  kanso#1492 built the isolating ladder: eight rewrites of unreachable code,
+  eight binaries, the row identical to the instruction. Zero.
+- **The baselines from the wrong machine.** Three of the welfare split's
+  baselines were this container's readings against goldens CI measured, so the
+  objective priced a machine difference as compiler work: +68.3%, +77.4% and
+  +3.3%. Each golden's own header says the two readings are not comparable.
+
+So, before an argument rests on a number:
+
+- **Read the thing the number describes before running anything against it.**
+  A rule's own section states its exceptions, and a golden's header states what
+  its reading may be compared with. Both were one paragraph away in the cases
+  above, and reading them costs a minute against the round a wrong claim costs.
+- **A report that something is ABSENT is worth what the search for it being
+  PRESENT was worth.** Running a fixture shows what happened, not what was
+  supposed to happen. A search by phrasing finds a phrasing.
+- **An attribution is not a mechanism.** That X arrived with Y is a
+  difference-in-differences; it becomes a cause when something isolates Y and
+  the isolation agrees. Until then, say the delta arrived with the change and
+  leave the mechanism open.
+- **Where a claim has already travelled is part of the cost.** The rewrite
+  claim reached three surfaces before it was checked. When a claim is
+  withdrawn, name every surface it reached and correct each; a claim that is
+  fixed in the log and left standing on the page has not been withdrawn.
+
 ### Merge and conflict discipline
 - **CI is the only gate on a merge, and green means merge.** Clay has said so
   three times, most recently on 2026-08-24: "stop asking me for permission to
