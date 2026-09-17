@@ -3904,6 +3904,94 @@ row, and not equal across rows — so neither a term that scales with the work
 nor one fixed cost per process. It is a small number of instructions in
 something whose iteration count moves slightly, and every red compile row from
 here carries its own second reading to narrow it with.
+
+## 2026-09-16 — a function named for an imported type, and the backend that could not find it
+
+Seven lines, and `kanso check` says ok while the two engines disagree:
+
+    import "std/json"
+
+    pub play = print "{entry 1} {length (json/decode "[1]")}"
+
+    fn entry i
+      i + 1
+
+The interpreter prints `2 1`, which is right. The native backend answers
+`error: native backend: unknown type `<module>/entry``. Rename the function to
+`row` and everything passes; drop the json import and everything passes. So the
+trigger is a module declaring a function whose name one of its imports exports
+as a TYPE — and that is a thing the language allows, because the two are
+different namespaces and the checker has always said so.
+
+**The chain, end to end.**
+
+1. `enroll_bare` gives json's exported type `entry` a bare twin named `entry`.
+2. `check::declared_names` returns ONE flat set holding both `program.types`
+   names and `program.fns` names.
+3. `qualify` builds its spelling map from that set, so this module's `fn entry`
+   puts `entry -> <module>/entry` in it.
+4. `rewrite_pattern` rewrites a `Pattern::Ctor`'s TYPE name through that same
+   map, so the bare `entry` type becomes `<module>/entry`.
+5. `codegen.rs`'s `emit_pattern` looks that up in `type_ids`, which holds
+   `json/entry` and `entry` and not it, and returns the internal error.
+
+Three other lookups share the map and the bug: `Pattern::Annotated`'s type,
+`Expr::Upcast`'s target, and a typeset member inside `qualify` itself. Each is
+a type position reading a map that also holds function names.
+
+**The fix, and why it is one map rather than two.**
+
+A constructor is CALLED by its type's name, so a VALUE position has to be able
+to find a type in this map. What must not happen is the reverse. So the map's
+value gains a flag — the spelling, and whether the name it replaces is a type —
+and the four type positions require it while the one value position does not.
+Two maps would have meant threading a second parameter through
+`rewrite_pattern`, `rewrite_stmt`, `rewrite_scope` and `rewrite_expr` and their
+thirty call sites; one flag changes the five lookups and nothing else.
+
+**The spec.**
+
+`tests/golden/micro/a_function_named_for_an_imported_type.kso`. The micro
+corpus runs every fixture as a LIBRARY through the harness's generated entry,
+which is the import path this bug lives on — `golden.rs`'s own comment says
+"the library path is also where four separate qualification bugs lived, none of
+which could fail a corpus that only ran files", and this is the fifth.
+
+Watched red before it went green. With the type flag taken off the constructor
+arm alone:
+
+    a_function_named_for_an_imported_type answers differently as a library
+      left: ""
+     right: "2 1\n"
+
+— the program produces nothing, because the backend refuses it, which is the
+failure as a user meets it rather than a claim about a map.
+
+**What it is not.**
+
+It is not a design decision about whether a function may share a name with an
+imported type. The checker already permits it and the interpreter already runs
+it; the loader disagreed with both, and the native backend's way of saying so
+was an internal error rather than a diagnostic. The differential law allows an
+engine to REFUSE a feature with a clear diagnostic and forbids it to diverge
+silently, and `unknown type <module>/entry` is neither clear nor a diagnostic.
+
+**What it costs, measured on CI.** `compile_instructions` 36,878,550 →
+36,900,512, `entry_instructions` 131,884,284 → 131,966,724,
+`library_instructions` 132,025,167 → 132,070,594, and `compile_allocs`
+27,395 → 27,397. That is one set of type names per dependency, built once
+where the qualifier already walks the dependency's declarations. Welfare falls
+0.00106 and the floor moves by exactly that: a name the language says means a
+constructor has to mean one, which is the case CLAUDE.md rules needs no gavel.
+
+**Round two's allocation row failed on a number that agreed.** CI measured
+`compile_allocs=27397`, the golden said `compile_allocs=27397`, and the job
+said `compile allocations disagrees with its golden`. `compile_allocs.sh`
+strips its golden with `grep -v '^#'` and hands the result to `diff`, and the
+note added after the value left a blank line between them — a line that
+survives the strip and that the gate's output has no counterpart for. Nine
+gates read a golden that way. `tests/a_golden_diffed_line_by_line_holds_no_blank_line.rs`
+finds them off the scripts and refuses a golden that carries one.
 ## 2026-09-16 — the linearity analysis asked the whole program once per question
 
 Clay's gavel that morning made development-loop cost its own welfare, and the
@@ -4146,6 +4234,8 @@ two runners, which no single job can make. The cost-goldens job uploads the
 three profiles it counted, and the host's CPU family, model, stepping, glibc,
 rustc and binary sha beside them, so `profile_diff.sh` can be run across a
 model 0x1 sitting and a model 0x11 one and name the frame that carries the 13.
+
+
 ## 2026-09-17 — the allocator was guessing at addresses, and the row was paying for it
 
 The three compile rows have disagreed with their goldens by thirteen
@@ -4219,6 +4309,12 @@ it reads 131,884,271 and nothing else.
 `library_instructions` 130,762,703 — the figures this branch had measured
 before, to the instruction. The merge brought main's values in and this writes
 the branch's back. Two runs agreeing is what the allocator fix bought.
+
+`compile_instructions` 36,900,512, `entry_instructions` 131,966,724 and
+`library_instructions` 132,070,594 — to the instruction, the figures round two
+measured and the next run then disagreed with by thirteen. The merge brought
+main's values in and this writes the branch's back. `compile_allocs` reads
+27,397 and agrees, now that the note sits above the value rather than after it.
 
 ## 2026-09-17 — the emitter asked two whole-body questions once per name
 
@@ -4547,6 +4643,60 @@ interning names to integers so the maps stop comparing strings at all, which
 would reach that 3.5% and part of the 2.6% in rehashing beside it. That is a
 refactor across check.rs, infer.rs and codegen.rs, and it is not costed yet.
 
+**Round four, after kanso#1464.** CI reads `compile_instructions` 36,885,953,
+`entry_instructions` 131,919,543 and `library_instructions` 132,022,229 against
+main's 36,864,779, 131,837,650 and 131,978,823. The set of a dependency's type
+names is the rise, and it is the same rise round three measured; the figures
+differ because kanso#1464 arrived underneath them.
+
+## 2026-09-17 — CI's sitting of the merged tree: a correctness fix that costs a little
+
+kanso#1465 merged with main after kanso#1459 landed. The merge carried
+kanso#1459's values forward so the gate had one value to fail against; CI read
+the merged tree above them:
+
+    compile_instructions    36,682,232 -> 36,703,489   +21,257   +0.0579%
+    entry_instructions     130,573,787 -> 130,655,644  +81,857   +0.0627%
+    library_instructions   130,716,747 -> 130,760,194  +43,447   +0.0332%
+
+**The rise is the fix.** DONE. `declared_names` returned types and functions in
+one set, so qualifying a function's name rewrote an imported type's constructor
+pattern with it, and a program that named both compiled into one that named the
+wrong thing. Keeping them apart costs the checker a little more work to be
+right, and a sixteen-hundredth of a per cent of a compile is what being right
+costs here.
+
+**The floor does not move.** DONE. welfare reads 69.76 against a floor of
+69.76: the merge's own resolution took the higher of the two floors and this
+tree clears it. Nothing to lower and nothing to bank.
+
+## 2026-09-17 — kanso#1465 on the merged tree: CI's sitting, and the floor drops
+
+The branch merged with kanso#1472 and CI measured the merged tree:
+
+    entry_instructions   128,144,579 -> 128,214,733   +70,154   +0.055%
+    library_instructions 128,281,268 -> 128,348,838   +67,570   +0.053%
+    compile_instructions  35,969,565 -> 35,967,913     -1,652   -0.0046%
+
+The two rises are the branch's own cost. The qualifier now keeps a set of the
+type names it must not rewrite, and the entry and library routes pay to build
+and read it. The module row falls, which is layout.
+
+Welfare falls to 69.79141882095341 and **the floor is lowered to meet it**,
+under the 2026-09-13 ironclad rule: the change makes the language work to its
+specification. A seven-line program that `kanso check` passed had the two
+engines printing different things — the interpreter `2 1`, the native backend
+`error: native backend: unknown type <module>/entry` — which is the differential
+law broken, not a preference. So the floor drops by exactly what the fix costs,
+the reason is in the ratchet history, and this does not go to the ledger.
+
+`per_process_floor=558232 frames=604 kernel=6.17.0-1022-azure cpu=25/1`. Note
+604 frames rather than 605: a frame this binary does not have. The floors are
+comparable only between two sittings of ONE binary, which is why a reading from
+another branch says nothing about this one.
+
+- **DONE** the rows are CI's and the floor is where the measurement put it.
+
 **The three compile rows moved, by layout.** CI reads 36,861,474, 131,826,563
 and 131,967,995 against main's 36,864,779, 131,837,650 and 131,978,823 — falls
 of 3,305, 11,087 and 10,828, which is 0.009% on the first. `kanso check` stops
@@ -4671,6 +4821,7 @@ not already cover.
   diffuse — the largest single caller of `memcmp` is 6.2M, 1.0% — so there is
   no first map to intern that pays on its own. That is the same answer the
   check side gave, now with the build side agreeing.
+
 ## 2026-09-17 — kanso#1468 on the merged tree: CI's sitting
 
 The branch merged with kanso#1472 and CI measured the merged tree:
@@ -4679,9 +4830,16 @@ The branch merged with kanso#1472 and CI measured the merged tree:
     entry_instructions   128,144,579 -> 127,849,537   -295,042  -0.230%
     library_instructions 128,281,268 -> 127,988,399   -292,869  -0.228%
 
-All three are work removed rather than layout: `kanso check` runs the front end
-that asks the two questions this branch indexes. Welfare rose and is banked at
-69.79571178806425.
+**All three are LAYOUT, and the first draft of this entry said the opposite.**
+Both questions are asked inside `Backend::emit`, which sits under `emit_ir`,
+and `emit_ir` is reached only from `main.rs`'s build and run paths. `kanso
+check` stops before codegen, so neither scan runs on any of the three compile
+corpora and neither index can have saved them anything. What moved the rows is
+`src/codegen.rs` being part of the compiler binary.
+
+The change's own effect is on the build path, and it is the largest in the run:
+`kanso build bench/runbench` falls 69.64%. Welfare rose and is banked at
+69.79571178806425 -- a rise is banked whatever moved it.
 
 **The 69.64% this branch takes off `kanso build bench/runbench` is almost all
 `prune_unnamed`.** Measured separately on `15e182b1` by indexing only the
@@ -4740,3 +4898,105 @@ are is open. This entry closes the smaller thing it actually found.
 - **DONE** the constant is parsed once.
 - **OPEN** the 53.5M of substring searching inside `Backend::emit`. It needs a
   profile built with debug info to name the line; a caller tree cannot.
+
+
+## 2026-09-17 — kanso#1473 on the stacked head: CI's sitting
+
+    compile_instructions  35,887,833 -> 35,871,357   -16,476  -0.046%
+    entry_instructions   127,849,537 -> 127,802,541  -46,996  -0.037%
+    library_instructions 127,988,399 -> 127,942,447  -45,952  -0.036%
+
+**All three are LAYOUT, and the first draft of this entry said the opposite.**
+`beat_loops` is called from one place, `codegen.rs` inside `emit_ir`, and
+`emit_ir` is reached only from `main.rs`'s build and run paths. `beat::report`
+is the other door and it opens only under `KANSO_BEAT_REPORT`, which the gates
+do not set. So `kanso check` never runs the pass this branch changes, and the
+106 lines it adds cannot execute on any of the three compile corpora. What
+moved the rows is `src/beat.rs` being part of the compiler binary.
+
+The change's own effect is on the build path: `kanso build bench/runbench`
+falls 31.38% with the emitted IR byte-identical. Welfare rose and is banked at
+69.79631238451805 -- a rise is banked whatever moved it, and what moved this
+one was the compiler's bytes.
+
+The test for this is one grep, and it is worth doing before writing "work
+removed" on any compile row: find the callers of the changed function, and if
+they all sit under `emit_ir`, the compile rows cannot have seen it.
+
+`per_process_floor=558700 frames=605 kernel=6.17.0-1022-azure cpu=26/2`.
+
+- **DONE** the rows are CI's.
+
+## 2026-09-17 — kanso#1468 on the merged tree, and the layout term measured
+
+CI's sitting on the tree merged with kanso#1465:
+
+    compile_instructions  35,967,913 -> 35,887,458    -80,455
+    entry_instructions   128,214,733 -> 127,923,555   -291,178
+    library_instructions 128,348,838 -> 128,059,740   -289,098
+
+**LAYOUT.** Both questions this branch indexes are asked inside
+`Backend::emit`, which sits under `emit_ir`, and `emit_ir` is reached only from
+`main.rs`'s build and run paths. `kanso check` stops before codegen, so neither
+scan runs on any of these three corpora and neither index can have saved them
+anything.
+
+That used to be an argument. It is a measurement now. Three binaries built on
+this box whose only difference is Rust functions **that nothing calls**, read
+with this gate's own box, command and pinned tunables:
+
+    baseline                      36,377,641              .text 2,841,218
+    +20  pub fns that never run   36,322,623   -55,018    .text 2,842,034
+    +120 pub fns that never run   36,383,018    +5,377    .text 2,839,538
+
+60,395 instructions of span from code that cannot execute, non-monotone in
+`.text` exactly as this row's own header records. A first attempt at that
+experiment was invalid and nearly went in the other direction: with
+`#[allow(dead_code)]` private functions rustc eliminated all of them, `.text`
+read 2,841,218 in both runs, and the row did not move — which would have looked
+like a refutation. The `.text` column caught it. `pub` plus `#[inline(never)]`
+in a `pub mod` survives elimination.
+
+The change's own effect is on the build path and is the largest in the run:
+`kanso build bench/runbench` falls 69.64%. Welfare rose and is banked at
+69.79493399688721 — a rise is banked whatever moved it, and what moved this one
+is the compiler's bytes. Whether the ratchet should be banking that at all is
+the open question in the ledger.
+
+- **DONE** the rows are CI's and their cause is named correctly.
+
+## 2026-09-17 — the thirteen is in bucket zero, and bucket zero has a candidate
+
+Two sittings of this head, same compiler source, printed frame digests that
+differ in exactly one bucket:
+
+    a8995bb9  b0=1765679/40    rows thirteen under the golden
+    e7a6b980  b0=1765692/40    rows on the golden, job green
+
+1,765,692 − 1,765,679 = **13**. The other thirty-one buckets are byte-identical
+and the frame count is forty in both, so no frame appeared or disappeared: one
+frame among forty changed cost by thirteen. Both sittings read
+`per_process_floor=558620 frames=605`, the fifth pair with the floor identical
+to the digit while the rows part.
+
+Bucket zero is the frames whose NAME LENGTH is a multiple of thirty-two.
+Listing them out of a local profile of the same workload gives forty, and one
+of them costs **exactly thirteen instructions**:
+
+    13   ./nptl/./nptl/pthread_attr_init.c:pthread_attr_init@@GLIBC_2.2.5
+
+That is the same family as the term Clay ruled out on 2026-09-15, when
+`pthread_getattr_np`'s parse of `/proc/self/maps` was found moving this row
+with the binary's layout: "this has nothing to do with compiler performance and
+obviously shouldn't be part of what we measure." The anchor at `kanso::main`
+was the answer to that one, and it drops the stack guard placed above it. This
+is thread-attribute setup reached from inside `kanso::main` instead.
+
+It is a candidate, not the answer. Two things are unchecked: whether CI's
+bucket-zero frames are the forty this box lists, and whether the thirteen in
+CI's digest is this frame's cost appearing and disappearing or another frame in
+the bucket moving by the same amount. The step below settles both — the forty
+frames of bucket zero, by name and cost, in one notice.
+
+- **DONE** the bucket is named, and the digest earned its place doing it.
+- **OPEN** the frame. One line in the next pair of sittings.
