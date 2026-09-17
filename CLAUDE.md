@@ -597,12 +597,15 @@ So, before an argument rests on a number:
   compiler's own half of what a build costs. Weighing the child tree alone left
   kanso#1480's 51,082,187-instruction saving invisible to every term in the
   model, which is how the gap was found.
-  `bench/objective_sources.txt` is the list — thirteen `<counter> <gate key>`
+  `bench/objective_sources.txt` is the list — FOURTEEN `<counter> <gate key>`
   pairs for those eleven — and
   `tests/the_objective_reads_what_the_gate_watches.rs` replays it, so the list
-  is checkable rather than remembered. **This sentence has now been wrong
-  three times, and the third is why the counts above are not to be trusted from
-  memory either.** Until 2026-09-06 it said fixpoint rounds, expression visits and
+  is checkable rather than remembered. **This sentence has now been wrong FOUR
+  times, and the fourth was wrong on the day it was written.** It said THIRTEEN
+  pairs when the file held fourteen, in the same paragraph that tells you not
+  to trust a count here — and the pull request landing the split said fourteen
+  in its own body while this line said thirteen. Read the file:
+  `grep -vcE '^\s*(#|$)' bench/objective_sources.txt`. Until 2026-09-06 it said fixpoint rounds, expression visits and
   emitted lines, none of which the objective has weighed since the 2026-09-03
   rebuild, and a session spent a round expecting a 4.5% rise in emitted lines
   to cost welfare when the objective cannot see that vein at all. Until
