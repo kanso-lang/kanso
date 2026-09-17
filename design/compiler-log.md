@@ -7359,7 +7359,50 @@ the first one I published to the compiler page before checking. The page
 carried it for about an hour. Both surfaces are corrected in the same commit,
 and the page now states the two commands rather than the number.
 
-- **DONE** 50 of 73 rulings probed: all 21 of September, 29 of August, none of
-  the 23 under the older spelling.
-- **OPEN** the 23 unswept rulings — 14 July, 6 undated, 3 August.
+### And then the 23, swept the same afternoon
+
+They are language rulings almost to a one, which is why they are old and why
+they are cheap to check: every behaviour ships with a golden, so the corpus is
+the probe. `cargo test --release --test golden` passes on all eleven tests, 242
+seconds, and it carries a named fixture for most of the twenty-three.
+
+| ruled | where it is pinned |
+|---|---|
+| none is a value, err is the failure | `a_none_in_a_list_does_not_silence_the_rest` |
+| where none may live | the same corpus |
+| `any` excludes the absence channel | `no_any_type`, in the error corpus |
+| a bare field is unconstrained, `any` is `some` | `no_any_type`, second diagnostic |
+| a record field carries no type | `no_any_type` says it in the ruling's words |
+| a function accepting an err must return err | `an_err_reaches_a_group_with_no_arm_for_it` |
+| an operation on a none is a dispatch question | the same err corpus |
+| partial application is explicit | `a_partial_over_a_value`, `curry_every_argument`, `partial_chain` |
+| `&` merges named bundles only | `an_ampersand_with_nothing_to_hold`, `a_construction_merges_its_failures` |
+| declaration order is the author's | `generic_before_concrete` |
+| a field is written by assignment | `a_field_is_written_by_assignment` |
+| streaming stdout, io/write ships | `io_write` |
+| accessors are functions | `accessor_value`, `accessor_renders_opaque` |
+| text blocks | `a_one_line_text_block`, `a_newline_in_a_text_block_is_a_line_break` |
+| the compiler does not know the name `play` | `play_in_a_comment`, `play_file_with_a_syntax_error` |
+| the play verb runs little programs | the same two |
+| equality is about values, a function is not one | `equality_binds` |
+| equality refuses a value that names itself | `a_constant_that_names_itself` |
+| modules are Go-shaped | `a_module_that_moved` |
+| as-patterns | `an_as_pattern_binding_two_names` |
+| two definitions with one unfolding are one value | `a_knot_compares_by_its_unfolding` |
+| build tail-entry demotion + THREADED | `src/beat.rs:75`, `const THREADED` |
+| welfare cannot fall, two severities | `welfare.kso:864` refuses a lowering `--set` |
+
+`no_any_type` is the one worth looking at. Three separate rulings land in one
+fixture, and the diagnostic quotes the ruling: *a record field carries no type
+— write `name` and let the compiler infer what it holds.*
+
+The welfare ruling's first part has since been narrowed by name. It said `--set`
+refuses every fall and the only override is editing the floor file by hand; the
+2026-09-13 rule lets a ruled language feature lower the floor by what it costs,
+without asking. Both stand, the later one narrower.
+
+**Zero unbuilt across all 73.**
+
+- **DONE** all 73 rulings probed — 50 under the `— gavel:` spelling, 23 under
+  `GAVEL:` and its variants. Nothing unbuilt in either set.
 - **OPEN** the two welfare.kso sentences, which are cloud's file.
