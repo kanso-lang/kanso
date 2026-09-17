@@ -6058,3 +6058,75 @@ artifacts on every run.
   the published page.
 - **OPEN** what carries the 146,628. Cloud's, and it needs the profile pair
   rather than another table.
+
+## 2026-09-17 — the interpreter copies 180 MB building byte strings, and uniqueness is why it cannot stop
+
+`interp_instructions` became a weighted term on the 2026-09-16 gavel, so the
+interpreted run was profiled for the first time with a counter on it. The
+largest single thing in it is not interpretation:
+
+    402,818,345  18.49%  __memcpy_avx_unaligned_erms
+    147,104,143   6.75%  <Interp>::dispatch
+    144,592,299   6.64%  <Interp>::eval_ident
+    117,641,168   5.40%  mi_free
+    104,394,489   4.79%  _mi_theap_malloc_zero
+
+memcpy's callers are `__rust_realloc` at 8.27% and `<Vec<u8> as Clone>::clone`
+at **7.76% over 43,572 calls** — about 4,000 instructions each. Every one of
+those clones comes from `<Interp>::call_builtin`.
+
+### Two sites, and the small one was built first
+
+`call_builtin` deep-copies a `Vec<u8>` in two places. Both were instrumented
+with `Rc::strong_count` and run over `interp_corpus`.
+
+**`utf8`, 6,606 calls.** `Rc::try_unwrap` instead of a copy takes
+`interp_instructions` from 2,228,593,160 to 2,228,294,740 on this box — a fall
+of **298,420, or 0.0134%**, against the 7.76% the profile suggested. The probe
+says why: every one of the 6,606 calls found `strong=3`. **The branch never
+fires.** What the change removed was the call to `clone`, not the copy inside
+it, and `memcpy` came back 402,825,525 against 402,818,345 — unmoved. Declined.
+
+**`append`, 36,966 calls, and this is the one that matters.** The byte builder
+copies its whole accumulator before extending it:
+
+    let mut out = (**items).clone();
+
+Over the corpus that is **180,081,360 bytes copied** — accumulators up to 9,906
+bytes, rebuilt one append at a time. The refcounts:
+
+    strong=1    1,326    3.6%
+    strong=2   11,880   32.1%
+    strong=3   13,206   35.7%
+    strong=5    9,228   25.0%
+    strong=6    1,326    3.6%
+
+So the same fix fails here for the same reason, only less completely: 3.6% of
+the appends could extend in place, and 96.4% could not. Six and a half of the
+180 megabytes.
+
+### What the numbers actually say
+
+**The copy is not the defect; the holders are.** A buffer partway through a
+fold is held by the argument vector, by the wrapper function's environment, by
+the caller's, and by the fold's own state, and the interpreter has no way to
+know that all but one of those are about to go away. The compiled engine does
+know — the linearity analysis proves the accumulator unique and appends extend
+the builder in place, which is what the 2026-08-26 entry "byte-builder growth
+is malloc-backed and a mut-grow frees its predecessor" records. **The
+interpreter has no such proof and its refcounts say uniqueness is rare.**
+
+Every stdlib entry point is a one-line wrapper — `pub fn append acc x` calling
+`builtin_append acc x` — and each wrapper's environment is one of the holders.
+That is a cost the wrapper's author cannot see and the profile only shows once
+somebody counts.
+
+- **DECLINED, measured** `Rc::try_unwrap` at `utf8`: 0.0134%, and the branch
+  never fires on this corpus.
+- **DECLINED, measured** the same at `append`: 3.6% of the copies, 6.5 MB of
+  180.
+- **OPEN** what would actually pay is a value that can be appended to without
+  being unique — a builder or a rope — or an argument protocol that does not
+  leave a copy in the wrapper's frame. That is the interpreter's value model
+  rather than a patch, and it is now worth pricing: 18.49% of the weighted
+  vein is memcpy, and 180 MB of it is this one builtin.
