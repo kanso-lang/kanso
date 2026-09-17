@@ -1713,7 +1713,14 @@
 # `#[cfg(test)]` now) and the generic instantiations linear.rs shares with the
 # check path are inlined differently for it. Recorded as unattributed rather
 # than explained.
-compile_instructions=36878537
+#
+# 2026-09-17, kanso#1464, round three. The same figure round two wrote, read
+# again on a binary whose allocator no longer picks a random base address
+# (kanso#1466). Round two took it from CI and CI disagreed on the next run by
+# thirteen; this reading and that one agree to the instruction, which is the
+# first time this vein has reproduced across two runs since the compiler
+# moved to mimalloc.
+compile_instructions=36864779
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

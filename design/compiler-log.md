@@ -3958,3 +3958,11 @@ were written from a sitting that drew an unlucky address and have been
 thirteen high since. The entry row is where it shows plainly: with the hint on
 it read 131,884,793 and then 131,884,271 inside one job, and with the hint off
 it reads 131,884,271 and nothing else.
+
+**Round three, after kanso#1466: the same three rows, read again and agreeing.**
+CI on the merged head reads `compile_instructions` 36,864,779,
+`entry_instructions` 131,837,650 and `library_instructions` 131,978,823 — to
+the instruction, the figures round two took from CI and that the next run
+disagreed with by thirteen. The merge brought main's values in and this writes
+the branch's back. It is the first time this vein has reproduced across two
+runs since the compiler moved to mimalloc, which is what kanso#1466 was for.
