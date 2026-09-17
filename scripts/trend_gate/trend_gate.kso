@@ -90,7 +90,11 @@ lower_g = ["compile_instructions" "compile_allocs"]
 # the interpreted run's three -- the only ones that count a program EXECUTING --
 # and `emit_instructions`, which is what the codegen rows stopped counting when
 # kanso's own process was excluded from them. Lower is better for all of them.
-lower_gh = ["library_instructions" "startup_instructions" "interp_instructions" "emit_instructions"]
+lower_ge = ["library_instructions" "startup_instructions"]
+
+lower_gf = ["interp_instructions" "emit_instructions"]
+
+lower_gh = text/concat lower_ge lower_gf
 
 lower_gi = text/concat lower_gh ["interp_allocs" "interp_peak_bytes"]
 
