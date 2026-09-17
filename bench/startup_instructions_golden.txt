@@ -120,4 +120,28 @@
 # base, so the merged tree is reading neither number. The value below is
 # main's, carried forward so the gate has one value to fail against
 # rather than none; the merged sitting is CI's to take.
-startup_instructions=4838372
+#
+# 2026-09-17, kanso#1468 on the tree merged with kanso#1462. CI reads
+# 5,077,523 against main's 4,838,372, a RISE of 239,151 -- 4.94%. This is the
+# one row on this branch that moves by WORK rather than by layout, and it is
+# the trade the change makes rather than a surprise.
+# #
+# `kanso play` takes the native path, so unlike the three `kanso check` rows
+# it runs the emitter -- on a one-line program, which is the point of the
+# vein and also why it is the one corpus where the index cannot pay for
+# itself. Both sides were reproduced on the container under rustc 1.98.1,
+# 161 and 169 instructions from CI's two readings: main 4,838,211, the branch
+# 5,077,692, a local delta of 239,481 against CI's 239,151.
+# #
+# WHERE IT GOES. `declares_context_calls` builds its set once per process out
+# of DECLARES's 1,187 lines and costs 599,739 instructions inclusive, 10.57%
+# of the whole row -- two and a half times the rise. The per-line searching it
+# replaces was therefore worth about 360,000 here, and the difference is what
+# this row records. On a real program the same set answers 163 declare
+# questions and 1,024 more, and `kanso build bench/runbench` falls 69.90%.
+# #
+# So the shape is a fixed cost against a per-line one, and start-up is the
+# corpus with no lines to spread it over. Building the set more cheaply than
+# a run of hashed inserts is the open lead; the objective does not weigh this
+# vein yet, so nothing waits on it.
+startup_instructions=5077523
