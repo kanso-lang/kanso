@@ -7006,3 +7006,58 @@ alias and the field of a born node stay built and are not part of the row.
   decline it out loud*, which the 2026-08-29 partial gavel retired and the
   file's own test at line 70 refutes by name. A stale comment rather than a
   behavior, and cloud's file to fix.
+
+## 2026-09-17 — a welfare counter reads six instructions differently on two runners
+
+Found by kanso#1499 going red on a diff that changes `STATUS.md` and
+`design/compiler-log.md` and nothing else.
+
+```
+interp_instructions counted 2178502272 against 2178502266
+  in bench/interp_instructions_golden.txt
+interp_again row=2178502272 (the first reading was 2178502272)
+```
+
+Six instructions out of 2,178,502,266, and the gate's own second reading in
+the same run agrees with its first, so the divergence is stable per host
+rather than noisy per run.
+
+**Three readings at the same content.** Main's own run at `5e256ce0` passes
+step 27 of `cost goldens` (run 35269167146). kanso#1498, branched off that
+same commit and touching three documentation files, passes the whole job.
+kanso#1499, branched off the same commit and touching two, fails on that one
+vein. The golden's measured-on line reads `glibc=2.39-0ubuntu8.9
+rustc=1.98.1` and so does every box, so the header check that exists to catch
+exactly this passed on all three.
+
+**The mechanism is open and this entry does not guess it.** What is
+established is that the reading moves between runners at byte-identical
+content, which is the only claim the three rows support. Candidates worth
+isolating, none of them measured: a `/proc/self/maps` parse of the kind
+kanso#1234 argued and Clay ruled on for the compile row on 2026-09-15; an
+ifunc resolver in glibc picking a different memcpy by CPU feature; an arena
+size read off available memory. The gate already prints `interp_sample
+cpu="cpu family 0x19 model 0x1"` beside every reading, which says the host
+sensitivity was suspected when the counter was written and not yet chased.
+
+**Why it matters more than the one red round.** `interp_instructions` is one
+of the ten counters the meta welfare weighs, and it landed the same day in
+kanso#1491. A weighted counter that disagrees with itself across runners
+fails unrelated pull requests at random, and the failures land on whoever
+opened them rather than on whoever owns the counter — which is how this one
+surfaced, on a documentation diff.
+
+It is also already ruled. Clay, 2026-09-15: "you want to set up the run so
+that any external State like this is normalized. you clear it out so it's
+identical every single run or you do something that puts it into a persistent
+known initial state." The ruling is ironclad and predates the counter by a
+day. So this is a second row on the unbuilt list rather than a question, and
+the row names the isolation before the fix, because the candidates above are
+three and the entry has measured none of them.
+
+- **DONE** the divergence established across three runs at one commit, and
+  the vein named.
+- **OPEN** which external state moves it. The row carries the isolation.
+- **OPEN** whether the other nine weighted counters have the same exposure.
+  Nobody has asked; `start-up instructions` and the codegen pair are new the
+  same day and read the same kind of thing.

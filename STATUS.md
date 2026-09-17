@@ -123,11 +123,13 @@ log entry calls the live remainder of that ruling. The two welfares came off
 when kanso#1491 landed the second half of the 2026-09-16 gavel; every item on
 its Owes list was probed against a build of main rather than read off a
 report, and for about an hour on 2026-09-17 the section was empty for the
-first time since it was created. ONE row stands as of 2026-09-17 21:00Z, and
-the sweep that found it is why the list is no longer only a floor: every one
-of the twenty rulings in the 2026-08-29 sitting was probed against a release
-build of `5e256ce0`, nineteen came back built or declined, and the twentieth
-is the row below. The build hole came off built as kanso#1447, the day after
+first time since it was created. TWO rows stand as of 2026-09-17 21:00Z. The
+first came from the sweep that is also why the list is no longer only a
+floor: every one of the twenty rulings in the 2026-08-29 sitting was probed
+against a release build of `5e256ce0`, nineteen came back built or declined,
+and the twentieth is the first row below. The second is the 2026-09-15
+normalization ruling, which is ironclad and which a counter minted a day
+later does not satisfy. The build hole came off built as kanso#1447, the day after
 it was found twenty-three days off this
 list; the compile row's normalization, ruled 2026-09-15, was built the same
 night (kanso#1439); and the explicit box came off the same afternoon it was
@@ -186,6 +188,35 @@ if it does, the widening and a micro golden building a cycle over a
 data-sized list; if it does not, a ledger entry stating what the gavel's
 purpose needs. Either way the golden's header stops claiming four shapes
 while the checker admits two.
+
+### The normalization ruling reaches `interp_instructions` (2026-09-15)
+
+Clay's words, on the compile row's `/proc/self/maps` parse: "you want to set
+up the run so that any external State like this is normalized. you clear it
+out so it's identical every single run or you do something that puts it into
+a persistent known initial state." Ironclad, and recorded in CLAUDE.md as a
+ruling that supersedes the kanso#1234 argument rather than reopening it.
+
+`interp_instructions` landed a day later in kanso#1491 and does not satisfy
+it. At byte-identical content it reads 2,178,502,266 on one runner and
+2,178,502,272 on another — six instructions, stable across the gate's own
+second reading, so it is a property of the host rather than noise. Three runs
+at `5e256ce0` establish it: main's own passes step 27, kanso#1498 passes the
+whole job, kanso#1499 fails on that vein alone with a diff of two
+documentation files. The golden's measured-on line matches the box in all
+three, so the header check that exists to catch this cannot see it.
+
+The counter is one of the ten the meta welfare weighs, which is what makes
+this a row rather than a nuisance: it fails unrelated pull requests, and it
+fails them on whoever opened them.
+
+Owes: an isolation naming which external state moves the reading — three
+candidates are open and none is measured, so the isolation comes before the
+fix; then whichever the ruling's two roads calls for, cleared per run or
+fixed to a known initial state, with the golden re-measured and the log
+saying which road and why. And a sweep of the other nine weighted counters
+for the same exposure, since `start-up instructions` and the codegen pair are
+the same age and read the same kind of thing.
 
 ## In flight
 
