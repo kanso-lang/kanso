@@ -179,10 +179,7 @@ fn the_warm_up_runs_under_the_measurements_environment() {
         .map(|(_, r)| r)
         .unwrap_or_else(|| panic!("the first measured run does not empty its environment"));
     // The environment the measurement sets, up to the callgrind invocation.
-    let wanted: Vec<&str> = measured
-        .split_whitespace()
-        .take_while(|t| *t != "valgrind")
-        .collect();
+    let wanted: Vec<&str> = measured.split_whitespace().take_while(|t| *t != "valgrind").collect();
     assert!(
         !wanted.is_empty(),
         "the measured run names no environment between `env -i` and valgrind"
