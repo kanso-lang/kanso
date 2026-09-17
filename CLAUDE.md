@@ -116,6 +116,36 @@ thing." Nothing in the log schedules a ruling, and an OPEN entry is read when
 cloud next reads the log, which is why the list lives in STATUS.md and not in
 the log.
 
+**COUNTING THE RULINGS TAKES TWO GREPS, AND THE SECOND ONE IS THE ONE PEOPLE
+FORGET.** The log has written a ruling two ways. September and most of August
+write `## <date> — gavel: ...`; July writes `GAVEL:`, `GAVELED:`,
+`GAVEL (syntax):`, `GAVEL (extension):`, `GAVEL (amendment):` and
+`GAVEL, IMPLEMENTED:`, and three August entries use the old spelling too. No
+heading matches both patterns, so a count is the sum of two:
+
+```
+grep -hE "^## " design/compiler-log.md design/log/compiler-log-archive.md \
+  | grep -cE "— gavel[:,]"          # 50 on 2026-09-17: 29 August, 21 September
+  | grep -cE "GAVEL(ED)?[:,(]"      # 23 on 2026-09-17: 14 July, 6 undated, 3 August
+```
+
+On 2026-09-17 an audit reported 56 rulings, 35 of them August, all swept, and
+published it to the compiler page. The real figures were 73 and 29 of 32, and
+twenty-three rulings had never been read against a build — every one of them
+found by running the second grep. They all turned out to be built, so the cost
+was one wrong sentence on a public page rather than a missed feature, and that
+was luck.
+
+Two things follow. **Run both greps, every time, and never carry a ruling count
+in prose** — including the numbers in this paragraph, which are dated for that
+reason. And **a sweep that reports a period as complete names the pattern it
+matched on**, because "all of August" meant one spelling of August.
+
+The blind spot is also mechanical and has a home: `page_drift`'s `ruling?` reads
+`— gavel:` and `— directive:` and nothing else, so a July-spelled ruling counts
+against the page's budget. A spec pinning the whole convention would close both
+halves at once, and `tests/` is cloud's.
+
 **GITHUB API ACCESS DEPENDS ON HOW A SESSION WAS STARTED, NOT ON ITS AGE.**
 Established 2026-09-08 by comparing four sessions in one environment:
 
