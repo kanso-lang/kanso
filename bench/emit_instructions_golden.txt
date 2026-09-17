@@ -62,4 +62,11 @@
 # line, so the gate could not tell one host's number from another's and
 # refused to compare at all. The row above is the vein's first reading on a
 # runner and the line under it says which runner.
-emit_instructions=382212543
+# 2026-09-17, kanso#1486 on the tree merged with main 3120df0e, CI's sitting.
+# 382,212,543 -> 382,216,372, a RISE of 3,829 -- 10 parts per million. This row
+# counts the phase the alias fixpoint runs in, so unlike the four compile rows
+# beside it this one can move for the change: running the fixpoint once instead
+# of twice leaves a different set of decisions behind it for the emitter to
+# walk. Ten parts per million is the size of that, and the three kanso check
+# rows sit 408,753, 1,442,220 and 1,121,690 below main against it.
+emit_instructions=382216372

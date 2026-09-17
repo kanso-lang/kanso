@@ -7262,5 +7262,13 @@ The index reads 76.13 against a floor of 76.13 and the rise is 0.01. Banked
 here, because a rise nobody ratchets is a rise the next change is free to
 spend and the floor sentinel fails an unbanked one however small.
 
-- **DONE** four rows measured and written; the floor ratcheted.
+A fifth row followed on the next base. `emit_instructions` counted 382,216,372
+against 382,212,543, a rise of 3,829 — ten parts per million. Unlike the four
+above it that row can move for this change: it counts the phase the alias
+fixpoint runs in, and running the fixpoint once instead of twice leaves a
+different set of decisions behind it for the emitter to walk. It costs 0.000
+points and takes the 0.01 with it, so the index sits exactly on the floor
+ratcheted above rather than above it.
+
+- **DONE** five rows measured and written; the floor ratcheted and held.
 
