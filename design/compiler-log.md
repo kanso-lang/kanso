@@ -5319,3 +5319,29 @@ this is a change in what is counted rather than a gain to bank.
 
 - **DONE** the three rows carry the excluded sitting; one page span follows.
 - **OPEN** the second build, which is the whole claim.
+
+## 2026-09-17 — kanso#1468's rows, re-measured on the excluded anchor
+
+The three rows were written this morning against an anchor that still counted
+the printed line, so they were a face of the thirteen. kanso#1487 took that
+frame out, and CI's sitting on the merged head reads:
+
+```
+  compile_instructions   35,964,325 -> 35,886,633    -77,692
+  entry_instructions    128,204,133 -> 127,922,777   -281,356
+  library_instructions  128,339,261 -> 128,058,971   -280,290
+  startup_instructions    5,077,750                  unchanged, green
+  compile_allocs             27,397                  unchanged, green
+```
+
+The three falls are the same three this morning measured, to the instruction,
+which is what a stable anchor was supposed to buy. All three are LAYOUT:
+`kanso check` stops before codegen, so nothing these rows count as work went
+near the emitter change, and what moved them is the compiler binary carrying
+different bytes.
+
+welfare exits 0. The floor already holds this branch's ratchet from the
+earlier sitting, and the excluded rows land inside its band, so there is
+nothing further to bank.
+
+- **DONE** the rows carry the sitting on the excluded anchor; one page span follows.
