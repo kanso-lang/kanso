@@ -721,6 +721,7 @@
 # binary. The grep that settles it: the changed code's callers all sit under the
 # run path, not under compile_module_inner.
 #
+# 2026-09-17, kanso#1482, CI's sitting. LAYOUT, same reason. 511 higher.
 # 2026-09-17, merged with main. Both branches moved this row on their own
 # base, so the merged tree is reading neither number. The value below is
 # main's, carried forward so the gate has one value to fail against
@@ -770,6 +771,9 @@
 # rather than none; the merged sitting is CI's to take.
 #
 # 2026-09-17, kanso#1468 on the excluded row. 280,290 lower, layout.
+# 2026-09-17 (kanso#1482): library_instructions 128,339,261 -> 128,339,772, a
+# RISE of 511 (+0.00040%). Layout, same sitting as the compile row.
+# startup_instructions was green at 4,837,367 and is left where it stands.
 # 2026-09-17 (kanso#1462): library_instructions 128,339,261 -> 128,352,174, a
 # RISE of 12,913 (+0.0101%). Same sitting as the compile row.
 #
@@ -781,7 +785,14 @@
 # 2026-09-17, kanso#1468 on the tree merged with kanso#1462. CI reads
 # 128,340,895 against main's 128,352,174, a fall of 11,279 -- 0.0088%. Layout,
 # with the module and entry rows beside it.
-library_instructions=128340895
+# 2026-09-17, kanso#1482 on the tree merged with kanso#1462. CI reads
+# 128,348,205 against main's 128,352,174, a fall of 3,969 -- 0.0031%. Layout.
+#
+# 2026-09-17, merged with main. Both branches moved this row on their own
+# base, so the merged tree is reading neither number. The value below is
+# main's, carried forward so the gate has one value to fail against
+# rather than none; the merged sitting is CI's to take.
+library_instructions=128348205
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

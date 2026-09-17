@@ -695,6 +695,9 @@
 # binary. The grep that settles it: the changed code's callers all sit under the
 # run path, not under compile_module_inner.
 #
+# 2026-09-17, kanso#1482, CI's sitting. LAYOUT, for the reason the module
+# row's note gives: src/codegen.rs is in the binary and the entry route never
+# reaches it. 564 higher.
 # 2026-09-17, merged with main. Both branches moved this row on their own
 # base, so the merged tree is reading neither number. The value below is
 # main's, carried forward so the gate has one value to fail against
@@ -745,6 +748,8 @@
 # rather than none; the merged sitting is CI's to take.
 #
 # 2026-09-17, kanso#1468 on the excluded row. 281,356 lower, layout.
+# 2026-09-17 (kanso#1482): entry_instructions 128,204,133 -> 128,204,697, a RISE
+# of 564 (+0.00044%). Layout, same sitting as the compile row.
 # 2026-09-17 (kanso#1462): entry_instructions 128,204,133 -> 128,217,983, a RISE
 # of 13,850 (+0.0108%). Same sitting as the compile row.
 #
@@ -757,7 +762,15 @@
 # 128,205,992 against main's 128,217,983, a fall of 11,991 -- 0.0094%. The
 # same layout term as the module row above it; the entry route stops before
 # codegen for the same reason.
-entry_instructions=128205992
+# 2026-09-17, kanso#1482 on the tree merged with kanso#1462. CI reads
+# 128,213,972 against main's 128,217,983, a fall of 4,011 -- 0.0031%. Layout,
+# as the module row above it.
+#
+# 2026-09-17, merged with main. Both branches moved this row on their own
+# base, so the merged tree is reading neither number. The value below is
+# main's, carried forward so the gate has one value to fail against
+# rather than none; the merged sitting is CI's to take.
+entry_instructions=128213972
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.
