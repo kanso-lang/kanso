@@ -184,15 +184,23 @@ make a PR and then merge it."
   adding a line to lib/json is a line the compiler carries and compiles.
   `all_counters.sh` names the runtime cost goldens only; `machine_code`,
   `emitted_code`, `compile_memory`, `compile_allocs`, `compile_instructions`,
-  `entry_instructions`, `library_instructions`, `compile_libraries` and
-  `codegen_instructions`
+  `entry_instructions`, `library_instructions`, `compile_libraries`,
+  `codegen_instructions` and `emit_instructions`
   are separate gates and two of their counters are welfare terms.
   `codegen_instructions` is the odd one and joined on 2026-09-17: it runs
   `kanso build` rather than `kanso check`, so it is the only row here that
-  reaches codegen at all, and it counts the WHOLE process tree -- kanso, the
-  clang driver, `clang -cc1` and ld. Named without an argument it runs both
+  reaches codegen at all. It counts the CHILD TREE -- the clang driver, the
+  convention probe's clang, `clang -cc1` and ld -- and NOT kanso's own
+  process, which was excluded the same day: every child reproduced byte for
+  byte across two readings while kanso's moved 233, all of it in
+  `kanso::build`'s inlined wait for clang, which is the scheduler's to size.
+  Named without an argument it runs both
   tiers, `-O0` and `-O3 -flto`, which the 2026-09-16 gavel puts on opposite
-  sides of the objective. THE LAST TWO OF
+  sides of the objective. `emit_instructions` is what that exclusion left
+  uncounted and joined beside it: `codegen::emit_ir` inclusive, which is the
+  compiler's own emitting with no wait inside the anchor, and which read
+  394,910,642 on four profiles of two binaries while the process around it
+  moved. THE LAST TWO OF
   THOSE NAMES ARE ONE LETTER APART AND ARE UNRELATED: `compile_libraries` diffs
   the list of shared objects the compiler links against, where
   `library_instructions` counts instructions. `kanso check` routes a single file

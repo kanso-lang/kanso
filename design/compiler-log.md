@@ -5641,3 +5641,55 @@ kanso#1487 anchors the compile rows, where no wait is inside the anchor.
 - **DONE** the exclusion, its spec, and both headers.
 - **OPEN** both rows, which the next sitting writes; and an anchored row for
   what the compiler itself spends emitting.
+
+## 2026-09-17 — what the compiler spends emitting, which nothing counted
+
+Excluding kanso's own process from the codegen rows leaves a hole, and it is
+not a small one. The three `kanso check` rows stop before codegen. The two
+codegen rows now count the child tree. Between them sits the work this project
+wrote — turning a checked program into LLVM IR — and no row reached it.
+
+`emit_instructions` is that row: `codegen::emit_ir` inclusive over
+`kanso build pkg/codegen_corpus` in the staged box.
+
+The anchor was chosen because it is exact rather than approximate, and that
+was measured before the gate was written. Four profiles were already on disk
+from the reproduction work above — two readings of the shipped binary and two
+of a probe binary whose `pid_tag_of` returns a constant — and every one of the
+four reads the frame at **394,910,642** inclusive, byte for byte, while the
+process around it moved 233 and then 112. Two binaries, four readings, one
+number. The wait for clang happens in `build` after `emit_ir` returns, so it
+is outside the anchor by construction rather than by luck.
+
+The frame is 92.78% of what kanso's own process spends on a release build, so
+what the exclusion drops is the wait and very little else.
+
+That number is a CONTAINER's. It is written into the golden's header as
+evidence that the anchor is deterministic and it is NOT the row: only CI's
+numbers may be recorded, which is what `scripts/gates/measured_on.sh` exists
+to enforce. The golden ships with an empty value on purpose, so the gate
+refuses with the sitting printed above the refusal and the next round writes
+it.
+
+### The prefix list went stale a third time, and was caught this time
+
+`tests/the_compile_sweep_names_every_compile_gate.rs` derives the compile
+gates from a list of golden-path prefixes, and its own comment says twice that
+the list goes stale when a vein arrives under a new name — once for
+`bench/library_*`, once for `bench/codegen_*`, both read late. `bench/emit_*`
+is the third, and it is in the list in the same commit that creates the file.
+
+`bench/emitted_golden` was already named there and is a DIFFERENT file: it
+counts what the compiler WROTE for the decoder, where this one counts what
+writing cost. One letter apart and unrelated, which that file has now had to
+say about two pairs of names.
+
+`all_compile.sh` runs it, and CLAUDE.md names it — that line is required by
+`the_instructions_name_every_compile_gate`, which is why a pull request from
+the compiler lane touches the instructions file at all. The same edit corrects
+what that file said about `codegen_instructions`, which was "the WHOLE process
+tree" until this morning.
+
+- **DONE** the gate, the golden's header, the sweep, the instructions, and the
+  spec's prefix list.
+- **OPEN** the row itself, which the next sitting writes.

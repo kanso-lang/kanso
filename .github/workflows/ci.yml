@@ -533,9 +533,11 @@ jobs:
           echo "::notice::frame_bucket0 $(cat /tmp/b0.txt)"
       # The two codegen rows, which are the only ones here that reach codegen
       # at all: the three above run `kanso check`, which stops before it. Each
-      # counts the whole process tree -- kanso, the clang driver, `clang -cc1`
-      # and ld -- because that is what a developer waits for, and the two tiers
-      # sit on opposite sides of the 2026-09-16 gavel's objective.
+      # counts the child tree -- the clang driver, the convention probe's clang,
+      # `clang -cc1` and ld -- because that is what a developer waits for, and
+      # the two tiers sit on opposite sides of the 2026-09-16 gavel's objective.
+      # kanso's own process is out of it: every child reproduced byte for byte
+      # across two readings while kanso's moved, inside the loop that waits.
       - name: dev-tier codegen
         id: codegen_dev
         if: always()
@@ -546,6 +548,15 @@ jobs:
         if: always()
         continue-on-error: true
         run: sh scripts/gates/codegen_instructions.sh release
+      # And what the compiler itself spends emitting, which neither side counts:
+      # the three `kanso check` rows stop before codegen, and the two rows above
+      # leave kanso's own process out because it waits for a child. The anchor
+      # is `codegen::emit_ir` inclusive, with no wait inside it.
+      - name: what emitting costs
+        id: emit_ir
+        if: always()
+        continue-on-error: true
+        run: sh scripts/gates/emit_instructions.sh
       - name: compile memory
         id: compile_memory
         if: always()
@@ -691,6 +702,7 @@ jobs:
                       "start-up instructions:${{ steps.startup_ir.outcome }}" \
                       "dev-tier codegen:${{ steps.codegen_dev.outcome }}" \
                       "release-tier codegen:${{ steps.codegen_release.outcome }}" \
+                      "what emitting costs:${{ steps.emit_ir.outcome }}" \
                       "encode counters:${{ steps.encode.outcome }}" \
                       "wide counters:${{ steps.wide.outcome }}" \
                       "pending-cell counters:${{ steps.pend.outcome }}" \
