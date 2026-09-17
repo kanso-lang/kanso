@@ -95,5 +95,15 @@
 # base, so the merged tree is reading neither number. The value below is
 # main's, carried forward so the gate has one value to fail against
 # rather than none; the merged sitting is CI's to take.
-interp_instructions=2178502266
+#
+# 2026-09-17, kanso#1468 against main, CI's sitting. 2,178,502,266 ->
+# 2,178,711,730, a RISE of 209,464 (+0.0096%). LAYOUT, and here by construction:
+# this row anchors at the interpreter's own thread, so the front end is outside
+# it and an emitter change can reach it only by moving the binary.
+#
+# 2026-09-17, merged with kanso#1468's CI sitting. Both branches moved this
+# row on their own base, so the merged tree is reading neither number. The
+# value below is the base's, carried forward so the gate has one value to
+# fail against rather than none; the merged sitting is CI's to take.
+interp_instructions=2178711730
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

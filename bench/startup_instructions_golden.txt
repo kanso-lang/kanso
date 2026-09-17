@@ -191,4 +191,29 @@
 # base, so the merged tree is reading neither number. The value below is
 # main's, carried forward so the gate has one value to fail against
 # rather than none; the merged sitting is CI's to take.
-startup_instructions=4837381
+#
+# 2026-09-17, kanso#1468 against main, CI's sitting. 4,837,381 -> 5,076,598, a
+# RISE of 239,217 (+4.945%). NOT LAYOUT, and the four rows above do not explain
+# it. `kanso play` takes the native path and runs the emitter, which is what this
+# branch changes.
+# 
+# WHAT IT IS. The branch replaces two whole-body scans the emitter ran once per
+# name with an index built once per process, and this workload is a single
+# `print`. There is almost nothing to amortise the construction over, so on this
+# one corpus the construction is very nearly the whole reading. Profiled under
+# rustc 1.98.1 in the gate's own box, the frames that arrive are the
+# `OnceLock<Set<&str>>` behind `declares_context_calls` at 599,550 and
+# `called_symbols` at 310,752; the frames that leave are the per-name scans under
+# them, 362,928 + 274,780 + 107,365 + 107,269 + 41,018 + 19,651.
+# 
+# THE TRADE IS THE RIGHT WAY ROUND. The same change takes 69.64% off
+# `kanso build bench/runbench`. A one-line program is the one workload in the
+# corpus where an index cannot pay for itself, and it is the workload this row
+# measures on purpose: what start-up costs is what is left when the program is
+# too small to cost anything.
+#
+# 2026-09-17, merged with kanso#1468's CI sitting. Both branches moved this
+# row on their own base, so the merged tree is reading neither number. The
+# value below is the base's, carried forward so the gate has one value to
+# fail against rather than none; the merged sitting is CI's to take.
+startup_instructions=5076598
