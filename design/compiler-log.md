@@ -3904,6 +3904,94 @@ row, and not equal across rows — so neither a term that scales with the work
 nor one fixed cost per process. It is a small number of instructions in
 something whose iteration count moves slightly, and every red compile row from
 here carries its own second reading to narrow it with.
+
+## 2026-09-16 — a function named for an imported type, and the backend that could not find it
+
+Seven lines, and `kanso check` says ok while the two engines disagree:
+
+    import "std/json"
+
+    pub play = print "{entry 1} {length (json/decode "[1]")}"
+
+    fn entry i
+      i + 1
+
+The interpreter prints `2 1`, which is right. The native backend answers
+`error: native backend: unknown type `<module>/entry``. Rename the function to
+`row` and everything passes; drop the json import and everything passes. So the
+trigger is a module declaring a function whose name one of its imports exports
+as a TYPE — and that is a thing the language allows, because the two are
+different namespaces and the checker has always said so.
+
+**The chain, end to end.**
+
+1. `enroll_bare` gives json's exported type `entry` a bare twin named `entry`.
+2. `check::declared_names` returns ONE flat set holding both `program.types`
+   names and `program.fns` names.
+3. `qualify` builds its spelling map from that set, so this module's `fn entry`
+   puts `entry -> <module>/entry` in it.
+4. `rewrite_pattern` rewrites a `Pattern::Ctor`'s TYPE name through that same
+   map, so the bare `entry` type becomes `<module>/entry`.
+5. `codegen.rs`'s `emit_pattern` looks that up in `type_ids`, which holds
+   `json/entry` and `entry` and not it, and returns the internal error.
+
+Three other lookups share the map and the bug: `Pattern::Annotated`'s type,
+`Expr::Upcast`'s target, and a typeset member inside `qualify` itself. Each is
+a type position reading a map that also holds function names.
+
+**The fix, and why it is one map rather than two.**
+
+A constructor is CALLED by its type's name, so a VALUE position has to be able
+to find a type in this map. What must not happen is the reverse. So the map's
+value gains a flag — the spelling, and whether the name it replaces is a type —
+and the four type positions require it while the one value position does not.
+Two maps would have meant threading a second parameter through
+`rewrite_pattern`, `rewrite_stmt`, `rewrite_scope` and `rewrite_expr` and their
+thirty call sites; one flag changes the five lookups and nothing else.
+
+**The spec.**
+
+`tests/golden/micro/a_function_named_for_an_imported_type.kso`. The micro
+corpus runs every fixture as a LIBRARY through the harness's generated entry,
+which is the import path this bug lives on — `golden.rs`'s own comment says
+"the library path is also where four separate qualification bugs lived, none of
+which could fail a corpus that only ran files", and this is the fifth.
+
+Watched red before it went green. With the type flag taken off the constructor
+arm alone:
+
+    a_function_named_for_an_imported_type answers differently as a library
+      left: ""
+     right: "2 1\n"
+
+— the program produces nothing, because the backend refuses it, which is the
+failure as a user meets it rather than a claim about a map.
+
+**What it is not.**
+
+It is not a design decision about whether a function may share a name with an
+imported type. The checker already permits it and the interpreter already runs
+it; the loader disagreed with both, and the native backend's way of saying so
+was an internal error rather than a diagnostic. The differential law allows an
+engine to REFUSE a feature with a clear diagnostic and forbids it to diverge
+silently, and `unknown type <module>/entry` is neither clear nor a diagnostic.
+
+**What it costs, measured on CI.** `compile_instructions` 36,878,550 →
+36,900,512, `entry_instructions` 131,884,284 → 131,966,724,
+`library_instructions` 132,025,167 → 132,070,594, and `compile_allocs`
+27,395 → 27,397. That is one set of type names per dependency, built once
+where the qualifier already walks the dependency's declarations. Welfare falls
+0.00106 and the floor moves by exactly that: a name the language says means a
+constructor has to mean one, which is the case CLAUDE.md rules needs no gavel.
+
+**Round two's allocation row failed on a number that agreed.** CI measured
+`compile_allocs=27397`, the golden said `compile_allocs=27397`, and the job
+said `compile allocations disagrees with its golden`. `compile_allocs.sh`
+strips its golden with `grep -v '^#'` and hands the result to `diff`, and the
+note added after the value left a blank line between them — a line that
+survives the strip and that the gate's output has no counterpart for. Nine
+gates read a golden that way. `tests/a_golden_diffed_line_by_line_holds_no_blank_line.rs`
+finds them off the scripts and refuses a golden that carries one.
 ## 2026-09-16 — the linearity analysis asked the whole program once per question
 
 Clay's gavel that morning made development-loop cost its own welfare, and the
@@ -4147,6 +4235,8 @@ three profiles it counted, and the host's CPU family, model, stepping, glibc,
 rustc and binary sha beside them, so `profile_diff.sh` can be run across a
 model 0x1 sitting and a model 0x11 one and name the frame that carries the 13.
 
+
+
 ## 2026-09-16 — the first development counter measured, and it found a quadratic
 
 Clay's gavel that morning made interpreter start-up a first-class term: it is
@@ -4388,6 +4478,12 @@ it reads 131,884,271 and nothing else.
 `library_instructions` 130,762,703 — the figures this branch had measured
 before, to the instruction. The merge brought main's values in and this writes
 the branch's back. Two runs agreeing is what the allocator fix bought.
+
+`compile_instructions` 36,900,512, `entry_instructions` 131,966,724 and
+`library_instructions` 132,070,594 — to the instruction, the figures round two
+measured and the next run then disagreed with by thirteen. The merge brought
+main's values in and this writes the branch's back. `compile_allocs` reads
+27,397 and agrees, now that the note sits above the value rather than after it.
 
 **Round three: the start-up row was counting a cold cache.** One binary, one
 job, read 6,018,427 and then 4,869,632 — 1,148,795 apart, a fifth of the row.
@@ -4676,6 +4772,60 @@ are ten map lookups of which the largest is 0.94%. The structural lever is
 interning names to integers so the maps stop comparing strings at all, which
 would reach that 3.5% and part of the 2.6% in rehashing beside it. That is a
 refactor across check.rs, infer.rs and codegen.rs, and it is not costed yet.
+
+**Round four, after kanso#1464.** CI reads `compile_instructions` 36,885,953,
+`entry_instructions` 131,919,543 and `library_instructions` 132,022,229 against
+main's 36,864,779, 131,837,650 and 131,978,823. The set of a dependency's type
+names is the rise, and it is the same rise round three measured; the figures
+differ because kanso#1464 arrived underneath them.
+
+## 2026-09-17 — CI's sitting of the merged tree: a correctness fix that costs a little
+
+kanso#1465 merged with main after kanso#1459 landed. The merge carried
+kanso#1459's values forward so the gate had one value to fail against; CI read
+the merged tree above them:
+
+    compile_instructions    36,682,232 -> 36,703,489   +21,257   +0.0579%
+    entry_instructions     130,573,787 -> 130,655,644  +81,857   +0.0627%
+    library_instructions   130,716,747 -> 130,760,194  +43,447   +0.0332%
+
+**The rise is the fix.** DONE. `declared_names` returned types and functions in
+one set, so qualifying a function's name rewrote an imported type's constructor
+pattern with it, and a program that named both compiled into one that named the
+wrong thing. Keeping them apart costs the checker a little more work to be
+right, and a sixteen-hundredth of a per cent of a compile is what being right
+costs here.
+
+**The floor does not move.** DONE. welfare reads 69.76 against a floor of
+69.76: the merge's own resolution took the higher of the two floors and this
+tree clears it. Nothing to lower and nothing to bank.
+
+## 2026-09-17 — kanso#1465 on the merged tree: CI's sitting, and the floor drops
+
+The branch merged with kanso#1472 and CI measured the merged tree:
+
+    entry_instructions   128,144,579 -> 128,214,733   +70,154   +0.055%
+    library_instructions 128,281,268 -> 128,348,838   +67,570   +0.053%
+    compile_instructions  35,969,565 -> 35,967,913     -1,652   -0.0046%
+
+The two rises are the branch's own cost. The qualifier now keeps a set of the
+type names it must not rewrite, and the entry and library routes pay to build
+and read it. The module row falls, which is layout.
+
+Welfare falls to 69.79141882095341 and **the floor is lowered to meet it**,
+under the 2026-09-13 ironclad rule: the change makes the language work to its
+specification. A seven-line program that `kanso check` passed had the two
+engines printing different things — the interpreter `2 1`, the native backend
+`error: native backend: unknown type <module>/entry` — which is the differential
+law broken, not a preference. So the floor drops by exactly what the fix costs,
+the reason is in the ratchet history, and this does not go to the ledger.
+
+`per_process_floor=558232 frames=604 kernel=6.17.0-1022-azure cpu=25/1`. Note
+604 frames rather than 605: a frame this binary does not have. The floors are
+comparable only between two sittings of ONE binary, which is why a reading from
+another branch says nothing about this one.
+
+- **DONE** the rows are CI's and the floor is where the measurement put it.
 
 **Round four: the warm-up holds.** CI read the start-up row 4,876,986 and then
 4,876,986 again in the same job, where the round before it read 6,018,427 and

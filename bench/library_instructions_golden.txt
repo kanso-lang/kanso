@@ -579,6 +579,16 @@
 # 2026-09-17, kanso#1461, round three. Read on the merged head, where the
 # allocator no longer picks a random base address (kanso#1466). The scan
 # this branch removes is worth what the fall says.
+# 2026-09-17, kanso#1465. The qualifier now builds a set of each dependency's
+# TYPE names and consults it at the four positions that spell a type, so a
+# function named for an imported type stops rewriting its callers' Ctor
+# patterns to the function's symbol. The set is built once per dependency and
+# the row rose by that: the correctness of a name is worth it.
+#
+# 2026-09-17, kanso#1465, round three. The figure round two measured, read
+# again on the merged head where the allocator no longer picks a random base
+# address (kanso#1466). The merge brought main's value in; this writes the
+# branch's back, and the two runs agree to the instruction.
 # 2026-09-16 (the linearity analysis indexed both ways; kanso#1464):
 # library_instructions 132,025,167 -> 131,978,823, a FALL of 46,344 (-0.0351%).
 # The third of three falls at -0.0373%, -0.0354% and -0.0351% -- close enough
@@ -600,6 +610,10 @@
 # 2026-09-17, kanso#1461, round four. Read on the head merged with
 # kanso#1464, against main's 36,864,779 / 131,837,650 / 131,978,823. The
 # declares scan this branch removes is what the fall is.
+# 2026-09-17, kanso#1465, round four. Read on the head merged with
+# kanso#1464, against main's 36,864,779 / 131,837,650 / 131,978,823. The set
+# of a dependency's type names is the rise; kanso#1464 arriving underneath is
+# why the figures differ from round three's.
 #
 # 2026-09-17, merged with main. Both notes above stand: each change moved this
 # row on its own base, so the merged tree is neither reading. The value is
@@ -612,6 +626,11 @@
 # interpreter, so the start-up work this branch removes is not on this corpus
 # at all: the move is the layout kind the header above describes, src/eval.rs
 # being the compiler's own bytes.
+# 2026-09-17, kanso#1465, CI's sitting of the merged tree. A RISE of 43,447
+# (+0.0332%): qualifying a function's name stops rewriting an imported type's Ctor
+# pattern, which is a correctness fix and costs the checker a little more work
+# to be right. The value the merge carried forward was kanso#1459's; this is
+# the merged tree's own reading.
 # 2026-09-17, kanso#1472, CI's sitting. The compiler's allocator stops handing
 # every allocation to mimalloc's aligned path: 2,435,479 lower, 1.863%. This
 # container projected 1.85% and CI read 1.863%, which is the projection
@@ -630,7 +649,17 @@
 # reading. `kanso check` does not run the interpreter, so the start-up work this
 # branch removes is not on this corpus at all: the move is the layout kind the
 # header above describes, src/eval.rs being the compiler's own bytes.
-library_instructions=128272434
+# 2026-09-17, kanso#1465 merged with kanso#1472, CI's sitting on the merged tree.
+# The value the merge carried forward was main's; this is the merged tree's own
+# reading. The qualifier now keeps a set of the type names it must not rewrite,
+# so the entry and library routes pay for building and reading it: the two rows
+# RISE. The module row falls, which is layout.
+#
+# 2026-09-17, merged with main. Both branches moved this row on their own
+# base, so the merged tree is reading neither number. The value below is
+# main's, carried forward so the gate has one value to fail against
+# rather than none; the merged sitting is CI's to take.
+library_instructions=128348838
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.
