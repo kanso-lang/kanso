@@ -7207,7 +7207,12 @@ wrong — **85,109 of 2,809,326 did not read back**.
 
 - **DONE** built, measured, declined, and the corpus's digit distribution
   recorded so the next idea is priced before it is written.
-- **OPEN** the seven register moves the 2026-09-14 entry named and left: 37
-  instructions a float, 8.5% of `render_ryu`, about 0.36% of runbench. That one
-  is still there and is a different kind of change.
+- **ANSWERED SINCE, at kanso#1502** — the seven register moves the 2026-09-14
+  entry named and left. They are structural to doing three divide-by-hundreds
+  on x86-64: each needs its value in `rax` and its result out of `rdx`, so
+  three divisions cost six moves whatever the C says, and rewriting the C would
+  not have removed them. What removes them is removing a division. `vr` is
+  carried through the loop and read once at the end, so it comes out: two
+  divisions a trip, one variable division at the bottom. runbench falls 924,584
+  and `.text` 1,360 bytes.
 
