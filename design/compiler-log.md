@@ -4538,3 +4538,38 @@ golden fixture and a log entry moved all three rows by thirteen.
 - **DONE** the verdict is inside the cap.
 - **OPEN** what the verdict says. The gates are armed on every branch carrying
   main; the next parting row answers from inside its own job.
+
+## 2026-09-17 — eight runs of one binary, identical to the instruction
+
+The thirteen had never been attempted locally. It has now, with the compile
+gate's own box, its own command and its pinned tunables:
+
+    run 1: 36384683      run 5: 36384683
+    run 2: 36384683      run 6: 36384683
+    run 3: 36384683      run 7: 36384683
+    run 4: 36384683      run 8: 36384683
+
+Eight sittings, one binary, one container, one corpus. Identical to the
+instruction. **So the cross-run thirteen is not two runs of one binary**, and
+`kanso#1463`'s second reading — which counts the same binary again inside the
+failing job — should print VERDICT (1) every time.
+
+What is left is two BINARIES. `compile_instructions.sh` has carried the reason
+in its own header since it was written: cargo builds are not bit-reproducible,
+a binary whose data and bss differ starts the heap at a different break, and
+the 508 that row once read was exactly that — sha 55fb850296d1 counted
+41,831,767 and sha de5bfab22fbd counted 41,832,275. Every CI job builds its own
+compiler. Two sittings of one commit are two builds.
+
+The sha is already printed on every run, green or red, put there so a hash
+could be paired with a value. It goes to stdout, and stdout reaches only the
+job log, which is the one artifact unreachable from a session reading over the
+API. Three notices fix that, and the spec pins them.
+
+That makes the next pair decisive either way. Two sittings of one head thirteen
+apart with DIFFERENT shas is the answer: the row moves with the binary and the
+fix is a reproducible build, not a compiler change. The same shas would refute
+it and leave something genuinely unexplained inside `kanso::main`.
+
+- **DONE** eight runs say it is not the run.
+- **OPEN** whether it is the build. The sha notice answers it on the next pair.

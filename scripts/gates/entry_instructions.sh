@@ -34,6 +34,15 @@ sh scripts/gates/library_box.sh
 box=/tmp/kanso-compile-ir
 
 printf 'entry_binary sha256=%s\n' "$(sha256sum "$box/kanso" | cut -d' ' -f1)"
+# AND AS A NOTICE, because this is the reading that decides the open
+# question about this row. Eight runs of ONE binary in one container,
+# with this gate's own box, command and tunables, read 36,384,683 every
+# time -- so the cross-run thirteen is not two runs of one binary. The
+# remaining candidate is two binaries, which is exactly what the 508
+# documented in compile_instructions.sh turned out to be, and the sha is
+# what tells them apart. It was printed to stdout, and stdout reaches
+# only the job log.
+echo "::notice::entry_binary sha256=$(sha256sum "$box/kanso" | cut -d' ' -f1)"
 size --format=sysv "$box/kanso" \
   | awk '/^\.(text|data|bss)[ \t]/ { printf "entry_binary %s=%s\n", $1, $2 }'
 

@@ -54,6 +54,34 @@ fn the_verdict_comes_before_the_explanation() {
     assert!(checked >= 3, "only {checked} gates were found to check");
 }
 
+/// The binary's sha is what tells two sittings apart when the rows differ.
+///
+/// Eight runs of ONE binary in one container, with the compile gate's own box,
+/// command and pinned tunables, read 36,384,683 every time. So the cross-run
+/// thirteen is not two runs of one binary, and the candidate left is two
+/// binaries — which is what the 508 documented in `compile_instructions.sh`
+/// turned out to be. The sha was printed to stdout, and stdout reaches only
+/// the job log.
+#[test]
+fn the_binary_sha_is_a_notice_not_only_stdout() {
+    let mut checked = 0;
+    for (gate, short) in [
+        ("scripts/gates/compile_instructions.sh", "compile"),
+        ("scripts/gates/entry_instructions.sh", "entry"),
+        ("scripts/gates/library_instructions.sh", "library"),
+    ] {
+        let Some(text) = read(gate) else { continue };
+        let marker = format!("::notice::{short}_binary sha256=");
+        assert!(
+            text.contains(&marker),
+            "{gate} prints its binary's sha to stdout alone; it needs `{marker}` so the hash \
+             survives as an annotation and two sittings can be told apart"
+        );
+        checked += 1;
+    }
+    assert_eq!(checked, 3, "only {checked} of the three compile gates were found");
+}
+
 #[test]
 fn the_second_reading_is_a_notice_not_only_stdout() {
     // stdout reaches the job log and the artifact, and both of those have to
