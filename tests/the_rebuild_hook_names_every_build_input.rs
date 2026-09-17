@@ -54,7 +54,9 @@ fn embedded_roots() -> BTreeSet<String> {
     let mut roots = BTreeSet::new();
     for path in sources {
         let text = fs::read_to_string(&path).expect("a source file reads");
-        for (_, rest) in text.match_indices("include_str!(\"../").map(|(i, m)| (i, &text[i + m.len()..])) {
+        for (_, rest) in
+            text.match_indices("include_str!(\"../").map(|(i, m)| (i, &text[i + m.len()..]))
+        {
             let Some((arg, _)) = rest.split_once('"') else {
                 continue;
             };
@@ -87,9 +89,6 @@ fn the_hook_watches_the_crate_itself() {
     let watched = watched();
 
     for required in ["src", "Cargo.toml", "Cargo.lock"] {
-        assert!(
-            watched.contains(required),
-            "hooks/post-merge does not watch {required}"
-        );
+        assert!(watched.contains(required), "hooks/post-merge does not watch {required}");
     }
 }
