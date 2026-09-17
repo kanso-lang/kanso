@@ -5866,3 +5866,29 @@ first CI sitting replaces the number and writes the measured-on line under it.
 - **DONE** both specs, and the value that satisfies the shape without making
   a claim.
 - **OPEN** the row itself, unchanged: CI's first sitting writes it.
+
+## 2026-09-17 — the box those readings were taken on had four runaway spinners
+
+Found by reading `ps` while wondering why a test suite was slow: four
+`sh /tmp/cpu_hunt.sh` processes, orphaned to init at 00:02, each burning a
+core. Forty-one hours of CPU on a four-core box. The script spawns four busy
+loops to measure a compile row under load and kills them at the end; it was
+interrupted before the kill, and nothing else was going to.
+
+What that does and does not touch:
+
+**It does not touch an instruction count.** callgrind counts instructions
+executed, not time, so every number this log recorded today — the compile
+rows, the emit row's three readings, the four release-path profiles — is what
+it would have been on an idle box.
+
+**It does touch the wait.** The 233 and then 112 that the release-tier
+reproduction moved by live in `kanso::build`'s inlined loop waiting for clang,
+and how many times that loop goes round is exactly what a loaded box changes.
+So the finding stands — the wait is the scheduler's and not the compiler's,
+which is what the dev tier's byte-identical control says independently — but
+neither 233 nor 112 is a clean estimate of its size on a quiet machine. CI's
+own 3,105 was measured on a runner and is untouched by this.
+
+The script now traps and kills its spinners on EXIT, INT and TERM. A
+background loop with no trap is a loop that outlives the reason for it.
