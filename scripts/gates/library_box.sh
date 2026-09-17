@@ -48,6 +48,14 @@ cp -R bench/entry_corpus "$box/entry_corpus"
 # — the path the count tracks, about 160 instructions a character — is the same
 # for all three.
 cp -R bench/library_corpus "$box/library_corpus"
+# And the interpreted corpus, which is not a compile at all: `kanso run
+# --interp` parses, infers and then EXECUTES in the same process, so the box
+# holds it for the interpreter's own two veins. Staged here beside the other
+# three because the path length moves an instruction count whatever the verb
+# reading it -- about 160 instructions a character, the measurement the header
+# of this file carries.
+cp -R bench/interp_corpus "$box/interp_corpus"
+
 # And the start-up corpus, which is one `print` and exists to be small. The
 # other three corpora measure what compiling a body of code costs; this one
 # measures what a `kanso play` costs before it has any work to do, which is

@@ -3782,6 +3782,109 @@ custom allocator only behind the unstable `allocator_api`, so the question it
 turns on is how many of the 49,229 calls belong to collections a phase-scoped
 arena could own. That is not answered here. Recorded as an open lead with
 nothing above it that sizes it.
+## 2026-09-16 — the interpreter hashed against an attacker it does not have
+
+Clay's gavel that morning ordered three counters for the interpreted engine and
+named their order in his own words: "start-time is vastly more important than
+speed which is more important than memory usage." Start-up was measured first
+and is kanso#1461. This is the other two, and opening them found something.
+
+**The corpus builds its own input.** `bench/interp_corpus` interpolates a
+document of 220 objects and decodes it six times, so the workload is a property
+of the corpus alone. Every other benchmark in this tree reads
+`bench/large.json`, and a row that reads a file is a row that moves when the
+file does.
+
+**The anchor is the interpreter's own thread, not `kanso::main`.** `kanso run
+--interp` pins a one-gigabyte stack and hands the program to a thread of its
+own, so the main thread holds the front end and 1.8% of the run: 48,026,664
+against 2,700,128,254 for the whole process on the first sitting.
+`run_interpreted_on_stack` is that thread's entry, it is not recursive, and it
+excludes the loader for the same reason the compile rows exclude it.
+
+**The vein opened onto a reproduction failure.**
+
+Two runs of one binary over one corpus read 2,651,460,189 and 2,648,375,305 —
+3,084,884 apart, 0.116% — while the front end's own anchor read 48,026,664
+twice in the same pair of runs. One row, one value is the 2026-09-05 ruling, so
+that halts the vein and is hunted rather than keyed.
+
+It took one grep. `src/eval.rs` declared the interpreter's tables with
+`std::collections`: `fns` and `types`, the `knots` cell map, the typeset cache,
+and the two cycle-guard sets under `values_equal` and `render`. `RandomState`
+draws a fresh key from the OS on every process, so each run probes those tables
+in a different order and does a different amount of work reaching the same
+answer.
+
+That is exactly the defect kanso#1449 cost three CI rounds, two published
+corrections and a withdrawn escalation to find on the compile path.
+`tests/the_compile_path_hashes_with_a_fixed_seed.rs` exists to stop it
+recurring, and it EXCUSED this file, with this reason:
+
+    the interpreter. No compile golden runs a program, and the interpreter's
+    own cost is not counted by any exact vein.
+
+Both halves were true when they were written and the second half is what this
+change falsifies. The excuse is gone, `src/eval.rs` is spelled `crate::hash`,
+and the spec covers the file that had the defect.
+
+**It is a fall as well as a fix.**
+
+Three consecutive runs read 2,375,580,224. Against the higher of the two
+disagreeing readings that is 275,879,965 fewer instructions, a fall of 10.40%:
+SipHash-1-3 was hashing every name the interpreter looked up, on a path where
+the keys are the program's own identifiers and there is no adversary. The
+argument `src/hash.rs` makes for the front end held for the interpreter the
+whole time and nobody had made it.
+
+The two memory rows read identically before the change and after it —
+`interp_allocs` 5,313,431 and `interp_peak_bytes` 933,202 — which is the check
+on what it touched. A probe sequence moves how much work a table does and not
+how many bytes it asks for.
+
+**What the veins are and are not.**
+
+`bench/interp_instructions_golden.txt` and `bench/interp_memory_golden.txt` are
+exact veins of their own and NOT objective terms, the way `.text` is under the
+2026-09-05 ruling. The objective takes them when the model splits, which is
+that gavel's own build.
+
+The memory vein covers the front end and the interpreter together, on purpose:
+the interpreted engine is a deployment rather than a stage of one, and what an
+interpreted run costs includes deciding what to run. The instruction vein
+excludes the front end, because it is the SPEED row and the front end has a
+speed row of its own.
+
+The rows recorded are this container's. It runs rustc 1.94.1 against the
+runner's 1.98.1, so both gates refuse to compare here; round one was
+deliberately red on both and CI's own reading is what stands.
+
+**What CI read, and the one row that did not move between the hosts.**
+
+    interp_instructions  container 2,375,580,224   CI 2,324,888,431   -2.18%
+    interp_allocs        container     5,313,431   CI     5,313,431    0
+    interp_peak_bytes    container       933,202   CI       933,202    0
+
+The two memory rows came back EXACTLY as this container measured them, across
+rustc 1.94.1 here and 1.98.1 there, while the instruction row beside them
+diverged 2.18% between the same two hosts. That is worth writing down rather
+than assuming: what a run ASKS the allocator for is the program's own shape,
+and what it COSTS to ask is the toolchain's. The container reads about 1.2%
+HIGH on the three compile rows, so the interpreted row's divergence is the same
+sign and about twice the size, which is what an interpreted run being mostly
+the interpreter's own loop would predict.
+
+Three layout moves came with the change: compile_instructions -483,
+entry_instructions -2,874, library_instructions -1,722. `kanso check` never
+constructs an interpreter, so none of them is this change doing work
+differently -- src/eval.rs IS the compiler, and editing it moves the compiler's
+bytes and what sits around them. Three different magnitudes for one edit is the
+signature of layout rather than of work. Welfare holds at 69.75.
+
+The gate gains the in-job second reading kanso#1463 adds to the three compile
+gates, for the reason that entry gives: the compile rows read 13 apart on two
+runs of identical source that evening and the start-up row read 33 apart, and
+a reader had to reconstruct which case that was by comparing job logs by hand.
 
 
 
@@ -4479,6 +4582,18 @@ it reads 131,884,271 and nothing else.
 before, to the instruction. The merge brought main's values in and this writes
 the branch's back. Two runs agreeing is what the allocator fix bought.
 
+**Round three, after kanso#1466: the interp row is on its golden.** The
+interpreted run had read 2,324,888,437 against a golden of 2,324,888,431 on
+every other run; on the merged head it reads 2,324,888,431 and CI says
+`interp_instructions: 2324888431, on the row`. Both memory rows are
+byte-exact. The six instructions were the allocator picking a random base
+address, which is the same fault the three compile rows had at thirteen.
+
+The three compile rows come back at `compile_instructions` 36,878,080,
+`entry_instructions` 131,881,423 and `library_instructions` 132,023,458,
+against main's 36,878,537, 131,884,271 and 132,025,154. That fall is the
+fixed-seed hashing this branch puts on the compile path.
+
 `compile_instructions` 36,900,512, `entry_instructions` 131,966,724 and
 `library_instructions` 132,070,594 — to the instruction, the figures round two
 measured and the next run then disagreed with by thirteen. The merge brought
@@ -4825,6 +4940,58 @@ are ten map lookups of which the largest is 0.94%. The structural lever is
 interning names to integers so the maps stop comparing strings at all, which
 would reach that 3.5% and part of the 2.6% in rehashing beside it. That is a
 refactor across check.rs, infer.rs and codegen.rs, and it is not costed yet.
+
+**Round four, after kanso#1464.** The interpreted run falls 3,920,499 to
+2,320,967,932: the linearity analysis runs on the interpreter's compile path
+too, and indexing it is felt here. CI read that figure and then read it again
+in the same job. The three compile rows come back at 36,862,804, 131,830,523
+and 131,972,417 against main's 36,864,779, 131,837,650 and 131,978,823, and
+both interpreter memory rows are byte-identical to the round before.
+
+## 2026-09-17 — CI's sitting of the merged tree, and the floor moves with the silicon
+
+kanso#1462 merged with main after kanso#1459 landed. CI read the merged tree
+below the values the merge carried forward:
+
+    compile_instructions    36,682,232 -> 36,681,044   -1,188   -0.0032%
+    entry_instructions     130,573,787 -> 130,567,058  -6,729   -0.0052%
+    library_instructions   130,716,747 -> 130,711,295  -5,452   -0.0042%
+
+`kanso check` does not run the interpreter, so the hashing this branch changes
+is not on this corpus; all three are the layout kind the row's header
+describes.
+
+**The per-process floor tracks the silicon, and it still does not explain the
+thirteen.** DONE. Three sittings, three CPUs, three floors:
+
+    cpu 25/1    558,610   605 frames
+    cpu 26/2    556,282   605 frames
+    cpu 6/173   558,222   604 frames
+
+So the floor is a host reading rather than a constant, which is what it should
+be. What it cannot do is carry the thirteen: kanso#1469 and kanso#1470 both ran
+on cpu 25/1 and both printed 558,610 over 605 frames, to the instruction, with
+their three compile rows thirteen apart. A term the floor holds cannot move
+while the floor does not. kanso#1474 prints the module compile's whole listing
+beside it for that reason.
+
+## 2026-09-17 — kanso#1462 on the merged tree: CI's sitting
+
+The branch merged with kanso#1472 and CI measured the merged tree. Four rows
+moved against the values the merge carried forward:
+
+    interp_instructions  2,320,967,932 -> 2,178,656,557  -142,311,375  -6.13%
+    compile_instructions    35,969,565 -> 35,968,356           -1,209  -0.0034%
+    entry_instructions     128,144,579 -> 128,138,080          -6,499  -0.0051%
+    library_instructions   128,281,268 -> 128,275,780          -5,488  -0.0043%
+
+The interpreter row is the branch's own. The three compile rows are layout:
+`kanso check` does not run the interpreter, so none of the hashing this branch
+changes is on that corpus. Welfare rose and is banked at 69.7922205456612.
+
+`per_process_floor=556292 frames=605 kernel=6.17.0-1022-azure cpu=25/1`.
+
+- **DONE** the rows are CI's.
 
 **Round four, after kanso#1464.** CI reads `compile_instructions` 36,885,953,
 `entry_instructions` 131,919,543 and `library_instructions` 132,022,229 against
@@ -5264,6 +5431,28 @@ the module and entry rows, and their fall is the rise banked here. Welfare
 69.79153807658396 -> 69.79493424287482, `--set` run after the goldens carried
 CI's rows and not before.
 
+**CI's sitting on the head merged with main after kanso#1479.** Five rows move
+and only one of them is this change.
+
+```
+interp_instructions   2,178,656,557 -> 2,178,559,085    -97,472   -0.0045%  WORK
+compile_instructions     35,965,137 ->     35,969,617     +4,480   +0.012%  LAYOUT
+entry_instructions      128,204,898 ->    128,218,761    +13,863   +0.011%  LAYOUT
+library_instructions    128,340,017 ->    128,352,943    +12,926   +0.010%  LAYOUT
+startup_instructions      4,838,323 ->      4,838,372        +49   +0.001%  LAYOUT
+```
+
+The interpreted row is the change — this branch's whole compiler diff is
+`src/eval.rs` and one new `interpreter_counters` in `src/main.rs`, called only
+from the interpreter's `Drop` under `KANSO_COUNTERS`. `kanso check` runs
+neither, so the other four are the binary's bytes moving.
+
+**And the objective passes.** The four layout rows put 18,343 on the welfare
+term — 0.011% of 164,188,378, which at 9.49e-9 a point is 0.00017 — and
+`verdict` has a dead band of 0.001 either side of the floor, so a move this
+size neither fails nor asks to be banked. Worth writing down because the four
+rows look alarming and the score does not move.
+
 ## 2026-09-17 — kanso#1477's three rows take the thirteen, and the fourth does not
 
 CI's sitting on the merged head:
@@ -5597,6 +5786,38 @@ earlier sitting, and the excluded rows land inside its band, so there is
 nothing further to bank.
 
 - **DONE** the rows carry the sitting on the excluded anchor; one page span follows.
+
+## 2026-09-17 — kanso#1462's rows, priced: the compiler compiles with the hasher it changes
+
+CI's sitting on the anchor kanso#1487 left, so each number is one value rather
+than a face of the thirteen.
+
+```
+  compile_instructions   35,964,325 ->  35,968,792   +4,467 (+0.0124%)
+  entry_instructions    128,204,133 -> 128,217,983  +13,850 (+0.0108%)
+  library_instructions  128,339,261 -> 128,352,174  +12,913 (+0.0101%)
+  interp_allocs            5,313,431 ->   5,313,434       +3
+```
+
+`interp_instructions` came back 2,178,559,085 and `interp_peak_bytes` 933,202,
+both on the row; `startup_instructions` was green at 4,838,372, `compile_allocs`
+at 27,397, and compile memory byte-identical.
+
+The three `kanso check` rows rise together and by about the same fraction,
+which is what this change's shape predicts: the interpreter's hasher is part
+of the compiler, so the compiler's own maps are built with it. A hash that
+is cheaper to compute and worse at spreading costs a little more in a map
+that is read many times per entry, and the compile corpus is exactly that.
+
+The three allocations are not explained here. Peak bytes and the instruction
+row both came back unchanged, so nothing about the shape of the interpreted
+run moved.
+
+welfare weighs 18,317 of this against a dead band of about 105,000 and does
+not move.
+
+- **DONE** the four rows, priced.
+- **OPEN** nothing; the branch is CI's to confirm.
 
 ## 2026-09-17 — the bound discharge, merged onto the excluded row
 
