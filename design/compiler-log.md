@@ -3795,6 +3795,15 @@ where the qualifier already walks the dependency's declarations. Welfare falls
 0.00106 and the floor moves by exactly that: a name the language says means a
 constructor has to mean one, which is the case CLAUDE.md rules needs no gavel.
 
+**Round two's allocation row failed on a number that agreed.** CI measured
+`compile_allocs=27397`, the golden said `compile_allocs=27397`, and the job
+said `compile allocations disagrees with its golden`. `compile_allocs.sh`
+strips its golden with `grep -v '^#'` and hands the result to `diff`, and the
+note added after the value left a blank line between them — a line that
+survives the strip and that the gate's output has no counterpart for. Nine
+gates read a golden that way. `tests/a_golden_diffed_line_by_line_holds_no_blank_line.rs`
+finds them off the scripts and refuses a golden that carries one.
+
 ## 2026-09-16 — gavel: two welfares and a meta-welfare over them, and the floor re-ratchets
 
 Clay ruled the ledger's "What the compile term counts once codegen is in it"
