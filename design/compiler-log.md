@@ -3933,3 +3933,9 @@ were written from a sitting that drew an unlucky address and have been
 thirteen high since. The entry row is where it shows plainly: with the hint on
 it read 131,884,793 and then 131,884,271 inside one job, and with the hint off
 it reads 131,884,271 and nothing else.
+
+**Round three, after kanso#1466.** CI on the merged head reads
+`compile_instructions` 36,695,922, `entry_instructions` 130,618,857 and
+`library_instructions` 130,762,703 — the figures this branch had measured
+before, to the instruction. The merge brought main's values in and this writes
+the branch's back. Two runs agreeing is what the allocator fix bought.
