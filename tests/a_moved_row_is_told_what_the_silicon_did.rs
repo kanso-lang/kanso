@@ -50,9 +50,7 @@ fn every_instruction_gate_consults_the_block_when_a_row_moved() {
             _ => false,
         };
         if !consults || !at_move {
-            missing.push(format!(
-                "  {name}.sh: consults={consults} before-the-verdict={at_move}"
-            ));
+            missing.push(format!("  {name}.sh: consults={consults} before-the-verdict={at_move}"));
         }
     }
     assert!(
@@ -68,8 +66,8 @@ fn every_instruction_gate_consults_the_block_when_a_row_moved() {
 #[test]
 fn the_block_is_recorded_and_carries_its_rows() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let text = std::fs::read_to_string(root.join("bench/dispatch.txt"))
-        .expect("bench/dispatch.txt reads");
+    let text =
+        std::fs::read_to_string(root.join("bench/dispatch.txt")).expect("bench/dispatch.txt reads");
     let rows: Vec<&str> = text.lines().filter(|l| l.starts_with("x86.")).collect();
     assert!(
         rows.len() > 100,
