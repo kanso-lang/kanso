@@ -47,16 +47,19 @@
 # replaces it and writes the measured-on line under it; until then the row is
 # a shape rather than a claim.
 #
-# 2026-09-17, CI's first sitting. 382,309,867, anchored at
-# `codegen::emit_ir` inclusive.
-# #
-# This is the compiler's own half of a build -- what the two codegen rows
-# stopped counting when kanso's process was excluded from them. The container
-# read 394,912,504 from three stagings and 394,910,642 on four release-path
-# profiles; CI reads 12.6 million lower, which is the host difference this
-# golden's header said no box could compare away.
+# 2026-09-17, the first sitting (kanso#1470). CI's reading, taken on the
+# runner, anchored at `codegen::emit_ir` inclusive. 382,212,543.
+# measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
 #
-# 2026-09-17, kanso#1470 against main, CI's sitting. 382,309,867 -> 382,212,543,
-# a FALL of 97,324 (-0.025%). The value it replaces was not CI's; this is the
-# first sitting of this vein on a runner.
+# This is the compiler's own half of a build -- what the two codegen rows
+# stopped counting when kanso's process was excluded from them. This container
+# read 394,912,504 from three stagings and 394,910,642 on four release-path
+# profiles; the runner reads 12.6 million lower, which is the host difference
+# this golden's header said no box could compare away.
+#
+# The value 382,309,867 stood here until this line was written and was NOT
+# CI's, whatever the note beside it said. The file carried no measured-on
+# line, so the gate could not tell one host's number from another's and
+# refused to compare at all. The row above is the vein's first reading on a
+# runner and the line under it says which runner.
 emit_instructions=382212543
