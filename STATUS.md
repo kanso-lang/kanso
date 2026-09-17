@@ -129,7 +129,7 @@ floor: every one of the twenty rulings in the 2026-08-29 sitting was probed
 against a release build of `5e256ce0`, nineteen came back built or declined,
 and the twentieth is the first row below. The second is the 2026-09-15
 normalization ruling, which is ironclad and which a counter minted a day
-later does not satisfy. The build hole came off built as kanso#1447, the day after
+later does not satisfy, because two builds of one source are two binaries. The build hole came off built as kanso#1447, the day after
 it was found twenty-three days off this
 list; the compile row's normalization, ruled 2026-09-15, was built the same
 night (kanso#1439); and the explicit box came off the same afternoon it was
@@ -189,34 +189,49 @@ data-sized list; if it does not, a ledger entry stating what the gavel's
 purpose needs. Either way the golden's header stops claiming four shapes
 while the checker admits two.
 
-### The normalization ruling reaches `interp_instructions` (2026-09-15)
+### The release build is not reproducible, and a welfare counter reads it (2026-09-15)
 
 Clay's words, on the compile row's `/proc/self/maps` parse: "you want to set
 up the run so that any external State like this is normalized. you clear it
 out so it's identical every single run or you do something that puts it into
-a persistent known initial state." Ironclad, and recorded in CLAUDE.md as a
-ruling that supersedes the kanso#1234 argument rather than reopening it.
+a persistent known initial state." Ironclad, and recorded in CLAUDE.md as
+superseding the kanso#1234 argument rather than reopening it.
 
 `interp_instructions` landed a day later in kanso#1491 and does not satisfy
-it. At byte-identical content it reads 2,178,502,266 on one runner and
-2,178,502,272 on another — six instructions, stable across the gate's own
-second reading, so it is a property of the host rather than noise. Three runs
-at `5e256ce0` establish it: main's own passes step 27, kanso#1498 passes the
-whole job, kanso#1499 fails on that vein alone with a diff of two
-documentation files. The golden's measured-on line matches the box in all
-three, so the header check that exists to catch this cannot see it.
+it. It reads 2,178,502,266 on one CI job and 2,178,502,272 on another, six
+instructions apart, each stable across the gate's own second reading.
 
-The counter is one of the ten the meta welfare weighs, which is what makes
-this a row rather than a nuisance: it fails unrelated pull requests, and it
-fails them on whoever opened them.
+The cause is the binary rather than the box. The gate prints
+`interp_binary sha256=` on every run for this purpose, and the two jobs
+carry `81c947470e0c…` and `59a47a9cbfb4…`. `.text` 2,797,410, `.data` 12,672,
+`.bss` 29,912 and `cpu family 0x19 model 0x1` are the same on both, as are
+`glibc=2.39-0ubuntu8.9` and `rustc=1.98.1`.
 
-Owes: an isolation naming which external state moves the reading — three
-candidates are open and none is measured, so the isolation comes before the
-fix; then whichever the ruling's two roads calls for, cleared per run or
-fixed to a known initial state, with the golden re-measured and the log
-saying which road and why. And a sweep of the other nine weighted counters
-for the same exposure, since `start-up instructions` and the codegen pair are
-the same age and read the same kind of thing.
+The source that produced them is identical. The diff between the two trees is
+two markdown files, and nothing markdown reaches the binary: every
+`include_str!` in `src/` is a `.kso` under `lib/` or `hako/`, or `runtime.c`.
+There is no `build.rs`, and no `env!` or `option_env!` in `src/` embeds a
+commit or a time.
+
+So `cargo build --release` of one source tree on one toolchain produced two
+binaries. If that holds generally then every exact instruction pin in the
+tree is a layout vein — which CLAUDE.md already says of `compile_instructions`
+in those words, with seven recorded layout-only moves behind it — and here
+the property has reached a counter the objective scores. It fails unrelated
+pull requests, on whoever opened them.
+
+Owes: the isolation first — diff the two binaries' symbol tables and
+attribute the six to a function. Both jobs already upload a
+`compile-profiles` artifact with per-symbol counts, so nothing needs
+re-running to start. Then the ruling's first road, a release build that is
+byte-identical from one source, with the golden re-measured and the log
+saying what was not reproducible. And a sweep of the other nine weighted
+counters, which read the same binary and so carry the same prior.
+
+If a reproducible release build turns out not to be reachable, the question
+that follows is whether an exact pin is the right instrument for a counter
+whose artifact moves. That one is Clay's, and this row does not decide it in
+advance.
 
 ## In flight
 
