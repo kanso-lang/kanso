@@ -4578,7 +4578,6 @@ reading that matters rather than either projection.
 and it is banked in this same commit, after the goldens carry CI's rows and not
 before. Raising a floor is arithmetic; there was nothing to decide.
 
-<<<<<<< HEAD
 ## 2026-09-17 — the beat asked the whole program once per name, a seventh time
 
 Seventh instance of the shape, and the largest frame the compiler still owned
@@ -4625,7 +4624,6 @@ order of work and costs no signature.
   name hashing, which is what interning names to integers would remove, and it
   is the refactor design/compiler-log.md has called the only structural lever
   left on the check side. The build side now says the same thing.
-<<<<<<< HEAD
 
 ## 2026-09-17 — the same analysis, built three times from the same program
 
@@ -4673,8 +4671,6 @@ not already cover.
   diffuse — the largest single caller of `memcmp` is 6.2M, 1.0% — so there is
   no first map to intern that pays on its own. That is the same answer the
   check side gave, now with the build side agreeing.
-=======
-=======
 ## 2026-09-17 — kanso#1468 on the merged tree: CI's sitting
 
 The branch merged with kanso#1472 and CI measured the merged tree:
@@ -4705,8 +4701,6 @@ into `Backend::emit` and callgrind attributes them there together.
 `per_process_floor=558726 frames=605 kernel=6.17.0-1022-azure cpu=25/17`.
 
 - **DONE** the rows are CI's.
->>>>>>> origin/claude/group-indices
->>>>>>> claude/value-use-index
 
 ## 2026-09-17 — DECLARES is a constant, parsed once per emit until now
 
