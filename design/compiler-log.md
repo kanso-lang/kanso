@@ -6438,3 +6438,37 @@ listings were truncated differently is not a difference, and the check that
 caught it — `nm` on both binaries — took one command.
 
 - **DONE** the rows are CI's, and the two that rose are attributed.
+
+## 2026-09-17 — kanso#1478 as the one tip: three check rows down, two up
+
+CI has measured the tip of the run of five against main:
+
+    compile_instructions    35,968,171 ->    35,868,982     -99,189   -0.276%
+    entry_instructions     128,213,972 ->   127,871,143    -342,829   -0.267%
+    library_instructions   128,348,205 ->   128,009,282    -338,923   -0.264%
+    interp_instructions  2,178,502,266 -> 2,182,337,099  +3,834,833   +0.176%
+    startup_instructions     4,837,381 ->     5,081,497    +244,116   +5.046%
+
+The rows this branch carried until now were main's, carried forward by the
+merge so the gate had one number to fail against rather than none.
+
+**`interp_instructions` worsened and lands at 2,182,337,099.** Layout, by
+construction: this row anchors at the interpreter's own thread, so the front
+end is outside the count, and every change in the run of five is in the front
+end or the emitter. A move spread evenly at 0.176% over a row nothing in the
+diff can execute is a shifted working set.
+
+**`startup_instructions` worsened and lands at 5,081,497.** That one is the
+five working, the other way round. Each replaces a whole-program scan run once
+per name with an index built once per process, and this workload is a program
+holding one `print`. A local profile under rustc 1.98.1 puts `kanso::main` at
+5,081,820 against CI's 5,081,497 — 323 apart, which is as close as two
+containers get — and kanso#1468 alone accounts for 239,217 of the 244,116. One
+index, not five.
+
+The five take 61.6x off `kanso build bench/runbench` between them with the
+emitted IR byte-identical on every one.
+
+Welfare holds at its floor.
+
+- **DONE** five rows, CI's, with both risers attributed.
