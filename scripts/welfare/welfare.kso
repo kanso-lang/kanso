@@ -70,6 +70,15 @@ floor_path = "bench/welfare_floor.json"
 # weighted at zero while it more than doubled, because a list has no empty
 # slots to notice.
 #
+# A WEIGHT IS A SHARE OF ITS OWN SUB-WELFARE, since the 2026-09-16 split, and
+# each side's weights sum to one. The four that predate the split were shares
+# of a single objective summing to one between them -- 0.30, 0.26, 0.32, 0.12 --
+# and they are renormalised here rather than carried over, because 0.30 of a
+# four-term whole and 0.30 of the development side are different quantities.
+# What survives the renormalisation is every RATIO the reasoning below argues
+# for: run speed still outweighs run memory, compile speed still outweighs
+# compile memory better than three to one.
+#
 # The weights come from what teams shipping software pay for, recorded with
 # their sources in design/compiler-log.md. Runtime carries 0.60 because it
 # recurs per request forever. Compile carries 0.40 rather than the third it
@@ -105,7 +114,7 @@ floor_path = "bench/welfare_floor.json"
 # The thirteen per-phase benchmarks all survive, with every golden they had.
 # They say WHERE a move came from, which one number cannot; the objective says
 # whether the project came out ahead, which thirteen numbers could not.
-d_run_speed = dimension run_speed_counters "run speed" 2.0 0.30
+d_run_speed = dimension run_speed_counters "run speed" 2.0 0.45
 
 # Compile speed rises and run memory funds it. Ruled 2026-09-02, from the
 # objective restated: "the core thing we're attempting to optimize for here is
@@ -115,13 +124,66 @@ d_run_speed = dimension run_speed_counters "run speed" 2.0 0.30
 # peak memory only when something falls over. The memory model is the identity;
 # the order the objective punishes regressions in is the order developers
 # notice them.
-d_run_memory = dimension run_memory_counters "run memory" 2.0 0.26
+d_run_memory = dimension run_memory_counters "run memory" 2.0 0.40
 
-d_compile_speed = dimension compile_speed_counters "compile speed" 0.5 0.32
+d_compile_speed = dimension compile_speed_counters "compile speed" 0.5 0.30
 
 # Unchanged at 0.12: the compiler's own footprint is a CI-container guard
 # rather than something a developer perceives.
-d_compile_memory = dimension compile_memory_counters "compile memory" 0.5 0.12
+d_compile_memory = dimension compile_memory_counters "compile memory" 0.5 0.08
+
+# THE THREE COUNTERS THE 2026-09-16 GAVEL PUT ON THE DEVELOPMENT SIDE, and the
+# one it put on the production side. Weights inside a sub-welfare sum to one,
+# so a term's weight says what share of ITS OWN welfare it carries rather than
+# what share of the whole objective; the meta decides how much each sub-welfare
+# is worth.
+#
+# Release-tier codegen: `-O3 -flto`, the whole process tree under clang and the
+# linker. Production carries it because a release build is what ships, and it
+# satiates at 0.5 for the reason the front end does -- a release build is paid
+# once and waited for deliberately, so halving it again and again stops
+# mattering quickly. 0.15 against the binary's own two terms: what the compiler
+# spends making the program fast is worth a fraction of how fast the program is.
+d_codegen_release = dimension codegen_release_counters "release build" 0.5 0.15
+
+# Dev-tier codegen: `-O0`, the tree a `kanso build` waits on between a keystroke
+# and an answer. It is most of the wait: on this box the dev tier is 1.00
+# billion instructions against the front end's 164 million.
+#
+# WHAT A DEV BUILD COSTS IS TWO ROWS, NOT ONE, and both are weighed here. The
+# 2026-09-15 exclusion took kanso's own process out of the codegen rows --
+# rightly, because the parent sits in a wait loop for clang and what that loop
+# costs is the box's scheduling. But the emitter runs in that process, so the
+# exclusion left the compiler's own half of a build outside every counter.
+# `emit_instructions`, anchored at `codegen::emit_ir` inclusive, is that half.
+#
+# Weighing only the child tree would leave the gavel's "dev-tier codegen" half
+# measured, and kanso#1480 is what showed it: that branch takes 51,082,187
+# instructions off a `kanso build` and not one objective counter could see the
+# saving. The 0.22 splits by what the two halves cost -- 1.00 billion for the
+# children against 395 million for the emit, near enough 0.16 and 0.06.
+d_codegen_dev = dimension codegen_dev_counters "dev codegen" 0.5 0.16
+
+d_emit = dimension emit_counters "emitting" 0.5 0.06
+
+# INTERPRETER START-UP, and Clay's order for the interpreted side is the whole
+# of the pricing: "start-time is vastly more important than speed which is more
+# important than memory usage." So 0.25, 0.11 and 0.04 -- start-up outweighs
+# speed better than two to one and speed outweighs memory better than two to
+# one, and start-up is the largest single term on this side.
+#
+# It earns that because `kanso test` pays it on every invocation and production
+# never pays it once. That is the dimension no single scalar could hold, and
+# the reason the split was ruled rather than a re-weighting.
+d_start = dimension start_counters "interpreter start-up" 0.5 0.25
+
+# The interpreted engine executing. Satiation 1.0 sits between the front end's
+# 0.5 and the native run's 2.0: an interpreted run is a real execution and
+# keeps paying for speed, but it is the oracle rather than the deployment, so
+# it stops paying sooner than the binary does.
+d_interp_speed = dimension interp_speed_counters "interpreter speed" 1.0 0.11
+
+d_interp_memory = dimension interp_memory_counters "interpreter memory" 1.0 0.04
 
 # Retired instructions, which is what a run costs. Laziness is priced here and
 # nowhere else: a thunk is an implementation detail, so no thunk counter carries
@@ -169,18 +231,71 @@ compile_speed_counters = ["compile_instructions" "compile_allocs"]
 
 compile_memory_counters = ["compile_peak_bytes"]
 
+codegen_release_counters = ["codegen_instructions_release"]
+
+codegen_dev_counters = ["codegen_instructions_dev"]
+
+emit_counters = ["emit_instructions"]
+
+start_counters = ["startup_instructions"]
+
+interp_speed_counters = ["interp_instructions"]
+
+# The interpreted run's peak, read straight rather than summed: the interpreted
+# engine has one pool, so unlike `run_peak_bytes` there is nothing for `peak_of`
+# to add up.
+interp_memory_counters = ["interp_peak_bytes"]
+
+# TWO WELFARES AND A META, ruled 2026-09-16. Production is the binary: what the
+# program costs to run and what it cost to build for shipping. Development is
+# the edit-test loop: the front end `kanso test` runs on every invocation, the
+# dev-tier build, and the interpreted engine that runs the specs.
 run_terms = [d_run_speed d_run_memory]
+
+prod_terms = text/concat run_terms [d_codegen_release]
 
 compile_terms = [d_compile_speed d_compile_memory]
 
-terms = text/concat run_terms compile_terms
+interp_terms = [d_start d_interp_speed d_interp_memory]
+
+build_terms = [d_codegen_dev d_emit]
+
+dev_terms = text/concat (text/concat compile_terms build_terms) interp_terms
+
+# Every term, for the reporting that is keyed by counter rather than by side.
+terms = text/concat prod_terms dev_terms
+
+# HOW MUCH EACH SIDE IS WORTH TO THE META. Clay's framing: "if we're optimizing
+# for production performance and not compile performance, then compile
+# performance becomes more like a very dialed-down input to the overall
+# welfare." Production carries 0.70 and development 0.30.
+prod_share = 0.70
+
+dev_share = 0.30
+
+# THE META SATIATES, and that is what makes it more than arithmetic. A linear
+# `a*W_prod + b*W_dev` is algebraically one flat term list -- the same model
+# with every weight multiplied through -- so the split would buy nothing the
+# old single scalar did not already have.
+#
+# Saturating it says the thing the gavel wanted said: a sub-welfare near its
+# ceiling earns little from further wins, which is the model's way of saying
+# "the interpreter is fast enough now" and letting a development gain outweigh
+# a small production cost when development is the side that is behind.
+#
+# 1.0 is the rate. Each sub-welfare enters as its own score over a hundred, so
+# the input is in [0, 1] and `f w = w / (w + 1)` is concave across the whole
+# range: a side sitting at 0.9 earns 31% of what a side at 0.3 earns for the
+# same absolute gain. Dividing by `f 1.0` puts the ceiling back at a hundred,
+# so the meta is on the same scale as the two numbers under it.
+meta_satiation = 1.0
 
 # WHICH DEFINITION SCORED A ROW. It moves in the same commit as anything that
 # changes what the number means — a weight, a satiation, a term's counters,
 # the saturation rule — and it is emitted with the model so the one thing that
 # rewrites history.jsonl's welfare column does not keep its own copy to go
 # stale. The date is the day of the gavel that last moved the formula.
-formula = "2026-09-06"
+formula = "2026-09-17"
 
 # The baseline and the per-counter breakdown are keyed by counter, because a
 # counter is what is measured; a dimension is what it is measured FOR.
@@ -188,7 +303,14 @@ run_counters = text/concat run_speed_counters run_memory_counters
 
 compile_counters = text/concat compile_speed_counters compile_memory_counters
 
-counter_names = text/concat run_counters compile_counters
+interp_counters = text/concat start_counters
+  (text/concat interp_speed_counters interp_memory_counters)
+
+codegen_counters = text/concat (text/concat codegen_dev_counters emit_counters)
+  codegen_release_counters
+
+counter_names = text/concat (text/concat run_counters compile_counters)
+  (text/concat interp_counters codegen_counters)
 
 # A comment is not a counter, and one of them carries an `=`: the
 # compile-memory golden names its host as `# measured-on rustc=1.98.0`,
@@ -285,7 +407,27 @@ fn measured run work veins
   ca = [["compile_allocs" traffic["compile_allocs"]]]
   cm = [["compile_peak_bytes" held["compile_peak_bytes"]]]
   compile = text/concat ci (text/concat ca cm)
-  list/to_h (text/concat (text/concat rp (worked work)) compile)
+  old = text/concat (text/concat rp (worked work)) compile
+  list/to_h (text/concat old (added veins))
+
+# The five counters the 2026-09-16 gavel added, each read straight from its own
+# golden by the name that golden gives it. Nothing here sums or renames, which
+# is why they take one line apiece where the compile term takes four.
+fn added veins
+  st = veins[5]
+  ii = veins[6]
+  im = veins[7]
+  cd = veins[8]
+  cr = veins[9]
+  start = [["startup_instructions" st["startup_instructions"]]]
+  ispeed = [["interp_instructions" ii["interp_instructions"]]]
+  imem = [["interp_peak_bytes" im["interp_peak_bytes"]]]
+  dev = [["codegen_instructions_dev" cd["codegen_instructions_dev"]]]
+  rel = [["codegen_instructions_release" cr["codegen_instructions_release"]]]
+  em = veins[10]
+  emit = [["emit_instructions" em["emit_instructions"]]]
+  built = text/concat (text/concat dev rel) emit
+  text/concat (text/concat start ispeed) (text/concat imem built)
 
 # ONE ROW OUT OF FOURTEEN. bench/instructions_golden.txt carries a row for
 # every benchmark the gate counts, and since the 2026-09-06 gavel the objective
@@ -360,8 +502,64 @@ fn ratio_of now base c
 # The one number: a weighted sum of per-term satisfaction, on a scale whose
 # ceiling is a hundred and whose origin is arbitrary. Not a percentage of
 # anything — what the number is for is its direction and the size of its moves.
+fn score_over ts now base
+  100.0 * list/sum (list/to_list (list/map ts (t -> share now base t)))
+
+# The production side: what the program costs to run, and what building it for
+# shipping cost.
+fn score_prod now base
+  score_over prod_terms now base
+
+# The development side: the front end on every `kanso test`, the dev-tier
+# build, and the interpreted engine the specs run on.
+fn score_dev now base
+  score_over dev_terms now base
+
+# THE NUMBER CI GATES ON. One floor, on the meta, for the reason the standing
+# rule gives: the sum is the objective and the terms are diagnostics, so
+# ratcheting the two sides separately would re-enable the part-against-whole
+# optimisation that rule exists to stop.
 fn score now base
-  100.0 * list/sum (list/to_list (list/map terms (t -> share now base t)))
+  meta (score_prod now base / 100.0) (score_dev now base / 100.0)
+
+fn meta w_prod w_dev
+  weighted = prod_share * saturated w_prod + dev_share * saturated w_dev
+  100.0 * weighted / saturated 1.0
+
+fn saturated w
+  w / (w + meta_satiation)
+
+# EACH SIDE'S WEIGHTS SUM TO ONE, and the program refuses rather than scoring
+# when they do not. This is not a tidiness rule: a weight is a share of its own
+# sub-welfare, so a side summing to 0.71 scores everything on it 29% low and
+# the meta reads that as the production side being far from its ceiling. It
+# happened on the day the split was written — the four pre-split weights were
+# carried over unrenormalised, production summed to 0.71 and scored 40.97 where
+# it should have read 57.11, and nothing in the output said so. A number that is
+# wrong by a fifth and looks entirely plausible is what a refusal is for.
+fn balanced? ts
+  s = list/sum (list/to_list (list/map ts (t -> t.weight)))
+  s > 0.999999 and s < 1.000001
+
+weighed = checked (balanced? prod_terms) (balanced? dev_terms)
+
+fn checked true true
+  io/write ""
+
+fn checked _ _
+  io/write_err unbalanced .> (_ -> os/exit 2)
+
+u_one = "a side's weights do not sum to one, so every term on it is\n"
+
+u_two = "scored by the wrong share, and the meta reads the shortfall as\n"
+
+u_three = "that side sitting far from its ceiling. A weight is a share of\n"
+
+u_four = "its own sub-welfare: fix prod_terms and dev_terms in\n"
+
+u_five = "scripts/welfare/welfare.kso so each of them totals 1.0.\n"
+
+unbalanced = "{u_one}{u_two}{u_three}{u_four}{u_five}"
 
 fn pow10 0
   1
@@ -431,10 +629,28 @@ fn filled s width false
 fn asked path
   os/read_file! path
 
-fn gauge run w ir ca held ent
+# NINE VEINS IN ONE LIST LITERAL, and the literal is the point. `veins[5]` on a
+# list built by `text/concat` is a box, because a concatenated length is not
+# known where the index is written; on a literal it is an index. Writing the
+# nine out is what lets `measured` read them by position without opening nine
+# boxes it has already had pinned for it.
+fn gauge run w ir ca held ent st ii im cd cr em
   work = work_of w
-  veins = [(counters ir) (counters ca) (counters held) (counters ent)]
-  pinned work veins[1] veins[2] veins[3] veins[4]
+  vir = counters ir
+  vca = counters ca
+  vhe = counters held
+  ven = counters ent
+  vst = counters st
+  vii = counters ii
+  vim = counters im
+  vcd = counters cd
+  vcr = counters cr
+  vem = counters em
+  veins = [vir vca vhe ven vst vii vim vcd vcr vem]
+  weighed
+    .> (_ -> pinned work vir vca vhe ven)
+    .> (_ -> pinned_new vst vii vim vcd vcr)
+    .> (_ -> vem["emit_instructions"]!)
     .> (_ -> floored (measured (counters run) work veins))
 
 fn floored now
@@ -452,6 +668,15 @@ fn pinned work ir traffic held ent
     .> (_ -> ent["entry_instructions"]!)
     .> (_ -> traffic["compile_allocs"]!)
     .> (_ -> held["compile_peak_bytes"]!)
+
+# The gavel's five, pinned the same way and for the same reason: a golden that
+# lost one of these rows refuses here rather than scoring it as nothing.
+fn pinned_new st ii im cd cr
+  st["startup_instructions"]!
+    .> (_ -> ii["interp_instructions"]!)
+    .> (_ -> im["interp_peak_bytes"]!)
+    .> (_ -> cd["codegen_instructions_dev"]!)
+    .> (_ -> cr["codegen_instructions_release"]!)
 
 # Every counter the objective weighs stands on a measurement of its own.
 #
@@ -576,17 +801,36 @@ fn routed now base held value args setting _
 # javascript — would each grow their own.
 #
 #   formula <date>
-#   term <name>|<weight>|<satiation>|<counter,counter,...>
+#   term <name>|<weight>|<satiation>|<counter,counter,...>|<side>
+#   meta <production share>|<development share>|<satiation>
 #   base <counter>=<value>
+#
+# THE SIDE AND THE META LINE ARRIVED WITH THE SPLIT, and they are here rather
+# than in the rescorer for the reason the formula date is: a second copy of the
+# model keeps its old value through the gavel that moves it, and every row then
+# claims to have been scored by a definition that no longer exists. The
+# rescorer reads nine terms, two sides and one meta out of this text and holds
+# none of them.
 fn term_line t
   listed_counters = text/join t.counters ","
-  "term {t.name}|{t.weight}|{t.satiation}|{listed_counters}\n"
+  side = side_of t
+  "term {t.name}|{t.weight}|{t.satiation}|{listed_counters}|{side}\n"
+
+fn side_of t
+  named_side (list/any? prod_terms (p -> p.name == t.name))
+
+fn named_side true
+  "production"
+
+fn named_side false
+  "development"
 
 fn model_of base
   shaped = list/to_list (list/map terms term_line)
   kept = list/select counter_names (c -> base[c] != none)
   held = list/to_list (list/map kept (c -> "base {c}={base[c]}\n"))
-  io/write "formula {formula}\n{text/join shaped ""}{text/join held ""}"
+  m = "meta {prod_share}|{dev_share}|{meta_satiation}\n"
+  io/write "formula {formula}\n{text/join shaped ""}{m}{text/join held ""}"
 
 fn counters_of now
   kept = list/to_list (list/select counter_names (c -> now[c] != none))
@@ -676,7 +920,17 @@ fn reported now base held value
   reason = text/slice (last_why held) 1 52
   tail = "(ceiling 100, ratchet {era_of held}: {reason}…)"
   io/write "{head}   {tail}\n"
+    .> (_ -> sides now base)
     .> (_ -> detailed now base .> (_ -> verdict value floor))
+
+# THE TWO SIDES UNDER THE META, printed because the meta alone cannot say which
+# way a trade went. They are diagnostics in the same sense the per-term
+# breakdown is: neither carries a floor, and neither is a thing to optimise
+# against the other.
+fn sides now base
+  p = score_prod now base
+  d = score_dev now base
+  io/write "  production {fixed p 2}   development {fixed d 2}\n"
 
 fn moved? now base c
   base[c] != now[c]
@@ -790,6 +1044,33 @@ fn with_traffic run w ir ca
 
 fn with_held run w ir ca held
   entry_golden = "bench/entry_instructions_golden.txt"
-  asked entry_golden .> (e -> gauge run w ir ca held e)
+  asked entry_golden .> (e -> with_entry run w ir ca held e)
+
+# ELEVEN GOLDENS, where there were six. The 2026-09-16 gavel's five arrive
+# here: start-up, the interpreted run's instructions and its peak, and the two
+# codegen tiers. Each is read whole and its one row taken by name in `added`.
+fn with_entry run w ir ca held e
+  asked "bench/startup_instructions_golden.txt"
+    .> (st -> with_start run w ir ca held e st)
+
+fn with_start run w ir ca held e st
+  asked "bench/interp_instructions_golden.txt"
+    .> (ii -> with_interp run w ir ca held e st ii)
+
+fn with_interp run w ir ca held e st ii
+  asked "bench/interp_memory_golden.txt"
+    .> (im -> with_imem run w ir ca held e st ii im)
+
+fn with_imem run w ir ca held e st ii im
+  asked "bench/codegen_instructions_dev_golden.txt"
+    .> (cd -> with_dev run w ir ca held e st ii im cd)
+
+fn with_dev run w ir ca held e st ii im cd
+  asked "bench/codegen_instructions_release_golden.txt"
+    .> (cr -> with_rel run w ir ca held e st ii im cd cr)
+
+fn with_rel run w ir ca held e st ii im cd cr
+  asked "bench/emit_instructions_golden.txt"
+    .> (em -> gauge run w ir ca held e st ii im cd cr em)
 
 pub play = asked "bench/cost_golden_run.txt" .> (r -> with_run r)

@@ -859,14 +859,40 @@ fn closure_convention() -> kanso::codegen::ClosureConvention {
     }
 }
 
+/// The process id, always the same number of characters.
+///
+/// EVERY TEMP PATH THIS FILE BUILDS CARRIES ONE, and a path's LENGTH is a term
+/// in what the process costs: the bytes are copied, walked and handed to
+/// `open`. A pid is anywhere from one digit to seven, so two runs of one binary
+/// on one box wrote paths of different lengths and counted different
+/// instructions for doing the same thing. On 2026-09-17 that was the whole of
+/// what the codegen row's second reading still disagreed by once the warm-up
+/// was fixed: 120 instructions out of 1,071,604,729 on the dev tier and 582 out
+/// of 7,307,728,731 on release, on one binary in one job.
+///
+/// Seven digits covers every pid Linux hands out under the default
+/// `pid_max` of 4,194,304. A larger `pid_max` widens the field rather than
+/// truncating it, so uniqueness is never at risk; the length guarantee is,
+/// and `tests/a_temp_path_is_the_same_length_every_run.rs` says so in the
+/// same breath as it pins the width.
+fn pid_tag() -> String {
+    pid_tag_of(std::process::id())
+}
+
+/// Split out from `pid_tag` so the width can be asked about a pid this process
+/// does not have.
+fn pid_tag_of(pid: u32) -> String {
+    format!("{pid:07}")
+}
+
 /// Compile a two-define module: one carrying the convention, one calling
 /// through it. Both halves are there because a toolchain that parsed the
 /// define and refused the call site would still refuse what the emitter
 /// writes, and a probe testing only the define would not know.
 fn preserve_none_probe() -> bool {
     let dir = std::env::temp_dir();
-    let ll = dir.join(format!("kanso_pn_probe_{}.ll", std::process::id()));
-    let obj = dir.join(format!("kanso_pn_probe_{}.o", std::process::id()));
+    let ll = dir.join(format!("kanso_pn_probe_{}.ll", pid_tag()));
+    let obj = dir.join(format!("kanso_pn_probe_{}.o", pid_tag()));
     let module = "define preserve_nonecc i64 @p(i64 %x) { ret i64 %x }\n\
                   define i64 @q(i64 %x) {\n\
                   \x20 %r = call preserve_nonecc i64 @p(i64 %x)\n\
@@ -875,13 +901,26 @@ fn preserve_none_probe() -> bool {
     if std::fs::write(&ll, module).is_err() {
         return false;
     }
+    // `status()` WITH THE CHILD'S OUTPUT THROWN AWAY, not `output()`, and the
+    // difference is measurable. Only `status.success()` was ever read here, but
+    // `output()` opens pipes and drains them, and how many `poll` and `read`
+    // calls that takes depends on when the child's bytes arrive rather than on
+    // anything the compiler did. Measured 2026-09-17: two runs of one binary on
+    // one box, same corpus, same environment, counted 1,016,046,470 and
+    // 1,016,048,745 for `kanso build`, and eight frames of ten thousand six
+    // hundred and forty-two accounted for every instruction of the difference:
+    // `FileDesc::read_to_end` +903, `small_probe_read` +591, `read_output`
+    // +253, `read` +220, `__memcpy_avx` +176, `poll` +88, `__errno_location`
+    // +44. All of it is the pipe-draining loop. With no pipe there is no loop.
     let ok = std::process::Command::new("clang")
         .args(["-Wno-override-module", "-c"])
         .arg(&ll)
         .arg("-o")
         .arg(&obj)
-        .output()
-        .map(|o| o.status.success())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
         .unwrap_or(false);
     let _ = std::fs::remove_file(&ll);
     let _ = std::fs::remove_file(&obj);
@@ -973,8 +1012,8 @@ fn cached_runtime_object(profile: &str, opt: &[&str]) -> std::io::Result<std::pa
     }
     let c_path = std::env::temp_dir().join(format!("kanso_runtime_{profile}_{key:016x}.c"));
     std::fs::write(&c_path, source)?;
-    let staging = std::env::temp_dir()
-        .join(format!("kanso_runtime_{profile}_{key:016x}_{}.o", std::process::id()));
+    let staging =
+        std::env::temp_dir().join(format!("kanso_runtime_{profile}_{key:016x}_{}.o", pid_tag()));
     // `-Werror=unknown-attributes` is the belt to the probe's braces: clang 18
     // only WARNS about `preserve_none` and would silently compile the runtime
     // on the C convention while the emitted IR used the other one.
@@ -1119,10 +1158,9 @@ fn cached_program_binary(ir: &str) -> std::io::Result<std::path::PathBuf> {
     // rewrite what the other's clang was already reading — which surfaces as
     // a segmentation fault inside LLVM's assembly lexer, blamed on the
     // program rather than on the race.
-    let ll_path =
-        std::env::temp_dir().join(format!("kanso_run_{key:016x}_{}.ll", std::process::id()));
+    let ll_path = std::env::temp_dir().join(format!("kanso_run_{key:016x}_{}.ll", pid_tag()));
     std::fs::write(&ll_path, ir)?;
-    let staging = std::env::temp_dir().join(format!("kanso_run_{key:016x}_{}", std::process::id()));
+    let staging = std::env::temp_dir().join(format!("kanso_run_{key:016x}_{}", pid_tag()));
     let ll = ll_path.to_string_lossy().into_owned();
     let out = staging.to_string_lossy().into_owned();
     let status = dev_clang(&out, &ll)?;
@@ -1164,5 +1202,48 @@ fn run_plan(program: &ast::Program, file: &str, source: &str) -> ExitCode {
             eprintln!("error: main is not an io; there is no plan to show");
             ExitCode::FAILURE
         }
+    }
+}
+
+// THE TEST MODULE GOES LAST, and clippy insists: `items_after_test_module`
+// fires on anything declared after one, and CI lints with warnings denied.
+#[cfg(test)]
+mod a_temp_path_is_the_same_length_every_run {
+    use super::pid_tag_of;
+
+    /// Every pid Linux hands out under the default `pid_max` renders to the
+    /// same number of characters, so two runs of one binary build paths of
+    /// one length.
+    #[test]
+    fn every_pid_under_the_default_ceiling_is_seven_characters() {
+        for pid in [1u32, 2, 9, 10, 99, 100, 999, 1000, 65_535, 999_999, 4_194_303, 4_194_304] {
+            let tag = pid_tag_of(pid);
+            assert_eq!(
+                tag.len(),
+                7,
+                "pid {pid} rendered {tag:?}, {} characters. A path whose length \
+                 moves with the pid makes two runs of one binary count different \
+                 instructions for the same work.",
+                tag.len()
+            );
+        }
+    }
+
+    /// And it is still a pid: padding may not collide two of them.
+    #[test]
+    fn padding_keeps_every_pid_distinct() {
+        let pids = [1u32, 10, 100, 1000, 10_000, 100_000, 1_000_000, 4_194_303];
+        let tags: std::collections::BTreeSet<String> =
+            pids.iter().map(|p| pid_tag_of(*p)).collect();
+        assert_eq!(tags.len(), pids.len(), "padding collided two pids: {tags:?}");
+    }
+
+    /// Past the default ceiling the field widens rather than truncating. A
+    /// host with a larger `pid_max` loses the length guarantee and keeps
+    /// uniqueness, which is the right way round.
+    #[test]
+    fn a_wider_pid_widens_the_field() {
+        assert_eq!(pid_tag_of(12_345_678), "12345678");
+        assert_ne!(pid_tag_of(12_345_678), pid_tag_of(2_345_678));
     }
 }

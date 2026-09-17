@@ -184,8 +184,23 @@ make a PR and then merge it."
   adding a line to lib/json is a line the compiler carries and compiles.
   `all_counters.sh` names the runtime cost goldens only; `machine_code`,
   `emitted_code`, `compile_memory`, `compile_allocs`, `compile_instructions`,
-  `entry_instructions`, `library_instructions` and `compile_libraries`
-  are separate gates and two of their counters are welfare terms. THE LAST TWO OF
+  `entry_instructions`, `library_instructions`, `compile_libraries`,
+  `codegen_instructions` and `emit_instructions`
+  are separate gates and two of their counters are welfare terms.
+  `codegen_instructions` is the odd one and joined on 2026-09-17: it runs
+  `kanso build` rather than `kanso check`, so it is the only row here that
+  reaches codegen at all. It counts the CHILD TREE -- the clang driver, the
+  convention probe's clang, `clang -cc1` and ld -- and NOT kanso's own
+  process, which was excluded the same day: every child reproduced byte for
+  byte across two readings while kanso's moved 233, all of it in
+  `kanso::build`'s inlined wait for clang, which is the scheduler's to size.
+  Named without an argument it runs both
+  tiers, `-O0` and `-O3 -flto`, which the 2026-09-16 gavel puts on opposite
+  sides of the objective. `emit_instructions` is what that exclusion left
+  uncounted and joined beside it: `codegen::emit_ir` inclusive, which is the
+  compiler's own emitting with no wait inside the anchor, and which read
+  394,910,642 on four profiles of two binaries while the process around it
+  moved. THE LAST TWO OF
   THOSE NAMES ARE ONE LETTER APART AND ARE UNRELATED: `compile_libraries` diffs
   the list of shared objects the compiler links against, where
   `library_instructions` counts instructions. `kanso check` routes a single file
@@ -454,6 +469,48 @@ Only Clay arms, disarms or retimes it.
   0 failures"). The harness extracts the real function text from the
   source, never a copy.
 
+### A measurement bounds what it measured, and nothing that resembles it
+
+Four claims failed this way in one afternoon, across both sessions, and each
+cost at least a round. The shape is always the same: a number is taken from
+the context that produced it and applied to a context nobody checked it
+against.
+
+- **The name blind spot.** Three fixtures reported the box ruling's check
+  refusal missing. Each bound the err to a name first, and the rule reads
+  calls rather than names — deliberately, documented in the paragraph that
+  describes the rule. The fixtures exercised the documented exception.
+- **The grep for a phrasing.** The correction to that then said ch04 fails to
+  document the blind spot, on a `grep` for "blind spot". ch04 documents it in
+  the words *the checker reads calls, not the names they are bound to*.
+- **The rewrite family.** kanso#1480's bisection showed 145,472 arriving with
+  74 rewritten lines, and that was written down as rewriting being the cause,
+  into a log entry, a published page section and a ledger recommendation.
+  kanso#1492 built the isolating ladder: eight rewrites of unreachable code,
+  eight binaries, the row identical to the instruction. Zero.
+- **The baselines from the wrong machine.** Three of the welfare split's
+  baselines were this container's readings against goldens CI measured, so the
+  objective priced a machine difference as compiler work: +68.3%, +77.4% and
+  +3.3%. Each golden's own header says the two readings are not comparable.
+
+So, before an argument rests on a number:
+
+- **Read the thing the number describes before running anything against it.**
+  A rule's own section states its exceptions, and a golden's header states what
+  its reading may be compared with. Both were one paragraph away in the cases
+  above, and reading them costs a minute against the round a wrong claim costs.
+- **A report that something is ABSENT is worth what the search for it being
+  PRESENT was worth.** Running a fixture shows what happened, not what was
+  supposed to happen. A search by phrasing finds a phrasing.
+- **An attribution is not a mechanism.** That X arrived with Y is a
+  difference-in-differences; it becomes a cause when something isolates Y and
+  the isolation agrees. Until then, say the delta arrived with the change and
+  leave the mechanism open.
+- **Where a claim has already travelled is part of the cost.** The rewrite
+  claim reached three surfaces before it was checked. When a claim is
+  withdrawn, name every surface it reached and correct each; a claim that is
+  fixed in the log and left standing on the page has not been withdrawn.
+
 ### Merge and conflict discipline
 - **CI is the only gate on a merge, and green means merge.** Clay has said so
   three times, most recently on 2026-08-24: "stop asking me for permission to
@@ -482,14 +539,17 @@ Only Clay arms, disarms or retimes it.
   otherwise is false reporting. (Auto-merge silently failed to fire on
   green PRs more than once, and stale docs sat live for hours.)
 - **Reading the cost-goldens job takes two sources, and neither alone is it.**
-  Its nineteen counter steps are `continue-on-error`, so the per-step
+  Its counter steps are `continue-on-error`, so the per-step
   conclusions the API returns say SUCCESS even when the gate failed — on
   kanso#1262 the API reported `how much work` and `compile instructions` green
   while the job's own vein summary said `work:failure` and `compile
   instructions:failure`, and that summary is the step that fails the job. So
   the summary block (`for vein in "emitted:success" ...`) is the authority for
-  those nineteen, AND it omits the trend gate and `page_drift`, whose own
-  step conclusions are reliable. Read both. Every other job in the run can be
+  every step it lists, AND it omits the trend gate and `page_drift`, whose own
+  step conclusions are reliable. This sentence said NINETEEN until
+  2026-09-17, when the two codegen rows made it twenty-one; a count in prose
+  goes stale the first time anybody adds a row, so read the summary block's
+  own list rather than a number written here. Read both. Every other job in the run can be
   read from its steps.
 - **Opening a PR without arming a wake is how one gets abandoned.** In a
   container nothing runs between turns: a session is woken by a subscription
@@ -506,16 +566,31 @@ Only Clay arms, disarms or retimes it.
 
 ### The welfare number only goes up
 
-- **One scalar covers runtime and compile cost together**, because the
-  per-counter goldens cannot see a trade. `scripts/welfare/welfare.kso` weighs
-  FIVE counters into a single score: `run_instructions`, `run_peak_bytes` (the
-  arena, held and permanent peaks summed by `peak_of`), `compile_instructions`,
-  `compile_allocs` and `compile_peak_bytes`.
-  `bench/objective_sources.txt` is the list — seven `<counter> <gate key>`
-  pairs for those five — and
+- **TWO WELFARES AND A META cover production and development cost, because the
+  per-counter goldens cannot see a trade and one scalar could not hold
+  interpreter start-up.** Ruled 2026-09-16, built 2026-09-17.
+  `scripts/welfare/welfare.kso` scores a PRODUCTION number over
+  `run_instructions`, `run_peak_bytes` (the arena, held and permanent peaks
+  summed by `peak_of`) and `codegen_instructions_release`; a DEVELOPMENT number
+  over `compile_instructions`, `compile_allocs`, `compile_peak_bytes`,
+  `codegen_instructions_dev`, `emit_instructions`, `startup_instructions`,
+  `interp_instructions` and `interp_peak_bytes`; and a META over the two, which is the number CI gates
+  on and the only one carrying a floor. A weight is a share of ITS OWN side and
+  each side sums to one — `balanced?` refuses to score when one does not, which
+  is a refusal that exists because carrying the four pre-split weights over
+  unrenormalised scored production a fifth low and looked entirely plausible.
+  **THE TWO CODEGEN-SIDE ROWS ARE BOTH WEIGHED AND ONE IS EASY TO FORGET.** The
+  2026-09-15 exclusion took kanso's own process out of `codegen_instructions_*`,
+  and the emitter runs in that process, so `emit_instructions` carries the
+  compiler's own half of what a build costs. Weighing the child tree alone left
+  kanso#1480's 51,082,187-instruction saving invisible to every term in the
+  model, which is how the gap was found.
+  `bench/objective_sources.txt` is the list — thirteen `<counter> <gate key>`
+  pairs for those eleven — and
   `tests/the_objective_reads_what_the_gate_watches.rs` replays it, so the list
   is checkable rather than remembered. **This sentence has now been wrong
-  twice.** Until 2026-09-06 it said fixpoint rounds, expression visits and
+  three times, and the third is why the counts above are not to be trusted from
+  memory either.** Until 2026-09-06 it said fixpoint rounds, expression visits and
   emitted lines, none of which the objective has weighed since the 2026-09-03
   rebuild, and a session spent a round expecting a 4.5% rise in emitted lines
   to cost welfare when the objective cannot see that vein at all. Until
@@ -523,8 +598,12 @@ Only Clay arms, disarms or retimes it.
   twelve memory rows — the shape before Clay's 2026-09-06 gavel made the
   runtime side one consolidated program, which turned twenty-five rows into
   five. A session reading that hand-computed a trade over the wrong model, got
-  its sign wrong, and only the real `welfare` run caught it. Run
-  `kanso run scripts/welfare -- --counters`; it prints the list in five lines.
+  its sign wrong, and only the real `welfare` run caught it. Until 2026-09-17 it
+  then said FIVE and SEVEN, which was true for exactly the eleven days between
+  the consolidation gavel and the split gavel being built. Run
+  `kanso run scripts/welfare -- --counters` for the list, and a bare
+  `kanso run scripts/welfare` prints the meta with production and development
+  under it.
   **It is an
   index, not a percentage** — the ceiling is a hundred, where every term costs
   nothing, and the origin is arbitrary. Only its direction and the size of its

@@ -141,6 +141,9 @@
 # the compiler: since this branch measured, the only thing that landed
 # under it is a row written into a golden, so the value below is this
 # branch's own sitting and it still stands.
+#
+# 2026-09-17 (kanso#1470): startup_instructions 4,838,323 -> 4,837,892, a FALL of
+# 431 (-0.0089%). Layout, same sitting as the compile row.
 # 2026-09-17, kanso#1482, CI's sitting. LAYOUT, same reason, and this one
 # fell: 956 lower. The four rows together are +93 +564 +511 -956, which is
 # what a code-layout shift looks like -- no direction, and no relation to
@@ -153,10 +156,6 @@
 # main's, carried forward so the gate has one value to fail against
 # rather than none; the merged sitting is CI's to take.
 #
-# 2026-09-17, merged with main. Both branches moved this row on their own
-# base, so the merged tree is reading neither number. The value below is
-# main's, carried forward so the gate has one value to fail against
-# rather than none; the merged sitting is CI's to take.
 # 2026-09-17, kanso#1468 on the tree merged with kanso#1462. CI reads
 # 5,077,523 against main's 4,838,372, a RISE of 239,151 -- 4.94%. This is the
 # one row on this branch that moves by WORK rather than by layout, and it is
@@ -181,26 +180,6 @@
 # a run of hashed inserts is the open lead; the objective does not weigh this
 # vein yet, so nothing waits on it.
 #
-# 2026-09-17, merged with main. Both branches moved this row on their own
-# base, so the merged tree is reading neither number. The value below is
-# main's, carried forward so the gate has one value to fail against
-# rather than none; the merged sitting is CI's to take.
-#
-# 2026-09-17, merged with main. Both branches moved this row on their own
-# base, so the merged tree is reading neither number. The value below is
-# main's, carried forward so the gate has one value to fail against
-# rather than none; the merged sitting is CI's to take.
-#
-# 2026-09-17, merged with main. Both branches moved this row on their own
-# base, so the merged tree is reading neither number. The value below is
-# main's, carried forward so the gate has one value to fail against
-# rather than none; the merged sitting is CI's to take.
-#
-# 2026-09-17, merged with main. Both branches moved this row on their own
-# base, so the merged tree is reading neither number. The value below is
-# main's, carried forward so the gate has one value to fail against
-# rather than none; the merged sitting is CI's to take.
-#
 # 2026-09-17, kanso#1478 as the one tip, on main 298636b7. CI reads 5,082,497
 # against main's 4,838,372, a RISE of 244,125 -- 5.05%.
 # #
@@ -216,6 +195,11 @@
 # one-line program is the corpus with nothing to spread it over, which is
 # what this vein is for. kanso#1484, stacked on kanso#1468, writes the
 # DECLARES set down as a sorted constant and takes the larger part back.
+#
+# 2026-09-17, kanso#1470 on main 298636b7. CI reads 4,837,941 against main's
+# 4,838,372, a fall of 431 -- 0.009%. `kanso play` takes the native path and
+# this branch adds counter plumbing to src/main.rs; 431 is what that weighs
+# here.
 # 2026-09-17, kanso#1482 on the tree merged with kanso#1462. CI reads
 # 4,837,381 against main's 4,838,372, a fall of 991 -- 0.020%. `kanso play`
 # takes the native path and does run the emitter, so some of this is the
@@ -227,6 +211,10 @@
 # base, so the merged tree is reading neither number. The value below is
 # main's, carried forward so the gate has one value to fail against
 # rather than none; the merged sitting is CI's to take.
+#
+# 2026-09-17, merged with main at 5e256ce0 (kanso#1491), which moved this row
+# 1,373 instructions downward under this branch. The value below is this
+# branch own CI sitting; the merged number is CI to take.
 #
 # 2026-09-17, kanso#1478 against main, CI's sitting. 4,837,381 -> 5,081,497, a
 # RISE of 244,116 (+5.046%). NOT LAYOUT. `kanso play` takes the native path and
@@ -251,4 +239,10 @@
 # on every one. A one-line program is the workload where an index is all cost,
 # and measuring what is left when the program is too small to cost anything is
 # what this row is for.
+#
+# 2026-09-17, kanso#1470 against main, CI's sitting. 4,837,381 -> 4,836,950, a
+# FALL of 431 (-0.0089%). `kanso play` runs the emitter, which is where the new
+# counters sit; they are compiled out of a shipped binary and the gate builds one
+# that carries them, so what this reads is the same layout term as the rows
+# above, at the same scale.
 startup_instructions=5081497

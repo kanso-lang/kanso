@@ -751,6 +751,8 @@
 # 2026-09-17, kanso#1487's sitting, printed line excluded. The two faces were
 # 128,204,898 and 128,204,911; the excluded subtree is 765 and 778.
 #
+# 2026-09-17 (kanso#1470): entry_instructions 128,204,133 -> 128,203,909, a FALL
+# of 224 (-0.00017%). Layout, same sitting as the compile row.
 # 2026-09-17, merged with main. Both branches moved this row on their own
 # base, so the merged tree is reading neither number. The value below is
 # main's, carried forward so the gate has one value to fail against
@@ -795,33 +797,18 @@
 # main's, carried forward so the gate has one value to fail against
 # rather than none; the merged sitting is CI's to take.
 #
-# 2026-09-17, merged with main. Both branches moved this row on their own
-# base, so the merged tree is reading neither number. The value below is
-# main's, carried forward so the gate has one value to fail against
-# rather than none; the merged sitting is CI's to take.
 # 2026-09-17, kanso#1468 on the tree merged with kanso#1462. CI reads
 # 128,205,992 against main's 128,217,983, a fall of 11,991 -- 0.0094%. The
 # same layout term as the module row above it; the entry route stops before
 # codegen for the same reason.
 #
-# 2026-09-17, merged with main. Both branches moved this row on their own
-# base, so the merged tree is reading neither number. The value below is
-# main's, carried forward so the gate has one value to fail against
-# rather than none; the merged sitting is CI's to take.
-#
-# 2026-09-17, merged with main. Both branches moved this row on their own
-# base, so the merged tree is reading neither number. The value below is
-# main's, carried forward so the gate has one value to fail against
-# rather than none; the merged sitting is CI's to take.
-#
-# 2026-09-17, merged with main. Both branches moved this row on their own
-# base, so the merged tree is reading neither number. The value below is
-# main's, carried forward so the gate has one value to fail against
-# rather than none; the merged sitting is CI's to take.
-#
 # 2026-09-17, kanso#1478 as the one tip, on main 298636b7. CI reads
 # 127,871,094 against main's 128,217,983, a fall of 346,889 -- 0.270%. Work,
 # as the module row above it: the entry route runs the same analyses.
+#
+# 2026-09-17, kanso#1470 on main 298636b7. CI reads 128,217,981 against main's
+# 128,217,983 -- two instructions, downward. `library_instructions` and
+# `interp_instructions` are byte-identical to main in the same sitting.
 # 2026-09-17, kanso#1482 on the tree merged with kanso#1462. CI reads
 # 128,213,972 against main's 128,217,983, a fall of 4,011 -- 0.0031%. Layout,
 # as the module row above it.
@@ -831,8 +818,15 @@
 # main's, carried forward so the gate has one value to fail against
 # rather than none; the merged sitting is CI's to take.
 #
+# 2026-09-17, merged with main at 5e256ce0 (kanso#1491), which moved this row
+# 2 instructions downward under this branch. The value below is this branch
+# own CI sitting; the merged number is CI to take.
+#
 # 2026-09-17, kanso#1478 against main, CI's sitting. 128,213,972 -> 127,871,143,
 # a FALL of 342,829 (-0.267%). WORK; see bench/compile_instructions_golden.txt.
+#
+# 2026-09-17, kanso#1470 against main, CI's sitting. 128,213,972 -> 128,213,970,
+# a FALL of 2. See bench/compile_instructions_golden.txt.
 entry_instructions=127871143
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
