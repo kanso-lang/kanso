@@ -5881,3 +5881,138 @@ move on this and there is no floor question to put to anyone.
   start-up reads 615,754 lower than this branch and 350,129 below main, with
   `kanso build`'s 69.90% kept. So this row's rise is paid back by the branch
   above it rather than left standing.
+
+## 2026-09-17 — kanso#1480's rows challenged, bisected, and the calibration's blind spot found
+
+kanso#1480 shares one linearity `Analysis` where three were built, takes
+51,082,187 instructions off a `kanso build` (−7.77%) with the emitted IR
+byte-identical, and raises the two rows welfare weighs by 627,157. It was
+escalated as Clay's call with three ways out — lower the floor, reweigh the
+objective, or park the branch — all resting on the reading that the rise is
+the layout term.
+
+**The challenge.** This tree has measured that term on the anchored frame
+twice. `scripts/gates/compile_instructions.sh`'s header carries a 2026-09-04
+ladder of seven binaries differing only in code nothing reaches: span 1,028,
+with 7,632 bytes of unreachable code moving the frame 402, not monotone in
+`.text`. design/pending-gavels.md's `.rodata` entry carries a hundred-function
+pair at 5,849 unpinned and identical pinned. kanso#1480 moves
+`compile_instructions` 140,122 and `entry_instructions` 487,035, the latter
+larger than the 330,496 separating its parent kanso#1478 from main. Two orders
+of magnitude above both calibrations is not a thing to wave through, so the
+escalation went back with a request to attribute the number rather than a
+recommendation to rule on it.
+
+**The bisection, cloud's, within the hour.** On the runner's compiler: 105
+added lines in the linearity analysis cost **357** on the module row, and 74
+lines rewriting two private functions in the emitter cost **145,472** —
+functions reachable only from `emit_ir`, which a check never calls. So the
+row moved a hundred and forty-five thousand instructions because code that
+does not run on the measured path was rewritten.
+
+**The blind spot is the shape of the perturbation, and the calibration never
+covered it.** The seven-binary ladder ADDED functions nothing reaches, which
+leaves every existing decision where it was; kanso#1480 REWRITES existing
+unreachable functions, which moves what sits around them. Those are different
+perturbations, the ladder bounded only the first, and nothing said so. One
+`#[inline(never)]` in the same module, measured the same afternoon, cost 1,503
+— the same family as the ladder, and three hundred times smaller than a
+rewrite.
+
+**So the challenge was right and its conclusion was wrong.** The number was
+not established as layout, and saying so is what produced the bisection. What
+it was taken to imply — that the rise must therefore be real work on the
+check path — does not follow and is false. The correction is recorded here
+rather than folded away, beside the one from earlier today about probing for
+absence, because both are the same error: an argument from a measurement
+whose scope was never checked.
+
+- **DONE** the number attributed, by cloud's bisection, to a rewrite of code
+  the measured path does not run.
+- **OPEN** whether that makes the welfare fall a cost the project should pay.
+  It is not external state under the 2026-09-15 rule — the binary's layout is
+  produced by the change — and it is not work on the measured path either.
+  design/pending-gavels.md's `.rodata` entry is where that sits, and it now
+  has a case its earlier measurements could not make.
+- **OPEN** whether the ladder should be re-run with rewrites rather than
+  additions, so the calibration bounds the perturbation changes actually make.
+  Cloud's.
+
+## 2026-09-17 — STATUS.md counted the build hole twice and the two welfares not at all
+
+The "Ruled, unbuilt" intro is the paragraph cloud reads before choosing what
+to build. On 2026-09-17 it read: *Two rows stand on 2026-09-17, the build hole
+having come off built (kanso#1447 ...): the explicit box ... and the build
+hole, ruled 2026-08-24 and found off this list on 2026-09-16.*
+
+So it named the build hole as having come off and as one of the two standing
+rows, in one sentence, and did not name the two welfares at all — which is the
+larger of the two rows that actually stand, and the one with four counters
+outstanding. The headings below it were right the whole time; only the prose
+that counts them was wrong, left behind by the edit that removed the build
+hole's row on 2026-09-16.
+
+This is the same failure mode CLAUDE.md's counter bullets are written against:
+a count kept in a sentence and maintained by hand goes stale, and the thing it
+counts is read off the sentence rather than off the list. Here the cost is that
+cloud reads a standing row as retired and a retired row as standing on the one
+page whose job is to hold them.
+
+Corrected in place, with the correction recorded in the paragraph so a reader
+who saw the old one knows which is which. `tests/the_status_index_counts_the_ledger.rs`
+pins the ledger index's three sentences and does not reach this section.
+
+- **DONE** the paragraph names the two rows that stand.
+- **OPEN** whether a spec should read this section's headings and check the
+  intro's count against them, the way the ledger index is already pinned.
+  That spec has caught the ledger's count twice.
+
+## 2026-09-17 — the box row probed, and the probe was wrong twice first
+
+kanso#1477's body reports the explicit-box ruling stale, and kanso#1478 and
+kanso#1480 cite that in their "Rulings weighed" paragraphs. Probed against a
+release build of the branch tip, the report holds on everything the probe
+reached: the `effect` constructor answers a box `bind` and `rescue` take, an
+`(err _)` arm matches a bare err anywhere, and the check-time refusal fires in
+all three shapes part 3 names --
+
+    print "{boom 0 + 1}"     error[exhaustive]: this can be an err and `+` wants a value
+    print "{(boom 0)[0]}"    error[exhaustive]: this can be an err and an index wants a value
+    print (add1 (boom 0))    error[exhaustive]: this can be an err and `add1` has no arm for it
+
+-- each naming the position and pointing at an `(err _)` arm.
+
+**The entry is here for the two wrong answers that came first, because they
+were the same mistake twice in ten minutes.**
+
+The first pass reported the refusal unbuilt. Its three fixtures each bound the
+err to a name, `x = boom 0` then `x + 1`, and the rule reads calls rather than
+names. That is deliberate, it is the blind spot the `none` rule has always had,
+and `docs/compiler.html` section 71 states it in the paragraph describing the
+rule. The probe had found the documented exception and called it a hole.
+
+The second pass corrected the first and added a narrower claim: that section 71
+says *chapter 4 says so rather than leaving a reader to find it*, and chapter 4
+does not. Chapter 4 does, in the paragraph immediately after the railway
+sample: *`share` above is a name, and the checker reads calls, not the names
+they are bound to, so the failure rides past `with_tip` at run time and the
+endpoint reports it.* The search behind that claim was `grep` for the words
+"blind spot", which is a search for a phrasing rather than for a fact.
+
+So nothing is owed on the page or in the book, and `railway.kso` runs because
+the chapter says it runs. Both wrong answers reached three surfaces before
+being caught -- a STATUS.md row, a pull request body and a comment on
+kanso#1480 -- and each correction went to the same three.
+
+**The rule this leaves.** A report that a feature is ABSENT is worth what the
+search for it being PRESENT was worth. Running the fixture is not that search;
+the fixture only shows what happened, and what was supposed to happen is
+written in the section that describes the rule. Read that first, then probe,
+and where the probe contradicts the documentation suspect the probe. Both
+passes here had the answer one paragraph away.
+
+- **DONE** the constructor, the `(err _)` arm and the check refusal probed
+  built, and both wrong answers corrected on all three surfaces.
+- **OPEN** what the probe did not reach and the row cannot retire without: the
+  710 `xs[i]!` sites, `!` names in lib answering a box, and the two cost levers
+  kanso#1477 reports built. Their own pass.
