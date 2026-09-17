@@ -2069,6 +2069,23 @@ second = (list/fold [10] seed put_step)[&quot;k&quot;]
 
 <p>the thing that sent anyone looking was six instructions, and the new instrument ruled itself out of explaining them. the two jobs above printed the same block, all 123 rows, and their four short veins agree to the instruction while the interpreted run is six apart on <strong>2,178,502,266</strong>. six in 2.18 billion is three parts per billion; on the other four rows, which run from 4.8 million to 128 million, the same proportion is a fraction of one instruction and could not be seen. that is the shape of a term proportional to work rather than a constant, and the interpreted run is also the allocation-heavy one — <strong>5,313,434</strong> allocations against a compile&#39;s <strong>27,397</strong>. where the allocator&#39;s heap starts moves with the size of the file the loader mapped. that is an argument and not yet a measurement, and the page says so.</p>
 
+<h2 id="hopname"><span class="sec-num">79</span>a hop needs a name to print</h2>
+
+<p>in july an optimisation was declined on the differential law. rewriting <code>(a b -&gt; f a b)</code> to <code>f</code> made the native engine print a provenance line the interpreter did not &#8212; <code>passed through greet</code> &#8212; and the two engines disagreeing is the one thing this project does not permit. the entry recorded it and moved on.</p>
+
+<p>the 2026-09-15 explicit-bind ruling moved the ground under that argument in its own words: the provenance hop now accrues at binds rather than at skipped calls. so the argument was re-run rather than re-asserted. three spellings of one call, each on both engines:</p>
+
+<pre><code>label "flan" seasonal                            passed through label
+lab "flan" seasonal   (fn lab d c = label d c)   passed through lab
+(d c -&gt; label d c) "flan" seasonal               no hop line at all</code></pre>
+
+<p>both engines agree in every one. the divergence that killed the optimisation is gone, and what the three readings describe is a rule rather than a bug: <strong>a hop names the function the err was about to enter, so a named function records one and an anonymous one records nothing.</strong> a lambda has no name to print.</p>
+
+<p>the optimisation stays declined anyway, on different ground. eta-reducing the third spelling to the first no longer makes the engines disagree &#8212; it makes the trace GAIN a line where the lambda printed none. that is still a change to what a program prints.</p>
+
+<p>the direction is worth noticing, though, because it now points at source rather than at a rewrite. wrapping a call in a lambda silently drops its provenance line, on both engines, and a reader would not expect <code>(d c -&gt; label d c)</code> and <code>label</code> to trace differently. whether that is the right rule for an anonymous function is a question about the language, and it goes to the ledger rather than being settled by an optimisation that wanted it one way.</p>
+
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>
