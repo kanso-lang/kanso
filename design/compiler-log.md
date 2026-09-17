@@ -7086,6 +7086,46 @@ does NOT help here: its copy step reads `for n in compile entry library`, so
 `cg.interp` is not among the files. The threshold-90 list above, printed in
 both job logs, is what there is, and it has already been read.
 
+**Fourteen counters, one disagreement.** Both jobs dump every `*_got.txt`
+before the summary step, so the whole sitting can be compared rather than the
+one row that failed:
+
+```
+compile_allocs                27,397          =
+codegen_instructions_dev      596,161,187     =
+codegen_instructions_release  6,826,827,769   =
+compile_instructions          35,968,173      =
+emit_instructions             382,212,543     =
+entry_instructions            128,213,970     =
+library_instructions          128,348,205     =
+startup_instructions          4,836,950       =
+interp_allocs                 5,313,434       =
+interp_peak_bytes             933,202         =
+interp_instructions           2,178,502,266 vs 2,178,502,272   +6
+```
+
+`work.txt`'s fourteen benchmarks, `emitted.txt`, `emitted_others.txt` and
+`text.txt` agree too. So the second OPEN below is answered, and answered the
+other way from its prior: the nine counters that share the binary do not
+share the divergence.
+
+That sharpens the puzzle rather than settling it. `compile_instructions` is
+the row CLAUDE.md calls a layout vein, with seven recorded layout-only moves
+behind it, and it is byte-identical across the two binaries. If the artifacts
+differed in a way that moved code around, that row is the first that would
+have said so.
+
+**The lead, named as a lead.** The one counter that moves is the one whose
+workload spawns a thread. `kanso run --interp` pins a one-gigabyte stack and
+runs the interpreter on a thread of its own; the other gates run `kanso
+check` or a one-line `kanso play` and create none. Traced under strace on
+this container, that path opens `/proc/self/maps` once, on the main thread,
+before the `clone3` that makes the interpreter thread — so the parse itself
+sits outside the frame the gate anchors at, which is the frame the row reads.
+That is a correlation and a partial trace, not a mechanism, and it is written
+down here so the next person starts from it rather than from the three
+guesses this entry has already discarded.
+
 **Why it outranks the one red round.** `interp_instructions` is one of the
 ten counters the meta welfare weighs, and it landed the same day in
 kanso#1491. A counter read off an artifact that moves for reasons nobody has

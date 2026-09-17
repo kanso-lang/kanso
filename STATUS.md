@@ -234,8 +234,24 @@ its copy step reads `for n in compile entry library`, so `cg.interp` is not
 in it; uploading that profile would make the next occurrence answerable
 without guessing. Then the ruling's first road, a build byte-identical from
 one source on the runners that measure it, with the golden re-measured and
-the log saying what was moving. And a sweep of the other nine weighted
-counters, which read the same binary and so carry the same prior.
+the log saying what was moving.
+
+The sweep of the other nine is done and came back clean. Both jobs dump every
+`*_got.txt`, and `compile_allocs`, both codegen rows, `compile_instructions`,
+`emit_instructions`, `entry_instructions`, `library_instructions`,
+`startup_instructions`, `interp_allocs` and `interp_peak_bytes` are identical
+across the two, as are `work.txt`'s fourteen benchmarks and the emitted and
+text veins. One counter disagrees. `compile_instructions` being among the
+identical ones is the sharpest part: it is the row CLAUDE.md calls a layout
+vein, with seven recorded layout-only moves behind it, so whatever separates
+the two artifacts did not move code around.
+
+The lead to start from, named as a lead: the one counter that moves is the
+one whose workload spawns a thread. `kanso run --interp` pins a one-gigabyte
+stack and runs on a thread of its own; the other gates create none. On this
+container that path opens `/proc/self/maps` once, on the main thread, before
+the `clone3` — outside the frame the gate anchors at, which is the frame the
+row reads.
 
 If a byte-identical build turns out not to be reachable, the question that
 follows is whether an exact pin is the right instrument for a counter whose
