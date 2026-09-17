@@ -99,6 +99,38 @@ processes_in() {
   done
 }
 
+# THE ROW IS THE CHILD TREE, AND KANSO'S OWN PROCESS IS EXCLUDED.
+# Measured 2026-09-17 on this project's container, two readings of one binary
+# in one staging: the three `clang` processes and `ld` came back byte for byte
+# in both, and kanso's own process moved 233. Inside it, two frames of 1,346
+# differed -- `kanso::build` +189 and `__memcmp_avx2_movbe` +44 -- and a probe
+# binary whose `pid_tag_of` returns a constant took the memcmp to zero and the
+# total to 112. What is left is one frame: `build` itself, self cost, every
+# callee identical, which is the inlined loop that waits for clang. The dev
+# tier is the control -- the same code waiting on a child that finishes seven
+# times sooner -- and it reproduces exactly.
+#
+# A loop whose iteration count belongs to the scheduler is external state, and
+# the 2026-09-15 rule says a term that cannot be normalized is excluded and the
+# exclusion named in the golden's header. So it is: the row counts what codegen
+# costs in the processes that do codegen, and the compiler's own emitting gets
+# an anchored row of its own rather than a share of a number that wobbles.
+#
+# The process COUNT still includes kanso, because a build that did not run it
+# is not a build and the short-tree guard below is what says so.
+is_kanso() {
+  # The FIRST WORD and nothing else. A `cmd:` line carries the whole command,
+  # and kanso's name turns up inside other processes' arguments -- the
+  # convention probe's clang compiles `/tmp/kanso_pn_probe_NNNNNNN.ll`, and
+  # the corpus lives under a directory this project named. Matching anywhere
+  # in the line calls that clang the compiler and takes the largest
+  # deterministic process out of the row.
+  case "$(sed -n 's/^cmd: *//p' "$1" | head -1 | awk '{print $1}')" in
+    kanso|*/kanso) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 box=/tmp/kanso-codegen
 
 # THE BOX IS RE-STAGED BEFORE EACH MEASURED RUN, and that is the whole of what
@@ -173,8 +205,12 @@ for f in /tmp/cg.codegen.$tier.*; do
   [ -f "$f" ] || continue
   n=$(grep -o '^summary: [0-9]*' "$f" | tr -dc 0-9)
   [ -n "$n" ] || continue
-  sum=$((sum + n))
   seen=$((seen + 1))
+  if is_kanso "$f"; then
+    echo "::notice::codegen_${tier}_kanso_excluded=${n}"
+    continue
+  fi
+  sum=$((sum + n))
 done
 printf 'codegen_processes %s=%s\n' "$tier" "$seen"
 echo "::notice::codegen_procs_${tier} first=[$(processes_in /tmp/cg.codegen.$tier.*)]"
@@ -232,8 +268,12 @@ for f in /tmp/cg.codegen.${tier}b.*; do
   [ -f "$f" ] || continue
   n=$(grep -o '^summary: [0-9]*' "$f" | tr -dc 0-9)
   [ -n "$n" ] || continue
-  again=$((again + n))
   again_seen=$((again_seen + 1))
+  if is_kanso "$f"; then
+    echo "::notice::codegen_${tier}_kanso_excluded_again=${n}"
+    continue
+  fi
+  again=$((again + n))
 done
 # HOW MANY PROCESSES EACH READING SAW, because a second reading that counts
 # FEWER of them is not measuring the same thing and its disagreement says

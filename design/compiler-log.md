@@ -5607,3 +5607,37 @@ count the children alone, or give kanso's own half its own row.
 - **DONE** the instrument, and the process named.
 - **OPEN** the release row, which is not written and will not be until the
   thing it counts reproduces.
+
+## 2026-09-17 — the codegen row counts the processes that do codegen
+
+The finding above leaves one process in the row that does not reproduce, and
+the 2026-09-15 rule says what to do with a term that cannot be normalized.
+
+So both tiers count the child tree — the clang driver, the convention probe's
+clang, `clang -cc1` and `ld` — and kanso's own process is excluded, with the
+two measurements that put it there written into the gate's header. Every one
+of those four came back byte for byte across two readings at the release tier,
+which is the whole reason the row can hold one value.
+
+`is_kanso` reads the FIRST WORD of a profile's `cmd:` line and nothing else.
+kanso's name turns up inside other processes' arguments — the convention
+probe's clang compiles `/tmp/kanso_pn_probe_NNNNNNN.ll` — and a rule that
+matched anywhere in the line would call that clang the compiler and take a
+deterministic 32 million out of the row.
+`the_codegen_row_leaves_the_waiting_process_out` runs the gate's own function
+text against the five command lines a real build produced. Watched red by
+dropping the first-word rule and loosening the pattern: it answers `yes` for
+the probe's clang and says so.
+
+Both goldens now hold whole-tree numbers, which is one process too many. They
+are left where they are so each gate has a value to fail against, and the
+first sitting under the new shape writes them.
+
+What is still owed is kanso's own emitting, which is real compiler work and
+should not disappear from the index because the process it runs in also waits.
+It wants an anchored row of its own, counted at `codegen::emit_ir` the way
+kanso#1487 anchors the compile rows, where no wait is inside the anchor.
+
+- **DONE** the exclusion, its spec, and both headers.
+- **OPEN** both rows, which the next sitting writes; and an anchored row for
+  what the compiler itself spends emitting.

@@ -38,4 +38,12 @@
 # reading paid for compiling runtime.c and this one does not, and the gate's
 # header records how the difference was found. Counted twice in one job and
 # byte-identical both times.
+#
+# 2026-09-17, later: THE ROW IS THE CHILD TREE NOW, and the value below is a
+# whole-tree reading, so it will disagree by kanso's own process -- about
+# 425 million -- on the next sitting and that sitting writes it. kanso's own
+# process is excluded because it waits for clang, and the loop that waits is
+# the scheduler's to size; the gate's header carries the measurement behind
+# that. The exclusion is not a change to what codegen costs, only to which
+# processes the row calls codegen.
 codegen_instructions_dev=1003426243

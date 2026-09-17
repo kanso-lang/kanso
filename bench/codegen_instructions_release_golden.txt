@@ -80,4 +80,11 @@
 # process that waits for another process. Counting the children alone, or
 # giving kanso's own half its own row, are the two shapes that would leave
 # every counted thing deterministic.
+#
+# 2026-09-17, later: the exclusion is built. The row is the child tree --
+# three `clang` processes and `ld`, every one of which came back byte for
+# byte across two readings -- and kanso's own process is out of it, named in
+# the gate's header with the two measurements that put it there. The value
+# below is the old whole-tree number and stands only so the gate has one
+# value to fail against; the first sitting under the new shape writes it.
 codegen_instructions_release=12107507377
