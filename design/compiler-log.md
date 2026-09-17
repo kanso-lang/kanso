@@ -3887,6 +3887,126 @@ runs of identical source that evening and the start-up row read 33 apart, and
 a reader had to reconstruct which case that was by comparing job logs by hand.
 
 
+
+## 2026-09-16 — the compile rows moved by thirteen and the job log could not say why
+
+kanso#1459's two rounds carry identical compiler source. Round two changed the
+three goldens, design/compiler-log.md, bench/welfare_floor.json and one page,
+and nothing the compiler compiles. All three compile rows came back exactly 13
+higher:
+
+    compile_instructions    36,695,922 ->  36,695,935
+    entry_instructions     130,618,857 -> 130,618,870
+    library_instructions   130,762,703 -> 130,762,716
+
+PROGRAM TOTALS moves by the same 13 and so does the `main` frame, so it is
+inside the run rather than in the loader. The same 13 hit kanso#1460, whose
+whole diff was a log entry, and a re-run of that commit came back on the
+golden.
+
+**What the gate printed, and why it was not enough.**
+
+The gate has printed a binary sha and a silicon line on every run since the
+last time this happened, precisely so a reader could settle case (1) against
+case (2). Here is what the two rounds carry:
+
+    round one   cpu="cpu family 0x19 model 0x1"    sha=c234bfc0577c   row=130762703
+    round two   cpu="cpu family 0x19 model 0x11"   sha=770141d59043   row=130762716
+
+Two variables and one observation. The runner's CPU MODEL moved, from AMD Zen 3
+to Zen 4, and the BINARY'S SHA moved with it. Either could own the 13 and
+nothing in either job separates them.
+
+Two things are ruled out. Cargo is reproducible: three release builds of one
+source on this container land on one sha, and three more with
+`codegen-units = 1` land on one sha, so "the build is not deterministic" is a
+hypothesis with no evidence under it. And a different glibc ifunc variant is
+not it by size -- masking AVX-512 through `glibc.cpu.hwcaps` on this container
+moves the library row by 393,285 instructions where the CI gap is 13. Thirteen
+is a branch taken once per process on a CPU-feature test, not a different
+memcpy.
+
+**The fix is one more reading, and it costs nothing on a green run.**
+
+The question "did this binary count two numbers, or did two binaries count one
+each" is answerable inside the job that asks it. So each of the three compile
+gates now counts a second time, on the same binary in the same box, and only
+when the first reading disagreed with the golden. It prints both and then says
+which case it is in its own words:
+
+    library_again row=133327398 (the first reading was 133327398)
+    ::error::THIS BINARY IS STABLE. A second count in this same job, on
+    ::error::this same binary, read 133327398 -- the same number.
+
+A run that is going to pass pays nothing. A run that is going to fail pays one
+callgrind pass, about thirty seconds, and hands back the thing a reader has
+twice had to reconstruct by comparing two job logs by hand.
+
+This does not settle the 13. It makes the NEXT occurrence settle itself:
+readings that agree inside one job put the difference outside the run, where
+the sha and the silicon lines are, and readings that disagree are case (2) on
+the spot.
+
+**And the second reading goes into the artifact, not only into the log.** The
+`*_got.txt` files are catted in one step at the end of the job, about eighty
+lines from its tail; the callgrind output the error block sits under is several
+hundred. Reading the first occurrence of this cost four fetches of whole job
+logs to recover two sha lines and two cpu lines, and the `*_again` row would
+have cost a fifth. A reader who has to fetch the whole job to learn whether the
+binary was stable is a reader who will not bother, so `compile_again`,
+`entry_again` and `library_again` are appended to the three `*_got.txt` files
+and arrive with the rows they belong to.
+
+**A third observation arrived while this was being written.** kanso#1463's own
+first run read 36,878,537, 131,884,271 and 132,025,154 — the same exact −13 on
+all three rows that kanso#1460 read, on a branch whose whole diff is gate
+scripts, a log entry and a mutation. Three pull requests now, none of which
+compiles differently from main, and the same thirteen.
+
+## The second reading landed, and it is case (2)
+
+The run after that one carried the new row into its artifact dump:
+
+    library_instructions=132025619
+    library_again=132025167
+
+One binary, one corpus, one box, ONE JOB. Two callgrind runs minutes apart, 452
+instructions apart, and the second landed exactly on the golden. On the same
+run `compile instructions` and `entry instructions` both passed, so it is not
+one fixed term per process either.
+
+**So the compile vein does not reproduce on the runner**, and the 2026-09-05
+ruling's case (2) applies: it halts the vein and is hunted rather than pinned.
+
+**And the reading published for it a few hours earlier was wrong.** The CPU
+model and the binary sha were put forward as the two candidates, on the
+evidence of kanso#1459's two rounds, where both had moved together. Neither is
+it. The same binary on one machine does not reproduce, which no comparison
+across two job logs could ever have shown — and which is the whole argument for
+reading it inside the job. Cargo's build reproducibility, three builds landing
+on one sha, was never the question.
+
+The container is why four rounds of cross-run comparison could not reach it.
+Eight runs of the library gate's own command here, one binary, one box, one
+sitting: `kanso::main` 133,335,824 and the whole process 133,939,674, EIGHT
+TIMES, to the instruction. The object is now the difference between this
+container and the runner, rather than the difference between two runners.
+
+That also rules out per-process randomness as the cause, which was the first
+guess worth having: a hasher seeded from the OS, or anything else drawn fresh
+per process, would vary here too and does not. Two more are ruled out by the
+corpus. `library_corpus` is a single FILE, so the loader's directory walk never
+runs for it — and that walk sorts anyway. And the row is anchored at
+`kanso::main`, which is inside `lang_start_internal`, so the `/proc/self/maps`
+parse the 2026-09-15 ruling called external state is already outside it.
+
+What the magnitudes say, across four veins: +6 on the interpreted run's 2.3
+billion, ±13 on the compile rows' 131 million, +33 on start-up's 6 million, and
++452 on the library row in the sighting above. Small, not proportional to the
+row, and not equal across rows — so neither a term that scales with the work
+nor one fixed cost per process. It is a small number of instructions in
+something whose iteration count moves slightly, and every red compile row from
+here carries its own second reading to narrow it with.
 ## 2026-09-16 — the linearity analysis asked the whole program once per question
 
 Clay's gavel that morning made development-loop cost its own welfare, and the
@@ -4061,6 +4181,74 @@ the file, because this model's PROSE has gone stale twice while the file never
 did. Weights and satiations priced from evidence. The entry leaves the ledger
 with this commit and STATUS.md carries the build.
 
+## 2026-09-17 — where two readings part, function by function
+
+The three compile rows each read one figure out of a callgrind profile:
+`kanso::main` inclusive. When two readings of one binary on one machine
+disagree, that figure says how much and nothing about where. Every hunt
+through 2026-09-16 had to guess from the size of the move, and the guesses
+have been wrong twice: the runner's CPU model and the binary's sha were both
+published as the cause of the 13 and neither was.
+
+`scripts/gates/profile_diff.sh` totals each function's SELF cost in two
+profiles, joins on the name, and prints every function that moved. The three
+gates call it in the branch that has already established case (2) — the same
+binary counting two numbers in one job — where the two profiles are still on
+disk and nothing else in the job can say which frame carries the difference.
+
+**The profile is parsed here rather than through `callgrind_annotate`, and
+that is not a preference.** `--threshold` is a percentage of the total and 100
+is its maximum, so the tool stops as soon as the running percentage rounds to
+100. On a profile whose hot function is 99.999% of it, the entire tail is
+dropped — and the tail is this instrument's whole subject, because thirteen
+instructions in a hundred and thirty-two million live nowhere else. The first
+draft read the annotated table and reported two profiles differing by exactly
+that as identical. `tests/two_readings_that_part_name_the_frame.rs` is built
+from a frame one ten-thousandth of its profile for that reason, and it was
+watched red against the first draft before the parser replaced it.
+
+**Two real library profiles on this container agree function by function.**
+Eight runs had already read 133,335,824 identically; this is the same fact at
+a far finer resolution, and it says the container is not where the flutter
+lives. The parser's self-cost sum matches `callgrind_annotate`'s PROGRAM
+TOTALS exactly on a real profile, which is the check that it reads the format
+rather than something near it.
+
+**The temp files are named for the process.** Three gates diff their own pair
+and the spec runs two comparisons at once; a fixed path had one of them
+reading the other's answer, which is how the second spec first went red.
+
+**The two CI runs that differ by 13 differ in one thing.** kanso#1464's rounds
+carried identical compiler source — round two changed goldens, the log, the
+floor and one page. Same glibc 2.39-0ubuntu8.9, same rustc 1.98.1, identical
+`.text=2799906 .data=12672 .bss=29976`, and all three compile rows exactly 13
+lower in round two. Identical section sizes rule out layout. The binary sha
+differs because mimalloc's `options.c` prints a banner built from `__DATE__`
+and `__TIME__` — `libmimalloc-sys` passes `-Wno-error=date-time` for it — and
+those are fixed-length strings, so every offset in the binary is unmoved. What
+is left is the runner: AMD family 0x19 model 0x11 in round one, model 0x1 in
+round two.
+
+**A single CPU feature bit moves the row by single digits.** On this container,
+`GLIBC_TUNABLES` `hwcaps=-AVX2_Usable` moves the library row by exactly +2,
+from 133,429,679 to 133,429,681. Larger masks move it by a great deal —
+`-ERMS` by −1.86M, `-AVX_Fast_Unaligned_Load` by −395k — and that is routine
+selection. The +2 is a per-process constant of the shape the 13 has.
+
+**Eager binding is not the lever, and the control says why.** `LD_BIND_NOW=1`
+raises the row by 2,511, and so does `XX_BIND_NOW=1`, which means nothing to
+the loader: the whole move is one more entry in the environment, not the
+binding mode. The row costs 2,511 instructions per environment variable
+regardless of that variable's length — 1, 2, 3, 4 and 8 characters all read
+identically. The gates run under `env -i` with two variables, so this is
+normalised on CI already; it is recorded because it is the same class of thing
+and it was very nearly published as a finding about the loader.
+
+**The profiles now leave the job.** The comparison left is between two runs on
+two runners, which no single job can make. The cost-goldens job uploads the
+three profiles it counted, and the host's CPU family, model, stepping, glibc,
+rustc and binary sha beside them, so `profile_diff.sh` can be run across a
+model 0x1 sitting and a model 0x11 one and name the frame that carries the 13.
 ## 2026-09-17 — the allocator was guessing at addresses, and the row was paying for it
 
 The three compile rows have disagreed with their goldens by thirteen
