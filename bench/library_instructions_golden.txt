@@ -760,6 +760,19 @@
 # 2026-09-17 (kanso#1476): library_instructions 128,339,261 -> 128,099,426, a
 # FALL of 239,835 (-0.1869%). The parent's fall, byte-identical to kanso#1475's
 # reading. Same sitting as the compile row.
+# 2026-09-17, kanso#1475. 239,835 below main, 87,875 above kanso#1473.
+# 2026-09-17, kanso#1473. 327,710 below main, 47,420 below kanso#1468.
+# 2026-09-17, kanso#1468 on the excluded row. 280,290 lower, layout.
+#
+# 2026-09-17, merged with the base. The base moved this row's FILE and not
+# the compiler: since this branch measured, the only thing that landed
+# under it is a row written into a golden, so the value below is this
+# branch's own sitting and it still stands.
+#
+# 2026-09-17, merged with the base. The base moved this row's FILE and not
+# the compiler: since this branch measured, the only thing that landed
+# under it is a row written into a golden, so the value below is this
+# branch's own sitting and it still stands.
 library_instructions=128099426
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
