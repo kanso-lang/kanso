@@ -5095,3 +5095,80 @@ frames of bucket zero, by name and cost, in one notice.
 
 - **DONE** the bucket is named, and the digest earned its place doing it.
 - **OPEN** the frame. One line in the next pair of sittings.
+
+## 2026-09-17 — the codegen row reproduces, and the last term was a pipe
+
+The warm-up fix landed and the sitting said so. `codegen_procs` now prints the
+same five processes for both readings — `kanso clang:probe clang clang ld` —
+where the first reading used to see six, and the dev row went from
+`9,273,832,677 then 1,071,605,357` to `1,071,604,729 then 1,071,604,609`. From
+a ninefold gap to 120 instructions in 1.07 billion.
+
+120 is not zero, and the vein is compared exactly, so the gate still halted.
+Two things were left and only one of them was what I expected.
+
+**The pid, which was real and was not it.** Five temp paths in `src/main.rs`
+interpolate `std::process::id()`, and a pid is one digit to seven. A path's
+LENGTH is a term in what a process costs — the bytes are copied, walked and
+handed to `open` — so two runs wrote paths of different lengths and counted
+different instructions for identical work. `pid_tag()` pads to seven, which
+covers every pid under the default `pid_max` of 4,194,304 and keeps every one
+of them distinct. Two specs: the width, beside the function, and that every
+site goes through it, so a path added later cannot put the variance back.
+
+It did not fix the row. Two passes with the padding read 1,016,046,470 and
+1,016,048,745 — 2,275 apart, further than before rather than closer.
+
+**What it actually was.** Diffing the two passes frame by frame: EIGHT frames of
+ten thousand six hundred and forty-two differ, and together they are the whole
+of the 2,275.
+
+```
+  +903   FileDesc::read_to_end
+  +591   default_read_to_end::small_probe_read
+  +253   process::unix::common::read_output
+  +220   read
+  +176   __memcpy_avx_unaligned_erms
+   +88   poll
+   +44   __errno_location
+```
+
+Every one of them is `Command::output()` draining a child's pipes, and how many
+`poll` and `read` calls that takes depends on when the child's bytes arrive.
+The only caller was `preserve_none_probe`, which reads `status.success()` and
+throws the output away. With the child's streams sent to null and `status()` in
+place of `output()` there is no pipe and no loop.
+
+```
+before   1,016,046,470   1,016,048,745                                   2,275 apart
+after    1,016,035,480 x 5                                                    exact
+```
+
+Five passes after the change, each re-staging the box and warming both tiers
+first, and every one reads the same digits. The row falls about eleven thousand
+besides, which is the pipes' own cost leaving the count.
+
+`src/main.rs` now holds no `Command::output()` at all.
+`tests/the_compiler_never_drains_a_childs_pipes.rs` pins that and the probe's
+null streams; `src/eval.rs` keeps its `output()` and must, because `os/run`
+hands a kanso program the child's stdout and stderr, and no compile row runs a
+kanso program's `os/run`.
+
+**Guessing cost a round again, and the instrument paid for itself again.** The
+pid was a good hypothesis, it was measured, and it was wrong about this row.
+What settled it was the same move that named the thirteen: diff the frames and
+read what differs.
+
+
+**And the queue was mostly reading commits nobody would look at.** Counted the
+same afternoon: twelve pull requests open, twelve latest runs, all `queued` —
+and ELEVEN of them on a head the branch had already moved past, three of them
+on one branch at once. Every push had left its predecessor running. The eleven
+were cancelled by hand, and `ci.yml` grows a `concurrency` guard so a newer head
+cancels the older one, keyed off the pull request number and deliberately NOT
+applied to `main`: a push there writes the perf history row the trend chart
+reads, so it is the record of that commit rather than a draft of the branch.
+
+- **DONE** the codegen row reproduces exactly on this box, five times.
+- **OPEN** the golden. This host refuses the recorded toolchain, so the values
+  are CI's to take on the first green sitting.

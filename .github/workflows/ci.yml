@@ -1,5 +1,20 @@
 name: ci
 
+# ONE RUN A HEAD, and the reason is a queue that was mostly reading commits
+# nobody would look at. On 2026-09-17 twelve pull requests were open and every
+# one of the twelve latest runs was `queued`; eleven of them were on a head the
+# branch had already moved past -- three on one branch at once -- so the runners
+# were busy measuring trees that no longer existed while the current heads
+# waited behind them. A superseded run cannot say anything true about a branch,
+# so it is cancelled the moment a newer head arrives.
+#
+# NOT ON main. A push to main writes the perf history row and the trend chart
+# reads it, so a run there is never superseded by the next one -- it is the
+# record of that commit. The guard keys on the ref for exactly that.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 on:
   pull_request:
   push:
