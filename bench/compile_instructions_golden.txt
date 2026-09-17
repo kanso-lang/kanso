@@ -1753,7 +1753,15 @@
 # neither reading. The value here is kanso#1459's, carried forward so the
 # gate has one value to fail against rather than none; the merged sitting is
 # CI's to take, and it replaces this line in the round after it.
-compile_instructions=36682232
+#
+# 2026-09-17, kanso#1468 merged with kanso#1459, CI's sitting. The value the
+# merge carried forward was kanso#1459's, and the merged tree reads below it
+# because it carries both changes: 81,740 lower (0.2228%). Neither change
+# moved this row by doing different work on this corpus -- `kanso check` stops
+# before codegen and neither touches a pass it runs -- so both are the layout
+# move CLAUDE.md's own note on this row describes, and this is the reading
+# that matters rather than either projection.
+compile_instructions=36600492
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

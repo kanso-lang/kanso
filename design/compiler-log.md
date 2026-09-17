@@ -4105,3 +4105,26 @@ before codegen, so nothing this change does to the emitter runs on those
 corpora at all; `src/codegen.rs` is the compiler, and its bytes and the layout
 under them moved. That is the case CLAUDE.md's bullet describes, and it says
 what this entry is doing: take it from CI rather than predict it.
+
+## 2026-09-17 — CI's sitting of the merged tree, and three rows below both parents
+
+kanso#1459 and kanso#1468 each moved the three compile rows on their own base,
+and the merge carried kanso#1459's values forward so the gate had one value to
+fail against rather than none. CI read the merged tree below both:
+
+    compile_instructions    36,682,232 -> 36,600,492   -81,740   -0.2228%
+    entry_instructions     130,573,787 -> 130,278,874  -294,913  -0.2259%
+    library_instructions   130,716,747 -> 130,423,751  -292,996  -0.2241%
+
+**Neither change does different work on this corpus.** DONE. `kanso check`
+stops before codegen, and neither the prune index nor `arm_can_run`'s
+reordering touches a pass it runs — `prune_unnamed` is the emitter's and the
+reordering was already in kanso#1459's own reading. So all three moves are the
+layout kind the row's own header describes: src/codegen.rs and src/infer.rs are
+the compiler, and editing them moves the compiler's bytes and what sits around
+them. That makes this the ninth layout move recorded on this row, and the
+reading that matters rather than either projection.
+
+**The floor is ratcheted to 69.77.** DONE. The rise is the two changes together
+and it is banked in this same commit, after the goldens carry CI's rows and not
+before. Raising a floor is arithmetic; there was nothing to decide.
