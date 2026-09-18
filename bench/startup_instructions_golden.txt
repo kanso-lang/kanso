@@ -394,4 +394,12 @@
 # 2026-09-18, kanso#1517 on the tree merged with kanso#1516, CI's sitting.
 # 3,364,523 -> 3,362,788, a FALL of 1,735 (-0.0516%).
 # LAYOUT. `kanso play` takes the native path and builds no `Interp`.
-startup_instructions=3362788
+#
+# 2026-09-18, kanso#1504 on the tree merged with main after kanso#1517,
+# CI's sitting. 3,362,788 -> 3,363,385, a RISE of
+# 597 (+0.0177531%).
+# LAYOUT. src/runtime.c is include_str!'d into the compiler (src/main.rs)
+# and digested into a constant (src/hash.rs), so editing it moves the
+# compiler's own .rodata and every route that runs the compiler moves with
+# it. None of these routes executes the runtime.
+startup_instructions=3363385

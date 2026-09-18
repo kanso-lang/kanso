@@ -344,5 +344,17 @@
 # 1,997,105,566 -> 1,963,826,350, a FALL of 33,279,216 (-1.6664%).
 # THIS ONE IS THE CHANGE. The container projected -33,238,900 and CI reads
 # -33,279,216 on a different toolchain: 40,316 apart, 0.12% of the delta.
-interp_instructions=1963826350
+#
+# 2026-09-18, kanso#1504 on the tree merged with main after kanso#1517,
+# CI's sitting. 1,963,826,350 -> 1,963,826,376, a RISE of
+# 26 (+0.0000013%).
+# TWENTY-SIX INSTRUCTIONS on 1.96 billion. The interpreted corpus decodes a
+# document it built itself and never enters the C runtime, so a runtime edit
+# cannot give it work to do. kanso#1502 is the cross-check rather than an
+# argument: a DIFFERENT runtime.c change, measured in the same hour against
+# the same main, moved this row by 15. Two edits touching different
+# functions both landing in the tens is what layout looks like on a row this
+# size; work would not be the same order for both. interp_allocs and
+# interp_peak_bytes agree with their golden on both branches.
+interp_instructions=1963826376
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

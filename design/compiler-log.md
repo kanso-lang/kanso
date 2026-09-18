@@ -4298,3 +4298,32 @@ Welfare reads 76.93 against main's 76.88. The 0.05 is not banked here for the
 same reason it was not banked on kanso#1502: welfare weighs the five carried
 rows, so a --set now would freeze a score this container projected rather than
 the one CI measures. The rows come first.
+
+## 2026-09-18 — kanso#1504, CI's rows on the tree merged after kanso#1517
+
+    compile_instructions      35,486,173 ->    35,487,349    +1,176   +0.0033%
+    entry_instructions       126,498,498 ->   126,500,546    +2,048   +0.0016%
+    library_instructions     126,953,661 ->   126,956,802    +3,141   +0.0025%
+    startup_instructions       3,362,788 ->     3,363,385      +597   +0.0178%
+    emit_instructions         51,451,897 ->    51,456,279    +4,382   +0.0085%
+    interp_instructions    1,963,826,350 -> 1,963,826,376       +26   +0.0000013%
+
+TWO BRANCHES MEASURED IN THE SAME HOUR GIVE THE INTERPRETED ROW A CROSS-CHECK
+IT HAS NOT HAD BEFORE. kanso#1502 and this one are different edits to
+`src/runtime.c` — two divisions in float rendering there, the cached beat top
+here — both merged onto the same main, both read by CI within two minutes of
+each other. The interpreted row moved 15 on one and 26 on the other.
+
+That is worth more than either number alone. The corpus decodes a document it
+built itself and never enters the C runtime, so neither edit can give it work;
+if one of them had, the two would not both land in the tens on a row of
+1,963,826,350. Both branches also read `interp_allocs` 4,810,437 and
+`interp_peak_bytes` 951,438 exactly, and an allocation counter counts operations
+rather than a host, so a row with real work in it would have moved that one too.
+
+The five layout rows rose on both branches, by different amounts in the same
+direction, which is the ordinary signature of a moved binary rather than of
+work.
+
+`compile_allocs` read 27,313. Both codegen rows are this branch's own and read
+exactly: 596,197,703 dev and 6,841,691,425 release.
