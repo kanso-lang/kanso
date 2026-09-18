@@ -142,3 +142,4 @@
 # LAYOUT. The interpreter does not run the alias fixpoint; it carries the
 # compiler's bytes, and 219,835 on 2.18 billion is a hundredth of a per cent.
 interp_instructions=2182526878
+# measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

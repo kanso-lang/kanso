@@ -2077,16 +2077,17 @@
 # the compiler's bytes moves what sits around them. Against main's own
 # 35,968,173 the branch is 98,818 below, which is the work.
 #
-# 2026-09-17, merged with main 2a0cec7c. Every row below is MAIN'S, carried
-# forward. This branch measured against a base that kanso#1478 (emitted code
-# -84.25%) and kanso#1493 (start-up -22.14%) have both moved since, so the
-# numbers it took are against a tree that no longer exists -- its emit row read
-# 382,216,372 where main now reads 60,197,743. Carrying main's forward gives
-# the gate one number to fail against rather than none, and makes CI's diff
-# read exactly what this branch does to today's main. The merged sitting is
-# CI's to take.
-#
 # 2026-09-17, kanso#1486 on the tree merged with main 2a0cec7c, CI's sitting.
 # compile_instructions 35,869,355 -> 35,441,049, a FALL of 428,306 (-1.1941%).
 # The row this branch is for. A second count in the same job read 35,441,049.
 compile_instructions=35441049
+
+# 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
+# the allocator stops picking a random base address for its OS allocations.
+# The row did not move for that -- the same figure came back on the run before
+# this one, with the hint still on, and on the run before that. The golden was
+# written from a sitting that drew an unlucky address and has been thirteen
+# high ever since; this is the first reading taken where the draw cannot
+# happen. The entry row is the one that shows it plainly: with the hint on it
+# read 131,884,793 and then 131,884,271 in one job, and with the hint off it
+# reads 131,884,271 and nothing else.
