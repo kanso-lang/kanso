@@ -937,7 +937,15 @@
 # bytes of the compiler's own .rodata and every route that runs the compiler
 # moves with it. None of these five routes executes the runtime: three stop
 # before codegen, the fourth writes IR, the fifth starts the interpreter.
-entry_instructions=126353950
+# ^ SUPERSEDED: that reading was taken before kanso#1517 landed under this
+#   branch. THE VALUE BELOW IS MAIN'S, carried forward; the merged
+#   reading is CI's.
+#
+# 2026-09-18, kanso#1517 on the tree merged with kanso#1516, CI's sitting.
+# 126,368,664 -> 126,498,498, a RISE of 129,834 (+0.1027%).
+# WORK. See the compile row: `Interp::new` wraps every group in an `Rc` now,
+# and this route builds an `Interp`.
+entry_instructions=126498498
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

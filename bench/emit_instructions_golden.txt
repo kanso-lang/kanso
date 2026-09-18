@@ -186,4 +186,11 @@
 # bytes of the compiler's own .rodata and every route that runs the compiler
 # moves with it. None of these five routes executes the runtime: three stop
 # before codegen, the fourth writes IR, the fifth starts the interpreter.
-emit_instructions=51543783
+# ^ SUPERSEDED: that reading was taken before kanso#1517 landed under this
+#   branch. THE VALUE BELOW IS MAIN'S, carried forward; the merged
+#   reading is CI's.
+#
+# 2026-09-18, kanso#1517 on the tree merged with kanso#1516, CI's sitting.
+# 51,554,663 -> 51,451,897, a FALL of 102,766 (-0.1993%).
+# LAYOUT. `codegen::emit_ir` does not run the interpreter.
+emit_instructions=51451897

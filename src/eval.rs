@@ -1120,6 +1120,28 @@ impl Executor for ScriptedExecutor {
 /// literals are arms of their own rather than a `Desc` or a `Value`: this
 /// lives in a table with one row per name the run mentions, and inlining
 /// either enum would size every row by its largest variant.
+/// What a CALL on a name does. `call_named` asked `err`, then the types map,
+/// then the function map, on every call; `group_of` inside `eval_tail` probed
+/// the same two maps to decide one bit. Neither map changes during a run, so
+/// the answer is remembered the first time it is worked out -- the same
+/// bargain `Named` makes for what a name is WORTH, at the sites that ask what
+/// it DOES.
+///
+/// Two memories rather than one because the rows would not fit in one: a value
+/// needs the name as an `Rc<str>` and a call needs the group, and an arm
+/// carrying both would size every row of both tables by the pair.
+#[derive(Clone)]
+enum Callee<'a> {
+    Err,
+    /// `entry` names a declaration the interpreter owns rather than one the
+    /// program holds, so it cannot be stored as a borrow of the program and
+    /// gets an arm of its own.
+    EntryType,
+    Constructor(&'a TypeDecl),
+    Group(Rc<Vec<&'a FnDecl>>),
+    Builtin,
+}
+
 #[derive(Clone)]
 enum Named<'a> {
     Constant(&'a FnDecl),
@@ -1135,7 +1157,7 @@ enum Named<'a> {
 }
 
 pub struct Interp<'a> {
-    fns: Map<&'a str, Vec<&'a FnDecl>>,
+    fns: Map<&'a str, Rc<Vec<&'a FnDecl>>>,
     types: Map<&'a str, &'a TypeDecl>,
     entry_decl: TypeDecl,
     demand: crate::demand::DemandInfo<'a>,
@@ -1162,6 +1184,9 @@ pub struct Interp<'a> {
     /// `Interp` and evaluates nothing, and that route is a weighed welfare
     /// term -- the same reason `cycles` above is a `OnceCell`.
     names: RefCell<Map<String, Named<'a>>>,
+    /// One entry per name this run has CALLED, filled on first sight for the
+    /// reason `names` above is.
+    callees: RefCell<Map<String, Callee<'a>>>,
     program: &'a Program,
 }
 
@@ -1184,15 +1209,20 @@ impl ThunkStats {
 impl<'a> Interp<'a> {
     pub fn new(program: &'a Program) -> Self {
         set_root(program);
-        let mut fns: Map<&str, Vec<&FnDecl>> = Map::default();
+        let mut groups: Map<&str, Vec<&FnDecl>> = Map::default();
         for decl in &program.fns {
-            fns.entry(&decl.name).or_default().push(decl);
+            groups.entry(&decl.name).or_default().push(decl);
         }
         // proximity breaks specificity ties: local arms come before
         // bare-enrolled clones, so a same-shape local wins its own file
-        for overloads in fns.values_mut() {
+        for overloads in groups.values_mut() {
             overloads.sort_by_key(|d| d.synthetic);
         }
+        // A group is shared rather than copied: the callee memory below holds
+        // one without borrowing from `self`, and a tail hop takes a refcount
+        // bump where it used to clone the whole vector.
+        let fns: Map<&str, Rc<Vec<&FnDecl>>> =
+            groups.into_iter().map(|(name, decls)| (name, Rc::new(decls))).collect();
         let types = program.types.iter().map(|t| (t.name.as_str(), t)).collect();
         TYPESETS.with(|reg| {
             *reg.borrow_mut() = program
@@ -1228,6 +1258,7 @@ impl<'a> Interp<'a> {
             knots: RefCell::new(Map::default()),
             cycles: std::cell::OnceCell::new(),
             names: RefCell::new(Map::default()),
+            callees: RefCell::new(Map::default()),
             program,
         }
     }
@@ -1319,8 +1350,10 @@ impl<'a> Interp<'a> {
         }
         let group_of = |callee: &Value| -> Option<Rc<str>> {
             let Value::FnRef(n) = callee else { return None };
-            let plain = &**n != "err" && &**n != "if" && self.type_decl(n).is_none();
-            (plain && self.fns.contains_key(&**n)).then(|| n.clone())
+            // `if` is the one name the memory would answer Group for and this
+            // may not: it is a declaration AND the conditional form, and the
+            // form wins here.
+            (&**n != "if" && self.calls_a_group(n)).then(|| n.clone())
         };
         if *piped && !args.is_empty() {
             let piped_value = self.eval(&args[0], env, frame)?;
@@ -2052,7 +2085,18 @@ impl<'a> Interp<'a> {
     }
 
     fn call_named(&self, name: &str, args: Vec<Value>, span: Span, frame: &Frame) -> EvalResult {
-        if name == "err" {
+        // The borrow is dropped before the call runs, because the body it
+        // reaches calls back in here.
+        let known = self.callees.borrow().get(name).cloned();
+        let callee = match known {
+            Some(callee) => callee,
+            None => {
+                let callee = self.callee(name);
+                self.callees.borrow_mut().insert(name.to_string(), callee.clone());
+                callee
+            }
+        };
+        if let Callee::Err = callee {
             let [reason] = arity(args, name, span)?;
             let reason = self.force_thunk(reason)?;
             if is_failure(&reason) {
@@ -2060,7 +2104,12 @@ impl<'a> Interp<'a> {
             }
             return Ok(err_value(reason, origin_at(frame, span)));
         }
-        if let Some(ty) = self.type_decl(name) {
+        let constructed = match callee {
+            Callee::EntryType => Some(&self.entry_decl),
+            Callee::Constructor(ty) => Some(ty),
+            _ => None,
+        };
+        if let Some(ty) = constructed {
             // A constructor slot is where a knot ties: an argument still
             // being computed is stored rather than demanded, so the cell
             // completes here and the field resolves against it afterwards.
@@ -2075,11 +2124,41 @@ impl<'a> Interp<'a> {
                 .collect::<Result<Vec<_>, _>>()?;
             return self.construct(ty, args, span);
         }
-        if let Some(overloads) = self.fns.get(name) {
-            return self.dispatch(name, overloads, args, span);
+        if let Callee::Group(overloads) = callee {
+            return self.dispatch(name, &overloads, args, span);
         }
         let args = args.into_iter().map(|a| self.force_thunk(a)).collect::<Result<Vec<_>, _>>()?;
         self.call_builtin(name, args, span, frame)
+    }
+
+    /// The ladder `call_named` used to walk, walked once per name per run.
+    /// The arms are in the order they were in, because the order decides the
+    /// answer: `err` beats a type, and a type beats a group.
+    fn callee(&self, name: &str) -> Callee<'a> {
+        if name == "err" {
+            return Callee::Err;
+        }
+        if name == "entry" {
+            return Callee::EntryType;
+        }
+        if let Some(ty) = self.types.get(name).copied() {
+            return Callee::Constructor(ty);
+        }
+        match self.fns.get(name) {
+            Some(overloads) => Callee::Group(overloads.clone()),
+            None => Callee::Builtin,
+        }
+    }
+
+    /// Whether a name calls a dispatch group, read off the same memory.
+    fn calls_a_group(&self, name: &str) -> bool {
+        if let Some(known) = self.callees.borrow().get(name) {
+            return matches!(known, Callee::Group(_));
+        }
+        let callee = self.callee(name);
+        let group = matches!(callee, Callee::Group(_));
+        self.callees.borrow_mut().insert(name.to_string(), callee);
+        group
     }
 
     fn construct(&self, ty: &TypeDecl, args: Vec<Value>, span: Span) -> EvalResult {
@@ -2139,11 +2218,11 @@ impl<'a> Interp<'a> {
     fn dispatch(
         &self,
         name: &str,
-        overloads: &[&FnDecl],
+        overloads: &Rc<Vec<&'a FnDecl>>,
         args: Vec<Value>,
         span: Span,
     ) -> EvalResult {
-        self.dispatch_loop(name.to_string(), overloads.to_vec(), args, span)
+        self.dispatch_loop(name.to_string(), Rc::clone(overloads), args, span)
     }
 
     /// The dispatcher's trampoline: a tail call to a named group re-enters
@@ -2154,7 +2233,7 @@ impl<'a> Interp<'a> {
     fn dispatch_loop(
         &self,
         name: String,
-        overloads: Vec<&FnDecl>,
+        overloads: Rc<Vec<&FnDecl>>,
         args: Vec<Value>,
         span: Span,
     ) -> EvalResult {
@@ -2184,12 +2263,12 @@ impl<'a> Interp<'a> {
     fn dispatch_loop_inner(
         &self,
         name: String,
-        overloads: Vec<&FnDecl>,
+        overloads: Rc<Vec<&FnDecl>>,
         args: Vec<Value>,
         span: Span,
     ) -> EvalResult {
         let mut name = name;
-        let mut overloads = overloads;
+        let mut overloads: Rc<Vec<&FnDecl>> = overloads;
         let mut args = args;
         let mut span = span;
         loop {
@@ -2226,7 +2305,7 @@ impl<'a> Interp<'a> {
                 }
             }
             let mut best: Option<(Score, &FnDecl, Bindings)> = None;
-            for decl in &overloads {
+            for decl in overloads.iter() {
                 if decl.params.len() != args.len() {
                     continue;
                 }

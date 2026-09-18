@@ -76,19 +76,28 @@ pub fn run rounds
 /// What 300 extra rounds of the two builders cost, with every fixed
 /// allocation cancelled by the subtraction.
 ///
-/// It read 18,001 when kanso#1515 pinned it and reads 16,201 since kanso#1516,
-/// and the 1,800 between them is six allocations a round that the builders
-/// never made. `eval_ident` used to build an `Rc<str>` every time it resolved a
-/// name to a reference; it remembers the answer now, so the six names each
-/// round mentions allocate once for the whole run instead of once per mention.
-/// That is a change in what the ROUNDS cost and the subtraction is meant to see
-/// it -- which is why this spec went red on that branch and had to be re-read
-/// rather than widened.
+/// Three readings so far, and each drop is a change telling this spec what it
+/// cost per round:
+///
+///     18,001   kanso#1515, where the number was first pinned
+///     16,201   kanso#1516, six a round less
+///     15,601   kanso#1517, two a round less again
+///
+/// The six are `eval_ident`: it used to build an `Rc<str>` every time it
+/// resolved a name to a reference, and it remembers the answer now, so the six
+/// names each round mentions allocate once for the whole run rather than once
+/// per mention. The two are the tail hop: `grow` and `stack` each tail-call
+/// once a round, and a hop used to clone the whole overload vector where it now
+/// takes a refcount.
+///
+/// Each time, the number was re-read rather than the assertion widened. A
+/// change in what the ROUNDS cost is exactly what the subtraction exists to
+/// see, so this spec going red on those branches was it working.
 ///
 /// The 19,201 the copying arm read is from before kanso#1516 and has not been
-/// re-measured under it. What this spec pins is unchanged either way: the
-/// in-place path costs less per round than the copying one.
-const PER_EXTRA_ROUND: u64 = 16_201;
+/// re-measured under either change. What this spec pins is unchanged either
+/// way: the in-place path costs less per round than the copying one.
+const PER_EXTRA_ROUND: u64 = 15_601;
 
 fn kanso() -> PathBuf {
     let mut exe = std::env::current_exe().expect("the test binary has a path");
