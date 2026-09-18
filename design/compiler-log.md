@@ -4860,9 +4860,18 @@ stack for the duration of one lookup.
     key    row 1,150,537,278   memcmp 35,577,082
 
 **It removes 12,588,581 instructions of `memcmp`, twenty-six per cent of the
-whole figure, and the run rises 34,540,503.** Both engines print the same
-answer. A net loss of about thirty-four million, three times worse than the
-byte.
+whole figure, and the run rises 34,540,503.** A net loss of about thirty-four
+million, three times worse than the byte.
+
+**What was checked about correctness, stated exactly.** The interpreted corpus
+prints byte-identical output before and after, which is what makes the two
+instruction counts comparable. That is a comparison of two BUILDS on one
+engine, and the first draft of this entry called it "both engines print the
+same answer" — which would be the differential check and was not run. The
+golden suite was started against this build and the worktree was removed out
+from under it, so it reported a failure that is an artifact of the removal and
+says nothing either way. Since the change is declined, no further verification
+was done; if it is ever revived, the differential goldens are where it starts.
 
 **Two schemes, both sound, both losing, and the second loss is the informative
 one.** The byte lost to the node's size; this one has no node cost at all and
