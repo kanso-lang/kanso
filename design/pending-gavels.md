@@ -50,6 +50,45 @@ went to the log rather than here.
 
 ## Blocking — a fixture, gate, or merge is waiting
 
+### Should the fixed-temporary pin cover both codegen tiers, or the release tier alone?
+
+**Cited:** the live log's 2026-09-17 entries adding `codegen_instructions` and
+excluding kanso's own process from it; the 2026-09-16 gavel splitting welfare
+into production and development, which puts the two tiers on opposite sides of
+the objective; and the archive's kanso#1512 entry, "THE 11 IS THE TEMP OBJECT'S
+NAME", where nine of ten temporary names read 5,163,341,031 and `4b8c1a` read
+5,163,341,042, reproduced three times.
+
+**The question.** kanso#1513 pins the temporary object's name so the link step
+stops reading a different number depending on which name the driver drew.
+`scripts/gates/codegen_instructions.sh` takes the tier as `$1` and adds
+`KANSO_FIXED_TEMPS=1` to all three of its `env -i` lines, so the variable is in
+the DEV run's environment as well — and `src/main.rs:744-747` dispatches on the
+tier (`match release { true => release_clang(...), false => dev_clang(...) }`),
+so `dev_clang` never reads it. The dev row moves anyway. The pull request is
+green but for the two codegen rows, which are red by design until this is
+settled.
+
+1. **Pin both tiers**, as kanso#1513 is written. The dev row is re-based to
+   whatever the pinned name produces, and both rows stop drawing. The cost is
+   that the dev row's new value has no mechanism behind it: the flag does not
+   reach `dev_clang`, so what moved it is unexplained, and re-basing a row on
+   an unexplained move is the thing the goldens exist to catch.
+2. **Narrow the pin to the release tier.** `codegen_instructions.sh` sets
+   `KANSO_FIXED_TEMPS` only when `$1` is the release tier. The release row stops
+   drawing, the dev row keeps whatever variance it has, and nothing is re-based
+   without a mechanism.
+3. **Leave both unpinned** and accept an 11-instruction draw on a 5.16-billion
+   row.
+
+**Recommendation: 2.** The measurement is the release tier's — that is where the
+name was shown to move the count, three times. The dev row's move is real but
+unexplained, and option 1 would bank it as though it were understood. 3 keeps a
+known, reproducible, one-in-ten draw in a row the objective weighs.
+
+**What is NOT being asked.** Whether to lower the floor: nothing here costs
+welfare. Only which tier the pin covers.
+
 ### Does the wall survive the fused operators?
 
 **Cited:** the live log's "the wall is bind with a discarded value" (2026-09-17),
