@@ -344,7 +344,6 @@
 # costs in instructions is the rustc that built the binary; this one changes
 # how many ALLOCATIONS happen, which is a count the program decides. A
 # container projection travels when the thing it projects is a count.
-<<<<<<< HEAD
 #
 # 2026-09-18, kanso#1513: 1,075,174,600 -> 1,075,164,040, a fall of 10,560
 # (0.00098%). This branch adds no interpreter code. It adds twenty-four lines
@@ -352,8 +351,9 @@
 # interpreter's row moves because those lines are in the binary the row runs,
 # not because anything the row measures got cheaper. CI's figure, written in
 # rather than projected.
-interp_instructions=1075164040
-=======
+#
+# The row below is MAIN'S, taken in the kanso#1531 merge. The reading above
+# was against the pre-`if` baseline and is kept because it says what this
+# branch does to the row; CI re-measures it on the merged tree.
 interp_instructions=1029696275
->>>>>>> origin/main
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
