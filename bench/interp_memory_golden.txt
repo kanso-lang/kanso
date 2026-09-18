@@ -191,7 +191,11 @@
 # allocator was holding at one instant, and what it was holding depends on the
 # machine in a way a call count does not. That sentence is a candidate for the
 # mechanism and the eight bytes are the measurement.
-interp_allocs=1309483
+# 2026-09-18, kanso#1543. 1,309,483 -> 1,183,336, a FALL of 126,147 (-9.63%),
+# the largest this counter has made. A container pair put the removed
+# allocate-and-free pairs at 119,541, which is the same quantity read by a
+# different instrument over a narrower scope.
+interp_allocs=1183336
 #
 # 2026-09-18, kanso#1518 against main at kanso#1517, CI's sitting.
 # 951,438 -> 961,165, a RISE of
@@ -235,5 +239,16 @@ interp_allocs=1309483
 # dispatcher keeps is a buffer that is live at the peak rather than absent from
 # it, so a fall at all is the direction worth noting; three bytes is not worth
 # a mechanism.
-interp_peak_bytes=833463
+# 2026-09-18, kanso#1543. 833,463 -> 834,079, a RISE of 616 bytes (+0.074%),
+# AND IT IS THE PRICE OF THE CHANGE RATHER THAN A SURPRISE. Pooling a buffer
+# means the buffer is resident when the run is at its widest; the pool holds
+# the largest one any dispatch has needed and does not give it back. kanso#1540
+# predicted this direction in its own entry -- "a buffer the dispatcher keeps
+# is a buffer that is live at the peak rather than absent from it" -- and that
+# change happened to fall 3 instead. This one pays the 616.
+#
+# Traffic falls 126,147 and residency rises 616, which is the two rows doing
+# what the gate's own message says they do: a total and a high-water mark,
+# free to move apart.
+interp_peak_bytes=834079
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

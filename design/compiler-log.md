@@ -4667,3 +4667,45 @@ and a container's uniqueness is decided while the body runs. The sibling test
 still answers `1200 600` and `2400 1200`, and the number moved down.
 
 Nine builds on the dispatch path today, four wins.
+
+## 2026-09-18 — kanso#1543, CI's rows, and an objective that barely moves
+
+    interp_instructions   932,183,914 -> 929,300,332   -2,883,582  -0.3094%
+    interp_allocs           1,309,483 ->   1,183,336    -126,147   -9.6333%
+    interp_peak_bytes         833,463 ->     834,079        +616  +0.0739%
+    compile_instructions   35,550,010 ->  35,551,167      +1,157
+    entry_instructions    126,729,588 -> 126,732,646      +3,058
+    library_instructions  127,186,008 -> 127,188,882      +2,874
+    emit_instructions      51,617,476 ->  51,619,793      +2,317
+    startup_instructions    3,363,916 ->   3,363,672        -244
+
+The second count in the same job read 929,300,332 as well, so the binary is
+stable and the disagreement is with the golden rather than within the run.
+
+**FIVE COMPILE-SIDE ROWS MOVED, AND THIS IS THE FIRST CHANGE IN THE FAMILY BIG
+ENOUGH TO DO IT.** kanso#1538 and kanso#1540 left every one byte-identical, and
+their entries said so. This one adds a pool, a clone and a `try_unwrap` to
+`dispatch_loop_inner`, and the layout moved: four up, one down, each reproducing
+twice inside the job. `kanso check` stops before the interpreter runs, so none
+of it is the change's subject. The 2026-09-06 correction stands with a third
+data point — the prior that editing the compiler's own Rust moves these rows is
+a good one, and the exception is a change small enough to leave the layout
+alone.
+
+**THE PEAK ROSE, AND IT IS THE PRICE RATHER THAN A SURPRISE.** Pooling a buffer
+means the buffer is resident when the run is at its widest. kanso#1540's entry
+predicted this direction in those words and then happened to fall 3; this one
+pays 616. Traffic falls 126,147 against it, which is the two rows doing what
+the gate says they do: a total and a high-water mark, free to move apart.
+
+**AND THE OBJECTIVE BARELY MOVES.** Welfare reads 0.00 above the floor — a rise
+the sentinel still wants banked, and banked it is, but the honest summary is
+that a 0.31% instruction fall is very nearly cancelled by what the pooling
+costs in residency and in layout. The instruction row is not the objective and
+this is the clearest case today of the difference: three changes that each took
+millions off the interpreted row moved welfare 77.25 to 77.26 to 77.27 to 77.27.
+
+That is the model working rather than failing. `interp_instructions` sits on
+the development side under a satiating curve, and a row already improved 132%
+against its baseline pays very little for the next percent. A change wanting to
+move the number has to find production work or an unsatiated term.
