@@ -3757,3 +3757,64 @@ memory's ordering, because that is what the broken build proved.
 
 The presence counter for the change is `interp_allocs`: remove the memory and
 that row moves 6.12%.
+
+## 2026-09-18 — the same question at the call sites, and a vector cloned per tail hop
+
+kanso#1516 gave `eval_ident` a memory of what a non-local name stands for. The
+same profile showed the question asked again at two sites that change does not
+reach:
+
+      16,171,431  0.71%  type_decl'call_named'call
+      15,346,817  0.67%  contains_key'eval_tail'dispatch
+      15,088,508  0.66%  type_decl'eval_tail'dispatch
+       2,942,810  0.13%  contains_key'dispatch'call_named
+     -----------
+      49,549,566  2.17%
+
+`call_named` had a ladder of its own — `err`, the types map, the function map —
+walked on every call. `group_of` inside `eval_tail` asked
+`type_decl(n).is_none() && fns.contains_key(n)` about every `FnRef` callee: two
+probes for one bit. Both read a second memory now, keyed the same way.
+
+**Two memories rather than one, and the reason is the row size.** A value needs
+the name as an `Rc<str>`; a call needs the overload group. An arm carrying both
+is 24 bytes of payload where either alone is 16, and that would size every row
+of the table by the pair — the mistake kanso#1516 made once already and paid
+fifteen and a half million instructions for.
+
+Measured against kanso#1516's head, same worktree, boxes of equal path length:
+
+      instructions   1,836,055,421 -> 1,802,816,521   -33,238,900   -1.81%
+      allocations        4,985,431 ->     4,810,435      -174,996   -3.51%
+      peak bytes           942,308 ->       951,537        +9,229   +0.98%
+
+Against main, the two changes together: **2,007,688,216 -> 1,802,816,521,
+-204,871,695, -10.20%**; allocations -9.42%; peak +1.96%.
+
+**THE ALLOCATION FALL IS NOT THE MEMORY**, and the attribution matters because
+the memory is what the change is about. `dispatch_loop_inner` cloned the whole
+overload VECTOR on every tail hop. The groups are `Rc<Vec<..>>` now, because
+the memory has to hold one without borrowing from `self` — a group lives in a
+map owned by the `Interp`, so a `&[&FnDecl]` taken out of it borrows `self` and
+cannot be stored in a field of `self`. Making them shared was the lifetime's
+price and the tail hop's saving: a refcount bump where there was a vector copy.
+The 174,996 is that.
+
+**The profile said 49.5 million and the change bought 33.2.** The difference is
+the memory's own probe, which replaces the two it removes rather than removing
+both: three sites that each did two probes now each do one. The prediction was
+the ceiling, not the estimate, and it is worth writing the gap down rather than
+rounding it away.
+
+Start-up does not pay for the `Rc` per group. `kanso play` on the start-up
+corpus reads 3,399,666 before and 3,384,980 after, a fall of 14,686 — and that
+route takes the native path rather than building an `Interp`, so the fall is
+layout and the per-group allocation is not in the number at all. What the
+reading says is only that nothing on the start-up path got worse; the
+allocation itself is priced by the interpreted row, which fell.
+
+`group_of`'s rewrite drops two literal exclusions and keeps one. `err` was
+excluded by name and is now excluded because the memory answers `Callee::Err`
+for it; a type name was excluded by a `type_decl` probe and is now excluded
+because the memory answers `Constructor`. `if` stays a literal: it is a
+declaration AND the conditional form, and the form wins at this site.

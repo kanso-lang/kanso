@@ -91,6 +91,25 @@
 #
 # The thunk counters are byte-identical across the change -- 1 alloc, 6 forces,
 # 1 eval -- so nothing semantic moved.
+#
+# 2026-09-18, kanso#1517 (stacked on kanso#1516). ROUND ONE IS DELIBERATELY RED
+# ON BOTH ROWS; the values below are carried forward and CI's sitting replaces
+# them.
+#
+# Measured here against kanso#1516's head: interp_allocs 4,985,431 ->
+# 4,810,435, a FALL of 174,996 (-3.51%), and interp_peak_bytes 942,308 ->
+# 951,537, a RISE of 9,229 (+0.98%). Against main, the two changes together:
+# allocations 5,310,694 -> 4,810,435 (-9.42%) and peak 933,280 -> 951,537
+# (+1.96%).
+#
+# THE ALLOCATION FALL IS NOT THE MEMORY, and that is worth saying because the
+# memory is what the change is about. `dispatch_loop_inner` cloned the whole
+# overload VECTOR on every tail hop -- `self.fns.get(&*next).expect(..).clone()`
+# -- and the groups are `Rc<Vec<..>>` now because the memory needs to hold one
+# without borrowing from `self`. A tail hop takes a refcount bump instead. The
+# 174,996 is that, and the memory's own rows are the rise beside it.
+#
+# The thunk counters are byte-identical across both changes.
 interp_allocs=5310696
 interp_peak_bytes=933182
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

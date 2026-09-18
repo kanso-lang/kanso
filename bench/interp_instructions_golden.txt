@@ -271,5 +271,30 @@
 # all resolutions paid four probes and an allocation to answer a question whose
 # answer cannot change during a run. The answer is remembered on first sight
 # now, and the ladder runs once per name.
+#
+# 2026-09-18, kanso#1517 (stacked on kanso#1516). ROUND ONE IS DELIBERATELY RED
+# ON THIS ROW, for the reason kanso#1516's entry above gives: this host cannot
+# compare with the runner, so the value below is carried forward and CI's
+# sitting replaces it.
+#
+# Measured here against kanso#1516's head, same worktree, boxes of equal path
+# length: 1,836,055,421 -> 1,802,816,521, a FALL of 33,238,900 (-1.81%).
+# Against main, the two changes together: 2,007,688,216 -> 1,802,816,521,
+# -204,871,695, -10.20%.
+#
+# WORK. `call_named` walked a ladder of its own on every call -- `err`, the
+# types map, the function map -- and `group_of` inside `eval_tail` probed both
+# maps to decide one bit about every `FnRef` callee. Neither map changes during
+# a run, so both read one memory now. The profile put those frames at
+# 49,549,566; the measured fall is 33,238,900, the difference being the probe
+# that replaces them.
+#
+# START-UP DOES NOT PAY FOR IT. The function groups became `Rc<Vec<..>>` so the
+# memory can hold one without borrowing from `self`, which is an allocation per
+# group at construction. `kanso play` on the start-up corpus reads 3,399,666
+# before and 3,384,980 after, a FALL of 14,686 -- and that route takes the
+# native path rather than building an `Interp`, so the move is layout and the
+# allocation per group is not in this number at all. What it says is that
+# nothing on the start-up path got worse.
 interp_instructions=2168428538
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
