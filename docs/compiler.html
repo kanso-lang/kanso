@@ -2137,7 +2137,36 @@ the digest    3,955,899     -1,125,200   -22.14%</code></pre>
 
 <p>the shape is worth naming because it is not about hashing. a cache key has to change when its input changes, and the cheapest way to write that is to hash the input &#8212; which is correct, and which quietly moves the cost from build time to every single run. what the input is fixed at compile time is the question worth asking before reaching for a hasher.</p>
 
-<h2 id="beattop"><span class="sec-num">81</span>nine instructions to find a pointer that never moved</h2>
+<h2 id="encodeframe"><span class="sec-num">81</span>what the encoder&#39;s frame is for</h2>
+
+<p>the run program&#39;s top frame is the json encoder&#39;s dispatch: <strong>392,547,176</strong> instructions over <strong>2,380,860</strong> calls, 21.5% of everything the program does and 164.9 instructions a call. eighteen of those run on every call before the dispatch has decided anything &#8212; six callee-saved pushes, an 88-byte stack frame, the failure test, and the jump table.</p>
+
+<p>the dispatch has eight arms and only two of them loop. counted off the per-address costs, every call is accounted for:</p>
+
+<pre><code>string      942,750   39.6%
+int/float   379,530   15.9%
+map         248,490   10.4%
+list        247,590   10.4%
+true        189,990    8.0%
+false       187,920    7.9%
+json_null   184,590    7.8%</code></pre>
+
+<p>so 79.2% of calls take an arm that appends something and returns, and pays for a frame the looping arms need. the runtime already has this shape solved in one place: <code>k_beat_pop</code> splits from <code>k_beat_pop_slow</code> so the pop with nothing to do returns without the six pushes the migrates need. the reading was that the encoder wants the same split, worth about 1.45%.</p>
+
+<p>it was built and it is worse. marking the two looping arms <code>noinline</code> in the emitted ir, linking both copies against the same runtime object with the same flags, output byte-identical:</p>
+
+<pre><code>control    1,823,406,531   text=318,482
+noinline   1,835,914,985   text=319,042
+           +12,508,454     +0.686%   +560 bytes</code></pre>
+
+<p>the release build sets <code>-inline-threshold=2000</code>, eight times clang&#39;s default, and that number was found by measuring rather than reasoning &#8212; it is worth 2.09%. it is right here too: inlining the loop arms saves more than the six pushes cost, because outlining adds a call and a return per list and per map element on top of the argument shuffling.</p>
+
+<p>the more useful half is that the premise was wrong. outlining shrank the frame from 88 bytes to 56 and <strong>left all six pushes</strong>. they belong to the arms that make calls, which is nearly all of them &#8212; the string arm calls the escaper, the number arms call the renderer, and each needs its values preserved across that call. only <code>true</code>, <code>false</code> and <code>null</code> are literal appends, and those are 23.6% of calls rather than 79.2%. the ceiling was about 0.43%, for a change more invasive than the one that just measured 0.686% against it.</p>
+
+<p>the shape is worth keeping even though the change is not. a frame is sized for the worst arm, and a dispatch whose arms differ a lot in what they need is a place to look &#8212; but which arms need what is a question for the disassembler, not for the source.</p>
+
+
+<h2 id="beattop"><span class="sec-num">82</span>nine instructions to find a pointer that never moved</h2>
 
 <p>a beat loop is one the compiler proved gives its arena back between laps, and <code>k_beat_iter</code> is what it calls to do that. the run program calls it <strong>2,692,766</strong> times for <strong>61,672,983</strong> instructions &#8212; 3.35% of everything it does, and 22.9 instructions a call against a fast path that is six stores and three tests.</p>
 
