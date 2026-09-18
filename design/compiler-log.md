@@ -3774,7 +3774,10 @@ CI's sitting on the tree merged with main:
 Both codegen rows read their goldens exactly and `compile_allocs` is unmoved.
 The five compile-side rises are layout: src/eval.rs is the compiler, so its
 bytes move and every row that runs the compiler moves with them, and none of
-those five routes evaluates a name.
+those five routes evaluates a name. Each by its key, with the value it landed
+on: `compile_instructions` 35,447,843, `entry_instructions` 126,368,664,
+`library_instructions` 126,824,214, `startup_instructions` 3,364,523 and
+`emit_instructions` 51,554,663.
 
 **THE TWO MEASUREMENTS AGREED, AND HOW CLOSELY IS THE POINT.** This container
 projected a fall of 171,632,795 from two binaries built in one worktree; CI, on
