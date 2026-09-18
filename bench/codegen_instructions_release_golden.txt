@@ -195,4 +195,37 @@
 # number, in the same job -- which is kanso#1507's `-Wl,-plugin-opt=jobs=1`
 # holding on a tree that changes runtime.c, not just on one that leaves it
 # alone. Before that pin this row could not be read twice and get one answer.
-codegen_instructions_release=6841893129
+#
+# 2026-09-18, THE GATE NOW CLEARS ITS OUTPUT PATH BEFORE EVERY BUILD, so this
+# row measures a different thing and the value below is the OLD one, left in
+# place for CI to move. `ld` reads whatever is already at `-o`, and what it
+# finds there changes the count. On the container, one binary, one corpus, the
+# same `ld` command each time, varying only the output path's state:
+#
+#     absent            5,163,341,031   (twice, to the instruction)
+#     an empty file     5,163,341,036   (twice, +5)
+#     100 bytes         5,163,343,385
+#     5 MB              5,163,343,385
+#     the real binary   5,163,343,385   (+2,354 over absent)
+#
+# Three groups, each internally identical, and size stops mattering once the
+# file is non-empty. The gate read the third group by accident -- the warm-up
+# left its binary at `-o` -- and now reads the first by construction. THIS IS
+# A MEASUREMENT CHANGE AND NOT A COMPILER SAVING: nothing about the compiler
+# moved, and the fall this produces is the gate no longer counting `ld`'s
+# inspection of a file left over from the previous build.
+#
+# 2026-09-18, CI's own sitting for the cleared gate. 6,822,651,561 -> 6,824,133,280,
+# a RISE of 1,481,719 (+0.0217%). RE-BASE, not a change in the
+# compiler: nothing about the compiler moved and both readings in the job
+# agreed to the instruction, which this row had not managed before.
+#
+# The container reads the release row the OTHER WAY, 412,910 DOWN, with
+# the whole difference inside `ld` and all three clang processes
+# byte-identical. Two hosts, opposite signs; nothing here predicts the
+# runner's, and the size of this term is not a property of the change.
+#
+# 2026-09-18, re-merged onto main after kanso#1512, which re-based this row by
+# clearing the gate's output path. THE VALUE BELOW IS MAIN'S, carried forward;
+# the merged reading is CI's.
+codegen_instructions_release=6824133280

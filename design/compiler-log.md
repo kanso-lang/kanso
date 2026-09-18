@@ -2883,6 +2883,155 @@ that changes only `src/codegen.rs` does not move a row twice and then stop.
 kanso#1512 isolates a real dependence of that row on un-normalized state — the
 prior contents of the output path, worth 2,354 — and says plainly that it does
 not explain this 11, which stays open.
+## 2026-09-18 — ld reads what is already at -o, and the codegen row moved with it
+
+kanso#1510's round went red on `codegen_instructions_release` alone, at +11,
+with the gate's own second reading landing exactly on the golden:
+6,822,651,572 and then 6,822,651,561, one binary, one corpus, one machine.
+The instrument kanso#1507 built for this named the frame rather than the
+magnitude: `llvm::StringMapImpl::LookupBucketFor` inside `/usr/bin/ld`, −11,
+and the whole-program delta was −11 too.
+
+A string-keyed hash probe moving with the strings put the random temp-file
+name under suspicion — clang writes `/tmp/codegen_corpus-89a40b.o` with fresh
+hex every run. Three names then read identically and this entry ruled the name
+out. **THAT WAS WRONG AND THE ENTRY BELOW OVERTURNS IT** — the effect is
+sparse, about one name in ten, and three samples could not see it. What
+follows is still correct about the output path; it is the sentence about the
+name that does not survive.
+
+    object at -89a40b.o    5,163,341,031
+    object at -0c759c.o    5,163,341,031
+    object at -aaaaaa.o    5,163,341,031
+
+Three different names, three identical readings. What the first pass of that
+experiment showed was a defect in the experiment: the repeat run wrote its
+binary to a path six characters longer than the others, so the one thing held
+constant across the three "different name" runs was silently varied in the
+fourth. **The output path, not the input name.**
+
+Isolated properly — same binary, same corpus, same `ld` command every time,
+varying only what was sitting at `-o`:
+
+    output path absent          5,163,341,031   twice, to the instruction
+    output path an empty file   5,163,341,036   twice, +5
+    output path 100 bytes       5,163,343,385
+    output path 5 MB            5,163,343,385
+    output path the real binary 5,163,343,385   +2,354 over absent
+
+Three groups, each internally identical to the instruction across repeats, and
+size stops mattering once the file is non-empty. `ld` looks at what is already
+there, and how much it finds costs 2,354 instructions.
+
+**The gate was reading the third group by accident.** `stage_and_warm` wipes
+the box and then warms both tiers, so the counted build always found the
+warm-up's binary at `-o`. Right answer, no reason: dropping a warm-up or
+reordering the two would have moved the row by 2,354 with nothing in the diff
+to explain it. It now clears the output path before every build it performs,
+warm and counted alike, which is the 2026-09-15 rule applied literally —
+Clay's words were "you clear it out so it's identical every single run".
+`tests/the_codegen_gate_clears_its_output_before_every_build.rs` pins it
+structurally, and was watched red twice: once with the clear before the
+counted build removed, where it names the line and how far the build sits from
+the nearest clear, and once with `codegen_corpus.ll` dropped from the clear.
+
+**Two things this does NOT do, and both matter more than what it does.**
+
+It is a MEASUREMENT CHANGE, not a compiler saving. Nothing about the compiler
+moved. The fall it produces is the gate no longer counting `ld` inspecting a
+file the previous build left behind, and the floor entry says so in those
+words rather than banking it as a gain.
+
+And it does not explain kanso#1510's 11. The sizes do not match, the frame
+does not match — 2,354 spread across `ld`'s file handling against 11 inside a
+StringMap probe — and this gate has always been in the "existing binary" state
+on both readings of a job, so the term this fixes was constant across the pair
+that disagreed. What is fixed here is a real dependence on un-normalized state
+that nobody had noticed; the within-job 11 is still open, and calling it
+explained because a neighbouring mechanism was found is the attribution error
+this log has recorded four times.
+
+**The whole term is in `ld`, and the SIGN differs between this box and the
+runner.** Running the gate's own pipeline under callgrind, per process, twice
+in each mode (each mode reproduced to the instruction):
+
+                   no clear          clear            delta
+    kanso        82,061,217      82,061,004            -213   (excluded)
+    clang-probe  32,178,589      32,178,589               0
+    clang        31,644,251      31,644,251               0
+    clang -cc1 1,617,283,971   1,617,283,971               0
+    ld        5,146,605,294   5,146,192,384        -412,910
+
+All three clang processes are byte-identical. Every instruction of the
+difference is `ld`'s, which is what the isolated experiment said and this
+confirms on the real inputs rather than on a hand-built object. The magnitude
+is not the isolated 2,354 — the real pipeline links a different object against
+a different library set, and the term is worth more there.
+
+CI's first round on this change read `codegen_instructions_dev` DOWN 2,150 and
+`codegen_instructions_release` UP 1,481,719. This box reads the release row
+DOWN 412,910. **Opposite signs on the same row**, and nothing here predicts the
+runner's: the two hosts differ in gcc, and `ld`'s work on an absent output
+against an existing one is evidently not the same trade on both.
+
+That does not change what the normalization is for. The point is a FIXED state,
+not a smaller number, and "absent" is the only one of the three that can be
+reached without depending on what ran before: an empty `touch` lands in the
+middle group at +5, so "existing with content" cannot be established except by
+building, which is the accident being removed. The row re-bases once, in
+whichever direction the host takes it, and then stays put.
+
+What this does mean is that the size of this term cannot be quoted from either
+host as though it were a property of the change. It is quoted here as two
+measurements on two machines, which is what it is.
+
+Both codegen goldens carry the old value with the change named in the header.
+CI moves them.
+## 2026-09-18 — the eleven is the temp object's NAME, and five samples said it was not
+
+The entry above rules the random temp-object name out of the release-codegen
+row's 11, on three names reading identically and then five. That is wrong, and
+it is wrong in the way this log keeps recording: a search for a thing being
+ABSENT is worth what the search was worth, and five samples of a sparse effect
+is not worth much.
+
+Ten names, one binary, one corpus, the output path held absent every time:
+
+    89a40b  5,163,341,031      000000  5,163,341,031
+    0c759c  5,163,341,031      4b8c1a  5,163,341,042
+    aaaaaa  5,163,341,031      d7e60f  5,163,341,031
+    1f2e3d  5,163,341,031      2a9b53  5,163,341,031
+    ffffff  5,163,341,031      6c1d84  5,163,341,031
+
+**Nine read one number and one reads eleven more.** `4b8c1a` was then run three
+more times and read 5,163,341,042 every time, with `89a40b` back at
+5,163,341,031 beside it. The name decides the count, the count is decided
+deterministically, and the difference is **exactly the 11** the release-codegen
+row has been disagreeing with itself by.
+
+That closes the mechanism. `clang` writes its LTO object to
+`/tmp/codegen_corpus-XXXXXX.o` with fresh hex every run, `ld`'s LLVM plugin
+puts that path into a `StringMap`, and about one name in ten probes one bucket
+further. The frame kanso#1507's instrument named on kanso#1510 was
+`llvm::StringMapImpl::LookupBucketFor`, which is that probe, and the whole-
+program delta was the same 11. Two CI jobs — kanso#1510's first head and
+kanso#1511, the latter touching neither codegen nor runtime.c — saw it, which
+is the rate a one-in-ten effect gives over the number of rounds this row has
+had.
+
+**What the earlier entry got right stands.** The output path's prior contents
+is a second, separate dependence, worth 2,354 isolated and 412,910 in the
+pipeline, and clearing it is still right. What it got wrong is the sentence
+saying the name is out, and that sentence reached this log, a commit message
+and a pull request body before ten samples overturned it. All three are
+corrected: the name is IN, it is the eleven, and the fix is a deterministic
+object name rather than a cleared output.
+
+The next step is that fix, and it is not in this change: an env var the gate
+sets, in the shape of `KANSO_LTO_JOBS`, making `release_clang` write its
+object to a fixed path. It is separated so that one round measures one thing —
+the cleared output re-bases both codegen rows here, and a second re-base on
+top of it could not be told apart.
 ## 2026-09-17 — the beat rewind's fast path: 23 instructions to 15
 
 `k_beat_iter` is what a compiler-proven beat loop calls between iterations to
