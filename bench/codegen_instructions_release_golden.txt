@@ -189,4 +189,32 @@
 # the whole difference inside `ld` and all three clang processes
 # byte-identical. Two hosts, opposite signs; nothing here predicts the
 # runner's, and the size of this term is not a property of the change.
+#
+# 2026-09-18, A CORRECTION TO THE 2026-09-17 ENTRY ABOVE. That entry says the
+# row is "three `clang` processes and `ld`, every one of which came back byte
+# for byte across two readings". That is true of clang and is NOT true of `ld`.
+# Three cost-goldens jobs on 2026-09-18 halted this vein for a reproduction
+# failure, each with every clang process byte-identical and the whole
+# difference inside `ld`:
+#
+#   kanso#1504   5,160,407,609 then 5,160,407,598   -11
+#                probes 1,816,463 -> 1,816,452
+#   kanso#1502   5,139,582,528 then 5,139,582,517   -11
+#                probes 1,822,415 -> 1,822,404
+#   kanso#1537   6,824,133,291 then 6,824,133,280   -11
+#                probes 1,819,373 -> 1,819,362
+#
+# Every one of them lands entirely in `llvm::StringMapImpl::LookupBucketFor`,
+# which is the frame this header's own analysis asked the gate to name, and
+# every one of them is exactly eleven. Three different probe counts, one
+# residue.
+#
+# The 2026-09-17 sentence stands as what the two readings it had showed. What
+# it does not support is the general claim, and the general claim is what a
+# later reader takes from it. kanso#1538 and kanso#1504's SECOND job both
+# reproduced, so the draw is a property of the job rather than of any branch's
+# diff -- one branch has now been on both sides of it.
+#
+# This corrects the record only. Whether to pin the release tier is a decision
+# in design/pending-gavels.md and is not settled here.
 codegen_instructions_release=6824133280
