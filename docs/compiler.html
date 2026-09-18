@@ -2207,7 +2207,23 @@ library_instructions 128,010,052 -&gt;   126,804,150 -1,205,902   -0.942%</code>
 
 <p>emitting fewer means emitting fewer die sites, and each one is a check a running program can reach: an arity mismatch, an overload with no match, a destructure of the wrong shape, integer overflow. what clang and ld pay for those lines is real, and it is the price of the checks.</p>
 
-<h2 id="beattop"><span class="sec-num">85</span>nine instructions to find a pointer that never moved</h2>
+<h2 id="hopname"><span class="sec-num">85</span>a hop needs a name to print</h2>
+
+<p>in july an optimisation was declined on the differential law. rewriting <code>(a b -&gt; f a b)</code> to <code>f</code> made the native engine print a provenance line the interpreter did not &#8212; <code>passed through greet</code> &#8212; and the two engines disagreeing is the one thing this project does not permit. the entry recorded it and moved on.</p>
+
+<p>the 2026-09-15 explicit-bind ruling moved the ground under that argument in its own words: the provenance hop now accrues at binds rather than at skipped calls. so the argument was re-run rather than re-asserted. three spellings of one call, each on both engines:</p>
+
+<pre><code>label "flan" seasonal                            passed through label
+lab "flan" seasonal   (fn lab d c = label d c)   passed through lab
+(d c -&gt; label d c) "flan" seasonal               no hop line at all</code></pre>
+
+<p>both engines agree in every one. the divergence that killed the optimisation is gone, and what the three readings describe is a rule rather than a bug: <strong>a hop names the function the err was about to enter, so a named function records one and an anonymous one records nothing.</strong> a lambda has no name to print.</p>
+
+<p>the optimisation stays declined anyway, on different ground. eta-reducing the third spelling to the first no longer makes the engines disagree &#8212; it makes the trace GAIN a line where the lambda printed none. that is still a change to what a program prints.</p>
+
+<p>the direction is worth noticing, though, because it now points at source rather than at a rewrite. wrapping a call in a lambda silently drops its provenance line, on both engines, and a reader would not expect <code>(d c -&gt; label d c)</code> and <code>label</code> to trace differently. whether that is the right rule for an anonymous function is a question about the language, and it goes to the ledger rather than being settled by an optimisation that wanted it one way.</p>
+
+<h2 id="beattop"><span class="sec-num">86</span>nine instructions to find a pointer that never moved</h2>
 
 <p>a beat loop is one the compiler proved gives its arena back between laps, and <code>k_beat_iter</code> is what it calls to do that. the run program calls it <strong>2,692,766</strong> times for <strong>61,672,983</strong> instructions &#8212; 3.35% of everything it does, and 22.9 instructions a call against a fast path that is six stores and three tests.</p>
 
