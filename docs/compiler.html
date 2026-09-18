@@ -2311,6 +2311,20 @@ interp_peak_bytes           884,985 -&gt;       833,130       -51,855   -5.86%</
 
 <p>and a pin was missing. five specs catch the optimisation firing where it should <em>not</em>, and every one of them stays green if the gate silently stops matching &#8212; if a key changes, if a span moves, if the analysis is handed a different program. a per-round allocation count now fails when the optimisation quietly stops happening, which nothing in the tree could previously do.</p>
 
+<h2 id="bytebeside"><span class="sec-num">90</span>a byte beside the name, and why it cost eight</h2>
+
+<p>the interpreted run spends <strong>4.14%</strong> of itself inside libc&#8217;s <code>memcmp</code>, and the largest caller is the walk up the environment chain that resolves a local name &#8212; <strong>724,304</strong> calls, the same figure section 87 publishes for locals that stop at that walk.</p>
+
+<p>the walk compares one string against another. rust&#8217;s string equality checks the length first and then calls <code>memcmp</code>, so length is already free, and what reaches libc is every binding in the chain that happens to be <em>the same length</em> as the one being looked for. a single byte of the name, compared before the string, rejects most of those without a call. that is a standard trick and it works: the <code>memcmp</code> fell by <strong>2,465,720</strong>.</p>
+
+<p>the run rose by <strong>10,409,061</strong>.</p>
+
+<p><strong>the node is why, and it was measured rather than reasoned about.</strong> <code>size_of</code> on the environment node reads <strong>64</strong> bytes without the byte and <strong>72</strong> with it. there is no padding to hide it in: the name is 24 bytes, the value is 32, the parent pointer is 8, and that is exactly 64. the compiler already orders the fields to pack them. so one byte of payload costs eight bytes of node, and the interpreted run allocates about two and a half million of them &#8212; twenty megabytes of extra traffic to save two and a half million instructions of comparison.</p>
+
+<p>where to look next follows from that. a discriminator that fits in space the node already owns would keep the saving and drop the cost, and there is nowhere to put one: the name&#8217;s own 24 bytes are full, holding twenty-two bytes of text plus a length and a tag. what remains is changing how a name or a value is represented, which is a larger question than this lead was, and <strong>2,465,720</strong> is the ceiling on what answering it could be worth here.</p>
+
+<p>declined on arithmetic. the idea is sound and the node is the wrong size for it.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>

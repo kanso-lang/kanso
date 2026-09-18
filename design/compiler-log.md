@@ -4757,3 +4757,44 @@ enough change leaves the layout alone.
 
 So the trade is 62.8 million interpreted instructions against 715,346 across
 the four compile-side rows, and it is not close.
+
+## 2026-09-18 — a byte beside the name, built and declined: one byte costs eight
+
+The interpreted run spends **48,165,663 instructions (4.14%)** inside
+`__memcmp_avx2_movbe`, and the largest caller is `eval_ident`'s walk of the
+environment chain — **724,304 calls**, a figure that matches the one section 87
+already publishes for locals that stop at that walk.
+
+The walk compares `frame.name.as_str() == name`. `str` equality checks the
+length and then calls `memcmp`, so length is already a free rejection and what
+reaches libc is every binding in the chain that happens to be the same length
+as the one being looked up. A byte of the name, compared first, should reject
+most of those without a call.
+
+It was built. `Env` gained a `head: u8`, `bind` read it once, `lookup` compared
+it before the string. Both engines print the same answer.
+
+    base   row 1,115,996,775   memcmp 48,165,663
+    head   row 1,126,405,836   memcmp 45,699,943
+
+**The memcmp fell by 2,465,720 and the run rose by 10,409,061.** A net loss of
+about eight million instructions, 0.93% of the row.
+
+**The mechanism is the node, and it was measured rather than guessed.**
+`std::mem::size_of::<Env>()` reads 64 on main and **72** with the byte. There is
+no padding to put it in: `Name` is 24 bytes, `Value` is 32, `Option<Rc<Env>>` is
+8, and 24 + 32 + 8 is exactly 64. Rust already orders the fields to pack them,
+so one byte of payload costs eight of node, and the interpreted run allocates
+about 2.5 million of them. That is twenty megabytes of extra traffic to save
+two and a half million instructions of comparison.
+
+**So this is declined on arithmetic, not on taste, and the arithmetic says what
+would change it.** A discriminator that lives in space the node already has
+would keep the saving and drop the cost. `Name`'s own 24 bytes are full — the
+inline variant is twenty-two bytes of text plus a length and a tag — so there is
+no room there either. What is left is a representation change to `Name` or to
+`Value`, which is a larger question than this lead, and the 2.5 million is the
+ceiling on what answering it would be worth.
+
+Recorded so the next reader does not rebuild it. The idea is sound; the node is
+the wrong size for it.
