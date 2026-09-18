@@ -222,7 +222,7 @@ description: "how kanso reaches serde_json's speed with no garbage collector, no
 
 <p>and the json table is now the <em>older</em> of the page's two scoreboards. kanso is a lazy language—a value is computed when it's demanded, or never—and on workloads where demand is conditional, the second scoreboard (§07) shows the clear kanso form fifteen times ahead of rust as naturally written and within forty percent of rust hand-restructured to skip the same work, with counters proving 95% of the work was never born. the strict-tier story below and the lazy story in §07 are two halves of one design.</p>
 
-<h2 id="idea"><span class="sec-num">01</span>constraints buy freedom</h2>
+<h2 id="idea"><span class="sec-num">1</span>constraints buy freedom</h2>
 
 <p>picture a fast car on a mountain road with a cliff on one side and no railing. even a great driver takes the corners slowly there, because a single mistake goes over the edge, so caution has to live in every turn.</p>
 
@@ -232,7 +232,7 @@ description: "how kanso reaches serde_json's speed with no garbage collector, no
 
 <p>to the compiler, they are railings. an ordinary compiler has to assume the worst at every turn: this value might be shared, this call might have printed something, this branch might do anything. so it drives slowly. kanso's compiler knows the worst can't happen, because the language already forbade it, and so it can take optimizations that would be reckless, even unsound, in a language without the railings. it treats each constraint as something to spend rather than work around.</p>
 
-<h2 id="journey"><span class="sec-num">02</span>the journey, honestly</h2>
+<h2 id="journey"><span class="sec-num">2</span>the journey, honestly</h2>
 
 <p>the goal was straightforward: run faster than an ordinary rust program without asking the programmer to do rust's work by hand. there are two known ways to manage memory safely, and both charge the programmer for it. rust makes you prove in the source exactly when each value dies; those proofs are lifetimes, and writing them is real work. garbage collection skips the proofs and instead pauses the program every so often to find and free dead memory; the cost moves from your keyboard to your latency. we wanted a third option, so we spent a while in the literature.</p>
 
@@ -268,7 +268,7 @@ description: "how kanso reaches serde_json's speed with no garbage collector, no
 
 <p><strong>an eight-byte ascii skip</strong> in the utf-8 validator looked like free speed: gulp eight bytes of text at once, and if they're all plain ascii, skip the per-byte checking. we tried it. it made the benchmark <em>slower</em> by 3%, because the strings in real json are mostly shorter than eight bytes, so the setup cost was paid every time and the skip almost never fired. then—months later, having forgotten—we tried the exact same thing again, and it lost again by the same margin. the log now says, in as many words: do not try a third time without a workload full of long strings.</p>
 
-<h2 id="c11"><span class="sec-num">03</span>the strict tier: rewinding arenas<span class="status status-shipped">shipped</span></h2>
+<h2 id="c11"><span class="sec-num">3</span>the strict tier: rewinding arenas<span class="status status-shipped">shipped</span></h2>
 
 <p>this section teaches the shipped allocator for strict values — one of the two tiers named in the intro, and the one behind the json scoreboard. the lazy tier and the counted destination are §07's story; read them as two halves.</p>
 
@@ -375,7 +375,7 @@ basket         10,000                0          1,048,576</code></pre>
 <p>this is the corpus, not the verdict. the number that will ultimately judge the design is still the one this section has always named—write the kanso compiler in kanso and count survivors on a program nobody tuned for the boards.</p>
 
 
-<h2 id="ladder"><span class="sec-num">04</span>the last stretch to serde<span class="status status-shipped">shipped</span></h2>
+<h2 id="ladder"><span class="sec-num">4</span>the last stretch to serde<span class="status status-shipped">shipped</span></h2>
 
 <p>the arenas closed most of the gap on their own. rust pays a separate malloc and free for every object unless its programmer hand-builds an arena to avoid it—which is exactly the kind of expert move most code never gets around to. kanso's shape makes that arena automatic, sound, and invisible. but the arena alone left a representational gap against serde—tagged values and per-call dispatch in the hot loop—and three changes, in this order, closed most of it. (laziness later spent a slice of the margin back; the board above is the current, honest ledger.)</p>
 
@@ -407,7 +407,7 @@ basket         10,000                0          1,048,576</code></pre>
 
 <p>the receipt lives where a user can feel it: <a href="https://github.com/kanso-lang/kq">kq</a>'s pretty-printer rides the same builder and wins every board of its interleaved race against <code>jq</code>—hardest on the biggest documents, where the recopying alternative hurts most. <code>bench/kq_race.sh</code> in that repo reproduces it, byte-identity checked before any timing starts.</p>
 
-<h2 id="license"><span class="sec-num">05</span>the rest of the license</h2>
+<h2 id="license"><span class="sec-num">5</span>the rest of the license</h2>
 
 <p>the arenas and the ladder are where the headline number comes from. but the guardrails pay out in other places too, and these are the ones worth seeing before the deep end.</p>
 
@@ -456,7 +456,7 @@ basket         10,000                0          1,048,576</code></pre>
 
 <p>a third engine emits wasm bytecode directly—hand-rolled, no llvm anywhere near it, because llvm is measured in hundreds of megabytes and a browser tab is not. the whole thing is about half a megabyte of wasm, and it's what lets the <a href="playground.html">playground</a> compile the program you type into machine code inside the page, tail calls and all. its value representation is deliberately odd today (every value is a small handle into a registry the toolchain owns), and that first cut is staged toward a self-contained module over time, every step of the migration pinned by the same corpus of byte-identical golden outputs the other two engines are held to.</p>
 
-<h2 id="deep"><span class="sec-num">06</span>the deep end</h2>
+<h2 id="deep"><span class="sec-num">6</span>the deep end</h2>
 
 <div class="deep-flag">from here down the page stops holding your hand. this is the theory under the arenas and the frontier past it—genuinely dense, mostly design rather than shipped code, and safe to skip if the numbers above are what you came for.</div>
 
@@ -620,7 +620,7 @@ no helper, guarded run       -3.0842%     -1.4555%      +213,359    -0.01
 <p>that is a statement about the weights rather than about the change, and it was filed as one. it is closed: the gavel of 2026-09-06 put the objective's run side on one consolidated program, so nothing enters the corpus at its dimension's standing any more and the granted-baseline rule is retired. the welfare column above is what the objective answered on 2026-09-05, under a model that weighed the live encode row; today's weighs one program that includes the shipped library's encode path at its measured share. the code is reverted; the numbers are here so the next reading of the same profile finds them.</p>
 
 
-<h2 id="lazy"><span class="sec-num">07</span>the lazy bet<span class="status status-shipped">v1 shipped</span></h2>
+<h2 id="lazy"><span class="sec-num">7</span>the lazy bet<span class="status status-shipped">v1 shipped</span></h2>
 
 <p>the newest ruling is the largest since the arenas: kanso is lazy. write <code>foo = expensive_calculation</code> and nothing runs; the computation is noted, and it happens when—if—the value is actually used. a value behind a conditional that turns out false is never computed at all. the motive is the one that runs through this whole page: don't pay for work that never reaches the answer.</p>
 
@@ -824,7 +824,7 @@ KANSO_SCHED_DEBUG=1 ./overlapped     <span class="c"># watch elapsed + wait = de
 <li><strong>simd structural scanning</strong> — simdjson (langdale &amp; lemire, VLDB 2019): whole-document byte classification feeding the switchboards, the frontier past serde parity.</li>
 </ul>
 
-<h2 id="c04"><span class="sec-num">08</span>the receipts</h2>
+<h2 id="c04"><span class="sec-num">8</span>the receipts</h2>
 
 <p>none of the numbers on this page ask to be believed. here is the scoreboard and the recipe. every engine reads the file at runtime—an embedded constant would let llvm fold the decode away—and the kanso harness accumulates a checksum so the loop provably runs.</p>
 
@@ -938,7 +938,7 @@ time ./jsonbench                                  <span class="c"># less ~3 ms s
 
 <p>so purging is off, which leaves three unconditional reads at startup where there were 163 that answered to the clock. a compiler is a short-lived process that exits and hands everything back at once, so this removes work. the 13 is still unexplained, and the log says so rather than claiming the credit: a difference in how many deadlines expired would land on the long compiles and not the short one, where the gap was the same on all three. the wall-clock dependence was real and is gone; the disagreement stays open, with those three startup reads named as the next place to look.</p>
 
-<h2 id="surface"><span class="sec-num">09</span>the surface a program needs<span class="status status-shipped">shipped</span></h2>
+<h2 id="surface"><span class="sec-num">9</span>the surface a program needs<span class="status status-shipped">shipped</span></h2>
 
 <p>a fast compiler with nothing to compile against is a demo. four pieces landed in one sitting, and each of them was a thing a real tool could not do without.</p>
 
@@ -2314,7 +2314,64 @@ interp_peak_bytes           884,985 -&gt;       833,130       -51,855   -5.86%</
 <p>one more thing came out of it, and it is about the corpus rather than the change. of the 16 distinct sites the interpreter actually reaches at runtime, every one is inside the 54 the analysis marks. so over this program the marking is complete as well as sound. that holds for this corpus; a program reaching a seventeenth site would say whether it holds more widely.</p>
 
 <p>and a pin was missing. five specs catch the optimisation firing where it should <em>not</em>, and every one of them stays green if the gate silently stops matching &#8212; if a key changes, if a span moves, if the analysis is handed a different program. a per-round allocation count now fails when the optimisation quietly stops happening, which nothing in the tree could previously do.</p>
-<h2 id="beattop"><span class="sec-num">90</span>nine instructions to find a pointer that never moved</h2>
+<h2 id="bytebeside"><span class="sec-num">90</span>a byte beside the name, and why it cost eight</h2>
+
+<p>the interpreted run spends <strong>4.14%</strong> of itself inside libc&#8217;s <code>memcmp</code>, and the largest caller is the walk up the environment chain that resolves a local name &#8212; <strong>724,304</strong> calls, the same figure section 87 publishes for locals that stop at that walk.</p>
+
+<p>the walk compares one string against another. rust&#8217;s string equality checks the length first and then calls <code>memcmp</code>, so length is already free, and what reaches libc is every binding in the chain that happens to be <em>the same length</em> as the one being looked for. a single byte of the name, compared before the string, rejects most of those without a call. that is a standard trick and it works: the <code>memcmp</code> fell by <strong>2,465,720</strong>.</p>
+
+<p>the run rose by <strong>10,409,061</strong>.</p>
+
+<p><strong>the node is why, and it was measured rather than reasoned about.</strong> <code>size_of</code> on the environment node reads <strong>64</strong> bytes without the byte and <strong>72</strong> with it. there is no padding to hide it in: the name is 24 bytes, the value is 32, the parent pointer is 8, and that is exactly 64. the compiler already orders the fields to pack them. so one byte of payload costs eight bytes of node, and the interpreted run allocates about two and a half million of them &#8212; twenty megabytes of extra traffic to save two and a half million instructions of comparison.</p>
+
+<p>where to look next follows from that. a discriminator that fits in space the node already owns would keep the saving and drop the cost, and there is nowhere to put one: the name&#8217;s own 24 bytes are full, holding twenty-two bytes of text plus a length and a tag. what remains is changing how a name or a value is represented, which is a larger question than this lead was, and <strong>2,465,720</strong> is the ceiling on what answering it could be worth here.</p>
+
+<p>declined on arithmetic. the idea is sound and the node is the wrong size for it.</p>
+
+<p><strong>so the other version was built too, and it loses by more.</strong> the name&#8217;s inline buffer is zero-filled before the text is copied, so two inline names hold identical twenty-two-byte buffers exactly when they hold the same text &#8212; the padding makes the length implicit, and an identifier cannot contain a NUL to blur it. the walk can therefore build a padded key <em>once per lookup</em> and compare a fixed-width block per frame, which the compiler inlines. nothing grows; the key lives on the stack for one lookup.</p>
+
+<pre><code>base   row 1,115,996,775   memcmp 48,165,663
+key    row 1,150,537,278   memcmp 35,577,082</code></pre>
+
+<p>it takes <strong>12,588,581</strong> instructions off <code>memcmp</code>, twenty-six per cent of the whole figure, and the run rises <strong>34,540,503</strong>. three times worse than the byte, with no node cost at all. the interpreted corpus prints byte-identical output before and after, which is what makes the two counts comparable &#8212; that is two builds on one engine, not the differential check across both, which a declined change did not earn.</p>
+
+<p>two sound schemes losing in different ways is worth more than either result. the byte lost to the node&#8217;s size; this one has no node cost and loses by more, so what is left to blame is the shape of the trade: the setup is paid per <em>lookup</em> and the saving arrives per <em>frame</em>. that only pays when the chain is long, and here it is not.</p>
+
+<p>which reframes the lead. the 48 million is real, and it belongs to the walk rather than to how the walk compares. anything that keeps the walk and makes the compare cheaper is buying a per-frame saving with a per-lookup cost.</p>
+
+<p><strong>and that ratio is measurable, so it was measured rather than left as a reason.</strong> a counter in the walk, over the same corpus:</p>
+
+<pre><code>lookups          1,056,329
+frames visited   2,662,536      2.52 per lookup
+misses             332,025      31.4%, and a miss walks the whole chain</code></pre>
+
+<p>the instrument lands on two numbers this page already carries. <strong>1,056,329</strong> is the resolution count in section 87; take the misses away and <strong>724,304</strong> remains, which is section 87&#8217;s count of locals that stop at the walk and also the caller count read off the profile. three routes to the same pair.</p>
+
+<p><strong>2.52 is the whole explanation.</strong> a scheme paying setup per lookup and saving per frame has two and a half frames to amortise it over. the padded key cost about forty-seven instructions a lookup against a saving of the eighteen-odd a small <code>memcmp</code> costs, times 2.52 &#8212; so it lost, and would have lost at any setup above about forty-five. the byte had no setup and lost to the node instead.</p>
+
+<p>it also prices the change that would work. eighteen instructions a visit across 2,662,536 visits is the 48 million; resolving a local to an index at parse time removes the <em>visit</em>, and an index costs two or three instead of eighteen. the ceiling is around forty million, near 3.6% of the interpreted row &#8212; a number rather than a hope, and larger than anything tried here, because slots have to survive closures, which capture an environment rather than a frame.</p>
+
+<p><strong>then the distribution was measured too, and it names a cheaper change first.</strong> an average hides a shape, so here is the shape &#8212; hits by depth:</p>
+
+<pre><code>1   267,899   37.0%        hit frames    1,590,733   2.20 deep
+2   199,016   27.5%        miss frames   1,071,803   3.23 deep
+3   130,524   18.0%        total         2,662,536
+4   101,095   14.0%
+5    25,770    3.6%
+6+        0</code></pre>
+
+<p>the chain never exceeds five, so nothing here waits on a pathological case. and the split by outcome is the point: <strong>misses are 31.4% of lookups and 40.3% of every frame visited</strong>. a miss walks the whole chain and finds nothing, because the name was never a local &#8212; it is a function, a descriptor, a type or a builtin, and the resolution ladder carries on afterwards. that is about <strong>19.3 million</strong> instructions spent on walks that cannot succeed.</p>
+
+<p>so the cheaper change is not a faster walk but no walk. whether a name can be a local at a given site is decidable where that site is compiled, and skipping the walk for the ones that cannot needs no slots, no upvalue analysis and no change to how a closure captures &#8212; the three things that make the larger change large. it is worth about half as much for a small fraction of the work.</p>
+
+<p>that does not retire the index: the 1,590,733 hit-frames stay, and only an index removes those. it orders them. skip first, measure what is left, and let the remainder make its own case.</p>
+
+<h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
+
+<p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>
+
+</article>
+<h2 id="beattop"><span class="sec-num">91</span>nine instructions to find a pointer that never moved</h2>
 
 <p>a beat loop is one the compiler proved gives its arena back between laps, and <code>k_beat_iter</code> is what it calls to do that. the run program calls it <strong>2,692,766</strong> times for <strong>61,672,983</strong> instructions &#8212; 3.35% of everything it does, and 22.9 instructions a call against a fast path that is six stores and three tests.</p>
 
@@ -2350,7 +2407,7 @@ widebench        33,516,094 -&gt;     33,644,020      +127,926   +0.3817%</code>
 <p>the spec for that took two tries and both failures say something about the language. the first program accumulated strings, which compiles to a <em>carry</em> beat &#8212; that one computes its own mark, never reads the cache, and the spec passed with the maintenance torn out. the second carried a scalar and allocated nothing, and a loop with nothing to reclaim emits no beat at all. what it takes is both at once: laps that allocate, and a carried value small enough to cross one. each lap builds a padded string and keeps its length.</p>
 
 
-<h2 id="rowsthatmove"><span class="sec-num">91</span>a row that moves seven, and what two readings are worth</h2>
+<h2 id="rowsthatmove"><span class="sec-num">92</span>a row that moves seven, and what two readings are worth</h2>
 
 <p>the interpreted row sits at about 1.138 billion instructions and it has moved by <strong>seven</strong> three times this month, on trees whose compiler source the interpreted corpus never touches. seven is not a number anybody would chase. what it is good for is a question this page has had to answer repeatedly: when a counted row disagrees with its golden, how much evidence does it take to say what happened?</p>
 
@@ -2388,8 +2445,3 @@ kanso#1504      AMD  0x1a / 0x2   2,840,050   806,288   1,138,001,437</code></pr
 
 <p>the shape is worth naming because it is not a slip about arithmetic. a claim was assembled out of three data points, one of which was an instrument reading itself, and the instrument had printed what it was doing. what makes three readings better than two is that they are independent; a number the tool generated is not a third opinion.</p>
 
-<h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
-
-<p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>
-
-</article>
