@@ -266,7 +266,7 @@
 # walk costs is below what this row resolves -- the reproducible signal for
 # this change is `interp_allocs`, which read +16 on both rounds.
 #
-# 2026-09-18, re-merged onto main after kanso#1511. THE VALUE BELOW IS MAIN'S,
+# 2026-09-18, re-merged onto main after kanso#1515. THE VALUE BELOW IS MAIN'S,
 # carried forward; the merged reading is CI's.
-interp_instructions=2182579844
+interp_instructions=2168428538
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

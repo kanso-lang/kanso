@@ -952,9 +952,9 @@
 # CI's sitting. 126,813,486 -> 126,814,937, a RISE of 1,451
 # (+0.0011%). LAYOUT, same reason: this route evaluates no constant.
 #
-# 2026-09-18, re-merged onto main after kanso#1511. THE VALUE BELOW IS MAIN'S,
+# 2026-09-18, re-merged onto main after kanso#1515. THE VALUE BELOW IS MAIN'S,
 # carried forward; the merged reading is CI's.
-library_instructions=126807146
+library_instructions=126810299
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.
