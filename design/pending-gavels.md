@@ -69,6 +69,29 @@ so `dev_clang` never reads it. The dev row moves anyway. The pull request is
 green but for the two codegen rows, which are red by design until this is
 settled.
 
+**THAT SENTENCE UNDERSTATES IT, AND THE REAL FIGURE BEARS ON THE CHOICE.** A
+cost-goldens job on 2026-09-18, on this branch merged with main, reports EIGHT
+veins disagreeing rather than two:
+
+    compile instructions        entry instructions
+    library instructions        start-up instructions
+    interpreted run instructions   what emitting costs
+    dev-tier codegen            release-tier codegen
+
+The goldens on the branch are byte-identical to main's, so none of this is
+staleness. The cause is that the pin is 24 lines of `src/main.rs` — the
+COMPILER'S OWN SOURCE — so the binary changes and every layout-sensitive row
+moves with it, the way the interpreted row's seven does on any relink.
+
+**This is an argument about option 1's cost, in option 1's own terms.** The
+objection already written against it is that re-basing a row on an unexplained
+move is what the goldens exist to catch. Six of these eight are exactly that:
+layout moves with no mechanism, on rows nobody was asking about. Option 2 does
+not avoid them either — narrowing the pin still leaves `src/main.rs` changed —
+so the honest statement is that the pin costs eight re-based rows whichever
+tier it covers, and the choice is only about which codegen row stops drawing.
+That was not visible when the options were written.
+
 1. **Pin both tiers**, as kanso#1513 is written. The dev row is re-based to
    whatever the pinned name produces, and both rows stop drawing. The cost is
    that the dev row's new value has no mechanism behind it: the flag does not
