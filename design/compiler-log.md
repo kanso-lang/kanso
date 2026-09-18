@@ -3319,3 +3319,39 @@ differential, not an argument. kanso#1515 and kanso#1520 are both about building
 strings and lists in place, so the appending side is not hypothetical.
 
 Recorded as the lead the whole day was looking for, unsized deliberately.
+
+## 2026-09-18 — half of every Value clone allocates, and the integers are four times the strings
+
+The entry above reasoned about `Value::Str` and put a trade beside it: `Rc<str>`
+buys a cheaper copy at the price of a more expensive build, because a `String`
+is what gets appended to. THAT TRADE IS WRONG FOR THIS CODEBASE and the fix was
+one grep. `append` takes `Value::Bytes` -- "append takes bytes and a string,
+bytes, or byte" -- and grows an `Rc<Vec<u8>>`. Nothing appends to a
+`Value::Str`; a string is built as a local `String`, wrapped once, and copied
+thereafter. kanso#1515 and kanso#1520 are about `Bytes` and `List`, not this.
+
+So the counts were taken instead of reasoned about. A `Clone` impl written by
+hand in place of the derive, counting per variant, over bench/interp_corpus:
+
+    Value clones        1,555,866
+      Str                 137,732     8.9%   566,128 bytes, 4.1 per clone
+      Int                 610,763    39.3%
+      everything else     807,371    51.9%   an Rc bump or a copy of nothing
+
+HALF OF EVERY CLONE ALLOCATES, AND THE INTEGERS ARE FOUR AND A HALF TIMES THE
+STRINGS. `Value::Int` holds a `BigInt`, whose clone allocates a digit vector; on
+this corpus that is 610,763 heap allocations for numbers that are almost all
+small. The strings average FOUR BYTES, so `String::clone`'s ninety-three
+instructions there are the allocator rather than the copying.
+
+The interp vein's allocation counter reads 2,486,376. These two variants are
+748,495 of whatever that counts -- adjacent figures from different instruments,
+so no arithmetic is done between them here.
+
+WHAT THIS MAKES THE LEAD. A small-integer representation -- an inline `i64` with
+`BigInt` only when it overflows -- removes 610,763 allocations, and is a change
+to `Value` rather than to any one path, so every clone in the run pays less, not
+only the environment walk's. `Rc<str>` is the same shape and a quarter the size.
+
+UNSIZED, and this is the fourth time today that mattered: 610,763 is how often
+the allocation happens, not what removing it saves. The build is the measurement.
