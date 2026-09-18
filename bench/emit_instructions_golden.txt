@@ -193,4 +193,13 @@
 # 2026-09-18, kanso#1517 on the tree merged with kanso#1516, CI's sitting.
 # 51,554,663 -> 51,451,897, a FALL of 102,766 (-0.1993%).
 # LAYOUT. `codegen::emit_ir` does not run the interpreter.
-emit_instructions=51451897
+#
+# 2026-09-18, kanso#1502 on the tree merged with main after kanso#1517,
+# CI's sitting. 51,451,897 -> 51,457,106, a RISE of
+# 5,209 (+0.0101240%).
+# LAYOUT. src/runtime.c is include_str!'d into the compiler (src/main.rs)
+# and digested into a constant (src/hash.rs), so editing it moves 450,100
+# bytes of the compiler's own .rodata. None of these routes executes the
+# runtime: three stop before codegen, the fourth writes IR, the fifth
+# starts the interpreter.
+emit_instructions=51457106

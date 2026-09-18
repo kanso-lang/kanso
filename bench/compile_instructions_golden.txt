@@ -2195,7 +2195,16 @@
 # wraps every function group in an `Rc` so the callee memory can hold one
 # without borrowing from `self`. That is an allocation per group at
 # construction, on a route that constructs and then evaluates nothing.
-compile_instructions=35486173
+#
+# 2026-09-18, kanso#1502 on the tree merged with main after kanso#1517,
+# CI's sitting. 35,486,173 -> 35,487,966, a RISE of
+# 1,793 (+0.0050527%).
+# LAYOUT. src/runtime.c is include_str!'d into the compiler (src/main.rs)
+# and digested into a constant (src/hash.rs), so editing it moves 450,100
+# bytes of the compiler's own .rodata. None of these routes executes the
+# runtime: three stop before codegen, the fourth writes IR, the fifth
+# starts the interpreter.
+compile_instructions=35487966
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

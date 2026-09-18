@@ -4240,3 +4240,33 @@ instructions off runbench, and the work vein that carries it read `success` on
 the last job. But welfare also weighs the five carried rows, so a `--set` now
 would freeze a score this container projected rather than the one CI measures.
 The rows come first and the bank follows them.
+
+## 2026-09-18 — kanso#1502, CI's rows on the tree merged after kanso#1517
+
+    compile_instructions      35,486,173 ->    35,487,966    +1,793   +0.0051%
+    entry_instructions       126,498,498 ->   126,503,235    +4,737   +0.0037%
+    library_instructions     126,953,661 ->   126,959,068    +5,407   +0.0043%
+    startup_instructions       3,362,788 ->     3,363,586      +798   +0.0237%
+    emit_instructions         51,451,897 ->    51,457,106    +5,209   +0.0101%
+    interp_instructions    1,963,826,350 -> 1,963,826,365       +15   +0.0000008%
+
+The five layout rows rose this time where they fell against the kanso#1516
+tree, which is the same term with the opposite sign: `src/runtime.c` is
+`include_str!`'d into the compiler and digested into a constant, so 450,100
+bytes of the binary's own `.rodata` move and every route that runs the compiler
+moves with them. None of the five executes the runtime.
+
+THE INTERPRETED ROW IS THE ONE WORTH READING, and it is worth reading because
+of how small it is. Fifteen instructions on 1.96 billion. Against the kanso#1516
+tree this row read its golden EXACTLY, and what changed underneath it since is
+kanso#1517 rather than anything on this branch — the corpus decodes a document
+it built itself and never enters the C runtime. So the fifteen is not the two
+divisions. A frame-level move of this size has been recorded in this log
+before, at plus or minus 13, and that one was chased to `memrchr`; whether this
+is the same frame was NOT checked, and the row is written in saying only that
+fifteen is far too small to be work and that nothing else about the row moved.
+`interp_allocs` read 4,810,437 and `interp_peak_bytes` 951,438, both agreeing
+with their golden, which is what a row with no work in it looks like.
+
+`compile_allocs` read 27,313 and both codegen rows read exactly — 596,162,050
+dev and 6,820,866,344 release.
