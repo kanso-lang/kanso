@@ -3856,3 +3856,36 @@ excluded by name and is now excluded because the memory answers `Callee::Err`
 for it; a type name was excluded by a `type_decl` probe and is now excluded
 because the memory answers `Constructor`. `if` stays a literal: it is a
 declaration AND the conditional form, and the form wins at this site.
+
+## 2026-09-18 — kanso#1517's rows on CI, and the three check routes name their own cost
+
+      interpreted    1,997,105,566 -> 1,963,826,350   -33,279,216   -1.6664%
+      allocations        4,985,433 ->     4,810,437      -174,996   -3.5100%
+      peak bytes           942,210 ->       951,438        +9,228   +0.9794%
+      compile           35,447,843 ->    35,486,173       +38,330   +0.1081%
+      entry            126,368,664 ->   126,498,498      +129,834   +0.1027%
+      library          126,824,214 ->   126,953,661      +129,447   +0.1021%
+      start-up           3,364,523 ->     3,362,788        -1,735   -0.0516%
+      emitting          51,554,663 ->    51,451,897      -102,766   -0.1993%
+
+Each key with the value it landed on: `compile_instructions` 35,486,173,
+`entry_instructions` 126,498,498, `library_instructions` 126,953,661 and
+`interp_peak_bytes` 951,438.
+
+**The three check rows are WORK and not layout, and their agreement is what
+says so.** They rose 0.1081%, 0.1027% and 0.1021% — three routes, three
+different programs, one figure to three decimal places. A shifted binary does
+not do that; it moves rows by different amounts in mixed directions, which is
+what start-up and emitting did here. `kanso check` builds an `Interp`, and
+`Interp::new` now wraps every function group in an `Rc` so the callee memory
+can hold one without borrowing from `self`. That is an allocation per group, on
+a route that constructs the interpreter and then evaluates nothing with it.
+
+It is the cost this change pays and it is priced in the sum: 130,000
+instructions on each check route against 33,279,216 off the interpreted one.
+
+**The two hosts agreed again, and on the counters exactly.** The container
+projected the interpreted fall at 33,238,900 and CI reads 33,279,216 — 40,316
+apart, 0.12% of the delta. `interp_allocs` fell by 174,996 on both, the same
+integer. `interp_peak_bytes` rose 9,229 here and 9,228 on the runner, one byte
+apart on a row whose absolute values the two hosts do not share.

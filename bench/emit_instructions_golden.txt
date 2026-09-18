@@ -153,4 +153,8 @@
 # LAYOUT. src/eval.rs is the compiler, so its bytes move and every row that
 # runs the compiler moves with them; none of these routes evaluates a name,
 # because all four stop before the interpreter and the fifth is the emitter.
-emit_instructions=51554663
+#
+# 2026-09-18, kanso#1517 on the tree merged with kanso#1516, CI's sitting.
+# 51,554,663 -> 51,451,897, a FALL of 102,766 (-0.1993%).
+# LAYOUT. `codegen::emit_ir` does not run the interpreter.
+emit_instructions=51451897

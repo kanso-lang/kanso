@@ -347,4 +347,8 @@
 # LAYOUT. src/eval.rs is the compiler, so its bytes move and every row that
 # runs the compiler moves with them; none of these routes evaluates a name,
 # because all four stop before the interpreter and the fifth is the emitter.
-startup_instructions=3364523
+#
+# 2026-09-18, kanso#1517 on the tree merged with kanso#1516, CI's sitting.
+# 3,364,523 -> 3,362,788, a FALL of 1,735 (-0.0516%).
+# LAYOUT. `kanso play` takes the native path and builds no `Interp`.
+startup_instructions=3362788

@@ -121,6 +121,12 @@
 # 174,996 is that, and the memory's own rows are the rise beside it.
 #
 # The thunk counters are byte-identical across both changes.
-interp_allocs=4985433
-interp_peak_bytes=942210
+#
+# 2026-09-18, kanso#1517 on the tree merged with kanso#1516, CI's sitting.
+# interp_allocs 4,985,433 -> 4,810,437, a FALL of 174,996 (-3.5101%) --
+# the tail hop's vector clone, and EXACTLY the container's -174,996 again.
+# interp_peak_bytes 942,210 -> 951,438, a RISE of 9,228 (+0.9794%),
+# against the container's +9,229: one byte apart on a row neither host shares.
+interp_allocs=4810437
+interp_peak_bytes=951438
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
