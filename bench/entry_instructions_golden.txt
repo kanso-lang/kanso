@@ -898,7 +898,13 @@
 # 2026-09-18, kanso#1511 on the tree merged with main after kanso#1510,
 # CI's sitting. 126,358,241 -> 126,359,513, a RISE of 1,272
 # (+0.0010%). LAYOUT, same reason: this route evaluates no constant.
-entry_instructions=126354834
+#
+# 2026-09-18, kanso#1513 on the tree merged with main after kanso#1515, CI's sitting.
+# 126,354,834 -> 126,354,832, a FALL of 2 (-0.00000%).
+# LAYOUT. `-save-temps=obj` rides KANSO_FIXED_TEMPS, which only the codegen
+# gate sets, and none of these four routes links anything; what moved is the
+# `match` in `release_clang` sitting in the binary they all carry.
+entry_instructions=126354832
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

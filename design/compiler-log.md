@@ -3735,3 +3735,26 @@ it), about 1.35 million lower. **A MEASUREMENT CHANGE and not a compiler
 saving** — nothing about the compiler moved, and what the flag buys is a link
 whose object has the same name twice. Both codegen goldens carry the old value
 with the change named in the header; CI moves them.
+
+## 2026-09-18 — kanso#1513's four layout rows, written in; the two codegen rows are the decision
+
+CI's sitting on the tree merged with main after kanso#1515:
+
+      compile           35,443,611 ->    35,443,609        -2
+      entry            126,354,834 ->   126,354,832        -2
+      library          126,810,299 ->   126,810,297        -2
+      start-up           3,363,774 ->     3,363,770        -4
+
+Minus two, two, two and four. `-save-temps=obj` rides `KANSO_FIXED_TEMPS`,
+which only the codegen gate sets, and none of these four routes links anything;
+what moved is the `match` in `release_clang` sitting in the binary they carry.
+
+**Two rows are left alone on purpose.** `release-tier codegen` reads
+6,833,786,335 against the golden's 6,824,133,280, and writing that row in IS the
+floor drop this branch is waiting on — a drop bought by measurement
+infrastructure rather than by the specification, which the 2026-09-13 rule
+leaves with Clay. `dev-tier codegen` also disagrees, and the comment on the pull
+request claimed it could not: the claim was that `-save-temps=obj` never reaches
+the dev tier. One of those two is wrong and this entry does not say which,
+because nothing here isolated it. That is the next measurement on this branch,
+not a sentence.
