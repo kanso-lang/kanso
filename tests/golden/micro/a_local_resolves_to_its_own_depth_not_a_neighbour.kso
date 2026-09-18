@@ -1,0 +1,50 @@
+# Every wrong answer here prints a wrong NUMBER rather than failing, which is
+# the whole point of the fixture. Resolving a local means walking the
+# environment chain until a name matches; a change that resolves to an index
+# instead has to land on the same frame, and an index one out reaches a
+# neighbouring binding that is a perfectly good value of the same type. A
+# fixture whose locals all held different types, or whose wrong answers
+# crashed, would pass for a resolution that was merely wrong.
+#
+# So the five locals in `ladder` are consecutive integers: off by one in
+# either direction prints a neighbour and the golden catches it.
+#
+# THE GUARD IS THE REASON THIS IS NOT JUST A LIST OF BINDS. `Stmt` has three
+# variants and none of them branches, which reads like a body being a flat
+# sequence -- and it is not. `Expr::Guard` carries its own statement list and
+# evaluates it only when the condition is false, so the binds after a `return
+# ... if` line are nested rather than next. `after_guard` puts three of them
+# there, under a guard that does not fire.
+#
+# `shadowed` is the other half, and the checker narrows which half is even
+# possible: a local may NOT take the name of a declaration in its own module
+# ("`base` is already a declaration; rename the binding"), so the only legal
+# shadowing is of a bare-enrolled import. `round` here is the local, and
+# `math/round` is what it shadows; reaching past the local finds a function
+# value rather than an error, so a wrong answer is again a wrong print.
+import "std/math"
+
+fn ladder x
+  a = x + 1
+  b = x + 2
+  c = x + 3
+  d = x + 4
+  e = x + 5
+  "{a} {b} {c} {d} {e}"
+
+fn after_guard n
+  return "early" if n < 0
+  p = n + 10
+  q = n + 20
+  r = n + 30
+  "{p} {q} {r}"
+
+fn shadowed x
+  round = x + 7
+  other = x + 8
+  "{round} {other}"
+
+pub play =
+  print (ladder 10)
+  >> print (after_guard 1)
+  >> print (shadowed 1)

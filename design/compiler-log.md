@@ -2881,6 +2881,48 @@ Recorded rather than started, with four pull requests in flight. The
 measurement is the deliverable here; kanso#1516 already memoises what a name
 resolves to, so the first question for whoever picks this up is why that memory
 does not already prevent the walk.
+
+## 2026-09-18 — the spec the slot work needs, watched red before it was green
+
+`tests/golden/micro/a_local_resolves_to_its_own_depth_not_a_neighbour` pins that
+a local resolves to its own binding and not to the one beside it. Resolving a
+local to an INDEX has to land on the same frame the walk lands on, and the way
+that goes wrong is an index one out, which reaches a neighbouring binding rather
+than nothing. So every wrong answer here has to be a wrong VALUE.
+
+Three shapes, chosen for that:
+
+`ladder` binds five consecutive integers and prints all five. Off by one in
+either direction prints a neighbour, and every candidate answer is a perfectly
+good number.
+
+`after_guard` puts three binds after a `return ... if` line. This is the shape
+the entry above got wrong: `Stmt` has three variants and none of them branches,
+which reads like a flat sequence, and `Expr::Guard` carries its own statement
+list and runs it only when the condition is false. The binds after a guard are
+nested rather than next.
+
+`shadowed` takes the name of something already in scope, and THE CHECKER
+NARROWS WHICH SHADOWING IS EVEN POSSIBLE. A local may not take the name of a
+declaration in its own module -- "`base` is already a declaration; rename the
+binding" -- which the first draft of this fixture was refused for. The only
+legal shadowing is of a bare-enrolled import, so `round` shadows `math/round`,
+and reaching past the local finds a function value rather than an error. That
+is a constraint worth having: at any site a name is a local or it is not, and
+never both.
+
+WATCHED RED, FOR THE RIGHT REASON. `lookup` was broken to return the matched
+frame's PARENT -- one frame too far, exactly what an index off by one does --
+and the fixture printed:
+
+    10 11 12 13 14      against   11 12 13 14 15
+    1 11 21             against   11 21 31
+    1 8                 against   8 9
+
+Every line a valid number, nothing raised, all three shapes caught. The native
+engine was untouched by the break, so the two engines disagreed and
+`micro_corpus_agrees_across_engines` failed on the divergence rather than on
+the golden alone. Restored, and green again.
 ## 2026-09-17 — the digit loop carried a value it only needed at the end, and then the tail gave it back
 
 `render_ryu` is 84,209,220 instructions of runbench, 4.58%, 440.7 a float over
