@@ -108,3 +108,69 @@ impl Hasher for Fx {
         self.hash
     }
 }
+
+/// The digest of a byte string, taken at BUILD time.
+///
+/// `src/runtime.c` is 450,100 bytes and two cache keys must both change when
+/// it does: the staged `kanso_runtime_*.o` and the linked `kanso_run_*`. Both
+/// used to get that by handing the whole file to a `DefaultHasher`, so every
+/// `kanso play`, `kanso run` and `kanso build` walked it twice before doing
+/// any work of its own. Callgrind on `kanso play` over a one-line program put
+/// `sip::Hasher::write` at 1,226,463 instructions of self time -- 25.35% of
+/// everything under `kanso::main`, for a constant that cannot differ between
+/// two processes of one binary.
+///
+/// A constant's digest is a constant, so `RUNTIME_DIGEST` is computed by the
+/// compiler that builds this one and the running compiler folds in eight
+/// bytes.
+///
+/// WHY TWO ACCUMULATORS. FNV-1a is a good enough mixer for content that has no
+/// adversary, and its known weakness is the high bits of short inputs. Two
+/// passes with different primes and different offsets are folded in together,
+/// so a key carries 128 bits rather than 64. A collision here is not a slow
+/// build; it is a runtime object reused against IR that was built for a
+/// different one, which is a miscompile. The cost of the second pass is paid
+/// once, by the build.
+pub const fn digest_of(bytes: &[u8]) -> (u64, u64) {
+    let mut a: u64 = 0xcbf2_9ce4_8422_2325;
+    let mut b: u64 = 0x9e37_79b9_7f4a_7c15;
+    let mut i = 0;
+    // EIGHT BYTES A STEP, because this loop is interpreted. `const` evaluation
+    // runs one step at a time under a budget rustc denies by default, and a
+    // byte-at-a-time walk over 450,100 bytes exceeds it. A word at a time is
+    // the same function of the same bytes at an eighth of the steps.
+    while i + 8 <= bytes.len() {
+        let word = u64::from_le_bytes([
+            bytes[i],
+            bytes[i + 1],
+            bytes[i + 2],
+            bytes[i + 3],
+            bytes[i + 4],
+            bytes[i + 5],
+            bytes[i + 6],
+            bytes[i + 7],
+        ]);
+        a = (a ^ word).wrapping_mul(0x0000_0100_0000_01b3);
+        b = (b ^ word).wrapping_mul(0x0000_0000_0100_0193).rotate_left(29);
+        i += 8;
+    }
+    while i < bytes.len() {
+        let byte = bytes[i] as u64;
+        a = (a ^ byte).wrapping_mul(0x0000_0100_0000_01b3);
+        b = (b ^ byte).wrapping_mul(0x0000_0000_0100_0193).rotate_left(29);
+        i += 1;
+    }
+    // The length goes in too: a tail shorter than a word is folded byte by
+    // byte, so two contents differing only in trailing zero bytes would
+    // otherwise be free to meet.
+    a ^= bytes.len() as u64;
+    b = b.wrapping_add(bytes.len() as u64);
+    (a, b)
+}
+
+/// `src/runtime.c`, digested by the compiler that built this one.
+///
+/// `tests/the_runtime_source_is_not_hashed_at_run_time.rs` holds both halves
+/// of what this is for: that nothing walks the source at run time, and that
+/// this constant is the digest of the bytes it names.
+pub const RUNTIME_DIGEST: (u64, u64) = digest_of(include_str!("runtime.c").as_bytes());

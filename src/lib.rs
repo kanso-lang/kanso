@@ -165,8 +165,15 @@ fn compile_parsed_entry(
     // honest; see `Rewrites`.
     let rewritten =
         phase::watched("canonicalize_bare_aliases", || canonicalize_bare_aliases(&mut merged));
-    let merged_diags = check::check_merged_after_aliases(&merged, true, &rewritten);
-    inline::inline_builtin_wrappers(&mut merged);
+    // One alias fixpoint and one group count for the two passes that read
+    // them. The check runs first and the rewrite second over a program
+    // neither changes in between, so asking twice was asking the same
+    // question of the same program.
+    let counts = inline::group_sizes(&merged);
+    let builtins = inline::aliases_from(&merged, &counts);
+    let wrappers = inline::wrapper_table(&builtins, &counts);
+    let merged_diags = check::check_merged_after_aliases_with(&merged, true, &rewritten, builtins);
+    inline::apply_wrappers(&mut merged, &wrappers);
     match merged_diags.is_empty() {
         true => {
             phase::watched("canonicalize_types", || canonicalize_types(&mut merged));
@@ -3847,10 +3854,16 @@ fn compile_module_loaded(
     // readers as the entry path.
     let rewritten =
         phase::watched("canonicalize_bare_aliases", || canonicalize_bare_aliases(&mut merged));
+    // As on the entry path: the check and the rewrite ask the same program
+    // the same question back to back, so the fixpoint and the group count are
+    // built once and handed to each.
+    let counts = inline::group_sizes(&merged);
+    let builtins = inline::aliases_from(&merged, &counts);
+    let wrappers = inline::wrapper_table(&builtins, &counts);
     let diags = phase::watched("check_merged", || {
-        check::check_merged_after_aliases(&merged, require_entry, &rewritten)
+        check::check_merged_after_aliases_with(&merged, require_entry, &rewritten, builtins)
     });
-    inline::inline_builtin_wrappers(&mut merged);
+    inline::apply_wrappers(&mut merged, &wrappers);
     if !diags.is_empty() {
         // The name an import writes, never the file behind it. A module in a
         // directory read as `(module pkg)` and a module in one file as

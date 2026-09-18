@@ -44,7 +44,7 @@ box=/tmp/kanso-compile-ir
 
 printf 'startup_binary sha256=%s\n' "$(sha256sum "$box/kanso" | cut -d' ' -f1)"
 size --format=sysv "$box/kanso" \
-  | awk '/^\.(text|data|bss)[ \t]/ { printf "startup_binary %s=%s\n", $1, $2 }'
+  | awk '/^\.(text|rodata|data|bss)[ \t]/ { printf "startup_binary %s=%s\n", $1, $2 }'
 
 tune=glibc.cpu.x86_data_cache_size=0x8000
 tune=$tune:glibc.cpu.x86_shared_cache_size=0x2000000
@@ -96,6 +96,22 @@ fi
 echo "=== the profile's top frames, inclusive"
 callgrind_annotate --inclusive=yes --threshold=99 /tmp/cg.startup 2>&1 | head -30
 
+# THIS GATE'S PROGRAM PRINTS NOTHING TO STDOUT through Rust, which is why the
+# printed line is not subtracted here the way it is on the four rows beside
+# this one. `startup_corpus/main.kso` holds a single `print` and that output
+# does reach stdout -- but `kanso play` takes the NATIVE path, so the program's
+# print is the C runtime writing directly and never enters
+# `std::io::stdio::_print`. No LineWriter, no `memrchr` over the formatted
+# bytes, and so no frame whose cost moves with the binary's layout.
+#
+# The measurement agrees with the mechanism. kanso#1487 read five CI builds on
+# 2026-09-17 across trees whose compiler source was identical: the module,
+# entry and library rows each drew two faces thirteen apart, and this row gave
+# ONE value on all five. That is the row where the exclusion would have nothing
+# to take off.
+#
+# tests/every_anchored_gate_answers_for_the_printed_line.rs is what makes this
+# paragraph exist rather than be assumed.
 own=$(callgrind_annotate --inclusive=yes --threshold=100 /tmp/cg.startup 2>/dev/null \
       | awk '/kanso::main/ && !seen { gsub(/,/, "", $1); print $1; seen = 1 }')
 case "$own" in
