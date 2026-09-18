@@ -4334,6 +4334,51 @@ Welfare 77.25 -> 77.26, banked in the same pull request.
 
 ---
 
+## 2026-09-18 — two green sweeps did not cover four gates, and the spec that says so passed vacuously first
+
+**BUILT.** On 2026-09-18 `all_counters.sh` printed "the twelve cost veins and
+the lazy tier agree with their goldens" on a tree whose interpreted row had
+moved 18,540,440 instructions. Nothing was lost — the move was deliberate and
+CI measured it — but two sweeps reading green is what a session takes for
+coverage, and four gates were in neither list:
+
+    instructions           bench/instructions_golden.txt
+    interp_instructions    bench/interp_instructions_golden.txt
+    interp_memory          bench/interp_memory_golden.txt
+    startup_instructions   bench/startup_instructions_golden.txt
+
+The first is retired instructions per benchmark, which is the dimension every
+allocation counter is blind to. CI runs all four, each as its own step with its
+own row in the cost-goldens summary, so a pull request can go red on a gate no
+container sweep names.
+
+`scripts/gates/all_interp.sh` is the third sweep, in `all_compile.sh`'s shape
+and for its stated reasons. **All four REFUSE on this container**, and that is
+an argument for including them rather than against: a gate printed as REFUSED
+says the row is unchecked and CI will measure it, where saying nothing says it
+agreed. That distinction is the whole reason `all_compile.sh` separates the two
+verdicts.
+
+**THE SPEC PASSED WITHOUT CHECKING ANYTHING, AND ONLY BREAKING IT SHOWED THAT.**
+`tests/every_golden_is_swept_by_something.rs` pins that every gate CI runs
+against a golden is named by one of the three sweeps. Written, it went green.
+Removing `interp_instructions` from the new sweep to watch it fail, it stayed
+green — its `reads_a_golden` scan began AT `bench/` rather than after it, and
+`/` is not in the character set it walks, so every gate read as naming no
+golden at all and the assertion ranged over an empty set.
+
+One character of offset, and a spec that would have shipped proving nothing
+about the hole it was written for. CLAUDE.md's rule is exact about this — watch
+it fail, for the right reason, before it passes — and the rule earned its place
+again here. Fixed, it names `interp_instructions` and nothing else.
+
+The property is anchored to the workflow rather than to a list in the spec,
+because a list in the spec is the thing that goes stale: CI running a gate is
+the obligation, so a gate added to CI and to no sweep is a red spec. Two
+siblings already cover one sweep each — `every_counter_gate_is_in_the_sweep.rs`
+and `the_compile_sweep_names_every_compile_gate.rs` — and by construction
+neither could see a gate belonging to neither of them.
+
 ## 2026-09-18 — the score buffer had no reason to be freed, and freeing it cost five million
 
 **BUILT AND SHIPPING**, following the previous change rather than a fresh
