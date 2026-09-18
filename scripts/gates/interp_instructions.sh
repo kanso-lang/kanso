@@ -86,6 +86,32 @@ callgrind_annotate --inclusive=yes --threshold=99 /tmp/cg.interp 2>&1 | head -30
 # exclude it.
 own=$(callgrind_annotate --inclusive=yes --threshold=100 /tmp/cg.interp 2>/dev/null \
       | awk '/kanso::run_interpreted_on_stack/ && !seen { gsub(/,/, "", $1); print $1; seen = 1 }')
+
+# THE PRINTED LINE COMES OFF, the same way and for the same reason it comes off
+# the module row. `interp_corpus` prints what it decoded, LineWriter runs
+# `core::slice::memchr::memrchr` over the formatted bytes to find the last
+# newline, and what that frame costs moves with the binary's LAYOUT rather than
+# with anything the interpreter does. kanso#1487 measured it on the module row:
+# five CI builds on 2026-09-17, across trees whose compiler source was
+# identical, drew two faces THIRTEEN apart on the module, entry and library
+# rows, while start-up -- whose gate prints nothing -- gave one value on all
+# five. That fix landed on the three `kanso check` rows and not here, and this
+# row has been drawing the same two faces ever since: kanso#1486's two sittings
+# read 2,182,526,878 and 2,182,526,865, thirteen apart, on trees whose only
+# difference was three goldens, a page and a log entry.
+#
+# So the term is excluded, per the 2026-09-15 rule: what cannot be normalized
+# is left out and the exclusion is named in the golden's header. The figure is
+# printed as a notice rather than only subtracted, because a number that only
+# ever appears subtracted cannot answer the next drift.
+printed=$(callgrind_annotate --inclusive=yes --threshold=100 /tmp/cg.interp 2>/dev/null \
+          | awk '/:std::io::stdio::_print \[/ && !seen { gsub(/,/, "", $1); print $1; seen = 1 }')
+case "$printed" in '' | *[!0-9]*) printed=0 ;; esac
+case "$own" in
+  '' | *[!0-9]*) ;;
+  *) own=$((own - printed)) ;;
+esac
+echo "::notice::interp_printed=${printed}"
 case "$own" in
   '' | *[!0-9]*)
     echo "::error::the profile carries no run_interpreted_on_stack frame, so"
