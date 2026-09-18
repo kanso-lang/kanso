@@ -420,5 +420,11 @@
 # this branch changes src/runtime.c, which the interpreted row carries as
 # bytes rather than compiling, so the row moves with the binary and not with
 # anything the row measures.
-interp_instructions=1029696282
+#
+# 2026-09-18, kanso#1533, CI's sitting. 1,029,696,275 -> 995,837,536,
+# a FALL of 33,858,739 (-3.2882%).
+# THE ROW THIS CHANGE IS ABOUT. The dispatcher stops copying its group name
+# through the formatting machinery on every tail hop, and arm selection stops
+# allocating two vectors for every candidate it is about to reject.
+interp_instructions=995837536
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

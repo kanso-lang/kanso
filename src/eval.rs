@@ -2311,7 +2311,7 @@ impl<'a> Interp<'a> {
         args: Vec<Value>,
         span: Span,
     ) -> EvalResult {
-        self.dispatch_loop(name.to_string(), Rc::clone(overloads), args, span)
+        self.dispatch_loop(Rc::from(name), Rc::clone(overloads), args, span)
     }
 
     /// The dispatcher's trampoline: a tail call to a named group re-enters
@@ -2321,7 +2321,7 @@ impl<'a> Interp<'a> {
     /// machine stack. The oracle should not be the engine that fails first.
     fn dispatch_loop(
         &self,
-        name: String,
+        name: Rc<str>,
         overloads: Rc<Vec<&'a FnDecl>>,
         args: Vec<Value>,
         span: Span,
@@ -2351,7 +2351,7 @@ impl<'a> Interp<'a> {
 
     fn dispatch_loop_inner(
         &self,
-        name: String,
+        name: Rc<str>,
         overloads: Rc<Vec<&'a FnDecl>>,
         args: Vec<Value>,
         span: Span,
@@ -2394,19 +2394,42 @@ impl<'a> Interp<'a> {
                 }
             }
             let mut best: Option<(Score, &FnDecl, Bindings)> = None;
+            // One pair of buffers for the whole candidate list. `match_params`
+            // used to build both at `Vec::with_capacity` on every candidate and
+            // give up the moment a pattern refused, so a candidate that failed
+            // on its first parameter had already paid for two allocations --
+            // and most candidates fail, because arm selection tries them all.
+            let mut score: Score = Vec::new();
+            let mut binds: Bindings = Vec::new();
             for decl in overloads.iter() {
                 if decl.params.len() != args.len() {
                     continue;
                 }
-                let Some((score, binds)) = match_params(&decl.params, &args) else {
+                if !match_params_into(&decl.params, &args, &mut score, &mut binds) {
                     continue;
-                };
+                }
                 let replace = match &best {
                     Some((best_score, ..)) => score > *best_score,
                     None => true,
                 };
                 if replace {
-                    best = Some((score, decl, binds));
+                    // The outgoing best's buffers become the working pair, so
+                    // a candidate that wins hands its vectors on rather than
+                    // leaving the next one to allocate from nothing.
+                    match best.take() {
+                        Some((was_score, _, was_binds)) => {
+                            let kept_score = std::mem::replace(&mut score, was_score);
+                            let kept_binds = std::mem::replace(&mut binds, was_binds);
+                            best = Some((kept_score, decl, kept_binds));
+                        }
+                        None => {
+                            best = Some((
+                                std::mem::take(&mut score),
+                                decl,
+                                std::mem::take(&mut binds),
+                            ));
+                        }
+                    }
                 }
             }
             match best {
@@ -2429,7 +2452,11 @@ impl<'a> Interp<'a> {
                         Flow::Tail(next, next_args, next_span) => {
                             overloads =
                                 self.fns.get(&*next).expect("tails name real groups").clone();
-                            name = next.to_string();
+                            // `Flow::Tail` already carries the name as an
+                            // `Rc<str>`, and every use of it below this loop
+                            // reads it as `&str`. Moving it costs a pointer
+                            // where copying it cost an allocation a hop.
+                            name = next;
                             args = next_args;
                             span = next_span;
                         }
@@ -3828,15 +3855,23 @@ fn taken_to_grow<T: Clone>(rc: Rc<Vec<T>>, extra: usize) -> Vec<T> {
     }
 }
 
-fn match_params(params: &[Pattern], args: &[Value]) -> Option<(Score, Bindings)> {
-    // Both vectors are built at the size the parameter list already states.
-    // `score` takes exactly one entry per parameter, so its capacity is not an
-    // estimate; `binds` takes at most one per parameter for the simple
-    // patterns and grows from there for a constructor that binds several.
-    // dispatch runs this once per overload on every call, and a Vec::new()
-    // that reaches three entries has reallocated twice by then.
-    let mut score = Vec::with_capacity(params.len());
-    let mut binds = Vec::with_capacity(params.len());
+/// Score one candidate into buffers the caller owns, answering whether it
+/// matched at all.
+///
+/// The vectors used to be built here, at the size the parameter list states,
+/// once per candidate. That is the right size and the wrong lifetime: arm
+/// selection tries every overload in the group and keeps one, so the
+/// allocations for every candidate that refused were paid and thrown away.
+/// The caller clears and reuses one pair instead, and `binds` keeps whatever
+/// capacity the group's widest arm reached.
+fn match_params_into(
+    params: &[Pattern],
+    args: &[Value],
+    score: &mut Score,
+    binds: &mut Bindings,
+) -> bool {
+    score.clear();
+    binds.clear();
     for (pattern, arg) in params.iter().zip(args) {
         // per-param: literals 200, annotated 100 minus subtype distance
         // (nearer declarations outrank ancestors), generics 10 — the old
@@ -3846,10 +3881,12 @@ fn match_params(params: &[Pattern], args: &[Value]) -> Option<(Score, Bindings)>
             1 => 100,
             _ => 10,
         };
-        let depth = match_one(pattern, arg, &mut binds)?;
+        let Some(depth) = match_one(pattern, arg, binds) else {
+            return false;
+        };
         score.push(base.saturating_sub(depth));
     }
-    Some((score, binds))
+    true
 }
 
 /// The as-pattern's name takes the value the shape matched — the same value
