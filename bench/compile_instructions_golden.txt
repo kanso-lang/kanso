@@ -1773,6 +1773,26 @@
 # the pattern before the binder is what the fall is; the rest of the move
 # against round three is kanso#1464 arriving underneath it.
 #
+# 2026-09-17, kanso#1468. A LAYOUT MOVE, and the documented kind: `kanso
+# check` stops before codegen, so nothing this change does to the emitter
+# runs on this corpus at all -- but src/codegen.rs IS the compiler, and its
+# bytes and the layout under them moved. 3,305 on 36.8M is 0.009%, and it
+# fell. CLAUDE.md's bullet on this says never to write down that the row
+# cannot move, and never to write down that it did before CI has said so.
+#
+# 2026-09-17, kanso#1468 merged with kanso#1459's tree. Both notes below
+# stand: each change moved this row on its own base, and the merged tree is
+# neither reading. The value here is kanso#1459's, carried forward so the
+# gate has one value to fail against rather than none; the merged sitting is
+# CI's to take, and it replaces this line in the round after it.
+#
+# 2026-09-17, kanso#1468 merged with kanso#1459, CI's sitting. The value the
+# merge carried forward was kanso#1459's, and the merged tree reads below it
+# because it carries both changes: 81,740 lower (0.2228%). Neither change
+# moved this row by doing different work on this corpus -- `kanso check` stops
+# before codegen and neither touches a pass it runs -- so both are the layout
+# move CLAUDE.md's own note on this row describes, and this is the reading
+# that matters rather than either projection.
 # 2026-09-17, kanso#1462, round four. Read on the head merged with
 # kanso#1464, against main's 36,864,779 / 131,837,650 / 131,978,823. The
 # fixed-seed hashing this branch puts on the compile path is the fall.
@@ -1819,6 +1839,16 @@
 # carried forward so the gate has one value to fail against rather than none;
 # the merged sitting is CI's to take.
 #
+# 2026-09-17, kanso#1468 merged with kanso#1472, CI's sitting on the merged tree.
+# The value the merge carried forward was main's; this is the merged tree's own
+# reading. The two whole-program questions the emitter asked once per name are
+# indexed, and `kanso check` runs the front end that asks them, so this is work
+# removed from this corpus rather than layout.
+#
+# 2026-09-17, kanso#1473 on the stacked head, CI's sitting. The beat's tail
+# calls are read once from an index rather than re-derived per group, and
+# `kanso check` runs the pass that asks, so this is work removed from the corpus
+# rather than layout.
 # 2026-09-17, kanso#1462 merged with kanso#1472, CI's sitting on the merged tree.
 # The value the merge carried forward was main's; this is the merged tree's own
 # reading. `kanso check` does not run the interpreter, so the hashing this branch
@@ -1840,6 +1870,12 @@
 # main's, carried forward so the gate has one value to fail against
 # rather than none; the merged sitting is CI's to take.
 #
+# 2026-09-17, kanso#1468 on the tree merged with kanso#1465, CI's sitting. LAYOUT,
+# not work: both questions this branch indexes are asked inside Backend::emit,
+# which sits under emit_ir, and emit_ir is reached only from main.rs's build and
+# run paths. `kanso check` stops before codegen, so neither scan runs on these
+# corpora. Measured on this box: three binaries differing only in functions that
+# nothing calls span 60,395 instructions on this row.
 # 2026-09-17, kanso#1461 on the tree merged with kanso#1465, CI's sitting. LAYOUT,
 # not work: this branch changes src/eval.rs, the interpreter, and `kanso check`
 # never runs it. What moved the row is src/eval.rs being part of the compiler
@@ -1860,6 +1896,17 @@
 # main's, carried forward so the gate has one value to fail against
 # rather than none; the merged sitting is CI's to take.
 #
+# 2026-09-17, merged with main. Both branches moved this row on their own
+# base, so the merged tree is reading neither number. The value below is
+# main's, carried forward so the gate has one value to fail against
+# rather than none; the merged sitting is CI's to take.
+# 2026-09-17, kanso#1468 on the head merged with main after kanso#1461.
+# CI reads 35,887,445 against 35,965,137, a FALL of 77,692 (-0.216%). LAYOUT.
+# This branch's whole diff is src/codegen.rs and nothing else, and `kanso check`
+# stops before codegen, so not one line it changes runs on this corpus. What
+# moved is the compiler's own bytes and the layout under them, which is the case
+# CLAUDE.md's bullet describes and the reason this row is taken from CI rather
+# than projected.
 # 2026-09-17, kanso#1462 on the head merged with main after kanso#1479. CI
 # reads 35,969,617 against 35,965,137, a RISE of 4,480 (+0.012%). LAYOUT. This
 # branch's whole compiler diff is src/eval.rs and a new `interpreter_counters`
@@ -1912,6 +1959,49 @@
 # main's, carried forward so the gate has one value to fail against
 # rather than none; the merged sitting is CI's to take.
 #
+# 2026-09-17, merged with main. Both branches moved this row on their own
+# base, so the merged tree is reading neither number. The value below is
+# main's, carried forward so the gate has one value to fail against
+# rather than none; the merged sitting is CI's to take.
+#
+# 2026-09-17 (kanso#1478): compile_instructions 35,964,325 -> 35,869,543, a FALL
+# of 94,782 (-0.2635%). Against the parent kanso#1476 the fall is 27,425
+# (-0.0764%), and that part is this branch's: the beat's seventh whole-program
+# question reads an index now. CI's sitting on 938653c6.
+# 2026-09-17 (kanso#1476): compile_instructions 35,964,325 -> 35,896,968, a FALL
+# of 67,357 (-0.1873%). The fall is the parent's, kanso#1475. This row came back
+# byte-identical to the one that branch measured: `kanso check` stops before
+# codegen and this change is in the emitter, so there is nothing here for it to
+# move. CI's sitting on fb28abb2.
+# 2026-09-17, kanso#1475 on the excluded anchor. 67,357 below main, and 27,425
+# ABOVE its own base kanso#1473. The linearity fixpoint's group scan is indexed
+# here and `kanso check` does run that analysis, so this row is not purely
+# layout -- but the direction is a rise, and what the change buys is on the
+# build path: kanso build falls 9.61% with the emitted IR byte-identical.
+# 2026-09-17, kanso#1473 on the excluded anchor. 94,782 below main and 17,090
+# below its own base, kanso#1468: the beat's tail-call question is asked once
+# per name now. Layout, as the other two compile rows are -- `kanso check`
+# stops before codegen.
+# 2026-09-17, kanso#1468 on the excluded row. 77,692 lower. The emitter's two
+# whole-body questions are asked once per name now instead of once per name per
+# declaration, and this is the layout half of that: `kanso check` stops before
+# codegen, so what moved the row is the compiler binary carrying different
+# bytes.
+#
+# 2026-09-17, merged with the base. The base moved this row's FILE and not
+# the compiler: since this branch measured, the only thing that landed
+# under it is a row written into a golden, so the value below is this
+# branch's own sitting and it still stands.
+#
+# 2026-09-17, merged with the base. The base moved this row's FILE and not
+# the compiler: since this branch measured, the only thing that landed
+# under it is a row written into a golden, so the value below is this
+# branch's own sitting and it still stands.
+#
+# 2026-09-17, merged with the base. The base moved this row's FILE and not
+# the compiler: since this branch measured, the only thing that landed
+# under it is a row written into a golden, so the value below is this
+# branch's own sitting and it still stands.
 # 2026-09-17 (kanso#1482): compile_instructions 35,964,325 -> 35,964,418, a RISE
 # of 93 (+0.00026%). The change is in the emitter and `kanso check` stops before
 # codegen, so this is layout; compile_allocs and compile memory came back
@@ -1927,6 +2017,21 @@
 # base, so the merged tree is reading neither number. The value below is
 # main's, carried forward so the gate has one value to fail against
 # rather than none; the merged sitting is CI's to take.
+#
+# 2026-09-17, kanso#1468 on the tree merged with kanso#1462. CI reads 35,964,985
+# against main's 35,968,792, a fall of 3,807 -- 0.0106%. LAYOUT, as every
+# sitting this branch has taken on this row: `kanso check` stops before
+# codegen, so neither the prune index nor the declares index runs on this
+# corpus at all. src/codegen.rs is the compiler, and moving its bytes moves
+# what sits around them.
+#
+# 2026-09-17, kanso#1478 as the ONE TIP for the run of five, on main 298636b7.
+# CI reads 35,868,792 against main's 35,968,792, a fall of exactly 100,000 --
+# 0.278%. This head carries kanso#1468, kanso#1473, kanso#1475 and kanso#1476
+# as well as its own change, and unlike kanso#1468 alone the fall here is
+# WORK: the beat and linearity indexes run inside `kanso check`, which is
+# what this corpus measures. The round hundred thousand is a coincidence of
+# the sitting and not a rounded figure.
 #
 # 2026-09-17, kanso#1470 on main 298636b7. CI reads 35,968,794 against main's
 # 35,968,792 -- TWO instructions. The branch edits src/main.rs, so the row can
@@ -1944,12 +2049,64 @@
 # main's, carried forward so the gate has one value to fail against
 # rather than none; the merged sitting is CI's to take.
 #
+# 2026-09-17, merged with main at 5e256ce0 (kanso#1491). kanso#1470 landed
+# under this branch inside the split, and it moved this row 2 instructions.
+# The value below is still this branch own CI sitting, 99,189 below the base
+# it was taken on; the merge adds a couple of instructions of layout on top
+# of that and CI is what says how many. Only CI may write the merged number.
+#
+# 2026-09-17, kanso#1478 as the one tip for the run of five, against main,
+# CI's sitting. 35,968,171 -> 35,868,982, a FALL of 99,189 (-0.276%). WORK: five
+# passes that answered a whole-program question once per name answer it from an
+# index now. The entry path fell 0.267% and the library path 0.264% beside it,
+# on one binary in one job.
+# 
+# The row this file carried until now was main's, put there by the merge so the
+# gate would have one number to fail against rather than none. This is the tip's
+# own reading.
+#
 # 2026-09-17, kanso#1470 against main, CI's sitting. 35,968,171 -> 35,968,173, a
 # RISE of 2. The entry row fell 2 and the library and interpreted rows are
 # byte-identical. This branch adds counters and the gates that read them and
 # changes no decision the front end makes; two instructions is the binary's
 # bytes and nothing else.
-compile_instructions=35968173
+# 2026-09-17, kanso#1478 on the tree merged with main 5e256ce0, CI's sitting.
+# 35,868,982 -> 35,869,355, a RISE of 373 (+0.0010%). LAYOUT. kanso#1491 landed
+# under this branch and edits src/main.rs; `kanso check` stops before codegen,
+# so nothing the split does can reach a decision this corpus makes, and moving
+# the compiler's bytes moves what sits around them. Against main's own
+# 35,968,173 the branch is 98,818 below, which is the work.
+#
+# 2026-09-17, kanso#1486 on the tree merged with main 2a0cec7c, CI's sitting.
+# compile_instructions 35,869,355 -> 35,441,049, a FALL of 428,306 (-1.1941%).
+# The row this branch is for. A second count in the same job read 35,441,049.
+# 2026-09-18, kanso#1507 on the tree merged with main, CI's sitting. 35,869,355 ->
+# 35,869,250, a FALL of 105 (-0.00029%). LAYOUT. This branch adds a
+# `match std::env::var("KANSO_LTO_JOBS")` to `release_clang` in src/main.rs and
+# `KANSO_LTO_JOBS=1` to three `env -i` lines in a gate script. src/main.rs is
+# the compiler, so its bytes and the layout under them move, and every row that
+# runs the compiler moves with them. Seven rows moved here and all seven are
+# under five ten-thousandths of a per cent, with mixed signs -- which is what a
+# shifted binary looks like and not what work looks like.
+#
+# 2026-09-18, re-merged after kanso#1486 landed underneath. THE VALUE BELOW IS
+# MAIN'S, carried forward. kanso#1507's own sitting on the pre-merge tree read
+# 35,869,250 and is recorded above; it was taken on a base that did not
+# carry kanso#1486's 1.17% fall across the three check routes, so it describes
+# a tree that no longer exists. Carrying main's forward gives the gate one
+# number to fail against rather than none, and makes CI's diff read exactly
+# what this branch does to today's main.
+#
+# 2026-09-18, kanso#1507 on the tree merged with kanso#1486, CI's sitting.
+# 35,441,049 -> 35,441,027, a FALL of 22 (-0.00006%). LAYOUT. The value
+# above was main's, carried forward because this branch's own reading predated
+# kanso#1486; this is the merged tree measured. src/main.rs gained a four-line
+# `match` on an environment variable and src/main.rs is the compiler, so its
+# bytes move and every row that runs the compiler moves with them. Six rows
+# moved and the two codegen rows did not: they AGREED with this branch's own
+# readings to the instruction, across two CI jobs on two different trees,
+# which is what `-Wl,-plugin-opt=jobs=1` bought.
+compile_instructions=35441027
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

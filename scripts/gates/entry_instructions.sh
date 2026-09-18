@@ -44,7 +44,7 @@ printf 'entry_binary sha256=%s\n' "$(sha256sum "$box/kanso" | cut -d' ' -f1)"
 # only the job log.
 echo "::notice::entry_binary sha256=$(sha256sum "$box/kanso" | cut -d' ' -f1)"
 size --format=sysv "$box/kanso" \
-  | awk '/^\.(text|data|bss)[ \t]/ { printf "entry_binary %s=%s\n", $1, $2 }'
+  | awk '/^\.(text|rodata|data|bss)[ \t]/ { printf "entry_binary %s=%s\n", $1, $2 }'
 # AND THE SAME THREE AS A NOTICE. kanso#1479 made the sha a notice for a
 # reason that applies here with more force: the sections are the only printed
 # property that distinguishes two BUILDS of one source, and stdout reaches
@@ -56,7 +56,7 @@ size --format=sysv "$box/kanso" \
 # between BUILDS, and the sections are what would say so; they were printed
 # on both runs and readable on neither.
 size --format=sysv "$box/kanso" \
-  | awk '/^\.(text|data|bss)[ \t]/ { printf "%s=%s ", $1, $2 }' > /tmp/entry.sections
+  | awk '/^\.(text|rodata|data|bss)[ \t]/ { printf "%s=%s ", $1, $2 }' > /tmp/entry.sections
 echo "::notice::entry_binary sections $(cat /tmp/entry.sections)"
 
 tune=glibc.cpu.x86_data_cache_size=0x8000

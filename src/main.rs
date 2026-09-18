@@ -959,6 +959,27 @@ fn release_clang(stem: &str, ll_path: &str) -> std::io::Result<std::process::Exi
         .arg("-mllvm")
         .arg("-inline-threshold=2000")
         .args(if cfg!(target_arch = "x86_64") { &["-mssse3"][..] } else { &[][..] })
+        // HOW MANY THREADS THE LINKER'S LTO MAY USE, when a measurement asks.
+        // Unset -- which is every build but a gate's -- the plugin picks, and a
+        // release build keeps every core it can get.
+        //
+        // The gate asks for one, because a row cannot be pinned to a number the
+        // scheduler helps choose. `ld` splits LTO codegen across threads,
+        // callgrind counts every thread, and how the work lands is not a
+        // property of the input: two links of byte-identical bitcode on this
+        // container read 20,565,047,254 and 20,565,047,243 on one pair and
+        // 20,565,047,241 and 20,565,049,584 on the next, while both `clang`
+        // children came back byte for byte every time. With `jobs=1` the same
+        // pair reads 20,574,502,681 twice.
+        //
+        // That is the 2026-09-15 rule applied where it belongs: the state is
+        // put into a known one for the measurement rather than explained
+        // afterwards. It is NOT made the default, because a user's release
+        // build has no row to keep and every reason to use the cores.
+        .args(match std::env::var("KANSO_LTO_JOBS") {
+            Ok(n) if !n.is_empty() => vec![format!("-Wl,-plugin-opt=jobs={n}")],
+            _ => vec![],
+        })
         .arg("-Wno-override-module")
         .arg("-o")
         .arg(stem)
@@ -988,7 +1009,11 @@ fn cached_runtime_object(profile: &str, opt: &[&str]) -> std::io::Result<std::pa
     use std::hash::{Hash, Hasher};
     let source = include_str!("runtime.c");
     let mut hasher = std::hash::DefaultHasher::new();
-    source.hash(&mut hasher);
+    // THE SOURCE'S DIGEST, NOT THE SOURCE. `runtime.c` is a constant of this
+    // binary, so what it hashes to was settled by the compiler that built it;
+    // walking its 450,100 bytes here cost a quarter of `kanso play`'s
+    // start-up and told every process the same thing. See `hash::digest_of`.
+    kanso::hash::RUNTIME_DIGEST.hash(&mut hasher);
     profile.hash(&mut hasher);
     // THE CONVENTION IS NOT IN THE SOURCE -- it is a `-D` the probe decides,
     // so a machine that gains or loses clang 19 would otherwise reuse an
@@ -1147,7 +1172,9 @@ fn cached_program_binary(ir: &str) -> std::io::Result<std::path::PathBuf> {
     use std::hash::{Hash, Hasher};
     let mut hasher = std::hash::DefaultHasher::new();
     ir.hash(&mut hasher);
-    include_str!("runtime.c").hash(&mut hasher);
+    // The same swap, for the same reason: this key names the runtime the
+    // binary would be linked against, and that runtime is a constant.
+    kanso::hash::RUNTIME_DIGEST.hash(&mut hasher);
     let key = hasher.finish();
     let binary = std::env::temp_dir().join(format!("kanso_run_{key:016x}"));
     if binary.exists() {
