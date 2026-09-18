@@ -8911,6 +8911,77 @@ The lesson is narrower than "be careful with regexes": a golden's trailing
 lines are load-bearing, so an edit that rewrites a value rewrites the value and
 nothing else.
 
+## 2026-09-17 — the digits that can come off are not the digits the width says, and what the encode corpus actually renders
+
+`render_ryu` is 84,209,220 instructions of the run program, 4.58%, over 191,070
+calls at 440.7 each, and a quarter of that is one loop walking digits off `vr`
+two at a time. The 2026-09-14 entry fused that loop and measured it at 5.35
+trips a float. Ten or eleven digits come off on this corpus.
+
+The idea tried here: compute the count instead of searching for it. `vp` and
+`vm` agree above the first place where `vp - vm` has a digit, so
+`declen(vp - vm) - 1` is a lower bound on how many can be removed, and one
+division by a power of ten takes them all at once. The step was written guarded
+by the same test the loops use, so it can never take a digit they would have
+left, and `round_up` takes the most significant of the block, which is the
+digit the last walking trip would have tested.
+
+**It costs 38.3 instructions a float.** `render_ryu` goes 84,209,220 to
+91,522,440 and runbench 1,840,368,292 to 1,847,681,512, a rise of 7,313,220 —
+0.397%, and every instruction of it is in that function.
+
+A counter in the step says why. Over 190,890 calls it fired every time, and
+`can` was **1 for 58,680 and 2 for 132,210**. Never more. The bound is a
+property of the interval at full width, and the interval rescales after each
+removal: dividing `vp` and `vm` by ten narrows the absolute gap but leaves
+`vp / 10 > vm / 10` true for many more steps than the starting width predicts.
+So the step pays `ryu_declen`'s sixteen comparisons and three divisions to take
+1.69 digits, where one trip of the existing loop takes two for twenty-one.
+
+Declined, and the reason is a property of the quantity rather than of the code:
+a width bound cannot see past the first step of a process that renormalises at
+every step.
+
+### what the corpus renders, counted
+
+The same probe answered a question the fused-loop entry guessed at. Of the
+191,070 doubles `k_b_append_rendered` sends to `render_ryu` on runbench:
+
+    shortest form is 3 digits        90
+                     4 digits       630
+                     5 digits     4,950
+                     6 digits    32,940
+                     7 digits   152,460     79.8%
+    integral values                   0
+
+That corrects the earlier entry, which said a float a program writes down "has
+three or four" significant digits. It has six or seven here — and the loop
+arithmetic in that same entry already implied it, since 5.35 trips at two
+digits a trip removes 10.7 of seventeen and leaves 6.3.
+
+**Not one of the 191,070 is integral.** A fast path for small whole numbers —
+the obvious next idea, and the one this measurement was taken to price — would
+fire zero times on this workload. It is not worth writing.
+
+### the harness
+
+`tests/every_rendered_float_reads_back_as_itself` sweeps 2,809,326 values
+against `strtod` and lifts `ryu_d2d` and `render_ryu` out of `src/runtime.c`
+rather than copying them. It was green with the change in place. Watched red
+first, the right way: with `round_up` reading `RYU_POW10[can]` instead of
+`RYU_POW10[can - 1]` — one digit over, the subtlest thing the step could get
+wrong — **85,109 of 2,809,326 did not read back**.
+
+- **DONE** built, measured, declined, and the corpus's digit distribution
+  recorded so the next idea is priced before it is written.
+- **ANSWERED SINCE, at kanso#1502** — the seven register moves the 2026-09-14
+  entry named and left. They are structural to doing three divide-by-hundreds
+  on x86-64: each needs its value in `rax` and its result out of `rdx`, so
+  three divisions cost six moves whatever the C says, and rewriting the C would
+  not have removed them. What removes them is removing a division. `vr` is
+  carried through the loop and read once at the end, so it comes out: two
+  divisions a trip, one variable division at the bottom. runbench falls 924,584
+  and `.text` 1,360 bytes.
 ## 2026-09-17 — kanso#1486 on the merged tree: three check rows down, the interpreted row up
 
 The rows this branch carried were main's, carried forward by the merge so the
@@ -9013,3 +9084,34 @@ base that is gone describes a tree that does not exist, and the only way to
 know which of those numbers survived the move is to let CI say so.
 
 
+## 2026-09-18 — kanso#1486: the interpreted row re-read under the shape kanso#1505 gave it, and a claim this file had gone stale on
+
+kanso#1505 took the printed line's subtree off the interpreted row, so the
+number the branch had measured described a row that no longer exists. CI's
+sitting on the merged tree:
+
+    interp_instructions  2,182,303,844 -> 2,182,523,679  +219,835  +0.0101%
+
+The delta is 219,835 under the new shape and was 219,835 under the old one.
+That is what it should be: both sides shed the same 3,199-instruction subtree,
+so the difference between them survives the change intact. It is a check on
+kanso#1505 rather than a coincidence.
+
+The move is layout. This branch edits src/check.rs, src/inline.rs and
+src/lib.rs, all front end, and the gate anchors at `run_interpreted_on_stack` —
+the interpreter's own thread, with the front end outside the number by
+construction. Nothing the branch changes executes inside the row. The size
+matches what this vein's layout term has shown before: kanso#1468 moved it
+237,834 from a single-file edit.
+
+**And the objective weighs this vein now, which the golden's own header denied
+three times.** Each of those sentences was true when it was written. The
+2026-09-16 gavel made the objective a development welfare, a production welfare
+and a meta over them, and `interp_instructions interp_instructions` has been a
+line of bench/objective_sources.txt since — the middle term of Clay's order for
+the interpreted engine, start-up then speed then memory. So this row's rise is
+priced rather than free, and the branch's welfare number already carries it: the
+three compile routes fall about 1.2% each and the score still went up.
+
+The correction is recorded in the golden's header beside the value, where the
+next session reading this vein will meet it.
