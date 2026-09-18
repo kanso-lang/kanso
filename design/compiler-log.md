@@ -2766,6 +2766,437 @@ with main to the instruction.
   diffuse — the largest single caller of `memcmp` is 6.2M, 1.0% — so there is
   no first map to intern that pays on its own. That is the same answer the
   check side gave, now with the build side agreeing.
+## 2026-09-17 — DECLARES calls sixty-two symbols, and the compiler was finding that out every time
+
+kanso#1468's index made `kanso build bench/runbench` fall 69.64% and made the
+start-up row RISE 239,427, and that entry said why: the index costs a fixed
+amount to build and saves in proportion to what the program emits, so a single
+`print` is where the trade is worst. Attributing it named the fixed part.
+
+```
+called_symbols                          278,812 self
+  < Once::call_once_force::{{closure}}  292,701 inclusive, 1,023 calls
+  < Backend::emit                        18,159 inclusive,     2 calls
+```
+
+The 1,023 calls are `declares_context_calls()` walking DECLARES' non-declare
+lines. DECLARES is a `const`. The answer is the same in every process kanso has
+ever run, and it is sixty-two names.
+
+So they are written down, sorted, and asked with a binary search: six
+comparisons an ask against a hash table that has to be built first.
+
+```
+kanso play startup_corpus, kanso::main inclusive
+  kanso#1468       5,148,482
+  written down     4,532,728      -615,754    -11.96%
+```
+
+More than the scan itself, because the table went with it — no build, no hash
+per query. Against main, which does not have kanso#1468's index at all, the row
+reads 4,882,857, so this lands **350,129 below the branch point** while keeping
+the 69.64%. The emitted IR for runbench is byte-identical.
+
+`the_declares_symbols_are_the_ones_declares_calls` recomputes the set from
+DECLARES with the scan it replaces and asserts both directions, plus sorted,
+deduped and non-empty. Watched red three ways: a symbol the list names and
+DECLARES does not call (it named `k_zz_not_called`), a symbol DECLARES calls
+and the list drops (it named `k_b_at`), and the sort broken — which
+`binary_search` would otherwise answer wrongly and quietly.
+
+- **DONE** the constant is a constant.
+- **OPEN** the start-up golden, which falls by the 615,754 above. CI's sitting
+  takes it; this host refuses the recorded toolchain.
+
+
+**REBUILT ON MAIN, 2026-09-18.** The branch carrying this had been open 15.7
+hours and its diff against main had grown to 689 lines of src/codegen.rs plus
+four goldens, because it sat on a stack whose other members have since landed.
+It is rebuilt as one cherry-pick of 785c21b8 onto main: src/codegen.rs applied
+without a conflict, and only this entry needed resolving — and the resolution
+had to drop 27 entries the cherry-pick re-added that main has since moved into
+the archive.
+
+The rows are main's, carried forward, and the merged sitting is CI's to take.
+`emitted_code` AGREED on the compile sweep, so the emitted IR is byte-identical
+on today's main: precomputing the symbol set changes what the compiler asks,
+not what it writes.
+
+**CI'S SITTING ON THE MERGED TREE.** Six rows moved:
+
+    startup_instructions     3,951,796 ->   3,384,249    -567,547  -14.3617%
+    emit_instructions       60,196,725 ->  59,636,068    -560,657   -0.9314%
+    interp_instructions  2,182,576,109 -> 2,182,620,735   +44,626   +0.0020%
+    entry_instructions     126,349,040 -> 126,355,774      +6,734   +0.0053%
+    library_instructions   126,804,425 -> 126,810,678      +6,253   +0.0049%
+    compile_instructions    35,441,027 ->  35,443,639      +2,612   +0.0074%
+
+Start-up falls 14.36%, which is far more than the emitter's 0.93% share of the
+same saving. What the saving IS has been measured on both rows; why it lands so
+much harder on start-up than on `emit_ir` is not claimed here beyond the plain
+reading, that start-up runs the derivation over the whole declare block before
+any program does anything.
+
+The four rises are layout: the derivation runs before `kanso check` reaches
+those routes, so the saving is outside them, and rises of a few thousand
+against falls of 567,547 and 560,657 is the shape a real saving plus a moved
+binary makes.
+
+`codegen_instructions_dev`, `codegen_instructions_release`, `compile_allocs`
+and both interp memory rows AGREED with main to the instruction, which is the
+measured half of the emitted-IR-is-identical claim.
+
+The spec was watched red on the rebuilt tree rather than taken on trust from
+the old branch. Dropping `"k_b_append_byte"` from `DECLARES_CONTEXT_CALLS`
+fails `the_written_list_is_what_the_scan_finds`, which is the one of the three
+that compares the written list against a scan of DECLARES itself; the other
+two, which check sortedness and non-emptiness, stay green on that edit, which
+is what makes the first one the load-bearing assertion. Restored: all three
+green.
+## 2026-09-18 — kanso#1510's rows re-measured after kanso#1509, and the release row read the golden exactly
+
+kanso#1509 landed under this branch, so all six compile-side goldens were
+carried forward at main's values and the round measured the merged tree. CI's
+sitting, second reading matching the first to the instruction on all four rows
+that take one:
+
+    startup_instructions     3,933,223 ->     3,364,974  -568,249  (-14.4474%)
+    emit_instructions       52,115,454 ->    51,554,407  -561,047   (-1.0765%)
+    compile_instructions    35,441,774 ->    35,445,148    +3,374   (+0.0095%)
+    entry_instructions     126,350,802 ->   126,358,241    +7,439   (+0.0059%)
+    library_instructions   126,806,203 ->   126,813,486    +7,283   (+0.0057%)
+    interp_instructions  2,182,576,109 -> 2,182,620,735   +44,626   (+0.0020%)
+
+The two falls are what this branch is for: precomputing the DECLARES symbol
+set takes about 565,000 instructions out of both routes that run the
+derivation, and the two figures land within 7,202 of each other. The four
+rises are layout — the derivation runs before `kanso check` reaches its work
+and before the interpreted run reaches its own, so the saving is outside
+those routes and what moved in them is where the code sits. Every one of the
+four is under a hundredth of a per cent.
+
+**And the release-codegen row read 6,822,651,561 — the golden, exactly.** The
+previous head of this branch was red on that row alone, at +11, with the same
+job's second reading landing on the golden. This round agrees with the golden
+on both readings. So the +11 is intermittent and is not this branch's: a PR
+that changes only `src/codegen.rs` does not move a row twice and then stop.
+kanso#1512 isolates a real dependence of that row on un-normalized state — the
+prior contents of the output path, worth 2,354 — and says plainly that it does
+not explain this 11, which stays open.
+## 2026-09-18 — ld reads what is already at -o, and the codegen row moved with it
+
+kanso#1510's round went red on `codegen_instructions_release` alone, at +11,
+with the gate's own second reading landing exactly on the golden:
+6,822,651,572 and then 6,822,651,561, one binary, one corpus, one machine.
+The instrument kanso#1507 built for this named the frame rather than the
+magnitude: `llvm::StringMapImpl::LookupBucketFor` inside `/usr/bin/ld`, −11,
+and the whole-program delta was −11 too.
+
+A string-keyed hash probe moving with the strings put the random temp-file
+name under suspicion — clang writes `/tmp/codegen_corpus-89a40b.o` with fresh
+hex every run. Three names then read identically and this entry ruled the name
+out. **THAT WAS WRONG AND THE ENTRY BELOW OVERTURNS IT** — the effect is
+sparse, about one name in ten, and three samples could not see it. What
+follows is still correct about the output path; it is the sentence about the
+name that does not survive.
+
+    object at -89a40b.o    5,163,341,031
+    object at -0c759c.o    5,163,341,031
+    object at -aaaaaa.o    5,163,341,031
+
+Three different names, three identical readings. What the first pass of that
+experiment showed was a defect in the experiment: the repeat run wrote its
+binary to a path six characters longer than the others, so the one thing held
+constant across the three "different name" runs was silently varied in the
+fourth. **The output path, not the input name.**
+
+Isolated properly — same binary, same corpus, same `ld` command every time,
+varying only what was sitting at `-o`:
+
+    output path absent          5,163,341,031   twice, to the instruction
+    output path an empty file   5,163,341,036   twice, +5
+    output path 100 bytes       5,163,343,385
+    output path 5 MB            5,163,343,385
+    output path the real binary 5,163,343,385   +2,354 over absent
+
+Three groups, each internally identical to the instruction across repeats, and
+size stops mattering once the file is non-empty. `ld` looks at what is already
+there, and how much it finds costs 2,354 instructions.
+
+**The gate was reading the third group by accident.** `stage_and_warm` wipes
+the box and then warms both tiers, so the counted build always found the
+warm-up's binary at `-o`. Right answer, no reason: dropping a warm-up or
+reordering the two would have moved the row by 2,354 with nothing in the diff
+to explain it. It now clears the output path before every build it performs,
+warm and counted alike, which is the 2026-09-15 rule applied literally —
+Clay's words were "you clear it out so it's identical every single run".
+`tests/the_codegen_gate_clears_its_output_before_every_build.rs` pins it
+structurally, and was watched red twice: once with the clear before the
+counted build removed, where it names the line and how far the build sits from
+the nearest clear, and once with `codegen_corpus.ll` dropped from the clear.
+
+**Two things this does NOT do, and both matter more than what it does.**
+
+It is a MEASUREMENT CHANGE, not a compiler saving. Nothing about the compiler
+moved. The fall it produces is the gate no longer counting `ld` inspecting a
+file the previous build left behind, and the floor entry says so in those
+words rather than banking it as a gain.
+
+And it does not explain kanso#1510's 11. The sizes do not match, the frame
+does not match — 2,354 spread across `ld`'s file handling against 11 inside a
+StringMap probe — and this gate has always been in the "existing binary" state
+on both readings of a job, so the term this fixes was constant across the pair
+that disagreed. What is fixed here is a real dependence on un-normalized state
+that nobody had noticed; the within-job 11 is still open, and calling it
+explained because a neighbouring mechanism was found is the attribution error
+this log has recorded four times.
+
+**The whole term is in `ld`, and the SIGN differs between this box and the
+runner.** Running the gate's own pipeline under callgrind, per process, twice
+in each mode (each mode reproduced to the instruction):
+
+                   no clear          clear            delta
+    kanso        82,061,217      82,061,004            -213   (excluded)
+    clang-probe  32,178,589      32,178,589               0
+    clang        31,644,251      31,644,251               0
+    clang -cc1 1,617,283,971   1,617,283,971               0
+    ld        5,146,605,294   5,146,192,384        -412,910
+
+All three clang processes are byte-identical. Every instruction of the
+difference is `ld`'s, which is what the isolated experiment said and this
+confirms on the real inputs rather than on a hand-built object. The magnitude
+is not the isolated 2,354 — the real pipeline links a different object against
+a different library set, and the term is worth more there.
+
+CI's first round on this change read `codegen_instructions_dev` DOWN 2,150 and
+`codegen_instructions_release` UP 1,481,719. This box reads the release row
+DOWN 412,910. **Opposite signs on the same row**, and nothing here predicts the
+runner's: the two hosts differ in gcc, and `ld`'s work on an absent output
+against an existing one is evidently not the same trade on both.
+
+That does not change what the normalization is for. The point is a FIXED state,
+not a smaller number, and "absent" is the only one of the three that can be
+reached without depending on what ran before: an empty `touch` lands in the
+middle group at +5, so "existing with content" cannot be established except by
+building, which is the accident being removed. The row re-bases once, in
+whichever direction the host takes it, and then stays put.
+
+What this does mean is that the size of this term cannot be quoted from either
+host as though it were a property of the change. It is quoted here as two
+measurements on two machines, which is what it is.
+
+Both codegen goldens carry the old value with the change named in the header.
+CI moves them.
+## 2026-09-18 — the eleven is the temp object's NAME, and five samples said it was not
+
+The entry above rules the random temp-object name out of the release-codegen
+row's 11, on three names reading identically and then five. That is wrong, and
+it is wrong in the way this log keeps recording: a search for a thing being
+ABSENT is worth what the search was worth, and five samples of a sparse effect
+is not worth much.
+
+Ten names, one binary, one corpus, the output path held absent every time:
+
+    89a40b  5,163,341,031      000000  5,163,341,031
+    0c759c  5,163,341,031      4b8c1a  5,163,341,042
+    aaaaaa  5,163,341,031      d7e60f  5,163,341,031
+    1f2e3d  5,163,341,031      2a9b53  5,163,341,031
+    ffffff  5,163,341,031      6c1d84  5,163,341,031
+
+**Nine read one number and one reads eleven more.** `4b8c1a` was then run three
+more times and read 5,163,341,042 every time, with `89a40b` back at
+5,163,341,031 beside it. The name decides the count, the count is decided
+deterministically, and the difference is **exactly the 11** the release-codegen
+row has been disagreeing with itself by.
+
+That closes the mechanism. `clang` writes its LTO object to
+`/tmp/codegen_corpus-XXXXXX.o` with fresh hex every run, `ld`'s LLVM plugin
+puts that path into a `StringMap`, and about one name in ten probes one bucket
+further. The frame kanso#1507's instrument named on kanso#1510 was
+`llvm::StringMapImpl::LookupBucketFor`, which is that probe, and the whole-
+program delta was the same 11. Two CI jobs — kanso#1510's first head and
+kanso#1511, the latter touching neither codegen nor runtime.c — saw it, which
+is the rate a one-in-ten effect gives over the number of rounds this row has
+had.
+
+**What the earlier entry got right stands.** The output path's prior contents
+is a second, separate dependence, worth 2,354 isolated and 412,910 in the
+pipeline, and clearing it is still right. What it got wrong is the sentence
+saying the name is out, and that sentence reached this log, a commit message
+and a pull request body before ten samples overturned it. All three are
+corrected: the name is IN, it is the eleven, and the fix is a deterministic
+object name rather than a cleared output.
+
+The next step is that fix, and it is not in this change: an env var the gate
+sets, in the shape of `KANSO_LTO_JOBS`, making `release_clang` write its
+object to a fixed path. It is separated so that one round measures one thing —
+the cleared output re-bases both codegen rows here, and a second re-base on
+top of it could not be told apart.
+## 2026-09-18 — gavel built: a demanded knot counts on both engines, and the oracle moved
+
+Ruled 2026-08-24, on the archive entry "a demanded knot counts, and the oracle
+moves", Clay: "it seems so obvious." The day before had found it and written
+it down exactly: *the DEMANDED knot still disagrees. Native reports
+`thunk_allocs=1` where the oracle reports `0`, because the oracle's `knotted`
+builds its cell without touching the counter.* The gavel named which side
+moves. It stood unbuilt for twenty-five days.
+
+Reproduced first, on a release build of `bc282f04`, by flipping the arm of
+`an_undemanded_knot_allocates_nothing` so the knot is read and running it
+through an importing entry on both engines:
+
+    thunk_allocs   native 1   oracle 0
+    thunk_forces   native 1   oracle 1
+    thunk_evals    native 1   oracle 1
+    stdout         native 1   oracle 1
+
+**The bump does not go where it first looks like it goes.** `eval_ident`
+routes EVERY zero-arity constant through `knotted` — its own comment says so,
+and the reason is that asking whether a constant mentions its own name reads
+`a = f b` and `b = f a` as two ordinary constants and then recurses until the
+process dies. So counting a cell wherever `knotted` builds one read 2 on this
+fixture rather than 1: one for `demanded/x`, which is the knot, and one for
+`demanded/play`, which is not. A probe printing the name at each cell is what
+said so; the first patch was wrong and green-looking on the narrow assertion.
+
+What native counts is a `k_thunk_new`, and the emitter only emits one for a
+constant in `codegen::knotted_constants` — the set that reaches itself through
+a chain of mentions. The oracle now filters by that same predicate, computed
+once per run through a `OnceCell` on the first constant cell it builds rather
+than at construction, because `kanso check` makes an `Interp` and evaluates no
+constant, and that route is a weighed development term.
+
+Two fixtures, and they are a pair:
+
+- `tests/golden/mem/a_demanded_knot_allocates_one_cell.kso` pins the shape the
+  2026-08-24 entry named as unblocked and nobody wrote — 1 alloc, 1 force, 1
+  eval, 1 live at exit. Its twin still reads 0 on both engines, so the
+  2026-08-23 ruling that an undemanded knot allocates nothing is untouched.
+- `tests/a_demanded_knot_counts_the_same_on_both_engines.rs` runs the same
+  program through the real binary both ways and asserts the whole thunk
+  triple, PINNED rather than merely compared: two engines agreeing on a wrong
+  number is the failure a differential assertion cannot see.
+
+Watched red twice before it was watched green — once on the unfixed tree
+(oracle 0 against native 1) and once with the bump replaced by a no-op after
+the fix was in. The native arm passes in both, which is the arm that should.
+
+**And the hole was the FIXTURE, not the comparison — which is the reverse of
+what this entry said in draft.** The draft read `tests/golden.rs`, saw the mem
+vein run with no `--interp`, and concluded that nothing in the tree compared
+the two engines. `tests/oracle.rs:211` is what it missed:
+`mem_corpus_interp_matches_the_semantic_counters` walks the same corpus,
+evaluates each case on the interpreter, and asserts thunk_allocs, thunk_forces
+and thunk_evals against the native goldens, leaving frees, escaped and
+live_exit alone as allocator behaviour. That loop has been there the whole
+time.
+
+It stayed green because the corpus held exactly one knot and that one was
+undemanded, where both engines read zero and agreed by saying nothing. Checked
+rather than assumed: with the new fixture in the vein and the bump replaced by
+a no-op, that loop goes red naming the file and the row, `thunk_allocs=0`
+against `thunk_allocs=1`. So the ruling could have been caught by machinery
+that already existed, on the day somebody wrote a three-line program.
+
+A differential loop is worth exactly the corpus under it, and the comment in
+`tests/golden.rs` now says which loop reads the other engine rather than
+promising one in the future tense. STATUS.md's row for this ruling carries the
+draft's claim, citing `tests/golden.rs:194` and that future-tense comment; the
+row comes off with this build, and this paragraph is here so the reason it was
+wrong comes off with it.
+
+Costs, as this host can read them: `emitted_code` and `compile_cost` AGREED,
+every runtime cost vein and the whole lazy tier AGREED. The eight compile rows
+this container refuses are CI's, and `interp_instructions` refuses here too —
+its row is the one to read off the job log, since the change adds a predicate
+walk and a set lookup on the interpreted path.
+## 2026-09-18 — what the demanded-knot ruling costs, on CI's own rows
+
+kanso#1511's first round measured the price of building the 2026-08-24 gavel.
+CI's sitting on the tree merged with main:
+
+    interp_instructions  2,182,576,109 -> 2,182,638,759  +62,650  (+0.0029%)
+    interp_allocs            5,313,332 ->     5,313,348      +16  (+0.0003%)
+    emit_instructions       52,115,454 ->    52,119,322   +3,868  (+0.0074%)
+    library_instructions   126,806,203 ->   126,807,028     +825  (+0.0007%)
+    entry_instructions     126,350,802 ->   126,351,031     +229  (+0.0002%)
+    compile_instructions    35,441,774 ->    35,441,736      -38  (-0.0001%)
+    startup_instructions     3,933,223 ->     3,932,978     -245  (-0.0062%)
+
+**Two of these are the change and five are layout.** The interpreted run is
+the only route that evaluates a constant, so it is the only one that fires the
+`OnceCell` and asks `codegen::knotted_constants`. 62,650 instructions is that
+one whole-program walk plus a set lookup at every constant cell after it, and
+16 allocations is the set of owned names the walk answers with.
+
+The other five move because the binary moved. `kanso check` makes an `Interp`
+and evaluates no constant, which is exactly why the predicate is computed
+lazily rather than in `Interp::new` — the three check routes and `emit_ir` pay
+nothing for it, and two of the five FELL. Every one of the five is under a
+hundredth of a per cent.
+
+**The price is the ruling's, and it is cheap for what it buys.** 0.0029% of an
+interpreted run is what it costs for the two engines to agree about a demanded
+knot's allocation, which the differential law requires and which the gavel
+ruled the oracle's side of twenty-five days ago.
+
+**And the release-codegen row read +11 again, on a branch that touches
+neither codegen nor runtime.c.** The gate's own per-process breakdown settles
+what moves:
+
+    first:  kanso=81075461 clang:probe=32265497 clang=31732189
+            clang=1617286141 ld=5141367745
+    again:  kanso=81075205 clang:probe=32265497 clang=31732189
+            clang=1617286141 ld=5141367734
+
+All three clang processes are byte-identical between the two readings, and
+`ld` alone differs, by 11. kanso's own process differs by 256 and is excluded
+from the row. So the 11 lives in `ld` and in nothing else, it has now been
+seen on kanso#1510 and here, and it appears on a change to the interpreter's
+counting — which is as far from the linker as a change in this repository
+gets. It is the measurement rather than the branch.
+
+kanso#1512 isolates one real dependence of that row on un-normalized state and
+says plainly it is not this. The breakdown above narrows what remains: whatever
+the 11 is, it is inside `ld`, it is not the three clang invocations, and it is
+not the output path's prior contents, because the gate re-stages between the
+two readings and both counted builds therefore find the warm-up's binary at
+`-o`.
+## 2026-09-18 — correcting what kanso#1511 costs: the interpreted row does not resolve it, and the sixteen allocations do
+
+The entry above reads the first round's `interp_instructions` rise of 62,650 as
+"that one whole-program walk plus a set lookup at every constant cell after
+it". The second round, on the tree merged after kanso#1510 landed, reads the
+row the other way:
+
+    round 1, base 2,182,576,109   ->  2,182,638,759   +62,650
+    round 2, base 2,182,620,735   ->  2,182,597,360   -23,375
+
+One change, two bases, two signs. So the walk's cost is below what this row
+resolves, and the first entry's sentence attributing 62,650 to it was reading
+a layout term as work.
+
+**What reproduces is `interp_allocs`, at +16 on both rounds.** The predicate
+answers with a set of owned names, built once per run, and sixteen allocations
+is what that set costs on this program. That is the price of the ruling, it is
+the same number against two different bases, and it is the number to quote.
+
+The other five rows moved by between 219 and 10,522 with mixed signs, all
+under a fiftieth of a per cent, on routes that evaluate no constant and
+therefore never fire the `OnceCell` at all:
+
+    compile_instructions    35,445,148 ->    35,444,548     -600
+    entry_instructions     126,358,241 ->   126,359,513   +1,272
+    library_instructions   126,813,486 ->   126,814,937   +1,451
+    startup_instructions     3,364,974 ->     3,364,755     -219
+    emit_instructions       51,554,407 ->    51,543,885  -10,522 Both codegen rows AGREED with
+their goldens, and the release row read 6,822,651,561 — the golden exactly —
+on a tree that changes the interpreter and nothing else.
+
+This is the same correction shape as the rewrite family and the three
+container baselines: a delta that arrived with a change was written down as
+the change's cost, and a second measurement against a different base says the
+row cannot see it. What a row cannot resolve, it cannot attribute.
 ## 2026-09-18 — the data-sized cycle is blocked by the HOLE's placement, before birth through a call is reached
 
 STATUS.md's "Ruled, unbuilt" carries the 2026-08-29 cohort gavel — "cyclic

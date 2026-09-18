@@ -115,6 +115,10 @@
 # readings to the instruction, across two CI jobs on two different trees,
 # which is what `-Wl,-plugin-opt=jobs=1` bought.
 #
+# 2026-09-18, kanso#1510 (kanso#1484 rebuilt) on the tree merged with main,
+# CI's sitting. 60,196,725 -> 59,636,068, a FALL of 560,657 (-0.9314%).
+# The emitter's own share of the same saving: it asked the same question and
+# now reads a constant.
 # 2026-09-18, kanso#1509 (kanso#1480 rebuilt) on the tree merged with main,
 # CI's sitting. 60,196,725 -> 52,115,454, a FALL of 8,081,271 (-13.4248%).
 # THIS ONE IS THE CHANGE. `emit_instructions` anchors at `codegen::emit_ir`
@@ -122,4 +126,25 @@
 # once each for in_place_pushes, reusable_records and string_builders, on
 # consecutive lines. Building it once takes 8,081,271 instructions out of the
 # emitter, 13.42% of what emitting costs.
-emit_instructions=52115454
+#
+# 2026-09-18, kanso#1511 on the tree merged with main, CI's sitting.
+# 52,115,454 -> 52,119,322, a RISE of 3,868 (+0.0074%).
+# LAYOUT. `codegen::emit_ir` does not run the interpreter at all; the
+# predicate it now shares with the oracle was already in this binary.
+# 2026-09-18, re-merged onto main after kanso#1509. THE VALUE BELOW IS MAIN'S,
+# carried forward: kanso#1509 moved this row on its own and what this branch
+# adds on top of it has not been measured, so the merged reading is CI's.
+#
+# 2026-09-18, kanso#1510 (kanso#1484 rebuilt) on the tree merged with main
+# after kanso#1509, CI's sitting. 52,115,454 -> 51,554,407, a FALL of
+# 561,047 (-1.0765%). This is a route the removed derivation runs, and the saving lands here.
+# The second reading in the same job matched the first to the instruction.
+#
+# 2026-09-18, re-merged onto main after kanso#1510. THE VALUE BELOW IS MAIN'S,
+# carried forward: kanso#1510 moved this row on its own and what this branch
+# adds on top of it has not been measured, so the merged reading is CI's.
+#
+# 2026-09-18, kanso#1511 on the tree merged with main after kanso#1510,
+# CI's sitting. 51,554,407 -> 51,543,885, a FALL of 10,522
+# (-0.0204%). LAYOUT. `codegen::emit_ir` does not run the interpreter at all.
+emit_instructions=51543885
