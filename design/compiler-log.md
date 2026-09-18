@@ -3542,3 +3542,144 @@ is found and normalized, or `ld` comes out of the sum and the header says why.
 - **OPEN** those eleven. The gate already has the instrument: it takes the
   second reading. What it needs is to keep `ld`'s two profiles when they
   disagree and diff the frames.
+## 2026-09-18 — a unique container is extended where it stands, and kanso#1497's decline was a prediction
+
+kanso#1497 profiled the interpreted run and found `__memcpy_avx_unaligned_erms`
+its largest single frame, with 180,081,360 bytes of it inside `append`
+rebuilding an accumulator one byte at a time. It tried `Rc::try_unwrap` on
+`utf8`, measured 298,420 instructions, counted `append`'s refcounts — unique on
+1,326 of 36,966 calls, 3.6% — and declined the same fix for `append` on that
+share. **The share was measured; the fix was not.**
+
+Run, on `push`, `put` and `append` together, and beside a second change that
+clears the argument vector before the body runs. Four release builds of main
+`14530ee9`, one box, one corpus, the gate's own anchor and the profile's
+largest frame:
+
+    tree                     anchor          memcpy        delta
+    main                  2,231,485,945   402,825,998         —
+    args.clear() alone    2,227,528,092   402,825,747    -3,957,853
+    taken() alone         2,217,291,320   390,296,335   -14,194,625
+    both                  2,213,414,350   390,296,335   -18,071,595
+
+**The two are additive and independent.** 3,957,853 + 14,194,625 is 18,152,478
+against 18,071,595 measured, 80,883 apart on 2.2 billion. `taken()` takes every
+byte of the memcpy saving on its own — 12,529,663 instructions, 3.11% of that
+frame — and `args.clear()` moves memcpy by 251, which is refcount traffic
+rather than copying. 0.81% of the interpreted row, and the corpus prints the
+same bytes as main.
+
+**The prediction was not wrong about the shape it measured.** An accumulator
+threaded through a name the caller still holds is pointed at by that frame too:
+
+    fn stack xs n
+      stack (push xs n) (n - 1)
+
+reads `interp_allocs=19,053` on both trees, byte for byte, and a 400-append
+`text/append` loop of the same shape reads 13,805 on both. `Rc::try_unwrap`
+cannot fire and does not. An accumulator that arrives as another call's
+answer is pointed at by nothing else:
+
+    fn stack xs n
+      stack (push (push xs n) n) (n - 1)
+
+reads 22,362 allocations copying and 21,162 extending in place, one ask per
+copy avoided. `lib/list`'s own `put acc k (push (bucket acc[k]) x)` is that
+second shape, which is why the corpus moved and the first two fixtures did
+not. A refcount histogram taken at one instant answers for the calls it
+sampled; what a fix is worth is a different question and only a run answers
+it.
+
+**The spec pins the count, not the bytes, and the exclusion is measured.**
+`tests/a_unique_container_is_extended_in_place.rs` runs the real binary on the
+second shape and pins `interp_allocs` at 21,162; it was watched red on main at
+22,362 and green on a tree carrying `taken()` without `args.clear()`, which is
+what says the spec pins the half it names. `interp_alloc_bytes` and
+`interp_peak_bytes` are left out because they track the length of the path the
+run was handed: the same fixture at `/tmp/chain` reads 10,524,425 and 148,058,
+and at a name 34 characters longer reads 10,578,250 and 148,485, with
+`interp_allocs` at 21,173 both times. A spec staging under
+`std::env::temp_dir()` would pin macOS's `/var/folders/...` against Linux's
+`/tmp`. That is the 2026-09-15 rule: what cannot be normalized is left out and
+the exclusion is named.
+
+**What `args.clear()` is pinned by is the vein.** It changes no allocation and
+no output — only instructions — so there is no fixture that fails without it
+short of `interp_instructions` itself, which is an exact golden and moves.
+Shipping it beside a change that does have a fixture is the honest shape:
+the table above says which half each number belongs to.
+
+**`sort` and `concat` were built with it and taken back out.** They copy the
+same way and the change is the same two lines, so they went in. Two runs of
+the five-builtin build read the anchor at 2,214,199,828, which is 785,478
+ABOVE the three-builtin build's 2,213,414,350, with `memcpy` at 390,296,396
+against 390,296,335 — 61 apart, so neither new site fired once over the whole
+corpus. The corpus sorts and concatenates lists that something else still
+points at, and what the two extra call sites bought was a bigger binary. Both
+reverted; the three that fire are what ships.
+
+**Still open.** Uniqueness stays rare in the threaded-accumulator shape, and
+that is the shape a fold writes. kanso#1497's remaining question is untouched:
+a value that can be appended to without being unique, or an argument protocol
+that does not leave a copy in the caller's frame. What has changed is the price of the
+cheap half: 14,194,625 instructions, declined the day before on a share
+rather than a reading.
+
+## 2026-09-18 — the spec pinned a count the host owns, and macOS said so
+
+`tests/a_unique_container_is_extended_in_place.rs` pinned `interp_allocs` at
+21,162 on a fixture staged under `std::env::temp_dir()`. The first CI round on
+the other host went red on exactly that file: macOS stages under
+`/var/folders/...` where Linux stages under `/tmp`, and a run's allocations
+track the length of the path it was handed.
+
+**The exclusion was half-right and the half it got wrong was the important
+one.** The file's own header excluded `interp_alloc_bytes` and
+`interp_peak_bytes` for that reason, measured: the same fixture at `/tmp/chain`
+reads 10,524,425 and 148,058, and at a name 34 characters longer reads
+10,578,250 and 148,485. `interp_allocs` held at 21,173 across that pair, and
+holding across ONE pair of Linux paths is not the same property as holding
+across two operating systems. The absolute count then moved from 21,162 to
+21,180 between two revisions of the spec itself, because the entry file's name
+got shorter.
+
+**A difference is what survives.** The fixture now runs the same program at 300
+rounds and at 600, from entry files of the same name length in the same
+directory, and pins what the second costs over the first. Every fixed
+allocation — the loader, the path, the library, the entry — is identical in
+both runs and cancels. Copying reads 19,201 for those rounds and extending in
+place 18,001: the 1,200 copies the two builders would have made, one allocation
+each. Green on the branch, red on main at 19,201, and the number is one the
+host cannot move.
+
+That is the 2026-09-15 rule applied to a spec rather than a gate: what cannot
+be normalized is not measured, and the way to normalize an absolute count with
+a host-sized constant inside it is to subtract the constant.
+
+## 2026-09-18 — kanso#1515's rows on CI, and the interpreted row falls 0.649%
+
+CI's sitting on `259daa83`:
+
+    interp_instructions   2,182,597,360 -> 2,168,428,538  -14,168,822  (-0.649%)
+    interp_allocs             5,313,348 ->     5,310,696       -2,652
+    interp_peak_bytes           933,202 ->       933,182          -20
+    compile_instructions     35,444,548 ->    35,443,611         -937
+    entry_instructions      126,359,513 ->   126,354,834       -4,679
+    library_instructions    126,814,937 ->   126,810,299       -4,638
+    startup_instructions      3,364,755 ->     3,363,774         -981
+    emit_instructions        51,543,885 ->    51,546,788       +2,903
+
+Both codegen rows read their goldens exactly, which is what an interpreter-only
+change should do: `kanso build`'s child tree never sees `src/eval.rs`. The five
+compile-side rows are layout.
+
+**This container read the fall at 18,071,595 and CI reads 14,168,822.** Both
+are real and CI's is the one the objective takes. The two halves were measured
+apart here — `args.clear()` alone 3,957,853, `taken()` alone 14,194,625, both
+18,071,595, additive to within 80,883 — and that split is a property of this
+box's binary rather than of the change; what travels is the sign and the
+mechanism.
+
+Welfare rises to 76.8277 from a floor of 76.82429875406118, past the
+sentinel's 0.001 band, so the floor is banked at 76.82771395446468. Raising it
+is arithmetic rather than a decision.

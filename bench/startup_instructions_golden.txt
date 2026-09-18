@@ -341,4 +341,4 @@
 # 2026-09-18, kanso#1511 on the tree merged with main after kanso#1510,
 # CI's sitting. 3,364,974 -> 3,364,755, a FALL of 219
 # (-0.0065%). LAYOUT. Start-up takes the native path, which counts cells in the runtime.
-startup_instructions=3364755
+startup_instructions=3363774

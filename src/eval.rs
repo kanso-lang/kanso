@@ -2182,6 +2182,15 @@ impl<'a> Interp<'a> {
                     for (bind_name, value) in binds {
                         env = bind(env, &bind_name, value);
                     }
+                    // THE ARGUMENT VECTOR IS A HOLDER, and nothing below
+                    // reads it. `match_one` cloned each matched value into
+                    // `binds`, so every container argument is now pointed at
+                    // twice: once from here and once from the environment the
+                    // body will run in. kanso#1497 measured what that costs:
+                    // `append`'s accumulator was unique on 3.6% of 36,966
+                    // calls, so the builder copied 180 MB it mostly did not
+                    // need to, and `Rc::try_unwrap` could not fire.
+                    args.clear();
                     match self.eval_body_flow(decl, env)? {
                         Flow::Done(value) => return Ok(value),
                         Flow::Tail(next, next_args, next_span) => {
@@ -2622,26 +2631,27 @@ impl<'a> Interp<'a> {
             }
             "push" => {
                 let [list, item] = arity(args, name, span)?;
-                let Value::List(items) = &list else {
+                if !matches!(list, Value::List(_)) {
                     return Err(RuntimeError {
                         message: format!("push takes a list and a value{}", lazy_hint(&list)),
                         span,
                     });
-                };
-                let mut next = (**items).clone();
+                }
+                let Value::List(items) = list else { unreachable!("checked just above") };
+                let mut next = taken(items);
                 next.push(item);
                 Ok(Value::List(Rc::new(next)))
             }
             "put" => {
                 let [map, key, value] = arity(args, name, span)?;
-                let Value::Map(entries) = &map else {
+                let Value::Map(entries) = map else {
                     return Err(RuntimeError {
                         message: "put takes a map, a key, and a value".to_string(),
                         span,
                     });
                 };
                 let key = map_key(key, span)?;
-                let mut next = (**entries).clone();
+                let mut next = taken(entries);
                 next.insert(key, value);
                 Ok(Value::Map(Rc::new(next)))
             }
@@ -2868,13 +2878,13 @@ impl<'a> Interp<'a> {
                         return Ok(v.clone());
                     }
                 }
-                let Value::Bytes(items) = &acc else {
+                let Value::Bytes(items) = acc else {
                     return Err(RuntimeError {
                         message: "append takes bytes and a string, bytes, or byte".to_string(),
                         span,
                     });
                 };
-                let mut out = (**items).clone();
+                let mut out = taken(items);
                 match &x {
                     Value::Str(s) => out.extend_from_slice(s.as_bytes()),
                     Value::Bytes(more) => out.extend_from_slice(more),
@@ -3479,6 +3489,25 @@ fn own_failure(cause: &ErrInfo, site: &Raised) -> bool {
     match (&cause.hako, &site.hako) {
         (Some(raiser), Some(here)) => raiser == here,
         _ => false,
+    }
+}
+
+/// Take a container's contents to change, copying only when somebody else
+/// still points at it.
+///
+/// `push`, `put`, `concat` and `append` each answer with a new container, and
+/// the copy that makes is only necessary while the old one is still reachable.
+/// `Rc::try_unwrap` asks exactly that, and a value no other reference points
+/// at cannot be observed changing, so the two arms are the same function.
+///
+/// kanso#1497 measured this alone and declined it: `append`'s accumulator was
+/// unique on 1,326 of 36,966 calls, 3.6%, because the argument vector and the
+/// wrapper's environment both held it. The argument vector is cleared before
+/// the body runs now, which is the other half.
+fn taken<T: Clone>(rc: Rc<T>) -> T {
+    match Rc::try_unwrap(rc) {
+        Ok(owned) => owned,
+        Err(shared) => (*shared).clone(),
     }
 }
 
