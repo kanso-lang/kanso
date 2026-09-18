@@ -218,4 +218,7 @@
 # LAYOUT. This branch changes how a shared vector is copied in the
 # INTERPRETER; none of these routes runs it. src/eval.rs is the compiler,
 # so its bytes move and every route that runs the compiler moves with them.
-emit_instructions=51456464
+# CI's reading on the merged tree, emit_instructions: 51,456,464 -> 51,456,185 (-279). This branch
+# touches the beat reporter and not the front end; these six are the
+# layout the kanso#1520 merge left.
+emit_instructions=51456185
