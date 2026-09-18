@@ -4744,3 +4744,37 @@ none of them can be work.
 `interp_allocs` agreeing at 3,879,653 across all three is what makes that a
 check rather than an assertion. An allocation counter counts operations rather
 than a host, and real work in the interpreted run would have moved it.
+
+## 2026-09-18 — the layout rows the kanso#1520 merge left on this branch
+
+kanso#1520 landed under this branch — the clone sized for the growth that
+follows it — and every instruction row moved with the binary it rebuilt. This
+branch touches the beat reporter and nothing the front end runs, so none of the
+six is work anybody did on this branch; all six are where the code landed after
+another change resized the compiler around it. Written down because a number
+that changes without a sentence is the thing to catch.
+
+CI's readings on the merged tree, against the values carried forward from main:
+
+    compile_instructions      35,486,333 ->     35,489,169     +2,836
+    entry_instructions       126,498,292 ->    126,507,679     +9,387
+    library_instructions     126,954,304 ->    126,963,794     +9,490
+    interp_instructions    1,260,262,910 ->  1,260,262,917         +7
+    startup_instructions       3,363,378 ->      3,363,577       +199
+    emit_instructions         51,456,464 ->     51,456,185       -279
+
+The interp row's +7 is the same order as the ±13 the module row has drawn
+across trees whose compiler source was identical; kanso#1487 measured that one
+and it is a face of the layout rather than a cost. The compile-side three are
+larger and one-directional, which is what an inlining decision re-made against
+a different `src/eval.rs` looks like. Both compile memory rows and both codegen
+rows agreed without an edit, which is the check on that reading: allocation and
+peak counts are decisions the code makes, and they did not move.
+
+Worth setting beside kanso#1502, which took the same merge on the same day and
+read different numbers for five of the six. Only the interp row's +7 is shared.
+So these are not a property of kanso#1520 that a branch inherits — they are
+where each branch's own code lands once the compiler around it is rebuilt, and
+a reader who saw one of the two sets would have been wrong to expect the other.
+
+The floor is banked at 77.17 after these rows, not before them.
