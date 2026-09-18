@@ -4478,3 +4478,39 @@ cent. That is the ceiling, and the floor is zero.
 the environment into `eval_body_flow`, so measuring how often it comes back
 unshared means keeping a handle and counting — which is most of the change
 itself. The profile has been run; the next step is the build.
+
+**AND THE BUILD SETTLED IT: 173,921 OF 173,922.** The bound above is the
+answer, at its ceiling. An instrumented binary took a `Weak` to the frame
+before the body ran and tried to upgrade it after:
+
+    interp_frames_made=173922
+    interp_frames_dead=173921
+
+One frame in the whole run outlives the body that was given it. The `Weak` was
+deliberate rather than a second strong handle, because a strong clone would
+make `Rc::try_unwrap` fail everywhere inside the body and change the behaviour
+being measured.
+
+So the frame is reclaimable 99.9994% of the time, and the prize is the full
+173,922 allocate-and-free pairs rather than some fraction of them: seven to ten
+and a half million instructions, 0.75% to 1.1% of the interpreted row, at the
+42.4 and 61.2 per pair that kanso#1540 and kanso#1538 measured.
+
+173,922 against the 175,246 iterations the profile counts is the dispatches
+whose parameter list binds nothing, where `bind_all` hands the parent
+environment back and builds no frame at all.
+
+**WHAT THE BUILD WOULD BE.** The dispatcher moves the environment into
+`eval_body_flow`, so the frame dies in there. Keeping the owner in the
+dispatcher and passing a reference would let `Rc::try_unwrap` take the
+`Env::Many(binds, parent)` back afterwards, and with it the bindings vector's
+allocation for the next iteration. `eval` already takes its environment by
+reference, so the shape exists. The risk to check is that holding the frame one
+frame longer does not change what the body's own uniqueness checks see, and
+`a_unique_container_is_extended_in_place` is the spec that would say so: it
+pins an exact per-round allocation count and caught the last change to this
+function.
+
+The instrumentation is reverted. It is described here rather than kept, since a
+counter that exists to answer one question is a vein to regenerate forever
+after.
