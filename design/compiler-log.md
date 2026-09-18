@@ -3076,3 +3076,52 @@ What remains is representation. The depth is provably available; where the index
 lives on the node -- a new `Expr` variant written by a rewrite at load, against a
 cell on `Expr::Ident` -- is the next question, and it is the one the build
 starts from.
+
+## 2026-09-18 — the slot lead is dead, and it died of the error this branch corrected
+
+The entries above corrected the 19.3 million by showing that the miss walks carry
+almost none of the `memcmp`, and then re-sized the slot lead UPWARD on the
+grounds that the 47.2 million left over must be in the hit walks. The same
+mistake, one level up. The hit walks carry 1,335,388 of it.
+
+BUILT, to find that out. A per-site inline cache: the address of the `Name` in
+each `Ident` node keys a direct-mapped table of 4,096 entries holding the depth
+that site's local was found at last time. The walk jumps straight to the
+remembered depth, checks the name it lands on and falls back on a mismatch, so a
+stale entry costs one comparison and can never answer wrongly. It needs no
+static pass and no AST change; the depth being static was measured first and
+then deliberately not relied on.
+
+It is correct -- the corpus and the shadowing fixture print byte-identical
+output -- and it costs 31,209,169, a rise of 2.80%. What matters is not the sign
+but which counters moved:
+
+    eval_ident      115,147,991 -> 152,742,778     +37,594,787
+    dispatch        130,726,726 -> 130,726,726      byte-identical
+    match_one        68,846,453 ->  68,846,453      byte-identical
+    memcmp           48,165,663 ->  46,830,275      -1,335,388
+
+THE CACHE REMOVES ESSENTIALLY THE WHOLE HIT WALK AND TAKES 1,335,388 OFF
+`memcmp`. With the 956,485 the shape filter took off the miss walks, the entire
+environment walk accounts for 2,291,873 of the 48,165,663 -- 4.8% of the figure,
+and 0.205% of the interpreted row.
+
+`match_one` is byte-identical at 68,846,453 in every build here and calls
+`memcmp` 733,821 times against `eval_ident`'s 724,304. The bulk of the 48 million
+is PATTERN MATCHING, and it always was. The walk arrived beside it in the
+profile and three successive claims priced the walk at the whole of it: section
+90's forty million, this branch's 47.2 million, and the sentence in section 90
+saying the ceiling rises.
+
+WHERE THE CLAIM TRAVELLED, and what is corrected: section 90 on main (the forty
+million and the correction added to it today), section 91 on this branch, this
+branch's body, and kanso#1530's body, which cites the 47.2 million as the reason
+its fixture exists. The fixture is still worth having -- it pins that a local
+resolves to its own depth, which nothing else did -- but not for that reason.
+
+WHAT IS ACTUALLY LEFT. `match_one` is 5.8% of the run and carries roughly half
+the `memcmp` calls; that is the lead the walk was standing in front of, and it
+has not been looked at. Nothing here sizes it, deliberately: sizing a lead by
+dividing a counter among its callers is what produced three wrong numbers in one
+day, and the next figure written down about `match_one` should come from a
+differential rather than a division.

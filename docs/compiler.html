@@ -2346,7 +2346,7 @@ misses             332,025      31.4%, and a miss walks the whole chain</code></
 
 <p><strong>2.52 is the whole explanation.</strong> a scheme paying setup per lookup and saving per frame has two and a half frames to amortise it over. the padded key cost about forty-seven instructions a lookup against a saving of the eighteen-odd a small <code>memcmp</code> costs, times 2.52 &#8212; so it lost, and would have lost at any setup above about forty-five. the byte had no setup and lost to the node instead.</p>
 
-<p>it also prices the change that would work. eighteen instructions a visit across 2,662,536 visits is the 48 million; resolving a local to an index at parse time removes the <em>visit</em>, and an index costs two or three instead of eighteen. the ceiling is around forty million, near 3.6% of the interpreted row &#8212; a number rather than a hope, and larger than anything tried here, because slots have to survive closures, which capture an environment rather than a frame. <strong>section 91 re-sizes this against the visits it actually describes:</strong> the <code>memcmp</code> sits almost entirely in the hit visits, which are what a slot removes, so the ceiling rises rather than falls.</p>
+<p>it also prices the change that would work. eighteen instructions a visit across 2,662,536 visits is the 48 million; resolving a local to an index at parse time removes the <em>visit</em>, and an index costs two or three instead of eighteen. the ceiling is around forty million, near 3.6% of the interpreted row &#8212; a number rather than a hope, and larger than anything tried here, because slots have to survive closures, which capture an environment rather than a frame. <strong>and section 91 retires it.</strong> the <code>memcmp</code> is not the walk&#8217;s to begin with: a per-site cache that removes essentially the whole hit walk takes <strong>1,335,388</strong> off the figure, and <code>match_one</code> &#8212; pattern matching, not name resolution &#8212; is byte-identical through every build and carries the rest.</p>
 
 <p><strong>then the distribution was measured too, and it names a cheaper change first.</strong> an average hides a shape, so here is the shape &#8212; hits by depth:</p>
 
@@ -2382,7 +2382,20 @@ recorded and tested, walks skipped         1,140,317,149      +207,951</code></p
 
 <p>the lesson is about the sizing rather than the change. a count multiplied by an average is a measurement only where the average describes the thing counted, and here it described a population thirty-three times more expensive than the one it was multiplied by. the check costs one build: remove the visits and read the counter that was supposed to fall.</p>
 
-<p><strong>and the lead it was competing with grows.</strong> the 48 million does not spread evenly over the visits; 47.2 million of it is in the hit visits, which are exactly what resolving a local to an index removes. section 90&#8217;s forty million was sized from the same average and is, if anything, low. it is still a ceiling on one term and still unbuilt &#8212; but it is now sized against the visits it describes, and the cheap-looking neighbour that was recommended ahead of it turned out to be worth nothing.</p>
+<p><strong>and the lead it was competing with dies of the same error, one level up.</strong> the first draft of this section said the 47.2 million left over must be in the hit visits, which is the whole counter attributed to one caller again. so that was built too: a per-site inline cache keyed by the address of the name in each node, holding the depth the site&#8217;s local was found at last time. it jumps to the remembered depth, checks the name it lands on, and falls back on a mismatch, so a stale entry costs one comparison and can never answer wrongly.</p>
+
+<p>it is correct, and it costs <strong>31,209,169</strong>. which counters moved is the answer:</p>
+
+<pre><code>eval_ident   115,147,991 -> 152,742,778   +37,594,787
+dispatch     130,726,726 -> 130,726,726    byte-identical
+match_one     68,846,453 ->  68,846,453    byte-identical
+memcmp        48,165,663 ->  46,830,275    -1,335,388</code></pre>
+
+<p>removing essentially the whole hit walk takes <strong>1,335,388</strong> off <code>memcmp</code>. with the 956,485 the shape filter took off the misses, the entire environment walk is <strong>2,291,873</strong> of the 48,165,663 &#8212; <strong>4.8%</strong> of the figure and <strong>0.205%</strong> of the interpreted row. <code>match_one</code> is byte-identical in every build here and calls <code>memcmp</code> 733,821 times against the walk&#8217;s 724,304. the bulk of the 48 million is pattern matching, and always was.</p>
+
+<p>three claims priced the walk at the whole of that counter: section 90&#8217;s forty million, this section&#8217;s first draft, and the sentence above. each one divided a measured total by a measured count and called the quotient a cost. the profile put the walk beside the figure; nothing ever put it inside.</p>
+
+<p>what is left is the thing the walk was standing in front of. <code>match_one</code> is 5.8% of the run and carries half the comparisons, and it has not been looked at. no number for it is written here on purpose: the next one should come from removing something and reading the counter, which is the only method on this page that has not yet been wrong.</p>
 
 <p>so the cheaper change is not a faster walk but no walk. whether a name can be a local at a given site is decidable where that site is compiled, and skipping the walk for the ones that cannot needs no slots, no upvalue analysis and no change to how a closure captures &#8212; the three things that make the larger change large. it is worth about half as much for a small fraction of the work.</p>
 
