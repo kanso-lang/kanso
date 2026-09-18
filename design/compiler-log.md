@@ -4436,6 +4436,36 @@ counting calls, and the same arithmetic does not obviously give two here. Two
 a round is the measurement. A decomposition guessed into a spec's doc is what
 the next reader would check their own change against.
 
+## 2026-09-18 — kanso#1540, CI's rows for the kept score buffer
+
+    interp_instructions   939,042,794 -> 932,183,914   -6,858,880  -0.7304%
+    interp_allocs           1,410,530 ->   1,309,483    -101,047   -7.1638%
+    interp_peak_bytes         833,466 ->     833,463          -3  -0.0004%
+
+Every compile vein byte-identical: compile 35,550,010, entry 126,729,588,
+library 127,186,008, emit 51,617,476, start-up 3,363,916, compile_allocs
+27,313, compile_peak_bytes 787,956. **The fourth runtime-only change in a row
+that moved no layout.**
+
+This container projected 5,073,171 and the runner reads 6,858,880 — the same
+direction and larger, which is the shape every host split has taken today.
+
+**`interp_allocs` REPRODUCES ACROSS HOSTS AND `interp_instructions` DOES NOT.**
+The instrumented container run printed `interp_allocs=1309483` for this tree
+and the runner reads 1,309,483 — the same figure to the unit, on machines whose
+instruction counts differ by millions. It counts what the program asked the
+allocator for rather than what the machine did, which is why its gate carries
+no host-divergence allowance and why the instruction gates refuse on this box
+while this one would not have.
+
+The two allocation instruments agree in sign here — CI's counter falls 101,047
+and the callgrind tally of `__rust_alloc` CALLS over the toggled thread falls
+119,542 — where on kanso#1538 they pointed opposite ways. Both entries say the
+same thing about why: different scopes, different definitions, and neither is
+the other's check.
+
+Welfare 77.26 -> 77.27, banked in the same pull request.
+
 ---
 
 ## 2026-09-18 — what the dispatcher still allocates, and why the profile cannot finish the sentence
