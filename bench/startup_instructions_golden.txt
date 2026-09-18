@@ -341,4 +341,10 @@
 # 2026-09-18, kanso#1511 on the tree merged with main after kanso#1510,
 # CI's sitting. 3,364,974 -> 3,364,755, a FALL of 219
 # (-0.0065%). LAYOUT. Start-up takes the native path, which counts cells in the runtime.
-startup_instructions=3363774
+#
+# 2026-09-18, kanso#1516 on the tree merged with main, CI's sitting.
+# 3,363,774 -> 3,364,523, a RISE of 749 (+0.0223%).
+# LAYOUT. src/eval.rs is the compiler, so its bytes move and every row that
+# runs the compiler moves with them; none of these routes evaluates a name,
+# because all four stop before the interpreter and the fifth is the emitter.
+startup_instructions=3364523

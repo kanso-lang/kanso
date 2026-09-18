@@ -3758,6 +3758,41 @@ memory's ordering, because that is what the broken build proved.
 The presence counter for the change is `interp_allocs`: remove the memory and
 that row moves 6.12%.
 
+## 2026-09-18 — kanso#1516's rows on CI, and the two engines of the measurement agreed
+
+CI's sitting on the tree merged with main:
+
+      interpreted    2,168,428,538 -> 1,997,105,566  -171,322,972   -7.9008%
+      allocations        5,310,696 ->     4,985,433      -325,263   -6.1246%
+      peak bytes           933,182 ->       942,210        +9,028   +0.9675%
+      compile           35,443,611 ->    35,447,843        +4,232   +0.0119%
+      entry            126,354,834 ->   126,368,664       +13,830   +0.0109%
+      library          126,810,299 ->   126,824,214       +13,915   +0.0110%
+      start-up           3,363,774 ->     3,364,523          +749   +0.0223%
+      emitting          51,546,788 ->    51,554,663        +7,875   +0.0153%
+
+Both codegen rows read their goldens exactly and `compile_allocs` is unmoved.
+The five compile-side rises are layout: src/eval.rs is the compiler, so its
+bytes move and every row that runs the compiler moves with them, and none of
+those five routes evaluates a name.
+
+**THE TWO MEASUREMENTS AGREED, AND HOW CLOSELY IS THE POINT.** This container
+projected a fall of 171,632,795 from two binaries built in one worktree; CI, on
+a different rustc and a different glibc, reads 171,322,972. The two deltas are
+309,823 apart — 0.18% of the delta. The absolute rows cannot be compared across
+those hosts at all and the goldens' headers say so; what travels is the
+difference, and this is the sharpest reading of that yet taken here.
+
+The two counter rows travel further still: the container read 5,310,694 ->
+4,985,431 and 933,280 -> 942,308, different absolute values on both rows and
+the SAME -325,263 and +9,028. They count operations rather than a host, which
+is why the instruction row's two readings could be expected to agree as closely
+as they did.
+
+`interp_peak_bytes` is the term that pays, 0.010 points. It is the table the
+remembered answers live in, and it is what the other two rows were bought with.
+Welfare rises to 76.87 and the floor is banked at that.
+
 ## 2026-09-18 — the same question at the call sites, and a vector cloned per tail hop
 
 kanso#1516 gave `eval_ident` a memory of what a non-local name stands for. The

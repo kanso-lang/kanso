@@ -272,10 +272,19 @@
 # answer cannot change during a run. The answer is remembered on first sight
 # now, and the ladder runs once per name.
 #
+# 2026-09-18, kanso#1516 on the tree merged with main, CI's sitting. 2,168,428,538 -> 1,997,105,566, a FALL of
+# 171,322,972 (-7.9008%). THIS ONE IS THE CHANGE.
+#
+# The container projected -171,632,795 (-8.55%) from two binaries built in one
+# worktree; CI reads -171,322,972 on a different toolchain. The two deltas
+# agree to within 309,823 -- 0.18% of the delta itself -- which is what a real
+# saving looks like measured twice on two hosts.
+#
 # 2026-09-18, kanso#1517 (stacked on kanso#1516). ROUND ONE IS DELIBERATELY RED
-# ON THIS ROW, for the reason kanso#1516's entry above gives: this host cannot
-# compare with the runner, so the value below is carried forward and CI's
-# sitting replaces it.
+# ON THIS ROW. The value below is the row the branch underneath measured on CI,
+# carried forward: this host runs rustc 1.94.1 against the runner's 1.98.1 and
+# the gate refuses to compare, so what this branch does to the row is CI's to
+# read.
 #
 # Measured here against kanso#1516's head, same worktree, boxes of equal path
 # length: 1,836,055,421 -> 1,802,816,521, a FALL of 33,238,900 (-1.81%).
@@ -297,5 +306,5 @@
 # native path rather than building an `Interp`, so the move is layout and the
 # allocation per group is not in this number at all. What it says is that
 # nothing on the start-up path got worse.
-interp_instructions=2168428538
+interp_instructions=1997105566
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
