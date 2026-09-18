@@ -5130,3 +5130,28 @@ resolve-and-verify pass, beside the anchor diff.
 **AND THE RULE UNDER IT.** A script that moves a region of a file must not be
 run on a file that still has conflict markers in it, because the region it cuts
 is defined by content and the markers are content. Resolve first, then move.
+
+**AND THE SPEC WAS THIS SESSION'S OWN, WRITTEN THIS MORNING FOR THIS FAILURE.**
+`e9d99540`, 14:37 today, merged as kanso#1526, carrying this session's id. Its
+message says: "Today a merge resolution left `<<<<<<< HEAD`, `=======` and
+`>>>>>>> origin/main` in docs/compiler.html and the commit went in. All three
+page gates then ran on that tree and ALL THREE PASSED." Eight hours later the
+same file took the same three markers in the same place, past the same three
+gates plus two checks added since.
+
+So the honest version is not that a spec caught a mistake. **The lesson was
+found, written down, pinned in CI, and then repeated**, because what went into
+the tree was a spec and what was needed on the container was a grep. A spec
+guards the push. It does not guard the twenty minutes before the push, and that
+is where the same hands make the same move again.
+
+That is the whole argument for `verify_resolution.sh` being a script rather
+than a paragraph: the paragraph existed, in a commit message, in this file, and
+in the spec's own doc-comment, and it did not survive contact with a resolution
+at speed. The check now runs beside the anchor diff, and it was watched red on
+a planted marker before being trusted.
+
+kanso#1526's message also names the second half, which held again today: "the
+merge that leaves a marker is the same one that leaves two sections numbered
+88." Two sections numbered 97 is what the duplicate check caught on this same
+branch an hour earlier.
