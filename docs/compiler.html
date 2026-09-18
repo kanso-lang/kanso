@@ -2305,6 +2305,22 @@ widebench        33,516,094 -&gt;     33,644,020      +127,926   +0.3817%</code>
 <p>the spec for that took two tries and both failures say something about the language. the first program accumulated strings, which compiles to a <em>carry</em> beat &#8212; that one computes its own mark, never reads the cache, and the spec passed with the maintenance torn out. the second carried a scalar and allocated nothing, and a loop with nothing to reclaim emits no beat at all. what it takes is both at once: laps that allocate, and a carried value small enough to cross one. each lap builds a padded string and keeps its length.</p>
 
 
+<h2 id="rowsthatmove"><span class="sec-num">89</span>a row that moves seven, and what two readings are worth</h2>
+
+<p>the interpreted row sits at about 1.138 billion instructions and it has moved by <strong>seven</strong> three times this month, on trees whose compiler source the interpreted corpus never touches. seven is not a number anybody would chase. what it is good for is a question this page has had to answer repeatedly: when a counted row disagrees with its golden, how much evidence does it take to say what happened?</p>
+
+<p>the honest answer this time was two readings and no mechanism.</p>
+
+<p>two branches read the row on the same day. one caches a pointer in the beat rewind, the other changes two divisions in a float renderer, and they ran on different runners &#8212; one of them an intel part whose feature block the repository does not have on file. both read <strong>1,138,001,437</strong> to the instruction, against a golden holding <strong>1,138,001,430</strong> from the tree before the merge. and the allocation counter beside it read <strong>2,539,998</strong> on both and on main.</p>
+
+<p>that last row is the one carrying the weight. allocations are decisions the program makes; instructions carry the layout of the binary that made them. a change in the first would mean the interpreter was doing something different. there was no change in the first.</p>
+
+<p>so the row is re-based on two agreeing readings, and the log says layout is a guess. what it does not say is that layout is established, because nothing isolated it.</p>
+
+<p><strong>the draft of this section said something stronger, and it was wrong.</strong> the first write-up had <em>three</em> readings of seven, across three trees at three different absolute values, and concluded a pattern. the third reading was not a reading. it came from the gate&#8217;s second count, which was subtracting the printed line from its first pass and not its second &#8212; so a binary that counted one number was reported as counting two, exactly 3,015 apart, with <code>interp_printed=3015</code> sitting in the job log two screens above the error. that is the subject of the previous section.</p>
+
+<p>the shape is worth naming because it is not a slip about arithmetic. a claim was assembled out of three data points, one of which was an instrument reading itself, and the instrument had printed what it was doing. what makes three readings better than two is that they are independent; a number the tool generated is not a third opinion.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>
