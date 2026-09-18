@@ -2467,6 +2467,23 @@ error[name]: unknown name `builders/run`
 
 <p>one figure on the way there was wrong and is worth saying so. the allocations were first sized at 65,283,877, which is what <code>__rust_alloc</code> costs <em>inclusive</em> when called from the dispatcher — everything underneath it. the function's own cost across the whole program is 36,857,970. reading the first as a budget for the second is the arithmetic this page has withdrawn figures for before. what the change was worth is the differential, and the differential is smaller than either.</p>
 
+<h2 id="oneframe"><span class="sec-num">94</span>a scope that was as deep as the argument list</h2>
+
+<p>section 93 took two copies out of the dispatcher and left the environment walk where section 91 had found it: 2,662,536 frame visits to serve 724,304 hits, 3.7 nodes a lookup. that ratio is not about how fast a node is visited. it is about how many nodes there are.</p>
+
+<p>binding a name built one heap node holding that name, its value, and a pointer to the rest. so a call with four parameters pushed four nodes, and every name the body mentioned walked past all four before it reached the caller's scope. the depth of a scope was the length of an argument list.</p>
+
+<p>a scope is two shapes now. one node for a name bound on its own — a deferred value, a pattern variable, a step inside a build. one node for a whole call's parameters together. the second scans its slots backwards, which is what keeps shadowing exactly as it was: binding three names as three nodes leaves the last one outermost, so a single node holding all three has to answer the last one first.</p>
+
+<pre>  interpreted run   1,038,405,822 -&gt; 1,022,961,605   -15,444,217   -1.49%
+  allocator work       25,548,225 -&gt;     20,621,100                -19.3%</pre>
+
+<p>most of why it is cheap is that it composes with the change underneath it. arm selection already fills one vector of bindings and hands the winner's on; the frame takes that same vector. the allocation selection had already paid for becomes the scope, instead of being freed and replaced by one node per parameter. a call that binds nothing pushes no node at all.</p>
+
+<p>the reason it is a small change at all is that the scope type was sealed: one function built a node, one function read a chain, and nothing else in the interpreter named the type. three functions and one call site.</p>
+
+<p>section 91 declined four schemes aimed at this walk — a head byte beside the name, a padded key, a shape filter, a per-site cache — and every one of them cost more than it saved. all four aimed at the comparing and left the structure alone. this one aims at how many nodes exist, which is the allocation count and the walk depth at the same time. that is a reason to try it, not a reason to expect it to win; the four that failed looked sound too. what settles it is the two binaries above.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>

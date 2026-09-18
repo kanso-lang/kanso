@@ -3769,3 +3769,51 @@ So the mechanism stays open because nobody has spent that, not because the
 number is too small to see. The golden's header says the same. What is not in
 doubt is the trade: 587,222 allocations against 205 bytes, and the objective
 weighs both.
+
+## 2026-09-18 — a call's parameters bound in one frame instead of one each
+
+`bind` was `Some(Rc::new(Env { name, value, parent: env }))`: one heap node per
+BINDING. A call with four parameters pushed four nodes, and every name the body
+mentioned walked past all four to reach the caller's scope. Three frames in the
+interpreted profile are that decomposition:
+
+    eval_ident, self cost          115,147,991   10.61%
+    Rc::drop_slow                   45,932,054    4.23%   229,625 calls
+    memcmp                          47,672,229    4.39%
+
+2,662,536 frame visits served 724,304 hits, 3.7 nodes a lookup.
+
+`Env` is an enum now. `One(Name, Value, parent)` is a single name bound on its
+own — a lazy thunk, a pattern variable, a `build` step. `Many(Bindings, parent)`
+is a whole call's parameters. `Many` scans its slots in REVERSE, which is what
+keeps shadowing the same: binding a, b, c as three `One` frames leaves c
+outermost, so one frame holding them has to answer c first.
+
+    base       1,038,405,822
+    grouped    1,022,961,605     -15,444,217     -1.49%
+    __rust_alloc  25,548,225 -> 20,621,100        -19.3%
+
+The corpus prints `interp 59442` on both binaries.
+
+IT COMPOSES WITH THE CANDIDATE BUFFERS UNDERNEATH IT, and that is most of why
+it is cheap. Arm selection fills one `binds` vector and the winner hands it on;
+`bind_all` moves that same vector into the frame the body runs in. The
+allocation selection already paid for becomes the scope, rather than being
+freed and replaced by one node per parameter. A call that binds nothing pushes
+no frame at all, so a chain never carries an empty node for the walk to step
+over.
+
+ENV WAS FULLY ENCAPSULATED, which is the only reason this is a small diff: one
+constructor and one reader, `bind` and `lookup`, and nothing outside eval.rs
+names the type. Three functions and the dispatch site.
+
+WHY THIS ONE AND NOT THE FOUR kanso#1529 DECLINED. The head byte, the padded
+key, the shape filter and the per-site cache all aimed at the COMPARING and
+left the structure alone; all four cost more than they saved. This aims at the
+node count, which is the allocation count and the walk depth at once. That is a
+reason to try it rather than a prediction, and the four that failed looked
+sound too — what settles it is the differential above.
+
+The allocation fixture re-reads 7,803 -> 6,003 -> 5,403 across the two changes.
+The last two are `grow acc n` and `stack xs n`, each taking two parameters and
+each called once a round.
