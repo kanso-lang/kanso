@@ -4379,6 +4379,39 @@ siblings already cover one sweep each — `every_counter_gate_is_in_the_sweep.rs
 and `the_compile_sweep_names_every_compile_gate.rs` — and by construction
 neither could see a gate belonging to neither of them.
 
+## 2026-09-18 — the release golden's header said the children reproduce, and one of them does not
+
+**CORRECTION.** `bench/codegen_instructions_release_golden.txt`'s 2026-09-17
+entry describes the row as "three `clang` processes and `ld`, every one of
+which came back byte for byte across two readings". That is what its two
+readings showed and it is not true in general. Three cost-goldens jobs on
+2026-09-18 halted the vein for a reproduction failure, every clang process
+byte-identical and the whole difference inside `ld`:
+
+    kanso#1504   5,160,407,609 then 5,160,407,598   -11
+                 probes 1,816,463 -> 1,816,452
+    kanso#1502   5,139,582,528 then 5,139,582,517   -11
+                 probes 1,822,415 -> 1,822,404
+    kanso#1537   6,824,133,291 then 6,824,133,280   -11
+                 probes 1,819,373 -> 1,819,362
+
+All of it in `llvm::StringMapImpl::LookupBucketFor`, which is the frame the
+header's own analysis instrumented the gate to name. Three different probe
+counts and one residue.
+
+The correction is appended to the header as a dated entry rather than written
+over the 2026-09-17 one, for the reason the log works that way: what that
+sentence recorded was true of its two readings, and what is wrong is the
+general claim a later reader takes from it.
+
+**kanso#1538 and kanso#1504's SECOND job both reproduced.** One branch has now
+been on both sides, which settles the draw as a property of the job rather
+than of any diff. The rate is not written down here; it changes with every job
+run today, and the list lives in the ledger entry.
+
+This corrects the record and settles nothing about the pin, which is
+design/pending-gavels.md's to rule on.
+
 ## 2026-09-18 — the object gets a name the run chooses, and the eleven has nowhere left to live
 
 kanso#1512 closed the mechanism and said the fix belonged in a round of its
