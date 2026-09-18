@@ -3817,3 +3817,40 @@ sound too — what settles it is the differential above.
 The allocation fixture re-reads 7,803 -> 6,003 -> 5,403 across the two changes.
 The last two are `grow acc n` and `stack xs n`, each taking two parameters and
 each called once a round.
+
+## 2026-09-18 — what the grouped frame did not touch, which is the useful half
+
+A profile of the interpreted run with the frame change in, taken on a release
+build with debug info so the frames carry names rather than `???`:
+
+    eval                    68,919,538   6.44%
+    memcmp                  47,631,349   4.45%
+    Value::clone            47,204,366   4.41%
+    match_one               44,851,891   4.19%
+    drop_in_place<Value>    41,234,808   3.85%
+    eval_ident              39,702,258   3.71%
+    dispatch_loop           30,804,862   2.88%
+    lookup                  30,732,822   2.87%
+
+THE PROFILE IS FLAT NOW. The top frame is 6.44% where this morning's was
+11.70%, and the two that led it — `dispatch_loop` at 121,568,733 and
+`eval_ident` at 115,147,991 — are 30,804,862 and 39,702,258. `lookup` appears
+as its own symbol because the enum match made it too big to inline; its
+inclusive cost from `eval_ident` is 116,087,760 over 1,056,328 calls.
+
+MEMCMP DID NOT MOVE: 47,672,229 before, 47,631,349 after, a difference of
+41,000 on a counter of 47 million. That is the useful half of this reading.
+Grouping a call's parameters into one frame removes NODES and ALLOCATIONS and
+leaves the comparing exactly where it was, because the same names are compared
+against the same query — they are laid out in a vector rather than strung
+through a chain. Anyone reading the row fall and concluding the walk now
+compares less would be wrong, and the number says so.
+
+So what the walk costs after the structural change is two nearly equal halves:
+comparing names, 47,631,349, and copying the value out, 47,204,366.
+kanso#1529 built four schemes at the first half — a head byte, a padded key, a
+shape filter, a per-site cache — and all four cost more than they saved. The
+second half is what section 91 sized and nothing has touched.
+
+Percentages here are of this binary's total, and a debug-info build is not the
+one the goldens are measured on. The ordering is what this reading is for.
