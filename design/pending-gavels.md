@@ -176,6 +176,53 @@ is the only thing deferring it.
 
 ## Open, not blocking
 
+### Where does a golden live that pins ONE engine's answer where another refuses?
+
+**Cited:** the differential law as this file and CLAUDE.md state it -- a feature
+may land on fewer engines only if the others REJECT it with a clear diagnostic,
+never silently diverge; `docs/book/ch02.html` and
+`docs/book/samples/ch02/overflow.out`, which pin native's refusal at the int64
+boundary; and `tests/golden.rs`'s `micro_corpus_agrees_across_engines`, which
+runs every micro fixture on both engines and requires agreement.
+
+**The question.** kanso's integers are arbitrary-precision by specification. The
+interpreter implements that with `BigInt`; the native build is int64 and raises
+`integer overflow (int64 native build; spec int is arbitrary precision)` past
+the boundary. The refusal is pinned. The interpreter's own ANSWERS there are
+not, and they cannot be: the micro corpus is the only behavioural corpus, it
+runs both engines, and it requires them to agree, so no fixture in it can hold
+a program native refuses.
+
+That matters now because the interpreter's `Value::Int` holds a `BigInt` whose
+clone allocates, and 610,763 of the run's 1,555,866 value clones are integers --
+every one of which fits an `i64`. An inline machine integer with `BigInt` on
+overflow removes those allocations, and the way it goes wrong is promoting one
+step late, which prints a WRAPPED number rather than raising. Nothing in the
+tree would catch that.
+
+1. **A fixture kind that pins one engine where another refuses.** A micro
+   fixture gains an optional companion recording the refusal, so the corpus
+   asserts "interp says X, native refuses with Y" rather than requiring
+   agreement. The cost is a second shape of golden for every reader to learn,
+   and a door to divergences being pinned rather than fixed.
+2. **Native gains arbitrary precision**, the two engines agree, and an ordinary
+   micro golden works. The cost is a bignum in the compiled runtime, on the
+   production side of the objective, for a case programs rarely reach.
+3. **Leave it unpinned** and let the small-integer change rest on the
+   interpreter's existing arithmetic tests. The cost is that the one defect the
+   change can introduce is the one nothing watches.
+
+**Recommendation: 1.** The divergence is already sanctioned and already
+documented in the book; what is missing is a place to assert it mechanically,
+and 2 spends production cost to remove a divergence the project chose. But
+this is a question about what the corpus is FOR, which is Clay's rather than
+the implementer's.
+
+**What is NOT being asked.** Whether to build the small-integer change; that
+is an ordinary performance question and it is unsized. Only where its fixture
+lives.
+
+
 ### What spelling does "cyclic structures sized by data" need?
 
 **Cited:** the archive's "block-born is the whole cohort" (2026-08-29), whose
