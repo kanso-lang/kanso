@@ -2629,6 +2629,10 @@ error[name]: unknown name `builders/run`
 
 <p>which leaves 119,542 removed against roughly 175,246 that could have been. a draft of this paragraph said one per tail hop and had not looked at the second number. about two thirds of iterations were allocating, and what accounts for the other third is not established here. the obvious candidate is arity zero, since asking for a capacity of nothing allocates nothing, and it stays a candidate: nothing in this profile counts dispatches by arity.</p>
 
+<p><strong>what the runner read.</strong> this container projected 5,073,171 and ci reads 6,858,880 &#8212; the same direction, larger, on different silicon. the allocation counter beside it falls 1,410,530 to 1,309,483, and the peak 833,466 to 833,463. every compile vein is byte-identical, which makes this the fourth runtime-only change in a row that moved no layout.</p>
+
+<p>one claim about those counters was published and then half withdrawn, which is worth the space because the half that survived is useful. the allocation counter reproduces across hosts: the container printed 1,309,483 for this tree and the runner read 1,309,483, and on a second tree both read 1,410,530. the peak does not. on that second tree the container reads 833,458 against the runner&#39;s 833,466, eight bytes apart. so it is the traffic count that is host-independent rather than the memory rows as a family, which is why one of those gates carries no allowance for the machine and the instruction gates refuse to compare at all on this box.</p>
+
 <p>a fourth change leaves the comparing alone. memcmp reads 46,087,562 then 46,118,166 across the &#167;97 pair, +0.066%. a draft of this paragraph had it falling 1,484,175, which was a debug-info profile read against a release one &#8212; two build configurations rather than two trees. compared inside its own sitting it has not moved, and the three changes in &#167;96 become four.</p>
 
 <h2 id="framedback"><span class="sec-num">99</span>the frame handed back</h2>
