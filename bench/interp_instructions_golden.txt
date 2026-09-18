@@ -284,5 +284,9 @@
 #
 # 2026-09-18, re-merged onto main after kanso#1515. THE VALUE BELOW IS MAIN'S,
 # carried forward; the merged reading is CI's.
-interp_instructions=2168428538
+#
+# 2026-09-18, kanso#1504 on the tree merged with main after kanso#1515, CI's sitting.
+# 2,168,428,538 -> 2,168,245,153, a FALL of 183,385 (-0.0085%). LAYOUT: the value above was main's,
+# carried forward on the re-merge, and this is the merged tree measured.
+interp_instructions=2168245153
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

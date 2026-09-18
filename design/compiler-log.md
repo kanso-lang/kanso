@@ -4028,3 +4028,30 @@ floor and the ratchet follows CI's sitting.
 
 The three compile spans on the page follow the goldens and carry main's values
 with them.
+
+## 2026-09-18 — kanso#1504's rows on the tree merged after kanso#1515
+
+Six layout rows, one job, against the values carried forward from main:
+
+      compile           35,443,611 ->    35,443,639       +28   +0.0001%
+      entry            126,354,834 ->   126,356,158    +1,324   +0.0010%
+      library          126,810,299 ->   126,811,904    +1,605   +0.0013%
+      interpreted    2,168,428,538 -> 2,168,245,153  -183,385   -0.0085%
+      start-up           3,363,774 ->     3,364,590      +816   +0.0243%
+      emitting          51,546,788 ->    51,544,132    -2,656   -0.0052%
+
+Four rose, two fell, every one under three hundredths of a per cent and with
+mixed signs, which is what a shifted binary looks like. The compile, entry,
+library and emit rows each read the same value twice in the job.
+
+`codegen_instructions_release` reads 6,841,691,425, the branch's own row from
+its pre-merge sitting: main did not touch that golden, so the merge left it
+alone and it is the term this branch actually pays. `codegen_instructions_dev`
+reads 596,197,703, also the branch's own. The floor is banked at
+76.88172594705054.
+
+The same comparison beside kanso#1502's is worth keeping: both branches sat on
+identical carried-forward rows, and the interpreted row fell 183,385 here and
+162,511 there. Two different changes, two falls of the same order on a row
+neither of them executes, which is the layout term's size on this tree rather
+than anything either branch did.

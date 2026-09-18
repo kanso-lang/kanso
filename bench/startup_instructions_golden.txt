@@ -384,4 +384,8 @@
 #
 # 2026-09-18, re-merged onto main after kanso#1515. THE VALUE BELOW IS MAIN'S,
 # carried forward; the merged reading is CI's.
-startup_instructions=3363774
+#
+# 2026-09-18, kanso#1504 on the tree merged with main after kanso#1515, CI's sitting.
+# 3,363,774 -> 3,364,590, a RISE of 816 (+0.0243%). LAYOUT: the value above was main's,
+# carried forward on the re-merge, and this is the merged tree measured.
+startup_instructions=3364590

@@ -974,7 +974,11 @@
 #
 # 2026-09-18, re-merged onto main after kanso#1515. THE VALUE BELOW IS MAIN'S,
 # carried forward; the merged reading is CI's.
-library_instructions=126810299
+#
+# 2026-09-18, kanso#1504 on the tree merged with main after kanso#1515, CI's sitting.
+# 126,810,299 -> 126,811,904, a RISE of 1,605 (+0.0013%). LAYOUT: the value above was main's,
+# carried forward on the re-merge, and this is the merged tree measured.
+library_instructions=126811904
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.
