@@ -22,22 +22,31 @@
 //! corpus moved.
 //!
 //! WHAT IS PINNED is how many times the run asked the allocator, not a frame
-//! or a verdict. The fixture appends and pushes 300 times each; copying asks
-//! 1,200 times more than extending in place, one ask per copy. A spec written
-//! against the copy itself -- a counter on the clone, a probe of
-//! `Rc::strong_count` -- would go green the moment the decomposition moved,
-//! which is exactly when it needed to speak.
+//! or a verdict. A spec written against the copy itself -- a counter on the
+//! clone, a probe of `Rc::strong_count` -- would go green the moment the
+//! decomposition moved, which is exactly when it needed to speak.
 //!
-//! THE TWO BYTE COUNTERS ARE EXCLUDED, and the exclusion is measured rather
-//! than assumed. `interp_alloc_bytes` and `interp_peak_bytes` track the length
-//! of the path the run was handed: the same fixture staged at `/tmp/chain`
-//! reads 10,524,425 and 148,058, and staged at a name 34 characters longer
-//! reads 10,578,250 and 148,485. `interp_allocs` reads 21,173 at both. A
-//! spec that stages under `std::env::temp_dir()` runs on a path whose length
-//! is the host's, so pinning either byte counter would pin macOS's
-//! `/var/folders/...` against Linux's `/tmp`. That is the 2026-09-15 rule:
-//! what cannot be normalized is left out, and the exclusion is named where a
-//! reader will find it.
+//! AND IT IS PINNED AS A DIFFERENCE, because an absolute count is the host's.
+//! `interp_alloc_bytes` and `interp_peak_bytes` track the length of the path
+//! the run was handed: the same fixture staged at `/tmp/chain` reads
+//! 10,524,425 and 148,058, and staged at a name 34 characters longer reads
+//! 10,578,250 and 148,485. `interp_allocs` held at 21,173 across that pair on
+//! Linux, and pinning it anyway was wrong: macOS stages under
+//! `/var/folders/...` rather than `/tmp` and the first CI round on the other
+//! host went red on exactly this file.
+//!
+//! So the fixture runs the SAME program at two sizes, from entry files of the
+//! same name length in the same directory, and pins what the second costs
+//! over the first. Every fixed allocation — the loader, the path, the
+//! library, the entry — is identical in both runs and cancels exactly. What
+//! is left is what the extra 300 rounds cost, which is the thing the change
+//! is about. That is the 2026-09-15 rule: a term that cannot be normalized is
+//! not measured, and the way to normalize this one is to subtract it.
+//!
+//! Copying reads 19,201 for those rounds and extending in place 18,001 -- the
+//! 1,200 copies the two builders would have made, one allocation each. The
+//! absolute counts moved with the entry's name between two revisions of this
+//! very file, 21,162 to 21,180, while the difference did not.
 
 use std::path::PathBuf;
 use std::process::Command;
@@ -60,8 +69,13 @@ fn stack xs 0
 fn stack xs n
   stack (push (push xs n) n) (n - 1)
 
-pub play = print "{length (grow (text/bytes "") 300)} {length (stack [] 300)}"
+pub fn run rounds
+  print "{length (grow (text/bytes "") rounds)} {length (stack [] rounds)}"
 "#;
+
+/// What 300 extra rounds of the two builders cost, with every fixed
+/// allocation cancelled by the subtraction.
+const PER_EXTRA_ROUND: u64 = 18_001;
 
 fn kanso() -> PathBuf {
     let mut exe = std::env::current_exe().expect("the test binary has a path");
@@ -72,15 +86,19 @@ fn kanso() -> PathBuf {
     exe.join("kanso")
 }
 
-/// Run the real binary on the staged fixture and answer what it printed and
-/// what the interpreter's allocator counted.
-fn ran() -> (String, Vec<(String, u64)>) {
+/// Run the real binary on the staged fixture at one size and answer what it
+/// printed and what the interpreter's allocator counted.
+///
+/// The two entry names are the same length on purpose: a run's allocations
+/// track the length of the path it was handed, and the difference the tests
+/// below take is only a cancellation if the two paths cost the same.
+fn ran(rounds: u32) -> (String, Vec<(String, u64)>) {
     let stage = std::env::temp_dir().join("kanso-unique-container");
-    let _ = std::fs::remove_dir_all(&stage);
     std::fs::create_dir_all(&stage).expect("a staging directory");
     std::fs::write(stage.join("builders.kso"), LIBRARY).expect("the library writes");
-    let entry = stage.join("run_builders.kso");
-    std::fs::write(&entry, "import \"./builders\"\n\nbuilders/play\n").expect("the entry writes");
+    let entry = stage.join(format!("run_{rounds}.kso"));
+    std::fs::write(&entry, format!("import \"./builders\"\n\nbuilders/run {rounds}\n"))
+        .expect("the entry writes");
 
     let out = Command::new(kanso())
         .arg("run")
@@ -102,7 +120,6 @@ fn ran() -> (String, Vec<(String, u64)>) {
         .filter_map(|(key, value)| Some((key.to_string(), value.trim().parse().ok()?)))
         .collect();
     let printed = String::from_utf8_lossy(&out.stdout).to_string();
-    let _ = std::fs::remove_dir_all(&stage);
     (printed, counted)
 }
 
@@ -117,24 +134,25 @@ fn counter(counted: &[(String, u64)], name: &str) -> u64 {
 /// The answer first: extending in place may not change what the program says.
 #[test]
 fn the_builders_answer_what_they_answered_before() {
-    let (printed, _) = ran();
-    assert_eq!(printed, "1200 600\n", "600 appends of two bytes, and 600 pushes");
+    assert_eq!(ran(300).0, "1200 600\n", "600 appends of two bytes, and 600 pushes");
+    assert_eq!(ran(600).0, "2400 1200\n", "twice the rounds, twice the answer");
 }
 
-/// Exact, not a band. The copying interpreter asks 22,362 times for the same
-/// answer; a tolerance wide enough to survive 1,200 extra allocations is wide
-/// enough to survive the fix being removed.
+/// Exact, not a band, and a difference rather than a count.
 #[test]
 fn a_unique_container_is_extended_in_place() {
-    let (_, counted) = ran();
+    let small = counter(&ran(300).1, "interp_allocs");
+    let large = counter(&ran(600).1, "interp_allocs");
     assert_eq!(
-        counter(&counted, "interp_allocs"),
-        21_162,
-        "the interpreter copied a container no other reference points at. \
-         Copying asks the allocator 22,362 times over this fixture, one ask \
-         per copy; extending in place asks 21,162. `push`, `put` and \
-         `append` in src/eval.rs take their container by value and hand it \
-         to `taken`, which is `Rc::try_unwrap` with the clone as its other \
-         arm. Counted: {counted:?}"
+        large - small,
+        PER_EXTRA_ROUND,
+        "300 more rounds of the two builders cost {} allocations; extending \
+         a unique container in place costs {PER_EXTRA_ROUND}. Every fixed \
+         allocation is the same in both runs and cancels, so what is left is \
+         what the rounds cost. `push`, `put` and `append` in src/eval.rs take \
+         their container by value and hand it to `taken`, which is \
+         `Rc::try_unwrap` with the clone as its other arm. Read {small} at \
+         300 rounds and {large} at 600.",
+        large - small
     );
 }

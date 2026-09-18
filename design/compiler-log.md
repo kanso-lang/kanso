@@ -3624,3 +3624,34 @@ a value that can be appended to without being unique, or an argument protocol
 that does not leave a copy in the caller's frame. What has changed is the price of the
 cheap half: 14,194,625 instructions, declined the day before on a share
 rather than a reading.
+
+## 2026-09-18 — the spec pinned a count the host owns, and macOS said so
+
+`tests/a_unique_container_is_extended_in_place.rs` pinned `interp_allocs` at
+21,162 on a fixture staged under `std::env::temp_dir()`. The first CI round on
+the other host went red on exactly that file: macOS stages under
+`/var/folders/...` where Linux stages under `/tmp`, and a run's allocations
+track the length of the path it was handed.
+
+**The exclusion was half-right and the half it got wrong was the important
+one.** The file's own header excluded `interp_alloc_bytes` and
+`interp_peak_bytes` for that reason, measured: the same fixture at `/tmp/chain`
+reads 10,524,425 and 148,058, and at a name 34 characters longer reads
+10,578,250 and 148,485. `interp_allocs` held at 21,173 across that pair, and
+holding across ONE pair of Linux paths is not the same property as holding
+across two operating systems. The absolute count then moved from 21,162 to
+21,180 between two revisions of the spec itself, because the entry file's name
+got shorter.
+
+**A difference is what survives.** The fixture now runs the same program at 300
+rounds and at 600, from entry files of the same name length in the same
+directory, and pins what the second costs over the first. Every fixed
+allocation — the loader, the path, the library, the entry — is identical in
+both runs and cancels. Copying reads 19,201 for those rounds and extending in
+place 18,001: the 1,200 copies the two builders would have made, one allocation
+each. Green on the branch, red on main at 19,201, and the number is one the
+host cannot move.
+
+That is the 2026-09-15 rule applied to a spec rather than a gate: what cannot
+be normalized is not measured, and the way to normalize an absolute count with
+a host-sized constant inside it is to subtract the constant.
