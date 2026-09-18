@@ -75,7 +75,20 @@ pub fn run rounds
 
 /// What 300 extra rounds of the two builders cost, with every fixed
 /// allocation cancelled by the subtraction.
-const PER_EXTRA_ROUND: u64 = 18_001;
+///
+/// It read 18,001 when kanso#1515 pinned it and reads 16,201 since kanso#1516,
+/// and the 1,800 between them is six allocations a round that the builders
+/// never made. `eval_ident` used to build an `Rc<str>` every time it resolved a
+/// name to a reference; it remembers the answer now, so the six names each
+/// round mentions allocate once for the whole run instead of once per mention.
+/// That is a change in what the ROUNDS cost and the subtraction is meant to see
+/// it -- which is why this spec went red on that branch and had to be re-read
+/// rather than widened.
+///
+/// The 19,201 the copying arm read is from before kanso#1516 and has not been
+/// re-measured under it. What this spec pins is unchanged either way: the
+/// in-place path costs less per round than the copying one.
+const PER_EXTRA_ROUND: u64 = 16_201;
 
 fn kanso() -> PathBuf {
     let mut exe = std::env::current_exe().expect("the test binary has a path");
