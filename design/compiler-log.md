@@ -9063,8 +9063,11 @@ what a pass that runs once per program rather than once per name looks like:
 the entry route gives back four times the instructions of the module route at
 the same 1.19%, because it is four times the program.
 
-Two rows rose and both are layout — `interp_instructions` by 219,835, a
-hundredth of a per cent on 2.18 billion, and `emit_instructions` by 2,466.
+Two rows rose and both are layout. `interp_instructions` rose 219,835 to land
+on 2,182,523,679, a hundredth of a per cent on 2.18 billion.
+`emit_instructions` rose 2,466 to land on 60,200,209, four thousandths of a per
+cent — the emitter writes the same IR, and this row counts what deciding to
+write it costs, so it moves with the binary the way the three check rows do.
 The run-side rows, the machine-code row and both codegen rows are
 byte-identical: this change is entirely in the front end.
 
