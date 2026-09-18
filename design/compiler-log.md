@@ -3276,7 +3276,7 @@ corpus now pins whatever the answer turns out to be:
 three shapes and both goldens, and was watched red twice — once with a word
 changed in the message and once with the lambda's hole removed from the
 program.
-## 2026-09-18 — the interpreted row varies by 0.117% on this container, and the candidate it replaces was wrong about the mechanism
+## 2026-09-18 — the interpreted row does not vary, and the reading that said it did came out of a stale box
 
 STATUS.md's second standing "Ruled, unbuilt" row is the 2026-09-15
 normalization ruling against `interp_instructions`, which two CI jobs read
@@ -3285,88 +3285,68 @@ was that six in 2.18 billion is three parts per billion, that the interpreted
 run is the allocation-heavy workload, and that where the allocator's heap
 starts moves with the size of the file the loader mapped.
 
-Measured on a release build of main `07b96058`, four runs of one binary over
-one corpus, in the gate's own box under the gate's own `env -i` and glibc
-tunables. The gate's anchor, `run_interpreted_on_stack` inclusive:
+**The first answer this branch recorded was wrong.** Four runs staged out of
+`/tmp/kanso-compile-ir` read the gate's anchor at 2,648,173,504,
+2,646,456,996, 2,649,443,833 and 2,646,343,385 — a spread of 3,100,448, or
+0.117% — with `core::hash::sip::Hasher::write` live at 187,455,582, 6.96% of
+the run. A frame diff of the extremes put the whole difference in
+`eval_ident`, `type_decl`, `call_named`, `__memcmp_avx2_movbe` and
+`hashbrown`'s `contains_key`, against a `dispatch` that went the other way.
+That went into this branch as a property of the current tree.
 
-    2,648,173,504
-    2,646,456,996
-    2,649,443,833
-    2,646,343,385
+It is not. Four runs of a release build of `07b96058` — the same commit the
+first reading names — read the anchor at **2,231,670,466, four times, with no
+`sip::Hasher::write` frame in the profile at all.** Four runs of a release
+build of `14530ee9` read 2,231,485,945 four times, likewise. The row is exact
+on this container and always was.
 
-**Spread 3,100,448, or 0.117%** — four orders of magnitude above the six CI
-saw, and the whole-process totals spread by the same 3,100,448, so every
-instruction of it is inside the anchor. The printed line the gate excludes,
-`memrchr`, read 177 on all four.
+**What the box held.** `scripts/gates/library_box.sh` copies
+`./target/release/kanso`; it does not build it. A worktree's target directory
+holds whatever was last built in it, and the binary in the box was one from
+before kanso#1449's sibling fix of 2026-09-16 — `3ee41dcf`, "the interpreter
+hashed against an attacker it does not have", which moved the interpreter's
+`fns`, `types`, `knots`, typeset cache and cycle-guard sets off
+`std::collections`.
 
-A callgrind diff of the two extremes puts the difference in lookup frames and
-nowhere else:
+Built at `3ee41dcf^` and handed today's corpus and today's `lib`, that
+compiler reads:
 
-    +1,339,085  Interp::eval_ident'2
-    +1,095,324  Interp::type_decl
-      +406,353  Interp::call_named'2
-      +232,276  __memcmp_avx2_movbe
-       +39,636  hashbrown contains_key
-      -125,514  Interp::dispatch'2
-    ---------
-    +2,986,837  PROGRAM TOTALS
+    2,649,396,935
+    2,654,191,562
+    2,650,473,347
+    2,653,900,730
 
-That is the shape `src/hash.rs` describes in its own doc comment — probe
-sequences moving while the hashing itself does not. SipHash is live in this
-binary at 6.96% (187,455,582 in `sip::Hasher::write`, 3,846,090 calls from
-`hash_one`) and its cost is BYTE-IDENTICAL across the runs, which is what a
-per-process random key looks like: the same bytes hashed, landing in different
-buckets.
+with `sip::Hasher::write` at **187,455,582, 6.95%** — the same figure to the
+instruction — and a frame diff of two runs naming `eval_ident` +1,933,122,
+`type_decl` +1,164,960, `call_named` +844,947, `__memcmp_avx2_movbe` +434,498,
+`contains_key` +421,421 and `dispatch` −4,199. Same binary, same signature,
+same spread. The provenance is not inferred from a resemblance; the SipHash
+figure and all six frames reproduce.
 
-**What this does not establish is which map.** Every file in `src/` that names
-`HashMap` or `HashSet` imports `crate::hash`'s fixed-seed aliases —
-`tests/the_compile_path_hashes_with_a_fixed_seed.rs` passes on this tree and
-covers `src/eval.rs` explicitly, since 2026-09-16. `callgrind_annotate`'s
-caller tree shows eval's frames above `hash_one` and `hash_one` above
-`sip::write`, but `hash_one` is one symbol covering every instantiation in the
-binary, so that tree cannot say whose call reached SipHash. Naming eval as the
-caller from this data would be the attribution error this log has recorded
-before.
+**So the mechanism the first reading named was right about that binary and
+wrong about this tree.** Probe sequences moving while the hashing itself does
+not is exactly what `src/hash.rs` describes, and
+`tests/the_compile_path_hashes_with_a_fixed_seed.rs` already covers
+`src/eval.rs`, so no map on this tree could have produced it.
 
-**A second profile narrows it and leaves one step.** Re-run with
-`--separate-callers=2`, every context that reaches `sip::Hasher::write`:
+**The 2026-09-15 row is therefore not what it was filed as.** Two CI jobs read
+six apart, and nothing on this container reproduces even that: eight runs
+across two release builds gave two values, one per build. Six in 2.18 billion
+remains unexplained, and it is a CI-side question about two runners rather
+than a randomly-seeded map. What this branch can say is that the map
+hypothesis is dead and the container shows no variance to chase.
 
-    76,786,762  ...'hash_one'Interp::eval_ident
-    66,040,164  ...'hash_one'Interp::type_decl
-    16,137,504  ...'hash_one'Interp::call_named
-    15,363,696  ...'hash_one'hashbrown contains_key
-    12,706,722  ...'hash_one'Interp::dispatch
-       359,918  ...'hash_one'Interp::render_interpolated
+**And the staging script now builds what it stages.** One line,
+`cargo build --release`, ahead of the copy, which is the rule
+`all_counters.sh` and `all_compile.sh` already carry and which this script was
+missing. `tests/the_box_stages_a_binary_it_built.rs` pins it: the build line
+exists, it precedes the copy when comments are stripped, and the path it
+copies is the one the build writes. Watched red three ways — the line deleted,
+the line moved after the copy, and the copy pointed at a different path.
 
-Every one is the interpreter's own lookup. `hash_one` is FOURTEEN distinct
-functions in this binary sharing one demangled name, so the node annotate
-prints is merged and the cost split between them is not readable — but a
-separated context is a chain of names taken from the live stack, so
-`eval_ident` really did call a `hash_one` that really did call SipHash.
-
-And the frames those names sit in probe `self.fns` and `self.types`, which are
-`crate::hash::Map` — `BuildHasherDefault<Fx>`, fixed seed, no SipHash
-anywhere in reach. The two readings do not fit together, and the resolution is
-probably not the seed at all: **SipHash's own cost is byte-identical across
-runs.** The same bytes are hashed the same way every time. What differs is
-where things LAND, which a seed would do and so would a different INSERTION
-ORDER — and an Fx map built by collecting from a seeded map's iteration
-inherits that map's order without inheriting its hasher. `src/hash.rs` says in
-its own doc that iteration order changes and nothing the compiler writes
-depends on it; what it costs is the question this row is about.
-
-That is a hypothesis with the right shape and it is not measured. Naming the
-map it would come from is the step left.
-
-**So the candidate is replaced rather than confirmed.** The row's variance is
-not about where the allocator's heap starts; it is a hash probe sequence, and
-the same signature the three compile rows had before kanso#1449 fixed them.
-What is open is where the seeded map lives, given that no file in `src/` still
-declares one — a dependency, or an instantiation the spec's textual check
-cannot see.
-
-And the two numbers do not yet meet: 0.117% here against three parts per
-billion on CI, on what should be the same binary over the same corpus. Either
-the runner is not exposed to whatever this is, or its exposure is far smaller,
-and a claim that these are one phenomenon needs a measurement that shows it
-rather than a resemblance.
+**What it cost to not have it.** A wrong spread, a wrong mechanism and a
+search for a map that does not exist, all in an entry that reached an open
+pull request. Nothing on main, because the reproduction happened before the
+merge — but the only reason the reproduction happened was that the number was
+re-measured rather than re-read. A gate that measures a binary nobody built answers about
+some other tree, and prints a plausible number doing it.
