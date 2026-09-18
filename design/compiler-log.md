@@ -3579,3 +3579,52 @@ That is why this ships with the cost golden and no behavioural fixture, and why
 the one that was written was discarded rather than committed. A golden that
 passes with the rule removed is worse than none, because it stops anybody
 looking.
+
+## 2026-09-18 — two tests shared one staging directory, and cargo runs them at once
+
+`a_unique_container_is_extended_in_place` went red on kanso#1502's Linux job
+and kanso#1529's macOS job within an hour of each other. Neither diff touched
+the interpreter; kanso#1502's touches `src/runtime.c`, which is the NATIVE
+runtime, and this fixture measures the interpreted one. Both were read as the
+fixture being flaky and left.
+
+The panic says what it is, and reading it was the whole diagnosis:
+
+    the interpreted run failed:
+    error[name]: unknown name `builders/run`
+      --> /tmp/kanso-unique-container/run_300.kso:3:1
+
+The library is THERE and has nothing in it. `std::fs::write` is a
+`File::create` followed by a `write_all`, and `File::create` truncates. Both
+tests in the file staged into one hardcoded path, cargo runs the tests in a
+binary on parallel threads, so one test's staging truncated the library while
+the other test's `kanso` was reading it. A zero-byte library is a valid
+library with no definitions in it, which is why the run got as far as
+resolving a name.
+
+THE FAILING TEST IS NOT THE ONE THE FILE IS NAMED FOR. Both rounds were
+recorded as `a_unique_container_is_extended_in_place`, because that is the
+cargo TARGET, and the target is the file. The test that actually died is
+`the_builders_answer_what_they_answered_before` — the other one passed in the
+same run. Read the failure block, not the target list.
+
+Each test stages its own tree now, named for a tag it passes. The tags are all
+the same length so a reading under one is comparable with a reading under
+another, and the directory's own name growing by seven characters moved the
+absolute counts and left `PER_EXTRA_ROUND` at 7,803 — the subtraction doing
+exactly what this fixture's header says it is for.
+
+TWENTY-FIVE RUNS OF THE PAIR ON AN IDLE BOX DID NOT REPRODUCE IT, which is
+why the spec forces the interleaving rather than waiting for it. `ran` no
+longer stages; it takes a tree that is already staged. That split is not
+tidiness — the first version of the spec truncated one tree's library and then
+called `ran`, which re-wrote the library on the way in and healed the very
+window being tested, so it PASSED against the shared directory. Moving the
+staging out is what makes the window stay open across the read.
+
+Watched red by making `staged` ignore its tag, which is the shared directory
+this file used to have, and the message is CI's byte for byte.
+
+This is the 2026-09-15 rule read from the other side. External state gets
+normalized before it is measured; a directory two threads write is not
+normalized and is nobody's.
