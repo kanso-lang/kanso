@@ -4435,3 +4435,46 @@ file on purpose.** The paragraphs above it decompose their own deltas by
 counting calls, and the same arithmetic does not obviously give two here. Two
 a round is the measurement. A decomposition guessed into a spec's doc is what
 the next reader would check their own change against.
+
+---
+
+## 2026-09-18 — what the dispatcher still allocates, and why the profile cannot finish the sentence
+
+**OPEN, measured as far as this instrument goes.** kanso#1540's entry left one
+thread: after the score buffer stopped being allocated per dispatch, the
+dispatcher's remaining allocations are the bindings vector, which `bind_all`
+turns into the environment frame, and the `Rc<Env>` node holding it. Both
+outlive the dispatch, so neither is removable the way the score was. The
+question that follows is whether a frame whose strong count reaches one when
+the body returns can be handed back rather than freed.
+
+A debug-info profile of the interpreted corpus, `--auto=yes`, says this much:
+
+    175,246   iterations (frame_for, and the drop of `best`, agreeing)
+    229,625   Rc<T,A>::drop_slow            <- dispatch_loop'2
+    457,929   drop_in_place<Value>          <- Rc<T,A>::drop_slow
+    796,091   drop_in_place<Value>          <- dispatch_loop'2
+    521,766   instructions on the line `Some(Rc::new(Env::Many(binds, env)))`
+
+`drop_slow` runs only when a strong count reaches ZERO, so the dispatcher is
+taking an `Rc` to its last handle 229,625 times against 175,246 iterations —
+1.31 a time.
+
+**AND THAT IS NOT THE FRAME'S SHARE.** The dispatcher holds three kinds of
+`Rc`: the frame, the name it dispatches on, and the overload list. Every one of
+them is `Rc<T,A>::drop_slow` in the profile, because the type parameter is gone
+by then and `drop_in_place<Env>` is inlined into it — there is no edge in the
+whole file naming `Env`, on a debug-info build, with auto-annotation on. So
+1.31 per iteration bounds the frame's share from ABOVE and says nothing about
+where inside that bound it sits.
+
+Written down because the bound is the useful part and the temptation is to read
+it as the answer. If every one of those were the frame, reclaiming it would be
+worth 175,246 allocate-and-free pairs, which today's two measurements price
+between 42.4 and 61.2 instructions each: seven to ten million, about one per
+cent. That is the ceiling, and the floor is zero.
+
+**WHAT WOULD SETTLE IT IS A BUILD, not another profile.** The dispatcher moves
+the environment into `eval_body_flow`, so measuring how often it comes back
+unshared means keeping a handle and counting — which is most of the change
+itself. The profile has been run; the next step is the build.
