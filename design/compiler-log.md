@@ -8703,8 +8703,12 @@ goldens, a page and a log entry: 2,182,526,878 and 2,182,526,865. Thirteen.
 
 The fix is the one kanso#1487 wrote, applied to the fourth gate, with the
 figure printed as `interp_printed=` so what came off is readable. The row's
-absolute value moves, so main's number is carried forward and round one is
-deliberately red on it; CI's own reading replaces it.
+absolute value moves, so main's number was carried forward and round one was
+deliberately red on it. CI read **2,182,303,844** against main's
+2,182,307,043: a difference of 3,199, which is not a saving but the printed
+line's subtree leaving the count. Larger than the module row's roughly 825,
+because `interp_corpus` prints the document it decoded rather than one
+summary line.
 
 **What made this possible to miss is worth more than the fix.** The property
 lived in three scripts and in no check, so nothing could tell that a fourth
