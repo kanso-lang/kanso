@@ -3943,3 +3943,27 @@ the moment it is found. What was missing is that "goes to him" has a file name,
 and marking a task is not it. Worth adding to the check a session runs when it
 opens a red pull request: if the redness is waiting on a decision, the ledger
 gets an entry in the same turn, and the pull request's body cites the heading.
+
+## 2026-09-18 — a finished ruling sat in the list cloud reads to choose work
+
+STATUS.md's "Ruled, unbuilt" section said three rows stood. One of them,
+"A demanded knot counts on one engine only (2026-08-24)", was built and merged
+as kanso#1511 earlier the same day. The section's own second sentence says the
+chat removes a row the day its build lands on main; the removal belonged in that
+commit and was not made.
+
+So for several hours the one list cloud is told to read before choosing what to
+build advertised a finished job, complete with an Owes list of three things that
+are done. That is the precise failure the section exists to prevent, pointing
+the other way: it was written because five ruled features sat unbuilt while 296
+pull requests landed, and an entry that is finished and still listed costs the
+same reader the same wrong turn.
+
+Probed against main before removing it rather than taken from a merge notice:
+`src/eval.rs:3505` consults `codegen::knotted_constants`, and
+`tests/golden.rs:194` names `mem_corpus_interp_matches_the_semantic_counters`,
+whose loop kanso#1511's entry records being watched red against the unfixed
+interpreter. Both halves the ruling asked for are there.
+
+Two rows stand now: the cohort gavel's data-sized cycle, and the 2026-09-15
+normalization ruling.

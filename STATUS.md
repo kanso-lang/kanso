@@ -121,12 +121,23 @@ log entry calls the live remainder of that ruling. The two welfares came off
 when kanso#1491 landed the second half of the 2026-09-16 gavel; every item on
 its Owes list was probed against a build of main rather than read off a
 report, and for about an hour on 2026-09-17 the section was empty for the
-first time since it was created. THREE rows stand as of 2026-09-17 21:35Z. The
+first time since it was created. TWO rows stand as of 2026-09-18 11:20Z. The
 first came from the 2026-08-29 sweep: every one of the twenty rulings in that
 sitting was probed against a release build of `5e256ce0`, nineteen came back
 built or declined, and the twentieth is the first row below. The second is
 the 2026-09-15 normalization ruling, which is ironclad and which a counter
 minted a day later does not satisfy.
+
+**The third came off on 2026-09-18, late.** "A demanded knot counts on one
+engine only (2026-08-24)" was built and merged as kanso#1511 earlier the same
+day, and the row should have gone in that commit — this section says in its own
+second sentence that the chat removes a row the day its build lands. It did not,
+so for several hours the one list cloud is told to read before choosing work
+advertised a finished job. Probed on main before removing it rather than taken
+from a merge notice: `src/eval.rs:3505` consults
+`codegen::knotted_constants`, and `tests/golden.rs:194` names
+`mem_corpus_interp_matches_the_semantic_counters`, whose loop the entry says was
+watched red against the unfixed interpreter.
 
 **And the floor is still a floor, because August is not the log.** Counting the
 rulings takes two greps, because the log has written a ruling two ways, and
@@ -270,43 +281,6 @@ If the reading cannot be made to repeat between machines, the question that
 follows is whether an exact pin is the right instrument for a counter whose
 artifact and host both move under it. That one is Clay's, and this row does
 not decide it in advance.
-
-### A demanded knot counts on one engine only (2026-08-24)
-
-The archive entry "a demanded knot counts, and the oracle moves", Clay: "it
-seems so obvious." The day before, 2026-08-23 had found it and sent it to the
-ledger in these words: *the DEMANDED knot still disagrees. Native reports
-`thunk_allocs=1` where the oracle reports `0`, because the oracle's `knotted`
-builds its cell without touching the counter.* The gavel names which side
-moves — the oracle — and calls it bookkeeping with no semantic change
-anywhere.
-
-Measured on a release build of main, 2026-09-17, by flipping the arm of the
-mem vein's undemanded fixture so the knot is read and running it through an
-importing entry on both engines:
-
-    thunk_allocs   native 1   oracle 0
-    thunk_forces   native 1   oracle 1
-    thunk_evals    native 1   oracle 1
-    stdout         native 1   oracle 1
-
-Both demand it, both agree it was forced and evaluated, and one counter
-disagrees, in the direction the ruling ruled against.
-
-Nothing in the tree compares the two. `tests/golden.rs:194` runs the mem vein
-with no `--interp`, so every `.mem` file is one engine's reading, and no
-`*_differential` script mentions `KANSO_COUNTERS` or `thunk_allocs`. The
-comment four lines above that loop says what was meant to close it, still in
-the future tense: *the lazy fragment will extend these with engine-shared
-semantic counters (forces, evaluations, cells live at exit) asserted on both
-engines.*
-
-Owes: the oracle's `knotted` touching the counter, per the ruling; the fixture
-the 2026-08-24 entry itself named as unblocked and nobody wrote, pinning a
-demanded knot's allocation shape; and a decision about the wider hole, since
-one engine's `.mem` reading cannot catch a divergence by construction. The
-differential law says engines agree or one refuses out loud, and a counter
-nothing compares is outside it.
 
 ## In flight
 
