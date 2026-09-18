@@ -91,6 +91,17 @@
 #
 # The thunk counters are byte-identical across the change -- 1 alloc, 6 forces,
 # 1 eval -- so nothing semantic moved.
-interp_allocs=5310696
-interp_peak_bytes=933182
+#
+# 2026-09-18, kanso#1516 on the tree merged with main, CI's sitting.
+# interp_allocs 5,310,696 -> 4,985,433, a FALL of 325,263 (-6.1247%).
+# interp_peak_bytes 933,182 -> 942,210, a RISE of 9,028 (+0.9674%).
+#
+# BOTH DELTAS ARE THE CONTAINER'S TO THE UNIT. This box read 5,310,694 ->
+# 4,985,431 and 933,280 -> 942,308: different absolute values, because these
+# rows belong to the rustc that built the compiler, and the SAME -325,263 and
+# +9,028. That is what a counter of operations rather than of a host looks
+# like, and it is why the instruction row's two readings could be trusted to
+# agree as closely as they did.
+interp_allocs=4985433
+interp_peak_bytes=942210
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
