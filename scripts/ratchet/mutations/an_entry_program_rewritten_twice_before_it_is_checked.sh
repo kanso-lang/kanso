@@ -18,15 +18,17 @@
 # src/lib.rs and `finish_program` many more, so neither is a guard that can
 # refuse. Since kanso#1335 the entry path calls `check_merged_after_aliases`
 # instead — the alias pass runs in front of it now and hands it the record —
-# and that name appears exactly once in the file, which is what makes it a
-# usable anchor. The count is asserted before anything is inserted.
+# and since kanso#1486 it is the `_with` spelling, which takes the alias map
+# its caller already built. That line appears exactly once in the file, which
+# is what makes it a usable anchor. The count is asserted before anything is
+# inserted.
 set -e
-target='    let merged_diags = check::check_merged_after_aliases(&merged, true, &rewritten);'
+target='    let merged_diags = check::check_merged_after_aliases_with(&merged, true, &rewritten, builtins);'
 n=$(grep -cF "$target" src/lib.rs)
 [ "$n" -eq 1 ] || { echo "the entry check moved or multiplied ($n); rewrite this" >&2; exit 1; }
 awk '
   { print }
-  index($0, "let merged_diags = check::check_merged_after_aliases(&merged, true, &rewritten)") {
+  index($0, "let merged_diags = check::check_merged_after_aliases_with(&merged, true, &rewritten, builtins)") {
       print "    rewrite::pass();"
       print "    finish_program(&mut merged);"
       print "    rewrite::pass();"

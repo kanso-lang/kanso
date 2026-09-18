@@ -2076,7 +2076,11 @@
 # so nothing the split does can reach a decision this corpus makes, and moving
 # the compiler's bytes moves what sits around them. Against main's own
 # 35,968,173 the branch is 98,818 below, which is the work.
-compile_instructions=35869355
+#
+# 2026-09-17, kanso#1486 on the tree merged with main 2a0cec7c, CI's sitting.
+# compile_instructions 35,869,355 -> 35,441,049, a FALL of 428,306 (-1.1941%).
+# The row this branch is for. A second count in the same job read 35,441,049.
+compile_instructions=35441049
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.
