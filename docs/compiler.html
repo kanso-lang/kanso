@@ -2528,7 +2528,41 @@ error[name]: unknown name `builders/run`
 
 <p>three builds on one hypothesis now: an inline hint on the walk changed the row by zero, the lookup split bought 15,853,848, and this cost 3,411,326. that a profile puts instructions on a function&#39;s entry line is a reason to build the experiment, and one time in three it was also a reason to expect it to work.</p>
 
-<h2 id="carriedvalue"><span class="sec-num">96</span>the loop carried a value it only needed at the end</h2>
+<h2 id="fivebuilds"><span class="sec-num">96</span>five builds at one line, and the one that worked</h2>
+
+<p>&#167;95 shipped one change out of a family of five. the other four are here with their numbers, because an idea nobody writes down as declined gets built again.</p>
+
+<p>they all aim at one push. the annotated profile puts <code>match_one</code>&#39;s variable arm at 723,255 value copies for 29,241,307 instructions &#8212; 46.5% of every copy the run makes, off a single line. the call counts come out of the profile file rather than being inferred from instruction ratios: 1,555,866 copies, 1,100,726 pattern matches, 1,056,329 scope lookups, 332,024 of those missing, 55,711 dispatches, and 34,332 matches that recurse into a record. the lookups that hit come to 724,305, which lands on the 724,304 &#167;91 counted from the other end.</p>
+
+<p><strong>score without binding.</strong> selection walks every candidate to compute a score, and a score needs the patterns matched rather than the values bound. so the walk bound nothing, and the winner was walked a second time to bind.</p>
+
+<pre>  base    1,007,027,010
+  split   1,059,328,533   +52,301,523   +5.19%</pre>
+
+<p>declined, by nearly twice what the copying costs in total. the second walk is not only the copies: matching carries 44,851,891 of its own beside the 29,241,307, so walking the winning arm twice swamps what every losing arm&#39;s copying saved.</p>
+
+<p><strong>move the winner&#39;s arguments out.</strong> no second walk. matching recorded a position for a parameter at the top of the list and a value only for a name bound inside a record; the winner&#39;s positions became bindings by taking the values out of the argument vector, which the dispatcher owns and clears a line later.</p>
+
+<pre>  base    1,007,027,010
+  moved   1,017,171,110   +10,144,100   +1.01%</pre>
+
+<p>declined. what a position costs is a tag beside the value it replaces, so the record pushed on the hot path got bigger rather than smaller, and the winner&#39;s positions are walked into a second vector that did not exist before. which of those two dominates was not measured.</p>
+
+<p>so the line resists both routes. copying a parameter is thirty-two bytes and, for every kind of value but a big integer and a string, a reference count. deferring that costs more than doing it; indexing it costs more than doing it.</p>
+
+<pre>  inline hint on the scope walk                 0
+  lookup frame split                  -15,853,848   shipped
+  eval arm split                       +3,411,326   declined
+  score without binding               +52,301,523   declined
+  winner&#39;s arguments moved out        +10,144,100   declined</pre>
+
+<p>five builds, one win, and the win was the smallest change of the five. each is two binaries on one container, one corpus, directory paths of the same length, identical output.</p>
+
+<p><strong>the draft of this section said the split flattened the profile, and it did not.</strong> the figure reached for was 11.70%, which was the top frame of a profile taken three changes earlier. measured on both sides of the split instead: the top frame goes 6.44% to 7.70%, the top five 23.34% to 24.86%, the top twenty 49.76% to 48.95%. twenty functions to reach half the run either way. the profile was already flat, and the split <em>raised</em> the top frame&#39;s share by taking work out of the function below it. the flattening belongs to &#167;93 and &#167;94.</p>
+
+<p>the comparing has not moved all day either: 47,672,229, then 47,631,349, then 47,602,341, across three changes to how scopes are built and walked. &#167;91 declined four schemes aimed at it. with the four here, the two largest named things in this profile have nine declined builds between them, and picking the top frame off a list has a record of one in five.</p>
+
+<h2 id="carriedvalue"><span class="sec-num">97</span>the loop carried a value it only needed at the end</h2>
 
 <p>rendering a double is 4.58% of the run program, 440.7 instructions a float over 191,070 calls, and a quarter of that is one loop taking digits off two at a time. it divides three values a trip: the two ends of the rounding interval, to decide whether another pair comes off, and the significand, because the significand is the answer.</p>
 
@@ -2551,7 +2585,7 @@ a float             440.7 -&gt;          425.9        -14.8
 
 <p>the lesson is about where a saving goes rather than about ryu. taking work out of a loop that runs five times only pays if what replaces it costs less than five times what was removed, and the first shape of this change failed that test while looking like a win. the disassembly is what said so; the instruction count alone would have been read as a small success and left there.</p>
 
-<h2 id="copiedtwice"><span class="sec-num">97</span>the same name, allocated twice</h2>
+<h2 id="copiedtwice"><span class="sec-num">98</span>the same name, allocated twice</h2>
 
 <p>&#167;87 left the interpreted row at 1,555,890,579 and a lead open: the profile still had the allocator near the top. two more changes took it to <strong>1,138,001,430</strong>. the first sized a clone for the growth that followed it. the second is smaller than either and is the one worth reading, because the cost it removes was never anybody&#39;s decision &#8212; it was two pieces of code each doing the right thing on its own.</p>
 
