@@ -2415,3 +2415,72 @@ applied, the spec goes red; restored, green.
 With all four in, the spec passes on the merged tree and the three archived
 sends are answered where they stand — one bounced, one filed and ruled, one in
 the ledger.
+**The 13-instruction disagreement is still open.** Nothing here explains it,
+and the arithmetic that would have — three fixed init reads at 11 instructions
+a call — does not divide 13. What this round establishes is narrower and worth
+having on its own: the compile veins no longer contain a term that counts wall
+time.
+
+## 2026-09-17 — DECLARES calls sixty-two symbols, and the compiler was finding that out every time
+
+kanso#1468's index made `kanso build bench/runbench` fall 69.64% and made the
+start-up row RISE 239,427, and that entry said why: the index costs a fixed
+amount to build and saves in proportion to what the program emits, so a single
+`print` is where the trade is worst. Attributing it named the fixed part.
+
+```
+called_symbols                          278,812 self
+  < Once::call_once_force::{{closure}}  292,701 inclusive, 1,023 calls
+  < Backend::emit                        18,159 inclusive,     2 calls
+```
+
+The 1,023 calls are `declares_context_calls()` walking DECLARES' non-declare
+lines. DECLARES is a `const`. The answer is the same in every process kanso has
+ever run, and it is sixty-two names.
+
+So they are written down, sorted, and asked with a binary search: six
+comparisons an ask against a hash table that has to be built first.
+
+```
+kanso play startup_corpus, kanso::main inclusive
+  kanso#1468       5,148,482
+  written down     4,532,728      -615,754    -11.96%
+```
+
+More than the scan itself, because the table went with it — no build, no hash
+per query. Against main, which does not have kanso#1468's index at all, the row
+reads 4,882,857, so this lands **350,129 below the branch point** while keeping
+the 69.64%. The emitted IR for runbench is byte-identical.
+
+`the_declares_symbols_are_the_ones_declares_calls` recomputes the set from
+DECLARES with the scan it replaces and asserts both directions, plus sorted,
+deduped and non-empty. Watched red three ways: a symbol the list names and
+DECLARES does not call (it named `k_zz_not_called`), a symbol DECLARES calls
+and the list drops (it named `k_b_at`), and the sort broken — which
+`binary_search` would otherwise answer wrongly and quietly.
+
+- **DONE** the constant is a constant.
+- **OPEN** the start-up golden, which falls by the 615,754 above. CI's sitting
+  takes it; this host refuses the recorded toolchain.
+
+
+**REBUILT ON MAIN, 2026-09-18.** The branch carrying this had been open 15.7
+hours and its diff against main had grown to 689 lines of src/codegen.rs plus
+four goldens, because it sat on a stack whose other members have since landed.
+It is rebuilt as one cherry-pick of 785c21b8 onto main: src/codegen.rs applied
+without a conflict, and only this entry needed resolving — and the resolution
+had to drop 27 entries the cherry-pick re-added that main has since moved into
+the archive.
+
+The rows are main's, carried forward, and the merged sitting is CI's to take.
+`emitted_code` AGREED on the compile sweep, so the emitted IR is byte-identical
+on today's main: precomputing the symbol set changes what the compiler asks,
+not what it writes.
+
+The spec was watched red on the rebuilt tree rather than taken on trust from
+the old branch. Dropping `"k_b_append_byte"` from `DECLARES_CONTEXT_CALLS`
+fails `the_written_list_is_what_the_scan_finds`, which is the one of the three
+that compares the written list against a scan of DECLARES itself; the other
+two, which check sortedness and non-emptiness, stay green on that edit, which
+is what makes the first one the load-bearing assertion. Restored: all three
+green.
