@@ -3032,3 +3032,47 @@ it is barely exercising the case. What the figure does bound is the thing that
 matters here: the row this change is for is measured on THIS corpus, so the
 change that moves the row needs no upvalue resolution. A program that leans on
 closures would keep the walk it has today and lose nothing it has now.
+
+## 2026-09-18 — the static depth is right on 656,939 hits and wrong on none
+
+The pass that resolving a local to an index needs was written as a PROBE rather
+than a pass: it works out what depth each `Ident` site would resolve to, and
+`lookup` then compares that answer with the depth its own walk reaches. So the
+run says whether the static answer is right, instead of the code looking right.
+
+The probe walks each declaration with a scope that mirrors the chain --
+parameters deepest in `match_params` order, then each `Stmt::Bind`'s binders on
+top, a lambda's parameters above its capture, a `Block` or a `Build` in
+expression position scoped to itself, a `Build` in statement position escaping
+into its parent, and a guard's `rest` continuing on the same scope. A later
+binding of the same name shadows an earlier one, so the search runs from the
+top.
+
+Over bench/interp_corpus:
+
+    ident sites in the program                 1,757
+    sites resolving to a local                 1,098    62.5%
+
+    hits where the static depth AGREED       656,939    90.7% of all hits
+    hits where it DISAGREED                        0
+    misses at a site it called a local             0
+
+NOT ONE WRONG DEPTH, AND NOT ONE NAME CALLED A LOCAL THAT WAS NOT ONE. The
+remaining 67,365 hits are sites the probe has no opinion on, and the reason is
+the probe's key rather than the idea: a `Span` is a line and a column with no
+file, so two modules collide, and 577 keys are poisoned to keep the check sound.
+A pass keyed by site identity has no such loss.
+
+THE LAST NUMBER IS THE ONE THAT NEEDED MEASURING. A first draft reported 18,695
+misses at sites it had called locals, which would have been a wrong answer in a
+real pass. Every one was a collision: a resolving site in one module sharing a
+line and column with a global read in another. Poisoning a key the moment ANY
+site that does not resolve touches it took the figure to zero, and it is zero
+because the ambiguity is gone rather than because the count was quietly dropped
+-- the poisoned keys rose from 15 to 577 in the same run and the agreed hits
+fell from 689,940 to 656,939 to pay for it.
+
+What remains is representation. The depth is provably available; where the index
+lives on the node -- a new `Expr` variant written by a rewrite at load, against a
+cell on `Expr::Ident` -- is the next question, and it is the one the build
+starts from.
