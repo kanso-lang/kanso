@@ -200,4 +200,16 @@
 # 2026-09-18, re-merged onto main after kanso#1512, which re-based this row by
 # clearing the gate's output path. THE VALUE BELOW IS MAIN'S, carried forward;
 # the merged reading is CI's.
-codegen_instructions_release=6824133280
+#
+# 2026-09-18, kanso#1502 on the tree merged with main after kanso#1512,
+# CI's sitting. 6,824,133,280 -> 6,820,866,344, a FALL of 3,266,936
+# (-0.0479%). THE TWO READINGS IN THIS JOB WERE 11 APART -- 6,820,866,344 then
+# 6,820,866,355 -- which is the temp-object-name term kanso#1512's log entry
+# closed: clang names its LTO object /tmp/codegen_corpus-XXXXXX.o with fresh
+# hex, ld's plugin probes a StringMap with that path, and about one name in
+# eleven lands a bucket further. Twenty-two names were sampled on the
+# container and exactly two of them, `4b8c1a` and `fedcba`, read the high
+# value. The FIRST reading is written here because that is the one the gate
+# compares; until the name is pinned this row has a one-in-eleven chance per
+# job of drawing the other bucket.
+codegen_instructions_release=6820866344

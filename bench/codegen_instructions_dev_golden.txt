@@ -117,4 +117,8 @@
 # 2026-09-18, re-merged onto main after kanso#1512, which re-based this row by
 # clearing the gate's output path. THE VALUE BELOW IS MAIN'S, carried forward;
 # the merged reading is CI's.
-codegen_instructions_dev=596157624
+#
+# 2026-09-18, kanso#1502 on the tree merged with main after kanso#1512,
+# CI's sitting. 596,157,624 -> 596,162,050, a FALL of -4,426
+# (+0.0007%). Both readings in the job agreed at this value.
+codegen_instructions_dev=596162050

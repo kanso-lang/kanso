@@ -3187,3 +3187,32 @@ binary moves a row that does not run the changed code.
 The run-side rows this branch exists for are unchanged from its own sitting and
 stand where its earlier entry recorded them; `interp_instructions` and both
 codegen rows agreed with the goldens this branch already carries.
+## 2026-09-18 — the eleven caught in the act, on kanso#1502's own job
+
+kanso#1512's entry closed the mechanism on the container: clang names its LTO
+object `/tmp/codegen_corpus-XXXXXX.o` with fresh hex every run, `ld`'s plugin
+probes a `StringMap` with that path, and about one name in eleven lands a
+bucket further. Twenty-two names were sampled there and exactly two, `4b8c1a`
+and `fedcba`, read eleven more than the other twenty.
+
+This branch's round drew both buckets inside one job:
+
+    codegen_instructions_release  = 6,820,866,344
+    codegen_release_again    row  = 6,820,866,355
+
+Eleven apart, one binary, one corpus, one machine, with the gate re-staging
+the box between the two. That is the same term, on the runner rather than on
+the container, and it is the plainest evidence yet: the readings differ by the
+exact figure the name experiment produces, on a branch whose diff is two
+divisions in float rendering.
+
+`codegen_instructions_dev` agreed with itself at 596,162,050 on both readings,
+which fits — the dev tier does not run the LTO plugin.
+
+The row written here is the FIRST reading, because that is the one the gate
+compares against the golden. Until the object name is pinned, this row has
+about a one-in-eleven chance per job of drawing the other bucket and going red
+for no reason a diff can explain. Pinning it is its own change: `-save-temps=obj`
+gives clang a deterministic object name, and on the container it also moves the
+whole pipeline by 1,352,261, so it re-bases the row as well as steadying it and
+belongs in a round of its own.
