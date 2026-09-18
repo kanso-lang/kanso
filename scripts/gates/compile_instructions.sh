@@ -77,7 +77,7 @@ printf 'compile_binary sha256=%s\n' "$(sha256sum "$box/kanso" | cut -d' ' -f1)"
 # printed to stdout, and stdout reaches only the job log.
 echo "::notice::compile_binary sha256=$(sha256sum "$box/kanso" | cut -d' ' -f1)"
 size --format=sysv "$box/kanso" \
-  | awk '/^\.(text|data|bss)[ \t]/ { printf "compile_binary %s=%s\n", $1, $2 }'
+  | awk '/^\.(text|rodata|data|bss)[ \t]/ { printf "compile_binary %s=%s\n", $1, $2 }'
 # AND THE SAME THREE AS A NOTICE. kanso#1479 made the sha a notice for a
 # reason that applies here with more force: the sections are the only printed
 # property that distinguishes two BUILDS of one source, and stdout reaches
@@ -89,7 +89,7 @@ size --format=sysv "$box/kanso" \
 # between BUILDS, and the sections are what would say so; they were printed
 # on both runs and readable on neither.
 size --format=sysv "$box/kanso" \
-  | awk '/^\.(text|data|bss)[ \t]/ { printf "%s=%s ", $1, $2 }' > /tmp/compile.sections
+  | awk '/^\.(text|rodata|data|bss)[ \t]/ { printf "%s=%s ", $1, $2 }' > /tmp/compile.sections
 echo "::notice::compile_binary sections $(cat /tmp/compile.sections)"
 
 # WHY THE TUNABLES ARE PINNED. Emptying the environment was not enough: on one

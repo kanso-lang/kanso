@@ -8872,3 +8872,49 @@ wrong — **85,109 of 2,809,326 did not read back**.
   and `.text` 1,360 bytes.
 
 
+## 2026-09-18 — the section line prints .rodata, and the row that asked for it had the premise backwards
+
+STATUS.md's normalization row carries a small item marked as not blocked on
+the measurement beside it: `interp_instructions.sh` prints `.text`, `.data`
+and `.bss`, where `compile_instructions.sh` "prints `.rodata` too, with a
+seven-binary calibration in its header for why". One awk alternation, it said.
+
+The calibration is in that header. The printing is not. Grep the gates for
+`rodata` and the only two hits in the tree are both inside a comment — lines
+156 and 163 of `compile_instructions.sh`, the calibration table itself. No
+gate printed `.rodata`, and the interp gate was not behind the others: all six
+gates that print a section line printed the same three sections.
+
+So the change is nine lines rather than one, across six files, and every one
+of them now reads `text|rodata|data|bss`. On a release build of the compiler
+that adds a column worth 866,912 bytes beside the 2,844,578 of `.text`.
+
+**Why the pair matters, from the table that was misread.** Seven binaries
+differing only in code or data nothing reaches:
+
+    variant           .text     row         maps     program
+    baseline          2550854   42,344,081  112,580  41,878,959
+    +64 KiB .bss      2550854   42,346,221  114,720  41,878,959
+    +64 KiB .rodata   2550854   42,344,099  112,598  41,878,959
+    +400 dead fns     2565174   42,348,044  110,341  41,879,922
+
+`.bss` and `.rodata` are the two cases where the anchored frame comes back
+identical to the instruction and `.text` is not one of them. A gate printing
+`.bss` and withholding `.rodata` prints half of that pair, so a reader looking
+at a moved row could see that the zero-initialised data grew and not that the
+constant data did.
+
+**The spec reads the gates off disk and pins the count at nine.** A list
+written down by hand goes stale the way CLAUDE.md's counter count did, twice,
+and the way this STATUS row did. It skips comment lines, which is the whole
+reason the row was wrong, and it pins rather than bounds: a floor of "at least
+nine" would stay green through a gate that stopped printing its sections,
+which is the change it exists to catch. Watched red first, naming all nine
+lines with their files.
+
+No counter moves. The section line is a notice; the three gates that also
+write a `.sections` file only `cat` it into another notice, and nothing
+compares either.
+
+The measurement half of that STATUS row — cloud's three-parts-per-billion
+candidate for the interpreted row's six — is untouched here and still owed.
