@@ -318,5 +318,15 @@
 # THE FRAME MEMORY AND FOUR RESERVES. This container projected the fall at
 # 410,520,397 and the runner read 407,935,771 -- 0.63% of the delta apart,
 # which is the usual agreement between the two hosts on a difference.
-interp_instructions=1555890579
+#
+# 2026-09-18, kanso#1520 against main at kanso#1519, CI's sitting.
+# 1,555,890,579 -> 1,260,262,910, a FALL of 295,627,669 (-19.0005%).
+# THE CLONE SIZED FOR ITS GROWTH, and the number is THREE TIMES what this
+# container projected. The container read the fall at 94,998,647 and the
+# runner reads 295,627,669. Both hosts agree EXACTLY on what the change
+# does -- interp_allocs falls 36,066 and interp_peak_bytes 76,113 on both,
+# to the byte -- and disagree threefold on what it costs. What a copy of N
+# elements costs in instructions is the rustc that built the binary; how
+# many copies happen is the program.
+interp_instructions=1260262910
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

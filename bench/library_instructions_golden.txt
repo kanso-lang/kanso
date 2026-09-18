@@ -941,7 +941,13 @@
 # 126,824,214 -> 126,953,661, a RISE of 129,447 (+0.1021%).
 # WORK. See the compile row: `Interp::new` wraps every group in an `Rc` now,
 # and this route builds an `Interp`.
-library_instructions=126953661
+#
+# 2026-09-18, kanso#1520 against main at kanso#1519, CI's sitting.
+# 126,953,661 -> 126,954,304, a RISE of 643 (+0.0005%).
+# LAYOUT. This branch changes how a shared vector is copied in the
+# INTERPRETER; none of these routes runs it. src/eval.rs is the compiler,
+# so its bytes move and every route that runs the compiler moves with them.
+library_instructions=126954304
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

@@ -2159,7 +2159,13 @@
 # wraps every function group in an `Rc` so the callee memory can hold one
 # without borrowing from `self`. That is an allocation per group at
 # construction, on a route that constructs and then evaluates nothing.
-compile_instructions=35486173
+#
+# 2026-09-18, kanso#1520 against main at kanso#1519, CI's sitting.
+# 35,486,173 -> 35,486,333, a RISE of 160 (+0.0005%).
+# LAYOUT. This branch changes how a shared vector is copied in the
+# INTERPRETER; none of these routes runs it. src/eval.rs is the compiler,
+# so its bytes move and every route that runs the compiler moves with them.
+compile_instructions=35486333
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

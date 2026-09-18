@@ -4087,6 +4087,82 @@ them is not known, and this entry does not guess.
 
 The floor is banked after these rows, never before.
 
+## 2026-09-18 — the floor sentinel is read by three jobs, and a pin was named in prose
+
+Two corrections to CLAUDE.md, both of the same family: a fact written down in a
+place that could not be checked against the thing it described.
+
+THE FLOOR. A re-merge round one leaves the layout goldens carrying main's values
+and the floor unbanked, and the practice written down for it said the board goes
+red on the layout gates "plus the floor sentinel" — one job. It is three.
+`tests/the_digest_is_priced_on_both_sides.rs` runs in `specs` and on the macOS
+host as well, and its `the_undoctored_goldens_hold_the_floor` reads the same
+number the `cost goldens` job's welfare step reads. So two jobs whose titles say
+nothing about welfare go red for it, and this morning they were read as a second
+unrelated fault and chased before the failing target's name was looked at. The
+name was the whole answer, and it was one line down in the log. The rule added
+is to read the failing TARGET rather than the job title.
+
+Watched rather than argued: with the goldens stashed back to the values CI had
+tested, the spec panics `welfare 76.88   floor 76.87 ... a rise nobody
+ratchets`, and it passes with the floor banked.
+
+THE PIN. The kq bullet carried "kq's pin sits at kanso#1120 with 59 commits
+behind it", read off the repo on 2026-08-31. kq#108 moved it 114 commits on
+2026-09-14 and the sentence stayed. Worse, a session whose repository scope is
+kanso alone cannot check that sentence at all, so it reads as current. The
+specific figure is gone and the bullet now says to read the pin from kq or to
+say it could not be read. What the bullet is for — the five veins, and the fact
+that the instructions vein moves where the allocation counters do not — does not
+go stale and is what remains.
+
+## 2026-09-18 — a blocking question sat in a task list for four hours
+
+kanso#1513 was opened at 06:19Z with two codegen rows red by design, waiting on
+a decision. The decision was written down — as a session task marked CLAY'S CALL
+/ BLOCKING — and the session then worked other threads, which is what the rules
+say to do. The part that was skipped is the part that matters: it never reached
+`design/pending-gavels.md`, and that file is the only place Clay reads pending
+decisions. A task list is this session's, not his.
+
+So for four and a half hours the pull request was blocked on a question nobody
+could answer, and the board read it as an ordinary red. It is filed now, under
+Blocking, with the three options and the measurement behind each: nine of ten
+temporary names read 5,163,341,031 and `4b8c1a` read 5,163,341,042, reproduced
+three times, against a `dev_clang` that never reads the flag the gate sets for
+it (`src/main.rs:744-747`). STATUS.md's two counts moved from two blocking to
+three.
+
+The rule this breaks was already written: a decision that is Clay's goes to him
+the moment it is found. What was missing is that "goes to him" has a file name,
+and marking a task is not it. Worth adding to the check a session runs when it
+opens a red pull request: if the redness is waiting on a decision, the ledger
+gets an entry in the same turn, and the pull request's body cites the heading.
+
+## 2026-09-18 — a finished ruling sat in the list cloud reads to choose work
+
+STATUS.md's "Ruled, unbuilt" section said three rows stood. One of them,
+"A demanded knot counts on one engine only (2026-08-24)", was built and merged
+as kanso#1511 earlier the same day. The section's own second sentence says the
+chat removes a row the day its build lands on main; the removal belonged in that
+commit and was not made.
+
+So for several hours the one list cloud is told to read before choosing what to
+build advertised a finished job, complete with an Owes list of three things that
+are done. That is the precise failure the section exists to prevent, pointing
+the other way: it was written because five ruled features sat unbuilt while 296
+pull requests landed, and an entry that is finished and still listed costs the
+same reader the same wrong turn.
+
+Probed against main before removing it rather than taken from a merge notice:
+`src/eval.rs:3505` consults `codegen::knotted_constants`, and
+`tests/golden.rs:194` names `mem_corpus_interp_matches_the_semantic_counters`,
+whose loop kanso#1511's entry records being watched red against the unfixed
+interpreter. Both halves the ruling asked for are there.
+
+Two rows stand now: the cohort gavel's data-sized cycle, and the 2026-09-15
+normalization ruling.
+
 ## 2026-09-18 — a clone sized for the growth that follows it
 
 `Vec::clone` allocates capacity exactly equal to length. So `taken`'s clone arm
@@ -4164,3 +4240,40 @@ population is what this change just made cheap. Anything built on
 `linear::in_place_pushes` now competes with a copy that already costs far less,
 so the lead must be re-measured against this binary before it is built, not
 taken from the earlier figure.
+
+## 2026-09-18 — kanso#1520, CI's rows, and an instruction delta three times the projection
+
+    interp_instructions   1,555,890,579 -> 1,260,262,910   -295,627,669  -19.00%
+    interp_allocs             3,879,653 ->     3,843,587        -36,066   -0.93%
+    interp_peak_bytes           961,165 ->       885,052        -76,113   -7.92%
+    compile_instructions     35,486,173 ->    35,486,333           +160
+    entry_instructions      126,498,498 ->   126,498,292           -206
+    library_instructions    126,953,661 ->   126,954,304           +643
+    startup_instructions      3,362,788 ->     3,363,378           +590
+    emit_instructions        51,451,897 ->    51,456,464         +4,567
+
+THE CONTAINER PROJECTED 94,998,647 AND THE RUNNER READ 295,627,669. Three times
+as much, on the same source, and it is not a bad measurement on either side.
+
+On the same pair of runs the two machines agreed TO THE BYTE on what the change
+does: 36,066 fewer allocations and 76,113 fewer peak bytes, the same integers on
+both hosts, on rows whose absolute values they do not share. So the change is
+understood and behaves identically. Only its instruction price differs, and by
+a factor of three.
+
+WHAT THIS CORRECTS. Four sittings in a row — kanso#1516, kanso#1517 and
+kanso#1518 — had their instruction deltas agree across the two hosts to 0.18%,
+0.12% and 0.63%, and the log and the compiler page both wrote that down as
+though it were a property of the counter. It is not. What a copy of a thousand
+elements costs in instructions is a property of the rustc that built the
+interpreter; how many copies happen is a property of the program. Only the
+second crosses a machine boundary. Section 87 carried the older wording onto
+main this morning and is corrected in this same commit rather than left to
+stand.
+
+The four close agreements were four changes whose work happened to compile
+similarly on both hosts. This one does not, and the honest reading of the
+earlier four is that they were not evidence of a law.
+
+The floor is banked after these rows. The run side is unchanged — this branch
+touches the interpreter only.
