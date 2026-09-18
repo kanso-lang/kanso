@@ -4672,10 +4672,21 @@ the same direction.
 and it keeps holding: a counter of operations crosses a machine boundary
 intact, a counter of instructions does not.
 
-`interp_peak_bytes` is the interesting one: −51,859 here against −51,855 there,
-four apart on fifty-two thousand. Peak bytes counts sizes the program chooses,
-so it ought to travel like the allocation count, and it nearly does. Four is
-not nothing and it is not explained. Noted rather than rounded off.
+`interp_peak_bytes` moved −51,859 here against −51,855 there, four apart on
+fifty-two thousand, and the first draft of this entry called that four
+unexplained. It is not a puzzle, and checking took one command.
+
+`interp_memory.sh` refuses to compare on this box at all: the golden was
+measured on glibc 2.39-0ubuntu8.9 with rustc 1.98.1 and this container is 8.7
+and 1.94.1, so the gate declines rather than reads. The absolute figures differ
+by about two hundred at both ends for the same reason — 885,189 here against
+884,985 there before the change, 833,330 against 833,130 after. Two hundred is
+the host, and four is what survives of it in a difference.
+
+So the notable thing is the opposite of what the draft said: across two hosts
+the gate will not even compare, the DELTA agreed to within four bytes. The
+golden's own header says what its reading may be set beside, and reading it
+first would have saved writing the sentence twice.
 
 **The four compile-side rows are the price of the change existing.** `kanso
 check` stops before the interpreter runs and the analysis is behind a
