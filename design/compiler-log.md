@@ -5040,3 +5040,40 @@ printed line and therefore reported a stable binary as unstable by exactly
 3,015; kanso#1524 fixes it. Two readings of seven are still two readings, and
 they are enough to re-base a row. They are not enough to name a mechanism, so
 none is named here beyond the standing guess that it is layout.
+
+## 2026-09-18 — the eleven, drawn twice in one job, with the golden on the second
+
+kanso#1502's re-run cleared every vein it had been failing. The interpreted row
+read 1,138,001,437 and agreed with the re-base; the three compile rows,
+start-up, emit, both memory rows and the dev codegen tier all read their
+goldens exactly. One row disagreed, and it is the one already under a blocked
+question:
+
+    codegen_instructions_release  first  6,820,866,355
+                                  again  6,820,866,344
+                                  golden 6,820,866,344
+
+Eleven apart, in one job, on one binary. Both readings saw five processes —
+`first_procs=5 again_procs=5` — so the gate's own guard against a second
+reading that measured something different is satisfied.
+
+This is the intermittent kanso#1512 hunted to its source: the temp object's
+NAME. Nine of ten names read one value and `4b8c1a` reads eleven more,
+reproduced three times that day. What is new here is the ORDER. Every earlier
+sighting had the expensive name and the golden on opposite sides of a whole
+job; this job drew the expensive name on its first pass and the cheap one on
+its second, so the same binary showed both faces within one run and the second
+landed on the golden exactly.
+
+That is worth recording because it is the cleanest demonstration yet that the
+eleven is a property of the build rather than of the machine or the day: one
+process tree, one sitting, two answers, and the difference is which name the
+temp object got.
+
+`codegen_release_kanso_excluded` moved too — 80,447,724 against 80,449,362,
+1,638 apart — which is kanso's own process and is excluded from this row by the
+2026-09-15 normalization ruling. It is printed rather than counted, and it
+moving while the counted rows hold is the exclusion doing its job.
+
+The fix is kanso#1513's and is a decision, not a measurement: it sits in
+design/pending-gavels.md awaiting Clay.
