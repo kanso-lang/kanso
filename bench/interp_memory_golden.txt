@@ -147,7 +147,12 @@
 # bytes or fewer in the node, and 99.77% of identifiers across lib/ are that
 # short. The peak falls 67 bytes with it, which is the tail of the same thing:
 # a node that holds its name inline frees nothing when it dies.
-interp_allocs=2328213
+#
+# 2026-09-18, kanso#1533, CI's sitting. 2,328,213 -> 1,740,991,
+# a FALL of 587,222 (-25.2220%).
+# Arm selection asked the allocator for two vectors per candidate and most
+# candidates fail.
+interp_allocs=1740991
 #
 # 2026-09-18, kanso#1518 against main at kanso#1517, CI's sitting.
 # 951,438 -> 961,165, a RISE of
@@ -162,5 +167,13 @@ interp_allocs=2328213
 # this change removes over-allocated; it repays kanso#1518's frames table
 # eight times over, so the interpreter holds LESS than before this line of
 # work began.
-interp_peak_bytes=833128
+#
+# 2026-09-18, kanso#1533, CI's sitting. 833,128 -> 833,333, a RISE of 205.
+# The COUNT falls a quarter on the same change and the peak rises 205, which
+# is 0.02%. The likely reading is that one pair of candidate buffers keeps
+# whatever capacity the widest arm in a group reached, where per-candidate
+# vectors were freed at the size each arm needed -- but that is a guess with
+# nothing isolating it, and 205 bytes is too small to isolate cheaply. Recorded
+# as measured, mechanism open.
+interp_peak_bytes=833333
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

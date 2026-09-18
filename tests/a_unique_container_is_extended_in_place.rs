@@ -87,6 +87,8 @@ pub fn run rounds
 ///      9,001   the environment holding a `Name`, six a round less again
 ///      7,803   the interpreter reading the linearity analysis, four a round
 ///              less again
+///      6,003   arm selection reusing one pair of candidate buffers, six a
+///              round less again
 ///
 /// The six are `eval_ident`: it used to build an `Rc<str>` every time it
 /// resolved a name to a reference, and it remembers the answer now, so the six
@@ -128,10 +130,17 @@ pub fn run rounds
 /// change in what the ROUNDS cost is exactly what the subtraction exists to
 /// see, so this spec going red on those branches was it working.
 ///
+/// The six are arm selection. `match_params` built `score` and `binds` at
+/// `Vec::with_capacity` on every overload candidate and gave up the moment a
+/// pattern refused, so a candidate that failed on its first parameter had
+/// already paid for two allocations -- and selection tries every arm in the
+/// group. `grow` and `stack` each have two arms and each is called three times
+/// a round, so six candidate pairs a round stopped being allocated.
+///
 /// The 19,201 the copying arm read is from before kanso#1516 and has not been
 /// re-measured under either change. What this spec pins is unchanged either
 /// way: the in-place path costs less per round than the copying one.
-const PER_EXTRA_ROUND: u64 = 7_803;
+const PER_EXTRA_ROUND: u64 = 6_003;
 
 fn kanso() -> PathBuf {
     let mut exe = std::env::current_exe().expect("the test binary has a path");

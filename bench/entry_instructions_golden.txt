@@ -915,7 +915,11 @@
 # LAYOUT. This branch changes how a shared vector is copied in the
 # INTERPRETER; none of these routes runs it. src/eval.rs is the compiler,
 # so its bytes move and every route that runs the compiler moves with them.
-entry_instructions=126735634
+#
+# 2026-09-18, kanso#1533, CI's sitting. 126,735,634 -> 126,729,588,
+# a FALL of 6,046 (-0.0048%).
+# Layout, the same way.
+entry_instructions=126729588
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

@@ -344,5 +344,11 @@
 # costs in instructions is the rustc that built the binary; this one changes
 # how many ALLOCATIONS happen, which is a count the program decides. A
 # container projection travels when the thing it projects is a count.
-interp_instructions=1029696275
+#
+# 2026-09-18, kanso#1533, CI's sitting. 1,029,696,275 -> 995,837,536,
+# a FALL of 33,858,739 (-3.2882%).
+# THE ROW THIS CHANGE IS ABOUT. The dispatcher stops copying its group name
+# through the formatting machinery on every tail hop, and arm selection stops
+# allocating two vectors for every candidate it is about to reject.
+interp_instructions=995837536
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
