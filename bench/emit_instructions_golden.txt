@@ -120,6 +120,10 @@
 # LAYOUT. These rows carry runtime.c's bytes rather than compiling it, and
 # every binary's `.text` grew 32 bytes on this change; the moves are all under
 # two hundredths of a per cent.
+# 2026-09-18, kanso#1510 (kanso#1484 rebuilt) on the tree merged with main,
+# CI's sitting. 60,196,725 -> 59,636,068, a FALL of 560,657 (-0.9314%).
+# The emitter's own share of the same saving: it asked the same question and
+# now reads a constant.
 # 2026-09-18, kanso#1509 (kanso#1480 rebuilt) on the tree merged with main,
 # CI's sitting. 60,196,725 -> 52,115,454, a FALL of 8,081,271 (-13.4248%).
 # THIS ONE IS THE CHANGE. `emit_instructions` anchors at `codegen::emit_ir`
@@ -139,4 +143,12 @@
 # stops before the backend, and the interpreted start-up links the runtime
 # without rendering a float. What moved is where the code sits. The second
 # reading in the same job matched the first to the instruction.
-emit_instructions=52125468
+# 2026-09-18, kanso#1510 (kanso#1484 rebuilt) on the tree merged with main
+# after kanso#1509, CI's sitting. 52,115,454 -> 51,554,407, a FALL of
+# 561,047 (-1.0765%). This is a route the removed derivation runs, and the saving lands here.
+# The second reading in the same job matched the first to the instruction.
+#
+# 2026-09-18, re-merged onto main after kanso#1510. THE VALUE BELOW IS MAIN'S,
+# carried forward: kanso#1510 moved this row and what this branch adds on top
+# has not been measured, so the merged reading is CI's.
+emit_instructions=51554407

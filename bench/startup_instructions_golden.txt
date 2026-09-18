@@ -311,6 +311,14 @@
 # LAYOUT. These rows carry runtime.c's bytes rather than compiling it, and
 # every binary's `.text` grew 32 bytes on this change; the moves are all under
 # two hundredths of a per cent.
+# 2026-09-18, kanso#1510 (kanso#1484 rebuilt) on the tree merged with main,
+# CI's sitting. 3,951,796 -> 3,384,249, a FALL of 567,547 (-14.3617%).
+# THIS IS THE CHANGE, and it is much larger here than anywhere else. The set
+# of symbols DECLARES calls was re-derived rather than written down, and the
+# interpreter's start-up is where that derivation was paid for most. What the
+# saving IS has been measured; why it lands so much harder on this row than on
+# the emitter's is not claimed here beyond the obvious -- start-up runs the
+# derivation over the whole declare block before any program does anything.
 # 2026-09-18, kanso#1509 (kanso#1480 rebuilt) on the tree merged with main,
 # CI's sitting. 3,951,796 -> 3,933,223, a FALL of 18,573 (-0.4700%).
 # The interpreter's start-up carries the compiler's bytes, and this branch
@@ -329,4 +337,12 @@
 # stops before the backend, and the interpreted start-up links the runtime
 # without rendering a float. What moved is where the code sits. The second
 # reading in the same job matched the first to the instruction.
-startup_instructions=3933390
+# 2026-09-18, kanso#1510 (kanso#1484 rebuilt) on the tree merged with main
+# after kanso#1509, CI's sitting. 3,933,223 -> 3,364,974, a FALL of
+# 568,249 (-14.4474%). This is a route the removed derivation runs, and the saving lands here.
+# The second reading in the same job matched the first to the instruction.
+#
+# 2026-09-18, re-merged onto main after kanso#1510. THE VALUE BELOW IS MAIN'S,
+# carried forward: kanso#1510 moved this row and what this branch adds on top
+# has not been measured, so the merged reading is CI's.
+startup_instructions=3364974
