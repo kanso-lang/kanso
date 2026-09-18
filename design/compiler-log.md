@@ -3720,10 +3720,11 @@ the path it is given:
       peak bytes           933,280 ->       942,308         +9,028   +0.97%
 
 The allocation fall is the `Rc::from` that is no longer built per reference:
-325,412 of those, against a measured fall of 325,263, the difference being the
-149 distinct names that now allocate once each. The peak rise is the table
-those 149 rows live in. Thunk counters are byte-identical, so nothing semantic
-moved.
+325,412 of those, against a measured fall of 325,263. The 149 the two differ by
+is what the table costs -- a `String` per distinct name, plus whatever the map
+allocated growing to hold them. How that 149 splits between the two is not
+measured here and nothing rests on it. The peak rise is the same table.
+Thunk counters are byte-identical, so nothing semantic moved.
 
 **The first shape of this cost half the win, and the reason is worth keeping.**
 `Named` began with a `Desc(Desc)` arm and a `Lit(Value)` arm, which sized every
@@ -3732,7 +3733,7 @@ row of the table by the largest variant of two other enums; the run read
 four literals as arms of their own — every remaining arm a pointer or nothing —
 took the row down to a tag and a word, and the run to 1,836,055,421 with the
 peak rising 9,028. Fifteen and a half million instructions for a smaller table
-on a corpus with 149 names in it: what moved is cache lines, not work.
+on a corpus whose table holds a few hundred rows: what moved is cache lines rather than work.
 
 **A spec for this could not be written the obvious way, and finding that out
 cost a build.** The intended fixture was a name meaning a declaration at one
