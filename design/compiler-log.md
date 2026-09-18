@@ -8687,3 +8687,35 @@ success, so nothing else this branch touches moved a counter.
 The published table on the compiler page now carries CI's base, with a sentence
 saying the profile above it predates the seven indexes.
 
+
+## 2026-09-18 — the printed line comes off the interpreted row too
+
+kanso#1487 found that `std::io::stdio::_print`'s subtree ends in `memrchr`
+over the formatted bytes, that what the frame costs moves with the binary's
+layout rather than with anything the program does, and that five CI builds on
+2026-09-17 across trees with identical compiler source drew two faces thirteen
+apart on the module, entry and library rows. It excluded the term from those
+three, per the 2026-09-15 rule.
+
+It missed `interp_instructions`, and that row has been drawing the same two
+faces since. kanso#1486 read it twice on trees whose only difference was three
+goldens, a page and a log entry: 2,182,526,878 and 2,182,526,865. Thirteen.
+
+The fix is the one kanso#1487 wrote, applied to the fourth gate, with the
+figure printed as `interp_printed=` so what came off is readable. The row's
+absolute value moves, so main's number is carried forward and round one is
+deliberately red on it; CI's own reading replaces it.
+
+**What made this possible to miss is worth more than the fix.** The property
+lived in three scripts and in no check, so nothing could tell that a fourth
+gate had the same shape and not the same treatment.
+`tests/every_anchored_gate_answers_for_the_printed_line.rs` reads the gates off
+disk: every one that anchors an inclusive frame either subtracts the line or
+writes down why it need not. Five anchor today and the fifth is start-up,
+whose exemption is now a paragraph rather than a silence — `kanso play` takes
+the native path, so its program's `print` is the C runtime writing directly and
+never enters `_print` at all. That is why it was the one row giving a single
+value across all five of kanso#1487's builds: nothing to take off.
+
+Watched red before it passed, naming `startup_instructions.sh` as the gate that
+had not answered.
