@@ -44,9 +44,12 @@ kanso — sat here and was bounced on 2026-08-29: a performance question with no
 surface area is the implementer's, per the ledger's own charter, and the log
 carries the research mandate it left with.
 
-**Seven questions are waiting** — two blocking, both filed 2026-09-17 out of
-one reading of a book sample: whether the wall `>>` survives the fused
-operators, and whether its simultaneous-failure merge was meant to go. The
+**Eight questions are waiting** — three blocking. Two were filed 2026-09-17 out
+of one reading of a book sample: whether the wall `>>` survives the fused
+operators, and whether its simultaneous-failure merge was meant to go. The third
+was filed 2026-09-18, four hours late, after sitting in a session task list
+instead of here: whether kanso#1513's fixed-temporary pin covers both codegen
+tiers or the release tier alone. The
 compile-term question before them was filed and ruled on 2026-09-16: two
 welfares and a meta-welfare over them, with the floor re-ratcheted. The
 welfare-floor entry left

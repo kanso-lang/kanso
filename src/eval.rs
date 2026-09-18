@@ -1187,6 +1187,16 @@ pub struct Interp<'a> {
     /// One entry per name this run has CALLED, filled on first sight for the
     /// reason `names` above is.
     callees: RefCell<Map<String, Callee<'a>>>,
+    /// One entry per declaration this run has ENTERED, keyed by the
+    /// declaration's address, which `&'a FnDecl` on `frame_for` is what makes
+    /// safe: the compiler refuses a borrow that does not outlive this
+    /// interpreter, so no temporary can land here and reuse a freed address.
+    /// `frame_of` formats a trace line and asks which
+    /// package a file belongs to, on every entry into every body, for a string
+    /// only read when an err is raised. The answer depends on the declaration
+    /// alone, and a declaration lives in the `Program` this interpreter
+    /// borrows, so its address is stable for the whole run and unique to it.
+    frames: RefCell<Map<usize, Frame>>,
     program: &'a Program,
 }
 
@@ -1259,20 +1269,33 @@ impl<'a> Interp<'a> {
             cycles: std::cell::OnceCell::new(),
             names: RefCell::new(Map::default()),
             callees: RefCell::new(Map::default()),
+            frames: RefCell::new(Map::default()),
             program,
         }
     }
 
+    /// `frame_of` for a declaration this run has entered before, which after
+    /// the first entry is a clone of an `Rc` rather than two formatted strings.
+    fn frame_for(&self, decl: &'a FnDecl) -> Frame {
+        let key = decl as *const FnDecl as usize;
+        if let Some(known) = self.frames.borrow().get(&key) {
+            return known.clone();
+        }
+        let frame = frame_of(decl);
+        self.frames.borrow_mut().insert(key, frame.clone());
+        frame
+    }
+
     /// Evaluate a declaration's body with its lazy bind sites in view.
-    fn eval_body_of(&self, decl: &FnDecl, env: Option<Rc<Env>>) -> EvalResult {
-        self.eval_body_in(decl, &decl.body, env, &frame_of(decl))
+    fn eval_body_of(&self, decl: &'a FnDecl, env: Option<Rc<Env>>) -> EvalResult {
+        self.eval_body_in(decl, &decl.body, env, &self.frame_for(decl))
     }
 
     /// A body run whose final expression may hand back a tail call for the
     /// dispatcher's loop instead of recursing. Everything before the last
     /// statement evaluates exactly as eval_body_in does.
-    fn eval_body_flow(&self, decl: &FnDecl, env: Option<Rc<Env>>) -> Result<Flow, RuntimeError> {
-        let frame = frame_of(decl);
+    fn eval_body_flow(&self, decl: &'a FnDecl, env: Option<Rc<Env>>) -> Result<Flow, RuntimeError> {
+        let frame = self.frame_for(decl);
         let body = &decl.body;
         let Some((Stmt::Expr(last), lead)) = body.split_last() else {
             return Ok(Flow::Done(self.eval_body_in(decl, body, env, &frame)?));
@@ -1402,7 +1425,7 @@ impl<'a> Interp<'a> {
                 }),
             };
         }
-        let mut values = Vec::new();
+        let mut values = Vec::with_capacity(args.len());
         for arg in args {
             values.push(self.eval(arg, env, frame)?);
         }
@@ -1771,7 +1794,7 @@ impl<'a> Interp<'a> {
                 }
                 let callee = self.eval(head, env, frame)?;
                 let lazy_if = matches!(&callee, Value::FnRef(name) if &**name == "if");
-                let mut values = Vec::new();
+                let mut values = Vec::with_capacity(args.len());
                 for arg in args {
                     match lazy_if {
                         true => values.push(Value::Closure(Rc::new(ClosureData {
@@ -2233,7 +2256,7 @@ impl<'a> Interp<'a> {
     fn dispatch_loop(
         &self,
         name: String,
-        overloads: Rc<Vec<&FnDecl>>,
+        overloads: Rc<Vec<&'a FnDecl>>,
         args: Vec<Value>,
         span: Span,
     ) -> EvalResult {
@@ -2263,12 +2286,12 @@ impl<'a> Interp<'a> {
     fn dispatch_loop_inner(
         &self,
         name: String,
-        overloads: Rc<Vec<&FnDecl>>,
+        overloads: Rc<Vec<&'a FnDecl>>,
         args: Vec<Value>,
         span: Span,
     ) -> EvalResult {
         let mut name = name;
-        let mut overloads: Rc<Vec<&FnDecl>> = overloads;
+        let mut overloads: Rc<Vec<&'a FnDecl>> = overloads;
         let mut args = args;
         let mut span = span;
         loop {
@@ -3481,7 +3504,7 @@ impl<'a> Interp<'a> {
             .any(|n| knots.get(*n).is_some_and(|c| matches!(&*c.borrow(), ThunkState::Blackhole)))
     }
 
-    fn knotted(&self, name: &str, constant: &FnDecl) -> EvalResult {
+    fn knotted(&self, name: &str, constant: &'a FnDecl) -> EvalResult {
         if let Some(cell) = self.knots.borrow().get(name) {
             let forced = match &*cell.borrow() {
                 ThunkState::Forced(v) => Some(v.clone()),
@@ -3656,8 +3679,14 @@ fn taken<T: Clone>(rc: Rc<T>) -> T {
 }
 
 fn match_params(params: &[Pattern], args: &[Value]) -> Option<(Score, Bindings)> {
-    let mut score = Vec::new();
-    let mut binds = Vec::new();
+    // Both vectors are built at the size the parameter list already states.
+    // `score` takes exactly one entry per parameter, so its capacity is not an
+    // estimate; `binds` takes at most one per parameter for the simple
+    // patterns and grows from there for a constructor that binds several.
+    // dispatch runs this once per overload on every call, and a Vec::new()
+    // that reaches three entries has reallocated twice by then.
+    let mut score = Vec::with_capacity(params.len());
+    let mut binds = Vec::with_capacity(params.len());
     for (pattern, arg) in params.iter().zip(args) {
         // per-param: literals 200, annotated 100 minus subtype distance
         // (nearer declarations outrank ancestors), generics 10 — the old
@@ -3696,13 +3725,13 @@ fn match_one(pattern: &Pattern, arg: &Value, binds: &mut Bindings) -> Option<u8>
         (Pattern::Var(name, _), _) => match is_failure(arg) {
             true => None,
             false => {
-                binds.push((name.to_string(), arg.clone()));
+                binds.push((name.as_str().to_owned(), arg.clone()));
                 Some(0)
             }
         },
         (Pattern::Annotated { name, ty, .. }, _) => match type_match_depth(ty, arg) {
             Some(depth) => {
-                binds.push((name.to_string(), arg.clone()));
+                binds.push((name.as_str().to_owned(), arg.clone()));
                 Some(depth)
             }
             None => None,
