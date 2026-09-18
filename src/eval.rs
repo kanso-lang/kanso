@@ -2403,6 +2403,18 @@ impl<'a> Interp<'a> {
         let mut overloads: Rc<Vec<&'a FnDecl>> = overloads;
         let mut args = args;
         let mut span = span;
+        // THE SCORE BUFFER OUTLIVES THE DISPATCH, where the bindings buffer
+        // cannot. `binds` is moved into `bind_all` and becomes the environment
+        // frame, so its allocation is doing work after the dispatch ends;
+        // `score` is only read to compare candidates, kept beside `best` while
+        // one wins, and then dropped. Declaring it inside the loop paid one
+        // allocation and one free per dispatch for a buffer nothing keeps.
+        //
+        // The loser's buffer is the one held here: the swap below leaves the
+        // outgoing candidate's vector in `score`, so what survives the
+        // iteration already has capacity and `match_params_into` clears it
+        // before the next candidate fills it.
+        let mut score: Score = Vec::with_capacity(args.len());
         loop {
             // The second hole in an err's infectiousness: a reader's getter
             // answers the piece before any arm is tried, so an own-hako err
@@ -2467,8 +2479,8 @@ impl<'a> Interp<'a> {
             // `args_len` is exact for `score`, which takes one entry per
             // parameter, and a floor for `binds`, since a `Ctor` pattern can
             // bind its fields and a whole.
-            let mut score: Score = Vec::with_capacity(args_len);
             let mut binds: Bindings = Vec::with_capacity(args_len);
+            score.reserve(args_len);
             for decl in overloads.iter() {
                 if decl.params.len() != args.len() {
                     continue;
@@ -2501,7 +2513,12 @@ impl<'a> Interp<'a> {
                 }
             }
             match best {
-                Some((_, decl, binds)) => {
+                Some((won_score, decl, binds)) => {
+                    // The winner's buffer comes back as the working one. The
+                    // two have the same job and only one of them is needed
+                    // next time round.
+                    score = won_score;
+                    score.clear();
                     // One frame for the whole parameter list. Pushing a node
                     // per binding made the chain as long as the arguments, and
                     // the walk paid for that on every name the body mentions.
