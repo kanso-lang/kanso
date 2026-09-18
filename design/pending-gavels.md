@@ -175,8 +175,17 @@ beside kanso#1504's job:
     frame          LookupBucketFor         LookupBucketFor
     clang x3            identical               identical
 
-Two branches, two jobs, `ld` totals 20,825,081 apart and bucket-probe counts
-5,952 apart, and the drop is ELEVEN PROBES both times, all of it in one frame.
+**A THIRD JOB DREW IT, and it was this pull request's own** — the docs-only
+branch carrying this entry, which cannot touch codegen by construction:
+
+    kanso#1537   6,824,133,291 then 6,824,133,280, -11
+                 probes 1,819,373 -> 1,819,362
+                 frame  llvm::StringMapImpl::LookupBucketFor
+
+Three jobs, three branches, three different probe counts — 1,816,463,
+1,822,415, 1,819,373 — and the same eleven every time. Three branches, `ld`
+totals 20,825,081 apart across the first two, and the drop is ELEVEN PROBES
+each time, all of it in one frame.
 A residue that holds at a fixed eleven across that much movement in the
 quantity it is a residue of is not noise in the ordinary sense, and it is not
 proportional to anything the two jobs differ in. Whatever costs the eleven
@@ -184,6 +193,16 @@ costs the same eleven on both.
 
 This does not name the cause, and it narrows the search in one way worth
 writing down: a candidate has to explain a CONSTANT, not a variance.
+
+**AND THE RATE IS NOT ONE IN TEN.** Option 3 below offers to accept "a known,
+reproducible, one-in-ten draw", a figure that came from kanso#1512's ten
+temporary names. Four cost-goldens jobs ran on 2026-09-18 after the output
+path was cleared and threads pinned: kanso#1504, kanso#1502 and kanso#1537
+drew, and kanso#1538 reproduced. Three in four is not one in ten, so the cost
+of option 3 is three red pull requests in four rather than one in ten, and
+every one of them halts the vein for a change that did not cause it. Four
+jobs is a small sample and the direction of the error is the one that
+matters.
 
 **AND THE SAME JOB SHOWS WHERE kanso's OWN PROCESS MOVES, which is the
 excluded one.** The gate prints it anyway, and on kanso#1502 it moved 1,610
