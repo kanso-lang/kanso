@@ -4646,3 +4646,47 @@ gate silently stops matching — if a key changes, if a span moves, if the
 analysis is handed a different program. This number does not. It is the only
 thing in the tree that fails when the optimisation quietly stops happening,
 and the spec's own header now says so.
+
+## 2026-09-18 — kanso#1525's rows on CI, and a projection that was right about its direction
+
+Eight rows moved. CI's sitting, against main:
+
+    interp_instructions   1,138,001,430 -> 1,075,174,600   -62,826,830   -5.52%
+    interp_allocs             2,539,998 ->     2,486,376       -53,622   -2.11%
+    interp_peak_bytes           884,985 ->       833,130       -51,855   -5.86%
+    compile_instructions     35,486,333 ->    35,552,188       +65,855   +0.19%
+    entry_instructions      126,498,292 ->   126,735,634      +237,342   +0.19%
+    library_instructions    126,954,304 ->   127,192,177      +237,873   +0.19%
+    emit_instructions        51,456,464 ->    51,630,538      +174,074   +0.34%
+    startup_instructions      3,363,378 ->     3,365,595        +2,217   +0.07%
+
+**The container projected 53,327,307 and said to expect more.** It read
+62,826,830, 17.8% above the projection. The reason was written down before the
+job ran rather than after: this change removes memcpys, so it moves BYTES, and
+a per-byte price is a property of the compiler that built the interpreter. The
+kanso#1520 shape came in three times low; this one came in a sixth low, and in
+the same direction.
+
+**The allocation counter travelled exactly.** −53,622 on this container and
+−53,622 on the runner, to the unit. That is the second half of the same rule
+and it keeps holding: a counter of operations crosses a machine boundary
+intact, a counter of instructions does not.
+
+`interp_peak_bytes` is the interesting one: −51,859 here against −51,855 there,
+four apart on fifty-two thousand. Peak bytes counts sizes the program chooses,
+so it ought to travel like the allocation count, and it nearly does. Four is
+not nothing and it is not explained. Noted rather than rounded off.
+
+**The four compile-side rows are the price of the change existing.** `kanso
+check` stops before the interpreter runs and the analysis is behind a
+`OnceCell` that only the interpreter touches, so not one of those rows can be
+paying for work this change does. They move because `src/eval.rs` IS the
+compiler: it grew, and the binary's layout moved under it. Three of them move
+by the same 0.19% — +65,855, +237,342 and +237,873 on three different routes
+through the same front end — which is what a uniform layout shift looks like.
+CLAUDE.md's standing note on this row says an edit to the compiler's own Rust
+usually moves it, and this is that case rather than the rarer one where a small
+enough change leaves the layout alone.
+
+So the trade is 62.8 million interpreted instructions against 715,346 across
+the four compile-side rows, and it is not close.
