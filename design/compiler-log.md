@@ -3492,3 +3492,42 @@ per cent, bounded from above, for a change to one type.
 
 That is the number the corpus question in the ledger is worth answering for --
 or not. Recorded so the answer can be weighed rather than guessed.
+
+## 2026-09-18 — one line copies a whole expression tree, fifty thousand times
+
+Reading the annotated source for the integer work turned up a bigger and much
+narrower lead beside it. `Expr::clone` in the interpreted run:
+
+    body: arg.clone()          11,471,717     50,235 calls     228 each
+    a second site                  77,936        221 calls
+    expr: expr.clone()                285          1 call
+
+ONE LINE CARRIES 99.3% OF IT. It is the `lazy_if` path, building a deferred
+argument as a closure with no parameters:
+
+    values.push(Value::Closure(Rc::new(ClosureData {
+        params: Vec::new(),
+        body: arg.clone(),
+        ...
+
+`ClosureData.body` is an owned `Expr`, so every deferral copies the argument's
+whole subtree. 228 instructions a copy, 11,471,717 in all, which is 1.03% of
+this box's interpreted row.
+
+WHY IT IS NOT A FIVE-LINE FIX, checked rather than assumed. `ClosureData` has
+five constructions and three readers, all of the form
+`self.eval(&closure.body, ...)`, which would take an `Rc<Expr>` unchanged. But
+the clone is of an `Expr` the AST owns, so wrapping the FIELD in an `Rc` still
+copies once to build the `Rc`. The copy goes away only if the thing being
+cloned is already shared -- `App { args: Vec<Rc<Expr>> }` in the AST, built once
+by the parser.
+
+That is a narrow AST change: one field of one variant, and the parser is the
+only thing that constructs it. No semantics move, nothing is promoted, and
+unlike the integer lead there is no corpus question in front of it -- a deferred
+argument evaluates to the same value however its expression is stored, and the
+existing differential goldens already say so on every engine.
+
+Sized from the annotated source, which is the instrument that has been right;
+unsized as a saving, which is the distinction this day was about. 11,471,717 is
+what the copying costs, not what removing it returns.
