@@ -147,4 +147,4 @@
 # 2026-09-18, kanso#1511 on the tree merged with main after kanso#1510,
 # CI's sitting. 51,554,407 -> 51,543,885, a FALL of 10,522
 # (-0.0204%). LAYOUT. `codegen::emit_ir` does not run the interpreter at all.
-emit_instructions=51543885
+emit_instructions=51546788

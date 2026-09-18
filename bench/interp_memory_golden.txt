@@ -71,6 +71,6 @@
 # (+0.0003%). THE ONE ROW THAT REPRODUCES. +16 on both rounds, against two different
 # bases: the predicate answers with a set of owned names, built once, and
 # sixteen allocations is what that set costs on this program.
-interp_allocs=5313348
-interp_peak_bytes=933202
+interp_allocs=5310696
+interp_peak_bytes=933182
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

@@ -3655,3 +3655,31 @@ host cannot move.
 That is the 2026-09-15 rule applied to a spec rather than a gate: what cannot
 be normalized is not measured, and the way to normalize an absolute count with
 a host-sized constant inside it is to subtract the constant.
+
+## 2026-09-18 — kanso#1515's rows on CI, and the interpreted row falls 0.649%
+
+CI's sitting on `259daa83`:
+
+    interp_instructions   2,182,597,360 -> 2,168,428,538  -14,168,822  (-0.649%)
+    interp_allocs             5,313,348 ->     5,310,696       -2,652
+    interp_peak_bytes           933,202 ->       933,182          -20
+    compile_instructions     35,444,548 ->    35,443,611         -937
+    entry_instructions      126,359,513 ->   126,354,834       -4,679
+    library_instructions    126,814,937 ->   126,810,299       -4,638
+    startup_instructions      3,364,755 ->     3,363,774         -981
+    emit_instructions        51,543,885 ->    51,546,788       +2,903
+
+Both codegen rows read their goldens exactly, which is what an interpreter-only
+change should do: `kanso build`'s child tree never sees `src/eval.rs`. The five
+compile-side rows are layout.
+
+**This container read the fall at 18,071,595 and CI reads 14,168,822.** Both
+are real and CI's is the one the objective takes. The two halves were measured
+apart here — `args.clear()` alone 3,957,853, `taken()` alone 14,194,625, both
+18,071,595, additive to within 80,883 — and that split is a property of this
+box's binary rather than of the change; what travels is the sign and the
+mechanism.
+
+Welfare rises to 76.8277 from a floor of 76.82429875406118, past the
+sentinel's 0.001 band, so the floor is banked at 76.82771395446468. Raising it
+is arithmetic rather than a decision.

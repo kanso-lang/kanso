@@ -251,5 +251,5 @@
 # kanso#1510 left, reads the other way. One change, two signs, so what the
 # walk costs is below what this row resolves -- the reproducible signal for
 # this change is `interp_allocs`, which read +16 on both rounds.
-interp_instructions=2182597360
+interp_instructions=2168428538
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
