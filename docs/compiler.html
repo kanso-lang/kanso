@@ -2223,7 +2223,25 @@ lab "flan" seasonal   (fn lab d c = label d c)   passed through lab
 
 <p>the direction is worth noticing, though, because it now points at source rather than at a rewrite. wrapping a call in a lambda silently drops its provenance line, on both engines, and a reader would not expect <code>(d c -&gt; label d c)</code> and <code>label</code> to trace differently. whether that is the right rule for an anonymous function is a question about the language, and it goes to the ledger rather than being settled by an optimisation that wanted it one way.</p>
 
-<h2 id="beattop"><span class="sec-num">86</span>nine instructions to find a pointer that never moved</h2>
+<h2 id="whoholds"><span class="sec-num">86</span>a refcount histogram is not a price</h2>
+
+<p>the interpreted run became a weighted term on the 2026-09-16 gavel, so it was profiled for the first time with a counter on it. the largest single thing in it is not interpretation: <code>memcpy</code> carries <strong>18.49%</strong>, and 7.76% of the whole run is <code>Vec&lt;u8&gt;::clone</code> called 43,572 times from one function &#8212; about four thousand instructions a call. the byte builder copies its entire accumulator before extending it, 180,081,360 bytes over the corpus, accumulators up to 9,906 bytes rebuilt one append at a time.</p>
+
+<p>the obvious repair is to extend in place when the buffer is unique. it was built at both sites and both were declined, and the refcounts are why. at the smaller site every one of the 6,606 calls found three holders &#8212; <strong>the fast branch never fires</strong>, and the 298,420 instructions the change appeared to save were the call to <code>clone</code> rather than the copy inside it, with <code>memcpy</code> coming back unmoved. at the larger site:</p>
+
+<pre><code>strong=1    1,326    3.6%
+strong=2   11,880   32.1%
+strong=3   13,206   35.7%
+strong=5    9,228   25.0%
+strong=6    1,326    3.6%</code></pre>
+
+<p>3.6% of the appends could extend in place and 96.4% could not: six and a half megabytes of the hundred and eighty. <strong>that share was measured and the fix was not</strong>, and the two turn out to be different numbers. run, on <code>push</code>, <code>put</code> and <code>append</code> together, it is <strong>14,194,625 instructions</strong> &#8212; 0.64% of the interpreted row, with <code>memcpy</code> falling 12,529,663. the histogram answers for the calls it sampled at the instant it sampled them; what a fix is worth is a question only a run answers.</p>
+
+<p>the histogram was right about the shape it saw, and that shape is most of them. an accumulator threaded through a name the caller still holds &#8212; <code>stack (push xs n) (n - 1)</code> &#8212; is pointed at by that frame too, and two fixtures of that shape read identical allocation counts with the fix and without it. an accumulator that arrives as another call's answer &#8212; <code>push (push xs n) n</code> &#8212; is pointed at by nothing else, and reads 22,362 allocations copying against 21,162 extending in place. <code>lib/list</code>'s own <code>put acc k (push (bucket acc[k]) x)</code> is the second shape, which is why the corpus moved.</p>
+
+<p>so the copy is a symptom and the holders are the thing. a buffer partway through a fold is held by the argument vector, by the wrapper's environment, by the caller's, and by the fold's own state, and the interpreter cannot know that all but one are about to go away. the compiled engine can: the linearity analysis proves the accumulator unique and the append extends the builder in place. that proof is the difference between the two engines here, and no amount of reference counting at run time substitutes for it.</p>
+
+<h2 id="beattop"><span class="sec-num">87</span>nine instructions to find a pointer that never moved</h2>
 
 <p>a beat loop is one the compiler proved gives its arena back between laps, and <code>k_beat_iter</code> is what it calls to do that. the run program calls it <strong>2,692,766</strong> times for <strong>61,672,983</strong> instructions &#8212; 3.35% of everything it does, and 22.9 instructions a call against a fast path that is six stores and three tests.</p>
 
