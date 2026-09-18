@@ -2427,6 +2427,26 @@ memcmp        48,165,663 ->  46,830,275    -1,335,388</code></pre>
 
 <p>that does not retire the index: the 1,590,733 hit-frames stay, and only an index removes those. it orders them. skip first, measure what is left, and let the remainder make its own case.</p>
 
+<h2 id="dispatchcopies"><span class="sec-num">92</span>two copies the dispatcher was making for nothing</h2>
+
+<p>section 91 left the environment walk sized and the schemes aimed at it declined. the next profile of the interpreted run put a different frame on top: the dispatcher, at 130,726,726 instructions of its own, 11.70% of everything the run does. two of its callee counts had answers, and both were things being built and immediately thrown away.</p>
+
+<p>the first showed itself by arithmetic. <code>&lt;str as Display&gt;::fmt</code> was called 119,535 times from inside the dispatcher, for 23,936,233 instructions. the dispatcher's tail-hop line ran 119,542 times. two numbers derived from different places, agreeing to within seven.</p>
+
+<p>the dispatcher is a trampoline: a tail call to a named group re-enters arm selection rather than growing the rust stack. it held the name of the group as an owned <code>String</code>, and each hop wrote <code>name = next.to_string()</code>. but <code>next</code> is already an <code>Rc&lt;str&gt;</code> — the tail carries it that way — and <code>to_string</code> reaches <code>Display</code>, which reaches the formatting machinery. two hundred instructions and an allocation, a hop, to copy a name one pointer away. holding the name as an <code>Rc&lt;str&gt;</code> makes the hop a move. every use of the name inside the loop already read it as a <code>&amp;str</code>.</p>
+
+<p>the second was in arm selection. <code>match_params</code> built two vectors sized to the parameter list on every candidate it tried, and gave up the moment a pattern refused — so a candidate that failed on its first parameter had already paid for both. selection tries every overload in the group and keeps one, so most candidates fail. one pair of buffers now serves the whole list, and the candidate that wins hands its vectors to the next one rather than leaving it to grow from nothing.</p>
+
+<p>measured together, against a tree that already had the value-position <code>if</code>:</p>
+
+<pre>  interpreted run   1,070,343,718 -&gt; 1,038,405,822   -31,937,896   -2.98%
+  allocator work       34,485,525 -&gt;     25,548,225                -25.9%
+  allocation calls, dispatcher      1,471,992 -&gt; 502,377</pre>
+
+<p>the corpus prints the same answer on both binaries.</p>
+
+<p>one figure on the way there was wrong and is worth saying so. the allocations were first sized at 65,283,877, which is what <code>__rust_alloc</code> costs <em>inclusive</em> when called from the dispatcher — everything underneath it. the function's own cost across the whole program is 36,857,970. reading the first as a budget for the second is the arithmetic this page has withdrawn figures for before. what the change was worth is the differential, and the differential is smaller than either.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>

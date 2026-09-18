@@ -3651,3 +3651,39 @@ is that function's own self cost across the whole program. Reading the first as
 a budget for the second is the kind of arithmetic this log has withdrawn five
 figures for. What the change was worth is the differential, and the
 differential is 6,071,593.
+
+## 2026-09-18 — a merge loop committed conflict markers, and the check that missed them
+
+Four branches took a merge of main in one loop. The loop resolved
+design/compiler-log.md, ran `git add -u`, committed and pushed. Three of the
+four went out carrying `<<<<<<<` in files the loop had never looked at:
+`bench/welfare_floor.json` on two of them and
+`bench/interp_instructions_golden.txt` on two.
+
+CI found it in the shape the file's own reader would:
+
+    error[endpoint]: unhandled err reached the executor:
+    json/parse_failure 1 "unexpected character `<`"
+      born in json/fail at std/json/scan.kso:2
+
+THE CHECK WAS REAL AND LOOKED AT ONE FILE. After resolving, the loop counted
+markers in design/compiler-log.md and printed the count. It read zero, which
+was true, and said nothing about the two bench files git had also left
+conflicted. A verification that names the file it verifies will keep passing
+while the defect moves one directory over. Count markers across the whole
+tree, or let the thing that reads the file read it -- here, running
+`kanso run scripts/welfare` would have failed instantly on all three.
+
+AND THE FIRST FIX WAS WORSE THAN THE SECOND. `git checkout origin/main --
+bench/interp_instructions_golden.txt` clears the markers and takes the row,
+and it silently dropped kanso#1502's own header note recording its sitting.
+The same move on kanso#1513 would have dropped its note explaining why a
+branch that adds no interpreter code moves the interpreter's row. That file's
+history IS its comments, which is what the standing rule against blanket
+resolution is protecting. Both were resolved hunk by hunk instead: main's
+value on the conflicted line, every comment kept.
+
+`git add -u` after a merge stages whatever git left behind, including what it
+could not merge. The rule already written down is to scope adds to the paths
+a change owns; the addition here is that a loop doing it across several
+branches turns one slip into three.
