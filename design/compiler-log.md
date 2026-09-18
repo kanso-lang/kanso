@@ -5733,6 +5733,57 @@ the module and entry rows, and their fall is the rise banked here. Welfare
 69.79153807658396 -> 69.79493424287482, `--set` run after the goldens carried
 CI's rows and not before.
 
+## 2026-09-17 — the alias fixpoint ran twice over a program nothing changed
+
+`check_merged_after_aliases` and `inline_builtin_wrappers` run back to back on
+the same program, and each asked `inline::aliases` the same question of it. A
+third walk sat inside the inliner, counting group sizes the fixpoint had
+already counted. Profiling `kanso check compile_corpus`:
+
+```
+  inline::aliases        526,041  1.43%   14 calls (7 from each reader)
+    the group count      263,099  0.71%   1,436 entries, one walk per call
+    direct_aliases       206,496  0.56%   28 calls, exactly two per fixpoint
+  inline_builtin_wrappers' own group count
+                         141,876  0.39%   758 entries
+```
+
+Fourteen calls to `aliases` made twenty-eight to `direct_aliases`, so the
+fixpoint has never needed a third pass on this corpus: one pass to find the
+renames, one to confirm nothing grew. Both readers see a program the other
+does not touch — on the entry path they are consecutive statements, on the
+module path they are separated by the `phase::watched` wrapper alone.
+
+So the group sizes are counted once and the fixpoint run once, and both are
+handed to each reader. Measured end to end, two readings each side:
+
+```
+  before   36,816,573
+  after    36,387,408     -429,165   -1.166%
+```
+
+Emitted IR is byte-identical on encodebench, basket and runbench.
+
+One further pass is skipped: the first `direct_aliases` reads an empty map of
+known renames, so the arm that consults the group sizes never runs and the
+program is its only input. A pass that found nothing there would read the same
+two inputs again, so it already is the fixpoint. Four of the fourteen calls
+take that exit on this corpus (the 160-fn and 4-fn programs); the other ten
+find between 1 and 12 renames and run the confirming pass as before.
+
+The borrow checker holds half of the sharing: the alias map and the group
+count borrow the program, so a pass that rewrote it before their last use
+would not compile. It does not hold the other half — after `wrapper_table`
+only owned `String`s are left — so
+`tests/the_shared_alias_map_outlives_nothing_that_rewrites.rs` reads both call
+sites and fails on a pass slipped in between. Watched red on
+`canonicalize_types(&mut merged)` inserted there, which named the line.
+
+- **DONE** built and measured; 147 test binaries green, fmt and clippy clean.
+- **OPEN** the same shape in `check_per_node`'s `arities`, which is a third
+  walk over `program.fns` for a question two of these three already answer.
+
+
 
 ## 2026-09-17 — the stack-slot check reads the first space, and the lever was a tenth the size advertised
 
@@ -6504,6 +6555,34 @@ reading a binary, and an index the emitter builds is a few more bytes for the
 loader to place. The work it saves is in a build, which this row does not
 reach.
 
+## 2026-09-17 — kanso#1486's rows on the excluded anchor, and the floor moves
+
+CI's sitting with the print out of the reading:
+
+```
+  compile_instructions   35,964,325 -> 35,550,945    -413,380   -1.15%
+  entry_instructions    128,204,133 -> 126,735,456  -1,468,677   -1.15%
+  library_instructions  128,339,261 -> 127,191,484  -1,147,777   -0.89%
+  startup_instructions    4,838,323 ->   4,833,787      -4,536
+  compile_allocs             27,397 ->      27,313         -84
+```
+
+The module row's 413,380 against 429,165 measured here in a container is the
+same number read on two machines. The entry row falls three and a half times
+as far in absolute terms and the same 1.15% in relative terms, which is what
+the shape predicts: the entry route merges and checks everything its imports
+bring, so it asks the alias question of a much larger program.
+
+The eighty-four allocations are the second alias map and the second group
+count, which no longer exist.
+
+welfare rose 0.02 and is banked at 69.81. A rise nobody ratchets is one the
+next change spends, and the sentinel says so rather than leaving it to
+memory — it refused the tree until the floor moved.
+
+- **DONE** five rows and eleven page spans; welfare held at 69.81.
+
+
 
 ## 2026-09-17 — kanso#1482's three rows, priced: layout, upward
 
@@ -6811,6 +6890,39 @@ move on this and there is no floor question to put to anyone.
   start-up reads 615,754 lower than this branch and 350,129 below main, with
   `kanso build`'s 69.90% kept. So this row's rise is paid back by the branch
   above it rather than left standing.
+
+## 2026-09-17 — kanso#1486 on the tree merged with kanso#1462: the three check rows fall by over a percent
+
+    compile_instructions    35,968,792 -> 35,559,376    -409,416   -1.14%
+    entry_instructions     128,217,983 -> 126,771,382  -1,446,601  -1.13%
+    library_instructions   128,352,174 -> 127,226,167  -1,126,007  -0.88%
+    startup_instructions     4,838,372 -> 4,834,337       -4,035   -0.083%
+    interp_allocs            5,313,434 -> 5,313,332         -102
+    interp_peak_bytes          933,202 -> 933,202              0
+    interp_instructions  2,178,559,085 -> 2,178,750,341  +191,256  +0.0088%
+
+**These are work, which separates this branch from the three beside it in the
+round.** The alias fixpoint and the group count run inside `kanso check`, so
+the corpora the three compile rows measure are exactly where running them once
+instead of twice shows up. The entry route pays both readers as consecutive
+statements and takes the largest share.
+
+Start-up falls 4,035, a tenth of the percentage the module corpus sees, which
+is what a one-line program gives a fixpoint to walk.
+
+**One counter worsened: `interp_instructions` landed on 2,178,750,341.** The
+front end runs on that corpus too and got cheaper there — `interp_allocs` falls
+102 in the same job, which is the same change counted a different way — but the
+corpus is one small program and 2.18 billion of the row is the interpreter
+executing it. The layout term on this vein is the size of the move: kanso#1482
+takes it down 56,819 and kanso#1468 puts it up 237,834 in this same round, both
+from edits that never execute on it. A saving of a few thousand front-end
+instructions cannot be read out from under that, and this row is not where this
+change is measured.
+
+`interp_peak_bytes` is unchanged at 933,202: the fixpoint's working sets were
+never the high-water mark.
+
 
 
 ## 2026-09-17 — kanso#1482 on the tree merged with kanso#1462: five rows, all down
@@ -8870,5 +8982,139 @@ wrong — **85,109 of 2,809,326 did not read back**.
   carried through the loop and read once at the end, so it comes out: two
   divisions a trip, one variable division at the bottom. runbench falls 924,584
   and `.text` 1,360 bytes.
+## 2026-09-17 — kanso#1486 on the merged tree: three check rows down, the interpreted row up
+
+The rows this branch carried were main's, carried forward by the merge so the
+gate had one number to fail against rather than none while both sides had
+moved. CI has measured the merged tree:
+
+    compile_instructions    35,968,171 ->    35,559,408    -408,763   -1.136%
+    entry_instructions     128,213,972 ->   126,771,759  -1,442,213   -1.125%
+    library_instructions   128,348,205 ->   127,226,509  -1,121,696   -0.874%
+    compile_allocs              27,397 ->        27,313         -84   -0.307%
+    startup_instructions     4,837,381 ->     4,833,450      -3,931   -0.081%
+    interp_instructions  2,178,502,266 -> 2,178,722,705    +220,439   +0.010%
+
+The first five are the alias fixpoint and the group count running once over a
+program nothing changed between the two runs. That is the whole of the branch.
+
+**The sixth worsened and lands at 2,178,722,705.** It is layout, and here by
+construction rather than by argument: `interp_instructions` anchors at the
+interpreter's own thread, so the front end under `kanso::main` is outside the
+count entirely, and this branch changes nothing else. A front-end change can
+reach that row only by moving the bytes of the binary the interpreter is
+running inside. 0.010% is the size such a move has taken on this vein all
+week.
+
+Welfare comes back to 69.81, its floor, which is the number this branch banked
+before main moved under it.
+
+- **DONE** CI's sitting on the merged tree, six rows, five down and one up.
 
 
+## 2026-09-17 — kanso#1486's rows on the merged tree
+
+CI's sitting after the branch was re-based on main `5e256ce0`:
+
+    compile_instructions     35,559,408 ->    35,559,420        +12
+    entry_instructions      126,771,759 ->   126,771,750         -9
+    library_instructions    127,226,509 ->   127,226,515         +6
+    startup_instructions      4,833,450 ->     4,833,019       -431
+
+Nothing in that table is this branch. Twelve instructions in thirty-five
+million is four parts in ten million, the signs disagree across three rows
+that measure the same pass, and the start-up figure is the same 431 every
+branch re-based today took from kanso#1491's edit to src/main.rs.
+
+Where the branch shows is against main: the three check rows sit **408,753,
+1,442,220 and 1,121,690 below** it. The interpreted row rises 163,620, 75
+parts per million, and costs 0.000 points.
+
+The index reads 76.13 against a floor of 76.13 and the rise is 0.01. Banked
+here, because a rise nobody ratchets is a rise the next change is free to
+spend and the floor sentinel fails an unbanked one however small.
+
+A fifth row followed on the next base. `emit_instructions` counted 382,216,372
+against 382,212,543, a rise of 3,829 — ten parts per million. Unlike the four
+above it that row can move for this change: it counts the phase the alias
+fixpoint runs in, and running the fixpoint once instead of twice leaves a
+different set of decisions behind it for the emitter to walk. It costs 0.000
+points and takes the 0.01 with it, so the index sits exactly on the floor
+ratcheted above rather than above it.
+
+- **DONE** five rows measured and written; the floor ratcheted and held.
+
+
+
+## 2026-09-17 — kanso#1486 on today's main: a fixpoint round that rewrote nothing
+
+The alias canonicaliser runs to a fixpoint. It ran a second round over a
+program the first round had not rewritten, and a round that rewrites nothing
+still walks everything. CI's sitting on the merged tree:
+
+    compile_allocs            27,397 ->        27,313        -84   -0.307%
+    compile_instructions  35,869,355 ->    35,441,049   -428,306   -1.194%
+    entry_instructions   127,872,255 ->   126,348,616 -1,523,639   -1.192%
+    library_instructions 128,010,052 ->   126,804,150 -1,205,902   -0.942%
+    startup_instructions   3,955,899 ->     3,951,284     -4,615   -0.117%
+
+All three `kanso check` routes fall by about the same proportion, which is
+what a pass that runs once per program rather than once per name looks like:
+the entry route gives back four times the instructions of the module route at
+the same 1.19%, because it is four times the program.
+
+Two rows rose and both are layout. `interp_instructions` rose 219,835 to land
+on 2,182,523,679, a hundredth of a per cent on 2.18 billion.
+`emit_instructions` rose 2,466 to land on 60,200,209, four thousandths of a per
+cent — the emitter writes the same IR, and this row counts what deciding to
+write it costs, so it moves with the binary the way the three check rows do.
+The run-side rows, the machine-code row and both codegen rows are
+byte-identical: this change is entirely in the front end.
+
+Welfare 76.65 → 76.66, banked.
+
+**Every golden on this branch was reset to main's before CI measured, and one
+of them did not need to be.** The branch was cut before kanso#1478, kanso#1491,
+kanso#1492 and kanso#1493 landed; its emit row read 382,216,372 where main now
+reads 60,197,743, a 6x gap that is kanso#1478's doing. So the merge carried
+main's values forward across the board, including `compile_allocs`, whose
+27,313 the branch had measured on its own base and whose gate this container
+cannot run — the golden was taken under rustc 1.98.1 and the container runs
+1.94.1. CI read 27,313. The branch had been right about that row the whole
+time, and resetting it cost nothing except the round it took to find out. The
+rule the reset follows is still the right one: a number measured against a
+base that is gone describes a tree that does not exist, and the only way to
+know which of those numbers survived the move is to let CI say so.
+
+
+## 2026-09-18 — kanso#1486: the interpreted row re-read under the shape kanso#1505 gave it, and a claim this file had gone stale on
+
+kanso#1505 took the printed line's subtree off the interpreted row, so the
+number the branch had measured described a row that no longer exists. CI's
+sitting on the merged tree:
+
+    interp_instructions  2,182,303,844 -> 2,182,523,679  +219,835  +0.0101%
+
+The delta is 219,835 under the new shape and was 219,835 under the old one.
+That is what it should be: both sides shed the same 3,199-instruction subtree,
+so the difference between them survives the change intact. It is a check on
+kanso#1505 rather than a coincidence.
+
+The move is layout. This branch edits src/check.rs, src/inline.rs and
+src/lib.rs, all front end, and the gate anchors at `run_interpreted_on_stack` —
+the interpreter's own thread, with the front end outside the number by
+construction. Nothing the branch changes executes inside the row. The size
+matches what this vein's layout term has shown before: kanso#1468 moved it
+237,834 from a single-file edit.
+
+**And the objective weighs this vein now, which the golden's own header denied
+three times.** Each of those sentences was true when it was written. The
+2026-09-16 gavel made the objective a development welfare, a production welfare
+and a meta over them, and `interp_instructions interp_instructions` has been a
+line of bench/objective_sources.txt since — the middle term of Clay's order for
+the interpreted engine, start-up then speed then memory. So this row's rise is
+priced rather than free, and the branch's welfare number already carries it: the
+three compile routes fall about 1.2% each and the score still went up.
+
+The correction is recorded in the golden's header beside the value, where the
+next session reading this vein will meet it.
