@@ -71,6 +71,37 @@
 # (+0.0003%). THE ONE ROW THAT REPRODUCES. +16 on both rounds, against two different
 # bases: the predicate answers with a set of owned names, built once, and
 # sixteen allocations is what that set costs on this program.
-interp_allocs=5310696
-interp_peak_bytes=933182
+#
+# 2026-09-18, kanso#1516. ROUND ONE IS DELIBERATELY RED ON BOTH ROWS, for the
+# reason the instruction golden gives: this host cannot compare, so the values
+# below are main's and CI's sitting replaces them.
+#
+# Measured here, as evidence of direction and size: interp_allocs
+# 5,310,694 -> 4,985,431, a FALL of 325,263 (-6.12%), and interp_peak_bytes
+# 933,280 -> 942,308, a RISE of 9,028 (+0.97%).
+#
+# THE TWO DIMENSIONS GO OPPOSITE WAYS AND BOTH ARE THE SAME CHANGE. The traffic
+# falls because `eval_ident` no longer builds an `Rc<str>` for every reference
+# it returns -- 325,412 of those on this corpus, against a measured fall of
+# 325,263. The 149 they differ by is what the table costs: a `String` per
+# distinct name plus the map's own growth, and how it splits between those two
+# is not measured. The residency rises because that table is held for the whole
+# run. It is what the traffic bought, and it is the trade to read here rather
+# than either row alone.
+#
+# The thunk counters are byte-identical across the change -- 1 alloc, 6 forces,
+# 1 eval -- so nothing semantic moved.
+#
+# 2026-09-18, kanso#1516 on the tree merged with main, CI's sitting.
+# interp_allocs 5,310,696 -> 4,985,433, a FALL of 325,263 (-6.1247%).
+# interp_peak_bytes 933,182 -> 942,210, a RISE of 9,028 (+0.9674%).
+#
+# BOTH DELTAS ARE THE CONTAINER'S TO THE UNIT. This box read 5,310,694 ->
+# 4,985,431 and 933,280 -> 942,308: different absolute values, because these
+# rows belong to the rustc that built the compiler, and the SAME -325,263 and
+# +9,028. That is what a counter of operations rather than of a host looks
+# like, and it is why the instruction row's two readings could be trusted to
+# agree as closely as they did.
+interp_allocs=4985433
+interp_peak_bytes=942210
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
