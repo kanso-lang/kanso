@@ -126,4 +126,10 @@
 # particular changed what the release-codegen row COUNTS by pinning ld's LLVM
 # plugin to one thread, so nothing this branch measured on that row is
 # comparable with anything measured after it. The merged sitting is CI's.
-emit_instructions=60196725
+#
+# 2026-09-18, kanso#1504 on the tree merged with main, CI's sitting.
+# 60,196,725 -> 60,221,314, a RISE of 24,589 (+0.0408%).
+# LAYOUT. `kanso check` and the interpreted run carry runtime.c's bytes rather
+# than compiling it, so what moved is where the code sits; every one of these
+# is under a hundredth of a per cent.
+emit_instructions=60221314

@@ -2762,3 +2762,50 @@ The falls are the change: a beat that finds its mark instead of computing it
 retires 23 instructions where it retired 15, and the benchmarks that rewind
 most often gain most. escapebench rewinds on every escape and gains 11.27%;
 the scanners and the index, which barely beat at all, do not move.
+## 2026-09-18 — kanso#1504's compile-side rows on the merged tree, and the release row reproducing
+
+The run-side veins were this branch's own and are recorded above. These eight
+are CI's sitting on the tree merged with kanso#1486, kanso#1496 and kanso#1507:
+
+    codegen_instructions_release 6,822,651,561 -> 6,841,893,129 +19,241,568 +0.2820%
+    emit_instructions               60,196,725 ->    60,221,314     +24,589 +0.0408%
+    codegen_instructions_dev       596,159,774 ->   596,180,956     +21,182 +0.0036%
+    interp_instructions          2,182,576,109 -> 2,182,585,809      +9,700 +0.0004%
+    startup_instructions             3,951,796 ->     3,953,725      +1,929 +0.0488%
+    compile_instructions            35,441,027 ->    35,441,565        +538 +0.0015%
+    library_instructions           126,804,425 ->   126,804,746        +321 +0.0003%
+    entry_instructions             126,349,040 ->   126,348,616        -424 -0.0003%
+
+**The release row is the one real cost and this branch expected to pay it.**
+It is the only row that COMPILES src/runtime.c rather than carrying its bytes,
+and the beat cache adds a pointer and the code that keeps it: 19.2 million
+instructions of clang and ld, 0.282%. The dev tier pays a twentieth of that for
+the same change, because `-O0` does far less with the extra code. The other six
+are under a twentieth of a per cent apiece and are layout.
+
+**AND THE RELEASE ROW REPRODUCED.** `codegen_release_again` read
+6,841,893,129 — the same number, in the same job. That matters more than the
+value: before kanso#1507 pinned ld's LLVM plugin to one thread, this row could
+not be read twice and get one answer, and it halted its own vein on exactly
+that failure two rounds ago. This is the first sitting where a tree that
+CHANGES runtime.c reads it twice and agrees, which is a stronger test of the
+pin than the trees that left runtime.c alone.
+
+The trade is the objective's to judge and it judges in favour: nine run-side
+veins fall, the largest 11.27%, against 19.2 million on a row weighted for
+production build cost. Welfare rose and is banked.
+**And the floor was banked twice on this branch, because the first bank broke
+the rule that exists for exactly this.** "Bank AFTER the goldens carry CI's
+rows, never before." The first `--set` here ran while the eight compile-side
+goldens still held MAIN'S values carried forward, so it recorded a score this
+container projected from rows nobody had measured: 76.71669769306608. CI then
+measured them, the release row came in 19.2 million higher than main's, and
+welfare read 0.01 BELOW the floor its own branch had just set. A branch cannot
+fail its own bank without something being wrong with the bank.
+
+The second `--set` is CI's figure, 76.7108285575541, and it is still a rise of
+0.053 over main's 76.6576 — the change is a gain, and the projection was
+simply too generous about a row it had not seen. Recorded rather than quietly
+re-run, because the failure looks exactly like a regression in the logs and is
+not one: nothing about the change moved between the two banks, only what was
+known about it.

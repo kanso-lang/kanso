@@ -183,4 +183,16 @@
 # particular changed what the release-codegen row COUNTS by pinning ld's LLVM
 # plugin to one thread, so nothing this branch measured on that row is
 # comparable with anything measured after it. The merged sitting is CI's.
-codegen_instructions_release=6822651561
+#
+# 2026-09-18, kanso#1504 on the tree merged with main, CI's sitting.
+# 6,822,651,561 -> 6,841,893,129, a RISE of 19,241,568 (+0.2820%).
+# THIS IS THE ONE REAL COST, and it is the row this branch expected to pay.
+# The release tier is the only row that COMPILES src/runtime.c rather than
+# carrying its bytes, and the beat cache adds a pointer and the code that keeps
+# it. 19.2 million instructions of clang and ld, 0.282%.
+#
+# AND IT REPRODUCED. `codegen_release_again` read 6,841,893,129, the same
+# number, in the same job -- which is kanso#1507's `-Wl,-plugin-opt=jobs=1`
+# holding on a tree that changes runtime.c, not just on one that leaves it
+# alone. Before that pin this row could not be read twice and get one answer.
+codegen_instructions_release=6841893129

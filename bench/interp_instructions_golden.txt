@@ -223,5 +223,11 @@
 # particular changed what the release-codegen row COUNTS by pinning ld's LLVM
 # plugin to one thread, so nothing this branch measured on that row is
 # comparable with anything measured after it. The merged sitting is CI's.
-interp_instructions=2182576109
+#
+# 2026-09-18, kanso#1504 on the tree merged with main, CI's sitting.
+# 2,182,576,109 -> 2,182,585,809, a RISE of 9,700 (+0.0004%).
+# LAYOUT. `kanso check` and the interpreted run carry runtime.c's bytes rather
+# than compiling it, so what moved is where the code sits; every one of these
+# is under a hundredth of a per cent.
+interp_instructions=2182585809
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
