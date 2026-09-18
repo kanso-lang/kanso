@@ -1,0 +1,36 @@
+error[build]: `_` is a hole for a field a `build` block fills; it stands only where a construction's argument goes, inside one
+  --> a_hole_away_from_a_construction_argument.kso:17:21
+  17 |     xs = [(cell "a" _) (cell "b" _)]
+                           ^
+error[build]: `_` is a hole for a field a `build` block fills; it stands only where a construction's argument goes, inside one
+  --> a_hole_away_from_a_construction_argument.kso:17:34
+  17 |     xs = [(cell "a" _) (cell "b" _)]
+                                        ^
+error[build]: `_` in `cell`'s `link` is never filled: a hole is filled exactly once before the block freezes
+  --> a_hole_away_from_a_construction_argument.kso:17:21
+  17 |     xs = [(cell "a" _) (cell "b" _)]
+                           ^
+error[build]: `_` in `cell`'s `link` is never filled: a hole is filled exactly once before the block freezes
+  --> a_hole_away_from_a_construction_argument.kso:17:34
+  17 |     xs = [(cell "a" _) (cell "b" _)]
+                                        ^
+error[build]: `_` is a hole for a field a `build` block fills; it stands only where a construction's argument goes, inside one
+  --> a_hole_away_from_a_construction_argument.kso:22:27
+  22 |     a = if flag (cell "a" _) (cell "b" _)
+                                 ^
+error[build]: `_` is a hole for a field a `build` block fills; it stands only where a construction's argument goes, inside one
+  --> a_hole_away_from_a_construction_argument.kso:22:40
+  22 |     a = if flag (cell "a" _) (cell "b" _)
+                                              ^
+error[build]: `_` in `cell`'s `link` is never filled: a hole is filled exactly once before the block freezes
+  --> a_hole_away_from_a_construction_argument.kso:22:27
+  22 |     a = if flag (cell "a" _) (cell "b" _)
+                                 ^
+error[build]: `_` in `cell`'s `link` is never filled: a hole is filled exactly once before the block freezes
+  --> a_hole_away_from_a_construction_argument.kso:22:40
+  22 |     a = if flag (cell "a" _) (cell "b" _)
+                                              ^
+error[build]: `_` is a hole for a field a `build` block fills; it stands only where a construction's argument goes, inside one
+  --> a_hole_away_from_a_construction_argument.kso:27:22
+  27 |     f = (n -> cell n _)
+                            ^

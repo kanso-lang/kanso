@@ -29,6 +29,28 @@
 # for this reason; allocations and peak bytes are measured from the same fixed
 # path now so all three veins answer for the same program.
 set -e
+# AND THE BINARY IS BUILT HERE, because this script stages one it did not
+# make. `cp ./target/release/kanso` copies whatever that path holds, and a
+# worktree's target directory holds whatever was last built in it -- which on
+# 2026-09-18 was a compiler from before 3ee41dcf, the 2026-09-16 fix
+# that moved the interpreter's tables off std's randomly-seeded hasher. Four
+# runs staged out of that box read the interpreted anchor 3,100,448 apart with
+# `sip::Hasher::write` live at 187,455,582, and the spread went into a log
+# entry and an open pull request as a property of the current tree.
+#
+# Four runs of a release build of the same commit read ONE value with no
+# SipHash frame at all. A build of `3ee41dcf^` handed the same corpus reads
+# 2,649,396,935 / 2,654,191,562 / 2,650,473,347 / 2,653,900,730 and puts
+# SipHash at 187,455,582 -- the stale reading's own figure, to the
+# instruction.
+#
+# It is the rule `all_compile.sh` already carries for the artifacts its gates
+# read: a measurement script builds what it measures rather than trusting what
+# is lying about. `all_counters.sh` opens with this same line for the same
+# reason. In CI it is a no-op, because the workflow has already built; on a
+# box where somebody is measuring by hand it is the difference between the
+# tree's number and some other tree's.
+cargo build --release
 box=/tmp/kanso-compile-ir
 rm -rf "$box"
 mkdir -p "$box"
