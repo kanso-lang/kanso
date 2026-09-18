@@ -4119,3 +4119,55 @@ in kanso#1529. With the five here, the two largest named things in the
 interpreted profile have nine declined builds between them. Picking the top
 frame off a profile has a record of one in five. The next real gain is
 structural, and the way to find it is not another reading of the same list.
+
+---
+
+## 2026-09-18 — the allocation ladder is real, and reserving ahead of it costs 12 million
+
+**DECLINED.** The previous entry closed by saying the next attempt should not
+be another reading of the profile's self-cost list. So this one came off a
+different axis: tallying which callers reach the allocator, rather than which
+functions carry instructions.
+
+Out of the post-split profile, by caller:
+
+    456,133  __rust_alloc  <- RawVecInner::finish_grow
+    471,517  finish_grow   <- RawVec<T,A>::grow_one
+    237,980  grow_one      <- kanso::eval::match_one
+    225,431  grow_one      <- kanso::eval::Interp::dispatch_loop'2
+
+463,411 of the run's 471,517 reallocations come from those two call sites,
+and both are the same pair of buffers. `match_params_into` clears `score` and
+`binds` at the top of every dispatch, but the WINNER's pair is moved out —
+the bindings become the environment frame, the score is kept beside `best` —
+so what comes back next time is a `Vec` at capacity zero and a push climbs
+1, 2, 4 from nothing.
+
+The change was two lines: `score.reserve(params.len())` and
+`binds.reserve(params.len())` after the two clears, with `params.len()` exact
+for `score` and a floor for `binds`, since a `Ctor` pattern can bind more
+than one name per parameter.
+
+    base      1,007,027,010
+    reserve   1,019,044,912   +12,017,902   +1.19%
+
+Declined. **The tally was right about where the allocations are and wrong
+about what removing them is worth**, which is the same shape as the four
+before it: a real, large, correctly-measured quantity that does not become a
+saving when you go after it.
+
+**THE MECHANISM IS OPEN AND IS NOT THE OBVIOUS ONE.** A reserve on an empty
+buffer is one allocation where the ladder was two or three, so the count
+should have fallen. What that arithmetic leaves out was not measured here,
+and the candidates — a larger size class, the reserve's own capacity check on
+a path taken once per candidate arm rather than once per dispatch, an arm
+that fails on its first pattern paying for a buffer it never fills — are
+guesses until something isolates one. Recorded as guesses.
+
+**The base row is now read three times at 1,007,027,010**, from two binaries
+with different content hashes (`555c7ab8` in the argmove pair, `e8cac1ad`
+here) built from trees carrying the same runtime code at different paths.
+Same row either way, which is the cleanest statement yet that this
+measurement is reading the code and not the layout.
+
+Six builds on the dispatch path today, one win.

@@ -2564,6 +2564,28 @@ error[name]: unknown name `builders/run`
 
 <p>the comparing has not moved all day either: 47,672,229, then 47,631,349, then 47,602,341, across three changes to how scopes are built and walked. &#167;91 declined four schemes aimed at it. with the four here, the two largest named things in this profile have nine declined builds between them, and picking the top frame off a list has a record of one in five.</p>
 
+<h2 id="reserved"><span class="sec-num">97</span>where the allocations are, and what removing them was worth</h2>
+
+<p>&#167;96 ended by saying the next attempt should come off a different axis than the profile&#39;s self-cost list. this one did: instead of asking which functions carry instructions, ask which callers reach the allocator.</p>
+
+<pre>  456,133  __rust_alloc  &lt;- RawVecInner::finish_grow
+  471,517  finish_grow   &lt;- RawVec&lt;T,A&gt;::grow_one
+  237,980  grow_one      &lt;- kanso::eval::match_one
+  225,431  grow_one      &lt;- kanso::eval::Interp::dispatch_loop</pre>
+
+<p>463,411 of the run&#39;s 471,517 reallocations come from two call sites, and both are the same pair of buffers. dispatch clears a score buffer and a bindings buffer at the top of every call, but the winning candidate&#39;s pair is moved out &#8212; the bindings become the environment frame, the score is kept beside the winner &#8212; so what comes back next time is a vector at capacity zero, and a push climbs 1, 2, 4 from nothing.</p>
+
+<p>two lines reserve the parameter count on each buffer after the clears. exact for the score, which pushes once per parameter; a floor for the bindings, since a record pattern can bind more than one name per parameter.</p>
+
+<pre>  base      1,007,027,010
+  reserve   1,019,044,912   +12,017,902   +1.19%</pre>
+
+<p>declined. the tally was right about where the allocations are and wrong about what removing them is worth, which is the shape of the four in &#167;96 as well: a large quantity, correctly measured, that does not turn into a saving when you go after it.</p>
+
+<p>the mechanism is open. a reserve on an empty buffer is one allocation where the ladder was two or three, so the count should have fallen; what that arithmetic leaves out was not measured. a larger size class, the reserve&#39;s own check on a path taken once per candidate rather than once per dispatch, a candidate that fails on its first pattern and pays for a buffer it never fills &#8212; all guesses, recorded as guesses.</p>
+
+<p>one thing did firm up. the base row reads 1,007,027,010 for the third time, from two binaries with different content hashes, built from trees carrying the same interpreter at different paths. on a row that moves with path length, that is the clearest statement so far that the differential reads the code.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>
