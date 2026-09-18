@@ -2167,13 +2167,15 @@
 # CI's sitting. 35,445,148 -> 35,444,548, a FALL of 600
 # (-0.0017%). LAYOUT. This route evaluates no constant, so the OnceCell never fires here.
 #
-# 2026-09-18, re-merged onto main after kanso#1515. THE VALUE BELOW IS MAIN'S,
-# carried forward; the merged reading is CI's.
 #
-# 2026-09-18, kanso#1502 on the tree merged with main after kanso#1515, CI's sitting.
-# 35,443,611 -> 35,442,256, a FALL of 1,355 (-0.0038%). LAYOUT: the value above was main's,
-# carried forward on the re-merge, and this is the merged tree measured.
-compile_instructions=35442256
+# 2026-09-18, re-merged onto main after kanso#1516. THE VALUE BELOW IS MAIN'S,
+# carried forward; the merged reading is CI's.
+# 2026-09-18, kanso#1516 on the tree merged with main, CI's sitting.
+# 35,443,611 -> 35,447,843, a RISE of 4,232 (+0.0119%).
+# LAYOUT. src/eval.rs is the compiler, so its bytes move and every row that
+# runs the compiler moves with them; none of these routes evaluates a name,
+# because all four stop before the interpreter and the fifth is the emitter.
+compile_instructions=35447843
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

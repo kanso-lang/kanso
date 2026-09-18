@@ -1,0 +1,8 @@
+error[name]: `inc` is already a declaration; rename the binding
+  --> a_binding_may_not_take_a_name_that_resolves_without_it.kso:15:10
+  15 | fn shade inc
+                ^
+error[name]: `length` is already a declaration; rename the binding
+  --> a_binding_may_not_take_a_name_that_resolves_without_it.kso:18:12
+  18 | fn shadier length
+                  ^
