@@ -365,4 +365,4 @@
 #
 # 2026-09-18, re-merged onto main after kanso#1511. THE VALUE BELOW IS MAIN'S,
 # carried forward; the merged reading is CI's.
-startup_instructions=3364755
+startup_instructions=3363766

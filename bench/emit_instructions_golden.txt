@@ -171,4 +171,4 @@
 #
 # 2026-09-18, re-merged onto main after kanso#1511. THE VALUE BELOW IS MAIN'S,
 # carried forward; the merged reading is CI's.
-emit_instructions=51543885
+emit_instructions=51546941
