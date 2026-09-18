@@ -4465,3 +4465,19 @@ same thing about why: different scopes, different definitions, and neither is
 the other's check.
 
 Welfare 77.26 -> 77.27, banked in the same pull request.
+
+**THE HOST-INDEPENDENCE CLAIM, CHECKED AND HALF REFUTED.** The entry above says
+`interp_allocs` reproduces across hosts, on the strength of one agreement, which
+is a coincidence until it is two. Run against a second tree: on kanso#1538's the
+container prints `interp_allocs=1410530` and the runner reads 1,410,530. Two
+trees, two hosts, exact both times.
+
+The same run refutes the wider reading. `interp_peak_bytes` on that tree is
+833,458 on the container against 833,466 on the runner — **eight bytes apart**.
+So it is the TRAFFIC COUNT that is host-independent and not the memory rows as
+a family. A peak is a high-water mark of what the allocator held at one instant
+and what it held depends on the machine, where a call count does not; that is a
+candidate for the mechanism, and the eight bytes are the measurement.
+
+Worth the two minutes it took. The claim had already been written into a golden
+header, where the next reader would have taken it for both rows.
