@@ -2096,7 +2096,17 @@
 # a tree that no longer exists. Carrying main's forward gives the gate one
 # number to fail against rather than none, and makes CI's diff read exactly
 # what this branch does to today's main.
-compile_instructions=35441049
+#
+# 2026-09-18, kanso#1507 on the tree merged with kanso#1486, CI's sitting.
+# 35,441,049 -> 35,441,027, a FALL of 22 (-0.00006%). LAYOUT. The value
+# above was main's, carried forward because this branch's own reading predated
+# kanso#1486; this is the merged tree measured. src/main.rs gained a four-line
+# `match` on an environment variable and src/main.rs is the compiler, so its
+# bytes move and every row that runs the compiler moves with them. Six rows
+# moved and the two codegen rows did not: they AGREED with this branch's own
+# readings to the instruction, across two CI jobs on two different trees,
+# which is what `-Wl,-plugin-opt=jobs=1` bought.
+compile_instructions=35441027
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

@@ -199,5 +199,15 @@
 # a tree that no longer exists. Carrying main's forward gives the gate one
 # number to fail against rather than none, and makes CI's diff read exactly
 # what this branch does to today's main.
-interp_instructions=2182523679
+#
+# 2026-09-18, kanso#1507 on the tree merged with kanso#1486, CI's sitting.
+# 2,182,523,679 -> 2,182,576,109, a RISE of 52,430 (+0.00240%). LAYOUT. The value
+# above was main's, carried forward because this branch's own reading predated
+# kanso#1486; this is the merged tree measured. src/main.rs gained a four-line
+# `match` on an environment variable and src/main.rs is the compiler, so its
+# bytes move and every row that runs the compiler moves with them. Six rows
+# moved and the two codegen rows did not: they AGREED with this branch's own
+# readings to the instruction, across two CI jobs on two different trees,
+# which is what `-Wl,-plugin-opt=jobs=1` bought.
+interp_instructions=2182576109
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

@@ -9212,15 +9212,32 @@ src/main.rs gained a four-line `match` on an environment variable, and
 src/main.rs is the compiler, so its bytes move and every row that runs the
 compiler moves with them.
 
-**Those seven are recorded and not carried.** kanso#1486 landed underneath
-this branch between the sitting above and the merge, taking the three check
-routes down 1.17%, so the values in that table were measured against a base
-that no longer exists. All seven goldens carry MAIN'S values forward and the
-merged sitting is CI's to take; each header says so beside the number. The two
-codegen rows are the exception and keep this branch's readings, because
-kanso#1486 does not reach codegen at all and they are what the branch is for.
-Welfare sits exactly on main's floor, 76.6566, with the codegen pair re-based
-rather than scored. `entry_instructions`, `library_instructions` and
+**Those seven are recorded and not carried, and CI has now re-read them.**
+kanso#1486 landed underneath this branch between the sitting above and the
+merge, taking the three check routes down 1.17%, so the values in that table
+were measured against a base that no longer exists. All seven goldens carried
+MAIN'S values forward and CI measured the merged tree:
+
+    compile_instructions        35,441,049 ->     35,441,027        -22
+    entry_instructions         126,348,616 ->    126,349,040       +424
+    library_instructions       126,804,150 ->    126,804,425       +275
+    interp_instructions      2,182,523,679 ->  2,182,576,109    +52,430
+    startup_instructions         3,951,284 ->      3,951,796       +512
+    emit_instructions           60,200,209 ->     60,196,725     -3,484
+
+Six moved, all layout, mixed signs, the largest 24 parts per million.
+
+**The two codegen rows did not move, and that is the result.**
+`codegen_instructions_dev` read 596,159,774 and `codegen_instructions_release`
+read 6,822,651,561 — the same two numbers this branch measured on a different
+tree in a different job, agreeing to the instruction. A row that halted its own
+vein with a reproduction failure two rounds ago now reproduces across jobs.
+That is what `-Wl,-plugin-opt=jobs=1` bought, and it is better evidence than
+the single green round, because the two readings come from trees that differ
+by kanso#1486.
+
+Welfare sits on main's floor with the codegen pair re-based rather than
+scored. `entry_instructions`, `library_instructions` and
 `emit_instructions` are the three that rose; nothing in this branch runs on the
 entry or library corpus or writes a different line of IR, so what moved is
 where the code sits rather than what it does.
