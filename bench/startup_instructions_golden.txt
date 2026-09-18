@@ -94,6 +94,54 @@
 # previous sitting's 4,838,300 on a different tree. This is the interpreter's own
 # start-up and the 13.8x fall this branch bought is already in the value.
 #
+# 2026-09-17, kanso#1468. CI reads 5,077,750 against 4,838,323, a RISE of
+# 239,427 (+4.95%), and it is real work rather than layout. This row is the one
+# that reaches codegen, and the branch indexes two whole-body scans there.
+# Reproduced in a container and attributed, main against the branch on this
+# corpus:
+# 
+#     kanso::main            4,882,857 ->  5,148,482   +265,625
+#     codegen::called_symbols        0 ->    278,812   +278,812  (new)
+#     memchr_aligned           921,736 ->    879,487    -42,249
+#     is_contained_in          626,252 ->    577,318    -48,934
+#     next_match               381,383 ->    379,562     -1,821
+# 
+# The index costs 278,812 to build and saves 93,556 on the scans it replaces,
+# because most of that cost is reading DECLARES -- twelve hundred lines, a
+# constant, the same for every process -- while the saving is proportional to
+# how much the program emits. A single `print` emits almost nothing, so this
+# corpus is where the trade is worst. `kanso build bench/runbench` falls 69.64%
+# on the same change. The objective weighs neither row, so nothing here is a
+# welfare question; the trade is stated because the row moved.
+#
+# 2026-09-17 (kanso#1478): startup_instructions 5,077,750 -> 5,082,671, a RISE of
+# 4,921 (+0.0969%), 2,719 of it against the parent. The seventh index is more
+# bytes for the loader to place, and the trade it buys is the 88,438 the entry
+# row above gives back.
+# 2026-09-17 (kanso#1476): startup_instructions 5,077,750 -> 5,079,952, a RISE of
+# 2,202 (+0.0434%). Against the parent's 5,079,380 the rise is 572, and that is
+# the only row this branch moves on its own: the index it builds is a few more
+# bytes for the loader to place. The three `kanso check` rows above are the
+# parent's to the instruction.
+# 2026-09-17, kanso#1475. 3,354 above kanso#1473's reading.
+# 2026-09-17, kanso#1473. The start-up rise this stack carries, 1,724 below
+# kanso#1468's reading of it.
+#
+# 2026-09-17, merged with the base. The base moved this row's FILE and not
+# the compiler: since this branch measured, the only thing that landed
+# under it is a row written into a golden, so the value below is this
+# branch's own sitting and it still stands.
+#
+# 2026-09-17, merged with the base. The base moved this row's FILE and not
+# the compiler: since this branch measured, the only thing that landed
+# under it is a row written into a golden, so the value below is this
+# branch's own sitting and it still stands.
+#
+# 2026-09-17, merged with the base. The base moved this row's FILE and not
+# the compiler: since this branch measured, the only thing that landed
+# under it is a row written into a golden, so the value below is this
+# branch's own sitting and it still stands.
+#
 # 2026-09-17 (kanso#1470): startup_instructions 4,838,323 -> 4,837,892, a FALL of
 # 431 (-0.0089%). Layout, same sitting as the compile row.
 # 2026-09-17, kanso#1482, CI's sitting. LAYOUT, same reason, and this one
@@ -107,6 +155,46 @@
 # base, so the merged tree is reading neither number. The value below is
 # main's, carried forward so the gate has one value to fail against
 # rather than none; the merged sitting is CI's to take.
+#
+# 2026-09-17, kanso#1468 on the tree merged with kanso#1462. CI reads
+# 5,077,523 against main's 4,838,372, a RISE of 239,151 -- 4.94%. This is the
+# one row on this branch that moves by WORK rather than by layout, and it is
+# the trade the change makes rather than a surprise.
+# #
+# `kanso play` takes the native path, so unlike the three `kanso check` rows
+# it runs the emitter -- on a one-line program, which is the point of the
+# vein and also why it is the one corpus where the index cannot pay for
+# itself. Both sides were reproduced on the container under rustc 1.98.1,
+# 161 and 169 instructions from CI's two readings: main 4,838,211, the branch
+# 5,077,692, a local delta of 239,481 against CI's 239,151.
+# #
+# WHERE IT GOES. `declares_context_calls` builds its set once per process out
+# of DECLARES's 1,187 lines and costs 599,739 instructions inclusive, 10.57%
+# of the whole row -- two and a half times the rise. The per-line searching it
+# replaces was therefore worth about 360,000 here, and the difference is what
+# this row records. On a real program the same set answers 163 declare
+# questions and 1,024 more, and `kanso build bench/runbench` falls 69.90%.
+# #
+# So the shape is a fixed cost against a per-line one, and start-up is the
+# corpus with no lines to spread it over. Building the set more cheaply than
+# a run of hashed inserts is the open lead; the objective does not weigh this
+# vein yet, so nothing waits on it.
+#
+# 2026-09-17, kanso#1478 as the one tip, on main 298636b7. CI reads 5,082,497
+# against main's 4,838,372, a RISE of 244,125 -- 5.05%.
+# #
+# IT DECOMPOSES, because kanso#1468 took its own sitting on this row two hours
+# earlier and read 5,077,523. So kanso#1468 is 239,151 of this and the four
+# branches above it are 4,974 between them. The 239,151 is measured and
+# attributed in that branch's own note: `declares_context_calls` builds its
+# set once per process out of DECLARES's 1,187 lines, 599,739 instructions
+# inclusive, against about 360,000 of per-line searching removed.
+# #
+# The shape is the same for all five: a fixed index built once per program,
+# against a saving proportional to what the program has. `kanso play` on a
+# one-line program is the corpus with nothing to spread it over, which is
+# what this vein is for. kanso#1484, stacked on kanso#1468, writes the
+# DECLARES set down as a sorted constant and takes the larger part back.
 #
 # 2026-09-17, kanso#1470 on main 298636b7. CI reads 4,837,941 against main's
 # 4,838,372, a fall of 431 -- 0.009%. `kanso play` takes the native path and
@@ -124,9 +212,57 @@
 # main's, carried forward so the gate has one value to fail against
 # rather than none; the merged sitting is CI's to take.
 #
+# 2026-09-17, merged with main at 5e256ce0 (kanso#1491), which moved this row
+# 1,373 instructions downward under this branch. The value below is this
+# branch own CI sitting; the merged number is CI to take.
+#
+# 2026-09-17, kanso#1478 against main, CI's sitting. 4,837,381 -> 5,081,497, a
+# RISE of 244,116 (+5.046%). NOT LAYOUT. `kanso play` takes the native path and
+# runs the emitter, which is where this run of five changed code.
+# 
+# WHAT IT IS. Each of the five replaces a whole-program scan run once per name
+# with an index built once per process, and this workload is a single `print`.
+# There is nothing to amortise the construction over. Profiled under rustc 1.98.1
+# in the gate's own box, `kanso::main` inclusive reads 4,837,246 on main and
+# 5,081,820 here -- 323 from CI's reading of the same pair, which is as close as
+# two containers get. The frames that arrive are the `OnceLock<Set<&str>>` behind
+# `declares_context_calls` at 599,550 and `called_symbols` at 310,752; the frames
+# that leave are the per-name scans, 362,928 + 274,780 + 107,365 + 107,269 +
+# 41,018 + 19,651.
+# 
+# ALMOST ALL OF IT IS ONE OF THE FIVE. kanso#1468 alone read +239,217 on its own
+# CI sitting, so the other four together add 4,899. One index accounts for the
+# row.
+# 
+# THE TRADE IS THE RIGHT WAY ROUND. The five take 61.6x off
+# `kanso build bench/runbench` between them, with the emitted IR byte-identical
+# on every one. A one-line program is the workload where an index is all cost,
+# and measuring what is left when the program is too small to cost anything is
+# what this row is for.
+#
 # 2026-09-17, kanso#1470 against main, CI's sitting. 4,837,381 -> 4,836,950, a
 # FALL of 431 (-0.0089%). `kanso play` runs the emitter, which is where the new
 # counters sit; they are compiled out of a shipped binary and the gate builds one
 # that carries them, so what this reads is the same layout term as the rows
 # above, at the same scale.
-startup_instructions=4836950
+# 2026-09-17, kanso#1478 on the tree merged with main 5e256ce0, CI's sitting.
+# 5,081,497 -> 5,081,099, a FALL of 398 (-0.0078%). The merge moved this one
+# DOWNWARD where it moved the three check rows up, which is what a layout term
+# looks like: it has no sign of its own.
+# 2026-09-17, merged with main fcf6238e (kanso#1478). That branch RAISED this
+# row 242,727 -- seven indexes are more bytes for the loader to place -- so the
+# 3,711,750 this branch measured was against a baseline that no longer exists.
+# The value below is main's, carried forward so the gate has one number to fail
+# against rather than none, and so CI's diff reads exactly what this branch
+# does to today's main. The merged sitting is CI's to take.
+#
+# 2026-09-17, kanso#1493 on the tree merged with main fcf6238e, CI's sitting.
+# 5,081,099 -> 3,955,899, a FALL of 1,125,200 (-22.14%). The runtime source is
+# digested at BUILD time now, so a run no longer hashes 8,400 lines of C to
+# decide whether its cached runtime object is current. `kanso play` takes the
+# native path, which is why this vein sees it and the three `kanso check` rows
+# do not: they stop before codegen and never ask the question.
+#
+# The value the merge carried forward was main's, so this diff is the whole of
+# what the branch does to today's main, taken in one job.
+startup_instructions=3955899

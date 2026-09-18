@@ -69,6 +69,18 @@ STATUS.md joined that list on 2026-09-14, having been missing from it since the
 keeping STATUS.md current the chat's job, in those words. A session reading the
 lane sentence strictly would have found its own assignment out of lane.
 
+docs/compiler.html joined it on 2026-09-17 for the same reason, having been
+missing the whole time. The `page_drift` gate fails a tree carrying more than
+three log entries the page has not covered, and the chat writes the log, so
+every third or fourth chat entry makes the page owe a section — which the
+chat is then the only session positioned to write, because the section is
+about what the chat found. Four of them had already landed under this
+session's id by the day this paragraph was added, so the practice preceded
+the permission by some weeks. The page is the chat's for PROSE about findings
+and rulings. Its `data-golden` spans are a different thing: a span quotes a
+number out of a golden, `golden_prose` checks the quote against the file, and
+moving one means the golden moved, which is cloud's. So a chat pull request
+writes paragraphs and never edits a span to make a gate agree with it.
 Each session merges its own pull requests on green. Clay named the alternative
 on the same day and is content with either: cloud sweeping and landing what the
 chat opened. This one is in force because it waits on neither session noticing
@@ -103,6 +115,36 @@ able to see and consider the entire list to do that, not just take the next
 thing." Nothing in the log schedules a ruling, and an OPEN entry is read when
 cloud next reads the log, which is why the list lives in STATUS.md and not in
 the log.
+
+**COUNTING THE RULINGS TAKES TWO GREPS, AND THE SECOND ONE IS THE ONE PEOPLE
+FORGET.** The log has written a ruling two ways. September and most of August
+write `## <date> — gavel: ...`; July writes `GAVEL:`, `GAVELED:`,
+`GAVEL (syntax):`, `GAVEL (extension):`, `GAVEL (amendment):` and
+`GAVEL, IMPLEMENTED:`, and three August entries use the old spelling too. No
+heading matches both patterns, so a count is the sum of two:
+
+```
+grep -hE "^## " design/compiler-log.md design/log/compiler-log-archive.md \
+  | grep -cE "— gavel[:,]"          # 50 on 2026-09-17: 29 August, 21 September
+  | grep -cE "GAVEL(ED)?[:,(]"      # 23 on 2026-09-17: 14 July, 6 undated, 3 August
+```
+
+On 2026-09-17 an audit reported 56 rulings, 35 of them August, all swept, and
+published it to the compiler page. The real figures were 73 and 29 of 32, and
+twenty-three rulings had never been read against a build — every one of them
+found by running the second grep. They all turned out to be built, so the cost
+was one wrong sentence on a public page rather than a missed feature, and that
+was luck.
+
+Two things follow. **Run both greps, every time, and never carry a ruling count
+in prose** — including the numbers in this paragraph, which are dated for that
+reason. And **a sweep that reports a period as complete names the pattern it
+matched on**, because "all of August" meant one spelling of August.
+
+The blind spot is also mechanical and has a home: `page_drift`'s `ruling?` reads
+`— gavel:` and `— directive:` and nothing else, so a July-spelled ruling counts
+against the page's budget. A spec pinning the whole convention would close both
+halves at once, and `tests/` is cloud's.
 
 **GITHUB API ACCESS DEPENDS ON HOW A SESSION WAS STARTED, NOT ON ITS AGE.**
 Established 2026-09-08 by comparing four sessions in one environment:
@@ -585,12 +627,15 @@ So, before an argument rests on a number:
   compiler's own half of what a build costs. Weighing the child tree alone left
   kanso#1480's 51,082,187-instruction saving invisible to every term in the
   model, which is how the gap was found.
-  `bench/objective_sources.txt` is the list — thirteen `<counter> <gate key>`
+  `bench/objective_sources.txt` is the list — FOURTEEN `<counter> <gate key>`
   pairs for those eleven — and
   `tests/the_objective_reads_what_the_gate_watches.rs` replays it, so the list
-  is checkable rather than remembered. **This sentence has now been wrong
-  three times, and the third is why the counts above are not to be trusted from
-  memory either.** Until 2026-09-06 it said fixpoint rounds, expression visits and
+  is checkable rather than remembered. **This sentence has now been wrong FOUR
+  times, and the fourth was wrong on the day it was written.** It said THIRTEEN
+  pairs when the file held fourteen, in the same paragraph that tells you not
+  to trust a count here — and the pull request landing the split said fourteen
+  in its own body while this line said thirteen. Read the file:
+  `grep -vcE '^\s*(#|$)' bench/objective_sources.txt`. Until 2026-09-06 it said fixpoint rounds, expression visits and
   emitted lines, none of which the objective has weighed since the 2026-09-03
   rebuild, and a session spent a round expecting a 4.5% rise in emitted lines
   to cost welfare when the objective cannot see that vein at all. Until

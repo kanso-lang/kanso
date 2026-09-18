@@ -63,11 +63,101 @@
 # one is the change: the interpreted run is what this branch touches, and the
 # fixed-seed hashing is what it does. The objective does not weigh this vein.
 #
+# 2026-09-17, kanso#1468 on the tree merged with kanso#1462. CI reads
+# 2,178,796,919 against main's 2,178,559,085, a RISE of 237,834 -- 0.0109%.
+# LAYOUT, and the profile says so rather than the reasoning alone. `kanso run
+# --interp` returns from run_interpreted before codegen is reached
+# (src/main.rs, the early return on both the run and play paths), so nothing
+# this branch edits executes on this corpus. A callgrind profile of the
+# corpus on the branch carries exactly one codegen frame, an instantiated
+# prune_unnamed closure worth 284 instructions in the whole run; the other
+# 237,550 are the compiler's bytes moving under an interpreter that never
+# enters them. The objective does not weigh this vein.
+#
+# 2026-09-17, kanso#1478 as the one tip, on main 298636b7. CI reads
+# 2,182,341,803 against main's 2,178,559,085, a RISE of 3,782,718 -- 0.174%.
+# LAYOUT, and this one was measured rather than assumed, because 3.78 million
+# is sixteen times the largest move this vein had shown before.
+# #
+# THE ROW EXCLUDES THE FRONT END. The gate anchors at
+# `run_interpreted_on_stack`, the interpreter's own thread, so the 46.3
+# million `kanso::main` spends parsing and checking this corpus is not in the
+# number at all. A front-end change cannot move this row by working; it can
+# only move it by moving the binary.
+# #
+# BOTH SIDES REPRODUCED on the container under rustc 1.98.1: main
+# 2,178,694,946 and this head 2,182,308,031, a local delta of 3,613,085
+# against CI's 3,782,718. The delta is spread evenly over every frame of the
+# interpreter rather than sitting in one:
+# #
+#       eval           18,445,521,672 -> 18,479,680,323   +0.185%
+#       call           11,157,959,351 -> 11,181,808,771   +0.214%
+#       call_named     11,127,354,432 -> 11,151,189,142   +0.214%
+#       eval_tail       9,866,786,211 ->  9,888,320,078   +0.218%
+#       dispatch       10,516,297,101 -> 10,535,892,811   +0.186%
+#       run_main        2,178,075,324 ->  2,181,688,409   +0.166%
+# #
+# A uniform fifth of a per cent across the whole interpreter is what a moved
+# working set looks like; work concentrates in one frame and this does not.
+# The size of it is the size of the perturbation: this head carries five
+# source changes across src/codegen.rs, src/linear.rs and src/beat.rs, where
+# every earlier reading on this vein came from a single file. The objective
+# does not weigh this vein.
 # 2026-09-17, kanso#1482 on the tree merged with kanso#1462. CI reads
 # 2,178,502,266 against main's 2,178,559,085, a fall of 56,819 -- 0.0026%.
 # LAYOUT: `kanso run --interp` returns from run_interpreted before codegen,
 # so `FnEmit::write` never runs on this corpus. The size of the move is what
 # this vein's layout term looks like -- kanso#1468 moves it 237,834 the other
 # way in the same round from an edit in the same file.
-interp_instructions=2178502266
+#
+# 2026-09-17, merged with main. Both branches moved this row on their own
+# base, so the merged tree is reading neither number. The value below is
+# main's, carried forward so the gate has one value to fail against
+# rather than none; the merged sitting is CI's to take.
+#
+# 2026-09-17, kanso#1478 against main, CI's sitting. 2,178,502,266 ->
+# 2,182,337,099, a RISE of 3,834,833 (+0.176%). LAYOUT, by construction: this row
+# anchors at the interpreter's own thread, the front end is outside it, and every
+# change in this run of five is in the front end or the emitter. A move of this
+# size spread evenly over every frame is what a shifted working set looks like.
+# 2026-09-17, kanso#1478 on the tree merged with main 5e256ce0, CI's sitting.
+# 2,182,337,099 -> 2,182,307,043, a FALL of 30,056 (-0.0014%). This row is the
+# one that reaches codegen, so some of the fall is the split's own emitting and
+# some is layout; at 14 parts per million the two cannot be separated here and
+# nothing is claimed about which. A second count in the same job read
+# 2,182,307,043, so the binary is stable and the disagreement was with the
+# golden.
+#
+# 2026-09-18, kanso#1505. THE PRINTED LINE IS EXCLUDED FROM THIS ROW, and the
+# exclusion is named here per the 2026-09-15 rule. `interp_corpus` prints what
+# it decoded; LineWriter runs `core::slice::memchr::memrchr` over the formatted
+# bytes to find the last newline, and what that frame costs moves with the
+# binary's LAYOUT rather than with anything the interpreter does.
+#
+# kanso#1487 measured the term and took it off the module, entry and library
+# rows. It missed this one, and this row has drawn two faces ever since:
+# kanso#1486's two sittings read 2,182,526,878 and 2,182,526,865 -- thirteen
+# apart, on trees whose only difference was three goldens, a page and a log
+# entry. Thirteen is the same thirteen those three rows were drawing.
+#
+# The gate prints `interp_printed=` as a notice, so the figure that was taken
+# off is readable rather than only subtracted.
+#
+# THE VALUE BELOW IS MAIN'S AND ROUND ONE IS DELIBERATELY RED ON IT. Changing
+# what the row counts moves its absolute value, so no number measured before
+# this change is comparable with one measured after, and this container cannot
+# run the gate -- the golden was taken under rustc 1.98.1 and the box runs
+# 1.94.1. CI measures and its own reading replaces this line.
+#
+# 2026-09-18, kanso#1505, CI's sitting WITH THE LINE EXCLUDED.
+# 2,182,307,043 -> 2,182,303,844. The difference is 3,199 and it is not a
+# saving: it is the printed line's subtree, which this row stops counting.
+# Larger than the module row's ~825 because `interp_corpus` prints the
+# document it decoded rather than one summary line.
+#
+# NOTHING MEASURED BEFORE THIS CHANGE IS COMPARABLE WITH ANYTHING MEASURED
+# AFTER IT. The row counts a different thing now. What it buys is that the two
+# faces stop: the thirteen that kanso#1486 drew across two sittings lived in
+# this subtree, and it is no longer in the number.
+interp_instructions=2182303844
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

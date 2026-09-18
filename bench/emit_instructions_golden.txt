@@ -62,4 +62,17 @@
 # line, so the gate could not tell one host's number from another's and
 # refused to compare at all. The row above is the vein's first reading on a
 # runner and the line under it says which runner.
-emit_instructions=382212543
+# 2026-09-17, kanso#1478 on the tree merged with main 5e256ce0, CI's sitting.
+# 382,212,543 -> 60,197,743, a FALL of 322,014,800 -- 84.25%. WORK, and the
+# largest single move this vein has recorded. Five passes that answered a
+# whole-program question once per name answer it from an index now, and this
+# row counts exactly the phase where those passes run. A second count in the
+# same job read 60,197,743.
+#
+# The C toolchain did not move with it. `codegen_instructions_dev` and
+# `codegen_instructions_release` both passed unchanged in the same sitting, and
+# the dev gate's notice reads codegen_dev_kanso_excluded=85,091,397 against
+# main's 407,173,801 -- kanso's own process on the codegen corpus falls 79.1%
+# while clang and ld count the same to the instruction. That is the emitted IR
+# being byte-identical, measured rather than asserted.
+emit_instructions=60197743

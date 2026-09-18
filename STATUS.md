@@ -109,20 +109,60 @@ whole section before choosing what to build next, and chooses with
 discretion; a pull request on something else says which of these it weighed.
 The chat adds a row the day a ruling lands and removes it the day the build
 lands on main. Verified against the tree on 2026-09-09 by probing the
-compiler; the list is a floor, since the rest of the 2026-08-29 sitting was
-not audited. Swept again on 2026-09-14 against merged main: the effect-type
+compiler. The list has called itself a floor since that day because the
+2026-08-29 sitting had never been audited; the sweep recorded below audits
+that one sitting, and the phrase stays, because it is still true for the
+rest. Swept again on 2026-09-14 against merged main: the effect-type
 row came off, built and merged as kanso#1372, and the exhaustiveness row came
 off with kanso#1369. The book row came off with kanso#1412, which its own
-log entry calls the live remainder of that ruling. NO row stands as of
-2026-09-17 20:15Z, and that is the first time this section has been empty
-since it was created on 2026-09-09. The two welfares came off when kanso#1491
-landed the second half of the 2026-09-16 gavel; every item on its Owes list
-was probed against a build of main rather than read off a report. So cloud
-chooses freely: there is no ruled-and-unbuilt work a self-generated lead would
-be displacing, and the "which rulings did you weigh" paragraph a pull request
-body owes has, for now, an empty list to weigh against. That changes the day
-anything is ruled, and the chat adds the row that day. The build hole came off
-built as kanso#1447, the day after it was found twenty-three days off this
+log entry calls the live remainder of that ruling. The two welfares came off
+when kanso#1491 landed the second half of the 2026-09-16 gavel; every item on
+its Owes list was probed against a build of main rather than read off a
+report, and for about an hour on 2026-09-17 the section was empty for the
+first time since it was created. THREE rows stand as of 2026-09-17 21:35Z. The
+first came from the 2026-08-29 sweep: every one of the twenty rulings in that
+sitting was probed against a release build of `5e256ce0`, nineteen came back
+built or declined, and the twentieth is the first row below. The second is
+the 2026-09-15 normalization ruling, which is ironclad and which a counter
+minted a day later does not satisfy.
+
+**And the floor is still a floor, because August is not the log.** Counting the
+rulings takes two greps, because the log has written a ruling two ways, and
+this paragraph said 56 and thirty-five before either was run:
+
+```
+grep -hE "^## " design/compiler-log.md design/log/compiler-log-archive.md \
+  | grep -cE "— gavel[:,]"          # 50 on 2026-09-17: 29 August, 21 September
+  | grep -cE "GAVEL(ED)?[:,(]"      # 23 on 2026-09-17: 14 July, 6 undated, 3 August
+```
+
+No heading matches both, so the two partition **73** rulings. **August is 32
+and 29 of them are swept** — the three under the older spelling are the
+as-patterns ruling, equality refusing a self-naming value, and two definitions
+with one unfolding. **Two came back unbuilt**, and both are rows
+below. The **twenty-one** September rulings are the rest; thirteen of them were
+probed on the way past and are built — the whole-float rendering of 09-06 and
+the inf/nan words of 09-08, each with a golden carrying its citation, and the
+09-03 suffix contracts, whose own entry recorded them as unimplemented and
+which now refuse at the declaration with `error[naming]` on both halves, and
+the 09-08 `page_drift` fix, built as the first of the two shapes that gavel
+named and pinned by three specs, and the 09-06 consolidated run program,
+whose header writes down the mix the gavel required, and the 09-03
+exceptional-failure doctrine, whose anticipated outcome rides inside the box
+the later rulings apply and dispatches as data once opened, and both 09-05
+welfare gavels, where `--counters` carries no machine-code term and the
+compile golden carries exactly one value line, and the 09-10 rows-stay-unscored
+ruling, whose coverage boundary `site_smoke` pins, the 09-06 clang-19 bump
+with its feature detection, the 09-08 fixed compile corpus, and the 09-05
+corpus-first ruling, whose read loop sits inside the consolidated run
+program's own entry rather than on the shelf the gavel named, and the 09-03
+bimodal row, whose first named suspect is addressed by `paths.sort()` in the
+module loader — and **eight** are unread here. Thirteen probed and thirteen
+built or satisfied: September's yield is lower than August's, which is what a
+list that tracks recent rulings should look like. Two in 32 is not zero, so
+what is unread is a guess until somebody reads it. That is what "floor" means
+and why the word stays. The build hole came off built as kanso#1447, the day after
+it was found twenty-three days off this
 list; the compile row's normalization, ruled 2026-09-15, was built the same
 night (kanso#1439); and the explicit box came off the same afternoon it was
 probed part by part against a release build of main. It does not wait on
@@ -148,6 +188,123 @@ as a standing row and as one that had come off, in the same breath, and did not
 name the two welfares at all. This paragraph is the first thing cloud reads
 before choosing work, so a row miscounted here is a row chosen or skipped
 wrongly.
+
+### The cohort gavel's data-sized cycle (2026-08-29, narrowed 2026-09-16)
+
+The archive entry "block-born is the whole cohort", Clay: "okay whole cohort
+it is." Built on 2026-09-09 as kanso#1359 with all four shapes the gavel
+names. The build-hole gavel of 2026-09-16 took two of them back: a record an
+`if` chose and an element of a born list can no longer be written through,
+because a hole is filled exactly once and a name whose birth is `Either`
+cannot be shown to fill one. That reasoning is sound and this row does not
+ask for it to be undone.
+
+What the row asks for is the purpose the two shapes carried. The cohort
+gavel's words are "cyclic structures sized by data (a graph parsed from
+input, N linked nodes from a map) gain a spelling", and against a build of
+main there is no such spelling left: an indexed element cannot fill a hole, a
+field built with a value cannot be written at all, birth does not flow through
+a call, and N nodes cannot carry N names. The alias and the field of a born
+node stay built and are not part of this row.
+
+Route, and the reason this is a build rather than a question: the 2026-09-09
+entry names birth through a call as the next widening of this analysis and
+claims it as the implementer's. A call that returns one record may resolve to
+one birth, which would give the fill its uniqueness back. That is a thing to
+measure before it is a thing to build on, and if the measurement says no, the
+finding goes to the ledger as a question about what the cohort gavel's
+purpose is owed instead.
+
+Owes: a measurement of whether birth through a call resolves to one birth;
+if it does, the widening and a micro golden building a cycle over a
+data-sized list; if it does not, a ledger entry stating what the gavel's
+purpose needs. Either way the golden's header stops claiming four shapes
+while the checker admits two.
+
+### A welfare counter reads three parts per billion (2026-09-15)
+
+Clay's words, on the compile row's `/proc/self/maps` parse: "you want to set
+up the run so that any external State like this is normalized. you clear it
+out so it's identical every single run or you do something that puts it into
+a persistent known initial state." Ironclad, and recorded in CLAUDE.md as
+superseding the kanso#1234 argument rather than reopening it.
+
+`interp_instructions` landed a day later in kanso#1491 and does not satisfy
+it. Two CI jobs read 2,178,502,266 and 2,178,502,272, each stable across the
+gate's own second reading.
+
+**Read kanso#1492 before this row.** Its log entry "seven silicons, one
+recorded block, and a reader that was never called" and `docs/compiler.html`
+§77 built the instrument this row was guessing at: the gates printed a CPU
+family and model and stopped, and the reader for the whole 123-row feature
+block had nothing recorded to compare against. Across ninety-odd job logs
+there are seven distinct blocks differing in 57 rows. On these two jobs the
+block is identical, all 123 rows, so the silicon is out.
+
+Cloud's candidate, left as cloud left it — an argument, not a measurement:
+six in 2,178,502,266 is three parts per billion, and the interpreted run is
+the allocation-heavy workload at 5,313,434 allocations against a compile's
+27,397, so a term proportional to work fits where a constant does not, and
+where the allocator's heap starts moves with the size of the file the loader
+mapped.
+
+What this row adds is a correction to itself. The other ten counters in the
+same two jobs agree to the instruction, and that was written here as the nine
+sharing the binary not sharing the exposure. It is not evidence of that: the
+other instruction rows run from 4.8 million to 128 million, where three parts
+per billion is a fraction of one instruction, so none of them could have
+shown this either way.
+
+Owes: measure cloud's candidate, or replace it. And one small thing that is
+not blocked on it — `interp_instructions.sh` prints `.text`, `.data` and
+`.bss`, where `compile_instructions.sh`, which the interp gate's own header
+sends the reader to, prints `.rodata` too, with a seven-binary calibration in
+its header for why. One awk alternation, and the next occurrence starts with
+the section the compile gate already watches. Checked against kanso#1492
+rather than assumed: it added twenty-two lines to that gate wiring in the
+silicon comparison and left the section line reading `text|data|bss`.
+
+If the reading cannot be made to repeat between machines, the question that
+follows is whether an exact pin is the right instrument for a counter whose
+artifact and host both move under it. That one is Clay's, and this row does
+not decide it in advance.
+
+### A demanded knot counts on one engine only (2026-08-24)
+
+The archive entry "a demanded knot counts, and the oracle moves", Clay: "it
+seems so obvious." The day before, 2026-08-23 had found it and sent it to the
+ledger in these words: *the DEMANDED knot still disagrees. Native reports
+`thunk_allocs=1` where the oracle reports `0`, because the oracle's `knotted`
+builds its cell without touching the counter.* The gavel names which side
+moves — the oracle — and calls it bookkeeping with no semantic change
+anywhere.
+
+Measured on a release build of main, 2026-09-17, by flipping the arm of the
+mem vein's undemanded fixture so the knot is read and running it through an
+importing entry on both engines:
+
+    thunk_allocs   native 1   oracle 0
+    thunk_forces   native 1   oracle 1
+    thunk_evals    native 1   oracle 1
+    stdout         native 1   oracle 1
+
+Both demand it, both agree it was forced and evaluated, and one counter
+disagrees, in the direction the ruling ruled against.
+
+Nothing in the tree compares the two. `tests/golden.rs:194` runs the mem vein
+with no `--interp`, so every `.mem` file is one engine's reading, and no
+`*_differential` script mentions `KANSO_COUNTERS` or `thunk_allocs`. The
+comment four lines above that loop says what was meant to close it, still in
+the future tense: *the lazy fragment will extend these with engine-shared
+semantic counters (forces, evaluations, cells live at exit) asserted on both
+engines.*
+
+Owes: the oracle's `knotted` touching the counter, per the ruling; the fixture
+the 2026-08-24 entry itself named as unblocked and nobody wrote, pinning a
+demanded knot's allocation shape; and a decision about the wider hole, since
+one engine's `.mem` reading cannot catch a divergence by construction. The
+differential law says engines agree or one refuses out loud, and a counter
+nothing compares is outside it.
 
 ## In flight
 
