@@ -2853,3 +2853,33 @@ that compares the written list against a scan of DECLARES itself; the other
 two, which check sortedness and non-emptiness, stay green on that edit, which
 is what makes the first one the load-bearing assertion. Restored: all three
 green.
+## 2026-09-18 — kanso#1510's rows re-measured after kanso#1509, and the release row read the golden exactly
+
+kanso#1509 landed under this branch, so all six compile-side goldens were
+carried forward at main's values and the round measured the merged tree. CI's
+sitting, second reading matching the first to the instruction on all four rows
+that take one:
+
+    startup_instructions     3,933,223 ->     3,364,974  -568,249  (-14.4474%)
+    emit_instructions       52,115,454 ->    51,554,407  -561,047   (-1.0765%)
+    compile_instructions    35,441,774 ->    35,445,148    +3,374   (+0.0095%)
+    entry_instructions     126,350,802 ->   126,358,241    +7,439   (+0.0059%)
+    library_instructions   126,806,203 ->   126,813,486    +7,283   (+0.0057%)
+    interp_instructions  2,182,576,109 -> 2,182,620,735   +44,626   (+0.0020%)
+
+The two falls are what this branch is for: precomputing the DECLARES symbol
+set takes about 565,000 instructions out of both routes that run the
+derivation, and the two figures land within 7,202 of each other. The four
+rises are layout — the derivation runs before `kanso check` reaches its work
+and before the interpreted run reaches its own, so the saving is outside
+those routes and what moved in them is where the code sits. Every one of the
+four is under a hundredth of a per cent.
+
+**And the release-codegen row read 6,822,651,561 — the golden, exactly.** The
+previous head of this branch was red on that row alone, at +11, with the same
+job's second reading landing on the golden. This round agrees with the golden
+on both readings. So the +11 is intermittent and is not this branch's: a PR
+that changes only `src/codegen.rs` does not move a row twice and then stop.
+kanso#1512 isolates a real dependence of that row on un-normalized state — the
+prior contents of the output path, worth 2,354 — and says plainly that it does
+not explain this 11, which stays open.

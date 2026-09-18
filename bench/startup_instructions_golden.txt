@@ -324,4 +324,9 @@
 # 2026-09-18, re-merged onto main after kanso#1509. THE VALUE BELOW IS MAIN'S,
 # carried forward: kanso#1509 moved this row on its own and what this branch
 # adds on top of it has not been measured, so the merged reading is CI's.
-startup_instructions=3933223
+#
+# 2026-09-18, kanso#1510 (kanso#1484 rebuilt) on the tree merged with main
+# after kanso#1509, CI's sitting. 3,933,223 -> 3,364,974, a FALL of
+# 568,249 (-14.4474%). This is a route the removed derivation runs, and the saving lands here.
+# The second reading in the same job matched the first to the instruction.
+startup_instructions=3364974
