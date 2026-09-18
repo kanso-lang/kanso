@@ -2632,6 +2632,12 @@ error[name]: unknown name `builders/run`
 
 <p>every clang process byte-identical each time, the whole difference inside the linker, and all of it in one frame: the bucket probe of llvm&#39;s string map during the link-time-optimised link. three different probe counts and the same eleven. one of those three was the branch that carries this correction, which cannot touch codegen by construction.</p>
 
+<p><strong>and the cause was already known when that correction was written, which is the part worth publishing.</strong> the branch that fixes this had measured it: twenty-two object names, one binary, one corpus, every other input held and the output path absent each time. twenty read 5,163,341,031 and two of them &#8212; <code>4b8c1a</code> and <code>fedcba</code> &#8212; read 5,163,341,042. eleven apart, deterministic per name, about one name in eleven. clang writes its link-time object to a path with fresh hex every run, the linker&#39;s plugin puts that path in a string map, and how far the bucket probe walks depends on the string.</p>
+
+<p>so the frame is the probe, the residue is always eleven because there are two buckets, and a job draws when its two readings fall on opposite sides &#8212; twice one in eleven times ten in eleven, about one job in six. all three of those were treated as open puzzles for an evening and every one of them is a consequence. the fix pins the name, and what is left to settle is only which of the two tiers the pin covers.</p>
+
+<p>the log's own rule covers how this went wrong twice. a report that something is absent is worth what the search for it being present was worth: the first round ruled names out on three samples, then five, of a one-in-eleven effect, and the second read a number that agreed with the experiment and called it a rival explanation.</p>
+
 <p>the correction is appended to the header as a dated entry rather than written over the old one. what that sentence recorded was true of the readings it had; what is wrong is the general claim a later reader takes from it, and the difference between those two is the whole reason the log works the way it does.</p>
 
 <p>a fourth job reproduced, and so did a second run of the first branch on the same commit. one branch on both sides of that list is what settles the draw as a property of the job rather than of any diff.</p>

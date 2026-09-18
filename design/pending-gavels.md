@@ -256,6 +256,52 @@ already excludes this process, while `compile_instructions`, `entry_instructions
 and `library_instructions` all count it and have been reproducing to the
 instruction, which is the first thing any test of this has to explain.
 
+**EVERYTHING ABOVE FROM "THE MECHANISM, FOUND 2026-09-18" ONWARD WAS A FOURTH
+ROUND ON A QUESTION kanso#1513 HAD ALREADY CLOSED, AND THIS CORRECTS IT.**
+
+kanso#1513's own log entry carries the experiment. Twenty-two names, one
+binary, one corpus, every other input held and the output path absent each
+time:
+
+    twenty names          5,163,341,031
+    `4b8c1a`, `fedcba`    5,163,341,042
+
+Eleven apart, DETERMINISTIC PER NAME — `4b8c1a` was run four times and read the
+high value every time — and about one name in eleven. **The eleven is the
+temporary object's name.** kanso#1512's premise, which this entry cites at the
+top, stands.
+
+**The paragraph above saying that premise "may no longer hold" is wrong, and
+here is the error.** It reasoned that the golden's header re-explains
+5,163,341,031 as its own reading with the output path ABSENT, so the figure
+belongs to the path rather than to names. But the twenty-two-name experiment
+was run with the output path absent as well, and 5,163,341,031 is what twenty
+of its twenty-two names read. Same configuration, same number: the header's
+reading is the LOW BUCKET, not a competing explanation. Two things agreeing is
+not two things disagreeing.
+
+**And the frame, the constancy and the rate are all predicted by it rather than
+puzzles beside it.** `LookupBucketFor` is where a `StringMap` probe walks, and
+the name is the string. A two-bucket per-name effect gives a residue that is
+ALWAYS eleven, which is what "a candidate has to explain a constant" was
+reaching for. A job draws when its two readings straddle the buckets, which at
+one name in eleven is about 2 × (1/11) × (10/11), near 17% — the same order as
+the handful of draws counted on 2026-09-18, on a sample far too small to
+separate.
+
+**kanso#1513's entry warned about exactly this, in these words:** "Three rounds
+were spent on it, and one was spent asserting the name was not the cause. That
+assertion rested on three samples, then five, of a one-in-eleven effect." The
+material above is a fourth round, and it reached this ledger and main. Its
+salvage is the per-frame diff the gate now prints and the replication table,
+which are evidence FOR the name rather than against it.
+
+**WHAT IS ACTUALLY LEFT TO DECIDE, with the mechanism settled.** Only which
+tier the pin covers. The dev row's separate movement is unexplained and the
+flag does not reach `dev_clang`, which is the argument for 2 that stands on its
+own. The eight re-based rows are common to both options, since the pin is a
+change to `src/main.rs` either way.
+
 **Recommendation: 2.** The measurement is the release tier's — that is where the
 name was shown to move the count, three times. The dev row's move is real but
 unexplained, and option 1 would bank it as though it were understood. 3 keeps a

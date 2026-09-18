@@ -4562,6 +4562,51 @@ header, where the next reader would have taken it for both rows.
 
 ---
 
+## 2026-09-18 — a fourth round asserting the name was not the cause, and it was
+
+**A CORRECTION, and the thing corrected is this session's own work from this
+evening.** kanso#1513's entry established the mechanism: twenty-two names, one
+binary, one corpus, every other input held and the output path absent each
+time, twenty reading 5,163,341,031 and two reading 5,163,341,042. Eleven apart,
+deterministic per name, about one name in eleven. The eleven is the temporary
+object's name.
+
+That entry also wrote down the hazard, in these words: "Three rounds were spent
+on it, and one was spent asserting the name was not the cause. That assertion
+rested on three samples, then five, of a one-in-eleven effect."
+
+**This evening spent a fourth.** Working from the golden's header rather than
+from that entry, the ledger gained a section saying the cause was open, a
+section offering a "limit on the evidence that rules names out", and a section
+saying kanso#1512's premise "may no longer hold". All of it landed on main in
+kanso#1537.
+
+**THE SPECIFIC ERROR.** The header re-explains 5,163,341,031 as its own reading
+with the output path ABSENT, and that was read as the figure belonging to the
+path instead of to names. But the twenty-two-name experiment was run with the
+output path absent too, and 5,163,341,031 is what twenty of its twenty-two
+names read. Same configuration, same number. The header's reading is the low
+bucket. Two measurements agreeing was mistaken for two explanations competing.
+
+**AND THE THREE FINDINGS THAT FELT LIKE PROGRESS ARE PREDICTIONS OF THE
+MECHANISM.** `LookupBucketFor` is where a `StringMap` probe walks, and the name
+is the string it walks for. A two-bucket per-name effect gives a residue that
+is always eleven, which is what "a candidate has to explain a constant" was
+groping toward. And a job draws when its two readings straddle the buckets:
+2 × (1/11) × (10/11), about 17%, the same order as the day's handful.
+
+The per-frame diff and the replication table are worth keeping. They are
+evidence FOR the name and were read as evidence that the cause was unknown.
+
+**WHY IT HAPPENED, since the rule it breaks is already in CLAUDE.md twice.**
+The header of a golden and the log entry of the branch that fixes the thing are
+two sources, and only one of them was read. The entry was one `awk` away in a
+worktree already checked out. "Read the thing the number describes before
+running anything against it" is the rule, and a branch's own log entry is part
+of the thing.
+
+---
+
 ## 2026-09-18 — the object gets a name the run chooses, and the eleven has nowhere left to live
 
 kanso#1512 closed the mechanism and said the fix belonged in a round of its
