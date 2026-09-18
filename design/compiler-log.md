@@ -4126,3 +4126,41 @@ Against main before any of the interpreter work, the row has now fallen
 The whole golden corpus passes, which is the assertion that matters: a capacity
 is not observable, so an output difference would have meant the change was not
 what it looked like.
+
+### where the copying went, and one refinement measured and declined
+
+The sized clone did more than take 94,998,647 off the row. It took `memcpy` off
+the top of the profile:
+
+    __memcpy_avx_unaligned_erms   162,103,398 (11.27%) -> 32,012,270 (2.38%)
+    __rustc::__rust_realloc        67,362,609 of memcpy ->    770,336 self
+
+Both halves of the memcpy story went at once, and the reason is that they were
+one story: `taken`'s clone allocated exactly, `push` reallocated, and the pair
+copied the same bytes twice. Removing the second copy removes the realloc that
+performed it.
+
+What is left of the copying is inside `taken_to_grow` itself, 44,816,580 (3.33%)
+of self cost, where `out.extend(shared.iter().cloned())` walks the elements.
+
+**AND THE OBVIOUS REFINEMENT IS WRONG, which is why it was measured.** A bulk
+`extend_from_slice` looks strictly better than an element-wise clone, and for
+`Vec<u8>` it should reduce to a `memcpy`. Built and run:
+
+    extend(shared.iter().cloned())   1,297,297,477
+    extend_from_slice(&shared)       1,323,762,604    +26,465,127
+
+**26,465,127 WORSE.** Declined. The reasoning that recommended it — a bulk copy
+beats a loop — is sound about bytes and says nothing about `Vec<Value>`, which
+is the vector this helper is mostly handed and whose elements are not `Copy`.
+Whatever the two spellings compile to for that case, the iterator one is better
+here by two per cent of the whole run, and the guess was worth exactly what a
+guess is worth.
+
+THE NEXT LEAD IS SMALLER THAN IT WAS, and the note that sized it needs saying
+again with this in it. `taken`'s copy-when-shared was 65,960,854 of memcpy over
+35,640 calls when the linearity lead was priced at about 59 million. That
+population is what this change just made cheap. Anything built on
+`linear::in_place_pushes` now competes with a copy that already costs far less,
+so the lead must be re-measured against this binary before it is built, not
+taken from the earlier figure.
