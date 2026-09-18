@@ -4277,3 +4277,107 @@ earlier four is that they were not evidence of a law.
 
 The floor is banked after these rows. The run side is unchanged — this branch
 touches the interpreter only.
+
+## 2026-09-18 — birth through a call, measured, and it is not what the cohort gavel's purpose is waiting on
+
+STATUS.md's cohort row has owed one measurement since 2026-09-16: whether a
+call that returns one record resolves to one birth. The 2026-09-09 entry named
+that widening as the next one and left it to the implementer. This is the
+measurement, taken by running programs rather than by reading the analysis.
+
+The analysis first, because it says what to expect. `born_of` in `src/check.rs`
+handles `Expr::App` with an identifier head in three ways: `if` takes both arms
+and joins them, a field getter takes the base's field, and anything else does
+`let decl = *types.get(name.as_str())?`. That `?` is the whole answer for a
+function call — `types` holds type declarations, a function name is not in it,
+and the call resolves to nothing. The comment above it says so: *a call that
+merely returns a record may hand back something older.*
+
+Five programs, each run through `kanso play` on a release build of
+`30fb1abe`. What each one is refused for is the finding, and the five refusals
+are not the same refusal.
+
+**One. A hole cannot be written outside a build block.**
+
+    fn fresh id
+      node id _
+
+    error[build]: `_` is a hole for a field a `build` block fills; it stands
+    only where a construction's argument goes, inside one
+
+**Two. A call that returns a record is not block-born.** This is the case the
+row's route is about, and it is the only one of the five that widening
+`born_of` would fix.
+
+    fn fresh id
+      node id []
+    build
+      a = fresh "a"
+      a.peers = [b]
+
+    error[build]: `a.peers = ...` writes only block-born values: `a` is not a
+    construction made in this `build` block, so it stays immutable
+
+**Three. A hole cannot escape the block it was written in.**
+
+    fn fresh id
+      build
+        n = node id _
+      n
+
+    error[build]: `_` in `node`'s `peers` is never filled: a hole is filled
+    exactly once before the block freezes
+
+**Four. A lambda lexically inside a build block is outside it for this
+purpose**, which is the shape "N nodes from a list" actually takes.
+
+    build
+      ns = list/to_list (list/map [1 2 3] (i -> node "{i}" _))
+
+    error[build]: `_` is a hole for a field a `build` block fills; it stands
+    only where a construction's argument goes, inside one
+
+**Five. A fill's target parses as a bare name**, so N nodes need N names before
+any analysis gets a say.
+
+    build
+      ns[0].peers = [b]
+
+    error[syntax]: expected a parameter pattern
+
+And the control, so the five refusals are refusals of something rather than of
+everything: two nodes named by hand, filled, and collected into a list runs and
+prints the cycle.
+
+So the answer to the row's question is that birth through a call does not
+resolve today, and that widening it is real and separable work — it fixes the
+second of these and nothing else. What it does not do is reach the gavel's
+purpose. "Cyclic structures sized by data" needs a hole to survive either a
+call or a lambda, and one and three close those two directions with different
+rules, and five closes the indexed route in the grammar before the checker is
+consulted.
+
+That is the branch the row named: the measurement says no, so what the purpose
+needs goes to the ledger as a question about the spelling rather than a build
+anybody can start.
+
+### And `build_cycle.kso` now says what it pins
+
+That fixture had no header. The row's Owes said the golden's header should
+stop claiming four shapes while the checker admits two, and a repo-wide search
+finds that claim in `design/compiler-log.md` and
+`design/memory-frontier-research.md`, both about the memory frontier's shapes,
+and in no golden header anywhere. There was no claim to correct; there was a
+file saying nothing. It now carries what it pins, which two shapes the
+build-hole gavel took back, and the sentence that two names is the largest
+cycle the language admits rather than a choice the fixture made.
+
+Writing it cost a round, for the second time today and for a second reason.
+The header's eleventh line ran to 82 characters and the run stopped with
+`error[formatting]: a line holds at most 80 characters`, stdout empty, which is
+what the mem corpus reported: a stdout mismatch against the golden with an
+empty left side. This morning's fixture failed the same way on a blank line
+between its comment block and the first declaration. Both are the grammar
+refusing the file before a line of it runs, and both look from the test's
+verdict exactly like the change under test being broken. The message says
+which; the verdict cannot.
