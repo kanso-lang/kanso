@@ -63,6 +63,17 @@ struct Analysis<'a> {
     returns_unique: HashSet<(String, usize)>,
     /// The spellings that resolve to std/list's `fold` in this program.
     folds: HashSet<String>,
+    /// Every declaration of a group, by name and arity, collected in one walk.
+    ///
+    /// `group` used to answer this by scanning `program.fns` end to end and
+    /// collecting the matches into a fresh `Vec`, and the fixpoint asks it once
+    /// per parameter and once per group on every round. That is a question
+    /// about the whole program asked once per name, the shape kanso#1464,
+    /// kanso#1468 and kanso#1473 each removed from somewhere else, and it was
+    /// the largest single item left in `kanso build bench/runbench`: 151.8
+    /// million instructions, 17.6% of the build, almost all of it in the
+    /// collect.
+    groups: crate::hash::Map<&'a str, Vec<&'a FnDecl>>,
     /// Every name the program mentions as a VALUE rather than calls, read off
     /// the program in one walk instead of once per question.
     mentions: Mentions<'a>,
@@ -172,9 +183,19 @@ impl<'a> Analysis<'a> {
         let types: HashSet<String> = program.types.iter().map(|t| t.name.clone()).collect();
         let folds = fold_spellings(program);
         let mentions = Mentions::of(program);
+        // Keyed by NAME alone, not by (name, arity). A tuple key would have to
+        // be built from a `&'a str` at every lookup, and the names the fixpoint
+        // holds are borrowed from its own sets rather than from the program;
+        // a `&str` key borrows as `str` and takes them as they are. Arity is
+        // filtered off the result, which is one to three declarations.
+        let mut groups: crate::hash::Map<&'a str, Vec<&'a FnDecl>> = crate::hash::Map::default();
+        for decl in program.fns.iter() {
+            groups.entry(decl.name.as_str()).or_default().push(decl);
+        }
         let mut a = Analysis {
             program,
             types,
+            groups,
             linear_params: HashSet::default(),
             returns_unique: HashSet::default(),
             folds,
@@ -207,7 +228,7 @@ impl<'a> Analysis<'a> {
                 .returns_unique
                 .iter()
                 .filter(|(name, arity)| {
-                    !self.group(name, *arity).iter().all(
+                    !self.group(name, *arity).all(
                         |d| matches!(d.body.last(), Some(Stmt::Expr(e)) if self.unique_list(e, d)),
                     )
                 })
@@ -223,8 +244,16 @@ impl<'a> Analysis<'a> {
         }
     }
 
-    fn group(&self, name: &str, arity: usize) -> Vec<&'a FnDecl> {
-        self.program.fns.iter().filter(|d| d.name == name && d.params.len() == arity).collect()
+    /// A group's declarations, read out of the index rather than scanned for.
+    /// The empty slice stands for a name nothing declares, which is what the
+    /// scan answered for one too.
+    fn group<'s>(&'s self, name: &str, arity: usize) -> impl Iterator<Item = &'a FnDecl> + 's {
+        self.groups
+            .get(name)
+            .map_or(&[][..], |v| v.as_slice())
+            .iter()
+            .copied()
+            .filter(move |d| d.params.len() == arity)
     }
 
     fn param_is_linear(&self, name: &str, arity: usize, i: usize) -> bool {
@@ -1421,5 +1450,79 @@ mod tests {
     fn the_value_mention_index_agrees_with_the_walk_it_replaced() {
         agrees_on("lib/json");
         agrees_on("bench/compile_corpus");
+    }
+}
+
+#[cfg(test)]
+mod the_group_index_answers_what_the_scan_answered {
+    use super::*;
+
+    /// What `group` did before the index existed, kept as the oracle.
+    fn scanned<'a>(program: &'a Program, name: &str, arity: usize) -> Vec<&'a FnDecl> {
+        program.fns.iter().filter(|d| d.name == name && d.params.len() == arity).collect()
+    }
+
+    /// Every question the fixpoint can ask, asked both ways.
+    ///
+    /// The names are the program's own, and the arities are every arity any
+    /// declaration has -- not just each name's own -- because the index is
+    /// keyed by NAME and filters arity off the result, so a name declared at
+    /// two arities is exactly where a wrong filter shows up. A name nothing
+    /// declares is asked too: the scan answered the empty vector for one and
+    /// so must the index.
+    fn agrees_over(program: &Program) {
+        let mut arities: Vec<usize> = program.fns.iter().map(|d| d.params.len()).collect();
+        arities.sort_unstable();
+        arities.dedup();
+        let a = Analysis::new(program);
+        let mut names: Vec<&str> = program.fns.iter().map(|d| d.name.as_str()).collect();
+        names.push("a name nothing declares");
+        for name in names {
+            for &arity in arities.iter().chain(std::iter::once(&99)) {
+                let want = scanned(program, name, arity);
+                let got: Vec<&FnDecl> = a.group(name, arity).collect();
+                assert_eq!(
+                    want.len(),
+                    got.len(),
+                    "`{name}` at arity {arity}: the scan found {} declarations and the index \
+                     found {}",
+                    want.len(),
+                    got.len()
+                );
+                for (w, g) in want.iter().zip(got.iter()) {
+                    assert!(
+                        std::ptr::eq(*w, *g),
+                        "`{name}` at arity {arity}: the index answered a different declaration, \
+                         or the same ones in a different order -- the fixpoint reads them in \
+                         order and `param_is_linear` stops at the first arm that disproves, so \
+                         order is part of the answer"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn over_the_library_the_compiler_carries() {
+        // lib/json is the largest program the compiler always has to hand, and
+        // it declares names at more than one arity, which is the case a
+        // name-keyed index has to get right.
+        let program =
+            crate::compile_module(std::path::Path::new("lib/json"), false).expect("lib/json");
+        agrees_over(&program);
+    }
+
+    #[test]
+    fn over_a_name_declared_at_two_arities() {
+        // The shape the index is keyed against, written small: one name at two
+        // arities, and a second name that shares neither.
+        let src = concat!(
+            "fn f x\n  x\n\n",
+            "fn f x y\n  x + y\n\n",
+            "fn g x\n  x\n\n",
+            "main = print \"{f 1} {f 1 2} {g 3}\"\n"
+        );
+        let program = crate::compile("test.kso", src, false).expect("the fixture compiles");
+        agrees_over(&program);
     }
 }

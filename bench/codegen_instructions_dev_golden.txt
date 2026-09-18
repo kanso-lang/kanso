@@ -60,4 +60,23 @@
 # #
 # The container's placeholder read 1,003,426,243, which was the pre-exclusion
 # shape and is not comparable to this.
-codegen_instructions_dev=596161187
+# 2026-09-17, kanso#1493 on the tree merged with main 5e256ce0, CI's sitting.
+# 596,161,187 -> 596,161,166, a FALL of 21 -- 35 parts per billion. This row
+# excludes kanso's own process and counts the C toolchain, so twenty-one
+# instructions is clang and ld landing marginally differently on IR they
+# compiled the same way. A second count in the same job read 596,161,166.
+#
+# kanso's own process, which the row excludes and the gate prints as a notice,
+# is where this branch shows: codegen_dev_kanso_excluded=406,043,465 against
+# main's 407,173,801, a fall of 1,130,336. A build pays the same start-up a
+# run does.
+#
+# 2026-09-18, kanso#1507 on the tree merged with main, CI's sitting. 596,161,166 ->
+# 596,159,774, a FALL of 1,392 (-0.00023%). LAYOUT. This branch adds a
+# `match std::env::var("KANSO_LTO_JOBS")` to `release_clang` in src/main.rs and
+# `KANSO_LTO_JOBS=1` to three `env -i` lines in a gate script. src/main.rs is
+# the compiler, so its bytes and the layout under them move, and every row that
+# runs the compiler moves with them. Seven rows moved here and all seven are
+# under five ten-thousandths of a per cent, with mixed signs -- which is what a
+# shifted binary looks like and not what work looks like.
+codegen_instructions_dev=596159774

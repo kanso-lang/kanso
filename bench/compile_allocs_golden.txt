@@ -465,4 +465,16 @@
 # inside a comment block becomes a line the output does not carry, and the
 # gate fails on a row that agrees. It did, on this file, on kanso#1465's
 # round two.
-compile_allocs=27397
+#
+# 2026-09-17, merged with main 2a0cec7c. The value below is MAIN'S, carried
+# forward. This branch measured 27,313 against a base that kanso#1478 and
+# kanso#1493 have both moved since, and this host cannot compare the row --
+# the golden was measured under rustc 1.98.1 and the container runs 1.94.1.
+# Carrying main's forward makes CI's diff read exactly what this branch does
+# to today's main. The merged sitting is CI's to take.
+#
+# 2026-09-17, kanso#1486 on the tree merged with main 2a0cec7c, CI's sitting.
+# compile_allocs 27,397 -> 27,313, a FALL of 84 (-0.3066%).
+# The alias canonicaliser's fixpoint ran twice over a program nothing had
+# rewritten between the rounds. 84 allocations is what the second round cost.
+compile_allocs=27313

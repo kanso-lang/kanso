@@ -320,6 +320,20 @@ run or you do something that puts it into a persistent known initial state.*
 The gate already pins ten `GLIBC_TUNABLES` for exactly this reason; where the
 heap begins is the one it does not pin.
 
+*And a second thread arrived at the same instrument, from the other end.*
+kanso#1492's entry "seven silicons, one recorded block, and a reader that was
+never called" chases six instructions on `interp_instructions` — 2,178,502,266
+against 2,178,502,272 across two CI jobs at one source. It built a reader for
+the whole 123-row CPU feature block and ruled the silicon out: identical on
+both jobs. Its live candidate is stated as an argument rather than a
+measurement, and it is this entry's mechanism in different words — the
+interpreted run is the allocation-heavy workload, 5,313,434 allocations
+against a compile's 27,397, and *where the allocator's heap starts moves with
+the size of the file the loader mapped*. So a fixed heap start is the
+instrument two independent chases now want, on two different veins. Whichever
+one measures it first answers the other, and that raises what the reading
+below is worth without changing what it is.
+
 *What this entry needs before it is ruled, and it is cheap.* One reading of
 kanso#1480's own commit pair with the heap start fixed. If the 146,628 dies
 under a fixed heap start, the instrument is chosen and the ruling is a
@@ -328,6 +342,47 @@ entry is not where it belongs. Either way the frame-level diff of the two
 compile profiles names it, and kanso#1492 says CI uploads both as artifacts on
 every run. A build and two callgrind runs, and cloud's. Nothing here should be
 ruled without it.
+
+### Raising escapebench's size, so it pins the bracket's benefit and not only its cost
+
+**Cited:** the archive entry of 2026-09-05, "the clean run in front of the
+first escape, declined four ways", whose closing paragraph measures this and
+says *whether to raise its size is Clay's*. Found on 2026-09-17 by cloud's
+reach fix for `tests/a_question_sent_to_clay_has_a_ledger_entry.rs`, which
+reads the archive as well as the live log and went red on three sends; the
+other two were answered in the log the same day and this is the one with
+nowhere to land. Searched this ledger, the live log and the archive for
+`escapebench`, `27.6%` and the bracket by name: that paragraph is the only
+place the question is asked, and it has never been asked here.
+
+**The question.** escapebench is small enough that the escape bracket's cost
+falls inside it on every run while its benefit falls outside. The entry's
+measurement: at the third block the growing accumulator's superseded buffers
+exceed a block and the rewind is the only thing holding the peak down, so a
+change DELETING the bracket would read as a **27.6% win with every memory
+counter flat**. A benchmark that prices a mechanism's cost and none of its
+benefit reports a deletion as an improvement, which is the failure the corpus
+README exists to prevent, one level in.
+
+**The price of fixing it, which is why this is Clay's and not the
+implementer's.** `escape_instructions` is a welfare term. A bigger escapebench
+is a slower job on every run forever, and it moves a weighted counter, so the
+baseline moves with it and the history's rows before the change are not
+comparable across the boundary. That is a cost paid by the whole project
+against a failure mode nobody has actually triggered.
+
+**Recommendation: raise it, and take the baseline move.** The 2026-09-05
+corpus-first ruling already settled the principle for this exact shape — *"the
+corpus is blind" is never a reason to lower the floor; it is a corpus defect,
+and the remedy is to add the benchmark the objective could not see, baseline
+it forward, and let the fix score.* A benchmark that would score a deletion as
+a win is the same defect seen from the other side, and the same remedy applies:
+size it so the bracket's benefit is inside, re-baseline that term in the same
+change, and say in the log which way it went.
+
+The alternative is to leave it and rely on a reader noticing, which is what
+this entry is evidence does not happen — the measurement sat in the archive
+for twelve days and surfaced only because a spec learned to read that file.
 
 ## Stale — the July campaign's unclosed letters (GAVELS.md, retired here)
 
