@@ -3800,11 +3800,11 @@ cannot be stored in a field of `self`. Making them shared was the lifetime's
 price and the tail hop's saving: a refcount bump where there was a vector copy.
 The 174,996 is that.
 
-**The profile said 49.5 million and the change bought 33.2.** The difference is
-the memory's own probe, which replaces the two it removes rather than removing
-both: three sites that each did two probes now each do one. The prediction was
-the ceiling, not the estimate, and it is worth writing the gap down rather than
-rounding it away.
+**The profile said 49.5 million and the change bought 33.2.** The 49.5 is what
+the removed frames cost; the change also ADDS a probe at each of the three
+sites, so the prediction was a ceiling rather than an estimate. What the
+remaining 16.3 million is made of — the new probes, the layout the edit moved,
+or both — is not separated here, and nothing below rests on it.
 
 Start-up does not pay for the `Rc` per group. `kanso play` on the start-up
 corpus reads 3,399,666 before and 3,384,980 after, a fall of 14,686 — and that

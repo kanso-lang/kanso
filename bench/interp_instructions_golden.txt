@@ -286,8 +286,9 @@
 # types map, the function map -- and `group_of` inside `eval_tail` probed both
 # maps to decide one bit about every `FnRef` callee. Neither map changes during
 # a run, so both read one memory now. The profile put those frames at
-# 49,549,566; the measured fall is 33,238,900, the difference being the probe
-# that replaces them.
+# 49,549,566 and the measured fall is 33,238,900: the change adds a probe at
+# each site as well as removing two, so the profile's figure was a ceiling.
+# What the remaining 16,310,666 is made of is not separated here.
 #
 # START-UP DOES NOT PAY FOR IT. The function groups became `Rc<Vec<..>>` so the
 # memory can hold one without borrowing from `self`, which is an allocation per
