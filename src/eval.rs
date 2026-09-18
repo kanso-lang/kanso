@@ -1119,6 +1119,16 @@ pub struct Interp<'a> {
     /// the constant is still being computed gets the unforced cell, which is
     /// how a value that names itself gets a value at all.
     knots: RefCell<Map<String, Rc<RefCell<ThunkState>>>>,
+    /// The constants that reach themselves through a chain of mentions --
+    /// the same set the emitter computes, so the two engines count the same
+    /// cells. Every constant goes through `knotted`, but only these are the
+    /// ones native builds a thunk for, and the counters are semantics.
+    ///
+    /// Computed on the first constant this run builds a cell for rather than
+    /// at construction, because `kanso check` makes an `Interp` and never
+    /// evaluates a constant, and that route is a weighed welfare term.
+    cycles: std::cell::OnceCell<crate::hash::Set<String>>,
+    program: &'a Program,
 }
 
 /// Engine-shared semantic counters: evaluation counts are semantics, so
@@ -1182,6 +1192,8 @@ impl<'a> Interp<'a> {
             depth: Cell::new(0),
             stack_hint: crate::stack_hint(program),
             knots: RefCell::new(Map::default()),
+            cycles: std::cell::OnceCell::new(),
+            program,
         }
     }
 
@@ -3322,6 +3334,24 @@ impl<'a> Interp<'a> {
                 _ => None,
             };
             return Ok(forced.unwrap_or_else(|| Value::Thunk(Rc::clone(cell))));
+        }
+        // Ruled 2026-08-24: a demanded knot counts, and this is the side that
+        // moves. The cell below is the only way a self-naming constant can be
+        // built, so building it is an allocation the native engine has always
+        // reported; the counters are semantics rather than a resource
+        // heuristic, and two engines may not disagree about what the work was.
+        // The early return above allocates nothing and does not count.
+        // Ruled 2026-08-24: a demanded knot counts, and this is the side that
+        // moves. Only a constant that reaches itself is one native builds a
+        // cell for, and every constant arrives here, so the count is filtered
+        // by the emitter's own predicate rather than by getting this far. The
+        // early return above allocates nothing and does not count.
+        if self
+            .cycles
+            .get_or_init(|| crate::codegen::knotted_constants(self.program))
+            .contains(name)
+        {
+            self.thunk_stats.allocs.set(self.thunk_stats.allocs.get() + 1);
         }
         let cell = Rc::new(RefCell::new(ThunkState::Blackhole));
         self.knots.borrow_mut().insert(name.to_string(), Rc::clone(&cell));
