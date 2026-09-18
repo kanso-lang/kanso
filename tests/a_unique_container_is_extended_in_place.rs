@@ -47,8 +47,15 @@
 //! 1,200 copies the two builders would have made, one allocation each. The
 //! absolute counts moved with the entry's name between two revisions of this
 //! very file, 21,162 to 21,180, while the difference did not.
+//!
+//! AND EACH TEST STAGES ITS OWN TREE, which the `staged` helper below explains
+//! at length because it cost two red CI rounds on branches that had touched
+//! neither the interpreter nor this file. The directory got seven characters
+//! longer when the tag went into its name; the difference this file pins did
+//! not move, which is the subtraction doing what the paragraph above says it
+//! is for.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 /// Both builders hand the previous answer straight into the next call, so the
@@ -142,16 +149,50 @@ fn kanso() -> PathBuf {
     exe.join("kanso")
 }
 
-/// Run the real binary on the staged fixture at one size and answer what it
-/// printed and what the interpreter's allocator counted.
+/// Each caller of `ran` owns its own staging directory, named for the tag it
+/// passes. Sharing one was a real defect rather than untidiness: cargo runs
+/// the tests in a binary on parallel threads, `std::fs::write` truncates
+/// before it writes, and a `kanso` started by one test read the library while
+/// the other test's `File::create` had it at zero bytes. kanso#1502's Linux
+/// job died on it with the library present and empty --
+///
+///     the interpreted run failed:
+///     error[name]: unknown name `builders/run`
+///       --> /tmp/kanso-unique-container/run_300.kso:3:1
+///
+/// -- and kanso#1529's macOS job the same way, on two branches whose diffs
+/// touched neither the interpreter nor this file. That is the 2026-09-15 rule
+/// read the other way round: the state a measurement reads has to be the
+/// measurement's own, and a directory two threads write is nobody's.
+///
+/// The tags are all the same length, so two runs staged under different tags
+/// are handed paths that cost the same.
+fn staged(tag: &str) -> PathBuf {
+    let stage = std::env::temp_dir().join(format!("kanso-unique-container-{tag}"));
+    std::fs::create_dir_all(&stage).expect("a staging directory");
+    std::fs::write(stage.join("builders.kso"), LIBRARY).expect("the library writes");
+    stage
+}
+
+/// The two measuring tests' tags, and the pair the crossing spec stages.
+const ANSWER: &str = "answer";
+const ALLOCS: &str = "allocs";
+const CROSS_A: &str = "crossa";
+const CROSS_B: &str = "crossb";
+
+/// Run the real binary on an ALREADY-STAGED tree at one size and answer what
+/// it printed and what the interpreter's allocator counted.
+///
+/// It stages nothing itself. A helper that re-wrote the library on every call
+/// would heal the very window this file's crossing spec holds open, and did:
+/// the spec passed against the shared directory until the staging moved out.
 ///
 /// The two entry names are the same length on purpose: a run's allocations
 /// track the length of the path it was handed, and the difference the tests
-/// below take is only a cancellation if the two paths cost the same.
-fn ran(rounds: u32) -> (String, Vec<(String, u64)>) {
-    let stage = std::env::temp_dir().join("kanso-unique-container");
-    std::fs::create_dir_all(&stage).expect("a staging directory");
-    std::fs::write(stage.join("builders.kso"), LIBRARY).expect("the library writes");
+/// below take is only a cancellation if the two paths cost the same. Every
+/// tag is the same length for the same reason, so a reading taken under one
+/// is comparable with a reading taken under another.
+fn ran(stage: &Path, rounds: u32) -> (String, Vec<(String, u64)>) {
     let entry = stage.join(format!("run_{rounds}.kso"));
     std::fs::write(&entry, format!("import \"./builders\"\n\nbuilders/run {rounds}\n"))
         .expect("the entry writes");
@@ -190,15 +231,17 @@ fn counter(counted: &[(String, u64)], name: &str) -> u64 {
 /// The answer first: extending in place may not change what the program says.
 #[test]
 fn the_builders_answer_what_they_answered_before() {
-    assert_eq!(ran(300).0, "1200 600\n", "600 appends of two bytes, and 600 pushes");
-    assert_eq!(ran(600).0, "2400 1200\n", "twice the rounds, twice the answer");
+    let stage = staged(ANSWER);
+    assert_eq!(ran(&stage, 300).0, "1200 600\n", "600 appends of two bytes, and 600 pushes");
+    assert_eq!(ran(&stage, 600).0, "2400 1200\n", "twice the rounds, twice the answer");
 }
 
 /// Exact, not a band, and a difference rather than a count.
 #[test]
 fn a_unique_container_is_extended_in_place() {
-    let small = counter(&ran(300).1, "interp_allocs");
-    let large = counter(&ran(600).1, "interp_allocs");
+    let stage = staged(ALLOCS);
+    let small = counter(&ran(&stage, 300).1, "interp_allocs");
+    let large = counter(&ran(&stage, 600).1, "interp_allocs");
     assert_eq!(
         large - small,
         PER_EXTRA_ROUND,
@@ -210,5 +253,46 @@ fn a_unique_container_is_extended_in_place() {
          `Rc::try_unwrap` with the clone as its other arm. Read {small} at \
          300 rounds and {large} at 600.",
         large - small
+    );
+}
+
+/// One staging tree's library is not another's.
+///
+/// This is the spec for the defect above, and it makes the race deterministic
+/// rather than waiting for it. `std::fs::write` truncates and then writes, so
+/// a run that reads the library inside that window reads an empty file and
+/// dies naming the function it cannot find. Truncating one tree's library and
+/// leaving it truncated is that window held open.
+///
+/// Watched red by making `staged` ignore its tag, which is exactly the
+/// directory this file used to share:
+///
+///     the interpreted run failed:
+///     error[name]: unknown name `builders/run`
+///
+/// the same words CI reported on two branches that had touched neither the
+/// interpreter nor this file.
+#[test]
+fn one_trees_truncated_library_is_not_another_trees() {
+    let victim = staged(CROSS_A);
+    let other = staged(CROSS_B);
+
+    // `File::create` with nothing written after it: what every `fs::write`
+    // here passes through, stopped at the point the other thread can see.
+    std::fs::File::create(victim.join("builders.kso")).expect("the library truncates");
+    assert_eq!(
+        std::fs::metadata(victim.join("builders.kso")).expect("it is still there").len(),
+        0,
+        "the window is an empty file rather than a missing one, which is why \
+         the run gets as far as resolving a name and fails on the name"
+    );
+
+    assert_eq!(
+        ran(&other, 300).0,
+        "1200 600\n",
+        "a run under one tag reads its own library; truncating another tag's \
+         may not reach it. Sharing one directory is how kanso#1502 and \
+         kanso#1529 went red on branches that changed neither the interpreter \
+         nor this file."
     );
 }
