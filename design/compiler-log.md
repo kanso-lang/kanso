@@ -4122,12 +4122,12 @@ structural, and the way to find it is not another reading of the same list.
 
 ---
 
-## 2026-09-18 — the allocation ladder is real, and reserving ahead of it costs 12 million
+## 2026-09-18 — the same two lines cost 12 million in one function and save 21 million in the one above it
 
-**DECLINED.** The previous entry closed by saying the next attempt should not
-be another reading of the profile's self-cost list. So this one came off a
-different axis: tallying which callers reach the allocator, rather than which
-functions carry instructions.
+**BUILT AND SHIPPING.** The previous entry closed by saying the next attempt
+should not be another reading of the profile's self-cost list, which had gone
+one for five. So this one came off a different axis: tally which callers
+reach the allocator, rather than which functions carry instructions.
 
 Out of the post-split profile, by caller:
 
@@ -4137,37 +4137,64 @@ Out of the post-split profile, by caller:
     225,431  grow_one      <- kanso::eval::Interp::dispatch_loop'2
 
 463,411 of the run's 471,517 reallocations come from those two call sites,
-and both are the same pair of buffers. `match_params_into` clears `score` and
-`binds` at the top of every dispatch, but the WINNER's pair is moved out —
-the bindings become the environment frame, the score is kept beside `best` —
-so what comes back next time is a `Vec` at capacity zero and a push climbs
-1, 2, 4 from nothing.
+and both are the same pair of buffers. `dispatch_loop_inner` declares `score`
+and `binds` at the top of each dispatch and the candidate loop recycles them
+— a winner hands its vectors back as the working pair rather than leaving the
+next candidate to allocate from nothing, which kanso#1497 already built. What
+they do not survive is the dispatch: the winner's bindings become the
+environment frame and its score is kept beside `best`, so the next dispatch
+starts at capacity zero and climbs 1, 2, 4 from nothing. 225,431 growths
+against 55,711 dispatches is four reallocations a call.
 
-The change was two lines: `score.reserve(params.len())` and
-`binds.reserve(params.len())` after the two clears, with `params.len()` exact
-for `score` and a floor for `binds`, since a `Ctor` pattern can bind more
-than one name per parameter.
+**THE FIRST PLACEMENT LOST BY TWELVE MILLION.** `score.reserve(params.len())`
+and `binds.reserve(params.len())` went after the two `clear()` calls at the
+top of `match_params_into`:
 
     base      1,007,027,010
     reserve   1,019,044,912   +12,017,902   +1.19%
 
-Declined. **The tally was right about where the allocations are and wrong
-about what removing them is worth**, which is the same shape as the four
-before it: a real, large, correctly-measured quantity that does not become a
-saving when you go after it.
+Which is where the day's fifth decline would have been written down, with the
+mechanism left open. The draft entry saying so was written and pushed as
+kanso#1538 before the code was read carefully enough — the honest reason it
+is not in this file is that the reading came next and changed the answer.
 
-**THE MECHANISM IS OPEN AND IS NOT THE OBVIOUS ONE.** A reserve on an empty
-buffer is one allocation where the ladder was two or three, so the count
-should have fallen. What that arithmetic leaves out was not measured here,
-and the candidates — a larger size class, the reserve's own capacity check on
-a path taken once per candidate arm rather than once per dispatch, an arm
-that fails on its first pattern paying for a buffer it never fills — are
-guesses until something isolates one. Recorded as guesses.
+**`match_params_into` RUNS ONCE PER CANDIDATE, AND THE ALLOCATION IS ONCE PER
+DISPATCH.** Arm selection tries every arity match, so the reserve was paid
+roughly twenty times per dispatch — 1,100,726 calls to `match_one` against
+55,711 dispatches — to fix an allocation that happens once. The two
+`clear()` calls it sat behind are per-candidate housekeeping on buffers the
+loop already owns; they are not where the buffers come from.
 
-**The base row is now read three times at 1,007,027,010**, from two binaries
+**MOVED ONE FUNCTION UP, THE SAME REQUEST WINS.** `Vec::new()` becomes
+`Vec::with_capacity(args_len)` at the two declarations in
+`dispatch_loop_inner`, which is where the pair is actually created:
+
+    base      1,007,027,010
+    hoisted     985,444,659   -21,582,351   -2.14%
+
+A swing of 33,600,253 instructions between two placements of the same
+request, and the winning one is the larger gain of the day — bigger than the
+frame split that shipped this morning as kanso#1535, which took 15,853,848.
+
+`args_len` is exact for `score`, which takes one entry per parameter, and a
+floor for `binds`, since a `Ctor` pattern can bind its fields and a whole.
+
+**WHAT THIS SAYS ABOUT THE FIVE DECLINES.** It does not retract any of them;
+each was a different change and each was measured. What it does retract is
+the inference that was forming around them — that the dispatch path had been
+read out, and that a correctly-measured quantity not turning into a saving
+was the shape of this code rather than the shape of five particular attempts.
+One of those five was placed a function away from the one that works.
+
+**The base row is now read four times at 1,007,027,010**, from two binaries
 with different content hashes (`555c7ab8` in the argmove pair, `e8cac1ad`
-here) built from trees carrying the same runtime code at different paths.
-Same row either way, which is the cleanest statement yet that this
-measurement is reading the code and not the layout.
+here) built from trees carrying the same interpreter at different paths. On a
+row known to move with path length, that is the clearest statement so far
+that this differential reads the code.
 
-Six builds on the dispatch path today, one win.
+Seven builds on the dispatch path today, two wins.
+
+**OPEN.** The tally that found this has three more entries nobody has been
+after: `drop_slow` from `dispatch_loop'2` 229,625 times, `__rust_alloc` from
+`String::clone` 149,093, and the 8,106 reallocations that are neither of the
+two call sites above. The allocator-caller axis is not spent.

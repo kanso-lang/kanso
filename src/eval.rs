@@ -2442,8 +2442,27 @@ impl<'a> Interp<'a> {
             // give up the moment a pattern refused, so a candidate that failed
             // on its first parameter had already paid for two allocations --
             // and most candidates fail, because arm selection tries them all.
-            let mut score: Score = Vec::new();
-            let mut binds: Bindings = Vec::new();
+            // AND ONE PAIR PER DISPATCH, not per candidate. The swap below
+            // recycles these across the candidate list, so within one dispatch
+            // they allocate once; what they do not survive is the dispatch
+            // itself, because the winner's pair is moved out to become the
+            // environment frame and the score kept beside `best`. So every
+            // dispatch starts at capacity zero and climbs 1, 2, 4 from nothing:
+            // `dispatch_loop` reached `grow_one` 225,431 times against 55,711
+            // dispatches, four reallocations a call. Asking for the arity up
+            // front costs one allocation of the right size instead.
+            //
+            // kanso#1538 put this reserve inside `match_params_into`, where it
+            // is paid once per CANDIDATE -- roughly twenty times per dispatch,
+            // since arm selection tries every arity match -- and it cost
+            // 12,017,902 instructions. The allocation is per dispatch, so the
+            // reserve belongs here.
+            //
+            // `args_len` is exact for `score`, which takes one entry per
+            // parameter, and a floor for `binds`, since a `Ctor` pattern can
+            // bind its fields and a whole.
+            let mut score: Score = Vec::with_capacity(args_len);
+            let mut binds: Bindings = Vec::with_capacity(args_len);
             for decl in overloads.iter() {
                 if decl.params.len() != args.len() {
                     continue;
