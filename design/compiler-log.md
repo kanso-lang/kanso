@@ -4229,3 +4229,18 @@ that measure it agree exactly because kanso#1525 already priced them. A layout
 story that moved those too would not be a layout story.
 
 Both codegen rows and `compile_allocs` also read their goldens exactly.
+
+## 2026-09-18 — what the beat-top branch does to the interpreted row after kanso#1531
+
+The interpreted row on this branch is `interp_instructions=1,029,696,282`,
+where main reads 1,029,696,275. A rise of 7 instructions, 0.0000007%.
+
+Layout, and the mechanism is the same one this branch's earlier readings
+record. `kanso run --interp` never reaches the native runtime, but the binary
+it runs holds `src/runtime.c` as bytes, because the compiler `include_str!`s
+that file. This branch changes that file, so the code the interpreted run
+walks past is arranged differently and the row moves with the arrangement
+rather than with anything it measures.
+
+Seven instructions against a row of a billion. The trend gate asked for the
+sentence because the goldens carried the new value with nothing naming it.
