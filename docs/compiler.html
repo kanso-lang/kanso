@@ -2270,6 +2270,26 @@ strong=6    1,326    3.6%</code></pre>
 
 <p>the practical rule is the one the goldens already enforce and the first four readings nearly talked us out of: a counter of operations can be compared across machines and a counter of instructions cannot, not even as a difference. the four close agreements were four changes whose copying happened to compile similarly on both hosts. a fifth showed what the rule is actually worth.</p>
 
+<h2 id="interpasks"><span class="sec-num">88</span>the compiler already knew, and the interpreter never asked</h2>
+
+<p>the interpreter grows a container by taking it by value and calling <code>Rc::try_unwrap</code>, which hands back the contents when nothing else holds them and copies when something does. counters over the corpus: <strong>44,006</strong> calls into <code>push</code>, <code>put</code> and <code>append</code>, and <strong>42,680</strong> of them &#8212; <strong>96.99%</strong> &#8212; copy.</p>
+
+<p>the second holder is not a surprise, and it is not removable. a bound name lives in an environment node, the environment is a persistent singly-linked chain, and unlinking the node to drop its reference costs more than copying the container does. so the refcount is honestly two, the copy is honestly required, and no amount of care at the call site changes either.</p>
+
+<p>what changes it is a fact the compiler settled long before the interpreter ran. the linearity analysis exists to tell the code generator which reads of a container are its <em>last</em> &#8212; the ones after which the binding is dead &#8212; and it marks <strong>54</strong> such sites across the library. the compiled engine has used that answer for months. the interpreted engine had never been shown it.</p>
+
+<p>it asks now, keyed by file, line and column so the answer survives a re-parse, and where the analysis says the binding is dead it takes the value out of the <code>Rc</code> in place. on this container, against the tree that preceded it:</p>
+
+<pre><code>run_interpreted_on_stack  1,169,887,916 -&gt; 1,116,560,609   -53,327,307   -4.56%
+interp_allocs                 2,539,996 -&gt;     2,486,374       -53,622   -2.11%
+interp_peak_bytes               885,189 -&gt;       833,330       -51,859   -5.86%</code></pre>
+
+<p><strong>the gate is the whole of it, and an ungated version proves that rather than asserting it.</strong> the take is a <code>mem::take</code> through a raw pointer derived from a live <code>Rc</code> &#8212; sound only because the analysis proved the other holder dead, and catastrophic otherwise. so the take was built first without the gate, and the suite was run: <strong>five</strong> specs went red, three of them written for exactly this defect. with the gate consulted, all five are green and both engines print the same answer. the difference between those two runs is what the analysis is worth, stated as a measurement instead of an argument.</p>
+
+<p>one more thing came out of it, and it is about the corpus rather than the change. of the 16 distinct sites the interpreter actually reaches at runtime, every one is inside the 54 the analysis marks &#8212; so the marking is not merely sound here, it is complete over what this program does. that is a property of this corpus and not a theorem, and it is written down as the former.</p>
+
+<p>and a pin was missing. five specs catch the optimisation firing where it should <em>not</em>, and every one of them stays green if the gate silently stops matching &#8212; if a key changes, if a span moves, if the analysis is handed a different program. a per-round allocation count now fails when the optimisation quietly stops happening, which nothing in the tree could previously do. a suite full of specs that only catch a thing going wrong is not the same as a suite that notices it stopping.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>
