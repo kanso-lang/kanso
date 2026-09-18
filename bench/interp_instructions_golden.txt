@@ -371,5 +371,16 @@
 # 19,892,773. Both hosts agree the change is a count -- allocations fall on
 # both -- and disagree on what the removed work cost, which is the rustc
 # that built the binary.
-interp_instructions=975944763
+#
+# 2026-09-18, kanso#1535, CI's sitting. 975,944,763 -> 957,583,234,
+# a FALL of 18,361,529 (-1.8814%).
+# THE ROW THIS CHANGE IS ABOUT. `eval_ident` stops building a frame sized
+# for the path a bound name does not take; the map probe, the borrow and the
+# resolve ladder move into `eval_global`, out of line. EVERY OTHER VEIN IN
+# THE JOB IS BYTE-IDENTICAL -- the three compile rows, emit, start-up, and
+# both interpreter memory counters -- so this one moved nothing but the work
+# it was aimed at. This container projected the fall at 15,853,848 against
+# its own base; the runner reads 18,361,529, the same direction and larger,
+# which is the host split kanso#1534 recorded the day before.
+interp_instructions=957583234
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

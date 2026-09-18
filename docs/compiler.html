@@ -2488,7 +2488,45 @@ error[name]: unknown name `builders/run`
 
 <p>section 91 declined four schemes aimed at this walk — a head byte beside the name, a padded key, a shape filter, a per-site cache — and every one of them cost more than it saved. all four aimed at the comparing and left the structure alone. this one aims at how many nodes exist, which is the allocation count and the walk depth at the same time. that is a reason to try it, not a reason to expect it to win; the four that failed looked sound too. what settles it is the two binaries above.</p>
 
-<h2 id="fixedtemps"><span class="sec-num">95</span>the object gets a name the run chooses</h2>
+<h2 id="identframe"><span class="sec-num">95</span>a frame built for the path that is not taken</h2>
+
+<p>section 94 made scopes shallower and the profile re-ranked. the name lookup came second at 115,147,991 instructions of its own, 10.61% of the interpreted run. the two obvious guesses were both wrong and both cost nothing to check, because the answers were in the same file: the name table has used a seedless fx hash since &#167;34, so hashing is not where the time is, and the thing cloned out of that table is an enum of reference counts, so cloning it is an increment.</p>
+
+<p>the annotated build says where it goes, and it is not in the body:</p>
+
+<pre>  16,901,264 (1.58%)  fn eval_ident(&amp;self, name: &amp;str, span: Span, ...
+   7,122,532 (0.67%)      if let Some(value) = lookup(env, name) {
+   1,448,608 (0.14%)          return Ok(value);
+     996,075 (0.09%)      match named {
+   8,450,632 (0.79%)  }</pre>
+
+<p>25,351,896 instructions, 2.37% of the whole run, on the opening line and the closing brace. a release build annotates every line as <code>???</code> unless it is built with debug info, which is why reading this took a second build.</p>
+
+<p>a name that a scope binds is answered by the walk and returns. a name that no scope binds takes a borrow, a map probe, a match, and on its first visit the whole resolve ladder. both lived in one function, so the frame the second path needs was built and torn down for the first one as well. moving the second into a function of its own, marked never to be inlined back, leaves the first as a match over the walk&#39;s answer.</p>
+
+<pre>  isolation, two binaries on one container
+  base    1,022,880,858
+  split   1,007,027,010   -15,853,848   -1.5499%
+
+  the gate, measured on ci
+  interpreted run   975,944,763 -&gt; 957,583,234   -18,361,529   -1.8814%</pre>
+
+<p>every other vein in that job is byte-identical &#8212; the three compile rows, what emitting costs, start-up, and both interpreter memory counters. this is the second change in a day confined to the runtime path that left every layout row alone, and the prior that editing the compiler&#39;s own rust usually moves the compile row has now missed twice running.</p>
+
+<p>the base was read at two different paths of the same length and printed 1,022,880,858 both times. this row moves with the length of the path it is given, and the first pass ran the two arms in directories that differed by one character. the effect is four orders of magnitude larger than that could be; re-running was cheaper than arguing about it.</p>
+
+<p>the same shape failed earlier the same day. an inline hint on the walk itself left the row identical to the instruction across two binaries that genuinely differed. the entry cost a profile puts on a function is not automatically call overhead waiting to be removed; there it was the function&#39;s own work and no hint could reach it. what is different here is a frame sized for a path that is usually not taken, and splitting removes that. neither outcome followed from the attribution, which is the argument for building both.</p>
+
+<p>the same argument one function up was built and declined. <code>eval</code> is the caller, 92,306,061 instructions of its own with 16,623,552 on its signature line, and a match of fifteen arms where several build maps, lists and records while <code>Ident</code> and <code>Int</code> return in a few instructions. four of those arms &#8212; the widening cast, the map literal, the field read and the index read &#8212; were moved out of line the same way. same corpus, same harness, and the same base binary at 1,022,880,858, so the two readings compare directly.</p>
+
+<pre>  base   1,022,880,858
+  split  1,026,292,184   +3,411,326   +0.3335%</pre>
+
+<p>declined. what separates the two is which arms are rare in the corpus rather than which look expensive in the source. a name that no scope binds is genuinely uncommon when a program is decoding a document, so the lookup&#39;s second path really is the one not taken. reading a field and reading an index are how a decoded document is used, so moving them out adds a call to a hot path and saves a frame the application arm goes on requiring anyway.</p>
+
+<p>three builds on one hypothesis now: an inline hint on the walk changed the row by zero, the lookup split bought 15,853,848, and this cost 3,411,326. that a profile puts instructions on a function&#39;s entry line is a reason to build the experiment, and one time in three it was also a reason to expect it to work.</p>
+
+<h2 id="fixedtemps"><span class="sec-num">96</span>the object gets a name the run chooses</h2>
 
 <p>the release-tier codegen row measures a whole build, clang and <code>ld</code> included, and it had been drifting. pinning the linker plugin&#8217;s thread count took the drift from millions down to <strong>eleven</strong> instructions, and the eleven turned out to be a string: clang writes its link-time object to <code>/tmp/&lt;stem&gt;-XXXXXX.o</code> with fresh hex every run, <code>ld</code>&#8217;s plugin puts that path into a hash map, and the probe walks a different number of buckets depending on the name. twenty-two names on one binary and one corpus &#8212; twenty read <strong>5,163,341,031</strong> and two read <strong>5,163,341,042</strong>, reproducibly, the same name giving the same answer every time.</p>
 
