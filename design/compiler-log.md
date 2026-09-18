@@ -8734,6 +8734,71 @@ What is still open in that frame, and was not tested here: the encoder runs
 `encode_onto` alone even after kanso#1504 took a third off the iteration.
 Whether a list or map encode needs a beat of its own is an emitter question.
 
+## 2026-09-18 — the printed line comes off the interpreted row too
+
+kanso#1487 found that `std::io::stdio::_print`'s subtree ends in `memrchr`
+over the formatted bytes, that what the frame costs moves with the binary's
+layout rather than with anything the program does, and that five CI builds on
+2026-09-17 across trees with identical compiler source drew two faces thirteen
+apart on the module, entry and library rows. It excluded the term from those
+three, per the 2026-09-15 rule.
+
+It missed `interp_instructions`, and that row has been drawing the same two
+faces since. kanso#1486 read it twice on trees whose only difference was three
+goldens, a page and a log entry: 2,182,526,878 and 2,182,526,865. Thirteen.
+
+The fix is the one kanso#1487 wrote, applied to the fourth gate, with the
+figure printed as `interp_printed=` so what came off is readable. The row's
+absolute value moves, so main's number was carried forward and round one was
+deliberately red on it. CI read **2,182,303,844** against main's
+2,182,307,043: a difference of 3,199, which is not a saving but the printed
+line's subtree leaving the count. Larger than the module row's roughly 825,
+because `interp_corpus` prints the document it decoded rather than one
+summary line.
+
+**What made this possible to miss is worth more than the fix.** The property
+lived in three scripts and in no check, so nothing could tell that a fourth
+gate had the same shape and not the same treatment.
+`tests/every_anchored_gate_answers_for_the_printed_line.rs` reads the gates off
+disk: every one that anchors an inclusive frame either subtracts the line or
+writes down why it need not. Five anchor today and the fifth is start-up,
+whose exemption is now a paragraph rather than a silence — `kanso play` takes
+the native path, so its program's `print` is the C runtime writing directly and
+never enters `_print` at all. That is why it was the one row giving a single
+value across all five of kanso#1487's builds: nothing to take off.
+
+Watched red before it passed, naming `startup_instructions.sh` as the gate that
+had not answered.
+
+## 2026-09-18 — a golden that lost its measured-on line, and what the gate said about it
+
+kanso#1505's second round failed `interpreted run instructions` with the gate
+reading `interp_instructions=2182303844` — exactly the value in the golden.
+Got and want agreed and the gate still refused.
+
+The reason is one line further down. `bench/interp_instructions_golden.txt`
+carries `# measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1` AFTER its value,
+`host_gate.sh` reads it to decide whether the sitting is a reproduction of the
+recorded build, and the edit that wrote CI's row had truncated everything past
+the value line:
+
+    m = re.search(r'^interp_instructions=\d+\s*$', s, re.M)
+    s = s[:m.start()] + note + 'interp_instructions=2182303844\n'
+
+`s[:m.start()]` drops the tail. Every other golden touched tonight was edited
+with an in-place `re.sub`, which does not, and a sweep over all twenty edited
+files found exactly two with the line gone: this one and the same file on
+kanso#1486's branch, both from the same pattern.
+
+The gate behaved correctly and said so in its own words — that the sitting was
+counted on a toolchain the golden does not name. What made it hard to read is
+that a missing `measured-on` and a genuinely moved row both surface as one red
+row in the summary block, and the value printed beside it looks right.
+
+The lesson is narrower than "be careful with regexes": a golden's trailing
+lines are load-bearing, so an edit that rewrites a value rewrites the value and
+nothing else.
+
 ## 2026-09-17 — the beat rewind's fast path: 23 instructions to 15
 
 `k_beat_iter` is what a compiler-proven beat loop calls between iterations to
@@ -8892,4 +8957,5 @@ rewrite, and reading that output alone it looks like a warning. Run plain,
 golden_prose` — checked by injecting the bogus key and reading the exit code
 rather than the text. A claim about what a guardrail does is worth the thirty
 seconds it takes to watch it fail.
+
 
