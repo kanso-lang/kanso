@@ -85,6 +85,73 @@ sh scripts/gates/dispatch.sh name
 # Five processes moved by 3,105 between them and the job log named none of
 # them, so the next question had nothing to start from. `name=cost` costs one
 # grep per profile and answers it.
+# WHERE TWO READINGS DISAGREE, not just by how much. A reproduction failure
+# that reports only a magnitude sends the next session looking for a process
+# and then a frame, which is two CI rounds to learn what the profiles already
+# on disk can say. This pairs the two readings and, for a pair that disagrees,
+# diffs the per-function self costs and prints the frames that moved.
+# kanso#1469 did this for the compile rows' thirteen and the frame it named
+# (`memrchr`, under the line the gate prints) was the whole answer.
+#
+# TWO THINGS THIS GOT WRONG FIRST, both found by running it against two real
+# readings rather than by reading it:
+#
+#   The key cannot be the program name. A build runs clang three times, so
+#   `/usr/bin/clang` paired the probe compile against the driver and reported
+#   a 532,767 "disagreement" between two processes that were never the same
+#   process. It cannot be the whole argv either: the argv carries temp paths
+#   that differ between runs by construction -- the probe's pid, clang's
+#   random object suffix. So the key is the argv with those runs of digits and
+#   hex flattened, which is stable across runs and still distinguishes the
+#   three clangs.
+#
+#   The percentage column is not one field. callgrind_annotate right-aligns
+#   it, so `(100.0%)` is one field and `( 4.02%)` is two, and an awk that
+#   counts fields reads the frame name off a different column depending on
+#   the size of the number. Every frame name came out blank. The parse is a
+#   regex on the whole line now.
+#
+# It is diagnosis only: it prints and returns, and the caller still fails.
+key_of() {
+  sed -n 's/^cmd: *//p' "$1" | head -1 \
+    | sed -e 's/[0-9a-f]\{6,\}/X/g' -e 's/[0-9]\{4,\}/X/g'
+}
+
+self_costs() {
+  callgrind_annotate --threshold=100 "$1" 2>/dev/null \
+    | sed -n 's/^ *\([0-9,]*\) *([ ]*[0-9.]*%) *\(.*\)$/\1\t\2/p' \
+    | sed 's/,//g'
+}
+
+why_they_disagree() {
+  echo "::error::WHERE THEY DISAGREE, per process and then per frame:"
+  for a in $1; do
+    [ -f "$a" ] || continue
+    ka=$(key_of "$a")
+    sum_a=$(grep -o '^summary: [0-9]*' "$a" | tr -dc 0-9)
+    for b in $2; do
+      [ -f "$b" ] || continue
+      [ "$ka" = "$(key_of "$b")" ] || continue
+      sum_b=$(grep -o '^summary: [0-9]*' "$b" | tr -dc 0-9)
+      [ "$sum_a" = "$sum_b" ] && continue
+      echo "::error::  $ka"
+      echo "::error::    $sum_a then $sum_b, $((sum_b - sum_a))"
+      self_costs "$a" > /tmp/cgfn.first.txt
+      self_costs "$b" > /tmp/cgfn.again.txt
+      awk -F'\t' 'NR==FNR { was[$2] = $1; seen[$2] = 1; next }
+                  { if (seen[$2] && was[$2] != $1)
+                      printf "::error::    %+d  %s -> %s  %s\n",
+                             $1 - was[$2], was[$2], $1, $2
+                    else if (!seen[$2])
+                      printf "::error::    ONLY IN THE SECOND READING  %s  %s\n",
+                             $1, $2 }' \
+        /tmp/cgfn.first.txt /tmp/cgfn.again.txt | head -25
+      echo "::error::    (self cost; an empty list means the move is below"
+      echo "::error::    what callgrind_annotate resolves at this threshold)"
+    done
+  done
+}
+
 processes_in() {
   for f in "$@"; do
     [ -f "$f" ] || continue
@@ -353,7 +420,8 @@ if [ "$again" = "$got" ]; then
   echo "::error::something outside the diff. The codegen_binary sha256 and the"
   echo "::error::codegen_clang line above are what to compare against it."
 else
-  echo "::error::THIS BINARY COUNTED TWO NUMBERS IN ONE JOB: $got and then"
+  why_they_disagree "/tmp/cg.codegen.$tier.*" "/tmp/cg.codegen.${tier}b.*"
+echo "::error::THIS BINARY COUNTED TWO NUMBERS IN ONE JOB: $got and then"
   echo "::error::$again, on one binary, one corpus and one machine. That is"
   echo "::error::(2), settled here rather than by comparing runs, and it halts"
   echo "::error::this vein."

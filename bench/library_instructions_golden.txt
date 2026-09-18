@@ -863,7 +863,16 @@
 # 2026-09-17, kanso#1478 on the tree merged with main 5e256ce0, CI's sitting.
 # 128,009,282 -> 128,010,052, a RISE of 770 (+0.0006%). Layout, as above;
 # against main's 128,348,205 the branch is 338,153 below.
-library_instructions=128010052
+#
+# 2026-09-18, kanso#1507 on the tree merged with main, CI's sitting. 128,010,052 ->
+# 128,010,220, a RISE of 168 (+0.00013%). LAYOUT. This branch adds a
+# `match std::env::var("KANSO_LTO_JOBS")` to `release_clang` in src/main.rs and
+# `KANSO_LTO_JOBS=1` to three `env -i` lines in a gate script. src/main.rs is
+# the compiler, so its bytes and the layout under them move, and every row that
+# runs the compiler moves with them. Seven rows moved here and all seven are
+# under five ten-thousandths of a per cent, with mixed signs -- which is what a
+# shifted binary looks like and not what work looks like.
+library_instructions=128010220
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

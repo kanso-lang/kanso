@@ -8799,6 +8799,79 @@ The lesson is narrower than "be careful with regexes": a golden's trailing
 lines are load-bearing, so an edit that rewrites a value rewrites the value and
 nothing else.
 
+## 2026-09-17 — the digits that can come off are not the digits the width says, and what the encode corpus actually renders
+
+`render_ryu` is 84,209,220 instructions of the run program, 4.58%, over 191,070
+calls at 440.7 each, and a quarter of that is one loop walking digits off `vr`
+two at a time. The 2026-09-14 entry fused that loop and measured it at 5.35
+trips a float. Ten or eleven digits come off on this corpus.
+
+The idea tried here: compute the count instead of searching for it. `vp` and
+`vm` agree above the first place where `vp - vm` has a digit, so
+`declen(vp - vm) - 1` is a lower bound on how many can be removed, and one
+division by a power of ten takes them all at once. The step was written guarded
+by the same test the loops use, so it can never take a digit they would have
+left, and `round_up` takes the most significant of the block, which is the
+digit the last walking trip would have tested.
+
+**It costs 38.3 instructions a float.** `render_ryu` goes 84,209,220 to
+91,522,440 and runbench 1,840,368,292 to 1,847,681,512, a rise of 7,313,220 —
+0.397%, and every instruction of it is in that function.
+
+A counter in the step says why. Over 190,890 calls it fired every time, and
+`can` was **1 for 58,680 and 2 for 132,210**. Never more. The bound is a
+property of the interval at full width, and the interval rescales after each
+removal: dividing `vp` and `vm` by ten narrows the absolute gap but leaves
+`vp / 10 > vm / 10` true for many more steps than the starting width predicts.
+So the step pays `ryu_declen`'s sixteen comparisons and three divisions to take
+1.69 digits, where one trip of the existing loop takes two for twenty-one.
+
+Declined, and the reason is a property of the quantity rather than of the code:
+a width bound cannot see past the first step of a process that renormalises at
+every step.
+
+### what the corpus renders, counted
+
+The same probe answered a question the fused-loop entry guessed at. Of the
+191,070 doubles `k_b_append_rendered` sends to `render_ryu` on runbench:
+
+    shortest form is 3 digits        90
+                     4 digits       630
+                     5 digits     4,950
+                     6 digits    32,940
+                     7 digits   152,460     79.8%
+    integral values                   0
+
+That corrects the earlier entry, which said a float a program writes down "has
+three or four" significant digits. It has six or seven here — and the loop
+arithmetic in that same entry already implied it, since 5.35 trips at two
+digits a trip removes 10.7 of seventeen and leaves 6.3.
+
+**Not one of the 191,070 is integral.** A fast path for small whole numbers —
+the obvious next idea, and the one this measurement was taken to price — would
+fire zero times on this workload. It is not worth writing.
+
+### the harness
+
+`tests/every_rendered_float_reads_back_as_itself` sweeps 2,809,326 values
+against `strtod` and lifts `ryu_d2d` and `render_ryu` out of `src/runtime.c`
+rather than copying them. It was green with the change in place. Watched red
+first, the right way: with `round_up` reading `RYU_POW10[can]` instead of
+`RYU_POW10[can - 1]` — one digit over, the subtlest thing the step could get
+wrong — **85,109 of 2,809,326 did not read back**.
+
+- **DONE** built, measured, declined, and the corpus's digit distribution
+  recorded so the next idea is priced before it is written.
+- **ANSWERED SINCE, at kanso#1502** — the seven register moves the 2026-09-14
+  entry named and left. They are structural to doing three divide-by-hundreds
+  on x86-64: each needs its value in `rax` and its result out of `rdx`, so
+  three divisions cost six moves whatever the C says, and rewriting the C would
+  not have removed them. What removes them is removing a division. `vr` is
+  carried through the loop and read once at the end, so it comes out: two
+  divisions a trip, one variable division at the bottom. runbench falls 924,584
+  and `.text` 1,360 bytes.
+
+
 
 ## 2026-09-18 — the release-codegen row was counting the scheduler
 
@@ -8848,3 +8921,75 @@ ways: dropping the variable from one `env -i` line, and spelling the option
 The row's absolute value moves — single-threaded LTO partitions the work
 differently, about 0.046% higher on the container — so nothing measured before
 this is comparable with anything after, and CI takes the sitting.
+## 2026-09-18 — the release-codegen row, round two: three clangs pinned, and an eleven left inside ld
+
+Round one measured what `-Wl,-plugin-opt=jobs=1` bought and what it left. CI's
+per-process notice is the whole reading, first count against second:
+
+    process        first          again        delta
+    clang:probe    32,265,497     32,265,497       0
+    clang          31,732,189     31,732,189       0
+    clang -cc1  1,617,286,141  1,617,286,141       0
+    ld          5,141,367,734  5,141,367,745     +11
+    kanso          89,463,216     89,463,528    +312   (excluded from the row)
+
+The three clang processes were the drifting half of this row and they are
+byte-identical now. That is the change working. The row's absolute value falls
+4,177,959 (0.0612%) with it, and none of that is a saving: single-threaded LTO
+partitions the same work differently and callgrind counts every thread, so
+nothing measured before this change is comparable with anything measured after.
+
+**The container reproduces the fix and cannot reproduce the residue.** Two
+complete pipeline runs here — staged and warmed exactly as the gate does it,
+not the direct clang invocation round one used — agree to the instruction on
+all four counted processes, `ld` included at 5,146,602,703 twice. They agree
+even though the temp-file names differ between them: the probe compile reads
+`/tmp/kanso_pn_probe_0020122.ll` in one run and `..._0021879.ll` in the other,
+and clang's object is `codegen_corpus-89a40b.o` against `...-0c759c.o`. Both
+are fixed-width, both feed `ld` on its command line, and neither moves a
+count. So the paths are ruled out as the term, which was the standing
+hypothesis and is now a dead one.
+
+Seven other rows moved and all seven are layout, each named here with the
+value it landed on:
+
+    compile_instructions        35,869,355 ->    35,869,250      -105
+    entry_instructions         127,872,255 ->   127,872,509      +254
+    library_instructions       128,010,052 ->   128,010,220      +168
+    interp_instructions      2,182,303,844 -> 2,182,293,088   -10,756
+    startup_instructions         3,955,899 ->     3,955,888       -11
+    codegen_instructions_dev   596,161,166 ->   596,159,774    -1,392
+    emit_instructions           60,197,743 ->    60,197,827       +84
+
+Every one is under five ten-thousandths of a per cent and the signs are mixed.
+src/main.rs gained a four-line `match` on an environment variable, and
+src/main.rs is the compiler, so its bytes move and every row that runs the
+compiler moves with them. `entry_instructions`, `library_instructions` and
+`emit_instructions` are the three that rose; nothing in this branch runs on the
+entry or library corpus or writes a different line of IR, so what moved is
+where the code sits rather than what it does.
+
+**What the eleven gets instead of a guess.** The gate reported a magnitude and
+nothing else, which is two more CI rounds to find a process and then a frame.
+It now pairs the two readings and diffs their per-function self costs, printing
+the frames that moved. Two defects in that came out of running it against two
+real readings rather than reading it:
+
+  The key cannot be the program name. A build runs clang three times, so
+  `/usr/bin/clang` paired the probe compile against the driver and announced a
+  532,767 disagreement between two processes that were never the same process.
+  It cannot be the whole argv either, because the argv carries exactly the temp
+  paths that differ by construction. The key is the argv with runs of digits
+  and hex flattened: stable across runs, and still telling the three clangs
+  apart.
+
+  The percentage column is not one field. `callgrind_annotate` right-aligns it,
+  so `(100.0%)` is one whitespace-separated field and `( 4.02%)` is two, and an
+  awk counting fields reads the frame name off a different column depending on
+  the size of the number. Every frame name came out blank. It is a regex on the
+  whole line now.
+
+Run against the container's two passes, which differ only in the excluded
+kanso process, it pairs all five correctly, stays silent on the four that
+agree, and names the two frames that moved in the fifth:
+`__memcmp_avx2_movbe` −176 and `kanso::build` +419 on a process total of +243.

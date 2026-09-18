@@ -2076,7 +2076,16 @@
 # so nothing the split does can reach a decision this corpus makes, and moving
 # the compiler's bytes moves what sits around them. Against main's own
 # 35,968,173 the branch is 98,818 below, which is the work.
-compile_instructions=35869355
+#
+# 2026-09-18, kanso#1507 on the tree merged with main, CI's sitting. 35,869,355 ->
+# 35,869,250, a FALL of 105 (-0.00029%). LAYOUT. This branch adds a
+# `match std::env::var("KANSO_LTO_JOBS")` to `release_clang` in src/main.rs and
+# `KANSO_LTO_JOBS=1` to three `env -i` lines in a gate script. src/main.rs is
+# the compiler, so its bytes and the layout under them move, and every row that
+# runs the compiler moves with them. Seven rows moved here and all seven are
+# under five ten-thousandths of a per cent, with mixed signs -- which is what a
+# shifted binary looks like and not what work looks like.
+compile_instructions=35869250
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

@@ -265,4 +265,13 @@
 #
 # The value the merge carried forward was main's, so this diff is the whole of
 # what the branch does to today's main, taken in one job.
-startup_instructions=3955899
+#
+# 2026-09-18, kanso#1507 on the tree merged with main, CI's sitting. 3,955,899 ->
+# 3,955,888, a FALL of 11 (-0.00028%). LAYOUT. This branch adds a
+# `match std::env::var("KANSO_LTO_JOBS")` to `release_clang` in src/main.rs and
+# `KANSO_LTO_JOBS=1` to three `env -i` lines in a gate script. src/main.rs is
+# the compiler, so its bytes and the layout under them move, and every row that
+# runs the compiler moves with them. Seven rows moved here and all seven are
+# under five ten-thousandths of a per cent, with mixed signs -- which is what a
+# shifted binary looks like and not what work looks like.
+startup_instructions=3955888

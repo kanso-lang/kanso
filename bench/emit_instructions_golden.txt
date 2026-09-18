@@ -75,4 +75,13 @@
 # main's 407,173,801 -- kanso's own process on the codegen corpus falls 79.1%
 # while clang and ld count the same to the instruction. That is the emitted IR
 # being byte-identical, measured rather than asserted.
-emit_instructions=60197743
+#
+# 2026-09-18, kanso#1507 on the tree merged with main, CI's sitting. 60,197,743 ->
+# 60,197,827, a RISE of 84 (+0.00014%). LAYOUT. This branch adds a
+# `match std::env::var("KANSO_LTO_JOBS")` to `release_clang` in src/main.rs and
+# `KANSO_LTO_JOBS=1` to three `env -i` lines in a gate script. src/main.rs is
+# the compiler, so its bytes and the layout under them move, and every row that
+# runs the compiler moves with them. Seven rows moved here and all seven are
+# under five ten-thousandths of a per cent, with mixed signs -- which is what a
+# shifted binary looks like and not what work looks like.
+emit_instructions=60197827

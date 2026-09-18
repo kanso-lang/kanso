@@ -134,4 +134,30 @@
 # anything measured after. Single-threaded LTO partitions the work differently
 # -- about 0.046% higher on the container's pair. Round one is deliberately red
 # and CI's own reading replaces this line.
-codegen_instructions_release=6826829520
+#
+# 2026-09-18, kanso#1507 on the tree merged with main, CI's sitting.
+# 6,826,829,520 -> 6,822,651,561, a FALL of 4,177,959 (-0.0612%). THIS ONE IS
+# NOT LAYOUT AND IT IS NOT A SAVING EITHER: the row counts a different thing
+# now. `-Wl,-plugin-opt=jobs=1` makes GNU ld's LLVM plugin run codegen on one
+# thread, and callgrind counts every thread, so the total moves with the
+# partitioning. Nothing measured before this change is comparable with anything
+# measured after it.
+#
+# WHAT IT BOUGHT, from CI's own per-process notice. The three clang processes
+# read 32,265,497 / 31,732,189 / 1,617,286,141 on the first count and the same
+# three numbers on the second -- byte-identical, where before this they were
+# the drifting half of the row. Reproduced on the container as well: two
+# complete pipeline runs, staged and warmed exactly as the gate does it, agree
+# to the instruction on all four counted processes, and they agree even though
+# the temp-file names differ between the runs (`kanso_pn_probe_0020122.ll`
+# against `..._0021879.ll`, `codegen_corpus-89a40b.o` against
+# `...-0c759c.o`), which rules the paths out as the term.
+#
+# WHAT IS LEFT, and it halts this vein on CI rather than here. CI's two
+# readings differ by 11, all of it inside `ld`: 5,141,367,734 then
+# 5,141,367,745. The container cannot reproduce it -- `ld` reads
+# 5,146,602,703 twice across the two pipeline runs -- so the residue is
+# something the runner has and this box does not. The gate now diffs the two
+# readings frame by frame when they disagree, so the next job that sees it
+# names the frame instead of the magnitude.
+codegen_instructions_release=6822651561
