@@ -430,8 +430,13 @@ pub struct Env {
     parent: Option<Rc<Env>>,
 }
 
-fn bind(env: Option<Rc<Env>>, name: &str, value: Value) -> Option<Rc<Env>> {
-    Some(Rc::new(Env { name: name.to_string(), value, parent: env }))
+/// A binding takes its name BY VALUE. Every caller that reaches here with a
+/// freshly built `String` — `match_one` pushes one per matched name, and both
+/// loops below drain that vector — hands the same allocation on rather than
+/// paying for a second copy of the same bytes and dropping the first. The
+/// callers holding an AST name clone it here, which is what they did before.
+fn bind(env: Option<Rc<Env>>, name: String, value: Value) -> Option<Rc<Env>> {
+    Some(Rc::new(Env { name, value, parent: env }))
 }
 
 fn lookup(env: &Option<Rc<Env>>, name: &str) -> Option<Value> {
@@ -1318,7 +1323,7 @@ impl<'a> Interp<'a> {
                         env: env.clone(),
                         frame: frame.clone(),
                     }));
-                    env = bind(env, name, Value::Thunk(cell));
+                    env = bind(env, name.to_string(), Value::Thunk(cell));
                 }
                 Stmt::Bind { pattern, expr } => {
                     let mut value = self.eval(expr, &env, &frame)?;
@@ -1558,7 +1563,7 @@ impl<'a> Interp<'a> {
                         env: env.clone(),
                         frame: frame.clone(),
                     }));
-                    env = bind(env, name, Value::Thunk(cell));
+                    env = bind(env, name.to_string(), Value::Thunk(cell));
                 }
                 Stmt::Bind { pattern, expr } => {
                     let mut value = self.eval(expr, &env, frame)?;
@@ -1581,14 +1586,14 @@ impl<'a> Interp<'a> {
         span: Span,
     ) -> Result<Option<Rc<Env>>, RuntimeError> {
         match pattern {
-            Pattern::Var(name, _) => Ok(bind(env, name, value)),
+            Pattern::Var(name, _) => Ok(bind(env, name.to_string(), value)),
             Pattern::Ctor { ty, .. } => {
                 let mut binds = Vec::new();
                 match match_one(pattern, &value, &mut binds) {
                     Some(_) => {
                         let mut env = env;
                         for (name, bound) in binds {
-                            env = bind(env, &name, bound);
+                            env = bind(env, name, bound);
                         }
                         Ok(env)
                     }
@@ -1630,7 +1635,7 @@ impl<'a> Interp<'a> {
                             span,
                         });
                     };
-                    env = bind(env, &entry.bind_name, fields.borrow()[position].clone());
+                    env = bind(env, entry.bind_name.to_string(), fields.borrow()[position].clone());
                 }
                 Ok(env)
             }
@@ -2073,7 +2078,7 @@ impl<'a> Interp<'a> {
         }
         let mut env = closure.env.clone();
         for (name, value) in closure.params.iter().zip(args) {
-            env = bind(env, name, value);
+            env = bind(env, name.to_string(), value);
         }
         self.eval(&closure.body, &env, &closure.frame)
     }
@@ -2347,7 +2352,7 @@ impl<'a> Interp<'a> {
                 Some((_, decl, binds)) => {
                     let mut env = None;
                     for (bind_name, value) in binds {
-                        env = bind(env, &bind_name, value);
+                        env = bind(env, bind_name, value);
                     }
                     // THE ARGUMENT VECTOR IS A HOLDER, and nothing below
                     // reads it. `match_one` cloned each matched value into
@@ -2459,7 +2464,7 @@ impl<'a> Interp<'a> {
     fn call_decided(&self, callee: &Value, arg: Value, span: Span) -> EvalResult {
         match callee {
             Value::Closure(c) if c.params.len() == 1 => {
-                let env = bind(c.env.clone(), &c.params[0], arg);
+                let env = bind(c.env.clone(), c.params[0].to_string(), arg);
                 self.eval(&c.body, &env, &c.frame)
             }
             // a callback compiled into another engine's table. Without this
