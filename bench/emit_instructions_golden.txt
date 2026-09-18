@@ -158,6 +158,10 @@
 # it changes the compiler's own bytes and the layout under them; none of
 # these routes runs the beat code this branch touches. The second reading
 # in the same job matched the first to the instruction.
+# 2026-09-18, kanso#1511 on the tree merged with main, CI's sitting.
+# 52,115,454 -> 52,119,322, a RISE of 3,868 (+0.0074%).
+# LAYOUT. `codegen::emit_ir` does not run the interpreter at all; the
+# predicate it now shares with the oracle was already in this binary.
 # 2026-09-18, re-merged onto main after kanso#1509. THE VALUE BELOW IS MAIN'S,
 # carried forward: kanso#1509 moved this row on its own and what this branch
 # adds on top of it has not been measured, so the merged reading is CI's.
@@ -178,4 +182,13 @@
 # the compiler moves with them; none of these routes runs the beat code
 # this branch changes. All six fell this time, which is the same term with
 # the opposite sign to the previous sitting -- a shifted binary, not work.
-emit_instructions=51543408
+# carried forward: kanso#1510 moved this row on its own and what this branch
+# adds on top of it has not been measured, so the merged reading is CI's.
+#
+# 2026-09-18, kanso#1511 on the tree merged with main after kanso#1510,
+# CI's sitting. 51,554,407 -> 51,543,885, a FALL of 10,522
+# (-0.0204%). LAYOUT. `codegen::emit_ir` does not run the interpreter at all.
+#
+# 2026-09-18, re-merged onto main after kanso#1511. THE VALUE BELOW IS MAIN'S,
+# carried forward; the merged reading is CI's.
+emit_instructions=51543885

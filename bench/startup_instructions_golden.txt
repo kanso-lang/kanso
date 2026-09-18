@@ -351,6 +351,10 @@
 # it changes the compiler's own bytes and the layout under them; none of
 # these routes runs the beat code this branch touches. The second reading
 # in the same job matched the first to the instruction.
+# 2026-09-18, kanso#1511 on the tree merged with main, CI's sitting.
+# 3,933,223 -> 3,932,978, a FALL of 245 (-0.0062%).
+# LAYOUT, and it FELL. Start-up takes the native path, which counts cells in
+# the runtime rather than in the interpreter.
 # 2026-09-18, re-merged onto main after kanso#1509. THE VALUE BELOW IS MAIN'S,
 # carried forward: kanso#1509 moved this row on its own and what this branch
 # adds on top of it has not been measured, so the merged reading is CI's.
@@ -371,4 +375,13 @@
 # the compiler moves with them; none of these routes runs the beat code
 # this branch changes. All six fell this time, which is the same term with
 # the opposite sign to the previous sitting -- a shifted binary, not work.
-startup_instructions=3363379
+# carried forward: kanso#1510 moved this row on its own and what this branch
+# adds on top of it has not been measured, so the merged reading is CI's.
+#
+# 2026-09-18, kanso#1511 on the tree merged with main after kanso#1510,
+# CI's sitting. 3,364,974 -> 3,364,755, a FALL of 219
+# (-0.0065%). LAYOUT. Start-up takes the native path, which counts cells in the runtime.
+#
+# 2026-09-18, re-merged onto main after kanso#1511. THE VALUE BELOW IS MAIN'S,
+# carried forward; the merged reading is CI's.
+startup_instructions=3364755

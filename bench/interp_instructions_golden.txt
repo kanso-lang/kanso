@@ -230,6 +230,11 @@
 # than compiling it, so what moved is where the code sits; every one of these
 # is under a hundredth of a per cent.
 #
+# 2026-09-18, kanso#1511 on the tree merged with main, CI's sitting.
+# 2,182,576,109 -> 2,182,638,759, a RISE of 62,650 (+0.0029%).
+# The interpreter now asks `codegen::knotted_constants` once per run, on the
+# first constant cell it builds, and looks the name up in the answer at every
+# later one. This benchmark is the interpreted run, so it pays both.
 # 2026-09-18, kanso#1510 (kanso#1484 rebuilt) on the tree merged with main,
 # CI's sitting. 2,182,576,109 -> 2,182,620,735, a RISE of 44,626 (+0.0020%).
 # LAYOUT. The derivation this branch removes runs before `kanso check` reaches
@@ -265,5 +270,19 @@
 # the compiler moves with them; none of these routes runs the beat code
 # this branch changes. All six fell this time, which is the same term with
 # the opposite sign to the previous sitting -- a shifted binary, not work.
-interp_instructions=2182527453
+# carried forward: kanso#1510 moved this row on its own and what this branch
+# adds on top of it has not been measured, so the merged reading is CI's.
+#
+# 2026-09-18, kanso#1511 on the tree merged with main after kanso#1510,
+# CI's sitting. 2,182,620,735 -> 2,182,597,360, a FALL of 23,375
+# (-0.0011%). AND THIS ROW DOES NOT ISOLATE THE CHANGE. The first round, against the
+# pre-kanso#1510 base, read +62,650 and that entry called it the predicate
+# walk plus a lookup per constant cell. This round, against the base
+# kanso#1510 left, reads the other way. One change, two signs, so what the
+# walk costs is below what this row resolves -- the reproducible signal for
+# this change is `interp_allocs`, which read +16 on both rounds.
+#
+# 2026-09-18, re-merged onto main after kanso#1511. THE VALUE BELOW IS MAIN'S,
+# carried forward; the merged reading is CI's.
+interp_instructions=2182597360
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

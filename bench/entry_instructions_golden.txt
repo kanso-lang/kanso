@@ -908,6 +908,9 @@
 # it changes the compiler's own bytes and the layout under them; none of
 # these routes runs the beat code this branch touches. The second reading
 # in the same job matched the first to the instruction.
+# 2026-09-18, kanso#1511 on the tree merged with main, CI's sitting.
+# 126,350,802 -> 126,351,031, a RISE of 229 (+0.0002%).
+# LAYOUT, same reason as the compile row: this route evaluates no constant.
 # 2026-09-18, re-merged onto main after kanso#1509. THE VALUE BELOW IS MAIN'S,
 # carried forward: kanso#1509 moved this row on its own and what this branch
 # adds on top of it has not been measured, so the merged reading is CI's.
@@ -930,7 +933,16 @@
 # the compiler moves with them; none of these routes runs the beat code
 # this branch changes. All six fell this time, which is the same term with
 # the opposite sign to the previous sitting -- a shifted binary, not work.
-entry_instructions=126350641
+# carried forward: kanso#1510 moved this row on its own and what this branch
+# adds on top of it has not been measured, so the merged reading is CI's.
+#
+# 2026-09-18, kanso#1511 on the tree merged with main after kanso#1510,
+# CI's sitting. 126,358,241 -> 126,359,513, a RISE of 1,272
+# (+0.0010%). LAYOUT, same reason: this route evaluates no constant.
+#
+# 2026-09-18, re-merged onto main after kanso#1511. THE VALUE BELOW IS MAIN'S,
+# carried forward; the merged reading is CI's.
+entry_instructions=126359513
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.
 # The row did not move for that -- the same figure came back on the run before
