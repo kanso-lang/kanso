@@ -2897,6 +2897,36 @@ binary, so that tree cannot say whose call reached SipHash. Naming eval as the
 caller from this data would be the attribution error this log has recorded
 before.
 
+**A second profile narrows it and leaves one step.** Re-run with
+`--separate-callers=2`, every context that reaches `sip::Hasher::write`:
+
+    76,786,762  ...'hash_one'Interp::eval_ident
+    66,040,164  ...'hash_one'Interp::type_decl
+    16,137,504  ...'hash_one'Interp::call_named
+    15,363,696  ...'hash_one'hashbrown contains_key
+    12,706,722  ...'hash_one'Interp::dispatch
+       359,918  ...'hash_one'Interp::render_interpolated
+
+Every one is the interpreter's own lookup. `hash_one` is FOURTEEN distinct
+functions in this binary sharing one demangled name, so the node annotate
+prints is merged and the cost split between them is not readable — but a
+separated context is a chain of names taken from the live stack, so
+`eval_ident` really did call a `hash_one` that really did call SipHash.
+
+And the frames those names sit in probe `self.fns` and `self.types`, which are
+`crate::hash::Map` — `BuildHasherDefault<Fx>`, fixed seed, no SipHash
+anywhere in reach. The two readings do not fit together, and the resolution is
+probably not the seed at all: **SipHash's own cost is byte-identical across
+runs.** The same bytes are hashed the same way every time. What differs is
+where things LAND, which a seed would do and so would a different INSERTION
+ORDER — and an Fx map built by collecting from a seeded map's iteration
+inherits that map's order without inheriting its hasher. `src/hash.rs` says in
+its own doc that iteration order changes and nothing the compiler writes
+depends on it; what it costs is the question this row is about.
+
+That is a hypothesis with the right shape and it is not measured. Naming the
+map it would come from is the step left.
+
 **So the candidate is replaced rather than confirmed.** The row's variance is
 not about where the allocator's heap starts; it is a hash probe sequence, and
 the same signature the three compile rows had before kanso#1449 fixed them.
