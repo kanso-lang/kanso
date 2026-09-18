@@ -258,11 +258,39 @@ tune=$tune:glibc.malloc.tcache_count=7
 # runtime.c and the second found it. So the warm-up now runs the identical
 # command in the identical environment, which is what the 2026-09-15 rule asks
 # for and what "re-stage the box" only half did.
+# AND THE OUTPUT PATH IS CLEARED BEFORE EVERY BUILD, WARM OR COUNTED. `ld`
+# reads whatever is already at `-o`, and what it finds there changes the row.
+# Measured on this gate's own corpus, one binary, one machine, the same `ld`
+# command each time, varying only the state of the output path:
+#
+#     output path absent          5,163,341,031   (twice, to the instruction)
+#     output path an empty file   5,163,341,036   (twice, +5)
+#     output path 100 bytes       5,163,343,385
+#     output path 5 MB            5,163,343,385
+#     output path the real binary 5,163,343,385   (+2,354 over absent)
+#
+# Three groups, each internally identical to the instruction, and size does
+# not matter once the file is non-empty. So it is the prior CONTENTS of the
+# output path, not the name, not the pid and not the run: three different
+# object-file names with the output in the same state all read identically.
+#
+# The gate was reading the third group by accident. `stage_and_warm` wipes the
+# box and then warms both tiers, so the counted build always found the warm-up's
+# binary sitting at `-o` -- correct by luck, and a reordering or a dropped
+# warm-up would have moved the row by 2,354 with nothing to say why. Clearing
+# is the 2026-09-15 rule applied literally: put it in a known initial state
+# every single run. Absent is the state a fresh box gives and the only one of
+# the three that needs nothing created to reach it.
+clear_output() {
+  rm -f "$box/codegen_corpus" "$box/codegen_corpus.ll"
+}
+
 stage_and_warm() {
   sh scripts/gates/codegen_box.sh
   # Warm BOTH tiers, whichever one this run counts, so the row does not depend
   # on which of the two the job happened to ask for first.
   for warm_flag in "" "--release"; do
+    clear_output
     ( cd "$box" && env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" KANSO_LTO_JOBS=1 \
         ./kanso build pkg/codegen_corpus $warm_flag >/dev/null 2>&1 )
   done
@@ -276,6 +304,7 @@ printf 'codegen_clang %s\n' "$(clang --version | head -1)"
 
 
 rm -f /tmp/cg.codegen.$tier.*
+clear_output
 (
   cd "$box"
   env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" KANSO_LTO_JOBS=1 valgrind --tool=callgrind \
@@ -344,6 +373,7 @@ fi
 # cases below are settled differently.
 stage_and_warm
 rm -f /tmp/cg.codegen.${tier}b.*
+clear_output
 (
   cd "$box"
   env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" KANSO_LTO_JOBS=1 valgrind --tool=callgrind \
