@@ -4126,3 +4126,23 @@ those have now been shown not to be the silicon, not `.text` size and not
 `.rodata` size.
 
 Both codegen rows and `compile_allocs` read their goldens exactly.
+
+## 2026-09-18 — what the ryu branch does to the interpreted row after kanso#1531
+
+The interpreted row on this branch is `interp_instructions=1,029,696,289`,
+where main reads 1,029,696,275. A rise of 14 instructions, 0.0000014%.
+
+It is layout and nothing else. The row runs `kanso run --interp`, which never
+reaches the native runtime; what it carries of `src/runtime.c` is the bytes,
+because the compiler `include_str!`s that file and the interpreted run is a
+process whose binary holds it. This branch takes four hundred bytes out of
+`ryu_d2d` and adds none, and every benchmark's `.text` comes down 1,360 bytes
+with it, so the code the interpreted run walks past is arranged differently.
+
+Fourteen instructions is what that arrangement is worth on this corpus. The
+branch's own earlier sittings recorded the same effect against the pre-`if`
+baseline, 2,182,576,109 -> 2,182,584,048, a rise of 7,939 on a row four times
+the size. Same shape, same direction.
+
+The trend gate asked for this sentence and was right to: the row was re-based
+in the goldens with nothing in the log naming it or the value it landed on.
