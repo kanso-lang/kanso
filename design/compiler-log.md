@@ -4120,6 +4120,84 @@ interpreted profile have nine declined builds between them. Picking the top
 frame off a profile has a record of one in five. The next real gain is
 structural, and the way to find it is not another reading of the same list.
 
+---
+
+## 2026-09-18 — the counted row takes two values, and which one depends on where you stand
+
+**MEASURED.** The A/B discipline this tree uses says the two arms must sit in
+directories of the same path length, and the reason written down for it was
+that the row "moves with path length". That is not the shape. One binary
+(`/tmp/kanso-resbase`), one corpus, `kanso run interp_corpus --interp` counted
+from ten directories differing only in name and length:
+
+    /tmp/p                             len  6   1,007,027,010
+    /tmp/pathaaaa                      len 13   1,007,027,010
+    /tmp/pathbbbb                      len 13   1,007,027,010
+    /tmp/pathaaaaaaaa                  len 17   1,007,027,010
+    /tmp/pathaaaaaaaaa                 len 18   1,007,027,010
+    /tmp/pathaaaaaaaaaa                len 19   1,007,027,010
+    /tmp/pathaaaaaaaaaaa               len 20   1,007,027,010
+    /tmp/pathaaaaaaaaaaaa              len 21   1,007,004,925
+    /tmp/pathaaaaaaaaaaaaaaaa          len 25   1,007,004,925
+    /tmp/pathaaaaaaaaaaaaaaaaaaaaaaaa  len 33   1,007,004,925
+
+**TWO VALUES, 22,085 APART, ONE STEP BETWEEN 20 AND 21.** Flat across six
+lengths below it and three above. The two equal-length directories with
+different names agree, which rules the name out. And the LONGER path reads
+FEWER instructions, so whatever this is, it is not a cost that grows with the
+string being carried.
+
+`interp_instructions.sh` documents the variable it knows about — "the count
+tracks the length of the path the compiler is handed — about 160 instructions
+a character" — and that is a different variable, the ARGUMENT handed to
+`kanso`, measured in `library_box.sh`. This one is the working directory, with
+the argument held at the relative `interp_corpus` throughout. A per-character
+model does not describe it and neither does the sign.
+
+**THE ENVIRONMENT IS A SECOND TERM AND A SMALLER ONE.** Same binary, same
+directory, one variable added:
+
+    plain                          1,007,027,010
+    KANSOPAD=<12 characters>       1,007,027,097   +87
+    KANSOPAD=<120 characters>      1,007,027,097   +87
+
++87 for one more entry, and the SIZE of the entry does not matter. So the term
+is the count of environment entries rather than the bytes in them.
+
+**NEITHER OF THESE IS LOOSE IN CI, and that is the point of writing them
+down.** The gates already run under `env -i` with a fixed `GLIBC_TUNABLES` and
+already `cd` into a fixed box, so both terms are pinned. What the measurement
+adds is how narrow the margin is. There are two boxes:
+
+    /tmp/kanso-compile-ir   21   compile, entry, library, interp, start-up
+    /tmp/kanso-codegen      18   codegen, emit
+
+21 is ONE CHARACTER past the step and 18 is three short of it, so the two sit
+on opposite sides. Renaming the first box one character shorter would move
+five rows by 22,085 with no compiler change behind it, and the only thing
+standing between that and a re-based golden was that nobody had reason to
+rename it.
+
+`tests/every_counted_run_sits_at_one_fixed_path.rs` pins it: each gate uses
+its own box, no gate declares a third, and each box is the length its goldens
+were measured at. The first draft asserted there was ONE box and went red
+naming the second, which is how the pair above came to be measured rather than
+assumed.
+
+**WHAT THIS DOES NOT EXPLAIN.** CI holds the path fixed, so this is not the
+account of the ±7 and ±13 the interpreted row has drawn between jobs. The
+entry that calls those the relink stands; nothing here touches it. Two
+container readings support that separation from the other side: the same
+source built twice into binaries with different content hashes — once by a
+comment length change, once by a different worktree path — read 985,444,659
+twice and 1,007,027,010 five times, at equal path lengths. A binary whose
+bytes move while its path does not leaves this row alone.
+
+**OPEN.** Why the step sits between 20 and 21 is not established, and the two
+obvious guesses — an allocation size class the absolute path crosses, and a
+small-string threshold — are guesses. The direction is the awkward part for
+both: the longer path costs less.
+
 ## 2026-09-17 — the digit loop carried a value it only needed at the end, and then the tail gave it back
 
 `render_ryu` is 84,209,220 instructions of runbench, 4.58%, 440.7 a float over
