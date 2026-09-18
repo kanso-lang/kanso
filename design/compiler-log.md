@@ -4604,3 +4604,75 @@ two sources, and only one of them was read. The entry was one `awk` away in a
 worktree already checked out. "Read the thing the number describes before
 running anything against it" is the rule, and a branch's own log entry is part
 of the thing.
+
+---
+
+## 2026-09-18 — a golden carried one row twice, and four sweeps read it as a sum
+
+**BUILT AND SHIPPING**, a spec and two one-row deletions.
+
+`bench/codegen_instructions_release_golden.txt` held
+`codegen_instructions_release=` twice on kanso#1504 — 6,824,133,280 and
+6,841,691,425 — and twice on kanso#1502, with 6,820,866,344 as the second.
+Both came from the same move: a merge brought main's row forward, wrote a
+header block explaining which reading it was, and appended it UNDER the row
+already there rather than replacing it.
+
+The reader adds:
+
+    *out.entry(format!("{prefix}{}", name.trim())).or_default() += n;
+
+That `+=` is right and has to stay. A cost golden holds one row per sample and
+the gate's `totals` sums them, and `bench/objective_sources.txt` maps one
+objective counter onto several gate keys. What the `+=` cannot tell apart is a
+second sample from a second copy. The gate read 13,665,824,705 — exactly the
+two added.
+
+**WHAT DID NOT SPEAK.** The counter sweep, the compile sweep and all three page
+gates ran green on both branches. Not one of them reads a golden for a repeated
+key: the sweeps compare a measured row against the file, and if the file
+answers with a sum they compare against the sum.
+
+**WHAT DID, AND WHAT IT SAID.**
+`tests/the_objective_reads_what_the_gate_watches.rs` went red with:
+
+    `codegen_instructions_release` reads 6841691425 from welfare and
+    13665824705 from codegen_instructions_release. The link is wrong or a
+    pool joined the sum.
+
+The link was fine. No pool had joined anything. That spec compares TOTALS, so a
+doubled row reaches it as a wrong total and it names the last thing that could
+produce one. Two branches were then red on a message pointing at the wrong
+file, and the defect is a duplicated line three directories away.
+
+This is the standing note about a verification that names one file while the
+defect sits next door, in its cleanest form yet: the spec was correct, its
+assertion was correct, and its DIAGNOSIS sent a reader to
+`bench/objective_sources.txt`.
+
+**THE SPEC.** `tests/a_golden_holds_one_row_per_counter.rs` reads the trend
+gate's own list of goldens — the same `[["bench/…" "prefix_"]]` parse the
+objective spec uses, so a golden added to the gate is covered without a second
+list to maintain — and asserts no counter name appears twice within one file.
+It reports the file, the name and the count.
+
+Watched red by planting the exact fault, a second
+`codegen_instructions_release=6841691425` appended to main's copy:
+
+    bench/codegen_instructions_release_golden.txt:
+      `codegen_instructions_release` appears 2 times
+
+It is deliberately not a value check. Whether a row holds the right number is
+what the gates are for and what CI measures; this asserts only that there is
+one of it to read, which is the property a merge breaks and no measurement can
+restore.
+
+The invariant was checked against the tree before it was written: all 29
+goldens the gate names hold at most one row per counter on main, so this pins
+something already true rather than declaring a convention.
+
+**THE TWO FIXES.** One row each, main's carried forward, with the duplicate's
+history in the header. Neither branch's own reading survives, because both were
+taken against bases that have since moved under kanso#1540, kanso#1541 and
+kanso#1544 — CI measures the merged trees and the rows are copied out of the
+job logs.
