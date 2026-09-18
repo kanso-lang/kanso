@@ -240,4 +240,18 @@ codegen_instructions_release=6824133280
 # value. The FIRST reading is written here because that is the one the gate
 # compares; until the name is pinned this row has a one-in-eleven chance per
 # job of drawing the other bucket.
-codegen_instructions_release=6820866344
+# 2026-09-18. TWO LIVE ROWS SAT HERE. This branch's own reading was appended
+# rather than replacing the carried-forward one, so the file held
+# `codegen_instructions_release=` twice -- 6,824,133,280 and 6,820,866,344.
+#
+# `rows()` in tests/the_objective_reads_what_the_gate_watches.rs accumulates
+# with `+=`, which it must, because bench/objective_sources.txt maps one
+# objective counter onto several gate keys. Within ONE file a repeated row is
+# a defect, and the `+=` turns it into a sum, so the spec reports the LINK as
+# wrong when the link is fine and the file has two of the row. kanso#1504
+# carried the same defect from its own merge.
+#
+# One row now, and it is MAIN'S, carried forward. The branch's 6,820,866,344
+# was read against a base that has since moved under kanso#1540, kanso#1541
+# and kanso#1544, so it is not a reading of this tree. CI measures the merged
+# tree and the row is copied out of the job log.
