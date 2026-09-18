@@ -4566,6 +4566,62 @@ own message was never visible to me, and a spec that is green here and red
 there could have had another reason. What is established is that the shared
 directory is real, that it fails under a widened window, and that it is a
 defect either way.
+## 2026-09-18 — the gate that accused a stable binary, and the arithmetic behind it
+
+Two pull requests sat blocked on the same red check and the same words:
+
+    THIS BINARY COUNTED TWO NUMBERS IN ONE JOB: 1138001437 and then
+    1138004452, on one binary, one corpus and one machine.
+
+`interp_instructions.sh` takes a second callgrind pass whenever the row
+disagrees with its golden, and the second pass exists to separate two cases
+that are settled differently. A binary that counts two numbers is a
+reproduction failure: the vein halts and the cause is hunted, and the value is
+never pinned. A binary that counts one number the golden does not hold is an
+ordinary ratchet. The gate's own text says so.
+
+The binary was stable. 1,138,004,452 − 1,138,001,437 is 3,015, and both jobs
+printed `interp_printed=3015` as a notice. The first reading is the anchored
+frame with the printed line taken off; the second was the raw frame. Two
+readings of the same quantity, less one subtraction.
+
+That is why the pair reproduced across two branches and two runners. kanso#1502
+carries two divisions in Ryu's float rendering, kanso#1504 caches the innermost
+beat mark, neither goes near the interpreted corpus, and both drew
+1,138,001,437 and 1,138,004,452 — because the gap is not a measurement at all,
+it is the subtraction the second reading skipped.
+
+**Where it came from.** kanso#1487 gave the three compile-side gates the
+exclusion on 2026-09-17, writing the reader as `printed_cost()` and calling it
+on both profiles. kanso#1505 brought the same exclusion to the interpreted row
+that day and open-coded the pipeline instead of naming it, which reached the
+first reading and not the second. The fix is to make this gate look like its
+three siblings.
+
+**What the defect cost, and why nothing caught it.** The second count only runs
+on the failure path, so the bug fires exactly when a reader most needs the
+answer and is invisible the rest of the time. It cost two pull requests a round
+each and very nearly cost more than that: the branch-side diagnosis had already
+been written down as layout jitter — a +7 that had supposedly landed three
+times on three different absolute values — and a log entry saying so was
+committed before the job log was read. A spread of 3,015 on a row whose
+allocation counter never moved is not layout, and the gate's own notice line
+said as much two screens above the error.
+
+So the golden edit that entry justified is withdrawn, and the +7 goes back to
+being an unexplained disagreement between this tree and its golden rather than
+a shape with three readings behind it. Whether the row should read
+1,138,001,430 or 1,138,001,437 is a question the fixed gate gets to answer.
+
+`tests/a_gates_second_count_is_read_like_its_first.rs` pins the property: a
+gate that subtracts a printed line from its first reading subtracts one from
+its second, and it reads for the CALL rather than the text, because the defect
+was one call site out of two rather than a missing subtraction anybody could
+see. It reads by the same marker as
+`every_anchored_gate_answers_for_the_printed_line.rs`, so the two agree on
+what counts as subtracting by construction; a looser match had
+`startup_instructions.sh` failing on prose explaining why its program prints
+nothing.
 ## 2026-09-17 — the beat rewind's fast path: 23 instructions to 15
 
 `k_beat_iter` is what a compiler-proven beat loop calls between iterations to
