@@ -305,4 +305,13 @@
 # moved and the two codegen rows did not: they AGREED with this branch's own
 # readings to the instruction, across two CI jobs on two different trees,
 # which is what `-Wl,-plugin-opt=jobs=1` bought.
-startup_instructions=3951796
+#
+# 2026-09-18, kanso#1510 (kanso#1484 rebuilt) on the tree merged with main,
+# CI's sitting. 3,951,796 -> 3,384,249, a FALL of 567,547 (-14.3617%).
+# THIS IS THE CHANGE, and it is much larger here than anywhere else. The set
+# of symbols DECLARES calls was re-derived rather than written down, and the
+# interpreter's start-up is where that derivation was paid for most. What the
+# saving IS has been measured; why it lands so much harder on this row than on
+# the emitter's is not claimed here beyond the obvious -- start-up runs the
+# derivation over the whole declare block before any program does anything.
+startup_instructions=3384249

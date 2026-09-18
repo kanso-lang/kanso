@@ -2618,6 +2618,30 @@ The rows are main's, carried forward, and the merged sitting is CI's to take.
 on today's main: precomputing the symbol set changes what the compiler asks,
 not what it writes.
 
+**CI'S SITTING ON THE MERGED TREE.** Six rows moved:
+
+    startup_instructions     3,951,796 ->   3,384,249    -567,547  -14.3617%
+    emit_instructions       60,196,725 ->  59,636,068    -560,657   -0.9314%
+    interp_instructions  2,182,576,109 -> 2,182,620,735   +44,626   +0.0020%
+    entry_instructions     126,349,040 -> 126,355,774      +6,734   +0.0053%
+    library_instructions   126,804,425 -> 126,810,678      +6,253   +0.0049%
+    compile_instructions    35,441,027 ->  35,443,639      +2,612   +0.0074%
+
+Start-up falls 14.36%, which is far more than the emitter's 0.93% share of the
+same saving. What the saving IS has been measured on both rows; why it lands so
+much harder on start-up than on `emit_ir` is not claimed here beyond the plain
+reading, that start-up runs the derivation over the whole declare block before
+any program does anything.
+
+The four rises are layout: the derivation runs before `kanso check` reaches
+those routes, so the saving is outside them, and rises of a few thousand
+against falls of 567,547 and 560,657 is the shape a real saving plus a moved
+binary makes.
+
+`codegen_instructions_dev`, `codegen_instructions_release`, `compile_allocs`
+and both interp memory rows AGREED with main to the instruction, which is the
+measured half of the emitted-IR-is-identical claim.
+
 The spec was watched red on the rebuilt tree rather than taken on trust from
 the old branch. Dropping `"k_b_append_byte"` from `DECLARES_CONTEXT_CALLS`
 fails `the_written_list_is_what_the_scan_finds`, which is the one of the three

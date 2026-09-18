@@ -114,4 +114,9 @@
 # moved and the two codegen rows did not: they AGREED with this branch's own
 # readings to the instruction, across two CI jobs on two different trees,
 # which is what `-Wl,-plugin-opt=jobs=1` bought.
-emit_instructions=60196725
+#
+# 2026-09-18, kanso#1510 (kanso#1484 rebuilt) on the tree merged with main,
+# CI's sitting. 60,196,725 -> 59,636,068, a FALL of 560,657 (-0.9314%).
+# The emitter's own share of the same saving: it asked the same question and
+# now reads a constant.
+emit_instructions=59636068

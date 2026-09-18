@@ -209,5 +209,13 @@
 # moved and the two codegen rows did not: they AGREED with this branch's own
 # readings to the instruction, across two CI jobs on two different trees,
 # which is what `-Wl,-plugin-opt=jobs=1` bought.
-interp_instructions=2182576109
+#
+# 2026-09-18, kanso#1510 (kanso#1484 rebuilt) on the tree merged with main,
+# CI's sitting. 2,182,576,109 -> 2,182,620,735, a RISE of 44,626 (+0.0020%).
+# LAYOUT. The derivation this branch removes runs before `kanso check` reaches
+# these routes, so the saving is outside them; what moved is where the code
+# sits. Three check routes and the interpreted row rise by a few thousand each
+# against falls of 567,547 and 560,657 on the two rows that pay for the
+# derivation.
+interp_instructions=2182620735
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
