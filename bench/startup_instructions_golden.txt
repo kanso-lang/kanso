@@ -326,6 +326,10 @@
 # binary's layout moves with it. A fall rather than a rise, and larger than
 # this row's usual layout term.
 #
+# 2026-09-18, kanso#1511 on the tree merged with main, CI's sitting.
+# 3,933,223 -> 3,932,978, a FALL of 245 (-0.0062%).
+# LAYOUT, and it FELL. Start-up takes the native path, which counts cells in
+# the runtime rather than in the interpreter.
 # 2026-09-18, re-merged onto main after kanso#1509. THE VALUE BELOW IS MAIN'S,
 # carried forward: kanso#1509 moved this row on its own and what this branch
 # adds on top of it has not been measured, so the merged reading is CI's.
@@ -352,4 +356,13 @@
 # rendering and none of these routes renders a float. All six fell, where
 # the sitting before kanso#1510 landed had the same six rising: one layout
 # term, opposite sign, which is what a shifted binary looks like.
-startup_instructions=3363173
+# carried forward: kanso#1510 moved this row on its own and what this branch
+# adds on top of it has not been measured, so the merged reading is CI's.
+#
+# 2026-09-18, kanso#1511 on the tree merged with main after kanso#1510,
+# CI's sitting. 3,364,974 -> 3,364,755, a FALL of 219
+# (-0.0065%). LAYOUT. Start-up takes the native path, which counts cells in the runtime.
+#
+# 2026-09-18, re-merged onto main after kanso#1511. THE VALUE BELOW IS MAIN'S,
+# carried forward; the merged reading is CI's.
+startup_instructions=3364755

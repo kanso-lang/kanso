@@ -2127,6 +2127,11 @@
 # million and 18,573 on the two rows that reach the emitter, which is the
 # shape a real saving plus a moved binary makes.
 #
+# 2026-09-18, kanso#1511 on the tree merged with main, CI's sitting.
+# 35,441,774 -> 35,441,736, a FALL of 38 (-0.0001%).
+# LAYOUT. `kanso check` makes an Interp and evaluates no constant, so the
+# OnceCell never fires on this route and the predicate never runs; what moved
+# is where the code sits.
 # 2026-09-18, re-merged onto main after kanso#1509. THE VALUE BELOW IS MAIN'S,
 # carried forward: kanso#1509 moved this row on its own and what this branch
 # adds on top of it has not been measured, so the merged reading is CI's.
@@ -2155,7 +2160,16 @@
 # rendering and none of these routes renders a float. All six fell, where
 # the sitting before kanso#1510 landed had the same six rising: one layout
 # term, opposite sign, which is what a shifted binary looks like.
-compile_instructions=35441393
+# carried forward: kanso#1510 moved this row on its own and what this branch
+# adds on top of it has not been measured, so the merged reading is CI's.
+#
+# 2026-09-18, kanso#1511 on the tree merged with main after kanso#1510,
+# CI's sitting. 35,445,148 -> 35,444,548, a FALL of 600
+# (-0.0017%). LAYOUT. This route evaluates no constant, so the OnceCell never fires here.
+#
+# 2026-09-18, re-merged onto main after kanso#1511. THE VALUE BELOW IS MAIN'S,
+# carried forward; the merged reading is CI's.
+compile_instructions=35444548
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

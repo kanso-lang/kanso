@@ -1,0 +1,23 @@
+import "std/io"
+import "std/list"
+
+# The twin of `an_undemanded_knot_allocates_nothing`, and the fixture the
+# 2026-08-24 entry named as unblocked. Same knot, the other arm: `x` mentions
+# itself, so it can only be built through a cell, and here the run reaches
+# the arm that reads it.
+#
+# Ruled 2026-08-24, "a demanded knot counts, and the oracle moves": both
+# engines report one allocation, one force and one evaluation. The oracle
+# used to report zero allocations, because its `knotted` built the cell
+# without touching the counter, and nothing in the tree compared the two --
+# this vein runs one engine. The spec named for a demanded knot counting
+# the same on both engines is what compares them; this file pins the shape.
+x = [x]
+
+pub play = picked 2
+
+fn picked 1
+  io/write "one\n"
+
+fn picked _
+  io/write "{length (list/to_list x)}\n"
