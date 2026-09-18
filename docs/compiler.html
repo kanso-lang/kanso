@@ -2166,6 +2166,20 @@ noinline   1,835,914,985   text=319,042
 
 <p>the shape is worth keeping even though the change is not. a frame is sized for the worst arm, and a dispatch whose arms differ a lot in what they need is a place to look &#8212; but which arms need what is a question for the disassembler, not for the source.</p>
 
+<h2 id="widthbound"><span class="sec-num">82</span>a width bound cannot see past the first step</h2>
+
+<p>rendering a double is 4.58% of the run program &#8212; 84,209,220 instructions over 191,070 calls, 440.7 each &#8212; and a quarter of that is one loop walking digits off the significand two at a time. it takes 5.35 trips a float on the encode corpus, because the significand starts with seventeen digits and the shortest form needs six or seven.</p>
+
+<p>so compute the count instead of searching for it. the two ends of the rounding interval agree above the first place where their difference has a digit, which makes <code>declen(vp - vm) - 1</code> a lower bound on how many digits can come off, and one division by a power of ten takes them all at once. written guarded by the same test the loop uses, the step can never take a digit the loop would have left.</p>
+
+<p>it costs <strong>38.3 instructions a float</strong>. the function goes to 91,522,440 and the whole run program rises 7,313,220, 0.397%, with every instruction of the rise inside that one function.</p>
+
+<p>a counter says why. over 190,890 calls the step fired every time and the count it computed was <strong>1 on 58,680 of them and 2 on the other 132,210</strong>. never more. the bound reads the interval at full width, and the interval renormalises after every removal: dividing both ends by ten narrows the absolute gap but leaves the loop&#39;s test true for many more steps than the starting width predicts. the step pays sixteen comparisons and three divisions to take 1.69 digits where one trip of the loop takes two for twenty-one instructions.</p>
+
+<p>declined. the reason belongs to the quantity rather than to the code, which is why no amount of tightening the step would rescue it.</p>
+
+<p>the same probe priced the idea that would have come next. of the 191,070 doubles this corpus renders, 152,460 need seven significant digits and 32,940 need six &#8212; and <strong>none of them is a whole number</strong>. a fast path for small integral doubles, the standard trick in every float renderer, would fire zero times here. measuring the corpus cost one afternoon and saved writing it.</p>
+
 
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
