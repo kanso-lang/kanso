@@ -271,7 +271,7 @@ stage_and_warm
 
 printf 'codegen_binary sha256=%s\n' "$(sha256sum "$box/kanso" | cut -d' ' -f1)"
 size --format=sysv "$box/kanso" \
-  | awk '/^\.(text|data|bss)[ \t]/ { printf "codegen_binary %s=%s\n", $1, $2 }'
+  | awk '/^\.(text|rodata|data|bss)[ \t]/ { printf "codegen_binary %s=%s\n", $1, $2 }'
 printf 'codegen_clang %s\n' "$(clang --version | head -1)"
 
 
