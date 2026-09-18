@@ -3918,3 +3918,31 @@ merged tree, and the ratchet follows that reading rather than this one.
 
 The three compile spans on the page follow the goldens, so they carry main's
 values as well.
+
+## 2026-09-18 — kanso#1502's rows on the tree merged after kanso#1515
+
+Six layout rows, one job, against the values carried forward from main:
+
+      compile           35,443,611 ->    35,442,256    -1,355   -0.0038%
+      entry            126,354,834 ->   126,352,941    -1,893   -0.0015%
+      library          126,810,299 ->   126,808,451    -1,848   -0.0015%
+      interpreted    2,168,428,538 -> 2,168,266,027  -162,511   -0.0075%
+      start-up           3,363,774 ->     3,363,824       +50   +0.0015%
+      emitting          51,546,788 ->    51,541,777    -5,011   -0.0097%
+
+Five fell and one rose, all under a hundredth of a per cent. LAYOUT: the two
+divisions this branch merges are in float rendering and none of these routes
+renders one -- three are `kanso check`, `emit_ir` stops before the backend, and
+the interpreted corpus decodes a document it built itself. The compile, entry,
+library and emit rows each read the same value twice in the job, so the
+binaries are stable and the disagreement was with the golden.
+
+Both codegen rows read their goldens exactly: 596,162,050 dev and 6,820,866,344
+release, which is `-Wl,-plugin-opt=jobs=1` holding across another tree.
+
+Welfare rises past the sentinel's band and the floor is banked at
+76.83783682357429. The round before this one carried main's rows forward and
+was red on exactly these six gates plus the floor sentinel, which is what a
+re-merge round is for: the branch cannot know what the merged tree reads until
+CI reads it, and a floor banked on the pre-merge rows would price a tree that
+no longer exists.

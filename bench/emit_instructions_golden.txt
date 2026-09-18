@@ -171,4 +171,8 @@
 #
 # 2026-09-18, re-merged onto main after kanso#1515. THE VALUE BELOW IS MAIN'S,
 # carried forward; the merged reading is CI's.
-emit_instructions=51546788
+#
+# 2026-09-18, kanso#1502 on the tree merged with main after kanso#1515, CI's sitting.
+# 51,546,788 -> 51,541,777, a FALL of 5,011 (-0.0097%). LAYOUT: the value above was main's,
+# carried forward on the re-merge, and this is the merged tree measured.
+emit_instructions=51541777
