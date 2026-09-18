@@ -2766,3 +2766,71 @@ with main to the instruction.
   diffuse — the largest single caller of `memcmp` is 6.2M, 1.0% — so there is
   no first map to intern that pays on its own. That is the same answer the
   check side gave, now with the build side agreeing.
+## 2026-09-18 — the data-sized cycle is blocked by the HOLE's placement, before birth through a call is reached
+
+STATUS.md's "Ruled, unbuilt" carries the 2026-08-29 cohort gavel — "cyclic
+structures sized by data (a graph parsed from input, N linked nodes from a map)
+gain a spelling" — and owes a measurement first: *whether birth through a call
+resolves to one birth*. Its route says a call returning one record may resolve
+to one birth, which would give the fill its uniqueness back.
+
+Measured on a release build of main `07b96058`, nine fixtures, each one a
+`build` block of a dozen lines. What compiles today:
+
+    two constructions bound to names, mutually linked, then collected
+    into a list literal                                            ok
+    a node whose hole is filled with itself                        ok
+    the two-node cycle with both holes                             ok
+
+What is refused, and the rule that refuses it:
+
+    a = fresh "a"; a.link = b        `a` is not a construction made in
+    (fresh's body constructs)        this `build` block
+    [(cell "a" _) (cell "b" _)]      `_` stands only where a construction's
+    (n -> cell n _)                    argument goes, inside one
+    if flag (cell "a" _) (cell "b" _)          -- the same refusal
+    pair (cell "a" _) (cell "b" _)   admitted; refused later for never
+                                     being filled
+
+**There are two blockers and the row names only the second.** Birth not
+flowing through a call is real and the diagnostic is exact. But the hole's
+PLACEMENT rule bites first: `_` is admitted where the construction carrying it
+is a binding's whole right-hand side, or an argument of another construction,
+and nowhere else. A list literal, an `if` arm and a lambda all refuse it.
+
+That is what stops the gavel's own example. "N linked nodes from a map" wants
+a hole inside the lambda handed to `list/map`, or inside a list literal — both
+refused — and N nodes cannot be N named bindings, which is the one shape that
+works. So even if birth through a call were built exactly as the row's route
+describes, the data-sized spelling would still not exist, because the holes
+could not be written down.
+
+The nested-construction case is the one that shows the boundary is placement
+rather than dataflow: `pair (cell "a" _) (cell "b" _)` gets past the placement
+rule and is refused by the fill-once rule for never being filled. The hole is
+admitted there; it is the list, the arm and the lambda that are not.
+
+**What this does NOT settle.** Whether birth through a call resolves to one
+birth is still open, and this measurement does not answer it — it says the
+question is not the first one. Reading `Cohort::made` shows it pushes a fresh
+entry on every call rather than memoising by source position, which is
+evidence that per-call-site identities would come out distinct, and evidence
+is not a measurement: nothing here ran a build with birth flowing through a
+call. Recorded as an argument, the way the earlier one about the allocator's
+heap was.
+
+The ledger entry the row's Owes asks for is the chat's to file, and what it
+should say is that the gavel's purpose needs the placement rule widened before
+the dataflow one is, not instead of it.
+
+**One thing the fixture turned up on the way past.** A hole in a list literal
+is reported twice: once by the placement rule and once by the fill-once rule
+for never being filled. Both are true and the second is a consequence of the
+first, so a reader gets four diagnostics for two holes. The `if` arm and the
+lambda report once each. Recorded rather than fixed, because which of the two
+should stay silent is a question about the diagnostics rather than the rule,
+and the corpus now pins whatever the answer turns out to be:
+`tests/golden/errors/a_hole_away_from_a_construction_argument` carries all
+three shapes and both goldens, and was watched red twice — once with a word
+changed in the message and once with the lambda's hole removed from the
+program.
