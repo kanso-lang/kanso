@@ -2415,12 +2415,153 @@ applied, the spec goes red; restored, green.
 With all four in, the spec passes on the merged tree and the three archived
 sends are answered where they stand — one bounced, one filed and ruled, one in
 the ledger.
-**The 13-instruction disagreement is still open.** Nothing here explains it,
-and the arithmetic that would have — three fixed init reads at 11 instructions
-a call — does not divide 13. What this round establishes is narrower and worth
-having on its own: the compile veins no longer contain a term that counts wall
-time.
+## 2026-09-18 — the release-codegen row was counting the scheduler
 
+kanso#1487 hunted this row once, found the variance in kanso's own process,
+excluded that process, and recorded that what was left — three `clang`
+processes and `ld` — came back byte for byte across two readings. It drew two
+faces again within the day:
+
+    codegen_instructions_release=6838057046
+    codegen_release_again=6838057035
+
+One job, one binary, eleven apart. The gate prices every process it runs, and
+that is what settled it: all three clang children byte-identical, kanso's own
+process moving +325 and already excluded, and **`ld` moving −11, the whole row
+delta**.
+
+Diffing the two `ld` profiles function by function — 18,604 entries — exactly
+one differed: `llvm::StringMapImpl::LookupBucketFor`, a hash probe count.
+
+**It is parallel LTO.** `ld` splits LTO codegen across threads, callgrind
+counts every thread, and how the work lands is the scheduler's to decide rather
+than the input's. Four pairs of links on a container, byte-identical bitcode,
+both clang children byte for byte every time:
+
+    different output path, plugin picks:  20,565,047,254  20,565,047,243   -11
+    same output path, plugin picks:       20,565,047,241  20,565,049,584 +2,343
+    same output path, jobs=1:             20,574,502,681  20,574,502,681      0
+
+The magnitude changing between pairs is what ruled out the two candidates that
+looked obvious. The output path was one — my own first pair used two different
+`-o` names, which could have been the whole story and was not. The pid was the
+other, and the golden's header had offered it as kanso#1487's untaken lead; it
+is only on the STAGING name of the runtime object, renamed to a pid-free path
+before clang or ld sees it. A fixed string costs a fixed number. Eleven one
+pair and 2,343 the next is a scheduler.
+
+So the gate asks for one thread, per the 2026-09-15 rule. It is not the
+default: a user's release build has no row to keep and every reason to use its
+cores, and `release_clang` adds the option only when the variable is set.
+
+`tests/the_measured_link_pins_its_thread_count.rs` watches both halves,
+because the property needs the gate to ask AND the compiler to pass the ask on,
+and a property split across two files is one nothing checks. Watched red both
+ways: dropping the variable from one `env -i` line, and spelling the option
+`--thinlto-jobs` (which is lld's; this ld rejects it).
+
+The row's absolute value moves — single-threaded LTO partitions the work
+differently, about 0.046% higher on the container — so nothing measured before
+this is comparable with anything after, and CI takes the sitting.
+## 2026-09-18 — the release-codegen row, round two: three clangs pinned, and an eleven left inside ld
+
+Round one measured what `-Wl,-plugin-opt=jobs=1` bought and what it left. CI's
+per-process notice is the whole reading, first count against second:
+
+    process        first          again        delta
+    clang:probe    32,265,497     32,265,497       0
+    clang          31,732,189     31,732,189       0
+    clang -cc1  1,617,286,141  1,617,286,141       0
+    ld          5,141,367,734  5,141,367,745     +11
+    kanso          89,463,216     89,463,528    +312   (excluded from the row)
+
+The three clang processes were the drifting half of this row and they are
+byte-identical now. That is the change working. The row's absolute value falls
+4,177,959 (0.0612%) with it, and none of that is a saving: single-threaded LTO
+partitions the same work differently and callgrind counts every thread, so
+nothing measured before this change is comparable with anything measured after.
+
+**The container reproduces the fix and cannot reproduce the residue.** Two
+complete pipeline runs here — staged and warmed exactly as the gate does it,
+not the direct clang invocation round one used — agree to the instruction on
+all four counted processes, `ld` included at 5,146,602,703 twice. They agree
+even though the temp-file names differ between them: the probe compile reads
+`/tmp/kanso_pn_probe_0020122.ll` in one run and `..._0021879.ll` in the other,
+and clang's object is `codegen_corpus-89a40b.o` against `...-0c759c.o`. Both
+are fixed-width, both feed `ld` on its command line, and neither moves a
+count. So the paths are ruled out as the term, which was the standing
+hypothesis and is now a dead one.
+
+Seven other rows moved and all seven are layout, each named here with the
+value it landed on:
+
+    compile_instructions        35,869,355 ->    35,869,250      -105
+    entry_instructions         127,872,255 ->   127,872,509      +254
+    library_instructions       128,010,052 ->   128,010,220      +168
+    interp_instructions      2,182,303,844 -> 2,182,293,088   -10,756
+    startup_instructions         3,955,899 ->     3,955,888       -11
+    codegen_instructions_dev   596,161,166 ->   596,159,774    -1,392
+    emit_instructions           60,197,743 ->    60,197,827       +84
+
+Every one is under five ten-thousandths of a per cent and the signs are mixed.
+src/main.rs gained a four-line `match` on an environment variable, and
+src/main.rs is the compiler, so its bytes move and every row that runs the
+compiler moves with them.
+
+**Those seven are recorded and not carried, and CI has now re-read them.**
+kanso#1486 landed underneath this branch between the sitting above and the
+merge, taking the three check routes down 1.17%, so the values in that table
+were measured against a base that no longer exists. All seven goldens carried
+MAIN'S values forward and CI measured the merged tree:
+
+    compile_instructions        35,441,049 ->     35,441,027        -22
+    entry_instructions         126,348,616 ->    126,349,040       +424
+    library_instructions       126,804,150 ->    126,804,425       +275
+    interp_instructions      2,182,523,679 ->  2,182,576,109    +52,430
+    startup_instructions         3,951,284 ->      3,951,796       +512
+    emit_instructions           60,200,209 ->     60,196,725     -3,484
+
+Six moved, all layout, mixed signs, the largest 24 parts per million.
+
+**The two codegen rows did not move, and that is the result.**
+`codegen_instructions_dev` read 596,159,774 and `codegen_instructions_release`
+read 6,822,651,561 — the same two numbers this branch measured on a different
+tree in a different job, agreeing to the instruction. A row that halted its own
+vein with a reproduction failure two rounds ago now reproduces across jobs.
+That is what `-Wl,-plugin-opt=jobs=1` bought, and it is better evidence than
+the single green round, because the two readings come from trees that differ
+by kanso#1486.
+
+Welfare sits on main's floor with the codegen pair re-based rather than
+scored. `entry_instructions`, `library_instructions` and
+`emit_instructions` are the three that rose; nothing in this branch runs on the
+entry or library corpus or writes a different line of IR, so what moved is
+where the code sits rather than what it does.
+
+**What the eleven gets instead of a guess.** The gate reported a magnitude and
+nothing else, which is two more CI rounds to find a process and then a frame.
+It now pairs the two readings and diffs their per-function self costs, printing
+the frames that moved. Two defects in that came out of running it against two
+real readings rather than reading it:
+
+  The key cannot be the program name. A build runs clang three times, so
+  `/usr/bin/clang` paired the probe compile against the driver and announced a
+  532,767 disagreement between two processes that were never the same process.
+  It cannot be the whole argv either, because the argv carries exactly the temp
+  paths that differ by construction. The key is the argv with runs of digits
+  and hex flattened: stable across runs, and still telling the three clangs
+  apart.
+
+  The percentage column is not one field. `callgrind_annotate` right-aligns it,
+  so `(100.0%)` is one whitespace-separated field and `( 4.02%)` is two, and an
+  awk counting fields reads the frame name off a different column depending on
+  the size of the number. Every frame name came out blank. It is a regex on the
+  whole line now.
+
+Run against the container's two passes, which differ only in the excluded
+kanso process, it pairs all five correctly, stays silent on the four that
+agree, and names the two frames that moved in the fifth:
+`__memcmp_avx2_movbe` −176 and `kanso::build` +419 on a process total of +243.
 ## 2026-09-17 — DECLARES calls sixty-two symbols, and the compiler was finding that out every time
 
 kanso#1468's index made `kanso build bench/runbench` fall 69.64% and made the
