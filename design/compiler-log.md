@@ -4434,3 +4434,30 @@ rather than with anything it measures.
 
 Seven instructions against a row of a billion. The trend gate asked for the
 sentence because the goldens carried the new value with nothing naming it.
+
+## 2026-09-18 — kanso#1504's rows on the tree merged after kanso#1533
+
+CI measured the beat-rewind branch on the tree carrying the dispatcher
+change. Six rows moved, all of them small, and three went each way:
+
+    compile_instructions   35,550,010 ->  35,549,668      -342  -0.0010%
+    entry_instructions    126,729,588 -> 126,729,774      +186  +0.0001%
+    library_instructions  127,186,008 -> 127,185,869      -139  -0.0001%
+    emit_instructions      51,617,476 ->  51,620,167    +2,691  +0.0052%
+    startup_instructions    3,363,916 ->   3,363,431      -485  -0.0144%
+    interp_instructions   995,837,536 -> 995,837,543        +7  +0.0000007%
+
+Four were counted twice in the one job and every repeat agreed to the
+instruction: compile_again 35,549,668, entry_again 126,729,774,
+library_again 127,185,869, emit_again 51,620,167.
+
+A change that only moves layout gives no sign about direction, and this
+sitting is the cleanest demonstration of that on record: one diff, six rows,
+three down and three up, all under 0.015%. `interp_allocs` and
+`interp_peak_bytes` are byte-identical, so nothing the interpreter counts
+changed, and the seven instructions on the interpreted row are the relink.
+kanso#1502 read +14 on its own tree in the same sitting and byte-identical on
+another. Re-based, not explained, and the header on each golden says so.
+
+The branch's own rows are the run-time ones and they fell: livebench
+2,825,430,323 -> 2,805,024,580 and runbench 1,821,933,936 -> 1,804,998,570.

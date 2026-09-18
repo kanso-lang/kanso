@@ -426,5 +426,11 @@
 # THE ROW THIS CHANGE IS ABOUT. The dispatcher stops copying its group name
 # through the formatting machinery on every tail hop, and arm selection stops
 # allocating two vectors for every candidate it is about to reject.
-interp_instructions=995837536
+#
+# 2026-09-18, kanso#1504 on the tree merged after kanso#1533, CI's sitting.
+# 995,837,536 -> 995,837,543, a RISE of SEVEN instructions (+0.0000007%).
+# Seven on 995 million is what a relink moves this row by; kanso#1502 read
+# +14 on its own tree in the same sitting and byte-identical on another.
+# Nothing in this diff runs in the interpreter. Re-based, not explained.
+interp_instructions=995837543
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
