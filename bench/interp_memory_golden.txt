@@ -178,6 +178,19 @@
 # 1,309,483 -- the same figure to the unit, on machines whose instruction
 # counts differ by millions. It counts what the program asked for rather than
 # what the machine did, which is why its gate has no host divergence to allow.
+#
+# CHECKED ON A SECOND TREE, because one agreement is a coincidence. On the
+# kanso#1538 tree the container prints interp_allocs=1410530 and the runner
+# reads 1,410,530. Two trees, two hosts, two exact agreements.
+#
+# AND THE CHECK REFUTED THE WIDER VERSION OF THE CLAIM, which is why it was
+# worth running. `interp_peak_bytes` does NOT reproduce: on that same
+# kanso#1538 tree the container reads 833,458 against the runner's 833,466,
+# eight bytes apart. So it is the TRAFFIC COUNT that is host-independent and
+# not the memory rows as a family -- a peak is a high-water mark of what the
+# allocator was holding at one instant, and what it was holding depends on the
+# machine in a way a call count does not. That sentence is a candidate for the
+# mechanism and the eight bytes are the measurement.
 interp_allocs=1309483
 #
 # 2026-09-18, kanso#1518 against main at kanso#1517, CI's sitting.
