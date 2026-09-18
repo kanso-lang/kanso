@@ -2631,6 +2631,36 @@ error[name]: unknown name `builders/run`
 
 <p>a fourth change leaves the comparing alone. memcmp reads 46,087,562 then 46,118,166 across the &#167;97 pair, +0.066%. a draft of this paragraph had it falling 1,484,175, which was a debug-info profile read against a release one &#8212; two build configurations rather than two trees. compared inside its own sitting it has not moved, and the three changes in &#167;96 become four.</p>
 
+<h2 id="framedback"><span class="sec-num">99</span>the frame handed back</h2>
+
+<p>&#167;98 kept the score buffer because nothing consumes it. the bindings buffer is the other half and cannot be kept the same way: it is moved into the environment frame, and the body needs it. what can be taken back is the frame itself, once the body has finished with it.</p>
+
+<p>whether that is ever possible was worth measuring before building. an instrumented binary took a weak reference to the frame before the body ran and tried to upgrade it afterwards:</p>
+
+<pre>  frames made   173,922
+  frames dead   173,921</pre>
+
+<p>one frame in the whole run outlives the body it was given to, and it is a lazy binding holding the environment it was defined in. a weak reference rather than a second strong one, on purpose: a strong clone would make every uniqueness check inside the body fail and change the thing being measured.</p>
+
+<p>so the dispatcher keeps a handle beside the one the body gets, and afterwards asks for the frame back. the vector inside goes into a pool above the tail-call loop and the next dispatch takes it instead of allocating.</p>
+
+<pre>  base    980,371,488
+  frame   977,583,095   -2,788,393   -0.28%
+
+                   base        frame       delta
+  __rust_alloc    1,243,349   1,123,808   -119,541
+  __rust_dealloc  1,231,221   1,111,680   -119,541
+  grow_one          112,013      94,847    -17,166
+  drop_slow         262,323     160,154   -102,169</pre>
+
+<p>the projection off the frame count was seven to ten and a half million and the build paid 2.79. that gap is the useful part. the projection priced 173,922 pairs at the 42.4 and 61.2 instructions &#167;98 and &#167;97 measured; what arrived is 119,541 pairs at 23.3 each. fewer pairs than frames, because a pooled vector that already has capacity does not allocate when it is reserved again. and a cheaper pair than either earlier measurement, because this one buys its saving: a reference count up, a reference count down and an unwrap check on every dispatch, against an allocate-and-free it no longer makes.</p>
+
+<p>the 102,169 fall in the reference-count teardown is the frame being unwrapped instead of dropped through it, and is the clearest single sign the change does what it says.</p>
+
+<p>the node around the vector is still allocated. every dispatch that binds anything still calls for one, and reclaiming what is inside does nothing about it. that is the other half of the projection, untouched.</p>
+
+<p>a spec caught this one too, the same spec, the third change running: an exact per-round allocation count that fell by two a round again. this is the change most likely to disturb what it measures, since it holds a second handle to a frame whose values are the containers the builders check for uniqueness. it does not, because the frame was already alive for the whole body &#8212; the extra handle moves when the frame dies, from inside the body to just after it, and uniqueness is decided while the body runs. the builders still answer what they answered before, and the number moved down.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>

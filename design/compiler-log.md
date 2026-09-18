@@ -4514,3 +4514,65 @@ function.
 The instrumentation is reverted. It is described here rather than kept, since a
 counter that exists to answer one question is a vein to regenerate forever
 after.
+
+---
+
+## 2026-09-18 — the dispatcher takes its frame back, and gets two thirds of what the count promised
+
+**BUILT AND SHIPPING.** The entries above measured the opportunity and then
+settled it: the environment frame is dead 173,921 times out of 173,922 by the
+time the body has finished with it. So the dispatcher keeps a handle beside the
+one the body gets, and afterwards asks for it back.
+
+    let held = env.clone();
+    let flowed = self.eval_body_flow(decl, env);
+    if let Some(rc) = held {
+        if let Ok(Env::Many(slots, _)) = Rc::try_unwrap(rc) {
+            pool = slots;
+        }
+    }
+
+`Rc::try_unwrap` declines in exactly the case the instrumented build found: a
+lazy thunk that captured its defining environment. The bindings vector the
+frame was built around goes into a pool above the tail-call loop and the next
+dispatch takes it instead of allocating.
+
+    base    980,371,488
+    frame   977,583,095   -2,788,393   -0.28%
+
+                     base        frame       delta
+    __rust_alloc    1,243,349   1,123,808   -119,541
+    __rust_dealloc  1,231,221   1,111,680   -119,541
+    grow_one          112,013      94,847    -17,166
+    drop_slow         262,323     160,154   -102,169
+
+**THE PROJECTION WAS SEVEN TO TEN AND A HALF MILLION AND THE BUILD PAID 2.79.**
+That is the useful part of this entry. The projection priced 173,922 pairs at
+the 42.4 and 61.2 instructions the two changes before it measured. What arrived
+is 119,541 pairs at 23.3 each, and both halves of the gap are real: fewer pairs
+than frames, because a pooled vector that already has capacity does not
+allocate when it is reserved again, and a cheaper pair than either earlier
+measurement, because this one BUYS the saving — a reference count up, a
+reference count down and a `try_unwrap` check on every dispatch, against an
+allocate-and-free it does not make.
+
+`drop_slow` falling 102,169 is the frame being unwrapped instead of dropped
+through it, and is the clearest single sign the change does what it says.
+
+**WHAT IS STILL ALLOCATED.** The `Rc<Env>` node itself. `bind_all` calls
+`Rc::new` on every dispatch that binds anything, and reclaiming the vector
+inside does nothing about the node around it. That is the other half of the
+projection and it is untouched.
+
+**A SPEC CAUGHT THIS ONE TOO**, the same one, the same way:
+`a_unique_container_is_extended_in_place` read 4,203 against a pin of 4,803 —
+two fewer allocations a round for the third change running. Re-read per that
+file's protocol. This change is the one most likely to disturb what that spec
+measures, because it holds a second handle to a frame whose values are the
+containers `push`, `put` and `append` call `Rc::try_unwrap` on. It does not,
+and the reason is that the frame was already alive for the whole body: the
+extra handle moves when the frame dies, from inside the body to just after it,
+and a container's uniqueness is decided while the body runs. The sibling test
+still answers `1200 600` and `2400 1200`, and the number moved down.
+
+Nine builds on the dispatch path today, four wins.

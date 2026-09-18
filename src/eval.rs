@@ -2415,6 +2415,16 @@ impl<'a> Interp<'a> {
         // iteration already has capacity and `match_params_into` clears it
         // before the next candidate fills it.
         let mut score: Score = Vec::with_capacity(args.len());
+        // AND THE BINDINGS BUFFER COMES BACK TOO, when the frame it became is
+        // the dispatcher's to take back. `bind_all` moves `binds` into
+        // `Env::Many`, so unlike the score it cannot simply be kept -- the body
+        // needs it. What can be kept is the frame AFTER the body has finished
+        // with it, and it almost always is: an instrumented build took a `Weak`
+        // to the frame and tried to upgrade it after the body returned, and it
+        // was dead 173,921 times out of 173,922. The one survivor is a lazy
+        // thunk holding its defining environment, which is the case
+        // `Rc::try_unwrap` declines below.
+        let mut pool: Bindings = Vec::new();
         loop {
             // The second hole in an err's infectiousness: a reader's getter
             // answers the piece before any arm is tried, so an own-hako err
@@ -2479,7 +2489,9 @@ impl<'a> Interp<'a> {
             // `args_len` is exact for `score`, which takes one entry per
             // parameter, and a floor for `binds`, since a `Ctor` pattern can
             // bind its fields and a whole.
-            let mut binds: Bindings = Vec::with_capacity(args_len);
+            let mut binds: Bindings = std::mem::take(&mut pool);
+            binds.clear();
+            binds.reserve(args_len);
             score.reserve(args_len);
             for decl in overloads.iter() {
                 if decl.params.len() != args.len() {
@@ -2523,6 +2535,10 @@ impl<'a> Interp<'a> {
                     // per binding made the chain as long as the arguments, and
                     // the walk paid for that on every name the body mentions.
                     let env = bind_all(None, binds);
+                    // One handle for the dispatcher beside the one the body
+                    // gets. It costs a reference count either way, and it is
+                    // what makes the frame reclaimable rather than freed.
+                    let held = env.clone();
                     // THE ARGUMENT VECTOR IS A HOLDER, and nothing below
                     // reads it. `match_one` cloned each matched value into
                     // `binds`, so every container argument is now pointed at
@@ -2532,7 +2548,17 @@ impl<'a> Interp<'a> {
                     // calls, so the builder copied 180 MB it mostly did not
                     // need to, and `Rc::try_unwrap` could not fire.
                     args.clear();
-                    match self.eval_body_flow(decl, env)? {
+                    let flowed = self.eval_body_flow(decl, env);
+                    // The body has finished with the frame. If nothing it made
+                    // kept a handle -- a lazy thunk is the only thing that
+                    // does -- the vector inside comes back for the next
+                    // dispatch instead of being freed and allocated again.
+                    if let Some(rc) = held {
+                        if let Ok(Env::Many(slots, _)) = Rc::try_unwrap(rc) {
+                            pool = slots;
+                        }
+                    }
+                    match flowed? {
                         Flow::Done(value) => return Ok(value),
                         Flow::Tail(next, next_args, next_span) => {
                             overloads =
