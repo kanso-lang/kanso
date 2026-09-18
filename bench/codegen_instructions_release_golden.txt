@@ -189,4 +189,23 @@
 # the whole difference inside `ld` and all three clang processes
 # byte-identical. Two hosts, opposite signs; nothing here predicts the
 # runner's, and the size of this term is not a property of the change.
+#
+# 2026-09-18, THE GATE NOW PINS THE LTO OBJECT'S NAME, so this row measures a
+# different link and the value below is the OLD one, left for CI to move.
+# clang wrote the object to `/tmp/<stem>-XXXXXX.o` with fresh hex every run and
+# `ld`'s plugin probed a `StringMap` with that path. Twenty-two names, one
+# binary, one corpus, every other input held:
+#
+#     twenty names          5,163,341,031
+#     `4b8c1a`, `fedcba`    5,163,341,042
+#
+# Eleven apart, deterministic per name, about one name in eleven. That is the
+# eleven this row has disagreed with ITSELF by since kanso#1507 pinned the
+# plugin's threads, and kanso#1502's own job drew both buckets in one run:
+# 6,820,866,344 then 6,820,866,355.
+#
+# `-save-temps=obj` derives the name from the input instead. On the container
+# the whole pipeline then read 6,811,830,244 twice against 6,813,182,505 three
+# times without it, so the flag RE-BASES this row by about 1.35 million as well
+# as steadying it. A MEASUREMENT CHANGE, not a compiler saving.
 codegen_instructions_release=6824133280

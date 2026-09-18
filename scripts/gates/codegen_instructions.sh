@@ -229,6 +229,19 @@ tune=$tune:glibc.malloc.tcache_count=7
 # kanso#1487 had already excluded kanso's own process and certified the child
 # tree deterministic: the remaining drift was inside `ld` and nowhere else.
 #
+# KANSO_FIXED_TEMPS=1 RIDES BESIDE IT AND CLOSES WHAT THE THREAD PIN LEFT.
+# Pinning the threads took the row from drifting by millions to drifting by
+# ELEVEN, and the eleven is the object's NAME: clang writes its LTO object to
+# `/tmp/<stem>-XXXXXX.o` with fresh hex, `ld`'s plugin puts that path into a
+# `StringMap`, and the probe length depends on the string. Twenty-two names on
+# one binary and one corpus: twenty read 5,163,341,031 and two -- `4b8c1a` and
+# `fedcba` -- read 5,163,341,042. `-save-temps=obj` derives the name from the
+# input instead, so it is the same string every run.
+#
+# The two travel together on every `env -i` line here, and
+# `tests/the_measured_link_names_its_object.rs` says so: one without the other
+# is a measurement pinned in one of its two loose places.
+#
 # Measured on this container, two links of byte-identical bitcode, both `clang`
 # children byte for byte every time:
 #
@@ -282,7 +295,7 @@ tune=$tune:glibc.malloc.tcache_count=7
 # every single run. Absent is the state a fresh box gives and the only one of
 # the three that needs nothing created to reach it.
 clear_output() {
-  rm -f "$box/codegen_corpus" "$box/codegen_corpus.ll"
+  rm -f "$box/codegen_corpus" "$box/codegen_corpus.ll" "$box/codegen_corpus.o"
 }
 
 stage_and_warm() {
@@ -291,7 +304,7 @@ stage_and_warm() {
   # on which of the two the job happened to ask for first.
   for warm_flag in "" "--release"; do
     clear_output
-    ( cd "$box" && env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" KANSO_LTO_JOBS=1 \
+    ( cd "$box" && env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" KANSO_LTO_JOBS=1 KANSO_FIXED_TEMPS=1 \
         ./kanso build pkg/codegen_corpus $warm_flag >/dev/null 2>&1 )
   done
 }
@@ -307,7 +320,7 @@ rm -f /tmp/cg.codegen.$tier.*
 clear_output
 (
   cd "$box"
-  env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" KANSO_LTO_JOBS=1 valgrind --tool=callgrind \
+  env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" KANSO_LTO_JOBS=1 KANSO_FIXED_TEMPS=1 valgrind --tool=callgrind \
     --trace-children=yes --callgrind-out-file=/tmp/cg.codegen.$tier.%p \
     ./kanso build pkg/codegen_corpus $flag >/dev/null 2>/dev/null
 )
@@ -376,7 +389,7 @@ rm -f /tmp/cg.codegen.${tier}b.*
 clear_output
 (
   cd "$box"
-  env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" KANSO_LTO_JOBS=1 valgrind --tool=callgrind \
+  env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" KANSO_LTO_JOBS=1 KANSO_FIXED_TEMPS=1 valgrind --tool=callgrind \
     --trace-children=yes --callgrind-out-file=/tmp/cg.codegen.${tier}b.%p \
     ./kanso build pkg/codegen_corpus $flag >/dev/null 2>/dev/null
 )

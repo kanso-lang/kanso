@@ -3032,3 +3032,54 @@ sets, in the shape of `KANSO_LTO_JOBS`, making `release_clang` write its
 object to a fixed path. It is separated so that one round measures one thing —
 the cleared output re-bases both codegen rows here, and a second re-base on
 top of it could not be told apart.
+## 2026-09-18 — the object gets a name the run chooses, and the eleven has nowhere left to live
+
+kanso#1512 closed the mechanism and said the fix belonged in a round of its
+own. This is it.
+
+`clang` writes its LTO object to `/tmp/<stem>-XXXXXX.o` with fresh hex every
+run. `ld`'s LLVM plugin puts that path into a `StringMap`, and how far the
+probe walks depends on the string. Twenty-two names, one binary, one corpus,
+every other input held fixed and the output path absent each time:
+
+    twenty names          5,163,341,031
+    `4b8c1a`, `fedcba`    5,163,341,042
+
+Eleven apart, deterministic per name — `4b8c1a` was run four times in all and
+read the high value every time — and about one name in eleven. That is the
+eleven `codegen_instructions_release` has been disagreeing with ITSELF by ever
+since kanso#1507 pinned the plugin's thread count and took the drift from
+millions down to this. kanso#1502's round drew both buckets inside one job,
+6,820,866,344 and then 6,820,866,355, on a branch whose diff is two divisions
+in float rendering.
+
+**Three rounds were spent on it, and one was spent asserting the name was not
+the cause.** That assertion rested on three samples, then five, of a
+one-in-eleven effect. The lesson is the log's own and it now has a fourth
+entry: a report that something is ABSENT is worth what the search for it being
+PRESENT was worth.
+
+`-save-temps=obj` derives the object's name from the input, so the string is
+the same every run. It rides `KANSO_FIXED_TEMPS`, which only the gate sets,
+for the reason `KANSO_LTO_JOBS` is not the default either: it leaves a file in
+the user's directory and a user's release build has no row to keep.
+`tests/the_measured_link_names_its_object.rs` pins three things — the flag is
+conditional on the variable, the two pins travel together on every `env -i`
+line, and `clear_output` removes the object the flag leaves behind.
+
+**That last one is kanso#1512's lesson applied to this change's own leavings.**
+A saved object is state the next build would find at a known path, which is
+exactly what clearing the binary and the IR was for. All three go.
+
+**And the spec caught its own first shape.** Counting the sites and asserting
+three passed when one site lost the variable: a comment naming the pair made
+the count four, so dropping one left three. The assertion is per line now —
+every executable `env -i` that pins the threads pins the name too, and the
+reverse — and it was watched red in both directions.
+
+Cost, as the container reads it: the whole pipeline goes 6,813,182,505 (three
+identical runs without the flag) to 6,811,830,244 (two identical runs with
+it), about 1.35 million lower. **A MEASUREMENT CHANGE and not a compiler
+saving** — nothing about the compiler moved, and what the flag buys is a link
+whose object has the same name twice. Both codegen goldens carry the old value
+with the change named in the header; CI moves them.
