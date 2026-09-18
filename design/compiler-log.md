@@ -4889,3 +4889,38 @@ argues for.
 
 Recorded with the arithmetic so the next reader inherits the conclusion rather
 than the two experiments. The comparison is not the problem.
+
+## 2026-09-18 — the chain is 2.52 frames deep, which is why both schemes lost
+
+The entry above said the trade "only pays when the chain is long, and here it is
+not." That was inferred from two losses rather than measured, so it was
+measured. A counter in `lookup` over the interpreted corpus:
+
+    lookups          1,056,329
+    frames visited   2,662,536      2.52 per lookup
+    misses             332,025      31.4%, and a miss walks the whole chain
+
+**The instrument agrees with two figures this project already published, to the
+unit.** 1,056,329 is the `eval_ident` call count in section 87. Subtracting the
+misses leaves **724,304**, which is section 87's count of locals that stop at
+the environment walk AND the memcmp caller count read off the debuginfo build.
+Three independent paths to the same two numbers.
+
+**2.52 is the whole explanation.** A scheme that pays a setup cost per LOOKUP
+and saves per FRAME has two and a half frames to amortise it over. The padded
+key cost about forty-seven instructions a lookup and could save at most the
+eighteen-odd a small `memcmp` costs, times 2.52 — so it lost, and it would have
+lost at any setup cost above about forty-five. The head byte had no setup at all
+and lost to the node instead. Neither failure was about the comparison.
+
+**And it bounds what slot resolution could be worth, which is the point of
+measuring rather than guessing.** 48,165,663 instructions of `memcmp` over
+2,662,536 frame visits is about eighteen a visit. Resolving a local to an index
+at parse time removes the visit, not just the compare, and an index costs two or
+three instructions instead of eighteen — so the ceiling is roughly forty
+million, near 3.6% of the interpreted row. That is worth doing and it is now a
+number rather than a hope.
+
+It is also a larger change than anything tried here: slots have to survive
+closures, which capture an environment rather than a frame. Recorded as sized
+and unbuilt.

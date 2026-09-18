@@ -2334,7 +2334,19 @@ key    row 1,150,537,278   memcmp 35,577,082</code></pre>
 
 <p>two sound schemes losing in different ways is worth more than either result. the byte lost to the node&#8217;s size; this one has no node cost and loses by more, so what is left to blame is the shape of the trade: the setup is paid per <em>lookup</em> and the saving arrives per <em>frame</em>. that only pays when the chain is long, and here it is not.</p>
 
-<p>which reframes the lead. the 48 million is real, and it belongs to the walk rather than to how the walk compares. anything that keeps the walk and makes the compare cheaper is buying a per-frame saving with a per-lookup cost. what removes it is not walking at all: resolving a local to a slot at parse time, so the interpreter indexes where it now searches. that is a larger change than either of these, and it is what the 48 million actually argues for.</p>
+<p>which reframes the lead. the 48 million is real, and it belongs to the walk rather than to how the walk compares. anything that keeps the walk and makes the compare cheaper is buying a per-frame saving with a per-lookup cost.</p>
+
+<p><strong>and that ratio is measurable, so it was measured rather than left as a reason.</strong> a counter in the walk, over the same corpus:</p>
+
+<pre><code>lookups          1,056,329
+frames visited   2,662,536      2.52 per lookup
+misses             332,025      31.4%, and a miss walks the whole chain</code></pre>
+
+<p>the instrument lands on two numbers this page already carries. <strong>1,056,329</strong> is the resolution count in section 87; take the misses away and <strong>724,304</strong> remains, which is section 87&#8217;s count of locals that stop at the walk and also the caller count read off the profile. three routes to the same pair.</p>
+
+<p><strong>2.52 is the whole explanation.</strong> a scheme paying setup per lookup and saving per frame has two and a half frames to amortise it over. the padded key cost about forty-seven instructions a lookup against a saving of the eighteen-odd a small <code>memcmp</code> costs, times 2.52 &#8212; so it lost, and would have lost at any setup above about forty-five. the byte had no setup and lost to the node instead.</p>
+
+<p>it also prices the change that would work. eighteen instructions a visit across 2,662,536 visits is the 48 million; resolving a local to an index at parse time removes the <em>visit</em>, and an index costs two or three instead of eighteen. the ceiling is around forty million, near 3.6% of the interpreted row. that is worth doing, it is a number rather than a hope, and it is larger than anything tried here &#8212; slots have to survive closures, which capture an environment rather than a frame.</p>
 
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
