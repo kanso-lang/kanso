@@ -5142,3 +5142,43 @@ that would say something is a tree whose `.rodata` matches one of these three
 exactly and whose row disagrees — that would rule `.rodata` out too — or a
 deliberate `.rodata` change of known size on an otherwise identical tree, which
 would make it a function or kill it.
+
+## 2026-09-18 — the .rodata correspondence, tested and killed
+
+The entry above left `.rodata` standing as the one candidate the three-tree
+table had not ruled out, and named the experiment that would settle it: a
+deliberate `.rodata` change of known size on an otherwise identical tree. That
+experiment is cheap, it runs on this container, and it was run.
+
+Main at `36433243`, release, callgrind, twice — once as it stands and once with
+4,096 bytes of non-zero immutable data added to `src/lib.rs` under `#[used]`,
+reached by nothing the program runs:
+
+    .rodata=823,832  .text=2,860,898   row=1,173,233,661
+    .rodata=827,928  .text=2,860,898   row=1,173,233,661
+
+`.rodata` grew by exactly 4,096, `.text` held byte-for-byte, and the row did
+not move by one instruction.
+
+**So `.rodata` size does not move this row, and the correspondence was three
+points lining up by chance.** 803,856 reading 430 and the two larger values
+reading 437 is what two coin flips look like when you only have three of them.
+The page section that recorded it as a correspondence rather than a function
+was right to, and is now corrected to say it is neither.
+
+That leaves all three candidates dead: not the silicon, not `.text` size, not
+`.rodata` size. What remains is the one thing the table could not separate —
+`.text` CONTENT. Equal size is not equal code, and the three trees are three
+different branches; which functions landed at which addresses, and how they
+aligned, differs between them while the section total happens to match. That is
+layout in the narrow sense of addresses rather than sizes, and nothing here
+isolates it.
+
+The next experiment, if the seven is ever worth more than it has cost: perturb
+`.text` at constant size on one tree — reorder two functions, or pad one — and
+read the row. This probe took four minutes and killed a published claim, which
+is the argument for running the cheap one before writing the careful sentence.
+
+The figures above are this container's and are not comparable with CI's, which
+is exactly why the experiment is sound: both readings come from the same box,
+and what is compared is the difference between them.

@@ -2326,9 +2326,18 @@ kanso#1504      AMD  0x1a / 0x2   2,840,050   806,288   1,138,001,437</code></pr
 
 <p><strong>and <code>.text</code> is not it, which is the surprising one.</strong> all three trees emit byte-identical <code>.text</code>, 2,840,050 bytes, and the rows still differ. so a row that moves while the code section holds cannot be code layout in the ordinary sense.</p>
 
-<p><code>.rodata</code> is the only section that moves: 803,856, 805,776, 806,288. the smallest reads 430 and the two larger read 437 — and those two differ from each other by 512 while reading the same row, so what this is, so far, is a correspondence rather than a function.</p>
+<p><code>.rodata</code> is the only section that moves: 803,856, 805,776, 806,288. the smallest reads 430 and the two larger read 437, which looked like a correspondence over three points.</p>
 
-<p>two candidates ruled out and a third left standing is not an explanation, and the log says so rather than rounding it up to one. what would settle it: a tree whose <code>.rodata</code> matches one of these exactly and whose row disagrees, which kills the correspondence; or a deliberate <code>.rodata</code> change of known size on an otherwise identical tree, which makes it a function.</p>
+<p><strong>so it was tested, and it is not one.</strong> main, built twice on one box, the second build carrying 4,096 bytes of non-zero immutable data that nothing reaches:</p>
+
+<pre><code>.rodata=823,832  .text=2,860,898   row=1,173,233,661
+.rodata=827,928  .text=2,860,898   row=1,173,233,661</code></pre>
+
+<p>the section grew by exactly 4,096, the code section held byte for byte, and the row did not move by one instruction. three points lining up was two coin flips.</p>
+
+<p>that leaves all three candidates dead — not the silicon, not the size of the code, not the size of the constants. what is left is the one thing the table cannot separate: equal <code>.text</code> size is not equal <code>.text</code> content. three branches put different functions at different addresses with different alignment, and the totals happen to match. that is layout in the narrow sense of addresses rather than sizes, and nothing here isolates it.</p>
+
+<p>the probe took four minutes and killed a claim that had already reached a log entry and this page. the general lesson is not about this row: when a section names the experiment that would settle something, that is the experiment to run before the careful sentence, not after.</p>
 
 <p><strong>the draft of this section said something stronger, and it was wrong.</strong> the first write-up had <em>three</em> readings of seven, across three trees at three different absolute values, and concluded a pattern. the third reading was not a reading. it came from the gate&#8217;s second count, which was subtracting the printed line from its first pass and not its second &#8212; so a binary that counted one number was reported as counting two, exactly 3,015 apart, with <code>interp_printed=3015</code> sitting in the job log two screens above the error. that is the subject of the previous section.</p>
 
