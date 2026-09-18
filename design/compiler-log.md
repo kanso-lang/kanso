@@ -4381,3 +4381,45 @@ between its comment block and the first declaration. Both are the grammar
 refusing the file before a line of it runs, and both look from the test's
 verdict exactly like the change under test being broken. The message says
 which; the verdict cannot.
+
+### The knot spec staged two tests into one directory
+
+The macOS job named a second failing target beside the index count:
+`a_demanded_knot_counts_the_same_on_both_engines`, which landed this morning
+as kanso#1511 and which this branch does not touch. Its message was not in the
+part of that log I read, and the log carries exactly one panic — the index
+one. It passes on Linux, on this container three times out of three, and on
+main's own macOS job. That is what a race looks like from outside, so the code
+was read rather than the verdict.
+
+`ran(interp)` stages its library and entry in
+`temp_dir()/kanso-demanded-knot-{interp}` and calls `remove_dir_all` on that
+path at both ends. THREE tests call it FOUR times, and `cargo test` runs them
+on parallel threads. Printing the path and the thread id says the rest:
+
+    /tmp/kanso-demanded-knot-0   ThreadId(2)   ThreadId(4)
+    /tmp/kanso-demanded-knot-1   ThreadId(3)   ThreadId(4)
+
+Two threads, one directory, destructive on entry. One thread's leading
+`remove_dir_all` deletes the library another has just written and is about to
+run.
+
+Watched red by widening the window rather than by waiting for luck: holding
+the first two calls for 800ms between the write and the run makes the other
+two fail with `the run failed (native)` and `the run failed (oracle)` — a
+target that fails with no counter assertion at all, which is the shape the
+macOS job showed.
+
+The fix is one staging directory per CALL, from an atomic counter, zero-padded
+so the path length stays fixed as well as unique. Length does not matter to
+these three assertions, which pin thunk counters; it matters to the sibling
+spec `a_unique_container_is_extended_in_place`, whose header records a run's
+allocations tracking the length of the path it was handed and macOS staging
+under `/var/folders/...`. One habit for both is cheaper than remembering which
+is which.
+
+What this does not establish is that the race is what macOS hit. The failure's
+own message was never visible to me, and a spec that is green here and red
+there could have had another reason. What is established is that the shared
+directory is real, that it fails under a widened window, and that it is a
+defect either way.
