@@ -862,6 +862,13 @@
 # readings to the instruction, across two CI jobs on two different trees,
 # which is what `-Wl,-plugin-opt=jobs=1` bought.
 #
+# 2026-09-18, kanso#1510 (kanso#1484 rebuilt) on the tree merged with main,
+# CI's sitting. 126,349,040 -> 126,355,774, a RISE of 6,734 (+0.0053%).
+# LAYOUT. The derivation this branch removes runs before `kanso check` reaches
+# these routes, so the saving is outside them; what moved is where the code
+# sits. Three check routes and the interpreted row rise by a few thousand each
+# against falls of 567,547 and 560,657 on the two rows that pay for the
+# derivation.
 # 2026-09-18, kanso#1509 (kanso#1480 rebuilt) on the tree merged with main,
 # CI's sitting. 126,349,040 -> 126,350,802, a RISE of 1,762 (+0.0014%).
 # LAYOUT. `kanso check` stops before codegen, so the saving in `emit_ir` is
@@ -869,7 +876,18 @@
 # three check routes rise by 747, 1,762 and 1,778 against falls of 8.08
 # million and 18,573 on the two rows that reach the emitter, which is the
 # shape a real saving plus a moved binary makes.
-entry_instructions=126350802
+#
+# 2026-09-18, re-merged onto main after kanso#1509. THE VALUE BELOW IS MAIN'S,
+# carried forward: kanso#1509 moved this row on its own and what this branch
+# adds on top of it has not been measured, so the merged reading is CI's.
+#
+# 2026-09-18, kanso#1510 (kanso#1484 rebuilt) on the tree merged with main
+# after kanso#1509, CI's sitting. 126,350,802 -> 126,358,241, a RISE of
+# 7,439 (+0.0059%). LAYOUT. The derivation this branch removes runs before this route
+# reaches its work, so the saving is outside it and what moved is where
+# the code sits; the two rows that pay for it fall by about 560,000 each.
+# The second reading in the same job matched the first to the instruction.
+entry_instructions=126358241
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

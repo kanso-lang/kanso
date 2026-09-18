@@ -2766,6 +2766,123 @@ with main to the instruction.
   diffuse — the largest single caller of `memcmp` is 6.2M, 1.0% — so there is
   no first map to intern that pays on its own. That is the same answer the
   check side gave, now with the build side agreeing.
+## 2026-09-17 — DECLARES calls sixty-two symbols, and the compiler was finding that out every time
+
+kanso#1468's index made `kanso build bench/runbench` fall 69.64% and made the
+start-up row RISE 239,427, and that entry said why: the index costs a fixed
+amount to build and saves in proportion to what the program emits, so a single
+`print` is where the trade is worst. Attributing it named the fixed part.
+
+```
+called_symbols                          278,812 self
+  < Once::call_once_force::{{closure}}  292,701 inclusive, 1,023 calls
+  < Backend::emit                        18,159 inclusive,     2 calls
+```
+
+The 1,023 calls are `declares_context_calls()` walking DECLARES' non-declare
+lines. DECLARES is a `const`. The answer is the same in every process kanso has
+ever run, and it is sixty-two names.
+
+So they are written down, sorted, and asked with a binary search: six
+comparisons an ask against a hash table that has to be built first.
+
+```
+kanso play startup_corpus, kanso::main inclusive
+  kanso#1468       5,148,482
+  written down     4,532,728      -615,754    -11.96%
+```
+
+More than the scan itself, because the table went with it — no build, no hash
+per query. Against main, which does not have kanso#1468's index at all, the row
+reads 4,882,857, so this lands **350,129 below the branch point** while keeping
+the 69.64%. The emitted IR for runbench is byte-identical.
+
+`the_declares_symbols_are_the_ones_declares_calls` recomputes the set from
+DECLARES with the scan it replaces and asserts both directions, plus sorted,
+deduped and non-empty. Watched red three ways: a symbol the list names and
+DECLARES does not call (it named `k_zz_not_called`), a symbol DECLARES calls
+and the list drops (it named `k_b_at`), and the sort broken — which
+`binary_search` would otherwise answer wrongly and quietly.
+
+- **DONE** the constant is a constant.
+- **OPEN** the start-up golden, which falls by the 615,754 above. CI's sitting
+  takes it; this host refuses the recorded toolchain.
+
+
+**REBUILT ON MAIN, 2026-09-18.** The branch carrying this had been open 15.7
+hours and its diff against main had grown to 689 lines of src/codegen.rs plus
+four goldens, because it sat on a stack whose other members have since landed.
+It is rebuilt as one cherry-pick of 785c21b8 onto main: src/codegen.rs applied
+without a conflict, and only this entry needed resolving — and the resolution
+had to drop 27 entries the cherry-pick re-added that main has since moved into
+the archive.
+
+The rows are main's, carried forward, and the merged sitting is CI's to take.
+`emitted_code` AGREED on the compile sweep, so the emitted IR is byte-identical
+on today's main: precomputing the symbol set changes what the compiler asks,
+not what it writes.
+
+**CI'S SITTING ON THE MERGED TREE.** Six rows moved:
+
+    startup_instructions     3,951,796 ->   3,384,249    -567,547  -14.3617%
+    emit_instructions       60,196,725 ->  59,636,068    -560,657   -0.9314%
+    interp_instructions  2,182,576,109 -> 2,182,620,735   +44,626   +0.0020%
+    entry_instructions     126,349,040 -> 126,355,774      +6,734   +0.0053%
+    library_instructions   126,804,425 -> 126,810,678      +6,253   +0.0049%
+    compile_instructions    35,441,027 ->  35,443,639      +2,612   +0.0074%
+
+Start-up falls 14.36%, which is far more than the emitter's 0.93% share of the
+same saving. What the saving IS has been measured on both rows; why it lands so
+much harder on start-up than on `emit_ir` is not claimed here beyond the plain
+reading, that start-up runs the derivation over the whole declare block before
+any program does anything.
+
+The four rises are layout: the derivation runs before `kanso check` reaches
+those routes, so the saving is outside them, and rises of a few thousand
+against falls of 567,547 and 560,657 is the shape a real saving plus a moved
+binary makes.
+
+`codegen_instructions_dev`, `codegen_instructions_release`, `compile_allocs`
+and both interp memory rows AGREED with main to the instruction, which is the
+measured half of the emitted-IR-is-identical claim.
+
+The spec was watched red on the rebuilt tree rather than taken on trust from
+the old branch. Dropping `"k_b_append_byte"` from `DECLARES_CONTEXT_CALLS`
+fails `the_written_list_is_what_the_scan_finds`, which is the one of the three
+that compares the written list against a scan of DECLARES itself; the other
+two, which check sortedness and non-emptiness, stay green on that edit, which
+is what makes the first one the load-bearing assertion. Restored: all three
+green.
+## 2026-09-18 — kanso#1510's rows re-measured after kanso#1509, and the release row read the golden exactly
+
+kanso#1509 landed under this branch, so all six compile-side goldens were
+carried forward at main's values and the round measured the merged tree. CI's
+sitting, second reading matching the first to the instruction on all four rows
+that take one:
+
+    startup_instructions     3,933,223 ->     3,364,974  -568,249  (-14.4474%)
+    emit_instructions       52,115,454 ->    51,554,407  -561,047   (-1.0765%)
+    compile_instructions    35,441,774 ->    35,445,148    +3,374   (+0.0095%)
+    entry_instructions     126,350,802 ->   126,358,241    +7,439   (+0.0059%)
+    library_instructions   126,806,203 ->   126,813,486    +7,283   (+0.0057%)
+    interp_instructions  2,182,576,109 -> 2,182,620,735   +44,626   (+0.0020%)
+
+The two falls are what this branch is for: precomputing the DECLARES symbol
+set takes about 565,000 instructions out of both routes that run the
+derivation, and the two figures land within 7,202 of each other. The four
+rises are layout — the derivation runs before `kanso check` reaches its work
+and before the interpreted run reaches its own, so the saving is outside
+those routes and what moved in them is where the code sits. Every one of the
+four is under a hundredth of a per cent.
+
+**And the release-codegen row read 6,822,651,561 — the golden, exactly.** The
+previous head of this branch was red on that row alone, at +11, with the same
+job's second reading landing on the golden. This round agrees with the golden
+on both readings. So the +11 is intermittent and is not this branch's: a PR
+that changes only `src/codegen.rs` does not move a row twice and then stop.
+kanso#1512 isolates a real dependence of that row on un-normalized state — the
+prior contents of the output path, worth 2,354 — and says plainly that it does
+not explain this 11, which stays open.
 ## 2026-09-17 — the eta-reduction argument re-measured on the bind's ground
 
 The 2026-07-25 entry *"BUILT, MEASURED, DECLINED: eta-reduction is not
