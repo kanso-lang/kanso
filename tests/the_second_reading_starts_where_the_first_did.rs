@@ -120,8 +120,22 @@ fn staging_warms_both_tiers_every_time() {
 
     // The box staging builds the compiler; it is not what this is testing.
     let body = body.replace("sh scripts/gates/codegen_box.sh", ":");
+    // `stage_and_warm` calls the gate's own `clear_output`, which empties the
+    // output path before each warm build -- `ld` reads whatever is already at
+    // `-o` and what it finds there is worth 2,354 instructions. Extracting one
+    // function and running it standalone leaves the helpers it calls undefined,
+    // so the helper is carried across too rather than stubbed: a stub would let
+    // the two drift apart, and this harness exists to run the real body.
+    let helper = s
+        .split_once("clear_output() {")
+        .expect("the gate defines clear_output")
+        .1
+        .split_once("\n}\n")
+        .expect("clear_output closes on a line of its own")
+        .0;
     let script = format!(
-        "set -e\ntune=t\nbox={dir}\nstage_and_warm() {{\n{body}\n}}\nstage_and_warm\n",
+        "set -e\ntune=t\nbox={dir}\nclear_output() {{\n{helper}\n}}\n\
+         stage_and_warm() {{\n{body}\n}}\nstage_and_warm\n",
         dir = dir.display(),
     );
     let out = std::process::Command::new("sh")
