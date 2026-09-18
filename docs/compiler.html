@@ -2311,6 +2311,58 @@ interp_peak_bytes           884,985 -&gt;       833,130       -51,855   -5.86%</
 
 <p>and a pin was missing. five specs catch the optimisation firing where it should <em>not</em>, and every one of them stays green if the gate silently stops matching &#8212; if a key changes, if a span moves, if the analysis is handed a different program. a per-round allocation count now fails when the optimisation quietly stops happening, which nothing in the tree could previously do.</p>
 
+<h2 id="bytebeside"><span class="sec-num">90</span>a byte beside the name, and why it cost eight</h2>
+
+<p>the interpreted run spends <strong>4.14%</strong> of itself inside libc&#8217;s <code>memcmp</code>, and the largest caller is the walk up the environment chain that resolves a local name &#8212; <strong>724,304</strong> calls, the same figure section 87 publishes for locals that stop at that walk.</p>
+
+<p>the walk compares one string against another. rust&#8217;s string equality checks the length first and then calls <code>memcmp</code>, so length is already free, and what reaches libc is every binding in the chain that happens to be <em>the same length</em> as the one being looked for. a single byte of the name, compared before the string, rejects most of those without a call. that is a standard trick and it works: the <code>memcmp</code> fell by <strong>2,465,720</strong>.</p>
+
+<p>the run rose by <strong>10,409,061</strong>.</p>
+
+<p><strong>the node is why, and it was measured rather than reasoned about.</strong> <code>size_of</code> on the environment node reads <strong>64</strong> bytes without the byte and <strong>72</strong> with it. there is no padding to hide it in: the name is 24 bytes, the value is 32, the parent pointer is 8, and that is exactly 64. the compiler already orders the fields to pack them. so one byte of payload costs eight bytes of node, and the interpreted run allocates about two and a half million of them &#8212; twenty megabytes of extra traffic to save two and a half million instructions of comparison.</p>
+
+<p>where to look next follows from that. a discriminator that fits in space the node already owns would keep the saving and drop the cost, and there is nowhere to put one: the name&#8217;s own 24 bytes are full, holding twenty-two bytes of text plus a length and a tag. what remains is changing how a name or a value is represented, which is a larger question than this lead was, and <strong>2,465,720</strong> is the ceiling on what answering it could be worth here.</p>
+
+<p>declined on arithmetic. the idea is sound and the node is the wrong size for it.</p>
+
+<p><strong>so the other version was built too, and it loses by more.</strong> the name&#8217;s inline buffer is zero-filled before the text is copied, so two inline names hold identical twenty-two-byte buffers exactly when they hold the same text &#8212; the padding makes the length implicit, and an identifier cannot contain a NUL to blur it. the walk can therefore build a padded key <em>once per lookup</em> and compare a fixed-width block per frame, which the compiler inlines. nothing grows; the key lives on the stack for one lookup.</p>
+
+<pre><code>base   row 1,115,996,775   memcmp 48,165,663
+key    row 1,150,537,278   memcmp 35,577,082</code></pre>
+
+<p>it takes <strong>12,588,581</strong> instructions off <code>memcmp</code>, twenty-six per cent of the whole figure, and the run rises <strong>34,540,503</strong>. three times worse than the byte, with no node cost at all. the interpreted corpus prints byte-identical output before and after, which is what makes the two counts comparable &#8212; that is two builds on one engine, not the differential check across both, which a declined change did not earn.</p>
+
+<p>two sound schemes losing in different ways is worth more than either result. the byte lost to the node&#8217;s size; this one has no node cost and loses by more, so what is left to blame is the shape of the trade: the setup is paid per <em>lookup</em> and the saving arrives per <em>frame</em>. that only pays when the chain is long, and here it is not.</p>
+
+<p>which reframes the lead. the 48 million is real, and it belongs to the walk rather than to how the walk compares. anything that keeps the walk and makes the compare cheaper is buying a per-frame saving with a per-lookup cost.</p>
+
+<p><strong>and that ratio is measurable, so it was measured rather than left as a reason.</strong> a counter in the walk, over the same corpus:</p>
+
+<pre><code>lookups          1,056,329
+frames visited   2,662,536      2.52 per lookup
+misses             332,025      31.4%, and a miss walks the whole chain</code></pre>
+
+<p>the instrument lands on two numbers this page already carries. <strong>1,056,329</strong> is the resolution count in section 87; take the misses away and <strong>724,304</strong> remains, which is section 87&#8217;s count of locals that stop at the walk and also the caller count read off the profile. three routes to the same pair.</p>
+
+<p><strong>2.52 is the whole explanation.</strong> a scheme paying setup per lookup and saving per frame has two and a half frames to amortise it over. the padded key cost about forty-seven instructions a lookup against a saving of the eighteen-odd a small <code>memcmp</code> costs, times 2.52 &#8212; so it lost, and would have lost at any setup above about forty-five. the byte had no setup and lost to the node instead.</p>
+
+<p>it also prices the change that would work. eighteen instructions a visit across 2,662,536 visits is the 48 million; resolving a local to an index at parse time removes the <em>visit</em>, and an index costs two or three instead of eighteen. the ceiling is around forty million, near 3.6% of the interpreted row &#8212; a number rather than a hope, and larger than anything tried here, because slots have to survive closures, which capture an environment rather than a frame.</p>
+
+<p><strong>then the distribution was measured too, and it names a cheaper change first.</strong> an average hides a shape, so here is the shape &#8212; hits by depth:</p>
+
+<pre><code>1   267,899   37.0%        hit frames    1,590,733   2.20 deep
+2   199,016   27.5%        miss frames   1,071,803   3.23 deep
+3   130,524   18.0%        total         2,662,536
+4   101,095   14.0%
+5    25,770    3.6%
+6+        0</code></pre>
+
+<p>the chain never exceeds five, so nothing here waits on a pathological case. and the split by outcome is the point: <strong>misses are 31.4% of lookups and 40.3% of every frame visited</strong>. a miss walks the whole chain and finds nothing, because the name was never a local &#8212; it is a function, a descriptor, a type or a builtin, and the resolution ladder carries on afterwards. that is about <strong>19.3 million</strong> instructions spent on walks that cannot succeed.</p>
+
+<p>so the cheaper change is not a faster walk but no walk. whether a name can be a local at a given site is decidable where that site is compiled, and skipping the walk for the ones that cannot needs no slots, no upvalue analysis and no change to how a closure captures &#8212; the three things that make the larger change large. it is worth about half as much for a small fraction of the work.</p>
+
+<p>that does not retire the index: the 1,590,733 hit-frames stay, and only an index removes those. it orders them. skip first, measure what is left, and let the remainder make its own case.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>
