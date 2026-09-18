@@ -3197,6 +3197,493 @@ This is the same correction shape as the rewrite family and the three
 container baselines: a delta that arrived with a change was written down as
 the change's cost, and a second measurement against a different base says the
 row cannot see it. What a row cannot resolve, it cannot attribute.
+## 2026-09-18 — the data-sized cycle is blocked by the HOLE's placement, before birth through a call is reached
+
+STATUS.md's "Ruled, unbuilt" carries the 2026-08-29 cohort gavel — "cyclic
+structures sized by data (a graph parsed from input, N linked nodes from a map)
+gain a spelling" — and owes a measurement first: *whether birth through a call
+resolves to one birth*. Its route says a call returning one record may resolve
+to one birth, which would give the fill its uniqueness back.
+
+Measured on a release build of main `07b96058`, nine fixtures, each one a
+`build` block of a dozen lines. What compiles today:
+
+    two constructions bound to names, mutually linked, then collected
+    into a list literal                                            ok
+    a node whose hole is filled with itself                        ok
+    the two-node cycle with both holes                             ok
+
+What is refused, and the rule that refuses it:
+
+    a = fresh "a"; a.link = b        `a` is not a construction made in
+    (fresh's body constructs)        this `build` block
+    [(cell "a" _) (cell "b" _)]      `_` stands only where a construction's
+    (n -> cell n _)                    argument goes, inside one
+    if flag (cell "a" _) (cell "b" _)          -- the same refusal
+    pair (cell "a" _) (cell "b" _)   admitted; refused later for never
+                                     being filled
+
+**There are two blockers and the row names only the second.** Birth not
+flowing through a call is real and the diagnostic is exact. But the hole's
+PLACEMENT rule bites first: `_` is admitted where the construction carrying it
+is a binding's whole right-hand side, or an argument of another construction,
+and nowhere else. A list literal, an `if` arm and a lambda all refuse it.
+
+That is what stops the gavel's own example. "N linked nodes from a map" wants
+a hole inside the lambda handed to `list/map`, or inside a list literal — both
+refused — and N nodes cannot be N named bindings, which is the one shape that
+works. So even if birth through a call were built exactly as the row's route
+describes, the data-sized spelling would still not exist, because the holes
+could not be written down.
+
+The nested-construction case is the one that shows the boundary is placement
+rather than dataflow: `pair (cell "a" _) (cell "b" _)` gets past the placement
+rule and is refused by the fill-once rule for never being filled. The hole is
+admitted there; it is the list, the arm and the lambda that are not.
+
+**What this does NOT settle.** Whether birth through a call resolves to one
+birth is still open, and this measurement does not answer it — it says the
+question is not the first one. Reading `Cohort::made` shows it pushes a fresh
+entry on every call rather than memoising by source position, which is
+evidence that per-call-site identities would come out distinct, and evidence
+is not a measurement: nothing here ran a build with birth flowing through a
+call. Recorded as an argument, the way the earlier one about the allocator's
+heap was.
+
+The ledger entry the row's Owes asks for is the chat's to file, and what it
+should say is that the gavel's purpose needs the placement rule widened before
+the dataflow one is, not instead of it.
+
+**One thing the fixture turned up on the way past.** A hole in a list literal
+is reported twice: once by the placement rule and once by the fill-once rule
+for never being filled. Both are true and the second is a consequence of the
+first, so a reader gets four diagnostics for two holes. The `if` arm and the
+lambda report once each. Recorded rather than fixed, because which of the two
+should stay silent is a question about the diagnostics rather than the rule,
+and the reason is worth writing down for whoever widens the rule.
+
+`BuildScan::born_of` treats a list literal as birth-transparent — its doc says
+so, "an element of a list or map literal whose every element is born" — so it
+descends into the elements, finds `cell "a" _`, and registers a fill-once
+obligation for the hole. `per_node_walk`, which decides placement, does not
+carry `hole_ok` through a list literal, so it refuses the same hole. **The two
+walks disagree about whether a list literal is a place a construction can
+stand**, and the double-report is that disagreement showing. Neither diagnostic
+is false, which is why this is left alone: suppressing the second hides a true
+statement, and admitting the hole is a change to the language and Clay's. The
+corpus now pins whatever the answer turns out to be:
+`tests/golden/errors/a_hole_away_from_a_construction_argument` carries all
+three shapes and both goldens, and was watched red twice — once with a word
+changed in the message and once with the lambda's hole removed from the
+program.
+## 2026-09-18 — the interpreted row does not vary, and the reading that said it did came out of a stale box
+
+STATUS.md's second standing "Ruled, unbuilt" row is the 2026-09-15
+normalization ruling against `interp_instructions`, which two CI jobs read
+six apart. Its Owes: *measure cloud's candidate, or replace it.* The candidate
+was that six in 2.18 billion is three parts per billion, that the interpreted
+run is the allocation-heavy workload, and that where the allocator's heap
+starts moves with the size of the file the loader mapped.
+
+**The first answer this branch recorded was wrong.** Four runs staged out of
+`/tmp/kanso-compile-ir` read the gate's anchor at 2,648,173,504,
+2,646,456,996, 2,649,443,833 and 2,646,343,385 — a spread of 3,100,448, or
+0.117% — with `core::hash::sip::Hasher::write` live at 187,455,582, 6.96% of
+the run. A frame diff of the extremes put the whole difference in
+`eval_ident`, `type_decl`, `call_named`, `__memcmp_avx2_movbe` and
+`hashbrown`'s `contains_key`, against a `dispatch` that went the other way.
+That went into this branch as a property of the current tree.
+
+It is not. Four runs of a release build of `07b96058` — the same commit the
+first reading names — read the anchor at **2,231,670,466, four times, with no
+`sip::Hasher::write` frame in the profile at all.** Four runs of a release
+build of `14530ee9` read 2,231,485,945 four times, likewise. The row is exact
+on this container and always was.
+
+**What the box held.** `scripts/gates/library_box.sh` copies
+`./target/release/kanso`; it does not build it. A worktree's target directory
+holds whatever was last built in it, and the binary in the box was one from
+before kanso#1449's sibling fix of 2026-09-16 — `3ee41dcf`, "the interpreter
+hashed against an attacker it does not have", which moved the interpreter's
+`fns`, `types`, `knots`, typeset cache and cycle-guard sets off
+`std::collections`.
+
+Built at `3ee41dcf^` and handed today's corpus and today's `lib`, that
+compiler reads:
+
+    2,649,396,935
+    2,654,191,562
+    2,650,473,347
+    2,653,900,730
+
+with `sip::Hasher::write` at **187,455,582, 6.95%** — the same figure to the
+instruction — and a frame diff of two runs naming `eval_ident` +1,933,122,
+`type_decl` +1,164,960, `call_named` +844,947, `__memcmp_avx2_movbe` +434,498,
+`contains_key` +421,421 and `dispatch` −4,199. Same binary, same signature,
+same spread. The provenance is not inferred from a resemblance; the SipHash
+figure and all six frames reproduce.
+
+**So the mechanism the first reading named was right about that binary and
+wrong about this tree.** Probe sequences moving while the hashing itself does
+not is exactly what `src/hash.rs` describes, and
+`tests/the_compile_path_hashes_with_a_fixed_seed.rs` already covers
+`src/eval.rs`, so no map on this tree could have produced it.
+
+**The 2026-09-15 row is therefore not what it was filed as.** Two CI jobs read
+six apart, and nothing on this container reproduces even that: eight runs
+across two release builds gave two values, one per build. Six in 2.18 billion
+remains unexplained, and it is a CI-side question about two runners rather
+than a randomly-seeded map. What this branch can say is that the map
+hypothesis is dead and the container shows no variance to chase.
+
+**And the staging script now builds what it stages.** One line,
+`cargo build --release`, ahead of the copy, which is the rule
+`all_counters.sh` and `all_compile.sh` already carry and which this script was
+missing. `tests/the_box_stages_a_binary_it_built.rs` pins it: the build line
+exists, it precedes the copy when comments are stripped, and the path it
+copies is the one the build writes. Watched red three ways — the line deleted,
+the line moved after the copy, and the copy pointed at a different path.
+
+**What it cost to not have it.** A wrong spread, a wrong mechanism and a
+search for a map that does not exist, all in an entry that reached an open
+pull request. Nothing on main, because the reproduction happened before the
+merge — but the only reason the reproduction happened was that the number was
+re-measured rather than re-read. A gate that measures a binary nobody built answers about
+some other tree, and prints a plausible number doing it.
+## 2026-09-17 — the eta-reduction argument re-measured on the bind's ground
+
+The 2026-07-25 entry *"BUILT, MEASURED, DECLINED: eta-reduction is not
+semantics-preserving here"* declined `(a b -> f a b)` -> `f` on the differential
+law. An `err` recorded a hop for every function it passed through, the
+eta-expanded lambda was a function, and removing it made native print
+
+    born in first at welcome.kso:4
+    passed through greet
+
+where the interpreter printed only the first line. Native and the oracle
+disagreeing is the one thing not permitted, and the entry says so.
+
+The 2026-09-15 explicit-bind ruling moved that ground in its own words: the
+provenance hop "now accrues at binds rather than at skipped calls". So the
+argument was re-run rather than re-asserted. Three spellings of one call, each
+on both engines:
+
+    label "flan" seasonal                       passed through label
+    lab "flan" seasonal   (fn lab d c = label d c)   passed through lab
+    (d c -> label d c) "flan" seasonal          no hop line at all
+
+**Both engines agree in every one.** The divergence that killed the
+optimization is gone.
+
+A claim that did not survive checking, recorded because the checking is the
+point: the first draft of this entry said ch05's golden "has moved with it".
+It has not. `docs/book/samples/ch05/welcome.out` has read `born in first` and
+nothing else since the book landed — `git log -S"passed through"` over that
+file is empty. It is the oracle's answer, and what July's change did was make
+NATIVE print a line the golden never carried. Nothing about the golden moved.
+What moved is the rule below, which the three fixtures measure directly rather
+than inferring from a file that was never going to say.
+
+The rule the three readings describe is simple: **a hop names the function the
+err was about to enter, so a named function records one and an anonymous one
+records nothing.** A lambda has no name to print.
+
+### What that does to the optimization, and what it does not
+
+Eta-reducing the third spelling to the first no longer makes the engines
+disagree. It makes the trace GAIN a line — `passed through label` — where the
+lambda spelling printed none. That is still a change to what a program prints,
+so the optimization is still not trace-preserving and stays declined here.
+
+The direction is worth noticing. July's entry already said the added line was
+arguably the truer one: "the value really does pass through `greet`, so the
+native line is arguably the honest one and the lambda was hiding a real hop."
+That reading now applies to source the author wrote rather than to a rewrite
+the emitter performed. Wrapping a call in a lambda silently drops its
+provenance line, on both engines, and a reader of ch04's story would not expect
+`(d c -> label d c)` and `label` to trace differently.
+
+### The question, and whose it is
+
+**Should a value passing into an anonymous function record a hop, and what
+names it?** July said that question "belongs to a gavel rather than to an
+optimization's side effects", and it still does. What has changed is that it is
+now answerable on its own terms rather than through a declined optimization:
+nothing is waiting on it, no engine disagrees, and the measurement is three
+fixtures long.
+
+`tests/a_hop_is_recorded_for_a_name.rs` pins all three readings and the
+agreement between engines, with the fixtures in the corpus rather than in this
+entry. All three were watched red first — the engine comparison pointed at a
+mismatched pair, the named expectation changed, and the anonymous one pointed
+at the direct spelling.
+
+- **DONE** the July decline's ground is re-measured and the differential
+  objection is gone.
+- **DECLINED STILL** eta-reduction changes the trace, now by adding a line.
+- **FOR THE LEDGER** what a hop means for an anonymous function. Not blocking.
+## 2026-09-17 — the interpreter copies 180 MB building byte strings, and uniqueness is why it cannot stop
+
+`interp_instructions` became a weighted term on the 2026-09-16 gavel, so the
+interpreted run was profiled for the first time with a counter on it. The
+largest single thing in it is not interpretation:
+
+    402,818,345  18.49%  __memcpy_avx_unaligned_erms
+    147,104,143   6.75%  <Interp>::dispatch
+    144,592,299   6.64%  <Interp>::eval_ident
+    117,641,168   5.40%  mi_free
+    104,394,489   4.79%  _mi_theap_malloc_zero
+
+memcpy's callers are `__rust_realloc` at 8.27% and `<Vec<u8> as Clone>::clone`
+at **7.76% over 43,572 calls** — about 4,000 instructions each. Every one of
+those clones comes from `<Interp>::call_builtin`.
+
+### Two sites, and the small one was built first
+
+`call_builtin` deep-copies a `Vec<u8>` in two places. Both were instrumented
+with `Rc::strong_count` and run over `interp_corpus`.
+
+**`utf8`, 6,606 calls.** `Rc::try_unwrap` instead of a copy takes
+`interp_instructions` from 2,228,593,160 to 2,228,294,740 on this box — a fall
+of **298,420, or 0.0134%**, against the 7.76% the profile suggested. The probe
+says why: every one of the 6,606 calls found `strong=3`. **The branch never
+fires.** What the change removed was the call to `clone`, not the copy inside
+it, and `memcpy` came back 402,825,525 against 402,818,345 — unmoved. Declined.
+
+**`append`, 36,966 calls, and this is the one that matters.** The byte builder
+copies its whole accumulator before extending it:
+
+    let mut out = (**items).clone();
+
+Over the corpus that is **180,081,360 bytes copied** — accumulators up to 9,906
+bytes, rebuilt one append at a time. The refcounts:
+
+    strong=1    1,326    3.6%
+    strong=2   11,880   32.1%
+    strong=3   13,206   35.7%
+    strong=5    9,228   25.0%
+    strong=6    1,326    3.6%
+
+So the same fix fails here for the same reason, only less completely: 3.6% of
+the appends could extend in place, and 96.4% could not. Six and a half of the
+180 megabytes.
+
+### What the numbers actually say
+
+**The copy is not the defect; the holders are.** A buffer partway through a
+fold is held by the argument vector, by the wrapper function's environment, by
+the caller's, and by the fold's own state, and the interpreter has no way to
+know that all but one of those are about to go away. The compiled engine does
+know — the linearity analysis proves the accumulator unique and appends extend
+the builder in place, which is what the 2026-08-26 entry "byte-builder growth
+is malloc-backed and a mut-grow frees its predecessor" records. **The
+interpreter has no such proof and its refcounts say uniqueness is rare.**
+
+Every stdlib entry point is a one-line wrapper — `pub fn append acc x` calling
+`builtin_append acc x` — and each wrapper's environment is one of the holders.
+That is a cost the wrapper's author cannot see and the profile only shows once
+somebody counts.
+
+- **DECLINED, measured** `Rc::try_unwrap` at `utf8`: 0.0134%, and the branch
+  never fires on this corpus.
+- **DECLINED, measured** the same at `append`: 3.6% of the copies, 6.5 MB of
+  180.
+- **OPEN** what would actually pay is a value that can be appended to without
+  being unique — a builder or a rope — or an argument protocol that does not
+  leave a copy in the wrapper's frame. That is the interpreter's value model
+  rather than a patch, and it is now worth pricing: 18.49% of the weighted
+  vein is memcpy, and 180 MB of it is this one builtin.
+
+
+## 2026-09-17 — the eleven is `ld`, and the gate had already called it a reproduction failure
+
+**This corrects the entry that stood here, which was mine.** It read
+`codegen_instructions_release counted 6,826,827,780 against 6,826,827,769`,
+concluded the row does not reproduce across jobs, and re-based the golden.
+The conclusion was right about the row and wrong about where to look, and the
+re-base was the one thing the gate's header forbids.
+
+The gate prints every process in the tree and takes a second reading. Both
+readings of that job, side by side:
+
+    first   kanso=412,662,004  clang:probe=32,265,587  clang=31,705,914  clang=1,617,294,647  ld=5,145,561,632
+    again   kanso=412,661,592  clang:probe=32,265,587  clang=31,705,914  clang=1,617,294,647  ld=5,145,561,621
+
+`ld` counted **5,145,561,632 and then 5,145,561,621** on one binary in one job,
+eleven apart. The three clang processes are identical to the instruction in
+every reading taken today, on every branch. The row's variance is the linker's
+and nothing else's.
+
+The gate said so in the same breath and the entry walked past it:
+
+    codegen_release_again=6826827769  first_reading=6826827780
+
+which is case (2) in `codegen_instructions.sh`'s own header — "THE SAME BUILD
+COUNTED TWO NUMBERS. That is a REPRODUCTION FAILURE. It halts this vein and is
+hunted to its source — never pinned as a second value, and never recorded as a
+mode." Reading the `counted X against Y` line and writing Y is exactly the move
+that header exists to stop.
+
+The cross-branch table the old entry built proves nothing either. This branch
+read 6,826,827,780 on one round and 6,826,827,769 on the next, from a diff of
+72 lines of markdown. A branch cannot move a row in two directions; both values
+were draws from the same coin.
+
+The golden goes back to **6,826,827,769**, here and on kanso#1495.
+
+**What is open is eleven instructions inside `ld`**, and by the 2026-09-15 rule
+it is not a curiosity to explain: a counter reads the code under test and
+nothing else, and the linker is external to every change this row is asked
+about. It is also 75% of the row — 5.15 billion of 6.83. Either what moves it
+is found and normalized, or `ld` comes out of the sum and the header says why.
+
+- **DONE** the wrong value withdrawn from two branches, and the variance
+  localised from "some job differs" to one process and eleven instructions.
+- **OPEN** those eleven. The gate already has the instrument: it takes the
+  second reading. What it needs is to keep `ld`'s two profiles when they
+  disagree and diff the frames.
+## 2026-09-18 — a unique container is extended where it stands, and kanso#1497's decline was a prediction
+
+kanso#1497 profiled the interpreted run and found `__memcpy_avx_unaligned_erms`
+its largest single frame, with 180,081,360 bytes of it inside `append`
+rebuilding an accumulator one byte at a time. It tried `Rc::try_unwrap` on
+`utf8`, measured 298,420 instructions, counted `append`'s refcounts — unique on
+1,326 of 36,966 calls, 3.6% — and declined the same fix for `append` on that
+share. **The share was measured; the fix was not.**
+
+Run, on `push`, `put` and `append` together, and beside a second change that
+clears the argument vector before the body runs. Four release builds of main
+`14530ee9`, one box, one corpus, the gate's own anchor and the profile's
+largest frame:
+
+    tree                     anchor          memcpy        delta
+    main                  2,231,485,945   402,825,998         —
+    args.clear() alone    2,227,528,092   402,825,747    -3,957,853
+    taken() alone         2,217,291,320   390,296,335   -14,194,625
+    both                  2,213,414,350   390,296,335   -18,071,595
+
+**The two are additive and independent.** 3,957,853 + 14,194,625 is 18,152,478
+against 18,071,595 measured, 80,883 apart on 2.2 billion. `taken()` takes every
+byte of the memcpy saving on its own — 12,529,663 instructions, 3.11% of that
+frame — and `args.clear()` moves memcpy by 251, which is refcount traffic
+rather than copying. 0.81% of the interpreted row, and the corpus prints the
+same bytes as main.
+
+**The prediction was not wrong about the shape it measured.** An accumulator
+threaded through a name the caller still holds is pointed at by that frame too:
+
+    fn stack xs n
+      stack (push xs n) (n - 1)
+
+reads `interp_allocs=19,053` on both trees, byte for byte, and a 400-append
+`text/append` loop of the same shape reads 13,805 on both. `Rc::try_unwrap`
+cannot fire and does not. An accumulator that arrives as another call's
+answer is pointed at by nothing else:
+
+    fn stack xs n
+      stack (push (push xs n) n) (n - 1)
+
+reads 22,362 allocations copying and 21,162 extending in place, one ask per
+copy avoided. `lib/list`'s own `put acc k (push (bucket acc[k]) x)` is that
+second shape, which is why the corpus moved and the first two fixtures did
+not. A refcount histogram taken at one instant answers for the calls it
+sampled; what a fix is worth is a different question and only a run answers
+it.
+
+**The spec pins the count, not the bytes, and the exclusion is measured.**
+`tests/a_unique_container_is_extended_in_place.rs` runs the real binary on the
+second shape and pins `interp_allocs` at 21,162; it was watched red on main at
+22,362 and green on a tree carrying `taken()` without `args.clear()`, which is
+what says the spec pins the half it names. `interp_alloc_bytes` and
+`interp_peak_bytes` are left out because they track the length of the path the
+run was handed: the same fixture at `/tmp/chain` reads 10,524,425 and 148,058,
+and at a name 34 characters longer reads 10,578,250 and 148,485, with
+`interp_allocs` at 21,173 both times. A spec staging under
+`std::env::temp_dir()` would pin macOS's `/var/folders/...` against Linux's
+`/tmp`. That is the 2026-09-15 rule: what cannot be normalized is left out and
+the exclusion is named.
+
+**What `args.clear()` is pinned by is the vein.** It changes no allocation and
+no output — only instructions — so there is no fixture that fails without it
+short of `interp_instructions` itself, which is an exact golden and moves.
+Shipping it beside a change that does have a fixture is the honest shape:
+the table above says which half each number belongs to.
+
+**`sort` and `concat` were built with it and taken back out.** They copy the
+same way and the change is the same two lines, so they went in. Two runs of
+the five-builtin build read the anchor at 2,214,199,828, which is 785,478
+ABOVE the three-builtin build's 2,213,414,350, with `memcpy` at 390,296,396
+against 390,296,335 — 61 apart, so neither new site fired once over the whole
+corpus. The corpus sorts and concatenates lists that something else still
+points at, and what the two extra call sites bought was a bigger binary. Both
+reverted; the three that fire are what ships.
+
+**Still open.** Uniqueness stays rare in the threaded-accumulator shape, and
+that is the shape a fold writes. kanso#1497's remaining question is untouched:
+a value that can be appended to without being unique, or an argument protocol
+that does not leave a copy in the caller's frame. What has changed is the price of the
+cheap half: 14,194,625 instructions, declined the day before on a share
+rather than a reading.
+
+## 2026-09-18 — the spec pinned a count the host owns, and macOS said so
+
+`tests/a_unique_container_is_extended_in_place.rs` pinned `interp_allocs` at
+21,162 on a fixture staged under `std::env::temp_dir()`. The first CI round on
+the other host went red on exactly that file: macOS stages under
+`/var/folders/...` where Linux stages under `/tmp`, and a run's allocations
+track the length of the path it was handed.
+
+**The exclusion was half-right and the half it got wrong was the important
+one.** The file's own header excluded `interp_alloc_bytes` and
+`interp_peak_bytes` for that reason, measured: the same fixture at `/tmp/chain`
+reads 10,524,425 and 148,058, and at a name 34 characters longer reads
+10,578,250 and 148,485. `interp_allocs` held at 21,173 across that pair, and
+holding across ONE pair of Linux paths is not the same property as holding
+across two operating systems. The absolute count then moved from 21,162 to
+21,180 between two revisions of the spec itself, because the entry file's name
+got shorter.
+
+**A difference is what survives.** The fixture now runs the same program at 300
+rounds and at 600, from entry files of the same name length in the same
+directory, and pins what the second costs over the first. Every fixed
+allocation — the loader, the path, the library, the entry — is identical in
+both runs and cancels. Copying reads 19,201 for those rounds and extending in
+place 18,001: the 1,200 copies the two builders would have made, one allocation
+each. Green on the branch, red on main at 19,201, and the number is one the
+host cannot move.
+
+That is the 2026-09-15 rule applied to a spec rather than a gate: what cannot
+be normalized is not measured, and the way to normalize an absolute count with
+a host-sized constant inside it is to subtract the constant.
+
+## 2026-09-18 — kanso#1515's rows on CI, and the interpreted row falls 0.649%
+
+CI's sitting on `259daa83`:
+
+    interp_instructions   2,182,597,360 -> 2,168,428,538  -14,168,822  (-0.649%)
+    interp_allocs             5,313,348 ->     5,310,696       -2,652
+    interp_peak_bytes           933,202 ->       933,182          -20
+    compile_instructions     35,444,548 ->    35,443,611         -937
+    entry_instructions      126,359,513 ->   126,354,834       -4,679
+    library_instructions    126,814,937 ->   126,810,299       -4,638
+    startup_instructions      3,364,755 ->     3,363,774         -981
+    emit_instructions        51,543,885 ->    51,546,788       +2,903
+
+Both codegen rows read their goldens exactly, which is what an interpreter-only
+change should do: `kanso build`'s child tree never sees `src/eval.rs`. The five
+compile-side rows are layout.
+
+**This container read the fall at 18,071,595 and CI reads 14,168,822.** Both
+are real and CI's is the one the objective takes. The two halves were measured
+apart here — `args.clear()` alone 3,957,853, `taken()` alone 14,194,625, both
+18,071,595, additive to within 80,883 — and that split is a property of this
+box's binary rather than of the change; what travels is the sign and the
+mechanism.
+
+Welfare rises to 76.8277 from a floor of 76.82429875406118, past the
+sentinel's 0.001 band, so the floor is banked at 76.82771395446468. Raising it
+is arithmetic rather than a decision.
+
 ## 2026-09-18 — the object gets a name the run chooses, and the eleven has nowhere left to live
 
 kanso#1512 closed the mechanism and said the fix belonged in a round of its
