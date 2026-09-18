@@ -2606,6 +2606,47 @@ error[name]: unknown name `builders/run`
 
 <p>the tally has three entries nobody has been after yet: dropping from the dispatcher 229,625 times, allocating for a string copy 149,093, and the 8,106 reallocations that are neither of the two call sites above.</p>
 
+<h2 id="theinstrument"><span class="sec-num">98</span>what the instruments are made of</h2>
+
+<p>the sections above measure the compiler. this one is about the things doing the measuring, because two of them turned out to have inputs nobody had looked at and one of them was carrying a claim that was wrong.</p>
+
+<p><strong>the counted row takes two values, and which one you get depends on where you stand.</strong> the a/b discipline here says both arms must sit in directories of the same path length, and the reason written down was that the row moves with path length. one binary, one corpus, ten directories differing only in name and length:</p>
+
+<pre>  /tmp/p                             len  6   1,007,027,010
+  /tmp/pathaaaa                      len 13   1,007,027,010
+  /tmp/pathbbbb                      len 13   1,007,027,010
+  /tmp/pathaaaaaaaa                  len 17   1,007,027,010
+  /tmp/pathaaaaaaaaa                 len 18   1,007,027,010
+  /tmp/pathaaaaaaaaaa                len 19   1,007,027,010
+  /tmp/pathaaaaaaaaaaa               len 20   1,007,027,010
+  /tmp/pathaaaaaaaaaaaa              len 21   1,007,004,925
+  /tmp/pathaaaaaaaaaaaaaaaa          len 25   1,007,004,925
+  /tmp/pathaaaaaaaaaaaaaaaaaaaaaaaa  len 33   1,007,004,925</pre>
+
+<p>two values, 22,085 apart, one step between 20 and 21, flat across six lengths below it and three above. the two equal-length directories with different names agree, which rules the name out. and the longer path reads fewer instructions, so whatever this is, it is not a cost that grows with the string.</p>
+
+<p>the environment is a second and smaller term: one extra variable costs 87 instructions whatever its size, so what the term counts is the number of entries rather than the bytes in them.</p>
+
+<p>neither is loose in the gates, which already empty the environment and run from a fixed directory. what the measurement adds is the margin. there are two of those fixed directories, one 21 characters and one 18, and the step is at 21 &#8212; so they sit on opposite sides of it, and renaming the first one character shorter would re-base five rows by 22,085 with no compiler change behind it. a spec pins each name&#39;s length now. its first draft asserted there was one directory and went red naming the second, which is how the pair came to be measured rather than assumed.</p>
+
+<p><strong>and a golden&#39;s own header was wrong about the thing it was written to explain.</strong> the release codegen row is counted across a child tree, and last month&#39;s note describes that tree as &#8220;three clang processes and ld, every one of which came back byte for byte across two readings&#8221;. that was true of its two readings. three jobs on one day showed it false of the linker:</p>
+
+<pre>  5,160,407,609 then 5,160,407,598   -11   probes 1,816,463 -&gt; 1,816,452
+  5,139,582,528 then 5,139,582,517   -11   probes 1,822,415 -&gt; 1,822,404
+  6,824,133,291 then 6,824,133,280   -11   probes 1,819,373 -&gt; 1,819,362</pre>
+
+<p>every clang process byte-identical each time, the whole difference inside the linker, and all of it in one frame: the bucket probe of llvm&#39;s string map during the link-time-optimised link. three different probe counts and the same eleven. one of those three was the branch that carries this correction, which cannot touch codegen by construction.</p>
+
+<p><strong>and the cause was already known when that correction was written, which is the part worth publishing.</strong> the branch that fixes this had measured it: twenty-two object names, one binary, one corpus, every other input held and the output path absent each time. twenty read 5,163,341,031 and two of them &#8212; <code>4b8c1a</code> and <code>fedcba</code> &#8212; read 5,163,341,042. eleven apart, deterministic per name, about one name in eleven. clang writes its link-time object to a path with fresh hex every run, the linker&#39;s plugin puts that path in a string map, and how far the bucket probe walks depends on the string.</p>
+
+<p>so the frame is the probe, the residue is always eleven because there are two buckets, and a job draws when its two readings fall on opposite sides &#8212; twice one in eleven times ten in eleven, about one job in six. all three of those were treated as open puzzles for an evening and every one of them is a consequence. the fix pins the name, and what is left to settle is only which of the two tiers the pin covers.</p>
+
+<p>the log's own rule covers how this went wrong twice. a report that something is absent is worth what the search for it being present was worth: the first round ruled names out on three samples, then five, of a one-in-eleven effect, and the second read a number that agreed with the experiment and called it a rival explanation.</p>
+
+<p>the correction is appended to the header as a dated entry rather than written over the old one. what that sentence recorded was true of the readings it had; what is wrong is the general claim a later reader takes from it, and the difference between those two is the whole reason the log works the way it does.</p>
+
+<p>a fourth job reproduced, and so did a second run of the first branch on the same commit. one branch on both sides of that list is what settles the draw as a property of the job rather than of any diff.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>
