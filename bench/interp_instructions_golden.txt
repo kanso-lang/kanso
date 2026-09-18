@@ -495,19 +495,23 @@
 # 18,540,440, the same direction and smaller, on a different silicon (family
 # 0x6 model 0xcf against 0x19).
 #
-# 2026-09-18, kanso#1504 on the tree merged after kanso#1538, CI's sitting.
-# 939,042,794 -> 939,042,801, a RISE of SEVEN instructions, A FOURTH TIME
-# AGAINST A FOURTH BASELINE. The four now read:
+# 2026-09-18, kanso#1504 on the tree merged after kanso#1540. The baseline
+# moved under this branch again: kanso#1540 took the row from 939,042,794 to
+# 932,183,914 by keeping the score buffer across dispatches, and this branch's
+# own effect is the relink SEVEN, read four times against four baselines
+# spanning 56,794,742 instructions without moving by one:
 #
 #     995,837,536  ->  995,837,543   +7
 #     975,944,763  ->  975,944,770   +7
 #     957,583,234  ->  957,583,241   +7
 #     939,042,794  ->  939,042,801   +7
 #
-# The baselines span 56,794,742 instructions and the residue has not moved by
-# one. `interp_allocs` reads 1,410,530 and `interp_peak_bytes` 833,466, both
-# byte-identical to the golden, so nothing the interpreter COUNTS changed; the
-# seven is the relink, as this branch's own entry says, and four readings on
-# four baselines is the strongest form that claim has taken.
-interp_instructions=939042801
+# So 932,183,921 is a PROJECTION off the fifth baseline, not a reading. Four
+# confirmations make it a good one and that is still not a measurement: CI
+# measures this tree, and a fifth agreement is worth having on the record
+# where a fifth assumption is worth nothing. If the runner disagrees, the
+# disagreement is the finding and the row is copied out of the job log.
+# `interp_allocs` and `interp_peak_bytes` are main's, untouched by this
+# branch, which is why only this row is rebased.
+interp_instructions=932183921
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
