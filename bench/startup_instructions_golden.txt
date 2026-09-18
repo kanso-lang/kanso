@@ -360,4 +360,8 @@
 # LAYOUT. This branch changes how a shared vector is copied in the
 # INTERPRETER; none of these routes runs it. src/eval.rs is the compiler,
 # so its bytes move and every route that runs the compiler moves with them.
-startup_instructions=3365595
+#
+# 2026-09-18, kanso#1533, CI's sitting. 3,365,595 -> 3,363,916,
+# a FALL of 1,679 (-0.0499%).
+# Layout, the same way.
+startup_instructions=3363916
