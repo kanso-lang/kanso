@@ -3197,6 +3197,159 @@ This is the same correction shape as the rewrite family and the three
 container baselines: a delta that arrived with a change was written down as
 the change's cost, and a second measurement against a different base says the
 row cannot see it. What a row cannot resolve, it cannot attribute.
+## 2026-09-18 — the data-sized cycle is blocked by the HOLE's placement, before birth through a call is reached
+
+STATUS.md's "Ruled, unbuilt" carries the 2026-08-29 cohort gavel — "cyclic
+structures sized by data (a graph parsed from input, N linked nodes from a map)
+gain a spelling" — and owes a measurement first: *whether birth through a call
+resolves to one birth*. Its route says a call returning one record may resolve
+to one birth, which would give the fill its uniqueness back.
+
+Measured on a release build of main `07b96058`, nine fixtures, each one a
+`build` block of a dozen lines. What compiles today:
+
+    two constructions bound to names, mutually linked, then collected
+    into a list literal                                            ok
+    a node whose hole is filled with itself                        ok
+    the two-node cycle with both holes                             ok
+
+What is refused, and the rule that refuses it:
+
+    a = fresh "a"; a.link = b        `a` is not a construction made in
+    (fresh's body constructs)        this `build` block
+    [(cell "a" _) (cell "b" _)]      `_` stands only where a construction's
+    (n -> cell n _)                    argument goes, inside one
+    if flag (cell "a" _) (cell "b" _)          -- the same refusal
+    pair (cell "a" _) (cell "b" _)   admitted; refused later for never
+                                     being filled
+
+**There are two blockers and the row names only the second.** Birth not
+flowing through a call is real and the diagnostic is exact. But the hole's
+PLACEMENT rule bites first: `_` is admitted where the construction carrying it
+is a binding's whole right-hand side, or an argument of another construction,
+and nowhere else. A list literal, an `if` arm and a lambda all refuse it.
+
+That is what stops the gavel's own example. "N linked nodes from a map" wants
+a hole inside the lambda handed to `list/map`, or inside a list literal — both
+refused — and N nodes cannot be N named bindings, which is the one shape that
+works. So even if birth through a call were built exactly as the row's route
+describes, the data-sized spelling would still not exist, because the holes
+could not be written down.
+
+The nested-construction case is the one that shows the boundary is placement
+rather than dataflow: `pair (cell "a" _) (cell "b" _)` gets past the placement
+rule and is refused by the fill-once rule for never being filled. The hole is
+admitted there; it is the list, the arm and the lambda that are not.
+
+**What this does NOT settle.** Whether birth through a call resolves to one
+birth is still open, and this measurement does not answer it — it says the
+question is not the first one. Reading `Cohort::made` shows it pushes a fresh
+entry on every call rather than memoising by source position, which is
+evidence that per-call-site identities would come out distinct, and evidence
+is not a measurement: nothing here ran a build with birth flowing through a
+call. Recorded as an argument, the way the earlier one about the allocator's
+heap was.
+
+The ledger entry the row's Owes asks for is the chat's to file, and what it
+should say is that the gavel's purpose needs the placement rule widened before
+the dataflow one is, not instead of it.
+
+**One thing the fixture turned up on the way past.** A hole in a list literal
+is reported twice: once by the placement rule and once by the fill-once rule
+for never being filled. Both are true and the second is a consequence of the
+first, so a reader gets four diagnostics for two holes. The `if` arm and the
+lambda report once each. Recorded rather than fixed, because which of the two
+should stay silent is a question about the diagnostics rather than the rule,
+and the reason is worth writing down for whoever widens the rule.
+
+`BuildScan::born_of` treats a list literal as birth-transparent — its doc says
+so, "an element of a list or map literal whose every element is born" — so it
+descends into the elements, finds `cell "a" _`, and registers a fill-once
+obligation for the hole. `per_node_walk`, which decides placement, does not
+carry `hole_ok` through a list literal, so it refuses the same hole. **The two
+walks disagree about whether a list literal is a place a construction can
+stand**, and the double-report is that disagreement showing. Neither diagnostic
+is false, which is why this is left alone: suppressing the second hides a true
+statement, and admitting the hole is a change to the language and Clay's. The
+corpus now pins whatever the answer turns out to be:
+`tests/golden/errors/a_hole_away_from_a_construction_argument` carries all
+three shapes and both goldens, and was watched red twice — once with a word
+changed in the message and once with the lambda's hole removed from the
+program.
+## 2026-09-18 — the interpreted row does not vary, and the reading that said it did came out of a stale box
+
+STATUS.md's second standing "Ruled, unbuilt" row is the 2026-09-15
+normalization ruling against `interp_instructions`, which two CI jobs read
+six apart. Its Owes: *measure cloud's candidate, or replace it.* The candidate
+was that six in 2.18 billion is three parts per billion, that the interpreted
+run is the allocation-heavy workload, and that where the allocator's heap
+starts moves with the size of the file the loader mapped.
+
+**The first answer this branch recorded was wrong.** Four runs staged out of
+`/tmp/kanso-compile-ir` read the gate's anchor at 2,648,173,504,
+2,646,456,996, 2,649,443,833 and 2,646,343,385 — a spread of 3,100,448, or
+0.117% — with `core::hash::sip::Hasher::write` live at 187,455,582, 6.96% of
+the run. A frame diff of the extremes put the whole difference in
+`eval_ident`, `type_decl`, `call_named`, `__memcmp_avx2_movbe` and
+`hashbrown`'s `contains_key`, against a `dispatch` that went the other way.
+That went into this branch as a property of the current tree.
+
+It is not. Four runs of a release build of `07b96058` — the same commit the
+first reading names — read the anchor at **2,231,670,466, four times, with no
+`sip::Hasher::write` frame in the profile at all.** Four runs of a release
+build of `14530ee9` read 2,231,485,945 four times, likewise. The row is exact
+on this container and always was.
+
+**What the box held.** `scripts/gates/library_box.sh` copies
+`./target/release/kanso`; it does not build it. A worktree's target directory
+holds whatever was last built in it, and the binary in the box was one from
+before kanso#1449's sibling fix of 2026-09-16 — `3ee41dcf`, "the interpreter
+hashed against an attacker it does not have", which moved the interpreter's
+`fns`, `types`, `knots`, typeset cache and cycle-guard sets off
+`std::collections`.
+
+Built at `3ee41dcf^` and handed today's corpus and today's `lib`, that
+compiler reads:
+
+    2,649,396,935
+    2,654,191,562
+    2,650,473,347
+    2,653,900,730
+
+with `sip::Hasher::write` at **187,455,582, 6.95%** — the same figure to the
+instruction — and a frame diff of two runs naming `eval_ident` +1,933,122,
+`type_decl` +1,164,960, `call_named` +844,947, `__memcmp_avx2_movbe` +434,498,
+`contains_key` +421,421 and `dispatch` −4,199. Same binary, same signature,
+same spread. The provenance is not inferred from a resemblance; the SipHash
+figure and all six frames reproduce.
+
+**So the mechanism the first reading named was right about that binary and
+wrong about this tree.** Probe sequences moving while the hashing itself does
+not is exactly what `src/hash.rs` describes, and
+`tests/the_compile_path_hashes_with_a_fixed_seed.rs` already covers
+`src/eval.rs`, so no map on this tree could have produced it.
+
+**The 2026-09-15 row is therefore not what it was filed as.** Two CI jobs read
+six apart, and nothing on this container reproduces even that: eight runs
+across two release builds gave two values, one per build. Six in 2.18 billion
+remains unexplained, and it is a CI-side question about two runners rather
+than a randomly-seeded map. What this branch can say is that the map
+hypothesis is dead and the container shows no variance to chase.
+
+**And the staging script now builds what it stages.** One line,
+`cargo build --release`, ahead of the copy, which is the rule
+`all_counters.sh` and `all_compile.sh` already carry and which this script was
+missing. `tests/the_box_stages_a_binary_it_built.rs` pins it: the build line
+exists, it precedes the copy when comments are stripped, and the path it
+copies is the one the build writes. Watched red three ways — the line deleted,
+the line moved after the copy, and the copy pointed at a different path.
+
+**What it cost to not have it.** A wrong spread, a wrong mechanism and a
+search for a map that does not exist, all in an entry that reached an open
+pull request. Nothing on main, because the reproduction happened before the
+merge — but the only reason the reproduction happened was that the number was
+re-measured rather than re-read. A gate that measures a binary nobody built answers about
+some other tree, and prints a plausible number doing it.
 ## 2026-09-17 — the eta-reduction argument re-measured on the bind's ground
 
 The 2026-07-25 entry *"BUILT, MEASURED, DECLINED: eta-reduction is not

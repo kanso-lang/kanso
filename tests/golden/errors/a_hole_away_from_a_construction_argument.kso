@@ -1,0 +1,30 @@
+# A hole stands where a construction's argument goes, and the construction has
+# to be a binding's whole right-hand side or another construction's argument.
+# Put it inside a list literal, an `if` arm or a lambda and there is no field
+# for the block to fill, so all three are refused where they stand.
+#
+# This is the boundary the 2026-08-29 cohort gavel runs into. Its example is
+# "N linked nodes from a map", which wants a hole inside the lambda handed to
+# `list/map` — the third case below. N nodes cannot be N named bindings, and a
+# named binding is the one shape that works, so the gavel's purpose needs this
+# rule widened before the birth-through-a-call one is.
+type cell
+  tag
+  link
+
+fn in_a_list _
+  build
+    xs = [(cell "a" _) (cell "b" _)]
+    xs
+
+fn in_an_arm flag
+  build
+    a = if flag (cell "a" _) (cell "b" _)
+    a
+
+fn in_a_lambda _
+  build
+    f = (n -> cell n _)
+    f "a"
+
+pub play = print "{length (in_a_list 0)}"
