@@ -71,6 +71,25 @@
 # (+0.0003%). THE ONE ROW THAT REPRODUCES. +16 on both rounds, against two different
 # bases: the predicate answers with a set of owned names, built once, and
 # sixteen allocations is what that set costs on this program.
+#
+# 2026-09-18, kanso#1516. ROUND ONE IS DELIBERATELY RED ON BOTH ROWS, for the
+# reason the instruction golden gives: this host cannot compare, so the values
+# below are main's and CI's sitting replaces them.
+#
+# Measured here, as evidence of direction and size: interp_allocs
+# 5,310,694 -> 4,985,431, a FALL of 325,263 (-6.12%), and interp_peak_bytes
+# 933,280 -> 942,308, a RISE of 9,028 (+0.97%).
+#
+# THE TWO DIMENSIONS GO OPPOSITE WAYS AND BOTH ARE THE SAME CHANGE. The traffic
+# falls because `eval_ident` no longer builds an `Rc<str>` for every reference
+# it returns -- 325,412 of those on this corpus, which is the whole of the
+# fall to within 149, the number of distinct names that now allocate once each.
+# The residency rises because the remembered answers live in a table: 149 rows
+# in a map hashbrown sizes to 256 buckets. That table is what the traffic
+# bought, and it is the trade to read here rather than either row alone.
+#
+# The thunk counters are byte-identical across the change -- 1 alloc, 6 forces,
+# 1 eval -- so nothing semantic moved.
 interp_allocs=5310696
 interp_peak_bytes=933182
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

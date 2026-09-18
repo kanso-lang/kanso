@@ -251,5 +251,25 @@
 # kanso#1510 left, reads the other way. One change, two signs, so what the
 # walk costs is below what this row resolves -- the reproducible signal for
 # this change is `interp_allocs`, which read +16 on both rounds.
+#
+# 2026-09-18, kanso#1516. ROUND ONE IS DELIBERATELY RED ON THIS ROW. The value
+# below is main's, because this container's rustc is 1.94.1 against the
+# runner's 1.98.1 and the gate refuses the comparison; CI measures and its own
+# reading replaces this line.
+#
+# What this branch does, measured HERE and written down as evidence rather than
+# as the row: two binaries built in one worktree, staged into boxes of equal
+# path length, profiled with the gate's own anchor and glibc tunables. Base
+# 2,007,688,216, head 1,836,055,421 -- a FALL of 171,632,795, 8.55%.
+#
+# WORK, and the mechanism is named. `eval_ident` walked a ladder for every name
+# that is not a local: `fns`, then three descriptor names, then `types`, then
+# `fns` and `types` a SECOND time and a sixty-name array, then `Rc::from(name)`
+# to build the reference. A counter on each rung read 1,056,329 calls on this
+# corpus, 724,304 of them locals that stop at the environment walk, 332,024
+# reaching the type probe and 325,412 returning a reference -- so a third of
+# all resolutions paid four probes and an allocation to answer a question whose
+# answer cannot change during a run. The answer is remembered on first sight
+# now, and the ladder runs once per name.
 interp_instructions=2168428538
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

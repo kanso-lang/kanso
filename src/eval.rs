@@ -1105,6 +1105,35 @@ impl Executor for ScriptedExecutor {
     }
 }
 
+/// What a name that is not a local stands for. `eval_ident` used to answer
+/// this by walking a ladder -- `fns`, the three descriptor names, `types`,
+/// then `fns` and `types` a second time and a sixty-name array -- and a
+/// program asks it about the same name on every evaluation, once per loop
+/// iteration on the same node. The answer depends on the program alone, so it
+/// is remembered the first time it is worked out.
+///
+/// A constant is `Constant` rather than its value: `knotted` evaluates, and
+/// what it returns is a value rather than a resolution. A field-less record is
+/// `EmptyRecord` for the same reason -- its fields are a fresh `RefCell` on
+/// every mention.
+/// Every arm is a name or a pointer, and the three descriptors and four
+/// literals are arms of their own rather than a `Desc` or a `Value`: this
+/// lives in a table with one row per name the run mentions, and inlining
+/// either enum would size every row by its largest variant.
+#[derive(Clone)]
+enum Named<'a> {
+    Constant(&'a FnDecl),
+    Args,
+    Stdin,
+    Now,
+    EmptyRecord(Rc<str>),
+    True,
+    False,
+    NoneV,
+    Done,
+    FnRef(Rc<str>),
+}
+
 pub struct Interp<'a> {
     fns: Map<&'a str, Vec<&'a FnDecl>>,
     types: Map<&'a str, &'a TypeDecl>,
@@ -1128,6 +1157,11 @@ pub struct Interp<'a> {
     /// at construction, because `kanso check` makes an `Interp` and never
     /// evaluates a constant, and that route is a weighed welfare term.
     cycles: std::cell::OnceCell<crate::hash::Set<String>>,
+    /// One entry per non-local name this run has evaluated. Filled on first
+    /// sight rather than at construction, because `kanso check` makes an
+    /// `Interp` and evaluates nothing, and that route is a weighed welfare
+    /// term -- the same reason `cycles` above is a `OnceCell`.
+    names: RefCell<Map<String, Named<'a>>>,
     program: &'a Program,
 }
 
@@ -1193,6 +1227,7 @@ impl<'a> Interp<'a> {
             stack_hint: crate::stack_hint(program),
             knots: RefCell::new(Map::default()),
             cycles: std::cell::OnceCell::new(),
+            names: RefCell::new(Map::default()),
             program,
         }
     }
@@ -1794,6 +1829,39 @@ impl<'a> Interp<'a> {
         if let Some(value) = lookup(env, name) {
             return Ok(value);
         }
+        // The borrow is dropped before anything below runs: `knotted` evaluates
+        // a constant's body, which reaches `eval_ident` again and would find
+        // this cell already borrowed.
+        let known = self.names.borrow().get(name).cloned();
+        let named = match known {
+            Some(named) => named,
+            None => {
+                let named = self.resolve(name, span)?;
+                self.names.borrow_mut().insert(name.to_string(), named.clone());
+                named
+            }
+        };
+        match named {
+            Named::Constant(constant) => self.knotted(name, constant),
+            Named::Args => Ok(Value::Desc(Rc::new(Desc::Args))),
+            Named::Stdin => Ok(Value::Desc(Rc::new(Desc::Stdin))),
+            Named::Now => Ok(Value::Desc(Rc::new(Desc::Now))),
+            Named::EmptyRecord(ty) => {
+                Ok(Value::Record { ty, fields: Rc::new(RefCell::new(Vec::new())) })
+            }
+            Named::True => Ok(Value::True),
+            Named::False => Ok(Value::False),
+            Named::NoneV => Ok(Value::NoneV),
+            Named::Done => Ok(Value::Done),
+            Named::FnRef(name) => Ok(Value::FnRef(name)),
+        }
+    }
+
+    /// The ladder, walked once per name per run. Every arm below was an arm of
+    /// `eval_ident` and they are in the order they were in, because the order
+    /// decides the answer: a constant beats a descriptor name, a descriptor
+    /// name beats a field-less type, and a literal beats a reference.
+    fn resolve(&self, name: &str, span: Span) -> Result<Named<'a>, RuntimeError> {
         if let Some(decls) = self.fns.get(name) {
             if let Some(constant) = decls.iter().find(|d| d.params.is_empty()) {
                 // Every constant goes through the knot, not only one that
@@ -1803,28 +1871,25 @@ impl<'a> Interp<'a> {
                 // whether a constant mentions its own name sees `a = f b` and
                 // `b = f a` as two ordinary constants, and evaluating either
                 // recurses until the process dies.
-                return self.knotted(name, constant);
+                return Ok(Named::Constant(constant));
             }
         }
         match name.strip_prefix("builtin_").unwrap_or(name) {
-            "args" => return Ok(Value::Desc(Rc::new(Desc::Args))),
-            "stdin" => return Ok(Value::Desc(Rc::new(Desc::Stdin))),
-            "now" => return Ok(Value::Desc(Rc::new(Desc::Now))),
+            "args" => return Ok(Named::Args),
+            "stdin" => return Ok(Named::Stdin),
+            "now" => return Ok(Named::Now),
             _ => {}
         }
         if let Some(decl) = self.type_decl(name) {
             if decl.parent.is_none() && decl.members.is_empty() && decl.fields.is_empty() {
-                return Ok(Value::Record {
-                    ty: Rc::from(name),
-                    fields: Rc::new(RefCell::new(Vec::new())),
-                });
+                return Ok(Named::EmptyRecord(Rc::from(name)));
             }
         }
         match name {
-            "true" => Ok(Value::True),
-            "false" => Ok(Value::False),
-            "none" => Ok(Value::NoneV),
-            "done" => Ok(Value::Done),
+            "true" => Ok(Named::True),
+            "false" => Ok(Named::False),
+            "none" => Ok(Named::NoneV),
+            "done" => Ok(Named::Done),
             _ if self.fns.contains_key(name)
                 || self.types.contains_key(name)
                 || name == "err"
@@ -1833,7 +1898,7 @@ impl<'a> Interp<'a> {
                     .strip_prefix("builtin_")
                     .is_some_and(|n| crate::check::BUILTINS.contains(&n)) =>
             {
-                Ok(Value::FnRef(Rc::from(name)))
+                Ok(Named::FnRef(Rc::from(name)))
             }
             _ => Err(RuntimeError { message: format!("unknown name `{name}`"), span }),
         }

@@ -1,0 +1,21 @@
+# The interpreter remembers what a name that is not a local stands for, so a
+# run works the ladder out once per name instead of on every evaluation. That
+# is sound only because a non-local name means ONE thing for a whole run, and
+# these two refusals are what make it so: a parameter may not be spelled like
+# a declaration in the same module, nor like a builtin. Relax either and a
+# spelling could mean the declaration in one frame and a binding in the next,
+# which is the case a remembered answer cannot see.
+#
+# The environment is still asked first, before the memory, so the ordering
+# does not rest on this file. What rests on it is that there is nothing for
+# the ordering to protect.
+fn inc n
+  n + 1
+
+fn shade inc
+  inc * 10
+
+fn shadier length
+  length * 10
+
+pub play = print "x"

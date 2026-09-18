@@ -1,0 +1,20 @@
+# `round` is spelled three ways in one run and the interpreter sees two of
+# them. `import "std/math"` enrols a bare clone, and by the time a body is
+# evaluated that clone is `sample/round`; the builtin underneath it is
+# `builtin_round`; and `shade`'s parameter is the bare `round`, which is a
+# binding and never reaches name resolution at all.
+#
+# That separation is why the interpreter may remember what a non-local name
+# stands for: no spelling it remembers is a spelling a binding can take. What
+# this fixture pins is the separation itself, not the memory — a memory
+# consulted in the wrong order would still print these three numbers, which
+# was found by building one and watching it pass.
+import "std/math"
+
+fn apply f x
+  f x
+
+fn shade round
+  round * 10
+
+pub play = print "{shade 4} {apply round 2.6} {shade 6}"
