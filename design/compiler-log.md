@@ -3355,3 +3355,30 @@ only the environment walk's. `Rc<str>` is the same shape and a quarter the size.
 
 UNSIZED, and this is the fourth time today that mattered: 610,763 is how often
 the allocation happens, not what removing it saves. The build is the measurement.
+
+## 2026-09-18 — every integer the run clones fits in an i64
+
+The counting `Clone` impl was extended to ask, of each `Value::Int` it copied,
+whether the `BigInt` fits an `i64`. Over bench/interp_corpus:
+
+    Int clones            610,763
+    of those, fitting i64 610,763      all of them
+
+NOT ONE. Every integer this corpus copies is small, and each of those copies
+allocates a digit vector because `BigInt` keeps its magnitude on the heap.
+
+That settles the shape of the change without settling its size: an inline `i64`
+with `BigInt` reached only on overflow removes 610,763 allocations here and
+falls back never. It is a change to `Value` rather than to a path, so it pays
+wherever a value is copied -- the environment walk's 724,304 hits, `match_one`'s
+binds, every argument handed to a call -- rather than at one site.
+
+WHAT IT COSTS IS THE PART TO BUILD RATHER THAN ARGUE. `Value` gains a variant or
+`Int` gains a discriminant, and every arithmetic site has to promote at exactly
+the right point. The language's integers are arbitrary-precision by design, and
+a fast path that overflows one step late is a wrong answer rather than a slow
+one, so the fixture comes first: a golden holding a value either side of the
+i64 boundary, watched red on a deliberately-wrong promotion.
+
+Still unsized, deliberately. 610,763 is how often the allocation happens. What
+removing it saves is a differential nobody has run.
