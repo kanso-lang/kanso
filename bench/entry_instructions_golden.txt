@@ -942,7 +942,7 @@
 #
 # 2026-09-18, re-merged onto main after kanso#1511. THE VALUE BELOW IS MAIN'S,
 # carried forward; the merged reading is CI's.
-entry_instructions=126359513
+entry_instructions=126351986
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.
 # The row did not move for that -- the same figure came back on the run before

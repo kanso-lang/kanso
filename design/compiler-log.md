@@ -3479,3 +3479,45 @@ two different jobs on two different trees that both change runtime.c.
 
 The floor is re-banked on these rows rather than on the projection the
 re-merge carried.
+
+## 2026-09-18 — kanso#1504's rows on the tree merged after kanso#1511, and a floor that had been banked on main's row
+
+CI's sitting on `38fa8750`, every row with the value it landed on:
+
+    compile_instructions      35,442,006 ->    35,442,391       +385  (+0.0011%)
+    entry_instructions       126,350,641 ->   126,351,986     +1,345  (+0.0011%)
+    library_instructions     126,806,286 ->   126,807,492     +1,206  (+0.0010%)
+    startup_instructions       3,363,379 ->     3,363,835       +456  (+0.0136%)
+    interp_instructions    2,182,527,453 -> 2,182,576,175    +48,722  (+0.0022%)
+    emit_instructions         51,543,408 ->    51,547,188     +3,780  (+0.0073%)
+    codegen_instructions_dev     596,157,624 ->   596,197,703    +40,079  (+0.0067%)
+    codegen_instructions_release 6,824,133,280 -> 6,841,691,425 +17,558,145 (+0.2573%)
+
+The first six are layout. The branch's own source has not moved since the
+previous sitting, and what changed under it is main.
+
+**The release row is not layout, and the floor had been banked as though it
+were.** The branch measured 6,841,893,129 for itself at `3db62375`. The
+2026-09-18 merge of kanso#1512 resolved
+`bench/codegen_instructions_release_golden.txt` toward main, so the tree
+carried main's 6,824,133,280 — and the floor was then re-banked on that tree,
+at 76.88347521753009, crediting the beat rewind with a codegen row 17.5
+million instructions cheaper than the one it produces. This job reads
+6,841,691,425, which is 201,704 below the branch's earlier figure and
+17,558,145 above main's. Two readings of the branch's own cost that agree to
+0.003% is what a real cost looks like; the value that sat between them for a
+day was main's.
+
+So the floor is re-banked at 76.87843049336072 on the tree's own eight rows.
+The floor before the bad bank was 76.87853949372271, so this is a restoration
+within 0.00014 rather than a regression admitted.
+
+**The rule it breaks is one this file already carries, with a different
+victim.** "Carry ALL rows forward or none" was written about the trend gate:
+leaving one row at the branch's value while the others take main's makes a
+fall that paid for a rise read as main's. The same resolution going the other
+way — a row taken from main while the rest stay the branch's — costs the
+FLOOR instead, and it is worse, because the trend gate says so out loud and a
+bank says nothing at all. A merge that touches a golden the branch has
+measured for itself is a merge that needs the branch's number put back before
+anything is banked on the tree.
