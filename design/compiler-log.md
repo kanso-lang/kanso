@@ -4255,3 +4255,63 @@ smaller one it replaces, and a peak is where that overlap would show — a
 candidate, not a mechanism, and no build isolates it.
 
 Welfare 77.25 -> 77.26, banked in the same pull request.
+
+---
+
+## 2026-09-18 — the score buffer had no reason to be freed, and freeing it cost five million
+
+**BUILT AND SHIPPING**, following the previous change rather than a fresh
+reading of the profile. kanso#1538 gave the two dispatch buffers their arity up
+front. The question this one asks is why either is allocated per dispatch at
+all.
+
+`binds` has an answer: it is moved into `bind_all` and becomes the environment
+frame, so its allocation is still doing work after the dispatch ends. `score`
+has none. It exists to compare candidates, it is kept beside `best` while one
+candidate is winning, and then it is dropped. So it was declared above the
+tail-call loop instead, and the winner's buffer is handed back to the working
+variable rather than falling out of scope.
+
+    base    985,444,659
+    kept    980,371,488   -5,073,171   -0.51%
+
+The allocator edges say it is the change and nothing else:
+
+                     base        kept        delta
+    __rust_alloc    1,362,891   1,243,349   -119,542
+    __rust_dealloc  1,350,763   1,231,221   -119,542
+    grow_one          112,013     112,013          0
+    finish_grow       137,048     155,543    +18,495
+
+**119,542 allocate-and-free pairs, at 42.4 instructions each.** The growth path
+is untouched, which is the point: kanso#1538 took the growths and this takes
+the allocations, and the two costs are separable and were separated. The
++18,495 in `finish_grow` is the retained buffer growing when a later dispatch
+arrives with more parameters than the one that sized it — the price of keeping
+it, and it is in the measured total.
+
+**119,542 IS NOT THE DISPATCH COUNT, AND IT IS NOT THE ITERATION COUNT
+EITHER.** There are 55,711 dispatches, so this is 2.15 pairs each, and the
+reason it exceeds one is the loop the buffer now lives above: a tail call goes
+round again without leaving `dispatch_loop_inner`, and every one of those was
+allocating and freeing a score buffer too. `frame_for` is called once an
+iteration and reads 175,246, so the iterations are about three per dispatch.
+
+That leaves 119,542 removed against roughly 175,246 that could have been, and
+the first draft of this entry said "one per tail hop" without checking the
+second number. About two-thirds of iterations were allocating. What accounts
+for the other third is NOT established here. The obvious candidate is arity
+zero — `Vec::with_capacity(0)` allocates nothing, so a nullary dispatch never
+had a buffer to free — and that is a candidate, not a measurement: nothing in
+this profile counts dispatches by arity. The saving is 119,542 pairs whatever
+explains the gap.
+
+**Three wins in eight builds today**, and the two since the allocator-caller
+tally are both wins, against one in five before it.
+
+**A FOURTH CHANGE LEAVES THE COMPARING ALONE.** `__memcmp_avx2_movbe` reads
+46,087,562 then 46,118,166 across the reserve pair, +30,604, +0.066%. A draft
+of this entry had it FALLING 1,484,175, off 47,602,341 — which is a debug-info
+profile read against a release one, two build configurations rather than two
+trees. Compared inside its own sitting it has not moved, and §96's count of
+three changes becomes four.
