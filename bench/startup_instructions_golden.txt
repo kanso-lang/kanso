@@ -363,4 +363,12 @@
 # 2026-09-18, re-merged onto main after kanso#1510. THE VALUE BELOW IS MAIN'S,
 # carried forward: kanso#1510 moved this row and what this branch adds on top
 # has not been measured, so the merged reading is CI's.
-startup_instructions=3364974
+#
+# 2026-09-18, kanso#1504 on the tree merged with main after kanso#1510,
+# CI's sitting. 3,364,974 -> 3,363,379, a FALL of 1,595
+# (-0.0474%). LAYOUT. `src/runtime.c` is include_str!'d into the
+# compiler, so its bytes move the compiler's own and every row that runs
+# the compiler moves with them; none of these routes runs the beat code
+# this branch changes. All six fell this time, which is the same term with
+# the opposite sign to the previous sitting -- a shifted binary, not work.
+startup_instructions=3363379

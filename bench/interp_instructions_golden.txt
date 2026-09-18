@@ -257,5 +257,13 @@
 # 2026-09-18, re-merged onto main after kanso#1510. THE VALUE BELOW IS MAIN'S,
 # carried forward: kanso#1510 moved this row and what this branch adds on top
 # has not been measured, so the merged reading is CI's.
-interp_instructions=2182620735
+#
+# 2026-09-18, kanso#1504 on the tree merged with main after kanso#1510,
+# CI's sitting. 2,182,620,735 -> 2,182,527,453, a FALL of 93,282
+# (-0.0043%). LAYOUT. `src/runtime.c` is include_str!'d into the
+# compiler, so its bytes move the compiler's own and every row that runs
+# the compiler moves with them; none of these routes runs the beat code
+# this branch changes. All six fell this time, which is the same term with
+# the opposite sign to the previous sitting -- a shifted binary, not work.
+interp_instructions=2182527453
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

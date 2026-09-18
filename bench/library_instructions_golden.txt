@@ -954,7 +954,15 @@
 # 2026-09-18, re-merged onto main after kanso#1510. THE VALUE BELOW IS MAIN'S,
 # carried forward: kanso#1510 moved this row and what this branch adds on top
 # has not been measured, so the merged reading is CI's.
-library_instructions=126813486
+#
+# 2026-09-18, kanso#1504 on the tree merged with main after kanso#1510,
+# CI's sitting. 126,813,486 -> 126,806,286, a FALL of 7,200
+# (-0.0057%). LAYOUT. `src/runtime.c` is include_str!'d into the
+# compiler, so its bytes move the compiler's own and every row that runs
+# the compiler moves with them; none of these routes runs the beat code
+# this branch changes. All six fell this time, which is the same term with
+# the opposite sign to the previous sitting -- a shifted binary, not work.
+library_instructions=126806286
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.
 # The row did not move for that -- the same figure came back on the run before
