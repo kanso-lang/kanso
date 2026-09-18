@@ -2106,7 +2106,13 @@
 # moved and the two codegen rows did not: they AGREED with this branch's own
 # readings to the instruction, across two CI jobs on two different trees,
 # which is what `-Wl,-plugin-opt=jobs=1` bought.
-compile_instructions=35441027
+#
+# 2026-09-18, kanso#1502 on the tree merged with main, CI's sitting.
+# 35,441,027 -> 35,442,511, a RISE of 1,484 (+0.0042%).
+# LAYOUT. These rows carry runtime.c's bytes rather than compiling it, and
+# every binary's `.text` grew 32 bytes on this change; the moves are all under
+# two hundredths of a per cent.
+compile_instructions=35442511
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

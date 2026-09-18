@@ -2645,3 +2645,52 @@ one pair over: **222,173 of 2,809,326 did not read back**.
   Rows are CI's to take.
 - **OPEN** the rest of `render_ryu`. At 425.9 a float it is still the largest
   leaf in the run program after the four kanso-level frames.
+## 2026-09-18 — kanso#1502 on the merged tree, and the `.text` claim was the wrong sign
+
+CI's sitting, run side first. Five rows moved and nine are byte-identical:
+
+    encodebench  3,497,149,260 -> 3,485,406,060  -11,743,200  -0.3358%
+    livebench    2,825,430,323 -> 2,813,687,123  -11,743,200  -0.4156%
+    runbench     1,821,933,936 -> 1,819,291,716   -2,642,220  -0.1450%
+    oneshot         17,888,155 ->    17,858,797      -29,358  -0.1641%
+    widebench       33,516,094 ->    33,548,094      +32,000  +0.0955%
+
+encodebench and livebench fall by the SAME 11,743,200, to the instruction.
+That is one kernel doing one job: both corpora render the same floats the same
+number of times, and the digit loop's third division is gone from each of them
+equally. The benchmarks that render no floats — jsonbench, basket, deepbench,
+escapebench, pendbench, indexbench, scanbench, digestbench, readbench — do not
+move a single instruction.
+
+**The `.text` claim was the wrong sign.** This branch's entry records
+`.text -1,360 bytes`. CI reads **+32 bytes on every one of the fourteen
+binaries**, without exception. The earlier figure was taken before kanso#1478,
+kanso#1493 and four others landed, on a tree where the surrounding code was
+different; what the change does to the emitted size on today's main is add
+thirty-two bytes. widebench's +32,000 instructions is that growth being paid
+for by the benchmark whose working set it disturbs most, and it is the only
+run row that rises.
+
+The compile side moved eight rows, seven of them under two hundredths of a per
+cent and all layout. The exception is `codegen_instructions_release`, up
+1,758,635 (0.026%), which is the only row that COMPILES runtime.c rather than
+carrying its bytes. `codegen_release_again` read 6,824,410,196 — the same
+number in the same job, which is kanso#1507's thread pin holding on a third
+tree that changes runtime.c.
+Every row that rose, named by the counter the gate spells and the value it
+landed on:
+
+    codegen_instructions_release  6,824,410,196   +1,758,635  +0.0258%
+    work_widebench                   33,548,094      +32,000  +0.0955%
+    emit_instructions                60,206,729      +10,004  +0.0166%
+    interp_instructions           2,182,584,048       +7,939  +0.0004%
+    library_instructions            126,807,848       +3,423  +0.0027%
+    entry_instructions              126,352,058       +3,018  +0.0024%
+    compile_instructions             35,442,511       +1,484  +0.0042%
+    startup_instructions              3,951,975         +179  +0.0045%
+    text                            1,755,820 total       +448
+
+`text` is the sum over the fourteen binaries and each one grew by exactly 32
+bytes, so the total moves 448. Seven of the eight instruction rows are under
+two hundredths of a per cent and carry runtime.c's bytes rather than compiling
+it; the release row is the exception and the reason is given above.

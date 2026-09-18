@@ -79,4 +79,10 @@
 # runs the compiler moves with them. Seven rows moved here and all seven are
 # under five ten-thousandths of a per cent, with mixed signs -- which is what a
 # shifted binary looks like and not what work looks like.
-codegen_instructions_dev=596159774
+#
+# 2026-09-18, kanso#1502 on the tree merged with main, CI's sitting.
+# 596,159,774 -> 596,164,003, a RISE of 4,229 (+0.0007%).
+# LAYOUT. These rows carry runtime.c's bytes rather than compiling it, and
+# every binary's `.text` grew 32 bytes on this change; the moves are all under
+# two hundredths of a per cent.
+codegen_instructions_dev=596164003

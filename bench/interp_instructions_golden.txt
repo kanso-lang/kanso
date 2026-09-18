@@ -209,5 +209,11 @@
 # moved and the two codegen rows did not: they AGREED with this branch's own
 # readings to the instruction, across two CI jobs on two different trees,
 # which is what `-Wl,-plugin-opt=jobs=1` bought.
-interp_instructions=2182576109
+#
+# 2026-09-18, kanso#1502 on the tree merged with main, CI's sitting.
+# 2,182,576,109 -> 2,182,584,048, a RISE of 7,939 (+0.0004%).
+# LAYOUT. These rows carry runtime.c's bytes rather than compiling it, and
+# every binary's `.text` grew 32 bytes on this change; the moves are all under
+# two hundredths of a per cent.
+interp_instructions=2182584048
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

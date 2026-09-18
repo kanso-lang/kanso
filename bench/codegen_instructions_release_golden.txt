@@ -160,4 +160,12 @@
 # something the runner has and this box does not. The gate now diffs the two
 # readings frame by frame when they disagree, so the next job that sees it
 # names the frame instead of the magnitude.
-codegen_instructions_release=6822651561
+#
+# 2026-09-18, kanso#1502 on the tree merged with main, CI's sitting.
+# 6,822,651,561 -> 6,824,410,196, a RISE of 1,758,635 (+0.0258%).
+# The release tier is the only row that COMPILES src/runtime.c rather than
+# carrying its bytes, so a change to the digit loop is felt here: 1,758,635
+# instructions of clang and ld, 0.026%. `codegen_release_again` read
+# 6,824,410,196, the same number in the same job, which is kanso#1507's
+# `-Wl,-plugin-opt=jobs=1` holding on another tree that changes runtime.c.
+codegen_instructions_release=6824410196

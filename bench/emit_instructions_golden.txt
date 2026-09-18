@@ -114,4 +114,10 @@
 # moved and the two codegen rows did not: they AGREED with this branch's own
 # readings to the instruction, across two CI jobs on two different trees,
 # which is what `-Wl,-plugin-opt=jobs=1` bought.
-emit_instructions=60196725
+#
+# 2026-09-18, kanso#1502 on the tree merged with main, CI's sitting.
+# 60,196,725 -> 60,206,729, a RISE of 10,004 (+0.0166%).
+# LAYOUT. These rows carry runtime.c's bytes rather than compiling it, and
+# every binary's `.text` grew 32 bytes on this change; the moves are all under
+# two hundredths of a per cent.
+emit_instructions=60206729
