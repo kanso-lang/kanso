@@ -3983,3 +3983,27 @@ one of the somewheres; the pair is still worth reading for the others.
 The whole golden corpus passes unchanged, which is the assertion that matters:
 a capacity is not observable, so any output difference would have meant the
 change was not what it looked like.
+
+### the reserve's mechanism, isolated
+
+The paragraph above named two rows as where the saving would come from. Both
+were re-read on the binary that has it, and they are the two that moved:
+
+    RawVecInner::finish_grow   51,556,413 -> 22,646,445   -28,909,968
+    RawVec::grow_one           27,969,576 ->  9,171,576   -18,798,000
+                                                          -47,707,968
+
+The net is 29,632,812 rather than 47.7 million, and the difference is visible in
+the same profile: `dispatch` rose from 144,489,885 to 154,770,762, because
+`Vec::with_capacity` inlines into its caller where `grow_one` was a call. So the
+reserve does not remove that work, it moves two thirds of it and pays for the
+rest inline, which is the trade a reserve IS.
+
+This is the difference between a delta and a mechanism. The saving was predicted
+from two named rows before the change was written, and those two rows are the
+ones that fell — that is an isolation, not a difference-in-differences. Thirty
+million arriving with the change while some third row moved would have been the
+weaker claim this log has been caught making before.
+
+What is left of the shape: 31,818,021 instructions, 2.18%, still in those two
+rows. The parameter vectors were one site, not the site.
