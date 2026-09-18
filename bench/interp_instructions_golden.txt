@@ -148,4 +148,15 @@
 # this change is comparable with one measured after, and this container cannot
 # run the gate -- the golden was taken under rustc 1.98.1 and the box runs
 # 1.94.1. CI measures and its own reading replaces this line.
-interp_instructions=2182307043
+#
+# 2026-09-18, kanso#1505, CI's sitting WITH THE LINE EXCLUDED.
+# 2,182,307,043 -> 2,182,303,844. The difference is 3,199 and it is not a
+# saving: it is the printed line's subtree, which this row stops counting.
+# Larger than the module row's ~825 because `interp_corpus` prints the
+# document it decoded rather than one summary line.
+#
+# NOTHING MEASURED BEFORE THIS CHANGE IS COMPARABLE WITH ANYTHING MEASURED
+# AFTER IT. The row counts a different thing now. What it buys is that the two
+# faces stop: the thirteen that kanso#1486 drew across two sittings lived in
+# this subtree, and it is no longer in the number.
+interp_instructions=2182303844
