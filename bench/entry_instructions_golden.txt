@@ -948,7 +948,12 @@
 # LAYOUT. src/eval.rs is the compiler, so its bytes move and every row that
 # runs the compiler moves with them; none of these routes evaluates a name,
 # because all four stop before the interpreter and the fifth is the emitter.
-entry_instructions=126368664
+#
+# 2026-09-18, kanso#1517 on the tree merged with kanso#1516, CI's sitting.
+# 126,368,664 -> 126,498,498, a RISE of 129,834 (+0.1027%).
+# WORK. See the compile row: `Interp::new` wraps every group in an `Rc` now,
+# and this route builds an `Interp`.
+entry_instructions=126498498
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

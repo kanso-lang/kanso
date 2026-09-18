@@ -3796,6 +3796,102 @@ as they did.
 remembered answers live in, and it is what the other two rows were bought with.
 Welfare rises to 76.87 and the floor is banked at that.
 
+
+
+## 2026-09-18 — the same question at the call sites, and a vector cloned per tail hop
+
+kanso#1516 gave `eval_ident` a memory of what a non-local name stands for. The
+same profile showed the question asked again at two sites that change does not
+reach:
+
+      16,171,431  0.71%  type_decl'call_named'call
+      15,346,817  0.67%  contains_key'eval_tail'dispatch
+      15,088,508  0.66%  type_decl'eval_tail'dispatch
+       2,942,810  0.13%  contains_key'dispatch'call_named
+     -----------
+      49,549,566  2.17%
+
+`call_named` had a ladder of its own — `err`, the types map, the function map —
+walked on every call. `group_of` inside `eval_tail` asked
+`type_decl(n).is_none() && fns.contains_key(n)` about every `FnRef` callee: two
+probes for one bit. Both read a second memory now, keyed the same way.
+
+**Two memories rather than one, and the reason is the row size.** A value needs
+the name as an `Rc<str>`; a call needs the overload group. An arm carrying both
+is 24 bytes of payload where either alone is 16, and that would size every row
+of the table by the pair — the mistake kanso#1516 made once already and paid
+fifteen and a half million instructions for.
+
+Measured against kanso#1516's head, same worktree, boxes of equal path length:
+
+      instructions   1,836,055,421 -> 1,802,816,521   -33,238,900   -1.81%
+      allocations        4,985,431 ->     4,810,435      -174,996   -3.51%
+      peak bytes           942,308 ->       951,537        +9,229   +0.98%
+
+Against main, the two changes together: **2,007,688,216 -> 1,802,816,521,
+-204,871,695, -10.20%**; allocations -9.42%; peak +1.96%.
+
+**THE ALLOCATION FALL IS NOT THE MEMORY**, and the attribution matters because
+the memory is what the change is about. `dispatch_loop_inner` cloned the whole
+overload VECTOR on every tail hop. The groups are `Rc<Vec<..>>` now, because
+the memory has to hold one without borrowing from `self` — a group lives in a
+map owned by the `Interp`, so a `&[&FnDecl]` taken out of it borrows `self` and
+cannot be stored in a field of `self`. Making them shared was the lifetime's
+price and the tail hop's saving: a refcount bump where there was a vector copy.
+The 174,996 is that.
+
+**The profile said 49.5 million and the change bought 33.2.** The 49.5 is what
+the removed frames cost; the change also ADDS a probe at each of the three
+sites, so the prediction was a ceiling rather than an estimate. What the
+remaining 16.3 million is made of — the new probes, the layout the edit moved,
+or both — is not separated here, and nothing below rests on it.
+
+Start-up does not pay for the `Rc` per group. `kanso play` on the start-up
+corpus reads 3,399,666 before and 3,384,980 after, a fall of 14,686 — and that
+route takes the native path rather than building an `Interp`, so the fall is
+layout and the per-group allocation is not in the number at all. What the
+reading says is only that nothing on the start-up path got worse; the
+allocation itself is priced by the interpreted row, which fell.
+
+`group_of`'s rewrite drops two literal exclusions and keeps one. `err` was
+excluded by name and is now excluded because the memory answers `Callee::Err`
+for it; a type name was excluded by a `type_decl` probe and is now excluded
+because the memory answers `Constructor`. `if` stays a literal: it is a
+declaration AND the conditional form, and the form wins at this site.
+
+## 2026-09-18 — kanso#1517's rows on CI, and the three check routes name their own cost
+
+      interpreted    1,997,105,566 -> 1,963,826,350   -33,279,216   -1.6664%
+      allocations        4,985,433 ->     4,810,437      -174,996   -3.5100%
+      peak bytes           942,210 ->       951,438        +9,228   +0.9794%
+      compile           35,447,843 ->    35,486,173       +38,330   +0.1081%
+      entry            126,368,664 ->   126,498,498      +129,834   +0.1027%
+      library          126,824,214 ->   126,953,661      +129,447   +0.1021%
+      start-up           3,364,523 ->     3,362,788        -1,735   -0.0516%
+      emitting          51,554,663 ->    51,451,897      -102,766   -0.1993%
+
+Each key with the value it landed on: `compile_instructions` 35,486,173,
+`entry_instructions` 126,498,498, `library_instructions` 126,953,661 and
+`interp_peak_bytes` 951,438.
+
+**The three check rows are WORK and not layout, and their agreement is what
+says so.** They rose 0.1081%, 0.1027% and 0.1021% — three routes, three
+different programs, one figure to three decimal places. A shifted binary does
+not do that; it moves rows by different amounts in mixed directions, which is
+what start-up and emitting did here. `kanso check` builds an `Interp`, and
+`Interp::new` now wraps every function group in an `Rc` so the callee memory
+can hold one without borrowing from `self`. That is an allocation per group, on
+a route that constructs the interpreter and then evaluates nothing with it.
+
+It is the cost this change pays and it is priced in the sum: 130,000
+instructions on each check route against 33,279,216 off the interpreted one.
+
+**The two hosts agreed again, and on the counters exactly.** The container
+projected the interpreted fall at 33,238,900 and CI reads 33,279,216 — 40,316
+apart, 0.12% of the delta. `interp_allocs` fell by 174,996 on both, the same
+integer. `interp_peak_bytes` rose 9,229 here and 9,228 on the runner, one byte
+apart on a row whose absolute values the two hosts do not share.
+
 ## 2026-09-17 — the beat rewind's fast path: 23 instructions to 15
 
 `k_beat_iter` is what a compiler-proven beat loop calls between iterations to
@@ -4179,3 +4275,26 @@ this branch is actually for -- 6,841,691,425 -- is untouched by the merge.
 Third re-merge for this branch. Each costs it a round, and the cost is
 `required_status_checks.strict` with several changes in flight rather than
 anything wrong with any of them.
+
+## 2026-09-18 — kanso#1504 re-merged onto main after kanso#1517
+
+kanso#1517 landed the callee memory under this branch, so the five layout rows
+and the floor carry MAIN's values again and this round is deliberately red on
+them.
+
+The goldens auto-merged this time and that was checked rather than trusted:
+every one of the six instruction rows now reads main's value exactly —
+compile 35,486,173, entry 126,498,498, library 126,953,661, start-up 3,362,788,
+emitting 51,451,897, interpreted 1,963,826,350. An auto-merge on a golden is
+worth a diff, because git will take a clean apply on a file where the right
+answer is a judgement.
+
+Two rows are the branch's own and CI measured them: codegen release at
+6,841,691,425 and dev at 596,197,703. The release one costs 0.007 points and
+buys the run side 1,804,998,570, which is 14,293,146 instructions below the
+tree kanso#1502 sits on.
+
+Welfare reads 76.93 against main's 76.88. The 0.05 is not banked here for the
+same reason it was not banked on kanso#1502: welfare weighs the five carried
+rows, so a --set now would freeze a score this container projected rather than
+the one CI measures. The rows come first.
