@@ -831,6 +831,10 @@
 # 127,871,143 -> 127,872,255, a RISE of 1,112 (+0.0009%). The same layout term
 # as the module row; against main's 128,213,970 the branch is 341,715 below.
 #
+# 2026-09-17, kanso#1486 on the tree merged with main 2a0cec7c, CI's sitting.
+# entry_instructions 127,872,255 -> 126,348,616, a FALL of 1,523,639 (-1.1915%).
+# The entry route pays the same fixpoint and pays it over more program, so it
+# gives back four times the instructions at the same proportion.
 # 2026-09-18, kanso#1507 on the tree merged with main, CI's sitting. 127,872,255 ->
 # 127,872,509, a RISE of 254 (+0.00020%). LAYOUT. This branch adds a
 # `match std::env::var("KANSO_LTO_JOBS")` to `release_clang` in src/main.rs and
@@ -839,7 +843,15 @@
 # runs the compiler moves with them. Seven rows moved here and all seven are
 # under five ten-thousandths of a per cent, with mixed signs -- which is what a
 # shifted binary looks like and not what work looks like.
-entry_instructions=127872509
+#
+# 2026-09-18, re-merged after kanso#1486 landed underneath. THE VALUE BELOW IS
+# MAIN'S, carried forward. kanso#1507's own sitting on the pre-merge tree read
+# 127,872,509 and is recorded above; it was taken on a base that did not
+# carry kanso#1486's 1.17% fall across the three check routes, so it describes
+# a tree that no longer exists. Carrying main's forward gives the gate one
+# number to fail against rather than none, and makes CI's diff read exactly
+# what this branch does to today's main.
+entry_instructions=126348616
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

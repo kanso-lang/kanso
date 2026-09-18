@@ -266,6 +266,19 @@
 # The value the merge carried forward was main's, so this diff is the whole of
 # what the branch does to today's main, taken in one job.
 #
+# 2026-09-17, merged with main 2a0cec7c. Every row below is MAIN'S, carried
+# forward. This branch measured against a base that kanso#1478 (emitted code
+# -84.25%) and kanso#1493 (start-up -22.14%) have both moved since, so the
+# numbers it took are against a tree that no longer exists -- its emit row read
+# 382,216,372 where main now reads 60,197,743. Carrying main's forward gives
+# the gate one number to fail against rather than none, and makes CI's diff
+# read exactly what this branch does to today's main. The merged sitting is
+# CI's to take.
+#
+# 2026-09-17, kanso#1486 on the tree merged with main 2a0cec7c, CI's sitting.
+# startup_instructions 3,955,899 -> 3,951,284, a FALL of 4,615 (-0.1167%).
+# Start-up reaches codegen but compiles one `print`, so most of this is the
+# same layout term the row above shows, at this row's scale.
 # 2026-09-18, kanso#1507 on the tree merged with main, CI's sitting. 3,955,899 ->
 # 3,955,888, a FALL of 11 (-0.00028%). LAYOUT. This branch adds a
 # `match std::env::var("KANSO_LTO_JOBS")` to `release_clang` in src/main.rs and
@@ -274,4 +287,12 @@
 # runs the compiler moves with them. Seven rows moved here and all seven are
 # under five ten-thousandths of a per cent, with mixed signs -- which is what a
 # shifted binary looks like and not what work looks like.
-startup_instructions=3955888
+#
+# 2026-09-18, re-merged after kanso#1486 landed underneath. THE VALUE BELOW IS
+# MAIN'S, carried forward. kanso#1507's own sitting on the pre-merge tree read
+# 3,955,888 and is recorded above; it was taken on a base that did not
+# carry kanso#1486's 1.17% fall across the three check routes, so it describes
+# a tree that no longer exists. Carrying main's forward gives the gate one
+# number to fail against rather than none, and makes CI's diff read exactly
+# what this branch does to today's main.
+startup_instructions=3951284
