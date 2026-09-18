@@ -1,0 +1,27 @@
+# Every name the interpreter binds is stored as a `Name`, which keeps
+# twenty-two bytes or fewer in the node itself and boxes anything longer.
+# Nothing in the corpus bound a name past that bound before this fixture, so
+# the boxed path was load-bearing and unexercised at once.
+#
+# The two parameters of `picked` share their first twenty-two bytes exactly.
+# That pair is the one that matters: a store keeping only the inline prefix
+# would give both the same key, where a single truncated name still matches a
+# lookup truncated the same way and proves nothing.
+#
+# Watched red before it was green, with `bind` storing
+# `Name::new(&name.as_str()[..22])`: the interpreter stops with
+# `error[runtime]: unknown name a_parameter_name_longer_than_the_inline_bound`
+# and exits 1. Native prints the same three numbers under that break, because
+# compiled code binds nothing through an environment — so what catches this is
+# the corpus running BOTH engines, not the corpus running at all.
+fn scaled a_parameter_name_longer_than_the_inline_bound
+  a_parameter_name_longer_than_the_inline_bound * 10
+
+fn picked this_name_is_long_enough_alpha this_name_is_long_enough_beta
+  this_name_is_long_enough_alpha - this_name_is_long_enough_beta
+
+fn totalled n
+  a_local_binding_name_longer_than_inline = n + 1
+  a_local_binding_name_longer_than_inline * 2
+
+pub play = print "{scaled 4} {picked 9 2} {totalled 5}"

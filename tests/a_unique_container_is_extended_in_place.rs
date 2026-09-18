@@ -83,6 +83,8 @@ pub fn run rounds
 ///     16,201   kanso#1516, six a round less
 ///     15,601   kanso#1517, two a round less again
 ///     12,001   the frame memory, twelve a round less
+///     10,801   the bound name's second copy, four a round less
+///      9,001   the environment holding a `Name`, six a round less again
 ///
 /// The six are `eval_ident`: it used to build an `Rc<str>` every time it
 /// resolved a name to a reference, and it remembers the answer now, so the six
@@ -93,6 +95,20 @@ pub fn run rounds
 /// line and a package lookup -- two allocations -- on every entry into every
 /// body, so six body entries a round cost twelve.
 ///
+/// The last two are one change taken in two steps, and the split says what
+/// each half reached. A binding used to allocate its name twice: `match_one`
+/// pushed `name.as_str().to_owned()` into a `Bindings`, and `bind` then did
+/// `name.to_string()` on top of it. Taking the name by value in `bind` drops
+/// the second copy for the bindings that arrive through a `Bindings` — four a
+/// round. Storing a `Name` rather than a `String` drops the first copy for
+/// every binding, whichever route it came by — six a round. Six body entries
+/// a round is the same six the frame-memory row above counted, and four of
+/// them are the ones a pattern match binds.
+///
+/// Measured by building all three trees rather than subtracting one number
+/// from another: main reads 12,001, the by-value commit alone 10,801, and the
+/// two together 9,001.
+///
 /// Each time, the number was re-read rather than the assertion widened. A
 /// change in what the ROUNDS cost is exactly what the subtraction exists to
 /// see, so this spec going red on those branches was it working.
@@ -100,7 +116,7 @@ pub fn run rounds
 /// The 19,201 the copying arm read is from before kanso#1516 and has not been
 /// re-measured under either change. What this spec pins is unchanged either
 /// way: the in-place path costs less per round than the copying one.
-const PER_EXTRA_ROUND: u64 = 12_001;
+const PER_EXTRA_ROUND: u64 = 9_001;
 
 fn kanso() -> PathBuf {
     let mut exe = std::env::current_exe().expect("the test binary has a path");
