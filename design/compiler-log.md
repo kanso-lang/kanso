@@ -4315,3 +4315,27 @@ of this entry had it FALLING 1,484,175, off 47,602,341 — which is a debug-info
 profile read against a release one, two build configurations rather than two
 trees. Compared inside its own sitting it has not moved, and §96's count of
 three changes becomes four.
+
+**THE ITERATION COUNT IS CONFIRMED FROM A SECOND FRAME, and the remaining
+allocations are named.** `drop_in_place<Option<(Vec<u8>, &ka...)>>` is called
+175,246 times, and that type is `best` — `Score` is `Vec<u8>` and `Bindings` is
+`Vec<(Name, Value)>`, so `Option<(Score, &FnDecl, Bindings)>` is exactly what
+the annotator truncated. Two unrelated frames agreeing at 175,246 makes the
+iteration count a measurement rather than an inference, and leaves the gap to
+119,542 standing as the open part.
+
+**A SCORE IS ONE BYTE PER PARAMETER.** `Score = Vec<u8>`, so what this change
+stopped allocating was a handful of bytes, and 42.4 instructions is the
+measured price of an allocate-and-free pair that small. A guess before the
+build put it near 120, which is the price of a larger one.
+
+**OPEN, and this is where the dispatcher's allocations now are.**
+`__rust_alloc` is still reached 404,871 times from `dispatch_loop`, against
+175,246 iterations. Two per iteration are accounted for by construction: the
+bindings vector, which `bind_all` turns into the environment frame, and the
+`Rc<Env>` node that holds it. That is 350,492, and the remaining 54,379 are
+not attributed. Neither of the two is removable the way the score was — both
+outlive the dispatch — so the next thing to ask about them is whether a frame
+whose refcount reaches one at the end of a call can be handed back rather than
+freed. That is a larger change than anything built today and nothing here
+measures it.
