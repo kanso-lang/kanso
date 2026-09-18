@@ -312,4 +312,9 @@
 # removes two whole analysis constructions from the emitter's path, so the
 # binary's layout moves with it. A fall rather than a rise, and larger than
 # this row's usual layout term.
-startup_instructions=3933223
+#
+# 2026-09-18, kanso#1511 on the tree merged with main, CI's sitting.
+# 3,933,223 -> 3,932,978, a FALL of 245 (-0.0062%).
+# LAYOUT, and it FELL. Start-up takes the native path, which counts cells in
+# the runtime rather than in the interpreter.
+startup_instructions=3932978

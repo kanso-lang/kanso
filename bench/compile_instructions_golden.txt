@@ -2114,7 +2114,13 @@
 # three check routes rise by 747, 1,762 and 1,778 against falls of 8.08
 # million and 18,573 on the two rows that reach the emitter, which is the
 # shape a real saving plus a moved binary makes.
-compile_instructions=35441774
+#
+# 2026-09-18, kanso#1511 on the tree merged with main, CI's sitting.
+# 35,441,774 -> 35,441,736, a FALL of 38 (-0.0001%).
+# LAYOUT. `kanso check` makes an Interp and evaluates no constant, so the
+# OnceCell never fires on this route and the predicate never runs; what moved
+# is where the code sits.
+compile_instructions=35441736
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

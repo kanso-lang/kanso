@@ -2844,3 +2844,55 @@ every runtime cost vein and the whole lazy tier AGREED. The eight compile rows
 this container refuses are CI's, and `interp_instructions` refuses here too —
 its row is the one to read off the job log, since the change adds a predicate
 walk and a set lookup on the interpreted path.
+## 2026-09-18 — what the demanded-knot ruling costs, on CI's own rows
+
+kanso#1511's first round measured the price of building the 2026-08-24 gavel.
+CI's sitting on the tree merged with main:
+
+    interp_instructions  2,182,576,109 -> 2,182,638,759  +62,650  (+0.0029%)
+    interp_allocs            5,313,332 ->     5,313,348      +16  (+0.0003%)
+    emit_instructions       52,115,454 ->    52,119,322   +3,868  (+0.0074%)
+    library_instructions   126,806,203 ->   126,807,028     +825  (+0.0007%)
+    entry_instructions     126,350,802 ->   126,351,031     +229  (+0.0002%)
+    compile_instructions    35,441,774 ->    35,441,736      -38  (-0.0001%)
+    startup_instructions     3,933,223 ->     3,932,978     -245  (-0.0062%)
+
+**Two of these are the change and five are layout.** The interpreted run is
+the only route that evaluates a constant, so it is the only one that fires the
+`OnceCell` and asks `codegen::knotted_constants`. 62,650 instructions is that
+one whole-program walk plus a set lookup at every constant cell after it, and
+16 allocations is the set of owned names the walk answers with.
+
+The other five move because the binary moved. `kanso check` makes an `Interp`
+and evaluates no constant, which is exactly why the predicate is computed
+lazily rather than in `Interp::new` — the three check routes and `emit_ir` pay
+nothing for it, and two of the five FELL. Every one of the five is under a
+hundredth of a per cent.
+
+**The price is the ruling's, and it is cheap for what it buys.** 0.0029% of an
+interpreted run is what it costs for the two engines to agree about a demanded
+knot's allocation, which the differential law requires and which the gavel
+ruled the oracle's side of twenty-five days ago.
+
+**And the release-codegen row read +11 again, on a branch that touches
+neither codegen nor runtime.c.** The gate's own per-process breakdown settles
+what moves:
+
+    first:  kanso=81075461 clang:probe=32265497 clang=31732189
+            clang=1617286141 ld=5141367745
+    again:  kanso=81075205 clang:probe=32265497 clang=31732189
+            clang=1617286141 ld=5141367734
+
+All three clang processes are byte-identical between the two readings, and
+`ld` alone differs, by 11. kanso's own process differs by 256 and is excluded
+from the row. So the 11 lives in `ld` and in nothing else, it has now been
+seen on kanso#1510 and here, and it appears on a change to the interpreter's
+counting — which is as far from the linker as a change in this repository
+gets. It is the measurement rather than the branch.
+
+kanso#1512 isolates one real dependence of that row on un-normalized state and
+says plainly it is not this. The breakdown above narrows what remains: whatever
+the 11 is, it is inside `ld`, it is not the three clang invocations, and it is
+not the output path's prior contents, because the gate re-stages between the
+two readings and both counted builds therefore find the warm-up's binary at
+`-o`.

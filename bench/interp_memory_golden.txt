@@ -51,6 +51,11 @@
 # twice is 102 fewer allocations on this program. interp_peak_bytes is
 # unchanged at 933,202: the fixpoint's working sets were never the high-water
 # mark.
-interp_allocs=5313332
+#
+# 2026-09-18, kanso#1511 on the tree merged with main, CI's sitting.
+# 5,313,332 -> 5,313,348, a RISE of 16 (+0.0003%).
+# The predicate's answer is a set of owned names, built once. Sixteen
+# allocations is what that set costs on this program.
+interp_allocs=5313348
 interp_peak_bytes=933202
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

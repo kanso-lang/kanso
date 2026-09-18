@@ -869,7 +869,11 @@
 # three check routes rise by 747, 1,762 and 1,778 against falls of 8.08
 # million and 18,573 on the two rows that reach the emitter, which is the
 # shape a real saving plus a moved binary makes.
-entry_instructions=126350802
+#
+# 2026-09-18, kanso#1511 on the tree merged with main, CI's sitting.
+# 126,350,802 -> 126,351,031, a RISE of 229 (+0.0002%).
+# LAYOUT, same reason as the compile row: this route evaluates no constant.
+entry_instructions=126351031
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

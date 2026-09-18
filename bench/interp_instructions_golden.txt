@@ -209,5 +209,11 @@
 # moved and the two codegen rows did not: they AGREED with this branch's own
 # readings to the instruction, across two CI jobs on two different trees,
 # which is what `-Wl,-plugin-opt=jobs=1` bought.
-interp_instructions=2182576109
+#
+# 2026-09-18, kanso#1511 on the tree merged with main, CI's sitting.
+# 2,182,576,109 -> 2,182,638,759, a RISE of 62,650 (+0.0029%).
+# The interpreter now asks `codegen::knotted_constants` once per run, on the
+# first constant cell it builds, and looks the name up in the answer at every
+# later one. This benchmark is the interpreted run, so it pays both.
+interp_instructions=2182638759
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
