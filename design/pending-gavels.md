@@ -115,6 +115,39 @@ reproduced byte for byte, measured 2026-09-16 with `--trace-children`. That
 held for clang and has now been shown false of `ld`. Correcting it is separate
 from this question and does not wait on it.
 
+**THE FRAME, 2026-09-18 — and it is the thing the golden's header asked for.**
+`bench/codegen_instructions_release_golden.txt` ends its analysis with what was
+left after threads were pinned to one and the output path was cleared: "CI's
+two readings differ by 11, all of it inside `ld` ... the container cannot
+reproduce it ... The gate now diffs the two readings frame by frame when they
+disagree, so the next job that sees it names the frame instead of the
+magnitude."
+
+A cost-goldens job on kanso#1504 saw it, and the gate named the frame:
+
+    /usr/bin/ld ... -plugin LLVMgold.so ... -plugin-opt=O3
+      5160407609 then 5160407598, -11
+        -11  1816463 -> 1816452  llvm::StringMapImpl::LookupBucketFor(llvm::StringRef)
+
+All three clang processes byte-identical, as they have been since jobs=1.
+
+**WHAT THIS DOES NOT SAY.** It names where the eleven landed, not what moved
+it. The header has already ruled out the two candidates this frame suggests:
+the temporary names ("they agree even though the temp-file names differ between
+the runs ... which rules the paths out as the term") and a fixed string in
+general ("a fixed string would cost a fixed number"). A `StringMap` probe count
+is a symptom that a lookup walked a different number of buckets; it does not
+say why the map was in a different state.
+
+**AND IT UNSETTLES THIS ENTRY'S OWN CITATION.** The entry cites the archive's
+kanso#1512, "THE 11 IS THE TEMP OBJECT'S NAME", with nine of ten names reading
+5,163,341,031. The golden's header has since re-explained that figure twice:
+first as LTO thread partitioning, now pinned with `-plugin-opt=jobs=1`, and
+then as the state of the output path, which the gate now clears before every
+build — 5,163,341,031 is the header's own "absent" reading. So the premise the
+options below were written against may no longer hold, and the sitting should
+settle whether it does before choosing between them.
+
 **Recommendation: 2.** The measurement is the release tier's — that is where the
 name was shown to move the count, three times. The dev row's move is real but
 unexplained, and option 1 would bank it as though it were understood. 3 keeps a
