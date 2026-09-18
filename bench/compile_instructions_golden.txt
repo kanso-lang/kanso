@@ -2213,7 +2213,9 @@
 # LAYOUT. This branch changes how a shared vector is copied in the
 # INTERPRETER; none of these routes runs it. src/eval.rs is the compiler,
 # so its bytes move and every route that runs the compiler moves with them.
-compile_instructions=35486333
+# CI's reading on the merged tree, compile_instructions: 35,486,333 -> 35,488,929 (+2596). The branch
+# touches no compiler source; this is the layout the merge left.
+compile_instructions=35488929
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

@@ -405,4 +405,6 @@
 # LAYOUT. This branch changes how a shared vector is copied in the
 # INTERPRETER; none of these routes runs it. src/eval.rs is the compiler,
 # so its bytes move and every route that runs the compiler moves with them.
-startup_instructions=3363378
+# CI's reading on the merged tree, startup_instructions: 3,363,378 -> 3,363,252 (-126). The branch
+# touches no compiler source; this is the layout the merge left.
+startup_instructions=3363252

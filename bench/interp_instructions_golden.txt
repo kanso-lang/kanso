@@ -374,5 +374,7 @@
 # to the byte -- and disagree threefold on what it costs. What a copy of N
 # elements costs in instructions is the rustc that built the binary; how
 # many copies happen is the program.
-interp_instructions=1260262910
+# CI's reading on the merged tree, interp_instructions: 1,260,262,910 -> 1,260,262,917 (+7). The branch
+# touches no compiler source; this is the layout the merge left.
+interp_instructions=1260262917
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

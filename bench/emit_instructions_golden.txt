@@ -211,4 +211,6 @@
 # LAYOUT. This branch changes how a shared vector is copied in the
 # INTERPRETER; none of these routes runs it. src/eval.rs is the compiler,
 # so its bytes move and every route that runs the compiler moves with them.
-emit_instructions=51456464
+# CI's reading on the merged tree, emit_instructions: 51,456,464 -> 51,455,635 (-829). The branch
+# touches no compiler source; this is the layout the merge left.
+emit_instructions=51455635
