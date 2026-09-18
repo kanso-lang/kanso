@@ -2510,7 +2510,12 @@ error[name]: unknown name `builders/run`
 
 <pre>  isolation, two binaries on one container
   base    1,022,880,858
-  split   1,007,027,010   -15,853,848   -1.5499%</pre>
+  split   1,007,027,010   -15,853,848   -1.5499%
+
+  the gate, measured on ci
+  interpreted run   975,944,763 -&gt; 957,583,234   -18,361,529   -1.8814%</pre>
+
+<p>every other vein in that job is byte-identical &#8212; the three compile rows, what emitting costs, start-up, and both interpreter memory counters. this is the second change in a day confined to the runtime path that left every layout row alone, and the prior that editing the compiler&#39;s own rust usually moves the compile row has now missed twice running.</p>
 
 <p>the base was read at two different paths of the same length and printed 1,022,880,858 both times. this row moves with the length of the path it is given, and the first pass ran the two arms in directories that differed by one character. the effect is four orders of magnitude larger than that could be; re-running was cheaper than arguing about it.</p>
 

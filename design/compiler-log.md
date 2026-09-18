@@ -4003,3 +4003,29 @@ Three builds now on one hypothesis: an inline hint on `lookup` (no change at
 all), the `eval_ident` split (-15,853,848), and this (+3,411,326). The
 hypothesis "a profile's entry cost is a frame that can be removed" has been
 right once in three. It is a reason to build, not a reason to expect.
+
+## 2026-09-18 — kanso#1535, CI's row for the frame split
+
+    interp_instructions   975,944,763 -> 957,583,234   -18,361,529  -1.8814%
+
+And nothing else in the job moved at all. `compile_instructions` 35,550,010,
+`entry_instructions` 126,729,588, `library_instructions` 127,186,008,
+`emit_instructions` 51,617,476, `startup_instructions` 3,363,916,
+`compile_allocs` 27,313, `interp_allocs` 1,412,516, `interp_peak_bytes`
+834,117 — every one byte-identical to main. That is the second change today
+confined to the runtime path that left every layout row alone, after
+kanso#1534 did the same. The prior that an edit to the compiler's own Rust
+usually moves `compile_instructions` has now missed twice in a row, which is
+worth remembering next time it is offered as a reason.
+
+This container projected 15,853,848 and the runner reads 18,361,529 — same
+direction, 15.8% larger. Both hosts agreeing on direction and differing on
+size is the split kanso#1520 and kanso#1522 mapped: a change that removes a
+COUNT travels, and what the removed work cost in instructions is the rustc
+that built the binary.
+
+**The interpreted row today, every figure CI's own:** 1,075,174,600 at the
+start of the day, then 1,029,696,275 (kanso#1531), 995,837,536 (kanso#1533),
+975,944,763 (kanso#1534) and 957,583,234 here. A fall of 117,591,366, or
+10.94%, over five merged changes, none of which changed what the interpreter
+computes.
