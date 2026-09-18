@@ -4757,6 +4757,49 @@ enough change leaves the layout alone.
 
 So the trade is 62.8 million interpreted instructions against 715,346 across
 the four compile-side rows, and it is not close.
+
+## 2026-09-18 — the page gates read a conflict marker and called it prose
+
+Five branches each added a section to `docs/compiler.html` today, and every
+merge from main conflicted in the same place: the end of the file, just above
+the coda, where every new section goes. Four of those resolutions went fine.
+One did not, and what it cost is the point.
+
+The HTML was left unmerged. A script then rewrote the file for an unrelated
+reason — renumbering a section — which wrote the working tree's contents back
+out, markers included, and the commit went in with `<<<<<<< HEAD`, `=======`
+and `>>>>>>> origin/main` sitting in the published page.
+
+**All three page gates then ran on that tree and all three passed.**
+`golden_prose` reads the `data-golden` spans and there were none in the hunk.
+`page_drift` counts log entries against the page's git history and the page had
+moved. `prose_check` reads twenty-nine pages for three families of sentence,
+and a conflict marker is not a sentence. The sweep printed *the three page
+gates agree with what the tree says* over a page with three markers in it.
+
+Nothing downstream would have caught it either. The markers are text in HTML,
+so a browser renders them as a line of prose rather than failing; the site
+builds; the book checks pass. It was found by a `grep` run for something else.
+
+`tests/no_published_page_carries_a_conflict_marker.rs` closes it. It reads the
+same two directories `prose_check` reads, off disk rather than from a list, so
+a page added later is covered without anybody remembering the file exists. It
+was watched red against a reproduction of the exact failure — the same three
+markers in the same place — and names the file and line of each.
+
+Two details in it are deliberate. The middle marker is matched as a WHOLE LINE
+equal to seven equals signs, where the other two are matched as prefixes: a row
+of equals signs is ordinary punctuation under a heading or inside a fenced
+block, and matching it loosely would fail on prose somebody wrote on purpose.
+And the message says to check the section numbers afterwards, because the merge
+that leaves a marker is the same merge that leaves two sections numbered 88 —
+both happened in the same resolution, and finding one is a reason to look for
+the other.
+
+The general shape is one this file already knows: three gates that read the
+same file for three different properties leave the union of what none of them
+reads. The published number, the entry budget and the sentence families were
+each checked, and whether the file was a finished merge was checked by nothing.
 ## 2026-09-17 — the beat rewind's fast path: 23 instructions to 15
 
 `k_beat_iter` is what a compiler-proven beat loop calls between iterations to
