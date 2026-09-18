@@ -147,7 +147,7 @@
 # bytes or fewer in the node, and 99.77% of identifiers across lib/ are that
 # short. The peak falls 67 bytes with it, which is the tail of the same thing:
 # a node that holds its name inline frees nothing when it dies.
-interp_allocs=2539998
+interp_allocs=2486376
 #
 # 2026-09-18, kanso#1518 against main at kanso#1517, CI's sitting.
 # 951,438 -> 961,165, a RISE of
@@ -162,5 +162,5 @@ interp_allocs=2539998
 # this change removes over-allocated; it repays kanso#1518's frames table
 # eight times over, so the interpreter holds LESS than before this line of
 # work began.
-interp_peak_bytes=884985
+interp_peak_bytes=833130
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
