@@ -98,4 +98,14 @@
 # A MEASUREMENT CHANGE AND NOT A COMPILER SAVING: nothing about the compiler
 # moved, and the fall this produces is the gate no longer counting `ld`'s
 # inspection of a file left over from the previous build.
-codegen_instructions_dev=596159774
+#
+# 2026-09-18, CI's own sitting for the cleared gate. 596,159,774 -> 596,157,624,
+# a FALL of 2,150 (-0.0004%). RE-BASE, not a change in the
+# compiler: nothing about the compiler moved and both readings in the job
+# agreed to the instruction, which this row had not managed before.
+#
+# The container reads the release row the OTHER WAY, 412,910 DOWN, with
+# the whole difference inside `ld` and all three clang processes
+# byte-identical. Two hosts, opposite signs; nothing here predicts the
+# runner's, and the size of this term is not a property of the change.
+codegen_instructions_dev=596157624

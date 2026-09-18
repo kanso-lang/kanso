@@ -2830,5 +2830,39 @@ that nobody had noticed; the within-job 11 is still open, and calling it
 explained because a neighbouring mechanism was found is the attribution error
 this log has recorded four times.
 
+**The whole term is in `ld`, and the SIGN differs between this box and the
+runner.** Running the gate's own pipeline under callgrind, per process, twice
+in each mode (each mode reproduced to the instruction):
+
+                   no clear          clear            delta
+    kanso        82,061,217      82,061,004            -213   (excluded)
+    clang-probe  32,178,589      32,178,589               0
+    clang        31,644,251      31,644,251               0
+    clang -cc1 1,617,283,971   1,617,283,971               0
+    ld        5,146,605,294   5,146,192,384        -412,910
+
+All three clang processes are byte-identical. Every instruction of the
+difference is `ld`'s, which is what the isolated experiment said and this
+confirms on the real inputs rather than on a hand-built object. The magnitude
+is not the isolated 2,354 — the real pipeline links a different object against
+a different library set, and the term is worth more there.
+
+CI's first round on this change read `codegen_instructions_dev` DOWN 2,150 and
+`codegen_instructions_release` UP 1,481,719. This box reads the release row
+DOWN 412,910. **Opposite signs on the same row**, and nothing here predicts the
+runner's: the two hosts differ in gcc, and `ld`'s work on an absent output
+against an existing one is evidently not the same trade on both.
+
+That does not change what the normalization is for. The point is a FIXED state,
+not a smaller number, and "absent" is the only one of the three that can be
+reached without depending on what ran before: an empty `touch` lands in the
+middle group at +5, so "existing with content" cannot be established except by
+building, which is the accident being removed. The row re-bases once, in
+whichever direction the host takes it, and then stays put.
+
+What this does mean is that the size of this term cannot be quoted from either
+host as though it were a property of the change. It is quoted here as two
+measurements on two machines, which is what it is.
+
 Both codegen goldens carry the old value with the change named in the header.
 CI moves them.
