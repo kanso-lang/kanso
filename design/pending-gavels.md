@@ -196,13 +196,23 @@ writing down: a candidate has to explain a CONSTANT, not a variance.
 
 **AND THE RATE IS NOT ONE IN TEN.** Option 3 below offers to accept "a known,
 reproducible, one-in-ten draw", a figure that came from kanso#1512's ten
-temporary names. Four cost-goldens jobs ran on 2026-09-18 after the output
-path was cleared and threads pinned: kanso#1504, kanso#1502 and kanso#1537
-drew, and kanso#1538 reproduced. Three in four is not one in ten, so the cost
-of option 3 is three red pull requests in four rather than one in ten, and
-every one of them halts the vein for a change that did not cause it. Four
-jobs is a small sample and the direction of the error is the one that
-matters.
+temporary names. The cost-goldens jobs run on 2026-09-18, after the output
+path was cleared and threads pinned, with the reading each produced:
+
+    kanso#1504, first job    DREW        -11
+    kanso#1502               DREW        -11
+    kanso#1537               DREW        -11
+    kanso#1538               reproduced
+    kanso#1504, second job   reproduced
+
+**THE SAME BRANCH IS ON BOTH SIDES OF THAT LIST**, which is the useful part:
+kanso#1504 drew on one job and reproduced on the next with the same head, so
+this is a property of the JOB and not of any branch's diff. Three in five is
+the figure as of the fifth job, and the denominator grows with every job run
+today — no count written into this entry will stay true, which is why the list
+is here instead of a rate. What survives the next job is the direction: the
+draw is far commoner than one in ten, and every one of them halts the vein for
+a change that did not cause it.
 
 **AND THE SAME JOB SHOWS WHERE kanso's OWN PROCESS MOVES, which is the
 excluded one.** The gate prints it anyway, and on kanso#1502 it moved 1,610
