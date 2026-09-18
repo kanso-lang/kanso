@@ -4026,3 +4026,29 @@ empty next to a length the code already holds, and this interpreter had it in
 four hot places. The remaining `finish_grow` and `grow_one` say there are more.
 
 The golden corpus passes on both steps.
+
+### what the reserves did to the allocation counters, including the worry that was wrong
+
+A reserve allocates where `Vec::new()` does not, so an overload whose parameters
+are all literals — binding nothing — would now take a vector it never fills, on
+every dispatch attempt. That was worth checking rather than assuming, because
+`interp_allocs` is a welfare term and the interpreter tries many candidates per
+call.
+
+    main                              interp_allocs 4,810,437   peak   951,504
+    + frame memory, match_params      interp_allocs 3,906,737   peak   961,391
+    + the two argument vectors        interp_allocs 3,879,653   peak   961,231
+
+**930,784 fewer allocations, 19.35%.** The worry had the sign backwards: a
+reserve replaces several growth allocations with one, so even where it takes a
+vector that stays empty it is buying more than it spends. The argument-vector
+step isolates that on its own — 27,084 fewer allocations for two
+`with_capacity` calls and nothing else — so the shape reduces the counter rather
+than merely being swamped by the memory beside it. What is NOT isolated here is
+`match_params`' reserve alone, which shares a binary with the frame memory; the
+argument step is the evidence for the shape.
+
+THE PEAK ROSE 9,727 BYTES, 1.02%, and that is the frame memory rather than the
+reserves: one `Frame` per declaration the run enters, held for the run. It is a
+term the objective weighs and it is being paid for knowingly — 392 million
+instructions and 930,784 allocations against ten kilobytes held.
