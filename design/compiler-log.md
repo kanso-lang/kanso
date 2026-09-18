@@ -8953,3 +8953,36 @@ append-only and this project corrects by later entry. What the original entry
 got right is that there is a flat 85 million in the emitter with one cluster
 in it; what it got wrong is how big the cluster is, and 9.32% would have sent
 somebody looking for two and a half times the prize that is there.
+## 2026-09-18 — the 649 unreachable blocks are terminators, and 621 of them follow a call that already says noreturn
+
+The run-program profile left one lead marked still open: "649 `unreachable`
+blocks in 599 defines, roughly 3.6% of emitted lines, paid by clang and ld on
+every build." Measured on `kanso build bench/runbench`, 36,085 emitted lines:
+
+    unreachable blocks                  649    1.798% of emitted lines
+    ... preceded by a k_die-family call  621
+    ... standalone block tails            28
+    defines                              599
+
+**The share is 1.798%, and 3.6% is the pair.** 649 lines is 1.798%; 1,298 —
+each `unreachable` with the `call void @k_die(...)` above it — is 3.597%. The
+figure was right about the two lines together and the sentence reads as though
+the terminators alone cost that.
+
+**And the lead is closed rather than open.** An LLVM basic block must end in a
+terminator. `k_die`, `k_die_arity`, `k_die_overload` and `k_die_destructure`
+are all declared `noreturn` in the emitted preamble and carry
+`__attribute__((noreturn, noinline))` in runtime.c, so the block after one of
+those calls has no fall-through and `unreachable` is the terminator it is
+required to have. There is nothing to delete: 621 of the 649 are mandatory,
+and the other 28 are ordinary block tails after a label or a `ret`.
+
+Emitting fewer of them means emitting fewer `k_die` sites, and every one of
+those is a runtime check a program can reach — an arity mismatch, an overload
+with no match, a destructure of the wrong shape, integer overflow. That is a
+change to what the language checks, not a codegen saving, and it is not on the
+table.
+
+Recorded so the count stops reading like slack. What clang and ld pay for
+these lines is real and it is the price of the checks, which is a different
+sentence from the one the lead was written in.
