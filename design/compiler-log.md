@@ -8799,6 +8799,53 @@ success, so nothing else this branch touches moved a counter.
 The published table on the compiler page now carries CI's base, with a sentence
 saying the profile above it predates the seven indexes.
 
+## 2026-09-18 — built, measured, declined: outlining the json encoder's loop arms
+
+The run program's top frame is `d_json/encode_onto`: 392,547,176 instructions
+over 2,380,860 calls, 21.53% of the program and 164.9 instructions a call.
+Eighteen of those run on every call before the dispatch decides anything —
+six callee-saved pushes, an 88-byte frame, the failure test and the jump table.
+
+Two hypotheses were ruled out by reading the emitted IR and the disassembly
+rather than by building anything. The eight-arm dispatch is already a `switch`
+on the tag, which LLVM lowers to a jump table, so arm ordering is not a lever.
+And `k_not_failure` is `v.tag != K_ERR`, inlined under `-O3 -flto`; it appears
+neither as a symbol in runbench nor in the profile.
+
+The arm counts, off the per-address costs, account for every call exactly:
+string 942,750 (39.6%), int/float 379,530, map 248,490, list 247,590, true
+189,990, false 187,920, json_null 184,590. Only the list and map arms loop. So
+79.2% of calls looked like they were paying for a frame they do not use, which
+is the shape `k_beat_pop` and `k_beat_pop_slow` already solve in the runtime.
+Estimated 1.45%.
+
+**It is worse.** Both arms marked `noinline` in a copy of the IR, both copies
+linked against the same runtime object with the same flags, output
+byte-identical:
+
+    control    1,823,406,531   text=318,482
+    noinline   1,835,914,985   text=319,042
+               +12,508,454     +0.686%   +560 bytes
+
+The release build's `-inline-threshold=2000` was itself found by measuring and
+is worth 2.09%; it is right here too. Outlining adds a call and a return per
+list and per map element, on top of the argument shuffling, and that costs more
+than the frame saves.
+
+**And the attribution was wrong, which is the more useful half.** Outlining
+shrank the frame from 88 bytes to 56 and left all six pushes standing. They
+belong to the arms that make calls — the string arm calls the escaper, the
+number arms call the renderer — and each needs its values preserved across
+that call. Only `true`, `false` and `json_null` are literal appends, and those
+are 562,500 calls, 23.6%, against the 79.2% the estimate assumed. The ceiling
+was about 0.43%, for a change more invasive than the one measured at 0.686%
+against it.
+
+What is still open in that frame, and was not tested here: the encoder runs
+496,170 beat entries and 1,132,200 iterations, 50.8M of beat machinery inside
+`encode_onto` alone even after kanso#1504 took a third off the iteration.
+Whether a list or map encode needs a beat of its own is an emitter question.
+
 ## 2026-09-17 — kanso#1486 on the merged tree: three check rows down, the interpreted row up
 
 The rows this branch carried were main's, carried forward by the merge so the
@@ -8899,3 +8946,4 @@ time, and resetting it cost nothing except the round it took to find out. The
 rule the reset follows is still the right one: a number measured against a
 base that is gone describes a tree that does not exist, and the only way to
 know which of those numbers survived the move is to let CI say so.
+
