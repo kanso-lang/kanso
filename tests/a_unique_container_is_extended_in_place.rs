@@ -96,6 +96,8 @@ pub fn run rounds
 ///              less again
 ///      6,003   arm selection reusing one pair of candidate buffers, six a
 ///              round less again
+///      5,403   a call's parameters bound in one environment frame, two a
+///              round less again
 ///
 /// The six are `eval_ident`: it used to build an `Rc<str>` every time it
 /// resolved a name to a reference, and it remembers the answer now, so the six
@@ -144,10 +146,17 @@ pub fn run rounds
 /// group. `grow` and `stack` each have two arms and each is called three times
 /// a round, so six candidate pairs a round stopped being allocated.
 ///
+/// The two are the environment. `bind` pushed an `Rc<Env>` node per BINDING,
+/// so a call with two parameters made two nodes; a whole call's parameters go
+/// into one frame now. `grow acc n` and `stack xs n` each take two and each is
+/// called once a round, so two nodes a round stopped being allocated. The
+/// vector the frame holds is the one arm selection already filled, so the
+/// frame itself costs nothing beyond the node.
+///
 /// The 19,201 the copying arm read is from before kanso#1516 and has not been
 /// re-measured under either change. What this spec pins is unchanged either
 /// way: the in-place path costs less per round than the copying one.
-const PER_EXTRA_ROUND: u64 = 6_003;
+const PER_EXTRA_ROUND: u64 = 5_403;
 
 fn kanso() -> PathBuf {
     let mut exe = std::env::current_exe().expect("the test binary has a path");

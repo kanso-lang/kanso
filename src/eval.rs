@@ -439,10 +439,20 @@ enum Step {
 /// the allocator. The heap variant is still there for the thirty names that
 /// run longer, and they are nearly all test function names.
 #[derive(Debug)]
-pub struct Env {
-    name: Name,
-    value: Value,
-    parent: Option<Rc<Env>>,
+/// A scope, as a chain of frames.
+///
+/// `One` is a single name bound on its own — a lazy thunk, a pattern variable,
+/// a `build` step. `Many` is a whole call's parameters in one frame, because
+/// dispatch knows all of them at once and pushing a node each made the chain
+/// as long as the argument list. A four-parameter call pushed four nodes and
+/// the walk crossed all four to reach the caller's scope.
+///
+/// `Many` scans its slots in REVERSE, which is what keeps shadowing the same:
+/// binding a, b, c as three `One` frames leaves c outermost, and a single
+/// frame holding [a, b, c] has to answer c first to agree with that.
+pub enum Env {
+    One(Name, Value, Option<Rc<Env>>),
+    Many(Bindings, Option<Rc<Env>>),
 }
 
 /// A binding takes its name BY VALUE. Every caller that reaches here with a
@@ -451,16 +461,41 @@ pub struct Env {
 /// paying for a second copy of the same bytes and dropping the first. The
 /// callers holding an AST name clone it here, which is what they did before.
 fn bind(env: Option<Rc<Env>>, name: Name, value: Value) -> Option<Rc<Env>> {
-    Some(Rc::new(Env { name, value, parent: env }))
+    Some(Rc::new(Env::One(name, value, env)))
+}
+
+/// Bind a whole call's parameters in one frame.
+///
+/// The vector is the one arm selection already filled and the winner handed
+/// on, so the frame the body runs in costs no allocation of its own. Nothing
+/// is pushed for a call that binds nothing, so a chain never carries an empty
+/// frame for the walk to step over.
+fn bind_all(env: Option<Rc<Env>>, binds: Bindings) -> Option<Rc<Env>> {
+    match binds.is_empty() {
+        true => env,
+        false => Some(Rc::new(Env::Many(binds, env))),
+    }
 }
 
 fn lookup(env: &Option<Rc<Env>>, name: &str) -> Option<Value> {
     let mut cur = env.as_ref();
     while let Some(frame) = cur {
-        if frame.name.as_str() == name {
-            return Some(frame.value.clone());
+        match &**frame {
+            Env::One(bound, value, parent) => {
+                if bound.as_str() == name {
+                    return Some(value.clone());
+                }
+                cur = parent.as_ref();
+            }
+            Env::Many(slots, parent) => {
+                for (bound, value) in slots.iter().rev() {
+                    if bound.as_str() == name {
+                        return Some(value.clone());
+                    }
+                }
+                cur = parent.as_ref();
+            }
         }
-        cur = frame.parent.as_ref();
     }
     None
 }
@@ -2434,10 +2469,10 @@ impl<'a> Interp<'a> {
             }
             match best {
                 Some((_, decl, binds)) => {
-                    let mut env = None;
-                    for (bind_name, value) in binds {
-                        env = bind(env, bind_name, value);
-                    }
+                    // One frame for the whole parameter list. Pushing a node
+                    // per binding made the chain as long as the arguments, and
+                    // the walk paid for that on every name the body mentions.
+                    let env = bind_all(None, binds);
                     // THE ARGUMENT VECTOR IS A HOLDER, and nothing below
                     // reads it. `match_one` cloned each matched value into
                     // `binds`, so every container argument is now pointed at

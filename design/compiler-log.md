@@ -3769,3 +3769,156 @@ So the mechanism stays open because nobody has spent that, not because the
 number is too small to see. The golden's header says the same. What is not in
 doubt is the trade: 587,222 allocations against 205 bytes, and the objective
 weighs both.
+
+## 2026-09-18 — a call's parameters bound in one frame instead of one each
+
+`bind` was `Some(Rc::new(Env { name, value, parent: env }))`: one heap node per
+BINDING. A call with four parameters pushed four nodes, and every name the body
+mentioned walked past all four to reach the caller's scope. Three frames in the
+interpreted profile are that decomposition:
+
+    eval_ident, self cost          115,147,991   10.61%
+    Rc::drop_slow                   45,932,054    4.23%   229,625 calls
+    memcmp                          47,672,229    4.39%
+
+2,662,536 frame visits served 724,304 hits, 3.7 nodes a lookup.
+
+`Env` is an enum now. `One(Name, Value, parent)` is a single name bound on its
+own — a lazy thunk, a pattern variable, a `build` step. `Many(Bindings, parent)`
+is a whole call's parameters. `Many` scans its slots in REVERSE, which is what
+keeps shadowing the same: binding a, b, c as three `One` frames leaves c
+outermost, so one frame holding them has to answer c first.
+
+    base       1,038,405,822
+    grouped    1,022,961,605     -15,444,217     -1.49%
+    __rust_alloc  25,548,225 -> 20,621,100        -19.3%
+
+The corpus prints `interp 59442` on both binaries.
+
+IT COMPOSES WITH THE CANDIDATE BUFFERS UNDERNEATH IT, and that is most of why
+it is cheap. Arm selection fills one `binds` vector and the winner hands it on;
+`bind_all` moves that same vector into the frame the body runs in. The
+allocation selection already paid for becomes the scope, rather than being
+freed and replaced by one node per parameter. A call that binds nothing pushes
+no frame at all, so a chain never carries an empty node for the walk to step
+over.
+
+ENV WAS FULLY ENCAPSULATED, which is the only reason this is a small diff: one
+constructor and one reader, `bind` and `lookup`, and nothing outside eval.rs
+names the type. Three functions and the dispatch site.
+
+WHY THIS ONE AND NOT THE FOUR kanso#1529 DECLINED. The head byte, the padded
+key, the shape filter and the per-site cache all aimed at the COMPARING and
+left the structure alone; all four cost more than they saved. This aims at the
+node count, which is the allocation count and the walk depth at once. That is a
+reason to try it rather than a prediction, and the four that failed looked
+sound too — what settles it is the differential above.
+
+The allocation fixture re-reads 7,803 -> 6,003 -> 5,403 across the two changes.
+The last two are `grow acc n` and `stack xs n`, each taking two parameters and
+each called once a round.
+
+## 2026-09-18 — what the grouped frame did not touch, which is the useful half
+
+A profile of the interpreted run with the frame change in, taken on a release
+build with debug info so the frames carry names rather than `???`:
+
+    eval                    68,919,538   6.44%
+    memcmp                  47,631,349   4.45%
+    Value::clone            47,204,366   4.41%
+    match_one               44,851,891   4.19%
+    drop_in_place<Value>    41,234,808   3.85%
+    eval_ident              39,702,258   3.71%
+    dispatch_loop           30,804,862   2.88%
+    lookup                  30,732,822   2.87%
+
+THE PROFILE IS FLAT NOW. The top frame is 6.44% where this morning's was
+11.70%, and the two that led it — `dispatch_loop` at 121,568,733 and
+`eval_ident` at 115,147,991 — are 30,804,862 and 39,702,258. `lookup` appears
+as its own symbol because the enum match made it too big to inline; its
+inclusive cost from `eval_ident` is 116,087,760 over 1,056,328 calls.
+
+MEMCMP DID NOT MOVE: 47,672,229 before, 47,631,349 after, a difference of
+41,000 on a counter of 47 million. That is the useful half of this reading.
+Grouping a call's parameters into one frame removes NODES and ALLOCATIONS and
+leaves the comparing exactly where it was, because the same names are compared
+against the same query — they are laid out in a vector rather than strung
+through a chain. Anyone reading the row fall and concluding the walk now
+compares less would be wrong, and the number says so.
+
+So what the walk costs after the structural change is two nearly equal halves:
+comparing names, 47,631,349, and copying the value out, 47,204,366.
+kanso#1529 built four schemes at the first half — a head byte, a padded key, a
+shape filter, a per-site cache — and all four cost more than they saved. The
+second half is what section 91 sized and nothing has touched.
+
+Percentages here are of this binary's total, and a debug-info build is not the
+one the goldens are measured on. The ordering is what this reading is for.
+
+## 2026-09-18 — an inline hint on `lookup` bought exactly nothing
+
+Making `Env` an enum made `lookup` too big for LLVM to inline on its own, and
+the annotated source priced what that seemed to cost: 9,506,961 instructions
+attributed to the `fn lookup(...)` line over 1,056,328 calls, and 2,656,200 to
+its closing brace. Twelve million on what looked like call machinery, on a
+function with two call sites and one of them cold.
+
+`#[inline]`, and the same A/B that measured the frame change:
+
+    without   1,022,961,605     allocations 20,621,100
+    with      1,022,961,605     allocations 20,621,100
+
+IDENTICAL TO THE INSTRUCTION. The binaries are not identical — the hinted one
+is 56 bytes smaller and has a different sha — so the hint reached the compiler
+and changed its output. It changed nothing this corpus pays for.
+
+WHAT THAT CORRECTS. The twelve million is the function's own entry work, the
+part that sets up the walk, attributed by the profiler to the first and last
+lines because that is where the instructions live. Reading it as a call frame
+waiting to be removed was a guess about what an attribution MEANS, and the
+same guess this log has been wrong with before: a number on a line tells you
+where instructions are, not what removing something would return.
+
+The hint is reverted rather than kept. A no-op carrying a comment that claims
+a reason is worse than no change at all, because the next reader believes it.
+
+## 2026-09-18 — kanso#1534, CI's rows: the grouped frame on the runner
+
+CI measured the environment change on the tree merged after kanso#1533, and
+the three interpreted rows moved:
+
+    interp_instructions   995,837,536 -> 975,944,763   -19,892,773  -1.9976%
+    interp_allocs           1,740,991 ->   1,412,516      -328,475  -18.8670%
+    interp_peak_bytes         833,333 ->     834,117          +784  +0.0941%
+
+Every other row in the job is byte-identical to main: `compile_instructions`
+35,550,010, `entry_instructions` 126,729,588, `library_instructions`
+127,186,008, `emit_instructions` 51,617,476, `startup_instructions`
+3,363,916, `compile_allocs` 27,313, both codegen rows. A change confined to
+`src/eval.rs`'s runtime path moved no layout row at all this time, which is
+worth recording beside the seven layout-only moves the compile row has shown
+before: the prior that an edit to the compiler's own Rust usually moves it is
+a prior, not a rule.
+
+**THE TWO HOSTS DISAGREE ON THE SIZE AND AGREE ON THE DIRECTION.** This
+container's isolation read the instruction fall at 15,444,217 against its own
+base of 1,038,405,822; the runner reads 19,892,773 against 995,837,536. The
+split is the one kanso#1520 and kanso#1522 already mapped: how many
+allocations a change removes is a count the program decides and travels
+between hosts, and what the removed work cost in instructions is the rustc
+that built the binary and does not.
+
+**`interp_peak_bytes` ROSE 784 AND LANDED ON 834,117, AND NOTHING HERE
+EXPLAINS IT.** The count falls 18.87% on the same change. A peak is a
+high-water mark where a count is a total, so the two are free to move apart:
+what a grouped frame changes is the shape of what is live at the run's widest
+moment. Which shape that is would take a build per hypothesis and none has
+been run. The counter is deterministic — three runs of one binary printed
+834,117 byte for byte on this container, and the runner printed the same
+figure — so 784 is separable, and what is missing is the isolation rather
+than the resolution. Recorded as measured, mechanism open.
+
+This is the second peak rise in two changes recorded this way (kanso#1533's
+was 205). Two unexplained rises against two large count falls is the point at
+which the pair is worth a build of its own rather than another note; that is
+a lead, not a conclusion.
