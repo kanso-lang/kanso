@@ -167,7 +167,18 @@
 # the whole run, and that one is callgrind's, over the toggled thread. Both
 # are recorded because a later reader comparing them would otherwise find a
 # contradiction that is not there.
-interp_allocs=1410530
+# 2026-09-18, kanso#1540. 1,410,530 -> 1,309,483, a FALL of 101,047 (-7.16%),
+# which is the largest move this counter has made in a day of them. A callgrind
+# tally of `__rust_alloc` CALLS over the toggled thread read 119,542 fewer on a
+# container pair; the two instruments differ in scope and agree in sign here,
+# where on kanso#1538 they pointed opposite ways.
+#
+# AND THIS COUNTER REPRODUCES ACROSS HOSTS WHERE THE INSTRUCTION ROW DOES NOT.
+# The container printed 1,309,483 for this tree and the runner reads
+# 1,309,483 -- the same figure to the unit, on machines whose instruction
+# counts differ by millions. It counts what the program asked for rather than
+# what the machine did, which is why its gate has no host divergence to allow.
+interp_allocs=1309483
 #
 # 2026-09-18, kanso#1518 against main at kanso#1517, CI's sitting.
 # 951,438 -> 961,165, a RISE of
@@ -207,5 +218,9 @@ interp_allocs=1410530
 # asked for at its final size is never live alongside the smaller one it
 # replaces, and a peak is exactly where that overlap shows. Recorded as
 # measured; that sentence is a candidate and no build isolates it.
-interp_peak_bytes=833466
+# 2026-09-18, kanso#1540. 833,466 -> 833,463, a FALL of 3 bytes. A buffer the
+# dispatcher keeps is a buffer that is live at the peak rather than absent from
+# it, so a fall at all is the direction worth noting; three bytes is not worth
+# a mechanism.
+interp_peak_bytes=833463
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
