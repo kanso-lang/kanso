@@ -3013,3 +3013,38 @@ simply too generous about a row it had not seen. Recorded rather than quietly
 re-run, because the failure looks exactly like a regression in the logs and is
 not one: nothing about the change moved between the two banks, only what was
 known about it.
+## 2026-09-18 — kanso#1504's rows re-measured on the tree merged with kanso#1509
+
+kanso#1509 landed under this branch and moved the compile-side rows on its own,
+so every figure this branch had measured before it was taken against a base
+that no longer exists. The five affected goldens were carried forward at main's
+values and the round re-measured them. CI's sitting, with the second reading in
+the same job matching the first to the instruction on all four rows that take
+one:
+
+    compile_instructions    35,441,774 ->    35,442,739    +965   (+0.0027%)
+    entry_instructions     126,350,802 ->   126,352,290  +1,488   (+0.0012%)
+    library_instructions   126,806,203 ->   126,807,903  +1,700   (+0.0013%)
+    startup_instructions     3,933,223 ->     3,935,119  +1,896   (+0.0482%)
+    emit_instructions       52,115,454 ->    52,140,118 +24,664   (+0.0473%)
+
+**All five are LAYOUT.** `src/runtime.c` is `include_str!`'d into the compiler,
+so a change to it changes the compiler's own bytes and the layout under them.
+None of these five routes runs the beat code this branch touches: three of them
+are `kanso check` and carry runtime.c's bytes without compiling it, `emit_ir`
+stops before the backend, and the interpreted start-up links the runtime but
+does not execute the rewind. The two largest rises in absolute terms are the
+two smallest baselines, which is what a fixed layout term looks like spread
+over rows of different sizes.
+
+`interp_instructions` held at 2,182,585,809, the value this branch measured
+before the re-merge, and both codegen rows agreed with their goldens:
+`codegen_instructions_dev` 596,180,956 and `codegen_instructions_release`
+6,841,893,129. **The release row reproducing is the thing worth noticing.**
+That row is the one kanso#1507 pinned by holding `ld`'s LLVM plugin to one
+thread, and this branch changes `src/runtime.c`, which is the only input the
+release row compiles rather than carries. It has now read the same number on
+two different jobs on two different trees that both change runtime.c.
+
+The floor is re-banked on these rows rather than on the projection the
+re-merge carried.

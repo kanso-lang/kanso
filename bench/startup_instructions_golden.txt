@@ -336,4 +336,11 @@
 # its own; what this branch adds on top of that has not been measured
 # anywhere, so the merged reading is CI's and gets written in when the
 # round reports it.
-startup_instructions=3933223
+#
+# 2026-09-18, kanso#1504 on the tree merged with main after kanso#1509,
+# CI's sitting. 3,933,223 -> 3,935,119, a RISE of 1,896 (+0.0482%).
+# LAYOUT. `src/runtime.c` is include_str!'d into the compiler, so changing
+# it changes the compiler's own bytes and the layout under them; none of
+# these routes runs the beat code this branch touches. The second reading
+# in the same job matched the first to the instruction.
+startup_instructions=3935119

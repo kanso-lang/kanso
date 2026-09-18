@@ -926,7 +926,14 @@
 # its own; what this branch adds on top of that has not been measured
 # anywhere, so the merged reading is CI's and gets written in when the
 # round reports it.
-library_instructions=126806203
+#
+# 2026-09-18, kanso#1504 on the tree merged with main after kanso#1509,
+# CI's sitting. 126,806,203 -> 126,807,903, a RISE of 1,700 (+0.0013%).
+# LAYOUT. `src/runtime.c` is include_str!'d into the compiler, so changing
+# it changes the compiler's own bytes and the layout under them; none of
+# these routes runs the beat code this branch touches. The second reading
+# in the same job matched the first to the instruction.
+library_instructions=126807903
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.
 # The row did not move for that -- the same figure came back on the run before

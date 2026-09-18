@@ -147,4 +147,11 @@
 # its own; what this branch adds on top of that has not been measured
 # anywhere, so the merged reading is CI's and gets written in when the
 # round reports it.
-emit_instructions=52115454
+#
+# 2026-09-18, kanso#1504 on the tree merged with main after kanso#1509,
+# CI's sitting. 52,115,454 -> 52,140,118, a RISE of 24,664 (+0.0473%).
+# LAYOUT. `src/runtime.c` is include_str!'d into the compiler, so changing
+# it changes the compiler's own bytes and the layout under them; none of
+# these routes runs the beat code this branch touches. The second reading
+# in the same job matched the first to the instruction.
+emit_instructions=52140118
