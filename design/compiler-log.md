@@ -4960,3 +4960,47 @@ entry is evidence for that decision and not a substitute for it.
 (80,660,230 and 80,660,156). That is kanso's own process, excluded from the row
 by the 2026-09-15 normalization ruling, printed rather than counted — and it
 moving while the counted row holds is the exclusion doing its job.
+
+## 2026-09-18 — the depth distribution, and a cheaper lead than the one just recorded
+
+The entry above sized slot resolution off an average of 2.52 frames. An average
+hides the shape, so the shape was measured. Hits by depth, interpreted corpus:
+
+    1   267,899   37.0%
+    2   199,016   27.5%
+    3   130,524   18.0%
+    4   101,095   14.0%
+    5    25,770    3.6%
+    6+        0
+
+**The chain never exceeds five.** That is worth knowing on its own: there is no
+tail, so nothing here is waiting on a pathological case.
+
+Splitting the frame visits by outcome is what changes the recommendation:
+
+    hit frames    1,590,733  over 724,304 hits    2.20 deep
+    miss frames   1,071,803  over 332,025 misses  3.23 deep
+    total         2,662,536                       matching the earlier count
+
+**Misses are 31.4% of lookups and 40.3% of every frame visited.** A miss walks
+the whole chain and finds nothing, because the name is not a local at all — it
+is a function, a descriptor, a type or a builtin, and `eval_ident` falls
+through to the rest of the ladder afterwards. At roughly eighteen instructions
+a visit that is **about 19.3 million instructions spent walking chains that
+cannot succeed**.
+
+**So the cheaper lead is not to make the walk faster but to skip it.** A name
+that is never bound as a local at a given site is decidable where the site is
+compiled, and skipping the walk for those needs no slot machinery, no upvalue
+analysis and no change to how a closure captures — the three things that make
+slot resolution large. It is worth roughly half of what slot resolution is
+worth and a small fraction of the work.
+
+That does not retire slot resolution: the 1,590,733 hit-frames are still there
+and only an index removes them. It reorders the two. Do the skip first, measure
+what is left, and let the remainder argue for the redesign or not.
+
+Recorded rather than started, with four pull requests in flight. The
+measurement is the deliverable here; kanso#1516 already memoises what a name
+resolves to, so the first question for whoever picks this up is why that memory
+does not already prevent the walk.
