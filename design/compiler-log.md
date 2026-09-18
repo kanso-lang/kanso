@@ -4086,3 +4086,43 @@ thing, so the size of a diff is not what predicts the layout rows. What predicts
 them is not known, and this entry does not guess.
 
 The floor is banked after these rows, never before.
+
+## 2026-09-18 — a clone sized for the growth that follows it
+
+`Vec::clone` allocates capacity exactly equal to length. So `taken`'s clone arm
+handed back a full vector, and the `push` or `extend_from_slice` immediately
+after it had no room and reallocated — copying the whole buffer a SECOND time.
+Every shared `push` and every shared `append` was paying for its contents twice.
+
+    main (kanso#1518)          1,392,296,124
+    + the clone sized to grow  1,297,297,477    -94,998,647   -6.82%
+
+**And the peak came down with it**, which was not the point of the change:
+
+    interp_allocs      3,879,653 -> 3,843,587     -36,066
+    interp_peak_bytes    961,231 ->   885,118     -76,113   -7.92%
+
+The peak falls because the reallocation was a doubling: a vector at 1,000 that
+needs 1,001 asks for 2,000, and the sized clone asks for 1,001. That repays the
+frames table's +9,727 from kanso#1518 eight times over, so the interpreter now
+holds LESS than it did before any of this line of work started.
+
+WHERE IT CAME FROM. `memcpy` is the largest single frame in the interpreted run
+and its callers were read off the profile rather than guessed:
+`__rust_realloc` 67,362,609 (4.68%) over 56,338 calls, and `kanso::eval::taken`
+65,960,854 (4.58%) over 35,640. The realloc figure did NOT move when kanso#1518's
+four `with_capacity` calls took `finish_grow`'s self cost from 51,556,413 to
+8,135,509 — it stayed at exactly 67,362,609 across three profiles. That was the
+clue: the reserves fixed small vectors growing by one, and this is large buffers
+being copied whole, a different population reached by a different path.
+
+The unique arm is deliberately untouched. A vector nobody else points at may
+already carry spare capacity, and reserving on it would be this same mistake
+pointing the other way.
+
+Against main before any of the interpreter work, the row has now fallen
+2,007,688,216 -> 1,297,297,477, **35.38%**.
+
+The whole golden corpus passes, which is the assertion that matters: a capacity
+is not observable, so an output difference would have meant the change was not
+what it looked like.
