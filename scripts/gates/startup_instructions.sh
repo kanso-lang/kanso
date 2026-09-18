@@ -44,7 +44,7 @@ box=/tmp/kanso-compile-ir
 
 printf 'startup_binary sha256=%s\n' "$(sha256sum "$box/kanso" | cut -d' ' -f1)"
 size --format=sysv "$box/kanso" \
-  | awk '/^\.(text|data|bss)[ \t]/ { printf "startup_binary %s=%s\n", $1, $2 }'
+  | awk '/^\.(text|rodata|data|bss)[ \t]/ { printf "startup_binary %s=%s\n", $1, $2 }'
 
 tune=glibc.cpu.x86_data_cache_size=0x8000
 tune=$tune:glibc.cpu.x86_shared_cache_size=0x2000000
