@@ -2346,7 +2346,7 @@ misses             332,025      31.4%, and a miss walks the whole chain</code></
 
 <p><strong>2.52 is the whole explanation.</strong> a scheme paying setup per lookup and saving per frame has two and a half frames to amortise it over. the padded key cost about forty-seven instructions a lookup against a saving of the eighteen-odd a small <code>memcmp</code> costs, times 2.52 &#8212; so it lost, and would have lost at any setup above about forty-five. the byte had no setup and lost to the node instead.</p>
 
-<p>it also prices the change that would work. eighteen instructions a visit across 2,662,536 visits is the 48 million; resolving a local to an index at parse time removes the <em>visit</em>, and an index costs two or three instead of eighteen. the ceiling is around forty million, near 3.6% of the interpreted row &#8212; a number rather than a hope, and larger than anything tried here, because slots have to survive closures, which capture an environment rather than a frame.</p>
+<p>it also prices the change that would work. eighteen instructions a visit across 2,662,536 visits is the 48 million; resolving a local to an index at parse time removes the <em>visit</em>, and an index costs two or three instead of eighteen. the ceiling is around forty million, near 3.6% of the interpreted row &#8212; a number rather than a hope, and larger than anything tried here, because slots have to survive closures, which capture an environment rather than a frame. <strong>and section 91 retires it.</strong> the forty million divides a counter by a count; measured by removal, the walk&#8217;s comparisons are worth about two and a quarter million, and its real expense is the value it copies out of the frame at the end.</p>
 
 <p><strong>then the distribution was measured too, and it names a cheaper change first.</strong> an average hides a shape, so here is the shape &#8212; hits by depth:</p>
 
@@ -2357,7 +2357,71 @@ misses             332,025      31.4%, and a miss walks the whole chain</code></
 5    25,770    3.6%
 6+        0</code></pre>
 
-<p>the chain never exceeds five, so nothing here waits on a pathological case. and the split by outcome is the point: <strong>misses are 31.4% of lookups and 40.3% of every frame visited</strong>. a miss walks the whole chain and finds nothing, because the name was never a local &#8212; it is a function, a descriptor, a type or a builtin, and the resolution ladder carries on afterwards. that is about <strong>19.3 million</strong> instructions spent on walks that cannot succeed.</p>
+<p>the chain never exceeds five, so nothing here waits on a pathological case. and the split by outcome looked like the point: <strong>misses are 31.4% of lookups and 40.3% of every frame visited</strong>. a miss walks the whole chain and finds nothing, because the name was never a local &#8212; it is a function, a descriptor, a type or a builtin, and the resolution ladder carries on afterwards. multiplying those visits by the eighteen above put the waste at about <strong>19.3 million</strong>.</p>
+
+<p><strong>that multiplication was wrong, and section 91 measures by how much.</strong> the visits were counted; the eighteen is an average over every visit, and the two halves differ by thirty-three times. a miss visit costs <strong>0.89</strong> instructions of <code>memcmp</code> and a hit visit costs <strong>29.68</strong>. so the 19.3 million is really <strong>956,485</strong>, and the forty million below is sized from the same average and moves the other way. read both figures in section 91.</p>
+
+<h2 id="wrongaverage"><span class="sec-num">91</span>an average applied to the half it does not describe</h2>
+
+<p>section 90 ends by sizing a lead. misses never find anything, they are 40.3% of every frame the interpreter visits, and at the eighteen instructions a visit the section derives that is <strong>19.3 million</strong> instructions of walking that cannot succeed. it reads like the cheapest thing on the page. so it was built.</p>
+
+<p>the filter is small and exactly safe. one function makes every environment frame, so it records the shape of each name it binds &#8212; the first byte and the length &#8212; into a 256-entry table, and the lookup answers <em>not here</em> without walking when the shape is absent. the table only ever gains bits, and a set bit admits the walk, so a collision costs a walk that would have happened anyway and can never change an answer. over this corpus, 35 distinct names are ever bound as locals and the 332,025 lookups that reach no frame are spread over 73 others; one of the 73 collides, so the filter skips <strong>326,733</strong> of the 332,025.</p>
+
+<p>the run rose by <strong>24,320,374</strong>, 2.18%. four binaries, built in one worktree and staged into the same box in turn, say where every instruction of that went:</p>
+
+<pre><code>base                                       1,115,996,775
+the reference threaded, never read         1,132,586,649   +16,589,874
+the shape recorded, never tested           1,140,109,198    +7,522,549
+recorded and tested, walks skipped         1,140,317,149      +207,951</code></pre>
+
+<p><strong>the last row is the whole of what the idea is worth, and it is a rise.</strong> <code>memcmp</code> makes it plainer still: 48,165,663 in the first three binaries and 47,209,178 in the fourth. removing every one of the 1,071,803 miss visits takes <strong>956,485</strong> off the figure &#8212; <strong>1.99%</strong> of it, from <strong>40.3%</strong> of the visits.</p>
+
+<p>so a miss visit costs <strong>0.89</strong> instructions of <code>memcmp</code> and a hit visit costs <strong>29.68</strong>. thirty-three times apart, and the eighteen is the average of the two. the mechanism is visible in the names themselves: string equality checks the length before it calls libc, every local this corpus binds is seven bytes or shorter, and the names that miss are <code>builtin_append</code>, <code>json/parsed</code>, <code>text/utf8</code>. a miss walk is rejected on length at every frame and never reaches libc at all. the misses were cheap for the same reason they were misses.</p>
+
+<p><strong>and threading the reference cost more than the idea was worth.</strong> 16.6 million of the rise is a fourth argument to the binding function that nothing reads &#8212; 534,994 bindings, all from one dispatcher, 31 instructions each. recording into it adds 7.5 million more. moving the table to a thread-local would remove the first half, and the second half alone still exceeds the 956,485 ceiling, so no arrangement of this wins. declined on arithmetic, with both halves isolated rather than guessed at.</p>
+
+<p>the lesson is about the sizing rather than the change. a count multiplied by an average is a measurement only where the average describes the thing counted, and here it described a population thirty-three times more expensive than the one it was multiplied by. the check costs one build: remove the visits and read the counter that was supposed to fall.</p>
+
+<p><strong>and the lead it was competing with dies of the same error, one level up.</strong> the first draft of this section said the 47.2 million left over must be in the hit visits, which is the whole counter attributed to one caller again. so that was built too: a per-site inline cache keyed by the address of the name in each node, holding the depth the site&#8217;s local was found at last time. it jumps to the remembered depth, checks the name it lands on, and falls back on a mismatch, so a stale entry costs one comparison and can never answer wrongly.</p>
+
+<p>it is correct, and it costs <strong>31,209,169</strong>. which counters moved is the answer:</p>
+
+<pre><code>eval_ident   115,147,991 -> 152,742,778   +37,594,787
+dispatch     130,726,726 -> 130,726,726    byte-identical
+match_one     68,846,453 ->  68,846,453    byte-identical
+memcmp        48,165,663 ->  46,830,275    -1,335,388</code></pre>
+
+<p><strong>so the walk&#8217;s comparisons are worth about two and a quarter million</strong> &#8212; 956,485 for the misses and 1,335,388 for the redundant compares on a hit, against a counter of 48,165,663. that figure was doubted for half an hour on a misread caller tree and then confirmed by a third route, which is the part worth keeping.</p>
+
+<p><strong>the annotated source settles it and needs no interpreting.</strong> a profile carrying line numbers gives a cost per line and per call site, and inside the walk it reads:</p>
+
+<pre><code>   909,375   if frame.name.as_str() == name {
+ 2,897,216       return Some(frame.value.clone());
+31,514,002   => &lt;Value as Clone&gt;::clone   (724,304x)</code></pre>
+
+<p><strong>every comparison the walk makes, over all 2,662,536 frame visits, costs 909,375.</strong> the clone at the end of it costs <strong>31,514,002</strong> &#8212; forty-three instructions on each of 724,304 hits. thirty-five to one.</p>
+
+<p>which explains every scheme on this page at once. the byte, the padded key, the shape filter, the per-site cache: all four aimed at the comparing, and the comparing was never the expense. a slot index would remove the visiting and the comparing together and leave the clone exactly where it is.</p>
+
+<p>what would touch it is the walk answering a <em>reference</em> into the frame instead of a copy of the value, so a caller that only reads pays nothing. that is a change to what <code>eval_ident</code> returns rather than a trick inside it, and no number is offered for it here: 31,514,002 is what the clone costs, not what removing it would save, and the distance between those two is what this page keeps learning.</p>
+
+<p>five figures for this counter were withdrawn getting here &#8212; 19.3 million, forty million, 47.2 million, 0.205%, and a withdrawal of the last one that was itself wrong. four came from dividing a measured total by a measured count. the fifth came from reading a caller list as belonging to the entry above it rather than below. the readings that survived were a differential and an annotated line, and those are the two instruments worth using.</p>
+
+<p><strong>so the day ends on a number nobody had looked for.</strong> the walk&#8217;s expense is <code>Value::clone</code>, and what that clone does depends entirely on which variant it copies. of the interpreter&#8217;s value kinds, maps, errors, lists, bytes, records, subtypes, function references, closures, partials, descriptors and thunks all sit behind a reference count, so copying one is a bump; floats and the five nullary values copy nothing. <strong>two variants allocate</strong>: a string, and an integer, which keeps its magnitude on the heap.</p>
+
+<p>counted by hand over the corpus, with a <code>Clone</code> written in place of the derived one:</p>
+
+<pre><code>value clones     1,555,866
+  integers         610,763   39.3%   allocates
+  strings          137,732    8.9%   allocates, 4.1 bytes each
+  everything else  807,371   51.9%   a bump, or nothing</code></pre>
+
+<p><strong>half of every copy this interpreter makes goes to the allocator, and the integers are four and a half times the strings.</strong> every one of the 610,763 fits in a machine word &#8212; not one of them needs the wide representation it pays for. the strings average four bytes, so what their copy costs is the allocator rather than the copying.</p>
+
+<p>the walk&#8217;s own hits have the same shape: 41.0% integers, 9.5% strings, 45.8% a bump, 3.7% nothing. which settles an ordering. an inline machine integer with the wide form on overflow reaches 41% of the walk&#8217;s copies and the same 39% of every other copy in the run, because it changes the value rather than a path. answering a reference into the frame instead of a copy reaches the 46% that are already only a bump, where the saving per copy is smallest, and costs a signature change through every caller that needs an owned value. integers first.</p>
+
+<p><strong>and writing the fixture before the code found the thing that would have bitten it.</strong> the native build is int64 and refuses past the boundary with a clear diagnostic; the interpreter answers exactly. that divergence is allowed, and the book pins native&#8217;s half of it. the interpreter&#8217;s own answers there are pinned nowhere and cannot be: the behavioural corpus runs every fixture on both engines and requires them to agree, so it cannot hold a program one of them refuses. the exact place a machine-word fast path goes wrong &#8212; promoting one step late, printing a wrapped number rather than raising &#8212; is a place nothing in the tree watches. that is a gap in the corpus rather than a fact about integers, and where such a golden should live is a question the project has to settle before the change is worth making.</p>
+
 
 <p>so the cheaper change is not a faster walk but no walk. whether a name can be a local at a given site is decidable where that site is compiled, and skipping the walk for the ones that cannot needs no slots, no upvalue analysis and no change to how a closure captures &#8212; the three things that make the larger change large. it is worth about half as much for a small fraction of the work.</p>
 
