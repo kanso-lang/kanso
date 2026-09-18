@@ -41,15 +41,13 @@ fn the_box_stages_a_binary_it_built() {
     let text = script();
     let lines = code(&text);
 
-    let built = lines
-        .iter()
-        .position(|l| l.starts_with("cargo build --release"))
-        .expect(
-            "library_box.sh builds the compiler before it stages it. Without \
+    let built = lines.iter().position(|l| l.starts_with("cargo build --release")).expect(
+        "library_box.sh builds the compiler before it stages it. Without \
              that line the script copies whatever ./target/release/kanso \
-             happens to hold, which on 2026-09-18 was a compiler four weeks \
-             old, and every gate reading /tmp/kanso-compile-ir measured it.",
-        );
+             happens to hold, which on 2026-09-18 was one built before the \
+             2026-09-16 fixed-seed fix, and every gate reading /tmp/kanso-compile-ir \
+             measured it.",
+    );
 
     let staged = lines
         .iter()
@@ -75,8 +73,10 @@ fn the_box_stages_a_binary_it_built() {
 #[test]
 fn the_staged_path_is_the_one_the_build_writes() {
     let text = script();
-    let staging: Vec<&str> =
-        code(&text).into_iter().filter(|l| l.contains("/kanso\"") && l.starts_with("cp ")).collect();
+    let staging: Vec<&str> = code(&text)
+        .into_iter()
+        .filter(|l| l.contains("/kanso\"") && l.starts_with("cp "))
+        .collect();
 
     assert_eq!(
         staging.len(),
