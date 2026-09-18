@@ -432,5 +432,15 @@
 # Seven on 995 million is what a relink moves this row by; kanso#1502 read
 # +14 on its own tree in the same sitting and byte-identical on another.
 # Nothing in this diff runs in the interpreter. Re-based, not explained.
-interp_instructions=995837543
+#
+# 2026-09-18, kanso#1534, CI's sitting. 995,837,536 -> 975,944,763,
+# a FALL of 19,892,773 (-1.9976%).
+# THE ROW THIS CHANGE IS ABOUT. A call binds its parameters in one frame
+# instead of one frame per parameter, so a scope is as deep as the call
+# chain rather than as deep as the argument lists along it. This container
+# projected the fall at 15,444,217 against its own base; the runner reads
+# 19,892,773. Both hosts agree the change is a count -- allocations fall on
+# both -- and disagree on what the removed work cost, which is the rustc
+# that built the binary.
+interp_instructions=975944763
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
