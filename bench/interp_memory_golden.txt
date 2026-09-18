@@ -152,7 +152,13 @@
 # a FALL of 587,222 (-25.2220%).
 # Arm selection asked the allocator for two vectors per candidate and most
 # candidates fail.
-interp_allocs=1740991
+#
+# 2026-09-18, kanso#1534, CI's sitting. 1,740,991 -> 1,412,516,
+# a FALL of 328,475 (-18.8670%).
+# One heap node per call rather than one per parameter. The corpus averages
+# just over two parameters a call, and the fall is what the second and later
+# ones were costing.
+interp_allocs=1412516
 #
 # 2026-09-18, kanso#1518 against main at kanso#1517, CI's sitting.
 # 951,438 -> 961,165, a RISE of
@@ -177,5 +183,15 @@ interp_allocs=1740991
 # binary print the same peak byte for byte, so 205 is separable and what is
 # missing is a build per hypothesis rather than resolution. Recorded as
 # measured, mechanism open.
-interp_peak_bytes=833333
+#
+# 2026-09-18, kanso#1534, CI's sitting. 833,333 -> 834,117, a RISE of 784
+# (+0.09%), against a count that falls 18.87% on the same change. A peak is
+# a high-water mark and a count is a total, so the two are free to move
+# apart: what the grouped frame changes is the SHAPE of what is live when
+# the run is at its widest, and nothing here isolates that shape. The
+# counter is deterministic -- three runs of one binary printed 834,117 byte
+# for byte on this container, the same figure the runner reads -- so 784 is
+# separable and what is missing is a build per hypothesis. Recorded as
+# measured, mechanism open.
+interp_peak_bytes=834117
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

@@ -3881,3 +3881,44 @@ where instructions are, not what removing something would return.
 
 The hint is reverted rather than kept. A no-op carrying a comment that claims
 a reason is worse than no change at all, because the next reader believes it.
+
+## 2026-09-18 — kanso#1534, CI's rows: the grouped frame on the runner
+
+CI measured the environment change on the tree merged after kanso#1533, and
+the three interpreted rows moved:
+
+    interp_instructions   995,837,536 -> 975,944,763   -19,892,773  -1.9976%
+    interp_allocs           1,740,991 ->   1,412,516      -328,475  -18.8670%
+    interp_peak_bytes         833,333 ->     834,117          +784  +0.0941%
+
+Every other row in the job is byte-identical to main: `compile_instructions`
+35,550,010, `entry_instructions` 126,729,588, `library_instructions`
+127,186,008, `emit_instructions` 51,617,476, `startup_instructions`
+3,363,916, `compile_allocs` 27,313, both codegen rows. A change confined to
+`src/eval.rs`'s runtime path moved no layout row at all this time, which is
+worth recording beside the seven layout-only moves the compile row has shown
+before: the prior that an edit to the compiler's own Rust usually moves it is
+a prior, not a rule.
+
+**THE TWO HOSTS DISAGREE ON THE SIZE AND AGREE ON THE DIRECTION.** This
+container's isolation read the instruction fall at 15,444,217 against its own
+base of 1,038,405,822; the runner reads 19,892,773 against 995,837,536. The
+split is the one kanso#1520 and kanso#1522 already mapped: how many
+allocations a change removes is a count the program decides and travels
+between hosts, and what the removed work cost in instructions is the rustc
+that built the binary and does not.
+
+**`interp_peak_bytes` ROSE 784 AND LANDED ON 834,117, AND NOTHING HERE
+EXPLAINS IT.** The count falls 18.87% on the same change. A peak is a
+high-water mark where a count is a total, so the two are free to move apart:
+what a grouped frame changes is the shape of what is live at the run's widest
+moment. Which shape that is would take a build per hypothesis and none has
+been run. The counter is deterministic — three runs of one binary printed
+834,117 byte for byte on this container, and the runner printed the same
+figure — so 784 is separable, and what is missing is the isolation rather
+than the resolution. Recorded as measured, mechanism open.
+
+This is the second peak rise in two changes recorded this way (kanso#1533's
+was 205). Two unexplained rises against two large count falls is the point at
+which the pair is worth a build of its own rather than another note; that is
+a lead, not a conclusion.

@@ -2475,8 +2475,16 @@ error[name]: unknown name `builders/run`
 
 <p>a scope is two shapes now. one node for a name bound on its own — a deferred value, a pattern variable, a step inside a build. one node for a whole call's parameters together. the second scans its slots backwards, which is what keeps shadowing exactly as it was: binding three names as three nodes leaves the last one outermost, so a single node holding all three has to answer the last one first.</p>
 
-<pre>  interpreted run   1,038,405,822 -&gt; 1,022,961,605   -15,444,217   -1.49%
-  allocator work       25,548,225 -&gt;     20,621,100                -19.3%</pre>
+<pre>  isolation, two binaries on one container
+  interpreted run   1,038,405,822 -&gt; 1,022,961,605   -15,444,217   -1.49%
+  allocator work       25,548,225 -&gt;     20,621,100                -19.3%
+
+  the gates, measured on ci
+  interpreted run     995,837,536 -&gt;   975,944,763   -19,892,773   -2.00%
+  allocations           1,740,991 -&gt;     1,412,516      -328,475   -18.87%
+  peak bytes              833,333 -&gt;       834,117          +784   +0.09%</pre>
+
+<p>the two hosts agree on the direction and disagree on the size, and the disagreement is the usual one: how many allocations a change removes is a count the program decides, and what the removed work cost in instructions is the rustc that built the binary. the peak moving the other way is recorded and not explained. a peak is a high-water mark where the count is a total, so the shape of what is live at the run's widest moment can grow while the number of allocations falls; which shape that is would take a build per hypothesis, and none has been run.</p>
 
 <p>most of why it is cheap is that it composes with the change underneath it. arm selection already fills one vector of bindings and hands the winner's on; the frame takes that same vector. the allocation selection had already paid for becomes the scope, instead of being freed and replaced by one node per parameter. a call that binds nothing pushes no node at all.</p>
 
