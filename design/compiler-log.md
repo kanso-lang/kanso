@@ -4415,3 +4415,23 @@ outlive the dispatch — so the next thing to ask about them is whether a frame
 whose refcount reaches one at the end of a call can be handed back rather than
 freed. That is a larger change than anything built today and nothing here
 measures it.
+
+**A SPEC CAUGHT IT, WHICH IS THE SPEC WORKING.**
+`tests/a_unique_container_is_extended_in_place.rs` pins the allocation
+DIFFERENCE between a 300-round run and a 600-round one, exactly rather than as
+a band, and it went red: 5,403 expected, 4,803 read. Six hundred fewer over
+three hundred extra rounds is two a round. Its own doc names the protocol —
+"the number was re-read rather than the assertion widened. A change in what
+the ROUNDS cost is exactly what the subtraction exists to see" — so the number
+is re-read to 4,803 with the reason beside it.
+
+Two things make that safe rather than convenient. The sibling test still reads
+`1200 600` and `2400 1200`, so the in-place path is doing what it did; and the
+number moved DOWN, where a container that stopped being extended in place
+would move it sharply up.
+
+**WHICH two of a round's dispatches stopped allocating is left open in that
+file on purpose.** The paragraphs above it decompose their own deltas by
+counting calls, and the same arithmetic does not obviously give two here. Two
+a round is the measurement. A decomposition guessed into a spec's doc is what
+the next reader would check their own change against.
