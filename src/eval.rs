@@ -2817,7 +2817,7 @@ impl<'a> Interp<'a> {
                     });
                 }
                 let Value::List(items) = list else { unreachable!("checked just above") };
-                let mut next = taken(items);
+                let mut next = taken_to_grow(items, 1);
                 next.push(item);
                 Ok(Value::List(Rc::new(next)))
             }
@@ -3063,7 +3063,12 @@ impl<'a> Interp<'a> {
                         span,
                     });
                 };
-                let mut out = taken(items);
+                let grows_by = match &x {
+                    Value::Str(s) => s.len(),
+                    Value::Bytes(more) => more.len(),
+                    _ => 1,
+                };
+                let mut out = taken_to_grow(items, grows_by);
                 match &x {
                     Value::Str(s) => out.extend_from_slice(s.as_bytes()),
                     Value::Bytes(more) => out.extend_from_slice(more),
@@ -3687,6 +3692,28 @@ fn taken<T: Clone>(rc: Rc<T>) -> T {
     match Rc::try_unwrap(rc) {
         Ok(owned) => owned,
         Err(shared) => (*shared).clone(),
+    }
+}
+
+/// `taken` for a vector that is about to GROW by a known amount.
+///
+/// `Vec::clone` allocates capacity exactly equal to length, so the clone arm of
+/// `taken` hands back a full vector and the push or extend that follows must
+/// reallocate and copy the whole buffer a second time. Every shared `push` and
+/// every shared `append` was paying for its contents twice: once to clone, once
+/// to grow.
+///
+/// Sizing the clone for what is coming pays once. The unique arm is untouched,
+/// because a vector nobody else points at may already have spare capacity and
+/// reserving on it would be the same mistake in the other direction.
+fn taken_to_grow<T: Clone>(rc: Rc<Vec<T>>, extra: usize) -> Vec<T> {
+    match Rc::try_unwrap(rc) {
+        Ok(owned) => owned,
+        Err(shared) => {
+            let mut out = Vec::with_capacity(shared.len() + extra);
+            out.extend(shared.iter().cloned());
+            out
+        }
     }
 }
 
