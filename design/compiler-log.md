@@ -4622,3 +4622,138 @@ see. It reads by the same marker as
 what counts as subtracting by construction; a looser match had
 `startup_instructions.sh` failing on prose explaining why its program prints
 nothing.
+## 2026-09-18 — the interpreter reads the linearity analysis at last
+
+`linear::in_place_pushes` has told the emitter since kanso#1359 which push,
+put and append sites extend a container nothing else will read. The emitter
+writes `push_mut_fast` at those sites and mutates. The interpreter consulted
+the analysis not at all — `grep 'linear::' src/eval.rs` came back empty — and
+cloned at every one of them.
+
+The corpus says how much that costs. Instrumenting `taken` and
+`taken_to_grow` to print `Rc::strong_count` gives 44,006 container-extension
+calls, of which only **1,326 (3.01%)** are uniquely owned and 42,680 (96.99%)
+clone. That 3.01% is worth pausing on: kanso#1520 won 295,627,669 instructions
+without moving it, by sizing the clone for the growth that follows rather than
+by making more containers unique.
+
+Those 44,006 calls come from **sixteen** distinct sites, and all sixteen are
+in the **fifty-four** a build of the same corpus marks in-place. So almost
+every clone the interpreted run makes is one the compiled engine already does
+not make.
+
+### What it took, and what it did not
+
+Not the plumbing, which was the expected obstacle and was already built.
+`call_builtin` has taken a `&Frame` since the frame work, and `Frame` is an
+`Option<Rc<Site>>` built once per declaration by `frame_of` and memoized by
+pointer since kanso#1518. `Site` gains the declaration's file — an `Arc` clone
+on a struct already paid for — and the key becomes the same (file, line,
+column) the emitter uses at its own push arm.
+
+The gate is `Rc`. It refuses `&mut` above one holder, and the other holder is
+the environment node binding the accumulator's name, in a persistent chain
+where removing one node costs more than the clone. So this is the project's
+SECOND `unsafe`, after `name.rs`: the contents are taken through
+`Rc::as_ptr`, leaving an empty vector behind for a holder the analysis proved
+never looks.
+
+The justification is the analysis rather than the refcount, and the
+differential law makes it checkable. Building the version with NO gate — an
+unconditional take — turns exactly the right things red:
+
+    a_list_held_twice_is_not_pushed_into
+    a_builder_passed_twice_through_a_wrapper_is_not_written_through
+    an_imported_builder_held_twice_is_not_written_through
+    micro_corpus_agrees_across_engines
+    a_unique_container_is_extended_in_place
+
+Three of those are named for this exact defect. All five are green with the
+gate in. That is the argument: not that the write is safe because somebody
+reasoned it was, but that the corpus already knows what an unsound in-place
+write looks like and says so.
+
+### The numbers
+
+On this container, release, callgrind, `bench/interp_corpus`, against main at
+`c5974233`:
+
+    run_interpreted_on_stack  1,169,887,916 -> 1,116,560,609  -53,327,307  -4.56%
+    interp_allocs                 2,539,996 ->     2,486,374      -53,622  -2.11%
+    interp_peak_bytes               885,189 ->       833,330      -51,859  -5.86%
+    printed answer                interp 59442 on both
+
+The ungated build measured 69,425,920 on the older base, and the difference
+between that and 53,327,307 is the gate's own cost plus what kanso#1522
+removed from under it. Both are container readings. This change removes
+memcpys, so it moves BYTES — the kanso#1520 shape, whose container projection
+came in three times low, where kanso#1522 moved counts and held to 4.40%. The
+runner should read MORE than 53,327,307, and the golden will say.
+
+### And the one pin that this repository was missing
+
+`a_unique_container_is_extended_in_place` moves 9,001 to 7,803 per 300 rounds,
+four a round less, which is the two builders' four extending calls no longer
+copying their accumulator.
+
+That row matters more than the arithmetic. The five specs above catch the
+optimisation firing where it should NOT. Every one of them stays green if the
+gate silently stops matching — if a key changes, if a span moves, if the
+analysis is handed a different program. This number does not. It is the only
+thing in the tree that fails when the optimisation quietly stops happening,
+and the spec's own header now says so.
+
+## 2026-09-18 — kanso#1525's rows on CI, and a projection that was right about its direction
+
+Eight rows moved. CI's sitting, against main:
+
+    interp_instructions   1,138,001,430 -> 1,075,174,600   -62,826,830   -5.52%
+    interp_allocs             2,539,998 ->     2,486,376       -53,622   -2.11%
+    interp_peak_bytes           884,985 ->       833,130       -51,855   -5.86%
+    compile_instructions     35,486,333 ->    35,552,188       +65,855   +0.19%
+    entry_instructions      126,498,292 ->   126,735,634      +237,342   +0.19%
+    library_instructions    126,954,304 ->   127,192,177      +237,873   +0.19%
+    emit_instructions        51,456,464 ->    51,630,538      +174,074   +0.34%
+    startup_instructions      3,363,378 ->     3,365,595        +2,217   +0.07%
+
+**The container projected 53,327,307 and said to expect more.** It read
+62,826,830, 17.8% above the projection. The reason was written down before the
+job ran rather than after: this change removes memcpys, so it moves BYTES, and
+a per-byte price is a property of the compiler that built the interpreter. The
+kanso#1520 shape came in three times low; this one came in a sixth low, and in
+the same direction.
+
+**The allocation counter travelled exactly.** −53,622 on this container and
+−53,622 on the runner, to the unit. That is the second half of the same rule
+and it keeps holding: a counter of operations crosses a machine boundary
+intact, a counter of instructions does not.
+
+`interp_peak_bytes` moved −51,859 here against −51,855 there, four apart on
+fifty-two thousand, and the first draft of this entry called that four
+unexplained. It is not a puzzle, and checking took one command.
+
+`interp_memory.sh` refuses to compare on this box at all: the golden was
+measured on glibc 2.39-0ubuntu8.9 with rustc 1.98.1 and this container is 8.7
+and 1.94.1, so the gate declines rather than reads. The absolute figures differ
+by about two hundred at both ends for the same reason — 885,189 here against
+884,985 there before the change, 833,330 against 833,130 after. Two hundred is
+the host, and four is what survives of it in a difference.
+
+So the notable thing is the opposite of what the draft said: across two hosts
+the gate will not even compare, the DELTA agreed to within four bytes. The
+golden's own header says what its reading may be set beside, and reading it
+first would have saved writing the sentence twice.
+
+**The four compile-side rows are the price of the change existing.** `kanso
+check` stops before the interpreter runs and the analysis is behind a
+`OnceCell` that only the interpreter touches, so not one of those rows can be
+paying for work this change does. They move because `src/eval.rs` IS the
+compiler: it grew, and the binary's layout moved under it. Three of them move
+by the same 0.19% — +65,855, +237,342 and +237,873 on three different routes
+through the same front end — which is what a uniform layout shift looks like.
+CLAUDE.md's standing note on this row says an edit to the compiler's own Rust
+usually moves it, and this is that case rather than the rarer one where a small
+enough change leaves the layout alone.
+
+So the trade is 62.8 million interpreted instructions against 715,346 across
+the four compile-side rows, and it is not close.
