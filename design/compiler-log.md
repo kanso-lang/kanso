@@ -4278,6 +4278,149 @@ earlier four is that they were not evidence of a law.
 The floor is banked after these rows. The run side is unchanged — this branch
 touches the interpreter only.
 
+## 2026-09-18 — a bound name was copied twice, and the environment now keeps it inline
+
+The interpreted row has fallen four times this week by taking work out of the
+inner loop: a name resolution remembered, a call site's ladder remembered, a
+frame built once per declaration, a clone sized for the growth that followed
+it. This one is smaller in idea and about the same size in effect. Binding a
+name to a value allocated twice, and after this it usually allocates not at
+all.
+
+`match_one` walks a pattern against an argument and pushes what it matched
+into a `Bindings`, which was a `Vec<(String, Value)>`. Every name it pushed
+was `name.as_str().to_owned()` — a fresh heap string. The caller then drained
+that vector into the environment, and `bind` took `&str` and did
+`name.to_string()`: a second malloc, a second memcpy of the same bytes, and a
+free of the first one line later. Two allocations to store one name, once per
+binding, on about half a million body entries in the corpus.
+
+The first half of the fix is the obvious one. `bind` takes the name by value,
+and the two loops that drain a `Bindings` move their string in rather than
+lending it. Callers that hold an AST name clone at the call site, which is
+what `bind` was doing for them anyway.
+
+The second half is what makes the remaining copy free. `Name` is the type the
+front end already uses for identifiers — twenty-four bytes, exactly what a
+`String` costs, holding twenty-two bytes or fewer in the value itself and
+boxing anything longer. 99.77% of identifier occurrences across `lib/` fit
+inline and 89.8% are seven bytes or fewer, so for almost every binding the
+remaining copy is twenty-four bytes of stack. `Env::name`, `Bindings` and
+`ClosureData::params` change together, because a name that arrives as a `Name`
+and is stored as a `String` pays for the crossing at the boundary. `Env` is
+the same size it was.
+
+Measured on this container, release, callgrind, `bench/interp_corpus`,
+anchored at `run_interpreted_on_stack`:
+
+    on 9b39e360, before kanso#1520
+      main                       1,392,767,370
+      the second copy gone       1,329,687,387      -63,079,983
+      the environment holds Name 1,265,684,136      -64,003,251
+                                                   -127,083,234    -9.12%
+
+    on 30fb1abe, with kanso#1520 under it
+      main                       1,297,739,654
+      both                       1,169,848,989      -127,890,665    -9.85%
+
+The two halves pay almost the same, which is what a doubled cost looks like
+taken off one copy at a time. The total agrees across the two bases to within
+807,431, 0.6% of itself, so kanso#1520 and this are independent.
+
+These are container projections and not the row. kanso#1520 projected
+-94,998,647 here and CI read -295,627,669, three times over, while its
+allocation and peak deltas matched to the byte. The direction is the claim.
+
+### The allocation count says which half did what
+
+`a_unique_container_is_extended_in_place` runs the same program at 300 and at
+600 rounds and pins the difference, so every fixed allocation cancels and what
+is left is what the extra rounds cost. It went red on this branch, which is
+the spec doing its job: the rounds got cheaper. Three trees were built rather
+than one number subtracted from another:
+
+    main                     12,001 per 300 rounds
+    the second copy gone     10,801         four a round less
+    the environment holds Name 9,001          six a round less again
+
+Six bindings a round, and four of them arrive through a pattern match. The
+first commit reaches only those four, because only a binding that came through
+a `Bindings` had a second copy to drop; the second reaches all six, because
+every binding allocated its name once whichever route it came by. The six is
+the same six the frame-memory row in that spec's ladder counted, which is
+what a body entry costs to enter.
+
+The pinned number moves from 12,001 to 9,001 and the assertion is not widened.
+
+### What was uncovered, and now is not
+
+Storing a `Name` makes the boxed path load-bearing in the interpreter, and
+nothing in the corpus bound a name past twenty-two bytes.
+`a_name_longer_than_the_inline_bound_still_binds` binds a forty-five-byte
+parameter, a thirty-nine-byte local, and two parameters whose first
+twenty-two bytes are identical. The last pair is the one that matters: a store
+keeping only the inline prefix would give both the same key, and a single
+truncated name would still match a lookup truncated the same way, so one long
+name alone proves nothing.
+
+Watched red first, with `bind` storing `Name::new(&name.as_str()[..22])`:
+
+    native   40 7 12                                               exit 0
+    interp   error[runtime]: unknown name
+             `a_parameter_name_longer_than_the_inline_bound`       exit 1
+
+Native is untouched by the break, because compiled code binds nothing through
+an environment. What catches this is the micro corpus running both engines
+rather than the micro corpus running at all, which is the differential law
+doing the work a single-engine golden could not.
+
+One thing the fixture found on the way in, and it is worth writing down
+because it nearly passed for the wrong reason. The first draft put a blank
+line between its comment header and the first `fn`, and the run failed with
+`error[formatting]: the file may not begin with a blank line` — empty stdout,
+which reads exactly like the change being broken. A fixture that fails before
+it runs proves nothing about what it was written to test, and the only way to
+tell the two apart is to read the message rather than the verdict.
+
+## 2026-09-18 — kanso#1522's rows on CI, and a container projection that held
+
+The two commits under this branch are in the entry above. These are CI's
+readings of them, against main at kanso#1521:
+
+    interp_instructions  1,260,262,910 -> 1,138,001,430   -122,261,480  -9.70%
+    interp_allocs            3,843,587 ->     2,539,998     -1,303,589 -33.92%
+    interp_peak_bytes          885,052 ->       884,985            -67
+
+Every other row in the job is byte-identical to main: `compile_instructions`
+35,486,333, `entry_instructions` 126,498,292, `library_instructions`
+126,954,304, `startup_instructions` 3,363,378, `emit_instructions` 51,456,464,
+`compile_allocs` 27,313, and both codegen rows. Two veins failed and they are
+the two this change is about.
+
+The allocation fall is the largest single move that vein has recorded, and it
+is the mechanism rather than a side effect: a binding allocated its name twice
+and now usually allocates it not at all.
+
+### The projection held, where kanso#1520's was three times out
+
+This container read the instruction fall at 127,890,665 and the runner reads
+122,261,480 — 4.40% apart. kanso#1520, six hours earlier, projected 94,998,647
+here and CI read 295,627,669, and its own golden's header wrote that down as
+the rule: *what a copy of N elements costs in instructions is the rustc that
+built the binary; how many copies happen is the program.*
+
+That rule predicts this. kanso#1520 changed how many BYTES a copy moves, so
+its instruction delta is a per-byte cost the two hosts do not share. This
+change removes allocations, and an allocation is a count the program decides —
+so the two hosts differ only in what one malloc costs, and they are closer on
+that than on a memcpy. The allocation deltas were the ones that matched to the
+byte on kanso#1520, and here they are what moved.
+
+So a container projection travels when the thing it projects is a count, and
+does not when it is a per-byte price. That is a prediction with two readings
+behind it rather than a law, and the next change that moves bytes should be
+expected to break the box's projection again.
+
 ## 2026-09-17 — the digit loop carried a value it only needed at the end, and then the tail gave it back
 
 `render_ryu` is 84,209,220 instructions of runbench, 4.58%, 440.7 a float over
