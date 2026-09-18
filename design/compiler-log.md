@@ -3683,3 +3683,115 @@ mechanism.
 Welfare rises to 76.8277 from a floor of 76.82429875406118, past the
 sentinel's 0.001 band, so the floor is banked at 76.82771395446468. Raising it
 is arithmetic rather than a decision.
+
+## 2026-09-18 — the interpreter worked out what a name meant on every evaluation
+
+`eval_ident` answered "what does this name stand for" by walking a ladder, and
+walked it again every time the same node was evaluated. The rungs, in order:
+the environment; `fns`; three descriptor names behind a `strip_prefix`;
+`types`; then `fns` and `types` a SECOND time, a sixty-name array of builtins,
+and `Rc::from(name)` to build the reference it returns.
+
+A counter on each rung, run over `bench/interp_corpus`:
+
+      calls into eval_ident        1,056,329
+      answered by the environment    724,304   68.6%
+      found in fns                   175,255
+      of those, constants                  1
+      reaching the type probe        332,024   31.4%
+      the type probe hits             11,886
+      returning a reference          325,412
+
+So roughly a third of all resolutions walked the whole ladder, probing two maps
+twice each and scanning sixty names, to reach an answer that cannot change
+during a run: `fns`, `types` and the builtin list are all fixed once the
+program is parsed. The answer is remembered on first sight now, in a
+`RefCell<Map<String, Named>>` filled lazily rather than at construction --
+`kanso check` builds an `Interp` and evaluates nothing, and that route is a
+weighed welfare term, which is the same reason `cycles` beside it is a
+`OnceCell`.
+
+**Measured on this container, two binaries built in one worktree and staged
+into boxes of equal path length**, because the entry route's count moves with
+the path it is given:
+
+      instructions   2,007,688,216 -> 1,836,055,421   -171,632,795   -8.55%
+      allocations        5,310,694 ->     4,985,431       -325,263   -6.12%
+      peak bytes           933,280 ->       942,308         +9,028   +0.97%
+
+The allocation fall is the `Rc::from` that is no longer built per reference:
+325,412 of those, against a measured fall of 325,263. The 149 the two differ by
+is what the table costs -- a `String` per distinct name, plus whatever the map
+allocated growing to hold them. How that 149 splits between the two is not
+measured here and nothing rests on it. The peak rise is the same table.
+Thunk counters are byte-identical, so nothing semantic moved.
+
+**The first shape of this cost half the win, and the reason is worth keeping.**
+`Named` began with a `Desc(Desc)` arm and a `Lit(Value)` arm, which sized every
+row of the table by the largest variant of two other enums; the run read
+1,851,622,574 and the peak rose 16,196. Spelling the three descriptors and the
+four literals as arms of their own — every remaining arm a pointer or nothing —
+took the row down to a tag and a word, and the run to 1,836,055,421 with the
+peak rising 9,028. Fifteen and a half million instructions for a smaller table
+on a corpus whose table holds a few hundred rows: what moved is cache lines rather than work.
+
+**A spec for this could not be written the obvious way, and finding that out
+cost a build.** The intended fixture was a name meaning a declaration at one
+mention and a binding at another, so that a memory consulted ahead of the
+environment would answer wrong. Three attempts were refused by the checker
+before the fixture ran: `push_local` rejects a binding spelled like a
+declaration and a binding spelled like a builtin. The fourth attempt used a
+bare-enrolled import, which IS shadowable, built the broken interpreter to
+watch it fail — and it passed.
+
+Dumping the memory's keys says why. On that program they are `sample/play`,
+`print`, `sample/shade`, `sample/apply`, `sample/round` and `builtin_round`. A
+bare-enrolled import is qualified before a body is evaluated, so the spelling
+the memory holds is never the spelling a binding can take. The soundness rests
+on that plus the two refusals, and both are now pinned:
+`tests/golden/errors/a_binding_may_not_take_a_name_that_resolves_without_it`
+holds the refusals, watched red by disabling the check in `push_local`, and
+`tests/golden/micro/a_bare_import_is_qualified_before_it_is_evaluated` holds
+the separation, with its own comment saying plainly that it does not guard the
+memory's ordering, because that is what the broken build proved.
+
+The presence counter for the change is `interp_allocs`: remove the memory and
+that row moves 6.12%.
+
+## 2026-09-18 — kanso#1516's rows on CI, and the two engines of the measurement agreed
+
+CI's sitting on the tree merged with main:
+
+      interpreted    2,168,428,538 -> 1,997,105,566  -171,322,972   -7.9008%
+      allocations        5,310,696 ->     4,985,433      -325,263   -6.1246%
+      peak bytes           933,182 ->       942,210        +9,028   +0.9675%
+      compile           35,443,611 ->    35,447,843        +4,232   +0.0119%
+      entry            126,354,834 ->   126,368,664       +13,830   +0.0109%
+      library          126,810,299 ->   126,824,214       +13,915   +0.0110%
+      start-up           3,363,774 ->     3,364,523          +749   +0.0223%
+      emitting          51,546,788 ->    51,554,663        +7,875   +0.0153%
+
+Both codegen rows read their goldens exactly and `compile_allocs` is unmoved.
+The five compile-side rises are layout: src/eval.rs is the compiler, so its
+bytes move and every row that runs the compiler moves with them, and none of
+those five routes evaluates a name. Each by its key, with the value it landed
+on: `compile_instructions` 35,447,843, `entry_instructions` 126,368,664,
+`library_instructions` 126,824,214, `startup_instructions` 3,364,523 and
+`emit_instructions` 51,554,663.
+
+**THE TWO MEASUREMENTS AGREED, AND HOW CLOSELY IS THE POINT.** This container
+projected a fall of 171,632,795 from two binaries built in one worktree; CI, on
+a different rustc and a different glibc, reads 171,322,972. The two deltas are
+309,823 apart — 0.18% of the delta. The absolute rows cannot be compared across
+those hosts at all and the goldens' headers say so; what travels is the
+difference, and this is the sharpest reading of that yet taken here.
+
+The two counter rows travel further still: the container read 5,310,694 ->
+4,985,431 and 933,280 -> 942,308, different absolute values on both rows and
+the SAME -325,263 and +9,028. They count operations rather than a host, which
+is why the instruction row's two readings could be expected to agree as closely
+as they did.
+
+`interp_peak_bytes` is the term that pays, 0.010 points. It is the table the
+remembered answers live in, and it is what the other two rows were bought with.
+Welfare rises to 76.87 and the floor is banked at that.
