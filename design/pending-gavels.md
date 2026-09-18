@@ -81,6 +81,40 @@ settled.
 3. **Leave both unpinned** and accept an 11-instruction draw on a 5.16-billion
    row.
 
+**THE MECHANISM, found 2026-09-18, and it was not in this entry before.**
+kanso#1512 measured the effect and could not say why. A cost-goldens job on
+kanso#1504 — an unrelated branch, no codegen in its diff — hit the draw on its
+own, and the gate did what it is built to do: it counted the binary a second
+time, declared `VERDICT (2): REPRODUCTION FAILURE`, and printed its own
+per-process and per-frame diff.
+
+    ./kanso build pkg/codegen_corpus --release
+        80648421 then 80648151, -270   kanso::build    <- already excluded
+    clang:probe    32265497   both readings
+    clang          31732189   both readings
+    clang        1617286141   both readings
+    /usr/bin/ld ... -plugin LLVMgold.so ... -plugin-opt=O3
+      5160407609 then 5160407598, -11
+        -11  1816463 -> 1816452  llvm::StringMapImpl::LookupBucketFor(llvm::StringRef)
+
+All eleven are in `ld`, and inside `ld` they are one function: LLVM's
+`StringMap` bucket probe during the LTO link. The temporary object's name is a
+string that map hashes, and a different name walks a different number of
+buckets. Every clang process reproduced byte for byte, so the IR kanso emits is
+identical and read identically.
+
+**This bears on the choice in one direction.** The mechanism is an LTO
+mechanism — `LLVMgold.so`, `-plugin-opt=O3`, the release link. The dev tier is
+`-O0` with no `-flto` and runs no LTO plugin, so it cannot be what moves the
+dev row. The dev row's move stays real and unexplained with one fewer candidate
+behind it, which is an argument for 2 rather than 1: option 1 re-bases a row
+whose move is now slightly less explained than it looked, not more.
+
+**And the release golden's header is wrong on one point.** It says the children
+reproduced byte for byte, measured 2026-09-16 with `--trace-children`. That
+held for clang and has now been shown false of `ld`. Correcting it is separate
+from this question and does not wait on it.
+
 **Recommendation: 2.** The measurement is the release tier's — that is where the
 name was shown to move the count, three times. The dev row's move is real but
 unexplained, and option 1 would bank it as though it were understood. 3 keeps a
