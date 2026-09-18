@@ -158,7 +158,16 @@
 # One heap node per call rather than one per parameter. The corpus averages
 # just over two parameters a call, and the fall is what the second and later
 # ones were costing.
-interp_allocs=1412516
+# 2026-09-18, kanso#1538. 1,412,516 -> 1,410,530, a FALL of 1,986 (-0.14%),
+# beside a count that falls 1.94%. Reserving the dispatch buffers replaces a
+# grow-and-copy ladder with one right-sized request, so the traffic this
+# counter measures falls while the number of `__rust_alloc` CALLS a callgrind
+# tally sees over the interpreted thread RISES by 1,332. The two are not in
+# conflict and are not the same measurement: this counter is kanso's own, over
+# the whole run, and that one is callgrind's, over the toggled thread. Both
+# are recorded because a later reader comparing them would otherwise find a
+# contradiction that is not there.
+interp_allocs=1410530
 #
 # 2026-09-18, kanso#1518 against main at kanso#1517, CI's sitting.
 # 951,438 -> 961,165, a RISE of
@@ -193,5 +202,10 @@ interp_allocs=1412516
 # for byte on this container, the same figure the runner reads -- so 784 is
 # separable and what is missing is a build per hypothesis. Recorded as
 # measured, mechanism open.
-interp_peak_bytes=834117
+# 2026-09-18, kanso#1538. 834,117 -> 833,466, a FALL of 651 (-0.08%), which
+# gives back most of the 784 kanso#1534 recorded as open. A buffer that is
+# asked for at its final size is never live alongside the smaller one it
+# replaces, and a peak is exactly where that overlap shows. Recorded as
+# measured; that sentence is a candidate and no build isolates it.
+interp_peak_bytes=833466
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
