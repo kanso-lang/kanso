@@ -8918,3 +8918,38 @@ compares either.
 
 The measurement half of that STATUS row — cloud's three-parts-per-billion
 candidate for the interpreted row's six — is untouched here and still owed.
+## 2026-09-18 — the emitter's 9.32% was two frames read as one, and the real figure is 3.82%
+
+kanso#1478's entry closes its open thread with "substring search over IR
+lines, 7,929,096 instructions inclusive, 9.32%, all of it reached from
+`Backend::emit`". That number landed on main and it is wrong. It sums two
+frames that do different things.
+
+`next_match` is a `CharSearcher`. Most of its 5,806,878 from `Backend::emit`
+is `.contains(char)` and `.find(char)` — single-character scans, which are
+already the cheap idiom and have nothing to give. The substring cost proper is
+`<&str as Pattern>::is_contained_in`: **3,260,397 inclusive, 3.82%**, over
+25,374 calls.
+
+The site did not converge either. Two candidates were instrumented on that
+branch's head and counted on `kanso build bench/codegen_corpus`:
+
+    without_stats_gate  line.contains("load i32, ptr @k_stats_on")  1,057 calls
+    prune_unnamed       names[at].contains(name)                    1,463 calls
+
+2,520 calls of 25,374. The rest is inlined into `Backend::emit` from
+somewhere a source grep does not reach, and `body_calls`, `body_lines`,
+`twin_calls` and `declares_context_calls` are all `crate::hash::Set` lookups
+rather than searches. A release build with `RUSTFLAGS=-g` still annotated as
+`???:`, because the benchmarks' hot code is clang's — from runtime.c and the
+emitted IR — so a rustc flag was never going to give line information there.
+
+**Declined at 3.82%**, with the sites unfound, against a front end whose three
+compile routes have come down about 1.2% apiece this week from changes whose
+sites were obvious. The run side's leads are worth more.
+
+The correction goes here rather than into kanso#1478, because the log is
+append-only and this project corrects by later entry. What the original entry
+got right is that there is a flat 85 million in the emitter with one cluster
+in it; what it got wrong is how big the cluster is, and 9.32% would have sent
+somebody looking for two and a half times the prize that is there.
