@@ -3531,3 +3531,123 @@ existing differential goldens already say so on every engine.
 Sized from the annotated source, which is the instrument that has been right;
 unsized as a saving, which is the distinction this day was about. 11,471,717 is
 what the copying costs, not what removing it returns.
+
+
+## 2026-09-18 — `if` in value position built three closures to use one
+
+`eval_tail` has always handled `if` directly: ask the condition, then evaluate
+in tail position the branch that answer chooses. `eval` never did. In value
+position every argument to `if` was wrapped in a nullary closure -- the whole
+`Expr` subtree copied, the environment and the frame cloned, an `Rc` allocated
+-- and all three handed to `builtin_if`, which forces the condition on the way
+in and then the one branch it picks. TWO OF THE THREE WERE BUILT TO BE THROWN
+AWAY AND THE THIRD TO BE OPENED IMMEDIATELY.
+
+The value path now mirrors the tail path, with `force` and `force_thunk` doing
+what `builtin_if` did:
+
+    base       1,115,996,775
+    mirrored   1,070,343,718     -45,653,057     -4.09%
+
+The annotated source had put the subtree copying alone at 11,471,717 over
+50,235 clones, and one line of it carried 99.3%. The rest of the fall is what
+was built and opened around those copies.
+
+MEASURED IN TWO STEPS, because the first one was too timid. Making only the
+CONDITION strict -- leaving the branches wrapped -- read 1,106,899,444, a fall
+of 9,097,331. Reading `eval_tail` afterwards showed the shape the value path
+should have had all along, and mirroring it is five times the change.
+
+NOTHING OBSERVABLE MOVES, checked rather than assumed. The corpus prints the
+same answer. A failure VALUE is still the answer rather than a fault. A
+condition that cannot be evaluated prints byte-identically on both engines
+before and after: `error[value]: division by zero`, from the same module.
+
+AND NO BEHAVIOURAL FIXTURE IS POSSIBLE, which is the more useful half of this
+entry and was found by breaking the code rather than by reasoning. A golden was
+written where the untaken branch PRINTS, on the view that a strict `if` would
+announce itself. The code was then broken to evaluate all three arguments, and
+the fixture PASSED.
+
+Effects in this language are VALUES. Evaluating `print "ran skipped"` builds an
+effect; it performs nothing until something sequences it, and the untaken branch
+is never sequenced. A failing branch is the same -- its failure is a value, and
+`builtin_if` discards the branch it did not choose. So `if`'s laziness is not
+observable by any terminating program: what it buys is COST and TERMINATION.
+
+That is why this ships with the cost golden and no behavioural fixture, and why
+the one that was written was discarded rather than committed. A golden that
+passes with the rule removed is worse than none, because it stops anybody
+looking.
+
+## 2026-09-18 — the dispatcher copied a name it was already holding a share of
+
+With the value-position `if` measured and on its way to main, a fresh profile
+of the interpreted run put `dispatch` at the top: 130,726,726 instructions of
+self cost, 11.70% of the program. Two of its callee counts stood out, and one
+of them explained itself immediately.
+
+    <str as Display>::fmt      119,535 calls     23,936,233 instructions
+    the tail-hop line          119,542 executions
+
+The same count twice. `dispatch_loop` held its function name as a `String`,
+and the trampoline's hop wrote `name = next.to_string()` where `next` is the
+`Rc<str>` that `Flow::Tail` already carries. `to_string` goes through
+`ToString`, which goes through `Display`, which goes through the formatting
+machinery: two hundred instructions and an allocation to copy a name that was
+one pointer away.
+
+`dispatch_loop` takes an `Rc<str>` now. The hop is a move. Every use of the
+name inside the loop was already `&name` or `&*name` — `err_reader`,
+`self.fns.get(&*next)`, `hop`, `getter_field`, `spoken` — so nothing else
+changed.
+
+    base       1,115,996,775
+    shared     1,089,450,665     -26,546,110     -2.38%
+
+The corpus answers `interp 59442` on both binaries, byte for byte.
+
+READING THE PROFILE WITHOUT DEBUG INFO WOULD NOT HAVE FOUND IT. The release
+build's frames annotate as `???`, so there is a cost per function and nothing
+per line. Rebuilding with `CARGO_PROFILE_RELEASE_DEBUG=1` is what put the hop
+and the formatter side by side on the same count, and the agreement of two
+independently derived numbers is what made it a finding rather than a guess.
+
+THIS IS THE THIRD OF ITS KIND. kanso#1516 gave `eval_ident` a memory so a name
+resolved once rather than per mention; kanso#1522 stopped a binding copying its
+name twice. Each time the name was already owned somewhere and was rebuilt
+anyway. Worth looking for the fourth.
+
+## 2026-09-18 — the candidate loop allocated for arms it was about to reject
+
+The same profile put `__rust_alloc` at 1,471,992 calls from `dispatch` and
+`__rust_dealloc` at 1,089,150. `match_params` built `score` and `binds` with
+`Vec::with_capacity` on every overload candidate and returned `None` the moment
+`match_one` refused, so a candidate that failed on its first parameter had
+already paid for two allocations. Arm selection tries every overload in the
+group and keeps one. 175,246 dispatches at about four candidates each, two
+vectors apiece, is the call count almost exactly.
+
+One pair of buffers now serves the whole candidate list, cleared between
+candidates, and `match_params_into` answers whether the candidate matched
+rather than handing back vectors. When a candidate wins, the outgoing best's
+vectors become the working pair, so the winner hands its capacity on instead of
+leaving the next candidate to grow from nothing.
+
+    base       1,115,996,775
+    buffered   1,109,925,182      -6,071,593     -0.54%
+    __rust_alloc  36,857,970 -> 29,713,800      -7,144,170    -19.4%
+
+THE ALLOCATOR LOST A FIFTH OF ITS WORK AND THE ROW MOVED LESS THAN THAT. The
+two numbers differ by about a million, which is what the buffer bookkeeping
+costs back: a `clear()` per candidate, and two `mem::replace` on every
+candidate that wins. Both readings are worth keeping, because the one that
+matters for the objective is the row and the one that says the change did what
+it was meant to is the allocator.
+
+AND THE ATTRIBUTION OVERSHOT. 65,283,877 was `__rust_alloc` INCLUSIVE from
+`dispatch` -- everything under it, `mi_malloc` and the rest -- where 36,857,970
+is that function's own self cost across the whole program. Reading the first as
+a budget for the second is the kind of arithmetic this log has withdrawn five
+figures for. What the change was worth is the differential, and the
+differential is 6,071,593.
