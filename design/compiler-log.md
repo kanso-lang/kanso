@@ -2766,3 +2766,69 @@ with main to the instruction.
   diffuse — the largest single caller of `memcmp` is 6.2M, 1.0% — so there is
   no first map to intern that pays on its own. That is the same answer the
   check side gave, now with the build side agreeing.
+## 2026-09-18 — ld reads what is already at -o, and the codegen row moved with it
+
+kanso#1510's round went red on `codegen_instructions_release` alone, at +11,
+with the gate's own second reading landing exactly on the golden:
+6,822,651,572 and then 6,822,651,561, one binary, one corpus, one machine.
+The instrument kanso#1507 built for this named the frame rather than the
+magnitude: `llvm::StringMapImpl::LookupBucketFor` inside `/usr/bin/ld`, −11,
+and the whole-program delta was −11 too.
+
+A string-keyed hash probe moving with the strings put the random temp-file
+name under suspicion — clang writes `/tmp/codegen_corpus-89a40b.o` with fresh
+hex every run. That was checked rather than asserted, and it is wrong.
+
+    object at -89a40b.o    5,163,341,031
+    object at -0c759c.o    5,163,341,031
+    object at -aaaaaa.o    5,163,341,031
+
+Three different names, three identical readings. What the first pass of that
+experiment showed was a defect in the experiment: the repeat run wrote its
+binary to a path six characters longer than the others, so the one thing held
+constant across the three "different name" runs was silently varied in the
+fourth. **The output path, not the input name.**
+
+Isolated properly — same binary, same corpus, same `ld` command every time,
+varying only what was sitting at `-o`:
+
+    output path absent          5,163,341,031   twice, to the instruction
+    output path an empty file   5,163,341,036   twice, +5
+    output path 100 bytes       5,163,343,385
+    output path 5 MB            5,163,343,385
+    output path the real binary 5,163,343,385   +2,354 over absent
+
+Three groups, each internally identical to the instruction across repeats, and
+size stops mattering once the file is non-empty. `ld` looks at what is already
+there, and how much it finds costs 2,354 instructions.
+
+**The gate was reading the third group by accident.** `stage_and_warm` wipes
+the box and then warms both tiers, so the counted build always found the
+warm-up's binary at `-o`. Right answer, no reason: dropping a warm-up or
+reordering the two would have moved the row by 2,354 with nothing in the diff
+to explain it. It now clears the output path before every build it performs,
+warm and counted alike, which is the 2026-09-15 rule applied literally —
+Clay's words were "you clear it out so it's identical every single run".
+`tests/the_codegen_gate_clears_its_output_before_every_build.rs` pins it
+structurally, and was watched red twice: once with the clear before the
+counted build removed, where it names the line and how far the build sits from
+the nearest clear, and once with `codegen_corpus.ll` dropped from the clear.
+
+**Two things this does NOT do, and both matter more than what it does.**
+
+It is a MEASUREMENT CHANGE, not a compiler saving. Nothing about the compiler
+moved. The fall it produces is the gate no longer counting `ld` inspecting a
+file the previous build left behind, and the floor entry says so in those
+words rather than banking it as a gain.
+
+And it does not explain kanso#1510's 11. The sizes do not match, the frame
+does not match — 2,354 spread across `ld`'s file handling against 11 inside a
+StringMap probe — and this gate has always been in the "existing binary" state
+on both readings of a job, so the term this fixes was constant across the pair
+that disagreed. What is fixed here is a real dependence on un-normalized state
+that nobody had noticed; the within-job 11 is still open, and calling it
+explained because a neighbouring mechanism was found is the attribution error
+this log has recorded four times.
+
+Both codegen goldens carry the old value with the change named in the header.
+CI moves them.
