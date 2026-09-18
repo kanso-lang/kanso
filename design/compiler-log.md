@@ -4074,3 +4074,52 @@ against the main that now exists.
 
 The branch's own change has not moved through any of it. The ratchet passed on
 the previous head before it went dirty.
+
+## 2026-09-18 — kanso#1502, CI's rows on the tree merged after kanso#1516
+
+Round two. The round before this carried main's values forward and was red on
+five gates plus the floor; these are the merged tree measured on the runner.
+
+THE FLOOR FAILS THREE JOBS, NOT ONE, and this round is where that got counted
+properly. An unbanked rise turns `cost goldens` red at its welfare step, and it
+also turns `specs (unit, golden, differential)` and `the other host (macos, arm)`
+red, because both run `tests/the_digest_is_priced_on_both_sides.rs` and its
+`the_undoctored_goldens_hold_the_floor` reads the same sentinel. Reading the
+board as "the ratchet job plus the floor" undercounts it by two jobs, and the
+two extra reds look like a second, unrelated fault until the target name is
+read. Watched here: with the goldens stashed back to the values CI tested, the
+spec panics `welfare 76.88   floor 76.87 ... a rise nobody ratchets`, and it
+passes with the floor banked.
+
+    compile_instructions      35,447,843 ->    35,443,478    -4,365   -0.0123%
+    entry_instructions       126,368,664 ->   126,353,950   -14,714   -0.0116%
+    library_instructions     126,824,214 ->   126,809,760   -14,454   -0.0114%
+    startup_instructions       3,364,523 ->     3,363,366    -1,157   -0.0344%
+    emit_instructions         51,554,663 ->    51,543,783   -10,880   -0.0211%
+
+All five fell, all under four hundredths of a per cent, and the mechanism is
+nameable rather than assumed. `src/runtime.c` is `include_str!`'d into the
+compiler at `src/main.rs:1010` and digested into a constant at `src/hash.rs:176`,
+so a runtime edit moves 450,100 bytes of the compiler's own `.rodata` and every
+route that runs the compiler moves with it. None of these five routes executes
+the runtime: three are `kanso check` and stop before codegen, `emit_ir` writes IR
+and stops before the backend, and the fifth starts the interpreter.
+
+Six rows read their goldens exactly, and the interpreted one is the one that
+says something. `interp_instructions` holds 1,997,105,566, which is main's value
+after kanso#1516, and CI read that integer back on the merged tree. The
+interpreted corpus decodes a document it built itself, and it does not touch the
+C runtime, so the branch's two divisions cost it nothing. `interp_allocs`
+4,985,433, `interp_peak_bytes` 942,210 and `compile_allocs` 27,313 likewise.
+Both codegen rows read exactly too — 596,162,050 dev and 6,820,866,344 release —
+which is `-Wl,-plugin-opt=jobs=1` holding across a fourth tree.
+
+The floor is banked at 76.88. The five falls are layout and none of them is
+work, so what the ratchet holds here is the arithmetic rather than a gain the
+branch earned.
+
+This is the fourth re-merge this branch has taken. The cost is
+`required_status_checks.strict` with several changes in flight: a merge turns
+every other open pull request dirty, a dirty one gets no CI, and the rows have
+to be read again against the main that now exists. The branch's own change has
+not moved through any of it.

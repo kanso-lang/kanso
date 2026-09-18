@@ -960,7 +960,16 @@
 # LAYOUT. src/eval.rs is the compiler, so its bytes move and every row that
 # runs the compiler moves with them; none of these routes evaluates a name,
 # because all four stop before the interpreter and the fifth is the emitter.
-library_instructions=126824214
+#
+# 2026-09-18, kanso#1502 on the tree merged with main after kanso#1516,
+# CI's sitting. 126,824,214 -> 126,809,760, a FALL of
+# 14,454 (-0.0114%).
+# LAYOUT. src/runtime.c is include_str!'d into the compiler (src/main.rs)
+# and digested into a constant (src/hash.rs), so editing it moves 450,100
+# bytes of the compiler's own .rodata and every route that runs the compiler
+# moves with it. None of these five routes executes the runtime: three stop
+# before codegen, the fourth writes IR, the fifth starts the interpreter.
+library_instructions=126809760
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.
