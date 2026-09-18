@@ -188,9 +188,20 @@ fn mem_corpus_pins_native_allocator_counters() {
     // allocation shape as a direct one. Qualified record rendering used to
     // be the one exception, its longer type names costing string bytes only
     // on the imported path; since the 2026-08-29 ruling a record prints
-    // qualified on both paths, and the `.imported.*` twins are gone. The lazy
-    // fragment will extend these with engine-shared semantic counters
-    // (forces, evaluations, cells live at exit) asserted on both engines.
+    // qualified on both paths, and the `.imported.*` twins are gone.
+    //
+    // This loop reads ONE engine, and `tests/oracle.rs` reads the other:
+    // `mem_corpus_interp_matches_the_semantic_counters` asserts the interp's
+    // thunk_allocs, thunk_forces and thunk_evals against these same goldens,
+    // and leaves frees/escaped/live_exit alone as allocator behaviour. So the
+    // comparison the 2026-08-24 ruling wanted has been here the whole time.
+    // What was missing was a fixture that DEMANDED a knot: the only knot case
+    // was the undemanded one, where both engines read zero and agreed by
+    // saying nothing. Adding `a_demanded_knot_allocates_one_cell` turns that
+    // loop red against the unfixed interpreter.
+    //
+    // The reading to take from that: a differential loop is worth exactly the
+    // corpus under it.
     for program in kso_files(&manifest_dir().join("tests/golden/mem")) {
         let expected_out = expected(&program, "stdout");
         let expected_mem = expected(&program, "mem");

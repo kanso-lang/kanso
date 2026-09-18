@@ -2676,3 +2676,81 @@ table.
 Recorded so the count stops reading like slack. What clang and ld pay for
 these lines is real and it is the price of the checks, which is a different
 sentence from the one the lead was written in.
+## 2026-09-18 — gavel built: a demanded knot counts on both engines, and the oracle moved
+
+Ruled 2026-08-24, on the archive entry "a demanded knot counts, and the oracle
+moves", Clay: "it seems so obvious." The day before had found it and written
+it down exactly: *the DEMANDED knot still disagrees. Native reports
+`thunk_allocs=1` where the oracle reports `0`, because the oracle's `knotted`
+builds its cell without touching the counter.* The gavel named which side
+moves. It stood unbuilt for twenty-five days.
+
+Reproduced first, on a release build of `bc282f04`, by flipping the arm of
+`an_undemanded_knot_allocates_nothing` so the knot is read and running it
+through an importing entry on both engines:
+
+    thunk_allocs   native 1   oracle 0
+    thunk_forces   native 1   oracle 1
+    thunk_evals    native 1   oracle 1
+    stdout         native 1   oracle 1
+
+**The bump does not go where it first looks like it goes.** `eval_ident`
+routes EVERY zero-arity constant through `knotted` — its own comment says so,
+and the reason is that asking whether a constant mentions its own name reads
+`a = f b` and `b = f a` as two ordinary constants and then recurses until the
+process dies. So counting a cell wherever `knotted` builds one read 2 on this
+fixture rather than 1: one for `demanded/x`, which is the knot, and one for
+`demanded/play`, which is not. A probe printing the name at each cell is what
+said so; the first patch was wrong and green-looking on the narrow assertion.
+
+What native counts is a `k_thunk_new`, and the emitter only emits one for a
+constant in `codegen::knotted_constants` — the set that reaches itself through
+a chain of mentions. The oracle now filters by that same predicate, computed
+once per run through a `OnceCell` on the first constant cell it builds rather
+than at construction, because `kanso check` makes an `Interp` and evaluates no
+constant, and that route is a weighed development term.
+
+Two fixtures, and they are a pair:
+
+- `tests/golden/mem/a_demanded_knot_allocates_one_cell.kso` pins the shape the
+  2026-08-24 entry named as unblocked and nobody wrote — 1 alloc, 1 force, 1
+  eval, 1 live at exit. Its twin still reads 0 on both engines, so the
+  2026-08-23 ruling that an undemanded knot allocates nothing is untouched.
+- `tests/a_demanded_knot_counts_the_same_on_both_engines.rs` runs the same
+  program through the real binary both ways and asserts the whole thunk
+  triple, PINNED rather than merely compared: two engines agreeing on a wrong
+  number is the failure a differential assertion cannot see.
+
+Watched red twice before it was watched green — once on the unfixed tree
+(oracle 0 against native 1) and once with the bump replaced by a no-op after
+the fix was in. The native arm passes in both, which is the arm that should.
+
+**And the hole was the FIXTURE, not the comparison — which is the reverse of
+what this entry said in draft.** The draft read `tests/golden.rs`, saw the mem
+vein run with no `--interp`, and concluded that nothing in the tree compared
+the two engines. `tests/oracle.rs:211` is what it missed:
+`mem_corpus_interp_matches_the_semantic_counters` walks the same corpus,
+evaluates each case on the interpreter, and asserts thunk_allocs, thunk_forces
+and thunk_evals against the native goldens, leaving frees, escaped and
+live_exit alone as allocator behaviour. That loop has been there the whole
+time.
+
+It stayed green because the corpus held exactly one knot and that one was
+undemanded, where both engines read zero and agreed by saying nothing. Checked
+rather than assumed: with the new fixture in the vein and the bump replaced by
+a no-op, that loop goes red naming the file and the row, `thunk_allocs=0`
+against `thunk_allocs=1`. So the ruling could have been caught by machinery
+that already existed, on the day somebody wrote a three-line program.
+
+A differential loop is worth exactly the corpus under it, and the comment in
+`tests/golden.rs` now says which loop reads the other engine rather than
+promising one in the future tense. STATUS.md's row for this ruling carries the
+draft's claim, citing `tests/golden.rs:194` and that future-tense comment; the
+row comes off with this build, and this paragraph is here so the reason it was
+wrong comes off with it.
+
+Costs, as this host can read them: `emitted_code` and `compile_cost` AGREED,
+every runtime cost vein and the whole lazy tier AGREED. The eight compile rows
+this container refuses are CI's, and `interp_instructions` refuses here too —
+its row is the one to read off the job log, since the change adds a predicate
+walk and a set lookup on the interpreted path.
