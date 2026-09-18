@@ -5268,3 +5268,38 @@ moving while the counted rows hold is the exclusion doing its job.
 
 The fix is kanso#1513's and is a decision, not a measurement: it sits in
 design/pending-gavels.md awaiting Clay.
+
+## 2026-09-18 — kanso#1502 on the tree merged with kanso#1525: six rows, and they do not agree on a direction
+
+CI's sitting on the merged tree, against the rows main carried:
+
+    compile_instructions     35,552,188 ->    35,553,022      +834
+    entry_instructions      126,735,634 ->   126,739,095    +3,461
+    library_instructions    127,192,177 ->   127,194,352    +2,175
+    interp_instructions  1,075,174,600 -> 1,075,174,614       +14
+    startup_instructions      3,365,595 ->     3,364,440    -1,155
+    emit_instructions        51,630,538 ->    51,629,594      -944
+
+**Three up and two down, and that is worth saying rather than smoothing over.**
+kanso#1504 took the same merge an hour earlier and its five layout rows all
+fell together; the entry there called a uniform shift what a layout move looks
+like. This one is not uniform. Both branches are layout stories — neither
+changes what the front end decides — but "they all moved the same way" was a
+property of that reading and not of this one, and a reader who took it as the
+signature of layout would mis-read this table.
+
+What layout actually predicts is that the rows move a little and
+inconsistently, because each one is a different route through a binary whose
+code landed in different places. Uniformity is one thing that can happen, not
+the test.
+
+**The interpreted row rose by fourteen, and the allocation counter did not
+move.** 2,486,376 and 833,130 are main's values to the unit. That matters more
+here than on kanso#1504, because this branch changes Ryu's float rendering and
+the interpreted corpus does render floats — so a real-work reading was
+available and the allocation row is what rules it out. Fourteen on 1.075
+billion is the same order as the sevens this row has been drawing all day, and
+those have now been shown not to be the silicon, not `.text` size and not
+`.rodata` size.
+
+Both codegen rows and `compile_allocs` read their goldens exactly.

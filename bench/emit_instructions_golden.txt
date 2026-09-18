@@ -211,4 +211,4 @@
 # LAYOUT. This branch changes how a shared vector is copied in the
 # INTERPRETER; none of these routes runs it. src/eval.rs is the compiler,
 # so its bytes move and every route that runs the compiler moves with them.
-emit_instructions=51630538
+emit_instructions=51629594
