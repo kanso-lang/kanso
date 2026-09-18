@@ -161,6 +161,49 @@ build — 5,163,341,031 is the header's own "absent" reading. So the premise the
 options below were written against may no longer hold, and the sitting should
 settle whether it does before choosing between them.
 
+**IT REPLICATED, ON A SECOND BRANCH, AND THE RESIDUE IS EXACTLY ELEVEN BOTH
+TIMES.** A cost-goldens job on kanso#1502 — a float-rendering branch with no
+codegen in its diff — hit the draw on 2026-09-18 and halted the same vein. Put
+beside kanso#1504's job:
+
+                        kanso#1504              kanso#1502
+    ld, first        5,160,407,609           5,139,582,528
+    ld, again        5,160,407,598           5,139,582,517
+    residue                    -11                     -11
+    probes, first        1,816,463               1,822,415
+    probes, again        1,816,452               1,822,404
+    frame          LookupBucketFor         LookupBucketFor
+    clang x3            identical               identical
+
+Two branches, two jobs, `ld` totals 20,825,081 apart and bucket-probe counts
+5,952 apart, and the drop is ELEVEN PROBES both times, all of it in one frame.
+A residue that holds at a fixed eleven across that much movement in the
+quantity it is a residue of is not noise in the ordinary sense, and it is not
+proportional to anything the two jobs differ in. Whatever costs the eleven
+costs the same eleven on both.
+
+This does not name the cause, and it narrows the search in one way worth
+writing down: a candidate has to explain a CONSTANT, not a variance.
+
+**AND THE SAME JOB SHOWS WHERE kanso's OWN PROCESS MOVES, which is the
+excluded one.** The gate prints it anyway, and on kanso#1502 it moved 1,610
+between the two readings, broken down:
+
+    +1610  PROGRAM TOTALS
+     +924  __memcmp_avx2_movbe                        libc
+     +713  kanso::build
+      -27  HashMap<String, ()>, std::hash::random::RandomState  ::insert
+
+`RandomState` is seeded per process from the OS, so a `HashMap` keyed by
+`String` probes a different sequence on every run, and comparing keys is what
+`memcmp` is doing there. That is a candidate mechanism for the excluded
+process's own variance and it is testable — a fixed hasher, two readings — but
+it is untested, so it is written here as a lead. **It bears on the 2026-09-15
+normalization ruling rather than on this entry's question**: `codegen_instructions`
+already excludes this process, while `compile_instructions`, `entry_instructions`
+and `library_instructions` all count it and have been reproducing to the
+instruction, which is the first thing any test of this has to explain.
+
 **Recommendation: 2.** The measurement is the release tier's — that is where the
 name was shown to move the count, three times. The dev row's move is real but
 unexplained, and option 1 would bank it as though it were understood. 3 keeps a
