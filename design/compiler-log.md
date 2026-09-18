@@ -4198,3 +4198,25 @@ Seven builds on the dispatch path today, two wins.
 after: `drop_slow` from `dispatch_loop'2` 229,625 times, `__rust_alloc` from
 `String::clone` 149,093, and the 8,106 reallocations that are neither of the
 two call sites above. The allocator-caller axis is not spent.
+
+**AND THE SAVING IS NOT FEWER ALLOCATIONS, which the first version of this
+entry implied and the commit message said outright.** Tallying the allocator
+edges on both arms of the same A/B:
+
+                      base        hoisted      delta
+    __rust_alloc    1,361,559    1,362,891     +1,332
+    __rust_dealloc  1,349,431    1,350,763     +1,332
+    __rust_realloc     35,956       32,638     -3,318
+    grow_one          464,507      112,013   -352,494
+    finish_grow       489,542      137,048   -352,494
+
+The allocation count goes UP. What the reserve removes is the GROWTH path:
+352,494 fewer `grow_one`/`finish_grow` pairs, and with them the capacity
+arithmetic, the amortised-doubling branch and the element copy each regrow
+makes. 21,582,351 over 352,494 is 61.2 instructions a growth, which is a
+plausible price for that work and is not a plausible price for an allocation.
+
+Written down because the difference decides what to look for next. "Reserving
+saves allocations" would send the next reader after allocation counts, and the
+counts here are flat to a tenth of a per cent. The commit message on the
+source change carries the looser phrasing; this is the correction.

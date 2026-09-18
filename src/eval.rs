@@ -2450,7 +2450,13 @@ impl<'a> Interp<'a> {
             // dispatch starts at capacity zero and climbs 1, 2, 4 from nothing:
             // `dispatch_loop` reached `grow_one` 225,431 times against 55,711
             // dispatches, four reallocations a call. Asking for the arity up
-            // front costs one allocation of the right size instead.
+            // front does NOT allocate less: `__rust_alloc` is called
+            // 1,362,891 times against 1,361,559, up 1,332. What goes is the
+            // GROWTH path -- `grow_one` and `finish_grow` fall from 464,507
+            // and 489,542 to 112,013 and 137,048, 352,494 fewer of each --
+            // and with it the capacity arithmetic, the doubling branch and
+            // the element copy every regrow makes. 21,582,351 over 352,494
+            // is 61.2 instructions a growth.
             //
             // kanso#1538 put this reserve inside `match_params_into`, where it
             // is paid once per CANDIDATE -- roughly twenty times per dispatch,

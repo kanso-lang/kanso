@@ -2589,6 +2589,17 @@ error[name]: unknown name `builders/run`
 
 <p>33,600,253 instructions between two placements of one idea, and the winning placement is the largest gain of the day &#8212; larger than the frame split in &#167;95, which took 15,853,848.</p>
 
+<p><strong>and the saving is not fewer allocations.</strong> tallying the allocator edges on both arms of the same pair:</p>
+
+<pre>                    base        hoisted      delta
+  __rust_alloc    1,361,559    1,362,891     +1,332
+  __rust_dealloc  1,349,431    1,350,763     +1,332
+  __rust_realloc     35,956       32,638     -3,318
+  grow_one          464,507      112,013   -352,494
+  finish_grow       489,542      137,048   -352,494</pre>
+
+<p>the allocation count goes up. what the reserve removes is the growth path: 352,494 fewer grow-and-copy pairs, and with them the capacity arithmetic, the doubling branch and the element copy each regrow makes. 21,582,351 over 352,494 is 61.2 instructions a growth, which is a plausible price for that work and not a plausible price for an allocation. the first draft of this section said the reserve allocates less, which would send the next reader after allocation counts that are flat to a tenth of a per cent.</p>
+
 <p>this retracts none of the five declines in &#167;96. each was a different change and each was measured. what it retracts is the inference that was forming around them: that the dispatch path had been read out, and that a correctly-measured quantity failing to become a saving was the shape of this code rather than the shape of five particular attempts. one of the five sat a function away from the one that works.</p>
 
 <p>the base row reads 1,007,027,010 for the fourth time, from two binaries with different content hashes built from trees carrying the same interpreter at different paths. on a row known to move with path length, that is the clearest statement so far that the differential reads the code.</p>
