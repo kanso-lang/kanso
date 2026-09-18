@@ -2469,7 +2469,7 @@ error[name]: unknown name `builders/run`
 
 <h2 id="oneframe"><span class="sec-num">94</span>a scope that was as deep as the argument list</h2>
 
-<p>section 93 took two copies out of the dispatcher and left the environment walk where section 91 had found it: 2,662,536 frame visits to serve 724,304 hits, 3.7 nodes a lookup. that ratio is not about how fast a node is visited. it is about how many nodes there are.</p>
+<p>section 93 took two copies out of the dispatcher and left the environment walk where section 91 had found it: 2,662,536 frame visits to serve 724,304 hits, 3.7 nodes a lookup. that ratio counts nodes, so what moves it is how many exist.</p>
 
 <p>binding a name built one heap node holding that name, its value, and a pointer to the rest. so a call with four parameters pushed four nodes, and every name the body mentioned walked past all four before it reached the caller's scope. the depth of a scope was the length of an argument list.</p>
 
