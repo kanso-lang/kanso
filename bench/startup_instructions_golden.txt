@@ -322,4 +322,18 @@
 # LAYOUT. `kanso check` and the interpreted run carry runtime.c's bytes rather
 # than compiling it, so what moved is where the code sits; every one of these
 # is under a hundredth of a per cent.
-startup_instructions=3953725
+#
+# 2026-09-18, kanso#1509 (kanso#1480 rebuilt) on the tree merged with main,
+# CI's sitting. 3,951,796 -> 3,933,223, a FALL of 18,573 (-0.4700%).
+# The interpreter's start-up carries the compiler's bytes, and this branch
+# removes two whole analysis constructions from the emitter's path, so the
+# binary's layout moves with it. A fall rather than a rise, and larger than
+# this row's usual layout term.
+#
+# 2026-09-18, re-merged onto main after kanso#1509 landed underneath.
+# THE VALUE BELOW IS MAIN'S, carried forward. kanso#1509 removed two
+# analysis constructions from the emitter's path and moved this row on
+# its own; what this branch adds on top of that has not been measured
+# anywhere, so the merged reading is CI's and gets written in when the
+# round reports it.
+startup_instructions=3933223

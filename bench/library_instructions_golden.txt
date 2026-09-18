@@ -911,7 +911,22 @@
 # LAYOUT. `kanso check` and the interpreted run carry runtime.c's bytes rather
 # than compiling it, so what moved is where the code sits; every one of these
 # is under a hundredth of a per cent.
-library_instructions=126804746
+#
+# 2026-09-18, kanso#1509 (kanso#1480 rebuilt) on the tree merged with main,
+# CI's sitting. 126,804,425 -> 126,806,203, a RISE of 1,778 (+0.0014%).
+# LAYOUT. `kanso check` stops before codegen, so the saving in `emit_ir` is
+# outside this row by construction; what moved is where the code sits. The
+# three check routes rise by 747, 1,762 and 1,778 against falls of 8.08
+# million and 18,573 on the two rows that reach the emitter, which is the
+# shape a real saving plus a moved binary makes.
+#
+# 2026-09-18, re-merged onto main after kanso#1509 landed underneath.
+# THE VALUE BELOW IS MAIN'S, carried forward. kanso#1509 removed two
+# analysis constructions from the emitter's path and moved this row on
+# its own; what this branch adds on top of that has not been measured
+# anywhere, so the merged reading is CI's and gets written in when the
+# round reports it.
+library_instructions=126806203
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.
 # The row did not move for that -- the same figure came back on the run before
