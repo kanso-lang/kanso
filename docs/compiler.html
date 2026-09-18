@@ -2427,7 +2427,27 @@ memcmp        48,165,663 ->  46,830,275    -1,335,388</code></pre>
 
 <p>that does not retire the index: the 1,590,733 hit-frames stay, and only an index removes those. it orders them. skip first, measure what is left, and let the remainder make its own case.</p>
 
-<h2 id="dispatchcopies"><span class="sec-num">92</span>two copies the dispatcher was making for nothing</h2>
+<h2 id="stagingrace"><span class="sec-num">92</span>a fixture that emptied the library it was reading</h2>
+
+<p>one of the interpreter's allocation fixtures went red on two pull requests in the same hour, on two different machines, on branches whose diffs touched neither the interpreter nor the fixture. both rounds were written off as flakiness and left.</p>
+
+<p>the panic said what it was, and reading it was the whole diagnosis:</p>
+
+<pre>the interpreted run failed:
+error[name]: unknown name `builders/run`
+  --&gt; /tmp/kanso-unique-container/run_300.kso:3:1</pre>
+
+<p>the library is there and has nothing in it. writing a file is a truncate followed by a write. the fixture's two tests staged into one hardcoded directory, and the test runner runs the tests in a binary on parallel threads — so one test's staging emptied the library while the other test's compiler was reading it. a zero-byte library is a valid library with no definitions in it, which is why the run got as far as resolving a name before it died.</p>
+
+<p>the failing test is also not the one the file is named for. both rounds were recorded against the file's name, because that is the target the runner reports, and the test that actually died was the other one in the same file — which passed in the very same run.</p>
+
+<p>each test stages its own tree now, named for a tag it passes, and every tag is the same length so a reading taken under one is comparable with a reading taken under another. the directory's name grew seven characters, the absolute allocation counts moved with it, and the figure the fixture pins — the cost of three hundred extra rounds, taken as a difference — did not move at all. that is the subtraction doing the job it was written for.</p>
+
+<p>two things about the spec are worth keeping. twenty-five runs of the pair on an idle machine did not reproduce the race, so the spec forces the interleaving rather than waiting for it: it truncates one tree's library, leaves it truncated, and runs the other tree. and the first version of that spec passed against the shared directory, because it called the helper that re-wrote the library on the way in and healed the window it was testing. moving the staging out of the run helper is what keeps the window open across the read.</p>
+
+<p>this page has a standing rule that external state is normalized before it is measured. this is the same rule read from the other side: a directory two threads write is not normalized, and it is nobody's.</p>
+
+<h2 id="dispatchcopies"><span class="sec-num">93</span>two copies the dispatcher was making for nothing</h2>
 
 <p>section 91 left the environment walk sized and the schemes aimed at it declined. the next profile of the interpreted run put a different frame on top: the dispatcher, at 130,726,726 instructions of its own, 11.70% of everything the run does. two of its callee counts had answers, and both were things being built and immediately thrown away.</p>
 
