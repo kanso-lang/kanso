@@ -3287,3 +3287,35 @@ source (`callgrind_annotate --auto=yes`, run where the recorded relative paths
 resolve) gives a cost per LINE and per CALL SITE. It is the only reading here
 that has not been wrong. The caller tree invites an off-by-one, and a total
 divided by a count is not a measurement.
+
+## 2026-09-18 — what a Value clone actually copies
+
+The walk's expense is `Value::clone` at the hit, 31,514,002 over 724,304 calls.
+Reading what that clone does narrows it further, and the enum answers most of it
+by inspection: of `Value`'s variants, `Map`, `ErrV`, `List`, `Bytes`, `Record`,
+`Sub`, `FnRef` and `Closure` are all behind an `Rc`, so cloning them is a
+refcount bump; `Float`, `True`, `False`, `NoneV` and `Done` are copies of
+nothing. TWO VARIANTS ALLOCATE: `Str(String)` and `Int(BigInt)`.
+
+The annotated source prices the first of those. Inside `Value::clone`:
+
+    12,872,332   => <String as Clone>::clone   (137,732x)
+
+Ninety-three instructions a clone, and that is every `Value::Str` copied
+anywhere in the run rather than only the ones the walk makes -- the reading is
+per call site inside `Value::clone`, which has many callers. So it is a bound on
+one component of the 31.5 million, not a share of it, and it is written down
+that way on purpose.
+
+WHAT IT SUGGESTS is that the interpreter copies string BODIES when it copies
+values, where every other compound variant it holds is shared. `Rc<str>` would
+turn a ninety-three-instruction allocating clone into a bump.
+
+WHAT IT COSTS IS THE REASON NOT TO ASSUME. A `String` is what gets APPENDED to,
+and `Rc<str>` cannot be appended in place -- so the trade is a cheaper copy
+against a more expensive build, and which way it comes out is a property of how
+much this corpus concatenates versus how much it copies. That is a build and a
+differential, not an argument. kanso#1515 and kanso#1520 are both about building
+strings and lists in place, so the appending side is not hypothetical.
+
+Recorded as the lead the whole day was looking for, unsized deliberately.
