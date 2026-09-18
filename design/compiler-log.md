@@ -3381,3 +3381,35 @@ for no reason a diff can explain. Pinning it is its own change: `-save-temps=obj
 gives clang a deterministic object name, and on the container it also moves the
 whole pipeline by 1,352,261, so it re-bases the row as well as steadying it and
 belongs in a round of its own.
+
+## 2026-09-18 — kanso#1502's rows on the tree merged after kanso#1511
+
+CI's sitting on `8c5b50f0`, every row with the value it landed on:
+
+    compile_instructions      35,444,548 ->    35,442,350    -2,198
+    entry_instructions       126,359,513 ->   126,351,950    -7,563
+    library_instructions     126,814,937 ->   126,807,146    -7,791
+    startup_instructions       3,364,755 ->     3,363,766      -989
+    interp_instructions    2,182,597,360 -> 2,182,579,844   -17,516
+    emit_instructions         51,543,885 ->    51,546,941    +3,056
+
+All six are layout. The branch's own source has not moved since the sitting
+that banked the floor; what moved under it is main, which gained kanso#1511
+and kanso#1512. Both codegen rows read their goldens exactly on this job —
+6,820,866,344 release and 596,162,050 dev — which is the branch's own change
+holding still while the compiler around it moved.
+
+`emit_instructions` is the one that rose, by 3,056 instructions on 51.5
+million, 0.0059%. `codegen::emit_ir` inclusive is a layout vein like the
+other five: the emitter's decisions cannot change when the emitted code does
+not, and `emitted` and `machine code` both agreed on this job.
+
+Welfare scores 76.8343 against a floor of 76.83355375328496. The rise is
+0.0008, inside the sentinel's 0.001 band, so there is nothing to bank.
+
+**And the three compile spans on the page follow the goldens.** They drifted
+on the first push of these rows because the sweep was not run, which cost a
+round: `golden_prose` is the only one of the three page gates that reads a
+`data-golden` span, and the two that were run cannot see one. A golden push
+runs `sh scripts/gates/all_pages.sh` and the trend gate, whether or not it
+feels like it touches a page.
