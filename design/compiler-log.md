@@ -3447,3 +3447,48 @@ So integers first, and the reference return is worth re-sizing only after,
 against whatever the row then reads. Neither is sized: these are counts of how
 often, not measurements of what removing them saves, and that distinction is
 the one this day was about.
+
+## 2026-09-18 — what a small integer costs to copy, and a benchmark that measured nothing first
+
+Making `Value::Int` an inline machine word is the ordered-first lead, and
+before 90 call sites are touched it is worth knowing what the copy it removes
+costs. `BigInt::clone` is inlined into `Value::clone` and lives in another
+crate, so `#[inline(never)]` cannot split it and the annotated source cannot
+price it the way it priced `String::clone`. A microbenchmark can.
+
+THE FIRST ONE MEASURED NOTHING, and the check that caught it took one extra
+run: doubling the count moved the total by FIFTEEN instructions. Cloning a
+constant and reading its bit count is loop-invariant, so LLVM hoisted the whole
+body; `#[inline(never)]` on the enclosing function does not stop it optimising
+inside. `black_box` on the input, the clone and the drop fixed it. A benchmark
+whose figure does not move with its count is measuring its own overhead, and
+varying the count is how that is found out rather than assumed.
+
+With the loop defeated, over mimalloc as the interpreter uses:
+
+    n =   100,000     4,436,432
+    n =   610,763    22,313,150
+    n = 1,221,526    43,689,870
+
+The slope is 35.00 instructions per iteration from the two largest points and
+35.00 from the two smallest, with 936,430 of fixed overhead -- which matches
+what the hoisted version read, so the constant is the process and the slope is
+the work.
+
+    over the walk's 297,244 integer hits     ~10.4 million
+    over all 610,763 integer clones          ~21.4 million
+
+WHAT THAT IS AND IS NOT. The 35 covers a clone, a `bits()` read, a drop and
+three `black_box`es, so the clone alone is less: it BOUNDS clone-and-drop from
+above. And a microbenchmark allocating and freeing in a tight loop is the
+allocator's best case; a real run interleaves and frees later, which could push
+the true figure up. So this bounds one component of `Value::clone`'s 46,791,170
+of self cost, and it is not a prediction of what the change saves.
+
+Beside the strings, which the annotated source priced directly at 12,872,332
+over 137,732 clones, the allocating half of every value copy in this run is
+somewhere around 34 million against an interpreted row of 1.075 billion. Three
+per cent, bounded from above, for a change to one type.
+
+That is the number the corpus question in the ledger is worth answering for --
+or not. Recorded so the answer can be weighed rather than guessed.
