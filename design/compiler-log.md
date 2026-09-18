@@ -3210,3 +3210,31 @@ million, forty million, 47.2 million, and 0.205%. Every one divided a measured
 total by a measured count. The two figures that have survived, 956,485 and
 1,335,388, were each read off the same counter in two binaries that differed by
 one change.
+
+## 2026-09-18 — match_one's comparisons are not in the arms that compare names
+
+Before sizing `match_one` by removing something, the obvious target was the arms
+that compare type names, so they were counted first. Over bench/interp_corpus:
+
+    match_one calls           1,135,058
+      Ctor against Record        29,052     2.6%
+      Ctor against Sub                0
+      Nullary                    76,408     6.7%
+      StrLit                          0
+      Annotated                  59,430     5.2%
+
+Those are 164,890 of 1,135,058 — 14.5%. The other 85% are `Var` and `Wildcard`,
+which compare nothing at all. And the debuginfo profile puts `match_one`'s
+`memcmp` calls at 768,153, which those arms cannot account for on any per-call
+cost.
+
+So the target was wrong, and interning the constructor type names -- which was
+the plan -- would reach 29,052 dispatches. Recorded as a negative result rather
+than acted on.
+
+WHERE THE CALLS ARE IS OPEN, and the next step is separation rather than another
+guess: `match_one` is a profile frame, not a function, and `bind_whole`,
+`type_match_depth` and whatever else is inlined into it are counted as part of
+it. Nothing here says which of them calls libc. A `#[inline(never)]` on each
+candidate, one build, would split the frame and name it, and that is a
+measurement rather than a division.
