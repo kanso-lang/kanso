@@ -3891,3 +3891,70 @@ projected the interpreted fall at 33,238,900 and CI reads 33,279,216 — 40,316
 apart, 0.12% of the delta. `interp_allocs` fell by 174,996 on both, the same
 integer. `interp_peak_bytes` rose 9,229 here and 9,228 on the runner, one byte
 apart on a row whose absolute values the two hosts do not share.
+
+## 2026-09-18 — the frame a raise would print, built once per declaration
+
+Two changes, measured together against main at kanso#1517: the interpreted row
+falls **363,081,711 instructions, 20.14%**, from 1,802,816,521 to 1,439,734,810
+on this container. Both readings are this box's and are a comparison with each
+other only; the base matches what the earlier ladder predicted for this tree to
+the instruction, which is the check that the two are the same measurement.
+
+`frame_of` is the larger half. It formats a trace line and asks which package a
+file belongs to — two allocations — and the interpreter called it on EVERY entry
+into EVERY body. The corpus enters about half a million bodies. The answer
+depends on the declaration alone: `frame_of` reads `decl.name` and `decl.file`
+and nothing else, so it is a pure function of its argument and can be
+remembered.
+
+THE FRAME IS NOT ONLY A DIAGNOSTIC, AND THIS WAS WRITTEN DOWN WRONG FIRST. The
+draft of this entry said the frame is "a string only read when an err is
+raised", which is true of its `prefix` and false of its `hako`. `own_failure`
+(`src/eval.rs:3655`) compares the failure's package against the frame's, and
+`Word::Rescue if own_failure(..) => Ok(yielded)` is the foreign-only licence:
+a rescue declines a failure raised in its own package and passes it through. So
+the frame decides whether a rescue FIRES. Memoizing it per declaration is still
+exactly right — both halves are pure in the declaration — but the change touches
+error-handling semantics rather than reporting, and it deserves to be described
+that way.
+
+THE KEY IS AN ADDRESS, AND THE COMPILER IS WHAT MAKES THAT SAFE. The memory is
+`Map<usize, Frame>` keyed on `decl as *const FnDecl as usize`, which is sound
+only if no two declarations can ever share a key — that is, only if every
+address in it outlives the interpreter. `frame_for` takes `&'a FnDecl`, where
+`'a` is the lifetime of the `Program` the interpreter borrows, so a temporary
+cannot be passed at all. Making that signature explicit was not cosmetic: it
+failed to compile until `eval_body_of`, `eval_body_flow`, `knotted` and the
+dispatch loop's `overloads` were widened to `'a` too, and each of those errors
+is a place where a future edit could otherwise have handed in a borrow that
+dies. The argument used to be "all four call sites happen to pass a
+program-owned declaration", which is a review; it is now a type.
+
+The smaller half is `match_one`'s two binding sites, where `name.to_string()`
+became `name.as_str().to_owned()`. `Name`'s `to_string` goes through `Display`
+and `core::fmt`; `str`'s is specialized in std. Same allocation, less machinery
+around it.
+
+What pins the cost: `tests/a_unique_container_is_extended_in_place.rs` reads
+12,001 per extra round where it read 15,601 before, and the twelve is this
+change — six body entries a round at two allocations each.
+
+WHAT CATCHES A WRONG FRAME WAS FOUND BY BREAKING THE MEMO, AND IT IS NOT THE
+FIXTURE THIS ENTRY FIRST NAMED. The draft claimed
+`tests/golden/micro/an_err_has_readers.kso` covers it, on the reasoning that it
+raises from two declarations and prints the name each `origin` carries. Run
+against a build whose key is hard-coded to 0 — every declaration sharing one
+entry — that fixture is BYTE-IDENTICAL to its golden. It exercises the readers,
+not the memory.
+
+The corpus does catch it, at `a_chain_step_names_its_channel`, and the way it
+fails says why the frame matters: the broken build prints NOTHING. A collapsed
+key gives every declaration the first one's package, `own_failure` then answers
+wrong, a rescue declines a failure it should have handled, and the failure
+leaves the program instead of its output. That is a much louder failure than a
+misnamed trace line, and it is the one the semantics deserve.
+
+The lesson is the one this log keeps relearning: a fixture that looks like it
+tests the thing has to be watched failing before it can be said to. Reasoning
+about which fixture covers a change is how the last four wrong claims were
+made.
