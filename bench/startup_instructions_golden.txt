@@ -409,4 +409,9 @@
 # 2026-09-18, kanso#1533, CI's sitting. 3,365,595 -> 3,363,916,
 # a FALL of 1,679 (-0.0499%).
 # Layout, the same way.
-startup_instructions=3363916
+#
+# 2026-09-18, kanso#1502 on the tree merged after kanso#1533, CI's sitting.
+# 3,363,916 -> 3,366,495, a RISE of 2,579 (+0.0767%).
+# Layout, the same way, and the largest of the five in percentage terms
+# because the row is the smallest.
+startup_instructions=3366495

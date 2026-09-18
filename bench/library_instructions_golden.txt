@@ -999,7 +999,11 @@
 # 2026-09-18, kanso#1533, CI's sitting. 127,192,177 -> 127,186,008,
 # a FALL of 6,169 (-0.0049%).
 # Layout, the same way.
-library_instructions=127186008
+#
+# 2026-09-18, kanso#1502 on the tree merged after kanso#1533, CI's sitting.
+# 127,186,008 -> 127,198,066, a RISE of 12,058 (+0.0095%).
+# Layout, the same way. library_again read 127,198,066.
+library_instructions=127198066
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

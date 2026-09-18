@@ -2219,7 +2219,13 @@
 # LAYOUT. src/eval.rs is the compiler's own Rust, so its bytes and the layout
 # under them move whether or not a decision this row counts changed. `kanso
 # check` stops before codegen and cannot see the dispatcher's runtime work.
-compile_instructions=35550010
+#
+# 2026-09-18, kanso#1502 on the tree merged after kanso#1533, CI's sitting.
+# 35,550,010 -> 35,554,080, a RISE of 4,070 (+0.0114%).
+# LAYOUT. `kanso check` stops before codegen and cannot see a render change,
+# and this diff grows every binary's `.text` by 32 bytes. Counted twice in
+# the one job: compile_again read 35,554,080 as well.
+compile_instructions=35554080
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

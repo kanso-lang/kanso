@@ -4336,3 +4336,37 @@ the size. Same shape, same direction.
 
 The trend gate asked for this sentence and was right to: the row was re-based
 in the goldens with nothing in the log naming it or the value it landed on.
+
+## 2026-09-18 — kanso#1502's rows on the tree merged after kanso#1533
+
+CI measured the ryu branch on the tree carrying the dispatcher change. Five
+compile-side rows rose and the interpreted row did not move at all:
+
+    compile_instructions   35,550,010 ->  35,554,080    +4,070  +0.0114%
+    entry_instructions    126,729,588 -> 126,742,198   +12,610  +0.0099%
+    library_instructions  127,186,008 -> 127,198,066   +12,058  +0.0095%
+    emit_instructions      51,617,476 ->  51,645,272   +27,796  +0.0538%
+    startup_instructions    3,363,916 ->   3,366,495    +2,579  +0.0767%
+    interp_instructions   995,837,536 -> 995,837,536         0   exactly
+
+Four of the five were counted TWICE in the one job and the repeat agreed to
+the instruction every time: compile_again 35,554,080, entry_again
+126,742,198, library_again 127,198,066, emit_again 51,645,272. So the rises
+are the binary, not the reading.
+
+They are layout. `kanso check` stops before codegen and cannot see a change
+to how a double is rendered, and this diff grows every binary's `.text` by
+32 bytes. The branch's own rows -- what the digit loop costs at run time --
+are the ones in `bench/instructions_golden.txt`, and they fell: encodebench
+3,497,149,260 -> 3,485,406,060, livebench 2,825,430,323 -> 2,813,687,123,
+runbench 1,821,933,936 -> 1,819,291,716, oneshot 17,888,155 -> 17,858,797.
+
+**THE INTERPRETED ROW READ ZERO THIS TIME, AND IT READ +14 BEFORE.** The
+branch's earlier note against main at kanso#1531 recorded a rise of 14
+instructions and called it the same layout move the compile rows show. On
+this tree the row is byte-identical. Both readings are CI's and neither is
+wrong; what they show is that 14 instructions on a 995 million row is inside
+what a relink moves it by, so the earlier sentence attributed to a mechanism
+something that is better described as the row not moving. The note stays in
+the header with its number, because it is what was measured; this paragraph
+is what it means.
