@@ -878,7 +878,15 @@
 # 2026-09-18, re-merged onto main after kanso#1509. THE VALUE BELOW IS MAIN'S,
 # carried forward: kanso#1509 moved this row on its own and what this branch
 # adds on top of it has not been measured, so the merged reading is CI's.
-entry_instructions=126350802
+#
+# 2026-09-18, kanso#1502 on the tree merged with main after kanso#1509,
+# CI's sitting. 126,350,802 -> 126,354,605, a RISE of 3,803 (+0.0030%).
+# LAYOUT. The two divisions this branch merges live in float rendering,
+# which none of these routes runs: three are `kanso check`, `emit_ir`
+# stops before the backend, and the interpreted start-up links the runtime
+# without rendering a float. What moved is where the code sits. The second
+# reading in the same job matched the first to the instruction.
+entry_instructions=126354605
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

@@ -2898,3 +2898,26 @@ landed on:
 bytes, so the total moves 448. Seven of the eight instruction rows are under
 two hundredths of a per cent and carry runtime.c's bytes rather than compiling
 it; the release row is the exception and the reason is given above.
+## 2026-09-18 — kanso#1502's compile-side rows re-measured after kanso#1509
+
+kanso#1509 landed under this branch, so the five compile-side goldens were
+carried forward at main's values and the round re-measured them on the merged
+tree. CI's sitting, with the second reading in the same job matching the first
+to the instruction on all four rows that take one:
+
+    compile_instructions    35,441,774 ->    35,443,452  +1,678   (+0.0047%)
+    entry_instructions     126,350,802 ->   126,354,605  +3,803   (+0.0030%)
+    library_instructions   126,806,203 ->   126,809,996  +3,793   (+0.0030%)
+    startup_instructions     3,933,223 ->     3,933,390    +167   (+0.0042%)
+    emit_instructions       52,115,454 ->    52,125,468 +10,014   (+0.0192%)
+
+**All five are LAYOUT.** The two divisions this branch merges are in float
+rendering, and none of these five routes renders a float: three of them are
+`kanso check`, `emit_ir` stops before the backend, and the interpreted
+start-up links the runtime without reaching it. Four of the five land within
+five thousandths of a per cent of where they were, which is the size a shifted
+binary moves a row that does not run the changed code.
+
+The run-side rows this branch exists for are unchanged from its own sitting and
+stand where its earlier entry recorded them; `interp_instructions` and both
+codegen rows agreed with the goldens this branch already carries.
