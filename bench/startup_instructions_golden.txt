@@ -305,4 +305,11 @@
 # moved and the two codegen rows did not: they AGREED with this branch's own
 # readings to the instruction, across two CI jobs on two different trees,
 # which is what `-Wl,-plugin-opt=jobs=1` bought.
-startup_instructions=3951796
+#
+# 2026-09-18, kanso#1509 (kanso#1480 rebuilt) on the tree merged with main,
+# CI's sitting. 3,951,796 -> 3,933,223, a FALL of 18,573 (-0.4700%).
+# The interpreter's start-up carries the compiler's bytes, and this branch
+# removes two whole analysis constructions from the emitter's path, so the
+# binary's layout moves with it. A fall rather than a rise, and larger than
+# this row's usual layout term.
+startup_instructions=3933223

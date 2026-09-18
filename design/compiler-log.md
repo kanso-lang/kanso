@@ -2622,6 +2622,29 @@ instead of three times changes nothing a program can see. 160 test binaries
 pass; the one failure is `wasm_engine`, which wants a `docs/kanso.wasm` this
 container has not built and CI does.
 
+**CI'S SITTING ON THE MERGED TREE, and the emitter row is the one that
+matters.** Five rows moved:
+
+    emit_instructions       60,196,725 ->  52,115,454  -8,081,271  -13.4248%
+    startup_instructions     3,951,796 ->   3,933,223     -18,573   -0.4700%
+    compile_instructions    35,441,027 ->  35,441,774        +747   +0.0021%
+    entry_instructions     126,349,040 -> 126,350,802      +1,762   +0.0014%
+    library_instructions   126,804,425 -> 126,806,203      +1,778   +0.0014%
+
+`emit_instructions` anchors at `codegen::emit_ir` inclusive, which is exactly
+where the three constructions sat, and it falls 13.42%. The start-up row falls
+0.47% because the interpreter carries the compiler's bytes and two whole
+analysis constructions have left the emitter's path.
+
+The three `kanso check` routes rise by a few hundred each, and that is layout
+by construction: `kanso check` stops before codegen, so the saving in `emit_ir`
+is outside those rows entirely. Falls of 8.08 million and 18,573 against rises
+of 747, 1,762 and 1,778 is the shape a real saving plus a moved binary makes.
+
+`codegen_instructions_dev`, `codegen_instructions_release`,
+`interp_instructions`, `compile_allocs` and both interp memory rows AGREED
+with main to the instruction.
+
 - **DONE** one analysis.
 - **OPEN** the run of eight is over. What is left in a build is flat: `memcmp`
   at 35.2M of 606.6M and a hash-and-compare cluster around it worth about 17%,
