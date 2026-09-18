@@ -8799,3 +8799,52 @@ The lesson is narrower than "be careful with regexes": a golden's trailing
 lines are load-bearing, so an edit that rewrites a value rewrites the value and
 nothing else.
 
+
+## 2026-09-18 — the release-codegen row was counting the scheduler
+
+kanso#1487 hunted this row once, found the variance in kanso's own process,
+excluded that process, and recorded that what was left — three `clang`
+processes and `ld` — came back byte for byte across two readings. It drew two
+faces again within the day:
+
+    codegen_instructions_release=6838057046
+    codegen_release_again=6838057035
+
+One job, one binary, eleven apart. The gate prices every process it runs, and
+that is what settled it: all three clang children byte-identical, kanso's own
+process moving +325 and already excluded, and **`ld` moving −11, the whole row
+delta**.
+
+Diffing the two `ld` profiles function by function — 18,604 entries — exactly
+one differed: `llvm::StringMapImpl::LookupBucketFor`, a hash probe count.
+
+**It is parallel LTO.** `ld` splits LTO codegen across threads, callgrind
+counts every thread, and how the work lands is the scheduler's to decide rather
+than the input's. Four pairs of links on a container, byte-identical bitcode,
+both clang children byte for byte every time:
+
+    different output path, plugin picks:  20,565,047,254  20,565,047,243   -11
+    same output path, plugin picks:       20,565,047,241  20,565,049,584 +2,343
+    same output path, jobs=1:             20,574,502,681  20,574,502,681      0
+
+The magnitude changing between pairs is what ruled out the two candidates that
+looked obvious. The output path was one — my own first pair used two different
+`-o` names, which could have been the whole story and was not. The pid was the
+other, and the golden's header had offered it as kanso#1487's untaken lead; it
+is only on the STAGING name of the runtime object, renamed to a pid-free path
+before clang or ld sees it. A fixed string costs a fixed number. Eleven one
+pair and 2,343 the next is a scheduler.
+
+So the gate asks for one thread, per the 2026-09-15 rule. It is not the
+default: a user's release build has no row to keep and every reason to use its
+cores, and `release_clang` adds the option only when the variable is set.
+
+`tests/the_measured_link_pins_its_thread_count.rs` watches both halves,
+because the property needs the gate to ask AND the compiler to pass the ask on,
+and a property split across two files is one nothing checks. Watched red both
+ways: dropping the variable from one `env -i` line, and spelling the option
+`--thinlto-jobs` (which is lld's; this ld rejects it).
+
+The row's absolute value moves — single-threaded LTO partitions the work
+differently, about 0.046% higher on the container — so nothing measured before
+this is comparable with anything after, and CI takes the sitting.

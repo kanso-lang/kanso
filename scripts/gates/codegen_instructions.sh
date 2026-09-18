@@ -155,6 +155,27 @@ tune=$tune:glibc.malloc.trim_threshold=131072
 tune=$tune:glibc.malloc.top_pad=131072
 tune=$tune:glibc.malloc.tcache_count=7
 
+# KANSO_LTO_JOBS=1 IS PART OF THE SAME NORMALIZATION, and it is the one that
+# reaches the linker rather than the allocator. `ld` splits LTO codegen across
+# threads; callgrind counts every thread; how the work lands is the scheduler's
+# to decide and not the input's. That is why this row drew two faces after
+# kanso#1487 had already excluded kanso's own process and certified the child
+# tree deterministic: the remaining drift was inside `ld` and nowhere else.
+#
+# Measured on this container, two links of byte-identical bitcode, both `clang`
+# children byte for byte every time:
+#
+#   different output path, plugin picks:  20,565,047,254  20,565,047,243   -11
+#   same output path, plugin picks:       20,565,047,241  20,565,049,584 +2,343
+#   same output path, jobs=1:             20,574,502,681  20,574,502,681      0
+#
+# The magnitude is not a fixed term -- eleven one pair and 2,343 the next --
+# which is what ruled out the output path and the pid before it. Only the
+# thread count explains a delta that changes size between pairs.
+#
+# The variable is read by `release_clang` in src/main.rs and is UNSET for every
+# build but this measurement, so a user's release build keeps its cores.
+
 # AND THE WARM-UP RUNS UNDER THE MEASUREMENT'S OWN ENVIRONMENT. Re-staging the
 # box alone did not settle it: kanso#1470's next sitting still read
 # `again_procs=5 first_procs=6`, with the dev row 9,273,832,677 and then
@@ -175,7 +196,7 @@ stage_and_warm() {
   # Warm BOTH tiers, whichever one this run counts, so the row does not depend
   # on which of the two the job happened to ask for first.
   for warm_flag in "" "--release"; do
-    ( cd "$box" && env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" \
+    ( cd "$box" && env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" KANSO_LTO_JOBS=1 \
         ./kanso build pkg/codegen_corpus $warm_flag >/dev/null 2>&1 )
   done
 }
@@ -190,7 +211,7 @@ printf 'codegen_clang %s\n' "$(clang --version | head -1)"
 rm -f /tmp/cg.codegen.$tier.*
 (
   cd "$box"
-  env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" valgrind --tool=callgrind \
+  env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" KANSO_LTO_JOBS=1 valgrind --tool=callgrind \
     --trace-children=yes --callgrind-out-file=/tmp/cg.codegen.$tier.%p \
     ./kanso build pkg/codegen_corpus $flag >/dev/null 2>/dev/null
 )
@@ -258,7 +279,7 @@ stage_and_warm
 rm -f /tmp/cg.codegen.${tier}b.*
 (
   cd "$box"
-  env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" valgrind --tool=callgrind \
+  env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" KANSO_LTO_JOBS=1 valgrind --tool=callgrind \
     --trace-children=yes --callgrind-out-file=/tmp/cg.codegen.${tier}b.%p \
     ./kanso build pkg/codegen_corpus $flag >/dev/null 2>/dev/null
 )

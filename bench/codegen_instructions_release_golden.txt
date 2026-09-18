@@ -102,4 +102,36 @@
 # a row whose `-O3 -flto` tier is the largest number this tree counts. The
 # same C-toolchain layout the dev row shows, at the scale that tier runs at.
 # A second count in the same job read 6,826,829,520.
+#
+# 2026-09-18, kanso#1507. THE THREAD COUNT IS PINNED NOW, and the value below
+# is main's, carried forward until CI takes a sitting under the new shape.
+#
+# kanso#1487 excluded kanso's own process from this row and certified what was
+# left -- three `clang` processes and `ld` -- deterministic across two
+# readings. It drew two faces again within the day: 6,838,057,046 then
+# 6,838,057,035 in one job, on one binary, eleven apart, with all three clang
+# children byte for byte and the whole delta in `ld`.
+#
+# `ld` splits LTO codegen across threads. callgrind counts every thread, and
+# how the work lands is the scheduler's to decide rather than the input's.
+# Reproduced on a container, two links of byte-identical bitcode, both clang
+# children byte for byte every time:
+#
+#   different output path, plugin picks:  20,565,047,254  20,565,047,243   -11
+#   same output path, plugin picks:       20,565,047,241  20,565,049,584 +2,343
+#   same output path, jobs=1:             20,574,502,681  20,574,502,681      0
+#
+# The magnitude changes between pairs, which is what ruled out the output path
+# and the pid before it -- a fixed string would cost a fixed number. Only the
+# thread count explains a delta that is eleven one pair and 2,343 the next.
+#
+# So the gate asks for one thread, per the 2026-09-15 rule that external state
+# is put into a known state rather than explained afterwards. It is not the
+# default: a user's release build has no row to keep and every reason to use
+# its cores.
+#
+# THE ABSOLUTE VALUE MOVES and nothing measured before this is comparable with
+# anything measured after. Single-threaded LTO partitions the work differently
+# -- about 0.046% higher on the container's pair. Round one is deliberately red
+# and CI's own reading replaces this line.
 codegen_instructions_release=6826829520
