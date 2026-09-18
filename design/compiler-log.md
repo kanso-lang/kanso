@@ -3382,3 +3382,36 @@ i64 boundary, watched red on a deliberately-wrong promotion.
 
 Still unsized, deliberately. 610,763 is how often the allocation happens. What
 removing it saves is a differential nobody has run.
+
+## 2026-09-18 — the interpreter's integer boundary has no home in the corpus
+
+The small-integer change needs a fixture before it needs code, so one was
+written: `9223372036854775807 + 1`, `-9223372036854775808 - 1`, and three
+products that cross the boundary from operands that do not. Running it found
+the constraint the build would otherwise have met late.
+
+NATIVE REFUSES THERE. `error[runtime]: integer overflow (int64 native build;
+spec int is arbitrary precision)`. The interpreter answers exactly:
+
+    9223372036854775808 -9223372036854775809 18446744073709551614 -18446744073709551616
+    9223372037000250000 18446744073709551614 -18446744073709551616
+
+That divergence is sanctioned and already pinned -- the differential law allows
+an engine to REJECT what another accepts provided the diagnostic is clear, and
+`docs/book/ch02.html` with `docs/book/samples/ch02/overflow.out` carries it.
+
+WHAT IS NOT PINNED is the second line: the interpreter's own answers at the
+boundary. The micro corpus runs every fixture on both engines and requires them
+to agree, so it cannot hold a program native refuses, and there is no other home
+for an interpreter-only behavioural golden. So the exact place an inline `i64`
+fast path would go wrong -- promoting one step late, and printing a WRAPPED
+number rather than raising -- is a place nothing in the tree currently watches.
+
+That is the finding, and it is a gap in the corpus rather than a fact about
+integers. The change needs a home for it first: either a fixture kind that pins
+one engine's answer where another refuses, or the native side gaining
+arbitrary precision so the two agree and an ordinary micro golden works. Which
+of those the project wants is a question rather than an implementation detail,
+so it goes to the ledger rather than being decided here.
+
+Recorded before any code, which is the whole point of writing the fixture first.
