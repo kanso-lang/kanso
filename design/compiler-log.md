@@ -3920,3 +3920,26 @@ specific figure is gone and the bullet now says to read the pin from kq or to
 say it could not be read. What the bullet is for — the five veins, and the fact
 that the instructions vein moves where the allocation counters do not — does not
 go stale and is what remains.
+
+## 2026-09-18 — a blocking question sat in a task list for four hours
+
+kanso#1513 was opened at 06:19Z with two codegen rows red by design, waiting on
+a decision. The decision was written down — as a session task marked CLAY'S CALL
+/ BLOCKING — and the session then worked other threads, which is what the rules
+say to do. The part that was skipped is the part that matters: it never reached
+`design/pending-gavels.md`, and that file is the only place Clay reads pending
+decisions. A task list is this session's, not his.
+
+So for four and a half hours the pull request was blocked on a question nobody
+could answer, and the board read it as an ordinary red. It is filed now, under
+Blocking, with the three options and the measurement behind each: nine of ten
+temporary names read 5,163,341,031 and `4b8c1a` read 5,163,341,042, reproduced
+three times, against a `dev_clang` that never reads the flag the gate sets for
+it (`src/main.rs:744-747`). STATUS.md's two counts moved from two blocking to
+three.
+
+The rule this breaks was already written: a decision that is Clay's goes to him
+the moment it is found. What was missing is that "goes to him" has a file name,
+and marking a task is not it. Worth adding to the check a session runs when it
+opens a red pull request: if the redness is waiting on a decision, the ledger
+gets an entry in the same turn, and the pull request's body cites the heading.

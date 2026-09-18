@@ -7,9 +7,11 @@ is stale — say so.
 ## Waiting on Clay
 
 The decisions live in design/pending-gavels.md — the single ledger; this file
-only indexes it. **Blocking right now: two** — whether the wall `>>` survives the fused
-operators, and whether its simultaneous-failure merge was meant to go, both
-filed 2026-09-17. The compile-term question before them was ruled the day it
+only indexes it. **Blocking right now: three** — whether the wall `>>` survives the fused
+operators and whether its simultaneous-failure merge was meant to go, both
+filed 2026-09-17, and whether kanso#1513's fixed-temporary pin covers both
+codegen tiers or the release tier alone, filed 2026-09-18 after sitting four
+hours in a session task list, which Clay does not read, instead of here. The compile-term question before them was ruled the day it
 was filed: two welfares and a meta-welfare over them, with the floor
 re-ratcheted. The `!` question before it was ruled 2026-09-16 and
 reversed the same day: the bang is the channel that bubbles, so `xs[i]!` and
@@ -523,7 +525,7 @@ else. Chains that tested for `none` after an effect migrate.
     checked from here on two days and both refused by the tooling
   - whether an err gains readers a lambda callback can use
 
-**Seven questions wait in `design/pending-gavels.md`** — two blocking, five
+**Eight questions wait in `design/pending-gavels.md`** — three blocking, five
 open — each with a recommendation. Recounted four times on 2026-09-16: the
 binding-position question joined Open with its measurement, the escape
 path's byte-position scan joined it, measured on 2026-09-15 and filed to
