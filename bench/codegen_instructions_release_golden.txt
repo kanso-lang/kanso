@@ -253,7 +253,21 @@
 # This corrects the record only. Whether to pin the release tier is a decision
 # in design/pending-gavels.md and is not settled here.
 codegen_instructions_release=6824133280
-# 2026-09-18, re-merged onto main after kanso#1512, which re-based this row by
-# clearing the gate's output path. THE VALUE BELOW IS MAIN'S, carried forward;
-# the merged reading is CI's.
-codegen_instructions_release=6841691425
+# 2026-09-18, re-merged onto main after kanso#1512 and again after kanso#1540
+# and kanso#1544. TWO LIVE ROWS SAT HERE and the second was appended rather
+# than replacing the first, so this file carried
+# `codegen_instructions_release=` twice: 6,824,133,280 and 6,841,691,425.
+#
+# `rows()` in tests/the_objective_reads_what_the_gate_watches.rs accumulates
+# with `+=`, which it must, because bench/objective_sources.txt maps one
+# objective counter onto several gate keys. Within ONE file a repeated row is
+# a defect, and the `+=` turned it into a sum: the gate read 13,665,824,705,
+# exactly the two added, and the spec reported the LINK as wrong. The row was
+# fine and the file had two of it.
+#
+# The value below is MAIN'S, carried forward. This branch raises this row --
+# it is the only compile-side row that COMPILES src/runtime.c rather than
+# carrying its bytes -- and its own readings of the rise were 11,227,515 and
+# 19,241,568 against bases that have since moved. So nothing here is a
+# reading of the merged tree: CI measures it and the row is copied out of the
+# job log.
