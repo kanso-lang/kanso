@@ -155,6 +155,61 @@ is the only thing deferring it.
 
 ## Open, not blocking
 
+### What spelling does "cyclic structures sized by data" need?
+
+**Cited:** the archive's "block-born is the whole cohort" (2026-08-29), whose
+words are *cyclic structures sized by data (a graph parsed from input, N
+linked nodes from a map) gain a spelling*; the live log's build-hole gavel of
+2026-09-16, which took back the two shapes that reached that purpose, on
+reasoning this entry does not ask to undo; the 2026-09-09 entry building the
+cohort as kanso#1359, which named birth through a call as the next widening
+and left it to the implementer; and the live log's 2026-09-18 entry "birth
+through a call, measured", which is the measurement STATUS.md's cohort row
+has owed since 2026-09-16 and which is what raises this question rather than
+answering it.
+
+**The question.** The gavel's purpose needs a program to make N nodes, where
+N comes from data, and tie them to each other. Five probes against a release
+build of `30fb1abe` say that today it cannot, and they fail for five different
+reasons:
+
+1. a hole outside a `build` block is refused — so the maker cannot be a
+   function;
+2. a value a call returns is not block-born, so its field cannot be filled —
+   this is the one that widening `born_of` would fix;
+3. a hole cannot escape the block it was written in, because it must be
+   filled before that block freezes — so the maker cannot be a `build` of its
+   own either;
+4. a lambda lexically inside the block is outside it for the hole rule, which
+   closes the `map` shape the purpose actually takes;
+5. `ns[0].field = ...` is a syntax error before any analysis runs, because a
+   fill's target parses as a bare name — so N nodes need N names.
+
+Two nodes named by hand still work, and `tests/golden/mem/build_cycle.kso`
+pins that. What is missing is only the sizing.
+
+**Recommendation, and it is a question about the spelling rather than a
+build.** Widening `born_of` to see through a call is real, separable and worth
+doing on its own terms, and it fixes exactly the second of those five. It does
+not reach the purpose, so building it and calling the row closed would be
+wrong. What the purpose needs is a decision about which of these to open:
+
+- **a build block that iterates** — a form binding one name per element of a
+  list, so N nodes get N births without N names in the source. This is the
+  smallest change that reaches the words of the gavel, and it leaves the hole
+  rule exactly as the build-hole gavel left it.
+- **a hole that survives a call**, which means a function whose answer carries
+  an unfilled field and a caller obliged to fill it. That is a second effect
+  in the type, and a much larger language change.
+- **the purpose retired**, with the gavel's sentence about data-sized cycles
+  struck and the alias and the field of a born node left as what the cohort
+  gained.
+
+The holder of this file would open the first. It is the one that keeps every
+rule the 2026-09-16 gavel established and adds a binder rather than an escape
+hatch. But which of the three is Clay's, because the gavel's own words are
+what is at stake.
+
 ### The box constructor's spelling
 
 **Cited:** the live log's "gavel: the box is explicit, an err is a value, and
