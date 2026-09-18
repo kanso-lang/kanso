@@ -4030,6 +4030,96 @@ start of the day, then 1,029,696,275 (kanso#1531), 995,837,536 (kanso#1533),
 10.94%, over five merged changes, none of which changed what the interpreter
 computes.
 
+## 2026-09-18 — two more routes at the parameter copy, both declined, and what five builds say
+
+Section 95 shipped the one win in a family of five. The other four are here
+with their numbers, because an idea that is not written down as declined gets
+built again.
+
+**THE LINE THEY ALL AIM AT.** The annotated profile puts one push of
+`match_one`'s `Var` arm at 723,255 `Value` clones for 29,241,307
+instructions. Call counts read out of the callgrind file rather than inferred
+from instruction ratios: `Value::clone` 1,555,866 calls, `match_one`
+1,100,726, `lookup` 1,056,329, `eval_global` 332,024, `dispatch_loop'2`
+55,711, the recursive `match_one'2` 34,332. So that one line makes 46.5% of
+every clone in the run, and `lookup`'s hits — 1,056,329 less 332,024 — come
+to 724,305, which lands on section 91's 724,304.
+
+**ROUTE ONE: SCORE WITHOUT BINDING.** `match_one`, `bind_whole` and
+`match_params_into` took a `bind: bool`; selection walked every candidate
+with it false and the winner was walked a second time with it true.
+
+    base    1,007,027,010
+    split   1,059,328,533   +52,301,523   +5.19%
+
+Declined. The winner's second walk costs more than every discarded clone
+saved, and not only in clones: `match_one` carries 44,851,891 of its own
+beside the 29,241,307 of copying, so doubling the winning arm's match swamps
+it.
+
+**ROUTE TWO: MOVE THE WINNER'S ARGUMENTS OUT.** No second walk. Matching
+pushed a `Pick` — `Arg(usize)` for a parameter at the top of the list,
+`Val(Value)` for a name bound inside a record — and the winner's picks became
+bindings by `std::mem::replace(&mut args[i], Value::NoneV)`. The dispatcher
+owns that vector and clears it a line later; its own comment already said
+nothing below reads it.
+
+    base    1,007,027,010
+    moved   1,017,171,110   +10,144,100   +1.01%
+
+Declined. A `Pick` is a tag plus a `Value`, so the hot push got WIDER, and
+the winner's picks are walked into a freshly allocated `Bindings`, which is
+an allocation and a walk per dispatch that did not exist before. Which of the
+two dominates is not measured.
+
+**SO THE LINE RESISTS BOTH.** The copy is 32 bytes and, for every variant but
+`Int` and `Str`, a refcount. Deferring it costs more than that. Indexing it
+costs more than that. 29,241,307 instructions is real and measured and, on
+this evidence, is what copying a parameter is worth paying.
+
+**FIVE BUILDS, ONE WIN.**
+
+    inline hint on lookup                   0
+    eval_ident frame split         -15,853,848   shipped as kanso#1535
+    eval arm split                  +3,411,326   declined
+    score without binding          +52,301,523   declined
+    winner's arguments moved out   +10,144,100   declined
+
+Each is two binaries on one container, one corpus, paths of the same length,
+identical output. The win was the smallest change of the five.
+
+**AND THE PROFILE IS FLAT, WHICH IS OLDER NEWS THAN IT LOOKED.** The first
+draft of this entry put the post-split top frame at 7.70% against 11.70%
+"this morning", which reads as the split having flattened it. Measuring the
+same statistic on both sides instead:
+
+    pre-split (1,070,153,314)     post-split (1,054,297,214)
+      top 1   6.44%                 top 1   7.70%
+      top 5  23.34%                 top 5  24.86%
+      top 10 36.83%                 top 10 36.55%
+      top 20 49.76%                 top 20 48.95%
+
+Twenty functions to reach half the run, on both sides. The profile was
+ALREADY flat before the split, and the split RAISED the top frame's share by
+taking work out of `eval_ident` while `eval` stayed. The 11.70% was
+`dispatch_loop'2` on a tree three changes older, so the flattening belongs to
+the dispatcher change and the environment frame. Attributing it here would
+have been the rewrite-family error again, a fortnight after that one was
+withdrawn.
+
+A cross-check worth keeping: the two debug-info profiles differ by
+15,856,100 and the release A/B read the split at 15,853,848 — two toolchain
+configurations, 2,252 apart.
+
+**WHERE THIS LEAVES THE NEXT ATTEMPT.** `__memcmp_avx2_movbe` read
+47,672,229, then 47,631,349, then 47,602,341 across the dispatcher change,
+the environment frame and the frame split — unmoved by three changes to how
+scopes are built and walked, and already the target of four declined schemes
+in kanso#1529. With the five here, the two largest named things in the
+interpreted profile have nine declined builds between them. Picking the top
+frame off a profile has a record of one in five. The next real gain is
+structural, and the way to find it is not another reading of the same list.
+
 ## 2026-09-18 — the object gets a name the run chooses, and the eleven has nowhere left to live
 
 kanso#1512 closed the mechanism and said the fix belonged in a round of its
