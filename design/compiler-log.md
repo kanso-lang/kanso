@@ -4533,3 +4533,23 @@ The interpreted rows carry main's — 1,555,890,579, 3,879,653 and 961,165. This
 branch's cached beat top moved that row by 26 instructions on 1.96 billion last
 sitting, so tens is what it should read again; anything larger is kanso#1518's
 arithmetic, not the beat's.
+
+## 2026-09-18 — kanso#1504, CI's row: nineteen instructions, and a third reading in the tens
+
+One vein disagreed and it disagreed by nineteen:
+
+    interp_instructions   1,555,890,579 -> 1,555,890,598   +19   +0.0000012%
+
+Every other row read its golden exactly — all five layout rows, both codegen
+rows, `compile_allocs`, and both interpreted memory rows.
+
+THREE RUNTIME EDITS IN ONE DAY HAVE NOW MOVED THIS ROW BY 15, 26 AND 19. They
+are three different functions in `src/runtime.c` — two divisions in Ryu's float
+rendering, the cached beat top, and the beat top again against a newer main —
+and every reading lands under thirty on a row of one and a half billion. The
+corpus decodes a document it built itself and never enters the C runtime, so
+none of them can be work.
+
+`interp_allocs` agreeing at 3,879,653 across all three is what makes that a
+check rather than an assertion. An allocation counter counts operations rather
+than a host, and real work in the interpreted run would have moved it.
