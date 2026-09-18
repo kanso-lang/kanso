@@ -2881,3 +2881,58 @@ Recorded rather than started, with four pull requests in flight. The
 measurement is the deliverable here; kanso#1516 already memoises what a name
 resolves to, so the first question for whoever picks this up is why that memory
 does not already prevent the walk.
+
+## 2026-09-18 — the 19.3 million was an average applied to the wrong half
+
+Section 90 closed by sizing a lead: misses are 31.4% of lookups and 40.3% of
+every frame visited, "about 19.3 million instructions spent on walks that
+cannot succeed". That figure was 1,071,803 miss visits times the eighteen
+instructions a visit the section derived earlier. The visits were counted. The
+eighteen was an average over every visit, and it does not describe the half it
+was applied to.
+
+BUILT. A filter that skips a walk which cannot succeed. `bind` is the only
+place an `Env` frame is made, so it records the shape of each name it binds --
+the first byte and the length -- into a 256-entry table on the interpreter, and
+`lookup` answers `None` without walking when the shape is absent. The table only
+gains bits and a set bit admits the walk, so a collision costs a walk that would
+have happened anyway and can never change an answer.
+
+Sized first on the corpus: 35 distinct names are ever bound, the 332,025
+lookups that reach no frame are spread over 73 others, and one of the 73 shares
+a shape with a local. So the table skips 326,733 of the 332,025 -- 98.4%.
+
+MEASURED, and it costs 24,320,374 (+2.18%). Four binaries, one worktree, each
+staged into the gate's own box in turn:
+
+    base                                          1,115,996,775
+    the reference threaded, never read            1,132,586,649   +16,589,874
+    the shape recorded, never tested              1,140,109,198    +7,522,549
+    recorded and tested, walks skipped            1,140,317,149      +207,951
+
+THE PRIZE WAS SIXTEEN TIMES SMALLER THAN THE ARITHMETIC. The last row is the
+whole of what skipping the walks is worth, and it is a rise. `memcmp` reads it
+directly: 48,165,663 in the first three binaries and 47,209,178 in the fourth.
+Removing every one of the 1,071,803 miss visits takes 956,485 off `memcmp` --
+1.99% of the figure, from 40.3% of the visits.
+
+So a miss visit costs 0.89 instructions of `memcmp` and a hit visit costs 29.68.
+Thirty-three times apart, and section 90's eighteen is the average of the two.
+The mechanism is visible in the names: Rust's string equality checks the length
+before it calls libc, every local this corpus binds is seven bytes or shorter,
+and the names that miss are `builtin_append`, `json/parsed`, `text/utf8`. A
+miss walk is rejected on length at every frame and never reaches libc at all.
+
+AND THREADING THE REFERENCE COSTS MORE THAN THE IDEA. 16,589,874 of the rise is
+a fourth argument to `bind` that nothing reads -- 534,994 binds, all from
+`dispatch`, 31 instructions each. Recording into it adds 7,522,549 more, 14 a
+bind. A thread-local would remove the first half and the second half alone still
+exceeds the 956,485 ceiling, so there is no arrangement of this idea that wins.
+Declined on arithmetic, with both halves isolated rather than attributed.
+
+WHAT IT DOES TO THE SLOT LEAD IS THE OPPOSITE. Section 90 put slots at "around
+forty million", from the same eighteen. The `memcmp` is not spread over the
+visits evenly: 47,209,178 of it sits in the 1,590,733 HIT visits, which are what
+a slot removes. The lead is larger than the page says and its cheap-looking
+neighbour was the part worth nothing. Still a ceiling on one term, still
+unbuilt, and now sized against the population it describes.

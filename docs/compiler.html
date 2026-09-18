@@ -2346,7 +2346,7 @@ misses             332,025      31.4%, and a miss walks the whole chain</code></
 
 <p><strong>2.52 is the whole explanation.</strong> a scheme paying setup per lookup and saving per frame has two and a half frames to amortise it over. the padded key cost about forty-seven instructions a lookup against a saving of the eighteen-odd a small <code>memcmp</code> costs, times 2.52 &#8212; so it lost, and would have lost at any setup above about forty-five. the byte had no setup and lost to the node instead.</p>
 
-<p>it also prices the change that would work. eighteen instructions a visit across 2,662,536 visits is the 48 million; resolving a local to an index at parse time removes the <em>visit</em>, and an index costs two or three instead of eighteen. the ceiling is around forty million, near 3.6% of the interpreted row &#8212; a number rather than a hope, and larger than anything tried here, because slots have to survive closures, which capture an environment rather than a frame.</p>
+<p>it also prices the change that would work. eighteen instructions a visit across 2,662,536 visits is the 48 million; resolving a local to an index at parse time removes the <em>visit</em>, and an index costs two or three instead of eighteen. the ceiling is around forty million, near 3.6% of the interpreted row &#8212; a number rather than a hope, and larger than anything tried here, because slots have to survive closures, which capture an environment rather than a frame. <strong>section 91 re-sizes this against the visits it actually describes:</strong> the <code>memcmp</code> sits almost entirely in the hit visits, which are what a slot removes, so the ceiling rises rather than falls.</p>
 
 <p><strong>then the distribution was measured too, and it names a cheaper change first.</strong> an average hides a shape, so here is the shape &#8212; hits by depth:</p>
 
@@ -2357,7 +2357,32 @@ misses             332,025      31.4%, and a miss walks the whole chain</code></
 5    25,770    3.6%
 6+        0</code></pre>
 
-<p>the chain never exceeds five, so nothing here waits on a pathological case. and the split by outcome is the point: <strong>misses are 31.4% of lookups and 40.3% of every frame visited</strong>. a miss walks the whole chain and finds nothing, because the name was never a local &#8212; it is a function, a descriptor, a type or a builtin, and the resolution ladder carries on afterwards. that is about <strong>19.3 million</strong> instructions spent on walks that cannot succeed.</p>
+<p>the chain never exceeds five, so nothing here waits on a pathological case. and the split by outcome looked like the point: <strong>misses are 31.4% of lookups and 40.3% of every frame visited</strong>. a miss walks the whole chain and finds nothing, because the name was never a local &#8212; it is a function, a descriptor, a type or a builtin, and the resolution ladder carries on afterwards. multiplying those visits by the eighteen above put the waste at about <strong>19.3 million</strong>.</p>
+
+<p><strong>that multiplication was wrong, and section 91 measures by how much.</strong> the visits were counted; the eighteen is an average over every visit, and the two halves differ by thirty-three times. a miss visit costs <strong>0.89</strong> instructions of <code>memcmp</code> and a hit visit costs <strong>29.68</strong>. so the 19.3 million is really <strong>956,485</strong>, and the forty million below is sized from the same average and moves the other way. read both figures in section 91.</p>
+
+<h2 id="wrongaverage"><span class="sec-num">91</span>an average applied to the half it does not describe</h2>
+
+<p>section 90 ends by sizing a lead. misses never find anything, they are 40.3% of every frame the interpreter visits, and at the eighteen instructions a visit the section derives that is <strong>19.3 million</strong> instructions of walking that cannot succeed. it reads like the cheapest thing on the page. so it was built.</p>
+
+<p>the filter is small and exactly safe. one function makes every environment frame, so it records the shape of each name it binds &#8212; the first byte and the length &#8212; into a 256-entry table, and the lookup answers <em>not here</em> without walking when the shape is absent. the table only ever gains bits, and a set bit admits the walk, so a collision costs a walk that would have happened anyway and can never change an answer. over this corpus, 35 distinct names are ever bound as locals and the 332,025 lookups that reach no frame are spread over 73 others; one of the 73 collides, so the filter skips <strong>326,733</strong> of the 332,025.</p>
+
+<p>the run rose by <strong>24,320,374</strong>, 2.18%. four binaries, built in one worktree and staged into the same box in turn, say where every instruction of that went:</p>
+
+<pre><code>base                                       1,115,996,775
+the reference threaded, never read         1,132,586,649   +16,589,874
+the shape recorded, never tested           1,140,109,198    +7,522,549
+recorded and tested, walks skipped         1,140,317,149      +207,951</code></pre>
+
+<p><strong>the last row is the whole of what the idea is worth, and it is a rise.</strong> <code>memcmp</code> makes it plainer still: 48,165,663 in the first three binaries and 47,209,178 in the fourth. removing every one of the 1,071,803 miss visits takes <strong>956,485</strong> off the figure &#8212; <strong>1.99%</strong> of it, from <strong>40.3%</strong> of the visits.</p>
+
+<p>so a miss visit costs <strong>0.89</strong> instructions of <code>memcmp</code> and a hit visit costs <strong>29.68</strong>. thirty-three times apart, and the eighteen is the average of the two. the mechanism is visible in the names themselves: string equality checks the length before it calls libc, every local this corpus binds is seven bytes or shorter, and the names that miss are <code>builtin_append</code>, <code>json/parsed</code>, <code>text/utf8</code>. a miss walk is rejected on length at every frame and never reaches libc at all. the misses were cheap for the same reason they were misses.</p>
+
+<p><strong>and threading the reference cost more than the idea was worth.</strong> 16.6 million of the rise is a fourth argument to the binding function that nothing reads &#8212; 534,994 bindings, all from one dispatcher, 31 instructions each. recording into it adds 7.5 million more. moving the table to a thread-local would remove the first half, and the second half alone still exceeds the 956,485 ceiling, so no arrangement of this wins. declined on arithmetic, with both halves isolated rather than guessed at.</p>
+
+<p>the lesson is about the sizing rather than the change. a count multiplied by an average is a measurement only where the average describes the thing counted, and here it described a population thirty-three times more expensive than the one it was multiplied by. the check costs one build: remove the visits and read the counter that was supposed to fall.</p>
+
+<p><strong>and the lead it was competing with grows.</strong> the 48 million does not spread evenly over the visits; 47.2 million of it is in the hit visits, which are exactly what resolving a local to an index removes. section 90&#8217;s forty million was sized from the same average and is, if anything, low. it is still a ceiling on one term and still unbuilt &#8212; but it is now sized against the visits it describes, and the cheap-looking neighbour that was recommended ahead of it turned out to be worth nothing.</p>
 
 <p>so the cheaper change is not a faster walk but no walk. whether a name can be a local at a given site is decidable where that site is compiled, and skipping the walk for the ones that cannot needs no slots, no upvalue analysis and no change to how a closure captures &#8212; the three things that make the larger change large. it is worth about half as much for a small fraction of the work.</p>
 
