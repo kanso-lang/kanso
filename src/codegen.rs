@@ -1526,9 +1526,10 @@ pub fn emit_ir(program: &Program, convention: ClosureConvention) -> Result<Strin
     escape.returns.retain(|_, ty| packable.contains(ty));
     escape.carries.retain(|_, ty| packable.contains(ty));
     let byte_disc = crate::dispatch::byte_dispatched(program, &inference);
-    let in_place_pushes = crate::linear::in_place_pushes(program);
-    let reusable_records = crate::linear::reusable_records(program);
-    let (builder_joins, builder_params, builder_carried) = crate::linear::string_builders(program);
+    // One `Analysis` for all three, rather than one each: see
+    // `linear::for_the_emitter`.
+    let (in_place_pushes, reusable_records, (builder_joins, builder_params, builder_carried)) =
+        crate::linear::for_the_emitter(program);
     // Beat loops rewind the arena between iterations. Groups returning the
     // by-value %parsed are excluded: k_beat_pop judges heap-ness from the
     // returned tag word, and the packed representation would mislead it.

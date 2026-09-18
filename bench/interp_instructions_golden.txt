@@ -217,5 +217,14 @@
 # sits. Three check routes and the interpreted row rise by a few thousand each
 # against falls of 567,547 and 560,657 on the two rows that pay for the
 # derivation.
-interp_instructions=2182620735
+#
+# 2026-09-18, re-merged onto main after kanso#1509. THE VALUE BELOW IS MAIN'S,
+# carried forward, and the branch's own reading above it stands as history
+# rather than as this tree's row. The five compile-side goldens were carried
+# forward for the same reason, and carrying those five while leaving this one
+# at the branch's reading made the trend gate read a PURE REGRESSION: the
+# falls of 567,547 and 560,657 that pay for this rise live in rows that are
+# now main's. Every compile-side row on this branch is main's, so the merged
+# sitting is CI's and arrives in one piece.
+interp_instructions=2182576109
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

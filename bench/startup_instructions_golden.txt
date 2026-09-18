@@ -314,4 +314,14 @@
 # saving IS has been measured; why it lands so much harder on this row than on
 # the emitter's is not claimed here beyond the obvious -- start-up runs the
 # derivation over the whole declare block before any program does anything.
-startup_instructions=3384249
+# 2026-09-18, kanso#1509 (kanso#1480 rebuilt) on the tree merged with main,
+# CI's sitting. 3,951,796 -> 3,933,223, a FALL of 18,573 (-0.4700%).
+# The interpreter's start-up carries the compiler's bytes, and this branch
+# removes two whole analysis constructions from the emitter's path, so the
+# binary's layout moves with it. A fall rather than a rise, and larger than
+# this row's usual layout term.
+#
+# 2026-09-18, re-merged onto main after kanso#1509. THE VALUE BELOW IS MAIN'S,
+# carried forward: kanso#1509 moved this row on its own and what this branch
+# adds on top of it has not been measured, so the merged reading is CI's.
+startup_instructions=3933223
