@@ -44,7 +44,7 @@ kanso — sat here and was bounced on 2026-08-29: a performance question with no
 surface area is the implementer's, per the ledger's own charter, and the log
 carries the research mandate it left with.
 
-**Eight questions are waiting** — three blocking. Two were filed 2026-09-17 out
+**Nine questions are waiting** — three blocking. Two were filed 2026-09-17 out
 of one reading of a book sample: whether the wall `>>` survives the fused
 operators, and whether its simultaneous-failure merge was meant to go. The third
 was filed 2026-09-18, four hours late, after sitting in a session task list
@@ -75,7 +75,9 @@ entry cites the search behind it and proposes an answer, and a sitting can be a
 yes or a no rather than a fresh design conversation. On 2026-08-29 every
 remaining question was ruled in one pass.
 
-**The five open, not blocking** — the box constructor's spelling, recommending
+**The six open, not blocking** — what spelling "cyclic structures sized by
+data" needs, filed 2026-09-18 with the measurement that sent it here and a
+recommendation to open a `build` block that iterates; the box constructor's spelling, recommending
 `effect`, which no build waits on; how far a binding position carries a box, filed 2026-09-16 with the ten
 fixtures that refuse the blunt answer; and a byte-position scan on a string for
 the JSON escape path, filed 2026-09-16 carrying a −1.2193% runbench measurement; and raising escapebench's size so it pins the escape bracket's benefit and
@@ -223,19 +225,39 @@ field built with a value cannot be written at all, birth does not flow through
 a call, and N nodes cannot carry N names. The alias and the field of a born
 node stay built and are not part of this row.
 
-Route, and the reason this is a build rather than a question: the 2026-09-09
-entry names birth through a call as the next widening of this analysis and
-claims it as the implementer's. A call that returns one record may resolve to
-one birth, which would give the fill its uniqueness back. That is a thing to
-measure before it is a thing to build on, and if the measurement says no, the
-finding goes to the ledger as a question about what the cohort gavel's
-purpose is owed instead.
+MEASURED 2026-09-18, and the answer sends this row to the ledger. The route
+this row proposed was birth through a call: the 2026-09-09 entry named that
+widening as the next one and claimed it as the implementer's, on the reasoning
+that a call returning one record may resolve to one birth and give the fill its
+uniqueness back. Five programs were run against a release build of `30fb1abe`,
+and the log entry "birth through a call, measured" carries them with their
+diagnostics.
 
-Owes: a measurement of whether birth through a call resolves to one birth;
-if it does, the widening and a micro golden building a cycle over a
-data-sized list; if it does not, a ledger entry stating what the gavel's
-purpose needs. Either way the golden's header stops claiming four shapes
-while the checker admits two.
+Birth through a call does not resolve today — `born_of` reaches `types.get` and
+a function name is not a type, so the call answers nothing. Widening it is real
+work and would lift exactly one of the five refusals, the one where a call's
+result is not block-born. It does not reach the gavel's purpose. "Sized by
+data" needs a hole to survive a call or a lambda, and those are closed by two
+separate rules; and a fill's target parses as a bare name, so N nodes need N
+names before any analysis is consulted.
+
+So the row stands, and what it waits on has changed from a measurement to a
+decision. The question is in design/pending-gavels.md under "Open, not
+blocking" as *What spelling does "cyclic structures sized by data" need?*, with
+three routes and a recommendation: a `build` block that iterates, which keeps
+every rule the 2026-09-16 gavel established.
+
+One thing this row asked for turned out not to exist. It said the golden's
+header should stop claiming four shapes while the checker admits two; a
+repo-wide search for that claim finds it in `design/compiler-log.md` and
+`design/memory-frontier-research.md`, about the memory frontier's shapes, and
+in no golden header at all. `tests/golden/mem/build_cycle.kso` had no header.
+It has one now, saying what it pins, which two shapes the build-hole gavel took
+back, and that two names is the largest cycle the language admits rather than a
+choice the fixture made.
+
+Owes: Clay's answer on the spelling. The widening of `born_of` is separable and
+may be built whenever somebody wants it; it does not close this row.
 
 ### A welfare counter reads three parts per billion (2026-09-15)
 
@@ -501,7 +523,7 @@ else. Chains that tested for `none` after an effect migrate.
     checked from here on two days and both refused by the tooling
   - whether an err gains readers a lambda callback can use
 
-**Eight questions wait in `design/pending-gavels.md`** — three blocking, five
+**Nine questions wait in `design/pending-gavels.md`** — three blocking, six
 open — each with a recommendation. Recounted four times on 2026-09-16: the
 binding-position question joined Open with its measurement, the escape
 path's byte-position scan joined it, measured on 2026-09-15 and filed to

@@ -1,3 +1,26 @@
+# The one fixture for the cohort gavel's cycles, and what it pins is two nodes
+# named by hand.
+#
+# The gavel of 2026-08-29 -- "block-born is the whole cohort" -- asked for four
+# shapes, and the build-hole gavel of 2026-09-16 took two of them back: a
+# record an `if` chose and an element of a born list can no longer be written
+# through, because a hole is filled exactly once and a name whose birth is
+# `Either` cannot be shown to fill one. The alias and the field of a born node
+# stay, and they are what this file exercises.
+#
+# WHAT IT DOES NOT PIN, measured 2026-09-18 and recorded in the log under
+# "birth through a call, measured": the gavel's own sentence asks for cyclic
+# structures SIZED BY DATA, and no program can write one. A hole is refused
+# outside a `build` block, so the maker cannot be a function; it cannot escape
+# the block it was written in, so the maker cannot be a `build` either; a
+# lambda inside the block is outside it for that rule, which closes the `map`
+# shape; and a fill's target parses as a bare name, so N nodes need N names. A
+# value a call returns is also not block-born, which is a separate refusal and
+# the only one that widening `born_of` would lift.
+#
+# So two names is not a choice this fixture made. It is the largest cycle the
+# language admits, and what it would take to admit more is a question in
+# design/pending-gavels.md rather than a build anybody can start.
 type node
   id
   peers
