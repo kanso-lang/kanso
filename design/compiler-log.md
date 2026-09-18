@@ -3125,3 +3125,47 @@ has not been looked at. Nothing here sizes it, deliberately: sizing a lead by
 dividing a counter among its callers is what produced three wrong numbers in one
 day, and the next figure written down about `match_one` should come from a
 differential rather than a division.
+
+## 2026-09-18 — withdrawn: the cache kept the expensive comparison, so it never priced the walk
+
+The entry above says the per-site cache "removes essentially the whole hit walk"
+and concludes from 1,335,388 that the environment walk is 0.205% of the row and
+the slot lead is dead. The first clause is wrong and the rest follows from it.
+
+The cache jumps to the remembered depth and then CHECKS THE NAME IT LANDS ON.
+That check is a comparison of two equal-length names, which is the case that
+reaches libc and runs the full twenty-two bytes. What the cache removed is the
+redundant comparisons on the way down; what it kept is the confirming one, and
+that is the expensive one.
+
+A debuginfo build says so directly. `eval_ident'2` calls `memcmp` 724,304 times
+-- exactly the number of hits, so ONE call per hit, and the 866,429 non-matching
+visits never reach libc at all, which is the same length-rejection the misses
+showed. `match_one` calls it 768,153 times. So the walk's `memcmp` is one full
+comparison per hit and the cache preserved every one of them.
+
+WITHDRAWN: that the whole environment walk is 2,291,873, that it is 0.205% of
+the row, and that the slot lead is dead. What stands is the shape filter's
+956,485 for the misses, the cache's 1,335,388 for the redundant comparisons, and
+the cache's own cost of 31,209,169. What a real slot is worth is UNMEASURED.
+
+AND THE ATTEMPT TO MEASURE IT FOUND SOMETHING ELSE. A ceiling variant that
+trusts the remembered depth without re-checking the name raised `is not callable`
+on the corpus. The depth is not the problem -- 656,939 hits agreed with a static
+depth and none disagreed. The KEY is: `Stmt::Bind`'s lazy path clones the whole
+`Expr` into the thunk, at three sites, so expression nodes are allocated and
+dropped throughout the run and A NODE'S ADDRESS IS NOT A SITE IDENTITY. A
+recycled address compares equal to a live entry. The checking cache survives
+that because the name comparison rejects the stale answer; the trusting one
+answered from a recycled entry.
+
+So the check that made the cache expensive is also the check that made it
+correct, and a slot scheme wanting to drop it needs a key the AST owns rather
+than one the allocator hands out. That is a real constraint on the design and it
+was not visible before something was built on the wrong key.
+
+Four claims about this one counter have now been withdrawn in a day -- 19.3
+million, forty million, 47.2 million, and 0.205%. Every one divided a measured
+total by a measured count. The two figures that have survived, 956,485 and
+1,335,388, were each read off the same counter in two binaries that differed by
+one change.
