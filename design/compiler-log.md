@@ -3238,3 +3238,52 @@ guess: `match_one` is a profile frame, not a function, and `bind_whole`,
 it. Nothing here says which of them calls libc. A `#[inline(never)]` on each
 candidate, one build, would split the frame and name it, and that is a
 measurement rather than a division.
+
+## 2026-09-18 — the withdrawal is withdrawn, and the walk's cost is the clone
+
+The entry above withdrew the 2,291,873 on the strength of a debuginfo profile
+that appeared to show `eval_ident` calling `memcmp` 724,304 times. It does not.
+That reading was wrong in a way worth naming exactly, because the tool invites
+it: in `callgrind_annotate --tree=caller`, the `<` caller lines come BEFORE the
+`*` entry they belong to. I read a block as belonging to the entry above it, so
+`Value::clone`'s callers were read as `memcmp`'s.
+
+The annotated source settles it and needs no interpretation. Inside `lookup`:
+
+      909,375   if frame.name.as_str() == name {
+    2,897,216       return Some(frame.value.clone());
+   31,514,002   => <kanso::eval::Value as Clone>::clone (724,304x)
+
+EVERY COMPARISON THE ENVIRONMENT WALK MAKES, over all 2,662,536 frame visits,
+COSTS 909,375. The two differentials agree with it and always did: removing
+every miss visit took 956,485 off `memcmp`, removing the redundant hit compares
+took 1,335,388. Three readings of the same quantity, by three routes, all in the
+same million.
+
+So the 2,291,873 stands, the slot lead is dead for the reason first given, and
+the entry above it is withdrawn in full. Also withdrawn: that `match_one` calls
+`memcmp` 768,153 times. That was `Value::clone` again, from
+`binds.push((name.clone(), arg.clone()))`.
+
+AND THE MISREADING PRODUCED THE FIRST WELL-FOUNDED NUMBER OF THE WHOLE THREAD.
+The walk's expense is not what it compares; it is what it returns. The clone on
+the hit costs **31,514,002** across 724,304 hits, forty-three instructions each,
+against 909,375 for every comparison in the run. Thirty-five to one.
+
+A slot index does not touch that. It removes the visiting and the comparing,
+which together are worth about two and a quarter million, and leaves the clone
+exactly where it is -- which is why every scheme tried today lost: they were all
+aimed at the cheap half. What would touch it is `lookup` answering a REFERENCE
+into the frame rather than a clone, so a caller that only reads pays nothing;
+`eval_ident` returns `EvalResult` by value, so that is a real change to its
+signature and its callers rather than a local trick.
+
+Unsized on purpose. 31,514,002 is what the clone costs, not what removing it
+would save, and the difference between those two is the thing this day has been
+about.
+
+THE METHOD, since four figures went wrong before it was found: the annotated
+source (`callgrind_annotate --auto=yes`, run where the recorded relative paths
+resolve) gives a cost per LINE and per CALL SITE. It is the only reading here
+that has not been wrong. The caller tree invites an off-by-one, and a total
+divided by a count is not a measurement.
