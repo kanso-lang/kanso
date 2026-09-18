@@ -4614,3 +4614,22 @@ another. Re-based, not explained, and the header on each golden says so.
 
 The branch's own rows are the run-time ones and they fell: livebench
 2,825,430,323 -> 2,805,024,580 and runbench 1,821,933,936 -> 1,804,998,570.
+
+## 2026-09-18 — kanso#1504 reads the same seven instructions against a different baseline
+
+CI measured the beat-rewind branch again, this time on the tree merged after
+kanso#1534. Every row it moved before moved the same way, and the interpreted
+row did something worth writing down:
+
+    interp_instructions   975,944,763 -> 975,944,770   +7   +0.0000007%
+
+The sitting before this one read +7 as well, against a baseline of
+995,837,536. Two readings, two baselines 19,892,773 apart, the same seven
+instructions. The earlier note called it "what a relink moves this row by"
+and said it was re-based rather than explained; a second reading at a
+different absolute value is what turns that from a guess into a small
+measured fact about this branch's binary.
+
+`interp_allocs` and `interp_peak_bytes` are byte-identical in both sittings,
+so nothing the interpreter counts changed either time. The other five rows
+are as recorded above: -342, +186, -139, +2,691, -485.

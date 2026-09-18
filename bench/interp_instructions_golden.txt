@@ -442,5 +442,14 @@
 # 19,892,773. Both hosts agree the change is a count -- allocations fall on
 # both -- and disagree on what the removed work cost, which is the rustc
 # that built the binary.
-interp_instructions=975944763
+#
+# 2026-09-18, kanso#1504 on the tree merged after kanso#1534, CI's sitting.
+# 975,944,763 -> 975,944,770, a RISE of SEVEN instructions, AGAIN.
+# The note above records +7 against a baseline of 995,837,536; this reading
+# is +7 against 975,944,763, a baseline 19.9 million lower. The same branch,
+# the same delta, twice, on two baselines that differ by two per cent. A
+# relink costs this row seven instructions and the figure reproduces, which
+# is more than the earlier note could claim. Nothing in this diff runs in the
+# interpreter, and interp_allocs and interp_peak_bytes are byte-identical.
+interp_instructions=975944770
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
