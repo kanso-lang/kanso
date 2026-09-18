@@ -96,6 +96,13 @@ now measured that it does. On the tree merged with kanso#1527 the runner read
 row is a production-side welfare term. The dev row read 596,153,756 against
 596,157,624, a fall of 3,868.
 
+REPRODUCED, 2026-09-18, on a second runner and a different tree — this branch
+re-merged onto main after kanso#1531. Both rows read exactly what they read
+before, 6,833,786,335 and 596,153,756, and every other vein in the job's
+summary block agrees. So the cost is the pin's, not the sitting's, and the
+question below is a question about what the project will pay rather than about
+whether the figure is real.
+
 The container had projected the opposite. `-save-temps=obj` read 6,811,830,244
 twice there against 6,813,182,505 three times without it, which is a SAVING of
 about 1.35 million; the runner reads a COST seven times that size, in the other
