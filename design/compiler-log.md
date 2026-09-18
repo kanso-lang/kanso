@@ -5068,3 +5068,26 @@ number and a minority give another, so an unpinned branch fails the row
 intermittently. kanso#1512 measured nine of ten names at one value and
 `4b8c1a` at another; this is the tenth case arriving on its own, in a job
 nobody set up to look for it.
+
+## 2026-09-18 — the same seven, a fourth time, against a fourth baseline
+
+    995,837,536  ->  995,837,543   +7
+    975,944,763  ->  975,944,770   +7
+    957,583,234  ->  957,583,241   +7
+    939,042,794  ->  939,042,801   +7
+
+**The baselines span 56,794,742 instructions and the residue has not moved by
+one.** `interp_allocs` reads 1,410,530 and `interp_peak_bytes` 833,466, both
+byte-identical to the golden, so nothing the interpreter COUNTS changed.
+
+Four readings on four baselines is the strongest form the relink claim has
+taken. It is also the shape the release codegen draw has: a constant residue
+that survives large movement in the quantity it is a residue of. The two are
+different veins, different hosts within the job, and different magnitudes —
+seven here, eleven there — and nothing measured connects them. Written down
+beside each other because a constant residue is a narrow thing to look for and
+this tree now has two.
+
+The job also drew the release codegen vein again, which is this branch's
+second and the sixth today. That one is design/pending-gavels.md's to rule on
+and no work here moves it.
