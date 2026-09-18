@@ -4381,3 +4381,42 @@ line between its comment header and the first `fn`, and the run failed with
 which reads exactly like the change being broken. A fixture that fails before
 it runs proves nothing about what it was written to test, and the only way to
 tell the two apart is to read the message rather than the verdict.
+
+## 2026-09-18 — kanso#1522's rows on CI, and a container projection that held
+
+The two commits under this branch are in the entry above. These are CI's
+readings of them, against main at kanso#1521:
+
+    interp_instructions  1,260,262,910 -> 1,138,001,430   -122,261,480  -9.70%
+    interp_allocs            3,843,587 ->     2,539,998     -1,303,589 -33.92%
+    interp_peak_bytes          885,052 ->       884,985            -67
+
+Every other row in the job is byte-identical to main: `compile_instructions`
+35,486,333, `entry_instructions` 126,498,292, `library_instructions`
+126,954,304, `startup_instructions` 3,363,378, `emit_instructions` 51,456,464,
+`compile_allocs` 27,313, and both codegen rows. Two veins failed and they are
+the two this change is about.
+
+The allocation fall is the largest single move that vein has recorded, and it
+is the mechanism rather than a side effect: a binding allocated its name twice
+and now usually allocates it not at all.
+
+### The projection held, where kanso#1520's was three times out
+
+This container read the instruction fall at 127,890,665 and the runner reads
+122,261,480 — 4.40% apart. kanso#1520, six hours earlier, projected 94,998,647
+here and CI read 295,627,669, and its own golden's header wrote that down as
+the rule: *what a copy of N elements costs in instructions is the rustc that
+built the binary; how many copies happen is the program.*
+
+That rule predicts this. kanso#1520 changed how many BYTES a copy moves, so
+its instruction delta is a per-byte cost the two hosts do not share. This
+change removes allocations, and an allocation is a count the program decides —
+so the two hosts differ only in what one malloc costs, and they are closer on
+that than on a memcpy. The allocation deltas were the ones that matched to the
+byte on kanso#1520, and here they are what moved.
+
+So a container projection travels when the thing it projects is a count, and
+does not when it is a per-byte price. That is a prediction with two readings
+behind it rather than a law, and the next change that moves bytes should be
+expected to break the box's projection again.

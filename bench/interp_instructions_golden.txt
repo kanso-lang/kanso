@@ -328,5 +328,21 @@
 # to the byte -- and disagree threefold on what it costs. What a copy of N
 # elements costs in instructions is the rustc that built the binary; how
 # many copies happen is the program.
-interp_instructions=1260262910
+#
+# 2026-09-18, kanso#1522 against main at kanso#1521, CI's sitting.
+# 1,260,262,910 -> 1,138,001,430, a FALL of 122,261,480 (-9.7013%).
+# A BOUND NAME WAS COPIED TWICE. `match_one` pushed a fresh `String` into a
+# `Bindings` and `bind` allocated a second copy of the same bytes on top of
+# it; the first commit takes the name by value and the second stores a
+# `Name`, which keeps twenty-two bytes or fewer in the node. The allocation
+# row below it falls 33.92% for the same reason.
+#
+# AND THE CONTAINER'S PROJECTION HELD THIS TIME, where kanso#1520's was three
+# times out. This box read the fall at 127,890,665 and the runner reads
+# 122,261,480, 4.40% apart. The two changes differ in what they move:
+# kanso#1520 changed how many BYTES a copy moves, and what a copy of N bytes
+# costs in instructions is the rustc that built the binary; this one changes
+# how many ALLOCATIONS happen, which is a count the program decides. A
+# container projection travels when the thing it projects is a count.
+interp_instructions=1138001430
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
