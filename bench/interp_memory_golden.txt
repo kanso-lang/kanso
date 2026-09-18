@@ -135,7 +135,11 @@
 # allocation counter counts operations rather than a host, so it travels
 # where an instruction counter only nearly does -- the same law the two
 # hosts showed at -325,263 and -174,996 on kanso#1516 and kanso#1517.
-interp_allocs=3879653
+#
+# 2026-09-18, kanso#1520 against main at kanso#1519, CI's sitting.
+# 3,879,653 -> 3,843,587, a FALL of 36,066 (-0.9296%).
+# -36,066, and this container read the same delta to the unit.
+interp_allocs=3843587
 #
 # 2026-09-18, kanso#1518 against main at kanso#1517, CI's sitting.
 # 951,438 -> 961,165, a RISE of
@@ -143,5 +147,12 @@ interp_allocs=3879653
 # The frames table: one Frame per declaration the run enters, held for the
 # run. A weighed term, paid knowingly against 407,935,771 instructions and
 # 930,784 allocations. The container read 961,231, sixty-six higher.
-interp_peak_bytes=961165
+#
+# 2026-09-18, kanso#1520 against main at kanso#1519, CI's sitting.
+# 961,165 -> 885,052, a FALL of 76,113 (-7.9188%).
+# -76,113, the same delta this container read, to the byte. The doubling
+# this change removes over-allocated; it repays kanso#1518's frames table
+# eight times over, so the interpreter holds LESS than before this line of
+# work began.
+interp_peak_bytes=885052
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
