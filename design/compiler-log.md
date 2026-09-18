@@ -3628,3 +3628,144 @@ this file used to have, and the message is CI's byte for byte.
 This is the 2026-09-15 rule read from the other side. External state gets
 normalized before it is measured; a directory two threads write is not
 normalized and is nobody's.
+
+## 2026-09-18 — the dispatcher copied a name it was already holding a share of
+
+With the value-position `if` measured and on its way to main, a fresh profile
+of the interpreted run put `dispatch` at the top: 130,726,726 instructions of
+self cost, 11.70% of the program. Two of its callee counts stood out, and one
+of them explained itself immediately.
+
+    <str as Display>::fmt      119,535 calls     23,936,233 instructions
+    the tail-hop line          119,542 executions
+
+The same count twice. `dispatch_loop` held its function name as a `String`,
+and the trampoline's hop wrote `name = next.to_string()` where `next` is the
+`Rc<str>` that `Flow::Tail` already carries. `to_string` goes through
+`ToString`, which goes through `Display`, which goes through the formatting
+machinery: two hundred instructions and an allocation to copy a name that was
+one pointer away.
+
+`dispatch_loop` takes an `Rc<str>` now. The hop is a move. Every use of the
+name inside the loop was already `&name` or `&*name` — `err_reader`,
+`self.fns.get(&*next)`, `hop`, `getter_field`, `spoken` — so nothing else
+changed.
+
+    base       1,115,996,775
+    shared     1,089,450,665     -26,546,110     -2.38%
+
+The corpus answers `interp 59442` on both binaries, byte for byte.
+
+READING THE PROFILE WITHOUT DEBUG INFO WOULD NOT HAVE FOUND IT. The release
+build's frames annotate as `???`, so there is a cost per function and nothing
+per line. Rebuilding with `CARGO_PROFILE_RELEASE_DEBUG=1` is what put the hop
+and the formatter side by side on the same count, and the agreement of two
+independently derived numbers is what made it a finding rather than a guess.
+
+THIS IS THE THIRD OF ITS KIND. kanso#1516 gave `eval_ident` a memory so a name
+resolved once rather than per mention; kanso#1522 stopped a binding copying its
+name twice. Each time the name was already owned somewhere and was rebuilt
+anyway. Worth looking for the fourth.
+
+## 2026-09-18 — the candidate loop allocated for arms it was about to reject
+
+The same profile put `__rust_alloc` at 1,471,992 calls from `dispatch` and
+`__rust_dealloc` at 1,089,150. `match_params` built `score` and `binds` with
+`Vec::with_capacity` on every overload candidate and returned `None` the moment
+`match_one` refused, so a candidate that failed on its first parameter had
+already paid for two allocations. Arm selection tries every overload in the
+group and keeps one. 175,246 dispatches at about four candidates each, two
+vectors apiece, is the call count almost exactly.
+
+One pair of buffers now serves the whole candidate list, cleared between
+candidates, and `match_params_into` answers whether the candidate matched
+rather than handing back vectors. When a candidate wins, the outgoing best's
+vectors become the working pair, so the winner hands its capacity on instead of
+leaving the next candidate to grow from nothing.
+
+    base       1,115,996,775
+    buffered   1,109,925,182      -6,071,593     -0.54%
+    __rust_alloc  36,857,970 -> 29,713,800      -7,144,170    -19.4%
+
+THE ALLOCATOR LOST A FIFTH OF ITS WORK AND THE ROW MOVED LESS THAN THAT. The
+two numbers differ by about a million, which is what the buffer bookkeeping
+costs back: a `clear()` per candidate, and two `mem::replace` on every
+candidate that wins. Both readings are worth keeping, because the one that
+matters for the objective is the row and the one that says the change did what
+it was meant to is the allocator.
+
+AND THE ATTRIBUTION OVERSHOT. 65,283,877 was `__rust_alloc` INCLUSIVE from
+`dispatch` -- everything under it, `mi_malloc` and the rest -- where 36,857,970
+is that function's own self cost across the whole program. Reading the first as
+a budget for the second is the kind of arithmetic this log has withdrawn five
+figures for. What the change was worth is the differential, and the
+differential is 6,071,593.
+
+## 2026-09-18 — a merge loop committed conflict markers, and the check that missed them
+
+Four branches took a merge of main in one loop. The loop resolved
+design/compiler-log.md, ran `git add -u`, committed and pushed. Three of the
+four went out carrying `<<<<<<<` in files the loop had never looked at:
+`bench/welfare_floor.json` on two of them and
+`bench/interp_instructions_golden.txt` on two.
+
+CI found it in the shape the file's own reader would:
+
+    error[endpoint]: unhandled err reached the executor:
+    json/parse_failure 1 "unexpected character `<`"
+      born in json/fail at std/json/scan.kso:2
+
+THE CHECK WAS REAL AND LOOKED AT ONE FILE. After resolving, the loop counted
+markers in design/compiler-log.md and printed the count. It read zero, which
+was true, and said nothing about the two bench files git had also left
+conflicted. A verification that names the file it verifies will keep passing
+while the defect moves one directory over. Count markers across the whole
+tree, or let the thing that reads the file read it -- here, running
+`kanso run scripts/welfare` would have failed instantly on all three.
+
+AND THE FIRST FIX WAS WORSE THAN THE SECOND. `git checkout origin/main --
+bench/interp_instructions_golden.txt` clears the markers and takes the row,
+and it silently dropped kanso#1502's own header note recording its sitting.
+The same move on kanso#1513 would have dropped its note explaining why a
+branch that adds no interpreter code moves the interpreter's row. That file's
+history IS its comments, which is what the standing rule against blanket
+resolution is protecting. Both were resolved hunk by hunk instead: main's
+value on the conflicted line, every comment kept.
+
+`git add -u` after a merge stages whatever git left behind, including what it
+could not merge. The rule already written down is to scope adds to the paths
+a change owns; the addition here is that a loop doing it across several
+branches turns one slip into three.
+
+## 2026-09-18 — the peak rose 205 bytes while the count fell a quarter
+
+CI's rows for the two dispatcher changes, and one of them goes the other way:
+
+    interp_allocs       2,328,213 -> 1,740,991    -587,222    -25.2%
+    interp_peak_bytes     833,128 ->   833,333        +205     +0.02%
+
+`interp_peak_bytes` is priced here because the trend gate asked and because
+the direction deserves a sentence rather than a shrug. A quarter of the run's
+allocations stop happening and its high-water mark goes UP by two hundred
+bytes.
+
+THE LIKELY READING, and it is a reading rather than a finding: one pair of
+candidate buffers now serves a whole overload group, so `binds` keeps whatever
+capacity the widest arm in that group reached and holds it for the length of
+the dispatch. Per-candidate vectors were freed at whatever size each arm
+needed. Fewer, larger, longer-lived beats more, smaller, shorter-lived on the
+count and can lose on the peak.
+
+NOTHING ISOLATES THAT, AND THE FIRST DRAFT OF THIS PARAGRAPH GAVE THE WRONG
+REASON. It said 205 bytes was below what a differential on this box could
+separate from the arena's rounding. That was a guess about the instrument, and
+the instrument was one command away: three runs of the same binary print
+`interp_peak_bytes=834117` three times, byte for byte. The counter is the
+program's own arena accounting and it is deterministic, so 205 bytes is
+perfectly separable. What is missing is not resolution but an ISOLATION -- a
+build per hypothesis -- and that is a different kind of cost.
+
+So the mechanism stays open because nobody has spent that, not because the
+number is too small to see. The golden's header says the same. What is not in
+doubt is the trade: 587,222 allocations against 205 bytes, and the objective
+weighs both.
