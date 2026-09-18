@@ -2603,45 +2603,6 @@ error[name]: unknown name `builders/run`
 <p>the base row reads 1,007,027,010 for the fourth time, from two binaries with different content hashes built from trees carrying the same interpreter at different paths. on a row known to move with path length, that is the clearest statement so far that the differential reads the code.</p>
 
 <p>the tally has three entries nobody has been after yet: dropping from the dispatcher 229,625 times, allocating for a string copy 149,093, and the 8,106 reallocations that are neither of the two call sites above.</p>
-<h2 id="carriedvalue"><span class="sec-num">98</span>the loop carried a value it only needed at the end</h2>
-
-<p>rendering a double is 4.58% of the run program, 440.7 instructions a float over 191,070 calls, and a quarter of that is one loop taking digits off two at a time. it divides three values a trip: the two ends of the rounding interval, to decide whether another pair comes off, and the significand, because the significand is the answer.</p>
-
-<p>only the first two decide anything. the third is carried through the loop and read once at the end, so it comes out: count the pairs with two divisions a trip, then take it down in one step.</p>
-
-<p>that was worth <strong>924,584</strong> instructions, 4.8 a float &#8212; and the number did not fit. disassembled, the loop went from 21 instructions with three multiply-highs and seven register moves to 15 with two and five. six a trip, and at 5.35 trips that is 32.1 a float. the tail was giving twenty-seven of it back.</p>
-
-<p>the tail divided twice by a table entry, and a divisor the compiler cannot see is a real division rather than a multiply-high. but the two entries are a hundred apart, so dividing by the smaller one first leaves both remaining steps with a <em>constant</em> divisor:</p>
-
-<pre><code>uint64_t q = vr / RYU_POW100[pairs - 1];
-round_up = (uint32_t)(q % 100) &gt;= 50;
-vr = q / 100;</code></pre>
-
-<p>one variable division instead of two, and the fall triples:</p>
-
-<pre><code>runbench    1,840,368,292 -&gt; 1,837,534,164   -2,834,128   -0.1540%
-render_ryu     84,209,220 -&gt;     81,375,750   -2,833,470   -3.365%
-a float             440.7 -&gt;          425.9        -14.8
-.text             319,346 -&gt;        317,954       -1,392</code></pre>
-
-<p>the lesson is about where a saving goes rather than about ryu. taking work out of a loop that runs five times only pays if what replaces it costs less than five times what was removed, and the first shape of this change failed that test while looking like a win. the disassembly is what said so; the instruction count alone would have been read as a small success and left there.</p>
-
-<h2 id="copiedtwice"><span class="sec-num">99</span>the same name, allocated twice</h2>
-
-<p>&#167;87 left the interpreted row at 1,555,890,579 and a lead open: the profile still had the allocator near the top. two more changes took it to <strong>1,138,001,430</strong>. the first sized a clone for the growth that followed it. the second is smaller than either and is the one worth reading, because the cost it removes was never anybody&#39;s decision &#8212; it was two pieces of code each doing the right thing on its own.</p>
-
-<p>calling a function binds its parameters. the matcher walks the pattern against the argument and pushes what it matched into a vector of name-and-value pairs, allocating a fresh string for each name. the caller then drains that vector into the environment, and the environment&#39;s constructor took a borrowed name and allocated its own copy of it. so each binding allocated the same bytes twice, and freed the first copy a line later. half a million body entries, six bindings each.</p>
-
-<p>the fix is two steps, and taking them one at a time is what says where the cost was. giving the constructor the name by value removes the second copy for the bindings that came through a match: the corpus loses four allocations a round. storing the name as the front end&#39;s own identifier type removes the first copy for every binding whatever route it came by, and that is six a round. the type is twenty-four bytes, which is exactly what a heap string costs, and it keeps a name of twenty-two bytes or fewer inside the value. across the shipped library 99.77% of identifiers are that short and 89.8% are seven bytes or fewer, so for almost every binding the remaining copy is twenty-four bytes of stack and no allocator at all. no structure grew.</p>
-
-<p>the row fell <strong>122,261,480</strong>, 9.70%. allocations fell <strong>1,303,589</strong>, 33.92%, which is the largest single move that vein has recorded. the campaign that &#167;87 opens now reads 2,168,428,538 to 1,138,001,430 &#8212; <strong>47.52%</strong> of the interpreted run, and 52.17% of its allocations, none of it from making the interpreter cleverer.</p>
-
-<p>storing a shorter name has one consequence worth a spec: the boxed path, for names past twenty-two bytes, is now load-bearing and nothing in the corpus exercised it. the fixture binds a forty-five-byte parameter, a thirty-nine-byte local, and two parameters whose first twenty-two bytes are identical. the last pair is the one that matters. a store keeping only the inline prefix would give both the same key, and a single long name would still match a lookup truncated the same way, so one long name alone proves nothing. it was watched red before it was green, with the constructor truncating deliberately: the interpreter stops with an unknown name and the compiled engine prints the right answer, because compiled code binds nothing through an environment. what catches it is the corpus running both engines rather than the corpus running at all.</p>
-
-<p>and a sixth reading of the measurement question &#167;87 ends on. that section says a counter of instructions cannot be compared across machines, not even as a difference, and explains the four earlier agreements as four changes whose copying happened to compile similarly on both hosts. this change was projected on the container at 127,890,665 and read on the runner at 122,261,480: <strong>4.40%</strong> apart, on a change that moves no copying at all.</p>
-
-<p>the rule survives and the explanation does not. an instruction delta is still not something to rely on across a machine boundary, which is why the golden is the runner&#39;s reading and this box&#39;s number never goes in it. but the earlier agreements were not luck. this change removes allocations, and an allocation is a count the program decides, so the two machines differ only in what one call to the allocator costs. the clone-sizing change moved bytes per copy, and what a copy of N bytes costs is the compiler that built the interpreter. a projection travels when what it projects is a count of operations and does not when it is a price per byte. two readings support that and it is a prediction rather than a law: the next change that moves bytes should be expected to break the box&#39;s projection again.</p>
-
 <h2 id="theinstrument"><span class="sec-num">98</span>what the instruments are made of</h2>
 
 <p>the sections above measure the compiler. this one is about the things doing the measuring, because two of them turned out to have inputs nobody had looked at and one of them was carrying a claim that was wrong.</p>
@@ -2676,6 +2637,45 @@ a float             440.7 -&gt;          425.9        -14.8
 <p>the correction is appended to the header as a dated entry rather than written over the old one. what that sentence recorded was true of the readings it had; what is wrong is the general claim a later reader takes from it, and the difference between those two is the whole reason the log works the way it does.</p>
 
 <p>a fourth job reproduced, and so did a second run of the first branch on the same commit. one branch on both sides of that list is what settles the draw as a property of the job rather than of any diff.</p>
+
+<h2 id="carriedvalue"><span class="sec-num">99</span>the loop carried a value it only needed at the end</h2>
+
+<p>rendering a double is 4.58% of the run program, 440.7 instructions a float over 191,070 calls, and a quarter of that is one loop taking digits off two at a time. it divides three values a trip: the two ends of the rounding interval, to decide whether another pair comes off, and the significand, because the significand is the answer.</p>
+
+<p>only the first two decide anything. the third is carried through the loop and read once at the end, so it comes out: count the pairs with two divisions a trip, then take it down in one step.</p>
+
+<p>that was worth <strong>924,584</strong> instructions, 4.8 a float &#8212; and the number did not fit. disassembled, the loop went from 21 instructions with three multiply-highs and seven register moves to 15 with two and five. six a trip, and at 5.35 trips that is 32.1 a float. the tail was giving twenty-seven of it back.</p>
+
+<p>the tail divided twice by a table entry, and a divisor the compiler cannot see is a real division rather than a multiply-high. but the two entries are a hundred apart, so dividing by the smaller one first leaves both remaining steps with a <em>constant</em> divisor:</p>
+
+<pre><code>uint64_t q = vr / RYU_POW100[pairs - 1];
+round_up = (uint32_t)(q % 100) &gt;= 50;
+vr = q / 100;</code></pre>
+
+<p>one variable division instead of two, and the fall triples:</p>
+
+<pre><code>runbench    1,840,368,292 -&gt; 1,837,534,164   -2,834,128   -0.1540%
+render_ryu     84,209,220 -&gt;     81,375,750   -2,833,470   -3.365%
+a float             440.7 -&gt;          425.9        -14.8
+.text             319,346 -&gt;        317,954       -1,392</code></pre>
+
+<p>the lesson is about where a saving goes rather than about ryu. taking work out of a loop that runs five times only pays if what replaces it costs less than five times what was removed, and the first shape of this change failed that test while looking like a win. the disassembly is what said so; the instruction count alone would have been read as a small success and left there.</p>
+
+<h2 id="copiedtwice"><span class="sec-num">100</span>the same name, allocated twice</h2>
+
+<p>&#167;87 left the interpreted row at 1,555,890,579 and a lead open: the profile still had the allocator near the top. two more changes took it to <strong>1,138,001,430</strong>. the first sized a clone for the growth that followed it. the second is smaller than either and is the one worth reading, because the cost it removes was never anybody&#39;s decision &#8212; it was two pieces of code each doing the right thing on its own.</p>
+
+<p>calling a function binds its parameters. the matcher walks the pattern against the argument and pushes what it matched into a vector of name-and-value pairs, allocating a fresh string for each name. the caller then drains that vector into the environment, and the environment&#39;s constructor took a borrowed name and allocated its own copy of it. so each binding allocated the same bytes twice, and freed the first copy a line later. half a million body entries, six bindings each.</p>
+
+<p>the fix is two steps, and taking them one at a time is what says where the cost was. giving the constructor the name by value removes the second copy for the bindings that came through a match: the corpus loses four allocations a round. storing the name as the front end&#39;s own identifier type removes the first copy for every binding whatever route it came by, and that is six a round. the type is twenty-four bytes, which is exactly what a heap string costs, and it keeps a name of twenty-two bytes or fewer inside the value. across the shipped library 99.77% of identifiers are that short and 89.8% are seven bytes or fewer, so for almost every binding the remaining copy is twenty-four bytes of stack and no allocator at all. no structure grew.</p>
+
+<p>the row fell <strong>122,261,480</strong>, 9.70%. allocations fell <strong>1,303,589</strong>, 33.92%, which is the largest single move that vein has recorded. the campaign that &#167;87 opens now reads 2,168,428,538 to 1,138,001,430 &#8212; <strong>47.52%</strong> of the interpreted run, and 52.17% of its allocations, none of it from making the interpreter cleverer.</p>
+
+<p>storing a shorter name has one consequence worth a spec: the boxed path, for names past twenty-two bytes, is now load-bearing and nothing in the corpus exercised it. the fixture binds a forty-five-byte parameter, a thirty-nine-byte local, and two parameters whose first twenty-two bytes are identical. the last pair is the one that matters. a store keeping only the inline prefix would give both the same key, and a single long name would still match a lookup truncated the same way, so one long name alone proves nothing. it was watched red before it was green, with the constructor truncating deliberately: the interpreter stops with an unknown name and the compiled engine prints the right answer, because compiled code binds nothing through an environment. what catches it is the corpus running both engines rather than the corpus running at all.</p>
+
+<p>and a sixth reading of the measurement question &#167;87 ends on. that section says a counter of instructions cannot be compared across machines, not even as a difference, and explains the four earlier agreements as four changes whose copying happened to compile similarly on both hosts. this change was projected on the container at 127,890,665 and read on the runner at 122,261,480: <strong>4.40%</strong> apart, on a change that moves no copying at all.</p>
+
+<p>the rule survives and the explanation does not. an instruction delta is still not something to rely on across a machine boundary, which is why the golden is the runner&#39;s reading and this box&#39;s number never goes in it. but the earlier agreements were not luck. this change removes allocations, and an allocation is a count the program decides, so the two machines differ only in what one call to the allocator costs. the clone-sizing change moved bytes per copy, and what a copy of N bytes costs is the compiler that built the interpreter. a projection travels when what it projects is a count of operations and does not when it is a price per byte. two readings support that and it is a prediction rather than a law: the next change that moves bytes should be expected to break the box&#39;s projection again.</p>
 
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
