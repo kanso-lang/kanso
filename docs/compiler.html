@@ -2315,7 +2315,20 @@ widebench        33,516,094 -&gt;     33,644,020      +127,926   +0.3817%</code>
 
 <p>that last row is the one carrying the weight. allocations are decisions the program makes; instructions carry the layout of the binary that made them. a change in the first would mean the interpreter was doing something different. there was no change in the first.</p>
 
-<p>so the row is re-based on two agreeing readings, and the log says layout is a guess. what it does not say is that layout is established, because nothing isolated it.</p>
+<p>so the row is re-based on two agreeing readings. and pulling the third job log — the one whose tree set the golden — bounds what the cause can be:</p>
+
+<pre><code>tree            silicon            .text      .rodata   interp row
+kanso#1522 PR   AMD  0x19 / 0x1   2,840,050   803,856   1,138,001,430
+kanso#1502      Intel 0x6 / 0x6a  2,840,050   805,776   1,138,001,437
+kanso#1504      AMD  0x1a / 0x2   2,840,050   806,288   1,138,001,437</code></pre>
+
+<p><strong>the silicon is not it.</strong> the two trees that agree to the instruction ran on an intel part and an amd zen 5 part, whose glibc feature blocks differ in fifty-odd rows — cache sizes, the rep-movsb stop threshold, the xsave sizes. both resolved to the same avx2 memcmp. the instrument that answers this was built two days ago for a standing question about a residual on this very row, and the resolver has been its leading suspect since; on this row the suspect has an alibi.</p>
+
+<p><strong>and <code>.text</code> is not it, which is the surprising one.</strong> all three trees emit byte-identical <code>.text</code>, 2,840,050 bytes, and the rows still differ. so a row that moves while the code section holds cannot be code layout in the ordinary sense.</p>
+
+<p><code>.rodata</code> is the only section that moves: 803,856, 805,776, 806,288. the smallest reads 430 and the two larger read 437 — and those two differ from each other by 512 while reading the same row, so what this is, so far, is a correspondence rather than a function.</p>
+
+<p>two candidates ruled out and a third left standing is not an explanation, and the log says so rather than rounding it up to one. what would settle it: a tree whose <code>.rodata</code> matches one of these exactly and whose row disagrees, which kills the correspondence; or a deliberate <code>.rodata</code> change of known size on an otherwise identical tree, which makes it a function.</p>
 
 <p><strong>the draft of this section said something stronger, and it was wrong.</strong> the first write-up had <em>three</em> readings of seven, across three trees at three different absolute values, and concluded a pattern. the third reading was not a reading. it came from the gate&#8217;s second count, which was subtracting the printed line from its first pass and not its second &#8212; so a binary that counted one number was reported as counting two, exactly 3,015 apart, with <code>interp_printed=3015</code> sitting in the job log two screens above the error. that is the subject of the previous section.</p>
 

@@ -5101,3 +5101,44 @@ The lesson is the one already in CLAUDE.md, arrived at the expensive way: read
 the thing the number describes before running anything against it. The gate
 prints what it subtracted, as a notice, precisely so the next drift can be
 answered — and the entry that went wrong was written without reading it.
+
+## 2026-09-18 — three trees, three silicons, and what the seven is not
+
+The row was re-based on two agreeing readings with no mechanism named. Pulling
+the third job log puts real bounds on what the mechanism can be, so the guess
+gets narrowed rather than left standing.
+
+    tree            silicon            .text      .rodata   interp row
+    kanso#1522 PR   AMD  0x19 / 0x1   2,840,050   803,856   1,138,001,430
+    kanso#1502      Intel 0x6 / 0x6a  2,840,050   805,776   1,138,001,437
+    kanso#1504      AMD  0x1a / 0x2   2,840,050   806,288   1,138,001,437
+
+**The silicon is not it.** The two trees that agree to the instruction ran on
+an Intel part and an AMD Zen 5 part, whose feature blocks differ in fifty-odd
+rows — cache sizes, `rep_movsb_stop_threshold`, `isa_1`, the `xsave` sizes.
+kanso#1492 built `bench/dispatch.txt` and the `differs` reader to answer
+exactly this, and this is the first time it has had three jobs to answer with.
+Both runs also resolved to `__memcmp_avx2_movbe`, so the resolver picked the
+same implementation on both.
+
+That matters beyond this row. The standing ruling "a welfare counter reads
+three parts per billion" (2026-09-15) has sat with the resolver as its leading
+suspect since it was filed. On this row the suspect has an alibi.
+
+**`.text` is not it either, and that is the surprising one.** All three trees
+emit byte-identical `.text` — 2,840,050 — and the rows still differ. Two of the
+three branches change the compiler's own Rust in different places and the
+compiled size lands on the same number, which is itself worth knowing; what
+follows is that a row moving while `.text` holds cannot be explained by code
+layout in the ordinary sense.
+
+**`.rodata` is the only section that moves**: 803,856, 805,776, 806,288. The
+smallest reads 430 and the two larger read 437. Three points, and the two
+larger ones differ by 512 while reading the same row, so this is a
+correspondence and not yet a function.
+
+What this does not do is name a mechanism. It rules two out. The next reading
+that would say something is a tree whose `.rodata` matches one of these three
+exactly and whose row disagrees — that would rule `.rodata` out too — or a
+deliberate `.rodata` change of known size on an otherwise identical tree, which
+would make it a function or kill it.
