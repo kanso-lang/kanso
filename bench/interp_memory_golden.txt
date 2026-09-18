@@ -51,6 +51,26 @@
 # twice is 102 fewer allocations on this program. interp_peak_bytes is
 # unchanged at 933,202: the fixpoint's working sets were never the high-water
 # mark.
-interp_allocs=5313332
+#
+# 2026-09-18, kanso#1511 on the tree merged with main, CI's sitting.
+# 5,313,332 -> 5,313,348, a RISE of 16 (+0.0003%).
+# The predicate's answer is a set of owned names, built once. Sixteen
+# allocations is what that set costs on this program.
+#
+# 2026-09-18, re-merged onto main after kanso#1510. THE VALUE BELOW IS MAIN'S,
+# carried forward, and the branch's own reading above it stands as history.
+# The six compile-side goldens beside it were carried forward because
+# kanso#1510 moved them; this one did not conflict, so the branch's +16
+# survived alone and the trend gate read a PURE REGRESSION -- one row worse
+# and nothing better, because the falls that sat beside it are now main's.
+# Every row on this branch is main's, so CI measures the merged tree in one
+# piece and the real sixteen comes back with whatever moves beside it.
+#
+# 2026-09-18, kanso#1511 on the tree merged with main after kanso#1510,
+# CI's sitting. 5,313,332 -> 5,313,348, a RISE of 16
+# (+0.0003%). THE ONE ROW THAT REPRODUCES. +16 on both rounds, against two different
+# bases: the predicate answers with a set of owned names, built once, and
+# sixteen allocations is what that set costs on this program.
+interp_allocs=5313348
 interp_peak_bytes=933202
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
