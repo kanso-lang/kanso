@@ -9118,3 +9118,70 @@ three compile routes fall about 1.2% each and the score still went up.
 
 The correction is recorded in the golden's header beside the value, where the
 next session reading this vein will meet it.
+## 2026-09-17 — the same analysis, built three times from the same program
+
+Eighth in the run, and the simplest one to state: `in_place_pushes`,
+`reusable_records` and `string_builders` each opened with
+`let analysis = Analysis::new(program)`, and `codegen::emit_ir` calls all three
+on consecutive lines. So the whole linearity analysis was built three times
+over one program in one compile.
+
+    in_place_pushes    25,468,138 instructions   1 call
+    reusable_records   25,468,351                1 call
+    string_builders    25,482,737                1 call
+                       ----------
+                       76,419,226  of a 657,731,658 build   11.6%
+
+Each keeps its public wrapper, which builds an `Analysis` and delegates to a
+`*_with` body that reads one it was handed. `for_the_emitter` builds one and
+asks all three. The wrappers stay because the corpus and a dozen specs call
+them one at a time, and building an analysis for one question is the right cost
+when only one is asked.
+
+`kanso build bench/runbench` falls **51,082,187 instructions, 7.77%**,
+657,731,658 to 606,649,471 — the two rebuilds, and nothing else, since the
+emitted IR is byte-identical at 36,085 lines.
+
+The spec keeps the three separate calls as the oracle and compares all five
+returned collections against the shared answer, over `lib/json` and over a
+small program written so two of the three answer non-empty. That second part
+is asserted rather than assumed: three empty answers agree with each other, and
+a fixture that only agreed emptily would pass with the sharing removed, with it
+wrong, or with the functions gutted. Watched red by returning
+`Default::default()` for one of the three, which fails the non-emptiness
+assertion and the comparison, in both tests.
+
+`reusable_records` is left to the lib/json case. A hand-written record fixture
+was tried and cost three rounds to the grammar — `rec box` is not snake_case,
+`rec box\n  n int` is a needless continuation, `rec box n int` reads as a
+library with statements — and bought nothing a library full of real records did
+not already cover.
+
+**REBUILT ON MAIN, 2026-09-18, and the numbers above are the original
+sitting.** The branch that carried this change was the top of a stack whose
+other members have all landed, so its diff against main had grown to include
+their work and every row on it was stale. It is rebuilt as one cherry-pick of
+ee19ee80 onto main: src/codegen.rs and src/linear.rs applied without a
+conflict, and only this log entry needed resolving.
+
+The 657,731,658 baseline and the 7.77% are against a tree that no longer
+exists — kanso#1475, kanso#1476, kanso#1478 and kanso#1493 have all landed
+under it since, and the largest of those took the same build down 69.64% on
+its own. The saving is real and the mechanism is unchanged; the SIZE of it on
+today's main is CI's to measure, and this branch carries main's rows forward
+so the gate has one number to fail against rather than none.
+
+**The safety claim reproduces on the rebuild.** `emitted_code` AGREED on the
+compile sweep, so the emitted IR is byte-identical on today's main as it was
+on the old base — which is the whole argument that building the analysis once
+instead of three times changes nothing a program can see. 160 test binaries
+pass; the one failure is `wasm_engine`, which wants a `docs/kanso.wasm` this
+container has not built and CI does.
+
+- **DONE** one analysis.
+- **OPEN** the run of eight is over. What is left in a build is flat: `memcmp`
+  at 35.2M of 606.6M and a hash-and-compare cluster around it worth about 17%,
+  which is name hashing and wants interning. Attributed to callers it is
+  diffuse — the largest single caller of `memcmp` is 6.2M, 1.0% — so there is
+  no first map to intern that pays on its own. That is the same answer the
+  check side gave, now with the build side agreeing.
