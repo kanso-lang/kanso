@@ -215,5 +215,32 @@
 # The interpreter now asks `codegen::knotted_constants` once per run, on the
 # first constant cell it builds, and looks the name up in the answer at every
 # later one. This benchmark is the interpreted run, so it pays both.
-interp_instructions=2182638759
+# 2026-09-18, kanso#1510 (kanso#1484 rebuilt) on the tree merged with main,
+# CI's sitting. 2,182,576,109 -> 2,182,620,735, a RISE of 44,626 (+0.0020%).
+# LAYOUT. The derivation this branch removes runs before `kanso check` reaches
+# these routes, so the saving is outside them; what moved is where the code
+# sits. Three check routes and the interpreted row rise by a few thousand each
+# against falls of 567,547 and 560,657 on the two rows that pay for the
+# derivation.
+#
+# 2026-09-18, re-merged onto main after kanso#1509. THE VALUE BELOW IS MAIN'S,
+# carried forward, and the branch's own reading above it stands as history
+# rather than as this tree's row. The five compile-side goldens were carried
+# forward for the same reason, and carrying those five while leaving this one
+# at the branch's reading made the trend gate read a PURE REGRESSION: the
+# falls of 567,547 and 560,657 that pay for this rise live in rows that are
+# now main's. Every compile-side row on this branch is main's, so the merged
+# sitting is CI's and arrives in one piece.
+#
+# 2026-09-18, kanso#1510 (kanso#1484 rebuilt) on the tree merged with main
+# after kanso#1509, CI's sitting. 2,182,576,109 -> 2,182,620,735, a RISE of
+# 44,626 (+0.0020%). LAYOUT. The derivation this branch removes runs before this route
+# reaches its work, so the saving is outside it and what moved is where
+# the code sits; the two rows that pay for it fall by about 560,000 each.
+# The second reading in the same job matched the first to the instruction.
+#
+# 2026-09-18, re-merged onto main after kanso#1510. THE VALUE BELOW IS MAIN'S,
+# carried forward: kanso#1510 moved this row on its own and what this branch
+# adds on top of it has not been measured, so the merged reading is CI's.
+interp_instructions=2182620735
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

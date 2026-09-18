@@ -894,6 +894,13 @@
 # readings to the instruction, across two CI jobs on two different trees,
 # which is what `-Wl,-plugin-opt=jobs=1` bought.
 #
+# 2026-09-18, kanso#1510 (kanso#1484 rebuilt) on the tree merged with main,
+# CI's sitting. 126,804,425 -> 126,810,678, a RISE of 6,253 (+0.0049%).
+# LAYOUT. The derivation this branch removes runs before `kanso check` reaches
+# these routes, so the saving is outside them; what moved is where the code
+# sits. Three check routes and the interpreted row rise by a few thousand each
+# against falls of 567,547 and 560,657 on the two rows that pay for the
+# derivation.
 # 2026-09-18, kanso#1509 (kanso#1480 rebuilt) on the tree merged with main,
 # CI's sitting. 126,804,425 -> 126,806,203, a RISE of 1,778 (+0.0014%).
 # LAYOUT. `kanso check` stops before codegen, so the saving in `emit_ir` is
@@ -905,7 +912,21 @@
 # 2026-09-18, kanso#1511 on the tree merged with main, CI's sitting.
 # 126,806,203 -> 126,807,028, a RISE of 825 (+0.0007%).
 # LAYOUT, same reason as the compile row: this route evaluates no constant.
-library_instructions=126807028
+# 2026-09-18, re-merged onto main after kanso#1509. THE VALUE BELOW IS MAIN'S,
+# carried forward: kanso#1509 moved this row on its own and what this branch
+# adds on top of it has not been measured, so the merged reading is CI's.
+#
+# 2026-09-18, kanso#1510 (kanso#1484 rebuilt) on the tree merged with main
+# after kanso#1509, CI's sitting. 126,806,203 -> 126,813,486, a RISE of
+# 7,283 (+0.0057%). LAYOUT. The derivation this branch removes runs before this route
+# reaches its work, so the saving is outside it and what moved is where
+# the code sits; the two rows that pay for it fall by about 560,000 each.
+# The second reading in the same job matched the first to the instruction.
+#
+# 2026-09-18, re-merged onto main after kanso#1510. THE VALUE BELOW IS MAIN'S,
+# carried forward: kanso#1510 moved this row on its own and what this branch
+# adds on top of it has not been measured, so the merged reading is CI's.
+library_instructions=126813486
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

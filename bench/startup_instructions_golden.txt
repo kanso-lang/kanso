@@ -306,6 +306,14 @@
 # readings to the instruction, across two CI jobs on two different trees,
 # which is what `-Wl,-plugin-opt=jobs=1` bought.
 #
+# 2026-09-18, kanso#1510 (kanso#1484 rebuilt) on the tree merged with main,
+# CI's sitting. 3,951,796 -> 3,384,249, a FALL of 567,547 (-14.3617%).
+# THIS IS THE CHANGE, and it is much larger here than anywhere else. The set
+# of symbols DECLARES calls was re-derived rather than written down, and the
+# interpreter's start-up is where that derivation was paid for most. What the
+# saving IS has been measured; why it lands so much harder on this row than on
+# the emitter's is not claimed here beyond the obvious -- start-up runs the
+# derivation over the whole declare block before any program does anything.
 # 2026-09-18, kanso#1509 (kanso#1480 rebuilt) on the tree merged with main,
 # CI's sitting. 3,951,796 -> 3,933,223, a FALL of 18,573 (-0.4700%).
 # The interpreter's start-up carries the compiler's bytes, and this branch
@@ -317,4 +325,16 @@
 # 3,933,223 -> 3,932,978, a FALL of 245 (-0.0062%).
 # LAYOUT, and it FELL. Start-up takes the native path, which counts cells in
 # the runtime rather than in the interpreter.
-startup_instructions=3932978
+# 2026-09-18, re-merged onto main after kanso#1509. THE VALUE BELOW IS MAIN'S,
+# carried forward: kanso#1509 moved this row on its own and what this branch
+# adds on top of it has not been measured, so the merged reading is CI's.
+#
+# 2026-09-18, kanso#1510 (kanso#1484 rebuilt) on the tree merged with main
+# after kanso#1509, CI's sitting. 3,933,223 -> 3,364,974, a FALL of
+# 568,249 (-14.4474%). This is a route the removed derivation runs, and the saving lands here.
+# The second reading in the same job matched the first to the instruction.
+#
+# 2026-09-18, re-merged onto main after kanso#1510. THE VALUE BELOW IS MAIN'S,
+# carried forward: kanso#1510 moved this row on its own and what this branch
+# adds on top of it has not been measured, so the merged reading is CI's.
+startup_instructions=3364974
