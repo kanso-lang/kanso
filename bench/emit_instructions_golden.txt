@@ -114,4 +114,12 @@
 # moved and the two codegen rows did not: they AGREED with this branch's own
 # readings to the instruction, across two CI jobs on two different trees,
 # which is what `-Wl,-plugin-opt=jobs=1` bought.
-emit_instructions=60196725
+#
+# 2026-09-18, kanso#1509 (kanso#1480 rebuilt) on the tree merged with main,
+# CI's sitting. 60,196,725 -> 52,115,454, a FALL of 8,081,271 (-13.4248%).
+# THIS ONE IS THE CHANGE. `emit_instructions` anchors at `codegen::emit_ir`
+# inclusive, and the linearity analysis was built three times inside it --
+# once each for in_place_pushes, reusable_records and string_builders, on
+# consecutive lines. Building it once takes 8,081,271 instructions out of the
+# emitter, 13.42% of what emitting costs.
+emit_instructions=52115454
