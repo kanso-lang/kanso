@@ -3891,3 +3891,32 @@ projected the interpreted fall at 33,238,900 and CI reads 33,279,216 — 40,316
 apart, 0.12% of the delta. `interp_allocs` fell by 174,996 on both, the same
 integer. `interp_peak_bytes` rose 9,229 here and 9,228 on the runner, one byte
 apart on a row whose absolute values the two hosts do not share.
+
+## 2026-09-18 — the floor sentinel is read by three jobs, and a pin was named in prose
+
+Two corrections to CLAUDE.md, both of the same family: a fact written down in a
+place that could not be checked against the thing it described.
+
+THE FLOOR. A re-merge round one leaves the layout goldens carrying main's values
+and the floor unbanked, and the practice written down for it said the board goes
+red on the layout gates "plus the floor sentinel" — one job. It is three.
+`tests/the_digest_is_priced_on_both_sides.rs` runs in `specs` and on the macOS
+host as well, and its `the_undoctored_goldens_hold_the_floor` reads the same
+number the `cost goldens` job's welfare step reads. So two jobs whose titles say
+nothing about welfare go red for it, and this morning they were read as a second
+unrelated fault and chased before the failing target's name was looked at. The
+name was the whole answer, and it was one line down in the log. The rule added
+is to read the failing TARGET rather than the job title.
+
+Watched rather than argued: with the goldens stashed back to the values CI had
+tested, the spec panics `welfare 76.88   floor 76.87 ... a rise nobody
+ratchets`, and it passes with the floor banked.
+
+THE PIN. The kq bullet carried "kq's pin sits at kanso#1120 with 59 commits
+behind it", read off the repo on 2026-08-31. kq#108 moved it 114 commits on
+2026-09-14 and the sentence stayed. Worse, a session whose repository scope is
+kanso alone cannot check that sentence at all, so it reads as current. The
+specific figure is gone and the bullet now says to read the pin from kq or to
+say it could not be read. What the bullet is for — the five veins, and the fact
+that the instructions vein moves where the allocation counters do not — does not
+go stale and is what remains.

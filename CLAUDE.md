@@ -322,11 +322,16 @@ make a PR and then merge it."
   first. The instructions vein is the one to remember, because it is the one
   most changes reach: a change that moves no allocation counter at all still
   moves it, and a session that checks only the allocation counters will
-  conclude kq is unaffected and be wrong. Read off the repo on 2026-08-31, kq's
-  pin sits at kanso#1120 with 59 commits behind it, several of which moved
-  runtime instructions and no allocation counter. Why it drifted is not
-  recorded; that this list would licence the drift is checkable and is the
-  reason it is corrected here. Adding `evac_allocs` broke kq's
+  conclude kq is unaffected and be wrong. DO NOT READ kq'S PIN FROM THIS FILE.
+  This bullet named a specific pin for a fortnight after that pin had moved, and
+  the number is exactly the thing that goes stale: kq#108 advanced it by 114
+  kanso commits on its own schedule, and a session reading the old figure would
+  have concluded kq was 59 behind when it was not. A session started from
+  claude.ai or the desktop app can read the pin out of kq itself; one whose
+  repository scope is kanso alone cannot, and should say so rather than repeat
+  a number from here. What this bullet is FOR is the list of five veins above
+  it, which does not go stale, and the warning that the instructions vein moves
+  where the allocation counters do not. Adding `evac_allocs` broke kq's
   gating check for a related reason: the counter was new everywhere, and only
   kanso's veins had been regenerated. A purely additive counter still moves
   those files.
@@ -593,6 +598,16 @@ So, before an argument rests on a number:
   goes stale the first time anybody adds a row, so read the summary block's
   own list rather than a number written here. Read both. Every other job in the run can be
   read from its steps.
+- **AN UNBANKED FLOOR TURNS THREE JOBS RED, AND TWO OF THEM LOOK LIKE AN
+  UNRELATED FAULT.** Besides the `cost goldens` job's welfare step, both
+  `specs (unit, golden, differential)` and `the other host (macos, arm)` run
+  `tests/the_digest_is_priced_on_both_sides.rs`, whose
+  `the_undoctored_goldens_hold_the_floor` reads the same sentinel. So a
+  re-merge round one is red on the layout gates AND on two jobs whose names say
+  nothing about the floor. On 2026-09-18 that cost a detour: the two extra reds
+  were read as a second fault and chased before the failing target's name was
+  looked at, and the name was the whole answer. Read the failing TARGET, not the
+  job title. The fix for all three is the one `--set` that was owed anyway.
 - **Opening a PR without arming a wake is how one gets abandoned.** In a
   container nothing runs between turns: a session is woken by a subscription
   or a scheduled check-in and by nothing else. So the moment a PR is opened,
