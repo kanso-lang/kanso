@@ -127,5 +127,37 @@
 # nothing is claimed about which. A second count in the same job read
 # 2,182,307,043, so the binary is stable and the disagreement was with the
 # golden.
-interp_instructions=2182307043
+#
+# 2026-09-18, kanso#1505. THE PRINTED LINE IS EXCLUDED FROM THIS ROW, and the
+# exclusion is named here per the 2026-09-15 rule. `interp_corpus` prints what
+# it decoded; LineWriter runs `core::slice::memchr::memrchr` over the formatted
+# bytes to find the last newline, and what that frame costs moves with the
+# binary's LAYOUT rather than with anything the interpreter does.
+#
+# kanso#1487 measured the term and took it off the module, entry and library
+# rows. It missed this one, and this row has drawn two faces ever since:
+# kanso#1486's two sittings read 2,182,526,878 and 2,182,526,865 -- thirteen
+# apart, on trees whose only difference was three goldens, a page and a log
+# entry. Thirteen is the same thirteen those three rows were drawing.
+#
+# The gate prints `interp_printed=` as a notice, so the figure that was taken
+# off is readable rather than only subtracted.
+#
+# THE VALUE BELOW IS MAIN'S AND ROUND ONE IS DELIBERATELY RED ON IT. Changing
+# what the row counts moves its absolute value, so no number measured before
+# this change is comparable with one measured after, and this container cannot
+# run the gate -- the golden was taken under rustc 1.98.1 and the box runs
+# 1.94.1. CI measures and its own reading replaces this line.
+#
+# 2026-09-18, kanso#1505, CI's sitting WITH THE LINE EXCLUDED.
+# 2,182,307,043 -> 2,182,303,844. The difference is 3,199 and it is not a
+# saving: it is the printed line's subtree, which this row stops counting.
+# Larger than the module row's ~825 because `interp_corpus` prints the
+# document it decoded rather than one summary line.
+#
+# NOTHING MEASURED BEFORE THIS CHANGE IS COMPARABLE WITH ANYTHING MEASURED
+# AFTER IT. The row counts a different thing now. What it buys is that the two
+# faces stop: the thirteen that kanso#1486 drew across two sittings lived in
+# this subtree, and it is no longer in the number.
+interp_instructions=2182303844
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
