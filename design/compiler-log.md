@@ -3032,3 +3032,168 @@ sets, in the shape of `KANSO_LTO_JOBS`, making `release_clang` write its
 object to a fixed path. It is separated so that one round measures one thing —
 the cleared output re-bases both codegen rows here, and a second re-base on
 top of it could not be told apart.
+## 2026-09-18 — gavel built: a demanded knot counts on both engines, and the oracle moved
+
+Ruled 2026-08-24, on the archive entry "a demanded knot counts, and the oracle
+moves", Clay: "it seems so obvious." The day before had found it and written
+it down exactly: *the DEMANDED knot still disagrees. Native reports
+`thunk_allocs=1` where the oracle reports `0`, because the oracle's `knotted`
+builds its cell without touching the counter.* The gavel named which side
+moves. It stood unbuilt for twenty-five days.
+
+Reproduced first, on a release build of `bc282f04`, by flipping the arm of
+`an_undemanded_knot_allocates_nothing` so the knot is read and running it
+through an importing entry on both engines:
+
+    thunk_allocs   native 1   oracle 0
+    thunk_forces   native 1   oracle 1
+    thunk_evals    native 1   oracle 1
+    stdout         native 1   oracle 1
+
+**The bump does not go where it first looks like it goes.** `eval_ident`
+routes EVERY zero-arity constant through `knotted` — its own comment says so,
+and the reason is that asking whether a constant mentions its own name reads
+`a = f b` and `b = f a` as two ordinary constants and then recurses until the
+process dies. So counting a cell wherever `knotted` builds one read 2 on this
+fixture rather than 1: one for `demanded/x`, which is the knot, and one for
+`demanded/play`, which is not. A probe printing the name at each cell is what
+said so; the first patch was wrong and green-looking on the narrow assertion.
+
+What native counts is a `k_thunk_new`, and the emitter only emits one for a
+constant in `codegen::knotted_constants` — the set that reaches itself through
+a chain of mentions. The oracle now filters by that same predicate, computed
+once per run through a `OnceCell` on the first constant cell it builds rather
+than at construction, because `kanso check` makes an `Interp` and evaluates no
+constant, and that route is a weighed development term.
+
+Two fixtures, and they are a pair:
+
+- `tests/golden/mem/a_demanded_knot_allocates_one_cell.kso` pins the shape the
+  2026-08-24 entry named as unblocked and nobody wrote — 1 alloc, 1 force, 1
+  eval, 1 live at exit. Its twin still reads 0 on both engines, so the
+  2026-08-23 ruling that an undemanded knot allocates nothing is untouched.
+- `tests/a_demanded_knot_counts_the_same_on_both_engines.rs` runs the same
+  program through the real binary both ways and asserts the whole thunk
+  triple, PINNED rather than merely compared: two engines agreeing on a wrong
+  number is the failure a differential assertion cannot see.
+
+Watched red twice before it was watched green — once on the unfixed tree
+(oracle 0 against native 1) and once with the bump replaced by a no-op after
+the fix was in. The native arm passes in both, which is the arm that should.
+
+**And the hole was the FIXTURE, not the comparison — which is the reverse of
+what this entry said in draft.** The draft read `tests/golden.rs`, saw the mem
+vein run with no `--interp`, and concluded that nothing in the tree compared
+the two engines. `tests/oracle.rs:211` is what it missed:
+`mem_corpus_interp_matches_the_semantic_counters` walks the same corpus,
+evaluates each case on the interpreter, and asserts thunk_allocs, thunk_forces
+and thunk_evals against the native goldens, leaving frees, escaped and
+live_exit alone as allocator behaviour. That loop has been there the whole
+time.
+
+It stayed green because the corpus held exactly one knot and that one was
+undemanded, where both engines read zero and agreed by saying nothing. Checked
+rather than assumed: with the new fixture in the vein and the bump replaced by
+a no-op, that loop goes red naming the file and the row, `thunk_allocs=0`
+against `thunk_allocs=1`. So the ruling could have been caught by machinery
+that already existed, on the day somebody wrote a three-line program.
+
+A differential loop is worth exactly the corpus under it, and the comment in
+`tests/golden.rs` now says which loop reads the other engine rather than
+promising one in the future tense. STATUS.md's row for this ruling carries the
+draft's claim, citing `tests/golden.rs:194` and that future-tense comment; the
+row comes off with this build, and this paragraph is here so the reason it was
+wrong comes off with it.
+
+Costs, as this host can read them: `emitted_code` and `compile_cost` AGREED,
+every runtime cost vein and the whole lazy tier AGREED. The eight compile rows
+this container refuses are CI's, and `interp_instructions` refuses here too —
+its row is the one to read off the job log, since the change adds a predicate
+walk and a set lookup on the interpreted path.
+## 2026-09-18 — what the demanded-knot ruling costs, on CI's own rows
+
+kanso#1511's first round measured the price of building the 2026-08-24 gavel.
+CI's sitting on the tree merged with main:
+
+    interp_instructions  2,182,576,109 -> 2,182,638,759  +62,650  (+0.0029%)
+    interp_allocs            5,313,332 ->     5,313,348      +16  (+0.0003%)
+    emit_instructions       52,115,454 ->    52,119,322   +3,868  (+0.0074%)
+    library_instructions   126,806,203 ->   126,807,028     +825  (+0.0007%)
+    entry_instructions     126,350,802 ->   126,351,031     +229  (+0.0002%)
+    compile_instructions    35,441,774 ->    35,441,736      -38  (-0.0001%)
+    startup_instructions     3,933,223 ->     3,932,978     -245  (-0.0062%)
+
+**Two of these are the change and five are layout.** The interpreted run is
+the only route that evaluates a constant, so it is the only one that fires the
+`OnceCell` and asks `codegen::knotted_constants`. 62,650 instructions is that
+one whole-program walk plus a set lookup at every constant cell after it, and
+16 allocations is the set of owned names the walk answers with.
+
+The other five move because the binary moved. `kanso check` makes an `Interp`
+and evaluates no constant, which is exactly why the predicate is computed
+lazily rather than in `Interp::new` — the three check routes and `emit_ir` pay
+nothing for it, and two of the five FELL. Every one of the five is under a
+hundredth of a per cent.
+
+**The price is the ruling's, and it is cheap for what it buys.** 0.0029% of an
+interpreted run is what it costs for the two engines to agree about a demanded
+knot's allocation, which the differential law requires and which the gavel
+ruled the oracle's side of twenty-five days ago.
+
+**And the release-codegen row read +11 again, on a branch that touches
+neither codegen nor runtime.c.** The gate's own per-process breakdown settles
+what moves:
+
+    first:  kanso=81075461 clang:probe=32265497 clang=31732189
+            clang=1617286141 ld=5141367745
+    again:  kanso=81075205 clang:probe=32265497 clang=31732189
+            clang=1617286141 ld=5141367734
+
+All three clang processes are byte-identical between the two readings, and
+`ld` alone differs, by 11. kanso's own process differs by 256 and is excluded
+from the row. So the 11 lives in `ld` and in nothing else, it has now been
+seen on kanso#1510 and here, and it appears on a change to the interpreter's
+counting — which is as far from the linker as a change in this repository
+gets. It is the measurement rather than the branch.
+
+kanso#1512 isolates one real dependence of that row on un-normalized state and
+says plainly it is not this. The breakdown above narrows what remains: whatever
+the 11 is, it is inside `ld`, it is not the three clang invocations, and it is
+not the output path's prior contents, because the gate re-stages between the
+two readings and both counted builds therefore find the warm-up's binary at
+`-o`.
+## 2026-09-18 — correcting what kanso#1511 costs: the interpreted row does not resolve it, and the sixteen allocations do
+
+The entry above reads the first round's `interp_instructions` rise of 62,650 as
+"that one whole-program walk plus a set lookup at every constant cell after
+it". The second round, on the tree merged after kanso#1510 landed, reads the
+row the other way:
+
+    round 1, base 2,182,576,109   ->  2,182,638,759   +62,650
+    round 2, base 2,182,620,735   ->  2,182,597,360   -23,375
+
+One change, two bases, two signs. So the walk's cost is below what this row
+resolves, and the first entry's sentence attributing 62,650 to it was reading
+a layout term as work.
+
+**What reproduces is `interp_allocs`, at +16 on both rounds.** The predicate
+answers with a set of owned names, built once per run, and sixteen allocations
+is what that set costs on this program. That is the price of the ruling, it is
+the same number against two different bases, and it is the number to quote.
+
+The other five rows moved by between 219 and 10,522 with mixed signs, all
+under a fiftieth of a per cent, on routes that evaluate no constant and
+therefore never fire the `OnceCell` at all:
+
+    compile_instructions    35,445,148 ->    35,444,548     -600
+    entry_instructions     126,358,241 ->   126,359,513   +1,272
+    library_instructions   126,813,486 ->   126,814,937   +1,451
+    startup_instructions     3,364,974 ->     3,364,755     -219
+    emit_instructions       51,554,407 ->    51,543,885  -10,522 Both codegen rows AGREED with
+their goldens, and the release row read 6,822,651,561 — the golden exactly —
+on a tree that changes the interpreter and nothing else.
+
+This is the same correction shape as the rewrite family and the three
+container baselines: a delta that arrived with a change was written down as
+the change's cost, and a second measurement against a different base says the
+row cannot see it. What a row cannot resolve, it cannot attribute.
