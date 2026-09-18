@@ -3958,3 +3958,28 @@ The lesson is the one this log keeps relearning: a fixture that looks like it
 tests the thing has to be watched failing before it can be said to. Reasoning
 about which fixture covers a change is how the last four wrong claims were
 made.
+
+## 2026-09-18 — two vectors built at the size the parameter list already states
+
+`match_params` opened `score` and `binds` with `Vec::new()` and pushed into
+them, and `dispatch` calls it once per overload on every call. `score` takes
+exactly one entry per parameter — the capacity is not an estimate — and a
+`Vec::new()` that reaches three entries has reallocated twice getting there.
+
+    main                              1,802,816,521
+    + the frame memory                1,439,734,810   -363,081,711
+    + both vectors reserved           1,410,101,998    -29,632,812
+
+**29,632,812 instructions, 2.06%** of the tree it lands on, for two words
+changed. Together with the frame memory the interpreted row falls
+**392,714,523, or 21.78%** against main at kanso#1517.
+
+Where it was found: the A/B's own callgrind output, annotated rather than
+re-run. `RawVecInner::finish_grow` carried 51,556,413 instructions (3.47%) and
+`RawVec::grow_one` 27,969,576 (1.88%) on the post-memory binary — 5.35% between
+them, which is a vector growing one element at a time somewhere hot. This is
+one of the somewheres; the pair is still worth reading for the others.
+
+The whole golden corpus passes unchanged, which is the assertion that matters:
+a capacity is not observable, so any output difference would have meant the
+change was not what it looked like.

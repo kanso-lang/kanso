@@ -3679,8 +3679,14 @@ fn taken<T: Clone>(rc: Rc<T>) -> T {
 }
 
 fn match_params(params: &[Pattern], args: &[Value]) -> Option<(Score, Bindings)> {
-    let mut score = Vec::new();
-    let mut binds = Vec::new();
+    // Both vectors are built at the size the parameter list already states.
+    // `score` takes exactly one entry per parameter, so its capacity is not an
+    // estimate; `binds` takes at most one per parameter for the simple
+    // patterns and grows from there for a constructor that binds several.
+    // dispatch runs this once per overload on every call, and a Vec::new()
+    // that reaches three entries has reallocated twice by then.
+    let mut score = Vec::with_capacity(params.len());
+    let mut binds = Vec::with_capacity(params.len());
     for (pattern, arg) in params.iter().zip(args) {
         // per-param: literals 200, annotated 100 minus subtype distance
         // (nearer declarations outrank ancestors), generics 10 — the old
