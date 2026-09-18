@@ -2165,7 +2165,13 @@
 # LAYOUT. This branch changes how a shared vector is copied in the
 # INTERPRETER; none of these routes runs it. src/eval.rs is the compiler,
 # so its bytes move and every route that runs the compiler moves with them.
-compile_instructions=35552188
+#
+# 2026-09-18, kanso#1533, CI's sitting. 35,552,188 -> 35,550,010,
+# a FALL of 2,178 (-0.0061%).
+# LAYOUT. src/eval.rs is the compiler's own Rust, so its bytes and the layout
+# under them move whether or not a decision this row counts changed. `kanso
+# check` stops before codegen and cannot see the dispatcher's runtime work.
+compile_instructions=35550010
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

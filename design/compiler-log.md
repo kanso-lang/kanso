@@ -3687,3 +3687,36 @@ value on the conflicted line, every comment kept.
 could not merge. The rule already written down is to scope adds to the paths
 a change owns; the addition here is that a loop doing it across several
 branches turns one slip into three.
+
+## 2026-09-18 — the peak rose 205 bytes while the count fell a quarter
+
+CI's rows for the two dispatcher changes, and one of them goes the other way:
+
+    interp_allocs       2,328,213 -> 1,740,991    -587,222    -25.2%
+    interp_peak_bytes     833,128 ->   833,333        +205     +0.02%
+
+`interp_peak_bytes` is priced here because the trend gate asked and because
+the direction deserves a sentence rather than a shrug. A quarter of the run's
+allocations stop happening and its high-water mark goes UP by two hundred
+bytes.
+
+THE LIKELY READING, and it is a reading rather than a finding: one pair of
+candidate buffers now serves a whole overload group, so `binds` keeps whatever
+capacity the widest arm in that group reached and holds it for the length of
+the dispatch. Per-candidate vectors were freed at whatever size each arm
+needed. Fewer, larger, longer-lived beats more, smaller, shorter-lived on the
+count and can lose on the peak.
+
+NOTHING ISOLATES THAT, AND THE FIRST DRAFT OF THIS PARAGRAPH GAVE THE WRONG
+REASON. It said 205 bytes was below what a differential on this box could
+separate from the arena's rounding. That was a guess about the instrument, and
+the instrument was one command away: three runs of the same binary print
+`interp_peak_bytes=834117` three times, byte for byte. The counter is the
+program's own arena accounting and it is deterministic, so 205 bytes is
+perfectly separable. What is missing is not resolution but an ISOLATION -- a
+build per hypothesis -- and that is a different kind of cost.
+
+So the mechanism stays open because nobody has spent that, not because the
+number is too small to see. The golden's header says the same. What is not in
+doubt is the trade: 587,222 allocations against 205 bytes, and the objective
+weighs both.
