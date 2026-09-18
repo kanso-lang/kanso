@@ -271,14 +271,13 @@ other instruction rows run from 4.8 million to 128 million, where three parts
 per billion is a fraction of one instruction, so none of them could have
 shown this either way.
 
-Owes: measure cloud's candidate, or replace it. And one small thing that is
-not blocked on it — `interp_instructions.sh` prints `.text`, `.data` and
-`.bss`, where `compile_instructions.sh`, which the interp gate's own header
-sends the reader to, prints `.rodata` too, with a seven-binary calibration in
-its header for why. One awk alternation, and the next occurrence starts with
-the section the compile gate already watches. Checked against kanso#1492
-rather than assumed: it added twenty-two lines to that gate wiring in the
-silicon comparison and left the section line reading `text|data|bss`.
+Owes: measure cloud's candidate, or replace it. That is the whole of it now.
+The second item this row carried — `interp_instructions.sh` printing
+`.text`, `.data` and `.bss` where `compile_instructions.sh` prints `.rodata`
+too — was built by kanso#1508 and comes off on 2026-09-18. Line 47 of the
+gate reads `/^\.(text|rodata|data|bss)[ \t]/`, and the pull request landed
+the same alternation on all nine section lines across six gates with a spec
+reading them off disk, so the shape cannot go stale one gate at a time again.
 
 If the reading cannot be made to repeat between machines, the question that
 follows is whether an exact pin is the right instrument for a counter whose
