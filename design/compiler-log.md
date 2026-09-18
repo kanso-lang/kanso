@@ -2334,8 +2334,8 @@ carries 65 live and 1,358 archived, 1,423 in all. So main's live file had grown
 to 147 against a cap of forty while the branch that fixes that sat open, and
 the branch's own live file had drifted from 40 to 65 under its later merges.
 
-The merged tree holds 39 live and 1,412 archived, 1,451 in all. That is main's
-1,449 plus this branch's own two entries, which is the check worth doing:
+The merged tree holds 40 live and 1,412 archived, 1,452 in all. That is main's
+1,449 plus this branch's own three entries, which is the check worth doing:
 nothing was deleted at either step, and the sum accounts for every entry on
 both sides.
 
@@ -2357,7 +2357,9 @@ had to be re-run here rather than assumed.
 This correction is folded into the entry it corrects rather than appended
 beside it. The entry has not landed, so its numbers are still its own to get
 right, and a second heading would have spent the page-drift budget on an
-arithmetic fix.
+arithmetic fix. The third entry below, which lands cloud's reach fix, earns
+its own heading: it changes a spec and a ratchet mutation rather than a
+number.
 
 ## 2026-09-17 — three sends the archive would have hidden, and one of them was never answered
 
@@ -2379,14 +2381,18 @@ with no surface are the implementer's, it leaves the ledger unruled.* So the
 send's premise is stale rather than unfiled, and teaching the spec to accept
 gavel numbers would have made it green over a question that no longer exists.
 Recorded here so the paragraph is answered: whether the `String` exists is the
-implementer's, and has been since 2026-08-29. The 2026-08-30 entry "eight
+implementer's, and has been since 2026-08-29, and the 407,394 instructions the
+send offers are the implementer's to spend or keep. Nothing goes to
+`design/pending-gavels.md` for it, because a bounce is the state where the
+ledger is the wrong place by construction. The 2026-08-30 entry "eight
 changes, and what they did to gavel #159" postdates the bounce and still reads
 it as live; it is wrong on that point for the same reason.
 
 **The second is answered, and answered the ordinary way.** The compile row that
 counted the binary rather than the process — 41,904,811 on this container,
 split 33,586,490 in the compiler against 7,982,541 in libc — says in its own
-words that it *is filed as one rather than done here*. It was filed, and it was
+words that it *is filed as one rather than done here*. It was filed in
+`design/pending-gavels.md`, and it was
 ruled: the 2026-09-15 normalization gavel, built the same night as kanso#1439,
 which CLAUDE.md records and which this afternoon's sweep verified against
 `scripts/gates/compile_instructions.sh` — the gate anchors below Rust's stack
@@ -2415,3 +2421,50 @@ paragraphs above and one ledger entry — the answers the sends were owed.
 - **OPEN** cloud's reach fix, and with it the question of whether the spec
   should recognise a bounce at all. A send answered by a bounce has no ledger
   entry by construction, which is a third state the spec does not model.
+## 2026-09-18 — cloud's reach fix, and two holes the archive move exposed under it
+
+The entry above closes with the reach fix left open: the spec reads
+design/compiler-log.md alone, so it stops checking a send the moment the trim
+walks past it. It lands here, and it did not land cleanly — the move exposed
+two more holes, both of which had been silently there.
+
+**The spec reads both files, archive first.** The archive is by construction
+older than everything live and the "filed by a later entry" rule reads
+forward, so joining them in that order keeps the rule meaning what it meant.
+They join with a blank line so no paragraph straddles the seam. The entry
+above says this was done and ran against main; it was not, and the file read
+one path until this commit. Recorded rather than quietly fixed, because that
+entry's own subject is a claim nobody checked.
+
+**Hole one: a bounce is a third state and the spec modelled two.** A send is
+filed and open, or filed and ruled, or BOUNCED — sent out of the ledger
+unruled because the question turned out to have no surface area a program
+could see, which the 2026-08-29 ruling makes the implementer's. A bounce has
+no ledger entry by construction, so a rule demanding the ledger's name can
+never be satisfied by one. Gavel #159 is the worked example and the entry
+above names it. A later paragraph now answers a send when it quotes one of the
+send's own measurements AND either names the ledger or records the bounce. The
+measurement is what ties the answer to the send; without it the word "bounced"
+anywhere in the log would excuse everything.
+
+**Hole two: a send measured only in per cent could never be filed by a later
+entry.** `carries_a_measurement` counts a bare percentage, so `27.6%` makes a
+paragraph a send. The tie-back read comma-grouped integers alone, so `mine`
+came back empty and the later-entry escape could not fire — leaving such a
+send satisfiable only by naming the ledger in its own paragraph, which is the
+one thing a send written before the rule existed cannot go back and do. The
+escapebench send is exactly that: measured at 27.6%, filed in the ledger under
+its own heading by the commit above, answered by a paragraph naming the ledger
+and quoting 27.6%, and still reported unanswered. The two functions accept the
+same thing now.
+
+**And the ratchet's mutation followed the paragraph out of the live file.**
+It anchors on the paragraph that files the `.rodata` page pin, which the trim
+moved to the archive; it went STALE rather than red, which is the failure mode
+a ratchet exists to prevent. It looks in whichever of the two files holds the
+anchor now, and exits non-zero naming the problem if neither does. Watched:
+applied, the spec goes red; restored, green.
+
+With all four in, the spec passes on the merged tree and the three archived
+sends are answered where they stand — one bounced, one filed and ruled, one in
+the ledger.
