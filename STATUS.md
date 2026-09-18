@@ -44,12 +44,14 @@ kanso — sat here and was bounced on 2026-08-29: a performance question with no
 surface area is the implementer's, per the ledger's own charter, and the log
 carries the research mandate it left with.
 
-**Nine questions are waiting** — three blocking. Two were filed 2026-09-17 out
+**Ten questions are waiting** — three blocking. Two were filed 2026-09-17 out
 of one reading of a book sample: whether the wall `>>` survives the fused
 operators, and whether its simultaneous-failure merge was meant to go. The third
 was filed 2026-09-18, four hours late, after sitting in a session task list
 instead of here: whether kanso#1513's fixed-temporary pin covers both codegen
-tiers or the release tier alone. The
+tiers or the release tier alone. The tenth is the newest and is not blocking:
+where a golden lives that pins ONE engine's answer where another refuses, which
+the interpreter's integer boundary needs and the micro corpus cannot hold. The
 compile-term question before them was filed and ruled on 2026-09-16: two
 welfares and a meta-welfare over them, with the floor re-ratcheted. The
 welfare-floor entry left
@@ -75,7 +77,11 @@ entry cites the search behind it and proposes an answer, and a sitting can be a
 yes or a no rather than a fresh design conversation. On 2026-08-29 every
 remaining question was ruled in one pass.
 
-**The six open, not blocking** — what spelling "cyclic structures sized by
+**The seven open, not blocking** — where a golden lives that pins ONE engine's
+answer where another refuses, filed 2026-09-18 when the interpreter's integer
+boundary turned out to have nowhere in the corpus to be pinned, since native
+refuses past int64 and the micro corpus runs both engines and requires them to
+agree; what spelling "cyclic structures sized by
 data" needs, filed 2026-09-18 with the measurement that sent it here and a
 recommendation to open a `build` block that iterates; the box constructor's spelling, recommending
 `effect`, which no build waits on; how far a binding position carries a box, filed 2026-09-16 with the ten
@@ -523,7 +529,7 @@ else. Chains that tested for `none` after an effect migrate.
     checked from here on two days and both refused by the tooling
   - whether an err gains readers a lambda callback can use
 
-**Nine questions wait in `design/pending-gavels.md`** — three blocking, six
+**Ten questions wait in `design/pending-gavels.md`** — three blocking, seven
 open — each with a recommendation. Recounted four times on 2026-09-16: the
 binding-position question joined Open with its measurement, the escape
 path's byte-position scan joined it, measured on 2026-09-15 and filed to
