@@ -156,7 +156,29 @@ pub fn run rounds
 /// The 19,201 the copying arm read is from before kanso#1516 and has not been
 /// re-measured under either change. What this spec pins is unchanged either
 /// way: the in-place path costs less per round than the copying one.
-const PER_EXTRA_ROUND: u64 = 5_403;
+///
+/// 5,403 -> 4,803 on the branch that keeps the dispatcher's SCORE buffer
+/// across dispatches instead of allocating one per dispatch. Six hundred
+/// fewer allocations over three hundred extra rounds is TWO A ROUND, and the
+/// buffer is the cause: the A/B behind that change reads `__rust_alloc`
+/// 1,362,891 -> 1,243,349 and `__rust_dealloc` by the same 119,542, with the
+/// growth path untouched.
+///
+/// WHICH two of the round's dispatches stopped allocating is NOT established.
+/// The paragraphs above decompose their own deltas by counting calls, and the
+/// same arithmetic does not obviously land on two here: a score buffer was
+/// allocated per dispatch-loop ITERATION, and how many of a round's
+/// iterations carry a parameter list long enough to allocate one is not
+/// something this file measures. Two a round is the measurement; the
+/// decomposition is left open rather than guessed, because a wrong
+/// decomposition written here is what the next reader would check their
+/// change against.
+///
+/// The sibling test is the reason this re-read is safe: the builders answer
+/// 1200 600 and 2400 1200 exactly as before, so nothing about the in-place
+/// path changed, and the number moved DOWN, which is the wrong direction for
+/// a container that stopped being extended in place.
+const PER_EXTRA_ROUND: u64 = 4_803;
 
 fn kanso() -> PathBuf {
     let mut exe = std::env::current_exe().expect("the test binary has a path");

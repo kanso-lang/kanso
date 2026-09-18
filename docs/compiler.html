@@ -2637,8 +2637,36 @@ error[name]: unknown name `builders/run`
 <p>the correction is appended to the header as a dated entry rather than written over the old one. what that sentence recorded was true of the readings it had; what is wrong is the general claim a later reader takes from it, and the difference between those two is the whole reason the log works the way it does.</p>
 
 <p>a fourth job reproduced, and so did a second run of the first branch on the same commit. one branch on both sides of that list is what settles the draw as a property of the job rather than of any diff.</p>
+<h2 id="keptscore"><span class="sec-num">99</span>the buffer nobody kept</h2>
 
-<h2 id="carriedvalue"><span class="sec-num">99</span>the loop carried a value it only needed at the end</h2>
+<p>&#167;97 gave the two dispatch buffers their arity up front. the question left over is why either is allocated per dispatch at all.</p>
+
+<p>the bindings buffer has an answer: it is moved out and becomes the environment frame, so its allocation is still doing work after the dispatch ends. the score buffer has none. it exists to compare candidates, it is held beside the winner while one is winning, and then it is dropped. so it was declared above the tail-call loop instead, and the winner&#39;s buffer is handed back to the working variable rather than falling out of scope.</p>
+
+<pre>  base    985,444,659
+  kept    980,371,488   -5,073,171   -0.51%</pre>
+
+<p>the allocator edges say it is the change and nothing else:</p>
+
+<pre>                   base        kept        delta
+  __rust_alloc    1,362,891   1,243,349   -119,542
+  __rust_dealloc  1,350,763   1,231,221   -119,542
+  grow_one          112,013     112,013          0
+  finish_grow       137,048     155,543    +18,495</pre>
+
+<p>119,542 allocate-and-free pairs at 42.4 instructions each. the growth path is untouched, which is the point: &#167;97 took the growths and this takes the allocations, and the two costs came apart cleanly. the 18,495 added to the growth count is the retained buffer growing when a later dispatch brings more parameters than the one that sized it, and that price is inside the measured total.</p>
+
+<p>119,542 is not the dispatch count, and it is not the iteration count either. there are 55,711 dispatches, so this is 2.15 pairs each, and the reason it exceeds one is the loop the buffer now lives above: a tail call goes round again without leaving the dispatcher, and every one of those was allocating and freeing a score buffer too. the frame builder runs once an iteration and is called 175,246 times, so iterations are about three per dispatch.</p>
+
+<p>which leaves 119,542 removed against roughly 175,246 that could have been. a draft of this paragraph said one per tail hop and had not looked at the second number. about two thirds of iterations were allocating, and what accounts for the other third is not established here. the obvious candidate is arity zero, since asking for a capacity of nothing allocates nothing, and it stays a candidate: nothing in this profile counts dispatches by arity.</p>
+
+<p><strong>what the runner read.</strong> this container projected 5,073,171 and ci reads 6,858,880 &#8212; the same direction, larger, on different silicon. the allocation counter beside it falls 1,410,530 to 1,309,483, and the peak 833,466 to 833,463. every compile vein is byte-identical, which makes this the fourth runtime-only change in a row that moved no layout.</p>
+
+<p>one claim about those counters was published and then half withdrawn, which is worth the space because the half that survived is useful. the allocation counter reproduces across hosts: the container printed 1,309,483 for this tree and the runner read 1,309,483, and on a second tree both read 1,410,530. the peak does not. on that second tree the container reads 833,458 against the runner&#39;s 833,466, eight bytes apart. so it is the traffic count that is host-independent rather than the memory rows as a family, which is why one of those gates carries no allowance for the machine and the instruction gates refuse to compare at all on this box.</p>
+
+<p>a fourth change leaves the comparing alone. memcmp reads 46,087,562 then 46,118,166 across the &#167;97 pair, +0.066%. a draft of this paragraph had it falling 1,484,175, which was a debug-info profile read against a release one &#8212; two build configurations rather than two trees. compared inside its own sitting it has not moved, and the three changes in &#167;96 become four.</p>
+
+<h2 id="carriedvalue"><span class="sec-num">100</span>the loop carried a value it only needed at the end</h2>
 
 <p>rendering a double is 4.58% of the run program, 440.7 instructions a float over 191,070 calls, and a quarter of that is one loop taking digits off two at a time. it divides three values a trip: the two ends of the rounding interval, to decide whether another pair comes off, and the significand, because the significand is the answer.</p>
 
@@ -2661,7 +2689,7 @@ a float             440.7 -&gt;          425.9        -14.8
 
 <p>the lesson is about where a saving goes rather than about ryu. taking work out of a loop that runs five times only pays if what replaces it costs less than five times what was removed, and the first shape of this change failed that test while looking like a win. the disassembly is what said so; the instruction count alone would have been read as a small success and left there.</p>
 
-<h2 id="copiedtwice"><span class="sec-num">100</span>the same name, allocated twice</h2>
+<h2 id="copiedtwice"><span class="sec-num">101</span>the same name, allocated twice</h2>
 
 <p>&#167;87 left the interpreted row at 1,555,890,579 and a lead open: the profile still had the allocator near the top. two more changes took it to <strong>1,138,001,430</strong>. the first sized a clone for the growth that followed it. the second is smaller than either and is the one worth reading, because the cost it removes was never anybody&#39;s decision &#8212; it was two pieces of code each doing the right thing on its own.</p>
 

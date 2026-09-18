@@ -4412,6 +4412,156 @@ run today, and the list lives in the ledger entry.
 This corrects the record and settles nothing about the pin, which is
 design/pending-gavels.md's to rule on.
 
+## 2026-09-18 — the score buffer had no reason to be freed, and freeing it cost five million
+
+**BUILT AND SHIPPING**, following the previous change rather than a fresh
+reading of the profile. kanso#1538 gave the two dispatch buffers their arity up
+front. The question this one asks is why either is allocated per dispatch at
+all.
+
+`binds` has an answer: it is moved into `bind_all` and becomes the environment
+frame, so its allocation is still doing work after the dispatch ends. `score`
+has none. It exists to compare candidates, it is kept beside `best` while one
+candidate is winning, and then it is dropped. So it was declared above the
+tail-call loop instead, and the winner's buffer is handed back to the working
+variable rather than falling out of scope.
+
+    base    985,444,659
+    kept    980,371,488   -5,073,171   -0.51%
+
+The allocator edges say it is the change and nothing else:
+
+                     base        kept        delta
+    __rust_alloc    1,362,891   1,243,349   -119,542
+    __rust_dealloc  1,350,763   1,231,221   -119,542
+    grow_one          112,013     112,013          0
+    finish_grow       137,048     155,543    +18,495
+
+**119,542 allocate-and-free pairs, at 42.4 instructions each.** The growth path
+is untouched, which is the point: kanso#1538 took the growths and this takes
+the allocations, and the two costs are separable and were separated. The
++18,495 in `finish_grow` is the retained buffer growing when a later dispatch
+arrives with more parameters than the one that sized it — the price of keeping
+it, and it is in the measured total.
+
+**119,542 IS NOT THE DISPATCH COUNT, AND IT IS NOT THE ITERATION COUNT
+EITHER.** There are 55,711 dispatches, so this is 2.15 pairs each, and the
+reason it exceeds one is the loop the buffer now lives above: a tail call goes
+round again without leaving `dispatch_loop_inner`, and every one of those was
+allocating and freeing a score buffer too. `frame_for` is called once an
+iteration and reads 175,246, so the iterations are about three per dispatch.
+
+That leaves 119,542 removed against roughly 175,246 that could have been, and
+the first draft of this entry said "one per tail hop" without checking the
+second number. About two-thirds of iterations were allocating. What accounts
+for the other third is NOT established here. The obvious candidate is arity
+zero — `Vec::with_capacity(0)` allocates nothing, so a nullary dispatch never
+had a buffer to free — and that is a candidate, not a measurement: nothing in
+this profile counts dispatches by arity. The saving is 119,542 pairs whatever
+explains the gap.
+
+**Three wins in eight builds today**, and the two since the allocator-caller
+tally are both wins, against one in five before it.
+
+**A FOURTH CHANGE LEAVES THE COMPARING ALONE.** `__memcmp_avx2_movbe` reads
+46,087,562 then 46,118,166 across the reserve pair, +30,604, +0.066%. A draft
+of this entry had it FALLING 1,484,175, off 47,602,341 — which is a debug-info
+profile read against a release one, two build configurations rather than two
+trees. Compared inside its own sitting it has not moved, and §96's count of
+three changes becomes four.
+
+**THE ITERATION COUNT IS CONFIRMED FROM A SECOND FRAME, and the remaining
+allocations are named.** `drop_in_place<Option<(Vec<u8>, &ka...)>>` is called
+175,246 times, and that type is `best` — `Score` is `Vec<u8>` and `Bindings` is
+`Vec<(Name, Value)>`, so `Option<(Score, &FnDecl, Bindings)>` is exactly what
+the annotator truncated. Two unrelated frames agreeing at 175,246 makes the
+iteration count a measurement rather than an inference, and leaves the gap to
+119,542 standing as the open part.
+
+**A SCORE IS ONE BYTE PER PARAMETER.** `Score = Vec<u8>`, so what this change
+stopped allocating was a handful of bytes, and 42.4 instructions is the
+measured price of an allocate-and-free pair that small. A guess before the
+build put it near 120, which is the price of a larger one.
+
+**OPEN, and this is where the dispatcher's allocations now are.**
+`__rust_alloc` is still reached 404,871 times from `dispatch_loop`, against
+175,246 iterations. Two per iteration are accounted for by construction: the
+bindings vector, which `bind_all` turns into the environment frame, and the
+`Rc<Env>` node that holds it. That is 350,492, and the remaining 54,379 are
+not attributed. Neither of the two is removable the way the score was — both
+outlive the dispatch — so the next thing to ask about them is whether a frame
+whose refcount reaches one at the end of a call can be handed back rather than
+freed. That is a larger change than anything built today and nothing here
+measures it.
+
+**A SPEC CAUGHT IT, WHICH IS THE SPEC WORKING.**
+`tests/a_unique_container_is_extended_in_place.rs` pins the allocation
+DIFFERENCE between a 300-round run and a 600-round one, exactly rather than as
+a band, and it went red: 5,403 expected, 4,803 read. Six hundred fewer over
+three hundred extra rounds is two a round. Its own doc names the protocol —
+"the number was re-read rather than the assertion widened. A change in what
+the ROUNDS cost is exactly what the subtraction exists to see" — so the number
+is re-read to 4,803 with the reason beside it.
+
+Two things make that safe rather than convenient. The sibling test still reads
+`1200 600` and `2400 1200`, so the in-place path is doing what it did; and the
+number moved DOWN, where a container that stopped being extended in place
+would move it sharply up.
+
+**WHICH two of a round's dispatches stopped allocating is left open in that
+file on purpose.** The paragraphs above it decompose their own deltas by
+counting calls, and the same arithmetic does not obviously give two here. Two
+a round is the measurement. A decomposition guessed into a spec's doc is what
+the next reader would check their own change against.
+
+## 2026-09-18 — kanso#1540, CI's rows for the kept score buffer
+
+    interp_instructions   939,042,794 -> 932,183,914   -6,858,880  -0.7304%
+    interp_allocs           1,410,530 ->   1,309,483    -101,047   -7.1638%
+    interp_peak_bytes         833,466 ->     833,463          -3  -0.0004%
+
+Every compile vein byte-identical: compile 35,550,010, entry 126,729,588,
+library 127,186,008, emit 51,617,476, start-up 3,363,916, compile_allocs
+27,313, compile_peak_bytes 787,956. **The fourth runtime-only change in a row
+that moved no layout.**
+
+This container projected 5,073,171 and the runner reads 6,858,880 — the same
+direction and larger, which is the shape every host split has taken today.
+
+**`interp_allocs` REPRODUCES ACROSS HOSTS AND `interp_instructions` DOES NOT.**
+The instrumented container run printed `interp_allocs=1309483` for this tree
+and the runner reads 1,309,483 — the same figure to the unit, on machines whose
+instruction counts differ by millions. It counts what the program asked the
+allocator for rather than what the machine did, which is why its gate carries
+no host-divergence allowance and why the instruction gates refuse on this box
+while this one would not have.
+
+The two allocation instruments agree in sign here — CI's counter falls 101,047
+and the callgrind tally of `__rust_alloc` CALLS over the toggled thread falls
+119,542 — where on kanso#1538 they pointed opposite ways. Both entries say the
+same thing about why: different scopes, different definitions, and neither is
+the other's check.
+
+Welfare 77.26 -> 77.27, banked in the same pull request.
+
+**THE HOST-INDEPENDENCE CLAIM, CHECKED AND HALF REFUTED.** The entry above says
+`interp_allocs` reproduces across hosts, on the strength of one agreement, which
+is a coincidence until it is two. Run against a second tree: on kanso#1538's the
+container prints `interp_allocs=1410530` and the runner reads 1,410,530. Two
+trees, two hosts, exact both times.
+
+The same run refutes the wider reading. `interp_peak_bytes` on that tree is
+833,458 on the container against 833,466 on the runner — **eight bytes apart**.
+So it is the TRAFFIC COUNT that is host-independent and not the memory rows as
+a family. A peak is a high-water mark of what the allocator held at one instant
+and what it held depends on the machine, where a call count does not; that is a
+candidate for the mechanism, and the eight bytes are the measurement.
+
+Worth the two minutes it took. The claim had already been written into a golden
+header, where the next reader would have taken it for both rows.
+
+---
+
 ## 2026-09-17 — the digit loop carried a value it only needed at the end, and then the tail gave it back
 
 `render_ryu` is 84,209,220 instructions of runbench, 4.58%, 440.7 a float over
