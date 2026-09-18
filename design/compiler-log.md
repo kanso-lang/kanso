@@ -4163,6 +4163,121 @@ interpreter. Both halves the ruling asked for are there.
 Two rows stand now: the cohort gavel's data-sized cycle, and the 2026-09-15
 normalization ruling.
 
+## 2026-09-18 — a clone sized for the growth that follows it
+
+`Vec::clone` allocates capacity exactly equal to length. So `taken`'s clone arm
+handed back a full vector, and the `push` or `extend_from_slice` immediately
+after it had no room and reallocated — copying the whole buffer a SECOND time.
+Every shared `push` and every shared `append` was paying for its contents twice.
+
+    main (kanso#1518)          1,392,296,124
+    + the clone sized to grow  1,297,297,477    -94,998,647   -6.82%
+
+**And the peak came down with it**, which was not the point of the change:
+
+    interp_allocs      3,879,653 -> 3,843,587     -36,066
+    interp_peak_bytes    961,231 ->   885,118     -76,113   -7.92%
+
+The peak falls because the reallocation was a doubling: a vector at 1,000 that
+needs 1,001 asks for 2,000, and the sized clone asks for 1,001. That repays the
+frames table's +9,727 from kanso#1518 eight times over, so the interpreter now
+holds LESS than it did before any of this line of work started.
+
+WHERE IT CAME FROM. `memcpy` is the largest single frame in the interpreted run
+and its callers were read off the profile rather than guessed:
+`__rust_realloc` 67,362,609 (4.68%) over 56,338 calls, and `kanso::eval::taken`
+65,960,854 (4.58%) over 35,640. The realloc figure did NOT move when kanso#1518's
+four `with_capacity` calls took `finish_grow`'s self cost from 51,556,413 to
+8,135,509 — it stayed at exactly 67,362,609 across three profiles. That was the
+clue: the reserves fixed small vectors growing by one, and this is large buffers
+being copied whole, a different population reached by a different path.
+
+The unique arm is deliberately untouched. A vector nobody else points at may
+already carry spare capacity, and reserving on it would be this same mistake
+pointing the other way.
+
+Against main before any of the interpreter work, the row has now fallen
+2,007,688,216 -> 1,297,297,477, **35.38%**.
+
+The whole golden corpus passes, which is the assertion that matters: a capacity
+is not observable, so an output difference would have meant the change was not
+what it looked like.
+
+### where the copying went, and one refinement measured and declined
+
+The sized clone did more than take 94,998,647 off the row. It took `memcpy` off
+the top of the profile:
+
+    __memcpy_avx_unaligned_erms   162,103,398 (11.27%) -> 32,012,270 (2.38%)
+    __rustc::__rust_realloc        67,362,609 of memcpy ->    770,336 self
+
+Both halves of the memcpy story went at once, and the reason is that they were
+one story: `taken`'s clone allocated exactly, `push` reallocated, and the pair
+copied the same bytes twice. Removing the second copy removes the realloc that
+performed it.
+
+What is left of the copying is inside `taken_to_grow` itself, 44,816,580 (3.33%)
+of self cost, where `out.extend(shared.iter().cloned())` walks the elements.
+
+**AND THE OBVIOUS REFINEMENT IS WRONG, which is why it was measured.** A bulk
+`extend_from_slice` looks strictly better than an element-wise clone, and for
+`Vec<u8>` it should reduce to a `memcpy`. Built and run:
+
+    extend(shared.iter().cloned())   1,297,297,477
+    extend_from_slice(&shared)       1,323,762,604    +26,465,127
+
+**26,465,127 WORSE.** Declined. The reasoning that recommended it — a bulk copy
+beats a loop — is sound about bytes and says nothing about `Vec<Value>`, which
+is the vector this helper is mostly handed and whose elements are not `Copy`.
+Whatever the two spellings compile to for that case, the iterator one is better
+here by two per cent of the whole run, and the guess was worth exactly what a
+guess is worth.
+
+THE NEXT LEAD IS SMALLER THAN IT WAS, and the note that sized it needs saying
+again with this in it. `taken`'s copy-when-shared was 65,960,854 of memcpy over
+35,640 calls when the linearity lead was priced at about 59 million. That
+population is what this change just made cheap. Anything built on
+`linear::in_place_pushes` now competes with a copy that already costs far less,
+so the lead must be re-measured against this binary before it is built, not
+taken from the earlier figure.
+
+## 2026-09-18 — kanso#1520, CI's rows, and an instruction delta three times the projection
+
+    interp_instructions   1,555,890,579 -> 1,260,262,910   -295,627,669  -19.00%
+    interp_allocs             3,879,653 ->     3,843,587        -36,066   -0.93%
+    interp_peak_bytes           961,165 ->       885,052        -76,113   -7.92%
+    compile_instructions     35,486,173 ->    35,486,333           +160
+    entry_instructions      126,498,498 ->   126,498,292           -206
+    library_instructions    126,953,661 ->   126,954,304           +643
+    startup_instructions      3,362,788 ->     3,363,378           +590
+    emit_instructions        51,451,897 ->    51,456,464         +4,567
+
+THE CONTAINER PROJECTED 94,998,647 AND THE RUNNER READ 295,627,669. Three times
+as much, on the same source, and it is not a bad measurement on either side.
+
+On the same pair of runs the two machines agreed TO THE BYTE on what the change
+does: 36,066 fewer allocations and 76,113 fewer peak bytes, the same integers on
+both hosts, on rows whose absolute values they do not share. So the change is
+understood and behaves identically. Only its instruction price differs, and by
+a factor of three.
+
+WHAT THIS CORRECTS. Four sittings in a row — kanso#1516, kanso#1517 and
+kanso#1518 — had their instruction deltas agree across the two hosts to 0.18%,
+0.12% and 0.63%, and the log and the compiler page both wrote that down as
+though it were a property of the counter. It is not. What a copy of a thousand
+elements costs in instructions is a property of the rustc that built the
+interpreter; how many copies happen is a property of the program. Only the
+second crosses a machine boundary. Section 87 carried the older wording onto
+main this morning and is corrected in this same commit rather than left to
+stand.
+
+The four close agreements were four changes whose work happened to compile
+similarly on both hosts. This one does not, and the honest reading of the
+earlier four is that they were not evidence of a law.
+
+The floor is banked after these rows. The run side is unchanged — this branch
+touches the interpreter only.
+
 ## 2026-09-17 — the beat rewind's fast path: 23 instructions to 15
 
 `k_beat_iter` is what a compiler-proven beat loop calls between iterations to

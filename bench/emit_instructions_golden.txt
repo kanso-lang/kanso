@@ -209,4 +209,13 @@
 # and digested into a constant (src/hash.rs), so editing it moves the
 # compiler's own .rodata and every route that runs the compiler moves with
 # it. None of these routes executes the runtime.
-emit_instructions=51456279
+# ^ SUPERSEDED: that reading was taken before kanso#1520 landed under this
+#   branch. THE VALUE BELOW IS MAIN'S, carried forward; the merged
+#   reading is CI's.
+#
+# 2026-09-18, kanso#1520 against main at kanso#1519, CI's sitting.
+# 51,451,897 -> 51,456,464, a RISE of 4,567 (+0.0089%).
+# LAYOUT. This branch changes how a shared vector is copied in the
+# INTERPRETER; none of these routes runs it. src/eval.rs is the compiler,
+# so its bytes move and every route that runs the compiler moves with them.
+emit_instructions=51456464
