@@ -2325,6 +2325,17 @@ interp_peak_bytes           884,985 -&gt;       833,130       -51,855   -5.86%</
 
 <p>declined on arithmetic. the idea is sound and the node is the wrong size for it.</p>
 
+<p><strong>so the other version was built too, and it loses by more.</strong> the name&#8217;s inline buffer is zero-filled before the text is copied, so two inline names hold identical twenty-two-byte buffers exactly when they hold the same text &#8212; the padding makes the length implicit, and an identifier cannot contain a NUL to blur it. the walk can therefore build a padded key <em>once per lookup</em> and compare a fixed-width block per frame, which the compiler inlines. nothing grows; the key lives on the stack for one lookup.</p>
+
+<pre><code>base   row 1,115,996,775   memcmp 48,165,663
+key    row 1,150,537,278   memcmp 35,577,082</code></pre>
+
+<p>it takes <strong>12,588,581</strong> instructions off <code>memcmp</code>, twenty-six per cent of the whole figure, and the run rises <strong>34,540,503</strong>. three times worse than the byte, with no node cost at all.</p>
+
+<p>two sound schemes losing in different ways is worth more than either result. the byte lost to the node&#8217;s size; this one has no node cost and loses by more, so what is left to blame is the shape of the trade: the setup is paid per <em>lookup</em> and the saving arrives per <em>frame</em>. that only pays when the chain is long, and here it is not.</p>
+
+<p>which reframes the lead. the 48 million is real, and it belongs to the walk rather than to how the walk compares. anything that keeps the walk and makes the compare cheaper is buying a per-frame saving with a per-lookup cost. what removes it is not walking at all: resolving a local to a slot at parse time, so the interpreter indexes where it now searches. that is a larger change than either of these, and it is what the 48 million actually argues for.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>

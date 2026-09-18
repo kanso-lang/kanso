@@ -4758,6 +4758,48 @@ enough change leaves the layout alone.
 So the trade is 62.8 million interpreted instructions against 715,346 across
 the four compile-side rows, and it is not close.
 
+## 2026-09-18 — the page gates read a conflict marker and called it prose
+
+Five branches each added a section to `docs/compiler.html` today, and every
+merge from main conflicted in the same place: the end of the file, just above
+the coda, where every new section goes. Four of those resolutions went fine.
+One did not, and what it cost is the point.
+
+The HTML was left unmerged. A script then rewrote the file for an unrelated
+reason — renumbering a section — which wrote the working tree's contents back
+out, markers included, and the commit went in with `<<<<<<< HEAD`, `=======`
+and `>>>>>>> origin/main` sitting in the published page.
+
+**All three page gates then ran on that tree and all three passed.**
+`golden_prose` reads the `data-golden` spans and there were none in the hunk.
+`page_drift` counts log entries against the page's git history and the page had
+moved. `prose_check` reads twenty-nine pages for three families of sentence,
+and a conflict marker is not a sentence. The sweep printed *the three page
+gates agree with what the tree says* over a page with three markers in it.
+
+Nothing downstream would have caught it either. The markers are text in HTML,
+so a browser renders them as a line of prose rather than failing; the site
+builds; the book checks pass. It was found by a `grep` run for something else.
+
+`tests/no_published_page_carries_a_conflict_marker.rs` closes it. It reads the
+same two directories `prose_check` reads, off disk rather than from a list, so
+a page added later is covered without anybody remembering the file exists. It
+was watched red against a reproduction of the exact failure — the same three
+markers in the same place — and names the file and line of each.
+
+Two details in it are deliberate. The middle marker is matched as a WHOLE LINE
+equal to seven equals signs, where the other two are matched as prefixes: a row
+of equals signs is ordinary punctuation under a heading or inside a fenced
+block, and matching it loosely would fail on prose somebody wrote on purpose.
+And the message says to check the section numbers afterwards, because the merge
+that leaves a marker is the same merge that leaves two sections numbered 88 —
+both happened in the same resolution, and finding one is a reason to look for
+the other.
+
+The general shape is one this file already knows: three gates that read the
+same file for three different properties leave the union of what none of them
+reads. The published number, the entry budget and the sentence families were
+each checked, and whether the file was a finished merge was checked by nothing.
 ## 2026-09-18 — a byte beside the name, built and declined: one byte costs eight
 
 The interpreted run spends **48,165,663 instructions (4.14%)** inside
@@ -4798,3 +4840,43 @@ ceiling on what answering it would be worth.
 
 Recorded so the next reader does not rebuild it. The idea is sound; the node is
 the wrong size for it.
+
+## 2026-09-18 — the second way to avoid the compare, and what losing twice says
+
+The entry above declined a byte beside the name because the node grew from 64
+to 72. It named the alternative: a discriminator in space the node already
+owns. There is one, and it is better than a discriminator — it is the whole
+comparison.
+
+`Name::new` zero-fills the inline buffer before copying, so two inline names
+hold byte-identical twenty-two-byte buffers exactly when they hold the same
+text. The padding makes the length implicit and an identifier cannot contain a
+NUL to blur it. So the walk can build a padded key ONCE per lookup and compare
+a fixed-width block per frame, which rustc inlines, where a `&str` comparison
+of a run-time length reaches `memcmp`. Nothing grows: the key lives on the
+stack for the duration of one lookup.
+
+    base   row 1,115,996,775   memcmp 48,165,663
+    key    row 1,150,537,278   memcmp 35,577,082
+
+**It removes 12,588,581 instructions of `memcmp`, twenty-six per cent of the
+whole figure, and the run rises 34,540,503.** Both engines print the same
+answer. A net loss of about thirty-four million, three times worse than the
+byte.
+
+**Two schemes, both sound, both losing, and the second loss is the informative
+one.** The byte lost to the node's size; this one has no node cost at all and
+loses by more. What is left to blame is the setup: a key is built per LOOKUP
+and the saving is per FRAME, so the trade only pays when the chain is long, and
+on this corpus it is not.
+
+That reframes the lead. The 48 million is real, and it belongs to the
+walk rather than to how the walk compares. Every scheme that keeps the walk and makes the compare
+cheaper is paying a per-lookup cost to save a per-frame one, and the ratio
+decides it. What would actually remove the cost is not walking: resolving a
+local to a slot at parse time, so the interpreter indexes instead of searching.
+That is a larger change than either of these, and it is the one the 48 million
+argues for.
+
+Recorded with the arithmetic so the next reader inherits the conclusion rather
+than the two experiments. The comparison is not the problem.
