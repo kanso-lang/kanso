@@ -2562,6 +2562,120 @@ Run against the container's two passes, which differ only in the excluded
 kanso process, it pairs all five correctly, stays silent on the four that
 agree, and names the two frames that moved in the fifth:
 `__memcmp_avx2_movbe` −176 and `kanso::build` +419 on a process total of +243.
+## 2026-09-18 — the section line prints .rodata, and the row that asked for it had the premise backwards
+
+STATUS.md's normalization row carries a small item marked as not blocked on
+the measurement beside it: `interp_instructions.sh` prints `.text`, `.data`
+and `.bss`, where `compile_instructions.sh` "prints `.rodata` too, with a
+seven-binary calibration in its header for why". One awk alternation, it said.
+
+The calibration is in that header. The printing is not. Grep the gates for
+`rodata` and the only two hits in the tree are both inside a comment — lines
+156 and 163 of `compile_instructions.sh`, the calibration table itself. No
+gate printed `.rodata`, and the interp gate was not behind the others: all six
+gates that print a section line printed the same three sections.
+
+So the change is nine lines rather than one, across six files, and every one
+of them now reads `text|rodata|data|bss`. On a release build of the compiler
+that adds a column worth 866,912 bytes beside the 2,844,578 of `.text`.
+
+**Why the pair matters, from the table that was misread.** Seven binaries
+differing only in code or data nothing reaches:
+
+    variant           .text     row         maps     program
+    baseline          2550854   42,344,081  112,580  41,878,959
+    +64 KiB .bss      2550854   42,346,221  114,720  41,878,959
+    +64 KiB .rodata   2550854   42,344,099  112,598  41,878,959
+    +400 dead fns     2565174   42,348,044  110,341  41,879,922
+
+`.bss` and `.rodata` are the two cases where the anchored frame comes back
+identical to the instruction and `.text` is not one of them. A gate printing
+`.bss` and withholding `.rodata` prints half of that pair, so a reader looking
+at a moved row could see that the zero-initialised data grew and not that the
+constant data did.
+
+**The spec reads the gates off disk and pins the count at nine.** A list
+written down by hand goes stale the way CLAUDE.md's counter count did, twice,
+and the way this STATUS row did. It skips comment lines, which is the whole
+reason the row was wrong, and it pins rather than bounds: a floor of "at least
+nine" would stay green through a gate that stopped printing its sections,
+which is the change it exists to catch. Watched red first, naming all nine
+lines with their files.
+
+No counter moves. The section line is a notice; the three gates that also
+write a `.sections` file only `cat` it into another notice, and nothing
+compares either.
+
+The measurement half of that STATUS row — cloud's three-parts-per-billion
+candidate for the interpreted row's six — is untouched here and still owed.
+## 2026-09-18 — the emitter's 9.32% was two frames read as one, and the real figure is 3.82%
+
+kanso#1478's entry closes its open thread with "substring search over IR
+lines, 7,929,096 instructions inclusive, 9.32%, all of it reached from
+`Backend::emit`". That number landed on main and it is wrong. It sums two
+frames that do different things.
+
+`next_match` is a `CharSearcher`. Most of its 5,806,878 from `Backend::emit`
+is `.contains(char)` and `.find(char)` — single-character scans, which are
+already the cheap idiom and have nothing to give. The substring cost proper is
+`<&str as Pattern>::is_contained_in`: **3,260,397 inclusive, 3.82%**, over
+25,374 calls.
+
+The site did not converge either. Two candidates were instrumented on that
+branch's head and counted on `kanso build bench/codegen_corpus`:
+
+    without_stats_gate  line.contains("load i32, ptr @k_stats_on")  1,057 calls
+    prune_unnamed       names[at].contains(name)                    1,463 calls
+
+2,520 calls of 25,374. The rest is inlined into `Backend::emit` from
+somewhere a source grep does not reach, and `body_calls`, `body_lines`,
+`twin_calls` and `declares_context_calls` are all `crate::hash::Set` lookups
+rather than searches. A release build with `RUSTFLAGS=-g` still annotated as
+`???:`, because the benchmarks' hot code is clang's — from runtime.c and the
+emitted IR — so a rustc flag was never going to give line information there.
+
+**Declined at 3.82%**, with the sites unfound, against a front end whose three
+compile routes have come down about 1.2% apiece this week from changes whose
+sites were obvious. The run side's leads are worth more.
+
+The correction goes here rather than into kanso#1478, because the log is
+append-only and this project corrects by later entry. What the original entry
+got right is that there is a flat 85 million in the emitter with one cluster
+in it; what it got wrong is how big the cluster is, and 9.32% would have sent
+somebody looking for two and a half times the prize that is there.
+## 2026-09-18 — the 649 unreachable blocks are terminators, and 621 of them follow a call that already says noreturn
+
+The run-program profile left one lead marked still open: "649 `unreachable`
+blocks in 599 defines, roughly 3.6% of emitted lines, paid by clang and ld on
+every build." Measured on `kanso build bench/runbench`, 36,085 emitted lines:
+
+    unreachable blocks                  649    1.798% of emitted lines
+    ... preceded by a k_die-family call  621
+    ... standalone block tails            28
+    defines                              599
+
+**The share is 1.798%, and 3.6% is the pair.** 649 lines is 1.798%; 1,298 —
+each `unreachable` with the `call void @k_die(...)` above it — is 3.597%. The
+figure was right about the two lines together and the sentence reads as though
+the terminators alone cost that.
+
+**And the lead is closed rather than open.** An LLVM basic block must end in a
+terminator. `k_die`, `k_die_arity`, `k_die_overload` and `k_die_destructure`
+are all declared `noreturn` in the emitted preamble and carry
+`__attribute__((noreturn, noinline))` in runtime.c, so the block after one of
+those calls has no fall-through and `unreachable` is the terminator it is
+required to have. There is nothing to delete: 621 of the 649 are mandatory,
+and the other 28 are ordinary block tails after a label or a `ret`.
+
+Emitting fewer of them means emitting fewer `k_die` sites, and every one of
+those is a runtime check a program can reach — an arity mismatch, an overload
+with no match, a destructure of the wrong shape, integer overflow. That is a
+change to what the language checks, not a codegen saving, and it is not on the
+table.
+
+Recorded so the count stops reading like slack. What clang and ld pay for
+these lines is real and it is the price of the checks, which is a different
+sentence from the one the lead was written in.
 ## 2026-09-17 — DECLARES calls sixty-two symbols, and the compiler was finding that out every time
 
 kanso#1468's index made `kanso build bench/runbench` fall 69.64% and made the
