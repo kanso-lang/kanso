@@ -2125,6 +2125,13 @@
 # than compiling it, so what moved is where the code sits; every one of these
 # is under a hundredth of a per cent.
 #
+# 2026-09-18, kanso#1510 (kanso#1484 rebuilt) on the tree merged with main,
+# CI's sitting. 35,441,027 -> 35,443,639, a RISE of 2,612 (+0.0074%).
+# LAYOUT. The derivation this branch removes runs before `kanso check` reaches
+# these routes, so the saving is outside them; what moved is where the code
+# sits. Three check routes and the interpreted row rise by a few thousand each
+# against falls of 567,547 and 560,657 on the two rows that pay for the
+# derivation.
 # 2026-09-18, kanso#1509 (kanso#1480 rebuilt) on the tree merged with main,
 # CI's sitting. 35,441,027 -> 35,441,774, a RISE of 747 (+0.0021%).
 # LAYOUT. `kanso check` stops before codegen, so the saving in `emit_ir` is
@@ -2146,7 +2153,21 @@
 # it changes the compiler's own bytes and the layout under them; none of
 # these routes runs the beat code this branch touches. The second reading
 # in the same job matched the first to the instruction.
-compile_instructions=35442739
+# 2026-09-18, re-merged onto main after kanso#1509. THE VALUE BELOW IS MAIN'S,
+# carried forward: kanso#1509 moved this row on its own and what this branch
+# adds on top of it has not been measured, so the merged reading is CI's.
+#
+# 2026-09-18, kanso#1510 (kanso#1484 rebuilt) on the tree merged with main
+# after kanso#1509, CI's sitting. 35,441,774 -> 35,445,148, a RISE of
+# 3,374 (+0.0095%). LAYOUT. The derivation this branch removes runs before this route
+# reaches its work, so the saving is outside it and what moved is where
+# the code sits; the two rows that pay for it fall by about 560,000 each.
+# The second reading in the same job matched the first to the instruction.
+#
+# 2026-09-18, re-merged onto main after kanso#1510. THE VALUE BELOW IS MAIN'S,
+# carried forward: kanso#1510 moved this row and what this branch adds on top
+# has not been measured, so the merged reading is CI's.
+compile_instructions=35445148
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.
 # The row did not move for that -- the same figure came back on the run before

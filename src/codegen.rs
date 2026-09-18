@@ -2137,15 +2137,149 @@ fn symbols_before_newline(text: &str) -> crate::hash::Set<&str> {
 /// The symbols DECLARES calls from its own inline definitions, which is every
 /// line of it that is not itself a `declare`. DECLARES is a constant, so this
 /// is read once for the life of the process rather than once per emit.
-fn declares_context_calls() -> &'static crate::hash::Set<&'static str> {
-    static CALLS: std::sync::OnceLock<crate::hash::Set<&'static str>> = std::sync::OnceLock::new();
-    CALLS.get_or_init(|| {
-        let mut found = crate::hash::Set::default();
+/// The symbols DECLARES calls from its own inline definitions, written down
+/// rather than scanned for.
+///
+/// DECLARES is a `const`: the same 62 names in every process kanso has ever
+/// run. Reading them off it cost 62 answers for 1,024 lines of scanning, and
+/// the scanning was 94% of the index this branch builds -- 292,701 of the
+/// 278,812 `called_symbols` charges on the start-up corpus came through
+/// `Once::call_once_force`, over 1,023 calls, against 18,159 from the emitter's
+/// two. On a program that emits one `print` that is the whole of the index's
+/// cost, and `kanso play` paid it to learn nothing it could not have been told.
+///
+/// Sorted, and asked with a binary search: 62 names is six comparisons an ask
+/// and 163 asks a module, where a hash set costs a table to build first.
+///
+/// `tests/the_declares_symbols_are_the_ones_declares_calls.rs` recomputes this
+/// list from DECLARES with the same scan it replaces and asserts they are the
+/// same set, so an edit to DECLARES that adds or drops a call turns that spec
+/// red rather than silently leaving a symbol out of a program's declares.
+static DECLARES_CONTEXT_CALLS: &[&str] = &[
+    "k_b_append",
+    "k_b_append_byte",
+    "k_b_append_mut",
+    "k_b_append_mut_byte",
+    "k_b_append_mut_int",
+    "k_b_append_slice",
+    "k_b_append_slice_fast",
+    "k_b_at",
+    "k_b_at_fast",
+    "k_b_bit_and",
+    "k_b_bit_and_fast",
+    "k_b_bit_not",
+    "k_b_bit_not_fast",
+    "k_b_bit_or",
+    "k_b_bit_or_fast",
+    "k_b_bit_shl",
+    "k_b_bit_shl_fast",
+    "k_b_bit_shr",
+    "k_b_bit_shr_fast",
+    "k_b_bit_xor",
+    "k_b_bit_xor_fast",
+    "k_b_bytes",
+    "k_b_bytes_fast",
+    "k_b_find2",
+    "k_b_find2_below",
+    "k_b_find2_below_fast",
+    "k_b_find2_below_raw",
+    "k_b_find2_fast",
+    "k_b_find2_raw",
+    "k_b_length",
+    "k_b_length_fast",
+    "k_b_push_mut",
+    "k_b_push_mut_fast",
+    "k_b_put_mut",
+    "k_b_put_mut_fast",
+    "k_b_slice",
+    "k_b_slice_fast",
+    "k_b_slice_raw",
+    "k_b_utf8_slice",
+    "k_b_utf8_slice_fast",
+    "k_b_utf8_slice_raw",
+    "k_bool",
+    "k_check_bool",
+    "k_check_int",
+    "k_check_rec",
+    "k_check_rec_fast",
+    "k_check_tag",
+    "k_field",
+    "k_field_fast",
+    "k_float",
+    "k_force",
+    "k_force_fast",
+    "k_index",
+    "k_index_fast",
+    "k_int",
+    "k_none",
+    "k_not_failure",
+    "k_str_lit",
+    "k_str_lit_fast",
+    "k_truthy",
+    "k_truthy_bad",
+    "llvm.memcpy.p0.p0.i64",
+];
+
+fn declares_context_calls(sym: &str) -> bool {
+    DECLARES_CONTEXT_CALLS.binary_search(&sym).is_ok()
+}
+
+#[cfg(test)]
+mod the_declares_symbols_are_the_ones_declares_calls {
+    use super::{called_symbols, DECLARES, DECLARES_CONTEXT_CALLS};
+
+    /// The scan the static replaces, kept as the oracle.
+    fn scanned() -> std::collections::BTreeSet<&'static str> {
+        let mut found = std::collections::BTreeSet::new();
         for line in DECLARES.lines().filter(|l| !l.starts_with("declare")) {
             found.extend(called_symbols(line));
         }
         found
-    })
+    }
+
+    /// Written down and scanned for are the same set. An edit to DECLARES that
+    /// adds or drops a call turns this red rather than leaving a symbol out of
+    /// a program's declares, where the only symptom is a link error in whatever
+    /// program happens to reach it.
+    #[test]
+    fn the_written_list_is_what_the_scan_finds() {
+        let written: std::collections::BTreeSet<&str> =
+            DECLARES_CONTEXT_CALLS.iter().copied().collect();
+        let found = scanned();
+        let missing: Vec<&&str> = found.difference(&written).collect();
+        let extra: Vec<&&str> = written.difference(&found).collect();
+        assert!(
+            missing.is_empty() && extra.is_empty(),
+            "DECLARES_CONTEXT_CALLS has drifted from DECLARES.\n               missing (DECLARES calls it, the list does not name it): {missing:?}\n               extra (the list names it, DECLARES does not call it): {extra:?}"
+        );
+    }
+
+    /// And it is sorted, because it is asked with a binary search.
+    #[test]
+    fn the_list_is_sorted_and_holds_no_duplicate() {
+        let mut sorted = DECLARES_CONTEXT_CALLS.to_vec();
+        sorted.sort_unstable();
+        assert_eq!(
+            DECLARES_CONTEXT_CALLS,
+            &sorted[..],
+            "the list is asked with binary_search, which answers nonsense on an \
+             unsorted slice and answers it quietly"
+        );
+        sorted.dedup();
+        assert_eq!(sorted.len(), DECLARES_CONTEXT_CALLS.len(), "the list repeats a symbol");
+    }
+
+    /// The population is not empty, so the two tests above are not agreeing
+    /// about nothing.
+    #[test]
+    fn the_list_is_not_empty() {
+        assert!(
+            DECLARES_CONTEXT_CALLS.len() > 40,
+            "only {} symbols, where DECLARES's inline definitions called sixty-two \
+             when this was written",
+            DECLARES_CONTEXT_CALLS.len()
+        );
+    }
 }
 
 #[cfg(test)]
@@ -3324,9 +3458,7 @@ impl<'a> Backend<'a> {
             // binary, which the compile rows read as a reproduction failure.
             let twin_calls = called_symbols(&call_twins);
             let referenced = |sym: &str| {
-                body_calls.contains(sym)
-                    || twin_calls.contains(sym)
-                    || declares_context_calls().contains(sym)
+                body_calls.contains(sym) || twin_calls.contains(sym) || declares_context_calls(sym)
             };
             let kept: Vec<&str> = DECLARES
                 .lines()
