@@ -4740,3 +4740,29 @@ measured fact about this branch's binary.
 `interp_allocs` and `interp_peak_bytes` are byte-identical in both sittings,
 so nothing the interpreter counts changed either time. The other five rows
 are as recorded above: -342, +186, -139, +2,691, -485.
+
+## 2026-09-18 — the same seven, a third time, against a third baseline
+
+    995,837,536 -> 995,837,543
+    975,944,763 -> 975,944,770
+    957,583,234 -> 957,583,241
+
+Three CI sittings of kanso#1504, each against a baseline the one before it did
+not have, spanning 38,254,302 instructions between the first and the last, and
+the delta is seven every time. `interp_allocs` and `interp_peak_bytes` are
+byte-identical in all three.
+
+The first note called it re-based rather than explained, which was right with
+one reading. Three make it a small measured fact instead: this branch's relink
+costs the interpreted row seven instructions, and the figure does not drift
+with the size of the row it sits on. A layout delta that reproduces across
+baselines is worth more than the same delta observed once, because once is
+consistent with noise that happened to land near seven.
+
+**AND THE RELEASE CODEGEN ROW PASSED THIS SITTING**, on the same branch whose
+previous sitting halted that vein with 6,841,691,436 then 6,841,691,425. That
+is what the temporary object's name being DRAWN predicts: most names give one
+number and a minority give another, so an unpinned branch fails the row
+intermittently. kanso#1512 measured nine of ten names at one value and
+`4b8c1a` at another; this is the tenth case arriving on its own, in a job
+nobody set up to look for it.

@@ -462,5 +462,17 @@
 # it was aimed at. This container projected the fall at 15,853,848 against
 # its own base; the runner reads 18,361,529, the same direction and larger,
 # which is the host split kanso#1534 recorded the day before.
-interp_instructions=957583234
+#
+# 2026-09-18, kanso#1504 on the tree merged after kanso#1535, CI's sitting.
+# 957,583,234 -> 957,583,241, a RISE of SEVEN instructions, A THIRD TIME.
+# The three sittings, each against a baseline the one before it did not have:
+#   995,837,536 -> 995,837,543
+#   975,944,763 -> 975,944,770
+#   957,583,234 -> 957,583,241
+# Three baselines spanning 38,254,302 instructions, the same seven every
+# time. What began as "re-based, not explained" is now a small measured fact
+# about this branch's binary: its relink costs this row seven instructions,
+# reproducibly. Nothing in the diff runs in the interpreter, and interp_allocs
+# and interp_peak_bytes are byte-identical in all three sittings.
+interp_instructions=957583241
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
