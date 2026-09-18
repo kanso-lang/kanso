@@ -3415,3 +3415,35 @@ of those the project wants is a question rather than an implementation detail,
 so it goes to the ledger rather than being decided here.
 
 Recorded before any code, which is the whole point of writing the fixture first.
+
+## 2026-09-18 — what the walk's own clones copy, which orders the two leads
+
+Two leads came out of the walk's 31,514,002 of `Value::clone`: answering a
+REFERENCE into the frame rather than a copy, and making small integers inline.
+Which to build first is a question the counters answer directly, by asking what
+the walk's 724,304 hits actually clone:
+
+    Int          297,244    41.0%     allocates a digit vector
+    Str           68,866     9.5%     allocates
+    Rc-backed    331,740    45.8%     a refcount bump
+    flat          26,454     3.7%     copies nothing
+
+    allocating   366,110    50.5%
+
+HALF THE WALK'S CLONES ALLOCATE, AND THE INTEGERS ARE FOUR TIMES THE STRINGS
+here as they are across the run. So the two leads are complementary rather than
+competing, and the order is settled by which covers more:
+
+Small integers reach 41.0% of the walk's clones and, being a change to `Value`
+itself, the same 39.3% of every OTHER clone in the run -- `match_one`'s binds,
+every argument handed to a call. It is one representation change with one
+correctness question (promote at exactly the right step).
+
+A reference return reaches the 45.8% that are already only a refcount bump,
+where the saving per clone is smallest, and it costs a signature change through
+`eval_ident` and its callers, several of which genuinely need an owned value.
+
+So integers first, and the reference return is worth re-sizing only after,
+against whatever the row then reads. Neither is sized: these are counts of how
+often, not measurements of what removing them saves, and that distinction is
+the one this day was about.
