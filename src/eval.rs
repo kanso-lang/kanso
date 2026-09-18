@@ -1983,9 +1983,17 @@ impl<'a> Interp<'a> {
     }
 
     fn eval_ident(&self, name: &str, span: Span, env: &Option<Rc<Env>>) -> EvalResult {
-        if let Some(value) = lookup(env, name) {
-            return Ok(value);
+        match lookup(env, name) {
+            Some(value) => Ok(value),
+            None => self.eval_global(name, span),
         }
+    }
+
+    /// The path a name takes when no scope binds it. It is out of line so that
+    /// `eval_ident` -- which a scope hit leaves after two loads -- does not
+    /// carry this one's frame.
+    #[inline(never)]
+    fn eval_global(&self, name: &str, span: Span) -> EvalResult {
         // The borrow is dropped before anything below runs: `knotted` evaluates
         // a constant's body, which reaches `eval_ident` again and would find
         // this cell already borrowed.
