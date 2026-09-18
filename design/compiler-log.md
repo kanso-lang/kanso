@@ -2996,3 +2996,39 @@ creation. Which one this wants is the question the build starts from.
 The spec it needs is small and should be written first: a local shadowing a
 global, read at a site that also reaches the global from an enclosing scope, so
 a wrong index prints the wrong value instead of crashing.
+
+## 2026-09-18 — the closure capture is not in the way, measured
+
+The entry above called the closure capture "the only part" still hard about
+resolving a local to an index, and named the two usual answers. Neither is
+needed to collect the prize, and the reason is a count rather than an argument.
+
+`call_closure` pushes the captured head onto a stack around the body it
+evaluates, and `lookup` marks whether its walk passed that frame before it
+matched. Over bench/interp_corpus:
+
+    closure calls                                440
+
+    hits   outside any closure body          722,764    99.79%
+           inside one, above the capture        1,540     0.21%
+           inside one, at or below it               0     0
+
+    hit    outside any closure body        1,588,753    99.88%
+    visits inside one, above the capture        1,980     0.124%
+           inside one, at or below it               0     0
+
+NOT ONE NAME LOOKUP IN THE RUN REACHES A CAPTURED FRAME. The 1,540 hits inside
+a closure body all resolve to the closure's own parameters, which sit above the
+capture and have static depths like any other parameter.
+
+So the 47,209,178 of `memcmp` the hit visits carry is 99.88% inside plain
+function bodies, and a slot scheme that covers those and leaves closures walking
+by name collects essentially all of it. The upvalue question is real and it is
+not on the path.
+
+WHAT THIS BOUNDS. One corpus, and a program written around closures would read
+differently -- the corpus makes 440 closure calls against 1,056,329 lookups, so
+it is barely exercising the case. What the figure does bound is the thing that
+matters here: the row this change is for is measured on THIS corpus, so the
+change that moves the row needs no upvalue resolution. A program that leans on
+closures would keep the walk it has today and lose nothing it has now.
