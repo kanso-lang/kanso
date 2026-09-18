@@ -2944,15 +2944,30 @@ what resolving a local to an index removes. Section 90 said the hard part is
 that closures capture an environment rather than a frame. Reading the tree says
 which part of that is hard and which part is already settled.
 
-SETTLED: a local's depth from its own frame is static at every site. Three
-things make it so, and all three are checkable rather than assumed.
+SETTLED: a local's depth from its own frame is static at every site.
 
 `Stmt` has exactly three variants -- `Bind`, `Expr` and `Set` -- and not one of
-them branches. A body is a flat sequence, so every `Stmt::Bind` runs once, in
-order, on every entry. `Expr::Build` splices its statements onto the same
-environment (`run_stmts(inner, &mut env, frame)`) and its names stay in scope
-for the rest of the body, so a `build` extends the sequence rather than nesting
-a scope inside it.
+them branches. THAT DOES NOT MAKE A BODY A FLAT SEQUENCE, which is what this
+entry said first and corrected an hour later. The branching is in the
+expressions, and three of them carry a statement list of their own: `Block`,
+`Build`, and `Guard`'s `rest`. A `return x if c` line evaluates `rest` only when
+the condition is false, so the statements after a guard are a nested list rather
+than the next items in a sequence.
+
+`tests/golden/micro/a_wall_whose_name_is_a_local.kso` says exactly that, in its
+own comment: "a binding that follows a `return` line lives in `Expr::Guard`'s
+own statement list rather than in a block, and a walk that knew only blocks
+refused this program". An earlier pass learned it from a program the compiler
+refused. This one read the enum and walked past the fixture, which is the same
+mistake as sizing a lead from an average -- the thing was written down one file
+away.
+
+What survives is what slots need. Each of the three runs its list on the
+environment as it stands where it appears, so a site inside one has a static
+depth. Only a `Build` in STATEMENT position takes `&mut env` and lets its binds
+escape into the parent's sequence; a `Block` or `Build` in expression position
+takes `env` by reference and its binds go no further. The body is a TREE of
+statement lists with static depths, rather than one flat list.
 
 A bind pattern is irrefutable by rule -- `destructure`'s fallback says so in as
 many words, "binding patterns are irrefutable: names and constructor patterns
