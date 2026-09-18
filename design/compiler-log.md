@@ -4742,3 +4742,111 @@ That is the model working rather than failing. `interp_instructions` sits on
 the development side under a satiating curve, and a row already improved 132%
 against its baseline pays very little for the next percent. A change wanting to
 move the number has to find production work or an unsatiated term.
+
+---
+
+## 2026-09-18 — the frame's node comes back too, and this one buys its saving with nothing
+
+**BUILT AND SHIPPING.** kanso#1543 took the vector out of a dead frame and let
+the `Rc` go. Its own entry named what it left: "the node around the vector is
+still allocated. every dispatch that binds anything still calls for one, and
+reclaiming what is inside does nothing about it." This is that node.
+
+The reason the node had to be destroyed was the tool. `Rc::try_unwrap` reaches
+the value by consuming the handle, so the only way to get the vector out was to
+free the `RcBox` around it, and the next dispatch called `Rc::new` for a fresh
+one. `Rc::get_mut` reaches the same vector through a handle that stays alive.
+So the pool stops being a `Bindings` and becomes an `Option<Rc<Env>>`: the node
+lends its vector to the candidate list at the top of the loop and takes it back
+when the body is done.
+
+    base    977,646,574
+    node    972,776,892   -4,869,682   -0.50%
+
+Two readings of each arm, in one box, interleaved; both arms repeated their own
+figure exactly. The two arms sit at `/tmp/wt-rcbase` and `/tmp/wt-rcnode`,
+named to the same length on purpose.
+
+**THE TRAFFIC IS THE SAME 119,541 kanso#1543 RECLAIMED**, which is the useful
+part of the measurement:
+
+                          base         node       delta
+    interp_allocs       1,183,336    1,063,795   -119,541
+    interp_alloc_bytes 84,810,613   75,247,333  -9,563,280
+    interp_peak_bytes     834,079      834,079           0
+
+Not a number near it — the same one. kanso#1543 stopped allocating the VECTOR
+for 119,541 frames and this stops allocating the NODE for 119,541 frames, so
+the two changes are reclaiming the same set of frames from two sides, and the
+set is now fully accounted. The bytes divide exactly: 9,563,280 over 119,541 is
+80.0, which is what an `RcBox<Env>` occupies.
+
+**AND THE PRICE PER PAIR IS THE UNDISCOUNTED ONE.** 4,869,682 over 119,541 is
+40.7 instructions, against the 42.4 kanso#1540 measured for a small allocate-
+and-free pair. kanso#1543 got 23.3 for the same count because it bought its
+saving: a reference count up, a reference count down and an unwrap check on
+every dispatch. This one swaps `try_unwrap` for `get_mut` at the same point in
+the same code and adds no traffic of its own, so what arrives is close to the
+full price of the pair. The two changes together take 119,541 frames from two
+allocations each to none, for 7,658,075 instructions.
+
+**THE PEAK DOES NOT MOVE**, where kanso#1543's rose 616 for the pooled vector.
+A retained 80-byte node is not resident at the high-water mark, because the
+node it replaces was resident there in the base arm too.
+
+**WHAT THE PER-SYMBOL TABLE SHOWS, AND WHAT IT DOES NOT.** Self costs, same
+sitting:
+
+                      base         node        delta
+    mi_free        26,050,308   23,420,394   -2,629,914
+    __rust_alloc   17,054,835   15,261,720   -1,793,115
+    mi_malloc       8,269,835    7,433,048     -836,787
+    __rust_dealloc  2,270,982    2,031,900     -239,082
+    drop_slow       3,230,145    5,758,049   +2,527,904
+    drop_slow'2       538,984    1,074,180     +535,196
+    grow_one        2,496,923    2,496,923            0
+    finish_grow     8,509,860    8,509,860            0
+
+The allocator falls and the reference-count teardown rises. That is attribution
+moving rather than a second effect: the bindings a frame holds used to be
+dropped through `binds.clear()` on a bare vector, where the compiler inlined
+that work into the dispatch loop, and they are now dropped out of a vector that
+lives inside an `Rc<Env>`, where it lands in `drop_slow`'s symbol. The same
+`Value` drops happen either way and the row fell by more than the two rises
+together. Written down without a mechanism attached, because this is a
+difference in where the profiler filed the work and nothing here isolates it.
+The claims that rest on isolation are the three counters above, each read
+twice.
+
+**UNIQUENESS: `get_mut` IS THE STRICTER TEST AND THAT IS FINE HERE.**
+`try_unwrap` reads the strong count alone; `get_mut` reads the weak count too,
+so a frame with a live `Weak` would be reclaimed by the first and refused by
+the second. Nothing in `src/` takes a `Weak<Env>` — the instrumented build that
+did was reverted after kanso#1543 measured with it — so the two agree today.
+The difference is written into the source rather than argued away, because the
+day something takes a `Weak<Env>` this becomes a silent loss of reuse rather
+than a bug.
+
+There is no `unreachable!` on the reclaim path. A refused `get_mut` carries the
+winner's bindings back out through a spare and falls through to `bind_all`, so
+the worst case is an allocation rather than a panic on a live interpreter.
+
+**THE SPEC IS THE SAME SPEC, THE FOURTH CHANGE RUNNING.**
+`tests/a_unique_container_is_extended_in_place.rs` pins what 300 extra rounds
+of the two builders cost in allocations, and it went red at 3,603 against a
+pinned 4,203 — another 600 over 300 rounds, another two a round. Its sibling
+still answers `1200 600` and `2400 1200`, so the in-place path is undisturbed,
+and the number moved DOWN, which is the wrong direction for a container that
+stopped being extended in place. Re-read rather than widened, as that file's
+own protocol says.
+
+The two a round has now held across four changes to this loop. The file still
+declines to decompose it, and that is deliberate: a wrong decomposition written
+there is what the next reader would check their change against.
+
+**OPEN, and smaller than the last one.** The loser's bindings buffer is still
+freed per dispatch. The candidate loop swaps `binds` with the outgoing best's
+vector, so when the winner's goes into the frame, the other one falls out of
+scope at the end of the iteration. Pooling it is the same trick a third time,
+and the ceiling on it is one allocate-and-free pair per dispatch that had more
+than one arity-matching candidate. Unmeasured; the count is not in hand.

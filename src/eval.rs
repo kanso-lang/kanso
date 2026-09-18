@@ -2424,7 +2424,20 @@ impl<'a> Interp<'a> {
         // was dead 173,921 times out of 173,922. The one survivor is a lazy
         // thunk holding its defining environment, which is the case
         // `Rc::try_unwrap` declines below.
-        let mut pool: Bindings = Vec::new();
+        // AND THE FRAME NODE COMES BACK WITH IT. kanso#1543 took the vector
+        // out of the dead frame and let the `Rc` allocation go; this keeps the
+        // whole node. `Rc::try_unwrap` had to destroy the node to reach the
+        // vector inside it, so a dispatch that reclaimed its bindings still
+        // paid `Rc::new` for a fresh `RcBox<Env>` on the next one.
+        // `Rc::get_mut` reaches the same vector through a handle that stays
+        // alive, so the node survives the dispatch that made it.
+        //
+        // The two are not interchangeable on the uniqueness they demand:
+        // `try_unwrap` reads the strong count alone, `get_mut` reads the weak
+        // count too. Nothing in this compiler takes a `Weak<Env>` -- the
+        // instrumented build above was reverted -- so today they agree, and
+        // the difference is written here rather than assumed away.
+        let mut pool: Option<Rc<Env>> = None;
         loop {
             // The second hole in an err's infectiousness: a reader's getter
             // answers the piece before any arm is tried, so an own-hako err
@@ -2489,7 +2502,14 @@ impl<'a> Interp<'a> {
             // `args_len` is exact for `score`, which takes one entry per
             // parameter, and a floor for `binds`, since a `Ctor` pattern can
             // bind its fields and a whole.
-            let mut binds: Bindings = std::mem::take(&mut pool);
+            // The pooled node lends its vector out for the candidate list
+            // and takes it back below. What stays behind in the node is an
+            // empty `Vec`, which owns no allocation, so the node is safe to
+            // carry through a dispatch that never binds.
+            let mut binds: Bindings = match pool.as_mut().and_then(Rc::get_mut) {
+                Some(Env::Many(slots, _)) => std::mem::take(slots),
+                _ => Vec::new(),
+            };
             binds.clear();
             binds.reserve(args_len);
             score.reserve(args_len);
@@ -2534,7 +2554,31 @@ impl<'a> Interp<'a> {
                     // One frame for the whole parameter list. Pushing a node
                     // per binding made the chain as long as the arguments, and
                     // the walk paid for that on every name the body mentions.
-                    let env = bind_all(None, binds);
+                    let env = match binds.is_empty() {
+                        true => None,
+                        false => match pool.take() {
+                            // The node is unique -- it was only pooled after
+                            // `get_mut` said so, and nothing has been handed a
+                            // copy since -- so this writes the winner's
+                            // bindings into the frame the last dispatch left.
+                            // `spare` carries them back out if it ever is not,
+                            // which keeps a refused `get_mut` a lost reuse
+                            // rather than a panic on a live interpreter.
+                            Some(mut rc) => {
+                                let mut spare = Some(binds);
+                                if let Some(Env::Many(slots, _)) = Rc::get_mut(&mut rc) {
+                                    if let Some(won) = spare.take() {
+                                        *slots = won;
+                                    }
+                                }
+                                match spare {
+                                    None => Some(rc),
+                                    Some(binds) => bind_all(None, binds),
+                                }
+                            }
+                            None => bind_all(None, binds),
+                        },
+                    };
                     // One handle for the dispatcher beside the one the body
                     // gets. It costs a reference count either way, and it is
                     // what makes the frame reclaimable rather than freed.
@@ -2553,9 +2597,9 @@ impl<'a> Interp<'a> {
                     // kept a handle -- a lazy thunk is the only thing that
                     // does -- the vector inside comes back for the next
                     // dispatch instead of being freed and allocated again.
-                    if let Some(rc) = held {
-                        if let Ok(Env::Many(slots, _)) = Rc::try_unwrap(rc) {
-                            pool = slots;
+                    if let Some(mut rc) = held {
+                        if Rc::get_mut(&mut rc).is_some() {
+                            pool = Some(rc);
                         }
                     }
                     match flowed? {
