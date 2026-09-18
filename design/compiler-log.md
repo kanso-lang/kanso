@@ -5091,3 +5091,42 @@ this tree now has two.
 The job also drew the release codegen vein again, which is this branch's
 second and the sixth today. That one is design/pending-gavels.md's to rule on
 and no work here moves it.
+
+## 2026-09-18 — three conflict markers shipped in the published page, and what did not catch them
+
+**A MISTAKE, caught by `no_published_page_carries_a_conflict_marker` on CI.**
+kanso#1504's `docs/compiler.html` went to CI carrying `<<<<<<< HEAD`,
+`>>>>>>> origin/main` and `=======`. Main never had them and no other branch
+did; it was this one resolution.
+
+**HOW.** The merge left the page unmerged with main's new section on one side
+and this branch's two on the other. A script then moved main's section ahead of
+this branch's and renumbered — and the block it cut, from `<h2 id="reserved">`
+to `<h2 id="coda">`, spanned the closing marker. So the move carried
+`>>>>>>> origin/main` with it and orphaned `=======` above the coda. Every line
+of both sides survived; three lines of git punctuation came along.
+
+**WHAT DID NOT CATCH IT, which is the part worth keeping.** The resolution was
+checked, and by four things:
+
+    git diff --diff-filter=U        no unmerged paths, because the script
+                                    had rewritten the file
+    comm -23 on the h2 anchors      nothing lost
+    sec-num duplicates              none
+    sh scripts/gates/all_pages.sh   all three gates green
+
+The three page gates read `data-golden` spans, the log's drift budget, and
+three families of sentence. A marker is none of those. The anchor and
+duplicate checks read `<h2 id=` and `sec-num`, and a marker is neither. Four
+checks, all passing, none of them looking at the thing that was wrong — which
+is the shape this tree already has a name for: a verification that names one
+file keeps passing while the defect moves next door.
+
+The spec existed and it worked, on the push. The container check that would
+have caught it before the push did not exist, and now does:
+`grep -cE '^<<<<<<< |^>>>>>>> |^=======$'` over the pages is part of the
+resolve-and-verify pass, beside the anchor diff.
+
+**AND THE RULE UNDER IT.** A script that moves a region of a file must not be
+run on a file that still has conflict markers in it, because the region it cuts
+is defined by content and the markers are content. Resolve first, then move.
