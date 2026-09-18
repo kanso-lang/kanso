@@ -23,10 +23,13 @@ file=src/lib.rs
 # touched. Proved on kanso#1338, whose diff rewrites this very call: the pass
 # selected three rows and neither this one nor its entry twin was among them.
 grep -q 'fn compile_parsed_entry' src/lib.rs
-# kanso#1335 moved the alias pass in front of this check and renamed the call,
-# so the anchor is the new one. The shape the mutation makes is unchanged: the
-# entry's whole-program check asked twice.
-anchor='let merged_diags = check::check_merged_after_aliases(&merged, true, &rewritten);'
+# kanso#1335 moved the alias pass in front of this check and renamed the call;
+# kanso#1486 gave it the alias map its caller had already built, so the anchor
+# is the `_with` spelling and it takes `builtins` by value. The duplicate the
+# mutation inserts therefore calls the plain form, which builds its own map --
+# a costlier defect than before, and the same shape: the entry's whole-program
+# check asked twice.
+anchor='let merged_diags = check::check_merged_after_aliases_with(&merged, true, &rewritten, builtins);'
 before=$(grep -cF "$anchor" "$file" || true)
 if [ "$before" -ne 1 ]; then
   echo "expected one entry-path check_merged call in $file, found $before;" >&2
@@ -42,8 +45,10 @@ awk -v anchor="$anchor" '
   { print }
 ' "$file" > "$file.mutated"
 mv "$file.mutated" "$file"
+# The real call keeps the `_with` spelling; the inserted one is the plain form,
+# which appears nowhere on this path until the mutation puts it there.
 after=$(grep -cF 'check::check_merged_after_aliases(&merged, true, &rewritten)' "$file" || true)
-if [ "$after" -ne 2 ]; then
-  echo "wanted the entry check asked twice, and the file holds $after calls" >&2
+if [ "$after" -ne 1 ]; then
+  echo "wanted one inserted entry check beside the real one, and the file holds $after" >&2
   exit 1
 fi

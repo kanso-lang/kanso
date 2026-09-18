@@ -31,15 +31,37 @@ use crate::hash::Map as HashMap;
 /// type checker reads this map per arm; the call-site rewrite below adds the
 /// stricter only-arm condition on top.
 pub fn aliases(program: &Program) -> HashMap<(&str, usize), &str> {
-    // The group sizes do not change while the fixpoint runs, so they are
-    // counted once here rather than rebuilt on each pass.
+    aliases_from(program, &group_sizes(program))
+}
+
+/// How many arms each name-and-arity group has.
+///
+/// The fixpoint below reads this and never changes it, and the call-site
+/// rewrite asks the same question of the same program, so a caller that does
+/// both counts once and hands the answer to each.
+pub fn group_sizes(program: &Program) -> HashMap<(&str, usize), usize> {
     let mut counts: HashMap<(&str, usize), usize> = HashMap::default();
     for decl in &program.fns {
         *counts.entry((decl.name.as_str(), decl.params.len())).or_default() += 1;
     }
-    let mut found = direct_aliases(program, &HashMap::default(), &counts);
+    counts
+}
+
+/// The alias fixpoint over a program whose group sizes are already counted.
+pub fn aliases_from<'a>(
+    program: &'a Program,
+    counts: &HashMap<(&str, usize), usize>,
+) -> HashMap<(&'a str, usize), &'a str> {
+    let mut found = direct_aliases(program, &HashMap::default(), counts);
+    // The first pass reads an empty `known`, so the arm that consults the
+    // group sizes never runs and the program is its only input. A pass that
+    // found nothing there would read those same two inputs again and return
+    // the same empty map, so it already is the fixpoint.
+    if found.is_empty() {
+        return found;
+    }
     loop {
-        let grown = direct_aliases(program, &found, &counts);
+        let grown = direct_aliases(program, &found, counts);
         if grown.len() == found.len() {
             return found;
         }
@@ -109,20 +131,33 @@ fn direct_aliases<'a>(
 /// sending its calls straight to the builtin would delete the dispatch that
 /// reaches the other arm.
 pub fn inline_builtin_wrappers(program: &mut Program) {
-    let mut counts: HashMap<(&str, usize), usize> = HashMap::default();
-    for decl in &program.fns {
-        *counts.entry((decl.name.as_str(), decl.params.len())).or_default() += 1;
-    }
-    // Owned, because the walk below takes `program` mutably. Nested by name
-    // then arity so the walk answers a call with two borrowed lookups: keyed
-    // by the pair, every call expression had to build a `String` from its
-    // callee first, and throw it away.
+    let counts = group_sizes(program);
+    let found = aliases_from(program, &counts);
+    let alias = wrapper_table(&found, &counts);
+    apply_wrappers(program, &alias);
+}
+
+/// The call-site table: every wrapper that is its own group's single arm.
+///
+/// Owned, because the walk that reads it takes `program` mutably and the
+/// alias map borrows it. Nested by name then arity so the walk answers a call
+/// with two borrowed lookups: keyed by the pair, every call expression had to
+/// build a `String` from its callee first, and throw it away.
+pub fn wrapper_table(
+    found: &HashMap<(&str, usize), &str>,
+    counts: &HashMap<(&str, usize), usize>,
+) -> HashMap<String, HashMap<usize, String>> {
     let mut alias: HashMap<String, HashMap<usize, String>> = HashMap::default();
-    for ((name, arity), target) in aliases(program) {
-        if counts.get(&(name, arity)) == Some(&1) {
-            alias.entry(name.to_string()).or_default().insert(arity, target.to_string());
+    for ((name, arity), target) in found {
+        if counts.get(&(*name, *arity)) == Some(&1) {
+            alias.entry((*name).to_string()).or_default().insert(*arity, (*target).to_string());
         }
     }
+    alias
+}
+
+/// Rewrite the calls the table names, in place.
+pub fn apply_wrappers(program: &mut Program, alias: &HashMap<String, HashMap<usize, String>>) {
     if alias.is_empty() {
         return;
     }
@@ -132,7 +167,7 @@ pub fn inline_builtin_wrappers(program: &mut Program) {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
                 Stmt::Set { value, .. } => value,
             };
-            rewrite(expr, &alias);
+            rewrite(expr, alias);
         }
     }
 }

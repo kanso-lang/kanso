@@ -71,10 +71,25 @@
 # main's 407,173,801, a fall of 1,130,336. A build pays the same start-up a
 # run does.
 #
+# 2026-09-18, kanso#1507 on the tree merged with main, CI's sitting. 596,161,166 ->
+# 596,159,774, a FALL of 1,392 (-0.00023%). LAYOUT. This branch adds a
+# `match std::env::var("KANSO_LTO_JOBS")` to `release_clang` in src/main.rs and
+# `KANSO_LTO_JOBS=1` to three `env -i` lines in a gate script. src/main.rs is
+# the compiler, so its bytes and the layout under them move, and every row that
+# runs the compiler moves with them. Seven rows moved here and all seven are
+# under five ten-thousandths of a per cent, with mixed signs -- which is what a
+# shifted binary looks like and not what work looks like.
 # 2026-09-17, kanso#1504 on the tree merged with main 2a0cec7c, CI's sitting.
 # codegen_instructions_dev 596,161,166 -> 596,182,348, a RISE of 21,182 (+0.0036%).
 # This row counts the C toolchain compiling the IR kanso wrote, excluding
 # kanso's own process. The dev tier is -O0, so a changed runtime.c costs it
 # almost nothing: 21,182 on 596 million. A second count in the same job read
 # 596,182,348.
-codegen_instructions_dev=596182348
+#
+# 2026-09-18, re-merged onto main after kanso#1486, kanso#1496 and kanso#1507
+# landed underneath. THE VALUE BELOW IS MAIN'S, carried forward. This branch's
+# own reading of this row was taken before all three, and kanso#1507 in
+# particular changed what the release-codegen row COUNTS by pinning ld's LLVM
+# plugin to one thread, so nothing this branch measured on that row is
+# comparable with anything measured after it. The merged sitting is CI's.
+codegen_instructions_dev=596159774

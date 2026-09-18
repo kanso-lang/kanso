@@ -160,6 +160,55 @@
 # faces stop: the thirteen that kanso#1486 drew across two sittings lived in
 # this subtree, and it is no longer in the number.
 #
+# 2026-09-18, kanso#1486 merged with main 073a4077. The value below is MAIN'S,
+# carried forward. kanso#1505 changed what this row COUNTS -- the printed
+# line's subtree is excluded now -- so the 2,182,526,878 this branch measured
+# describes the old shape and is not comparable with anything taken under the
+# new one. CI's sitting on the merged tree replaces this line, and the
+# difference it reads is what this branch does to the row as it now stands.
+#
+# 2026-09-18, kanso#1486 merged with main 073a4077, CI's sitting under the new
+# shape. 2,182,303,844 -> 2,182,523,679, a RISE of 219,835 (+0.0101%). LAYOUT.
+# This branch edits src/check.rs, src/inline.rs and src/lib.rs, all of them
+# front end, and the gate anchors at `run_interpreted_on_stack` -- the front
+# end is outside the number by construction, so nothing this branch changes
+# executes inside it. The size is the size this vein's layout term has shown
+# before: kanso#1468 moved it 237,834 (0.0109%) from a single-file edit, and
+# this is a three-file edit reading 219,835.
+#
+# AND THE OBJECTIVE DOES WEIGH THIS VEIN NOW. Every entry above this one closes
+# by saying it does not, and each was true when it was written; the 2026-09-16
+# gavel made the objective a development welfare, a production welfare and a
+# meta over them, and `interp_instructions interp_instructions` has been a line
+# of bench/objective_sources.txt ever since -- the middle of Clay's three for
+# the interpreted engine. So a rise here costs welfare, and the sentence this
+# file repeats three times is a stale one to carry forward.
+# 2026-09-18, kanso#1507 on the tree merged with main, CI's sitting. 2,182,303,844 ->
+# 2,182,293,088, a FALL of 10,756 (-0.00049%). LAYOUT. This branch adds a
+# `match std::env::var("KANSO_LTO_JOBS")` to `release_clang` in src/main.rs and
+# `KANSO_LTO_JOBS=1` to three `env -i` lines in a gate script. src/main.rs is
+# the compiler, so its bytes and the layout under them move, and every row that
+# runs the compiler moves with them. Seven rows moved here and all seven are
+# under five ten-thousandths of a per cent, with mixed signs -- which is what a
+# shifted binary looks like and not what work looks like.
+#
+# 2026-09-18, re-merged after kanso#1486 landed underneath. THE VALUE BELOW IS
+# MAIN'S, carried forward. kanso#1507's own sitting on the pre-merge tree read
+# 2,182,293,088 and is recorded above; it was taken on a base that did not
+# carry kanso#1486's 1.17% fall across the three check routes, so it describes
+# a tree that no longer exists. Carrying main's forward gives the gate one
+# number to fail against rather than none, and makes CI's diff read exactly
+# what this branch does to today's main.
+#
+# 2026-09-18, kanso#1507 on the tree merged with kanso#1486, CI's sitting.
+# 2,182,523,679 -> 2,182,576,109, a RISE of 52,430 (+0.00240%). LAYOUT. The value
+# above was main's, carried forward because this branch's own reading predated
+# kanso#1486; this is the merged tree measured. src/main.rs gained a four-line
+# `match` on an environment variable and src/main.rs is the compiler, so its
+# bytes move and every row that runs the compiler moves with them. Six rows
+# moved and the two codegen rows did not: they AGREED with this branch's own
+# readings to the instruction, across two CI jobs on two different trees,
+# which is what `-Wl,-plugin-opt=jobs=1` bought.
 # 2026-09-18, kanso#1504 merged with main 073a4077. The value below is MAIN'S,
 # carried forward. kanso#1505 changed what this row COUNTS -- the printed
 # line's subtree is excluded now -- so the 2,182,420,936 this branch measured
@@ -167,5 +216,12 @@
 # new one. CI's sitting on the merged tree replaces this line. This branch's
 # own effect on the row was layout either way: it changes src/runtime.c, which
 # the interpreter carries as bytes rather than runs.
-interp_instructions=2182303844
+#
+# 2026-09-18, re-merged onto main after kanso#1486, kanso#1496 and kanso#1507
+# landed underneath. THE VALUE BELOW IS MAIN'S, carried forward. This branch's
+# own reading of this row was taken before all three, and kanso#1507 in
+# particular changed what the release-codegen row COUNTS by pinning ld's LLVM
+# plugin to one thread, so nothing this branch measured on that row is
+# comparable with anything measured after it. The merged sitting is CI's.
+interp_instructions=2182576109
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
