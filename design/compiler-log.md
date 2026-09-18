@@ -2677,6 +2677,210 @@ The ruling counts are unchanged across the move, both greps: fifty under
 `— gavel[:,]` and twenty-three under `GAVEL(ED)?[:,(]`. They are printed here
 because a move of this size is exactly when a count would go wrong unnoticed,
 and because the second grep is the one people forget.
+## 2026-09-18 — a byte beside the name, built and declined: one byte costs eight
+
+The interpreted run spends **48,165,663 instructions (4.14%)** inside
+`__memcmp_avx2_movbe`, and the largest caller is `eval_ident`'s walk of the
+environment chain — **724,304 calls**, a figure that matches the one section 87
+already publishes for locals that stop at that walk.
+
+The walk compares `frame.name.as_str() == name`. `str` equality checks the
+length and then calls `memcmp`, so length is already a free rejection and what
+reaches libc is every binding in the chain that happens to be the same length
+as the one being looked up. A byte of the name, compared first, should reject
+most of those without a call.
+
+It was built. `Env` gained a `head: u8`, `bind` read it once, `lookup` compared
+it before the string. Both engines print the same answer.
+
+    base   row 1,115,996,775   memcmp 48,165,663
+    head   row 1,126,405,836   memcmp 45,699,943
+
+**The memcmp fell by 2,465,720 and the run rose by 10,409,061.** A net loss of
+about eight million instructions, 0.93% of the row.
+
+**The mechanism is the node, and it was measured rather than guessed.**
+`std::mem::size_of::<Env>()` reads 64 on main and **72** with the byte. There is
+no padding to put it in: `Name` is 24 bytes, `Value` is 32, `Option<Rc<Env>>` is
+8, and 24 + 32 + 8 is exactly 64. Rust already orders the fields to pack them,
+so one byte of payload costs eight of node, and the interpreted run allocates
+about 2.5 million of them. That is twenty megabytes of extra traffic to save
+two and a half million instructions of comparison.
+
+**So this is declined on arithmetic, not on taste, and the arithmetic says what
+would change it.** A discriminator that lives in space the node already has
+would keep the saving and drop the cost. `Name`'s own 24 bytes are full — the
+inline variant is twenty-two bytes of text plus a length and a tag — so there is
+no room there either. What is left is a representation change to `Name` or to
+`Value`, which is a larger question than this lead, and the 2.5 million is the
+ceiling on what answering it would be worth.
+
+Recorded so the next reader does not rebuild it. The idea is sound; the node is
+the wrong size for it.
+
+## 2026-09-18 — the second way to avoid the compare, and what losing twice says
+
+The entry above declined a byte beside the name because the node grew from 64
+to 72. It named the alternative: a discriminator in space the node already
+owns. There is one, and it is better than a discriminator — it is the whole
+comparison.
+
+`Name::new` zero-fills the inline buffer before copying, so two inline names
+hold byte-identical twenty-two-byte buffers exactly when they hold the same
+text. The padding makes the length implicit and an identifier cannot contain a
+NUL to blur it. So the walk can build a padded key ONCE per lookup and compare
+a fixed-width block per frame, which rustc inlines, where a `&str` comparison
+of a run-time length reaches `memcmp`. Nothing grows: the key lives on the
+stack for the duration of one lookup.
+
+    base   row 1,115,996,775   memcmp 48,165,663
+    key    row 1,150,537,278   memcmp 35,577,082
+
+**It removes 12,588,581 instructions of `memcmp`, twenty-six per cent of the
+whole figure, and the run rises 34,540,503.** A net loss of about thirty-four
+million, three times worse than the byte.
+
+**What was checked about correctness, stated exactly.** The interpreted corpus
+prints byte-identical output before and after, which is what makes the two
+instruction counts comparable. That is a comparison of two BUILDS on one
+engine, and the first draft of this entry called it "both engines print the
+same answer" — which would be the differential check and was not run. The
+golden suite was started against this build and the worktree was removed out
+from under it, so it reported a failure that is an artifact of the removal and
+says nothing either way. Since the change is declined, no further verification
+was done; if it is ever revived, the differential goldens are where it starts.
+
+**Two schemes, both sound, both losing, and the second loss is the informative
+one.** The byte lost to the node's size; this one has no node cost at all and
+loses by more. What is left to blame is the setup: a key is built per LOOKUP
+and the saving is per FRAME, so the trade only pays when the chain is long, and
+on this corpus it is not.
+
+That reframes the lead. The 48 million is real, and it belongs to the
+walk rather than to how the walk compares. Every scheme that keeps the walk and makes the compare
+cheaper is paying a per-lookup cost to save a per-frame one, and the ratio
+decides it. What would actually remove the cost is not walking: resolving a
+local to a slot at parse time, so the interpreter indexes instead of searching.
+That is a larger change than either of these, and it is the one the 48 million
+argues for.
+
+Recorded with the arithmetic so the next reader inherits the conclusion rather
+than the two experiments. The comparison is not the problem.
+
+## 2026-09-18 — the chain is 2.52 frames deep, which is why both schemes lost
+
+The entry above said the trade "only pays when the chain is long, and here it is
+not." That was inferred from two losses rather than measured, so it was
+measured. A counter in `lookup` over the interpreted corpus:
+
+    lookups          1,056,329
+    frames visited   2,662,536      2.52 per lookup
+    misses             332,025      31.4%, and a miss walks the whole chain
+
+**The instrument agrees with two figures this project already published, to the
+unit.** 1,056,329 is the `eval_ident` call count in section 87. Subtracting the
+misses leaves **724,304**, which is section 87's count of locals that stop at
+the environment walk AND the memcmp caller count read off the debuginfo build.
+Three independent paths to the same two numbers.
+
+**2.52 is the whole explanation.** A scheme that pays a setup cost per LOOKUP
+and saves per FRAME has two and a half frames to amortise it over. The padded
+key cost about forty-seven instructions a lookup and could save at most the
+eighteen-odd a small `memcmp` costs, times 2.52 — so it lost, and it would have
+lost at any setup cost above about forty-five. The head byte had no setup at all
+and lost to the node instead. Neither failure was about the comparison.
+
+**And it bounds what slot resolution could be worth, which is the point of
+measuring rather than guessing.** 48,165,663 instructions of `memcmp` over
+2,662,536 frame visits is about eighteen a visit. Resolving a local to an index
+at parse time removes the visit, not just the compare, and an index costs two or
+three instructions instead of eighteen — so the ceiling is roughly forty
+million, near 3.6% of the interpreted row. That is worth doing and it is now a
+number rather than a hope.
+
+It is also a larger change than anything tried here: slots have to survive
+closures, which capture an environment rather than a frame. Recorded as sized
+and unbuilt.
+
+## 2026-09-18 — the eleven, on a pull request that changes no code at all
+
+This branch edits `design/compiler-log.md` and `docs/compiler.html`. That is the
+whole diff: no Rust, no C, no kanso, no golden. Its cost-goldens job failed.
+
+    codegen_instructions_release   first  6,824,133,291
+                                   again  6,824,133,280
+                                   golden 6,824,133,280
+
+Eleven apart, in one job, both readings seeing five processes
+(`first_procs=5 again_procs=5`, so the gate's guard against a second reading
+that measured something else is satisfied).
+
+**This is the strongest isolation the eleven has had.** kanso#1512 hunted it to
+the temp object's NAME — nine of ten names reading one value and `4b8c1a`
+reading eleven more — and everything since has been a reading on a branch that
+changed *something*, which always leaves room for the change. A diff of two
+documentation files leaves none. The row moved with nothing to attribute it to.
+
+It is also the second twice-in-one-job reading today. kanso#1502 drew
+6,820,866,355 then 6,820,866,344 a couple of hours ago; the absolute values
+differ because main moved between them, and the eleven does not.
+
+**What this settles, and what it does not.** It settles that the release row's
+instability is a property of the build rather than of any change under test, so
+a reader who sees this row disagree should not look at the diff. It does not
+say what the pin should be — that is the question in
+`design/pending-gavels.md` under Blocking, waiting on Clay since 06:19Z, and
+kanso#1513 carries the proposal to narrow the pin to the release tier. This
+entry is evidence for that decision and not a substitute for it.
+
+`codegen_release_kanso_excluded` moved 74 between the two readings
+(80,660,230 and 80,660,156). That is kanso's own process, excluded from the row
+by the 2026-09-15 normalization ruling, printed rather than counted — and it
+moving while the counted row holds is the exclusion doing its job.
+
+## 2026-09-18 — the depth distribution, and a cheaper lead than the one just recorded
+
+The entry above sized slot resolution off an average of 2.52 frames. An average
+hides the shape, so the shape was measured. Hits by depth, interpreted corpus:
+
+    1   267,899   37.0%
+    2   199,016   27.5%
+    3   130,524   18.0%
+    4   101,095   14.0%
+    5    25,770    3.6%
+    6+        0
+
+**The chain never exceeds five.** That is worth knowing on its own: there is no
+tail, so nothing here is waiting on a pathological case.
+
+Splitting the frame visits by outcome is what changes the recommendation:
+
+    hit frames    1,590,733  over 724,304 hits    2.20 deep
+    miss frames   1,071,803  over 332,025 misses  3.23 deep
+    total         2,662,536                       matching the earlier count
+
+**Misses are 31.4% of lookups and 40.3% of every frame visited.** A miss walks
+the whole chain and finds nothing, because the name is not a local at all — it
+is a function, a descriptor, a type or a builtin, and `eval_ident` falls
+through to the rest of the ladder afterwards. At roughly eighteen instructions
+a visit that is **about 19.3 million instructions spent walking chains that
+cannot succeed**.
+
+**So the cheaper lead is not to make the walk faster but to skip it.** A name
+that is never bound as a local at a given site is decidable where the site is
+compiled, and skipping the walk for those needs no slot machinery, no upvalue
+analysis and no change to how a closure captures — the three things that make
+slot resolution large. It is worth roughly half of what slot resolution is
+worth and a small fraction of the work.
+
+That does not retire slot resolution: the 1,590,733 hit-frames are still there
+and only an index removes them. It reorders the two. Do the skip first, measure
+what is left, and let the remainder argue for the redesign or not.
+
+Recorded rather than started, with four pull requests in flight. The
+measurement is the deliverable here; kanso#1516 already memoises what a name
+resolves to, so the first question for whoever picks this up is why that memory
+does not already prevent the walk.
 ## 2026-09-17 — the digit loop carried a value it only needed at the end, and then the tail gave it back
 
 `render_ryu` is 84,209,220 instructions of runbench, 4.58%, 440.7 a float over
