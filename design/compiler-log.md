@@ -5373,3 +5373,36 @@ is the argument for running the cheap one before writing the careful sentence.
 The figures above are this container's and are not comparable with CI's, which
 is exactly why the experiment is sound: both readings come from the same box,
 and what is compared is the difference between them.
+
+## 2026-09-18 — kanso#1504 on the tree merged with kanso#1525: five layout rows, all down
+
+The linearity read landed on main and this branch took it. CI's sitting on the
+merged tree, against the rows main carried:
+
+    compile_instructions     35,552,188 ->    35,549,348    -2,840   -0.008%
+    entry_instructions      126,735,634 ->   126,728,937    -6,697   -0.005%
+    library_instructions    127,192,177 ->   127,184,826    -7,351   -0.006%
+    startup_instructions      3,365,595 ->     3,363,168    -2,427   -0.072%
+    emit_instructions        51,630,538 ->    51,617,748   -12,790   -0.025%
+
+**Every one of the five fell, and none of them is work this branch does.**
+`kanso check` stops before the beat rewind runs and `kanso play` on a one-line
+program never enters a beat loop, so nothing these rows count can be paying for
+a cached mark pointer. What moved is the layout: this branch adds a field to
+`KMark` and removes eight instructions from a runtime function, `src/runtime.c`
+is compiled into the binary that the front end also lives in, and the code
+landed differently around it.
+
+That they all moved the SAME WAY is what makes the reading easy this time. When
+kanso#1525 took this merge the four compile-side rows all ROSE by the same
+0.19%, and the entry there was that a uniform shift is what a layout move looks
+like. This is the same shape with the sign reversed and a tenth the size.
+
+The interpreted rows did not move at all — 1,075,174,600, 2,486,376 and 833,130,
+main's values to the unit. That is the check on the reading, and it is the
+strongest one available: the interpreted corpus is the workload most sensitive
+to `src/eval.rs`, this merge brought a large `src/eval.rs` change, and the rows
+that measure it agree exactly because kanso#1525 already priced them. A layout
+story that moved those too would not be a layout story.
+
+Both codegen rows and `compile_allocs` also read their goldens exactly.
