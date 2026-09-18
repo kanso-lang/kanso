@@ -50,6 +50,45 @@ went to the log rather than here.
 
 ## Blocking — a fixture, gate, or merge is waiting
 
+### Should the fixed-temporary pin cover both codegen tiers, or the release tier alone?
+
+**Cited:** the live log's 2026-09-17 entries adding `codegen_instructions` and
+excluding kanso's own process from it; the 2026-09-16 gavel splitting welfare
+into production and development, which puts the two tiers on opposite sides of
+the objective; and the archive's kanso#1512 entry, "THE 11 IS THE TEMP OBJECT'S
+NAME", where nine of ten temporary names read 5,163,341,031 and `4b8c1a` read
+5,163,341,042, reproduced three times.
+
+**The question.** kanso#1513 pins the temporary object's name so the link step
+stops reading a different number depending on which name the driver drew.
+`scripts/gates/codegen_instructions.sh` takes the tier as `$1` and adds
+`KANSO_FIXED_TEMPS=1` to all three of its `env -i` lines, so the variable is in
+the DEV run's environment as well — and `src/main.rs:744-747` dispatches on the
+tier (`match release { true => release_clang(...), false => dev_clang(...) }`),
+so `dev_clang` never reads it. The dev row moves anyway. The pull request is
+green but for the two codegen rows, which are red by design until this is
+settled.
+
+1. **Pin both tiers**, as kanso#1513 is written. The dev row is re-based to
+   whatever the pinned name produces, and both rows stop drawing. The cost is
+   that the dev row's new value has no mechanism behind it: the flag does not
+   reach `dev_clang`, so what moved it is unexplained, and re-basing a row on
+   an unexplained move is the thing the goldens exist to catch.
+2. **Narrow the pin to the release tier.** `codegen_instructions.sh` sets
+   `KANSO_FIXED_TEMPS` only when `$1` is the release tier. The release row stops
+   drawing, the dev row keeps whatever variance it has, and nothing is re-based
+   without a mechanism.
+3. **Leave both unpinned** and accept an 11-instruction draw on a 5.16-billion
+   row.
+
+**Recommendation: 2.** The measurement is the release tier's — that is where the
+name was shown to move the count, three times. The dev row's move is real but
+unexplained, and option 1 would bank it as though it were understood. 3 keeps a
+known, reproducible, one-in-ten draw in a row the objective weighs.
+
+**What is NOT being asked.** Whether to lower the floor: nothing here costs
+welfare. Only which tier the pin covers.
+
 ### Does the wall survive the fused operators?
 
 **Cited:** the live log's "the wall is bind with a discarded value" (2026-09-17),
@@ -115,6 +154,61 @@ operator, since `.>` can be made eager in its right side and a lambda's body
 is the only thing deferring it.
 
 ## Open, not blocking
+
+### What spelling does "cyclic structures sized by data" need?
+
+**Cited:** the archive's "block-born is the whole cohort" (2026-08-29), whose
+words are *cyclic structures sized by data (a graph parsed from input, N
+linked nodes from a map) gain a spelling*; the live log's build-hole gavel of
+2026-09-16, which took back the two shapes that reached that purpose, on
+reasoning this entry does not ask to undo; the 2026-09-09 entry building the
+cohort as kanso#1359, which named birth through a call as the next widening
+and left it to the implementer; and the live log's 2026-09-18 entry "birth
+through a call, measured", which is the measurement STATUS.md's cohort row
+has owed since 2026-09-16 and which is what raises this question rather than
+answering it.
+
+**The question.** The gavel's purpose needs a program to make N nodes, where
+N comes from data, and tie them to each other. Five probes against a release
+build of `30fb1abe` say that today it cannot, and they fail for five different
+reasons:
+
+1. a hole outside a `build` block is refused — so the maker cannot be a
+   function;
+2. a value a call returns is not block-born, so its field cannot be filled —
+   this is the one that widening `born_of` would fix;
+3. a hole cannot escape the block it was written in, because it must be
+   filled before that block freezes — so the maker cannot be a `build` of its
+   own either;
+4. a lambda lexically inside the block is outside it for the hole rule, which
+   closes the `map` shape the purpose actually takes;
+5. `ns[0].field = ...` is a syntax error before any analysis runs, because a
+   fill's target parses as a bare name — so N nodes need N names.
+
+Two nodes named by hand still work, and `tests/golden/mem/build_cycle.kso`
+pins that. What is missing is only the sizing.
+
+**Recommendation, and it is a question about the spelling rather than a
+build.** Widening `born_of` to see through a call is real, separable and worth
+doing on its own terms, and it fixes exactly the second of those five. It does
+not reach the purpose, so building it and calling the row closed would be
+wrong. What the purpose needs is a decision about which of these to open:
+
+- **a build block that iterates** — a form binding one name per element of a
+  list, so N nodes get N births without N names in the source. This is the
+  smallest change that reaches the words of the gavel, and it leaves the hole
+  rule exactly as the build-hole gavel left it.
+- **a hole that survives a call**, which means a function whose answer carries
+  an unfilled field and a caller obliged to fill it. That is a second effect
+  in the type, and a much larger language change.
+- **the purpose retired**, with the gavel's sentence about data-sized cycles
+  struck and the alias and the field of a born node left as what the cohort
+  gained.
+
+The holder of this file would open the first. It is the one that keeps every
+rule the 2026-09-16 gavel established and adds a binder rather than an escape
+hatch. But which of the three is Clay's, because the gavel's own words are
+what is at stake.
 
 ### The box constructor's spelling
 

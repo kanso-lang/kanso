@@ -104,8 +104,14 @@ own=$(callgrind_annotate --inclusive=yes --threshold=100 /tmp/cg.interp 2>/dev/n
 # is left out and the exclusion is named in the golden's header. The figure is
 # printed as a notice rather than only subtracted, because a number that only
 # ever appears subtracted cannot answer the next drift.
-printed=$(callgrind_annotate --inclusive=yes --threshold=100 /tmp/cg.interp 2>/dev/null \
-          | awk '/:std::io::stdio::_print \[/ && !seen { gsub(/,/, "", $1); print $1; seen = 1 }')
+#
+# IT IS A FUNCTION because the second count below must read the row the same
+# way this one does, and for a while it did not. See the note at `again`.
+printed_cost() {
+  callgrind_annotate --inclusive=yes --threshold=100 "$1" 2>/dev/null \
+    | awk '/:std::io::stdio::_print \[/ && !seen { gsub(/,/, "", $1); print $1; seen = 1 }'
+}
+printed=$(printed_cost /tmp/cg.interp)
 case "$printed" in '' | *[!0-9]*) printed=0 ;; esac
 case "$own" in
   '' | *[!0-9]*) ;;
@@ -174,6 +180,24 @@ fi
 )
 again=$(callgrind_annotate --inclusive=yes --threshold=100 /tmp/cg.interp2 2>/dev/null \
         | awk '/kanso::run_interpreted_on_stack/ && !seen { gsub(/,/, "", $1); print $1; seen = 1 }')
+# THE PRINTED LINE COMES OFF THIS READING TOO. For one day it did not. The
+# first reading is the frame MINUS the printed line; this one was the raw
+# frame, so a binary that counted the same number twice was reported as having
+# counted two numbers exactly `interp_printed` apart -- and the gate said so in
+# words that assert the opposite of what happened. kanso#1502 and kanso#1504
+# both read 1,138,001,437 and then 1,138,004,452 on 2026-09-18, a gap of 3,015,
+# with `interp_printed=3015` in both job logs: two branches, two runners, the
+# same pair, and both accused of a reproduction failure they did not have.
+#
+# WHERE IT CAME FROM. kanso#1487 gave the three compile-side gates the
+# subtraction on 2026-09-17 and wrote the reader as `printed_cost()`, so both
+# of their readings got it for free. kanso#1505 brought it to this row the same
+# day and open-coded the pipeline instead, which reached the first reading and
+# not this one. Naming the reader is what makes the second call obvious, and
+# the spec below is what makes it checked.
+again_printed=$(printed_cost /tmp/cg.interp2)
+case "$again_printed" in '' | *[!0-9]*) again_printed=0 ;; esac
+again=$((again - again_printed))
 printf 'interp_again row=%s (the first reading was %s)\n' "$again" "$got"
 
 

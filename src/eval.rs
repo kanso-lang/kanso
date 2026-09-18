@@ -110,6 +110,13 @@ pub struct ErrInfo {
 pub struct Site {
     pub prefix: Rc<str>,
     pub hako: Rc<str>,
+    /// The declaration's own file, kept whole rather than read back out of
+    /// `prefix`. `linear::in_place_pushes` keys its sites by (file, line,
+    /// column) and so does the emitter at `codegen.rs`'s push arm, so the
+    /// interpreter needs the same three to ask the same question. The `Arc`
+    /// is cloned once per declaration, which is what this struct already
+    /// costs: it is built by `frame_of` and memoized by pointer.
+    pub file: std::sync::Arc<str>,
 }
 
 pub type Frame = Option<Rc<Site>>;
@@ -118,6 +125,7 @@ fn frame_of(decl: &FnDecl) -> Frame {
     Some(Rc::new(Site {
         prefix: Rc::from(format!("{} at {}", crate::ast::frame_name(&decl.name), decl.file)),
         hako: Rc::from(crate::provenance::package_of(&decl.file)),
+        file: decl.file.clone(),
     }))
 }
 
@@ -270,7 +278,7 @@ pub fn trace_lines(interp: &Interp, info: &ErrInfo) -> String {
 
 #[derive(Debug)]
 pub struct ClosureData {
-    pub params: Vec<String>,
+    pub params: Vec<Name>,
     pub body: Expr,
     pub env: Option<Rc<Env>>,
     pub frame: Frame,
@@ -423,21 +431,33 @@ enum Step {
     Blocked(u64, Rc<Desc>),
 }
 
+/// The name is a `Name` rather than a `String`, and that is the whole of the
+/// second half of this change. `Name` is twenty-four bytes — exactly what a
+/// `String` costs, so no node grew — and it keeps a name of twenty-two bytes
+/// or fewer in the node itself. 99.77% of identifiers across `lib/` are that
+/// short, so binding one now copies twenty-four bytes where it used to reach
+/// the allocator. The heap variant is still there for the thirty names that
+/// run longer, and they are nearly all test function names.
 #[derive(Debug)]
 pub struct Env {
-    name: String,
+    name: Name,
     value: Value,
     parent: Option<Rc<Env>>,
 }
 
-fn bind(env: Option<Rc<Env>>, name: &str, value: Value) -> Option<Rc<Env>> {
-    Some(Rc::new(Env { name: name.to_string(), value, parent: env }))
+/// A binding takes its name BY VALUE. Every caller that reaches here with a
+/// freshly built `String` — `match_one` pushes one per matched name, and both
+/// loops below drain that vector — hands the same allocation on rather than
+/// paying for a second copy of the same bytes and dropping the first. The
+/// callers holding an AST name clone it here, which is what they did before.
+fn bind(env: Option<Rc<Env>>, name: Name, value: Value) -> Option<Rc<Env>> {
+    Some(Rc::new(Env { name, value, parent: env }))
 }
 
 fn lookup(env: &Option<Rc<Env>>, name: &str) -> Option<Value> {
     let mut cur = env.as_ref();
     while let Some(frame) = cur {
-        if frame.name == name {
+        if frame.name.as_str() == name {
             return Some(frame.value.clone());
         }
         cur = frame.parent.as_ref();
@@ -450,7 +470,7 @@ pub struct RuntimeError {
     pub span: Span,
 }
 
-type Bindings = Vec<(String, Value)>;
+type Bindings = Vec<(Name, Value)>;
 type Score = Vec<u8>;
 
 type EvalResult = Result<Value, RuntimeError>;
@@ -1120,6 +1140,28 @@ impl Executor for ScriptedExecutor {
 /// literals are arms of their own rather than a `Desc` or a `Value`: this
 /// lives in a table with one row per name the run mentions, and inlining
 /// either enum would size every row by its largest variant.
+/// What a CALL on a name does. `call_named` asked `err`, then the types map,
+/// then the function map, on every call; `group_of` inside `eval_tail` probed
+/// the same two maps to decide one bit. Neither map changes during a run, so
+/// the answer is remembered the first time it is worked out -- the same
+/// bargain `Named` makes for what a name is WORTH, at the sites that ask what
+/// it DOES.
+///
+/// Two memories rather than one because the rows would not fit in one: a value
+/// needs the name as an `Rc<str>` and a call needs the group, and an arm
+/// carrying both would size every row of both tables by the pair.
+#[derive(Clone)]
+enum Callee<'a> {
+    Err,
+    /// `entry` names a declaration the interpreter owns rather than one the
+    /// program holds, so it cannot be stored as a borrow of the program and
+    /// gets an arm of its own.
+    EntryType,
+    Constructor(&'a TypeDecl),
+    Group(Rc<Vec<&'a FnDecl>>),
+    Builtin,
+}
+
 #[derive(Clone)]
 enum Named<'a> {
     Constant(&'a FnDecl),
@@ -1135,7 +1177,7 @@ enum Named<'a> {
 }
 
 pub struct Interp<'a> {
-    fns: Map<&'a str, Vec<&'a FnDecl>>,
+    fns: Map<&'a str, Rc<Vec<&'a FnDecl>>>,
     types: Map<&'a str, &'a TypeDecl>,
     entry_decl: TypeDecl,
     demand: crate::demand::DemandInfo<'a>,
@@ -1157,11 +1199,34 @@ pub struct Interp<'a> {
     /// at construction, because `kanso check` makes an `Interp` and never
     /// evaluates a constant, and that route is a weighed welfare term.
     cycles: std::cell::OnceCell<crate::hash::Set<String>>,
+    /// The push, put and append sites the linearity analysis proves extend a
+    /// container nothing else will read -- the same set, by the same key,
+    /// that the emitter consults before it writes `push_mut_fast`. The
+    /// compiled engine has mutated at these sites since kanso#1359; until now
+    /// the interpreter cloned at every one of them.
+    ///
+    /// A `OnceCell` for the reason `cycles` above is one: `kanso check` makes
+    /// an `Interp` and evaluates nothing, and that route is a weighed welfare
+    /// term. The analysis is not cheap and must not run for a check.
+    in_place: std::cell::OnceCell<crate::hash::Set<(std::sync::Arc<str>, usize, usize)>>,
     /// One entry per non-local name this run has evaluated. Filled on first
     /// sight rather than at construction, because `kanso check` makes an
     /// `Interp` and evaluates nothing, and that route is a weighed welfare
     /// term -- the same reason `cycles` above is a `OnceCell`.
     names: RefCell<Map<String, Named<'a>>>,
+    /// One entry per name this run has CALLED, filled on first sight for the
+    /// reason `names` above is.
+    callees: RefCell<Map<String, Callee<'a>>>,
+    /// One entry per declaration this run has ENTERED, keyed by the
+    /// declaration's address, which `&'a FnDecl` on `frame_for` is what makes
+    /// safe: the compiler refuses a borrow that does not outlive this
+    /// interpreter, so no temporary can land here and reuse a freed address.
+    /// `frame_of` formats a trace line and asks which
+    /// package a file belongs to, on every entry into every body, for a string
+    /// only read when an err is raised. The answer depends on the declaration
+    /// alone, and a declaration lives in the `Program` this interpreter
+    /// borrows, so its address is stable for the whole run and unique to it.
+    frames: RefCell<Map<usize, Frame>>,
     program: &'a Program,
 }
 
@@ -1184,15 +1249,20 @@ impl ThunkStats {
 impl<'a> Interp<'a> {
     pub fn new(program: &'a Program) -> Self {
         set_root(program);
-        let mut fns: Map<&str, Vec<&FnDecl>> = Map::default();
+        let mut groups: Map<&str, Vec<&FnDecl>> = Map::default();
         for decl in &program.fns {
-            fns.entry(&decl.name).or_default().push(decl);
+            groups.entry(&decl.name).or_default().push(decl);
         }
         // proximity breaks specificity ties: local arms come before
         // bare-enrolled clones, so a same-shape local wins its own file
-        for overloads in fns.values_mut() {
+        for overloads in groups.values_mut() {
             overloads.sort_by_key(|d| d.synthetic);
         }
+        // A group is shared rather than copied: the callee memory below holds
+        // one without borrowing from `self`, and a tail hop takes a refcount
+        // bump where it used to clone the whole vector.
+        let fns: Map<&str, Rc<Vec<&FnDecl>>> =
+            groups.into_iter().map(|(name, decls)| (name, Rc::new(decls))).collect();
         let types = program.types.iter().map(|t| (t.name.as_str(), t)).collect();
         TYPESETS.with(|reg| {
             *reg.borrow_mut() = program
@@ -1227,21 +1297,36 @@ impl<'a> Interp<'a> {
             stack_hint: crate::stack_hint(program),
             knots: RefCell::new(Map::default()),
             cycles: std::cell::OnceCell::new(),
+            in_place: std::cell::OnceCell::new(),
             names: RefCell::new(Map::default()),
+            callees: RefCell::new(Map::default()),
+            frames: RefCell::new(Map::default()),
             program,
         }
     }
 
+    /// `frame_of` for a declaration this run has entered before, which after
+    /// the first entry is a clone of an `Rc` rather than two formatted strings.
+    fn frame_for(&self, decl: &'a FnDecl) -> Frame {
+        let key = decl as *const FnDecl as usize;
+        if let Some(known) = self.frames.borrow().get(&key) {
+            return known.clone();
+        }
+        let frame = frame_of(decl);
+        self.frames.borrow_mut().insert(key, frame.clone());
+        frame
+    }
+
     /// Evaluate a declaration's body with its lazy bind sites in view.
-    fn eval_body_of(&self, decl: &FnDecl, env: Option<Rc<Env>>) -> EvalResult {
-        self.eval_body_in(decl, &decl.body, env, &frame_of(decl))
+    fn eval_body_of(&self, decl: &'a FnDecl, env: Option<Rc<Env>>) -> EvalResult {
+        self.eval_body_in(decl, &decl.body, env, &self.frame_for(decl))
     }
 
     /// A body run whose final expression may hand back a tail call for the
     /// dispatcher's loop instead of recursing. Everything before the last
     /// statement evaluates exactly as eval_body_in does.
-    fn eval_body_flow(&self, decl: &FnDecl, env: Option<Rc<Env>>) -> Result<Flow, RuntimeError> {
-        let frame = frame_of(decl);
+    fn eval_body_flow(&self, decl: &'a FnDecl, env: Option<Rc<Env>>) -> Result<Flow, RuntimeError> {
+        let frame = self.frame_for(decl);
         let body = &decl.body;
         let Some((Stmt::Expr(last), lead)) = body.split_last() else {
             return Ok(Flow::Done(self.eval_body_in(decl, body, env, &frame)?));
@@ -1264,7 +1349,7 @@ impl<'a> Interp<'a> {
                         env: env.clone(),
                         frame: frame.clone(),
                     }));
-                    env = bind(env, name, Value::Thunk(cell));
+                    env = bind(env, name.clone(), Value::Thunk(cell));
                 }
                 Stmt::Bind { pattern, expr } => {
                     let mut value = self.eval(expr, &env, &frame)?;
@@ -1319,8 +1404,10 @@ impl<'a> Interp<'a> {
         }
         let group_of = |callee: &Value| -> Option<Rc<str>> {
             let Value::FnRef(n) = callee else { return None };
-            let plain = &**n != "err" && &**n != "if" && self.type_decl(n).is_none();
-            (plain && self.fns.contains_key(&**n)).then(|| n.clone())
+            // `if` is the one name the memory would answer Group for and this
+            // may not: it is a declaration AND the conditional form, and the
+            // form wins here.
+            (&**n != "if" && self.calls_a_group(n)).then(|| n.clone())
         };
         if *piped && !args.is_empty() {
             let piped_value = self.eval(&args[0], env, frame)?;
@@ -1331,7 +1418,7 @@ impl<'a> Interp<'a> {
                 let mut body_args: Vec<Expr> = vec![Expr::Ident(Name::new("__piped"), *span)];
                 body_args.extend(args[1..].iter().cloned());
                 let closure = Value::Closure(Rc::new(ClosureData {
-                    params: vec!["__piped".to_string()],
+                    params: vec![Name::new("__piped")],
                     body: Expr::App {
                         head: head.clone(),
                         args: body_args,
@@ -1369,7 +1456,7 @@ impl<'a> Interp<'a> {
                 }),
             };
         }
-        let mut values = Vec::new();
+        let mut values = Vec::with_capacity(args.len());
         for arg in args {
             values.push(self.eval(arg, env, frame)?);
         }
@@ -1502,7 +1589,7 @@ impl<'a> Interp<'a> {
                         env: env.clone(),
                         frame: frame.clone(),
                     }));
-                    env = bind(env, name, Value::Thunk(cell));
+                    env = bind(env, name.clone(), Value::Thunk(cell));
                 }
                 Stmt::Bind { pattern, expr } => {
                     let mut value = self.eval(expr, &env, frame)?;
@@ -1525,14 +1612,14 @@ impl<'a> Interp<'a> {
         span: Span,
     ) -> Result<Option<Rc<Env>>, RuntimeError> {
         match pattern {
-            Pattern::Var(name, _) => Ok(bind(env, name, value)),
+            Pattern::Var(name, _) => Ok(bind(env, name.clone(), value)),
             Pattern::Ctor { ty, .. } => {
                 let mut binds = Vec::new();
                 match match_one(pattern, &value, &mut binds) {
                     Some(_) => {
                         let mut env = env;
                         for (name, bound) in binds {
-                            env = bind(env, &name, bound);
+                            env = bind(env, name, bound);
                         }
                         Ok(env)
                     }
@@ -1574,7 +1661,7 @@ impl<'a> Interp<'a> {
                             span,
                         });
                     };
-                    env = bind(env, &entry.bind_name, fields.borrow()[position].clone());
+                    env = bind(env, Name::new(&entry.bind_name), fields.borrow()[position].clone());
                 }
                 Ok(env)
             }
@@ -1717,7 +1804,7 @@ impl<'a> Interp<'a> {
                             vec![Expr::Ident(Name::new("__piped"), *span)];
                         body_args.extend(args[1..].iter().cloned());
                         let closure = Value::Closure(Rc::new(ClosureData {
-                            params: vec!["__piped".to_string()],
+                            params: vec![Name::new("__piped")],
                             body: Expr::App {
                                 head: head.clone(),
                                 args: body_args,
@@ -1738,7 +1825,7 @@ impl<'a> Interp<'a> {
                 }
                 let callee = self.eval(head, env, frame)?;
                 let lazy_if = matches!(&callee, Value::FnRef(name) if &**name == "if");
-                let mut values = Vec::new();
+                let mut values = Vec::with_capacity(args.len());
                 for arg in args {
                     match lazy_if {
                         true => values.push(Value::Closure(Rc::new(ClosureData {
@@ -1780,7 +1867,7 @@ impl<'a> Interp<'a> {
                 Ok(Value::Desc(Rc::new(Desc::Seq(a, b, *span))))
             }
             Expr::Lambda { params, body, .. } => Ok(Value::Closure(Rc::new(ClosureData {
-                params: params.iter().map(|(n, _)| n.clone()).collect(),
+                params: params.iter().map(|(n, _)| Name::new(n)).collect(),
                 body: (**body).clone(),
                 env: env.clone(),
                 frame: frame.clone(),
@@ -2017,7 +2104,7 @@ impl<'a> Interp<'a> {
         }
         let mut env = closure.env.clone();
         for (name, value) in closure.params.iter().zip(args) {
-            env = bind(env, name, value);
+            env = bind(env, name.clone(), value);
         }
         self.eval(&closure.body, &env, &closure.frame)
     }
@@ -2052,7 +2139,18 @@ impl<'a> Interp<'a> {
     }
 
     fn call_named(&self, name: &str, args: Vec<Value>, span: Span, frame: &Frame) -> EvalResult {
-        if name == "err" {
+        // The borrow is dropped before the call runs, because the body it
+        // reaches calls back in here.
+        let known = self.callees.borrow().get(name).cloned();
+        let callee = match known {
+            Some(callee) => callee,
+            None => {
+                let callee = self.callee(name);
+                self.callees.borrow_mut().insert(name.to_string(), callee.clone());
+                callee
+            }
+        };
+        if let Callee::Err = callee {
             let [reason] = arity(args, name, span)?;
             let reason = self.force_thunk(reason)?;
             if is_failure(&reason) {
@@ -2060,7 +2158,12 @@ impl<'a> Interp<'a> {
             }
             return Ok(err_value(reason, origin_at(frame, span)));
         }
-        if let Some(ty) = self.type_decl(name) {
+        let constructed = match callee {
+            Callee::EntryType => Some(&self.entry_decl),
+            Callee::Constructor(ty) => Some(ty),
+            _ => None,
+        };
+        if let Some(ty) = constructed {
             // A constructor slot is where a knot ties: an argument still
             // being computed is stored rather than demanded, so the cell
             // completes here and the field resolves against it afterwards.
@@ -2075,11 +2178,41 @@ impl<'a> Interp<'a> {
                 .collect::<Result<Vec<_>, _>>()?;
             return self.construct(ty, args, span);
         }
-        if let Some(overloads) = self.fns.get(name) {
-            return self.dispatch(name, overloads, args, span);
+        if let Callee::Group(overloads) = callee {
+            return self.dispatch(name, &overloads, args, span);
         }
         let args = args.into_iter().map(|a| self.force_thunk(a)).collect::<Result<Vec<_>, _>>()?;
         self.call_builtin(name, args, span, frame)
+    }
+
+    /// The ladder `call_named` used to walk, walked once per name per run.
+    /// The arms are in the order they were in, because the order decides the
+    /// answer: `err` beats a type, and a type beats a group.
+    fn callee(&self, name: &str) -> Callee<'a> {
+        if name == "err" {
+            return Callee::Err;
+        }
+        if name == "entry" {
+            return Callee::EntryType;
+        }
+        if let Some(ty) = self.types.get(name).copied() {
+            return Callee::Constructor(ty);
+        }
+        match self.fns.get(name) {
+            Some(overloads) => Callee::Group(overloads.clone()),
+            None => Callee::Builtin,
+        }
+    }
+
+    /// Whether a name calls a dispatch group, read off the same memory.
+    fn calls_a_group(&self, name: &str) -> bool {
+        if let Some(known) = self.callees.borrow().get(name) {
+            return matches!(known, Callee::Group(_));
+        }
+        let callee = self.callee(name);
+        let group = matches!(callee, Callee::Group(_));
+        self.callees.borrow_mut().insert(name.to_string(), callee);
+        group
     }
 
     fn construct(&self, ty: &TypeDecl, args: Vec<Value>, span: Span) -> EvalResult {
@@ -2139,11 +2272,11 @@ impl<'a> Interp<'a> {
     fn dispatch(
         &self,
         name: &str,
-        overloads: &[&FnDecl],
+        overloads: &Rc<Vec<&'a FnDecl>>,
         args: Vec<Value>,
         span: Span,
     ) -> EvalResult {
-        self.dispatch_loop(name.to_string(), overloads.to_vec(), args, span)
+        self.dispatch_loop(name.to_string(), Rc::clone(overloads), args, span)
     }
 
     /// The dispatcher's trampoline: a tail call to a named group re-enters
@@ -2154,7 +2287,7 @@ impl<'a> Interp<'a> {
     fn dispatch_loop(
         &self,
         name: String,
-        overloads: Vec<&FnDecl>,
+        overloads: Rc<Vec<&'a FnDecl>>,
         args: Vec<Value>,
         span: Span,
     ) -> EvalResult {
@@ -2184,12 +2317,12 @@ impl<'a> Interp<'a> {
     fn dispatch_loop_inner(
         &self,
         name: String,
-        overloads: Vec<&FnDecl>,
+        overloads: Rc<Vec<&'a FnDecl>>,
         args: Vec<Value>,
         span: Span,
     ) -> EvalResult {
         let mut name = name;
-        let mut overloads = overloads;
+        let mut overloads: Rc<Vec<&'a FnDecl>> = overloads;
         let mut args = args;
         let mut span = span;
         loop {
@@ -2226,7 +2359,7 @@ impl<'a> Interp<'a> {
                 }
             }
             let mut best: Option<(Score, &FnDecl, Bindings)> = None;
-            for decl in &overloads {
+            for decl in overloads.iter() {
                 if decl.params.len() != args.len() {
                     continue;
                 }
@@ -2245,7 +2378,7 @@ impl<'a> Interp<'a> {
                 Some((_, decl, binds)) => {
                     let mut env = None;
                     for (bind_name, value) in binds {
-                        env = bind(env, &bind_name, value);
+                        env = bind(env, bind_name, value);
                     }
                     // THE ARGUMENT VECTOR IS A HOLDER, and nothing below
                     // reads it. `match_one` cloned each matched value into
@@ -2357,7 +2490,7 @@ impl<'a> Interp<'a> {
     fn call_decided(&self, callee: &Value, arg: Value, span: Span) -> EvalResult {
         match callee {
             Value::Closure(c) if c.params.len() == 1 => {
-                let env = bind(c.env.clone(), &c.params[0], arg);
+                let env = bind(c.env.clone(), c.params[0].clone(), arg);
                 self.eval(&c.body, &env, &c.frame)
             }
             // a callback compiled into another engine's table. Without this
@@ -2367,6 +2500,54 @@ impl<'a> Interp<'a> {
             Value::TableFn(handle) => foreign_call(*handle, vec![arg], span, true),
             other => self.call(other.clone(), vec![arg], span, &None),
         }
+    }
+
+    /// Whether the linearity analysis proved this call site extends a
+    /// container nothing else will read.
+    ///
+    /// The key is the declaration's file and the call's line and column, which
+    /// is what `codegen.rs` uses at its own push arm. A frame the wasm host
+    /// built carries no file and answers no, which is the safe direction.
+    fn writes_in_place(&self, span: Span, frame: &Frame) -> bool {
+        let Some(site) = frame else { return false };
+        self.in_place.get_or_init(|| crate::linear::in_place_pushes(self.program)).contains(&(
+            site.file.clone(),
+            span.line as usize,
+            span.col as usize,
+        ))
+    }
+
+    /// Take a container's contents where the analysis proved nobody else will
+    /// read them.
+    ///
+    /// SAFETY, and it is the analysis rather than the refcount. `Rc` refuses
+    /// `&mut` above one holder, and the other holder here is the environment
+    /// node binding the accumulator's name -- so `try_unwrap` fails on 96.99%
+    /// of this corpus's container calls and every one of them clones. What
+    /// `linear::in_place_pushes` proves is that no later read of that binding
+    /// exists, which is why the COMPILED engine writes through the same
+    /// pointer at the same sites and has since kanso#1359. Taking the contents
+    /// leaves an empty vector behind for a holder that never looks.
+    ///
+    /// The differential law is what keeps this honest rather than argued: the
+    /// two engines must agree, and five specs go red the moment this fires
+    /// where the analysis did not say so --
+    /// `a_list_held_twice_is_not_pushed_into`,
+    /// `a_builder_passed_twice_through_a_wrapper_is_not_written_through`,
+    /// `an_imported_builder_held_twice_is_not_written_through`,
+    /// `micro_corpus_agrees_across_engines` and
+    /// `a_unique_container_is_extended_in_place`. That was measured by
+    /// building the ungated version and watching them fail.
+    fn taken_in_place<T>(rc: &Rc<T>) -> T
+    where
+        T: Default,
+    {
+        let slot = Rc::as_ptr(rc) as *mut T;
+        // SAFETY: see above. The pointer is derived from a live `Rc` this
+        // frame holds, so it is valid and aligned for `T`, and no other
+        // reference into it is live across this line -- the only other holder
+        // is an environment binding the analysis proved dead.
+        unsafe { std::mem::take(&mut *slot) }
     }
 
     pub fn call_builtin(
@@ -2703,7 +2884,10 @@ impl<'a> Interp<'a> {
                     });
                 }
                 let Value::List(items) = list else { unreachable!("checked just above") };
-                let mut next = taken(items);
+                let mut next = match self.writes_in_place(span, frame) {
+                    true => Self::taken_in_place(&items),
+                    false => taken_to_grow(items, 1),
+                };
                 next.push(item);
                 Ok(Value::List(Rc::new(next)))
             }
@@ -2716,7 +2900,10 @@ impl<'a> Interp<'a> {
                     });
                 };
                 let key = map_key(key, span)?;
-                let mut next = taken(entries);
+                let mut next = match self.writes_in_place(span, frame) {
+                    true => Self::taken_in_place(&entries),
+                    false => taken(entries),
+                };
                 next.insert(key, value);
                 Ok(Value::Map(Rc::new(next)))
             }
@@ -2949,7 +3136,15 @@ impl<'a> Interp<'a> {
                         span,
                     });
                 };
-                let mut out = taken(items);
+                let grows_by = match &x {
+                    Value::Str(s) => s.len(),
+                    Value::Bytes(more) => more.len(),
+                    _ => 1,
+                };
+                let mut out = match self.writes_in_place(span, frame) {
+                    true => Self::taken_in_place(&items),
+                    false => taken_to_grow(items, grows_by),
+                };
                 match &x {
                     Value::Str(s) => out.extend_from_slice(s.as_bytes()),
                     Value::Bytes(more) => out.extend_from_slice(more),
@@ -3402,7 +3597,7 @@ impl<'a> Interp<'a> {
             .any(|n| knots.get(*n).is_some_and(|c| matches!(&*c.borrow(), ThunkState::Blackhole)))
     }
 
-    fn knotted(&self, name: &str, constant: &FnDecl) -> EvalResult {
+    fn knotted(&self, name: &str, constant: &'a FnDecl) -> EvalResult {
         if let Some(cell) = self.knots.borrow().get(name) {
             let forced = match &*cell.borrow() {
                 ThunkState::Forced(v) => Some(v.clone()),
@@ -3576,9 +3771,37 @@ fn taken<T: Clone>(rc: Rc<T>) -> T {
     }
 }
 
+/// `taken` for a vector that is about to GROW by a known amount.
+///
+/// `Vec::clone` allocates capacity exactly equal to length, so the clone arm of
+/// `taken` hands back a full vector and the push or extend that follows must
+/// reallocate and copy the whole buffer a second time. Every shared `push` and
+/// every shared `append` was paying for its contents twice: once to clone, once
+/// to grow.
+///
+/// Sizing the clone for what is coming pays once. The unique arm is untouched,
+/// because a vector nobody else points at may already have spare capacity and
+/// reserving on it would be the same mistake in the other direction.
+fn taken_to_grow<T: Clone>(rc: Rc<Vec<T>>, extra: usize) -> Vec<T> {
+    match Rc::try_unwrap(rc) {
+        Ok(owned) => owned,
+        Err(shared) => {
+            let mut out = Vec::with_capacity(shared.len() + extra);
+            out.extend(shared.iter().cloned());
+            out
+        }
+    }
+}
+
 fn match_params(params: &[Pattern], args: &[Value]) -> Option<(Score, Bindings)> {
-    let mut score = Vec::new();
-    let mut binds = Vec::new();
+    // Both vectors are built at the size the parameter list already states.
+    // `score` takes exactly one entry per parameter, so its capacity is not an
+    // estimate; `binds` takes at most one per parameter for the simple
+    // patterns and grows from there for a constructor that binds several.
+    // dispatch runs this once per overload on every call, and a Vec::new()
+    // that reaches three entries has reallocated twice by then.
+    let mut score = Vec::with_capacity(params.len());
+    let mut binds = Vec::with_capacity(params.len());
     for (pattern, arg) in params.iter().zip(args) {
         // per-param: literals 200, annotated 100 minus subtype distance
         // (nearer declarations outrank ancestors), generics 10 — the old
@@ -3598,7 +3821,7 @@ fn match_params(params: &[Pattern], args: &[Value]) -> Option<(Score, Bindings)>
 /// the caller passed, not one rebuilt from the parts.
 fn bind_whole(whole: &Option<Box<(Name, crate::diag::Span)>>, arg: &Value, binds: &mut Bindings) {
     if let Some(named) = whole {
-        binds.push((named.0.to_string(), arg.clone()));
+        binds.push((named.0.clone(), arg.clone()));
     }
 }
 
@@ -3617,13 +3840,13 @@ fn match_one(pattern: &Pattern, arg: &Value, binds: &mut Bindings) -> Option<u8>
         (Pattern::Var(name, _), _) => match is_failure(arg) {
             true => None,
             false => {
-                binds.push((name.to_string(), arg.clone()));
+                binds.push((name.clone(), arg.clone()));
                 Some(0)
             }
         },
         (Pattern::Annotated { name, ty, .. }, _) => match type_match_depth(ty, arg) {
             Some(depth) => {
-                binds.push((name.to_string(), arg.clone()));
+                binds.push((name.clone(), arg.clone()));
                 Some(depth)
             }
             None => None,

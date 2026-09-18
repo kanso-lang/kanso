@@ -76,19 +76,62 @@ pub fn run rounds
 /// What 300 extra rounds of the two builders cost, with every fixed
 /// allocation cancelled by the subtraction.
 ///
-/// It read 18,001 when kanso#1515 pinned it and reads 16,201 since kanso#1516,
-/// and the 1,800 between them is six allocations a round that the builders
-/// never made. `eval_ident` used to build an `Rc<str>` every time it resolved a
-/// name to a reference; it remembers the answer now, so the six names each
-/// round mentions allocate once for the whole run instead of once per mention.
-/// That is a change in what the ROUNDS cost and the subtraction is meant to see
-/// it -- which is why this spec went red on that branch and had to be re-read
-/// rather than widened.
+/// Three readings so far, and each drop is a change telling this spec what it
+/// cost per round:
+///
+///     18,001   kanso#1515, where the number was first pinned
+///     16,201   kanso#1516, six a round less
+///     15,601   kanso#1517, two a round less again
+///     12,001   the frame memory, twelve a round less
+///     10,801   the bound name's second copy, four a round less
+///      9,001   the environment holding a `Name`, six a round less again
+///      7,803   the interpreter reading the linearity analysis, four a round
+///              less again
+///
+/// The six are `eval_ident`: it used to build an `Rc<str>` every time it
+/// resolved a name to a reference, and it remembers the answer now, so the six
+/// names each round mentions allocate once for the whole run rather than once
+/// per mention. The two are the tail hop: `grow` and `stack` each tail-call
+/// once a round, and a hop used to clone the whole overload vector where it now
+/// takes a refcount. The twelve are `frame_of`, which built a formatted trace
+/// line and a package lookup -- two allocations -- on every entry into every
+/// body, so six body entries a round cost twelve.
+///
+/// The last two are one change taken in two steps, and the split says what
+/// each half reached. A binding used to allocate its name twice: `match_one`
+/// pushed `name.as_str().to_owned()` into a `Bindings`, and `bind` then did
+/// `name.to_string()` on top of it. Taking the name by value in `bind` drops
+/// the second copy for the bindings that arrive through a `Bindings` — four a
+/// round. Storing a `Name` rather than a `String` drops the first copy for
+/// every binding, whichever route it came by — six a round. Six body entries
+/// a round is the same six the frame-memory row above counted, and four of
+/// them are the ones a pattern match binds.
+///
+/// Measured by building all three trees rather than subtracting one number
+/// from another: main reads 12,001, the by-value commit alone 10,801, and the
+/// two together 9,001.
+///
+/// The last row is this spec doing the job it was written for from the other
+/// side. Every one before it removed an allocation the interpreter was making
+/// for no reason; this one removes the CLONE, at the sites
+/// `linear::in_place_pushes` proves nothing else will read. Four a round is
+/// the two builders' four extending calls, each of which used to copy the
+/// accumulator and now writes through it.
+///
+/// It is also the only pin this repository has that the optimisation FIRES.
+/// The five specs that catch it firing where it should not --
+/// `a_list_held_twice_is_not_pushed_into` and its two siblings, the
+/// differential micro loop, and this file's own assertion -- all stay green
+/// if the gate silently stops matching. This number does not.
+///
+/// Each time, the number was re-read rather than the assertion widened. A
+/// change in what the ROUNDS cost is exactly what the subtraction exists to
+/// see, so this spec going red on those branches was it working.
 ///
 /// The 19,201 the copying arm read is from before kanso#1516 and has not been
-/// re-measured under it. What this spec pins is unchanged either way: the
-/// in-place path costs less per round than the copying one.
-const PER_EXTRA_ROUND: u64 = 16_201;
+/// re-measured under either change. What this spec pins is unchanged either
+/// way: the in-place path costs less per round than the copying one.
+const PER_EXTRA_ROUND: u64 = 7_803;
 
 fn kanso() -> PathBuf {
     let mut exe = std::env::current_exe().expect("the test binary has a path");

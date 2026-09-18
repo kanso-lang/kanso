@@ -279,5 +279,70 @@
 # worktree; CI reads -171,322,972 on a different toolchain. The two deltas
 # agree to within 309,823 -- 0.18% of the delta itself -- which is what a real
 # saving looks like measured twice on two hosts.
-interp_instructions=1997105566
+#
+# 2026-09-18, kanso#1517 (stacked on kanso#1516). ROUND ONE IS DELIBERATELY RED
+# ON THIS ROW. The value below is the row the branch underneath measured on CI,
+# carried forward: this host runs rustc 1.94.1 against the runner's 1.98.1 and
+# the gate refuses to compare, so what this branch does to the row is CI's to
+# read.
+#
+# Measured here against kanso#1516's head, same worktree, boxes of equal path
+# length: 1,836,055,421 -> 1,802,816,521, a FALL of 33,238,900 (-1.81%).
+# Against main, the two changes together: 2,007,688,216 -> 1,802,816,521,
+# -204,871,695, -10.20%.
+#
+# WORK. `call_named` walked a ladder of its own on every call -- `err`, the
+# types map, the function map -- and `group_of` inside `eval_tail` probed both
+# maps to decide one bit about every `FnRef` callee. Neither map changes during
+# a run, so both read one memory now. The profile put those frames at
+# 49,549,566 and the measured fall is 33,238,900: the change adds a probe at
+# each site as well as removing two, so the profile's figure was a ceiling.
+# What the remaining 16,310,666 is made of is not separated here.
+#
+# START-UP DOES NOT PAY FOR IT. The function groups became `Rc<Vec<..>>` so the
+# memory can hold one without borrowing from `self`, which is an allocation per
+# group at construction. `kanso play` on the start-up corpus reads 3,399,666
+# before and 3,384,980 after, a FALL of 14,686 -- and that route takes the
+# native path rather than building an `Interp`, so the move is layout and the
+# allocation per group is not in this number at all. What it says is that
+# nothing on the start-up path got worse.
+#
+# 2026-09-18, kanso#1517 on the tree merged with kanso#1516, CI's sitting.
+# 1,997,105,566 -> 1,963,826,350, a FALL of 33,279,216 (-1.6664%).
+# THIS ONE IS THE CHANGE. The container projected -33,238,900 and CI reads
+# -33,279,216 on a different toolchain: 40,316 apart, 0.12% of the delta.
+#
+# 2026-09-18, kanso#1518 against main at kanso#1517, CI's sitting.
+# 1,963,826,350 -> 1,555,890,579, a FALL of
+# 407,935,771 (-20.7725%).
+# THE FRAME MEMORY AND FOUR RESERVES. This container projected the fall at
+# 410,520,397 and the runner read 407,935,771 -- 0.63% of the delta apart,
+# which is the usual agreement between the two hosts on a difference.
+#
+# 2026-09-18, kanso#1520 against main at kanso#1519, CI's sitting.
+# 1,555,890,579 -> 1,260,262,910, a FALL of 295,627,669 (-19.0005%).
+# THE CLONE SIZED FOR ITS GROWTH, and the number is THREE TIMES what this
+# container projected. The container read the fall at 94,998,647 and the
+# runner reads 295,627,669. Both hosts agree EXACTLY on what the change
+# does -- interp_allocs falls 36,066 and interp_peak_bytes 76,113 on both,
+# to the byte -- and disagree threefold on what it costs. What a copy of N
+# elements costs in instructions is the rustc that built the binary; how
+# many copies happen is the program.
+#
+# 2026-09-18, kanso#1522 against main at kanso#1521, CI's sitting.
+# 1,260,262,910 -> 1,138,001,430, a FALL of 122,261,480 (-9.7013%).
+# A BOUND NAME WAS COPIED TWICE. `match_one` pushed a fresh `String` into a
+# `Bindings` and `bind` allocated a second copy of the same bytes on top of
+# it; the first commit takes the name by value and the second stores a
+# `Name`, which keeps twenty-two bytes or fewer in the node. The allocation
+# row below it falls 33.92% for the same reason.
+#
+# AND THE CONTAINER'S PROJECTION HELD THIS TIME, where kanso#1520's was three
+# times out. This box read the fall at 127,890,665 and the runner reads
+# 122,261,480, 4.40% apart. The two changes differ in what they move:
+# kanso#1520 changed how many BYTES a copy moves, and what a copy of N bytes
+# costs in instructions is the rustc that built the binary; this one changes
+# how many ALLOCATIONS happen, which is a count the program decides. A
+# container projection travels when the thing it projects is a count.
+interp_instructions=1075174600
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
