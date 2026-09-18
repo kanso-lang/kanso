@@ -242,5 +242,12 @@
 # 2026-09-18, re-merged onto main after kanso#1510. THE VALUE BELOW IS MAIN'S,
 # carried forward: kanso#1510 moved this row and what this branch adds on top
 # has not been measured, so the merged reading is CI's.
-interp_instructions=2182620735
+#
+# 2026-09-18, kanso#1502 on the tree merged with main after kanso#1510,
+# CI's sitting. 2,182,620,735 -> 2,182,501,648, a FALL of 119,087
+# (-0.0055%). LAYOUT. The two divisions this branch merges are in float
+# rendering and none of these routes renders a float. All six fell, where
+# the sitting before kanso#1510 landed had the same six rising: one layout
+# term, opposite sign, which is what a shifted binary looks like.
+interp_instructions=2182501648
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
