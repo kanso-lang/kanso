@@ -2150,6 +2150,18 @@ k_beat_pop    14,517,216 -&gt; 18,521,968    +4,004,752
 k_beat_push   15,017,844 -&gt; 15,518,439      +500,595
 runbench   1,840,367,648 -&gt; 1,823,406,517  -16,961,131   -0.9216%</code></pre>
 
+<p>fourteen benchmarks carry a row in that vein, and the spread across them is the finding. a row falls in proportion to how much its program beat-loops:</p>
+
+<pre><code>escapebench      84,780,592 -&gt;     75,228,606    -9,551,986  -11.2667%
+basket           33,678,746 -&gt;     32,776,834      -901,912   -2.6780%
+runbench      1,821,933,936 -&gt;  1,804,998,570   -16,935,366   -0.9295%
+livebench     2,825,430,323 -&gt;  2,805,024,580   -20,405,743   -0.7222%
+encodebench   3,497,149,260 -&gt;  3,476,743,520   -20,405,740   -0.5835%
+deepbench       347,289,236 -&gt;    347,635,275      +346,039   +0.0996%
+widebench        33,516,094 -&gt;     33,644,020      +127,926   +0.3817%</code></pre>
+
+<p>escapebench is the extreme because escaping a string is a tight beat loop with almost nothing else in it, so the fifteen instructions are most of what a lap costs. the two that rise are paying the layout term without beat loops to spend it on &#8212; every binary here grew between 368 and 560 bytes, since the mark carries a field more and there is a new global beside it. the objective weighs the run program alone, so the score moves on one of these rows; the other thirteen are watched rather than scored, which is why the vein is diffed whole.</p>
+
 <p>the three frames are a container&#39;s, because that is where a profile can name them. the row the project pins is ci&#39;s, on its own machine and its own baseline: <strong>1,804,998,570</strong> against 1,821,933,936, a fall of <strong>16,935,366</strong> &#8212; <strong>0.9295%</strong>. two different boxes, two different baselines, and the two deltas are 25,765 apart, which is 0.0014% of the number. that is as close as this vein gets between machines, and it is why the attribution above can be trusted even though the absolute figures beside it cannot be compared with ci&#39;s.</p>
 
 <p>the change costs something too, and one row carries all of it. <code>src/runtime.c</code> is <code>include_str!</code>&#39;d into the compiler, so seven compile-side rows move by four thousandths of a per cent or less &#8212; they carry the file&#39;s bytes without compiling them. the eighth compiles them: the release-tier codegen row rises <strong>11,227,515</strong>, 0.1645%, which is clang at <code>-O3 -flto</code> over a mark that grew a field and a global beside it. paid once per release build against 16.9 million given back on every run of the program, and the objective &#8212; which weighs run speed at 0.45 and the release build at 0.15 &#8212; takes the trade: 76.65 to 76.71.</p>

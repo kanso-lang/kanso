@@ -8774,6 +8774,36 @@ trusted even though its absolute figures cannot be compared with CI's.
     k_beat_pop    14,517,216 -> 18,521,968    +4,004,752
     k_beat_push   15,017,844 -> 15,518,439      +500,595
 
+**Fourteen run-side rows moved, not one, and the spread is the finding.** The
+first push wrote runbench's number alone and CI refused it, which was right:
+thirteen rows were left describing a runtime this branch had widened. A vein is
+the whole file.
+
+    escapebench      84,780,592 ->     75,228,606    -9,551,986  -11.2667%
+    basket           33,678,746 ->     32,776,834      -901,912   -2.6780%
+    runbench      1,821,933,936 ->  1,804,998,570   -16,935,366   -0.9295%
+    livebench     2,825,430,323 ->  2,805,024,580   -20,405,743   -0.7222%
+    encodebench   3,497,149,260 ->  3,476,743,520   -20,405,740   -0.5835%
+    oneshot          17,888,155 ->     17,837,178       -50,977   -0.2850%
+    readbench         4,628,429 ->      4,627,056        -1,373   -0.0297%
+    digestbench       9,967,039 ->      9,966,673          -366   -0.0037%
+    scanbench       462,269,296 ->    462,269,305            +9   +0.0000%
+    jsonbench     1,133,644,520 ->  1,133,645,592        +1,072   +0.0001%
+    pendbench       208,138,815 ->    208,139,955        +1,140   +0.0005%
+    indexbench        2,895,708 ->      2,895,743           +35   +0.0012%
+    deepbench       347,289,236 ->    347,635,275      +346,039   +0.0996%
+    widebench        33,516,094 ->     33,644,020      +127,926   +0.3817%
+
+A row falls in proportion to how much its program beat-loops. escapebench is
+the extreme at 11.27% because escaping a string is a tight beat loop with
+almost nothing else in it, so the fifteen instructions are most of what a lap
+costs. The rises are the layout term: every binary grew 368 to 560 bytes,
+because the mark carries a field more and there is a new global beside it, and
+deepbench and widebench are the two paying that without beat loops to spend it
+on. The objective weighs `work_runbench` alone, so welfare reads 76.71 either
+way; the other thirteen rows are watched rather than scored, which is exactly
+why the vein is diffed whole.
+
 Eight compile-side rows moved, and seven of them are layout. `src/runtime.c`
 is `include_str!`'d into the compiler, so changing it changes the compiler's
 own bytes and what the linker does with them:
