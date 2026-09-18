@@ -311,4 +311,14 @@
 # LAYOUT. These rows carry runtime.c's bytes rather than compiling it, and
 # every binary's `.text` grew 32 bytes on this change; the moves are all under
 # two hundredths of a per cent.
-startup_instructions=3951975
+# 2026-09-18, kanso#1509 (kanso#1480 rebuilt) on the tree merged with main,
+# CI's sitting. 3,951,796 -> 3,933,223, a FALL of 18,573 (-0.4700%).
+# The interpreter's start-up carries the compiler's bytes, and this branch
+# removes two whole analysis constructions from the emitter's path, so the
+# binary's layout moves with it. A fall rather than a rise, and larger than
+# this row's usual layout term.
+#
+# 2026-09-18, re-merged onto main after kanso#1509. THE VALUE BELOW IS MAIN'S,
+# carried forward: kanso#1509 moved this row on its own and what this branch
+# adds on top of it has not been measured, so the merged reading is CI's.
+startup_instructions=3933223

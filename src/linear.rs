@@ -15,11 +15,45 @@ use crate::hash::{Map as HashMap, Set as HashSet};
 
 /// Push call sites, keyed `(file, line, col)`, whose list argument is uniquely
 /// owned and may be extended in place.
-pub fn in_place_pushes(program: &Program) -> HashSet<(std::sync::Arc<str>, usize, usize)> {
+/// What the emitter asks the linearity analysis for, in one answer.
+pub type EmitterFacts = (
+    HashSet<(std::sync::Arc<str>, usize, usize)>,
+    HashMap<(std::sync::Arc<str>, usize, usize), String>,
+    (Sites, Slots, Sites),
+);
+
+/// The three linearity answers the emitter needs, from ONE `Analysis`.
+///
+/// `in_place_pushes`, `reusable_records` and `string_builders` each built their
+/// own, and `codegen::emit_ir` calls all three on consecutive lines. So the
+/// same whole-program analysis was built three times from the same program:
+/// 25,468,138, 25,468,351 and 25,482,737 instructions in a `kanso build
+/// bench/runbench`, one call each, **76.4 million of a 657.7 million build**.
+///
+/// The three wrappers stay, because the corpus and a dozen specs call them one
+/// at a time and building an `Analysis` for one question is the right cost when
+/// only one is asked.
+pub fn for_the_emitter(program: &Program) -> EmitterFacts {
     let analysis = Analysis::new(program);
+    (
+        in_place_pushes_with(&analysis, program),
+        reusable_records_with(&analysis, program),
+        string_builders_with(&analysis, program),
+    )
+}
+
+pub fn in_place_pushes(program: &Program) -> HashSet<(std::sync::Arc<str>, usize, usize)> {
+    in_place_pushes_with(&Analysis::new(program), program)
+}
+
+/// The body of `in_place_pushes`, reading an `Analysis` it was handed.
+fn in_place_pushes_with(
+    analysis: &Analysis,
+    program: &Program,
+) -> HashSet<(std::sync::Arc<str>, usize, usize)> {
     let mut out = HashSet::default();
     for decl in real_fns(program) {
-        collect_pushes(&analysis, decl, &decl.body, &mut out);
+        collect_pushes(analysis, decl, &decl.body, &mut out);
     }
     out
 }
@@ -949,7 +983,14 @@ fn child_exprs(e: &Expr) -> Vec<&Expr> {
 /// the same width, so a mismatch — or the shared zero-field marker — falls
 /// back to allocating.
 pub fn reusable_records(program: &Program) -> HashMap<(std::sync::Arc<str>, usize, usize), String> {
-    let analysis = Analysis::new(program);
+    reusable_records_with(&Analysis::new(program), program)
+}
+
+/// The body of `reusable_records`, reading an `Analysis` it was handed.
+fn reusable_records_with(
+    analysis: &Analysis,
+    program: &Program,
+) -> HashMap<(std::sync::Arc<str>, usize, usize), String> {
     let types: HashSet<&str> = program.types.iter().map(|t| t.name.as_str()).collect();
     let mut out = HashMap::default();
     for decl in real_fns(program) {
@@ -958,7 +999,7 @@ pub fn reusable_records(program: &Program) -> HashMap<(std::sync::Arc<str>, usiz
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
                 Stmt::Set { value, .. } => value,
             };
-            walk_for_reuse(&analysis, decl, e, &types, &mut out);
+            walk_for_reuse(analysis, decl, e, &types, &mut out);
         }
     }
     out
@@ -1125,7 +1166,11 @@ pub type Slots = HashSet<(String, usize, usize)>;
 /// Returns the join sites, and the (name, arity, index) of each accumulator so
 /// the emitter can convert the seed where a caller hands one in from outside.
 pub fn string_builders(program: &Program) -> (Sites, Slots, Sites) {
-    let analysis = Analysis::new(program);
+    string_builders_with(&Analysis::new(program), program)
+}
+
+/// The body of `string_builders`, reading an `Analysis` it was handed.
+fn string_builders_with(analysis: &Analysis, program: &Program) -> (Sites, Slots, Sites) {
     let mut sites = HashSet::default();
     let mut accs = HashSet::default();
     for decl in real_fns(program) {
@@ -1134,13 +1179,13 @@ pub fn string_builders(program: &Program) -> (Sites, Slots, Sites) {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
                 Stmt::Set { value, .. } => value,
             };
-            walk_for_builder(&analysis, decl, e, &mut sites, &mut accs);
+            walk_for_builder(analysis, decl, e, &mut sites, &mut accs);
         }
     }
     // A parameter that forwards the accumulator on is carrying one too, so it
     // joins the set whose callers convert a seed — the conversion moves out to
     // where the value enters the cycle, rather than happening on every hop.
-    let (accs, carried) = carried_args(&analysis, program, &sites, accs);
+    let (accs, carried) = carried_args(analysis, program, &sites, accs);
     (sites, accs, carried)
 }
 
@@ -1362,6 +1407,59 @@ fn builder_param(a: &Analysis, decl: &FnDecl, name: &str, here: &Expr) -> Option
     match inside == everywhere && a.callers_hand_over(&decl.name, arity, i) {
         true => Some(i),
         false => None,
+    }
+}
+
+#[cfg(test)]
+mod one_analysis_answers_what_three_answered {
+    use super::*;
+
+    /// The three questions asked the way they were asked before: each building
+    /// its own `Analysis`. That is the oracle, and it is the three public
+    /// wrappers, unchanged and still exported.
+    fn separately(program: &Program) -> EmitterFacts {
+        (in_place_pushes(program), reusable_records(program), string_builders(program))
+    }
+
+    fn agrees_over(program: &Program) {
+        let (want_push, want_rec, (want_join, want_slot, want_carry)) = separately(program);
+        let (got_push, got_rec, (got_join, got_slot, got_carry)) = for_the_emitter(program);
+        assert_eq!(want_push, got_push, "in_place_pushes differs when the Analysis is shared");
+        assert_eq!(want_rec, got_rec, "reusable_records differs when the Analysis is shared");
+        assert_eq!(want_join, got_join, "builder joins differ when the Analysis is shared");
+        assert_eq!(want_slot, got_slot, "builder params differ when the Analysis is shared");
+        assert_eq!(want_carry, got_carry, "builder carried differs when the Analysis is shared");
+    }
+
+    #[test]
+    fn over_the_library_the_compiler_carries() {
+        let program = crate::compile_module(std::path::Path::new("lib/json"), false)
+            .expect("lib/json compiles");
+        agrees_over(&program);
+    }
+
+    #[test]
+    fn over_a_program_that_answers_two_of_the_three_yes() {
+        // A push into a unique list and a string accumulator carried round a
+        // loop, so two of the three answer YES rather than three empty answers
+        // agreeing with each other. `reusable_records` is left to the lib/json
+        // case above, which is full of real records; a hand-written one here
+        // bought nothing the library does not already cover.
+        let src = concat!(
+            "fn grow xs 0\n  xs\n\n",
+            "fn grow xs n\n  grow (push xs \"x\") (n - 1)\n\n",
+            "fn spell acc 0\n  acc\n\n",
+            "fn spell acc n\n  spell \"{acc}{n}\" (n - 1)\n\n",
+            "main = print \"{length (grow [] 3)} {spell \"\" 3}\"\n"
+        );
+        let program = crate::compile("test.kso", src, false).expect("the sample compiles");
+        // Two of the three must actually answer, or this is three empty
+        // answers agreeing with each other and it would pass with the sharing
+        // removed, with it wrong, or with the functions gutted.
+        let (pushes, _, (joins, _, _)) = for_the_emitter(&program);
+        assert!(!pushes.is_empty(), "the sample was meant to push into a unique list");
+        assert!(!joins.is_empty(), "the sample was meant to carry a string accumulator");
+        agrees_over(&program);
     }
 }
 

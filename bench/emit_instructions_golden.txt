@@ -120,4 +120,15 @@
 # LAYOUT. These rows carry runtime.c's bytes rather than compiling it, and
 # every binary's `.text` grew 32 bytes on this change; the moves are all under
 # two hundredths of a per cent.
-emit_instructions=60206729
+# 2026-09-18, kanso#1509 (kanso#1480 rebuilt) on the tree merged with main,
+# CI's sitting. 60,196,725 -> 52,115,454, a FALL of 8,081,271 (-13.4248%).
+# THIS ONE IS THE CHANGE. `emit_instructions` anchors at `codegen::emit_ir`
+# inclusive, and the linearity analysis was built three times inside it --
+# once each for in_place_pushes, reusable_records and string_builders, on
+# consecutive lines. Building it once takes 8,081,271 instructions out of the
+# emitter, 13.42% of what emitting costs.
+#
+# 2026-09-18, re-merged onto main after kanso#1509. THE VALUE BELOW IS MAIN'S,
+# carried forward: kanso#1509 moved this row on its own and what this branch
+# adds on top of it has not been measured, so the merged reading is CI's.
+emit_instructions=52115454
