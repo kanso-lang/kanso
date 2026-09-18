@@ -62,20 +62,12 @@ fn every_gate_that_reads_sections_reads_the_same_ones() {
         9,
         "the gates hold {} section lines, not nine:\n{}",
         printing.len(),
-        printing
-            .iter()
-            .map(|(f, l)| format!("  {f}\n    {l}"))
-            .collect::<Vec<_>>()
-            .join("\n")
+        printing.iter().map(|(f, l)| format!("  {f}\n    {l}")).collect::<Vec<_>>().join("\n")
     );
 
     assert!(
         wrong.is_empty(),
         "these section lines do not name `{SECTIONS}`:\n{}",
-        wrong
-            .iter()
-            .map(|(f, l)| format!("  {f}\n    {l}"))
-            .collect::<Vec<_>>()
-            .join("\n")
+        wrong.iter().map(|(f, l)| format!("  {f}\n    {l}")).collect::<Vec<_>>().join("\n")
     );
 }
