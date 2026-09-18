@@ -350,5 +350,16 @@
 # THE FRAME MEMORY AND FOUR RESERVES. This container projected the fall at
 # 410,520,397 and the runner read 407,935,771 -- 0.63% of the delta apart,
 # which is the usual agreement between the two hosts on a difference.
-interp_instructions=1555890579
+#
+# 2026-09-18, kanso#1502 on the tree merged with main after kanso#1518,
+# CI's sitting. 1,555,890,579 -> 1,555,890,587, a RISE of 8 (+0.00000051%).
+# EIGHT INSTRUCTIONS, and the fourth reading in one day to land under thirty.
+# Four src/runtime.c edits, four different functions, four sittings: 15 and 26
+# against the kanso#1517 tree, 19 and 8 against this one. The interpreted
+# corpus decodes a document it built itself and never enters the C runtime,
+# so none of them can be work, and `interp_allocs` read 3,879,653 on ALL FOUR
+# -- an allocation counter counts operations rather than a host, and real work
+# would have moved it. Four readings agreeing on that is the check; the size
+# of any one of them on its own would not be.
+interp_instructions=1555890587
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

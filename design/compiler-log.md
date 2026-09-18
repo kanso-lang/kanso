@@ -4483,3 +4483,21 @@ they are the ones to watch here for the same reason as last round: this branch's
 two divisions moved that row by 15 instructions on 1.96 billion, so anything
 larger than tens in the next sitting is kanso#1518's arithmetic showing through,
 not Ryu's.
+
+## 2026-09-18 — kanso#1502, CI's row: eight instructions, and the fourth reading under thirty
+
+    interp_instructions   1,555,890,579 -> 1,555,890,587   +8   +0.0000005%
+
+Every other row read its golden exactly, including both interpreted memory rows.
+
+FOUR RUNTIME EDITS IN ONE DAY HAVE NOW MOVED THIS ROW BY 15, 26, 19 AND 8. Four
+different functions in `src/runtime.c`, two sittings against the kanso#1517 tree
+and two against the kanso#1518 one, and every reading under thirty on a row of
+one and a half billion.
+
+`interp_allocs` read **3,879,653 on all four**. That is what turns four small
+numbers into a finding rather than four shrugs: an allocation counter counts
+operations rather than a host, so work in the interpreted run would have moved
+it, and it did not move once. The size of any single reading proves nothing —
+the agreement of the counter beside it across four independent edits is the
+evidence.
