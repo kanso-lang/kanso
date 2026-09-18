@@ -4924,3 +4924,39 @@ number rather than a hope.
 It is also a larger change than anything tried here: slots have to survive
 closures, which capture an environment rather than a frame. Recorded as sized
 and unbuilt.
+
+## 2026-09-18 — the eleven, on a pull request that changes no code at all
+
+This branch edits `design/compiler-log.md` and `docs/compiler.html`. That is the
+whole diff: no Rust, no C, no kanso, no golden. Its cost-goldens job failed.
+
+    codegen_instructions_release   first  6,824,133,291
+                                   again  6,824,133,280
+                                   golden 6,824,133,280
+
+Eleven apart, in one job, both readings seeing five processes
+(`first_procs=5 again_procs=5`, so the gate's guard against a second reading
+that measured something else is satisfied).
+
+**This is the strongest isolation the eleven has had.** kanso#1512 hunted it to
+the temp object's NAME — nine of ten names reading one value and `4b8c1a`
+reading eleven more — and everything since has been a reading on a branch that
+changed *something*, which always leaves room for the change. A diff of two
+documentation files leaves none. The row moved with nothing to attribute it to.
+
+It is also the second twice-in-one-job reading today. kanso#1502 drew
+6,820,866,355 then 6,820,866,344 a couple of hours ago; the absolute values
+differ because main moved between them, and the eleven does not.
+
+**What this settles, and what it does not.** It settles that the release row's
+instability is a property of the build rather than of any change under test, so
+a reader who sees this row disagree should not look at the diff. It does not
+say what the pin should be — that is the question in
+`design/pending-gavels.md` under Blocking, waiting on Clay since 06:19Z, and
+kanso#1513 carries the proposal to narrow the pin to the release tier. This
+entry is evidence for that decision and not a substitute for it.
+
+`codegen_release_kanso_excluded` moved 74 between the two readings
+(80,660,230 and 80,660,156). That is kanso's own process, excluded from the row
+by the 2026-09-15 normalization ruling, printed rather than counted — and it
+moving while the counted row holds is the exclusion doing its job.
