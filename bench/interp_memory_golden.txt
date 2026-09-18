@@ -65,6 +65,12 @@
 # and nothing better, because the falls that sat beside it are now main's.
 # Every row on this branch is main's, so CI measures the merged tree in one
 # piece and the real sixteen comes back with whatever moves beside it.
-interp_allocs=5313332
+#
+# 2026-09-18, kanso#1511 on the tree merged with main after kanso#1510,
+# CI's sitting. 5,313,332 -> 5,313,348, a RISE of 16
+# (+0.0003%). THE ONE ROW THAT REPRODUCES. +16 on both rounds, against two different
+# bases: the predicate answers with a set of owned names, built once, and
+# sixteen allocations is what that set costs on this program.
+interp_allocs=5313348
 interp_peak_bytes=933202
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

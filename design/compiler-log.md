@@ -3013,3 +3013,38 @@ the 11 is, it is inside `ld`, it is not the three clang invocations, and it is
 not the output path's prior contents, because the gate re-stages between the
 two readings and both counted builds therefore find the warm-up's binary at
 `-o`.
+## 2026-09-18 — correcting what kanso#1511 costs: the interpreted row does not resolve it, and the sixteen allocations do
+
+The entry above reads the first round's `interp_instructions` rise of 62,650 as
+"that one whole-program walk plus a set lookup at every constant cell after
+it". The second round, on the tree merged after kanso#1510 landed, reads the
+row the other way:
+
+    round 1, base 2,182,576,109   ->  2,182,638,759   +62,650
+    round 2, base 2,182,620,735   ->  2,182,597,360   -23,375
+
+One change, two bases, two signs. So the walk's cost is below what this row
+resolves, and the first entry's sentence attributing 62,650 to it was reading
+a layout term as work.
+
+**What reproduces is `interp_allocs`, at +16 on both rounds.** The predicate
+answers with a set of owned names, built once per run, and sixteen allocations
+is what that set costs on this program. That is the price of the ruling, it is
+the same number against two different bases, and it is the number to quote.
+
+The other five rows moved by between 219 and 10,522 with mixed signs, all
+under a fiftieth of a per cent, on routes that evaluate no constant and
+therefore never fire the `OnceCell` at all:
+
+    compile_instructions    35,445,148 ->    35,444,548     -600
+    entry_instructions     126,358,241 ->   126,359,513   +1,272
+    library_instructions   126,813,486 ->   126,814,937   +1,451
+    startup_instructions     3,364,974 ->     3,364,755     -219
+    emit_instructions       51,554,407 ->    51,543,885  -10,522 Both codegen rows AGREED with
+their goldens, and the release row read 6,822,651,561 — the golden exactly —
+on a tree that changes the interpreter and nothing else.
+
+This is the same correction shape as the rewrite family and the three
+container baselines: a delta that arrived with a change was written down as
+the change's cost, and a second measurement against a different base says the
+row cannot see it. What a row cannot resolve, it cannot attribute.
