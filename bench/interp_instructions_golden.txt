@@ -385,5 +385,16 @@
 # container projected 21,582,351 against its own base; the runner reads
 # 18,540,440, the same direction and smaller, on a different silicon (family
 # 0x6 model 0xcf against 0x19).
-interp_instructions=939042794
+# 2026-09-18, kanso#1540, CI's sitting. 939,042,794 -> 932,183,914,
+# a FALL of 6,858,880 (-0.7304%).
+# THE ROW THIS CHANGE IS ABOUT. The score buffer is declared above the
+# tail-call loop and the winner's is handed back, so it is allocated once for
+# a whole dispatch chain instead of once an iteration. `binds` still is,
+# because it becomes the environment frame. EVERY COMPILE VEIN IS
+# BYTE-IDENTICAL -- compile 35,550,010, entry 126,729,588, library
+# 127,186,008, emit 51,617,476, start-up 3,363,916, compile_allocs 27,313 --
+# the fourth runtime-only change in a row that moved no layout. This container
+# projected 5,073,171 and the runner reads 6,858,880: same direction, larger,
+# different silicon.
+interp_instructions=932183914
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
