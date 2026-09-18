@@ -1824,8 +1824,43 @@ impl<'a> Interp<'a> {
                     return self.call(callee, values, *span, frame);
                 }
                 let callee = self.eval(head, env, frame)?;
+                // `if` in VALUE position, the way `eval_tail` has always done it
+                // in tail position: ask the condition, then evaluate the branch
+                // that answer chooses. Nothing is deferred, so nothing is
+                // wrapped.
+                //
+                // What it replaces built a nullary closure around EVERY
+                // argument -- copying the whole subtree, cloning the
+                // environment and the frame, allocating an `Rc` -- and handed
+                // all three to `builtin_if`, which forces the condition on the
+                // way in and then the one branch it picks. Two of the three
+                // closures were built to be thrown away and the third to be
+                // opened immediately. The annotated profile put the subtree
+                // copying alone at 11,471,717 instructions over 50,235 clones.
+                //
+                // `force` matches what `builtin_if` did: it opens a nullary
+                // closure and then reaches through a thunk, so `force_thunk` on
+                // the branch is the second half of that. A failure VALUE is
+                // still the answer rather than a fault, as it was there.
+                if matches!(&callee, Value::FnRef(n) if &**n == "if") && args.len() == 3 {
+                    let cond = self.force(self.eval(&args[0], env, frame)?)?;
+                    return match cond {
+                        Value::True => self.force_thunk(self.eval(&args[1], env, frame)?),
+                        Value::False => self.force_thunk(self.eval(&args[2], env, frame)?),
+                        bad if is_failure(&bad) => Ok(bad),
+                        other => Err(RuntimeError {
+                            message: format!(
+                                "an if condition is true or false, got {}",
+                                render(self, &other, false)
+                            ),
+                            span: *span,
+                        }),
+                    };
+                }
                 let lazy_if = matches!(&callee, Value::FnRef(name) if &**name == "if");
                 let mut values = Vec::with_capacity(args.len());
+                // Any other arity reaches `builtin_if` as before -- a partial
+                // application, or a miscount the arity check is there to name.
                 for arg in args {
                     match lazy_if {
                         true => values.push(Value::Closure(Rc::new(ClosureData {
