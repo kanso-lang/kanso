@@ -4220,3 +4220,38 @@ Written down because the difference decides what to look for next. "Reserving
 saves allocations" would send the next reader after allocation counts, and the
 counts here are flat to a tenth of a per cent. The commit message on the
 source change carries the looser phrasing; this is the correction.
+
+## 2026-09-18 — kanso#1538, CI's rows for the per-dispatch reserve
+
+    interp_instructions   957,583,234 -> 939,042,794   -18,540,440  -1.9362%
+    interp_allocs           1,412,516 ->   1,410,530        -1,986  -0.1406%
+    interp_peak_bytes         834,117 ->     833,466          -651  -0.0781%
+
+Everything else in the job is byte-identical: compile 35,550,010, entry
+126,729,588, library 127,186,008, emit 51,617,476, start-up 3,363,916,
+compile_allocs 27,313, compile_peak_bytes 787,956. **The third runtime-only
+change today that moved no layout.** The prior that editing the compiler's own
+Rust moves `compile_instructions` has now missed three times running on
+changes confined to the interpreter's hot path, which is the shape the
+2026-09-06 correction described: a change small enough to leave the layout
+alone leaves that row alone with it.
+
+This container projected 21,582,351 and the runner reads 18,540,440 — same
+direction, smaller, on different silicon (family 0x6 model 0xcf against 0x19).
+Neither number is the other's check; the golden's header says the two hosts
+are not comparable, and what is comparable is the sign.
+
+**TWO ALLOCATION NUMBERS POINT OPPOSITE WAYS AND DO NOT DISAGREE.** CI's
+`interp_allocs` falls 1,986 while the callgrind tally of `__rust_alloc` CALLS
+rises 1,332. They are different instruments over different scopes — kanso's own
+traffic counter over the whole run, against callgrind's call count over the
+toggled interpreted thread — and both are written into the memory golden's
+header so that a later reader finds the explanation next to the numbers rather
+than a contradiction.
+
+`interp_peak_bytes` gives back 651 of the 784 kanso#1534 recorded as open and
+unexplained. A buffer asked for at its final size is never live beside the
+smaller one it replaces, and a peak is where that overlap would show — a
+candidate, not a mechanism, and no build isolates it.
+
+Welfare 77.25 -> 77.26, banked in the same pull request.
