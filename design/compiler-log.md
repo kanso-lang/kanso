@@ -3892,6 +3892,201 @@ apart, 0.12% of the delta. `interp_allocs` fell by 174,996 on both, the same
 integer. `interp_peak_bytes` rose 9,229 here and 9,228 on the runner, one byte
 apart on a row whose absolute values the two hosts do not share.
 
+## 2026-09-18 — the frame a raise would print, built once per declaration
+
+Two changes, measured together against main at kanso#1517: the interpreted row
+falls **363,081,711 instructions, 20.14%**, from 1,802,816,521 to 1,439,734,810
+on this container. Both readings are this box's and are a comparison with each
+other only; the base matches what the earlier ladder predicted for this tree to
+the instruction, which is the check that the two are the same measurement.
+
+`frame_of` is the larger half. It formats a trace line and asks which package a
+file belongs to — two allocations — and the interpreter called it on EVERY entry
+into EVERY body. The corpus enters about half a million bodies. The answer
+depends on the declaration alone: `frame_of` reads `decl.name` and `decl.file`
+and nothing else, so it is a pure function of its argument and can be
+remembered.
+
+THE FRAME IS NOT ONLY A DIAGNOSTIC, AND THIS WAS WRITTEN DOWN WRONG FIRST. The
+draft of this entry said the frame is "a string only read when an err is
+raised", which is true of its `prefix` and false of its `hako`. `own_failure`
+(`src/eval.rs:3655`) compares the failure's package against the frame's, and
+`Word::Rescue if own_failure(..) => Ok(yielded)` is the foreign-only licence:
+a rescue declines a failure raised in its own package and passes it through. So
+the frame decides whether a rescue FIRES. Memoizing it per declaration is still
+exactly right — both halves are pure in the declaration — but the change touches
+error-handling semantics rather than reporting, and it deserves to be described
+that way.
+
+THE KEY IS AN ADDRESS, AND THE COMPILER IS WHAT MAKES THAT SAFE. The memory is
+`Map<usize, Frame>` keyed on `decl as *const FnDecl as usize`, which is sound
+only if no two declarations can ever share a key — that is, only if every
+address in it outlives the interpreter. `frame_for` takes `&'a FnDecl`, where
+`'a` is the lifetime of the `Program` the interpreter borrows, so a temporary
+cannot be passed at all. Making that signature explicit was not cosmetic: it
+failed to compile until `eval_body_of`, `eval_body_flow`, `knotted` and the
+dispatch loop's `overloads` were widened to `'a` too, and each of those errors
+is a place where a future edit could otherwise have handed in a borrow that
+dies. The argument used to be "all four call sites happen to pass a
+program-owned declaration", which is a review; it is now a type.
+
+The smaller half is `match_one`'s two binding sites, where `name.to_string()`
+became `name.as_str().to_owned()`. `Name`'s `to_string` goes through `Display`
+and `core::fmt`; `str`'s is specialized in std. Same allocation, less machinery
+around it.
+
+What pins the cost: `tests/a_unique_container_is_extended_in_place.rs` reads
+12,001 per extra round where it read 15,601 before, and the twelve is this
+change — six body entries a round at two allocations each.
+
+WHAT CATCHES A WRONG FRAME WAS FOUND BY BREAKING THE MEMO, AND IT IS NOT THE
+FIXTURE THIS ENTRY FIRST NAMED. The draft claimed
+`tests/golden/micro/an_err_has_readers.kso` covers it, on the reasoning that it
+raises from two declarations and prints the name each `origin` carries. Run
+against a build whose key is hard-coded to 0 — every declaration sharing one
+entry — that fixture is BYTE-IDENTICAL to its golden. It exercises the readers,
+not the memory.
+
+The corpus does catch it, at `a_chain_step_names_its_channel`, and the way it
+fails says why the frame matters: the broken build prints NOTHING. A collapsed
+key gives every declaration the first one's package, `own_failure` then answers
+wrong, a rescue declines a failure it should have handled, and the failure
+leaves the program instead of its output. That is a much louder failure than a
+misnamed trace line, and it is the one the semantics deserve.
+
+The lesson is the one this log keeps relearning: a fixture that looks like it
+tests the thing has to be watched failing before it can be said to. Reasoning
+about which fixture covers a change is how the last four wrong claims were
+made.
+
+## 2026-09-18 — two vectors built at the size the parameter list already states
+
+`match_params` opened `score` and `binds` with `Vec::new()` and pushed into
+them, and `dispatch` calls it once per overload on every call. `score` takes
+exactly one entry per parameter — the capacity is not an estimate — and a
+`Vec::new()` that reaches three entries has reallocated twice getting there.
+
+    main                              1,802,816,521
+    + the frame memory                1,439,734,810   -363,081,711
+    + both vectors reserved           1,410,101,998    -29,632,812
+
+**29,632,812 instructions, 2.06%** of the tree it lands on, for two words
+changed. Together with the frame memory the interpreted row falls
+**392,714,523, or 21.78%** against main at kanso#1517.
+
+Where it was found: the A/B's own callgrind output, annotated rather than
+re-run. `RawVecInner::finish_grow` carried 51,556,413 instructions (3.47%) and
+`RawVec::grow_one` 27,969,576 (1.88%) on the post-memory binary — 5.35% between
+them, which is a vector growing one element at a time somewhere hot. This is
+one of the somewheres; the pair is still worth reading for the others.
+
+The whole golden corpus passes unchanged, which is the assertion that matters:
+a capacity is not observable, so any output difference would have meant the
+change was not what it looked like.
+
+### the reserve's mechanism, isolated
+
+The paragraph above named two rows as where the saving would come from. Both
+were re-read on the binary that has it, and they are the two that moved:
+
+    RawVecInner::finish_grow   51,556,413 -> 22,646,445   -28,909,968
+    RawVec::grow_one           27,969,576 ->  9,171,576   -18,798,000
+                                                          -47,707,968
+
+The net is 29,632,812 rather than 47.7 million, and the difference is visible in
+the same profile: `dispatch` rose from 144,489,885 to 154,770,762, because
+`Vec::with_capacity` inlines into its caller where `grow_one` was a call. So the
+reserve does not remove that work, it moves two thirds of it and pays for the
+rest inline, which is the trade a reserve IS.
+
+This is the difference between a delta and a mechanism. The saving was predicted
+from two named rows before the change was written, and those two rows are the
+ones that fell — that is an isolation, not a difference-in-differences. Thirty
+million arriving with the change while some third row moved would have been the
+weaker claim this log has been caught making before.
+
+What is left of the shape: 31,818,021 instructions, 2.18%, still in those two
+rows. The parameter vectors were one site, not the site.
+
+### the same shape twice more, in the two argument vectors
+
+`eval_tail` and `eval`'s call arm each opened a `Vec::new()` and pushed one
+value per argument, over an `args` slice whose length is right there.
+
+    + match_params' two vectors    1,410,101,998
+    + the two argument vectors     1,392,296,124    -17,805,874
+
+Against main at kanso#1517 the interpreted row is now down **410,520,397
+instructions, 22.77%**.
+
+Four `with_capacity` calls have paid 47,438,686 between them, which is more than
+the frame memory's smaller half, and none of them changed a line of logic. That
+is worth saying plainly rather than dressing up: the shape is a vector opened
+empty next to a length the code already holds, and this interpreter had it in
+four hot places. The remaining `finish_grow` and `grow_one` say there are more.
+
+The golden corpus passes on both steps.
+
+### what the reserves did to the allocation counters, including the worry that was wrong
+
+A reserve allocates where `Vec::new()` does not, so an overload whose parameters
+are all literals — binding nothing — would now take a vector it never fills, on
+every dispatch attempt. That was worth checking rather than assuming, because
+`interp_allocs` is a welfare term and the interpreter tries many candidates per
+call.
+
+    main                              interp_allocs 4,810,437   peak   951,504
+    + frame memory, match_params      interp_allocs 3,906,737   peak   961,391
+    + the two argument vectors        interp_allocs 3,879,653   peak   961,231
+
+**930,784 fewer allocations, 19.35%.** The worry had the sign backwards: a
+reserve replaces several growth allocations with one, so even where it takes a
+vector that stays empty it is buying more than it spends. The argument-vector
+step isolates that on its own — 27,084 fewer allocations for two
+`with_capacity` calls and nothing else — so the shape reduces the counter rather
+than merely being swamped by the memory beside it. What is NOT isolated here is
+`match_params`' reserve alone, which shares a binary with the frame memory; the
+argument step is the evidence for the shape.
+
+THE PEAK ROSE 9,727 BYTES, 1.02%, and that is the frame memory rather than the
+reserves: one `Frame` per declaration the run enters, held for the run. It is a
+term the objective weighs and it is being paid for knowingly — 392 million
+instructions and 930,784 allocations against ten kilobytes held.
+
+## 2026-09-18 — kanso#1518, CI's rows: the interpreted run falls 20.77%
+
+    interp_instructions   1,963,826,350 -> 1,555,890,579   -407,935,771  -20.77%
+    interp_allocs             4,810,437 ->     3,879,653       -930,784  -19.35%
+    interp_peak_bytes           951,438 ->       961,165         +9,727   +1.02%
+
+TWO THINGS IN THIS SITTING ARE WORTH MORE THAN THE FALL.
+
+**The allocation row is EXACTLY what this container read.** Not close — the same
+integer, 3,879,653, on two machines with different glibc and different rustc
+whose absolute instruction rows cannot be compared at all. That is the third
+time this has held: kanso#1516 and kanso#1517 each had their allocation deltas
+agree to the unit across the same two hosts. A counter of operations travels
+between machines where a counter of instructions only nearly does, and "nearly"
+is measurable here — the container projected the instruction fall at 410,520,397
+and the runner read 407,935,771, 0.63% of the delta apart.
+
+**Every layout row read its golden EXACTLY, and that was not the expectation.**
+`compile_instructions`, `entry_instructions`, `library_instructions`,
+`startup_instructions` and `emit_instructions` all agreed on a branch that
+rewrites a large part of `src/eval.rs` — a new table on `Interp`, four
+signatures widened to `'a`, a memoized function and four `with_capacity` calls.
+The standing prior in CLAUDE.md is that `compile_instructions` USUALLY moves on
+an edit to the compiler's own Rust, because src/eval.rs is the compiler and its
+bytes move. It did not move here, and neither did the other four.
+
+That is a data point for the prior rather than against it — the paragraph
+already allows it, on the strength of a two-line float-rendering edit that left
+the row byte-identical at kanso#1285. This is a much larger edit doing the same
+thing, so the size of a diff is not what predicts the layout rows. What predicts
+them is not known, and this entry does not guess.
+
+The floor is banked after these rows, never before.
+
 ## 2026-09-17 — the digit loop carried a value it only needed at the end, and then the tail gave it back
 
 `render_ryu` is 84,209,220 instructions of runbench, 4.58%, 440.7 a float over
@@ -4270,3 +4465,21 @@ with their golden, which is what a row with no work in it looks like.
 
 `compile_allocs` read 27,313 and both codegen rows read exactly — 596,162,050
 dev and 6,820,866,344 release.
+
+## 2026-09-18 — kanso#1502 re-merged onto main after kanso#1518
+
+The sixth re-merge, and the cheapest of them. kanso#1518 landed the frame memory
+and four reserves, which moved the interpreted rows and nothing else: the five
+layout goldens auto-merged because that branch did not move one of them, and
+only `interp_instructions`, the floor and the log needed resolving.
+
+That is worth noting beside the earlier rounds. A branch whose diff is large in
+`src/eval.rs` cost this one three conflicts; the two branches before it, whose
+diffs were small and in `src/runtime.c`, cost it eight. What a merge costs is
+about which FILES moved, not how much.
+
+The interpreted rows carry main's — 1,555,890,579, 3,879,653 and 961,165 — and
+they are the ones to watch here for the same reason as last round: this branch's
+two divisions moved that row by 15 instructions on 1.96 billion, so anything
+larger than tens in the next sitting is kanso#1518's arithmetic showing through,
+not Ryu's.
