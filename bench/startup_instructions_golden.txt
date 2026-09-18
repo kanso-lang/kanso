@@ -411,7 +411,4 @@
 # LAYOUT. This branch changes how a shared vector is copied in the
 # INTERPRETER; none of these routes runs it. src/eval.rs is the compiler,
 # so its bytes move and every route that runs the compiler moves with them.
-# CI's reading on the merged tree, startup_instructions: 3,363,378 -> 3,363,577 (+199). This branch
-# touches the beat reporter and not the front end; these six are the
-# layout the kanso#1520 merge left.
-startup_instructions=3363577
+startup_instructions=3365595
