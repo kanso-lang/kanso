@@ -2829,8 +2829,83 @@ for never being filled. Both are true and the second is a consequence of the
 first, so a reader gets four diagnostics for two holes. The `if` arm and the
 lambda report once each. Recorded rather than fixed, because which of the two
 should stay silent is a question about the diagnostics rather than the rule,
-and the corpus now pins whatever the answer turns out to be:
+and the reason is worth writing down for whoever widens the rule.
+
+`BuildScan::born_of` treats a list literal as birth-transparent — its doc says
+so, "an element of a list or map literal whose every element is born" — so it
+descends into the elements, finds `cell "a" _`, and registers a fill-once
+obligation for the hole. `per_node_walk`, which decides placement, does not
+carry `hole_ok` through a list literal, so it refuses the same hole. **The two
+walks disagree about whether a list literal is a place a construction can
+stand**, and the double-report is that disagreement showing. Neither diagnostic
+is false, which is why this is left alone: suppressing the second hides a true
+statement, and admitting the hole is a change to the language and Clay's. The
+corpus now pins whatever the answer turns out to be:
 `tests/golden/errors/a_hole_away_from_a_construction_argument` carries all
 three shapes and both goldens, and was watched red twice — once with a word
 changed in the message and once with the lambda's hole removed from the
 program.
+## 2026-09-18 — the interpreted row varies by 0.117% on this container, and the candidate it replaces was wrong about the mechanism
+
+STATUS.md's second standing "Ruled, unbuilt" row is the 2026-09-15
+normalization ruling against `interp_instructions`, which two CI jobs read
+six apart. Its Owes: *measure cloud's candidate, or replace it.* The candidate
+was that six in 2.18 billion is three parts per billion, that the interpreted
+run is the allocation-heavy workload, and that where the allocator's heap
+starts moves with the size of the file the loader mapped.
+
+Measured on a release build of main `07b96058`, four runs of one binary over
+one corpus, in the gate's own box under the gate's own `env -i` and glibc
+tunables. The gate's anchor, `run_interpreted_on_stack` inclusive:
+
+    2,648,173,504
+    2,646,456,996
+    2,649,443,833
+    2,646,343,385
+
+**Spread 3,100,448, or 0.117%** — four orders of magnitude above the six CI
+saw, and the whole-process totals spread by the same 3,100,448, so every
+instruction of it is inside the anchor. The printed line the gate excludes,
+`memrchr`, read 177 on all four.
+
+A callgrind diff of the two extremes puts the difference in lookup frames and
+nowhere else:
+
+    +1,339,085  Interp::eval_ident'2
+    +1,095,324  Interp::type_decl
+      +406,353  Interp::call_named'2
+      +232,276  __memcmp_avx2_movbe
+       +39,636  hashbrown contains_key
+      -125,514  Interp::dispatch'2
+    ---------
+    +2,986,837  PROGRAM TOTALS
+
+That is the shape `src/hash.rs` describes in its own doc comment — probe
+sequences moving while the hashing itself does not. SipHash is live in this
+binary at 6.96% (187,455,582 in `sip::Hasher::write`, 3,846,090 calls from
+`hash_one`) and its cost is BYTE-IDENTICAL across the runs, which is what a
+per-process random key looks like: the same bytes hashed, landing in different
+buckets.
+
+**What this does not establish is which map.** Every file in `src/` that names
+`HashMap` or `HashSet` imports `crate::hash`'s fixed-seed aliases —
+`tests/the_compile_path_hashes_with_a_fixed_seed.rs` passes on this tree and
+covers `src/eval.rs` explicitly, since 2026-09-16. `callgrind_annotate`'s
+caller tree shows eval's frames above `hash_one` and `hash_one` above
+`sip::write`, but `hash_one` is one symbol covering every instantiation in the
+binary, so that tree cannot say whose call reached SipHash. Naming eval as the
+caller from this data would be the attribution error this log has recorded
+before.
+
+**So the candidate is replaced rather than confirmed.** The row's variance is
+not about where the allocator's heap starts; it is a hash probe sequence, and
+the same signature the three compile rows had before kanso#1449 fixed them.
+What is open is where the seeded map lives, given that no file in `src/` still
+declares one — a dependency, or an instantiation the spec's textual check
+cannot see.
+
+And the two numbers do not yet meet: 0.117% here against three parts per
+billion on CI, on what should be the same binary over the same corpus. Either
+the runner is not exposed to whatever this is, or its exposure is far smaller,
+and a claim that these are one phenomenon needs a measurement that shows it
+rather than a resemblance.
