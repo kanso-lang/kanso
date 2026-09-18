@@ -361,5 +361,18 @@
 # -- an allocation counter counts operations rather than a host, and real work
 # would have moved it. Four readings agreeing on that is the check; the size
 # of any one of them on its own would not be.
-interp_instructions=1555890587
+# ^ SUPERSEDED: that reading was taken before kanso#1520 landed under this
+#   branch. THE VALUE BELOW IS MAIN'S, carried forward; the merged
+#   reading is CI's.
+#
+# 2026-09-18, kanso#1520 against main at kanso#1519, CI's sitting.
+# 1,555,890,579 -> 1,260,262,910, a FALL of 295,627,669 (-19.0005%).
+# THE CLONE SIZED FOR ITS GROWTH, and the number is THREE TIMES what this
+# container projected. The container read the fall at 94,998,647 and the
+# runner reads 295,627,669. Both hosts agree EXACTLY on what the change
+# does -- interp_allocs falls 36,066 and interp_peak_bytes 76,113 on both,
+# to the byte -- and disagree threefold on what it costs. What a copy of N
+# elements costs in instructions is the rustc that built the binary; how
+# many copies happen is the program.
+interp_instructions=1260262910
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

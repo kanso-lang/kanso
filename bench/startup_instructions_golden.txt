@@ -396,4 +396,13 @@
 # bytes of the compiler's own .rodata. None of these routes executes the
 # runtime: three stop before codegen, the fourth writes IR, the fifth
 # starts the interpreter.
-startup_instructions=3363586
+# ^ SUPERSEDED: that reading was taken before kanso#1520 landed under this
+#   branch. THE VALUE BELOW IS MAIN'S, carried forward; the merged
+#   reading is CI's.
+#
+# 2026-09-18, kanso#1520 against main at kanso#1519, CI's sitting.
+# 3,362,788 -> 3,363,378, a RISE of 590 (+0.0175%).
+# LAYOUT. This branch changes how a shared vector is copied in the
+# INTERPRETER; none of these routes runs it. src/eval.rs is the compiler,
+# so its bytes move and every route that runs the compiler moves with them.
+startup_instructions=3363378
