@@ -3854,3 +3854,30 @@ second half is what section 91 sized and nothing has touched.
 
 Percentages here are of this binary's total, and a debug-info build is not the
 one the goldens are measured on. The ordering is what this reading is for.
+
+## 2026-09-18 — an inline hint on `lookup` bought exactly nothing
+
+Making `Env` an enum made `lookup` too big for LLVM to inline on its own, and
+the annotated source priced what that seemed to cost: 9,506,961 instructions
+attributed to the `fn lookup(...)` line over 1,056,328 calls, and 2,656,200 to
+its closing brace. Twelve million on what looked like call machinery, on a
+function with two call sites and one of them cold.
+
+`#[inline]`, and the same A/B that measured the frame change:
+
+    without   1,022,961,605     allocations 20,621,100
+    with      1,022,961,605     allocations 20,621,100
+
+IDENTICAL TO THE INSTRUCTION. The binaries are not identical — the hinted one
+is 56 bytes smaller and has a different sha — so the hint reached the compiler
+and changed its output. It changed nothing this corpus pays for.
+
+WHAT THAT CORRECTS. The twelve million is the function's own entry work, the
+part that sets up the walk, attributed by the profiler to the first and last
+lines because that is where the instructions live. Reading it as a call frame
+waiting to be removed was a guess about what an attribution MEANS, and the
+same guess this log has been wrong with before: a number on a line tells you
+where instructions are, not what removing something would return.
+
+The hint is reverted rather than kept. A no-op carrying a comment that claims
+a reason is worse than no change at all, because the next reader believes it.
