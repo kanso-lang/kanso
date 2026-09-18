@@ -830,7 +830,12 @@
 # 2026-09-17, kanso#1478 on the tree merged with main 5e256ce0, CI's sitting.
 # 127,871,143 -> 127,872,255, a RISE of 1,112 (+0.0009%). The same layout term
 # as the module row; against main's 128,213,970 the branch is 341,715 below.
-entry_instructions=127872255
+#
+# 2026-09-17, kanso#1486 on the tree merged with main 2a0cec7c, CI's sitting.
+# entry_instructions 127,872,255 -> 126,348,616, a FALL of 1,523,639 (-1.1915%).
+# The entry route pays the same fixpoint and pays it over more program, so it
+# gives back four times the instructions at the same proportion.
+entry_instructions=126348616
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

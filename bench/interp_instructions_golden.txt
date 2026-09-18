@@ -159,5 +159,29 @@
 # AFTER IT. The row counts a different thing now. What it buys is that the two
 # faces stop: the thirteen that kanso#1486 drew across two sittings lived in
 # this subtree, and it is no longer in the number.
-interp_instructions=2182303844
+#
+# 2026-09-18, kanso#1486 merged with main 073a4077. The value below is MAIN'S,
+# carried forward. kanso#1505 changed what this row COUNTS -- the printed
+# line's subtree is excluded now -- so the 2,182,526,878 this branch measured
+# describes the old shape and is not comparable with anything taken under the
+# new one. CI's sitting on the merged tree replaces this line, and the
+# difference it reads is what this branch does to the row as it now stands.
+#
+# 2026-09-18, kanso#1486 merged with main 073a4077, CI's sitting under the new
+# shape. 2,182,303,844 -> 2,182,523,679, a RISE of 219,835 (+0.0101%). LAYOUT.
+# This branch edits src/check.rs, src/inline.rs and src/lib.rs, all of them
+# front end, and the gate anchors at `run_interpreted_on_stack` -- the front
+# end is outside the number by construction, so nothing this branch changes
+# executes inside it. The size is the size this vein's layout term has shown
+# before: kanso#1468 moved it 237,834 (0.0109%) from a single-file edit, and
+# this is a three-file edit reading 219,835.
+#
+# AND THE OBJECTIVE DOES WEIGH THIS VEIN NOW. Every entry above this one closes
+# by saying it does not, and each was true when it was written; the 2026-09-16
+# gavel made the objective a development welfare, a production welfare and a
+# meta over them, and `interp_instructions interp_instructions` has been a line
+# of bench/objective_sources.txt ever since -- the middle of Clay's three for
+# the interpreted engine. So a rise here costs welfare, and the sentence this
+# file repeats three times is a stale one to carry forward.
+interp_instructions=2182523679
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

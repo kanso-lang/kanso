@@ -863,7 +863,11 @@
 # 2026-09-17, kanso#1478 on the tree merged with main 5e256ce0, CI's sitting.
 # 128,009,282 -> 128,010,052, a RISE of 770 (+0.0006%). Layout, as above;
 # against main's 128,348,205 the branch is 338,153 below.
-library_instructions=128010052
+#
+# 2026-09-17, kanso#1486 on the tree merged with main 2a0cec7c, CI's sitting.
+# library_instructions 128,010,052 -> 126,804,150, a FALL of 1,205,902 (-0.9420%).
+# The library route, same fixpoint, same proportion.
+library_instructions=126804150
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

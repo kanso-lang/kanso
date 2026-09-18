@@ -73071,3 +73071,315 @@ first CI sitting replaces the number and writes the measured-on line under it.
   a claim.
 - **OPEN** the row itself, unchanged: CI's first sitting writes it.
 
+## 2026-09-17 — the alias fixpoint ran twice over a program nothing changed
+
+`check_merged_after_aliases` and `inline_builtin_wrappers` run back to back on
+the same program, and each asked `inline::aliases` the same question of it. A
+third walk sat inside the inliner, counting group sizes the fixpoint had
+already counted. Profiling `kanso check compile_corpus`:
+
+```
+  inline::aliases        526,041  1.43%   14 calls (7 from each reader)
+    the group count      263,099  0.71%   1,436 entries, one walk per call
+    direct_aliases       206,496  0.56%   28 calls, exactly two per fixpoint
+  inline_builtin_wrappers' own group count
+                         141,876  0.39%   758 entries
+```
+
+Fourteen calls to `aliases` made twenty-eight to `direct_aliases`, so the
+fixpoint has never needed a third pass on this corpus: one pass to find the
+renames, one to confirm nothing grew. Both readers see a program the other
+does not touch — on the entry path they are consecutive statements, on the
+module path they are separated by the `phase::watched` wrapper alone.
+
+So the group sizes are counted once and the fixpoint run once, and both are
+handed to each reader. Measured end to end, two readings each side:
+
+```
+  before   36,816,573
+  after    36,387,408     -429,165   -1.166%
+```
+
+Emitted IR is byte-identical on encodebench, basket and runbench.
+
+One further pass is skipped: the first `direct_aliases` reads an empty map of
+known renames, so the arm that consults the group sizes never runs and the
+program is its only input. A pass that found nothing there would read the same
+two inputs again, so it already is the fixpoint. Four of the fourteen calls
+take that exit on this corpus (the 160-fn and 4-fn programs); the other ten
+find between 1 and 12 renames and run the confirming pass as before.
+
+The borrow checker holds half of the sharing: the alias map and the group
+count borrow the program, so a pass that rewrote it before their last use
+would not compile. It does not hold the other half — after `wrapper_table`
+only owned `String`s are left — so
+`tests/the_shared_alias_map_outlives_nothing_that_rewrites.rs` reads both call
+sites and fails on a pass slipped in between. Watched red on
+`canonicalize_types(&mut merged)` inserted there, which named the line.
+
+- **DONE** built and measured; 147 test binaries green, fmt and clippy clean.
+- **OPEN** the same shape in `check_per_node`'s `arities`, which is a third
+  walk over `program.fns` for a question two of these three already answer.
+
+
+
+## 2026-09-17 — kanso#1486's rows on the excluded anchor, and the floor moves
+
+CI's sitting with the print out of the reading:
+
+```
+  compile_instructions   35,964,325 -> 35,550,945    -413,380   -1.15%
+  entry_instructions    128,204,133 -> 126,735,456  -1,468,677   -1.15%
+  library_instructions  128,339,261 -> 127,191,484  -1,147,777   -0.89%
+  startup_instructions    4,838,323 ->   4,833,787      -4,536
+  compile_allocs             27,397 ->      27,313         -84
+```
+
+The module row's 413,380 against 429,165 measured here in a container is the
+same number read on two machines. The entry row falls three and a half times
+as far in absolute terms and the same 1.15% in relative terms, which is what
+the shape predicts: the entry route merges and checks everything its imports
+bring, so it asks the alias question of a much larger program.
+
+The eighty-four allocations are the second alias map and the second group
+count, which no longer exist.
+
+welfare rose 0.02 and is banked at 69.81. A rise nobody ratchets is one the
+next change spends, and the sentinel says so rather than leaving it to
+memory — it refused the tree until the floor moved.
+
+- **DONE** five rows and eleven page spans; welfare held at 69.81.
+
+
+
+## 2026-09-17 — the box those readings were taken on had four runaway spinners
+
+Found by reading `ps` while wondering why a test suite was slow: four
+`sh /tmp/cpu_hunt.sh` processes, orphaned to init at 00:02, each burning a
+core. Forty-one hours of CPU on a four-core box. The script spawns four busy
+loops to measure a compile row under load and kills them at the end; it was
+interrupted before the kill, and nothing else was going to.
+
+What that does and does not touch:
+
+**It does not touch an instruction count.** callgrind counts instructions
+executed, not time, so every number this log recorded today — the compile
+rows, the emit row's three readings, the four release-path profiles — is what
+it would have been on an idle box.
+
+**It does touch the wait.** The 233 and then 112 that the release-tier
+reproduction moved by live in `kanso::build`'s inlined loop waiting for clang,
+and how many times that loop goes round is exactly what a loaded box changes.
+So the finding stands — the wait is the scheduler's and not the compiler's,
+which is what the dev tier's byte-identical control says independently — but
+neither 233 nor 112 is a clean estimate of its size on a quiet machine. CI's
+own 3,105 was measured on a runner and is untouched by this.
+
+The script now traps and kills its spinners on EXIT, INT and TERM. A
+background loop with no trap is a loop that outlives the reason for it.
+
+## 2026-09-17 — two welfares and a meta, built
+
+The 2026-09-16 gavel's second half. `scripts/welfare/welfare.kso` scored one
+number over four terms; it scores three over nine.
+
+    production      run speed 0.45, run memory 0.40, release build 0.15
+    development     compile speed 0.30, compile memory 0.08, dev build 0.22,
+                    interpreter start-up 0.25, interpreter speed 0.11,
+                    interpreter memory 0.04
+    meta            0.70 production, 0.30 development, saturating
+
+On the tree this was built from: production 57.11, development 72.59, meta
+76.13.
+
+**The interpreted side is priced in Clay's order and nothing else.** "start-time
+is vastly more important than speed which is more important than memory usage"
+is 0.25, 0.11 and 0.04 — each better than two to one over the next. Start-up is
+the largest single term on that side because `kanso test` pays it on every
+invocation and production never pays it once, which is the dimension no single
+scalar could hold and the reason the split was ruled rather than a
+re-weighting.
+
+**The meta saturates, and that is the whole of what the third number adds.** A
+linear `a·W_prod + b·W_dev` is algebraically one flat term list — the same
+model with every weight multiplied through — so the split would buy nothing
+the old single scalar did not already have. Each side enters as its score over
+a hundred, `f w = w / (w + 1)` is concave across [0, 1], and the result is
+divided by `f 1.0` to put the ceiling back at a hundred.
+
+What that buys is an exchange rate between the two sides that MOVES with where
+they stand. The meta's derivative in each side, computed at four positions:
+
+    position                  meta    d/d prod   d/d dev   ratio
+    today (0.571, 0.726)     76.13      56.72     20.14     2.82
+    level (0.500, 0.500)     66.67      62.22     26.67     2.33
+    production ahead (0.9, 0.3)  80.16  38.78     35.50     1.09
+    development ahead (0.3, 0.9) 60.73  82.84     16.62     4.98
+
+So today a development gain has to be 2.82 times the production cost in
+sub-welfare points to be worth taking — which is what "development speed much
+better in exchange for a very small production performance cost" means with a
+number on it. Let production run far ahead and that threshold falls to 1.09: a
+point of development is then worth almost a point of production, because the
+side near its ceiling has little left to earn. A linear meta would hold the
+ratio at 2.33 forever whatever either side did, and that is the whole of what
+the third number adds.
+
+**The four pre-split weights are renormalised, not carried over.** They summed
+to one between them as shares of a single objective, and a share of the
+development side is a different quantity. Every ratio the old reasoning argued
+for survives: run speed still outweighs run memory, compile speed still
+outweighs compile memory better than three to one.
+
+**Carrying them over unrenormalised was the first thing that happened, and
+nothing said so.** Production summed to 0.71 and scored 40.97 where it should
+have read 57.11 — every term on that side scored a fifth low, and the meta read
+the shortfall as production sitting far from its ceiling. The number looked
+entirely plausible. So the program refuses now: `balanced?` checks each side
+sums to one before anything is scored, and `weighed` sits at the head of
+`gauge`'s chain beside the golden pins. Watched red by putting run speed back
+to 0.30 — exit 2, naming the rule — and green again restored.
+
+**The floor re-ratchets, as the gavel required.** 69.79 was a reading of a
+four-term single scalar that no longer exists, so it is not carried forward;
+the meta floor is set from the rescored model in the same change. One floor,
+on the meta, because the standing rule that the sum is the objective and the
+terms are diagnostics applies exactly as it did before — ratcheting the two
+sides separately would re-enable the part-against-whole optimisation that rule
+exists to stop.
+
+**The five new counters enter at PARITY.** Baseline equals current, so each
+contributes its satiation floor and nothing else, and the meta is above the old
+number without one instruction of the compiler having changed. The old rule
+that granted a new counter its dimension's standing is gone and was not
+revived: a counter joining at parity has headroom a counter granted a high
+standing does not, and that difference decided at least one verdict in 2026-09.
+
+**What CI owes this PR.** `kanso check` runs on src/main.rs, which kanso#1470
+edits, so the five goldens under this branch are not yet this tree's. CI's
+first sitting writes all five goldens AND their five baselines together —
+together, because writing the golden alone would leave the baseline behind and
+score a host difference as a regression. Parity is preserved when both move,
+and the meta stays 76.13.
+
+**`bench/objective_sources.txt` gains five lines and the replay spec covers
+them.** None of the five renames and none of them sums, so each is one pair.
+Watched red by deleting `interp_peak_bytes`: the spec names that counter and
+says the trend gate cannot tell a re-basing of it from a win.
+
+- **OPEN** the meta's 0.70/0.30 and its satiation of 1.0 are priced from the
+  gavel's framing rather than from a measurement, which is what the 2026-08-25
+  charter leaves to the implementer. The first real trade the two sides
+  disagree about is the evidence that would move them, and there has not been
+  one yet.
+
+## 2026-09-17 — kanso#1468 on the tree merged with kanso#1462, and start-up pays
+
+Five rows moved, and for the first time on this branch they did not all move
+the same way. CI's sitting:
+
+    compile_instructions    35,968,792 -> 35,964,985      -3,807   -0.0106%
+    entry_instructions     128,217,983 -> 128,205,992    -11,991   -0.0094%
+    library_instructions   128,352,174 -> 128,340,895    -11,279   -0.0088%
+    interp_instructions  2,178,559,085 -> 2,178,796,919  +237,834  +0.0109%
+    startup_instructions     4,838,372 -> 5,077,523      +239,151   +4.94%
+
+**Two counters worsened: `interp_instructions` landed on 2,178,796,919 and
+`startup_instructions` landed on 5,077,523.** They worsened for different
+reasons and only one of them is this change's doing.
+
+**The interpreted run is layout, and the profile says so rather than the
+argument.** `kanso run --interp` returns from `run_interpreted` before codegen
+is reached, so nothing the branch edits executes on that corpus. A callgrind
+profile of it on the branch carries exactly one `kanso::codegen` frame — an
+instantiated `prune_unnamed` closure worth 284 instructions in a run of 2.18
+billion. The remaining 237,550 are the compiler's bytes moving under an
+interpreter that never enters them. kanso#1482, whose edit is four lines in a
+different file, moves the same row 56,819 the other way in the same round;
+this vein has a layout term of that size and it is not news.
+
+**Start-up is work, and it is the trade.** `kanso play` takes the native path,
+so it runs the emitter — on a one-line program, which is the point of the vein
+and also the one corpus where an index has nothing to amortise over. Both sides
+were reproduced on the container under rustc 1.98.1 and landed 161 and 169
+instructions from CI's readings: main 4,838,211, the branch 5,077,692, a local
+delta of 239,481 against CI's 239,151.
+
+`declares_context_calls` builds its set once per process from DECLARES's 1,187
+lines and costs 599,739 instructions inclusive, 10.57% of the whole row and two
+and a half times the rise. The per-line searching it replaces was worth about
+360,000 on this program, and the difference is the row. On a program with
+lines, the same set answers 163 `declare` questions and 1,024 more, and `kanso
+build bench/runbench` falls 69.90%.
+
+**Nothing in the objective weighs either row.** Both are exact veins of their
+own under the 2026-09-16 gavel and neither is a term yet, so welfare does not
+move on this and there is no floor question to put to anyone.
+
+- **IN HAND** on kanso#1484, which is stacked on this branch: DECLARES is a
+  `const`, so the sixty-two symbols it calls are the same in every process
+  kanso has ever run. Written down sorted and asked with `binary_search`,
+  start-up reads 615,754 lower than this branch and 350,129 below main, with
+  `kanso build`'s 69.90% kept. So this row's rise is paid back by the branch
+  above it rather than left standing.
+
+## 2026-09-17 — kanso#1486 on the tree merged with kanso#1462: the three check rows fall by over a percent
+
+    compile_instructions    35,968,792 -> 35,559,376    -409,416   -1.14%
+    entry_instructions     128,217,983 -> 126,771,382  -1,446,601  -1.13%
+    library_instructions   128,352,174 -> 127,226,167  -1,126,007  -0.88%
+    startup_instructions     4,838,372 -> 4,834,337       -4,035   -0.083%
+    interp_allocs            5,313,434 -> 5,313,332         -102
+    interp_peak_bytes          933,202 -> 933,202              0
+    interp_instructions  2,178,559,085 -> 2,178,750,341  +191,256  +0.0088%
+
+**These are work, which separates this branch from the three beside it in the
+round.** The alias fixpoint and the group count run inside `kanso check`, so
+the corpora the three compile rows measure are exactly where running them once
+instead of twice shows up. The entry route pays both readers as consecutive
+statements and takes the largest share.
+
+Start-up falls 4,035, a tenth of the percentage the module corpus sees, which
+is what a one-line program gives a fixpoint to walk.
+
+**One counter worsened: `interp_instructions` landed on 2,178,750,341.** The
+front end runs on that corpus too and got cheaper there — `interp_allocs` falls
+102 in the same job, which is the same change counted a different way — but the
+corpus is one small program and 2.18 billion of the row is the interpreter
+executing it. The layout term on this vein is the size of the move: kanso#1482
+takes it down 56,819 and kanso#1468 puts it up 237,834 in this same round, both
+from edits that never execute on it. A saving of a few thousand front-end
+instructions cannot be read out from under that, and this row is not where this
+change is measured.
+
+`interp_peak_bytes` is unchanged at 933,202: the fixpoint's working sets were
+never the high-water mark.
+
+
+
+## 2026-09-17 — kanso#1482 on the tree merged with kanso#1462: five rows, all down
+
+    compile_instructions    35,968,792 -> 35,968,171        -621   -0.0017%
+    entry_instructions     128,217,983 -> 128,213,972      -4,011   -0.0031%
+    library_instructions   128,352,174 -> 128,348,205      -3,969   -0.0031%
+    interp_instructions  2,178,559,085 -> 2,178,502,266   -56,819   -0.0026%
+    startup_instructions     4,838,372 -> 4,837,381          -991   -0.020%
+
+Nothing worsened. Four of the five are layout: `is_a_stack_slot` is asked from
+`FnEmit::write`, which sits under `emit_ir`, and neither `kanso check` nor
+`kanso run --interp` reaches codegen at all. src/codegen.rs is the compiler,
+so editing it moves the compiler's bytes and what sits around them.
+
+The interpreted row's 56,819 is worth writing down as a scale for that vein.
+kanso#1468 moves the same row 237,834 in the other direction in this same
+round, from an edit in the same file that likewise never executes on the
+corpus. A layout term of tens to hundreds of thousands is what this row has,
+and a move of that size on it means nothing on its own.
+
+Start-up is the one corpus where the change does run, because `kanso play`
+takes the native path. A one-line program emits few enough lines that the 991
+saved and the layout term the other four rows show are the same size, so this
+reading does not separate them; both point down and the row takes the number.
+
+- **DONE** the rows are CI's.
+

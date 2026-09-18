@@ -332,10 +332,11 @@ struct DeclState<'a> {
 
 /// Answers `check_named_per_node`'s three questions in its own vector, which
 /// the caller splices in where that check used to push.
-fn check_per_node(
-    program: &Program,
+fn check_per_node<'a>(
+    program: &'a Program,
     rewritten: &crate::Rewrites,
     diags: &mut Vec<Diagnostic>,
+    builtins: HashMap<(&'a str, usize), &'a str>,
 ) -> Vec<Diagnostic> {
     let mut arities: crate::hash::Map<&str, usize> =
         crate::hash::Map::with_capacity_and_hasher(program.fns.len(), Default::default());
@@ -360,7 +361,7 @@ fn check_per_node(
         types: program.types.iter().map(|t| (t.name.as_str(), t)).collect(),
         // Borrowed: the map is keyed by an owned name, and looking one up
         // needed a String built from the callee at every call expression.
-        builtins: crate::inline::aliases(program),
+        builtins,
         named: Named {
             // Construction is positional and complete, and the same seam hid
             // it: a type declared in one file of a module and built in another
@@ -2515,11 +2516,27 @@ pub fn check_merged_after_aliases(
     require_entry: bool,
     rewritten: &crate::Rewrites,
 ) -> Vec<Diagnostic> {
+    let builtins = crate::inline::aliases(program);
+    check_merged_after_aliases_with(program, require_entry, rewritten, builtins)
+}
+
+/// The same check, handed an alias map its caller has already built.
+///
+/// `inline_builtin_wrappers` runs straight after this check on the same
+/// program and asks the same question of it. A caller that does both builds
+/// the map once and passes it here, rather than paying for the fixpoint and
+/// the group count twice over a program neither of them changed.
+pub fn check_merged_after_aliases_with<'a>(
+    program: &'a Program,
+    require_entry: bool,
+    rewritten: &crate::Rewrites,
+    builtins: HashMap<(&'a str, usize), &'a str>,
+) -> Vec<Diagnostic> {
     let mut diags = Vec::new();
     // Three checks read what inference knows, and inference over a whole
     // program is the most expensive thing the front end does. One pass,
     // handed round.
-    let named_diags = check_per_node(program, rewritten, &mut diags);
+    let named_diags = check_per_node(program, rewritten, &mut diags, builtins);
     let walked = diags.len();
     if diags.iter().any(|d| d.kind == "arity") {
         // inference indexes an if's branches, so it never runs over a shape
