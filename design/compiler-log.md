@@ -4198,6 +4198,140 @@ obvious guesses — an allocation size class the absolute path crosses, and a
 small-string threshold — are guesses. The direction is the awkward part for
 both: the longer path costs less.
 
+## 2026-09-18 — the same two lines cost 12 million in one function and save 21 million in the one above it
+
+**BUILT AND SHIPPING.** The previous entry closed by saying the next attempt
+should not be another reading of the profile's self-cost list, which had gone
+one for five. So this one came off a different axis: tally which callers
+reach the allocator, rather than which functions carry instructions.
+
+Out of the post-split profile, by caller:
+
+    456,133  __rust_alloc  <- RawVecInner::finish_grow
+    471,517  finish_grow   <- RawVec<T,A>::grow_one
+    237,980  grow_one      <- kanso::eval::match_one
+    225,431  grow_one      <- kanso::eval::Interp::dispatch_loop'2
+
+463,411 of the run's 471,517 reallocations come from those two call sites,
+and both are the same pair of buffers. `dispatch_loop_inner` declares `score`
+and `binds` at the top of each dispatch and the candidate loop recycles them
+— a winner hands its vectors back as the working pair rather than leaving the
+next candidate to allocate from nothing, which kanso#1497 already built. What
+they do not survive is the dispatch: the winner's bindings become the
+environment frame and its score is kept beside `best`, so the next dispatch
+starts at capacity zero and climbs 1, 2, 4 from nothing. 225,431 growths
+against 55,711 dispatches is four reallocations a call.
+
+**THE FIRST PLACEMENT LOST BY TWELVE MILLION.** `score.reserve(params.len())`
+and `binds.reserve(params.len())` went after the two `clear()` calls at the
+top of `match_params_into`:
+
+    base      1,007,027,010
+    reserve   1,019,044,912   +12,017,902   +1.19%
+
+Which is where the day's fifth decline would have been written down, with the
+mechanism left open. The draft entry saying so was written and pushed as
+kanso#1538 before the code was read carefully enough — the honest reason it
+is not in this file is that the reading came next and changed the answer.
+
+**`match_params_into` RUNS ONCE PER CANDIDATE, AND THE ALLOCATION IS ONCE PER
+DISPATCH.** Arm selection tries every arity match, so the reserve was paid
+roughly twenty times per dispatch — 1,100,726 calls to `match_one` against
+55,711 dispatches — to fix an allocation that happens once. The two
+`clear()` calls it sat behind are per-candidate housekeeping on buffers the
+loop already owns; they are not where the buffers come from.
+
+**MOVED ONE FUNCTION UP, THE SAME REQUEST WINS.** `Vec::new()` becomes
+`Vec::with_capacity(args_len)` at the two declarations in
+`dispatch_loop_inner`, which is where the pair is actually created:
+
+    base      1,007,027,010
+    hoisted     985,444,659   -21,582,351   -2.14%
+
+A swing of 33,600,253 instructions between two placements of the same
+request, and the winning one is the larger gain of the day — bigger than the
+frame split that shipped this morning as kanso#1535, which took 15,853,848.
+
+`args_len` is exact for `score`, which takes one entry per parameter, and a
+floor for `binds`, since a `Ctor` pattern can bind its fields and a whole.
+
+**WHAT THIS SAYS ABOUT THE FIVE DECLINES.** It does not retract any of them;
+each was a different change and each was measured. What it does retract is
+the inference that was forming around them — that the dispatch path had been
+read out, and that a correctly-measured quantity not turning into a saving
+was the shape of this code rather than the shape of five particular attempts.
+One of those five was placed a function away from the one that works.
+
+**The base row is now read four times at 1,007,027,010**, from two binaries
+with different content hashes (`555c7ab8` in the argmove pair, `e8cac1ad`
+here) built from trees carrying the same interpreter at different paths. On a
+row known to move with path length, that is the clearest statement so far
+that this differential reads the code.
+
+Seven builds on the dispatch path today, two wins.
+
+**OPEN.** The tally that found this has three more entries nobody has been
+after: `drop_slow` from `dispatch_loop'2` 229,625 times, `__rust_alloc` from
+`String::clone` 149,093, and the 8,106 reallocations that are neither of the
+two call sites above. The allocator-caller axis is not spent.
+
+**AND THE SAVING IS NOT FEWER ALLOCATIONS, which the first version of this
+entry implied and the commit message said outright.** Tallying the allocator
+edges on both arms of the same A/B:
+
+                      base        hoisted      delta
+    __rust_alloc    1,361,559    1,362,891     +1,332
+    __rust_dealloc  1,349,431    1,350,763     +1,332
+    __rust_realloc     35,956       32,638     -3,318
+    grow_one          464,507      112,013   -352,494
+    finish_grow       489,542      137,048   -352,494
+
+The allocation count goes UP. What the reserve removes is the GROWTH path:
+352,494 fewer `grow_one`/`finish_grow` pairs, and with them the capacity
+arithmetic, the amortised-doubling branch and the element copy each regrow
+makes. 21,582,351 over 352,494 is 61.2 instructions a growth, which is a
+plausible price for that work and is not a plausible price for an allocation.
+
+Written down because the difference decides what to look for next. "Reserving
+saves allocations" would send the next reader after allocation counts, and the
+counts here are flat to a tenth of a per cent. The commit message on the
+source change carries the looser phrasing; this is the correction.
+
+## 2026-09-18 — kanso#1538, CI's rows for the per-dispatch reserve
+
+    interp_instructions   957,583,234 -> 939,042,794   -18,540,440  -1.9362%
+    interp_allocs           1,412,516 ->   1,410,530        -1,986  -0.1406%
+    interp_peak_bytes         834,117 ->     833,466          -651  -0.0781%
+
+Everything else in the job is byte-identical: compile 35,550,010, entry
+126,729,588, library 127,186,008, emit 51,617,476, start-up 3,363,916,
+compile_allocs 27,313, compile_peak_bytes 787,956. **The third runtime-only
+change today that moved no layout.** The prior that editing the compiler's own
+Rust moves `compile_instructions` has now missed three times running on
+changes confined to the interpreter's hot path, which is the shape the
+2026-09-06 correction described: a change small enough to leave the layout
+alone leaves that row alone with it.
+
+This container projected 21,582,351 and the runner reads 18,540,440 — same
+direction, smaller, on different silicon (family 0x6 model 0xcf against 0x19).
+Neither number is the other's check; the golden's header says the two hosts
+are not comparable, and what is comparable is the sign.
+
+**TWO ALLOCATION NUMBERS POINT OPPOSITE WAYS AND DO NOT DISAGREE.** CI's
+`interp_allocs` falls 1,986 while the callgrind tally of `__rust_alloc` CALLS
+rises 1,332. They are different instruments over different scopes — kanso's own
+traffic counter over the whole run, against callgrind's call count over the
+toggled interpreted thread — and both are written into the memory golden's
+header so that a later reader finds the explanation next to the numbers rather
+than a contradiction.
+
+`interp_peak_bytes` gives back 651 of the 784 kanso#1534 recorded as open and
+unexplained. A buffer asked for at its final size is never live beside the
+smaller one it replaces, and a peak is where that overlap would show — a
+candidate, not a mechanism, and no build isolates it.
+
+Welfare 77.25 -> 77.26, banked in the same pull request.
+
 ## 2026-09-18 — the object gets a name the run chooses, and the eleven has nowhere left to live
 
 kanso#1512 closed the mechanism and said the fix belonged in a round of its

@@ -382,5 +382,19 @@
 # it was aimed at. This container projected the fall at 15,853,848 against
 # its own base; the runner reads 18,361,529, the same direction and larger,
 # which is the host split kanso#1534 recorded the day before.
-interp_instructions=957583234
+# 2026-09-18, kanso#1538, CI's sitting. 957,583,234 -> 939,042,794,
+# a FALL of 18,540,440 (-1.9362%).
+# THE ROW THIS CHANGE IS ABOUT. The two dispatch buffers ask for the arity
+# when they are created rather than climbing 1, 2, 4 from nothing on every
+# dispatch. The saving is the GROWTH path, not the allocation count: on a
+# container pair `grow_one` and `finish_grow` each fall 352,494 while
+# `__rust_alloc` CALLS rise 1,332, which is the capacity arithmetic, the
+# doubling branch and the element copy going away. THE COMPILE SIDE IS
+# BYTE-IDENTICAL -- compile 35,550,010, entry 126,729,588, library
+# 127,186,008, emit 51,617,476, start-up 3,363,916, compile_allocs 27,313 --
+# so this is the third runtime-only change today that moved no layout. This
+# container projected 21,582,351 against its own base; the runner reads
+# 18,540,440, the same direction and smaller, on a different silicon (family
+# 0x6 model 0xcf against 0x19).
+interp_instructions=939042794
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

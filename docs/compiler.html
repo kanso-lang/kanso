@@ -2560,7 +2560,48 @@ error[name]: unknown name `builders/run`
 
 <p>the comparing has not moved all day either: 47,672,229, then 47,631,349, then 47,602,341, across three changes to how scopes are built and walked. &#167;91 declined four schemes aimed at it. with the four here, the two largest named things in this profile have nine declined builds between them, and picking the top frame off a list has a record of one in five.</p>
 
-<h2 id="fixedtemps"><span class="sec-num">97</span>the object gets a name the run chooses</h2>
+<h2 id="reserved"><span class="sec-num">97</span>the same two lines, one function apart</h2>
+
+<p>&#167;96 ended by saying the next attempt should come off a different axis than the profile&#39;s self-cost list, which had gone one for five. so this one asked which callers reach the allocator, rather than which functions carry instructions.</p>
+
+<pre>  456,133  __rust_alloc  &lt;- RawVecInner::finish_grow
+  471,517  finish_grow   &lt;- RawVec&lt;T,A&gt;::grow_one
+  237,980  grow_one      &lt;- kanso::eval::match_one
+  225,431  grow_one      &lt;- kanso::eval::Interp::dispatch_loop</pre>
+
+<p>463,411 of the run&#39;s 471,517 reallocations come from two call sites, and both are the same pair of buffers. dispatch declares a score buffer and a bindings buffer at the top of each call, and the candidate loop already recycles them &#8212; a winner hands its vectors back as the working pair instead of leaving the next candidate to allocate from nothing. what they do not survive is the dispatch: the winner&#39;s bindings become the environment frame and its score is kept beside the winner, so the next call starts at capacity zero and climbs 1, 2, 4 from nothing. 225,431 growths against 55,711 dispatches is four reallocations a call.</p>
+
+<p>so ask for the arity up front. two lines, placed after the two clears at the top of the per-candidate matcher:</p>
+
+<pre>  base      1,007,027,010
+  reserve   1,019,044,912   +12,017,902   +1.19%</pre>
+
+<p>that is where the day&#39;s fifth decline would have been written down. the matcher runs once per candidate, and arm selection tries every arity match, so the reserve was paid around twenty times per dispatch to fix an allocation that happens once. the clears it sat behind are housekeeping on buffers the loop already owns; they are not where the buffers come from.</p>
+
+<p>the same request, moved one function up to where the pair is created:</p>
+
+<pre>  base      1,007,027,010
+  hoisted     985,444,659   -21,582,351   -2.14%</pre>
+
+<p>33,600,253 instructions between two placements of one idea, and the winning placement is the largest gain of the day &#8212; larger than the frame split in &#167;95, which took 15,853,848.</p>
+
+<p><strong>and the saving is not fewer allocations.</strong> tallying the allocator edges on both arms of the same pair:</p>
+
+<pre>                    base        hoisted      delta
+  __rust_alloc    1,361,559    1,362,891     +1,332
+  __rust_dealloc  1,349,431    1,350,763     +1,332
+  __rust_realloc     35,956       32,638     -3,318
+  grow_one          464,507      112,013   -352,494
+  finish_grow       489,542      137,048   -352,494</pre>
+
+<p>the allocation count goes up. what the reserve removes is the growth path: 352,494 fewer grow-and-copy pairs, and with them the capacity arithmetic, the doubling branch and the element copy each regrow makes. 21,582,351 over 352,494 is 61.2 instructions a growth, which is a plausible price for that work and not a plausible price for an allocation. the first draft of this section said the reserve allocates less, which would send the next reader after allocation counts that are flat to a tenth of a per cent.</p>
+
+<p>this retracts none of the five declines in &#167;96. each was a different change and each was measured. what it retracts is the inference that was forming around them: that the dispatch path had been read out, and that a correctly-measured quantity failing to become a saving was the shape of this code rather than the shape of five particular attempts. one of the five sat a function away from the one that works.</p>
+
+<p>the base row reads 1,007,027,010 for the fourth time, from two binaries with different content hashes built from trees carrying the same interpreter at different paths. on a row known to move with path length, that is the clearest statement so far that the differential reads the code.</p>
+
+<p>the tally has three entries nobody has been after yet: dropping from the dispatcher 229,625 times, allocating for a string copy 149,093, and the 8,106 reallocations that are neither of the two call sites above.</p>
+<h2 id="fixedtemps"><span class="sec-num">98</span>the object gets a name the run chooses</h2>
 
 <p>the release-tier codegen row measures a whole build, clang and <code>ld</code> included, and it had been drifting. pinning the linker plugin&#8217;s thread count took the drift from millions down to <strong>eleven</strong> instructions, and the eleven turned out to be a string: clang writes its link-time object to <code>/tmp/&lt;stem&gt;-XXXXXX.o</code> with fresh hex every run, <code>ld</code>&#8217;s plugin puts that path into a hash map, and the probe walks a different number of buckets depending on the name. twenty-two names on one binary and one corpus &#8212; twenty read <strong>5,163,341,031</strong> and two read <strong>5,163,341,042</strong>, reproducibly, the same name giving the same answer every time.</p>
 
