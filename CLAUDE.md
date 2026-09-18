@@ -327,9 +327,16 @@ make a PR and then merge it."
   the number is exactly the thing that goes stale: kq#108 advanced it by 114
   kanso commits on its own schedule, and a session reading the old figure would
   have concluded kq was 59 behind when it was not. A session started from
-  claude.ai or the desktop app can read the pin out of kq itself; one whose
-  repository scope is kanso alone cannot, and should say so rather than repeat
-  a number from here. What this bullet is FOR is the list of five veins above
+  claude.ai or the desktop app can read the pin out of kq itself, and a session
+  whose repository scope lists kanso alone is NOT stuck either: `add_repo` with
+  owner `kanso-lang` and repo `kq` widens the scope for that session, after
+  which `/home/user/kq/.kanso-version` holds the pinned commit and
+  `git rev-list --count <pin>..origin/main` in the kanso clone says how far
+  behind it is. That is two commands and it is always current, which is the
+  whole reason no figure belongs in this paragraph. (Read this way on
+  2026-09-18: the pin was `ebab38e3`, kanso#1498 of the previous afternoon, 81
+  commits behind — and that sentence is dated because it was stale the moment
+  the next thing merged.) What this bullet is FOR is the list of five veins above
   it, which does not go stale, and the warning that the instructions vein moves
   where the allocation counters do not. Adding `evac_allocs` broke kq's
   gating check for a related reason: the counter was new everywhere, and only
