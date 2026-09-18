@@ -4007,3 +4007,22 @@ weaker claim this log has been caught making before.
 
 What is left of the shape: 31,818,021 instructions, 2.18%, still in those two
 rows. The parameter vectors were one site, not the site.
+
+### the same shape twice more, in the two argument vectors
+
+`eval_tail` and `eval`'s call arm each opened a `Vec::new()` and pushed one
+value per argument, over an `args` slice whose length is right there.
+
+    + match_params' two vectors    1,410,101,998
+    + the two argument vectors     1,392,296,124    -17,805,874
+
+Against main at kanso#1517 the interpreted row is now down **410,520,397
+instructions, 22.77%**.
+
+Four `with_capacity` calls have paid 47,438,686 between them, which is more than
+the frame memory's smaller half, and none of them changed a line of logic. That
+is worth saying plainly rather than dressing up: the shape is a vector opened
+empty next to a length the code already holds, and this interpreter had it in
+four hot places. The remaining `finish_grow` and `grow_one` say there are more.
+
+The golden corpus passes on both steps.

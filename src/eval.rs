@@ -1425,7 +1425,7 @@ impl<'a> Interp<'a> {
                 }),
             };
         }
-        let mut values = Vec::new();
+        let mut values = Vec::with_capacity(args.len());
         for arg in args {
             values.push(self.eval(arg, env, frame)?);
         }
@@ -1794,7 +1794,7 @@ impl<'a> Interp<'a> {
                 }
                 let callee = self.eval(head, env, frame)?;
                 let lazy_if = matches!(&callee, Value::FnRef(name) if &**name == "if");
-                let mut values = Vec::new();
+                let mut values = Vec::with_capacity(args.len());
                 for arg in args {
                     match lazy_if {
                         true => values.push(Value::Closure(Rc::new(ClosureData {
