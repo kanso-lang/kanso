@@ -139,6 +139,19 @@ general ("a fixed string would cost a fixed number"). A `StringMap` probe count
 is a symptom that a lookup walked a different number of buckets; it does not
 say why the map was in a different state.
 
+**ONE LIMIT ON THE EVIDENCE THAT RULES NAMES OUT, offered as scope rather than
+as a mechanism.** The header rules the temp-file names out with a container
+pair: "two complete pipeline runs, staged and warmed exactly as the gate does
+it, agree to the instruction on all four counted processes, and they agree even
+though the temp-file names differ between the runs". That is the same container
+pair whose `ld` reads 5,146,602,703 twice — the host the header immediately
+goes on to say "cannot reproduce it". So the experiment establishes that
+differing names do not destabilise `ld` on a host where `ld` is already stable.
+It cannot bound what they contribute on the runner, where it is not. This does
+not make names the cause and nothing here suggests they are; it says the one
+experiment ruling them out was run where the effect does not occur, which is
+worth knowing before the sitting treats them as excluded.
+
 **AND IT UNSETTLES THIS ENTRY'S OWN CITATION.** The entry cites the archive's
 kanso#1512, "THE 11 IS THE TEMP OBJECT'S NAME", with nine of ten names reading
 5,163,341,031. The golden's header has since re-explained that figure twice:
