@@ -8723,3 +8723,32 @@ value across all five of kanso#1487's builds: nothing to take off.
 
 Watched red before it passed, naming `startup_instructions.sh` as the gate that
 had not answered.
+
+## 2026-09-18 — a golden that lost its measured-on line, and what the gate said about it
+
+kanso#1505's second round failed `interpreted run instructions` with the gate
+reading `interp_instructions=2182303844` — exactly the value in the golden.
+Got and want agreed and the gate still refused.
+
+The reason is one line further down. `bench/interp_instructions_golden.txt`
+carries `# measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1` AFTER its value,
+`host_gate.sh` reads it to decide whether the sitting is a reproduction of the
+recorded build, and the edit that wrote CI's row had truncated everything past
+the value line:
+
+    m = re.search(r'^interp_instructions=\d+\s*$', s, re.M)
+    s = s[:m.start()] + note + 'interp_instructions=2182303844\n'
+
+`s[:m.start()]` drops the tail. Every other golden touched tonight was edited
+with an in-place `re.sub`, which does not, and a sweep over all twenty edited
+files found exactly two with the line gone: this one and the same file on
+kanso#1486's branch, both from the same pattern.
+
+The gate behaved correctly and said so in its own words — that the sitting was
+counted on a toolchain the golden does not name. What made it hard to read is
+that a missing `measured-on` and a genuinely moved row both surface as one red
+row in the summary block, and the value printed beside it looks right.
+
+The lesson is narrower than "be careful with regexes": a golden's trailing
+lines are load-bearing, so an edit that rewrites a value rewrites the value and
+nothing else.
