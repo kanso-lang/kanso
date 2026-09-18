@@ -3418,6 +3418,15 @@ short of `interp_instructions` itself, which is an exact golden and moves.
 Shipping it beside a change that does have a fixture is the honest shape:
 the table above says which half each number belongs to.
 
+**`sort` and `concat` were built with it and taken back out.** They copy the
+same way and the change is the same two lines, so they went in. Two runs of
+the five-builtin build read the anchor at 2,214,199,828, which is 785,478
+ABOVE the three-builtin build's 2,213,414,350, with `memcpy` at 390,296,396
+against 390,296,335 — 61 apart, so neither new site fired once over the whole
+corpus. The corpus sorts and concatenates lists that something else still
+points at, and what the two extra call sites bought was a bigger binary. Both
+reverted; the three that fire are what ships.
+
 **Still open.** Uniqueness stays rare in the threaded-accumulator shape, and
 that is the shape a fold writes. kanso#1497's remaining question is untouched:
 a value that can be appended to without being unique, or an argument protocol
