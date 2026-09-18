@@ -3922,3 +3922,84 @@ This is the second peak rise in two changes recorded this way (kanso#1533's
 was 205). Two unexplained rises against two large count falls is the point at
 which the pair is worth a build of its own rather than another note; that is
 a lead, not a conclusion.
+
+## 2026-09-18 — the name lookup was carrying the frame of the path it does not take
+
+Section 94 left the environment walk shallower and the profile re-ranked.
+`eval_ident` came second at 115,147,991 instructions of its own, 10.61% of
+the interpreted run, behind the dispatcher. The obvious guesses were both
+wrong and both cost nothing to rule out, because the answer was in the same
+file: the `names` map has used FxHash since src/hash.rs was written, so
+hashing is not where the time goes, and `Named` is an enum of `Rc`s and unit
+variants, so cloning one out of the map is a refcount.
+
+The annotated source says where it goes, and it is not in the body at all:
+
+    16,901,264 (1.58%)  fn eval_ident(&self, name: &str, span: Span, ...
+     7,122,532 (0.67%)      if let Some(value) = lookup(env, name) {
+     1,448,608 (0.14%)          return Ok(value);
+       996,075 (0.09%)      match named {
+     8,450,632 (0.79%)  }
+
+25,351,896 instructions, 2.37% of the whole run, on the opening line and the
+closing brace. A release build annotates as `???` without debug info, which
+is why this took a second build: `CARGO_PROFILE_RELEASE_DEBUG=1`.
+
+A name that a scope binds is answered by `lookup` and returns. A name that no
+scope binds walks a `RefCell` borrow, a map probe, a `Named` match and, the
+first time, the whole resolve ladder. Both paths were one function, so the
+frame the second one needs was being built and torn down for the first one
+too. Moving the second into `#[inline(never)] fn eval_global` leaves
+`eval_ident` as a match over `lookup`'s answer.
+
+    isolation, two binaries on one container
+    base    1,022,880,858
+    split   1,007,027,010   -15,853,848   -1.5499%
+
+The base was read at two distinct paths of the SAME LENGTH and printed
+1,022,880,858 both times, so the harness is stable and the count is not
+reading a path. That check exists because the first pass ran the two arms in
+`/tmp/ab-isbase` and `/tmp/ab-issplit`, which differ by one character, and
+this row is known to move with path length. The effect is four orders of
+magnitude larger than that confound could be; the point of re-running was to
+know rather than to argue.
+
+**THIS IS THE SAME SHAPE AS THE INLINE HINT THAT BOUGHT NOTHING, AND IT WENT
+THE OTHER WAY.** Earlier today `#[inline]` on `lookup` left the row identical
+to the instruction across two genuinely different binaries. The entry cost a
+profile attributes to a function is not automatically call overhead waiting
+to be removed -- there it was the function's own work, and the hint could not
+touch it. What is different here is that the cost is a frame sized for a path
+that is usually not taken, which splitting does remove. Neither outcome was
+predictable from the attribution, which is the argument for building both.
+
+## 2026-09-18 — the same split, one function up, costs 0.33%
+
+The frame argument above says `eval_ident` was building a frame its common
+path does not need. `eval` is the function above it, 92,306,061 instructions
+of its own, with 16,623,552 on its signature line — the same shape, one
+level up, and a bigger match: fifteen arms, several of which build maps,
+lists and records while `Ident` and `Int` return in a few instructions.
+
+Four arms moved out of line behind `#[inline(never)]`: `Upcast`, `MapLit`,
+`Field`, `Index`. Same corpus, same harness, one binary each.
+
+    base   1,022,880,858
+    split  1,026,292,184   +3,411,326   +0.3335%
+
+DECLINED. The base here is the same binary and the same reading as the row
+above, 1,022,880,858, so the two experiments are directly comparable: the
+split that helped bought 15,853,848 and this one costs 3,411,326.
+
+What separates them is which arms are actually rare. `eval_ident`'s second
+path is taken only by a name no scope binds, and in a corpus that decodes a
+document most names are bound. `Field` and `Index` are how a decoded document
+is read, so they are not the rare arms they look like in a source listing —
+moving them out adds a call to a hot path and saves a frame that the `App`
+arm, still inline, goes on requiring. Reading the match for which arm LOOKS
+expensive picked the wrong four.
+
+Three builds now on one hypothesis: an inline hint on `lookup` (no change at
+all), the `eval_ident` split (-15,853,848), and this (+3,411,326). The
+hypothesis "a profile's entry cost is a frame that can be removed" has been
+right once in three. It is a reason to build, not a reason to expect.
