@@ -3707,8 +3707,16 @@ the dispatch. Per-candidate vectors were freed at whatever size each arm
 needed. Fewer, larger, longer-lived beats more, smaller, shorter-lived on the
 count and can lose on the peak.
 
-NOTHING ISOLATES THAT. Two hundred and five bytes is 0.02% of the row and
-below what a differential on this box can separate from the arena's own
-rounding, so the mechanism is written down as open rather than asserted. The
-golden's header says the same. What is not in doubt is the trade: 587,222
-allocations against 205 bytes, and the objective weighs both.
+NOTHING ISOLATES THAT, AND THE FIRST DRAFT OF THIS PARAGRAPH GAVE THE WRONG
+REASON. It said 205 bytes was below what a differential on this box could
+separate from the arena's rounding. That was a guess about the instrument, and
+the instrument was one command away: three runs of the same binary print
+`interp_peak_bytes=834117` three times, byte for byte. The counter is the
+program's own arena accounting and it is deterministic, so 205 bytes is
+perfectly separable. What is missing is not resolution but an ISOLATION -- a
+build per hypothesis -- and that is a different kind of cost.
+
+So the mechanism stays open because nobody has spent that, not because the
+number is too small to see. The golden's header says the same. What is not in
+doubt is the trade: 587,222 allocations against 205 bytes, and the objective
+weighs both.
