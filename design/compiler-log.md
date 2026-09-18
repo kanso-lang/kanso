@@ -2936,3 +2936,48 @@ visits evenly: 47,209,178 of it sits in the 1,590,733 HIT visits, which are what
 a slot removes. The lead is larger than the page says and its cheap-looking
 neighbour was the part worth nothing. Still a ceiling on one term, still
 unbuilt, and now sized against the population it describes.
+
+## 2026-09-18 — what a slot would actually need, read off the tree before building
+
+The re-sizing above puts 47,209,178 of the `memcmp` in the hit visits, which is
+what resolving a local to an index removes. Section 90 said the hard part is
+that closures capture an environment rather than a frame. Reading the tree says
+which part of that is hard and which part is already settled.
+
+SETTLED: a local's depth from its own frame is static at every site. Three
+things make it so, and all three are checkable rather than assumed.
+
+`Stmt` has exactly three variants -- `Bind`, `Expr` and `Set` -- and not one of
+them branches. A body is a flat sequence, so every `Stmt::Bind` runs once, in
+order, on every entry. `Expr::Build` splices its statements onto the same
+environment (`run_stmts(inner, &mut env, frame)`) and its names stay in scope
+for the rest of the body, so a `build` extends the sequence rather than nesting
+a scope inside it.
+
+A bind pattern is irrefutable by rule -- `destructure`'s fallback says so in as
+many words, "binding patterns are irrefutable: names and constructor patterns
+only" -- so a `Stmt::Bind` binds the pattern's whole static set of names or the
+evaluation stops with an error. There is no path that binds half of them and
+carries on.
+
+Parameters are static too, for a reason worth writing down because it looks
+dynamic. `dispatch_loop_inner` picks the overload at runtime by score, so WHICH
+declaration's body runs is a runtime answer -- but `match_params` builds a FRESH
+`binds` vector per candidate, and only the winner's survives. `match_one`'s `?`
+does return from the middle of a constructor's field loop with earlier
+sub-patterns already pushed, and that partial vector is discarded whole with the
+candidate. So on the match that wins, `binds` holds exactly that declaration's
+binders in left-to-right order, plus `bind_whole`'s one when the pattern names a
+whole. Fixed per declaration.
+
+STILL HARD, and it is the only part: `ClosureData` carries
+`env: Option<Rc<Env>>` and `call_closure` starts from `closure.env.clone()`, so
+a closure captures the chain. A site inside a closure body has a static depth to
+its own parameters and a depth to a captured name that depends on where the
+closure was made. That is the ordinary upvalue problem and it has ordinary
+answers -- a two-level index, or a flat upvalue vector built once at closure
+creation. Which one this wants is the question the build starts from.
+
+The spec it needs is small and should be written first: a local shadowing a
+global, read at a site that also reaches the global from an enclosing scope, so
+a wrong index prints the wrong value instead of crashing.
