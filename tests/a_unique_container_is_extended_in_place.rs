@@ -85,6 +85,8 @@ pub fn run rounds
 ///     12,001   the frame memory, twelve a round less
 ///     10,801   the bound name's second copy, four a round less
 ///      9,001   the environment holding a `Name`, six a round less again
+///      7,803   the interpreter reading the linearity analysis, four a round
+///              less again
 ///
 /// The six are `eval_ident`: it used to build an `Rc<str>` every time it
 /// resolved a name to a reference, and it remembers the answer now, so the six
@@ -109,6 +111,19 @@ pub fn run rounds
 /// from another: main reads 12,001, the by-value commit alone 10,801, and the
 /// two together 9,001.
 ///
+/// The last row is this spec doing the job it was written for from the other
+/// side. Every one before it removed an allocation the interpreter was making
+/// for no reason; this one removes the CLONE, at the sites
+/// `linear::in_place_pushes` proves nothing else will read. Four a round is
+/// the two builders' four extending calls, each of which used to copy the
+/// accumulator and now writes through it.
+///
+/// It is also the only pin this repository has that the optimisation FIRES.
+/// The five specs that catch it firing where it should not --
+/// `a_list_held_twice_is_not_pushed_into` and its two siblings, the
+/// differential micro loop, and this file's own assertion -- all stay green
+/// if the gate silently stops matching. This number does not.
+///
 /// Each time, the number was re-read rather than the assertion widened. A
 /// change in what the ROUNDS cost is exactly what the subtraction exists to
 /// see, so this spec going red on those branches was it working.
@@ -116,7 +131,7 @@ pub fn run rounds
 /// The 19,201 the copying arm read is from before kanso#1516 and has not been
 /// re-measured under either change. What this spec pins is unchanged either
 /// way: the in-place path costs less per round than the copying one.
-const PER_EXTRA_ROUND: u64 = 9_001;
+const PER_EXTRA_ROUND: u64 = 7_803;
 
 fn kanso() -> PathBuf {
     let mut exe = std::env::current_exe().expect("the test binary has a path");

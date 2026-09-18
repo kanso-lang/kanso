@@ -110,6 +110,13 @@ pub struct ErrInfo {
 pub struct Site {
     pub prefix: Rc<str>,
     pub hako: Rc<str>,
+    /// The declaration's own file, kept whole rather than read back out of
+    /// `prefix`. `linear::in_place_pushes` keys its sites by (file, line,
+    /// column) and so does the emitter at `codegen.rs`'s push arm, so the
+    /// interpreter needs the same three to ask the same question. The `Arc`
+    /// is cloned once per declaration, which is what this struct already
+    /// costs: it is built by `frame_of` and memoized by pointer.
+    pub file: std::sync::Arc<str>,
 }
 
 pub type Frame = Option<Rc<Site>>;
@@ -118,6 +125,7 @@ fn frame_of(decl: &FnDecl) -> Frame {
     Some(Rc::new(Site {
         prefix: Rc::from(format!("{} at {}", crate::ast::frame_name(&decl.name), decl.file)),
         hako: Rc::from(crate::provenance::package_of(&decl.file)),
+        file: decl.file.clone(),
     }))
 }
 
@@ -1191,6 +1199,16 @@ pub struct Interp<'a> {
     /// at construction, because `kanso check` makes an `Interp` and never
     /// evaluates a constant, and that route is a weighed welfare term.
     cycles: std::cell::OnceCell<crate::hash::Set<String>>,
+    /// The push, put and append sites the linearity analysis proves extend a
+    /// container nothing else will read -- the same set, by the same key,
+    /// that the emitter consults before it writes `push_mut_fast`. The
+    /// compiled engine has mutated at these sites since kanso#1359; until now
+    /// the interpreter cloned at every one of them.
+    ///
+    /// A `OnceCell` for the reason `cycles` above is one: `kanso check` makes
+    /// an `Interp` and evaluates nothing, and that route is a weighed welfare
+    /// term. The analysis is not cheap and must not run for a check.
+    in_place: std::cell::OnceCell<crate::hash::Set<(std::sync::Arc<str>, usize, usize)>>,
     /// One entry per non-local name this run has evaluated. Filled on first
     /// sight rather than at construction, because `kanso check` makes an
     /// `Interp` and evaluates nothing, and that route is a weighed welfare
@@ -1279,6 +1297,7 @@ impl<'a> Interp<'a> {
             stack_hint: crate::stack_hint(program),
             knots: RefCell::new(Map::default()),
             cycles: std::cell::OnceCell::new(),
+            in_place: std::cell::OnceCell::new(),
             names: RefCell::new(Map::default()),
             callees: RefCell::new(Map::default()),
             frames: RefCell::new(Map::default()),
@@ -2483,6 +2502,54 @@ impl<'a> Interp<'a> {
         }
     }
 
+    /// Whether the linearity analysis proved this call site extends a
+    /// container nothing else will read.
+    ///
+    /// The key is the declaration's file and the call's line and column, which
+    /// is what `codegen.rs` uses at its own push arm. A frame the wasm host
+    /// built carries no file and answers no, which is the safe direction.
+    fn writes_in_place(&self, span: Span, frame: &Frame) -> bool {
+        let Some(site) = frame else { return false };
+        self.in_place.get_or_init(|| crate::linear::in_place_pushes(self.program)).contains(&(
+            site.file.clone(),
+            span.line as usize,
+            span.col as usize,
+        ))
+    }
+
+    /// Take a container's contents where the analysis proved nobody else will
+    /// read them.
+    ///
+    /// SAFETY, and it is the analysis rather than the refcount. `Rc` refuses
+    /// `&mut` above one holder, and the other holder here is the environment
+    /// node binding the accumulator's name -- so `try_unwrap` fails on 96.99%
+    /// of this corpus's container calls and every one of them clones. What
+    /// `linear::in_place_pushes` proves is that no later read of that binding
+    /// exists, which is why the COMPILED engine writes through the same
+    /// pointer at the same sites and has since kanso#1359. Taking the contents
+    /// leaves an empty vector behind for a holder that never looks.
+    ///
+    /// The differential law is what keeps this honest rather than argued: the
+    /// two engines must agree, and five specs go red the moment this fires
+    /// where the analysis did not say so --
+    /// `a_list_held_twice_is_not_pushed_into`,
+    /// `a_builder_passed_twice_through_a_wrapper_is_not_written_through`,
+    /// `an_imported_builder_held_twice_is_not_written_through`,
+    /// `micro_corpus_agrees_across_engines` and
+    /// `a_unique_container_is_extended_in_place`. That was measured by
+    /// building the ungated version and watching them fail.
+    fn taken_in_place<T>(rc: &Rc<T>) -> T
+    where
+        T: Default,
+    {
+        let slot = Rc::as_ptr(rc) as *mut T;
+        // SAFETY: see above. The pointer is derived from a live `Rc` this
+        // frame holds, so it is valid and aligned for `T`, and no other
+        // reference into it is live across this line -- the only other holder
+        // is an environment binding the analysis proved dead.
+        unsafe { std::mem::take(&mut *slot) }
+    }
+
     pub fn call_builtin(
         &self,
         name: &str,
@@ -2817,7 +2884,10 @@ impl<'a> Interp<'a> {
                     });
                 }
                 let Value::List(items) = list else { unreachable!("checked just above") };
-                let mut next = taken_to_grow(items, 1);
+                let mut next = match self.writes_in_place(span, frame) {
+                    true => Self::taken_in_place(&items),
+                    false => taken_to_grow(items, 1),
+                };
                 next.push(item);
                 Ok(Value::List(Rc::new(next)))
             }
@@ -2830,7 +2900,10 @@ impl<'a> Interp<'a> {
                     });
                 };
                 let key = map_key(key, span)?;
-                let mut next = taken(entries);
+                let mut next = match self.writes_in_place(span, frame) {
+                    true => Self::taken_in_place(&entries),
+                    false => taken(entries),
+                };
                 next.insert(key, value);
                 Ok(Value::Map(Rc::new(next)))
             }
@@ -3068,7 +3141,10 @@ impl<'a> Interp<'a> {
                     Value::Bytes(more) => more.len(),
                     _ => 1,
                 };
-                let mut out = taken_to_grow(items, grows_by);
+                let mut out = match self.writes_in_place(span, frame) {
+                    true => Self::taken_in_place(&items),
+                    false => taken_to_grow(items, grows_by),
+                };
                 match &x {
                     Value::Str(s) => out.extend_from_slice(s.as_bytes()),
                     Value::Bytes(more) => out.extend_from_slice(more),
