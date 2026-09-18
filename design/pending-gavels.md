@@ -81,6 +81,158 @@ settled.
 3. **Leave both unpinned** and accept an 11-instruction draw on a 5.16-billion
    row.
 
+**THE MECHANISM, found 2026-09-18, and it was not in this entry before.**
+kanso#1512 measured the effect and could not say why. A cost-goldens job on
+kanso#1504 — an unrelated branch, no codegen in its diff — hit the draw on its
+own, and the gate did what it is built to do: it counted the binary a second
+time, declared `VERDICT (2): REPRODUCTION FAILURE`, and printed its own
+per-process and per-frame diff.
+
+    ./kanso build pkg/codegen_corpus --release
+        80648421 then 80648151, -270   kanso::build    <- already excluded
+    clang:probe    32265497   both readings
+    clang          31732189   both readings
+    clang        1617286141   both readings
+    /usr/bin/ld ... -plugin LLVMgold.so ... -plugin-opt=O3
+      5160407609 then 5160407598, -11
+        -11  1816463 -> 1816452  llvm::StringMapImpl::LookupBucketFor(llvm::StringRef)
+
+All eleven are in `ld`, and inside `ld` they are one function: LLVM's
+`StringMap` bucket probe during the LTO link. The temporary object's name is a
+string that map hashes, and a different name walks a different number of
+buckets. Every clang process reproduced byte for byte, so the IR kanso emits is
+identical and read identically.
+
+**This bears on the choice in one direction.** The mechanism is an LTO
+mechanism — `LLVMgold.so`, `-plugin-opt=O3`, the release link. The dev tier is
+`-O0` with no `-flto` and runs no LTO plugin, so it cannot be what moves the
+dev row. The dev row's move stays real and unexplained with one fewer candidate
+behind it, which is an argument for 2 rather than 1: option 1 re-bases a row
+whose move is now slightly less explained than it looked, not more.
+
+**And the release golden's header is wrong on one point.** It says the children
+reproduced byte for byte, measured 2026-09-16 with `--trace-children`. That
+held for clang and has now been shown false of `ld`. Correcting it is separate
+from this question and does not wait on it.
+
+**THE FRAME, 2026-09-18 — and it is the thing the golden's header asked for.**
+`bench/codegen_instructions_release_golden.txt` ends its analysis with what was
+left after threads were pinned to one and the output path was cleared: "CI's
+two readings differ by 11, all of it inside `ld` ... the container cannot
+reproduce it ... The gate now diffs the two readings frame by frame when they
+disagree, so the next job that sees it names the frame instead of the
+magnitude."
+
+A cost-goldens job on kanso#1504 saw it, and the gate named the frame:
+
+    /usr/bin/ld ... -plugin LLVMgold.so ... -plugin-opt=O3
+      5160407609 then 5160407598, -11
+        -11  1816463 -> 1816452  llvm::StringMapImpl::LookupBucketFor(llvm::StringRef)
+
+All three clang processes byte-identical, as they have been since jobs=1.
+
+**WHAT THIS DOES NOT SAY.** It names where the eleven landed, not what moved
+it. The header has already ruled out the two candidates this frame suggests:
+the temporary names ("they agree even though the temp-file names differ between
+the runs ... which rules the paths out as the term") and a fixed string in
+general ("a fixed string would cost a fixed number"). A `StringMap` probe count
+is a symptom that a lookup walked a different number of buckets; it does not
+say why the map was in a different state.
+
+**ONE LIMIT ON THE EVIDENCE THAT RULES NAMES OUT, offered as scope rather than
+as a mechanism.** The header rules the temp-file names out with a container
+pair: "two complete pipeline runs, staged and warmed exactly as the gate does
+it, agree to the instruction on all four counted processes, and they agree even
+though the temp-file names differ between the runs". That is the same container
+pair whose `ld` reads 5,146,602,703 twice — the host the header immediately
+goes on to say "cannot reproduce it". So the experiment establishes that
+differing names do not destabilise `ld` on a host where `ld` is already stable.
+It cannot bound what they contribute on the runner, where it is not. This does
+not make names the cause and nothing here suggests they are; it says the one
+experiment ruling them out was run where the effect does not occur, which is
+worth knowing before the sitting treats them as excluded.
+
+**AND IT UNSETTLES THIS ENTRY'S OWN CITATION.** The entry cites the archive's
+kanso#1512, "THE 11 IS THE TEMP OBJECT'S NAME", with nine of ten names reading
+5,163,341,031. The golden's header has since re-explained that figure twice:
+first as LTO thread partitioning, now pinned with `-plugin-opt=jobs=1`, and
+then as the state of the output path, which the gate now clears before every
+build — 5,163,341,031 is the header's own "absent" reading. So the premise the
+options below were written against may no longer hold, and the sitting should
+settle whether it does before choosing between them.
+
+**IT REPLICATED, ON A SECOND BRANCH, AND THE RESIDUE IS EXACTLY ELEVEN BOTH
+TIMES.** A cost-goldens job on kanso#1502 — a float-rendering branch with no
+codegen in its diff — hit the draw on 2026-09-18 and halted the same vein. Put
+beside kanso#1504's job:
+
+                        kanso#1504              kanso#1502
+    ld, first        5,160,407,609           5,139,582,528
+    ld, again        5,160,407,598           5,139,582,517
+    residue                    -11                     -11
+    probes, first        1,816,463               1,822,415
+    probes, again        1,816,452               1,822,404
+    frame          LookupBucketFor         LookupBucketFor
+    clang x3            identical               identical
+
+**A THIRD JOB DREW IT, and it was this pull request's own** — the docs-only
+branch carrying this entry, which cannot touch codegen by construction:
+
+    kanso#1537   6,824,133,291 then 6,824,133,280, -11
+                 probes 1,819,373 -> 1,819,362
+                 frame  llvm::StringMapImpl::LookupBucketFor
+
+Three jobs, three branches, three different probe counts — 1,816,463,
+1,822,415, 1,819,373 — and the same eleven every time. Three branches, `ld`
+totals 20,825,081 apart across the first two, and the drop is ELEVEN PROBES
+each time, all of it in one frame.
+A residue that holds at a fixed eleven across that much movement in the
+quantity it is a residue of is not noise in the ordinary sense, and it is not
+proportional to anything the two jobs differ in. Whatever costs the eleven
+costs the same eleven on both.
+
+This does not name the cause, and it narrows the search in one way worth
+writing down: a candidate has to explain a CONSTANT, not a variance.
+
+**AND THE RATE IS NOT ONE IN TEN.** Option 3 below offers to accept "a known,
+reproducible, one-in-ten draw", a figure that came from kanso#1512's ten
+temporary names. The cost-goldens jobs run on 2026-09-18, after the output
+path was cleared and threads pinned, with the reading each produced:
+
+    kanso#1504, first job    DREW        -11
+    kanso#1502               DREW        -11
+    kanso#1537               DREW        -11
+    kanso#1538               reproduced
+    kanso#1504, second job   reproduced
+
+**THE SAME BRANCH IS ON BOTH SIDES OF THAT LIST**, which is the useful part:
+kanso#1504 drew on one job and reproduced on the next with the same head, so
+this is a property of the JOB and not of any branch's diff. Three in five is
+the figure as of the fifth job, and the denominator grows with every job run
+today — no count written into this entry will stay true, which is why the list
+is here instead of a rate. What survives the next job is the direction: the
+draw is far commoner than one in ten, and every one of them halts the vein for
+a change that did not cause it.
+
+**AND THE SAME JOB SHOWS WHERE kanso's OWN PROCESS MOVES, which is the
+excluded one.** The gate prints it anyway, and on kanso#1502 it moved 1,610
+between the two readings, broken down:
+
+    +1610  PROGRAM TOTALS
+     +924  __memcmp_avx2_movbe                        libc
+     +713  kanso::build
+      -27  HashMap<String, ()>, std::hash::random::RandomState  ::insert
+
+`RandomState` is seeded per process from the OS, so a `HashMap` keyed by
+`String` probes a different sequence on every run, and comparing keys is what
+`memcmp` is doing there. That is a candidate mechanism for the excluded
+process's own variance and it is testable — a fixed hasher, two readings — but
+it is untested, so it is written here as a lead. **It bears on the 2026-09-15
+normalization ruling rather than on this entry's question**: `codegen_instructions`
+already excludes this process, while `compile_instructions`, `entry_instructions`
+and `library_instructions` all count it and have been reproducing to the
+instruction, which is the first thing any test of this has to explain.
+
 **Recommendation: 2.** The measurement is the release tier's — that is where the
 name was shown to move the count, three times. The dev row's move is real but
 unexplained, and option 1 would bank it as though it were understood. 3 keeps a
