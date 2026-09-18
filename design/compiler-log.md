@@ -2923,6 +2923,615 @@ Every line a valid number, nothing raised, all three shapes caught. The native
 engine was untouched by the break, so the two engines disagreed and
 `micro_corpus_agrees_across_engines` failed on the divergence rather than on
 the golden alone. Restored, and green again.
+## 2026-09-18 — the 19.3 million was an average applied to the wrong half
+
+Section 90 closed by sizing a lead: misses are 31.4% of lookups and 40.3% of
+every frame visited, "about 19.3 million instructions spent on walks that
+cannot succeed". That figure was 1,071,803 miss visits times the eighteen
+instructions a visit the section derived earlier. The visits were counted. The
+eighteen was an average over every visit, and it does not describe the half it
+was applied to.
+
+BUILT. A filter that skips a walk which cannot succeed. `bind` is the only
+place an `Env` frame is made, so it records the shape of each name it binds --
+the first byte and the length -- into a 256-entry table on the interpreter, and
+`lookup` answers `None` without walking when the shape is absent. The table only
+gains bits and a set bit admits the walk, so a collision costs a walk that would
+have happened anyway and can never change an answer.
+
+Sized first on the corpus: 35 distinct names are ever bound, the 332,025
+lookups that reach no frame are spread over 73 others, and one of the 73 shares
+a shape with a local. So the table skips 326,733 of the 332,025 -- 98.4%.
+
+MEASURED, and it costs 24,320,374 (+2.18%). Four binaries, one worktree, each
+staged into the gate's own box in turn:
+
+    base                                          1,115,996,775
+    the reference threaded, never read            1,132,586,649   +16,589,874
+    the shape recorded, never tested              1,140,109,198    +7,522,549
+    recorded and tested, walks skipped            1,140,317,149      +207,951
+
+THE PRIZE WAS SIXTEEN TIMES SMALLER THAN THE ARITHMETIC. The last row is the
+whole of what skipping the walks is worth, and it is a rise. `memcmp` reads it
+directly: 48,165,663 in the first three binaries and 47,209,178 in the fourth.
+Removing every one of the 1,071,803 miss visits takes 956,485 off `memcmp` --
+1.99% of the figure, from 40.3% of the visits.
+
+So a miss visit costs 0.89 instructions of `memcmp` and a hit visit costs 29.68.
+Thirty-three times apart, and section 90's eighteen is the average of the two.
+The mechanism is visible in the names: Rust's string equality checks the length
+before it calls libc, every local this corpus binds is seven bytes or shorter,
+and the names that miss are `builtin_append`, `json/parsed`, `text/utf8`. A
+miss walk is rejected on length at every frame and never reaches libc at all.
+
+AND THREADING THE REFERENCE COSTS MORE THAN THE IDEA. 16,589,874 of the rise is
+a fourth argument to `bind` that nothing reads -- 534,994 binds, all from
+`dispatch`, 31 instructions each. Recording into it adds 7,522,549 more, 14 a
+bind. A thread-local would remove the first half and the second half alone still
+exceeds the 956,485 ceiling, so there is no arrangement of this idea that wins.
+Declined on arithmetic, with both halves isolated rather than attributed.
+
+WHAT IT DOES TO THE SLOT LEAD IS THE OPPOSITE. Section 90 put slots at "around
+forty million", from the same eighteen. The `memcmp` is not spread over the
+visits evenly: 47,209,178 of it sits in the 1,590,733 HIT visits, which are what
+a slot removes. The lead is larger than the page says and its cheap-looking
+neighbour was the part worth nothing. Still a ceiling on one term, still
+unbuilt, and now sized against the population it describes.
+
+## 2026-09-18 — what a slot would actually need, read off the tree before building
+
+The re-sizing above puts 47,209,178 of the `memcmp` in the hit visits, which is
+what resolving a local to an index removes. Section 90 said the hard part is
+that closures capture an environment rather than a frame. Reading the tree says
+which part of that is hard and which part is already settled.
+
+SETTLED: a local's depth from its own frame is static at every site.
+
+`Stmt` has exactly three variants -- `Bind`, `Expr` and `Set` -- and not one of
+them branches. THAT DOES NOT MAKE A BODY A FLAT SEQUENCE, which is what this
+entry said first and corrected an hour later. The branching is in the
+expressions, and three of them carry a statement list of their own: `Block`,
+`Build`, and `Guard`'s `rest`. A `return x if c` line evaluates `rest` only when
+the condition is false, so the statements after a guard are a nested list rather
+than the next items in a sequence.
+
+`tests/golden/micro/a_wall_whose_name_is_a_local.kso` says exactly that, in its
+own comment: "a binding that follows a `return` line lives in `Expr::Guard`'s
+own statement list rather than in a block, and a walk that knew only blocks
+refused this program". An earlier pass learned it from a program the compiler
+refused. This one read the enum and walked past the fixture, which is the same
+mistake as sizing a lead from an average -- the thing was written down one file
+away.
+
+What survives is what slots need. Each of the three runs its list on the
+environment as it stands where it appears, so a site inside one has a static
+depth. Only a `Build` in STATEMENT position takes `&mut env` and lets its binds
+escape into the parent's sequence; a `Block` or `Build` in expression position
+takes `env` by reference and its binds go no further. The body is a TREE of
+statement lists with static depths, rather than one flat list.
+
+A bind pattern is irrefutable by rule -- `destructure`'s fallback says so in as
+many words, "binding patterns are irrefutable: names and constructor patterns
+only" -- so a `Stmt::Bind` binds the pattern's whole static set of names or the
+evaluation stops with an error. There is no path that binds half of them and
+carries on.
+
+Parameters are static too, for a reason worth writing down because it looks
+dynamic. `dispatch_loop_inner` picks the overload at runtime by score, so WHICH
+declaration's body runs is a runtime answer -- but `match_params` builds a FRESH
+`binds` vector per candidate, and only the winner's survives. `match_one`'s `?`
+does return from the middle of a constructor's field loop with earlier
+sub-patterns already pushed, and that partial vector is discarded whole with the
+candidate. So on the match that wins, `binds` holds exactly that declaration's
+binders in left-to-right order, plus `bind_whole`'s one when the pattern names a
+whole. Fixed per declaration.
+
+STILL HARD, and it is the only part: `ClosureData` carries
+`env: Option<Rc<Env>>` and `call_closure` starts from `closure.env.clone()`, so
+a closure captures the chain. A site inside a closure body has a static depth to
+its own parameters and a depth to a captured name that depends on where the
+closure was made. That is the ordinary upvalue problem and it has ordinary
+answers -- a two-level index, or a flat upvalue vector built once at closure
+creation. Which one this wants is the question the build starts from.
+
+The spec it needs is small and should be written first: a local shadowing a
+global, read at a site that also reaches the global from an enclosing scope, so
+a wrong index prints the wrong value instead of crashing.
+
+## 2026-09-18 — the closure capture is not in the way, measured
+
+The entry above called the closure capture "the only part" still hard about
+resolving a local to an index, and named the two usual answers. Neither is
+needed to collect the prize, and the reason is a count rather than an argument.
+
+`call_closure` pushes the captured head onto a stack around the body it
+evaluates, and `lookup` marks whether its walk passed that frame before it
+matched. Over bench/interp_corpus:
+
+    closure calls                                440
+
+    hits   outside any closure body          722,764    99.79%
+           inside one, above the capture        1,540     0.21%
+           inside one, at or below it               0     0
+
+    hit    outside any closure body        1,588,753    99.88%
+    visits inside one, above the capture        1,980     0.124%
+           inside one, at or below it               0     0
+
+NOT ONE NAME LOOKUP IN THE RUN REACHES A CAPTURED FRAME. The 1,540 hits inside
+a closure body all resolve to the closure's own parameters, which sit above the
+capture and have static depths like any other parameter.
+
+So the 47,209,178 of `memcmp` the hit visits carry is 99.88% inside plain
+function bodies, and a slot scheme that covers those and leaves closures walking
+by name collects essentially all of it. The upvalue question is real and it is
+not on the path.
+
+WHAT THIS BOUNDS. One corpus, and a program written around closures would read
+differently -- the corpus makes 440 closure calls against 1,056,329 lookups, so
+it is barely exercising the case. What the figure does bound is the thing that
+matters here: the row this change is for is measured on THIS corpus, so the
+change that moves the row needs no upvalue resolution. A program that leans on
+closures would keep the walk it has today and lose nothing it has now.
+
+## 2026-09-18 — the static depth is right on 656,939 hits and wrong on none
+
+The pass that resolving a local to an index needs was written as a PROBE rather
+than a pass: it works out what depth each `Ident` site would resolve to, and
+`lookup` then compares that answer with the depth its own walk reaches. So the
+run says whether the static answer is right, instead of the code looking right.
+
+The probe walks each declaration with a scope that mirrors the chain --
+parameters deepest in `match_params` order, then each `Stmt::Bind`'s binders on
+top, a lambda's parameters above its capture, a `Block` or a `Build` in
+expression position scoped to itself, a `Build` in statement position escaping
+into its parent, and a guard's `rest` continuing on the same scope. A later
+binding of the same name shadows an earlier one, so the search runs from the
+top.
+
+Over bench/interp_corpus:
+
+    ident sites in the program                 1,757
+    sites resolving to a local                 1,098    62.5%
+
+    hits where the static depth AGREED       656,939    90.7% of all hits
+    hits where it DISAGREED                        0
+    misses at a site it called a local             0
+
+NOT ONE WRONG DEPTH, AND NOT ONE NAME CALLED A LOCAL THAT WAS NOT ONE. The
+remaining 67,365 hits are sites the probe has no opinion on, and the reason is
+the probe's key rather than the idea: a `Span` is a line and a column with no
+file, so two modules collide, and 577 keys are poisoned to keep the check sound.
+A pass keyed by site identity has no such loss.
+
+THE LAST NUMBER IS THE ONE THAT NEEDED MEASURING. A first draft reported 18,695
+misses at sites it had called locals, which would have been a wrong answer in a
+real pass. Every one was a collision: a resolving site in one module sharing a
+line and column with a global read in another. Poisoning a key the moment ANY
+site that does not resolve touches it took the figure to zero, and it is zero
+because the ambiguity is gone rather than because the count was quietly dropped
+-- the poisoned keys rose from 15 to 577 in the same run and the agreed hits
+fell from 689,940 to 656,939 to pay for it.
+
+What remains is representation. The depth is provably available; where the index
+lives on the node -- a new `Expr` variant written by a rewrite at load, against a
+cell on `Expr::Ident` -- is the next question, and it is the one the build
+starts from.
+
+## 2026-09-18 — the slot lead is dead, and it died of the error this branch corrected
+
+The entries above corrected the 19.3 million by showing that the miss walks carry
+almost none of the `memcmp`, and then re-sized the slot lead UPWARD on the
+grounds that the 47.2 million left over must be in the hit walks. The same
+mistake, one level up. The hit walks carry 1,335,388 of it.
+
+BUILT, to find that out. A per-site inline cache: the address of the `Name` in
+each `Ident` node keys a direct-mapped table of 4,096 entries holding the depth
+that site's local was found at last time. The walk jumps straight to the
+remembered depth, checks the name it lands on and falls back on a mismatch, so a
+stale entry costs one comparison and can never answer wrongly. It needs no
+static pass and no AST change; the depth being static was measured first and
+then deliberately not relied on.
+
+It is correct -- the corpus and the shadowing fixture print byte-identical
+output -- and it costs 31,209,169, a rise of 2.80%. What matters is not the sign
+but which counters moved:
+
+    eval_ident      115,147,991 -> 152,742,778     +37,594,787
+    dispatch        130,726,726 -> 130,726,726      byte-identical
+    match_one        68,846,453 ->  68,846,453      byte-identical
+    memcmp           48,165,663 ->  46,830,275      -1,335,388
+
+THE CACHE REMOVES ESSENTIALLY THE WHOLE HIT WALK AND TAKES 1,335,388 OFF
+`memcmp`. With the 956,485 the shape filter took off the miss walks, the entire
+environment walk accounts for 2,291,873 of the 48,165,663 -- 4.8% of the figure,
+and 0.205% of the interpreted row.
+
+`match_one` is byte-identical at 68,846,453 in every build here and calls
+`memcmp` 733,821 times against `eval_ident`'s 724,304. The bulk of the 48 million
+is PATTERN MATCHING, and it always was. The walk arrived beside it in the
+profile and three successive claims priced the walk at the whole of it: section
+90's forty million, this branch's 47.2 million, and the sentence in section 90
+saying the ceiling rises.
+
+WHERE THE CLAIM TRAVELLED, and what is corrected: section 90 on main (the forty
+million and the correction added to it today), section 91 on this branch, this
+branch's body, and kanso#1530's body, which cites the 47.2 million as the reason
+its fixture exists. The fixture is still worth having -- it pins that a local
+resolves to its own depth, which nothing else did -- but not for that reason.
+
+WHAT IS ACTUALLY LEFT. `match_one` is 5.8% of the run and carries roughly half
+the `memcmp` calls; that is the lead the walk was standing in front of, and it
+has not been looked at. Nothing here sizes it, deliberately: sizing a lead by
+dividing a counter among its callers is what produced three wrong numbers in one
+day, and the next figure written down about `match_one` should come from a
+differential rather than a division.
+
+## 2026-09-18 — withdrawn: the cache kept the expensive comparison, so it never priced the walk
+
+The entry above says the per-site cache "removes essentially the whole hit walk"
+and concludes from 1,335,388 that the environment walk is 0.205% of the row and
+the slot lead is dead. The first clause is wrong and the rest follows from it.
+
+The cache jumps to the remembered depth and then CHECKS THE NAME IT LANDS ON.
+That check is a comparison of two equal-length names, which is the case that
+reaches libc and runs the full twenty-two bytes. What the cache removed is the
+redundant comparisons on the way down; what it kept is the confirming one, and
+that is the expensive one.
+
+A debuginfo build says so directly. `eval_ident'2` calls `memcmp` 724,304 times
+-- exactly the number of hits, so ONE call per hit, and the 866,429 non-matching
+visits never reach libc at all, which is the same length-rejection the misses
+showed. `match_one` calls it 768,153 times. So the walk's `memcmp` is one full
+comparison per hit and the cache preserved every one of them.
+
+WITHDRAWN: that the whole environment walk is 2,291,873, that it is 0.205% of
+the row, and that the slot lead is dead. What stands is the shape filter's
+956,485 for the misses, the cache's 1,335,388 for the redundant comparisons, and
+the cache's own cost of 31,209,169. What a real slot is worth is UNMEASURED.
+
+AND THE ATTEMPT TO MEASURE IT FOUND SOMETHING ELSE. A ceiling variant that
+trusts the remembered depth without re-checking the name raised `is not callable`
+on the corpus. The depth is not the problem -- 656,939 hits agreed with a static
+depth and none disagreed. The KEY is: `Stmt::Bind`'s lazy path clones the whole
+`Expr` into the thunk, at three sites, so expression nodes are allocated and
+dropped throughout the run and A NODE'S ADDRESS IS NOT A SITE IDENTITY. A
+recycled address compares equal to a live entry. The checking cache survives
+that because the name comparison rejects the stale answer; the trusting one
+answered from a recycled entry.
+
+So the check that made the cache expensive is also the check that made it
+correct, and a slot scheme wanting to drop it needs a key the AST owns rather
+than one the allocator hands out. That is a real constraint on the design and it
+was not visible before something was built on the wrong key.
+
+Four claims about this one counter have now been withdrawn in a day -- 19.3
+million, forty million, 47.2 million, and 0.205%. Every one divided a measured
+total by a measured count. The two figures that have survived, 956,485 and
+1,335,388, were each read off the same counter in two binaries that differed by
+one change.
+
+## 2026-09-18 — match_one's comparisons are not in the arms that compare names
+
+Before sizing `match_one` by removing something, the obvious target was the arms
+that compare type names, so they were counted first. Over bench/interp_corpus:
+
+    match_one calls           1,135,058
+      Ctor against Record        29,052     2.6%
+      Ctor against Sub                0
+      Nullary                    76,408     6.7%
+      StrLit                          0
+      Annotated                  59,430     5.2%
+
+Those are 164,890 of 1,135,058 — 14.5%. The other 85% are `Var` and `Wildcard`,
+which compare nothing at all. And the debuginfo profile puts `match_one`'s
+`memcmp` calls at 768,153, which those arms cannot account for on any per-call
+cost.
+
+So the target was wrong, and interning the constructor type names -- which was
+the plan -- would reach 29,052 dispatches. Recorded as a negative result rather
+than acted on.
+
+WHERE THE CALLS ARE IS OPEN, and the next step is separation rather than another
+guess: `match_one` is a profile frame, not a function, and `bind_whole`,
+`type_match_depth` and whatever else is inlined into it are counted as part of
+it. Nothing here says which of them calls libc. A `#[inline(never)]` on each
+candidate, one build, would split the frame and name it, and that is a
+measurement rather than a division.
+
+## 2026-09-18 — the withdrawal is withdrawn, and the walk's cost is the clone
+
+The entry above withdrew the 2,291,873 on the strength of a debuginfo profile
+that appeared to show `eval_ident` calling `memcmp` 724,304 times. It does not.
+That reading was wrong in a way worth naming exactly, because the tool invites
+it: in `callgrind_annotate --tree=caller`, the `<` caller lines come BEFORE the
+`*` entry they belong to. I read a block as belonging to the entry above it, so
+`Value::clone`'s callers were read as `memcmp`'s.
+
+The annotated source settles it and needs no interpretation. Inside `lookup`:
+
+      909,375   if frame.name.as_str() == name {
+    2,897,216       return Some(frame.value.clone());
+   31,514,002   => <kanso::eval::Value as Clone>::clone (724,304x)
+
+EVERY COMPARISON THE ENVIRONMENT WALK MAKES, over all 2,662,536 frame visits,
+COSTS 909,375. The two differentials agree with it and always did: removing
+every miss visit took 956,485 off `memcmp`, removing the redundant hit compares
+took 1,335,388. Three readings of the same quantity, by three routes, all in the
+same million.
+
+So the 2,291,873 stands, the slot lead is dead for the reason first given, and
+the entry above it is withdrawn in full. Also withdrawn: that `match_one` calls
+`memcmp` 768,153 times. That was `Value::clone` again, from
+`binds.push((name.clone(), arg.clone()))`.
+
+AND THE MISREADING PRODUCED THE FIRST WELL-FOUNDED NUMBER OF THE WHOLE THREAD.
+The walk's expense is not what it compares; it is what it returns. The clone on
+the hit costs **31,514,002** across 724,304 hits, forty-three instructions each,
+against 909,375 for every comparison in the run. Thirty-five to one.
+
+A slot index does not touch that. It removes the visiting and the comparing,
+which together are worth about two and a quarter million, and leaves the clone
+exactly where it is -- which is why every scheme tried today lost: they were all
+aimed at the cheap half. What would touch it is `lookup` answering a REFERENCE
+into the frame rather than a clone, so a caller that only reads pays nothing;
+`eval_ident` returns `EvalResult` by value, so that is a real change to its
+signature and its callers rather than a local trick.
+
+Unsized on purpose. 31,514,002 is what the clone costs, not what removing it
+would save, and the difference between those two is the thing this day has been
+about.
+
+THE METHOD, since four figures went wrong before it was found: the annotated
+source (`callgrind_annotate --auto=yes`, run where the recorded relative paths
+resolve) gives a cost per LINE and per CALL SITE. It is the only reading here
+that has not been wrong. The caller tree invites an off-by-one, and a total
+divided by a count is not a measurement.
+
+## 2026-09-18 — what a Value clone actually copies
+
+The walk's expense is `Value::clone` at the hit, 31,514,002 over 724,304 calls.
+Reading what that clone does narrows it further, and the enum answers most of it
+by inspection: of `Value`'s variants, `Map`, `ErrV`, `List`, `Bytes`, `Record`,
+`Sub`, `FnRef` and `Closure` are all behind an `Rc`, so cloning them is a
+refcount bump; `Float`, `True`, `False`, `NoneV` and `Done` are copies of
+nothing. TWO VARIANTS ALLOCATE: `Str(String)` and `Int(BigInt)`.
+
+The annotated source prices the first of those. Inside `Value::clone`:
+
+    12,872,332   => <String as Clone>::clone   (137,732x)
+
+Ninety-three instructions a clone, and that is every `Value::Str` copied
+anywhere in the run rather than only the ones the walk makes -- the reading is
+per call site inside `Value::clone`, which has many callers. So it is a bound on
+one component of the 31.5 million, not a share of it, and it is written down
+that way on purpose.
+
+WHAT IT SUGGESTS is that the interpreter copies string BODIES when it copies
+values, where every other compound variant it holds is shared. `Rc<str>` would
+turn a ninety-three-instruction allocating clone into a bump.
+
+WHAT IT COSTS IS THE REASON NOT TO ASSUME. A `String` is what gets APPENDED to,
+and `Rc<str>` cannot be appended in place -- so the trade is a cheaper copy
+against a more expensive build, and which way it comes out is a property of how
+much this corpus concatenates versus how much it copies. That is a build and a
+differential, not an argument. kanso#1515 and kanso#1520 are both about building
+strings and lists in place, so the appending side is not hypothetical.
+
+Recorded as the lead the whole day was looking for, unsized deliberately.
+
+## 2026-09-18 — half of every Value clone allocates, and the integers are four times the strings
+
+The entry above reasoned about `Value::Str` and put a trade beside it: `Rc<str>`
+buys a cheaper copy at the price of a more expensive build, because a `String`
+is what gets appended to. THAT TRADE IS WRONG FOR THIS CODEBASE and the fix was
+one grep. `append` takes `Value::Bytes` -- "append takes bytes and a string,
+bytes, or byte" -- and grows an `Rc<Vec<u8>>`. Nothing appends to a
+`Value::Str`; a string is built as a local `String`, wrapped once, and copied
+thereafter. kanso#1515 and kanso#1520 are about `Bytes` and `List`, not this.
+
+So the counts were taken instead of reasoned about. A `Clone` impl written by
+hand in place of the derive, counting per variant, over bench/interp_corpus:
+
+    Value clones        1,555,866
+      Str                 137,732     8.9%   566,128 bytes, 4.1 per clone
+      Int                 610,763    39.3%
+      everything else     807,371    51.9%   an Rc bump or a copy of nothing
+
+HALF OF EVERY CLONE ALLOCATES, AND THE INTEGERS ARE FOUR AND A HALF TIMES THE
+STRINGS. `Value::Int` holds a `BigInt`, whose clone allocates a digit vector; on
+this corpus that is 610,763 heap allocations for numbers that are almost all
+small. The strings average FOUR BYTES, so `String::clone`'s ninety-three
+instructions there are the allocator rather than the copying.
+
+The interp vein's allocation counter reads 2,486,376. These two variants are
+748,495 of whatever that counts -- adjacent figures from different instruments,
+so no arithmetic is done between them here.
+
+WHAT THIS MAKES THE LEAD. A small-integer representation -- an inline `i64` with
+`BigInt` only when it overflows -- removes 610,763 allocations, and is a change
+to `Value` rather than to any one path, so every clone in the run pays less, not
+only the environment walk's. `Rc<str>` is the same shape and a quarter the size.
+
+UNSIZED, and this is the fourth time today that mattered: 610,763 is how often
+the allocation happens, not what removing it saves. The build is the measurement.
+
+## 2026-09-18 — every integer the run clones fits in an i64
+
+The counting `Clone` impl was extended to ask, of each `Value::Int` it copied,
+whether the `BigInt` fits an `i64`. Over bench/interp_corpus:
+
+    Int clones            610,763
+    of those, fitting i64 610,763      all of them
+
+NOT ONE. Every integer this corpus copies is small, and each of those copies
+allocates a digit vector because `BigInt` keeps its magnitude on the heap.
+
+That settles the shape of the change without settling its size: an inline `i64`
+with `BigInt` reached only on overflow removes 610,763 allocations here and
+falls back never. It is a change to `Value` rather than to a path, so it pays
+wherever a value is copied -- the environment walk's 724,304 hits, `match_one`'s
+binds, every argument handed to a call -- rather than at one site.
+
+WHAT IT COSTS IS THE PART TO BUILD RATHER THAN ARGUE. `Value` gains a variant or
+`Int` gains a discriminant, and every arithmetic site has to promote at exactly
+the right point. The language's integers are arbitrary-precision by design, and
+a fast path that overflows one step late is a wrong answer rather than a slow
+one, so the fixture comes first: a golden holding a value either side of the
+i64 boundary, watched red on a deliberately-wrong promotion.
+
+Still unsized, deliberately. 610,763 is how often the allocation happens. What
+removing it saves is a differential nobody has run.
+
+## 2026-09-18 — the interpreter's integer boundary has no home in the corpus
+
+The small-integer change needs a fixture before it needs code, so one was
+written: `9223372036854775807 + 1`, `-9223372036854775808 - 1`, and three
+products that cross the boundary from operands that do not. Running it found
+the constraint the build would otherwise have met late.
+
+NATIVE REFUSES THERE. `error[runtime]: integer overflow (int64 native build;
+spec int is arbitrary precision)`. The interpreter answers exactly:
+
+    9223372036854775808 -9223372036854775809 18446744073709551614 -18446744073709551616
+    9223372037000250000 18446744073709551614 -18446744073709551616
+
+That divergence is sanctioned and already pinned -- the differential law allows
+an engine to REJECT what another accepts provided the diagnostic is clear, and
+`docs/book/ch02.html` with `docs/book/samples/ch02/overflow.out` carries it.
+
+WHAT IS NOT PINNED is the second line: the interpreter's own answers at the
+boundary. The micro corpus runs every fixture on both engines and requires them
+to agree, so it cannot hold a program native refuses, and there is no other home
+for an interpreter-only behavioural golden. So the exact place an inline `i64`
+fast path would go wrong -- promoting one step late, and printing a WRAPPED
+number rather than raising -- is a place nothing in the tree currently watches.
+
+That is the finding, and it is a gap in the corpus rather than a fact about
+integers. The change needs a home for it first: either a fixture kind that pins
+one engine's answer where another refuses, or the native side gaining
+arbitrary precision so the two agree and an ordinary micro golden works. Which
+of those the project wants is a question rather than an implementation detail,
+so it goes to the ledger rather than being decided here.
+
+Recorded before any code, which is the whole point of writing the fixture first.
+
+## 2026-09-18 — what the walk's own clones copy, which orders the two leads
+
+Two leads came out of the walk's 31,514,002 of `Value::clone`: answering a
+REFERENCE into the frame rather than a copy, and making small integers inline.
+Which to build first is a question the counters answer directly, by asking what
+the walk's 724,304 hits actually clone:
+
+    Int          297,244    41.0%     allocates a digit vector
+    Str           68,866     9.5%     allocates
+    Rc-backed    331,740    45.8%     a refcount bump
+    flat          26,454     3.7%     copies nothing
+
+    allocating   366,110    50.5%
+
+HALF THE WALK'S CLONES ALLOCATE, AND THE INTEGERS ARE FOUR TIMES THE STRINGS
+here as they are across the run. So the two leads are complementary rather than
+competing, and the order is settled by which covers more:
+
+Small integers reach 41.0% of the walk's clones and, being a change to `Value`
+itself, the same 39.3% of every OTHER clone in the run -- `match_one`'s binds,
+every argument handed to a call. It is one representation change with one
+correctness question (promote at exactly the right step).
+
+A reference return reaches the 45.8% that are already only a refcount bump,
+where the saving per clone is smallest, and it costs a signature change through
+`eval_ident` and its callers, several of which genuinely need an owned value.
+
+So integers first, and the reference return is worth re-sizing only after,
+against whatever the row then reads. Neither is sized: these are counts of how
+often, not measurements of what removing them saves, and that distinction is
+the one this day was about.
+
+## 2026-09-18 — what a small integer costs to copy, and a benchmark that measured nothing first
+
+Making `Value::Int` an inline machine word is the ordered-first lead, and
+before 90 call sites are touched it is worth knowing what the copy it removes
+costs. `BigInt::clone` is inlined into `Value::clone` and lives in another
+crate, so `#[inline(never)]` cannot split it and the annotated source cannot
+price it the way it priced `String::clone`. A microbenchmark can.
+
+THE FIRST ONE MEASURED NOTHING, and the check that caught it took one extra
+run: doubling the count moved the total by FIFTEEN instructions. Cloning a
+constant and reading its bit count is loop-invariant, so LLVM hoisted the whole
+body; `#[inline(never)]` on the enclosing function does not stop it optimising
+inside. `black_box` on the input, the clone and the drop fixed it. A benchmark
+whose figure does not move with its count is measuring its own overhead, and
+varying the count is how that is found out rather than assumed.
+
+With the loop defeated, over mimalloc as the interpreter uses:
+
+    n =   100,000     4,436,432
+    n =   610,763    22,313,150
+    n = 1,221,526    43,689,870
+
+The slope is 35.00 instructions per iteration from the two largest points and
+35.00 from the two smallest, with 936,430 of fixed overhead -- which matches
+what the hoisted version read, so the constant is the process and the slope is
+the work.
+
+    over the walk's 297,244 integer hits     ~10.4 million
+    over all 610,763 integer clones          ~21.4 million
+
+WHAT THAT IS AND IS NOT. The 35 covers a clone, a `bits()` read, a drop and
+three `black_box`es, so the clone alone is less: it BOUNDS clone-and-drop from
+above. And a microbenchmark allocating and freeing in a tight loop is the
+allocator's best case; a real run interleaves and frees later, which could push
+the true figure up. So this bounds one component of `Value::clone`'s 46,791,170
+of self cost, and it is not a prediction of what the change saves.
+
+Beside the strings, which the annotated source priced directly at 12,872,332
+over 137,732 clones, the allocating half of every value copy in this run is
+somewhere around 34 million against an interpreted row of 1.075 billion. Three
+per cent, bounded from above, for a change to one type.
+
+That is the number the corpus question in the ledger is worth answering for --
+or not. Recorded so the answer can be weighed rather than guessed.
+
+## 2026-09-18 — one line copies a whole expression tree, fifty thousand times
+
+Reading the annotated source for the integer work turned up a bigger and much
+narrower lead beside it. `Expr::clone` in the interpreted run:
+
+    body: arg.clone()          11,471,717     50,235 calls     228 each
+    a second site                  77,936        221 calls
+    expr: expr.clone()                285          1 call
+
+ONE LINE CARRIES 99.3% OF IT. It is the `lazy_if` path, building a deferred
+argument as a closure with no parameters:
+
+    values.push(Value::Closure(Rc::new(ClosureData {
+        params: Vec::new(),
+        body: arg.clone(),
+        ...
+
+`ClosureData.body` is an owned `Expr`, so every deferral copies the argument's
+whole subtree. 228 instructions a copy, 11,471,717 in all, which is 1.03% of
+this box's interpreted row.
+
+WHY IT IS NOT A FIVE-LINE FIX, checked rather than assumed. `ClosureData` has
+five constructions and three readers, all of the form
+`self.eval(&closure.body, ...)`, which would take an `Rc<Expr>` unchanged. But
+the clone is of an `Expr` the AST owns, so wrapping the FIELD in an `Rc` still
+copies once to build the `Rc`. The copy goes away only if the thing being
+cloned is already shared -- `App { args: Vec<Rc<Expr>> }` in the AST, built once
+by the parser.
+
+That is a narrow AST change: one field of one variant, and the parser is the
+only thing that constructs it. No semantics move, nothing is promoted, and
+unlike the integer lead there is no corpus question in front of it -- a deferred
+argument evaluates to the same value however its expression is stored, and the
+existing differential goldens already say so on every engine.
+
+Sized from the annotated source, which is the instrument that has been right;
+unsized as a saving, which is the distinction this day was about. 11,471,717 is
+what the copying costs, not what removing it returns.
+
 ## 2026-09-17 — the beat rewind's fast path: 23 instructions to 15
 
 `k_beat_iter` is what a compiler-proven beat loop calls between iterations to
