@@ -59,7 +59,28 @@ fn kanso() -> PathBuf {
 /// Stage the library beside the entry that imports it, the way the mem vein
 /// reaches its fixtures, and answer what the run printed and counted.
 fn ran(interp: bool) -> (String, Vec<(String, u64)>) {
-    let stage = std::env::temp_dir().join(format!("kanso-demanded-knot-{}", interp as u8));
+    // ONE STAGE PER CALL, not one per engine. Three tests call this four
+    // times, and `cargo test` runs them on parallel threads: keying the
+    // directory by `interp` alone gave `the_native_engine_...` and
+    // `the_two_engines_agree_...` the same path, and this function removes
+    // that path at both ends. One thread's leading `remove_dir_all` deletes
+    // the library another thread has just staged and is about to run, and
+    // the run fails with no counter ever read.
+    //
+    // It went red on macOS on 2026-09-18 and passed on Linux in the same run,
+    // which is what a race looks like from outside. Reproduced here by
+    // holding the first two calls for 800ms between the write and the run:
+    // the other two then fail with "the run failed", the same shape the
+    // macOS job showed.
+    //
+    // The counter keeps the path LENGTH fixed as well as unique. These three
+    // assertions pin thunk counters, which a path cannot move, but the sibling
+    // spec `a_unique_container_is_extended_in_place` pins allocator counts
+    // that it can, and one habit for both is cheaper than remembering which
+    // is which.
+    static STAGE: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let nth = STAGE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let stage = std::env::temp_dir().join(format!("kanso-demanded-knot-{}-{nth:03}", interp as u8));
     let _ = std::fs::remove_dir_all(&stage);
     std::fs::create_dir_all(&stage).expect("a staging directory");
     std::fs::write(stage.join("demanded.kso"), LIBRARY).expect("the library writes");

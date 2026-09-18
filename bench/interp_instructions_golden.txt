@@ -396,5 +396,26 @@
 # costs in instructions is the rustc that built the binary; this one changes
 # how many ALLOCATIONS happen, which is a count the program decides. A
 # container projection travels when the thing it projects is a count.
-interp_instructions=1138001430
+#
+# 2026-09-18, kanso#1502 on the tree merged with main after kanso#1522, CI's
+# sitting. 1,138,001,430 -> 1,138,001,437, a rise of SEVEN.
+#
+# WHAT SUPPORTS THE NUMBER. Two branches read it independently on the same
+# day: this one, carrying two divisions in Ryu's float rendering, and
+# kanso#1504, caching the innermost beat mark. Neither goes near the
+# interpreted corpus. They ran on different runners -- kanso#1502's was Intel,
+# family 0x6 model 0x6a, which bench/dispatch.txt does not record -- and both
+# read 1,138,001,437 exactly. `interp_allocs` read 2,539,998 on both and on
+# main, which is the check that makes this readable: an allocation counter
+# counts decisions the program makes, and the interpreted corpus is not doing
+# anything different.
+#
+# WHAT DOES NOT. The golden's 1,138,001,430 came from kanso#1522's own PR tree;
+# 1,138,001,437 is what a tree containing that change MERGED reads. That the
+# two differ by seven is reproduced. WHY they differ is not established, and an
+# earlier note on kanso#1504 claiming a pattern of sevens across three trees was
+# withdrawn -- one of its three readings was an artifact of the gate's second
+# count, which kanso#1524 fixes. Layout is the standing guess and it is only a
+# guess.
+interp_instructions=1138001437
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

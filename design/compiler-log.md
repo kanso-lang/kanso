@@ -4421,6 +4421,151 @@ does not when it is a per-byte price. That is a prediction with two readings
 behind it rather than a law, and the next change that moves bytes should be
 expected to break the box's projection again.
 
+## 2026-09-18 — birth through a call, measured, and it is not what the cohort gavel's purpose is waiting on
+
+STATUS.md's cohort row has owed one measurement since 2026-09-16: whether a
+call that returns one record resolves to one birth. The 2026-09-09 entry named
+that widening as the next one and left it to the implementer. This is the
+measurement, taken by running programs rather than by reading the analysis.
+
+The analysis first, because it says what to expect. `born_of` in `src/check.rs`
+handles `Expr::App` with an identifier head in three ways: `if` takes both arms
+and joins them, a field getter takes the base's field, and anything else does
+`let decl = *types.get(name.as_str())?`. That `?` is the whole answer for a
+function call — `types` holds type declarations, a function name is not in it,
+and the call resolves to nothing. The comment above it says so: *a call that
+merely returns a record may hand back something older.*
+
+Five programs, each run through `kanso play` on a release build of
+`30fb1abe`. What each one is refused for is the finding, and the five refusals
+are not the same refusal.
+
+**One. A hole cannot be written outside a build block.**
+
+    fn fresh id
+      node id _
+
+    error[build]: `_` is a hole for a field a `build` block fills; it stands
+    only where a construction's argument goes, inside one
+
+**Two. A call that returns a record is not block-born.** This is the case the
+row's route is about, and it is the only one of the five that widening
+`born_of` would fix.
+
+    fn fresh id
+      node id []
+    build
+      a = fresh "a"
+      a.peers = [b]
+
+    error[build]: `a.peers = ...` writes only block-born values: `a` is not a
+    construction made in this `build` block, so it stays immutable
+
+**Three. A hole cannot escape the block it was written in.**
+
+    fn fresh id
+      build
+        n = node id _
+      n
+
+    error[build]: `_` in `node`'s `peers` is never filled: a hole is filled
+    exactly once before the block freezes
+
+**Four. A lambda lexically inside a build block is outside it for this
+purpose**, which is the shape "N nodes from a list" actually takes.
+
+    build
+      ns = list/to_list (list/map [1 2 3] (i -> node "{i}" _))
+
+    error[build]: `_` is a hole for a field a `build` block fills; it stands
+    only where a construction's argument goes, inside one
+
+**Five. A fill's target parses as a bare name**, so N nodes need N names before
+any analysis gets a say.
+
+    build
+      ns[0].peers = [b]
+
+    error[syntax]: expected a parameter pattern
+
+And the control, so the five refusals are refusals of something rather than of
+everything: two nodes named by hand, filled, and collected into a list runs and
+prints the cycle.
+
+So the answer to the row's question is that birth through a call does not
+resolve today, and that widening it is real and separable work — it fixes the
+second of these and nothing else. What it does not do is reach the gavel's
+purpose. "Cyclic structures sized by data" needs a hole to survive either a
+call or a lambda, and one and three close those two directions with different
+rules, and five closes the indexed route in the grammar before the checker is
+consulted.
+
+That is the branch the row named: the measurement says no, so what the purpose
+needs goes to the ledger as a question about the spelling rather than a build
+anybody can start.
+
+### And `build_cycle.kso` now says what it pins
+
+That fixture had no header. The row's Owes said the golden's header should
+stop claiming four shapes while the checker admits two, and a repo-wide search
+finds that claim in `design/compiler-log.md` and
+`design/memory-frontier-research.md`, both about the memory frontier's shapes,
+and in no golden header anywhere. There was no claim to correct; there was a
+file saying nothing. It now carries what it pins, which two shapes the
+build-hole gavel took back, and the sentence that two names is the largest
+cycle the language admits rather than a choice the fixture made.
+
+Writing it cost a round, for the second time today and for a second reason.
+The header's eleventh line ran to 82 characters and the run stopped with
+`error[formatting]: a line holds at most 80 characters`, stdout empty, which is
+what the mem corpus reported: a stdout mismatch against the golden with an
+empty left side. This morning's fixture failed the same way on a blank line
+between its comment block and the first declaration. Both are the grammar
+refusing the file before a line of it runs, and both look from the test's
+verdict exactly like the change under test being broken. The message says
+which; the verdict cannot.
+
+### The knot spec staged two tests into one directory
+
+The macOS job named a second failing target beside the index count:
+`a_demanded_knot_counts_the_same_on_both_engines`, which landed this morning
+as kanso#1511 and which this branch does not touch. Its message was not in the
+part of that log I read, and the log carries exactly one panic — the index
+one. It passes on Linux, on this container three times out of three, and on
+main's own macOS job. That is what a race looks like from outside, so the code
+was read rather than the verdict.
+
+`ran(interp)` stages its library and entry in
+`temp_dir()/kanso-demanded-knot-{interp}` and calls `remove_dir_all` on that
+path at both ends. THREE tests call it FOUR times, and `cargo test` runs them
+on parallel threads. Printing the path and the thread id says the rest:
+
+    /tmp/kanso-demanded-knot-0   ThreadId(2)   ThreadId(4)
+    /tmp/kanso-demanded-knot-1   ThreadId(3)   ThreadId(4)
+
+Two threads, one directory, destructive on entry. One thread's leading
+`remove_dir_all` deletes the library another has just written and is about to
+run.
+
+Watched red by widening the window rather than by waiting for luck: holding
+the first two calls for 800ms between the write and the run makes the other
+two fail with `the run failed (native)` and `the run failed (oracle)` — a
+target that fails with no counter assertion at all, which is the shape the
+macOS job showed.
+
+The fix is one staging directory per CALL, from an atomic counter, zero-padded
+so the path length stays fixed as well as unique. Length does not matter to
+these three assertions, which pin thunk counters; it matters to the sibling
+spec `a_unique_container_is_extended_in_place`, whose header records a run's
+allocations tracking the length of the path it was handed and macOS staging
+under `/var/folders/...`. One habit for both is cheaper than remembering which
+is which.
+
+What this does not establish is that the race is what macOS hit. The failure's
+own message was never visible to me, and a spec that is green here and red
+there could have had another reason. What is established is that the shared
+directory is real, that it fails under a widened window, and that it is a
+defect either way.
 ## 2026-09-17 — the digit loop carried a value it only needed at the end, and then the tail gave it back
 
 `render_ryu` is 84,209,220 instructions of runbench, 4.58%, 440.7 a float over
@@ -4863,3 +5008,35 @@ rows agreed without an edit, which is the check on that reading: allocation and
 peak counts are decisions the code makes, and they did not move.
 
 The floor is banked at 77.13 after these rows, not before them.
+
+## 2026-09-18 — kanso#1502 on the merged tree, and the seven that two branches agree on
+
+`interp_instructions` re-bases from 1,138,001,430 to **1,138,001,437**, a rise
+of seven on a branch that changes two divisions in Ryu's float rendering and
+goes nowhere near the interpreted corpus.
+
+Every other row in the cost-goldens job read its golden exactly: both codegen
+rows, all five layout rows, `compile_allocs`, and both interpreted memory rows.
+
+What makes the number worth writing down is that it was read twice, on the same
+day, by two branches with nothing in common but their base. kanso#1504 caches
+the innermost beat mark; this one divides differently in a float renderer;
+neither touches what the interpreted corpus runs. They landed on different
+runners — this branch's was Intel, family 0x6 model 0x6a, which
+`bench/dispatch.txt` does not record — and both read 1,138,001,437 to the
+instruction. `interp_allocs` read 2,539,998 on both and on main, which is the
+check that keeps this out of the "real work" column: allocations are decisions
+the program makes, and they did not move.
+
+**What is reproduced, and what is guessed.** The golden's 1,138,001,430 came
+from kanso#1522's own PR tree. 1,138,001,437 is what a tree carrying that
+change *merged* reads. That the two differ by seven is established by two
+independent readings. Why they differ is not.
+
+An earlier note on kanso#1504 claimed a pattern — the same seven across three
+trees at three different absolute values — and that note is withdrawn. One of
+its three readings was the gate's second count, which does not subtract the
+printed line and therefore reported a stable binary as unstable by exactly
+3,015; kanso#1524 fixes it. Two readings of seven are still two readings, and
+they are enough to re-base a row. They are not enough to name a mechanism, so
+none is named here beyond the standing guess that it is layout.
