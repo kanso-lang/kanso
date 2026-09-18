@@ -82,13 +82,16 @@ pub fn run rounds
 ///     18,001   kanso#1515, where the number was first pinned
 ///     16,201   kanso#1516, six a round less
 ///     15,601   kanso#1517, two a round less again
+///     12,001   the frame memory, twelve a round less
 ///
 /// The six are `eval_ident`: it used to build an `Rc<str>` every time it
 /// resolved a name to a reference, and it remembers the answer now, so the six
 /// names each round mentions allocate once for the whole run rather than once
 /// per mention. The two are the tail hop: `grow` and `stack` each tail-call
 /// once a round, and a hop used to clone the whole overload vector where it now
-/// takes a refcount.
+/// takes a refcount. The twelve are `frame_of`, which built a formatted trace
+/// line and a package lookup -- two allocations -- on every entry into every
+/// body, so six body entries a round cost twelve.
 ///
 /// Each time, the number was re-read rather than the assertion widened. A
 /// change in what the ROUNDS cost is exactly what the subtraction exists to
@@ -97,7 +100,7 @@ pub fn run rounds
 /// The 19,201 the copying arm read is from before kanso#1516 and has not been
 /// re-measured under either change. What this spec pins is unchanged either
 /// way: the in-place path costs less per round than the copying one.
-const PER_EXTRA_ROUND: u64 = 15_601;
+const PER_EXTRA_ROUND: u64 = 12_001;
 
 fn kanso() -> PathBuf {
     let mut exe = std::env::current_exe().expect("the test binary has a path");

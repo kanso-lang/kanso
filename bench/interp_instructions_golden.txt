@@ -356,5 +356,15 @@
 # functions both landing in the tens is what layout looks like on a row this
 # size; work would not be the same order for both. interp_allocs and
 # interp_peak_bytes agree with their golden on both branches.
-interp_instructions=1963826376
+# ^ SUPERSEDED: that reading was taken before kanso#1518 landed under this
+#   branch. THE VALUE BELOW IS MAIN'S, carried forward; the merged
+#   reading is CI's.
+#
+# 2026-09-18, kanso#1518 against main at kanso#1517, CI's sitting.
+# 1,963,826,350 -> 1,555,890,579, a FALL of
+# 407,935,771 (-20.7725%).
+# THE FRAME MEMORY AND FOUR RESERVES. This container projected the fall at
+# 410,520,397 and the runner read 407,935,771 -- 0.63% of the delta apart,
+# which is the usual agreement between the two hosts on a difference.
+interp_instructions=1555890579
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
