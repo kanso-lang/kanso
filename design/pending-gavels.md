@@ -86,8 +86,29 @@ name was shown to move the count, three times. The dev row's move is real but
 unexplained, and option 1 would bank it as though it were understood. 3 keeps a
 known, reproducible, one-in-ten draw in a row the objective weighs.
 
-**What is NOT being asked.** Whether to lower the floor: nothing here costs
-welfare. Only which tier the pin covers.
+**What is NOT being asked.** Which tier the pin covers is the question. What it
+does to the language is not; nothing here changes a program's meaning.
+
+**CORRECTION, 2026-09-18.** This entry said the pin costs no welfare, and CI has
+now measured that it does. On the tree merged with kanso#1527 the runner read
+`codegen_instructions_release` at 6,833,786,335 against a golden of
+6,824,133,280 — the pin costs the release row 9,653,055 instructions, and that
+row is a production-side welfare term. The dev row read 596,153,756 against
+596,157,624, a fall of 3,868.
+
+The container had projected the opposite. `-save-temps=obj` read 6,811,830,244
+twice there against 6,813,182,505 three times without it, which is a SAVING of
+about 1.35 million; the runner reads a COST seven times that size, in the other
+direction. So the pin's effect on the row's level does not travel between
+hosts, and only its effect on the row's STEADINESS — the eleven — was ever
+reproduced on both. Option 1 and option 2 both buy steadiness with about
+9.65 million instructions of welfare on the runner. Option 3 buys the eleven
+back and spends nothing.
+
+That changes what option 3 is worth, and it is why the floor now has to be part
+of the answer rather than a footnote to it. Whichever of 1 and 2 is chosen, the
+pull request lowers the floor by what the pin costs, and the reason recorded is
+the measurement above.
 
 ### Does the wall survive the fused operators?
 
