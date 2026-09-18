@@ -127,6 +127,21 @@
 # the tail hop's vector clone, and EXACTLY the container's -174,996 again.
 # interp_peak_bytes 942,210 -> 951,438, a RISE of 9,228 (+0.9794%),
 # against the container's +9,229: one byte apart on a row neither host shares.
-interp_allocs=4810437
-interp_peak_bytes=951438
+#
+# 2026-09-18, kanso#1518 against main at kanso#1517, CI's sitting.
+# 4,810,437 -> 3,879,653, a FALL of
+# 930,784 (-19.3493%).
+# EXACTLY what this container read. Not close: the same integer. An
+# allocation counter counts operations rather than a host, so it travels
+# where an instruction counter only nearly does -- the same law the two
+# hosts showed at -325,263 and -174,996 on kanso#1516 and kanso#1517.
+interp_allocs=3879653
+#
+# 2026-09-18, kanso#1518 against main at kanso#1517, CI's sitting.
+# 951,438 -> 961,165, a RISE of
+# 9,727 (+1.0223%).
+# The frames table: one Frame per declaration the run enters, held for the
+# run. A weighed term, paid knowingly against 407,935,771 instructions and
+# 930,784 allocations. The container read 961,231, sixty-six higher.
+interp_peak_bytes=961165
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

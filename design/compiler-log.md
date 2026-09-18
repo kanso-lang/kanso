@@ -4052,3 +4052,37 @@ THE PEAK ROSE 9,727 BYTES, 1.02%, and that is the frame memory rather than the
 reserves: one `Frame` per declaration the run enters, held for the run. It is a
 term the objective weighs and it is being paid for knowingly — 392 million
 instructions and 930,784 allocations against ten kilobytes held.
+
+## 2026-09-18 — kanso#1518, CI's rows: the interpreted run falls 20.77%
+
+    interp_instructions   1,963,826,350 -> 1,555,890,579   -407,935,771  -20.77%
+    interp_allocs             4,810,437 ->     3,879,653       -930,784  -19.35%
+    interp_peak_bytes           951,438 ->       961,165         +9,727   +1.02%
+
+TWO THINGS IN THIS SITTING ARE WORTH MORE THAN THE FALL.
+
+**The allocation row is EXACTLY what this container read.** Not close — the same
+integer, 3,879,653, on two machines with different glibc and different rustc
+whose absolute instruction rows cannot be compared at all. That is the third
+time this has held: kanso#1516 and kanso#1517 each had their allocation deltas
+agree to the unit across the same two hosts. A counter of operations travels
+between machines where a counter of instructions only nearly does, and "nearly"
+is measurable here — the container projected the instruction fall at 410,520,397
+and the runner read 407,935,771, 0.63% of the delta apart.
+
+**Every layout row read its golden EXACTLY, and that was not the expectation.**
+`compile_instructions`, `entry_instructions`, `library_instructions`,
+`startup_instructions` and `emit_instructions` all agreed on a branch that
+rewrites a large part of `src/eval.rs` — a new table on `Interp`, four
+signatures widened to `'a`, a memoized function and four `with_capacity` calls.
+The standing prior in CLAUDE.md is that `compile_instructions` USUALLY moves on
+an edit to the compiler's own Rust, because src/eval.rs is the compiler and its
+bytes move. It did not move here, and neither did the other four.
+
+That is a data point for the prior rather than against it — the paragraph
+already allows it, on the strength of a two-line float-rendering edit that left
+the row byte-identical at kanso#1285. This is a much larger edit doing the same
+thing, so the size of a diff is not what predicts the layout rows. What predicts
+them is not known, and this entry does not guess.
+
+The floor is banked after these rows, never before.
