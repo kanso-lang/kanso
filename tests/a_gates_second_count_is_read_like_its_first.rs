@@ -32,6 +32,17 @@
 //! the first reading and not the second. That is why this spec reads for the
 //! CALL rather than for the text of the pipeline: the defect is not a missing
 //! subtraction anybody could see, it is one call site out of two.
+//!
+//! THE OTHER SIX GATES WERE SWEPT BY HAND when this was written, for the wider
+//! property this spec only partly reaches: that the second reading measures
+//! the same quantity as the first. All five that anchor an inclusive frame
+//! anchor the SAME frame in both readings. `emit_instructions.sh` reads both
+//! through one `emit_cost()`. `codegen_instructions.sh` sums the child tree
+//! rather than anchoring, and counts the processes each reading saw, because a
+//! second reading that sees fewer of them is not measuring the same thing --
+//! which is this defect's shape, guarded against before it had a name. So the
+//! printed line was the only asymmetry in the tree on 2026-09-18, and a gate
+//! that grows a new one grows it in a form this spec cannot see.
 
 use std::path::{Path, PathBuf};
 
