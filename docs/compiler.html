@@ -2407,6 +2407,22 @@ memcmp        48,165,663 ->  46,830,275    -1,335,388</code></pre>
 
 <p>five figures for this counter were withdrawn getting here &#8212; 19.3 million, forty million, 47.2 million, 0.205%, and a withdrawal of the last one that was itself wrong. four came from dividing a measured total by a measured count. the fifth came from reading a caller list as belonging to the entry above it rather than below. the readings that survived were a differential and an annotated line, and those are the two instruments worth using.</p>
 
+<p><strong>so the day ends on a number nobody had looked for.</strong> the walk&#8217;s expense is <code>Value::clone</code>, and what that clone does depends entirely on which variant it copies. of the interpreter&#8217;s value kinds, maps, errors, lists, bytes, records, subtypes, function references, closures, partials, descriptors and thunks all sit behind a reference count, so copying one is a bump; floats and the five nullary values copy nothing. <strong>two variants allocate</strong>: a string, and an integer, which keeps its magnitude on the heap.</p>
+
+<p>counted by hand over the corpus, with a <code>Clone</code> written in place of the derived one:</p>
+
+<pre><code>value clones     1,555,866
+  integers         610,763   39.3%   allocates
+  strings          137,732    8.9%   allocates, 4.1 bytes each
+  everything else  807,371   51.9%   a bump, or nothing</code></pre>
+
+<p><strong>half of every copy this interpreter makes goes to the allocator, and the integers are four and a half times the strings.</strong> every one of the 610,763 fits in a machine word &#8212; not one of them needs the wide representation it pays for. the strings average four bytes, so what their copy costs is the allocator rather than the copying.</p>
+
+<p>the walk&#8217;s own hits have the same shape: 41.0% integers, 9.5% strings, 45.8% a bump, 3.7% nothing. which settles an ordering. an inline machine integer with the wide form on overflow reaches 41% of the walk&#8217;s copies and the same 39% of every other copy in the run, because it changes the value rather than a path. answering a reference into the frame instead of a copy reaches the 46% that are already only a bump, where the saving per copy is smallest, and costs a signature change through every caller that needs an owned value. integers first.</p>
+
+<p><strong>and writing the fixture before the code found the thing that would have bitten it.</strong> the native build is int64 and refuses past the boundary with a clear diagnostic; the interpreter answers exactly. that divergence is allowed, and the book pins native&#8217;s half of it. the interpreter&#8217;s own answers there are pinned nowhere and cannot be: the behavioural corpus runs every fixture on both engines and requires them to agree, so it cannot hold a program one of them refuses. the exact place a machine-word fast path goes wrong &#8212; promoting one step late, printing a wrapped number rather than raising &#8212; is a place nothing in the tree watches. that is a gap in the corpus rather than a fact about integers, and where such a golden should live is a question the project has to settle before the change is worth making.</p>
+
+
 <p>so the cheaper change is not a faster walk but no walk. whether a name can be a local at a given site is decidable where that site is compiled, and skipping the walk for the ones that cannot needs no slots, no upvalue analysis and no change to how a closure captures &#8212; the three things that make the larger change large. it is worth about half as much for a small fraction of the work.</p>
 
 <p>that does not retire the index: the 1,590,733 hit-frames stay, and only an index removes those. it orders them. skip first, measure what is left, and let the remainder make its own case.</p>
