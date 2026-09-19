@@ -5506,3 +5506,48 @@ says they are.
 Recorded rather than left, because the header's sentence has been read three
 times now as a ready-made diagnosis, including once in the section above this
 one before the instrumentation ran.
+
+## 2026-09-19 — the carry's width is the property, and one test says not yet
+
+The eleven were priced one at a time, with a probe that lets a named imported
+group keep its carry. Alone, every one of them reads the baseline on both
+columns: `arena_peak_bytes` 38,604,496 and 0.26 seconds. So the cost is a
+pairing rather than a group, and the pairs separate cleanly:
+
+    sha256/compress/4 + sha256/turned/3     35,458,768   1.01s
+    sha256/blocked/3  + sha256/digested/4   35,458,768   0.26s
+    the other seven                         38,604,496   0.27s
+    all eleven                              35,458,768   0.95s
+
+**The whole peak saving sits with the cheap pair.** `blocked` and `digested`
+give the entire 3,145,728 bytes at baseline wall time; `compress` and `turned`
+give the same bytes and all of the cost. Under callgrind the cheap pair reads
+1,841,054,483 instructions against main's 1,840,276,313 — +778,170, +0.0423% —
+with `allocs` up 251 and `alloc_bytes` up 20,080. Scored: **77.2707 to 77.6807,
++0.4100.**
+
+The first pair carries TWO positions each and the second ONE. So the width of a
+carry reads the property the path prefix was standing in for: evacuating one
+slot a lap is what the tier is for, and evacuating several is where a library
+loop starts copying its caller's work. It is a proxy for bytes copied per
+iteration, which nothing in the pass can measure, and it is a proxy the loop's
+own shape supplies rather than its file name. Built as "an imported group keeps
+a carry of at most one position": 1,841,081,961 instructions and the same
+35,458,768, scored 77.2707 to 77.6806. The five extra groups it admits beyond
+the named pair cost 27,478 instructions between them.
+
+**And it does not ship tonight, because a test says no and the test is about
+safety.** `beat::tests::json_decode_loops_stay_conservative` goes red: the rule
+admits `json/array_open/3` and `json/obj_open/3`, and that test asserts only the
+byte-builder encoders may rewind, because "scanners threading records or lists
+stay on the grow-only arena". A carried slot is evacuated before the rewind,
+which is what the carry tier is for, so the rule may well be safe there — but
+that is an argument, and the test is a recorded judgement about freeing memory
+under a live reference. The other 61 tests pass and the differential corpus is
+green.
+
+The measurement says those two json groups contribute nothing either way: the
+seven non-sha256 groups read the baseline on both columns. So the whole +0.41 is
+available without touching them, and what the next session owes is a rule that
+admits the sha256 pair on a property rather than by name, leaves json's scanners
+where that test wants them, and says why the difference is real.
