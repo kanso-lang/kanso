@@ -2675,7 +2675,19 @@ error[name]: unknown name `builders/run`
 
 <p>a fourth change leaves the comparing alone. memcmp reads 46,087,562 then 46,118,166 across the &#167;97 pair, +0.066%. a draft of this paragraph had it falling 1,484,175, which was a debug-info profile read against a release one &#8212; two build configurations rather than two trees. compared inside its own sitting it has not moved, and the three changes in &#167;96 become four.</p>
 
-<h2 id="framedback"><span class="sec-num">100</span>the frame handed back</h2>
+<h2 id="rowtwice"><span class="sec-num">100</span>one row, read twice</h2>
+
+<p>a golden carried the same row twice. two branches did it the same way: a merge brought main&#39;s value forward, wrote a header block saying which reading it was, and appended it under the row already there instead of replacing it.</p>
+
+<p>the reader adds rows into a map keyed by name, with <code>+=</code>. that is right and has to stay &#8212; a cost golden holds one row per sample and the gate sums them, and one objective counter can be made of several gate keys. what the <code>+=</code> cannot tell apart is a second sample from a second copy. the gate read 13,665,824,705, exactly the two values added.</p>
+
+<p>the counter sweep, the compile sweep and all three page gates ran green on both branches. none of them reads a golden for a repeated key: they compare a measured row against the file, and when the file answers with a sum they compare against the sum.</p>
+
+<p>what did speak was the spec that replays the objective&#39;s source list, and what it said was that the LINK was wrong or a pool had joined the sum. the link was fine and no pool had joined anything. that spec compares totals, so a doubled row arrives as a wrong total and it names the last thing that could produce one. two branches sat red on a message pointing three directories away from the duplicated line.</p>
+
+<p>the new spec reads the trend gate&#39;s own list of goldens and asserts no counter name appears twice in one file, reporting the file, the name and the count. it was watched red by planting the fault, and the invariant was checked against the tree first: all twenty-nine goldens the gate names already hold at most one row per counter. it does not check values. whether a row holds the right number is what the gates are for; this checks that there is one of it to read, which is the property a merge breaks and no measurement can restore.</p>
+
+<h2 id="framedback"><span class="sec-num">101</span>the frame handed back</h2>
 
 <p>&#167;99 kept the score buffer because nothing consumes it. the bindings buffer is the other half and cannot be kept the same way: it is moved into the environment frame, and the body needs it. what can be taken back is the frame itself, once the body has finished with it.</p>
 
