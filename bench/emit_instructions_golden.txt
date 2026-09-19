@@ -115,6 +115,11 @@
 # readings to the instruction, across two CI jobs on two different trees,
 # which is what `-Wl,-plugin-opt=jobs=1` bought.
 #
+# 2026-09-18, kanso#1502 on the tree merged with main, CI's sitting.
+# 60,196,725 -> 60,206,729, a RISE of 10,004 (+0.0166%).
+# LAYOUT. These rows carry runtime.c's bytes rather than compiling it, and
+# every binary's `.text` grew 32 bytes on this change; the moves are all under
+# two hundredths of a per cent.
 # 2026-09-18, kanso#1510 (kanso#1484 rebuilt) on the tree merged with main,
 # CI's sitting. 60,196,725 -> 59,636,068, a FALL of 560,657 (-0.9314%).
 # The emitter's own share of the same saving: it asked the same question and
@@ -135,12 +140,28 @@
 # carried forward: kanso#1509 moved this row on its own and what this branch
 # adds on top of it has not been measured, so the merged reading is CI's.
 #
+# 2026-09-18, kanso#1502 on the tree merged with main after kanso#1509,
+# CI's sitting. 52,115,454 -> 52,125,468, a RISE of 10,014 (+0.0192%).
+# LAYOUT. The two divisions this branch merges live in float rendering,
+# which none of these routes runs: three are `kanso check`, `emit_ir`
+# stops before the backend, and the interpreted start-up links the runtime
+# without rendering a float. What moved is where the code sits. The second
+# reading in the same job matched the first to the instruction.
 # 2026-09-18, kanso#1510 (kanso#1484 rebuilt) on the tree merged with main
 # after kanso#1509, CI's sitting. 52,115,454 -> 51,554,407, a FALL of
 # 561,047 (-1.0765%). This is a route the removed derivation runs, and the saving lands here.
 # The second reading in the same job matched the first to the instruction.
 #
 # 2026-09-18, re-merged onto main after kanso#1510. THE VALUE BELOW IS MAIN'S,
+# carried forward: kanso#1510 moved this row and what this branch adds on top
+# has not been measured, so the merged reading is CI's.
+#
+# 2026-09-18, kanso#1502 on the tree merged with main after kanso#1510,
+# CI's sitting. 51,554,407 -> 51,542,361, a FALL of 12,046
+# (-0.0234%). LAYOUT. The two divisions this branch merges are in float
+# rendering and none of these routes renders a float. All six fell, where
+# the sitting before kanso#1510 landed had the same six rising: one layout
+# term, opposite sign, which is what a shifted binary looks like.
 # carried forward: kanso#1510 moved this row on its own and what this branch
 # adds on top of it has not been measured, so the merged reading is CI's.
 #
@@ -148,15 +169,42 @@
 # CI's sitting. 51,554,407 -> 51,543,885, a FALL of 10,522
 # (-0.0204%). LAYOUT. `codegen::emit_ir` does not run the interpreter at all.
 #
+#
+# 2026-09-18, re-merged onto main after kanso#1516. THE VALUE BELOW IS MAIN'S,
+# carried forward; the merged reading is CI's.
 # 2026-09-18, kanso#1516 on the tree merged with main, CI's sitting.
 # 51,546,788 -> 51,554,663, a RISE of 7,875 (+0.0153%).
 # LAYOUT. src/eval.rs is the compiler, so its bytes move and every row that
 # runs the compiler moves with them; none of these routes evaluates a name,
 # because all four stop before the interpreter and the fifth is the emitter.
 #
+# 2026-09-18, kanso#1502 on the tree merged with main after kanso#1516,
+# CI's sitting. 51,554,663 -> 51,543,783, a FALL of
+# 10,880 (-0.0211%).
+# LAYOUT. src/runtime.c is include_str!'d into the compiler (src/main.rs)
+# and digested into a constant (src/hash.rs), so editing it moves 450,100
+# bytes of the compiler's own .rodata and every route that runs the compiler
+# moves with it. None of these five routes executes the runtime: three stop
+# before codegen, the fourth writes IR, the fifth starts the interpreter.
+# ^ SUPERSEDED: that reading was taken before kanso#1517 landed under this
+#   branch. THE VALUE BELOW IS MAIN'S, carried forward; the merged
+#   reading is CI's.
+#
 # 2026-09-18, kanso#1517 on the tree merged with kanso#1516, CI's sitting.
 # 51,554,663 -> 51,451,897, a FALL of 102,766 (-0.1993%).
 # LAYOUT. `codegen::emit_ir` does not run the interpreter.
+#
+# 2026-09-18, kanso#1502 on the tree merged with main after kanso#1517,
+# CI's sitting. 51,451,897 -> 51,457,106, a RISE of
+# 5,209 (+0.0101240%).
+# LAYOUT. src/runtime.c is include_str!'d into the compiler (src/main.rs)
+# and digested into a constant (src/hash.rs), so editing it moves 450,100
+# bytes of the compiler's own .rodata. None of these routes executes the
+# runtime: three stop before codegen, the fourth writes IR, the fifth
+# starts the interpreter.
+# ^ SUPERSEDED: that reading was taken before kanso#1520 landed under this
+#   branch. THE VALUE BELOW IS MAIN'S, carried forward; the merged
+#   reading is CI's.
 #
 # 2026-09-18, kanso#1520 against main at kanso#1519, CI's sitting.
 # 51,451,897 -> 51,456,464, a RISE of 4,567 (+0.0089%).
@@ -170,4 +218,11 @@
 # 2026-09-18, kanso#1543. 51,617,476 -> 51,619,793, +2,317. Layout: this gate
 # anchors on `codegen::emit_ir` and the diff is in `eval`. Counted twice in
 # the job, identical both times.
-emit_instructions=51619793
+# 2026-09-19, kanso#1502 on the tree merged after kanso#1543 and kanso#1547,
+# CI's sitting. emit_instructions 51,619,793 -> 51,616,373, a move of -3,420.
+#
+# 2026-09-19, kanso#1502 re-merged onto main after kanso#1552 and kanso#1553,
+# CI's sitting on run 35419502516. emit_instructions 51,616,373 -> 51,618,058, +1,685 (+0.0033%).
+# `codegen::emit_ir` inclusive, in the compiler's own process. Layout again:
+# the emitter writes the same IR either way. `emit_again` read 51,618,058.
+emit_instructions=51618058

@@ -3332,6 +3332,18 @@ KValue k_keyed_field(KValue v, const char* name) {
 }
 
 /* ryu d2s tables (adams, PLDI 2018): 125-bit multipliers, generated exactly */
+
+/* Powers of a hundred, for taking `vr` down in one step once the trip count
+   is known. Nine entries: the loop below removes two digits a trip and `vr`
+   starts with at most twenty. A u64 is below 1.9e19, so nine pairs is the
+   most that can come off and index nine is the last the step reads. The
+   table was written with nine entries first and the differential harness
+   found the read past the end before anything was measured. */
+static const uint64_t RYU_POW100[10] = {
+    1ULL, 100ULL, 10000ULL, 1000000ULL, 100000000ULL, 10000000000ULL,
+    1000000000000ULL, 100000000000000ULL, 10000000000000000ULL,
+    1000000000000000000ULL,
+};
 #define RYU_POW5_BITCOUNT 125
 #define RYU_POW5_INV_BITCOUNT 125
 static const uint64_t RYU_POW5[326][2] = {
@@ -4095,14 +4107,37 @@ static int ryu_d2d(double f, char* dig, int* e10) {
            the same sixteen instructions a trip (three multiply-highs, three
            shifts, a compare and the branch), so a trip that takes two digits
            is worth two that take one. */
+        /* TWO DIVISIONS A TRIP, NOT THREE. The loop only needs `vp` and `vm`
+           to decide whether another pair comes off; `vr` is carried through
+           it and read once at the end. Three divide-by-hundreds a trip cost
+           twenty-one instructions on this box, of which seven are moves
+           shuttling the three values around the back edge -- the 2026-09-14
+           entry named those seven and left them. Dropping `vr` out of the
+           loop takes one division and its pair of moves with it, and the one
+           variable division at the bottom is paid once a float rather than
+           5.35 times.
+
+           `round_up` is the top digit of the LAST pair removed, which is
+           `(vr / 100^(pairs-1)) % 100 >= 50` -- the same value the last trip
+           of the old loop wrote. */
+        int pairs = 0;
         for (;;) {
             uint64_t vpd100 = vp / 100, vmd100 = vm / 100;
             if (vpd100 <= vmd100) break;
-            uint64_t vrd100 = vr / 100;
-            uint32_t vrm100 = (uint32_t)(vr % 100);
-            round_up = vrm100 >= 50;
-            vr = vrd100; vp = vpd100; vm = vmd100;
-            removed += 2;
+            vp = vpd100; vm = vmd100;
+            pairs++;
+        }
+        if (pairs) {
+            /* ONE variable division, not two. `RYU_POW100[pairs]` is
+               `RYU_POW100[pairs - 1] * 100`, so dividing by the smaller one
+               first leaves both remaining steps with a CONSTANT divisor, and
+               a constant divisor is a multiply-high rather than a `div`. The
+               first shape of this step divided by both table entries and gave
+               back most of what the loop saved. */
+            uint64_t q = vr / RYU_POW100[pairs - 1];
+            round_up = (uint32_t)(q % 100) >= 50;
+            vr = q / 100;
+            removed += 2 * pairs;
         }
         for (;;) {
             uint64_t vpd = vp / 10, vmd = vm / 10;
