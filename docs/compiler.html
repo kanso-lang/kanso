@@ -2753,6 +2753,28 @@ error[name]: unknown name `builders/run`
 
 <p>the interpreted row has now fallen from 1,075,174,600 to 923,151,727 over ten builds and five wins, 14.1%. the objective moved by a hundredth of a point for it, for the third entry running: that term is more than 136% improved against its baseline and sits under a satiating curve, so the next six million buys almost nothing. a change wanting to move the number has to find production work or an unsatiated term.</p>
 
+<h2 id="losersbuffer"><span class="sec-num">103</span>the third pooling, which does not pay</h2>
+
+<p>&#167;102 left the third of these. the candidate loop swaps the working vector with the outgoing best&#39;s, so when the winner&#39;s goes into the frame the other falls out of scope at the end of the iteration. pooling it is the same trick a third time. it costs.</p>
+
+<pre>  base     972,776,892
+  spare    976,125,124   +3,348,232   +0.34%
+
+                        base         spare       delta
+  interp_allocs       1,063,795    1,041,355    -22,440
+  interp_alloc_bytes 75,247,333   69,333,733  -5,913,600
+  interp_peak_bytes     834,079      834,303       +224</pre>
+
+<p>three readings of each arm, interleaved, each arm repeating its own figure exactly. and it does save the allocations it set out to save, which is what makes the result worth keeping: 22,440 pairs gone, and the row still up by 3.35 million. at the 40.7 instructions a pair &#167;102 measured those pairs are worth about 914,000, so the bookkeeping cost something over four million.</p>
+
+<p>the asymmetry is the whole answer. the spare has to be taken out and put back on every dispatch &#8212; 175,254 of them &#8212; to serve a reuse that fires on 22,440. about 24 instructions a dispatch, against a saving on one dispatch in eight. the two poolings that worked pay their bookkeeping on the same frames they save, one for one.</p>
+
+<p>the ceiling was measured before the build and was still too kind. an instrumented binary counted 38,294 dispatches leaving the working buffer with capacity, which projected about 1.56 million; the real saving was 22,440 pairs, because some of those buffers had capacity they recycled within the dispatch rather than allocated. so the count was 70% high before the overhead was counted at all.</p>
+
+<p>a ceiling computed from a count bounds the saving and says nothing about what collecting it costs. the two changes before this one happened to have negligible collection cost, and that is a fact about them rather than about the technique.</p>
+
+<p>three poolings attempted, two kept. the score buffer, the frame&#39;s vector and the frame&#39;s node took the interpreted row from 1,075,174,600 to 923,151,727. the loser&#39;s buffer is the one that does not pay, and this section is here so it is not tried a fourth time.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>

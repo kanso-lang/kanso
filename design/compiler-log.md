@@ -5012,3 +5012,56 @@ improved against its baseline, so six million more buys a hundredth of a point.
 That is the model working as designed rather than failing, and it is the third
 entry in a row to say so. A change wanting to move the number has to find
 production work or an unsatiated term.
+
+---
+
+## 2026-09-19 — pooling the loser's buffer: built, measured, declined
+
+**BUILT AND DECLINED.** kanso#1545's entry left the third of these: the
+candidate loop swaps the working vector with the outgoing best's, so when the
+winner's goes into the frame the other falls out of scope at the end of the
+iteration. Pooling it is the same trick again. It costs.
+
+    base     972,776,892
+    spare    976,125,124   +3,348,232   +0.34%
+
+Three readings of each arm, interleaved, each arm repeating its own figure
+exactly. The arms sit at `/tmp/wt-basers` and `/tmp/wt-losers`, named to the
+same length.
+
+**AND IT DOES SAVE THE ALLOCATIONS IT SET OUT TO SAVE**, which is what makes
+the result worth keeping:
+
+                          base         spare       delta
+    interp_allocs       1,063,795    1,041,355    -22,440
+    interp_alloc_bytes 75,247,333   69,333,733  -5,913,600
+    interp_peak_bytes     834,079      834,303       +224
+
+22,440 allocate-and-free pairs gone, and the row still went UP by 3.35
+million. At the 40.7 instructions a pair kanso#1545 measured, those pairs are
+worth about 914,000, so the bookkeeping cost something over four million.
+
+**THE ASYMMETRY IS THE WHOLE ANSWER.** The spare has to be taken out and put
+back on EVERY dispatch — 175,254 of them — to serve a reuse that fires on
+22,440. About 24 instructions a dispatch of moves and drops, against a saving
+on one dispatch in eight. The two changes that worked did not have this shape:
+kanso#1543 and kanso#1545 pay their bookkeeping on the same frames they save,
+so the ratio is one to one.
+
+**THE CEILING WAS MEASURED FIRST AND WAS STILL TOO KIND.** An instrumented
+build counted 38,294 of 175,254 dispatches leaving the working buffer with
+capacity, which projected about 1.56 million. The real saving was 22,440 pairs,
+not 38,294: some of those buffers had capacity they had recycled within the
+dispatch rather than allocated. So the projection was 70% too high on the
+count before the overhead was counted at all.
+
+A ceiling computed from a count is an upper bound on the SAVING and says
+nothing about the COST of collecting it. Both of the previous two changes
+happened to have negligible collection cost and that is not a property of the
+technique.
+
+**WHERE THE DISPATCH LOOP STANDS.** Three poolings attempted, two kept. The
+score buffer (kanso#1540), the frame's vector (kanso#1543) and the frame's node
+(kanso#1545) together took the interpreted row from 1,075,174,600 to
+923,151,727 on CI's readings. The loser's buffer is the one that does not pay,
+and this entry is here so it is not tried a fourth time.
