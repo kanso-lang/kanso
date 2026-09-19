@@ -5542,3 +5542,42 @@ looking for what got worse. The tree is a rise over main's 77.2665986848222 and
 always was.
 
 Both numbers now come from CI's sitting.
+
+---
+
+## 2026-09-19 — the relink seven, a fifth time, against a baseline it was projected onto
+
+`interp_instructions` 932,183,914 -> **932,183,921** on kanso#1504's merged
+tree. A RISE of SEVEN, and this one was written down before CI measured it.
+
+When kanso#1540 moved the baseline under this branch, the golden was rebased to
+main's 932,183,914 plus seven and the header said what that was:
+
+> So 932,183,921 is a PROJECTION off the fifth baseline, not a reading. Four
+> confirmations make it a good one and that is still not a measurement: CI
+> measures this tree, and a fifth agreement is worth having on the record where
+> a fifth assumption is worth nothing.
+
+CI read 932,183,921. The five now stand as:
+
+     995,837,536  ->    995,837,543   +7
+     975,944,763  ->    975,944,770   +7
+     957,583,234  ->    957,583,241   +7
+     939,042,794  ->    939,042,801   +7
+     932,183,914  ->    932,183,921   +7
+
+The baselines span 63,653,622 instructions and the residue has not moved by
+one. `interp_allocs` reads 1,309,483 and `interp_peak_bytes` 833,463, both
+byte-identical to main, so nothing the interpreter COUNTS changed. The seven is
+the relink, and a prediction that named its value in advance and was then
+measured is a stronger form of that claim than four agreements found after the
+fact.
+
+**AND THE ROW IS PRICED HERE BECAUSE THE TREND GATE ASKED.** It reported
+`interp_instructions` UNPRICED — worsened or re-based with no sentence in this
+branch's log delta naming it and the value it landed on — which is the gate
+doing exactly its job: the movement is fine and the silence was not.
+
+`emit_instructions` 51,617,476 -> 51,620,167 and the two codegen rows moved with
+the same relink; `work_runbench` 1,821,933,936 -> 1,804,998,570 and
+`work_escapebench` 84,780,592 -> 75,228,606 are what this branch is for.
