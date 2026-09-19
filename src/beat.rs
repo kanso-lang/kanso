@@ -514,48 +514,6 @@ fn is_chain(
     }
 }
 
-/// Positions a self-tail group threads hand-to-hand: every self-tail call, in
-/// every arm, passes the bare parameter that sits at that position, and no arm
-/// rebinds the name. The value entering iteration n+1 is then the value the
-/// ENTRY supplied, allocated by the caller and so below the loop's mark — which
-/// is the property `beat_loops`' `std/`/`lib/` prefix is standing in for. A
-/// threaded position must not be evacuated: copying it every iteration copies
-/// the caller's invariant source, which is what made the 2026-09-01 removal of
-/// that prefix cost a 0.4-second program ten minutes.
-///
-/// A group with no self-tail call threads nothing, because there is no edge to
-/// prove it on.
-fn threaded_positions(program: &Program, name: &str, arity: usize) -> Vec<usize> {
-    let mut ok = vec![true; arity];
-    let mut saw = false;
-    for decl in program.fns.iter().filter(|d| d.name == name && d.params.len() == arity) {
-        let locals = local_binds(decl);
-        for tail in tail_exprs(decl.body.last()) {
-            let Expr::App { head, args, piped: false, .. } = tail else { continue };
-            let Expr::Ident(callee, _) = head.as_ref() else { continue };
-            if callee != name || args.len() != arity {
-                continue;
-            }
-            saw = true;
-            for (i, arg) in args.iter().enumerate() {
-                let bare = match (arg, decl.params.get(i)) {
-                    (Expr::Ident(used, _), Some(Pattern::Var(own, _))) => {
-                        used == own && !locals.contains_key(used.as_str())
-                    }
-                    _ => false,
-                };
-                if !bare {
-                    ok[i] = false;
-                }
-            }
-        }
-    }
-    match saw {
-        false => Vec::new(),
-        true => (0..arity).filter(|&i| ok[i]).collect(),
-    }
-}
-
 /// The self-tail argument positions the boundary rule rejects — the ones a
 /// carry beat must evacuate. Sorted and deduplicated.
 fn crossing_positions(
@@ -2486,6 +2444,21 @@ mod tests {
         // accumulator can dangle across a rewind. The string scanners share
         // the licence but not the entry: they are reached by a tail call,
         // and a demoted entry buys a plain beat, never a carried one.
+        //
+        // TWO OPENERS JOINED ON 2026-09-19, and the reason above is not about
+        // what they carry. `array_open/3` and `obj_open/3` are the
+        // whitespace skips in front of a bracket: `array_open cs cs[p + 1]
+        // (p + 1)`. Slot 0 is `cs`, the subject, and it is THREADED — the
+        // analysis says so, and a threaded slot is never carried. What they
+        // carry is slot 1, one character read out of that list, a fresh
+        // value a lap. The accumulator the comment above keeps out is not in
+        // either of them.
+        //
+        // They were kept out by the `std/`/`lib/` path prefix rather than by
+        // any of that, and the prefix went on 2026-09-19 for a rule about the
+        // loop's own shape. Measured on runbench, letting each imported group
+        // carry one at a time, these two move neither column: peak 38,604,496
+        // and 0.26 seconds, the baseline to the byte.
         let program = crate::compile_module(std::path::Path::new("lib/json"), false).unwrap();
         let inference = infer::infer(&program);
         let loops = beat_loops(&program, &inference, &crate::linear::in_place_pushes(&program));
@@ -2499,10 +2472,16 @@ mod tests {
         // so the cycle is not a beat: no bracket, no rewind, nothing to free.
         assert_eq!(
             licensed,
-            vec![("encode_items".to_string(), 3), ("encode_pairs".to_string(), 3)],
-            "only the byte-builder encoders may rewind; the escaper allocates \
-             nothing, and scanners threading records or lists stay on the \
-             grow-only arena"
+            vec![
+                ("array_open".to_string(), 3),
+                ("encode_items".to_string(), 3),
+                ("encode_pairs".to_string(), 3),
+                ("obj_open".to_string(), 3),
+            ],
+            "the byte-builder encoders rewind, and so do the two openers, whose \
+             carried slot is one character rather than an accumulator; the \
+             escaper allocates nothing, and a scanner that threads a record or \
+             a list still keeps the grow-only arena"
         );
     }
 

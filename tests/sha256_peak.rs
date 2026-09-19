@@ -57,8 +57,8 @@ fn peak_bytes(n: u64) -> u64 {
         .unwrap_or_else(|| panic!("no arena_peak_bytes in:\n{said}"))
 }
 
-/// Twice the message, more than twice the arena. A streaming hash would
-/// read the same number twice here, and when one does this assertion is the
+/// Twice the message, more than twice the arena. A streaming hash would read
+/// the same number at every size, and when one does this assertion is the
 /// thing to delete.
 ///
 /// Until 2026-09-07 the pins were 7,340,032 at 1,024 bytes and 14,680,064 at
@@ -82,16 +82,40 @@ fn peak_bytes(n: u64) -> u64 {
 /// rose 2,621,472 -> 5,242,912. Summed, the smaller message holds 786,448
 /// bytes more and the larger 5,767,168 less. Both are placement, and both
 /// are still a peak that grows with the message.
+///
+/// RE-PINNED AGAIN 2026-09-19, and this time a third of the retention went.
+/// `beat_loops` used to strip the carry from every group whose file begins
+/// `std/` or `lib/`, which took `sha256/blocked` and `sha256/digested` out of
+/// the carry tier and left every block's schedule and working words live to
+/// the end of the hash. The rule reads the loop's own shape now -- an imported
+/// group keeps a carry of at most one position -- and those two keep theirs.
+/// Across the range:
+///
+///        bytes      before        after
+///       16,384   6,291,472    3,145,744
+///       32,768   9,437,200    3,145,744
+///       65,536  19,922,976    7,340,064
+///      131,072  32,505,888    7,340,064
+///      262,144  75,497,520   24,117,296
+///
+/// Two to four times less, and the doubling from 65,536 to 131,072 now costs
+/// nothing at all. THE DEFECT IS NOT GONE: 262,144 still reads three times
+/// 131,072, and per message byte the hash still holds 92 bytes where it held
+/// 288. The header above projects the site's 1,604,098-byte wasm blob at
+/// roughly eleven gigabytes of live arena; that projection is nearer three and
+/// a half now, which is an improvement and not a fix.
 #[test]
 fn a_hash_holds_every_block_it_has_read() {
     let short = peak_bytes(65_536);
     let long = peak_bytes(131_072);
+    let longer = peak_bytes(262_144);
 
-    assert_eq!(short, 19_922_976, "the 65,536-byte peak moved");
-    assert_eq!(long, 32_505_888, "the 131,072-byte peak moved");
+    assert_eq!(short, 7_340_064, "the 65,536-byte peak moved");
+    assert_eq!(long, 7_340_064, "the 131,072-byte peak moved");
+    assert_eq!(longer, 24_117_296, "the 262,144-byte peak moved");
     assert!(
-        long > short,
-        "the peak stopped growing with the message: {short} at 65,536 bytes \
-         and {long} at 131,072"
+        longer > long,
+        "the peak stopped growing with the message: {long} at 131,072 bytes \
+         and {longer} at 262,144"
     );
 }

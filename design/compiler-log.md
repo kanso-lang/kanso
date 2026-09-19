@@ -5315,3 +5315,82 @@ frame filter were both built on a suspicion that the code would have refuted,
 and this one was refuted for the price of reading eighty lines of IR. The lead
 stays open and its shape has changed: what to attack in the encoder is the
 appending path, and nothing here says that path is wasteful.
+
+## 2026-09-19 — the carry tier stops reading a file path
+
+`beat_loops` decided which imported loops may evacuate their slots and rewind by
+asking whether the declaration's `file` begins `std/` or `lib/`. `file` is the
+field error origins are built from, a path meant for a diagnostic, and it was
+deciding a program's memory: the same package under a directory called `lib`
+compiled to one that never reclaimed a block, and one directory over to one that
+did. `tests/a_program_is_not_its_directory.rs` has pinned that since it was
+written — as a defect, with instructions for the day it went.
+
+The prefix had a real reason and its own comment gave it: a shared library driver
+threads its caller's invariant source through the loop, and evacuating that
+copies an unbounded value every iteration. Removing it outright was built and
+measured on 2026-08-31 and turned the digest quadratic — at 128 KB the wall time
+went from 1.3 seconds to 68.
+
+**What separates the two cases is the width of the carry, and it was measured one
+group at a time.** Eleven imported groups lose a carry at that point on runbench.
+Alone, every one of them reads the baseline on both columns — peak 38,604,496 and
+0.26 seconds. The pairs:
+
+    sha256/compress/4 + sha256/turned/3     35,458,768   1.01s
+    sha256/blocked/3  + sha256/digested/4   35,458,768   0.26s
+    the other seven                         38,604,496   0.27s
+    all eleven                              35,458,768   0.95s
+
+The expensive pair carries TWO positions each and the cheap pair ONE, and the
+whole saving sits with the cheap pair. So the rule is the loop's own shape: an
+imported group keeps a carry of at most one position. Evacuating one slot a lap
+is what the tier is for; evacuating several is where a library loop starts
+copying its caller's work. It is a proxy for bytes copied per iteration, which
+nothing in the pass can measure, and it is a proxy the loop supplies rather than
+its file name.
+
+**The 2026-08-31 catastrophe does not recur**, because `compress` and `turned`
+stay out: the same 128 KB digest under `lib/` reads 0.28 seconds against main's
+0.30, with the peak 32,505,888 -> 7,340,064.
+
+**What it buys.** The counter veins, regenerated with `all_counters.sh --write`:
+
+    run     arena_peak_bytes 38,604,496 -> 35,458,768, blocks 36 -> 33
+            allocs +251, alloc_bytes +20,080, beat_iters +501, evac_allocs +1,002
+    digest  arena_peak_bytes  2,097,152 ->  1,048,576, blocks 2 -> 1
+            allocs +130, alloc_bytes +10,400, beat_iters 56 -> 314
+    scan    beat_iters 15 -> 16, survive_slots 0 -> 2, nothing else
+
+and the hash across a range of messages:
+
+       16,384   6,291,472 ->  3,145,744
+       32,768   9,437,200 ->  3,145,744
+       65,536  19,922,976 ->  7,340,064
+      131,072  32,505,888 ->  7,340,064
+      262,144  75,497,520 -> 24,117,296
+
+Two to four times less, and the doubling from 65,536 to 131,072 now costs
+nothing. **The defect is not gone**: 262,144 still reads three times 131,072, and
+the hash holds 92 bytes a message byte where it held 288, so `sha256_peak.rs`'s
+projection for the site's 1,604,098-byte wasm blob moves from roughly eleven
+gigabytes of live arena to about three and a half. An improvement, not a fix, and
+that test now says so in those words.
+
+On this container the run row costs 805,648 instructions for it, +0.0438%, and
+welfare reads 77.6834 with the counter veins in and the instruction row still
+main's. CI supplies that row; the floor is banked after it lands, not here.
+
+**And the scan vein moved by two slots**, which is its own small finding: the
+split phase's 29,360,128 bytes are not behind this filter, as the 2026-09-19
+instrumentation already said. What holds them is still open.
+
+**Three tests changed, none weakened.** Each was written to be updated when the
+behaviour improved. `json_decode_loops_stay_conservative` keeps out "scanners
+threading records or lists", and the two openers the new rule admits carry
+neither: `array_open cs cs[p + 1] (p + 1)` threads the subject at slot 0, which
+the analysis marks THREADED and never carries, and carries slot 1, one character
+read out of it. `a_program_is_not_its_directory` asserts the property now instead
+of the defect, so it goes red if a path ever decides memory again.
+`sha256_peak` is re-pinned with the curve above and keeps its point: the hash
+still holds every block it has read, just less of it.
