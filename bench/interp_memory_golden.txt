@@ -191,7 +191,25 @@
 # allocator was holding at one instant, and what it was holding depends on the
 # machine in a way a call count does not. That sentence is a candidate for the
 # mechanism and the eight bytes are the measurement.
-interp_allocs=1309483
+# 2026-09-18, kanso#1543. 1,309,483 -> 1,183,336, a FALL of 126,147 (-9.63%),
+# the largest this counter has made. A container pair put the removed
+# allocate-and-free pairs at 119,541, which is the same quantity read by a
+# different instrument over a narrower scope.
+# 2026-09-19, kanso#1545, CI's sitting. interp_allocs 1,183,336 -> 1,063,795,
+# a FALL of 119,541, and interp_peak_bytes UNCHANGED at 834,079.
+#
+# A WIN TO BANK, and the count is the one to notice: 119,541 is exactly what
+# kanso#1543 reclaimed VECTORS for. The two changes take the same set of frames
+# from two sides -- that one stopped allocating the vector, this one the node
+# around it -- so the set is now fully accounted rather than merely reduced.
+#
+# BOTH ARMS REPRODUCED ACROSS HOSTS, which is the property this vein has and
+# the instruction vein does not. The container read 1,183,336 for the base and
+# 1,063,795 for this tree; the runner read the same two numbers. The peak did
+# not move on either host, where kanso#1543's rose 616 for the vector it kept:
+# a retained 80-byte node is not resident at the high-water mark, because the
+# node it replaces was resident there before.
+interp_allocs=1063795
 #
 # 2026-09-18, kanso#1518 against main at kanso#1517, CI's sitting.
 # 951,438 -> 961,165, a RISE of
@@ -235,5 +253,16 @@ interp_allocs=1309483
 # dispatcher keeps is a buffer that is live at the peak rather than absent from
 # it, so a fall at all is the direction worth noting; three bytes is not worth
 # a mechanism.
-interp_peak_bytes=833463
+# 2026-09-18, kanso#1543. 833,463 -> 834,079, a RISE of 616 bytes (+0.074%),
+# AND IT IS THE PRICE OF THE CHANGE RATHER THAN A SURPRISE. Pooling a buffer
+# means the buffer is resident when the run is at its widest; the pool holds
+# the largest one any dispatch has needed and does not give it back. kanso#1540
+# predicted this direction in its own entry -- "a buffer the dispatcher keeps
+# is a buffer that is live at the peak rather than absent from it" -- and that
+# change happened to fall 3 instead. This one pays the 616.
+#
+# Traffic falls 126,147 and residency rises 616, which is the two rows doing
+# what the gate's own message says they do: a total and a high-water mark,
+# free to move apart.
+interp_peak_bytes=834079
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
