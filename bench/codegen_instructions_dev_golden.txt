@@ -128,7 +128,59 @@
 # byte-identical. Two hosts, opposite signs; nothing here predicts the
 # runner's, and the size of this term is not a property of the change.
 #
-# 2026-09-18, re-merged onto main after kanso#1512, which re-based this row by
-# clearing the gate's output path. THE VALUE BELOW IS MAIN'S, carried forward;
-# the merged reading is CI's.
-codegen_instructions_dev=596197703
+# 2026-09-18, THE GATE NOW PINS THE LTO OBJECT'S NAME, so this row measures a
+# different link and the value below is the OLD one, left for CI to move.
+# clang wrote the object to `/tmp/<stem>-XXXXXX.o` with fresh hex every run and
+# `ld`'s plugin probed a `StringMap` with that path. Twenty-two names, one
+# binary, one corpus, every other input held:
+#
+#     twenty names          5,163,341,031
+#     `4b8c1a`, `fedcba`    5,163,341,042
+#
+# Eleven apart, deterministic per name, about one name in eleven. That is the
+# eleven this row has disagreed with ITSELF by since kanso#1507 pinned the
+# plugin's threads, and kanso#1502's own job drew both buckets in one run:
+# 6,820,866,344 then 6,820,866,355.
+#
+# `-save-temps=obj` derives the name from the input instead. On the container
+# the whole pipeline then read 6,811,830,244 twice against 6,813,182,505 three
+# times without it, so the flag RE-BASES this row by about 1.35 million as well
+# as steadying it. A MEASUREMENT CHANGE, not a compiler saving.
+# 2026-09-19, kanso#1513 on the tree merged after kanso#1540, kanso#1541,
+# kanso#1544 and kanso#1546, CI's sitting. codegen_instructions_dev 596,157,624 -> 596,153,756,
+# a move of -3,868.
+#
+# WHAT MOVED THIS ROW IS THE ENVIRONMENT BLOCK, NOT THE PIN. The line above
+# first read as the pin re-basing the row, and that explanation was wrong twice
+# over: `KANSO_FIXED_TEMPS` is read in `release_clang` alone (src/main.rs), so
+# it never reaches the dev build at all, and the layout story it offered cannot
+# apply to this row either, because this row is the CHILD TREE and kanso's own
+# process is excluded from it.
+#
+# The gate sets the variable on all three of its `env -i` lines, so the dev
+# run's environment block grew by nineteen bytes, and a child inherits the
+# block on its initial stack. Three arms at this tier, one tree, each pass
+# reproducing byte for byte:
+#
+#     KANSO_FIXED_TEMPS=1      595,943,218   the gate as written
+#     nothing                  595,947,057   main's block
+#     KANSO_FIXED_TEMPX=1      595,943,490   nineteen bytes, read by nothing
+#
+# A variable dev_clang never reads and a variable NOTHING reads move the tree
+# by 3,839 and 3,567, against the 3,868 CI reads here. The container's numbers
+# are its own and do not travel; what travels is that both arms move and the
+# unread one moves nearly as far. The 272 between them is the block's CONTENT,
+# one letter apart at the same length, and is layout for the same reason.
+#
+# So the row is re-based by a measurement change rather than by a compiler one,
+# and the environment block is now itself a term to hold still: adding a
+# variable to one tier's `env -i` line re-bases that tier's row whether or not
+# anything reads it. A re-basing is not a regression and the objective's trend
+# gate is told which it is by bench/objective_sources.txt.
+#
+# EVERY ROW IN THIS JOB REPRODUCED ON A SECOND READING, including this one.
+# That is the point of the change rather than a detail of it: before the pin,
+# codegen_instructions_release could draw two values eleven apart on one binary
+# -- kanso#1502's job in this same sitting drew 6,820,866,355 and then
+# 6,820,866,344 -- and the name the pin fixes is what decided which.
+codegen_instructions_dev=596153756

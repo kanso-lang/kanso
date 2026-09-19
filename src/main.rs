@@ -980,6 +980,30 @@ fn release_clang(stem: &str, ll_path: &str) -> std::io::Result<std::process::Exi
             Ok(n) if !n.is_empty() => vec![format!("-Wl,-plugin-opt=jobs={n}")],
             _ => vec![],
         })
+        // AND THE LTO OBJECT GETS A NAME THE RUN CHOOSES, for the measurement
+        // only. clang writes it to `/tmp/<stem>-XXXXXX.o` with fresh hex every
+        // run; `ld`'s LLVM plugin puts that path into a `StringMap`, and the
+        // probe length depends on the string. Twenty-two names were measured on
+        // one binary and one corpus with every other input held: twenty read
+        // 5,163,341,031 and two -- `4b8c1a` and `fedcba` -- read 5,163,341,042.
+        // Eleven apart, deterministic per name, about one name in eleven.
+        //
+        // That is the eleven `codegen_instructions_release` has been
+        // disagreeing with itself by since kanso#1507 pinned the thread count.
+        // kanso#1502's own job drew both buckets: 6,820,866,344 and then
+        // 6,820,866,355. About one job in eleven goes red on that row for
+        // nothing a diff can explain, and three rounds were spent on it.
+        //
+        // `-save-temps=obj` writes the object beside the output under a name
+        // derived from the input, so the string is the same every run. It is
+        // the 2026-09-15 rule again: the state is put into a known one rather
+        // than explained afterwards. NOT the default, for the same reason
+        // `KANSO_LTO_JOBS` is not -- it leaves a file in a user's directory and
+        // a user's build has no row to keep.
+        .args(match std::env::var("KANSO_FIXED_TEMPS") {
+            Ok(v) if !v.is_empty() => vec!["-save-temps=obj"],
+            _ => vec![],
+        })
         .arg("-Wno-override-module")
         .arg("-o")
         .arg(stem)

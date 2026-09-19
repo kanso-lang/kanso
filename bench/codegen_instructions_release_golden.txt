@@ -252,37 +252,36 @@
 #
 # This corrects the record only. Whether to pin the release tier is a decision
 # in design/pending-gavels.md and is not settled here.
-# 2026-09-19, kanso#1504 on the tree merged after kanso#1540, kanso#1541,
-# kanso#1544 and kanso#1546, CI's sitting. 6,824,133,280 -> 6,841,691,425, a
-# RISE of 17,558,145 (+0.2573%), and `codegen_release_again` read 6,841,691,425
-# in the same job -- the same number, so the row reproduced.
+# 2026-09-18, THE GATE NOW PINS THE LTO OBJECT'S NAME, so this row measures a
+# different link and the value below is the OLD one, left for CI to move.
+# clang wrote the object to `/tmp/<stem>-XXXXXX.o` with fresh hex every run and
+# `ld`'s plugin probed a `StringMap` with that path. Twenty-two names, one
+# binary, one corpus, every other input held:
 #
-# THE VALUE WAS ALREADY RIGHT AND THE FILE HAD TWO OF IT. 6,841,691,425 is what
-# the duplicated second row carried before it was deleted; what was wrong was
-# that it sat BESIDE main's 6,824,133,280 rather than replacing it, and the
-# reader adds rows with `+=`. Carrying main's value forward cost this one red
-# round, and it was the right call on the evidence available: neither number
-# was a reading of THIS tree, and only CI could say which.
+#     twenty names          5,163,341,031
+#     `4b8c1a`, `fedcba`    5,163,341,042
 #
-# The rise is this branch's own cost and the row it expected to pay. The
-# release tier is the only row that COMPILES src/runtime.c rather than carrying
-# its bytes, and the beat cache adds a pointer and the code that keeps it.
-codegen_instructions_release=6841691425
-# 2026-09-18, re-merged onto main after kanso#1512 and again after kanso#1540
-# and kanso#1544. TWO LIVE ROWS SAT HERE and the second was appended rather
-# than replacing the first, so this file carried
-# `codegen_instructions_release=` twice: 6,824,133,280 and 6,841,691,425.
+# Eleven apart, deterministic per name, about one name in eleven. That is the
+# eleven this row has disagreed with ITSELF by since kanso#1507 pinned the
+# plugin's threads, and kanso#1502's own job drew both buckets in one run:
+# 6,820,866,344 then 6,820,866,355.
 #
-# `rows()` in tests/the_objective_reads_what_the_gate_watches.rs accumulates
-# with `+=`, which it must, because bench/objective_sources.txt maps one
-# objective counter onto several gate keys. Within ONE file a repeated row is
-# a defect, and the `+=` turned it into a sum: the gate read 13,665,824,705,
-# exactly the two added, and the spec reported the LINK as wrong. The row was
-# fine and the file had two of it.
+# `-save-temps=obj` derives the name from the input instead. On the container
+# the whole pipeline then read 6,811,830,244 twice against 6,813,182,505 three
+# times without it, so the flag RE-BASES this row by about 1.35 million as well
+# as steadying it. A MEASUREMENT CHANGE, not a compiler saving.
+# 2026-09-19, kanso#1513 on the tree merged after kanso#1540, kanso#1541,
+# kanso#1544 and kanso#1546, CI's sitting. codegen_instructions_release 6,824,133,280 -> 6,833,786,335,
+# a move of +9,653,055.
 #
-# SUPERSEDED, and left here because the wrong turn is the readable part. It
-# said the value BELOW was main's, carried forward pending CI. No value follows
-# it now: the live row moved above this block when CI's reading landed, and the
-# 2026-09-19 entry there is what the file stands on. This branch's own readings
-# of the rise were 11,227,515 and 19,241,568, against bases that have since
-# moved; CI read 17,558,145.
+# THIS IS THE FIXED-TEMP PIN RE-BASING THE ROW, and every compile-side row
+# moves with it because the pin changes src/main.rs: the binary's layout moves,
+# and these rows track layout. A re-basing is not a regression and the
+# objective's trend gate is told which it is by bench/objective_sources.txt.
+#
+# EVERY ROW IN THIS JOB REPRODUCED ON A SECOND READING, including this one.
+# That is the point of the change rather than a detail of it: before the pin,
+# codegen_instructions_release could draw two values eleven apart on one binary
+# -- kanso#1502's job in this same sitting drew 6,820,866,355 and then
+# 6,820,866,344 -- and the name the pin fixes is what decided which.
+codegen_instructions_release=6833786335
