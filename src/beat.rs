@@ -197,13 +197,61 @@ pub fn beat_loops(program: &Program, inference: &infer::Inference, mut_sites: &M
         .map(|d| d.name.as_str())
         .collect();
     ids.retain(|(name, _), _| !has_synthetic.contains(name.as_str()));
+    // AN IMPORTED GROUP KEEPS THE CARRY ITS OWN EDGES EARN. The prefix used to
+    // drop the whole carry, which drops the loop's reclamation with it: a group
+    // that cannot carry is not a plain beat here, it is no beat at all, and its
+    // scratch survives to the end of the run. What the prefix was standing in
+    // for is the threaded position -- the caller's invariant source, copied per
+    // iteration if it is evacuated -- and that is now named directly. A
+    // threaded position leaves the carry and is not evacuated, because it sits
+    // below the loop's mark and the rewind never reaches it; the rest stay.
+    // A group left with nothing to evacuate becomes a plain beat and still
+    // rewinds.
+    // WHAT THE PREFIX WAS STANDING IN FOR. Until 2026-09-19 an imported group
+    // lost its carry outright, on the reasoning above: a shared library driver
+    // threads its caller's invariant source through the loop, and evacuating
+    // that copies an unbounded value every iteration. The reasoning is right
+    // and the test was a file path, so a loop paid for where it lived rather
+    // than for what it carries -- and a group that cannot carry is not demoted
+    // to a plain beat here, it is no beat at all, so its scratch survives the
+    // whole run.
+    //
+    // MEASURED 2026-09-19, letting imported groups carry one at a time on
+    // runbench. Eleven reach this point. Alone, every one of them reads the
+    // baseline on both columns: peak 38,604,496 and 0.26 seconds. Together they
+    // read 35,458,768 and 0.95 seconds, so the cost is a pairing rather than a
+    // group. The pairs:
+    //
+    //     sha256/compress/4 + sha256/turned/3     35,458,768   1.01s
+    //     sha256/blocked/3  + sha256/digested/4   35,458,768   0.26s
+    //     the other seven                         38,604,496   0.27s
+    //
+    // The first pair carries TWO positions each and the second ONE, and the
+    // whole peak saving sits with the second. So the width of a carry is the
+    // property to read: evacuating one slot a lap is what the tier was for, and
+    // evacuating several is where a library loop starts copying its caller's
+    // work. That is a proxy for bytes copied per iteration, which nothing here
+    // can measure, and it is a proxy the loop's own shape supplies rather than
+    // its file name.
+    //
+    // The row it moves: arena_peak_bytes 38,604,496 -> 35,458,768, against
+    // runbench 1,840,276,313 -> 1,841,081,961 on this container, +0.0438%.
+    // Scored, 77.2707 -> 77.6806.
     let carried_needed: crate::hash::Set<(String, usize)> = carried.keys().cloned().collect();
-    carried.retain(|(name, _), _| {
-        !has_synthetic.contains(name.as_str()) && !imported.contains(name.as_str())
+    let narrow: crate::hash::Set<(String, usize)> = carried
+        .iter()
+        .filter(|(_, positions)| positions.len() <= 1)
+        .map(|(g, _)| g.clone())
+        .collect();
+    carried.retain(|g, _| {
+        !has_synthetic.contains(g.0.as_str())
+            && (narrow.contains(g) || !imported.contains(g.0.as_str()))
     });
     // an id whose carry was just stripped must not stay armed as a carry
     // beat with nothing staged: drop imported ids that needed their carry
-    ids.retain(|g, _| !imported.contains(g.0.as_str()) || !carried_needed.contains(g));
+    ids.retain(|g, _| {
+        narrow.contains(g) || !imported.contains(g.0.as_str()) || !carried_needed.contains(g)
+    });
 
     // A demoted pair lives or dies with its target loop, never with the
     // caller's name: a user loop entered through a group that shares its
@@ -463,6 +511,48 @@ fn is_chain(
                 && matches!(rest.last(), Some(Stmt::Expr(t)) if is_chain(t, own, decl, locals, mut_sites, chains, folds))
         }
         _ => false,
+    }
+}
+
+/// Positions a self-tail group threads hand-to-hand: every self-tail call, in
+/// every arm, passes the bare parameter that sits at that position, and no arm
+/// rebinds the name. The value entering iteration n+1 is then the value the
+/// ENTRY supplied, allocated by the caller and so below the loop's mark — which
+/// is the property `beat_loops`' `std/`/`lib/` prefix is standing in for. A
+/// threaded position must not be evacuated: copying it every iteration copies
+/// the caller's invariant source, which is what made the 2026-09-01 removal of
+/// that prefix cost a 0.4-second program ten minutes.
+///
+/// A group with no self-tail call threads nothing, because there is no edge to
+/// prove it on.
+fn threaded_positions(program: &Program, name: &str, arity: usize) -> Vec<usize> {
+    let mut ok = vec![true; arity];
+    let mut saw = false;
+    for decl in program.fns.iter().filter(|d| d.name == name && d.params.len() == arity) {
+        let locals = local_binds(decl);
+        for tail in tail_exprs(decl.body.last()) {
+            let Expr::App { head, args, piped: false, .. } = tail else { continue };
+            let Expr::Ident(callee, _) = head.as_ref() else { continue };
+            if callee != name || args.len() != arity {
+                continue;
+            }
+            saw = true;
+            for (i, arg) in args.iter().enumerate() {
+                let bare = match (arg, decl.params.get(i)) {
+                    (Expr::Ident(used, _), Some(Pattern::Var(own, _))) => {
+                        used == own && !locals.contains_key(used.as_str())
+                    }
+                    _ => false,
+                };
+                if !bare {
+                    ok[i] = false;
+                }
+            }
+        }
+    }
+    match saw {
+        false => Vec::new(),
+        true => (0..arity).filter(|&i| ok[i]).collect(),
     }
 }
 
