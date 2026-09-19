@@ -2494,10 +2494,24 @@ impl<'a> Interp<'a> {
             // is 61.2 instructions a growth.
             //
             // kanso#1538 put this reserve inside `match_params_into`, where it
-            // is paid once per CANDIDATE -- roughly twenty times per dispatch,
-            // since arm selection tries every arity match -- and it cost
-            // 12,017,902 instructions. The allocation is per dispatch, so the
-            // reserve belongs here.
+            // is paid once per CANDIDATE, and it cost 12,017,902 instructions.
+            // The allocation is per dispatch, so the reserve belongs here.
+            //
+            // THE COUNT THAT USED TO BE HERE SAID TWENTY CANDIDATES A DISPATCH
+            // and it was `match_one` CALLS divided by dispatches. `match_one`
+            // runs once per PARAMETER of each candidate tried, so that ratio is
+            // calls a dispatch and bounds the candidates from above; it equals
+            // them only if every arm took one argument. Measured on the
+            // interpreted corpus, 2026-09-19:
+            //
+            //     dispatches      175,254
+            //     candidates      456,967   2.61 a dispatch
+            //     match_one     1,135,058   6.48 a dispatch, 2.48 a candidate
+            //
+            // The old figure's own arithmetic agrees with the smaller number:
+            // 12,017,902 over 175,254 is 68.6 instructions a dispatch, which is
+            // 26.3 per reserve at 2.61 candidates and an impossible 3.4 at
+            // twenty.
             //
             // `args_len` is exact for `score`, which takes one entry per
             // parameter, and a floor for `binds`, since a `Ctor` pattern can
