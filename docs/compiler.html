@@ -2929,6 +2929,35 @@ env -i PATH=... GLIBC_TUNABLES=... KANSO_FIXED_TEMPX=1  972,777,009   +117</code
 
 <p><strong>and the arm that looked like the candidate&#8217;s own claim was contaminated.</strong> growing the corpus file with comment lines the interpreter never runs moved the row too, 65 instructions for 62 KB and 4,484 for 124 KB. that reads as the mapped file doing exactly what the candidate said. but the bigger file costs the loader more allocations &#8212; traffic up five, bytes up 187,488, peak up 78,649 &#8212; and the anchor excludes the loader&#8217;s frames while sharing its allocator. that arm mixes whatever the file&#8217;s size does with work the loader really did, and cannot carry the claim. the environment arm can, because nothing reads the variable, the allocation counters hold, and the toll is the same 117 every time it is charged.</p>
 
+<h2 id="theframestoll"><span class="sec-num">110</span>six and a half per cent, getting in and out of functions</h2>
+
+<p>the production run spends <strong>120,988,262</strong> instructions on frames &#8212; the callee-saved registers a function pushes on entry and pops on the way out, and the stack it reserves. that is <strong>6.57%</strong> of the whole program: 3.52% going in, 3.05% coming out, and it is a floor rather than a total, because the stack pointer&#8217;s own restore is not counted. more than rendering every float (4.58%), more than the entire arena beat machinery (5.09%), and until now it had no name.</p>
+
+<pre><code>30,952,350  json/encode_onto    2,380,950 calls, 7 prologue instructions
+14,303,721  json/parse_value    1,100,286
+10,760,607  json/obj_key_start    827,739</code></pre>
+
+<p><code>encode_onto</code> is 21.33% of the run on its own, 164.9 instructions a call, twelve in and eight out. reading its jump table and counting the entries at each target says who pays that. the number arms take 379,530 calls and are four register moves and one call. <code>true</code>, <code>false</code> and <code>null</code> take 562,500 between them and are five instructions each into a shared append. strings take 942,750, maps and lists the rest. so two calls in five into that dispatcher pay a frame sized by the arms they do not take.</p>
+
+<p>the obvious fix is the compiler&#8217;s own: sink the pushes into the paths that need them. llvm calls that shrink-wrapping and it is on by default, and it never fires here &#8212; compiling with it switched off gives a byte-identical prologue. with a jump table to eight arms and register uses in several of them, the entry block is the only place that dominates them all.</p>
+
+<p>the other obvious fix is to split the dispatcher: emit the cheap arms so they need no frame, and tail-call the heavy ones. that rests on the frame being sized by the arm bodies inlined into it, and linking the ir by hand says it is not. marking the string arm&#8217;s callee <code>noinline</code> &#8212; the heaviest thing in there &#8212; takes the stack reserve from 0x58 to 0x38 and leaves all six pushes. marking <em>every</em> call site inside the dispatcher <code>noinline</code>, so no arm body is inlined at all, leaves all six pushes and 0x38 again.</p>
+
+<p>the registers are the dispatcher&#8217;s own, then. it holds both of its arguments live across the calls it makes, and a value here is two words, so the arguments alone are four registers that have to survive a call. there is nothing for an arm split to take away.</p>
+
+<p>what does move the number is inlining, because an inlined call has no frame at all. the threshold handed to the linker is already the lever, and pushing it further was measured on a program whose emitted ir is byte-identical across every arm:</p>
+
+<pre><code>225    1,938,999,983   343,128 bytes   22,317,482 calls
+2000   1,840,276,313   424,088         18,812,341
+4000   1,823,291,354   510,152
+8000   1,821,134,592   567,496</code></pre>
+
+<p>225 to 2000 &#8212; the step this compiler already takes &#8212; removes 3,505,141 calls and 98,723,670 instructions. that is 28.2 a call, which is a frame plus the call and the return, and it prices the mechanism.</p>
+
+<p><strong>and the next rung is declined.</strong> 4000 buys another 0.923% of the run and costs the release build 3.64% more work: 6,827,333,184 instructions against 7,075,918,942, two passes, each arm byte-identical. the development tier does not move at all, because it compiles at <code>-O0</code> and never sees the flag. scored against the goldens, the run gain alone is 77.27 to 77.33 and the pair together is <strong>77.26</strong>, one hundredth under the floor. the break-even was written down before the second arm finished &#8212; a release build 3.2% dearer &#8212; and the measurement came in at 3.64%.</p>
+
+<p>the reason recorded beside that flag had been binary size, and binary size is not scored at all. now the reason is the one the objective can see.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>

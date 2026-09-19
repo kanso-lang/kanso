@@ -5640,3 +5640,99 @@ environment was identical is still open, and the frames that moved between the
 contaminated corpus arms — `_mi_os_commit_ex`, `mi_bitmap_setN`,
 `_mi_prim_commit` — are where to look next. Those are the allocator committing
 pages, which is a different question from the allocator reading its options.
+
+---
+
+## 2026-09-19 — frames are 6.57% of the production run, and the threshold that would cut them costs more than it saves
+
+Three entries this week ended by saying a change wanting to move the objective
+has to find production work. This is what the production run spends getting
+into and out of functions, and what happens when the one lever that moves it is
+pushed.
+
+Measured on runbench at `0d164b55`, callgrind with `--dump-instr`, whole
+program 1,840,276,313 — two profiles agreeing to the instruction. Summing, over
+every function whose entry block ran, the leading callee-saved pushes and the
+stack reserve, plus the pops' own measured cost:
+
+    prologue   64,847,962   3.52%
+    pops       56,140,300   3.05%
+    together  120,988,262   6.57%
+
+A floor rather than a total, because the epilogue's `add $N,%rsp` is not
+counted. Larger than `render_ryu` at 4.58% and larger than the whole beat
+machinery at 5.09%, and until now it had no name.
+
+    30,952,350  d_json/encode_onto_2     2,380,950 calls, 7 prologue instructions
+    14,303,721  d_json/parse_value_2     1,100,286
+    10,760,607  d_json/obj_key_start_4     827,739
+
+`encode_onto` is 21.33% of the run and 164.9 self instructions a call, twelve
+in and eight out. Reading its jump table and counting entries at each target
+gives the arm mix: the number arms take 379,530 calls and are four movs and a
+call; `true`, `false` and `null` take 562,500 between them and are five
+instructions each into a shared append; strings take 942,750; maps and lists
+the rest. So 39.6% of the calls into that dispatcher pay a frame sized by the
+arms they do not take.
+
+**Shrink-wrapping is not the lever, and that was checked rather than assumed.**
+Compiling `runbench.ll` with `-mllvm -enable-shrink-wrap=false` gives a
+byte-identical prologue, so LLVM is not sinking it either way. With a jump
+table to eight arms and callee-saved uses in several of them, the entry block
+is the only place that dominates them all.
+
+**And splitting the dispatcher would not help, which is the other obvious fix
+and is now measured.** The idea is to emit the cheap arms so they need no
+frame and tail-call the heavy ones, on the reading that the dispatcher's frame
+is sized by the arm bodies inlined into it. Linking `runbench.ll` by hand says
+otherwise. Marking `d_json/escape_onto_2` `noinline` — the string arm, the
+heaviest thing in there — takes the stack reserve from `0x58` to `0x38` and
+leaves all six pushes. Marking EVERY call site inside the dispatcher `noinline`,
+so no arm body is inlined at all, leaves all six pushes and `0x38` again.
+
+So the registers are the dispatcher's own. It holds both arguments live across
+the calls it makes — `k_not_failure`, `k_err_hop`, `k_check_rec_fast` — and a
+`KValue` is two words, so the two arguments alone are four registers that must
+survive a call. There is nothing there for an emitter-level arm split to remove,
+and the idea is declined without being built.
+
+**Inlining is the lever, and it is already where it should be.** The ladder
+beside the flag in src/main.rs was measured against 1000 and stops at 3000;
+these two rungs are new, on a `runbench.ll` byte-identical across every arm, so
+the only difference is what the linker's LTO was told:
+
+    225    1,938,999,983   343,128 bytes   22,317,482 calls
+    2000   1,840,276,313   424,088         18,812,341
+    4000   1,823,291,354   510,152
+    8000   1,821,134,592   567,496
+
+225 to 2000 removes 3,505,141 calls and 98,723,670 instructions: 28.2 a call,
+which is a frame plus the call and the return. That is the mechanism, priced.
+
+**And 4000 is declined, on the objective rather than on `.text`.** The comment
+that chose 2000 gave binary size as the reason, and machine-code size has no
+welfare term — Clay ruled that on 2026-09-05 — so that reason could not have
+decided it. The scored reason is `codegen_instructions_release`, weight 0.15 on
+the production side. Same box, two passes, each arm byte-identical:
+
+    release codegen   6,827,333,184 -> 7,075,918,942   +248,585,758   +3.64%
+    dev codegen         595,943,218 ->   595,943,218   byte-identical
+
+The dev tier cannot move: `dev_clang` passes `-O0` and no `-mllvm`.
+
+Scored by applying each ratio to the goldens, the run gain alone takes welfare
+77.27 to 77.33, and the pair together to **77.26** — one hundredth below the
+floor. The break-even was worked out before the codegen arm finished, and
+written down then so it could be scored rather than fitted: the raise pays only
+if the release build costs under 3.2% more. It came in at 3.64%.
+
+It is worse than that once travel is allowed for. The same comment records that
+CI's work row moved 59% of what this container's ladder projected for 1000 to
+2000. At that travel the run gain is nearer 0.54% and the trade is not close.
+
+**The comment beside the flag held half of this and it was not read first.**
+The ladder, the non-monotonicity and the 59% travel factor were all one file
+away, and two arms were built before anyone looked. What the arms added is real
+— the codegen price and the welfare verdict, neither of which was there — but
+the rule stands and this is another instance of it: read the thing the number
+describes before running anything against it.
