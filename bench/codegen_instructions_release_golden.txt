@@ -160,6 +160,41 @@
 # something the runner has and this box does not. The gate now diffs the two
 # readings frame by frame when they disagree, so the next job that sees it
 # names the frame instead of the magnitude.
+# 2026-09-17, kanso#1504 on the tree merged with main 2a0cec7c, CI's sitting.
+# codegen_instructions_release 6,826,829,520 -> 6,838,057,035, a RISE of
+# 11,227,515 (+0.1645%). A second count in the same job read 6,838,057,035.
+#
+# THIS ONE IS WORK, not layout, and it is the only row here that is. The row
+# counts the C toolchain and excludes kanso's own process, and this branch
+# changes `src/runtime.c` -- so clang has different source to compile at
+# `-O3 -flto`, over a KMark that grew a field and a new global beside it. The
+# other seven compile-side rows move by four thousandths of a per cent or less
+# because they carry runtime.c's bytes without compiling them; this one
+# compiles them.
+#
+# It is what the change costs at build time, against 16,935,366 instructions a
+# run of the program gives back. The objective weighs both -- release build at
+# 0.15 on the production side against run speed at 0.45 -- and says the trade
+# is worth taking.
+#
+# 2026-09-18, re-merged onto main after kanso#1486, kanso#1496 and kanso#1507
+# landed underneath. THE VALUE BELOW IS MAIN'S, carried forward. This branch's
+# own reading of this row was taken before all three, and kanso#1507 in
+# particular changed what the release-codegen row COUNTS by pinning ld's LLVM
+# plugin to one thread, so nothing this branch measured on that row is
+# comparable with anything measured after it. The merged sitting is CI's.
+#
+# 2026-09-18, kanso#1504 on the tree merged with main, CI's sitting.
+# 6,822,651,561 -> 6,841,893,129, a RISE of 19,241,568 (+0.2820%).
+# THIS IS THE ONE REAL COST, and it is the row this branch expected to pay.
+# The release tier is the only row that COMPILES src/runtime.c rather than
+# carrying its bytes, and the beat cache adds a pointer and the code that keeps
+# it. 19.2 million instructions of clang and ld, 0.282%.
+#
+# AND IT REPRODUCED. `codegen_release_again` read 6,841,893,129, the same
+# number, in the same job -- which is kanso#1507's `-Wl,-plugin-opt=jobs=1`
+# holding on a tree that changes runtime.c, not just on one that leaves it
+# alone. Before that pin this row could not be read twice and get one answer.
 #
 # 2026-09-18, THE GATE NOW CLEARS ITS OUTPUT PATH BEFORE EVERY BUILD, so this
 # row measures a different thing and the value below is the OLD one, left in
@@ -249,4 +284,21 @@
 # codegen_instructions_release could draw two values eleven apart on one binary
 # -- kanso#1502's job in this same sitting drew 6,820,866,355 and then
 # 6,820,866,344 -- and the name the pin fixes is what decided which.
-codegen_instructions_release=6833786335
+#
+# 2026-09-19, kanso#1504 re-merged onto main after kanso#1552 and kanso#1553,
+# CI's sitting on run 35419504606. codegen_instructions_release
+# 6,833,786,335 -> 6,843,462,951, a RISE of 9,676,616 (+0.1416%).
+#
+# THIS IS THE ONE REAL COST ON THIS BRANCH. The release tier is the only row
+# that COMPILES src/runtime.c rather than carrying its bytes, and the beat
+# cache adds a pointer to KMark and the code that keeps it; clang at
+# `-O3 -flto` pays for the extra source. `codegen_release_again` read
+# 6,843,462,951 in the same job, so kanso#1507's plugin pin is still holding
+# on a tree that changes runtime.c.
+#
+# The two readings this branch has taken of this row, 9,676,616 here against
+# 19,241,568 on 2026-09-18, are NOT a measurement of the same thing: the
+# baseline under them moved with kanso#1513's fixed-temp pin, which re-based
+# the row by about 1.35 million and steadied it. Only the newer pair of
+# numbers is comparable with anything measured now.
+codegen_instructions_release=6843462951

@@ -79,6 +79,25 @@
 # runs the compiler moves with them. Seven rows moved here and all seven are
 # under five ten-thousandths of a per cent, with mixed signs -- which is what a
 # shifted binary looks like and not what work looks like.
+# 2026-09-17, kanso#1504 on the tree merged with main 2a0cec7c, CI's sitting.
+# codegen_instructions_dev 596,161,166 -> 596,182,348, a RISE of 21,182 (+0.0036%).
+# This row counts the C toolchain compiling the IR kanso wrote, excluding
+# kanso's own process. The dev tier is -O0, so a changed runtime.c costs it
+# almost nothing: 21,182 on 596 million. A second count in the same job read
+# 596,182,348.
+#
+# 2026-09-18, re-merged onto main after kanso#1486, kanso#1496 and kanso#1507
+# landed underneath. THE VALUE BELOW IS MAIN'S, carried forward. This branch's
+# own reading of this row was taken before all three, and kanso#1507 in
+# particular changed what the release-codegen row COUNTS by pinning ld's LLVM
+# plugin to one thread, so nothing this branch measured on that row is
+# comparable with anything measured after it. The merged sitting is CI's.
+#
+# 2026-09-18, kanso#1504 on the tree merged with main, CI's sitting.
+# 596,159,774 -> 596,180,956, a RISE of 21,182 (+0.0036%).
+# The dev tier pays a twentieth of what the release tier does for the same
+# runtime.c change, because -O0 does far less with the extra code. It
+# reproduced too: `codegen_dev_again` read 596,180,956.
 #
 # 2026-09-18, THE GATE NOW CLEARS ITS OUTPUT PATH BEFORE EVERY BUILD, so this
 # row measures a different thing and the value below is the OLD one, left in
@@ -164,4 +183,12 @@
 # codegen_instructions_release could draw two values eleven apart on one binary
 # -- kanso#1502's job in this same sitting drew 6,820,866,355 and then
 # 6,820,866,344 -- and the name the pin fixes is what decided which.
-codegen_instructions_dev=596153756
+#
+# 2026-09-19, kanso#1504 re-merged onto main after kanso#1552 and kanso#1553,
+# CI's sitting on run 35419504606. codegen_instructions_dev
+# 596,153,756 -> 596,193,835, a RISE of 40,079 (+0.0067%).
+#
+# The dev tier is -O0, so the changed `src/runtime.c` costs it a fifteenth of
+# what the release tier pays for the same source. `codegen_dev_again` read
+# 596,193,835 in the same job, so the row reproduced.
+codegen_instructions_dev=596193835

@@ -690,19 +690,19 @@
 # 9,830,203 still stand above it, priced in kanso#1432's and kanso#1430's
 # entries; nothing here moves them.
 #
-jsonbench 1133644520
-encodebench 3497149260
-oneshot 17888155
-basket 33678746
-widebench 33516094
-deepbench 347289236
-escapebench 84780592
-pendbench 208138815
-indexbench 2895708
-scanbench 462269296
-digestbench 9967039
-readbench 4628429
-livebench 2825430323
+jsonbench 1133645592
+encodebench 3476743520
+oneshot 17837178
+basket 32776834
+widebench 33644020
+deepbench 347635275
+escapebench 75228606
+pendbench 208139955
+indexbench 2895743
+scanbench 462269305
+digestbench 9966673
+readbench 4627056
+livebench 2805024580
 # 2026-09-06 (the run program joins): `runbench 3043743748` is a NEW row and
 # nothing regressed to make it appear. It is the program Clay's gavel that day
 # made the objective's whole run-speed term, and the thirteen rows above it
@@ -760,4 +760,54 @@ livebench 2825430323
 #
 # The uniform -8 across six rows is one instruction on a path each program
 # takes eight times, and the four flat rows never take it at all.
-runbench 1821933936
+# 2026-09-17, kanso#1504 on the tree merged with main 2a0cec7c, CI's sitting.
+# runbench 1,821,933,936 -> 1,804,998,570, a FALL of 16,935,366 (-0.9295%).
+# The beat rewind's fast path went from 23 instructions to 15: the registry
+# summary moved into the mark it describes and folded its test into the shelf
+# flag's, then the innermost mark is cached beside the depth instead of being
+# derived from it once an iteration. The container projected -16,961,131 on
+# the same change and CI reads 25,765 fewer -- 0.0014% of the total, which is
+# as close as two machines get on this vein.
+#
+# Attributed on the container, and the shape is what the trade is:
+#   k_beat_iter   61,672,983 -> 40,204,728   -21,468,255   -34.81%
+#   k_beat_pop    14,517,216 -> 18,521,968    +4,004,752
+#   k_beat_push   15,017,844 -> 15,518,439      +500,595
+# The loop iterates five times for every pop, so five instructions off the
+# iteration buy eight onto the pop.
+# 2026-09-18, kanso#1504 on the tree merged with main 2a0cec7c, CI's sitting.
+# The beat rewind's fast path goes from 23 instructions to 15: the registry
+# summary moves into the mark it describes and folds its test into the shelf
+# flag's, and the innermost mark is cached beside the depth instead of being
+# derived from it once an iteration.
+#
+# FOURTEEN ROWS, AND THE SPREAD IS THE FINDING. A row falls in proportion to
+# how much its program beat-loops, and rises by the layout term when it does
+# not:
+#
+#   escapebench      84,780,592 ->     75,228,606    -9,551,986  -11.2667%
+#   basket           33,678,746 ->     32,776,834      -901,912   -2.6780%
+#   livebench     2,825,430,323 ->  2,805,024,580   -20,405,743   -0.7222%
+#   encodebench   3,497,149,260 ->  3,476,743,520   -20,405,740   -0.5835%
+#   runbench      1,821,933,936 ->  1,804,998,570   -16,935,366   -0.9295%
+#   oneshot          17,888,155 ->     17,837,178       -50,977   -0.2850%
+#   readbench         4,628,429 ->      4,627,056        -1,373   -0.0297%
+#   digestbench       9,967,039 ->      9,966,673          -366   -0.0037%
+#   scanbench       462,269,296 ->    462,269,305            +9   +0.0000%
+#   jsonbench     1,133,644,520 ->  1,133,645,592        +1,072   +0.0001%
+#   pendbench       208,138,815 ->    208,139,955        +1,140   +0.0005%
+#   indexbench        2,895,708 ->      2,895,743           +35   +0.0012%
+#   deepbench       347,289,236 ->    347,635,275      +346,039   +0.0996%
+#   widebench        33,516,094 ->     33,644,020      +127,926   +0.3817%
+#
+# escapebench is the extreme because escaping a string is a tight beat loop
+# with almost nothing else in it, so the fifteen instructions are most of what
+# a lap costs. The rises are the layout term: every binary here grew 368 to 560
+# bytes, because the mark carries a field more and there is a new global beside
+# it, and deepbench and widebench are the two that pay it without beat loops to
+# spend it on.
+#
+# ONE ROW OF THIS VEIN WAS WRITTEN ALONE FIRST, and CI was right to refuse it.
+# runbench's number went in on its own, which left thirteen rows describing a
+# runtime this branch had widened. A vein is the whole file.
+runbench 1804998570

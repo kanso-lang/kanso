@@ -114,6 +114,24 @@
 # moved and the two codegen rows did not: they AGREED with this branch's own
 # readings to the instruction, across two CI jobs on two different trees,
 # which is what `-Wl,-plugin-opt=jobs=1` bought.
+# 2026-09-17, kanso#1504 on the tree merged with main 2a0cec7c, CI's sitting.
+# emit_instructions 60,197,743 -> 60,201,844, a RISE of 4,101 (+0.0068%).
+# LAYOUT. `src/runtime.c` is include_str!'d into the compiler, so changing it
+# changes the compiler's own bytes and what the linker does with them. This
+# branch does not touch a decision any of these rows counts.
+#
+# 2026-09-18, re-merged onto main after kanso#1486, kanso#1496 and kanso#1507
+# landed underneath. THE VALUE BELOW IS MAIN'S, carried forward. This branch's
+# own reading of this row was taken before all three, and kanso#1507 in
+# particular changed what the release-codegen row COUNTS by pinning ld's LLVM
+# plugin to one thread, so nothing this branch measured on that row is
+# comparable with anything measured after it. The merged sitting is CI's.
+#
+# 2026-09-18, kanso#1504 on the tree merged with main, CI's sitting.
+# 60,196,725 -> 60,221,314, a RISE of 24,589 (+0.0408%).
+# LAYOUT. `kanso check` and the interpreted run carry runtime.c's bytes rather
+# than compiling it, so what moved is where the code sits; every one of these
+# is under a hundredth of a per cent.
 #
 # 2026-09-18, kanso#1510 (kanso#1484 rebuilt) on the tree merged with main,
 # CI's sitting. 60,196,725 -> 59,636,068, a FALL of 560,657 (-0.9314%).
@@ -127,6 +145,19 @@
 # consecutive lines. Building it once takes 8,081,271 instructions out of the
 # emitter, 13.42% of what emitting costs.
 #
+# 2026-09-18, re-merged onto main after kanso#1509 landed underneath.
+# THE VALUE BELOW IS MAIN'S, carried forward. kanso#1509 removed two
+# analysis constructions from the emitter's path and moved this row on
+# its own; what this branch adds on top of that has not been measured
+# anywhere, so the merged reading is CI's and gets written in when the
+# round reports it.
+#
+# 2026-09-18, kanso#1504 on the tree merged with main after kanso#1509,
+# CI's sitting. 52,115,454 -> 52,140,118, a RISE of 24,664 (+0.0473%).
+# LAYOUT. `src/runtime.c` is include_str!'d into the compiler, so changing
+# it changes the compiler's own bytes and the layout under them; none of
+# these routes runs the beat code this branch touches. The second reading
+# in the same job matched the first to the instruction.
 # 2026-09-18, kanso#1511 on the tree merged with main, CI's sitting.
 # 52,115,454 -> 52,119,322, a RISE of 3,868 (+0.0074%).
 # LAYOUT. `codegen::emit_ir` does not run the interpreter at all; the
@@ -141,6 +172,16 @@
 # The second reading in the same job matched the first to the instruction.
 #
 # 2026-09-18, re-merged onto main after kanso#1510. THE VALUE BELOW IS MAIN'S,
+# carried forward: kanso#1510 moved this row and what this branch adds on top
+# has not been measured, so the merged reading is CI's.
+#
+# 2026-09-18, kanso#1504 on the tree merged with main after kanso#1510,
+# CI's sitting. 51,554,407 -> 51,543,408, a FALL of 10,999
+# (-0.0213%). LAYOUT. `src/runtime.c` is include_str!'d into the
+# compiler, so its bytes move the compiler's own and every row that runs
+# the compiler moves with them; none of these routes runs the beat code
+# this branch changes. All six fell this time, which is the same term with
+# the opposite sign to the previous sitting -- a shifted binary, not work.
 # carried forward: kanso#1510 moved this row on its own and what this branch
 # adds on top of it has not been measured, so the merged reading is CI's.
 #
@@ -148,6 +189,9 @@
 # CI's sitting. 51,554,407 -> 51,543,885, a FALL of 10,522
 # (-0.0204%). LAYOUT. `codegen::emit_ir` does not run the interpreter at all.
 #
+#
+# 2026-09-18, re-merged onto main after kanso#1516. THE VALUE BELOW IS MAIN'S,
+# carried forward; the merged reading is CI's.
 # 2026-09-18, kanso#1516 on the tree merged with main, CI's sitting.
 # 51,546,788 -> 51,554,663, a RISE of 7,875 (+0.0153%).
 # LAYOUT. src/eval.rs is the compiler, so its bytes move and every row that
@@ -157,6 +201,17 @@
 # 2026-09-18, kanso#1517 on the tree merged with kanso#1516, CI's sitting.
 # 51,554,663 -> 51,451,897, a FALL of 102,766 (-0.1993%).
 # LAYOUT. `codegen::emit_ir` does not run the interpreter.
+#
+# 2026-09-18, kanso#1504 on the tree merged with main after kanso#1517,
+# CI's sitting. 51,451,897 -> 51,456,279, a RISE of
+# 4,382 (+0.0085167%).
+# LAYOUT. src/runtime.c is include_str!'d into the compiler (src/main.rs)
+# and digested into a constant (src/hash.rs), so editing it moves the
+# compiler's own .rodata and every route that runs the compiler moves with
+# it. None of these routes executes the runtime.
+# ^ SUPERSEDED: that reading was taken before kanso#1520 landed under this
+#   branch. THE VALUE BELOW IS MAIN'S, carried forward; the merged
+#   reading is CI's.
 #
 # 2026-09-18, kanso#1520 against main at kanso#1519, CI's sitting.
 # 51,451,897 -> 51,456,464, a RISE of 4,567 (+0.0089%).
@@ -170,4 +225,11 @@
 # 2026-09-18, kanso#1543. 51,617,476 -> 51,619,793, +2,317. Layout: this gate
 # anchors on `codegen::emit_ir` and the diff is in `eval`. Counted twice in
 # the job, identical both times.
-emit_instructions=51619793
+# 2026-09-19, kanso#1504 on the tree merged after kanso#1543, CI's sitting.
+# emit_instructions 51,619,793 -> 51,617,717, a move of -2,076, and the
+# second reading in the same job agreed.
+#
+# A LAYOUT RE-BASING. The beat cache changes src/runtime.c, which these rows
+# carry without compiling, so what moves is where the bytes sit rather than
+# what the front end decides.
+emit_instructions=51617717
