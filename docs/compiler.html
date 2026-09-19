@@ -2717,7 +2717,7 @@ error[name]: unknown name `builders/run`
 
 <p>a spec caught this one too, the same spec, the third change running: an exact per-round allocation count that fell by two a round again. this is the change most likely to disturb what it measures, since it holds a second handle to a frame whose values are the containers the builders check for uniqueness. it does not, because the frame was already alive for the whole body &#8212; the extra handle moves when the frame dies, from inside the body to just after it, and uniqueness is decided while the body runs. the builders still answer what they answered before, and the number moved down.</p>
 
-<h2 id="pooledframe"><span class="sec-num">101</span>the node around the vector</h2>
+<h2 id="pooledframe"><span class="sec-num">102</span>the node around the vector</h2>
 
 <p>&#167;100 took the vector out of a dead frame and let the node around it go. that was the tool&#39;s doing rather than a choice: <code>Rc::try_unwrap</code> reaches the value by consuming the handle, so the only route to the vector ran through freeing the box, and the next dispatch called <code>Rc::new</code> for a fresh one. <code>Rc::get_mut</code> reaches the same vector through a handle that stays alive.</p>
 
