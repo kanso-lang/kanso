@@ -5236,3 +5236,57 @@ looks like an obvious place for a pre-filter on the first argument's type. At
 2.61 tried and 202,987 of 456,967 matching — 44.4% — there is little to filter:
 the loop already tries barely more arms than it accepts. That idea is closed by
 the measurement rather than by an attempt.
+
+## 2026-09-19 — what a point of welfare costs, measured on every counter the objective reads
+
+Three sessions in a row have chosen what to work on by reading the weights and
+the satiations and reasoning about them. The objective can be asked directly
+instead. Stage `bench/` and `scripts/`, scale ONE golden row by 0.9, and run
+`kanso run scripts/welfare -- --score`, which prints four places. The difference
+is what a tenth off that row is worth in meta welfare. Fourteen rows, one at a
+time, base 77.2707:
+
+    per 10%   counter                        golden row
+    +0.6644   run_instructions               instructions:runbench
+    +0.5091   run_peak_bytes                 cost_golden_run:arena_peak_bytes
+    +0.1952   codegen_instructions_release   codegen_instructions_release
+    +0.0923   startup_instructions           startup_instructions
+    +0.0692   codegen_instructions_dev       codegen_instructions_dev
+    +0.0446   interp_instructions            interp_instructions
+    +0.0233   compile_peak_bytes             compile_memory:compile_peak_bytes
+    +0.0214   compile_instructions           entry_instructions
+    +0.0197   interp_peak_bytes              interp_memory:interp_peak_bytes
+    +0.0197   compile_allocs                 compile_allocs
+    +0.0094   run_peak_bytes                 cost_golden_run:held_peak_bytes
+    +0.0068   emit_instructions              emit_instructions
+    +0.0060   compile_instructions           compile_instructions
+    +0.0003   run_peak_bytes                 cost_golden_run:perm_peak_bytes
+
+The same sweep at 1% gives the same order with every value about a tenth of
+these, so the curve is near enough straight over that range and the table can be
+trusted to rank even though each figure is an average over its own step rather
+than a derivative.
+
+**Two rows are two thirds of the board.** `runbench` and the run program's arena
+peak come to 1.1735 of a 1.6808 total: 69.8%. Everything else together is worth
+less than half of `runbench` alone.
+
+**And the arena peak has had no work at all.** It sits at 38,604,496 bytes and
+is worth 77% of what the run's instruction count is worth, which nothing in the
+last fortnight's log would suggest. Every entry in that window is instructions:
+the dispatch-pooling family, the beat rewind, the digit loop, the frames. The
+second most valuable row in the model has not been named once.
+
+**What this says about the fortnight.** `interp_instructions` is worth 0.0446 a
+tenth, fifteen times less than `runbench`. The three dispatch-pooling changes of
+2026-09-18 took 15.8 million off a 939 million row, 1.7%, and the objective
+moved 77.25 to 77.27 — which is exactly what this table predicts and is why it
+felt like so little for three merged changes. `compile_instructions` is worth
+0.0060 a tenth, a hundred and eleven times less than `runbench`, and it is the
+row this project has spent the most rounds arguing about.
+
+The figures are marginal at today's ratios and move as the terms improve, so the
+table is dated and belongs in the log rather than in a doc that reads as
+standing. What would keep it current is a `--marginal` flag on the welfare
+script itself, printing this table from the model it already holds. That is the
+follow-up; the table above is the reason to want it.

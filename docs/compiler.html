@@ -2837,6 +2837,37 @@ error[name]: unknown name `builders/run`
 
 <p>and it retires a lead. a loop trying twenty arms to find one looks like an obvious place for a pre-filter on the first argument&#39;s type. at 2.61 tried and 202,987 of 456,967 matching, the loop already tries barely more arms than it accepts, so there is little to filter. closed by the measurement rather than by an attempt.</p>
 
+
+<h2 id="whatapointcosts"><span class="sec-num">107</span>what a point of the objective costs</h2>
+
+<p>the compiler has an objective function, and for a fortnight the way to decide what to work on next has been to read its weights and satiations and reason about them. the function can be asked instead. take the goldens, scale one row by a tenth, score the model, and the difference is what that tenth is worth. fourteen rows, one at a time, on 2026-09-19:</p>
+
+<pre><code>per 10%   counter                        golden row
++0.6644   run_instructions               instructions:runbench
++0.5091   run_peak_bytes                 cost_golden_run:arena_peak_bytes
++0.1952   codegen_instructions_release   codegen_instructions_release
++0.0923   startup_instructions           startup_instructions
++0.0692   codegen_instructions_dev       codegen_instructions_dev
++0.0446   interp_instructions            interp_instructions
++0.0233   compile_peak_bytes             compile_memory:compile_peak_bytes
++0.0214   compile_instructions           entry_instructions
++0.0197   interp_peak_bytes              interp_memory:interp_peak_bytes
++0.0197   compile_allocs                 compile_allocs
++0.0094   run_peak_bytes                 cost_golden_run:held_peak_bytes
++0.0068   emit_instructions              emit_instructions
++0.0060   compile_instructions           compile_instructions
++0.0003   run_peak_bytes                 cost_golden_run:perm_peak_bytes</code></pre>
+
+<p>the same sweep at one per cent gives the same order with every figure about a tenth of these, so the curve is near enough straight over that range and the table ranks reliably even though each number is an average over its own step.</p>
+
+<p><strong>two rows are two thirds of the board.</strong> the run program&#8217;s instruction count and its arena peak come to 1.1735 of a 1.6808 total. everything else together is worth less than the first row alone.</p>
+
+<p><strong>and the arena peak has had no work at all.</strong> it is worth 77% of what the run&#8217;s instruction count is worth, and nothing in the last fortnight&#8217;s log would suggest it: every entry in that window is instructions &#8212; the dispatch pooling, the beat rewind, the digit loop, the frames. the second most valuable row in the model has not been named once.</p>
+
+<p>the table also explains a fortnight of small moves. the interpreted row is worth a fifteenth of the run row, and three changes that took 1.7% off it moved the objective by two hundredths. the compile row is worth a hundred and eleventh of the run row, and it is the row this project has spent the most rounds arguing about.</p>
+
+<p>the figures are marginal at today&#8217;s ratios and move as the terms improve, which is why they carry a date. what would keep them current is a flag on the scoring script itself, printing this table out of the model it already holds.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>
