@@ -2733,6 +2733,14 @@ error[name]: unknown name `builders/run`
 
 <p>what is left is the loser&#39;s buffer. the candidate loop swaps the working vector with the outgoing best&#39;s, so when the winner&#39;s goes into the frame the other falls out of scope at the end of the iteration. the same trick a third time, bounded by one pair per dispatch that had more than one arity-matching candidate, and that count is not in hand.</p>
 
+<p><strong>what the runner read.</strong> 929,300,332 to 923,151,727, a fall of 6,148,605 (-0.66%), read twice in the same job with the same answer. the allocation counter falls 1,183,336 to 1,063,795 and the peak does not move. every other vein reported success &#8212; the twelve cost veins, all eight compile-side rows, both codegen tiers, emitting and start-up &#8212; which makes this the fifth runtime-only change in a row to move no layout.</p>
+
+<p>this container projected 4,869,682 and the runner read 6,148,605. same direction, larger, different silicon, and the third time this family has landed that way: the ratios are 1.26, 1.35 and 1.35. three is enough to say the container under-reads this row&#39;s improvements rather than that one reading was unlucky, and not enough to say by how much.</p>
+
+<p>the allocation count reproduced on both arms. the container read 1,183,336 for the base and 1,063,795 for this tree, and the runner read the same two numbers &#8212; a two-arm confirmation of the property this vein has and the instruction vein does not.</p>
+
+<p>the interpreted row has now fallen from 1,075,174,600 to 923,151,727 over ten builds and five wins, 14.1%. the objective moved by a hundredth of a point for it, for the third entry running: that term is more than 136% improved against its baseline and sits under a satiating curve, so the next six million buys almost nothing. a change wanting to move the number has to find production work or an unsatiated term.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>

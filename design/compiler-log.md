@@ -4895,3 +4895,48 @@ vector, so when the winner's goes into the frame, the other one falls out of
 scope at the end of the iteration. Pooling it is the same trick a third time,
 and the ceiling on it is one allocate-and-free pair per dispatch that had more
 than one arity-matching candidate. Unmeasured; the count is not in hand.
+
+---
+
+## 2026-09-19 — kanso#1545, CI's rows for the pooled frame node
+
+    interp_instructions   929,300,332 -> 923,151,727   -6,148,605  -0.6617%
+    interp_allocs           1,183,336 ->   1,063,795     -119,541
+    interp_peak_bytes         834,079 ->     834,079            0
+
+Read twice in the same job, the same number both times, so the disagreement was
+with the golden rather than within the run. Every other vein reported success:
+the twelve cost veins, all eight compile-side rows, both codegen tiers, emitting
+and start-up. A runtime-only change that moved no layout, the fifth running.
+
+**THE CONTAINER PROJECTED 4,869,682 AND THE RUNNER READ 6,148,605.** Same
+direction, larger, different silicon — the third time this family has landed
+that way, after kanso#1540 (5,073,171 projected against 6,858,880 read) and
+kanso#1543. Three is enough to say the container under-reads this row's
+improvements rather than that any one reading was unlucky; it is not enough to
+say by how much, and the ratio is 1.26, 1.35 and 1.35 on the three.
+
+**THE ALLOCATION COUNT REPRODUCED ON BOTH ARMS.** The container read 1,183,336
+for the base and 1,063,795 for this tree; the runner read the same two numbers.
+That is the property this vein has and the instruction vein does not, and it
+now has a two-arm confirmation rather than a one-sided one.
+
+**119,541 IS THE SAME COUNT kanso#1543 RECLAIMED VECTORS FOR.** Not a number
+near it. That change stopped allocating the vector for a set of frames and this
+one stopped allocating the node around the same set, so the set is fully
+accounted rather than merely reduced. What the two take together is 119,541
+frames from two allocations each to none.
+
+The peak did not move on either host, where kanso#1543's rose 616 for the
+vector it kept. A retained 80-byte node is not resident at the high-water mark,
+because the node it replaces was resident there before it.
+
+**THE INTERPRETED ROW SINCE THIS FAMILY STARTED.** 1,075,174,600 to 923,151,727
+on CI's readings, a fall of 14.1% over ten builds and five wins.
+
+**WHAT THE OBJECTIVE DOES WITH IT: almost nothing, again.** `interp_instructions`
+sits on the development side under a satiating curve and is now more than 136%
+improved against its baseline, so six million more buys a hundredth of a point.
+That is the model working as designed rather than failing, and it is the third
+entry in a row to say so. A change wanting to move the number has to find
+production work or an unsatiated term.

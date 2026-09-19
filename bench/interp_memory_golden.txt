@@ -195,7 +195,21 @@
 # the largest this counter has made. A container pair put the removed
 # allocate-and-free pairs at 119,541, which is the same quantity read by a
 # different instrument over a narrower scope.
-interp_allocs=1183336
+# 2026-09-19, kanso#1545, CI's sitting. interp_allocs 1,183,336 -> 1,063,795,
+# a FALL of 119,541, and interp_peak_bytes UNCHANGED at 834,079.
+#
+# A WIN TO BANK, and the count is the one to notice: 119,541 is exactly what
+# kanso#1543 reclaimed VECTORS for. The two changes take the same set of frames
+# from two sides -- that one stopped allocating the vector, this one the node
+# around it -- so the set is now fully accounted rather than merely reduced.
+#
+# BOTH ARMS REPRODUCED ACROSS HOSTS, which is the property this vein has and
+# the instruction vein does not. The container read 1,183,336 for the base and
+# 1,063,795 for this tree; the runner read the same two numbers. The peak did
+# not move on either host, where kanso#1543's rose 616 for the vector it kept:
+# a retained 80-byte node is not resident at the high-water mark, because the
+# node it replaces was resident there before.
+interp_allocs=1063795
 #
 # 2026-09-18, kanso#1518 against main at kanso#1517, CI's sitting.
 # 951,438 -> 961,165, a RISE of
