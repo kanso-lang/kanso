@@ -6003,3 +6003,46 @@ one to keep.
 
 `interp_allocs` and `interp_peak_bytes` are main's, untouched, so nothing the
 interpreter counts changed on this branch.
+
+---
+
+## 2026-09-19 — the relink seven broke on its sixth baseline, and it was a prediction
+
+    interp_instructions   923,151,727 ->  923,151,726      -1
+    compile_instructions   35,551,167 ->   35,549,341  -1,826
+    emit_instructions      51,619,793 ->   51,617,717  -2,076
+    entry_instructions    126,732,646 ->  126,729,042  -3,604
+    library_instructions  127,188,882 ->  127,184,937  -3,945
+    startup_instructions    3,363,672 ->    3,363,742     +70
+
+Every row read twice in the same job and agreed with itself.
+
+**THE SEVEN BROKE.** This branch's interpreted row had risen by exactly seven
+on five consecutive baselines spanning 63,653,622 instructions. The fifth was
+written into the golden as a PROJECTION before CI measured it — 932,183,921 —
+and the runner read 932,183,921. That agreement was recorded here as "the
+strongest form the claim has taken".
+
+On the sixth baseline it is MINUS ONE.
+
+**AND NOTHING ABOUT THE BRANCH CHANGED.** What changed underneath it was
+kanso#1543 landing the dispatch-pooling family, which moved the interpreter's
+own code. So the seven was a property of the five trees it was measured on
+rather than a constant of the relink, and the residue that looked like a law
+was a coincidence of layout that survived five baselines and died on the sixth.
+
+**THE PREDICTION BEING RIGHT ONCE IS WHAT MAKES THIS WORTH WRITING DOWN.** A
+projection confirmed in advance is the strongest evidence a claim of this kind
+can get short of a mechanism, and this one had it. It still broke, because
+nothing ever isolated WHY the relink cost seven — the entries that recorded it
+were careful to say the delta arrived with the change and left the mechanism
+open, and that caution is the only reason this is a correction rather than a
+theory collapsing.
+
+So: no projection replaces the figure above, and the next merge that moves this
+baseline gets no prediction from this branch. Five agreements bought one wrong
+answer in both size and sign.
+
+**The other five rows are layout re-basings** of a few thousand each. The beat
+cache changes src/runtime.c, which those rows carry without compiling, so what
+moved is where the bytes sit.

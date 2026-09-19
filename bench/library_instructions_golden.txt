@@ -1008,7 +1008,14 @@
 # Layout, the same way.
 # 2026-09-18, kanso#1543. 127,186,008 -> 127,188,882, +2,874. Layout, as above.
 # Counted twice in the job, identical both times.
-library_instructions=127188882
+# 2026-09-19, kanso#1504 on the tree merged after kanso#1543, CI's sitting.
+# library_instructions 127,188,882 -> 127,184,937, a move of -3,945, and the
+# second reading in the same job agreed.
+#
+# A LAYOUT RE-BASING. The beat cache changes src/runtime.c, which these rows
+# carry without compiling, so what moves is where the bytes sit rather than
+# what the front end decides.
+library_instructions=127184937
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

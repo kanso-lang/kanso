@@ -225,4 +225,11 @@
 # 2026-09-18, kanso#1543. 51,617,476 -> 51,619,793, +2,317. Layout: this gate
 # anchors on `codegen::emit_ir` and the diff is in `eval`. Counted twice in
 # the job, identical both times.
-emit_instructions=51619793
+# 2026-09-19, kanso#1504 on the tree merged after kanso#1543, CI's sitting.
+# emit_instructions 51,619,793 -> 51,617,717, a move of -2,076, and the
+# second reading in the same job agreed.
+#
+# A LAYOUT RE-BASING. The beat cache changes src/runtime.c, which these rows
+# carry without compiling, so what moves is where the bytes sit rather than
+# what the front end decides.
+emit_instructions=51617717

@@ -505,5 +505,23 @@
 # residue that has not moved by one and has been right in advance once. It is
 # still not a measurement: CI measures this tree and the row is copied out of
 # the job log if it disagrees.
-interp_instructions=923151734
+# 2026-09-19, kanso#1504 on the tree merged after kanso#1543, CI's sitting.
+# 923,151,727 -> 923,151,726. MINUS ONE.
+#
+# THE SEVEN BROKE, and this file predicted 923,151,734. The relink residue had
+# read +7 on five consecutive baselines spanning 63,653,622 instructions, and
+# the fifth of those was a projection written here in advance that the runner
+# then confirmed exactly. On the sixth it is -1.
+#
+# So the seven was a property of those five trees rather than a constant of the
+# relink, and the projection that was right five times was wrong on the sixth
+# in both size and SIGN. Nothing about the branch changed between the fifth
+# reading and this one; what changed underneath it was kanso#1543's dispatch
+# pooling, which moved the interpreter's own code and with it whatever the
+# seven was measuring.
+#
+# The figure below is CI's reading of this tree. No projection replaces it, and
+# the next merge that moves the baseline gets no prediction from this file --
+# five agreements bought one wrong answer, which is the whole lesson.
+interp_instructions=923151726
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
