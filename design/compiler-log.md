@@ -5398,13 +5398,19 @@ Staging `bench/` with `arena_peak_bytes` at 9,244,368 and scoring: welfare
 **77.2707 to 82.0199, +4.7492**. Every compiler change merged in the two days
 before this entry moved the objective by 0.02 together.
 
-**The cause was written down eleven days ago, in the benchmark's own header.**
+**A cause was written down eleven days ago, in the benchmark's own header.**
 `bench/runbench/runbench/split/scanbench.kso` records a 2026-09-08 measurement:
-codegen reads `beat_loops`, and `beat_loops` drops every group whose file begins
-`std/` or `lib/` from the carry tier — `src/beat.rs:196` — so `regexp/walked`'s
-carry is stripped and its per-position scratch survives to the end of the scan.
-Clearing that filter gives a peak of 1,048,576 bytes over one block with
-`alloc_bytes` unchanged: the same allocation, now reclaimed.
+codegen reads `beat_loops`, `beat_loops` drops every group whose file begins
+`std/` or `lib/` from the carry tier — `src/beat.rs:196` — and clearing that
+filter gives a peak of 1,048,576 bytes over one block with `alloc_bytes`
+unchanged: the same allocation, now reclaimed.
+
+The measurement is the header's and stands. The mechanism it names does not, and
+the entry below reports the instrumentation: exactly eleven imported groups lose
+a carry at that filter, and `regexp/walked/5` is not among them. It is classified
+grow-only because another group tail-calls it, so it has no carry to strip and
+the filter never reaches it. What clearing the filter changes is some other
+loop's reclamation, and which one is open.
 
 Clearing it wholesale is not the fix and was measured not to be: runbench was
 still running after ten minutes against a 0.4-second baseline, because every
@@ -5461,3 +5467,42 @@ a bare parameter only when its inferred set is within THREADED, so a bare
 parameter carrying ordinary heap becomes a crossing position and would be
 evacuated every iteration. Giving that path the fixpoint is where the next
 attempt goes.
+
+## 2026-09-19 — eleven groups, and the walker is not one of them
+
+The cut above was made twice, by two different criteria, and both came back with
+byte-identical counters and byte-identical instructions: `allocs` 6,550,655,
+`alloc_bytes` 494,316,813, `arena_peak_bytes` 35,458,768 over 33 blocks, and
+13,618,672,806 instructions. Two changes agreeing to the byte is a thing to
+explain rather than to report twice, so the filter was instrumented instead.
+
+Under `KANSO_THREAD_REPORT`, building runbench, exactly ELEVEN imported groups
+reach the point where the prefix strips a carry:
+
+    json/array_open/3    carry [1]     regexp/more_flags/4     carry [2]
+    list/holds_all?/2    carry [0]     sha256/compress/4       carry [0, 1]
+    list/found_in/2      carry [0]     regexp/leading_flags/3  carry [2]
+    list/holds_any?/2    carry [0]     sha256/turned/3         carry [0, 1]
+    json/obj_open/3      carry [1]     sha256/blocked/3        carry [1]
+    sha256/digested/4    carry [1]
+
+Both cuts therefore did the same thing — let those eleven carry — which is why
+they agreed. 7.4x is what those eleven cost, against 3,145,728 bytes of peak.
+
+**`regexp/walked/5` is not in the list, and cannot be.** Its report line reads
+`grow-only: another group tail-calls it (unbracketed entry)`, so `classify` gives
+it `GrowOnly`; `demotable_entries` only considers `OutsideTailCall`, and the
+carry tiers only ever see a group that got one. A group with no carry has none
+to strip.
+
+So the scanbench header's measurement stands and its mechanism does not. Clearing
+the filter really does take that benchmark's peak to one block — the header
+measured it — but not by restoring the walker's carry, because the walker has
+none. What it restores is some other loop's, and naming that loop is the next
+step rather than a detail: the 29,360,128 bytes are still where they were, and
+the instrumentation says they are not behind this filter in the way the header
+says they are.
+
+Recorded rather than left, because the header's sentence has been read three
+times now as a ready-made diagnosis, including once in the section above this
+one before the instrumentation ran.
