@@ -5239,6 +5239,85 @@ the measurement rather than by an attempt.
 
 ---
 
+## 2026-09-19 — where the production run spends, measured because the objective says to look there
+
+**OPEN, measured, nothing built.** Three changes tonight took 15.8 million off
+the interpreted row and moved welfare 77.25 to 77.27. That is the model working:
+`interp_instructions` sits on the DEVELOPMENT side and is 136% improved against
+its baseline, so it is deep into its satiating curve. `scripts/welfare/welfare.kso`
+says where the money is in one line:
+
+    d_run_speed = dimension run_speed_counters "run speed" 2.0 0.45
+
+Satiation 2.0 — late, so doublings keep paying — and 0.45 of the production
+side. Three entries tonight ended with "a change wanting to move the number has
+to find production work or an unsatiated term", and then the next change went
+back to the interpreter. This is the first look at the other side.
+
+**THE RUN PROGRAM, PROFILED.** bench/runbench is the whole production speed term
+since the 2026-09-06 gavel. Its top frames, self cost, on this container:
+
+    1,840,368,355   PROGRAM TOTALS
+      392,547,176   21.33%   json/encode_onto
+      154,484,748    8.39%   json/obj_key_start
+       97,131,375    5.28%   json/parse_value
+       91,704,604    4.98%   runbench/tally
+       85,720,338    4.66%   json/array_delim
+       84,209,220    4.58%   render_ryu
+       77,645,700    4.22%   json/scan
+       65,074,779    3.54%   json/str_escape
+       61,672,983    3.35%   k_beat_iter
+       49,334,986    2.68%   k_b_at
+
+**AND DIVIDED, which is the rule the two declines tonight bought.** A share is
+not a magnitude and a total says nothing about what one call costs:
+
+    encode_onto     2,380,860 calls    164.9 instructions a call
+    obj_key_start     784,179 calls    197.0
+    parse_value     1,100,187 calls     88.3
+    k_b_at            690,000 calls     71.5
+    k_beat_iter     2,685,021 calls     23.0
+
+`encode_onto` is the largest frame in the production workload by a factor of
+two and a half, and 164.9 instructions a call is a lot for a function whose job
+is mostly appending a few bytes.
+
+**THE OBVIOUS SUSPICION IS WRONG, AND READING THE OUTPUT SAID SO BEFORE
+ANYTHING WAS BUILT.** `encode_onto` is an overloaded group of EIGHT arms, all
+of arity two — `true`, `false`, `json_null`, then `n:int`, `x:float64`,
+`s:string`, `xs:[]some` and `m:map[string some]`. A document of mostly strings
+and numbers looks as though it must reach its arm past the three nullary tests
+every call, which would make arm selection a share of the 164.9.
+
+The emitted IR settles it:
+
+    %t9 = extractvalue %KValue %x1, 0
+    switch i64 %t9, label %L7 [
+      i64 2, label %arm0    i64 3, label %arm1
+      i64 0, label %arm3    i64 1, label %arm4
+      i64 6, label %arm5    i64 9, label %arm6
+      i64 10, label %arm7   i64 7, label %L8
+    ]
+
+A jump table on the value's tag. Eight arms cost one switch, arm ORDER decides
+nothing, and the only linear step is the record case at `L8`, one
+`k_check_rec_fast` for tag seven. The dispatch is not where the instructions
+are.
+
+**SO THE 164.9 IS THE APPENDING.** Per call the common path is one
+`k_not_failure` on the accumulator, the switch, and an arm body: a string is
+`k_b_append_mut_byte`, `escape_onto`, `k_b_append_mut_byte` — three calls and a
+whole escape pass — where an int or a float is one `k_b_append_rendered`. That
+is real work rather than overhead, and it is why the frame is large.
+
+**TWO CHANGES DIED TONIGHT FOR WANT OF THIS STEP.** The loser's buffer and the
+frame filter were both built on a suspicion that the code would have refuted,
+and this one was refuted for the price of reading eighty lines of IR. The lead
+stays open and its shape has changed: what to attack in the encoder is the
+appending path, and nothing here says that path is wasteful.
+
+---
+
 ## 2026-09-17 — the beat rewind's fast path: 23 instructions to 15
 
 `k_beat_iter` is what a compiler-proven beat loop calls between iterations to
