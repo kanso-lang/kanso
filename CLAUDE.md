@@ -601,6 +601,21 @@ So, before an argument rests on a number:
   that ages is always the one nobody's task list mentions.
 - **Never blanket-resolve conflicts** (`checkout --ours`/`--theirs`) on
   runtime.c or any load-bearing file — resolve hunk by hunk.
+- **A RESOLUTION THAT KEEPS BOTH SIDES LEAVES A PARAGRAPH TWICE, AND EVERY
+  STRUCTURAL CHECK PASSES OVER IT.** Found on 2026-09-19: kanso#1502 carried
+  five long paragraphs of docs/compiler.html in duplicate, each copy two lines
+  after the other with a blank line between, and the page rendered. Markers,
+  unmerged paths, lost sections, duplicate section numbers and ascending
+  numbers were all clean. kanso#1504 had the same five, so the shape is what
+  this repo's page conflicts do rather than one bad afternoon. What saw it was
+  `golden_prose`, reporting one drifted number FOUR times instead of twice —
+  a count, not a name. So after resolving docs/compiler.html, check for a long
+  line that appears more than once, and read a repeated drift count as the
+  duplicate it is:
+
+  ```
+  grep -c 'data-golden="<the key golden_prose named>"' docs/compiler.html
+  ```
 - **No fire-and-forget merges.** Do not arm auto-merge and move on: wait
   for CI green, merge, and verify the content landed on origin/main —
   `state == MERGED` plus a grep of the changed lines. If CI fails, fix
