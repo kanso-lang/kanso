@@ -220,4 +220,9 @@
 # the job, identical both times.
 # 2026-09-19, kanso#1502 on the tree merged after kanso#1543 and kanso#1547,
 # CI's sitting. emit_instructions 51,619,793 -> 51,616,373, a move of -3,420.
-emit_instructions=51616373
+#
+# 2026-09-19, kanso#1502 re-merged onto main after kanso#1552 and kanso#1553,
+# CI's sitting on run 35419502516. emit_instructions 51,616,373 -> 51,618,058, +1,685 (+0.0033%).
+# `codegen::emit_ir` inclusive, in the compiler's own process. Layout again:
+# the emitter writes the same IR either way. `emit_again` read 51,618,058.
+emit_instructions=51618058

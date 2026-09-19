@@ -2224,7 +2224,13 @@
 # Counted twice in the job, identical both times.
 # 2026-09-19, kanso#1502 on the tree merged after kanso#1543 and kanso#1547,
 # CI's sitting. compile_instructions 35,551,167 -> 35,549,049, a move of -2,118.
-compile_instructions=35549049
+#
+# 2026-09-19, kanso#1502 re-merged onto main after kanso#1552 and kanso#1553,
+# CI's sitting on run 35419502516. compile_instructions 35,549,049 -> 35,549,673, +624 (+0.0018%).
+# A layout row: `kanso check` stops before codegen, so a runtime.c change
+# cannot alter a decision this row counts, and the compiler's own bytes move
+# under it anyway. `compile_again` read 35,549,673.
+compile_instructions=35549673
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

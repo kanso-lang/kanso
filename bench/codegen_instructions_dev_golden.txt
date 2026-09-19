@@ -169,4 +169,9 @@
 # codegen_instructions_release could draw two values eleven apart on one binary
 # -- kanso#1502's job in this same sitting drew 6,820,866,355 and then
 # 6,820,866,344 -- and the name the pin fixes is what decided which.
-codegen_instructions_dev=596153756
+#
+# 2026-09-19, kanso#1502 re-merged onto main after kanso#1552 and kanso#1553,
+# CI's sitting on run 35419502516. codegen_instructions_dev 596,153,756 -> 596,158,173, +4,417 (+0.0007%).
+# The dev tier is -O0, so the shorter runtime.c barely registers.
+# `codegen_dev_again` read 596,158,173.
+codegen_instructions_dev=596158173

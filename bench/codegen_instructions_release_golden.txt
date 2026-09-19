@@ -256,4 +256,16 @@
 # codegen_instructions_release could draw two values eleven apart on one binary
 # -- kanso#1502's job in this same sitting drew 6,820,866,355 and then
 # 6,820,866,344 -- and the name the pin fixes is what decided which.
-codegen_instructions_release=6833786335
+#
+# 2026-09-19, kanso#1502 re-merged onto main after kanso#1552 and kanso#1553,
+# CI's sitting on run 35419502516. codegen_instructions_release 6,833,786,335 -> 6,825,827,822, a FALL of
+# 7,958,513 (-0.1165%).
+# THIS ROW GOES DOWN, which is unusual here and is the point: the release
+# tier is the only row that COMPILES src/runtime.c rather than carrying its
+# bytes, and this branch removes two divisions from the float renderer. Less
+# source at `-O3 -flto` is less work for clang and ld.
+#
+# `codegen_release_again` read 6,825,827,822, so kanso#1507's plugin pin and
+# kanso#1513's fixed-temp name are both holding on a tree that changes
+# runtime.c.
+codegen_instructions_release=6825827822

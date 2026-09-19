@@ -5643,6 +5643,102 @@ pages, which is a different question from the allocator reading its options.
 
 ---
 
+## 2026-09-19 — frames are 6.57% of the production run, and the threshold that would cut them costs more than it saves
+
+Three entries this week ended by saying a change wanting to move the objective
+has to find production work. This is what the production run spends getting
+into and out of functions, and what happens when the one lever that moves it is
+pushed.
+
+Measured on runbench at `0d164b55`, callgrind with `--dump-instr`, whole
+program 1,840,276,313 — two profiles agreeing to the instruction. Summing, over
+every function whose entry block ran, the leading callee-saved pushes and the
+stack reserve, plus the pops' own measured cost:
+
+    prologue   64,847,962   3.52%
+    pops       56,140,300   3.05%
+    together  120,988,262   6.57%
+
+A floor rather than a total, because the epilogue's `add $N,%rsp` is not
+counted. Larger than `render_ryu` at 4.58% and larger than the whole beat
+machinery at 5.09%, and until now it had no name.
+
+    30,952,350  d_json/encode_onto_2     2,380,950 calls, 7 prologue instructions
+    14,303,721  d_json/parse_value_2     1,100,286
+    10,760,607  d_json/obj_key_start_4     827,739
+
+`encode_onto` is 21.33% of the run and 164.9 self instructions a call, twelve
+in and eight out. Reading its jump table and counting entries at each target
+gives the arm mix: the number arms take 379,530 calls and are four movs and a
+call; `true`, `false` and `null` take 562,500 between them and are five
+instructions each into a shared append; strings take 942,750; maps and lists
+the rest. So 39.6% of the calls into that dispatcher pay a frame sized by the
+arms they do not take.
+
+**Shrink-wrapping is not the lever, and that was checked rather than assumed.**
+Compiling `runbench.ll` with `-mllvm -enable-shrink-wrap=false` gives a
+byte-identical prologue, so LLVM is not sinking it either way. With a jump
+table to eight arms and callee-saved uses in several of them, the entry block
+is the only place that dominates them all.
+
+**And splitting the dispatcher would not help, which is the other obvious fix
+and is now measured.** The idea is to emit the cheap arms so they need no
+frame and tail-call the heavy ones, on the reading that the dispatcher's frame
+is sized by the arm bodies inlined into it. Linking `runbench.ll` by hand says
+otherwise. Marking `d_json/escape_onto_2` `noinline` — the string arm, the
+heaviest thing in there — takes the stack reserve from `0x58` to `0x38` and
+leaves all six pushes. Marking EVERY call site inside the dispatcher `noinline`,
+so no arm body is inlined at all, leaves all six pushes and `0x38` again.
+
+So the registers are the dispatcher's own. It holds both arguments live across
+the calls it makes — `k_not_failure`, `k_err_hop`, `k_check_rec_fast` — and a
+`KValue` is two words, so the two arguments alone are four registers that must
+survive a call. There is nothing there for an emitter-level arm split to remove,
+and the idea is declined without being built.
+
+**Inlining is the lever, and it is already where it should be.** The ladder
+beside the flag in src/main.rs was measured against 1000 and stops at 3000;
+these two rungs are new, on a `runbench.ll` byte-identical across every arm, so
+the only difference is what the linker's LTO was told:
+
+    225    1,938,999,983   343,128 bytes   22,317,482 calls
+    2000   1,840,276,313   424,088         18,812,341
+    4000   1,823,291,354   510,152
+    8000   1,821,134,592   567,496
+
+225 to 2000 removes 3,505,141 calls and 98,723,670 instructions: 28.2 a call,
+which is a frame plus the call and the return. That is the mechanism, priced.
+
+**And 4000 is declined, on the objective rather than on `.text`.** The comment
+that chose 2000 gave binary size as the reason, and machine-code size has no
+welfare term — Clay ruled that on 2026-09-05 — so that reason could not have
+decided it. The scored reason is `codegen_instructions_release`, weight 0.15 on
+the production side. Same box, two passes, each arm byte-identical:
+
+    release codegen   6,827,333,184 -> 7,075,918,942   +248,585,758   +3.64%
+    dev codegen         595,943,218 ->   595,943,218   byte-identical
+
+The dev tier cannot move: `dev_clang` passes `-O0` and no `-mllvm`.
+
+Scored by applying each ratio to the goldens, the run gain alone takes welfare
+77.27 to 77.33, and the pair together to **77.26** — one hundredth below the
+floor. The break-even was worked out before the codegen arm finished, and
+written down then so it could be scored rather than fitted: the raise pays only
+if the release build costs under 3.2% more. It came in at 3.64%.
+
+It is worse than that once travel is allowed for. The same comment records that
+CI's work row moved 59% of what this container's ladder projected for 1000 to
+2000. At that travel the run gain is nearer 0.54% and the trade is not close.
+
+**The comment beside the flag held half of this and it was not read first.**
+The ladder, the non-monotonicity and the 59% travel factor were all one file
+away, and two arms were built before anyone looked. What the arms added is real
+— the codegen price and the welfare verdict, neither of which was there — but
+the rule stands and this is another instance of it: read the thing the number
+describes before running anything against it.
+
+---
+
 ## 2026-09-17 — the digit loop carried a value it only needed at the end, and then the tail gave it back
 
 `render_ryu` is 84,209,220 instructions of runbench, 4.58%, 440.7 a float over
@@ -6327,3 +6423,47 @@ Regenerated from CI's readings, which is the only place they can come from: this
 container's toolchain is not the runner's. Welfare is unmoved at 77.2774,
 `library_instructions` being no term of the objective and the start-up move
 being nineteen parts per million of a row weighted 0.25 on the development side.
+
+## 2026-09-19 — kanso#1502 on CI's rows, and five paragraphs a resolution kept twice
+
+The branch was red on six veins and on the ratchet. The six are the ordinary
+thing: every compile-side golden still carried main's value while the branch
+changes `src/runtime.c`. CI's sitting, run 35419502516:
+
+    compile_instructions          35,549,049 ->     35,549,673       +624   +0.0018%
+    entry_instructions           126,727,524 ->    126,728,843     +1,319   +0.0010%
+    interp_instructions          923,151,719 ->    923,151,727         +8
+    emit_instructions             51,616,373 ->     51,618,058     +1,685   +0.0033%
+    codegen_instructions_dev     596,153,756 ->    596,158,173     +4,417   +0.0007%
+    codegen_instructions_release  6,833,786,335 -> 6,825,827,822 -7,958,513  -0.1165%
+
+The first five are layout, in both directions, as a shifted binary reads. The
+sixth is work, and it goes down: the release tier is the only row that compiles
+src/runtime.c rather than carrying its bytes, and this branch removes two
+divisions from the float renderer. Every codegen and compile reading reproduced
+in the same job, which is kanso#1507's plugin pin and kanso#1513's fixed-temp
+name still holding on a tree that changes runtime.c.
+
+Scored on those rows the tree reads 77.2796 and the floor is banked there.
+
+THE RATCHET FAILURE WAS SOMETHING ELSE, and it is the part worth keeping. The
+job reported `golden_prose` ALREADY RED before any mutation, on one drifted
+number quoted four times:
+
+    drifted: compiler.html :: compile.library_instructions shows 127,183,938,
+             golden says 127,184,941
+
+Four, because an earlier conflict resolution on this branch had kept both sides
+of five long paragraphs. `docs/compiler.html` carried each of them twice, with
+a blank line between the copies, and the page still rendered: main has two
+`compile.library_instructions` spans and the branch had four. The resolution
+check this repo uses looks for conflict markers, unmerged paths, lost sections,
+duplicate section numbers and ascending numbers, and every one of those passed
+over a page with ten duplicated lines in it. The duplicates are removed here and
+the check now also fails a paragraph that appears twice.
+
+That is the standing shape from 2026-09-18 again: a verification that names one
+file keeps passing while the defect moves next door. It took a gate that reads
+the page's numbers to find it, and it found it by counting a drift four times
+instead of twice.
+
