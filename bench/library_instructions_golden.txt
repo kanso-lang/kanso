@@ -931,6 +931,9 @@
 # CI's sitting. 126,813,486 -> 126,814,937, a RISE of 1,451
 # (+0.0011%). LAYOUT, same reason: this route evaluates no constant.
 #
+#
+# 2026-09-18, re-merged onto main after kanso#1516. THE VALUE BELOW IS MAIN'S,
+# carried forward; the merged reading is CI's.
 # 2026-09-18, kanso#1516 on the tree merged with main, CI's sitting.
 # 126,810,299 -> 126,824,214, a RISE of 13,915 (+0.0110%).
 # LAYOUT. src/eval.rs is the compiler, so its bytes move and every row that
