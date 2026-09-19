@@ -5236,3 +5236,58 @@ looks like an obvious place for a pre-filter on the first argument's type. At
 2.61 tried and 202,987 of 456,967 matching — 44.4% — there is little to filter:
 the loop already tries barely more arms than it accepts. That idea is closed by
 the measurement rather than by an attempt.
+
+## 2026-09-19 — a variable nothing reads moves the interpreted row by 117
+
+STATUS.md's normalization row has carried the same Owes since 2026-09-15:
+measure cloud's candidate for the six instructions two CI jobs disagreed by on
+`interp_instructions`, or replace it. The candidate was an argument rather
+than a measurement — that where the allocator's heap starts moves with the
+size of the file the loader mapped, so a term proportional to work fits where
+a constant does not. This measures the half of it that can be measured here.
+
+Two arms, one tree at `0d164b55`, the interp gate's own anchor and exclusions
+(`run_interpreted_on_stack`, the printed line subtracted), each read twice and
+byte-identical both times:
+
+    env -i PATH=... GLIBC_TUNABLES=...                      972,776,892
+    env -i PATH=... GLIBC_TUNABLES=... KANSO_FIXED_TEMPX=1  972,777,009   +117
+
+Nothing in the tree reads `KANSO_FIXED_TEMPX`. The variable is nineteen bytes
+of environment block, which every child carries on its initial stack, and the
+row moves 117 instructions for it. The allocation counters do not move at all:
+`interp_allocs` 1,063,795, `interp_alloc_bytes` 75,247,333 and
+`interp_peak_bytes` 834,079 are byte-identical across the two arms. So the
+interpreter asked the allocator for exactly the same things in the same order
+and the row still moved.
+
+**117 against a six.** The residue two CI jobs disagreed by is three parts per
+billion of this row; a term that moves it twenty times that far for nineteen
+bytes of environment is amply large enough to produce one. That does not say
+the environment block moved CI's six — between two jobs on one commit the
+block is identical, so it cannot have. What it establishes is the class: this
+row feels where things land, not only what the interpreter does, and a term of
+that kind is present at a scale that dwarfs the disagreement.
+
+**The corpus-size arms are contaminated and are reported as such.** Growing
+the corpus file with comment lines the interpreter never runs also moved the
+row — 65 instructions for 62 KB and 4,484 for 124 KB — and that looked like
+the candidate's own claim about the mapped file. It is not clean. The bigger
+file really does cost the loader more: `interp_allocs` 1,063,795 -> 1,063,800,
+`interp_alloc_bytes` +187,488, `interp_peak_bytes` +78,649. The anchor excludes
+the loader's frames and does not exclude the allocator state the loader leaves
+behind, so those arms mix a layout move with a real one. The environment arm is
+the clean one and is what the finding rests on.
+
+Also worth the sentence: the two contaminated arms are not linear in file size,
+65 then 4,484, so whatever they move is a boundary rather than a cost per byte.
+The gate pins `glibc.malloc.mmap_threshold` at 131,072 and the larger corpus is
+124,621 bytes, which is close enough to be the first thing to look at and is not
+evidence of anything yet.
+
+**What the row still owes.** A carrier. Both arms here say the row moves with
+external state; neither names the address or the structure that carries it, and
+naming it is what an exclusion or a normalization would need. The frames that
+moved between the contaminated arms are mimalloc's own — `_mi_os_commit_ex`,
+`mi_bitmap_setN`, `_mi_prim_commit` — which is where to look and is not yet a
+mechanism.

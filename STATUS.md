@@ -299,7 +299,23 @@ other instruction rows run from 4.8 million to 128 million, where three parts
 per billion is a fraction of one instruction, so none of them could have
 shown this either way.
 
-Owes: measure cloud's candidate, or replace it. That is the whole of it now.
+Owes: a carrier. Cloud's candidate was measured on 2026-09-19 and half of it
+holds. Two arms on one tree, the gate's own anchor and exclusions, each read
+twice and byte-identical: adding `KANSO_FIXED_TEMPX=1` to the run's `env -i`
+line moves the row from 972,776,892 to 972,777,009, +117, and nothing in the
+tree reads that variable. The allocation counters do not move at all across
+those arms. So the row feels where things land as well as what the interpreter
+does, and it feels it twenty times harder than the six the two jobs disagreed
+by — which establishes the class the six belongs to without naming what carried
+it. The environment block is identical between two jobs on one commit, so it is
+not itself the cause.
+
+The corpus-size arm, which looked like the candidate's own claim about the
+mapped file, is contaminated and does not carry it: the bigger file costs the
+loader five more allocations and 187,488 more bytes, and the anchor excludes
+the loader's frames while sharing its allocator. What is left to do is name the
+address or the structure that carries the move, which is what an exclusion or a
+normalization would need. The frames that moved are mimalloc's own.
 The second item this row carried — `interp_instructions.sh` printing
 `.text`, `.data` and `.bss` where `compile_instructions.sh` prints `.rodata`
 too — was built by kanso#1508 and comes off on 2026-09-18. Line 47 of the

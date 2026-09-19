@@ -2837,6 +2837,22 @@ error[name]: unknown name `builders/run`
 
 <p>and it retires a lead. a loop trying twenty arms to find one looks like an obvious place for a pre-filter on the first argument&#39;s type. at 2.61 tried and 202,987 of 456,967 matching, the loop already tries barely more arms than it accepts, so there is little to filter. closed by the measurement rather than by an attempt.</p>
 
+
+<h2 id="feelstheblock"><span class="sec-num">107</span>a variable nothing reads, and 117 instructions</h2>
+
+<p>the interpreted row has been disagreeing with itself. two ci jobs on one commit read <strong>2,178,502,266</strong> and <strong>2,178,502,272</strong> &#8212; six instructions apart, three parts per billion, each stable across the gate&#8217;s own second reading. the standing explanation was an argument rather than a measurement: that where the allocator&#8217;s heap starts moves with the size of the file the loader mapped, so the residue is a term proportional to work rather than a constant.</p>
+
+<p>here is the half of that which can be measured on one box. two arms, one tree, the gate&#8217;s own anchor and exclusions, each read twice and byte-identical both times:</p>
+
+<pre><code>env -i PATH=... GLIBC_TUNABLES=...                      972,776,892
+env -i PATH=... GLIBC_TUNABLES=... KANSO_FIXED_TEMPX=1  972,777,009   +117</code></pre>
+
+<p>nothing in the tree reads that variable. it is nineteen bytes of environment block, which a process carries on its initial stack, and the row moves 117 instructions for it. the allocation counters do not move at all: traffic, bytes and peak are byte-identical across the two arms. the interpreter asked the allocator for the same things in the same order, and the row still moved.</p>
+
+<p>so the row feels where things land as well as what the interpreter does, and it feels it twenty times harder than the six the jobs disagreed by. that is the class of term the disagreement belongs to. it is not the cause of that particular six &#8212; between two jobs on one commit the environment block is identical, so it cannot be &#8212; and saying which term carried the six still wants a carrier named.</p>
+
+<p><strong>and the arm that looked like the candidate&#8217;s own claim was contaminated.</strong> growing the corpus file with comment lines the interpreter never runs moved the row too, 65 instructions for 62 KB and 4,484 for 124 KB. that reads as the mapped file doing exactly what the candidate said. but the bigger file costs the loader more allocations &#8212; traffic up five, bytes up 187,488, peak up 78,649 &#8212; and the anchor excludes the loader&#8217;s frames while sharing its allocator. that arm mixes a layout move with a real one and cannot carry the claim. the environment arm can, because nothing reads the variable and nothing about the run changes except nineteen bytes of block.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>
