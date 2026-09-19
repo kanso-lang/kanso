@@ -2903,7 +2903,33 @@ KANSO_FIXED_TEMPX=1      595,943,490   nineteen bytes, read by nothing</code></p
 <p>so an environment block is a term to hold still like any other. adding a variable to one tier&#8217;s command re-bases that tier&#8217;s row whether or not anything reads it, and the 2026-09-15 rule covers it: put the state into a known one rather than explain it afterwards.</p>
 
 
-<h2 id="theframestoll"><span class="sec-num">109</span>six and a half per cent, getting in and out of functions</h2>
+<h2 id="feelstheblock"><span class="sec-num">109</span>a variable nothing reads, and 117 instructions</h2>
+
+<p>the interpreted row has been disagreeing with itself. two ci jobs on one commit read <strong>2,178,502,266</strong> and <strong>2,178,502,272</strong> &#8212; six instructions apart, three parts per billion, each stable across the gate&#8217;s own second reading. the standing explanation was an argument rather than a measurement: that where the allocator&#8217;s heap starts moves with the size of the file the loader mapped, so the residue is a term proportional to work rather than a constant.</p>
+
+<p>here is the half of that which can be measured on one box. two arms, one tree, the gate&#8217;s own anchor and exclusions, each read twice and byte-identical both times:</p>
+
+<pre><code>env -i PATH=... GLIBC_TUNABLES=...                      972,776,892
+env -i PATH=... GLIBC_TUNABLES=... KANSO_FIXED_TEMPX=1  972,777,009   +117</code></pre>
+
+<p>nothing in the tree reads that variable. it is one more entry in the environment block, and the row moves 117 instructions for it. the allocation counters do not move at all: traffic, bytes and peak are byte-identical across the two arms. the interpreter asked the allocator for the same things in the same order, and the row still moved.</p>
+
+<p>and the carrier is named, because the term is exactly linear in the number of variables. four arms, each read twice and byte-identical:</p>
+
+<pre><code>0 extra   972,776,892
+1 extra   972,777,009   +117
+2 extra   972,777,126   +117
+3 extra   972,777,243   +117</code></pre>
+
+<p>117 a variable, to the instruction, for variables nothing in the tree reads. layout does not do that: adding bytes to a block moves an address once and by whatever the alignment says, and it does not charge the same toll four times running. a scan does. diffing the two profiles frame by frame names it: the frames that move are <code>getenv</code>, <code>__strncmp_avx2</code>, and the allocator&#8217;s own <code>_mi_prim_getenv</code>, <code>_mi_strnicmp</code> and <code>_mi_toupper</code>. mimalloc looks its options up by name, each lookup walks the environment block comparing as it goes, and one more variable is one more comparison in every walk.</p>
+
+<p>most of that is start-up and the row excludes it. the 117 is the part inside the anchor, which means the interpreter&#8217;s own thread resolves an allocator option while it runs. so this is not a term to explain: it is the 2026-09-15 rule&#8217;s own case, where the state can be put into a known one and the reading stops depending on it.</p>
+
+<p>it is still not the cause of the six two jobs disagreed by &#8212; between two jobs on one commit the environment is identical, and six is not a multiple of 117. what it settles is that this row has a term of that shape, twenty times the size of the disagreement, with a mechanism rather than a suspicion behind it.</p>
+
+<p><strong>and the arm that looked like the candidate&#8217;s own claim was contaminated.</strong> growing the corpus file with comment lines the interpreter never runs moved the row too, 65 instructions for 62 KB and 4,484 for 124 KB. that reads as the mapped file doing exactly what the candidate said. but the bigger file costs the loader more allocations &#8212; traffic up five, bytes up 187,488, peak up 78,649 &#8212; and the anchor excludes the loader&#8217;s frames while sharing its allocator. that arm mixes whatever the file&#8217;s size does with work the loader really did, and cannot carry the claim. the environment arm can, because nothing reads the variable, the allocation counters hold, and the toll is the same 117 every time it is charged.</p>
+
+<h2 id="theframestoll"><span class="sec-num">110</span>six and a half per cent, getting in and out of functions</h2>
 
 <p>the production run spends <strong>120,988,262</strong> instructions on frames &#8212; the callee-saved registers a function pushes on entry and pops on the way out, and the stack it reserves. that is <strong>6.57%</strong> of the whole program: 3.52% going in, 3.05% coming out, and it is a floor rather than a total, because the stack pointer&#8217;s own restore is not counted. more than rendering every float (4.58%), more than the entire arena beat machinery (5.09%), and until now it had no name.</p>
 

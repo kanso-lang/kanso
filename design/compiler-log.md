@@ -5568,6 +5568,81 @@ eleven going red on nothing a diff can explain.
 
 ---
 
+## 2026-09-19 — a variable nothing reads moves the interpreted row by 117
+
+STATUS.md's normalization row has carried the same Owes since 2026-09-15:
+measure cloud's candidate for the six instructions two CI jobs disagreed by on
+`interp_instructions`, or replace it. The candidate was an argument rather
+than a measurement — that where the allocator's heap starts moves with the
+size of the file the loader mapped, so a term proportional to work fits where
+a constant does not. This measures the half of it that can be measured here.
+
+Two arms, one tree at `0d164b55`, the interp gate's own anchor and exclusions
+(`run_interpreted_on_stack`, the printed line subtracted), each read twice and
+byte-identical both times:
+
+    env -i PATH=... GLIBC_TUNABLES=...                      972,776,892
+    env -i PATH=... GLIBC_TUNABLES=... KANSO_FIXED_TEMPX=1  972,777,009   +117
+
+Nothing in the tree reads `KANSO_FIXED_TEMPX`. The variable is nineteen bytes
+of environment block, which every child carries on its initial stack, and the
+row moves 117 instructions for it. The allocation counters do not move at all:
+`interp_allocs` 1,063,795, `interp_alloc_bytes` 75,247,333 and
+`interp_peak_bytes` 834,079 are byte-identical across the two arms. So the
+interpreter asked the allocator for exactly the same things in the same order
+and the row still moved.
+
+**And the carrier is named, because the term is exactly linear in the count.**
+Four arms, each read twice and byte-identical:
+
+    0 extra   972,776,892
+    1 extra   972,777,009   +117
+    2 extra   972,777,126   +117
+    3 extra   972,777,243   +117
+
+117 a variable, to the instruction. Layout does not do that — adding bytes to a
+block moves an address once and by whatever the alignment says. A scan does.
+Diffing the two profiles frame by frame names it: the frames that move are
+`getenv`, `__strncmp_avx2`, and the allocator's own `_mi_prim_getenv`,
+`_mi_strnicmp` and `_mi_toupper`. mimalloc resolves its options by name, each
+lookup walks the environment block comparing as it goes, and one more variable
+is one more comparison in every walk. Most of that is start-up, which the
+anchor excludes; the 117 is the part inside it, so the interpreter's own thread
+resolves an allocator option while it runs.
+
+**117 against a six.** The residue two CI jobs disagreed by is three parts per
+billion of this row. It is not this term — between two jobs on one commit the
+environment is identical, and six is not a multiple of 117. What this settles
+is that the row carries a term of that shape, twenty times the size of the
+disagreement, with a mechanism behind it rather than a suspicion. And it is the
+2026-09-15 rule's own case: the state can be put into a known one, so the
+reading stops depending on it.
+
+**The corpus-size arms are contaminated and are reported as such.** Growing
+the corpus file with comment lines the interpreter never runs also moved the
+row — 65 instructions for 62 KB and 4,484 for 124 KB — and that looked like
+the candidate's own claim about the mapped file. It is not clean. The bigger
+file really does cost the loader more: `interp_allocs` 1,063,795 -> 1,063,800,
+`interp_alloc_bytes` +187,488, `interp_peak_bytes` +78,649. The anchor excludes
+the loader's frames and does not exclude the allocator state the loader leaves
+behind, so those arms mix a layout move with a real one. The environment arm is
+the clean one and is what the finding rests on.
+
+Also worth the sentence: the two contaminated arms are not linear in file size,
+65 then 4,484, so whatever they move is a boundary rather than a cost per byte.
+The gate pins `glibc.malloc.mmap_threshold` at 131,072 and the larger corpus is
+124,621 bytes, which is close enough to be the first thing to look at and is not
+evidence of anything yet.
+
+**What the row still owes.** The six. The environment term has a mechanism and
+a normalization; what carried the disagreement between two jobs whose
+environment was identical is still open, and the frames that moved between the
+contaminated corpus arms — `_mi_os_commit_ex`, `mi_bitmap_setN`,
+`_mi_prim_commit` — are where to look next. Those are the allocator committing
+pages, which is a different question from the allocator reading its options.
+
+---
+
 ## 2026-09-19 — frames are 6.57% of the production run, and the threshold that would cut them costs more than it saves
 
 Three entries this week ended by saying a change wanting to move the objective
