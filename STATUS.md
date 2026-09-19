@@ -44,14 +44,19 @@ kanso — sat here and was bounced on 2026-08-29: a performance question with no
 surface area is the implementer's, per the ledger's own charter, and the log
 carries the research mandate it left with.
 
-**Ten questions are waiting** — three blocking. Two were filed 2026-09-17 out
+**Nine questions are waiting** — two blocking. Both were filed 2026-09-17 out
 of one reading of a book sample: whether the wall `>>` survives the fused
-operators, and whether its simultaneous-failure merge was meant to go. The third
-was filed 2026-09-18, four hours late, after sitting in a session task list
-instead of here: whether kanso#1513's fixed-temporary pin covers both codegen
-tiers or the release tier alone. The tenth is the newest and is not blocking:
-where a golden lives that pins ONE engine's answer where another refuses, which
-the interpreter's integer boundary needs and the micro corpus cannot hold. The
+operators, and whether its simultaneous-failure merge was meant to go. A third
+was filed 2026-09-18 and withdrawn on 2026-09-19 without being ruled: whether
+kanso#1513's fixed-temporary pin covers both codegen tiers or the release tier
+alone. It went on the ground this file's own ledger states in its opening — an
+entry is there because it is about the language a user meets, and implementation
+details are decided by whoever holds the file — and a gate's environment
+variable is one. The reasoning and the decision are in design/compiler-log.md,
+and the entry cost a green pull request a day of blocking. The ninth is the
+newest and is not blocking: where a golden lives that pins ONE engine's answer
+where another refuses, which the interpreter's integer boundary needs and the
+micro corpus cannot hold. The
 compile-term question before them was filed and ruled on 2026-09-16: two
 welfares and a meta-welfare over them, with the floor re-ratcheted. The
 welfare-floor entry left
@@ -550,7 +555,7 @@ else. Chains that tested for `none` after an effect migrate.
     checked from here on two days and both refused by the tooling
   - whether an err gains readers a lambda callback can use
 
-**Ten questions wait in `design/pending-gavels.md`** — three blocking, seven
+**Nine questions wait in `design/pending-gavels.md`** — two blocking, seven
 open — each with a recommendation. Recounted four times on 2026-09-16: the
 binding-position question joined Open with its measurement, the escape
 path's byte-position scan joined it, measured on 2026-09-15 and filed to
