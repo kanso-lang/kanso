@@ -2682,7 +2682,95 @@ error[name]: unknown name `builders/run`
 
 <p>the new spec reads the trend gate&#39;s own list of goldens and asserts no counter name appears twice in one file, reporting the file, the name and the count. it was watched red by planting the fault, and the invariant was checked against the tree first: all twenty-nine goldens the gate names already hold at most one row per counter. it does not check values. whether a row holds the right number is what the gates are for; this checks that there is one of it to read, which is the property a merge breaks and no measurement can restore.</p>
 
-<h2 id="fixedtemps"><span class="sec-num">101</span>the object gets a name the run chooses</h2>
+<h2 id="framedback"><span class="sec-num">101</span>the frame handed back</h2>
+
+<p>&#167;99 kept the score buffer because nothing consumes it. the bindings buffer is the other half and cannot be kept the same way: it is moved into the environment frame, and the body needs it. what can be taken back is the frame itself, once the body has finished with it.</p>
+
+<p>whether that is ever possible was worth measuring before building. an instrumented binary took a weak reference to the frame before the body ran and tried to upgrade it afterwards:</p>
+
+<pre>  frames made   173,922
+  frames dead   173,921</pre>
+
+<p>one frame in the whole run outlives the body it was given to, and it is a lazy binding holding the environment it was defined in. a weak reference rather than a second strong one, on purpose: a strong clone would make every uniqueness check inside the body fail and change the thing being measured.</p>
+
+<p>so the dispatcher keeps a handle beside the one the body gets, and afterwards asks for the frame back. the vector inside goes into a pool above the tail-call loop and the next dispatch takes it instead of allocating.</p>
+
+<pre>  base    980,371,488
+  frame   977,583,095   -2,788,393   -0.28%
+
+                   base        frame       delta
+  __rust_alloc    1,243,349   1,123,808   -119,541
+  __rust_dealloc  1,231,221   1,111,680   -119,541
+  grow_one          112,013      94,847    -17,166
+  drop_slow         262,323     160,154   -102,169</pre>
+
+<p>the projection off the frame count was seven to ten and a half million and the build paid 2.79. that gap is the useful part. the projection priced 173,922 pairs at the 42.4 and 61.2 instructions &#167;99 and &#167;97 measured; what arrived is 119,541 pairs at 23.3 each. fewer pairs than frames, because a pooled vector that already has capacity does not allocate when it is reserved again. and a cheaper pair than either earlier measurement, because this one buys its saving: a reference count up, a reference count down and an unwrap check on every dispatch, against an allocate-and-free it no longer makes.</p>
+
+<p>the 102,169 fall in the reference-count teardown is the frame being unwrapped instead of dropped through it, and is the clearest single sign the change does what it says.</p>
+
+<p>the node around the vector is still allocated. every dispatch that binds anything still calls for one, and reclaiming what is inside does nothing about it. that is the other half of the projection, untouched.</p>
+
+<p>a spec caught this one too, the same spec, the third change running: an exact per-round allocation count that fell by two a round again. this is the change most likely to disturb what it measures, since it holds a second handle to a frame whose values are the containers the builders check for uniqueness. it does not, because the frame was already alive for the whole body &#8212; the extra handle moves when the frame dies, from inside the body to just after it, and uniqueness is decided while the body runs. the builders still answer what they answered before, and the number moved down.</p>
+
+<h2 id="pooledframe"><span class="sec-num">102</span>the node around the vector</h2>
+
+<p>&#167;100 took the vector out of a dead frame and let the node around it go. that was the tool&#39;s doing rather than a choice: <code>Rc::try_unwrap</code> reaches the value by consuming the handle, so the only route to the vector ran through freeing the box, and the next dispatch called <code>Rc::new</code> for a fresh one. <code>Rc::get_mut</code> reaches the same vector through a handle that stays alive.</p>
+
+<p>so the pool stops being a vector and becomes the frame itself. it lends its bindings to the candidate list at the top of the loop and takes them back once the body has finished.</p>
+
+<pre>  base    977,646,574
+  node    972,776,892   -4,869,682   -0.50%
+
+                        base         node       delta
+  interp_allocs       1,183,336    1,063,795   -119,541
+  interp_alloc_bytes 84,810,613   75,247,333  -9,563,280
+  interp_peak_bytes     834,079      834,079           0</pre>
+
+<p>the allocation count is the same 119,541 &#167;100 reclaimed vectors for. not a number near it &#8212; the same one, which says the two changes take the same set of frames from two sides, and that set is now fully accounted. the bytes divide exactly: 9,563,280 over 119,541 is 80.0, the size of the box around an environment.</p>
+
+<p>the price per pair is the undiscounted one. 4,869,682 over 119,541 is 40.7 instructions, against the 42.4 &#167;99 measured for a small allocate-and-free pair. &#167;100 got 23.3 for the same count because it bought its saving with a reference count up, a reference count down and an unwrap check on every dispatch. this change swaps one call for another at the same point in the same code and adds no traffic, so what arrives is close to the full price. together the two take 119,541 frames from two allocations each to none.</p>
+
+<p>the peak does not move, where &#167;100&#39;s rose 616 for the vector it kept. a retained 80-byte node is not resident at the high-water mark, because the node it replaces was resident there in the base arm too.</p>
+
+<p>one thing in the per-symbol table needs saying rather than publishing: the allocator&#39;s own frames fall by about 5.5 million and the reference-count teardown rises by about 3.06 million. that is attribution moving. the bindings a frame holds used to be dropped through a bare vector, where the compiler inlined the work into the dispatch loop, and they are now dropped out of a vector living inside the frame, where it lands in <code>drop_slow</code>&#39;s symbol. the same value drops happen either way, and nothing here isolates the shift, so it is recorded as a place the profiler filed work differently and not as a second effect. the three counters above are what the claim rests on, each read twice.</p>
+
+<p>the uniqueness test got stricter and that is safe here. <code>try_unwrap</code> reads the strong count alone; <code>get_mut</code> reads the weak count too, so a frame with a live weak handle would be reclaimed by the first and refused by the second. nothing in the compiler takes a weak handle to an environment &#8212; the instrumented build in &#167;98 that did was reverted &#8212; so the two agree today, and the difference is written into the source, because the day something takes one this becomes a quiet loss of reuse.</p>
+
+<p>the spec caught it again, the fourth change running: the per-round allocation count fell by two a round once more, 4,203 to 3,603, with the builders still answering what they answered before. four changes to one loop, the same two a round each time. the file declines to say which iterations those two belong to, and that restraint is the point &#8212; a decomposition guessed there is what the next reader would check their change against.</p>
+
+<p>what is left is the loser&#39;s buffer. the candidate loop swaps the working vector with the outgoing best&#39;s, so when the winner&#39;s goes into the frame the other falls out of scope at the end of the iteration. the same trick a third time, bounded by one pair per dispatch that had more than one arity-matching candidate, and that count is not in hand.</p>
+
+<p><strong>what the runner read.</strong> 929,300,332 to 923,151,727, a fall of 6,148,605 (-0.66%), read twice in the same job with the same answer. the allocation counter falls 1,183,336 to 1,063,795 and the peak does not move. every other vein reported success &#8212; the twelve cost veins, all eight compile-side rows, both codegen tiers, emitting and start-up &#8212; which makes this the fifth runtime-only change in a row to move no layout.</p>
+
+<p>this container projected 4,869,682 and the runner read 6,148,605. same direction, larger, different silicon, and the third time this family has landed that way: the ratios are 1.26, 1.35 and 1.35. three is enough to say the container under-reads this row&#39;s improvements rather than that one reading was unlucky, and not enough to say by how much.</p>
+
+<p>the allocation count reproduced on both arms. the container read 1,183,336 for the base and 1,063,795 for this tree, and the runner read the same two numbers &#8212; a two-arm confirmation of the property this vein has and the instruction vein does not.</p>
+
+<p>the interpreted row has now fallen from 1,075,174,600 to 923,151,727 over ten builds and five wins, 14.1%. the objective moved by a hundredth of a point for it, for the third entry running: that term is more than 136% improved against its baseline and sits under a satiating curve, so the next six million buys almost nothing. a change wanting to move the number has to find production work or an unsatiated term.</p>
+
+<h2 id="losersbuffer"><span class="sec-num">103</span>the third pooling, which does not pay</h2>
+
+<p>&#167;102 left the third of these. the candidate loop swaps the working vector with the outgoing best&#39;s, so when the winner&#39;s goes into the frame the other falls out of scope at the end of the iteration. pooling it is the same trick a third time. it costs.</p>
+
+<pre>  base     972,776,892
+  spare    976,125,124   +3,348,232   +0.34%
+
+                        base         spare       delta
+  interp_allocs       1,063,795    1,041,355    -22,440
+  interp_alloc_bytes 75,247,333   69,333,733  -5,913,600
+  interp_peak_bytes     834,079      834,303       +224</pre>
+
+<p>three readings of each arm, interleaved, each arm repeating its own figure exactly. and it does save the allocations it set out to save, which is what makes the result worth keeping: 22,440 pairs gone, and the row still up by 3.35 million. at the 40.7 instructions a pair &#167;102 measured those pairs are worth about 914,000, so the bookkeeping cost something over four million.</p>
+
+<p>the asymmetry is the whole answer. the spare has to be taken out and put back on every dispatch &#8212; 175,254 of them &#8212; to serve a reuse that fires on 22,440. about 24 instructions a dispatch, against a saving on one dispatch in eight. the two poolings that worked pay their bookkeeping on the same frames they save, one for one.</p>
+
+<p>the ceiling was measured before the build and was still too kind. an instrumented binary counted 38,294 dispatches leaving the working buffer with capacity, which projected about 1.56 million; the real saving was 22,440 pairs, because some of those buffers had capacity they recycled within the dispatch rather than allocated. so the count was 70% high before the overhead was counted at all.</p>
+
+<p>a ceiling computed from a count bounds the saving and says nothing about what collecting it costs. the two changes before this one happened to have negligible collection cost, and that is a fact about them rather than about the technique.</p>
+
+<p>three poolings attempted, two kept. the score buffer, the frame&#39;s vector and the frame&#39;s node took the interpreted row from 1,075,174,600 to 923,151,727. the loser&#39;s buffer is the one that does not pay, and this section is here so it is not tried a fourth time.</p>
+
+<h2 id="fixedtemps"><span class="sec-num">104</span>the object gets a name the run chooses</h2>
 
 <p>the release-tier codegen row measures a whole build, clang and <code>ld</code> included, and it had been drifting. pinning the linker plugin&#8217;s thread count took the drift from millions down to <strong>eleven</strong> instructions, and the eleven turned out to be a string: clang writes its link-time object to <code>/tmp/&lt;stem&gt;-XXXXXX.o</code> with fresh hex every run, <code>ld</code>&#8217;s plugin puts that path into a hash map, and the probe walks a different number of buckets depending on the name. twenty-two names on one binary and one corpus &#8212; twenty read <strong>5,163,341,031</strong> and two read <strong>5,163,341,042</strong>, reproducibly, the same name giving the same answer every time.</p>
 

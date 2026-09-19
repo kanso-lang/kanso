@@ -2174,19 +2174,9 @@
 # LAYOUT. src/eval.rs is the compiler's own Rust, so its bytes and the layout
 # under them move whether or not a decision this row counts changed. `kanso
 # check` stops before codegen and cannot see the dispatcher's runtime work.
-# 2026-09-19, kanso#1513, CI's sitting. 35,550,010 -> 35,551,167, a move of
-# +1,157, and `compile_again` read 35,551,167 in the same job.
-#
-# THE EIGHTH ROW THE PIN RE-BASES, and it was missed when the other seven were
-# copied in. The pin changes src/main.rs, so the binary's layout moves and
-# every row that tracks layout moves with it -- this one included, exactly as
-# CLAUDE.md's note says: `compile_instructions` USUALLY moves on an edit to the
-# compiler's own Rust, because src/main.rs IS the compiler whatever the front
-# end stops before.
-#
-# Seven rows were rebased from the job log and this one was not, because the
-# seven were taken from the ::error:: list and this row failed in a later
-# round. Read the summary block's own vein list, which named it.
+# 2026-09-18, kanso#1543. 35,550,010 -> 35,551,167, +1,157. Layout: the diff
+# is in the interpreter's dispatcher and `kanso check` stops before it runs.
+# Counted twice in the job, identical both times.
 compile_instructions=35551167
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that

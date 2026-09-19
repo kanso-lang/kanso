@@ -4679,6 +4679,395 @@ job logs.
 
 ---
 
+## 2026-09-18 — what the dispatcher still allocates, and why the profile cannot finish the sentence
+
+**OPEN, measured as far as this instrument goes.** kanso#1540's entry left one
+thread: after the score buffer stopped being allocated per dispatch, the
+dispatcher's remaining allocations are the bindings vector, which `bind_all`
+turns into the environment frame, and the `Rc<Env>` node holding it. Both
+outlive the dispatch, so neither is removable the way the score was. The
+question that follows is whether a frame whose strong count reaches one when
+the body returns can be handed back rather than freed.
+
+A debug-info profile of the interpreted corpus, `--auto=yes`, says this much:
+
+    175,246   iterations (frame_for, and the drop of `best`, agreeing)
+    229,625   Rc<T,A>::drop_slow            <- dispatch_loop'2
+    457,929   drop_in_place<Value>          <- Rc<T,A>::drop_slow
+    796,091   drop_in_place<Value>          <- dispatch_loop'2
+    521,766   instructions on the line `Some(Rc::new(Env::Many(binds, env)))`
+
+`drop_slow` runs only when a strong count reaches ZERO, so the dispatcher is
+taking an `Rc` to its last handle 229,625 times against 175,246 iterations —
+1.31 a time.
+
+**AND THAT IS NOT THE FRAME'S SHARE.** The dispatcher holds three kinds of
+`Rc`: the frame, the name it dispatches on, and the overload list. Every one of
+them is `Rc<T,A>::drop_slow` in the profile, because the type parameter is gone
+by then and `drop_in_place<Env>` is inlined into it — there is no edge in the
+whole file naming `Env`, on a debug-info build, with auto-annotation on. So
+1.31 per iteration bounds the frame's share from ABOVE and says nothing about
+where inside that bound it sits.
+
+Written down because the bound is the useful part and the temptation is to read
+it as the answer. If every one of those were the frame, reclaiming it would be
+worth 175,246 allocate-and-free pairs, which today's two measurements price
+between 42.4 and 61.2 instructions each: seven to ten million, about one per
+cent. That is the ceiling, and the floor is zero.
+
+**WHAT WOULD SETTLE IT IS A BUILD, not another profile.** The dispatcher moves
+the environment into `eval_body_flow`, so measuring how often it comes back
+unshared means keeping a handle and counting — which is most of the change
+itself. The profile has been run; the next step is the build.
+
+**AND THE BUILD SETTLED IT: 173,921 OF 173,922.** The bound above is the
+answer, at its ceiling. An instrumented binary took a `Weak` to the frame
+before the body ran and tried to upgrade it after:
+
+    interp_frames_made=173922
+    interp_frames_dead=173921
+
+One frame in the whole run outlives the body that was given it. The `Weak` was
+deliberate rather than a second strong handle, because a strong clone would
+make `Rc::try_unwrap` fail everywhere inside the body and change the behaviour
+being measured.
+
+So the frame is reclaimable 99.9994% of the time, and the prize is the full
+173,922 allocate-and-free pairs rather than some fraction of them: seven to ten
+and a half million instructions, 0.75% to 1.1% of the interpreted row, at the
+42.4 and 61.2 per pair that kanso#1540 and kanso#1538 measured.
+
+173,922 against the 175,246 iterations the profile counts is the dispatches
+whose parameter list binds nothing, where `bind_all` hands the parent
+environment back and builds no frame at all.
+
+**WHAT THE BUILD WOULD BE.** The dispatcher moves the environment into
+`eval_body_flow`, so the frame dies in there. Keeping the owner in the
+dispatcher and passing a reference would let `Rc::try_unwrap` take the
+`Env::Many(binds, parent)` back afterwards, and with it the bindings vector's
+allocation for the next iteration. `eval` already takes its environment by
+reference, so the shape exists. The risk to check is that holding the frame one
+frame longer does not change what the body's own uniqueness checks see, and
+`a_unique_container_is_extended_in_place` is the spec that would say so: it
+pins an exact per-round allocation count and caught the last change to this
+function.
+
+The instrumentation is reverted. It is described here rather than kept, since a
+counter that exists to answer one question is a vein to regenerate forever
+after.
+
+---
+
+## 2026-09-18 — the dispatcher takes its frame back, and gets two thirds of what the count promised
+
+**BUILT AND SHIPPING.** The entries above measured the opportunity and then
+settled it: the environment frame is dead 173,921 times out of 173,922 by the
+time the body has finished with it. So the dispatcher keeps a handle beside the
+one the body gets, and afterwards asks for it back.
+
+    let held = env.clone();
+    let flowed = self.eval_body_flow(decl, env);
+    if let Some(rc) = held {
+        if let Ok(Env::Many(slots, _)) = Rc::try_unwrap(rc) {
+            pool = slots;
+        }
+    }
+
+`Rc::try_unwrap` declines in exactly the case the instrumented build found: a
+lazy thunk that captured its defining environment. The bindings vector the
+frame was built around goes into a pool above the tail-call loop and the next
+dispatch takes it instead of allocating.
+
+    base    980,371,488
+    frame   977,583,095   -2,788,393   -0.28%
+
+                     base        frame       delta
+    __rust_alloc    1,243,349   1,123,808   -119,541
+    __rust_dealloc  1,231,221   1,111,680   -119,541
+    grow_one          112,013      94,847    -17,166
+    drop_slow         262,323     160,154   -102,169
+
+**THE PROJECTION WAS SEVEN TO TEN AND A HALF MILLION AND THE BUILD PAID 2.79.**
+That is the useful part of this entry. The projection priced 173,922 pairs at
+the 42.4 and 61.2 instructions the two changes before it measured. What arrived
+is 119,541 pairs at 23.3 each, and both halves of the gap are real: fewer pairs
+than frames, because a pooled vector that already has capacity does not
+allocate when it is reserved again, and a cheaper pair than either earlier
+measurement, because this one BUYS the saving — a reference count up, a
+reference count down and a `try_unwrap` check on every dispatch, against an
+allocate-and-free it does not make.
+
+`drop_slow` falling 102,169 is the frame being unwrapped instead of dropped
+through it, and is the clearest single sign the change does what it says.
+
+**WHAT IS STILL ALLOCATED.** The `Rc<Env>` node itself. `bind_all` calls
+`Rc::new` on every dispatch that binds anything, and reclaiming the vector
+inside does nothing about the node around it. That is the other half of the
+projection and it is untouched.
+
+**A SPEC CAUGHT THIS ONE TOO**, the same one, the same way:
+`a_unique_container_is_extended_in_place` read 4,203 against a pin of 4,803 —
+two fewer allocations a round for the third change running. Re-read per that
+file's protocol. This change is the one most likely to disturb what that spec
+measures, because it holds a second handle to a frame whose values are the
+containers `push`, `put` and `append` call `Rc::try_unwrap` on. It does not,
+and the reason is that the frame was already alive for the whole body: the
+extra handle moves when the frame dies, from inside the body to just after it,
+and a container's uniqueness is decided while the body runs. The sibling test
+still answers `1200 600` and `2400 1200`, and the number moved down.
+
+Nine builds on the dispatch path today, four wins.
+
+## 2026-09-18 — kanso#1543, CI's rows, and an objective that barely moves
+
+    interp_instructions   932,183,914 -> 929,300,332   -2,883,582  -0.3094%
+    interp_allocs           1,309,483 ->   1,183,336    -126,147   -9.6333%
+    interp_peak_bytes         833,463 ->     834,079        +616  +0.0739%
+    compile_instructions   35,550,010 ->  35,551,167      +1,157
+    entry_instructions    126,729,588 -> 126,732,646      +3,058
+    library_instructions  127,186,008 -> 127,188,882      +2,874
+    emit_instructions      51,617,476 ->  51,619,793      +2,317
+    startup_instructions    3,363,916 ->   3,363,672        -244
+
+The second count in the same job read 929,300,332 as well, so the binary is
+stable and the disagreement is with the golden rather than within the run.
+
+**FIVE COMPILE-SIDE ROWS MOVED, AND THIS IS THE FIRST CHANGE IN THE FAMILY BIG
+ENOUGH TO DO IT.** kanso#1538 and kanso#1540 left every one byte-identical, and
+their entries said so. This one adds a pool, a clone and a `try_unwrap` to
+`dispatch_loop_inner`, and the layout moved: four up, one down, each reproducing
+twice inside the job. `kanso check` stops before the interpreter runs, so none
+of it is the change's subject. The 2026-09-06 correction stands with a third
+data point — the prior that editing the compiler's own Rust moves these rows is
+a good one, and the exception is a change small enough to leave the layout
+alone.
+
+**THE PEAK ROSE, AND IT IS THE PRICE RATHER THAN A SURPRISE.** Pooling a buffer
+means the buffer is resident when the run is at its widest. kanso#1540's entry
+predicted this direction in those words and then happened to fall 3; this one
+pays 616. Traffic falls 126,147 against it, which is the two rows doing what
+the gate says they do: a total and a high-water mark, free to move apart.
+
+**AND THE OBJECTIVE BARELY MOVES.** Welfare reads 0.00 above the floor — a rise
+the sentinel still wants banked, and banked it is, but the honest summary is
+that a 0.31% instruction fall is very nearly cancelled by what the pooling
+costs in residency and in layout. The instruction row is not the objective and
+this is the clearest case today of the difference: three changes that each took
+millions off the interpreted row moved welfare 77.25 to 77.26 to 77.27 to 77.27.
+
+That is the model working rather than failing. `interp_instructions` sits on
+the development side under a satiating curve, and a row already improved 132%
+against its baseline pays very little for the next percent. A change wanting to
+move the number has to find production work or an unsatiated term.
+
+---
+
+## 2026-09-18 — the frame's node comes back too, and this one buys its saving with nothing
+
+**BUILT AND SHIPPING.** kanso#1543 took the vector out of a dead frame and let
+the `Rc` go. Its own entry named what it left: "the node around the vector is
+still allocated. every dispatch that binds anything still calls for one, and
+reclaiming what is inside does nothing about it." This is that node.
+
+The reason the node had to be destroyed was the tool. `Rc::try_unwrap` reaches
+the value by consuming the handle, so the only way to get the vector out was to
+free the `RcBox` around it, and the next dispatch called `Rc::new` for a fresh
+one. `Rc::get_mut` reaches the same vector through a handle that stays alive.
+So the pool stops being a `Bindings` and becomes an `Option<Rc<Env>>`: the node
+lends its vector to the candidate list at the top of the loop and takes it back
+when the body is done.
+
+    base    977,646,574
+    node    972,776,892   -4,869,682   -0.50%
+
+Two readings of each arm, in one box, interleaved; both arms repeated their own
+figure exactly. The two arms sit at `/tmp/wt-rcbase` and `/tmp/wt-rcnode`,
+named to the same length on purpose.
+
+**THE TRAFFIC IS THE SAME 119,541 kanso#1543 RECLAIMED**, which is the useful
+part of the measurement:
+
+                          base         node       delta
+    interp_allocs       1,183,336    1,063,795   -119,541
+    interp_alloc_bytes 84,810,613   75,247,333  -9,563,280
+    interp_peak_bytes     834,079      834,079           0
+
+Not a number near it — the same one. kanso#1543 stopped allocating the VECTOR
+for 119,541 frames and this stops allocating the NODE for 119,541 frames, so
+the two changes are reclaiming the same set of frames from two sides, and the
+set is now fully accounted. The bytes divide exactly: 9,563,280 over 119,541 is
+80.0, which is what an `RcBox<Env>` occupies.
+
+**AND THE PRICE PER PAIR IS THE UNDISCOUNTED ONE.** 4,869,682 over 119,541 is
+40.7 instructions, against the 42.4 kanso#1540 measured for a small allocate-
+and-free pair. kanso#1543 got 23.3 for the same count because it bought its
+saving: a reference count up, a reference count down and an unwrap check on
+every dispatch. This one swaps `try_unwrap` for `get_mut` at the same point in
+the same code and adds no traffic of its own, so what arrives is close to the
+full price of the pair. The two changes together take 119,541 frames from two
+allocations each to none, for 7,658,075 instructions.
+
+**THE PEAK DOES NOT MOVE**, where kanso#1543's rose 616 for the pooled vector.
+A retained 80-byte node is not resident at the high-water mark, because the
+node it replaces was resident there in the base arm too.
+
+**WHAT THE PER-SYMBOL TABLE SHOWS, AND WHAT IT DOES NOT.** Self costs, same
+sitting:
+
+                      base         node        delta
+    mi_free        26,050,308   23,420,394   -2,629,914
+    __rust_alloc   17,054,835   15,261,720   -1,793,115
+    mi_malloc       8,269,835    7,433,048     -836,787
+    __rust_dealloc  2,270,982    2,031,900     -239,082
+    drop_slow       3,230,145    5,758,049   +2,527,904
+    drop_slow'2       538,984    1,074,180     +535,196
+    grow_one        2,496,923    2,496,923            0
+    finish_grow     8,509,860    8,509,860            0
+
+The allocator falls and the reference-count teardown rises. That is attribution
+moving rather than a second effect: the bindings a frame holds used to be
+dropped through `binds.clear()` on a bare vector, where the compiler inlined
+that work into the dispatch loop, and they are now dropped out of a vector that
+lives inside an `Rc<Env>`, where it lands in `drop_slow`'s symbol. The same
+`Value` drops happen either way and the row fell by more than the two rises
+together. Written down without a mechanism attached, because this is a
+difference in where the profiler filed the work and nothing here isolates it.
+The claims that rest on isolation are the three counters above, each read
+twice.
+
+**UNIQUENESS: `get_mut` IS THE STRICTER TEST AND THAT IS FINE HERE.**
+`try_unwrap` reads the strong count alone; `get_mut` reads the weak count too,
+so a frame with a live `Weak` would be reclaimed by the first and refused by
+the second. Nothing in `src/` takes a `Weak<Env>` — the instrumented build that
+did was reverted after kanso#1543 measured with it — so the two agree today.
+The difference is written into the source rather than argued away, because the
+day something takes a `Weak<Env>` this becomes a silent loss of reuse rather
+than a bug.
+
+There is no `unreachable!` on the reclaim path. A refused `get_mut` carries the
+winner's bindings back out through a spare and falls through to `bind_all`, so
+the worst case is an allocation rather than a panic on a live interpreter.
+
+**THE SPEC IS THE SAME SPEC, THE FOURTH CHANGE RUNNING.**
+`tests/a_unique_container_is_extended_in_place.rs` pins what 300 extra rounds
+of the two builders cost in allocations, and it went red at 3,603 against a
+pinned 4,203 — another 600 over 300 rounds, another two a round. Its sibling
+still answers `1200 600` and `2400 1200`, so the in-place path is undisturbed,
+and the number moved DOWN, which is the wrong direction for a container that
+stopped being extended in place. Re-read rather than widened, as that file's
+own protocol says.
+
+The two a round has now held across four changes to this loop. The file still
+declines to decompose it, and that is deliberate: a wrong decomposition written
+there is what the next reader would check their change against.
+
+**OPEN, and smaller than the last one.** The loser's bindings buffer is still
+freed per dispatch. The candidate loop swaps `binds` with the outgoing best's
+vector, so when the winner's goes into the frame, the other one falls out of
+scope at the end of the iteration. Pooling it is the same trick a third time,
+and the ceiling on it is one allocate-and-free pair per dispatch that had more
+than one arity-matching candidate. Unmeasured; the count is not in hand.
+
+---
+
+## 2026-09-19 — kanso#1545, CI's rows for the pooled frame node
+
+    interp_instructions   929,300,332 -> 923,151,727   -6,148,605  -0.6617%
+    interp_allocs           1,183,336 ->   1,063,795     -119,541
+    interp_peak_bytes         834,079 ->     834,079            0
+
+Read twice in the same job, the same number both times, so the disagreement was
+with the golden rather than within the run. Every other vein reported success:
+the twelve cost veins, all eight compile-side rows, both codegen tiers, emitting
+and start-up. A runtime-only change that moved no layout, the fifth running.
+
+**THE CONTAINER PROJECTED 4,869,682 AND THE RUNNER READ 6,148,605.** Same
+direction, larger, different silicon — the third time this family has landed
+that way, after kanso#1540 (5,073,171 projected against 6,858,880 read) and
+kanso#1543. Three is enough to say the container under-reads this row's
+improvements rather than that any one reading was unlucky; it is not enough to
+say by how much, and the ratio is 1.26, 1.35 and 1.35 on the three.
+
+**THE ALLOCATION COUNT REPRODUCED ON BOTH ARMS.** The container read 1,183,336
+for the base and 1,063,795 for this tree; the runner read the same two numbers.
+That is the property this vein has and the instruction vein does not, and it
+now has a two-arm confirmation rather than a one-sided one.
+
+**119,541 IS THE SAME COUNT kanso#1543 RECLAIMED VECTORS FOR.** Not a number
+near it. That change stopped allocating the vector for a set of frames and this
+one stopped allocating the node around the same set, so the set is fully
+accounted rather than merely reduced. What the two take together is 119,541
+frames from two allocations each to none.
+
+The peak did not move on either host, where kanso#1543's rose 616 for the
+vector it kept. A retained 80-byte node is not resident at the high-water mark,
+because the node it replaces was resident there before it.
+
+**THE INTERPRETED ROW SINCE THIS FAMILY STARTED.** 1,075,174,600 to 923,151,727
+on CI's readings, a fall of 14.1% over ten builds and five wins.
+
+**WHAT THE OBJECTIVE DOES WITH IT: almost nothing, again.** `interp_instructions`
+sits on the development side under a satiating curve and is now more than 136%
+improved against its baseline, so six million more buys a hundredth of a point.
+That is the model working as designed rather than failing, and it is the third
+entry in a row to say so. A change wanting to move the number has to find
+production work or an unsatiated term.
+
+---
+
+## 2026-09-19 — pooling the loser's buffer: built, measured, declined
+
+**BUILT AND DECLINED.** kanso#1545's entry left the third of these: the
+candidate loop swaps the working vector with the outgoing best's, so when the
+winner's goes into the frame the other falls out of scope at the end of the
+iteration. Pooling it is the same trick again. It costs.
+
+    base     972,776,892
+    spare    976,125,124   +3,348,232   +0.34%
+
+Three readings of each arm, interleaved, each arm repeating its own figure
+exactly. The arms sit at `/tmp/wt-basers` and `/tmp/wt-losers`, named to the
+same length.
+
+**AND IT DOES SAVE THE ALLOCATIONS IT SET OUT TO SAVE**, which is what makes
+the result worth keeping:
+
+                          base         spare       delta
+    interp_allocs       1,063,795    1,041,355    -22,440
+    interp_alloc_bytes 75,247,333   69,333,733  -5,913,600
+    interp_peak_bytes     834,079      834,303       +224
+
+22,440 allocate-and-free pairs gone, and the row still went UP by 3.35
+million. At the 40.7 instructions a pair kanso#1545 measured, those pairs are
+worth about 914,000, so the bookkeeping cost something over four million.
+
+**THE ASYMMETRY IS THE WHOLE ANSWER.** The spare has to be taken out and put
+back on EVERY dispatch — 175,254 of them — to serve a reuse that fires on
+22,440. About 24 instructions a dispatch of moves and drops, against a saving
+on one dispatch in eight. The two changes that worked did not have this shape:
+kanso#1543 and kanso#1545 pay their bookkeeping on the same frames they save,
+so the ratio is one to one.
+
+**THE CEILING WAS MEASURED FIRST AND WAS STILL TOO KIND.** An instrumented
+build counted 38,294 of 175,254 dispatches leaving the working buffer with
+capacity, which projected about 1.56 million. The real saving was 22,440 pairs,
+not 38,294: some of those buffers had capacity they had recycled within the
+dispatch rather than allocated. So the projection was 70% too high on the
+count before the overhead was counted at all.
+
+A ceiling computed from a count is an upper bound on the SAVING and says
+nothing about the COST of collecting it. Both of the previous two changes
+happened to have negligible collection cost and that is not a property of the
+technique.
+
+**WHERE THE DISPATCH LOOP STANDS.** Three poolings attempted, two kept. The
+score buffer (kanso#1540), the frame's vector (kanso#1543) and the frame's node
+(kanso#1545) together took the interpreted row from 1,075,174,600 to
+923,151,727 on CI's readings. The loser's buffer is the one that does not pay,
+and this entry is here so it is not tried a fourth time.
+
+---
+
 ## 2026-09-18 — the object gets a name the run chooses, and the eleven has nowhere left to live
 
 kanso#1512 closed the mechanism and said the fix belonged in a round of its
@@ -4833,3 +5222,33 @@ the 0.003 points the release tier costs — so that blocker is now confirmed
 alone rather than merely asserted while another failure sat underneath it. The
 entry waits on the scope ruling in design/pending-gavels.md, as the previous
 entry says.
+
+---
+
+## 2026-09-19 — kanso#1513's eight re-based rows are superseded, and why they still go
+
+kanso#1543 landed the dispatch-pooling family, so main's compile-side rows
+moved again and this branch's merge conflicted on six of them. All six take
+MAIN's side, which throws away readings CI made on this branch's own merged
+tree a few hours ago.
+
+**THAT IS THE RIGHT CALL AND IT IS WORTH SAYING WHY**, because the rule this
+session wrote could be read the other way. The carry-forward rule says keep the
+value CI measured on a tree this one DESCENDS FROM. This branch's own eight
+rows were measured on a tree that descended from main-before-kanso#1543, and
+main has moved since; they are measurements of a tree that no longer exists on
+either side of the merge. Main's rows are the newest CI reading on a genuine
+ancestor, so they are the carry-forward, and the pin's effect on them is
+re-measured by CI on the merged tree.
+
+So the eight figures the previous entry recorded stand as history and not as
+this tree's rows. What they established does not move: every one of them
+reproduced on a second reading in the same job, including
+`codegen_instructions_release` at 6,833,786,335 twice, against kanso#1502 in
+the same sitting drawing 6,820,866,355 and then 6,820,866,344. The pin works.
+What is not yet known a second time is the SIZE of its re-basing on top of the
+pooling, and only CI can say.
+
+The floor is unchanged and still below its mark by the 0.003 points the release
+tier costs. That remains the one blocker and it remains a scope question in
+design/pending-gavels.md.
