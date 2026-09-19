@@ -364,4 +364,18 @@
 # 2026-09-18, kanso#1533, CI's sitting. 3,365,595 -> 3,363,916,
 # a FALL of 1,679 (-0.0499%).
 # Layout, the same way.
-startup_instructions=3363916
+# 2026-09-19, kanso#1513 on the tree merged after kanso#1540, kanso#1541,
+# kanso#1544 and kanso#1546, CI's sitting. startup_instructions 3,363,916 -> 3,363,672,
+# a move of -244.
+#
+# THIS IS THE FIXED-TEMP PIN RE-BASING THE ROW, and every compile-side row
+# moves with it because the pin changes src/main.rs: the binary's layout moves,
+# and these rows track layout. A re-basing is not a regression and the
+# objective's trend gate is told which it is by bench/objective_sources.txt.
+#
+# EVERY ROW IN THIS JOB REPRODUCED ON A SECOND READING, including this one.
+# That is the point of the change rather than a detail of it: before the pin,
+# codegen_instructions_release could draw two values eleven apart on one binary
+# -- kanso#1502's job in this same sitting drew 6,820,866,355 and then
+# 6,820,866,344 -- and the name the pin fixes is what decided which.
+startup_instructions=3363672

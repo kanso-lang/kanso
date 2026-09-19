@@ -127,4 +127,18 @@
 # the whole pipeline then read 6,811,830,244 twice against 6,813,182,505 three
 # times without it, so the flag RE-BASES this row by about 1.35 million as well
 # as steadying it. A MEASUREMENT CHANGE, not a compiler saving.
-codegen_instructions_dev=596157624
+# 2026-09-19, kanso#1513 on the tree merged after kanso#1540, kanso#1541,
+# kanso#1544 and kanso#1546, CI's sitting. codegen_instructions_dev 596,157,624 -> 596,153,756,
+# a move of -3,868.
+#
+# THIS IS THE FIXED-TEMP PIN RE-BASING THE ROW, and every compile-side row
+# moves with it because the pin changes src/main.rs: the binary's layout moves,
+# and these rows track layout. A re-basing is not a regression and the
+# objective's trend gate is told which it is by bench/objective_sources.txt.
+#
+# EVERY ROW IN THIS JOB REPRODUCED ON A SECOND READING, including this one.
+# That is the point of the change rather than a detail of it: before the pin,
+# codegen_instructions_release could draw two values eleven apart on one binary
+# -- kanso#1502's job in this same sitting drew 6,820,866,355 and then
+# 6,820,866,344 -- and the name the pin fixes is what decided which.
+codegen_instructions_dev=596153756

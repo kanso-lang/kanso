@@ -4693,3 +4693,43 @@ point and the whole blocker.
 Re-merged rather than left dirty because a dirty pull request gets no CI at all,
 and a board with nothing on it reads exactly like a green one. Nothing about
 the decision has changed.
+
+---
+
+## 2026-09-19 — kanso#1513, CI's rows for the fixed-temp pin, and what it costs
+
+    entry_instructions       126,729,588 ->   126,732,646     +3,058
+    library_instructions     127,186,008 ->   127,188,882     +2,874
+    interp_instructions      932,183,914 ->   932,183,929        +15
+    startup_instructions       3,363,916 ->     3,363,672       -244
+    codegen_instructions_dev 596,157,624 ->   596,153,756     -3,868
+    codegen_instructions_rel 6,824,133,280 -> 6,833,786,335 +9,653,055
+    emit_instructions         51,617,476 ->    51,619,793     +2,317
+
+Seven rows, all re-based rather than regressed: the pin changes src/main.rs, so
+the binary's layout moves and every row that tracks layout moves with it.
+
+**EVERY ROW IN THIS JOB REPRODUCED ON A SECOND READING**, including
+`codegen_instructions_release` at 6,833,786,335 twice. That is the change
+working rather than a detail of it. In the same sitting, on a branch WITHOUT
+the pin, kanso#1502's release row read 6,820,866,355 and then 6,820,866,344 —
+eleven apart, same binary. The two branches are the controlled comparison the
+question needed: one draws two values in a job, the other draws one.
+
+**THE PRICE IS 0.003 POINTS**, and it is the release-tier row: 6,826,827,769 ->
+6,833,786,335 against the baseline, 9.65 million instructions of clang and ld.
+Welfare falls a hundredth below the floor.
+
+**AND THAT IS NOT A FLOOR THIS SESSION WILL LOWER.** The ironclad exception
+covers a change that builds a ruled part of the LANGUAGE, and this is an
+instrument. There is a real argument that the 2026-09-15 normalization
+ruling — "you do something that puts it into a persistent known initial
+state" — already covers it, which is exactly what the pin does to the
+temporary's name. What makes that argument premature is that the SCOPE of the
+pin is itself the open question in design/pending-gavels.md: lowering the
+floor to make this green would settle by action a question already sent to
+Clay, and the tier the pin covers is what decides how much it costs.
+
+So the rows go in, the cost is now a measured number rather than an unknown,
+and the entry waits. The gavel is better informed than it was: 0.003 points,
+against a row that stops drawing two values in one job.
