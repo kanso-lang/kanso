@@ -5065,3 +5065,60 @@ score buffer (kanso#1540), the frame's vector (kanso#1543) and the frame's node
 (kanso#1545) together took the interpreted row from 1,075,174,600 to
 923,151,727 on CI's readings. The loser's buffer is the one that does not pay,
 and this entry is here so it is not tried a fourth time.
+
+---
+
+## 2026-09-19 — a filter on the frame, and a premise the measurement had already refuted
+
+**BUILT AND DECLINED.** kanso#1547 measured that 332,025 of 1,056,329 lookups
+answer nothing and spend 1,071,803 of the run's 2,662,536 name comparisons
+doing it, and named the misses as the lead. The cheapest way to skip a miss is
+to let the frame say no: a one-word membership filter over the binding names,
+tested before the scan.
+
+    base      972,776,892
+    filter    983,593,036   +10,816,144   +1.11%
+
+Two readings of each arm, identical both times, allocations byte-identical.
+Worse than the loser's-buffer pooling and for a related reason.
+
+**THE PREMISE WAS REFUTED BY THE SAME ENTRY THAT SUGGESTED THE LEAD.** A
+membership filter is an optimisation for a LONG scan: it earns its keep when
+rejecting costs much less than walking. kanso#1547's own numbers say the scan
+is 2.52 comparisons over 1.09 frames. That is not a long scan, and there was
+never much for a filter to skip.
+
+The 40.3% is a SHARE and the lead was read as though it were a magnitude.
+1,071,803 wasted comparisons is two fifths of the run's name-comparison work
+and still a small number of instructions in absolute terms, against a filter
+that must be computed once per lookup — `name_bit` on all 1,056,329 calls —
+and rebuilt on every frame that binds. Both of those are paid whether or not
+anything is skipped.
+
+**AND THAT IS THE SECOND TIME TONIGHT**, after the loser's buffer. Both come
+from one habit: pricing a saving from a COUNT while leaving the unit cost
+unmeasured and the overhead out of the model entirely.
+kanso#1545's entry stated the rule and this change was built the next hour
+without applying it.
+
+So the rule earns a sharper form. **Before building on a count, divide it.**
+1,071,803 probes over a run is a share; 2.52 probes over a call is a scan
+length, and the second is what decides whether skipping the scan can pay. The
+same two numbers were in hand both times.
+
+**WHAT REMAINS TRUE.** The misses are still 31.4% of lookups and still walk
+frames they will never match in. What is now also known is that each of those
+walks is short, so anything that helps has to remove the CALL rather than
+shorten the scan — which is the global-name skip, and which needs a per-ident
+answer with no hashing in it. src/demand.rs is the precedent for a
+whole-program side table, and it does not fit: `is_lazy_bind` is asked once per
+statement where this would be asked 1,056,329 times. `Expr::Ident(Name, Span)`
+has nowhere to keep a bit, and giving it one is 278 match sites across sixteen
+files. That is the size of the thing, measured rather than guessed, and it is
+the honest reason nothing is built here tonight.
+
+The spec written for the filter went with it. It pinned that a pooled frame
+rebuilds its filter with its slots — a real hazard while the filter existed,
+since kanso#1545 keeps one node across dispatches — and it was watched red on
+exactly that omission, `error[runtime]: unknown name `b``. With no filter there
+is nothing for it to pin.
