@@ -2605,7 +2605,6 @@ error[name]: unknown name `builders/run`
 <p>the base row reads 1,007,027,010 for the fourth time, from two binaries with different content hashes built from trees carrying the same interpreter at different paths. on a row known to move with path length, that is the clearest statement so far that the differential reads the code.</p>
 
 <p>the tally has three entries nobody has been after yet: dropping from the dispatcher 229,625 times, allocating for a string copy 149,093, and the 8,106 reallocations that are neither of the two call sites above.</p>
-
 <h2 id="theinstrument"><span class="sec-num">98</span>what the instruments are made of</h2>
 
 <p>the sections above measure the compiler. this one is about the things doing the measuring, because two of them turned out to have inputs nobody had looked at and one of them was carrying a claim that was wrong.</p>
@@ -2881,8 +2880,30 @@ error[name]: unknown name `builders/run`
 
 <p>two changes died that night for want of this step. the loser&#39;s buffer and the frame filter were both built on a suspicion the code would have refuted, and this one was refuted for the price of reading eighty lines of ir. the lead stays open and its shape has changed: what to attack in the encoder is the appending path, and nothing here says that path is wasteful.</p>
 
+<h2 id="fixedtemps"><span class="sec-num">108</span>the object gets a name the run chooses</h2>
 
-<h2 id="whatapointcosts"><span class="sec-num">108</span>what a point of the objective costs</h2>
+<p>the release-tier codegen row measures a whole build, clang and <code>ld</code> included, and it had been drifting. pinning the linker plugin&#8217;s thread count took the drift from millions down to <strong>eleven</strong> instructions, and the eleven turned out to be a string: clang writes its link-time object to <code>/tmp/&lt;stem&gt;-XXXXXX.o</code> with fresh hex every run, <code>ld</code>&#8217;s plugin puts that path into a hash map, and the probe walks a different number of buckets depending on the name. twenty-two names on one binary and one corpus &#8212; twenty read <strong>5,163,341,031</strong> and two read <strong>5,163,341,042</strong>, reproducibly, the same name giving the same answer every time.</p>
+
+<p><code>-save-temps=obj</code> derives the object&#8217;s name from its input, so the string is the same on every run and the draw stops. that is the change, and it is a measurement change rather than a compiler saving: nothing a user runs gets faster.</p>
+
+<p><strong>and the container was wrong about what it costs.</strong> here the pinned name read <strong>6,811,830,244</strong> twice against <strong>6,813,182,505</strong> three times without it &#8212; a saving of about <strong>1.35 million</strong>. the runner reads the same change as a cost of <strong>9,653,055</strong>, seven times the size and in the other direction. so the pin&#8217;s effect on the row&#8217;s <em>level</em> is a property of the host; only its effect on the row&#8217;s <em>steadiness</em> reproduced on both.</p>
+
+<p>that is worth stating on its own, because the container has now been right and wrong about the same kind of projection in one fortnight. it travelled for a change that moved a count &#8212; how many allocations a program makes &#8212; and it failed for a change that moves where bytes land. a projection from this box is worth what the quantity it projects is: a count travels, a layout does not.</p>
+
+<p>the pin covers both tiers. the flag reaches the release path and not the development one, and the development row moved anyway by <strong>3,868</strong>, which read for a day as a move nobody could explain &#8212; and re-basing a row on an unexplained move is the thing the goldens exist to catch. the explanation was in the gate. it sets the variable on all three of its <code>env -i</code> lines, so the development run&#8217;s environment block grew by nineteen bytes, and a child process inherits that block on its initial stack. this row is the child tree; the compiler&#8217;s own process is excluded from it. so the block is the only thing the change alters for the processes being counted.</p>
+
+<p>three arms at that tier, one tree, each pass reproducing byte for byte:</p>
+
+<pre><code>KANSO_FIXED_TEMPS=1      595,943,218   the gate as written
+nothing                  595,947,057   without it
+KANSO_FIXED_TEMPX=1      595,943,490   nineteen bytes, read by nothing</code></pre>
+
+<p>a variable the development path never reads moves the tree 3,839, and a variable <em>nothing</em> reads moves it 3,567. the 272 between those two arms is the block&#8217;s content, one letter apart at the same length. the container&#8217;s figures are its own and an instruction delta does not travel between hosts; what travels is that the unread arm moves nearly as far as the pinned one.</p>
+
+<p>so an environment block is a term to hold still like any other. adding a variable to one tier&#8217;s command re-bases that tier&#8217;s row whether or not anything reads it, and the 2026-09-15 rule covers it: put the state into a known one rather than explain it afterwards.</p>
+
+
+<h2 id="whatapointcosts"><span class="sec-num">109</span>what a point of the objective costs</h2>
 
 <p>the compiler has an objective function, and for a fortnight the way to decide what to work on next has been to read its weights and satiations and reason about them. the function can be asked instead. take the goldens, scale one row by a tenth, score the model, and the difference is what that tenth is worth. fourteen rows, one at a time, on 2026-09-19:</p>
 
@@ -2913,7 +2934,7 @@ error[name]: unknown name `builders/run`
 <p>the figures are marginal at today&#8217;s ratios and move as the terms improve, which is why they carry a date. what would keep them current is a flag on the scoring script itself, printing this table out of the model it already holds.</p>
 
 
-<h2 id="threequartersonephase"><span class="sec-num">109</span>three quarters of the memory, in 4.9% of the work</h2>
+<h2 id="threequartersonephase"><span class="sec-num">110</span>three quarters of the memory, in 4.9% of the work</h2>
 
 <p>the table above puts the run program&#8217;s arena peak second on the board. this is where it lives. one phase count at a time, taken to its floor, everything else left alone:</p>
 
@@ -2939,7 +2960,7 @@ split = 1                9,244,368    8</code></pre>
 <p>so the lead is not new. its size is: the largest single move on the board by two orders of magnitude, against a fix whose shape is already written down and whose crude form is already priced.</p>
 
 
-<h2 id="prefixfirstcut"><span class="sec-num">110</span>the first cut at the prefix filter, declined at seven times</h2>
+<h2 id="prefixfirstcut"><span class="sec-num">111</span>the first cut at the prefix filter, declined at seven times</h2>
 
 <p>the section above says the carry tier is decided by a path prefix rather than by the property that prefix stands in for, and that the machinery for the property already exists: the cluster analysis refuses to carry a slot it finds threaded. so a carry that came out of that analysis has already been checked for the thing the filter guards against, and the filter could let it through. four lines.</p>
 
@@ -2955,7 +2976,7 @@ run instructions 1,840,276,313 -&gt; 13,618,672,806   7.4 times</code></pre>
 <p>the split phase&#8217;s 29 megabytes are untouched by this cut, which is its own evidence. the regexp walker is reported grow-only for an outside tail call, so its carry comes through the demoted-entry path and the crossing-position test, neither of which has a threaded fixpoint at all: a bare parameter is accepted there only when its inferred set is narrow enough, so one carrying ordinary heap becomes a crossing position and would be copied every iteration. giving that path the fixpoint is where this goes next.</p>
 
 
-<h2 id="thecarryswidth"><span class="sec-num">111</span>the width of a carry, and a test that says not yet</h2>
+<h2 id="thecarryswidth"><span class="sec-num">112</span>the width of a carry, and a test that says not yet</h2>
 
 <p>the eleven groups the prefix strips were priced one at a time. alone, every one of them reads the baseline on both columns &#8212; peak 38,604,496 and 0.26 seconds &#8212; so the cost is a pairing rather than a group, and the pairs separate:</p>
 
