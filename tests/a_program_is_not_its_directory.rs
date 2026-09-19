@@ -84,8 +84,5 @@ fn the_directory_a_package_sits_in_does_not_change_its_memory() {
 
     assert_eq!(in_lib, 1_048_576, "the peak under lib/ moved");
     assert_eq!(elsewhere, 1_048_576, "the peak outside lib/ moved");
-    assert_eq!(
-        in_lib, elsewhere,
-        "a directory name is deciding a program's memory again"
-    );
+    assert_eq!(in_lib, elsewhere, "a directory name is deciding a program's memory again");
 }
