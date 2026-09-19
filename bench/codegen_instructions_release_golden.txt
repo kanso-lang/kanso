@@ -224,7 +224,31 @@
 #
 # This corrects the record only. Whether to pin the release tier is a decision
 # in design/pending-gavels.md and is not settled here.
-codegen_instructions_release=6824133280
+# 2026-09-19, kanso#1502 on the tree merged after kanso#1540, kanso#1541,
+# kanso#1544 and kanso#1546, CI's sitting. THE ROW DREW BOTH BUCKETS IN ONE
+# JOB: the first reading was 6,820,866,355 and the second 6,820,866,344,
+# ELEVEN apart. That is the eleven, caught in the act again, and its cause is
+# settled -- kanso#1513's twenty-two-name experiment showed the temporary
+# object's NAME decides which bucket a build lands in, about one name in
+# eleven drawing the high one.
+#
+# THE LOW VALUE IS WRITTEN HERE because the gate compares the FIRST reading
+# and exits green before it ever takes a second, and the low bucket is the
+# common one -- twenty of twenty-two names in that experiment. So this row is
+# green about ten jobs in eleven and draws the other bucket in the eleventh.
+# This job was an eleventh.
+#
+# It was 6,820,866,344 before the duplicated row beside it was deleted, and
+# main's 6,824,133,280 was carried forward in its place. That was the wrong
+# carry-forward under the lesson kanso#1504's entry records: when one of two
+# values came from CI on a tree this one descends from, that value is the one
+# to keep. Restored.
+#
+# Pinning the name would close this for good and the SCOPE of that pin -- which
+# tier it covers -- is a decision in design/pending-gavels.md. Until it is
+# ruled, this row is the one flaky gate in the tree and the flakiness has a
+# named mechanism rather than a shrug.
+codegen_instructions_release=6820866344
 # 2026-09-18, re-merged onto main after kanso#1512, which re-based this row by
 # clearing the gate's output path. THE VALUE BELOW IS MAIN'S, carried forward;
 # the merged reading is CI's.
