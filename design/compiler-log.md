@@ -5068,6 +5068,69 @@ and this entry is here so it is not tried a fourth time.
 
 ---
 
+## 2026-09-19 — what a name lookup walks, and the two fifths of it that find nothing
+
+**OPEN, measured.** The dispatch-loop pooling family is finished — three
+attempted, two kept — and the interpreted profile's next frames are
+`match_one` at 68,147,655, `lookup` at 67,319,929 and `Value::clone` at
+54,332,739. This measures the second of those before anything is built on it.
+
+An instrumented build counted what `lookup` does on the interpreted corpus:
+
+    look_calls        1,056,329
+    look_probes       2,662,536     2.52 name comparisons a call
+    look_depth        1,155,900     1.09 frames walked a call
+    look_bytes        5,291,628     1.99 bytes a comparison
+    look_miss           332,025     31.4% of calls answer nothing
+    look_miss_probes  1,071,803     40.3% of ALL probes
+    look_sameptr              0
+
+Four things follow, and the third is the one to build on.
+
+**THE CHAIN IS SHALLOW AND THE SCAN IS NOT.** 1.09 frames a call: a lookup
+almost always answers in the frame it starts in, or fails in it. So the cost is
+the linear scan of one frame's slots, not a walk up a long parent chain, and
+anything aimed at chain depth is aimed at 9% of the calls.
+
+**THE NAMES ARE TINY.** 1.99 bytes a comparison. Two-character names, compared
+with a length check and a memcmp call whose overhead dwarfs the two bytes it
+reads. `__memcmp_avx2_movbe` is 34,234,622 in the same profile, and
+34,234,622 over 2,662,536 is 12.86 — which is the right SIZE for these
+comparisons and is NOT evidence that they are these comparisons. Nothing here
+isolates memcmp's callers, so that share stays open; the probe count is
+measured and the attribution is not.
+
+**TWO FIFTHS OF THE COMPARISONS ARE MADE BY LOOKUPS THAT FIND NOTHING.**
+1,071,803 of 2,662,536. A miss averages 3.23 probes against a hit's 2.20,
+because a hit can stop early and a miss cannot stop at all — it scans every
+slot of every frame before falling through to the global table. A name the
+compiler could tell was global would skip the walk entirely, and that is 40% of
+this frame's scanning plus 332,025 calls' worth of entry and exit.
+
+**AND `look_sameptr` MEASURES THE REPRESENTATION, NOT AN OPPORTUNITY.** The
+zero is a tautology and it was nearly published as a finding. `Name` is not a
+pointer: src/name.rs holds a name INLINE, one length byte and twenty-two of
+payload, in the AST node itself. So each name is its own buffer and two names
+reading the same text can never share an address — the counter could only ever
+have been zero, whatever the program did.
+
+**AND INTERNING IS ALREADY RULED ON.** That module's own header says so in its
+third sentence: interning was measured and declined in kanso#1033 at 365
+conversion sites for one field of twenty-nine, and the 2026-08-29 ruling took
+the other road, which needs no table, no lifetime and no id. The inline
+representation IS that road. A first draft of this entry proposed interning as
+the larger of two leads, against a ruling recorded a fortnight ago, because the
+module that says so was one file away and was not read.
+
+The 1.99 bytes a comparison is the same header's measurement seen from the
+other side: 89.8% of identifier occurrences across lib/ are seven bytes or
+fewer. A comparison already that short is not where the instructions are.
+
+Nothing built. The lead is the misses, and it is the only one these numbers
+support: their saving is bounded below by work that is provably wasted.
+
+---
+
 ## 2026-09-17 — the digit loop carried a value it only needed at the end, and then the tail gave it back
 
 `render_ryu` is 84,209,220 instructions of runbench, 4.58%, 440.7 a float over
