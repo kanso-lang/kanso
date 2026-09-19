@@ -2673,7 +2673,19 @@ error[name]: unknown name `builders/run`
 
 <p>a fourth change leaves the comparing alone. memcmp reads 46,087,562 then 46,118,166 across the &#167;97 pair, +0.066%. a draft of this paragraph had it falling 1,484,175, which was a debug-info profile read against a release one &#8212; two build configurations rather than two trees. compared inside its own sitting it has not moved, and the three changes in &#167;96 become four.</p>
 
-<h2 id="beattop"><span class="sec-num">100</span>nine instructions to find a pointer that never moved</h2>
+<h2 id="rowtwice"><span class="sec-num">100</span>one row, read twice</h2>
+
+<p>a golden carried the same row twice. two branches did it the same way: a merge brought main&#39;s value forward, wrote a header block saying which reading it was, and appended it under the row already there instead of replacing it.</p>
+
+<p>the reader adds rows into a map keyed by name, with <code>+=</code>. that is right and has to stay &#8212; a cost golden holds one row per sample and the gate sums them, and one objective counter can be made of several gate keys. what the <code>+=</code> cannot tell apart is a second sample from a second copy. the gate read 13,665,824,705, exactly the two values added.</p>
+
+<p>the counter sweep, the compile sweep and all three page gates ran green on both branches. none of them reads a golden for a repeated key: they compare a measured row against the file, and when the file answers with a sum they compare against the sum.</p>
+
+<p>what did speak was the spec that replays the objective&#39;s source list, and what it said was that the LINK was wrong or a pool had joined the sum. the link was fine and no pool had joined anything. that spec compares totals, so a doubled row arrives as a wrong total and it names the last thing that could produce one. two branches sat red on a message pointing three directories away from the duplicated line.</p>
+
+<p>the new spec reads the trend gate&#39;s own list of goldens and asserts no counter name appears twice in one file, reporting the file, the name and the count. it was watched red by planting the fault, and the invariant was checked against the tree first: all twenty-nine goldens the gate names already hold at most one row per counter. it does not check values. whether a row holds the right number is what the gates are for; this checks that there is one of it to read, which is the property a merge breaks and no measurement can restore.</p>
+
+<h2 id="beattop"><span class="sec-num">101</span>nine instructions to find a pointer that never moved</h2>
 
 <p>a beat loop is one the compiler proved gives its arena back between laps, and <code>k_beat_iter</code> is what it calls to do that. the run program calls it <strong>2,692,766</strong> times for <strong>61,672,983</strong> instructions &#8212; 3.35% of everything it does, and 22.9 instructions a call against a fast path that is six stores and three tests.</p>
 
@@ -2708,7 +2720,7 @@ widebench        33,516,094 -&gt;     33,644,020      +127,926   +0.3817%</code>
 
 <p>the spec for that took two tries and both failures say something about the language. the first program accumulated strings, which compiles to a <em>carry</em> beat &#8212; that one computes its own mark, never reads the cache, and the spec passed with the maintenance torn out. the second carried a scalar and allocated nothing, and a loop with nothing to reclaim emits no beat at all. what it takes is both at once: laps that allocate, and a carried value small enough to cross one. each lap builds a padded string and keeps its length.</p>
 
-<h2 id="rowsthatmove"><span class="sec-num">101</span>a row that moves seven, and what two readings are worth</h2>
+<h2 id="rowsthatmove"><span class="sec-num">102</span>a row that moves seven, and what two readings are worth</h2>
 
 <p>the interpreted row sits at about 1.138 billion instructions and it has moved by <strong>seven</strong> three times this month, on trees whose compiler source the interpreted corpus never touches. seven is not a number anybody would chase. what it is good for is a question this page has had to answer repeatedly: when a counted row disagrees with its golden, how much evidence does it take to say what happened?</p>
 

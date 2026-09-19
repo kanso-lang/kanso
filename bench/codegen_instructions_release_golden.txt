@@ -252,7 +252,22 @@
 #
 # This corrects the record only. Whether to pin the release tier is a decision
 # in design/pending-gavels.md and is not settled here.
-codegen_instructions_release=6824133280
+# 2026-09-19, kanso#1504 on the tree merged after kanso#1540, kanso#1541,
+# kanso#1544 and kanso#1546, CI's sitting. 6,824,133,280 -> 6,841,691,425, a
+# RISE of 17,558,145 (+0.2573%), and `codegen_release_again` read 6,841,691,425
+# in the same job -- the same number, so the row reproduced.
+#
+# THE VALUE WAS ALREADY RIGHT AND THE FILE HAD TWO OF IT. 6,841,691,425 is what
+# the duplicated second row carried before it was deleted; what was wrong was
+# that it sat BESIDE main's 6,824,133,280 rather than replacing it, and the
+# reader adds rows with `+=`. Carrying main's value forward cost this one red
+# round, and it was the right call on the evidence available: neither number
+# was a reading of THIS tree, and only CI could say which.
+#
+# The rise is this branch's own cost and the row it expected to pay. The
+# release tier is the only row that COMPILES src/runtime.c rather than carrying
+# its bytes, and the beat cache adds a pointer and the code that keeps it.
+codegen_instructions_release=6841691425
 # 2026-09-18, re-merged onto main after kanso#1512 and again after kanso#1540
 # and kanso#1544. TWO LIVE ROWS SAT HERE and the second was appended rather
 # than replacing the first, so this file carried
