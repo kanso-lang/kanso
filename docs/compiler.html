@@ -2847,11 +2847,22 @@ error[name]: unknown name `builders/run`
 <pre><code>env -i PATH=... GLIBC_TUNABLES=...                      972,776,892
 env -i PATH=... GLIBC_TUNABLES=... KANSO_FIXED_TEMPX=1  972,777,009   +117</code></pre>
 
-<p>nothing in the tree reads that variable. it is nineteen bytes of environment block, which a process carries on its initial stack, and the row moves 117 instructions for it. the allocation counters do not move at all: traffic, bytes and peak are byte-identical across the two arms. the interpreter asked the allocator for the same things in the same order, and the row still moved.</p>
+<p>nothing in the tree reads that variable. it is one more entry in the environment block, and the row moves 117 instructions for it. the allocation counters do not move at all: traffic, bytes and peak are byte-identical across the two arms. the interpreter asked the allocator for the same things in the same order, and the row still moved.</p>
 
-<p>so the row feels where things land as well as what the interpreter does, and it feels it twenty times harder than the six the jobs disagreed by. that is the class of term the disagreement belongs to. it is not the cause of that particular six &#8212; between two jobs on one commit the environment block is identical, so it cannot be &#8212; and saying which term carried the six still wants a carrier named.</p>
+<p>and the carrier is named, because the term is exactly linear in the number of variables. four arms, each read twice and byte-identical:</p>
 
-<p><strong>and the arm that looked like the candidate&#8217;s own claim was contaminated.</strong> growing the corpus file with comment lines the interpreter never runs moved the row too, 65 instructions for 62 KB and 4,484 for 124 KB. that reads as the mapped file doing exactly what the candidate said. but the bigger file costs the loader more allocations &#8212; traffic up five, bytes up 187,488, peak up 78,649 &#8212; and the anchor excludes the loader&#8217;s frames while sharing its allocator. that arm mixes a layout move with a real one and cannot carry the claim. the environment arm can, because nothing reads the variable and nothing about the run changes except nineteen bytes of block.</p>
+<pre><code>0 extra   972,776,892
+1 extra   972,777,009   +117
+2 extra   972,777,126   +117
+3 extra   972,777,243   +117</code></pre>
+
+<p>117 a variable, to the instruction, for variables nothing in the tree reads. layout does not do that: adding bytes to a block moves an address once and by whatever the alignment says, and it does not charge the same toll four times running. a scan does. diffing the two profiles frame by frame names it: the frames that move are <code>getenv</code>, <code>__strncmp_avx2</code>, and the allocator&#8217;s own <code>_mi_prim_getenv</code>, <code>_mi_strnicmp</code> and <code>_mi_toupper</code>. mimalloc looks its options up by name, each lookup walks the environment block comparing as it goes, and one more variable is one more comparison in every walk.</p>
+
+<p>most of that is start-up and the row excludes it. the 117 is the part inside the anchor, which means the interpreter&#8217;s own thread resolves an allocator option while it runs. so this is not a term to explain: it is the 2026-09-15 rule&#8217;s own case, where the state can be put into a known one and the reading stops depending on it.</p>
+
+<p>it is still not the cause of the six two jobs disagreed by &#8212; between two jobs on one commit the environment is identical, and six is not a multiple of 117. what it settles is that this row has a term of that shape, twenty times the size of the disagreement, with a mechanism rather than a suspicion behind it.</p>
+
+<p><strong>and the arm that looked like the candidate&#8217;s own claim was contaminated.</strong> growing the corpus file with comment lines the interpreter never runs moved the row too, 65 instructions for 62 KB and 4,484 for 124 KB. that reads as the mapped file doing exactly what the candidate said. but the bigger file costs the loader more allocations &#8212; traffic up five, bytes up 187,488, peak up 78,649 &#8212; and the anchor excludes the loader&#8217;s frames while sharing its allocator. that arm mixes whatever the file&#8217;s size does with work the loader really did, and cannot carry the claim. the environment arm can, because nothing reads the variable, the allocation counters hold, and the toll is the same 117 every time it is charged.</p>
 
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 

@@ -5261,13 +5261,31 @@ row moves 117 instructions for it. The allocation counters do not move at all:
 interpreter asked the allocator for exactly the same things in the same order
 and the row still moved.
 
+**And the carrier is named, because the term is exactly linear in the count.**
+Four arms, each read twice and byte-identical:
+
+    0 extra   972,776,892
+    1 extra   972,777,009   +117
+    2 extra   972,777,126   +117
+    3 extra   972,777,243   +117
+
+117 a variable, to the instruction. Layout does not do that — adding bytes to a
+block moves an address once and by whatever the alignment says. A scan does.
+Diffing the two profiles frame by frame names it: the frames that move are
+`getenv`, `__strncmp_avx2`, and the allocator's own `_mi_prim_getenv`,
+`_mi_strnicmp` and `_mi_toupper`. mimalloc resolves its options by name, each
+lookup walks the environment block comparing as it goes, and one more variable
+is one more comparison in every walk. Most of that is start-up, which the
+anchor excludes; the 117 is the part inside it, so the interpreter's own thread
+resolves an allocator option while it runs.
+
 **117 against a six.** The residue two CI jobs disagreed by is three parts per
-billion of this row; a term that moves it twenty times that far for nineteen
-bytes of environment is amply large enough to produce one. That does not say
-the environment block moved CI's six — between two jobs on one commit the
-block is identical, so it cannot have. What it establishes is the class: this
-row feels where things land, not only what the interpreter does, and a term of
-that kind is present at a scale that dwarfs the disagreement.
+billion of this row. It is not this term — between two jobs on one commit the
+environment is identical, and six is not a multiple of 117. What this settles
+is that the row carries a term of that shape, twenty times the size of the
+disagreement, with a mechanism behind it rather than a suspicion. And it is the
+2026-09-15 rule's own case: the state can be put into a known one, so the
+reading stops depending on it.
 
 **The corpus-size arms are contaminated and are reported as such.** Growing
 the corpus file with comment lines the interpreter never runs also moved the
@@ -5285,9 +5303,9 @@ The gate pins `glibc.malloc.mmap_threshold` at 131,072 and the larger corpus is
 124,621 bytes, which is close enough to be the first thing to look at and is not
 evidence of anything yet.
 
-**What the row still owes.** A carrier. Both arms here say the row moves with
-external state; neither names the address or the structure that carries it, and
-naming it is what an exclusion or a normalization would need. The frames that
-moved between the contaminated arms are mimalloc's own — `_mi_os_commit_ex`,
-`mi_bitmap_setN`, `_mi_prim_commit` — which is where to look and is not yet a
-mechanism.
+**What the row still owes.** The six. The environment term has a mechanism and
+a normalization; what carried the disagreement between two jobs whose
+environment was identical is still open, and the frames that moved between the
+contaminated corpus arms — `_mi_os_commit_ex`, `mi_bitmap_setN`,
+`_mi_prim_commit` — are where to look next. Those are the allocator committing
+pages, which is a different question from the allocator reading its options.
