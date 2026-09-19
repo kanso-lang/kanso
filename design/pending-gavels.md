@@ -159,8 +159,26 @@ this is a question about what the corpus is FOR, which is Clay's rather than
 the implementer's.
 
 **What is NOT being asked.** Whether to build the small-integer change; that
-is an ordinary performance question and it is unsized. Only where its fixture
-lives.
+is an ordinary performance question and it is the implementer's. Only where
+its fixture lives.
+
+**IT IS NO LONGER UNSIZED, and that is the only thing this entry gained on
+2026-09-19.** The BigInt clone-and-drop pair was measured at 35.00 instructions
+over three counts, which puts the integer clones at about 21.4 million and the
+string clones beside them at 12.9 million. Against the interpreted row as it
+now stands — 923,151,727, after the dispatch-pooling family took 14.1% off it
+— that is 2.3% and 3.7%.
+
+Two things follow for whoever rules this. The number is large by the standards
+of what is left: the three changes that landed tonight were 6.9, 2.8 and 6.1
+million each, so this one alone is bigger than all of them together. And the
+question stays exactly as posed — where the fixture lives — because the reason
+it is not simply built is the defect the change can introduce, promoting one
+step late and printing a WRAPPED number, which the corpus cannot currently
+watch.
+
+This paragraph adds evidence to a question already asked. It does not re-ask
+it, and the recommendation is unchanged.
 
 
 ### What spelling does "cyclic structures sized by data" need?
