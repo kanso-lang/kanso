@@ -284,4 +284,21 @@
 # codegen_instructions_release could draw two values eleven apart on one binary
 # -- kanso#1502's job in this same sitting drew 6,820,866,355 and then
 # 6,820,866,344 -- and the name the pin fixes is what decided which.
-codegen_instructions_release=6833786335
+#
+# 2026-09-19, kanso#1504 re-merged onto main after kanso#1552 and kanso#1553,
+# CI's sitting on run 35419504606. codegen_instructions_release
+# 6,833,786,335 -> 6,843,462,951, a RISE of 9,676,616 (+0.1416%).
+#
+# THIS IS THE ONE REAL COST ON THIS BRANCH. The release tier is the only row
+# that COMPILES src/runtime.c rather than carrying its bytes, and the beat
+# cache adds a pointer to KMark and the code that keeps it; clang at
+# `-O3 -flto` pays for the extra source. `codegen_release_again` read
+# 6,843,462,951 in the same job, so kanso#1507's plugin pin is still holding
+# on a tree that changes runtime.c.
+#
+# The two readings this branch has taken of this row, 9,676,616 here against
+# 19,241,568 on 2026-09-18, are NOT a measurement of the same thing: the
+# baseline under them moved with kanso#1513's fixed-temp pin, which re-based
+# the row by about 1.35 million and steadied it. Only the newer pair of
+# numbers is comparable with anything measured now.
+codegen_instructions_release=6843462951

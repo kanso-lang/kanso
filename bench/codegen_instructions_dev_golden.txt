@@ -183,4 +183,12 @@
 # codegen_instructions_release could draw two values eleven apart on one binary
 # -- kanso#1502's job in this same sitting drew 6,820,866,355 and then
 # 6,820,866,344 -- and the name the pin fixes is what decided which.
-codegen_instructions_dev=596153756
+#
+# 2026-09-19, kanso#1504 re-merged onto main after kanso#1552 and kanso#1553,
+# CI's sitting on run 35419504606. codegen_instructions_dev
+# 596,153,756 -> 596,193,835, a RISE of 40,079 (+0.0067%).
+#
+# The dev tier is -O0, so the changed `src/runtime.c` costs it a fifteenth of
+# what the release tier pays for the same source. `codegen_dev_again` read
+# 596,193,835 in the same job, so the row reproduced.
+codegen_instructions_dev=596193835

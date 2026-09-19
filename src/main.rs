@@ -956,6 +956,35 @@ fn release_clang(stem: &str, ll_path: &str) -> std::io::Result<std::process::Exi
         // Machine-code size has no welfare term -- Clay ruled that on
         // 2026-09-05 -- but `.text` keeps its own exact vein, so the growth
         // is watched even though it is not scored.
+        //
+        // WHICH MEANS THE .TEXT REASON ABOVE IS NOT WHY 2000 STANDS, and on
+        // 2026-09-19 the scored reason was measured. The ladder carries two
+        // more rungs, taken the same way, on a runbench.ll byte-identical
+        // across every arm:
+        //
+        //     225    1,938,999,983   343,128 bytes   22,317,482 calls
+        //     2000   1,840,276,313   424,088         18,812,341
+        //     4000   1,823,291,354   510,152
+        //     8000   1,821,134,592   567,496
+        //
+        // 4000 is -0.923% of the run and 8000 a further -0.118%. What stops
+        // 4000 is `codegen_instructions_release`, which is a PRODUCTION
+        // welfare term at weight 0.15: the same box, two passes, each arm
+        // byte-identical, reads 6,827,333,184 against 7,075,918,942, a rise
+        // of 3.64%. The dev tier does not move at all (595,943,218 both
+        // arms), because `dev_clang` passes -O0 and no -mllvm.
+        //
+        // Scored against the goldens by ratio, the run gain alone is 77.27 ->
+        // 77.33 and the pair together is 77.26: one hundredth BELOW the
+        // floor. The break-even, worked before the codegen arm finished, was
+        // a release build 3.2% dearer, and it came in at 3.64%. And the
+        // paragraph above records that CI's work row moved 59% of what this
+        // container's ladder projected for 1000 -> 2000; at that travel the
+        // run gain is nearer 0.54% and the trade is not close.
+        //
+        // So 2000 stands on the objective rather than on `.text`, and 4000 is
+        // measured-and-declined. design/compiler-log.md carries the frame
+        // measurement this came out of.
         .arg("-mllvm")
         .arg("-inline-threshold=2000")
         .args(if cfg!(target_arch = "x86_64") { &["-mssse3"][..] } else { &[][..] })
