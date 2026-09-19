@@ -4236,8 +4236,13 @@ is not in this file is that the reading came next and changed the answer.
 
 **`match_params_into` RUNS ONCE PER CANDIDATE, AND THE ALLOCATION IS ONCE PER
 DISPATCH.** Arm selection tries every arity match, so the reserve was paid
-roughly twenty times per dispatch — 1,100,726 calls to `match_one` against
-55,711 dispatches — to fix an allocation that happens once. The two
+several times per dispatch to fix an allocation that happens once.
+
+*(Corrected 2026-09-19: this said "roughly twenty times per dispatch —
+1,100,726 calls to `match_one` against 55,711 dispatches". That ratio is
+`match_one` CALLS a dispatch. `match_one` runs once per PARAMETER of each
+candidate tried, so it bounds the candidates from above and equals them only
+if every arm took one argument. See the entry of that date.)* The two
 `clear()` calls it sat behind are per-candidate housekeeping on buffers the
 loop already owns; they are not where the buffers come from.
 
@@ -5065,3 +5070,49 @@ score buffer (kanso#1540), the frame's vector (kanso#1543) and the frame's node
 (kanso#1545) together took the interpreted row from 1,075,174,600 to
 923,151,727 on CI's readings. The loser's buffer is the one that does not pay,
 and this entry is here so it is not tried a fourth time.
+
+---
+
+## 2026-09-19 — twenty candidates a dispatch was two point six, and the ratio said so
+
+**A CORRECTION, on three surfaces including a published page.** The dispatch
+loop's own comment, the kanso#1538 log entry and compiler.html all said arm
+selection tries "roughly twenty" candidates a dispatch. Measured on the
+interpreted corpus:
+
+    dispatches      175,254
+    candidates      456,967    2.61 a dispatch
+    match_one     1,135,058    6.48 a dispatch, 2.48 a candidate
+    of which bind   817,017    72% of match_one calls push a binding
+
+**WHERE THE TWENTY CAME FROM, which is the useful part.** The log entry shows
+its working: "1,100,726 calls to `match_one` against 55,711 dispatches". That
+is 19.75, and it is `match_one` CALLS a dispatch. `match_one` runs once per
+PARAMETER of each candidate tried, so calls a dispatch bounds the candidates
+from ABOVE and equals them only if every arm took exactly one argument. The
+denominator was right and the numerator was counting something else.
+
+**THE OLD FIGURE'S OWN ARITHMETIC AGREED WITH THE SMALLER NUMBER.** kanso#1538
+measured the misplaced reserve at 12,017,902 instructions. Over 175,254
+dispatches that is 68.6 a dispatch, which is 26.3 per reserve at 2.61
+candidates — a plausible `Vec::reserve` — and 3.4 at twenty, which no reserve
+costs. The contradiction was sitting in the same paragraph for a fortnight.
+
+**AND IT IS THE THIRD TIME TODAY**, after the loser's buffer and the frame
+filter, that a count was used with the wrong denominator. Those two divided a
+run total by nothing at all and read a share as a magnitude; this one divided
+by dispatches and labelled the answer candidates. The habit is the same: a
+count is worth what its denominator says, and the denominator has to be the
+thing being counted.
+
+**WHAT CHANGES AND WHAT DOES NOT.** kanso#1538's conclusion stands — the
+reserve belongs once per dispatch rather than once per candidate, and moving it
+was worth 21,582,351. What changes is the SIZE of the explanation: the reserve
+was misplaced by a factor of 2.61, not twenty, and its 12 million came from a
+reserve call that is not cheap rather than from being paid twenty times.
+
+**AND IT RETIRES A LEAD.** A candidate loop trying twenty arms to find one
+looks like an obvious place for a pre-filter on the first argument's type. At
+2.61 tried and 202,987 of 456,967 matching — 44.4% — there is little to filter:
+the loop already tries barely more arms than it accepts. That idea is closed by
+the measurement rather than by an attempt.

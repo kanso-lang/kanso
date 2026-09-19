@@ -2580,7 +2580,7 @@ error[name]: unknown name `builders/run`
 <pre>  base      1,007,027,010
   reserve   1,019,044,912   +12,017,902   +1.19%</pre>
 
-<p>that is where the day&#39;s fifth decline would have been written down. the matcher runs once per candidate, and arm selection tries every arity match, so the reserve was paid around twenty times per dispatch to fix an allocation that happens once. the clears it sat behind are housekeeping on buffers the loop already owns; they are not where the buffers come from.</p>
+<p>that is where the day&#39;s fifth decline would have been written down. the matcher runs once per candidate, and arm selection tries every arity match, so the reserve was paid several times per dispatch to fix an allocation that happens once. the clears it sat behind are housekeeping on buffers the loop already owns; they are not where the buffers come from. <em>(this said &#8220;around twenty times per dispatch&#8221; until 2026-09-19; the figure behind it was matcher CALLS a dispatch, which bounds candidates from above rather than counting them. &#167;104 has the measurement.)</em></p>
 
 <p>the same request, moved one function up to where the pair is created:</p>
 
@@ -2774,6 +2774,25 @@ error[name]: unknown name `builders/run`
 <p>a ceiling computed from a count bounds the saving and says nothing about what collecting it costs. the two changes before this one happened to have negligible collection cost, and that is a fact about them rather than about the technique.</p>
 
 <p>three poolings attempted, two kept. the score buffer, the frame&#39;s vector and the frame&#39;s node took the interpreted row from 1,075,174,600 to 923,151,727. the loser&#39;s buffer is the one that does not pay, and this section is here so it is not tried a fourth time.</p>
+
+<h2 id="twentywastwo"><span class="sec-num">104</span>twenty candidates a dispatch was two point six</h2>
+
+<p>the dispatch loop&#39;s own comment, the entry about the misplaced reserve and this page all said arm selection tries around twenty candidates a dispatch. measured on the interpreted corpus:</p>
+
+<pre>  dispatches      175,254
+  candidates      456,967    2.61 a dispatch
+  match_one     1,135,058    6.48 a dispatch, 2.48 a candidate
+  of which bind   817,017    72% of matcher calls push a binding</pre>
+
+<p>the useful part is where the twenty came from. the entry shows its working: 1,100,726 calls to the matcher against 55,711 dispatches. that is 19.75, and it is matcher CALLS a dispatch. the matcher runs once per parameter of each candidate tried, so calls a dispatch bounds the candidates from above and equals them only if every arm took exactly one argument. the denominator was right and the numerator counted something else.</p>
+
+<p>the old figure&#39;s own arithmetic agreed with the smaller number. the misplaced reserve cost 12,017,902 instructions; over 175,254 dispatches that is 68.6 a dispatch, which is 26.3 per reserve at 2.61 candidates and 3.4 at twenty. no reserve costs 3.4. the contradiction sat in the same paragraph for a fortnight.</p>
+
+<p>that is the third count today used with the wrong denominator, after the loser&#39;s buffer and the frame filter. those two divided a run total by nothing and read a share as a magnitude; this one divided by dispatches and labelled the answer candidates. a count is worth what its denominator says, and the denominator has to be the thing being counted.</p>
+
+<p>what stands is the conclusion: the reserve belongs once per dispatch, and moving it was worth 21,582,351. what changes is the size of the explanation &#8212; it was misplaced by a factor of 2.61, and its twelve million came from a reserve call that is not cheap rather than from being paid twenty times.</p>
+
+<p>and it retires a lead. a loop trying twenty arms to find one looks like an obvious place for a pre-filter on the first argument&#39;s type. at 2.61 tried and 202,987 of 456,967 matching, the loop already tries barely more arms than it accepts, so there is little to filter. closed by the measurement rather than by an attempt.</p>
 
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
