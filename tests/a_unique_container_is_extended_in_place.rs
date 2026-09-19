@@ -195,7 +195,20 @@ pub fn run rounds
 /// container's uniqueness is decided while the body runs. The sibling test and
 /// the direction of this number are what check that claim rather than restate
 /// it.
-const PER_EXTRA_ROUND: u64 = 4_203;
+///
+/// 4,203 -> 3,603 on the branch where the frame's NODE comes back and not just
+/// the vector inside it. `Rc::try_unwrap` had to destroy the `RcBox` to reach
+/// that vector, so a dispatch that reclaimed its bindings still called
+/// `Rc::new` on the next one; `Rc::get_mut` reaches the same vector through a
+/// handle that stays alive. Another six hundred over three hundred extra
+/// rounds, another two a round, the fourth change in a row to read that.
+///
+/// The two a round has now survived four different changes to the same loop,
+/// which is worth saying plainly because it is the kind of coincidence that
+/// invites a decomposition. This file still does not offer one: what a round
+/// costs is two allocations, and which iterations of the dispatch loop they
+/// belong to is not something measured here.
+const PER_EXTRA_ROUND: u64 = 3_603;
 
 fn kanso() -> PathBuf {
     let mut exe = std::env::current_exe().expect("the test binary has a path");
