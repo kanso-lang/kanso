@@ -415,8 +415,6 @@
 # 2026-09-18, kanso#1533, CI's sitting. 3,365,595 -> 3,363,916,
 # a FALL of 1,679 (-0.0499%).
 # Layout, the same way.
-#
-# 2026-09-18, kanso#1504 on the tree merged after kanso#1533, CI's sitting.
-# 3,363,916 -> 3,363,431, a FALL of 485 (-0.0144%).
-# Layout.
-startup_instructions=3363431
+# 2026-09-18, kanso#1543. 3,363,916 -> 3,363,672, -244. Layout, and the only
+# one of the five that fell. Direction carries no information here.
+startup_instructions=3363672

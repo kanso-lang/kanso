@@ -222,9 +222,7 @@
 # 2026-09-18, kanso#1533, CI's sitting. 51,630,538 -> 51,617,476,
 # a FALL of 13,062 (-0.0253%).
 # Layout, the same way.
-#
-# 2026-09-18, kanso#1504 on the tree merged after kanso#1533, CI's sitting.
-# 51,617,476 -> 51,620,167, a RISE of 2,691 (+0.0052%).
-# Layout, and the largest of the five in absolute terms. emit_again read
-# 51,620,167.
-emit_instructions=51620167
+# 2026-09-18, kanso#1543. 51,617,476 -> 51,619,793, +2,317. Layout: this gate
+# anchors on `codegen::emit_ir` and the diff is in `eval`. Counted twice in
+# the job, identical both times.
+emit_instructions=51619793

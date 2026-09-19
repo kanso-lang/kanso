@@ -494,24 +494,16 @@
 # container projected 21,582,351 against its own base; the runner reads
 # 18,540,440, the same direction and smaller, on a different silicon (family
 # 0x6 model 0xcf against 0x19).
+# 2026-09-19, kanso#1504 on the tree merged after kanso#1543. The baseline
+# moved again: main is now 923,151,727 after the frame-node pool, and this
+# branch's own effect is the relink SEVEN. That seven has now been read FIVE
+# times against five baselines spanning 63,653,622 instructions, and the fifth
+# reading was a PREDICTION written into this file before CI measured it --
+# 932,183,921, which is what the runner then read.
 #
-# 2026-09-18, kanso#1504 on the tree merged after kanso#1540. The baseline
-# moved under this branch again: kanso#1540 took the row from 939,042,794 to
-# 932,183,914 by keeping the score buffer across dispatches, and this branch's
-# own effect is the relink SEVEN, read four times against four baselines
-# spanning 56,794,742 instructions without moving by one:
-#
-#     995,837,536  ->  995,837,543   +7
-#     975,944,763  ->  975,944,770   +7
-#     957,583,234  ->  957,583,241   +7
-#     939,042,794  ->  939,042,801   +7
-#
-# So 932,183,921 is a PROJECTION off the fifth baseline, not a reading. Four
-# confirmations make it a good one and that is still not a measurement: CI
-# measures this tree, and a fifth agreement is worth having on the record
-# where a fifth assumption is worth nothing. If the runner disagrees, the
-# disagreement is the finding and the row is copied out of the job log.
-# `interp_allocs` and `interp_peak_bytes` are main's, untouched by this
-# branch, which is why only this row is rebased.
-interp_instructions=932183921
+# So 923,151,734 is a projection off the sixth baseline, on the strength of a
+# residue that has not moved by one and has been right in advance once. It is
+# still not a measurement: CI measures this tree and the row is copied out of
+# the job log if it disagrees.
+interp_instructions=923151734
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
