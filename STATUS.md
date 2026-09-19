@@ -304,7 +304,28 @@ other instruction rows run from 4.8 million to 128 million, where three parts
 per billion is a fraction of one instruction, so none of them could have
 shown this either way.
 
-Owes: measure cloud's candidate, or replace it. That is the whole of it now.
+Owes: a carrier. Cloud's candidate was measured on 2026-09-19 and half of it
+holds. Two arms on one tree, the gate's own anchor and exclusions, each read
+twice and byte-identical: adding `KANSO_FIXED_TEMPX=1` to the run's `env -i`
+line moves the row from 972,776,892 to 972,777,009, +117, and nothing in the
+tree reads that variable. The allocation counters do not move at all across
+those arms. The term is exactly linear in the count — 0, 1, 2 and 3 extra
+variables read 972,776,892, 972,777,009, 972,777,126 and 972,777,243, 117 apart
+each time — and the frames that move are `getenv`, `__strncmp_avx2` and the
+allocator's own `_mi_prim_getenv`, `_mi_strnicmp` and `_mi_toupper`. mimalloc
+resolves its options by name and each lookup walks the block, so this is a scan
+rather than a layout, it has a normalization under the 2026-09-15 rule, and the
+interpreter's own thread resolves one while it runs. It is not the cause of the
+six: the environment is identical between two jobs on one commit, and six is not
+a multiple of 117.
+
+The corpus-size arm, which looked like the candidate's own claim about the
+mapped file, is contaminated and does not carry it: the bigger file costs the
+loader five more allocations and 187,488 more bytes, and the anchor excludes
+the loader's frames while sharing its allocator. What is left is the six itself. The frames that moved
+between the corpus arms are `_mi_os_commit_ex`, `mi_bitmap_setN` and
+`_mi_prim_commit` — the allocator committing pages, which is a different
+question from the allocator reading its options, and is where to look next.
 The second item this row carried — `interp_instructions.sh` printing
 `.text`, `.data` and `.bss` where `compile_instructions.sh` prints `.rodata`
 too — was built by kanso#1508 and comes off on 2026-09-18. Line 47 of the
