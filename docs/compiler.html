@@ -2423,6 +2423,10 @@ memcmp        48,165,663 ->  46,830,275    -1,335,388</code></pre>
 <p><strong>and writing the fixture before the code found the thing that would have bitten it.</strong> the native build is int64 and refuses past the boundary with a clear diagnostic; the interpreter answers exactly. that divergence is allowed, and the book pins native&#8217;s half of it. the interpreter&#8217;s own answers there are pinned nowhere and cannot be: the behavioural corpus runs every fixture on both engines and requires them to agree, so it cannot hold a program one of them refuses. the exact place a machine-word fast path goes wrong &#8212; promoting one step late, printing a wrapped number rather than raising &#8212; is a place nothing in the tree watches. that is a gap in the corpus rather than a fact about integers, and where such a golden should live is a question the project has to settle before the change is worth making.</p>
 
 
+<p>so the cheaper change is not a faster walk but no walk. whether a name can be a local at a given site is decidable where that site is compiled, and skipping the walk for the ones that cannot needs no slots, no upvalue analysis and no change to how a closure captures &#8212; the three things that make the larger change large. it is worth about half as much for a small fraction of the work.</p>
+
+<p>that does not retire the index: the 1,590,733 hit-frames stay, and only an index removes those. it orders them. skip first, measure what is left, and let the remainder make its own case.</p>
+
 <h2 id="stagingrace"><span class="sec-num">92</span>a fixture that emptied the library it was reading</h2>
 
 <p>one of the interpreter's allocation fixtures went red on two pull requests in the same hour, on two different machines, on branches whose diffs touched neither the interpreter nor the fixture. both rounds were written off as flakiness and left.</p>
@@ -2823,11 +2827,17 @@ error[name]: unknown name `builders/run`
 
 <p>that is worth stating on its own, because the container has now been right and wrong about the same kind of projection in one fortnight. it travelled for a change that moved a count &#8212; how many allocations a program makes &#8212; and it failed for a change that moves where bytes land. a projection from this box is worth what the quantity it projects is: a count travels, a layout does not.</p>
 
-<p>which tier the pin should cover is a decision, and it is with the project rather than settled here. the flag reaches the release path and not the development one, yet the development row moves anyway, so pinning both would re-base a row on a move nobody can explain &#8212; and re-basing on an unexplained move is the thing the goldens exist to catch.</p>
+<p>the pin covers both tiers. the flag reaches the release path and not the development one, and the development row moved anyway by <strong>3,868</strong>, which read for a day as a move nobody could explain &#8212; and re-basing a row on an unexplained move is the thing the goldens exist to catch. the explanation was in the gate. it sets the variable on all three of its <code>env -i</code> lines, so the development run&#8217;s environment block grew by nineteen bytes, and a child process inherits that block on its initial stack. this row is the child tree; the compiler&#8217;s own process is excluded from it. so the block is the only thing the change alters for the processes being counted.</p>
 
-<p>so the cheaper change is not a faster walk but no walk. whether a name can be a local at a given site is decidable where that site is compiled, and skipping the walk for the ones that cannot needs no slots, no upvalue analysis and no change to how a closure captures &#8212; the three things that make the larger change large. it is worth about half as much for a small fraction of the work.</p>
+<p>three arms at that tier, one tree, each pass reproducing byte for byte:</p>
 
-<p>that does not retire the index: the 1,590,733 hit-frames stay, and only an index removes those. it orders them. skip first, measure what is left, and let the remainder make its own case.</p>
+<pre><code>KANSO_FIXED_TEMPS=1      595,943,218   the gate as written
+nothing                  595,947,057   without it
+KANSO_FIXED_TEMPX=1      595,943,490   nineteen bytes, read by nothing</code></pre>
+
+<p>a variable the development path never reads moves the tree 3,839, and a variable <em>nothing</em> reads moves it 3,567. the 272 between those two arms is the block&#8217;s content, one letter apart at the same length. the container&#8217;s figures are its own and an instruction delta does not travel between hosts; what travels is that the unread arm moves nearly as far as the pinned one.</p>
+
+<p>so an environment block is a term to hold still like any other. adding a variable to one tier&#8217;s command re-bases that tier&#8217;s row whether or not anything reads it, and the 2026-09-15 rule covers it: put the state into a known one rather than explain it afterwards.</p>
 
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 

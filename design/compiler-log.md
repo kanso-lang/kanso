@@ -5372,3 +5372,66 @@ pooling, and only CI can say.
 The floor is unchanged and still below its mark by the 0.003 points the release
 tier costs. That remains the one blocker and it remains a scope question in
 design/pending-gavels.md.
+
+## 2026-09-19 — the dev row's 3,868 is the environment block, and the question it was sent to Clay over is answered here
+
+The ledger asked whether the fixed-temp pin should cover both codegen tiers or
+the release tier alone, and rested the whole question on one objection: pinning
+both re-bases the dev row on a move with no mechanism behind it, because
+`KANSO_FIXED_TEMPS` is read in `release_clang` and never reaches `dev_clang`.
+That reading of src/main.rs is right. The conclusion drawn from it was not.
+
+`scripts/gates/codegen_instructions.sh` sets the variable on all three of its
+`env -i` lines, so the dev run's environment block grew by nineteen bytes, and
+a child process inherits that block on its initial stack. The row IS the child
+tree — kanso's own process is excluded from it, which the gate says at line 169
+— so the block is the only thing this change alters for the processes the row
+counts. Three arms at the dev tier, one tree, two passes reproducing byte for
+byte:
+
+    KANSO_FIXED_TEMPS=1      595,943,218   the gate as written
+    nothing                  595,947,057   main's block
+    KANSO_FIXED_TEMPX=1      595,943,490   nineteen bytes, read by nothing
+
+A variable `dev_clang` never reads moves the tree 3,839, and a variable NOTHING
+reads moves it 3,567, against the 3,868 CI reads on this row. The two arms
+differ by 272 on content alone at the same length, which is the block again.
+The container's figures are its own and an instruction delta does not travel;
+what travels is that the unread arm moves nearly as far as the pinned one.
+
+So the dev row's move is explained, the objection is answered, and option 1 —
+pin both tiers, as kanso#1513 is written — stands. The golden's own header had
+explained the move as layout from the changed src/main.rs, which cannot be
+right for this row for the same reason: kanso's process is excluded. That
+paragraph is corrected in place.
+
+**This question should not have gone to Clay at all.** design/pending-gavels.md
+opens by saying an entry is there because it is about the language a user
+meets, and that implementation details do not come there — whoever holds the
+file decides them and answers for the decision in the log. A gate's environment
+variable is an implementation detail by any reading. The entry is withdrawn on
+that ground rather than ruled, and the decision is recorded here. It sat
+blocking a green pull request for a day, which is what filing it cost.
+
+**And the floor takes the pin's 0.003.** CI read the pinned release row at
+6,833,786,335 against 6,824,133,280, a re-basing of 9,653,055: `-save-temps=obj`
+writes the object beside the output instead of into a temporary, and the link
+does that work either way but now writes it where the name is fixed. The
+compiler is not slower and the counter measures a different build, which the
+objective cannot see, so it prices the re-basing as a regression. 0.003 points,
+banked with the reason, under the 2026-09-15 rule that external state is put
+into a known initial state rather than explained afterwards.
+
+`tests/the_digest_is_priced_on_both_sides.rs` went red on the other host over
+the same 0.003 — `the_undoctored_goldens_hold_the_floor` runs welfare against
+the tree's real goldens — so the macos failure and the welfare job were one
+failure with one fix.
+
+**The eleven, caught again while this was being decided.** kanso#1551 is a page
+and log branch with no code in its diff, and its cost-goldens job read the
+release row at 6,824,133,291 and then 6,824,133,280 — eleven apart, in one job,
+with `ld` carrying all of it: 5,142,849,464 then 5,142,849,453. That is the
+third branch to halt on this and the second to show the residue is exactly
+eleven. It is also the argument for landing the pin rather than leaving the row
+to draw: the cost is 0.003 points once, and the alternative is about one job in
+eleven going red on nothing a diff can explain.

@@ -131,10 +131,33 @@
 # kanso#1544 and kanso#1546, CI's sitting. codegen_instructions_dev 596,157,624 -> 596,153,756,
 # a move of -3,868.
 #
-# THIS IS THE FIXED-TEMP PIN RE-BASING THE ROW, and every compile-side row
-# moves with it because the pin changes src/main.rs: the binary's layout moves,
-# and these rows track layout. A re-basing is not a regression and the
-# objective's trend gate is told which it is by bench/objective_sources.txt.
+# WHAT MOVED THIS ROW IS THE ENVIRONMENT BLOCK, NOT THE PIN. The line above
+# first read as the pin re-basing the row, and that explanation was wrong twice
+# over: `KANSO_FIXED_TEMPS` is read in `release_clang` alone (src/main.rs), so
+# it never reaches the dev build at all, and the layout story it offered cannot
+# apply to this row either, because this row is the CHILD TREE and kanso's own
+# process is excluded from it.
+#
+# The gate sets the variable on all three of its `env -i` lines, so the dev
+# run's environment block grew by nineteen bytes, and a child inherits the
+# block on its initial stack. Three arms at this tier, one tree, each pass
+# reproducing byte for byte:
+#
+#     KANSO_FIXED_TEMPS=1      595,943,218   the gate as written
+#     nothing                  595,947,057   main's block
+#     KANSO_FIXED_TEMPX=1      595,943,490   nineteen bytes, read by nothing
+#
+# A variable dev_clang never reads and a variable NOTHING reads move the tree
+# by 3,839 and 3,567, against the 3,868 CI reads here. The container's numbers
+# are its own and do not travel; what travels is that both arms move and the
+# unread one moves nearly as far. The 272 between them is the block's CONTENT,
+# one letter apart at the same length, and is layout for the same reason.
+#
+# So the row is re-based by a measurement change rather than by a compiler one,
+# and the environment block is now itself a term to hold still: adding a
+# variable to one tier's `env -i` line re-bases that tier's row whether or not
+# anything reads it. A re-basing is not a regression and the objective's trend
+# gate is told which it is by bench/objective_sources.txt.
 #
 # EVERY ROW IN THIS JOB REPRODUCED ON A SECOND READING, including this one.
 # That is the point of the change rather than a detail of it: before the pin,
