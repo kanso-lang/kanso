@@ -5174,16 +5174,36 @@ not a magnitude and a total says nothing about what one call costs:
 two and a half, and 164.9 instructions a call is a lot for a function whose job
 is mostly appending a few bytes.
 
-**WHAT IS NOT KNOWN, and it is the whole question.** `encode_onto` is an
-overloaded group of EIGHT arms, all of arity two — `true`, `false`,
-`json_null`, then `n:int`, `x:float64`, `s:string`, `xs:[]some` and
-`m:map[string some]`. A document of mostly strings and numbers reaches its arm
-past the three nullary tests every time. That is a reason to SUSPECT arm
-selection carries part of the 164.9, and this profile does not isolate it: the
-figure covers the dispatch and the appending together, and nothing here
-separates them.
+**THE OBVIOUS SUSPICION IS WRONG, AND READING THE OUTPUT SAID SO BEFORE
+ANYTHING WAS BUILT.** `encode_onto` is an overloaded group of EIGHT arms, all
+of arity two — `true`, `false`, `json_null`, then `n:int`, `x:float64`,
+`s:string`, `xs:[]some` and `m:map[string some]`. A document of mostly strings
+and numbers looks as though it must reach its arm past the three nullary tests
+every call, which would make arm selection a share of the 164.9.
 
-So the lead is sized and its mechanism is open, which is the honest state and
-the one the two failures tonight came from skipping. The next step is an
-isolation — a build that counts arm tests, or an arm reordering measured on its
-own — not a projection from 21.33%.
+The emitted IR settles it:
+
+    %t9 = extractvalue %KValue %x1, 0
+    switch i64 %t9, label %L7 [
+      i64 2, label %arm0    i64 3, label %arm1
+      i64 0, label %arm3    i64 1, label %arm4
+      i64 6, label %arm5    i64 9, label %arm6
+      i64 10, label %arm7   i64 7, label %L8
+    ]
+
+A jump table on the value's tag. Eight arms cost one switch, arm ORDER decides
+nothing, and the only linear step is the record case at `L8`, one
+`k_check_rec_fast` for tag seven. The dispatch is not where the instructions
+are.
+
+**SO THE 164.9 IS THE APPENDING.** Per call the common path is one
+`k_not_failure` on the accumulator, the switch, and an arm body: a string is
+`k_b_append_mut_byte`, `escape_onto`, `k_b_append_mut_byte` — three calls and a
+whole escape pass — where an int or a float is one `k_b_append_rendered`. That
+is real work rather than overhead, and it is why the frame is large.
+
+**TWO CHANGES DIED TONIGHT FOR WANT OF THIS STEP.** The loser's buffer and the
+frame filter were both built on a suspicion that the code would have refuted,
+and this one was refuted for the price of reading eighty lines of IR. The lead
+stays open and its shape has changed: what to attack in the encoder is the
+appending path, and nothing here says that path is wasteful.
