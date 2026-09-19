@@ -1003,7 +1003,13 @@
 # Counted twice in the job, identical both times.
 # 2026-09-19, kanso#1502 on the tree merged after kanso#1543 and kanso#1547,
 # CI's sitting. library_instructions 127,188,882 -> 127,183,938, a move of -4,944.
-library_instructions=127183938
+# 2026-09-19, kanso#1502 on the tree merged after kanso#1513, CI's sitting.
+# library_instructions 127,183,938 -> 127,184,941, a move of +1,003.
+# LAYOUT. kanso#1513 added the fixed-temp pin to src/main.rs, so the compiler's
+# own bytes moved and these rows carry them. The job read the same number twice
+# -- "this binary is stable" -- so the disagreement was with the golden rather
+# than within the run, and the change under test is the merge.
+library_instructions=127184941
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

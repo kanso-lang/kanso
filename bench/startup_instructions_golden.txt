@@ -413,4 +413,10 @@
 # one of the five that fell. Direction carries no information here.
 # 2026-09-19, kanso#1502 on the tree merged after kanso#1543 and kanso#1547,
 # CI's sitting. startup_instructions 3,363,672 -> 3,363,249, a move of -423.
-startup_instructions=3363249
+# 2026-09-19, kanso#1502 on the tree merged after kanso#1513, CI's sitting.
+# startup_instructions 3,363,249 -> 3,363,186, a move of -63.
+# LAYOUT. kanso#1513 added the fixed-temp pin to src/main.rs, so the compiler's
+# own bytes moved and these rows carry them. The job read the same number twice
+# -- "this binary is stable" -- so the disagreement was with the golden rather
+# than within the run, and the change under test is the merge.
+startup_instructions=3363186

@@ -6234,3 +6234,21 @@ loop, so the small residues each carries are against a floor that moved under
 them. Neither is a constant: kanso#1504's entry of today records a residue that
 held five times and broke on the sixth, and this row gets no projection from
 here for the same reason.
+
+## 2026-09-19 — kanso#1502's two layout rows, moved by the merge rather than by the branch
+
+The cost-goldens job on the merged tree halted two rows and both are layout:
+
+    library_instructions   127,183,938 -> 127,184,941   +1,003
+    startup_instructions     3,363,249 ->   3,363,186      -63
+
+Neither is this branch's. kanso#1513 added the fixed-temp pin to `src/main.rs`,
+so the compiler's own bytes moved, and these two rows carry the binary's layout
+rather than counting the digit loop. The job read each number twice and got the
+same answer — "this binary is stable" — so the disagreement was with the golden
+and not within the run.
+
+Regenerated from CI's readings, which is the only place they can come from: this
+container's toolchain is not the runner's. Welfare is unmoved at 77.2774,
+`library_instructions` being no term of the objective and the start-up move
+being nineteen parts per million of a row weighted 0.25 on the development side.
