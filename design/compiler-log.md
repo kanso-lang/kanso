@@ -4718,13 +4718,24 @@ slot of every frame before falling through to the global table. A name the
 compiler could tell was global would skip the walk entirely, and that is 40% of
 this frame's scanning plus 332,025 calls' worth of entry and exit.
 
-**AND NO TWO NAMES ARE EVER THE SAME POINTER.** Not one comparison in 2,662,536
-is between pointers that already match, so today every one of them reads bytes.
-Interning would make them all pointer compares. That is the larger change of
-the two and the one whose saving is hardest to project — the loser's-buffer pooling had just
-finished demonstrating that a count bounds a saving and says nothing about
-what collecting it costs: 22,440 allocations saved and the row up 3,348,232.
+**AND `look_sameptr` MEASURES THE REPRESENTATION, NOT AN OPPORTUNITY.** The
+zero is a tautology and it was nearly published as a finding. `Name` is not a
+pointer: src/name.rs holds a name INLINE, one length byte and twenty-two of
+payload, in the AST node itself. So each name is its own buffer and two names
+reading the same text can never share an address — the counter could only ever
+have been zero, whatever the program did.
 
-Nothing built. The order suggested by these numbers is the misses first: the
-saving is bounded below by work that is provably wasted, where interning's is
-bounded above by a comparison that is already only two bytes long.
+**AND INTERNING IS ALREADY RULED ON.** That module's own header says so in its
+third sentence: interning was measured and declined in kanso#1033 at 365
+conversion sites for one field of twenty-nine, and the 2026-08-29 ruling took
+the other road, which needs no table, no lifetime and no id. The inline
+representation IS that road. A first draft of this entry proposed interning as
+the larger of two leads, against a ruling recorded a fortnight ago, because the
+module that says so was one file away and was not read.
+
+The 1.99 bytes a comparison is the same header's measurement seen from the
+other side: 89.8% of identifier occurrences across lib/ are seven bytes or
+fewer. A comparison already that short is not where the instructions are.
+
+Nothing built. The lead is the misses, and it is the only one these numbers
+support: their saving is bounded below by work that is provably wasted.

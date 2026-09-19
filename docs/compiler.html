@@ -2705,9 +2705,13 @@ error[name]: unknown name `builders/run`
 
 <p>two fifths of the comparisons are made by lookups that find nothing: 1,071,803 of 2,662,536. a miss averages 3.23 probes against a hit&#39;s 2.20, because a hit can stop early and a miss cannot stop at all &#8212; it scans every slot of every frame before falling through to the global table. a name the compiler could tell was global would skip the walk entirely.</p>
 
-<p>and no two names are ever the same pointer. not one comparison in 2,662,536 is between pointers that already match, so every one of them reads bytes today and interning would make them all pointer compares. that is the larger change and the one whose saving is hardest to project. a count bounds a saving and says nothing about what collecting it costs, which the third pooling of the dispatch buffers had just finished demonstrating: 22,440 allocations saved and the row up 3.35 million.</p>
+<p>the last counter measures the representation rather than an opportunity, and it was nearly published as a finding. a name is not a pointer: it is held inline, one length byte and twenty-two of payload, in the ast node itself. so each name is its own buffer, two names reading the same text can never share an address, and <code>look_sameptr</code> could only ever have been zero whatever the program did.</p>
 
-<p>nothing built yet. the order these numbers suggest is the misses first, because their saving is bounded below by work that is provably wasted, where interning&#39;s is bounded above by a comparison already only two bytes long.</p>
+<p>interning is also already ruled on, and that module&#39;s own header says so in its third sentence: it was measured and declined at 365 conversion sites for one field of twenty-nine, and the 2026-08-29 ruling took the other road &#8212; the one that needs no table, no lifetime and no id. the inline representation is that road. a first draft of this section proposed interning as the larger of two leads, against a ruling recorded a fortnight earlier, because the file that says so was one file away and was not read.</p>
+
+<p>the 1.99 bytes a comparison is that same header&#39;s measurement from the other side: 89.8% of identifier occurrences are seven bytes or fewer. a comparison already that short is not where the instructions are.</p>
+
+<p>nothing built. the lead is the misses, and it is the only one these numbers support: their saving is bounded below by work that is provably wasted.</p>
 
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
