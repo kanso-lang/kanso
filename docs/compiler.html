@@ -2580,7 +2580,7 @@ error[name]: unknown name `builders/run`
 <pre>  base      1,007,027,010
   reserve   1,019,044,912   +12,017,902   +1.19%</pre>
 
-<p>that is where the day&#39;s fifth decline would have been written down. the matcher runs once per candidate, and arm selection tries every arity match, so the reserve was paid several times per dispatch to fix an allocation that happens once. the clears it sat behind are housekeeping on buffers the loop already owns; they are not where the buffers come from. <em>(this said &#8220;around twenty times per dispatch&#8221; until 2026-09-19; the figure behind it was matcher CALLS a dispatch, which bounds candidates from above rather than counting them. &#167;105 has the measurement.)</em></p>
+<p>that is where the day&#39;s fifth decline would have been written down. the matcher runs once per candidate, and arm selection tries every arity match, so the reserve was paid several times per dispatch to fix an allocation that happens once. the clears it sat behind are housekeeping on buffers the loop already owns; they are not where the buffers come from. <em>(this said &#8220;around twenty times per dispatch&#8221; until 2026-09-19; the figure behind it was matcher CALLS a dispatch, which bounds candidates from above rather than counting them. &#167;106 has the measurement.)</em></p>
 
 <p>the same request, moved one function up to where the pair is created:</p>
 
@@ -2801,7 +2801,24 @@ error[name]: unknown name `builders/run`
 
 <p>nothing built. the lead is the misses, and it is the only one these numbers support: their saving is bounded below by work that is provably wasted.</p>
 
-<h2 id="twentywastwo"><span class="sec-num">105</span>twenty candidates a dispatch was two point six</h2>
+<h2 id="frameletssayno"><span class="sec-num">105</span>a filter on the frame, and a premise already refuted</h2>
+
+<p>the misses were the lead, and the cheapest way to skip one is to let the frame say no: a one-word membership filter over the binding names, tested before the scan.</p>
+
+<pre>  base      972,776,892
+  filter    983,593,036   +10,816,144   +1.11%</pre>
+
+<p>two readings of each arm, identical both times, allocations byte-identical. worse than the third pooling, and for a related reason.</p>
+
+<p>a membership filter is an optimisation for a long scan: it earns its keep when rejecting costs much less than walking. the measurement that suggested the lead had already said the scan is 2.52 comparisons over 1.09 frames. that is not a long scan, and there was never much for a filter to skip.</p>
+
+<p>the two fifths is a share, and it was read as though it were a magnitude. 1,071,803 wasted comparisons is most of the name-comparison work and still a small number of instructions, against a filter computed once per lookup on all 1,056,329 calls and rebuilt on every frame that binds &#8212; both paid whether or not anything is skipped.</p>
+
+<p>that is the second decline in a night, after the loser&#39;s buffer, and both come from one habit: pricing a saving from a count while leaving the unit cost unmeasured and the overhead out of the model. so the rule earns a sharper form: before building on a count, divide it. 1,071,803 probes over a run is a share; 2.52 probes over a call is a scan length, and the second is what decides whether skipping the scan can pay. both numbers were in hand both times.</p>
+
+<p>what remains true is that the misses are 31.4% of lookups and walk frames they will never match in. what is now also known is that each walk is short, so anything that helps has to remove the call rather than shorten the scan. that is the global-name skip, and it needs a per-ident answer with no hashing in it: the whole-program side table the demand analysis uses is asked once per statement where this would be asked a million times, and the ident node has nowhere to keep a bit &#8212; giving it one is 278 match sites across sixteen files. that is the size of the thing, measured rather than guessed.</p>
+
+<h2 id="twentywastwo"><span class="sec-num">106</span>twenty candidates a dispatch was two point six</h2>
 
 <p>the dispatch loop&#39;s own comment, the entry about the misplaced reserve and this page all said arm selection tries around twenty candidates a dispatch. measured on the interpreted corpus:</p>
 
