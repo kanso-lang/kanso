@@ -178,7 +178,37 @@ pub fn run rounds
 /// 1200 600 and 2400 1200 exactly as before, so nothing about the in-place
 /// path changed, and the number moved DOWN, which is the wrong direction for
 /// a container that stopped being extended in place.
-const PER_EXTRA_ROUND: u64 = 4_803;
+///
+/// 4,803 -> 4,203 on the branch where the dispatcher takes its environment
+/// frame back after the body is finished with it, instead of letting it fall
+/// out of scope. Another six hundred over three hundred extra rounds, another
+/// two a round. The A/B behind it reads `__rust_alloc` 1,243,349 -> 1,123,808
+/// and `__rust_dealloc` by the same 119,541, with `Rc<T,A>::drop_slow` down
+/// 102,169 because the frame is now unwrapped rather than dropped through it.
+///
+/// THIS ONE HOLDS A SECOND HANDLE TO THE FRAME while the body runs, which is
+/// the change most likely to disturb what this file measures: `push`, `put`
+/// and `append` reach `Rc::try_unwrap` on their CONTAINER, and a container is
+/// a value inside the frame. It does not disturb it, and the reason is that
+/// the frame was already alive for the whole body -- the extra handle changes
+/// when the frame dies, from inside the body to just after it, and a
+/// container's uniqueness is decided while the body runs. The sibling test and
+/// the direction of this number are what check that claim rather than restate
+/// it.
+///
+/// 4,203 -> 3,603 on the branch where the frame's NODE comes back and not just
+/// the vector inside it. `Rc::try_unwrap` had to destroy the `RcBox` to reach
+/// that vector, so a dispatch that reclaimed its bindings still called
+/// `Rc::new` on the next one; `Rc::get_mut` reaches the same vector through a
+/// handle that stays alive. Another six hundred over three hundred extra
+/// rounds, another two a round, the fourth change in a row to read that.
+///
+/// The two a round has now survived four different changes to the same loop,
+/// which is worth saying plainly because it is the kind of coincidence that
+/// invites a decomposition. This file still does not offer one: what a round
+/// costs is two allocations, and which iterations of the dispatch loop they
+/// belong to is not something measured here.
+const PER_EXTRA_ROUND: u64 = 3_603;
 
 fn kanso() -> PathBuf {
     let mut exe = std::env::current_exe().expect("the test binary has a path");
