@@ -280,9 +280,9 @@ codegen_instructions_release=6841691425
 # exactly the two added, and the spec reported the LINK as wrong. The row was
 # fine and the file had two of it.
 #
-# The value below is MAIN'S, carried forward. This branch raises this row --
-# it is the only compile-side row that COMPILES src/runtime.c rather than
-# carrying its bytes -- and its own readings of the rise were 11,227,515 and
-# 19,241,568 against bases that have since moved. So nothing here is a
-# reading of the merged tree: CI measures it and the row is copied out of the
-# job log.
+# SUPERSEDED, and left here because the wrong turn is the readable part. It
+# said the value BELOW was main's, carried forward pending CI. No value follows
+# it now: the live row moved above this block when CI's reading landed, and the
+# 2026-09-19 entry there is what the file stands on. This branch's own readings
+# of the rise were 11,227,515 and 19,241,568, against bases that have since
+# moved; CI read 17,558,145.
