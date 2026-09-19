@@ -493,6 +493,21 @@ Only Clay arms, disarms or retimes it.
 - **Enter where a user enters.** Run the program, read the output. Hand-built
   intermediate state asserts a fiction: the spec passes forever on inputs the
   real pipeline never produces.
+- **Run a guard bare. Four times in one session a correct check reported
+  success because of how it was wired.** `verify_resolution.sh | tail -3` took
+  the pipeline's exit status from `tail`, so a CONFLICT MARKERS verdict was
+  swallowed and three markers were pushed. An ordering check appended its
+  assertion after `exit $fail`, where nothing could reach it. A coverage scan
+  started one character late and saw an empty file. And a measurement written
+  `cd … && … && cp ./runbench "$dir"` hit a binary that was mid-rebuild, the
+  chain stopped, and the trailing `; grep … /tmp/ir.runbench` read a six-day-old
+  profile and printed 2,232,013,849 as this tree's figure. So: never pipe a
+  check whose exit status is the answer; put a read of a produced file in the
+  same `&&` chain that produced it and delete that file first, so a stale one
+  cannot answer; and before trusting a new check, break what it watches and
+  watch it go red. The last of those is already the rule two bullets above — the
+  point here is that it applies to the plumbing and not only to the assertion.
+
 - **The reduced fixture belongs in the corpus, not the commit message.** Error
   goldens for diagnostics, micro goldens for one construct, the mem vein for
   allocation shape. A bug that had no home in those is a gap in the corpus,
