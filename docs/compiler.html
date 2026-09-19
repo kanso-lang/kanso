@@ -2580,7 +2580,7 @@ error[name]: unknown name `builders/run`
 <pre>  base      1,007,027,010
   reserve   1,019,044,912   +12,017,902   +1.19%</pre>
 
-<p>that is where the day&#39;s fifth decline would have been written down. the matcher runs once per candidate, and arm selection tries every arity match, so the reserve was paid several times per dispatch to fix an allocation that happens once. the clears it sat behind are housekeeping on buffers the loop already owns; they are not where the buffers come from. <em>(this said &#8220;around twenty times per dispatch&#8221; until 2026-09-19; the figure behind it was matcher CALLS a dispatch, which bounds candidates from above rather than counting them. &#167;104 has the measurement.)</em></p>
+<p>that is where the day&#39;s fifth decline would have been written down. the matcher runs once per candidate, and arm selection tries every arity match, so the reserve was paid several times per dispatch to fix an allocation that happens once. the clears it sat behind are housekeeping on buffers the loop already owns; they are not where the buffers come from. <em>(this said &#8220;around twenty times per dispatch&#8221; until 2026-09-19; the figure behind it was matcher CALLS a dispatch, which bounds candidates from above rather than counting them. &#167;105 has the measurement.)</em></p>
 
 <p>the same request, moved one function up to where the pair is created:</p>
 
@@ -2775,7 +2775,33 @@ error[name]: unknown name `builders/run`
 
 <p>three poolings attempted, two kept. the score buffer, the frame&#39;s vector and the frame&#39;s node took the interpreted row from 1,075,174,600 to 923,151,727. the loser&#39;s buffer is the one that does not pay, and this section is here so it is not tried a fourth time.</p>
 
-<h2 id="twentywastwo"><span class="sec-num">104</span>twenty candidates a dispatch was two point six</h2>
+<h2 id="whatalookupwalks"><span class="sec-num">104</span>what a name lookup walks</h2>
+
+<p>the dispatch-loop pooling is finished &#8212; three attempted, two kept &#8212; and the next frames in the interpreted profile are <code>match_one</code> at 68,147,655, <code>lookup</code> at 67,319,929 and <code>Value::clone</code> at 54,332,739. this measures the second before anything is built on it.</p>
+
+<pre>  look_calls        1,056,329
+  look_probes       2,662,536     2.52 name comparisons a call
+  look_depth        1,155,900     1.09 frames walked a call
+  look_bytes        5,291,628     1.99 bytes a comparison
+  look_miss           332,025     31.4% of calls answer nothing
+  look_miss_probes  1,071,803     40.3% of all probes
+  look_sameptr              0</pre>
+
+<p>the chain is shallow and the scan is not. 1.09 frames a call means a lookup almost always answers in the frame it starts in, or fails in it, so the cost is the linear scan of one frame&#39;s slots rather than a walk up a long parent chain. anything aimed at chain depth is aimed at nine per cent of the calls.</p>
+
+<p>the names are tiny: 1.99 bytes a comparison, two-character names compared with a length check and a memcmp call whose overhead dwarfs the two bytes it reads. <code>__memcmp_avx2_movbe</code> is 34,234,622 in the same profile, and 34,234,622 over 2,662,536 is 12.86 &#8212; the right size for these comparisons, and not evidence that they are these comparisons. nothing here isolates memcmp&#39;s callers, so that share stays open. the probe count is measured; the attribution is not.</p>
+
+<p>two fifths of the comparisons are made by lookups that find nothing: 1,071,803 of 2,662,536. a miss averages 3.23 probes against a hit&#39;s 2.20, because a hit can stop early and a miss cannot stop at all &#8212; it scans every slot of every frame before falling through to the global table. a name the compiler could tell was global would skip the walk entirely.</p>
+
+<p>the last counter measures the representation rather than an opportunity, and it was nearly published as a finding. a name is not a pointer: it is held inline, one length byte and twenty-two of payload, in the ast node itself. so each name is its own buffer, two names reading the same text can never share an address, and <code>look_sameptr</code> could only ever have been zero whatever the program did.</p>
+
+<p>interning is also already ruled on, and that module&#39;s own header says so in its third sentence: it was measured and declined at 365 conversion sites for one field of twenty-nine, and the 2026-08-29 ruling took the other road &#8212; the one that needs no table, no lifetime and no id. the inline representation is that road. a first draft of this section proposed interning as the larger of two leads, against a ruling recorded a fortnight earlier, because the file that says so was one file away and was not read.</p>
+
+<p>the 1.99 bytes a comparison is that same header&#39;s measurement from the other side: 89.8% of identifier occurrences are seven bytes or fewer. a comparison already that short is not where the instructions are.</p>
+
+<p>nothing built. the lead is the misses, and it is the only one these numbers support: their saving is bounded below by work that is provably wasted.</p>
+
+<h2 id="twentywastwo"><span class="sec-num">105</span>twenty candidates a dispatch was two point six</h2>
 
 <p>the dispatch loop&#39;s own comment, the entry about the misplaced reserve and this page all said arm selection tries around twenty candidates a dispatch. measured on the interpreted corpus:</p>
 
