@@ -2938,6 +2938,22 @@ split = 1                9,244,368    8</code></pre>
 
 <p>so the lead is not new. its size is: the largest single move on the board by two orders of magnitude, against a fix whose shape is already written down and whose crude form is already priced.</p>
 
+
+<h2 id="prefixfirstcut"><span class="sec-num">110</span>the first cut at the prefix filter, declined at seven times</h2>
+
+<p>the section above says the carry tier is decided by a path prefix rather than by the property that prefix stands in for, and that the machinery for the property already exists: the cluster analysis refuses to carry a slot it finds threaded. so a carry that came out of that analysis has already been checked for the thing the filter guards against, and the filter could let it through. four lines.</p>
+
+<pre><code>arena_peak_bytes    38,604,496 -&gt;     35,458,768   -3,145,728, worth +0.41
+allocs               5,730,653 -&gt;      6,550,655     +820,002
+alloc_bytes        459,964,461 -&gt;    494,316,813  +34,352,352
+run instructions 1,840,276,313 -&gt; 13,618,672,806   7.4 times</code></pre>
+
+<p>declined. the peak gain is real and the instruction cost is not survivable, and it is the 2026-09-01 catastrophe in miniature: that removal left the program running after ten minutes against a 0.4-second baseline, and this one, over the cluster subset alone, costs seven and a half times.</p>
+
+<p>what it rules out is the useful part. the cluster analysis excludes threaded slots from a carry before it returns, so those carries had already passed the test the filter&#8217;s own comment describes &#8212; and exempting exactly them still blows up. so that fixpoint is not what the path prefix is standing in for. the next attempt has to find the difference rather than assume the two agree.</p>
+
+<p>the split phase&#8217;s 29 megabytes are untouched by this cut, which is its own evidence. the regexp walker is reported grow-only for an outside tail call, so its carry comes through the demoted-entry path and the crossing-position test, neither of which has a threaded fixpoint at all: a bare parameter is accepted there only when its inferred set is narrow enough, so one carrying ordinary heap becomes a crossing position and would be copied every iteration. giving that path the fixpoint is where this goes next.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>

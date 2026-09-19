@@ -5420,3 +5420,44 @@ fixpoint in `cluster_edges_ok`.
 So the lead is not new. What is new is its size: the largest single move on the
 board by two orders of magnitude, against a fix whose shape is already written
 down and whose crude form is already priced.
+
+## 2026-09-19 — the first cut at the prefix filter, declined at 7.4x
+
+The entry above says the carry tier is decided by a path prefix rather than by
+the property the prefix stands in for, and that the machinery for the property
+already exists as the threaded-slot fixpoint in `cluster_edges_ok`. The obvious
+first cut follows from that: `cluster_edges_ok` already refuses to carry a slot
+it finds threaded, so a carry that came out of the cluster analysis has already
+been checked for the thing the filter guards against, and the filter could
+exempt it.
+
+Built, on a branch, in four lines: record which groups took their carry from
+`eligible_clusters` and let those through both `carried.retain` and the
+`ids.retain` beside it.
+
+    arena_peak_bytes   38,604,496 -> 35,458,768    -3,145,728, worth +0.4127
+    allocs              5,730,653 ->  6,550,655     +820,002
+    alloc_bytes       459,964,461 -> 494,316,813    +34,352,352
+    run instructions  1,840,276,313 -> 13,618,672,806   SEVEN POINT FOUR TIMES
+
+Declined. The peak gain is real and the instruction cost is not survivable, and
+the shape is the 2026-09-01 catastrophe in miniature — that removal left
+runbench running after ten minutes against a 0.4-second baseline, and this one,
+over the cluster subset alone, costs 7.4x.
+
+**What it rules out is worth having.** `cluster_edges_ok` excludes threaded and
+chain-threaded slots from the carry before it returns, so a cluster carry has
+already passed the test the filter's comment describes — and exempting exactly
+those carries still blows up. So the threaded fixpoint as it stands is not what
+the path prefix is standing in for. Whatever the real property is, "the cluster
+analysis approved this carry" does not imply it, and the next attempt has to
+find the difference rather than assume the two agree.
+
+The split phase's 29,360,128 bytes are untouched by this cut, which is its own
+evidence: `regexp/walked/5` is reported grow-only for an outside tail call, so
+its carry comes through `demotable_entries` and `crossing_positions`, not
+through a cluster. That path has no threaded fixpoint at all — `arg_ok` accepts
+a bare parameter only when its inferred set is within THREADED, so a bare
+parameter carrying ordinary heap becomes a crossing position and would be
+evacuated every iteration. Giving that path the fixpoint is where the next
+attempt goes.
