@@ -5643,81 +5643,421 @@ pages, which is a different question from the allocator reading its options.
 
 ---
 
-## 2026-09-19 — the carry tier stops reading a file path
+## 2026-09-19 — frames are 6.57% of the production run, and the threshold that would cut them costs more than it saves
 
-`beat_loops` decided which imported loops may evacuate their slots and rewind by
-asking whether the declaration's `file` begins `std/` or `lib/`. `file` is the
-field error origins are built from, a path meant for a diagnostic, and it was
-deciding a program's memory: the same package under a directory called `lib`
-compiled to one that never reclaimed a block, and one directory over to one that
-did. `tests/a_program_is_not_its_directory.rs` has pinned that since it was
-written — as a defect, with instructions for the day it went.
+Three entries this week ended by saying a change wanting to move the objective
+has to find production work. This is what the production run spends getting
+into and out of functions, and what happens when the one lever that moves it is
+pushed.
 
-The prefix had a real reason and its own comment gave it: a shared library driver
-threads its caller's invariant source through the loop, and evacuating that
-copies an unbounded value every iteration. Removing it outright was built and
-measured on 2026-08-31 and turned the digest quadratic — at 128 KB the wall time
-went from 1.3 seconds to 68.
+Measured on runbench at `0d164b55`, callgrind with `--dump-instr`, whole
+program 1,840,276,313 — two profiles agreeing to the instruction. Summing, over
+every function whose entry block ran, the leading callee-saved pushes and the
+stack reserve, plus the pops' own measured cost:
 
-**What separates the two cases is the width of the carry, and it was measured one
-group at a time.** Eleven imported groups lose a carry at that point on runbench.
-Alone, every one of them reads the baseline on both columns — peak 38,604,496 and
-0.26 seconds. The pairs:
+    prologue   64,847,962   3.52%
+    pops       56,140,300   3.05%
+    together  120,988,262   6.57%
+
+A floor rather than a total, because the epilogue's `add $N,%rsp` is not
+counted. Larger than `render_ryu` at 4.58% and larger than the whole beat
+machinery at 5.09%, and until now it had no name.
+
+    30,952,350  d_json/encode_onto_2     2,380,950 calls, 7 prologue instructions
+    14,303,721  d_json/parse_value_2     1,100,286
+    10,760,607  d_json/obj_key_start_4     827,739
+
+`encode_onto` is 21.33% of the run and 164.9 self instructions a call, twelve
+in and eight out. Reading its jump table and counting entries at each target
+gives the arm mix: the number arms take 379,530 calls and are four movs and a
+call; `true`, `false` and `null` take 562,500 between them and are five
+instructions each into a shared append; strings take 942,750; maps and lists
+the rest. So 39.6% of the calls into that dispatcher pay a frame sized by the
+arms they do not take.
+
+**Shrink-wrapping is not the lever, and that was checked rather than assumed.**
+Compiling `runbench.ll` with `-mllvm -enable-shrink-wrap=false` gives a
+byte-identical prologue, so LLVM is not sinking it either way. With a jump
+table to eight arms and callee-saved uses in several of them, the entry block
+is the only place that dominates them all.
+
+**And splitting the dispatcher would not help, which is the other obvious fix
+and is now measured.** The idea is to emit the cheap arms so they need no
+frame and tail-call the heavy ones, on the reading that the dispatcher's frame
+is sized by the arm bodies inlined into it. Linking `runbench.ll` by hand says
+otherwise. Marking `d_json/escape_onto_2` `noinline` — the string arm, the
+heaviest thing in there — takes the stack reserve from `0x58` to `0x38` and
+leaves all six pushes. Marking EVERY call site inside the dispatcher `noinline`,
+so no arm body is inlined at all, leaves all six pushes and `0x38` again.
+
+So the registers are the dispatcher's own. It holds both arguments live across
+the calls it makes — `k_not_failure`, `k_err_hop`, `k_check_rec_fast` — and a
+`KValue` is two words, so the two arguments alone are four registers that must
+survive a call. There is nothing there for an emitter-level arm split to remove,
+and the idea is declined without being built.
+
+**Inlining is the lever, and it is already where it should be.** The ladder
+beside the flag in src/main.rs was measured against 1000 and stops at 3000;
+these two rungs are new, on a `runbench.ll` byte-identical across every arm, so
+the only difference is what the linker's LTO was told:
+
+    225    1,938,999,983   343,128 bytes   22,317,482 calls
+    2000   1,840,276,313   424,088         18,812,341
+    4000   1,823,291,354   510,152
+    8000   1,821,134,592   567,496
+
+225 to 2000 removes 3,505,141 calls and 98,723,670 instructions: 28.2 a call,
+which is a frame plus the call and the return. That is the mechanism, priced.
+
+**And 4000 is declined, on the objective rather than on `.text`.** The comment
+that chose 2000 gave binary size as the reason, and machine-code size has no
+welfare term — Clay ruled that on 2026-09-05 — so that reason could not have
+decided it. The scored reason is `codegen_instructions_release`, weight 0.15 on
+the production side. Same box, two passes, each arm byte-identical:
+
+    release codegen   6,827,333,184 -> 7,075,918,942   +248,585,758   +3.64%
+    dev codegen         595,943,218 ->   595,943,218   byte-identical
+
+The dev tier cannot move: `dev_clang` passes `-O0` and no `-mllvm`.
+
+Scored by applying each ratio to the goldens, the run gain alone takes welfare
+77.27 to 77.33, and the pair together to **77.26** — one hundredth below the
+floor. The break-even was worked out before the codegen arm finished, and
+written down then so it could be scored rather than fitted: the raise pays only
+if the release build costs under 3.2% more. It came in at 3.64%.
+
+It is worse than that once travel is allowed for. The same comment records that
+CI's work row moved 59% of what this container's ladder projected for 1000 to
+2000. At that travel the run gain is nearer 0.54% and the trade is not close.
+
+**The comment beside the flag held half of this and it was not read first.**
+The ladder, the non-monotonicity and the 59% travel factor were all one file
+away, and two arms were built before anyone looked. What the arms added is real
+— the codegen price and the welfare verdict, neither of which was there — but
+the rule stands and this is another instance of it: read the thing the number
+describes before running anything against it.
+
+---
+
+## 2026-09-19 — what a point of welfare costs, measured on every counter the objective reads
+
+Three sessions in a row have chosen what to work on by reading the weights and
+the satiations and reasoning about them. The objective can be asked directly
+instead. Stage `bench/` and `scripts/`, scale ONE golden row by 0.9, and run
+`kanso run scripts/welfare -- --score`, which prints four places. The difference
+is what a tenth off that row is worth in meta welfare. Fourteen rows, one at a
+time, base 77.2707:
+
+    per 10%   counter                        golden row
+    +0.6644   run_instructions               instructions:runbench
+    +0.5091   run_peak_bytes                 cost_golden_run:arena_peak_bytes
+    +0.1952   codegen_instructions_release   codegen_instructions_release
+    +0.0923   startup_instructions           startup_instructions
+    +0.0692   codegen_instructions_dev       codegen_instructions_dev
+    +0.0446   interp_instructions            interp_instructions
+    +0.0233   compile_peak_bytes             compile_memory:compile_peak_bytes
+    +0.0214   compile_instructions           entry_instructions
+    +0.0197   interp_peak_bytes              interp_memory:interp_peak_bytes
+    +0.0197   compile_allocs                 compile_allocs
+    +0.0094   run_peak_bytes                 cost_golden_run:held_peak_bytes
+    +0.0068   emit_instructions              emit_instructions
+    +0.0060   compile_instructions           compile_instructions
+    +0.0003   run_peak_bytes                 cost_golden_run:perm_peak_bytes
+
+The same sweep at 1% gives the same order with every value about a tenth of
+these, so the curve is near enough straight over that range and the table can be
+trusted to rank even though each figure is an average over its own step rather
+than a derivative.
+
+**Two rows are two thirds of the board.** `runbench` and the run program's arena
+peak come to 1.1735 of a 1.6808 total: 69.8%. Everything else together is worth
+less than half of `runbench` alone.
+
+**And the arena peak has had no work at all.** It sits at 38,604,496 bytes and
+is worth 77% of what the run's instruction count is worth, which nothing in the
+last fortnight's log would suggest. Every entry in that window is instructions:
+the dispatch-pooling family, the beat rewind, the digit loop, the frames. The
+second most valuable row in the model has not been named once.
+
+**What this says about the fortnight.** `interp_instructions` is worth 0.0446 a
+tenth, fifteen times less than `runbench`. The three dispatch-pooling changes of
+2026-09-18 took 15.8 million off a 939 million row, 1.7%, and the objective
+moved 77.25 to 77.27 — which is exactly what this table predicts and is why it
+felt like so little for three merged changes. `compile_instructions` is worth
+0.0060 a tenth, a hundred and eleven times less than `runbench`, and it is the
+row this project has spent the most rounds arguing about.
+
+The figures are marginal at today's ratios and move as the terms improve, so the
+table is dated and belongs in the log rather than in a doc that reads as
+standing. What would keep it current is a `--marginal` flag on the welfare
+script itself, printing this table from the model it already holds. That is the
+follow-up; the table above is the reason to want it.
+
+## 2026-09-19 — the arena peak is three quarters one phase, and that phase is 4.9% of the work
+
+The table above puts the run program's arena peak second on the board at 0.5091
+a tenth. This is where it lives. One count at a time, taken to its floor, every
+other count left alone, `arena_peak_bytes` read off the counters build:
+
+    baseline              38,604,496   36 blocks
+    decode = 1            38,604,496   36     unchanged
+    encode = 1            38,604,496   36     unchanged
+    decode = 1, encode = 1 38,604,496  36     unchanged
+    deep = 1              38,604,496   36     unchanged
+    escape = 1            38,604,496   36     unchanged
+    pend = 1              38,604,496   36     unchanged
+    index = 1,000         35,651,584   34
+    digest = 1            35,458,768   33
+    split = 1              9,244,368    8
+
+**Split holds 29,360,128 of it, 76%, and split is 4.87% of the program's
+instructions.** Decode and encode are 69% of the work between them and hold
+none of the peak at all: taking both to a single round leaves the number
+unmoved to the byte.
+
+Staging `bench/` with `arena_peak_bytes` at 9,244,368 and scoring: welfare
+**77.2707 to 82.0199, +4.7492**. Every compiler change merged in the two days
+before this entry moved the objective by 0.02 together.
+
+**A cause was written down eleven days ago, in the benchmark's own header.**
+`bench/runbench/runbench/split/scanbench.kso` records a 2026-09-08 measurement:
+codegen reads `beat_loops`, `beat_loops` drops every group whose file begins
+`std/` or `lib/` from the carry tier — `src/beat.rs:196` — and clearing that
+filter gives a peak of 1,048,576 bytes over one block with `alloc_bytes`
+unchanged: the same allocation, now reclaimed.
+
+The measurement is the header's and stands. The mechanism it names does not, and
+the entry below reports the instrumentation: exactly eleven imported groups lose
+a carry at that filter, and `regexp/walked/5` is not among them. It is classified
+grow-only because another group tail-calls it, so it has no carry to strip and
+the filter never reaches it. What clearing the filter changes is some other
+loop's reclamation, and which one is open.
+
+Clearing it wholesale is not the fix and was measured not to be: runbench was
+still running after ten minutes against a 0.4-second baseline, because every
+library loop begins evacuating, and the 2026-09-01 sitting priced that removal
+at -0.56 welfare under the objective of the day. The header names the shape of
+the real fix — "the carry tier being decided by a path prefix rather than by the
+property the prefix stands in for" — and `src/beat.rs:185` says what the
+property is: a shared library driver threads its caller's invariant source
+through the loop, and carrying that copies an unbounded value every iteration.
+The machinery for saying so already exists for clusters, as the threaded-slot
+fixpoint in `cluster_edges_ok`.
+
+So the lead is not new. What is new is its size: the largest single move on the
+board by two orders of magnitude, against a fix whose shape is already written
+down and whose crude form is already priced.
+
+## 2026-09-19 — the first cut at the prefix filter, declined at 7.4x
+
+The entry above says the carry tier is decided by a path prefix rather than by
+the property the prefix stands in for, and that the machinery for the property
+already exists as the threaded-slot fixpoint in `cluster_edges_ok`. The obvious
+first cut follows from that: `cluster_edges_ok` already refuses to carry a slot
+it finds threaded, so a carry that came out of the cluster analysis has already
+been checked for the thing the filter guards against, and the filter could
+exempt it.
+
+Built, on a branch, in four lines: record which groups took their carry from
+`eligible_clusters` and let those through both `carried.retain` and the
+`ids.retain` beside it.
+
+    arena_peak_bytes   38,604,496 -> 35,458,768    -3,145,728, worth +0.4127
+    allocs              5,730,653 ->  6,550,655     +820,002
+    alloc_bytes       459,964,461 -> 494,316,813    +34,352,352
+    run instructions  1,840,276,313 -> 13,618,672,806   SEVEN POINT FOUR TIMES
+
+Declined. The peak gain is real and the instruction cost is not survivable, and
+the shape is the 2026-09-01 catastrophe in miniature — that removal left
+runbench running after ten minutes against a 0.4-second baseline, and this one,
+over the cluster subset alone, costs 7.4x.
+
+**What it rules out is worth having.** `cluster_edges_ok` excludes threaded and
+chain-threaded slots from the carry before it returns, so a cluster carry has
+already passed the test the filter's comment describes — and exempting exactly
+those carries still blows up. So the threaded fixpoint as it stands is not what
+the path prefix is standing in for. Whatever the real property is, "the cluster
+analysis approved this carry" does not imply it, and the next attempt has to
+find the difference rather than assume the two agree.
+
+The split phase's 29,360,128 bytes are untouched by this cut, which is its own
+evidence: `regexp/walked/5` is reported grow-only for an outside tail call, so
+its carry comes through `demotable_entries` and `crossing_positions`, not
+through a cluster. That path has no threaded fixpoint at all — `arg_ok` accepts
+a bare parameter only when its inferred set is within THREADED, so a bare
+parameter carrying ordinary heap becomes a crossing position and would be
+evacuated every iteration. Giving that path the fixpoint is where the next
+attempt goes.
+
+## 2026-09-19 — eleven groups, and the walker is not one of them
+
+The cut above was made twice, by two different criteria, and both came back with
+byte-identical counters and byte-identical instructions: `allocs` 6,550,655,
+`alloc_bytes` 494,316,813, `arena_peak_bytes` 35,458,768 over 33 blocks, and
+13,618,672,806 instructions. Two changes agreeing to the byte is a thing to
+explain rather than to report twice, so the filter was instrumented instead.
+
+Under `KANSO_THREAD_REPORT`, building runbench, exactly ELEVEN imported groups
+reach the point where the prefix strips a carry:
+
+    json/array_open/3    carry [1]     regexp/more_flags/4     carry [2]
+    list/holds_all?/2    carry [0]     sha256/compress/4       carry [0, 1]
+    list/found_in/2      carry [0]     regexp/leading_flags/3  carry [2]
+    list/holds_any?/2    carry [0]     sha256/turned/3         carry [0, 1]
+    json/obj_open/3      carry [1]     sha256/blocked/3        carry [1]
+    sha256/digested/4    carry [1]
+
+Both cuts therefore did the same thing — let those eleven carry — which is why
+they agreed. 7.4x is what those eleven cost, against 3,145,728 bytes of peak.
+
+**`regexp/walked/5` is not in the list, and cannot be.** Its report line reads
+`grow-only: another group tail-calls it (unbracketed entry)`, so `classify` gives
+it `GrowOnly`; `demotable_entries` only considers `OutsideTailCall`, and the
+carry tiers only ever see a group that got one. A group with no carry has none
+to strip.
+
+So the scanbench header's measurement stands and its mechanism does not. Clearing
+the filter really does take that benchmark's peak to one block — the header
+measured it — but not by restoring the walker's carry, because the walker has
+none. What it restores is some other loop's, and naming that loop is the next
+step rather than a detail: the 29,360,128 bytes are still where they were, and
+the instrumentation says they are not behind this filter in the way the header
+says they are.
+
+Recorded rather than left, because the header's sentence has been read three
+times now as a ready-made diagnosis, including once in the section above this
+one before the instrumentation ran.
+
+## 2026-09-19 — the carry's width is the property, and one test says not yet
+
+The eleven were priced one at a time, with a probe that lets a named imported
+group keep its carry. Alone, every one of them reads the baseline on both
+columns: `arena_peak_bytes` 38,604,496 and 0.26 seconds. So the cost is a
+pairing rather than a group, and the pairs separate cleanly:
 
     sha256/compress/4 + sha256/turned/3     35,458,768   1.01s
     sha256/blocked/3  + sha256/digested/4   35,458,768   0.26s
     the other seven                         38,604,496   0.27s
     all eleven                              35,458,768   0.95s
 
-The expensive pair carries TWO positions each and the cheap pair ONE, and the
-whole saving sits with the cheap pair. So the rule is the loop's own shape: an
-imported group keeps a carry of at most one position. Evacuating one slot a lap
-is what the tier is for; evacuating several is where a library loop starts
-copying its caller's work. It is a proxy for bytes copied per iteration, which
-nothing in the pass can measure, and it is a proxy the loop supplies rather than
-its file name.
+**The whole peak saving sits with the cheap pair.** `blocked` and `digested`
+give the entire 3,145,728 bytes at baseline wall time; `compress` and `turned`
+give the same bytes and all of the cost. Under callgrind the cheap pair reads
+1,841,054,483 instructions against main's 1,840,276,313 — +778,170, +0.0423% —
+with `allocs` up 251 and `alloc_bytes` up 20,080. Scored: **77.2707 to 77.6807,
++0.4100.**
 
-**The 2026-08-31 catastrophe does not recur**, because `compress` and `turned`
-stay out: the same 128 KB digest under `lib/` reads 0.28 seconds against main's
-0.30, with the peak 32,505,888 -> 7,340,064.
+The first pair carries TWO positions each and the second ONE. So the width of a
+carry reads the property the path prefix was standing in for: evacuating one
+slot a lap is what the tier is for, and evacuating several is where a library
+loop starts copying its caller's work. It is a proxy for bytes copied per
+iteration, which nothing in the pass can measure, and it is a proxy the loop's
+own shape supplies rather than its file name. Built as "an imported group keeps
+a carry of at most one position": 1,841,081,961 instructions and the same
+35,458,768, scored 77.2707 to 77.6806. The five extra groups it admits beyond
+the named pair cost 27,478 instructions between them.
 
-**What it buys.** The counter veins, regenerated with `all_counters.sh --write`:
+**And it does not ship tonight, because a test goes red.**
+`beat::tests::json_decode_loops_stay_conservative`: the rule admits
+`json/array_open/3` and `json/obj_open/3`, and that test asserts only the
+byte-builder encoders may rewind, because "scanners threading records or lists
+stay on the grow-only arena". The other 61 tests pass and the differential
+corpus is green.
 
-    run     arena_peak_bytes 38,604,496 -> 35,458,768, blocks 36 -> 33
-            allocs +251, alloc_bytes +20,080, beat_iters +501, evac_allocs +1,002
-    digest  arena_peak_bytes  2,097,152 ->  1,048,576, blocks 2 -> 1
-            allocs +130, alloc_bytes +10,400, beat_iters 56 -> 314
-    scan    beat_iters 15 -> 16, survive_slots 0 -> 2, nothing else
+**What that test pins is worth reading carefully, and the first reading here was
+wrong.** It looks like a safety judgement about freeing memory under a live
+reference. The prefix it protects is a COST guard, and says so in its own words
+at `src/beat.rs:185`: carrying a shared library driver's threaded source "copies
+an unbounded value per iteration". Safety is established elsewhere and still is
+— the `THREADED` set with its list argument, the map exclusion, the bytes chain
+licence — and those run whatever the prefix does.
+`bounded_accumulator_carries` pins a carried list directly: a fixed-shape
+rebuild carries, and the evacuation handles it.
 
-and the hash across a range of messages:
+So what the next session owes is not a proof of memory safety. It is a decision
+about an expectation that was written when the rule was a file path, with a
+measurement now saying those two groups cost nothing either way. Changing a test
+because the rule beneath it changed is ordinary; changing one to get green is
+not, and this entry exists so the difference is on the record before anybody
+edits it.
 
-       16,384   6,291,472 ->  3,145,744
-       32,768   9,437,200 ->  3,145,744
-       65,536  19,922,976 ->  7,340,064
-      131,072  32,505,888 ->  7,340,064
-      262,144  75,497,520 -> 24,117,296
+The measurement says those two json groups contribute nothing either way: the
+seven non-sha256 groups read the baseline on both columns. So the whole +0.41 is
+available without touching them, and what the next session owes is a rule that
+admits the sha256 pair on a property rather than by name, leaves json's scanners
+where that test wants them, and says why the difference is real.
 
-Two to four times less, and the doubling from 65,536 to 131,072 now costs
-nothing. **The defect is not gone**: 262,144 still reads three times 131,072, and
-the hash holds 92 bytes a message byte where it held 288, so `sha256_peak.rs`'s
-projection for the site's 1,604,098-byte wasm blob moves from roughly eleven
-gigabytes of live arena to about three and a half. An improvement, not a fix, and
-that test now says so in those words.
+## 2026-09-19 — carry width is not the property, and the ratchet says so in three voices
 
-On this container the run row costs 805,648 instructions for it, +0.0438%, and
-welfare reads 77.6834 with the counter veins in and the instruction row still
-main's. CI supplies that row; the floor is banked after it lands, not here.
+`beat_loops` decides which imported loops may evacuate their slots and rewind by
+asking whether the declaration's `file` begins `std/` or `lib/`. That field is
+the one error origins are built from, and it is deciding a program's memory: the
+same package under a directory called `lib` compiles to one that never reclaims
+a block, and one directory over to one that does.
+`tests/a_program_is_not_its_directory.rs` has pinned that since it was written,
+as a defect.
 
-**And the scan vein moved by two slots**, which is its own small finding: the
-split phase's 29,360,128 bytes are not behind this filter, as the 2026-09-19
-instrumentation already said. What holds them is still open.
+The prefix stands in for something real. A shared library driver threads its
+caller's invariant source through the loop, and evacuating that copies an
+unbounded value every lap; removing it outright on 2026-08-31 turned the digest
+quadratic, 1.3s to 68s at 128 KB.
 
-**Three tests changed, none weakened.** Each was written to be updated when the
-behaviour improved. `json_decode_loops_stay_conservative` keeps out "scanners
-threading records or lists", and the two openers the new rule admits carry
-neither: `array_open cs cs[p + 1] (p + 1)` threads the subject at slot 0, which
-the analysis marks THREADED and never carries, and carries slot 1, one character
-read out of it. `a_program_is_not_its_directory` asserts the property now instead
-of the defect, so it goes red if a path ever decides memory again.
-`sha256_peak` is re-pinned with the curve above and keeps its point: the hash
-still holds every block it has read, just less of it.
+MEASURED, one group at a time, on runbench. Eleven imported groups lose a carry
+at that point. Alone, every one reads the baseline on both columns — peak
+38,604,496 and 0.26 seconds — so the cost is a pairing:
+
+    sha256/compress + sha256/turned      peak 35,458,768   1.01s
+    sha256/blocked  + sha256/digested    peak 35,458,768   0.26s
+    the other seven                      peak 38,604,496   0.27s
+
+The expensive pair carries two positions each and the cheap pair one, and the
+whole 3,145,728 bytes sit with the cheap pair. A rule admitting a carry of at
+most one position was built, measured at 77.6807 against a 77.2707 floor, and
+opened as kanso#1556.
+
+**IT IS DECLINED, and the reason took three translations to read.** Under the
+rule `kanso run scripts/ratchet` reports `the program ran out of stack:
+recursion went deeper than the stack holds`. The binary it runs prints
+`out of memory`. Printing the request at the point of failure gives the third
+and true version:
+
+    CARRYOOM need=18446744072171062384 depth=3 carry_n=1
+
+2^64 less 1,538,489,232. `k_copy_size` read a length of about minus one and a
+half billion out of a node it was sizing for the staged copy, the sum wrapped,
+and `malloc` refused it. What the prefix keeps out is a carried value whose
+interior the sizing walk cannot read, and the WIDTH of a carry does not see
+that at all. The rule was a proxy chosen from a pairing, and the pairing was
+about wall time.
+
+The sweep over which groups have to be rescued for the failure to appear:
+
+    {holds_all?, holds_any?}                     dies
+    {holds_all?, holds_any?, next}               dies
+    {holds_any?, next, next_skipped}             dies
+    {holds_all?, holds_any?, next, next_skipped} dies
+    all five                                     dies
+    every other subset tried                     runs
+
+`list/holds_any?/2` is in every coalition that dies and in none that survives.
+It drives `any?`, and the backtrace at the failure has one `any?` running inside
+another's predicate — `ratchet/read_it` to `any?` to `holds_any?` to the
+predicate closure to `any?` again. Excluding the three list drivers that take a
+predicate runs the ratchet clean AND still reads arena_peak_bytes 35,458,768
+against main's 38,604,496, so a rule shaped that way would ship the whole
+saving.
+
+**That rule is not shipped, because there is no small program that fails without
+it.** A nested `any?` over two 800-element lists reads 1,048,576 on both arms.
+The coalitions are not monotone: {holds_all?, holds_any?} dies where either
+alone runs, and {holds_all?, holds_any?, next_skipped, found_in} runs again —
+which is a failure sitting near a memory limit rather than a rule being broken,
+and it means a subset sweep cannot say which group is unsafe, only which one is
+over the line in this program. A guard swept out of one program is a guard
+nobody can check.
+
+What this branch leaves behind: the eleven groups and their carries, the pairing
+measurement, the number the sizing walk actually read, and a next step that is
+smaller than the one it started with — find the program that makes `k_copy_size`
+read a garbage length. The rule follows from that.
+

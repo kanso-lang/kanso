@@ -197,61 +197,13 @@ pub fn beat_loops(program: &Program, inference: &infer::Inference, mut_sites: &M
         .map(|d| d.name.as_str())
         .collect();
     ids.retain(|(name, _), _| !has_synthetic.contains(name.as_str()));
-    // AN IMPORTED GROUP KEEPS THE CARRY ITS OWN EDGES EARN. The prefix used to
-    // drop the whole carry, which drops the loop's reclamation with it: a group
-    // that cannot carry is not a plain beat here, it is no beat at all, and its
-    // scratch survives to the end of the run. What the prefix was standing in
-    // for is the threaded position -- the caller's invariant source, copied per
-    // iteration if it is evacuated -- and that is now named directly. A
-    // threaded position leaves the carry and is not evacuated, because it sits
-    // below the loop's mark and the rewind never reaches it; the rest stay.
-    // A group left with nothing to evacuate becomes a plain beat and still
-    // rewinds.
-    // WHAT THE PREFIX WAS STANDING IN FOR. Until 2026-09-19 an imported group
-    // lost its carry outright, on the reasoning above: a shared library driver
-    // threads its caller's invariant source through the loop, and evacuating
-    // that copies an unbounded value every iteration. The reasoning is right
-    // and the test was a file path, so a loop paid for where it lived rather
-    // than for what it carries -- and a group that cannot carry is not demoted
-    // to a plain beat here, it is no beat at all, so its scratch survives the
-    // whole run.
-    //
-    // MEASURED 2026-09-19, letting imported groups carry one at a time on
-    // runbench. Eleven reach this point. Alone, every one of them reads the
-    // baseline on both columns: peak 38,604,496 and 0.26 seconds. Together they
-    // read 35,458,768 and 0.95 seconds, so the cost is a pairing rather than a
-    // group. The pairs:
-    //
-    //     sha256/compress/4 + sha256/turned/3     35,458,768   1.01s
-    //     sha256/blocked/3  + sha256/digested/4   35,458,768   0.26s
-    //     the other seven                         38,604,496   0.27s
-    //
-    // The first pair carries TWO positions each and the second ONE, and the
-    // whole peak saving sits with the second. So the width of a carry is the
-    // property to read: evacuating one slot a lap is what the tier was for, and
-    // evacuating several is where a library loop starts copying its caller's
-    // work. That is a proxy for bytes copied per iteration, which nothing here
-    // can measure, and it is a proxy the loop's own shape supplies rather than
-    // its file name.
-    //
-    // The row it moves: arena_peak_bytes 38,604,496 -> 35,458,768, against
-    // runbench 1,840,276,313 -> 1,841,081,961 on this container, +0.0438%.
-    // Scored, 77.2707 -> 77.6806.
     let carried_needed: crate::hash::Set<(String, usize)> = carried.keys().cloned().collect();
-    let narrow: crate::hash::Set<(String, usize)> = carried
-        .iter()
-        .filter(|(_, positions)| positions.len() <= 1)
-        .map(|(g, _)| g.clone())
-        .collect();
-    carried.retain(|g, _| {
-        !has_synthetic.contains(g.0.as_str())
-            && (narrow.contains(g) || !imported.contains(g.0.as_str()))
+    carried.retain(|(name, _), _| {
+        !has_synthetic.contains(name.as_str()) && !imported.contains(name.as_str())
     });
     // an id whose carry was just stripped must not stay armed as a carry
     // beat with nothing staged: drop imported ids that needed their carry
-    ids.retain(|g, _| {
-        narrow.contains(g) || !imported.contains(g.0.as_str()) || !carried_needed.contains(g)
-    });
+    ids.retain(|g, _| !imported.contains(g.0.as_str()) || !carried_needed.contains(g));
 
     // A demoted pair lives or dies with its target loop, never with the
     // caller's name: a user loop entered through a group that shares its
@@ -2444,21 +2396,6 @@ mod tests {
         // accumulator can dangle across a rewind. The string scanners share
         // the licence but not the entry: they are reached by a tail call,
         // and a demoted entry buys a plain beat, never a carried one.
-        //
-        // TWO OPENERS JOINED ON 2026-09-19, and the reason above is not about
-        // what they carry. `array_open/3` and `obj_open/3` are the
-        // whitespace skips in front of a bracket: `array_open cs cs[p + 1]
-        // (p + 1)`. Slot 0 is `cs`, the subject, and it is THREADED — the
-        // analysis says so, and a threaded slot is never carried. What they
-        // carry is slot 1, one character read out of that list, a fresh
-        // value a lap. The accumulator the comment above keeps out is not in
-        // either of them.
-        //
-        // They were kept out by the `std/`/`lib/` path prefix rather than by
-        // any of that, and the prefix went on 2026-09-19 for a rule about the
-        // loop's own shape. Measured on runbench, letting each imported group
-        // carry one at a time, these two move neither column: peak 38,604,496
-        // and 0.26 seconds, the baseline to the byte.
         let program = crate::compile_module(std::path::Path::new("lib/json"), false).unwrap();
         let inference = infer::infer(&program);
         let loops = beat_loops(&program, &inference, &crate::linear::in_place_pushes(&program));
@@ -2472,16 +2409,10 @@ mod tests {
         // so the cycle is not a beat: no bracket, no rewind, nothing to free.
         assert_eq!(
             licensed,
-            vec![
-                ("array_open".to_string(), 3),
-                ("encode_items".to_string(), 3),
-                ("encode_pairs".to_string(), 3),
-                ("obj_open".to_string(), 3),
-            ],
-            "the byte-builder encoders rewind, and so do the two openers, whose \
-             carried slot is one character rather than an accumulator; the \
-             escaper allocates nothing, and a scanner that threads a record or \
-             a list still keeps the grow-only arena"
+            vec![("encode_items".to_string(), 3), ("encode_pairs".to_string(), 3)],
+            "only the byte-builder encoders may rewind; the escaper allocates \
+             nothing, and scanners threading records or lists stay on the \
+             grow-only arena"
         );
     }
 

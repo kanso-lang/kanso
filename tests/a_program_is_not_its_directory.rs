@@ -1,38 +1,34 @@
-//! The same sources, from two directories, compile to the same program.
+//! The same sources, from two directories, do NOT compile to the same program.
 //!
-//! They did not until 2026-09-19. The beat analysis decided which loops may
-//! rewind their arena by asking whether the declaration's `file` begins `std/`
-//! or `lib/`. `file` is the field error origins are built from -- a path meant
-//! for a diagnostic, read as a semantic marker. So a package kept in a
-//! directory called `lib` compiled to a program that never reclaimed a block,
-//! and the same package one directory over compiled to one that did: at 131,072
-//! bytes hashed, 32,505,888 against 7,340,064; on this file's own 4,096-byte
-//! message, 2,097,152 against 1,048,576. Twice the peak here and four times it
-//! there, from the name of a folder.
+//! This asserts what the compiler DOES, not what it should do — the same shape
+//! `tests/sha256_peak.rs` beside it uses, and for the same reason: the defect
+//! is real, the fix is not free, and a fact nothing pins is a fact that can be
+//! lost.
 //!
-//! THE PREFIX IS GONE and the rule reads the loop's own shape instead: an
-//! imported group keeps a carry of at most one position. The two numbers agree
-//! now, so this file asserts the property rather than the defect, and goes red
-//! if a path ever decides a program's memory again.
+//! The beat analysis decides which loops may rewind their arena by asking
+//! whether the declaration's `file` begins `std/` or `lib/`. `file` is the
+//! field error origins are built from — a path meant for a diagnostic, read as
+//! a semantic marker. So a package kept in a directory called `lib` compiles to
+//! a program that never reclaims a block, and the same package one directory
+//! over compiles to one that does. Twenty-six times the peak, from the name of
+//! a folder.
 //!
-//! WHY THE FIRST FIX WAS NOT THIS ONE. Removing the prefix outright was built
-//! and measured on 2026-08-31 and turned the digest quadratic: at 128 KB the
-//! peak fell from 1,262,485,520 bytes to 4,194,320 and the wall time rose from
-//! 1.3 seconds to 68. The second 2026-08-31 entry in design/compiler-log.md has
-//! the curve. What separates the two is width: `sha256/compress` and
-//! `sha256/turned` carry two positions each and are the whole of that cost;
-//! `sha256/blocked` and `sha256/digested` carry one and are the whole of the
-//! saving. Measured 2026-09-19, one group at a time.
+//! WHY IT IS STILL HERE. Removing the test was built and measured on
+//! 2026-08-31 and turned the digest quadratic: at 128 KB the peak falls from
+//! 1,262,485,520 bytes to 4,194,320 and the wall time rises from 1.3 seconds to
+//! 68. The second 2026-08-31 entry in design/compiler-log.md has the curve. So
+//! the fix is a real fix and its first draft was a bad trade, and the entry
+//! this file exists to make red is a better one.
 //!
-//! WHAT THE FIRST DRAFTS OF THIS FILE GOT WRONG, so they are not re-derived. A
-//! nineteen-byte message put both arms under the arena's 1 MiB first block,
-//! where every program reads the same peak. `current_dir(at)` with a bare `.`
-//! argument stamps `./main.kso` in both arms, so the directory name never
-//! reached `file` at all -- the run happens from the grandparent and names
-//! `lib/app` and `elsewhere/app` on the command line. And a `std/sha256` import
-//! reads `std/` in BOTH arms and so answered the same either way, which is a
-//! passing test that proves nothing; the digest is copied into the package
-//! instead, so the loops under test are the package's own.
+//! WHAT THE FIRST DRAFTS GOT WRONG, so they are not re-derived. A nineteen-byte
+//! message put both arms under the arena's 1 MiB first block, where every
+//! program reads the same peak. `current_dir(at)` with a bare `.` argument
+//! stamps `./main.kso` in both arms, so the directory name never reaches `file`
+//! at all — the run happens from the grandparent and names `lib/app` and
+//! `elsewhere/app` on the command line. And a `std/sha256` import reads `std/`
+//! in BOTH arms and so answers the same either way, which is a passing test
+//! that proves nothing; the digest is copied into the package instead, so the
+//! loops under test are the package's own.
 
 use std::process::Command;
 
@@ -74,15 +70,18 @@ fn peak_under(where_it_sits: &str) -> u64 {
         .unwrap_or_else(|| panic!("no arena_peak_bytes for {where_it_sits}/app in:\n{said}"))
 }
 
-/// Both numbers are pinned exactly, and they are the same number. The pin is
-/// what a package costs wherever it sits; the equality is what this file is
-/// for.
+/// Both numbers are pinned exactly. The one under `lib/` is what the defect
+/// costs; the one beside it is what the same sources cost anywhere else. When
+/// the two agree, this assertion is the thing to delete.
 #[test]
-fn the_directory_a_package_sits_in_does_not_change_its_memory() {
+fn the_directory_a_package_sits_in_changes_its_memory() {
     let in_lib = peak_under("lib");
     let elsewhere = peak_under("elsewhere");
 
-    assert_eq!(in_lib, 1_048_576, "the peak under lib/ moved");
+    assert_eq!(in_lib, 2_097_152, "the peak under lib/ moved");
     assert_eq!(elsewhere, 1_048_576, "the peak outside lib/ moved");
-    assert_eq!(in_lib, elsewhere, "a directory name is deciding a program's memory again");
+    assert_ne!(
+        in_lib, elsewhere,
+        "the directory stopped changing the program — delete this spec and say so"
+    );
 }
