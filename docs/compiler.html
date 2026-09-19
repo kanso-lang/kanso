@@ -2956,7 +2956,99 @@ env -i PATH=... GLIBC_TUNABLES=... KANSO_FIXED_TEMPX=1  972,777,009   +117</code
 
 <p>the reason recorded beside that flag had been binary size, and binary size is not scored at all. now the reason is the one the objective can see.</p>
 
-<h2 id="carriedvalue"><span class="sec-num">111</span>the loop carried a value it only needed at the end</h2>
+<h2 id="whatapointcosts"><span class="sec-num">111</span>what a point of the objective costs</h2>
+
+<p>the compiler has an objective function, and for a fortnight the way to decide what to work on next has been to read its weights and satiations and reason about them. the function can be asked instead. take the goldens, scale one row by a tenth, score the model, and the difference is what that tenth is worth. fourteen rows, one at a time, on 2026-09-19:</p>
+
+<pre><code>per 10%   counter                        golden row
++0.6644   run_instructions               instructions:runbench
++0.5091   run_peak_bytes                 cost_golden_run:arena_peak_bytes
++0.1952   codegen_instructions_release   codegen_instructions_release
++0.0923   startup_instructions           startup_instructions
++0.0692   codegen_instructions_dev       codegen_instructions_dev
++0.0446   interp_instructions            interp_instructions
++0.0233   compile_peak_bytes             compile_memory:compile_peak_bytes
++0.0214   compile_instructions           entry_instructions
++0.0197   interp_peak_bytes              interp_memory:interp_peak_bytes
++0.0197   compile_allocs                 compile_allocs
++0.0094   run_peak_bytes                 cost_golden_run:held_peak_bytes
++0.0068   emit_instructions              emit_instructions
++0.0060   compile_instructions           compile_instructions
++0.0003   run_peak_bytes                 cost_golden_run:perm_peak_bytes</code></pre>
+
+<p>the same sweep at one per cent gives the same order with every figure about a tenth of these, so the curve is near enough straight over that range and the table ranks reliably even though each number is an average over its own step.</p>
+
+<p><strong>two rows are two thirds of the board.</strong> the run program&#8217;s instruction count and its arena peak come to 1.1735 of a 1.6808 total. everything else together is worth less than the first row alone.</p>
+
+<p><strong>and the arena peak has had no work at all.</strong> it is worth 77% of what the run&#8217;s instruction count is worth, and nothing in the last fortnight&#8217;s log would suggest it: every entry in that window is instructions &#8212; the dispatch pooling, the beat rewind, the digit loop, the frames. the second most valuable row in the model has not been named once.</p>
+
+<p>the table also explains a fortnight of small moves. the interpreted row is worth a fifteenth of the run row, and three changes that took 1.7% off it moved the objective by two hundredths. the compile row is worth a hundred and eleventh of the run row, and it is the row this project has spent the most rounds arguing about.</p>
+
+<p>the figures are marginal at today&#8217;s ratios and move as the terms improve, which is why they carry a date. what would keep them current is a flag on the scoring script itself, printing this table out of the model it already holds.</p>
+
+
+<h2 id="threequartersonephase"><span class="sec-num">112</span>three quarters of the memory, in 4.9% of the work</h2>
+
+<p>the table above puts the run program&#8217;s arena peak second on the board. this is where it lives. one phase count at a time, taken to its floor, everything else left alone:</p>
+
+<pre><code>baseline                38,604,496   36 blocks
+decode = 1              38,604,496   36   unchanged
+encode = 1              38,604,496   36   unchanged
+decode = 1, encode = 1  38,604,496   36   unchanged
+deep = 1                38,604,496   36   unchanged
+escape = 1              38,604,496   36   unchanged
+pend = 1                38,604,496   36   unchanged
+index = 1,000           35,651,584   34
+digest = 1              35,458,768   33
+split = 1                9,244,368    8</code></pre>
+
+<p><strong>the split phase holds 29,360,128 of it, three quarters, and split is 4.87% of the program&#8217;s instructions.</strong> decode and encode are 69% of the work between them and hold none of the peak: taking both to a single round leaves the number unmoved to the byte.</p>
+
+<p>scored, that is <strong>+4.75</strong> welfare &#8212; 77.27 to 82.02. every compiler change merged in the two days before this section moved the objective by two hundredths together.</p>
+
+<p>a cause was written down eleven days ago in the benchmark&#8217;s own header: codegen reads a list of beat loops, that list drops every group whose file begins <code>std/</code> or <code>lib/</code> from the carry tier, and clearing the filter gives a peak of one block with the allocation count unchanged. the measurement is the header&#8217;s and stands. the mechanism it names does not: instrumenting the filter shows exactly eleven imported groups losing a carry there, and the regexp walker has none to lose: it is reported grow-only because another group tail-calls it, and the filter only ever reaches a group that got a carry in the first place. what clearing the filter actually changes is somebody else&#8217;s loop, and which one is open.</p>
+
+<p>clearing it wholesale is not the fix and was measured not to be &#8212; every library loop then begins evacuating, and the program that ran in 0.4 seconds was still running after ten minutes. the header names the real shape: the carry tier is decided by a path prefix rather than by the property that prefix stands in for, which is whether the loop threads its caller&#8217;s invariant source through itself. the machinery for deciding that already exists one function away, as the threaded-slot fixpoint the cluster analysis runs.</p>
+
+<p>so the lead is not new. its size is: the largest single move on the board by two orders of magnitude, against a fix whose shape is already written down and whose crude form is already priced.</p>
+
+
+<h2 id="prefixfirstcut"><span class="sec-num">113</span>the first cut at the prefix filter, declined at seven times</h2>
+
+<p>the section above says the carry tier is decided by a path prefix rather than by the property that prefix stands in for, and that the machinery for the property already exists: the cluster analysis refuses to carry a slot it finds threaded. so a carry that came out of that analysis has already been checked for the thing the filter guards against, and the filter could let it through. four lines.</p>
+
+<pre><code>arena_peak_bytes    38,604,496 -&gt;     35,458,768   -3,145,728, worth +0.41
+allocs               5,730,653 -&gt;      6,550,655     +820,002
+alloc_bytes        459,964,461 -&gt;    494,316,813  +34,352,352
+run instructions 1,840,276,313 -&gt; 13,618,672,806   7.4 times</code></pre>
+
+<p>declined. the peak gain is real and the instruction cost is not survivable, and it is the 2026-09-01 catastrophe in miniature: that removal left the program running after ten minutes against a 0.4-second baseline, and this one, over the cluster subset alone, costs seven and a half times.</p>
+
+<p>what it rules out is the useful part. the cluster analysis excludes threaded slots from a carry before it returns, so those carries had already passed the test the filter&#8217;s own comment describes &#8212; and exempting exactly them still blows up. so that fixpoint is not what the path prefix is standing in for. the next attempt has to find the difference rather than assume the two agree.</p>
+
+<p>the split phase&#8217;s 29 megabytes are untouched by this cut, which is its own evidence. the regexp walker is reported grow-only for an outside tail call, so its carry comes through the demoted-entry path and the crossing-position test, neither of which has a threaded fixpoint at all: a bare parameter is accepted there only when its inferred set is narrow enough, so one carrying ordinary heap becomes a crossing position and would be copied every iteration. giving that path the fixpoint is where this goes next.</p>
+
+
+<h2 id="thecarryswidth"><span class="sec-num">114</span>the width of a carry, and a test that says not yet</h2>
+
+<p>the eleven groups the prefix strips were priced one at a time. alone, every one of them reads the baseline on both columns &#8212; peak 38,604,496 and 0.26 seconds &#8212; so the cost is a pairing rather than a group, and the pairs separate:</p>
+
+<pre><code>sha256/compress + sha256/turned      35,458,768   1.01s
+sha256/blocked  + sha256/digested    35,458,768   0.26s
+the other seven                      38,604,496   0.27s
+all eleven                           35,458,768   0.95s</code></pre>
+
+<p>the whole saving sits with the cheap pair. <code>blocked</code> and <code>digested</code> give the entire 3,145,728 bytes at baseline wall time; <code>compress</code> and <code>turned</code> give the same bytes and all of the cost. counted rather than timed, the cheap pair costs 778,170 instructions, 0.0423%, against 3.1 megabytes of peak. scored: <strong>77.27 to 77.68</strong>.</p>
+
+<p>the first pair carries two positions each and the second one. so the width of a carry reads the property the path prefix was standing in for: evacuating one slot a lap is what the tier is for, and evacuating several is where a library loop starts copying its caller&#8217;s work. it is a proxy for bytes copied per iteration, which nothing in the pass can measure, and it is a proxy the loop&#8217;s own shape supplies rather than its file name.</p>
+
+<p>it does not ship yet, because a test goes red: the rule as written also admits two of the json decoder&#8217;s scanners, and a unit test keeps scanners threading records or lists on the grow-only arena while only the byte-builder encoders rewind.</p>
+
+<p>what that test pins is worth reading carefully, and the first reading of it here was wrong. it looks like a judgement about freeing memory under a live reference. the prefix it protects is a cost guard and says so in its own words: carrying a library driver&#8217;s threaded source copies an unbounded value every iteration. safety is established elsewhere and still is &#8212; the licence that lets a value cross a rewind, the map exclusion, the byte-chain rule &#8212; and a neighbouring test pins a carried list directly, where a fixed-shape rebuild carries and the evacuation handles it.</p>
+
+<p>the measurement says those two scanners contribute nothing either way, so the whole 0.41 is available without touching them. what is owed is a rule that admits the sha256 pair on a property, leaves the scanners where that test wants them, and says why the difference is real.</p>
+
+<h2 id="carriedvalue"><span class="sec-num">115</span>the loop carried a value it only needed at the end</h2>
 
 <p>rendering a double is 4.58% of the run program, 440.7 instructions a float over 191,070 calls, and a quarter of that is one loop taking digits off two at a time. it divides three values a trip: the two ends of the rounding interval, to decide whether another pair comes off, and the significand, because the significand is the answer.</p>
 
@@ -2979,7 +3071,7 @@ a float             440.7 -&gt;          425.9        -14.8
 
 <p>the lesson is about where a saving goes rather than about ryu. taking work out of a loop that runs five times only pays if what replaces it costs less than five times what was removed, and the first shape of this change failed that test while looking like a win. the disassembly is what said so; the instruction count alone would have been read as a small success and left there.</p>
 
-<h2 id="copiedtwice"><span class="sec-num">112</span>the same name, allocated twice</h2>
+<h2 id="copiedtwice"><span class="sec-num">116</span>the same name, allocated twice</h2>
 
 <p>&#167;87 left the interpreted row at 1,555,890,579 and a lead open: the profile still had the allocator near the top. two more changes took it to <strong>1,138,001,430</strong>. the first sized a clone for the growth that followed it. the second is smaller than either and is the one worth reading, because the cost it removes was never anybody&#39;s decision &#8212; it was two pieces of code each doing the right thing on its own.</p>
 

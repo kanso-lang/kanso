@@ -5739,6 +5739,256 @@ describes before running anything against it.
 
 ---
 
+## 2026-09-19 — what a point of welfare costs, measured on every counter the objective reads
+
+Three sessions in a row have chosen what to work on by reading the weights and
+the satiations and reasoning about them. The objective can be asked directly
+instead. Stage `bench/` and `scripts/`, scale ONE golden row by 0.9, and run
+`kanso run scripts/welfare -- --score`, which prints four places. The difference
+is what a tenth off that row is worth in meta welfare. Fourteen rows, one at a
+time, base 77.2707:
+
+    per 10%   counter                        golden row
+    +0.6644   run_instructions               instructions:runbench
+    +0.5091   run_peak_bytes                 cost_golden_run:arena_peak_bytes
+    +0.1952   codegen_instructions_release   codegen_instructions_release
+    +0.0923   startup_instructions           startup_instructions
+    +0.0692   codegen_instructions_dev       codegen_instructions_dev
+    +0.0446   interp_instructions            interp_instructions
+    +0.0233   compile_peak_bytes             compile_memory:compile_peak_bytes
+    +0.0214   compile_instructions           entry_instructions
+    +0.0197   interp_peak_bytes              interp_memory:interp_peak_bytes
+    +0.0197   compile_allocs                 compile_allocs
+    +0.0094   run_peak_bytes                 cost_golden_run:held_peak_bytes
+    +0.0068   emit_instructions              emit_instructions
+    +0.0060   compile_instructions           compile_instructions
+    +0.0003   run_peak_bytes                 cost_golden_run:perm_peak_bytes
+
+The same sweep at 1% gives the same order with every value about a tenth of
+these, so the curve is near enough straight over that range and the table can be
+trusted to rank even though each figure is an average over its own step rather
+than a derivative.
+
+**Two rows are two thirds of the board.** `runbench` and the run program's arena
+peak come to 1.1735 of a 1.6808 total: 69.8%. Everything else together is worth
+less than half of `runbench` alone.
+
+**And the arena peak has had no work at all.** It sits at 38,604,496 bytes and
+is worth 77% of what the run's instruction count is worth, which nothing in the
+last fortnight's log would suggest. Every entry in that window is instructions:
+the dispatch-pooling family, the beat rewind, the digit loop, the frames. The
+second most valuable row in the model has not been named once.
+
+**What this says about the fortnight.** `interp_instructions` is worth 0.0446 a
+tenth, fifteen times less than `runbench`. The three dispatch-pooling changes of
+2026-09-18 took 15.8 million off a 939 million row, 1.7%, and the objective
+moved 77.25 to 77.27 — which is exactly what this table predicts and is why it
+felt like so little for three merged changes. `compile_instructions` is worth
+0.0060 a tenth, a hundred and eleven times less than `runbench`, and it is the
+row this project has spent the most rounds arguing about.
+
+The figures are marginal at today's ratios and move as the terms improve, so the
+table is dated and belongs in the log rather than in a doc that reads as
+standing. What would keep it current is a `--marginal` flag on the welfare
+script itself, printing this table from the model it already holds. That is the
+follow-up; the table above is the reason to want it.
+
+## 2026-09-19 — the arena peak is three quarters one phase, and that phase is 4.9% of the work
+
+The table above puts the run program's arena peak second on the board at 0.5091
+a tenth. This is where it lives. One count at a time, taken to its floor, every
+other count left alone, `arena_peak_bytes` read off the counters build:
+
+    baseline              38,604,496   36 blocks
+    decode = 1            38,604,496   36     unchanged
+    encode = 1            38,604,496   36     unchanged
+    decode = 1, encode = 1 38,604,496  36     unchanged
+    deep = 1              38,604,496   36     unchanged
+    escape = 1            38,604,496   36     unchanged
+    pend = 1              38,604,496   36     unchanged
+    index = 1,000         35,651,584   34
+    digest = 1            35,458,768   33
+    split = 1              9,244,368    8
+
+**Split holds 29,360,128 of it, 76%, and split is 4.87% of the program's
+instructions.** Decode and encode are 69% of the work between them and hold
+none of the peak at all: taking both to a single round leaves the number
+unmoved to the byte.
+
+Staging `bench/` with `arena_peak_bytes` at 9,244,368 and scoring: welfare
+**77.2707 to 82.0199, +4.7492**. Every compiler change merged in the two days
+before this entry moved the objective by 0.02 together.
+
+**A cause was written down eleven days ago, in the benchmark's own header.**
+`bench/runbench/runbench/split/scanbench.kso` records a 2026-09-08 measurement:
+codegen reads `beat_loops`, `beat_loops` drops every group whose file begins
+`std/` or `lib/` from the carry tier — `src/beat.rs:196` — and clearing that
+filter gives a peak of 1,048,576 bytes over one block with `alloc_bytes`
+unchanged: the same allocation, now reclaimed.
+
+The measurement is the header's and stands. The mechanism it names does not, and
+the entry below reports the instrumentation: exactly eleven imported groups lose
+a carry at that filter, and `regexp/walked/5` is not among them. It is classified
+grow-only because another group tail-calls it, so it has no carry to strip and
+the filter never reaches it. What clearing the filter changes is some other
+loop's reclamation, and which one is open.
+
+Clearing it wholesale is not the fix and was measured not to be: runbench was
+still running after ten minutes against a 0.4-second baseline, because every
+library loop begins evacuating, and the 2026-09-01 sitting priced that removal
+at -0.56 welfare under the objective of the day. The header names the shape of
+the real fix — "the carry tier being decided by a path prefix rather than by the
+property the prefix stands in for" — and `src/beat.rs:185` says what the
+property is: a shared library driver threads its caller's invariant source
+through the loop, and carrying that copies an unbounded value every iteration.
+The machinery for saying so already exists for clusters, as the threaded-slot
+fixpoint in `cluster_edges_ok`.
+
+So the lead is not new. What is new is its size: the largest single move on the
+board by two orders of magnitude, against a fix whose shape is already written
+down and whose crude form is already priced.
+
+## 2026-09-19 — the first cut at the prefix filter, declined at 7.4x
+
+The entry above says the carry tier is decided by a path prefix rather than by
+the property the prefix stands in for, and that the machinery for the property
+already exists as the threaded-slot fixpoint in `cluster_edges_ok`. The obvious
+first cut follows from that: `cluster_edges_ok` already refuses to carry a slot
+it finds threaded, so a carry that came out of the cluster analysis has already
+been checked for the thing the filter guards against, and the filter could
+exempt it.
+
+Built, on a branch, in four lines: record which groups took their carry from
+`eligible_clusters` and let those through both `carried.retain` and the
+`ids.retain` beside it.
+
+    arena_peak_bytes   38,604,496 -> 35,458,768    -3,145,728, worth +0.4127
+    allocs              5,730,653 ->  6,550,655     +820,002
+    alloc_bytes       459,964,461 -> 494,316,813    +34,352,352
+    run instructions  1,840,276,313 -> 13,618,672,806   SEVEN POINT FOUR TIMES
+
+Declined. The peak gain is real and the instruction cost is not survivable, and
+the shape is the 2026-09-01 catastrophe in miniature — that removal left
+runbench running after ten minutes against a 0.4-second baseline, and this one,
+over the cluster subset alone, costs 7.4x.
+
+**What it rules out is worth having.** `cluster_edges_ok` excludes threaded and
+chain-threaded slots from the carry before it returns, so a cluster carry has
+already passed the test the filter's comment describes — and exempting exactly
+those carries still blows up. So the threaded fixpoint as it stands is not what
+the path prefix is standing in for. Whatever the real property is, "the cluster
+analysis approved this carry" does not imply it, and the next attempt has to
+find the difference rather than assume the two agree.
+
+The split phase's 29,360,128 bytes are untouched by this cut, which is its own
+evidence: `regexp/walked/5` is reported grow-only for an outside tail call, so
+its carry comes through `demotable_entries` and `crossing_positions`, not
+through a cluster. That path has no threaded fixpoint at all — `arg_ok` accepts
+a bare parameter only when its inferred set is within THREADED, so a bare
+parameter carrying ordinary heap becomes a crossing position and would be
+evacuated every iteration. Giving that path the fixpoint is where the next
+attempt goes.
+
+## 2026-09-19 — eleven groups, and the walker is not one of them
+
+The cut above was made twice, by two different criteria, and both came back with
+byte-identical counters and byte-identical instructions: `allocs` 6,550,655,
+`alloc_bytes` 494,316,813, `arena_peak_bytes` 35,458,768 over 33 blocks, and
+13,618,672,806 instructions. Two changes agreeing to the byte is a thing to
+explain rather than to report twice, so the filter was instrumented instead.
+
+Under `KANSO_THREAD_REPORT`, building runbench, exactly ELEVEN imported groups
+reach the point where the prefix strips a carry:
+
+    json/array_open/3    carry [1]     regexp/more_flags/4     carry [2]
+    list/holds_all?/2    carry [0]     sha256/compress/4       carry [0, 1]
+    list/found_in/2      carry [0]     regexp/leading_flags/3  carry [2]
+    list/holds_any?/2    carry [0]     sha256/turned/3         carry [0, 1]
+    json/obj_open/3      carry [1]     sha256/blocked/3        carry [1]
+    sha256/digested/4    carry [1]
+
+Both cuts therefore did the same thing — let those eleven carry — which is why
+they agreed. 7.4x is what those eleven cost, against 3,145,728 bytes of peak.
+
+**`regexp/walked/5` is not in the list, and cannot be.** Its report line reads
+`grow-only: another group tail-calls it (unbracketed entry)`, so `classify` gives
+it `GrowOnly`; `demotable_entries` only considers `OutsideTailCall`, and the
+carry tiers only ever see a group that got one. A group with no carry has none
+to strip.
+
+So the scanbench header's measurement stands and its mechanism does not. Clearing
+the filter really does take that benchmark's peak to one block — the header
+measured it — but not by restoring the walker's carry, because the walker has
+none. What it restores is some other loop's, and naming that loop is the next
+step rather than a detail: the 29,360,128 bytes are still where they were, and
+the instrumentation says they are not behind this filter in the way the header
+says they are.
+
+Recorded rather than left, because the header's sentence has been read three
+times now as a ready-made diagnosis, including once in the section above this
+one before the instrumentation ran.
+
+## 2026-09-19 — the carry's width is the property, and one test says not yet
+
+The eleven were priced one at a time, with a probe that lets a named imported
+group keep its carry. Alone, every one of them reads the baseline on both
+columns: `arena_peak_bytes` 38,604,496 and 0.26 seconds. So the cost is a
+pairing rather than a group, and the pairs separate cleanly:
+
+    sha256/compress/4 + sha256/turned/3     35,458,768   1.01s
+    sha256/blocked/3  + sha256/digested/4   35,458,768   0.26s
+    the other seven                         38,604,496   0.27s
+    all eleven                              35,458,768   0.95s
+
+**The whole peak saving sits with the cheap pair.** `blocked` and `digested`
+give the entire 3,145,728 bytes at baseline wall time; `compress` and `turned`
+give the same bytes and all of the cost. Under callgrind the cheap pair reads
+1,841,054,483 instructions against main's 1,840,276,313 — +778,170, +0.0423% —
+with `allocs` up 251 and `alloc_bytes` up 20,080. Scored: **77.2707 to 77.6807,
++0.4100.**
+
+The first pair carries TWO positions each and the second ONE. So the width of a
+carry reads the property the path prefix was standing in for: evacuating one
+slot a lap is what the tier is for, and evacuating several is where a library
+loop starts copying its caller's work. It is a proxy for bytes copied per
+iteration, which nothing in the pass can measure, and it is a proxy the loop's
+own shape supplies rather than its file name. Built as "an imported group keeps
+a carry of at most one position": 1,841,081,961 instructions and the same
+35,458,768, scored 77.2707 to 77.6806. The five extra groups it admits beyond
+the named pair cost 27,478 instructions between them.
+
+**And it does not ship tonight, because a test goes red.**
+`beat::tests::json_decode_loops_stay_conservative`: the rule admits
+`json/array_open/3` and `json/obj_open/3`, and that test asserts only the
+byte-builder encoders may rewind, because "scanners threading records or lists
+stay on the grow-only arena". The other 61 tests pass and the differential
+corpus is green.
+
+**What that test pins is worth reading carefully, and the first reading here was
+wrong.** It looks like a safety judgement about freeing memory under a live
+reference. The prefix it protects is a COST guard, and says so in its own words
+at `src/beat.rs:185`: carrying a shared library driver's threaded source "copies
+an unbounded value per iteration". Safety is established elsewhere and still is
+— the `THREADED` set with its list argument, the map exclusion, the bytes chain
+licence — and those run whatever the prefix does.
+`bounded_accumulator_carries` pins a carried list directly: a fixed-shape
+rebuild carries, and the evacuation handles it.
+
+So what the next session owes is not a proof of memory safety. It is a decision
+about an expectation that was written when the rule was a file path, with a
+measurement now saying those two groups cost nothing either way. Changing a test
+because the rule beneath it changed is ordinary; changing one to get green is
+not, and this entry exists so the difference is on the record before anybody
+edits it.
+
+The measurement says those two json groups contribute nothing either way: the
+seven non-sha256 groups read the baseline on both columns. So the whole +0.41 is
+available without touching them, and what the next session owes is a rule that
+admits the sha256 pair on a property rather than by name, leaves json's scanners
+where that test wants them, and says why the difference is real.
+
+---
+
 ## 2026-09-17 — the digit loop carried a value it only needed at the end, and then the tail gave it back
 
 `render_ryu` is 84,209,220 instructions of runbench, 4.58%, 440.7 a float over
