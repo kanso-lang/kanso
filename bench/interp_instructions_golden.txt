@@ -454,5 +454,31 @@
 # the fourth runtime-only change in a row that moved no layout. This container
 # projected 5,073,171 and the runner reads 6,858,880: same direction, larger,
 # different silicon.
-interp_instructions=932183914
+# 2026-09-18, kanso#1543, CI's sitting. 932,183,914 -> 929,300,332,
+# a FALL of 2,883,582 (-0.3094%). The second count in the same job read
+# 929,300,332 as well, so the binary is stable and this is a disagreement with
+# the golden rather than within the run.
+# THE ROW THIS CHANGE IS ABOUT. The dispatcher keeps a handle on the
+# environment frame and takes it back with `Rc::try_unwrap` once the body is
+# done, so the bindings vector is pooled instead of freed and allocated again.
+# This container projected 2,788,393 and the runner reads 2,883,582.
+# FIVE COMPILE-SIDE ROWS MOVED WITH IT and none of them is this change's
+# subject: compile +1,157, entry +3,058, library +2,874, emit +2,317, start-up
+# -244, each reproducing twice inside the job. That is layout, and it is the
+# first change in this family big enough to move it -- kanso#1538 and
+# kanso#1540 left every one byte-identical.
+# 2026-09-19, kanso#1545, CI's sitting. 929,300,332 -> 923,151,727, a FALL
+# of 6,148,605 (-0.6617%). THE ROW THIS CHANGE IS ABOUT. The frame's node is
+# pooled as well as the vector inside it: `Rc::get_mut` reaches the bindings
+# through a handle that stays alive, where `Rc::try_unwrap` had to destroy the
+# `RcBox` to reach them and the next dispatch called `Rc::new` for a fresh one.
+#
+# READ TWICE IN THE SAME JOB, the same number both times, so the disagreement
+# was with the golden rather than within the run.
+#
+# This container projected 4,869,682 and the runner reads 6,148,605: same
+# direction, larger, different silicon -- the third change in this family to
+# land that way, after kanso#1540 (5,073,171 projected, 6,858,880 read) and
+# kanso#1543.
+interp_instructions=923151727
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
