@@ -4805,3 +4805,31 @@ Clay, and the tier the pin covers is what decides how much it costs.
 So the rows go in, the cost is now a measured number rather than an unknown,
 and the entry waits. The gavel is better informed than it was: 0.003 points,
 against a row that stops drawing two values in one job.
+
+---
+
+## 2026-09-19 — the eighth row, and how seven got copied and one did not
+
+`compile_instructions` 35,550,010 -> **35,551,167** on kanso#1513's merged
+tree, +1,157, with `compile_again` reading 35,551,167 in the same job. The
+eighth row the fixed-temp pin re-bases, and the one that was missed when the
+other seven were copied in.
+
+**WHY IT WAS MISSED, which is the part worth keeping.** The seven were taken
+from the job's `::error::` lines, and this row did not appear among them
+because it failed in a later round, after the seven had been rebased. The
+summary block's own vein list named it — `"compile instructions:failure"` — and
+that block is the authority CLAUDE.md points at for exactly this reason. Read
+the vein list, not the error lines.
+
+And the movement itself was predicted in writing: `compile_instructions`
+USUALLY moves on an edit to the compiler's own Rust, because src/main.rs IS
+the compiler whatever the front end stops before. A pin that changes main.rs
+moves the layout and every row that tracks it.
+
+**WHAT THIS CLEARS AND WHAT IT DOES NOT.** With the eighth row in, every vein
+agrees and the trend gate is satisfied. Welfare still falls below the floor by
+the 0.003 points the release tier costs — so that blocker is now confirmed
+alone rather than merely asserted while another failure sat underneath it. The
+entry waits on the scope ruling in design/pending-gavels.md, as the previous
+entry says.
