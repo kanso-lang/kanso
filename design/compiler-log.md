@@ -5371,3 +5371,52 @@ table is dated and belongs in the log rather than in a doc that reads as
 standing. What would keep it current is a `--marginal` flag on the welfare
 script itself, printing this table from the model it already holds. That is the
 follow-up; the table above is the reason to want it.
+
+## 2026-09-19 — the arena peak is three quarters one phase, and that phase is 4.9% of the work
+
+The table above puts the run program's arena peak second on the board at 0.5091
+a tenth. This is where it lives. One count at a time, taken to its floor, every
+other count left alone, `arena_peak_bytes` read off the counters build:
+
+    baseline              38,604,496   36 blocks
+    decode = 1            38,604,496   36     unchanged
+    encode = 1            38,604,496   36     unchanged
+    decode = 1, encode = 1 38,604,496  36     unchanged
+    deep = 1              38,604,496   36     unchanged
+    escape = 1            38,604,496   36     unchanged
+    pend = 1              38,604,496   36     unchanged
+    index = 1,000         35,651,584   34
+    digest = 1            35,458,768   33
+    split = 1              9,244,368    8
+
+**Split holds 29,360,128 of it, 76%, and split is 4.87% of the program's
+instructions.** Decode and encode are 69% of the work between them and hold
+none of the peak at all: taking both to a single round leaves the number
+unmoved to the byte.
+
+Staging `bench/` with `arena_peak_bytes` at 9,244,368 and scoring: welfare
+**77.2707 to 82.0199, +4.7492**. Every compiler change merged in the two days
+before this entry moved the objective by 0.02 together.
+
+**The cause was written down eleven days ago, in the benchmark's own header.**
+`bench/runbench/runbench/split/scanbench.kso` records a 2026-09-08 measurement:
+codegen reads `beat_loops`, and `beat_loops` drops every group whose file begins
+`std/` or `lib/` from the carry tier — `src/beat.rs:196` — so `regexp/walked`'s
+carry is stripped and its per-position scratch survives to the end of the scan.
+Clearing that filter gives a peak of 1,048,576 bytes over one block with
+`alloc_bytes` unchanged: the same allocation, now reclaimed.
+
+Clearing it wholesale is not the fix and was measured not to be: runbench was
+still running after ten minutes against a 0.4-second baseline, because every
+library loop begins evacuating, and the 2026-09-01 sitting priced that removal
+at -0.56 welfare under the objective of the day. The header names the shape of
+the real fix — "the carry tier being decided by a path prefix rather than by the
+property the prefix stands in for" — and `src/beat.rs:185` says what the
+property is: a shared library driver threads its caller's invariant source
+through the loop, and carrying that copies an unbounded value every iteration.
+The machinery for saying so already exists for clusters, as the threaded-slot
+fixpoint in `cluster_edges_ok`.
+
+So the lead is not new. What is new is its size: the largest single move on the
+board by two orders of magnitude, against a fix whose shape is already written
+down and whose crude form is already priced.

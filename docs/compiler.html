@@ -2912,6 +2912,32 @@ error[name]: unknown name `builders/run`
 
 <p>the figures are marginal at today&#8217;s ratios and move as the terms improve, which is why they carry a date. what would keep them current is a flag on the scoring script itself, printing this table out of the model it already holds.</p>
 
+
+<h2 id="threequartersonephase"><span class="sec-num">109</span>three quarters of the memory, in 4.9% of the work</h2>
+
+<p>the table above puts the run program&#8217;s arena peak second on the board. this is where it lives. one phase count at a time, taken to its floor, everything else left alone:</p>
+
+<pre><code>baseline                38,604,496   36 blocks
+decode = 1              38,604,496   36   unchanged
+encode = 1              38,604,496   36   unchanged
+decode = 1, encode = 1  38,604,496   36   unchanged
+deep = 1                38,604,496   36   unchanged
+escape = 1              38,604,496   36   unchanged
+pend = 1                38,604,496   36   unchanged
+index = 1,000           35,651,584   34
+digest = 1              35,458,768   33
+split = 1                9,244,368    8</code></pre>
+
+<p><strong>the split phase holds 29,360,128 of it, three quarters, and split is 4.87% of the program&#8217;s instructions.</strong> decode and encode are 69% of the work between them and hold none of the peak: taking both to a single round leaves the number unmoved to the byte.</p>
+
+<p>scored, that is <strong>+4.75</strong> welfare &#8212; 77.27 to 82.02. every compiler change merged in the two days before this section moved the objective by two hundredths together.</p>
+
+<p>the cause was written down eleven days ago in the benchmark&#8217;s own header. codegen reads a list of beat loops, and that list drops every group whose file begins <code>std/</code> or <code>lib/</code> from the carry tier, so the regexp walker&#8217;s carry is stripped and its per-position scratch survives to the end of the scan. clearing the filter gives a peak of one block with the allocation count unchanged: the same bytes, now reclaimed.</p>
+
+<p>clearing it wholesale is not the fix and was measured not to be &#8212; every library loop then begins evacuating, and the program that ran in 0.4 seconds was still running after ten minutes. the header names the real shape: the carry tier is decided by a path prefix rather than by the property that prefix stands in for, which is whether the loop threads its caller&#8217;s invariant source through itself. the machinery for deciding that already exists one function away, as the threaded-slot fixpoint the cluster analysis runs.</p>
+
+<p>so the lead is not new. its size is: the largest single move on the board by two orders of magnitude, against a fix whose shape is already written down and whose crude form is already priced.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>
