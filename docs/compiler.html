@@ -2837,8 +2837,52 @@ error[name]: unknown name `builders/run`
 
 <p>and it retires a lead. a loop trying twenty arms to find one looks like an obvious place for a pre-filter on the first argument&#39;s type. at 2.61 tried and 202,987 of 456,967 matching, the loop already tries barely more arms than it accepts, so there is little to filter. closed by the measurement rather than by an attempt.</p>
 
+<h2 id="whereproduction"><span class="sec-num">107</span>where the production run spends</h2>
 
-<h2 id="feelstheblock"><span class="sec-num">107</span>a variable nothing reads, and 117 instructions</h2>
+<p>three changes in one night took 15.8 million off the interpreted row and moved the objective from 77.25 to 77.27. that is the model working: the interpreted row sits on the development side and is 136% improved against its baseline, so it is deep into its satiating curve. the objective says where the money is in one line &#8212; run speed carries a satiation of 2.0, which is late, and 0.45 of the production side.</p>
+
+<p>three entries that night ended with the observation that a change wanting to move the number has to find production work, and the next change went back to the interpreter each time. this is the first look at the other side.</p>
+
+<pre>  1,840,368,355   PROGRAM TOTALS
+    392,547,176   21.33%   json/encode_onto
+    154,484,748    8.39%   json/obj_key_start
+     97,131,375    5.28%   json/parse_value
+     91,704,604    4.98%   runbench/tally
+     85,720,338    4.66%   json/array_delim
+     84,209,220    4.58%   render_ryu
+     77,645,700    4.22%   json/scan
+     65,074,779    3.54%   json/str_escape
+     61,672,983    3.35%   k_beat_iter
+     49,334,986    2.68%   k_b_at</pre>
+
+<p>and divided, which is the rule the two declines that night bought. a share is not a magnitude, and a total says nothing about what one call costs:</p>
+
+<pre>  encode_onto     2,380,860 calls    164.9 instructions a call
+  obj_key_start     784,179 calls    197.0
+  parse_value     1,100,187 calls     88.3
+  k_b_at            690,000 calls     71.5
+  k_beat_iter     2,685,021 calls     23.0</pre>
+
+<p>the encoder is the largest frame in the production workload by a factor of two and a half, and 164.9 instructions a call is a lot for a function whose job is mostly appending a few bytes.</p>
+
+<p>the obvious suspicion is wrong, and reading the output said so before anything was built. <code>encode_onto</code> is an overloaded group of eight arms, all of arity two: true, false and null, then int, float, string, list and map. a document of mostly strings and numbers looks as though it must reach its arm past the three nullary tests every call, which would make arm selection a share of the 164.9. the emitted ir settles it:</p>
+
+<pre>  %t9 = extractvalue %KValue %x1, 0
+  switch i64 %t9, label %L7 [
+    i64 2, label %arm0    i64 3, label %arm1
+    i64 0, label %arm3    i64 1, label %arm4
+    i64 6, label %arm5    i64 9, label %arm6
+    i64 10, label %arm7   i64 7, label %L8
+  ]</pre>
+
+<p>a jump table on the value&#39;s tag. eight arms cost one switch, arm order decides nothing, and the only linear step is the record case, one check for tag seven. the dispatch is not where the instructions are.</p>
+
+<p>so the 164.9 is the appending. per call the common path is one failure check on the accumulator, the switch, and an arm body: a string is two byte-appends around a whole escape pass, where an int or a float is one rendered append. that is real work rather than overhead, and it is why the frame is large.</p>
+
+<p>two changes died that night for want of this step. the loser&#39;s buffer and the frame filter were both built on a suspicion the code would have refuted, and this one was refuted for the price of reading eighty lines of ir. the lead stays open and its shape has changed: what to attack in the encoder is the appending path, and nothing here says that path is wasteful.</p>
+
+
+<h2 id="feelstheblock"><span class="sec-num">108</span>a variable nothing reads, and 117 instructions</h2>
 
 <p>the interpreted row has been disagreeing with itself. two ci jobs on one commit read <strong>2,178,502,266</strong> and <strong>2,178,502,272</strong> &#8212; six instructions apart, three parts per billion, each stable across the gate&#8217;s own second reading. the standing explanation was an argument rather than a measurement: that where the allocator&#8217;s heap starts moves with the size of the file the loader mapped, so the residue is a term proportional to work rather than a constant.</p>
 
