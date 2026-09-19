@@ -5536,15 +5536,29 @@ a carry of at most one position": 1,841,081,961 instructions and the same
 35,458,768, scored 77.2707 to 77.6806. The five extra groups it admits beyond
 the named pair cost 27,478 instructions between them.
 
-**And it does not ship tonight, because a test says no and the test is about
-safety.** `beat::tests::json_decode_loops_stay_conservative` goes red: the rule
-admits `json/array_open/3` and `json/obj_open/3`, and that test asserts only the
+**And it does not ship tonight, because a test goes red.**
+`beat::tests::json_decode_loops_stay_conservative`: the rule admits
+`json/array_open/3` and `json/obj_open/3`, and that test asserts only the
 byte-builder encoders may rewind, because "scanners threading records or lists
-stay on the grow-only arena". A carried slot is evacuated before the rewind,
-which is what the carry tier is for, so the rule may well be safe there — but
-that is an argument, and the test is a recorded judgement about freeing memory
-under a live reference. The other 61 tests pass and the differential corpus is
-green.
+stay on the grow-only arena". The other 61 tests pass and the differential
+corpus is green.
+
+**What that test pins is worth reading carefully, and the first reading here was
+wrong.** It looks like a safety judgement about freeing memory under a live
+reference. The prefix it protects is a COST guard, and says so in its own words
+at `src/beat.rs:185`: carrying a shared library driver's threaded source "copies
+an unbounded value per iteration". Safety is established elsewhere and still is
+— the `THREADED` set with its list argument, the map exclusion, the bytes chain
+licence — and those run whatever the prefix does.
+`bounded_accumulator_carries` pins a carried list directly: a fixed-shape
+rebuild carries, and the evacuation handles it.
+
+So what the next session owes is not a proof of memory safety. It is a decision
+about an expectation that was written when the rule was a file path, with a
+measurement now saying those two groups cost nothing either way. Changing a test
+because the rule beneath it changed is ordinary; changing one to get green is
+not, and this entry exists so the difference is on the record before anybody
+edits it.
 
 The measurement says those two json groups contribute nothing either way: the
 seven non-sha256 groups read the baseline on both columns. So the whole +0.41 is
