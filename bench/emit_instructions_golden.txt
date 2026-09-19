@@ -218,4 +218,6 @@
 # 2026-09-18, kanso#1543. 51,617,476 -> 51,619,793, +2,317. Layout: this gate
 # anchors on `codegen::emit_ir` and the diff is in `eval`. Counted twice in
 # the job, identical both times.
-emit_instructions=51619793
+# 2026-09-19, kanso#1502 on the tree merged after kanso#1543 and kanso#1547,
+# CI's sitting. emit_instructions 51,619,793 -> 51,616,373, a move of -3,420.
+emit_instructions=51616373

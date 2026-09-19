@@ -5765,3 +5765,35 @@ name closes this for good, and which tier the pin covers is a decision in
 design/pending-gavels.md. Until it is ruled this row is the one flaky gate in
 the tree — and its flakiness has a named mechanism, a measured rate and a known
 fix, which is a different thing from a gate nobody understands.
+
+---
+
+## 2026-09-19 — kanso#1502's rows after the pooling landed, and the bucket it drew
+
+    interp_instructions   923,151,727 ->  923,151,719      -8
+    compile_instructions   35,551,167 ->   35,549,049  -2,118
+    emit_instructions      51,619,793 ->   51,616,373  -3,420
+    entry_instructions    126,732,646 ->  126,727,524  -5,122
+    library_instructions  127,188,882 ->  127,183,938  -4,944
+    startup_instructions    3,363,672 ->    3,363,249    -423
+
+Each of the four that take a second reading agreed with itself.
+
+**AND `codegen_instructions_release` PASSED.** It read 6,820,866,344 — the low
+bucket, which is the value this branch's golden was restored to a few hours ago
+on the argument that the gate compares the FIRST reading and the low bucket is
+the common one, twenty of twenty-two names. The job before this one drew the
+high bucket on its first reading and went red. Two jobs, two buckets, one
+binary, and the pinned value was right about which to expect.
+
+That is the eleven behaving exactly as kanso#1513's experiment says it will,
+and it is the second time today the same branch has shown both faces. Nothing
+new is claimed from it: the mechanism was settled and the rate was measured,
+and this is the rate happening.
+
+**THE INTERPRETED ROW MOVES EIGHT**, where kanso#1504's moved one the other
+way. Both branches touch rendering and both now sit on the pooled dispatch
+loop, so the small residues each carries are against a floor that moved under
+them. Neither is a constant: kanso#1504's entry of today records a residue that
+held five times and broke on the sixth, and this row gets no projection from
+here for the same reason.

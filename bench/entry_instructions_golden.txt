@@ -969,7 +969,9 @@
 # Layout, the same way.
 # 2026-09-18, kanso#1543. 126,729,588 -> 126,732,646, +3,058. Layout, as above.
 # Counted twice in the job, identical both times.
-entry_instructions=126732646
+# 2026-09-19, kanso#1502 on the tree merged after kanso#1543 and kanso#1547,
+# CI's sitting. entry_instructions 126,732,646 -> 126,727,524, a move of -5,122.
+entry_instructions=126727524
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

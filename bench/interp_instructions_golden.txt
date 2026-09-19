@@ -480,5 +480,7 @@
 # direction, larger, different silicon -- the third change in this family to
 # land that way, after kanso#1540 (5,073,171 projected, 6,858,880 read) and
 # kanso#1543.
-interp_instructions=923151727
+# 2026-09-19, kanso#1502 on the tree merged after kanso#1543 and kanso#1547,
+# CI's sitting. interp_instructions 923,151,727 -> 923,151,719, a move of -8.
+interp_instructions=923151719
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

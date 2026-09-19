@@ -2222,7 +2222,9 @@
 # 2026-09-18, kanso#1543. 35,550,010 -> 35,551,167, +1,157. Layout: the diff
 # is in the interpreter's dispatcher and `kanso check` stops before it runs.
 # Counted twice in the job, identical both times.
-compile_instructions=35551167
+# 2026-09-19, kanso#1502 on the tree merged after kanso#1543 and kanso#1547,
+# CI's sitting. compile_instructions 35,551,167 -> 35,549,049, a move of -2,118.
+compile_instructions=35549049
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.
