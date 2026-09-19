@@ -224,58 +224,36 @@
 #
 # This corrects the record only. Whether to pin the release tier is a decision
 # in design/pending-gavels.md and is not settled here.
-# 2026-09-19, kanso#1502 on the tree merged after kanso#1540, kanso#1541,
-# kanso#1544 and kanso#1546, CI's sitting. THE ROW DREW BOTH BUCKETS IN ONE
-# JOB: the first reading was 6,820,866,355 and the second 6,820,866,344,
-# ELEVEN apart. That is the eleven, caught in the act again, and its cause is
-# settled -- kanso#1513's twenty-two-name experiment showed the temporary
-# object's NAME decides which bucket a build lands in, about one name in
-# eleven drawing the high one.
+# 2026-09-18, THE GATE NOW PINS THE LTO OBJECT'S NAME, so this row measures a
+# different link and the value below is the OLD one, left for CI to move.
+# clang wrote the object to `/tmp/<stem>-XXXXXX.o` with fresh hex every run and
+# `ld`'s plugin probed a `StringMap` with that path. Twenty-two names, one
+# binary, one corpus, every other input held:
 #
-# THE LOW VALUE IS WRITTEN HERE because the gate compares the FIRST reading
-# and exits green before it ever takes a second, and the low bucket is the
-# common one -- twenty of twenty-two names in that experiment. So this row is
-# green about ten jobs in eleven and draws the other bucket in the eleventh.
-# This job was an eleventh.
+#     twenty names          5,163,341,031
+#     `4b8c1a`, `fedcba`    5,163,341,042
 #
-# It was 6,820,866,344 before the duplicated row beside it was deleted, and
-# main's 6,824,133,280 was carried forward in its place. That was the wrong
-# carry-forward under the lesson kanso#1504's entry records: when one of two
-# values came from CI on a tree this one descends from, that value is the one
-# to keep. Restored.
+# Eleven apart, deterministic per name, about one name in eleven. That is the
+# eleven this row has disagreed with ITSELF by since kanso#1507 pinned the
+# plugin's threads, and kanso#1502's own job drew both buckets in one run:
+# 6,820,866,344 then 6,820,866,355.
 #
-# Pinning the name would close this for good and the SCOPE of that pin -- which
-# tier it covers -- is a decision in design/pending-gavels.md. Until it is
-# ruled, this row is the one flaky gate in the tree and the flakiness has a
-# named mechanism rather than a shrug.
-codegen_instructions_release=6820866344
-# 2026-09-18, re-merged onto main after kanso#1512, which re-based this row by
-# clearing the gate's output path. THE VALUE BELOW IS MAIN'S, carried forward;
-# the merged reading is CI's.
+# `-save-temps=obj` derives the name from the input instead. On the container
+# the whole pipeline then read 6,811,830,244 twice against 6,813,182,505 three
+# times without it, so the flag RE-BASES this row by about 1.35 million as well
+# as steadying it. A MEASUREMENT CHANGE, not a compiler saving.
+# 2026-09-19, kanso#1513 on the tree merged after kanso#1540, kanso#1541,
+# kanso#1544 and kanso#1546, CI's sitting. codegen_instructions_release 6,824,133,280 -> 6,833,786,335,
+# a move of +9,653,055.
 #
-# 2026-09-18, kanso#1502 on the tree merged with main after kanso#1512,
-# CI's sitting. 6,824,133,280 -> 6,820,866,344, a FALL of 3,266,936
-# (-0.0479%). THE TWO READINGS IN THIS JOB WERE 11 APART -- 6,820,866,344 then
-# 6,820,866,355 -- which is the temp-object-name term kanso#1512's log entry
-# closed: clang names its LTO object /tmp/codegen_corpus-XXXXXX.o with fresh
-# hex, ld's plugin probes a StringMap with that path, and about one name in
-# eleven lands a bucket further. Twenty-two names were sampled on the
-# container and exactly two of them, `4b8c1a` and `fedcba`, read the high
-# value. The FIRST reading is written here because that is the one the gate
-# compares; until the name is pinned this row has a one-in-eleven chance per
-# job of drawing the other bucket.
-# 2026-09-18. TWO LIVE ROWS SAT HERE. This branch's own reading was appended
-# rather than replacing the carried-forward one, so the file held
-# `codegen_instructions_release=` twice -- 6,824,133,280 and 6,820,866,344.
+# THIS IS THE FIXED-TEMP PIN RE-BASING THE ROW, and every compile-side row
+# moves with it because the pin changes src/main.rs: the binary's layout moves,
+# and these rows track layout. A re-basing is not a regression and the
+# objective's trend gate is told which it is by bench/objective_sources.txt.
 #
-# `rows()` in tests/the_objective_reads_what_the_gate_watches.rs accumulates
-# with `+=`, which it must, because bench/objective_sources.txt maps one
-# objective counter onto several gate keys. Within ONE file a repeated row is
-# a defect, and the `+=` turns it into a sum, so the spec reports the LINK as
-# wrong when the link is fine and the file has two of the row. kanso#1504
-# carried the same defect from its own merge.
-#
-# One row now, and it is MAIN'S, carried forward. The branch's 6,820,866,344
-# was read against a base that has since moved under kanso#1540, kanso#1541
-# and kanso#1544, so it is not a reading of this tree. CI measures the merged
-# tree and the row is copied out of the job log.
+# EVERY ROW IN THIS JOB REPRODUCED ON A SECOND READING, including this one.
+# That is the point of the change rather than a detail of it: before the pin,
+# codegen_instructions_release could draw two values eleven apart on one binary
+# -- kanso#1502's job in this same sitting drew 6,820,866,355 and then
+# 6,820,866,344 -- and the name the pin fixes is what decided which.
+codegen_instructions_release=6833786335

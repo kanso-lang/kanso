@@ -2888,7 +2888,29 @@ error[name]: unknown name `builders/run`
 
 <p>two changes died that night for want of this step. the loser&#39;s buffer and the frame filter were both built on a suspicion the code would have refuted, and this one was refuted for the price of reading eighty lines of ir. the lead stays open and its shape has changed: what to attack in the encoder is the appending path, and nothing here says that path is wasteful.</p>
 
-<h2 id="carriedvalue"><span class="sec-num">108</span>the loop carried a value it only needed at the end</h2>
+<h2 id="fixedtemps"><span class="sec-num">108</span>the object gets a name the run chooses</h2>
+
+<p>the release-tier codegen row measures a whole build, clang and <code>ld</code> included, and it had been drifting. pinning the linker plugin&#8217;s thread count took the drift from millions down to <strong>eleven</strong> instructions, and the eleven turned out to be a string: clang writes its link-time object to <code>/tmp/&lt;stem&gt;-XXXXXX.o</code> with fresh hex every run, <code>ld</code>&#8217;s plugin puts that path into a hash map, and the probe walks a different number of buckets depending on the name. twenty-two names on one binary and one corpus &#8212; twenty read <strong>5,163,341,031</strong> and two read <strong>5,163,341,042</strong>, reproducibly, the same name giving the same answer every time.</p>
+
+<p><code>-save-temps=obj</code> derives the object&#8217;s name from its input, so the string is the same on every run and the draw stops. that is the change, and it is a measurement change rather than a compiler saving: nothing a user runs gets faster.</p>
+
+<p><strong>and the container was wrong about what it costs.</strong> here the pinned name read <strong>6,811,830,244</strong> twice against <strong>6,813,182,505</strong> three times without it &#8212; a saving of about <strong>1.35 million</strong>. the runner reads the same change as a cost of <strong>9,653,055</strong>, seven times the size and in the other direction. so the pin&#8217;s effect on the row&#8217;s <em>level</em> is a property of the host; only its effect on the row&#8217;s <em>steadiness</em> reproduced on both.</p>
+
+<p>that is worth stating on its own, because the container has now been right and wrong about the same kind of projection in one fortnight. it travelled for a change that moved a count &#8212; how many allocations a program makes &#8212; and it failed for a change that moves where bytes land. a projection from this box is worth what the quantity it projects is: a count travels, a layout does not.</p>
+
+<p>the pin covers both tiers. the flag reaches the release path and not the development one, and the development row moved anyway by <strong>3,868</strong>, which read for a day as a move nobody could explain &#8212; and re-basing a row on an unexplained move is the thing the goldens exist to catch. the explanation was in the gate. it sets the variable on all three of its <code>env -i</code> lines, so the development run&#8217;s environment block grew by nineteen bytes, and a child process inherits that block on its initial stack. this row is the child tree; the compiler&#8217;s own process is excluded from it. so the block is the only thing the change alters for the processes being counted.</p>
+
+<p>three arms at that tier, one tree, each pass reproducing byte for byte:</p>
+
+<pre><code>KANSO_FIXED_TEMPS=1      595,943,218   the gate as written
+nothing                  595,947,057   without it
+KANSO_FIXED_TEMPX=1      595,943,490   nineteen bytes, read by nothing</code></pre>
+
+<p>a variable the development path never reads moves the tree 3,839, and a variable <em>nothing</em> reads moves it 3,567. the 272 between those two arms is the block&#8217;s content, one letter apart at the same length. the container&#8217;s figures are its own and an instruction delta does not travel between hosts; what travels is that the unread arm moves nearly as far as the pinned one.</p>
+
+<p>so an environment block is a term to hold still like any other. adding a variable to one tier&#8217;s command re-bases that tier&#8217;s row whether or not anything reads it, and the 2026-09-15 rule covers it: put the state into a known one rather than explain it afterwards.</p>
+
+<h2 id="carriedvalue"><span class="sec-num">109</span>the loop carried a value it only needed at the end</h2>
 
 <p>rendering a double is 4.58% of the run program, 440.7 instructions a float over 191,070 calls, and a quarter of that is one loop taking digits off two at a time. it divides three values a trip: the two ends of the rounding interval, to decide whether another pair comes off, and the significand, because the significand is the answer.</p>
 
@@ -2911,7 +2933,7 @@ a float             440.7 -&gt;          425.9        -14.8
 
 <p>the lesson is about where a saving goes rather than about ryu. taking work out of a loop that runs five times only pays if what replaces it costs less than five times what was removed, and the first shape of this change failed that test while looking like a win. the disassembly is what said so; the instruction count alone would have been read as a small success and left there.</p>
 
-<h2 id="copiedtwice"><span class="sec-num">109</span>the same name, allocated twice</h2>
+<h2 id="copiedtwice"><span class="sec-num">110</span>the same name, allocated twice</h2>
 
 <p>&#167;87 left the interpreted row at 1,555,890,579 and a lead open: the profile still had the allocator near the top. two more changes took it to <strong>1,138,001,430</strong>. the first sized a clone for the growth that followed it. the second is smaller than either and is the one worth reading, because the cost it removes was never anybody&#39;s decision &#8212; it was two pieces of code each doing the right thing on its own.</p>
 

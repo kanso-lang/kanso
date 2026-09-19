@@ -5318,6 +5318,256 @@ appending path, and nothing here says that path is wasteful.
 
 ---
 
+## 2026-09-18 — the object gets a name the run chooses, and the eleven has nowhere left to live
+
+kanso#1512 closed the mechanism and said the fix belonged in a round of its
+own. This is it.
+
+`clang` writes its LTO object to `/tmp/<stem>-XXXXXX.o` with fresh hex every
+run. `ld`'s LLVM plugin puts that path into a `StringMap`, and how far the
+probe walks depends on the string. Twenty-two names, one binary, one corpus,
+every other input held fixed and the output path absent each time:
+
+    twenty names          5,163,341,031
+    `4b8c1a`, `fedcba`    5,163,341,042
+
+Eleven apart, deterministic per name — `4b8c1a` was run four times in all and
+read the high value every time — and about one name in eleven. That is the
+eleven `codegen_instructions_release` has been disagreeing with ITSELF by ever
+since kanso#1507 pinned the plugin's thread count and took the drift from
+millions down to this. kanso#1502's round drew both buckets inside one job,
+6,820,866,344 and then 6,820,866,355, on a branch whose diff is two divisions
+in float rendering.
+
+**Three rounds were spent on it, and one was spent asserting the name was not
+the cause.** That assertion rested on three samples, then five, of a
+one-in-eleven effect. The lesson is the log's own and it now has a fourth
+entry: a report that something is ABSENT is worth what the search for it being
+PRESENT was worth.
+
+`-save-temps=obj` derives the object's name from the input, so the string is
+the same every run. It rides `KANSO_FIXED_TEMPS`, which only the gate sets,
+for the reason `KANSO_LTO_JOBS` is not the default either: it leaves a file in
+the user's directory and a user's release build has no row to keep.
+`tests/the_measured_link_names_its_object.rs` pins three things — the flag is
+conditional on the variable, the two pins travel together on every `env -i`
+line, and `clear_output` removes the object the flag leaves behind.
+
+**That last one is kanso#1512's lesson applied to this change's own leavings.**
+A saved object is state the next build would find at a known path, which is
+exactly what clearing the binary and the IR was for. All three go.
+
+**And the spec caught its own first shape.** Counting the sites and asserting
+three passed when one site lost the variable: a comment naming the pair made
+the count four, so dropping one left three. The assertion is per line now —
+every executable `env -i` that pins the threads pins the name too, and the
+reverse — and it was watched red in both directions.
+
+Cost, as the container reads it: the whole pipeline goes 6,813,182,505 (three
+identical runs without the flag) to 6,811,830,244 (two identical runs with
+it), about 1.35 million lower. **A MEASUREMENT CHANGE and not a compiler
+saving** — nothing about the compiler moved, and what the flag buys is a link
+whose object has the same name twice. Both codegen goldens carry the old value
+with the change named in the header; CI moves them.
+
+## 2026-09-18 — kanso#1513's four layout rows, written in; the two codegen rows are the decision
+
+CI's sitting on the tree merged with main after kanso#1515:
+
+      compile           35,443,611 ->    35,443,609        -2
+      entry            126,354,834 ->   126,354,832        -2
+      library          126,810,299 ->   126,810,297        -2
+      start-up           3,363,774 ->     3,363,770        -4
+
+Minus two, two, two and four. `-save-temps=obj` rides `KANSO_FIXED_TEMPS`,
+which only the codegen gate sets, and none of these four routes links anything;
+what moved is the `match` in `release_clang` sitting in the binary they carry.
+
+**Two rows are left alone on purpose.** `release-tier codegen` reads
+6,833,786,335 against the golden's 6,824,133,280, and writing that row in IS the
+floor drop this branch is waiting on — a drop bought by measurement
+infrastructure rather than by the specification, which the 2026-09-13 rule
+leaves with Clay. `dev-tier codegen` also disagrees, and the comment on the pull
+request claimed it could not: the claim was that `-save-temps=obj` never reaches
+the dev tier. One of those two is wrong and this entry does not say which,
+because nothing here isolated it. That is the next measurement on this branch,
+not a sentence.
+
+## 2026-09-18 — kanso#1513 re-merged onto main after kanso#1516
+
+The four layout rows carry MAIN'S values again; they had been written in at
+CI's readings one main ago and kanso#1516 has moved the binary under them since.
+The two codegen goldens did not conflict, so the branch still carries main's
+`codegen_instructions_release` against CI's 6,833,786,335 — which is the whole
+point and the whole blocker.
+
+Re-merged rather than left dirty because a dirty pull request gets no CI at all,
+and a board with nothing on it reads exactly like a green one. Nothing about
+the decision has changed.
+
+---
+
+## 2026-09-19 — kanso#1513, CI's rows for the fixed-temp pin, and what it costs
+
+    entry_instructions       126,729,588 ->   126,732,646     +3,058
+    library_instructions     127,186,008 ->   127,188,882     +2,874
+    interp_instructions      932,183,914 ->   932,183,929        +15
+    startup_instructions       3,363,916 ->     3,363,672       -244
+    codegen_instructions_dev 596,157,624 ->   596,153,756     -3,868
+    codegen_instructions_rel 6,824,133,280 -> 6,833,786,335 +9,653,055
+    emit_instructions         51,617,476 ->    51,619,793     +2,317
+
+Seven rows, all re-based rather than regressed: the pin changes src/main.rs, so
+the binary's layout moves and every row that tracks layout moves with it.
+
+**EVERY ROW IN THIS JOB REPRODUCED ON A SECOND READING**, including
+`codegen_instructions_release` at 6,833,786,335 twice. That is the change
+working rather than a detail of it. In the same sitting, on a branch WITHOUT
+the pin, kanso#1502's release row read 6,820,866,355 and then 6,820,866,344 —
+eleven apart, same binary. The two branches are the controlled comparison the
+question needed: one draws two values in a job, the other draws one.
+
+**THE PRICE IS 0.003 POINTS**, and it is the release-tier row: 6,826,827,769 ->
+6,833,786,335 against the baseline, 9.65 million instructions of clang and ld.
+Welfare falls a hundredth below the floor.
+
+**AND THAT IS NOT A FLOOR THIS SESSION WILL LOWER.** The ironclad exception
+covers a change that builds a ruled part of the LANGUAGE, and this is an
+instrument. There is a real argument that the 2026-09-15 normalization
+ruling — "you do something that puts it into a persistent known initial
+state" — already covers it, which is exactly what the pin does to the
+temporary's name. What makes that argument premature is that the SCOPE of the
+pin is itself the open question in design/pending-gavels.md: lowering the
+floor to make this green would settle by action a question already sent to
+Clay, and the tier the pin covers is what decides how much it costs.
+
+So the rows go in, the cost is now a measured number rather than an unknown,
+and the entry waits. The gavel is better informed than it was: 0.003 points,
+against a row that stops drawing two values in one job.
+
+---
+
+## 2026-09-19 — the eighth row, and how seven got copied and one did not
+
+`compile_instructions` 35,550,010 -> **35,551,167** on kanso#1513's merged
+tree, +1,157, with `compile_again` reading 35,551,167 in the same job. The
+eighth row the fixed-temp pin re-bases, and the one that was missed when the
+other seven were copied in.
+
+**WHY IT WAS MISSED, which is the part worth keeping.** The seven were taken
+from the job's `::error::` lines, and this row did not appear among them
+because it failed in a later round, after the seven had been rebased. The
+summary block's own vein list named it — `"compile instructions:failure"` — and
+that block is the authority CLAUDE.md points at for exactly this reason. Read
+the vein list, not the error lines.
+
+And the movement itself was predicted in writing: `compile_instructions`
+USUALLY moves on an edit to the compiler's own Rust, because src/main.rs IS
+the compiler whatever the front end stops before. A pin that changes main.rs
+moves the layout and every row that tracks it.
+
+**WHAT THIS CLEARS AND WHAT IT DOES NOT.** With the eighth row in, every vein
+agrees and the trend gate is satisfied. Welfare still falls below the floor by
+the 0.003 points the release tier costs — so that blocker is now confirmed
+alone rather than merely asserted while another failure sat underneath it. The
+entry waits on the scope ruling in design/pending-gavels.md, as the previous
+entry says.
+
+---
+
+## 2026-09-19 — kanso#1513's eight re-based rows are superseded, and why they still go
+
+kanso#1543 landed the dispatch-pooling family, so main's compile-side rows
+moved again and this branch's merge conflicted on six of them. All six take
+MAIN's side, which throws away readings CI made on this branch's own merged
+tree a few hours ago.
+
+**THAT IS THE RIGHT CALL AND IT IS WORTH SAYING WHY**, because the rule this
+session wrote could be read the other way. The carry-forward rule says keep the
+value CI measured on a tree this one DESCENDS FROM. This branch's own eight
+rows were measured on a tree that descended from main-before-kanso#1543, and
+main has moved since; they are measurements of a tree that no longer exists on
+either side of the merge. Main's rows are the newest CI reading on a genuine
+ancestor, so they are the carry-forward, and the pin's effect on them is
+re-measured by CI on the merged tree.
+
+So the eight figures the previous entry recorded stand as history and not as
+this tree's rows. What they established does not move: every one of them
+reproduced on a second reading in the same job, including
+`codegen_instructions_release` at 6,833,786,335 twice, against kanso#1502 in
+the same sitting drawing 6,820,866,355 and then 6,820,866,344. The pin works.
+What is not yet known a second time is the SIZE of its re-basing on top of the
+pooling, and only CI can say.
+
+The floor is unchanged and still below its mark by the 0.003 points the release
+tier costs. That remains the one blocker and it remains a scope question in
+design/pending-gavels.md.
+
+## 2026-09-19 — the dev row's 3,868 is the environment block, and the question it was sent to Clay over is answered here
+
+The ledger asked whether the fixed-temp pin should cover both codegen tiers or
+the release tier alone, and rested the whole question on one objection: pinning
+both re-bases the dev row on a move with no mechanism behind it, because
+`KANSO_FIXED_TEMPS` is read in `release_clang` and never reaches `dev_clang`.
+That reading of src/main.rs is right. The conclusion drawn from it was not.
+
+`scripts/gates/codegen_instructions.sh` sets the variable on all three of its
+`env -i` lines, so the dev run's environment block grew by nineteen bytes, and
+a child process inherits that block on its initial stack. The row IS the child
+tree — kanso's own process is excluded from it, which the gate says at line 169
+— so the block is the only thing this change alters for the processes the row
+counts. Three arms at the dev tier, one tree, two passes reproducing byte for
+byte:
+
+    KANSO_FIXED_TEMPS=1      595,943,218   the gate as written
+    nothing                  595,947,057   main's block
+    KANSO_FIXED_TEMPX=1      595,943,490   nineteen bytes, read by nothing
+
+A variable `dev_clang` never reads moves the tree 3,839, and a variable NOTHING
+reads moves it 3,567, against the 3,868 CI reads on this row. The two arms
+differ by 272 on content alone at the same length, which is the block again.
+The container's figures are its own and an instruction delta does not travel;
+what travels is that the unread arm moves nearly as far as the pinned one.
+
+So the dev row's move is explained, the objection is answered, and option 1 —
+pin both tiers, as kanso#1513 is written — stands. The golden's own header had
+explained the move as layout from the changed src/main.rs, which cannot be
+right for this row for the same reason: kanso's process is excluded. That
+paragraph is corrected in place.
+
+**This question should not have gone to Clay at all.** design/pending-gavels.md
+opens by saying an entry is there because it is about the language a user
+meets, and that implementation details do not come there — whoever holds the
+file decides them and answers for the decision in the log. A gate's environment
+variable is an implementation detail by any reading. The entry is withdrawn on
+that ground rather than ruled, and the decision is recorded here. It sat
+blocking a green pull request for a day, which is what filing it cost.
+
+**And the floor takes the pin's 0.003.** CI read the pinned release row at
+6,833,786,335 against 6,824,133,280, a re-basing of 9,653,055: `-save-temps=obj`
+writes the object beside the output instead of into a temporary, and the link
+does that work either way but now writes it where the name is fixed. The
+compiler is not slower and the counter measures a different build, which the
+objective cannot see, so it prices the re-basing as a regression. 0.003 points,
+banked with the reason, under the 2026-09-15 rule that external state is put
+into a known initial state rather than explained afterwards.
+
+`tests/the_digest_is_priced_on_both_sides.rs` went red on the other host over
+the same 0.003 — `the_undoctored_goldens_hold_the_floor` runs welfare against
+the tree's real goldens — so the macos failure and the welfare job were one
+failure with one fix.
+
+**The eleven, caught again while this was being decided.** kanso#1551 is a page
+and log branch with no code in its diff, and its cost-goldens job read the
+release row at 6,824,133,291 and then 6,824,133,280 — eleven apart, in one job,
+with `ld` carrying all of it: 5,142,849,464 then 5,142,849,453. That is the
+third branch to halt on this and the second to show the residue is exactly
+eleven. It is also the argument for landing the pin rather than leaving the row
+to draw: the cost is 0.003 points once, and the alternative is about one job in
+eleven going red on nothing a diff can explain.
+
+---
+
 ## 2026-09-17 — the digit loop carried a value it only needed at the end, and then the tail gave it back
 
 `render_ryu` is 84,209,220 instructions of runbench, 4.58%, 440.7 a float over

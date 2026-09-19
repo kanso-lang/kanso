@@ -397,11 +397,16 @@
 # how many ALLOCATIONS happen, which is a count the program decides. A
 # container projection travels when the thing it projects is a count.
 #
-# 2026-09-18, kanso#1502 re-merged onto main after kanso#1531, CI's sitting.
-# 1,029,696,275 -> 1,029,696,289, a RISE of 14 (+0.0000014%). The same layout
-# move this branch's earlier readings record, against the newer baseline: the
-# row carries runtime.c's bytes rather than compiling it, and this diff grows
-# every binary's `.text` by 32 bytes.
+# 2026-09-18, kanso#1513: 1,075,174,600 -> 1,075,164,040, a fall of 10,560
+# (0.00098%). This branch adds no interpreter code. It adds twenty-four lines
+# to src/main.rs that read KANSO_FIXED_TEMPS on the way to clang, and the
+# interpreter's row moves because those lines are in the binary the row runs,
+# not because anything the row measures got cheaper. CI's figure, written in
+# rather than projected.
+#
+# The row below is MAIN'S, taken in the kanso#1531 merge. The reading above
+# was against the pre-`if` baseline and is kept because it says what this
+# branch does to the row; CI re-measures it on the merged tree.
 #
 # 2026-09-18, kanso#1533, CI's sitting. 1,029,696,275 -> 995,837,536,
 # a FALL of 33,858,739 (-3.2882%).
