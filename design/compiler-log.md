@@ -5275,6 +5275,21 @@ byte-identical prologue, so LLVM is not sinking it either way. With a jump
 table to eight arms and callee-saved uses in several of them, the entry block
 is the only place that dominates them all.
 
+**And splitting the dispatcher would not help, which is the other obvious fix
+and is now measured.** The idea is to emit the cheap arms so they need no
+frame and tail-call the heavy ones, on the reading that the dispatcher's frame
+is sized by the arm bodies inlined into it. Linking `runbench.ll` by hand says
+otherwise. Marking `d_json/escape_onto_2` `noinline` — the string arm, the
+heaviest thing in there — takes the stack reserve from `0x58` to `0x38` and
+leaves all six pushes. Marking EVERY call site inside the dispatcher `noinline`,
+so no arm body is inlined at all, leaves all six pushes and `0x38` again.
+
+So the registers are the dispatcher's own. It holds both arguments live across
+the calls it makes — `k_not_failure`, `k_err_hop`, `k_check_rec_fast` — and a
+`KValue` is two words, so the two arguments alone are four registers that must
+survive a call. There is nothing there for an emitter-level arm split to remove,
+and the idea is declined without being built.
+
 **Inlining is the lever, and it is already where it should be.** The ladder
 beside the flag in src/main.rs was measured against 1000 and stops at 3000;
 these two rungs are new, on a `runbench.ll` byte-identical across every arm, so

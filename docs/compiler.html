@@ -2850,6 +2850,10 @@ error[name]: unknown name `builders/run`
 
 <p>the obvious fix is the compiler&#8217;s own: sink the pushes into the paths that need them. llvm calls that shrink-wrapping and it is on by default, and it never fires here &#8212; compiling with it switched off gives a byte-identical prologue. with a jump table to eight arms and register uses in several of them, the entry block is the only place that dominates them all.</p>
 
+<p>the other obvious fix is to split the dispatcher: emit the cheap arms so they need no frame, and tail-call the heavy ones. that rests on the frame being sized by the arm bodies inlined into it, and linking the ir by hand says it is not. marking the string arm&#8217;s callee <code>noinline</code> &#8212; the heaviest thing in there &#8212; takes the stack reserve from 0x58 to 0x38 and leaves all six pushes. marking <em>every</em> call site inside the dispatcher <code>noinline</code>, so no arm body is inlined at all, leaves all six pushes and 0x38 again.</p>
+
+<p>the registers are the dispatcher&#8217;s own, then. it holds both of its arguments live across the calls it makes, and a value here is two words, so the arguments alone are four registers that have to survive a call. there is nothing for an arm split to take away.</p>
+
 <p>what does move the number is inlining, because an inlined call has no frame at all. the threshold handed to the linker is already the lever, and pushing it further was measured on a program whose emitted ir is byte-identical across every arm:</p>
 
 <pre><code>225    1,938,999,983   343,128 bytes   22,317,482 calls
