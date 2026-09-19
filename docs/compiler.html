@@ -900,8 +900,6 @@ time ./jsonbench                                  <span class="c"># less ~3 ms s
 
 <p>the hasher left malloc as the largest single thing in the profile, and the reason was one habit repeated in four places. a pass that reasons about names — which functions a declaration mentions, which types a public signature exposes, which bindings a statement makes, which bare aliases stand for a qualified original — was building a <code>String</code> for every name it wanted to remember, out of a program that already held all of them. the door analysis, the demand pass and the alias canonicaliser keep borrowed sets now, and <code>check.rs</code> turned out to have carried a borrowed twin of one of those walks the whole time. the json library's front end came down to <strong>64,884</strong> allocations from 91,185, and to <strong>59,527,334</strong> retired instructions where the seedless hash first read 66,961,255. the compile gates read <strong data-golden="compile.compile_allocs">27,313</strong> allocations and <strong data-golden="compile.compile_instructions">35,549,341</strong> retired instructions today &#8212; one row, one value, compared exactly, and &#167;34 says why the per-chip key it used to carry is gone; it counts the compiler&#39;s own frame rather than the whole process, which &#167;44 says why. it also counts a different program: since 2026-09-08 those gates check a fixed corpus rather than the json library, because a term measured on a library moves whenever that library changes what it imports. the four figures before it were taken on the library and are a comparison between themselves, not with this one. eight passes gave up their owned names over one sweep: the door analysis, the demand pass, the alias canonicaliser, provenance's fixpoint keys, the shadow checker's globals and the two arity maps beside them, the extern name set that had been copied whole once per file, and the bare-name walk that kept a string per identifier occurrence. the fixpoint keys were the largest single fall, at 1.8% of the front end's total work, because a fixpoint pays for its keys once per round rather than once.</p>
 
-<p>the hasher left malloc as the largest single thing in the profile, and the reason was one habit repeated in four places. a pass that reasons about names — which functions a declaration mentions, which types a public signature exposes, which bindings a statement makes, which bare aliases stand for a qualified original — was building a <code>String</code> for every name it wanted to remember, out of a program that already held all of them. the door analysis, the demand pass and the alias canonicaliser keep borrowed sets now, and <code>check.rs</code> turned out to have carried a borrowed twin of one of those walks the whole time. the json library's front end came down to <strong>64,884</strong> allocations from 91,185, and to <strong>59,527,334</strong> retired instructions where the seedless hash first read 66,961,255. the compile gates read <strong data-golden="compile.compile_allocs">27,313</strong> allocations and <strong data-golden="compile.compile_instructions">35,549,341</strong> retired instructions today &#8212; one row, one value, compared exactly, and &#167;34 says why the per-chip key it used to carry is gone; it counts the compiler&#39;s own frame rather than the whole process, which &#167;44 says why. it also counts a different program: since 2026-09-08 those gates check a fixed corpus rather than the json library, because a term measured on a library moves whenever that library changes what it imports. the four figures before it were taken on the library and are a comparison between themselves, not with this one. eight passes gave up their owned names over one sweep: the door analysis, the demand pass, the alias canonicaliser, provenance's fixpoint keys, the shadow checker's globals and the two arity maps beside them, the extern name set that had been copied whole once per file, and the bare-name walk that kept a string per identifier occurrence. the fixpoint keys were the largest single fall, at 1.8% of the front end's total work, because a fixpoint pays for its keys once per round rather than once.</p>
-
 <p>the same habit is in the lexer and it cannot be fixed the same way, which is worth writing down so nobody spends another afternoon on it. <code>Tok::Ident</code> owns its identifier and the parser clones it into the ast, so every name in a program is allocated twice — lex and parse are 36.9% of the front end's allocations between them. the obvious move is to take the string out of the token rather than copy it, since the parser walks forward and a consumed token's payload is dead. inside one parser that audit passes: the position is monotonic, and the one backward read looks at a payload only for operators. it dies on the next question. a parser <em>borrows</em> the token stream, and the same tokens are handed to several parsers over overlapping slices — one place parses a whole line and then re-parses the halves either side of a marker. so "consumed" is not a property of a token at all, and emptying one robs a later parser of a name it still needs. removing the copy for real means the ast borrows too, which is a whole-compiler lifetime refactor rather than a local change; the ceiling is worth measuring before anyone starts.</p>
 
 <p>a smaller ruling got built the same day, and it closes a hole rather than opening a door. this language refuses before anything runs, and reading a field off the wrong record did not: <code>p = point 1 2</code> followed by <code>p.name</code> compiled fine and died at run time, because the check asked only whether ANY declared record has a field called <code>name</code> — and some record did. that is the right answer for a parameter, whose type is a question for whole-program inference. it is the wrong answer for a local bound to a bare construction, which is where the mistake actually gets written. three shapes now say their type without any inference at all: a construction written where it stands, a local bound to one, and a parameter that either carries an annotation or arrives through a constructor pattern. all three refuse at compile time with a span. everything else stays quiet rather than guessing, and the run-time refusal is still there behind it.</p>
@@ -1802,8 +1800,6 @@ every changed counter is priced (or improved).</code></pre>
 
 <p>the front end reads the same way. the top function in <code>kanso check lib/json</code> carries 3.79%, and it is a hash map insert. bucketing every function&#39;s self cost gives the compiler&#39;s own passes 53.4%, hash tables 16.7%, malloc and free 14.4%, rust&#39;s standard library 8.4%, libc&#39;s string and memory routines 3.9%, and process startup the remaining 3.2%. so a third of a compile is the data structures rather than the passes, and the largest removable-looking piece inside that is rehashing: growing maps costs 4.2% of the process across 1,470 rehashes. it is not one change. attributed to the pass that owns each map, that 4.2% spreads over twenty-odd call sites and the largest is 0.68%. the allocator itself cost about 124 instructions a call, which is what glibc cost; the compiler runs on mimalloc since the swap recorded at the end of &#167;08, and that whole bill fell from 15.17 per cent of a compile to 7.39. the pinned rows beside this profile count a different program &#8212; <strong data-golden="compile.compile_allocs">27,313</strong> allocations and <strong data-golden="compile.compile_instructions">35,549,341</strong> retired instructions on the fixed corpus the compile gates have checked since 2026-09-08 &#8212; so read the shares above against the library and the rows against the corpus.</p>
 
-<p>the front end reads the same way. the top function in <code>kanso check lib/json</code> carries 3.79%, and it is a hash map insert. bucketing every function&#39;s self cost gives the compiler&#39;s own passes 53.4%, hash tables 16.7%, malloc and free 14.4%, rust&#39;s standard library 8.4%, libc&#39;s string and memory routines 3.9%, and process startup the remaining 3.2%. so a third of a compile is the data structures rather than the passes, and the largest removable-looking piece inside that is rehashing: growing maps costs 4.2% of the process across 1,470 rehashes. it is not one change. attributed to the pass that owns each map, that 4.2% spreads over twenty-odd call sites and the largest is 0.68%. the allocator itself cost about 124 instructions a call, which is what glibc cost; the compiler runs on mimalloc since the swap recorded at the end of &#167;08, and that whole bill fell from 15.17 per cent of a compile to 7.39. the pinned rows beside this profile count a different program &#8212; <strong data-golden="compile.compile_allocs">27,313</strong> allocations and <strong data-golden="compile.compile_instructions">35,549,341</strong> retired instructions on the fixed corpus the compile gates have checked since 2026-09-08 &#8212; so read the shares above against the library and the rows against the corpus.</p>
-
 <p>one apparent lead on that profile is worth publishing as a warning, because it is the kind that survives a careless reading. <code>getenv</code> shows up at 0.53% of the compile: the phase timer asks the environment whether reporting is on at every phase entry, and the inference fixpoint asks once per round. caching that answer is three lines and obviously right. it is also worth almost nothing, because glibc&#39;s <code>getenv</code> walks the environment block linearly, so its cost is a property of the shell that launched the profiler rather than of the compiler. the gate that counts this row runs under an emptied environment, and there the same work measures 0.06%. a profile taken at a normal terminal overstates it eightfold.</p>
 
 <p>bucketing the same run a second way says who wrote the instructions rather than where they cluster, and that turns out to be the more useful question. of the run program&#39;s 2,399,081,635 retired instructions, <strong>55.83%</strong> is code this compiler emitted from kanso source, 41.21% is the hand-written c in the runtime, 2.90% is glibc and the remaining 0.06% is the loader and a sort. every runtime shortcut landed over the fortnight above worked the 41% side. the larger half is the compiler&#39;s own output, so what a change there buys is bounded by how good that output already is &mdash; and two probes into it, one on the guards a match arm inherits and one on the failure checks the emitter writes at every call, both found work llvm had already removed. an instruction count read off the emitted ir is not a cost: <code>encode_onto</code> carries five failure checks in its ir and reaches its jump table after exactly one compare.</p>
@@ -1881,8 +1877,6 @@ error[name]: `builtin_probe/hello` is internal to the standard library
 
 <p>the gap cost three changes their measurement. all three touched the entry path and all three were read off a corpus staged in a temporary directory, where the count moves about 160 instructions per character of path; one of them projected a rise of 629 from a container where ci read a fall of 367. <code>bench/entry_instructions_golden.txt</code> pins it now, at <strong data-golden="compile.entry_instructions">126,729,042</strong> against the module row's <strong data-golden="compile.compile_instructions">35,549,341</strong>, both counted on one binary in one job. its corpus names ten imports where the module corpus names four, because the entry path's own work is the merge and the check over everything the imports bring, and a corpus with one small import measures mostly the module path underneath it.</p>
 
-<p>the gap cost three changes their measurement. all three touched the entry path and all three were read off a corpus staged in a temporary directory, where the count moves about 160 instructions per character of path; one of them projected a rise of 629 from a container where ci read a fall of 367. <code>bench/entry_instructions_golden.txt</code> pins it now, at <strong data-golden="compile.entry_instructions">126,729,042</strong> against the module row's <strong data-golden="compile.compile_instructions">35,549,341</strong>, both counted on one binary in one job. its corpus names ten imports where the module corpus names four, because the entry path's own work is the merge and the check over everything the imports bring, and a corpus with one small import measures mostly the module path underneath it.</p>
-
 <p>the ratchet asks the entry's whole-program check twice and the two veins separate cleanly: the entry row rises 15.25% and the module row is byte-identical. a vein whose defects another vein already catches would not be worth its callgrind run.</p>
 
 <p><strong>the objective reads both rows now.</strong> its compile term weighed one of the two compiles, which made a real improvement score as a loss. <code>enroll_bare</code> clones every exported declaration of an import under its short name, body and all — 145 of 882 declarations on this corpus — and the entry's whole-program check walks both copies. skipping the twins in three body walks costs the module row 3,306 instructions and saves the entry row 273,755, eighty-three times as much, and the term could see only the smaller number. so the skip was measured, held back a change, and shipped once the term could score it. summed, the two rows fell 212,644,590 to 212,374,141.</p>
@@ -1902,8 +1896,6 @@ error[name]: `builtin_probe/hello` is internal to the standard library
 <p>the two want different repairs. arity wants the spelling the program used, so the pass hands it a record — line and column to the bare name it replaced — and the message quotes that. opacity wants no message at all: the site is not a construction, and no wording of a refusal would be right, so a head the pass rewrote is skipped.</p>
 
 <p>the reason this is worth a section is where the fault was found. the entry path had cases in the module sweep, and both times the reordering was tried there the sweep caught it inside a round and it was reverted. the module path had the same reordering, done three days earlier, and no case at all — so the sweep read zero wrong while <code>kanso check</code> on a module refused a program that compiles. a corpus decides what a sweep can see, and a path with nothing pointed at it reads clean whatever it does. the module path has cases now, and so does the library path.</p>
-
-<p>the library path took the same reordering last, and it went in with the record from the start rather than after two reverts. <code>kanso check</code> on a file of definitions is the third route through the front end, and until the day before it had no counter of its own — so the change waited on a vein rather than on a measurement. removing the record and running the sweep is what shows the record is load-bearing: 29 modules, 2 wrong, one of them the opacity check refusing a program that compiles and the other the arity message quoting <code>m/one</code> where the source says <code>one</code>. with it, 29 and 0. the vein that watches it fell 1,282,921 instructions, or 0.78%, landing at 162,840,377 in the same job as the other two compile rows, which did not move at all. two changes have moved it since: the fold-seed uniqueness condition in the linearity analysis took all three compile rows down together by about a thousandth of a per cent each with the allocation and peak counters byte-identical, and the allocator swap at the end of &#167;08 took a further nine per cent off every one of them. the row reads <strong data-golden="compile.library_instructions">127,184,937</strong> today. the ratchet asks that path&#39;s whole-program check twice, which turns the new gate red and leaves the module and entry rows alone.</p>
 
 <p>the library path took the same reordering last, and it went in with the record from the start rather than after two reverts. <code>kanso check</code> on a file of definitions is the third route through the front end, and until the day before it had no counter of its own — so the change waited on a vein rather than on a measurement. removing the record and running the sweep is what shows the record is load-bearing: 29 modules, 2 wrong, one of them the opacity check refusing a program that compiles and the other the arity message quoting <code>m/one</code> where the source says <code>one</code>. with it, 29 and 0. the vein that watches it fell 1,282,921 instructions, or 0.78%, landing at 162,840,377 in the same job as the other two compile rows, which did not move at all. two changes have moved it since: the fold-seed uniqueness condition in the linearity analysis took all three compile rows down together by about a thousandth of a per cent each with the allocation and peak counters byte-identical, and the allocator swap at the end of &#167;08 took a further nine per cent off every one of them. the row reads <strong data-golden="compile.library_instructions">127,184,937</strong> today. the ratchet asks that path&#39;s whole-program check twice, which turns the new gate red and leaves the module and entry rows alone.</p>
 
@@ -1952,8 +1944,6 @@ error[name]: `builtin_probe/hello` is internal to the standard library
 <p>on the corpus the compile gates check, that is 315 declarations over six passes, 1,890 visits. 142 of those visits learned something. the other 1,748 walked a body, collected the same answer as last time, and returned it.</p>
 
 <p>the fix is the standard one and the only question was whether this pass could take it. it can, because a body asks about a fixed set of names: the body does not change during the fixpoint, and neither do the dispatch groups or the type names it reads, so the declaration indices a visit consults are the same indices on every visit. the first pass records them as it takes them and builds the reverse map. after that a declaration is re-asked only when an answer it read has actually grown.</p>
-
-<p>the compile term came down 1,032,618 instructions on that change, the entry path 2,517,319 and the library path 2,519,532. allocations fell 424, because each visit builds a set and there are fewer visits, less what the worklist keeps for itself: a reverse read map and a queue; that count reads <strong data-golden="compile.compile_allocs">27,313</strong> today and has not moved since. the three instruction rows have: they read <strong data-golden="compile.compile_instructions">35,549,341</strong>, <strong data-golden="compile.entry_instructions">126,729,042</strong> and <strong data-golden="compile.library_instructions">127,184,937</strong>, nine per cent below those readings, because the compiler changed allocator at the end of &#167;08.</p>
 
 <p>the compile term came down 1,032,618 instructions on that change, the entry path 2,517,319 and the library path 2,519,532. allocations fell 424, because each visit builds a set and there are fewer visits, less what the worklist keeps for itself: a reverse read map and a queue; that count reads <strong data-golden="compile.compile_allocs">27,313</strong> today and has not moved since. the three instruction rows have: they read <strong data-golden="compile.compile_instructions">35,549,341</strong>, <strong data-golden="compile.entry_instructions">126,729,042</strong> and <strong data-golden="compile.library_instructions">127,184,937</strong>, nine per cent below those readings, because the compiler changed allocator at the end of &#167;08.</p>
 
@@ -2966,12 +2956,105 @@ env -i PATH=... GLIBC_TUNABLES=... KANSO_FIXED_TEMPX=1  972,777,009   +117</code
 
 <p>the reason recorded beside that flag had been binary size, and binary size is not scored at all. now the reason is the one the objective can see.</p>
 
+<h2 id="whatapointcosts"><span class="sec-num">111</span>what a point of the objective costs</h2>
+
+<p>the compiler has an objective function, and for a fortnight the way to decide what to work on next has been to read its weights and satiations and reason about them. the function can be asked instead. take the goldens, scale one row by a tenth, score the model, and the difference is what that tenth is worth. fourteen rows, one at a time, on 2026-09-19:</p>
+
+<pre><code>per 10%   counter                        golden row
++0.6644   run_instructions               instructions:runbench
++0.5091   run_peak_bytes                 cost_golden_run:arena_peak_bytes
++0.1952   codegen_instructions_release   codegen_instructions_release
++0.0923   startup_instructions           startup_instructions
++0.0692   codegen_instructions_dev       codegen_instructions_dev
++0.0446   interp_instructions            interp_instructions
++0.0233   compile_peak_bytes             compile_memory:compile_peak_bytes
++0.0214   compile_instructions           entry_instructions
++0.0197   interp_peak_bytes              interp_memory:interp_peak_bytes
++0.0197   compile_allocs                 compile_allocs
++0.0094   run_peak_bytes                 cost_golden_run:held_peak_bytes
++0.0068   emit_instructions              emit_instructions
++0.0060   compile_instructions           compile_instructions
++0.0003   run_peak_bytes                 cost_golden_run:perm_peak_bytes</code></pre>
+
+<p>the same sweep at one per cent gives the same order with every figure about a tenth of these, so the curve is near enough straight over that range and the table ranks reliably even though each number is an average over its own step.</p>
+
+<p><strong>two rows are two thirds of the board.</strong> the run program&#8217;s instruction count and its arena peak come to 1.1735 of a 1.6808 total. everything else together is worth less than the first row alone.</p>
+
+<p><strong>and the arena peak has had no work at all.</strong> it is worth 77% of what the run&#8217;s instruction count is worth, and nothing in the last fortnight&#8217;s log would suggest it: every entry in that window is instructions &#8212; the dispatch pooling, the beat rewind, the digit loop, the frames. the second most valuable row in the model has not been named once.</p>
+
+<p>the table also explains a fortnight of small moves. the interpreted row is worth a fifteenth of the run row, and three changes that took 1.7% off it moved the objective by two hundredths. the compile row is worth a hundred and eleventh of the run row, and it is the row this project has spent the most rounds arguing about.</p>
+
+<p>the figures are marginal at today&#8217;s ratios and move as the terms improve, which is why they carry a date. what would keep them current is a flag on the scoring script itself, printing this table out of the model it already holds.</p>
+
+
+<h2 id="threequartersonephase"><span class="sec-num">112</span>three quarters of the memory, in 4.9% of the work</h2>
+
+<p>the table above puts the run program&#8217;s arena peak second on the board. this is where it lives. one phase count at a time, taken to its floor, everything else left alone:</p>
+
+<pre><code>baseline                38,604,496   36 blocks
+decode = 1              38,604,496   36   unchanged
+encode = 1              38,604,496   36   unchanged
+decode = 1, encode = 1  38,604,496   36   unchanged
+deep = 1                38,604,496   36   unchanged
+escape = 1              38,604,496   36   unchanged
+pend = 1                38,604,496   36   unchanged
+index = 1,000           35,651,584   34
+digest = 1              35,458,768   33
+split = 1                9,244,368    8</code></pre>
+
+<p><strong>the split phase holds 29,360,128 of it, three quarters, and split is 4.87% of the program&#8217;s instructions.</strong> decode and encode are 69% of the work between them and hold none of the peak: taking both to a single round leaves the number unmoved to the byte.</p>
+
+<p>scored, that is <strong>+4.75</strong> welfare &#8212; 77.27 to 82.02. every compiler change merged in the two days before this section moved the objective by two hundredths together.</p>
+
+<p>a cause was written down eleven days ago in the benchmark&#8217;s own header: codegen reads a list of beat loops, that list drops every group whose file begins <code>std/</code> or <code>lib/</code> from the carry tier, and clearing the filter gives a peak of one block with the allocation count unchanged. the measurement is the header&#8217;s and stands. the mechanism it names does not: instrumenting the filter shows exactly eleven imported groups losing a carry there, and the regexp walker has none to lose: it is reported grow-only because another group tail-calls it, and the filter only ever reaches a group that got a carry in the first place. what clearing the filter actually changes is somebody else&#8217;s loop, and which one is open.</p>
+
+<p>clearing it wholesale is not the fix and was measured not to be &#8212; every library loop then begins evacuating, and the program that ran in 0.4 seconds was still running after ten minutes. the header names the real shape: the carry tier is decided by a path prefix rather than by the property that prefix stands in for, which is whether the loop threads its caller&#8217;s invariant source through itself. the machinery for deciding that already exists one function away, as the threaded-slot fixpoint the cluster analysis runs.</p>
+
+<p>so the lead is not new. its size is: the largest single move on the board by two orders of magnitude, against a fix whose shape is already written down and whose crude form is already priced.</p>
+
+
+<h2 id="prefixfirstcut"><span class="sec-num">113</span>the first cut at the prefix filter, declined at seven times</h2>
+
+<p>the section above says the carry tier is decided by a path prefix rather than by the property that prefix stands in for, and that the machinery for the property already exists: the cluster analysis refuses to carry a slot it finds threaded. so a carry that came out of that analysis has already been checked for the thing the filter guards against, and the filter could let it through. four lines.</p>
+
+<pre><code>arena_peak_bytes    38,604,496 -&gt;     35,458,768   -3,145,728, worth +0.41
+allocs               5,730,653 -&gt;      6,550,655     +820,002
+alloc_bytes        459,964,461 -&gt;    494,316,813  +34,352,352
+run instructions 1,840,276,313 -&gt; 13,618,672,806   7.4 times</code></pre>
+
+<p>declined. the peak gain is real and the instruction cost is not survivable, and it is the 2026-09-01 catastrophe in miniature: that removal left the program running after ten minutes against a 0.4-second baseline, and this one, over the cluster subset alone, costs seven and a half times.</p>
+
+<p>what it rules out is the useful part. the cluster analysis excludes threaded slots from a carry before it returns, so those carries had already passed the test the filter&#8217;s own comment describes &#8212; and exempting exactly them still blows up. so that fixpoint is not what the path prefix is standing in for. the next attempt has to find the difference rather than assume the two agree.</p>
+
+<p>the split phase&#8217;s 29 megabytes are untouched by this cut, which is its own evidence. the regexp walker is reported grow-only for an outside tail call, so its carry comes through the demoted-entry path and the crossing-position test, neither of which has a threaded fixpoint at all: a bare parameter is accepted there only when its inferred set is narrow enough, so one carrying ordinary heap becomes a crossing position and would be copied every iteration. giving that path the fixpoint is where this goes next.</p>
+
+
+<h2 id="thecarryswidth"><span class="sec-num">114</span>the width of a carry, and a test that says not yet</h2>
+
+<p>the eleven groups the prefix strips were priced one at a time. alone, every one of them reads the baseline on both columns &#8212; peak 38,604,496 and 0.26 seconds &#8212; so the cost is a pairing rather than a group, and the pairs separate:</p>
+
+<pre><code>sha256/compress + sha256/turned      35,458,768   1.01s
+sha256/blocked  + sha256/digested    35,458,768   0.26s
+the other seven                      38,604,496   0.27s
+all eleven                           35,458,768   0.95s</code></pre>
+
+<p>the whole saving sits with the cheap pair. <code>blocked</code> and <code>digested</code> give the entire 3,145,728 bytes at baseline wall time; <code>compress</code> and <code>turned</code> give the same bytes and all of the cost. counted rather than timed, the cheap pair costs 778,170 instructions, 0.0423%, against 3.1 megabytes of peak. scored: <strong>77.27 to 77.68</strong>.</p>
+
+<p>the first pair carries two positions each and the second one. so the width of a carry reads the property the path prefix was standing in for: evacuating one slot a lap is what the tier is for, and evacuating several is where a library loop starts copying its caller&#8217;s work. it is a proxy for bytes copied per iteration, which nothing in the pass can measure, and it is a proxy the loop&#8217;s own shape supplies rather than its file name.</p>
+
+<p>it does not ship yet, because a test goes red: the rule as written also admits two of the json decoder&#8217;s scanners, and a unit test keeps scanners threading records or lists on the grow-only arena while only the byte-builder encoders rewind.</p>
+
+<p>what that test pins is worth reading carefully, and the first reading of it here was wrong. it looks like a judgement about freeing memory under a live reference. the prefix it protects is a cost guard and says so in its own words: carrying a library driver&#8217;s threaded source copies an unbounded value every iteration. safety is established elsewhere and still is &#8212; the licence that lets a value cross a rewind, the map exclusion, the byte-chain rule &#8212; and a neighbouring test pins a carried list directly, where a fixed-shape rebuild carries and the evacuation handles it.</p>
+
+<p>the measurement says those two scanners contribute nothing either way, so the whole 0.41 is available without touching them. what is owed is a rule that admits the sha256 pair on a property, leaves the scanners where that test wants them, and says why the difference is real.</p>
 
 
 
 
 
-<h2 id="beattop"><span class="sec-num">111</span>nine instructions to find a pointer that never moved</h2>
+
+
+<h2 id="beattop"><span class="sec-num">115</span>nine instructions to find a pointer that never moved</h2>
 
 <p>a beat loop is one the compiler proved gives its arena back between laps, and <code>k_beat_iter</code> is what it calls to do that. the run program calls it <strong>2,692,766</strong> times for <strong>61,672,983</strong> instructions &#8212; 3.35% of everything it does, and 22.9 instructions a call against a fast path that is six stores and three tests.</p>
 
@@ -3006,7 +3089,7 @@ widebench        33,516,094 -&gt;     33,644,020      +127,926   +0.3817%</code>
 
 <p>the spec for that took two tries and both failures say something about the language. the first program accumulated strings, which compiles to a <em>carry</em> beat &#8212; that one computes its own mark, never reads the cache, and the spec passed with the maintenance torn out. the second carried a scalar and allocated nothing, and a loop with nothing to reclaim emits no beat at all. what it takes is both at once: laps that allocate, and a carried value small enough to cross one. each lap builds a padded string and keeps its length.</p>
 
-<h2 id="rowsthatmove"><span class="sec-num">112</span>a row that moves seven, and what two readings are worth</h2>
+<h2 id="rowsthatmove"><span class="sec-num">116</span>a row that moves seven, and what two readings are worth</h2>
 
 <p>the interpreted row sits at about 1.138 billion instructions and it has moved by <strong>seven</strong> three times this month, on trees whose compiler source the interpreted corpus never touches. seven is not a number anybody would chase. what it is good for is a question this page has had to answer repeatedly: when a counted row disagrees with its golden, how much evidence does it take to say what happened?</p>
 
