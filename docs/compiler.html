@@ -2801,6 +2801,23 @@ error[name]: unknown name `builders/run`
 
 <p>nothing built. the lead is the misses, and it is the only one these numbers support: their saving is bounded below by work that is provably wasted.</p>
 
+<h2 id="frameletssayno"><span class="sec-num">105</span>a filter on the frame, and a premise already refuted</h2>
+
+<p>the misses were the lead, and the cheapest way to skip one is to let the frame say no: a one-word membership filter over the binding names, tested before the scan.</p>
+
+<pre>  base      972,776,892
+  filter    983,593,036   +10,816,144   +1.11%</pre>
+
+<p>two readings of each arm, identical both times, allocations byte-identical. worse than the third pooling, and for a related reason.</p>
+
+<p>a membership filter is an optimisation for a long scan: it earns its keep when rejecting costs much less than walking. the measurement that suggested the lead had already said the scan is 2.52 comparisons over 1.09 frames. that is not a long scan, and there was never much for a filter to skip.</p>
+
+<p>the two fifths is a share, and it was read as though it were a magnitude. 1,071,803 wasted comparisons is most of the name-comparison work and still a small number of instructions, against a filter computed once per lookup on all 1,056,329 calls and rebuilt on every frame that binds &#8212; both paid whether or not anything is skipped.</p>
+
+<p>that is the second decline in a night, after the loser&#39;s buffer, and both come from one habit: pricing a saving from a count while leaving the unit cost unmeasured and the overhead out of the model. so the rule earns a sharper form: before building on a count, divide it. 1,071,803 probes over a run is a share; 2.52 probes over a call is a scan length, and the second is what decides whether skipping the scan can pay. both numbers were in hand both times.</p>
+
+<p>what remains true is that the misses are 31.4% of lookups and walk frames they will never match in. what is now also known is that each walk is short, so anything that helps has to remove the call rather than shorten the scan. that is the global-name skip, and it needs a per-ident answer with no hashing in it: the whole-program side table the demand analysis uses is asked once per statement where this would be asked a million times, and the ident node has nowhere to keep a bit &#8212; giving it one is 278 match sites across sixteen files. that is the size of the thing, measured rather than guessed.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>
