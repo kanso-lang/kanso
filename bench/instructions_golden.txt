@@ -691,10 +691,10 @@
 # entries; nothing here moves them.
 #
 jsonbench 1133644520
-encodebench 3497149260
-oneshot 17888155
+encodebench 3485406060
+oneshot 17858797
 basket 33678746
-widebench 33516094
+widebench 33548094
 deepbench 347289236
 escapebench 84780592
 pendbench 208138815
@@ -702,7 +702,7 @@ indexbench 2895708
 scanbench 462269296
 digestbench 9967039
 readbench 4628429
-livebench 2825430323
+livebench 2813687123
 # 2026-09-06 (the run program joins): `runbench 3043743748` is a NEW row and
 # nothing regressed to make it appear. It is the program Clay's gavel that day
 # made the objective's whole run-speed term, and the thirteen rows above it
@@ -760,4 +760,4 @@ livebench 2825430323
 #
 # The uniform -8 across six rows is one instruction on a path each program
 # takes eight times, and the four flat rows never take it at all.
-runbench 1821933936
+runbench 1819291716

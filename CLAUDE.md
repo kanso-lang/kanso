@@ -599,6 +599,20 @@ So, before an argument rests on a number:
   with the reason recorded. A PR I cannot push to is superseded from a branch I
   own, never parked. The sweep is the whole list every time, because the one
   that ages is always the one nobody's task list mentions.
+- **A FINISHED COORDINATED SIBLING BRANCH ANSWERS FOR EVERY LATER BRANCH THAT
+  SHARES ITS NAME.** `.github/clone-sibling.sh` clones kq, vse and kanso-json
+  preferring a branch named after the branch under test, which is how one
+  language change is checked across all four repos. Branch names here are
+  ASSIGNED, so a later branch draws a name a finished campaign already used, and
+  the gate then checks the sibling's stale source. On 2026-09-22 kanso#1558 —
+  a log entry and one gate's output — went red on `kq specs` with two dozen
+  exhaustiveness and effect errors from kq source that predated those rulings,
+  on a kq branch whose kanso counterpart had merged eight days earlier. Read the
+  job's second line, `kq: <branch> (performance goldens from main)`, before
+  reading the diagnostics: it says which source was checked. Retire a
+  coordinated branch when its counterpart merges — taking main's tree onto it in
+  a merge commit retires it without a rewrite and without deleting anything.
+
 - **Never blanket-resolve conflicts** (`checkout --ours`/`--theirs`) on
   runtime.c or any load-bearing file — resolve hunk by hunk.
 - **A RESOLUTION THAT KEEPS BOTH SIDES LEAVES A PARAGRAPH TWICE, AND EVERY
