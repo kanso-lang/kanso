@@ -7252,3 +7252,69 @@ What would is comparing something other than bytes: a builtin resolved to an id
 once, where the checker already knows the name is a builtin, instead of
 resolved by its text at every call. That is a bigger change than this one and
 it is not specified here beyond the shape.
+## 2026-09-22 — call_builtin identifies itself inline, and the interpreted run falls another 2.42%
+
+kanso#1563 took `eval::lookup` off `__memcmp_avx2_movbe`. This is the second
+caller on that list: `Interp::call_builtin`, 12,535,464 instructions over
+564,790 calls.
+
+MEASURE FIRST, and the measurement chose a much smaller change than the one
+already written down. `call_builtin` is invoked 107,625 times and makes 5.25
+comparisons each -- 116 instructions per invocation spent working out which
+builtin it is. A `match` on a `&str` switches on the LENGTH and then walks the
+candidates of that length, and the buckets are wide:
+
+    length  3  ->  6 candidates      length  7  ->  7
+    length  4  ->  7                 length  8  ->  8
+    length  5  -> 12                 length  9  ->  6
+    length  6  -> 12                 length 11  ->  1
+
+Tallying the names at run time says which buckets matter. **Twelve distinct
+builtins account for every call in the corpus**, and every one of the hot ones
+sits in a wide bucket: `append` 29,631 calls at length 6, `length` 11,874 at 6,
+`slice` 7,700 at 5, `utf8` 5,504 at 4, `find2` 5,500 at 5, `bytes` 5,301 at 5.
+`append` alone is 37% of all dispatches. 5.25 is what walking a twelve-wide
+bucket costs.
+
+THE CHANGE IS ONE LINE AND FIFTY-ONE PREFIXES. `match name` becomes
+`match name.as_bytes()` and each pattern gains a `b`. Rust lowers a byte-string
+pattern to a length test and inline word compares; no call leaves the function.
+Nothing else moves -- the arm bodies are untouched, `name` stays in scope for
+the arity errors and the `_` arm's diagnostic, and the diff is 52 lines changed
+in one direction.
+
+    interpreted row   956,538,727 -> 933,389,998   -23,148,729   -2.42%
+    memcmp calls        1,707,612 ->   1,142,822      -564,790
+    memcmp cost        35,413,346 ->  22,116,197   -13,297,149
+
+The 564,790 is `call_builtin`'s own count exactly, and it is gone from the
+caller list altogether. The row falls by ten million more than the frame does,
+which is the bucket walk's own branches going with the calls.
+
+THE SPEC TOOK THREE TRIES AND THE FIRST TWO PROVED NOTHING. Both are recorded
+because each looked right.
+
+The first read the patterns off `src/eval.rs` and called every one. That is
+self-referential: rename `b"append"` to `b"appned"` and the spec calls
+`builtin_appned`, finds it dispatches, and passes. Watched doing exactly that.
+
+The second took its names from `lib/` instead -- a real oracle -- and passed
+the same mutation for a better reason. **The programs never reached the
+interpreter.** The checker gates `builtin_` names to std-origin files, so
+`builtin_append` in a scratch file is refused with `is internal to the standard
+library` before anything dispatches. The control says it plainest:
+`builtin_nosuchthing` draws that same refusal rather than `unknown builtin`. Every
+program in that spec, valid name or nonsense, produced one message that had
+nothing to do with the question.
+
+So the question moved to where it can be answered: two files that must agree.
+`lib/*.kso` names 46 builtins through the `builtin_` door and `src/eval.rs`
+dispatches 51, and a name in the first that is missing from the second would
+answer `unknown builtin` at run time. Mangling `append` turns that red and names
+the mangled entry; a `b` that lands inside the quotes turns a second assertion
+red; reverting the match to `&str` does not compile at all.
+
+WHAT IS LEFT of the memcmp frame after both changes: 22,116,197 instructions
+over 1,142,822 calls, led by `eval_global` at 332,026 and `call_named` at
+165,949. Those resolve a name against the program's declarations rather than
+against a fixed list, so neither takes this trick.
