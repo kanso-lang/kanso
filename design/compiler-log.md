@@ -6038,6 +6038,20 @@ LOADED ones, and a difference in `.comment`, the build id, or the unwinding
 tables moves a sha without moving an executed instruction. That half is not
 settled here.
 
+WHAT THE LOG WOULD HAVE TO CARRY for the next occurrence to be localizable. The
+gate prints the exclusive listing at `--threshold=90 | head -40`, and on this
+corpus that threshold has 125 function rows, so 85 of the rows it already
+computed are thrown away before the log sees them. The whole table is 1,115
+rows; 99 is 282 and 99.9 is 494. A three-instruction move can sit in a function
+too small to make any threshold, so only the whole table guarantees catching it.
+
+And the artifact is not an alternative from here, for a reason worth naming
+precisely: `productionresultssa7.blob.core.windows.net:443` is refused by this
+session's EGRESS POLICY — the proxy's own status endpoint records
+`connect_rejected, gateway answered 403 to CONNECT`. That is an organization
+policy denial rather than anything GitHub did, so no credential and no retry
+reaches it, and the job log is the only channel a session of this kind has.
+
 The silicon stays the live candidate, narrowed. glibc resolves its string
 routines by ifunc at start-up, the two the listing prints resolved the same, and
 the ones it does not print — strlen, memset, memchr and the rest — are where an
