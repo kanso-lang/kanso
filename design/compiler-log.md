@@ -7820,3 +7820,43 @@ where each branch's own code lands once the compiler around it is rebuilt, and
 a reader who saw one of the two sets would have been wrong to expect the other.
 
 The floor is banked at 77.17 after these rows, not before them.
+
+## 2026-09-22 — kanso#1504's rows on the tree merged with kanso#1502, and the floor banked on them
+
+kanso#1502 landed at 19:00 and this branch merged it. Neither side's goldens
+described the merged tree, so the merge carried main's and CI measured the
+difference. Its sitting, golden before against CI's reading:
+
+    runbench              1,819,291,716 -> 1,802,356,350   -16,935,366   -0.93%
+    encodebench           3,485,406,060 -> 3,465,000,320   -20,405,740   -0.59%
+    jsonbench             1,133,644,520 -> 1,133,645,592        +1,072
+    runbench .text              319,986 ->       320,546          +560
+    encodebench .text           135,746 ->       136,306          +560
+    jsonbench .text             122,354 ->       122,882          +528
+    compile_instructions     35,549,673 ->    35,551,455        +1,782
+    entry_instructions      126,728,843 ->   126,733,982        +5,139
+    library_instructions    127,184,941 ->   127,190,464        +5,523
+    startup_instructions      3,363,186 ->     3,363,875          +689
+    emit_instructions        51,618,058 ->    51,623,314        +5,256
+    codegen dev             596,158,173 ->   596,192,991       +34,818
+    codegen release       6,825,827,822 -> 6,837,945,401   +12,117,579
+    interp_instructions     923,151,727 ->   923,151,726            -1
+
+WHICH WAY AND WHY. The two falls are the branch's subject: `k_beat_iter` stops
+turning a depth back into `&k_beat_stack[depth - 1]` and reads a cached mark
+instead, and the run program iterates five times for every pop it makes. The
+rises are the code that does it — 560 bytes of `.text` on every benchmark that
+links the runtime, and the compile-side rows moving with the bytes the compiler
+carries, since `src/runtime.c` is `include_str!`'d into it. The release codegen
+row is the largest of them at +12,117,579, and it is clang optimising 560 more
+bytes.
+
+The interp row came back one LOWER, which is the same size as the ±13 that row
+has drawn across trees whose compiler source was identical. It is not a saving
+and nothing on this branch could have made it one.
+
+Scored, the floor moves 77.27959877643865 -> 77.33517935341673, banked in this
+commit and after the goldens carried CI's rows rather than before. The page's
+eight drifted spans follow the goldens; four of them quote
+`compile_instructions` from four distinct paragraphs, checked against the
+duplicate-paragraph shape kanso#1557 recorded — no long line appears twice.

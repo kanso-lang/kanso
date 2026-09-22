@@ -690,8 +690,8 @@
 # 9,830,203 still stand above it, priced in kanso#1432's and kanso#1430's
 # entries; nothing here moves them.
 #
-jsonbench 1133644520
-encodebench 3485406060
+jsonbench 1133645592
+encodebench 3465000320
 oneshot 17858797
 basket 33678746
 widebench 33548094
@@ -760,4 +760,4 @@ livebench 2813687123
 #
 # The uniform -8 across six rows is one instruction on a path each program
 # takes eight times, and the four flat rows never take it at all.
-runbench 1819291716
+runbench 1802356350

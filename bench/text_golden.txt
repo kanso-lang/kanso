@@ -782,8 +782,8 @@
 # Against main the sum is still a RISE, 1,707,852 -> 1,735,116 (+27,264),
 # kanso#1433's inlining and kanso#1435's masked tail less kanso#1436 and this.
 #
-jsonbench text=122354
-encodebench text=135746
+jsonbench text=122882
+encodebench text=136306
 oneshot text=132306
 basket text=110690
 widebench text=145026
@@ -801,4 +801,4 @@ livebench text=134050
 # src/runtime.c, which is linked into every program. The 336-byte spread is the
 # arms a program's own dispatch makes reachable. Machine-code size carries no
 # welfare term (ruled 2026-09-05); this vein is exact and watched on its own.
-runbench text=319986
+runbench text=320546
