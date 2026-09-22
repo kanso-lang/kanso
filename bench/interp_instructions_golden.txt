@@ -209,27 +209,12 @@
 # moved and the two codegen rows did not: they AGREED with this branch's own
 # readings to the instruction, across two CI jobs on two different trees,
 # which is what `-Wl,-plugin-opt=jobs=1` bought.
-# 2026-09-18, kanso#1504 merged with main 073a4077. The value below is MAIN'S,
-# carried forward. kanso#1505 changed what this row COUNTS -- the printed
-# line's subtree is excluded now -- so the 2,182,420,936 this branch measured
-# describes the old shape and is not comparable with anything taken under the
-# new one. CI's sitting on the merged tree replaces this line. This branch's
-# own effect on the row was layout either way: it changes src/runtime.c, which
-# the interpreter carries as bytes rather than runs.
 #
-# 2026-09-18, re-merged onto main after kanso#1486, kanso#1496 and kanso#1507
-# landed underneath. THE VALUE BELOW IS MAIN'S, carried forward. This branch's
-# own reading of this row was taken before all three, and kanso#1507 in
-# particular changed what the release-codegen row COUNTS by pinning ld's LLVM
-# plugin to one thread, so nothing this branch measured on that row is
-# comparable with anything measured after it. The merged sitting is CI's.
-#
-# 2026-09-18, kanso#1504 on the tree merged with main, CI's sitting.
-# 2,182,576,109 -> 2,182,585,809, a RISE of 9,700 (+0.0004%).
-# LAYOUT. `kanso check` and the interpreted run carry runtime.c's bytes rather
-# than compiling it, so what moved is where the code sits; every one of these
-# is under a hundredth of a per cent.
-#
+# 2026-09-18, kanso#1502 on the tree merged with main, CI's sitting.
+# 2,182,576,109 -> 2,182,584,048, a RISE of 7,939 (+0.0004%).
+# LAYOUT. These rows carry runtime.c's bytes rather than compiling it, and
+# every binary's `.text` grew 32 bytes on this change; the moves are all under
+# two hundredths of a per cent.
 # 2026-09-18, kanso#1511 on the tree merged with main, CI's sitting.
 # 2,182,576,109 -> 2,182,638,759, a RISE of 62,650 (+0.0029%).
 # The interpreter now asks `codegen::knotted_constants` once per run, on the
@@ -263,13 +248,12 @@
 # carried forward: kanso#1510 moved this row and what this branch adds on top
 # has not been measured, so the merged reading is CI's.
 #
-# 2026-09-18, kanso#1504 on the tree merged with main after kanso#1510,
-# CI's sitting. 2,182,620,735 -> 2,182,527,453, a FALL of 93,282
-# (-0.0043%). LAYOUT. `src/runtime.c` is include_str!'d into the
-# compiler, so its bytes move the compiler's own and every row that runs
-# the compiler moves with them; none of these routes runs the beat code
-# this branch changes. All six fell this time, which is the same term with
-# the opposite sign to the previous sitting -- a shifted binary, not work.
+# 2026-09-18, kanso#1502 on the tree merged with main after kanso#1510,
+# CI's sitting. 2,182,620,735 -> 2,182,501,648, a FALL of 119,087
+# (-0.0055%). LAYOUT. The two divisions this branch merges are in float
+# rendering and none of these routes renders a float. All six fell, where
+# the sitting before kanso#1510 landed had the same six rising: one layout
+# term, opposite sign, which is what a shifted binary looks like.
 # carried forward: kanso#1510 moved this row on its own and what this branch
 # adds on top of it has not been measured, so the merged reading is CI's.
 #
@@ -345,17 +329,17 @@
 # THIS ONE IS THE CHANGE. The container projected -33,238,900 and CI reads
 # -33,279,216 on a different toolchain: 40,316 apart, 0.12% of the delta.
 #
-# 2026-09-18, kanso#1504 on the tree merged with main after kanso#1517,
-# CI's sitting. 1,963,826,350 -> 1,963,826,376, a RISE of
-# 26 (+0.0000013%).
-# TWENTY-SIX INSTRUCTIONS on 1.96 billion. The interpreted corpus decodes a
-# document it built itself and never enters the C runtime, so a runtime edit
-# cannot give it work to do. kanso#1502 is the cross-check rather than an
-# argument: a DIFFERENT runtime.c change, measured in the same hour against
-# the same main, moved this row by 15. Two edits touching different
-# functions both landing in the tens is what layout looks like on a row this
-# size; work would not be the same order for both. interp_allocs and
-# interp_peak_bytes agree with their golden on both branches.
+# 2026-09-18, kanso#1502 on the tree merged with main after kanso#1517,
+# CI's sitting. 1,963,826,350 -> 1,963,826,365, a RISE of
+# 15 (+0.0000008%).
+# FIFTEEN INSTRUCTIONS on 1.96 billion, which is 0.0000008% and is not
+# work. The interpreted corpus decodes a document it built itself and
+# never enters the C runtime, and on the tree merged after kanso#1516 this
+# row read its golden EXACTLY. What changed underneath it is kanso#1517,
+# not this branch. A move of this size at frame level has been recorded
+# here before, at +-13 (kanso#1469); whether it is the same frame was not
+# checked, so this says only that fifteen is too small to be the two
+# divisions and that the row is otherwise unmoved.
 # ^ SUPERSEDED: that reading was taken before kanso#1518 landed under this
 #   branch. THE VALUE BELOW IS MAIN'S, carried forward; the merged
 #   reading is CI's.
@@ -367,17 +351,16 @@
 # 410,520,397 and the runner read 407,935,771 -- 0.63% of the delta apart,
 # which is the usual agreement between the two hosts on a difference.
 #
-# 2026-09-18, kanso#1504 on the tree merged with main after kanso#1518,
-# CI's sitting. 1,555,890,579 -> 1,555,890,598, a RISE of 19 (+0.00000122%).
-# NINETEEN INSTRUCTIONS on 1.55 billion, and the third reading in one day to
-# land in the tens: kanso#1502's two divisions moved this row 15 against the
-# kanso#1517 tree, this branch's cached beat top moved it 26 against that same
-# tree, and 19 here. Three runtime.c edits, three different functions, three
-# readings all under thirty on a row of this size. The interpreted corpus
-# decodes a document it built itself and never enters the C runtime, so none
-# of them can be work, and `interp_allocs` agreeing at 3,879,653 on all three
-# is the check that says so -- an allocation counter counts operations, and
-# real work would have moved it.
+# 2026-09-18, kanso#1502 on the tree merged with main after kanso#1518,
+# CI's sitting. 1,555,890,579 -> 1,555,890,587, a RISE of 8 (+0.00000051%).
+# EIGHT INSTRUCTIONS, and the fourth reading in one day to land under thirty.
+# Four src/runtime.c edits, four different functions, four sittings: 15 and 26
+# against the kanso#1517 tree, 19 and 8 against this one. The interpreted
+# corpus decodes a document it built itself and never enters the C runtime,
+# so none of them can be work, and `interp_allocs` read 3,879,653 on ALL FOUR
+# -- an allocation counter counts operations rather than a host, and real work
+# would have moved it. Four readings agreeing on that is the check; the size
+# of any one of them on its own would not be.
 # ^ SUPERSEDED: that reading was taken before kanso#1520 landed under this
 #   branch. THE VALUE BELOW IS MAIN'S, carried forward; the merged
 #   reading is CI's.
@@ -391,9 +374,8 @@
 # to the byte -- and disagree threefold on what it costs. What a copy of N
 # elements costs in instructions is the rustc that built the binary; how
 # many copies happen is the program.
-# CI's reading on the merged tree, interp_instructions: 1,260,262,910 -> 1,260,262,917 (+7). This branch
-# touches the beat reporter and not the front end; these six are the
-# layout the kanso#1520 merge left.
+# CI's reading on the merged tree, interp_instructions: 1,260,262,910 -> 1,260,262,917 (+7). The branch
+# touches no compiler source; this is the layout the merge left.
 # ^ SUPERSEDED: that reading was taken before kanso#1522 landed under this
 #   branch. THE VALUE BELOW IS MAIN'S, carried forward; the merged
 #   reading is CI's.
@@ -432,12 +414,6 @@
 # through the formatting machinery on every tail hop, and arm selection stops
 # allocating two vectors for every candidate it is about to reject.
 #
-# 2026-09-18, kanso#1504 on the tree merged after kanso#1533, CI's sitting.
-# 995,837,536 -> 995,837,543, a RISE of SEVEN instructions (+0.0000007%).
-# Seven on 995 million is what a relink moves this row by; kanso#1502 read
-# +14 on its own tree in the same sitting and byte-identical on another.
-# Nothing in this diff runs in the interpreter. Re-based, not explained.
-#
 # 2026-09-18, kanso#1534, CI's sitting. 995,837,536 -> 975,944,763,
 # a FALL of 19,892,773 (-1.9976%).
 # THE ROW THIS CHANGE IS ABOUT. A call binds its parameters in one frame
@@ -447,15 +423,6 @@
 # 19,892,773. Both hosts agree the change is a count -- allocations fall on
 # both -- and disagree on what the removed work cost, which is the rustc
 # that built the binary.
-#
-# 2026-09-18, kanso#1504 on the tree merged after kanso#1534, CI's sitting.
-# 975,944,763 -> 975,944,770, a RISE of SEVEN instructions, AGAIN.
-# The note above records +7 against a baseline of 995,837,536; this reading
-# is +7 against 975,944,763, a baseline 19.9 million lower. The same branch,
-# the same delta, twice, on two baselines that differ by two per cent. A
-# relink costs this row seven instructions and the figure reproduces, which
-# is more than the earlier note could claim. Nothing in this diff runs in the
-# interpreter, and interp_allocs and interp_peak_bytes are byte-identical.
 #
 # 2026-09-18, kanso#1535, CI's sitting. 975,944,763 -> 957,583,234,
 # a FALL of 18,361,529 (-1.8814%).
@@ -467,24 +434,6 @@
 # it was aimed at. This container projected the fall at 15,853,848 against
 # its own base; the runner reads 18,361,529, the same direction and larger,
 # which is the host split kanso#1534 recorded the day before.
-#
-# 2026-09-18, kanso#1504 on the tree merged after kanso#1535, CI's sitting.
-# 957,583,234 -> 957,583,241, a RISE of SEVEN instructions, A THIRD TIME.
-# The three sittings, each against a baseline the one before it did not have:
-#   995,837,536 -> 995,837,543
-#   975,944,763 -> 975,944,770
-#   957,583,234 -> 957,583,241
-# Three baselines spanning 38,254,302 instructions, the same seven every
-# time. What began as "re-based, not explained" is now a small measured fact
-# about this branch's binary: its relink costs this row seven instructions,
-# reproducibly. Nothing in the diff runs in the interpreter, and interp_allocs
-# and interp_peak_bytes are byte-identical in all three sittings.
-#
-# 2026-09-18, MERGED. Both blocks above and below are kept: the kanso#1504
-# note records the seven it read against the pre-kanso#1538 baseline, and
-# kanso#1538's is main's. The value below is MAIN's, so this branch's first
-# job after the merge is expected to disagree by whatever the seven is worth
-# on the new baseline, and CI's row replaces it.
 # 2026-09-18, kanso#1538, CI's sitting. 957,583,234 -> 939,042,794,
 # a FALL of 18,540,440 (-1.9362%).
 # THE ROW THIS CHANGE IS ABOUT. The two dispatch buffers ask for the arity
@@ -499,34 +448,49 @@
 # container projected 21,582,351 against its own base; the runner reads
 # 18,540,440, the same direction and smaller, on a different silicon (family
 # 0x6 model 0xcf against 0x19).
-# 2026-09-19, kanso#1504 on the tree merged after kanso#1543. The baseline
-# moved again: main is now 923,151,727 after the frame-node pool, and this
-# branch's own effect is the relink SEVEN. That seven has now been read FIVE
-# times against five baselines spanning 63,653,622 instructions, and the fifth
-# reading was a PREDICTION written into this file before CI measured it --
-# 932,183,921, which is what the runner then read.
+# 2026-09-18, kanso#1540, CI's sitting. 939,042,794 -> 932,183,914,
+# a FALL of 6,858,880 (-0.7304%).
+# THE ROW THIS CHANGE IS ABOUT. The score buffer is declared above the
+# tail-call loop and the winner's is handed back, so it is allocated once for
+# a whole dispatch chain instead of once an iteration. `binds` still is,
+# because it becomes the environment frame. EVERY COMPILE VEIN IS
+# BYTE-IDENTICAL -- compile 35,550,010, entry 126,729,588, library
+# 127,186,008, emit 51,617,476, start-up 3,363,916, compile_allocs 27,313 --
+# the fourth runtime-only change in a row that moved no layout. This container
+# projected 5,073,171 and the runner reads 6,858,880: same direction, larger,
+# different silicon.
+# 2026-09-18, kanso#1543, CI's sitting. 932,183,914 -> 929,300,332,
+# a FALL of 2,883,582 (-0.3094%). The second count in the same job read
+# 929,300,332 as well, so the binary is stable and this is a disagreement with
+# the golden rather than within the run.
+# THE ROW THIS CHANGE IS ABOUT. The dispatcher keeps a handle on the
+# environment frame and takes it back with `Rc::try_unwrap` once the body is
+# done, so the bindings vector is pooled instead of freed and allocated again.
+# This container projected 2,788,393 and the runner reads 2,883,582.
+# FIVE COMPILE-SIDE ROWS MOVED WITH IT and none of them is this change's
+# subject: compile +1,157, entry +3,058, library +2,874, emit +2,317, start-up
+# -244, each reproducing twice inside the job. That is layout, and it is the
+# first change in this family big enough to move it -- kanso#1538 and
+# kanso#1540 left every one byte-identical.
+# 2026-09-19, kanso#1545, CI's sitting. 929,300,332 -> 923,151,727, a FALL
+# of 6,148,605 (-0.6617%). THE ROW THIS CHANGE IS ABOUT. The frame's node is
+# pooled as well as the vector inside it: `Rc::get_mut` reaches the bindings
+# through a handle that stays alive, where `Rc::try_unwrap` had to destroy the
+# `RcBox` to reach them and the next dispatch called `Rc::new` for a fresh one.
 #
-# So 923,151,734 is a projection off the sixth baseline, on the strength of a
-# residue that has not moved by one and has been right in advance once. It is
-# still not a measurement: CI measures this tree and the row is copied out of
-# the job log if it disagrees.
-# 2026-09-19, kanso#1504 on the tree merged after kanso#1543, CI's sitting.
-# 923,151,727 -> 923,151,726. MINUS ONE.
+# READ TWICE IN THE SAME JOB, the same number both times, so the disagreement
+# was with the golden rather than within the run.
 #
-# THE SEVEN BROKE, and this file predicted 923,151,734. The relink residue had
-# read +7 on five consecutive baselines spanning 63,653,622 instructions, and
-# the fifth of those was a projection written here in advance that the runner
-# then confirmed exactly. On the sixth it is -1.
+# This container projected 4,869,682 and the runner reads 6,148,605: same
+# direction, larger, different silicon -- the third change in this family to
+# land that way, after kanso#1540 (5,073,171 projected, 6,858,880 read) and
+# kanso#1543.
+# 2026-09-19, kanso#1502 on the tree merged after kanso#1543 and kanso#1547,
+# CI's sitting. interp_instructions 923,151,727 -> 923,151,719, a move of -8.
 #
-# So the seven was a property of those five trees rather than a constant of the
-# relink, and the projection that was right five times was wrong on the sixth
-# in both size and SIGN. Nothing about the branch changed between the fifth
-# reading and this one; what changed underneath it was kanso#1543's dispatch
-# pooling, which moved the interpreter's own code and with it whatever the
-# seven was measuring.
-#
-# The figure below is CI's reading of this tree. No projection replaces it, and
-# the next merge that moves the baseline gets no prediction from this file --
-# five agreements bought one wrong answer, which is the whole lesson.
-interp_instructions=923151726
+# 2026-09-19, kanso#1502 re-merged onto main after kanso#1552 and kanso#1553,
+# CI's sitting on run 35419502516. interp_instructions 923,151,719 -> 923,151,727, +8.
+# Eight instructions on 923 million. The interpreter never reaches
+# src/runtime.c, so this is the binary's layout and nothing else.
+interp_instructions=923151727
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
