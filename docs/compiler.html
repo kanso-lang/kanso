@@ -3135,6 +3135,21 @@ main, read again                       2,862,578       973,143,830
 
 <p>and the frame turned out to be worth looking at for a different reason. <code>callgrind_annotate</code> will not say who calls it: at full threshold the callers it lists come to three parts in a thousand of the frame. the raw profile will, because callgrind records every call site beside its caller with the call&#39;s cost on the next line, and summing those accounted for the frame exactly — 47,999,433 instructions over 2,617,709 calls, eighteen each, on identifiers of twenty-two bytes or fewer. a twentieth of the interpreted run was spent entering and leaving a function that compares bytes which fit in two registers. the next section is what came of that.</p>
 
+<h2 id="keyedmaps"><span class="sec-num">122</span>the same trick, one layer out, declined</h2>
+
+<p>two changes had just taken a fifth of the interpreted run&#39;s <code>memcmp</code> traffic away by comparing short identifiers as machine words instead of calling out to the C library. the next two callers on that list are hash-map probes: an environment of globals and a table of resolved callees, both keyed by <code>String</code> and looked up with a <code>&amp;str</code>, which hashes the bytes and then compares the key by calling <code>memcmp</code>. key them by the identifier type instead and the comparison should be the same two word loads, for free, since the callers already hold one.</p>
+
+<p>it removes exactly the calls it was supposed to — 497,907 of them, which is the two lookup counts to within sixty-eight — and the row goes <em>up</em> by 4,315,544.</p>
+
+<pre><code>+10,456,358  &lt;Q as hashbrown::Equivalent&lt;K&gt;&gt;::equivalent   2,984 -&gt; 10,459,342
+ -9,776,759  __memcmp_avx2_movbe
+ +3,485,161  Interp::call
+ +2,149,368  __memcpy_avx_unaligned_erms</code></pre>
+
+<p>a map keyed by <code>String</code> and probed by <code>&amp;str</code> compares along a path that ends in a <code>memcmp</code> call. a map keyed by the identifier type and probed by the same compares through hashbrown&#39;s <code>Equivalent</code>, and that shim did not inline: 21 instructions a probe against <code>memcmp</code>&#39;s 19.6 plus its call. the word compare is in there and never got the chance to pay. the rest is two cold sites that now build an identifier where they used to pass a string slice.</p>
+
+<p>reverted. the cost sat in the machinery the library wraps around a comparison once you change what is being compared, rather than in the comparison itself — which is what the previous two sections were about. the same code, one layer further out, stops being free.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>

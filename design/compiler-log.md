@@ -7541,3 +7541,52 @@ WHAT IS LEFT of the memcmp frame after both changes, on the container's profile:
 22,116,197 instructions over 1,142,822 calls, led by `eval_global` at 332,026
 and `call_named` at 165,949. Those resolve a name against the program's
 declarations rather than against a fixed list, so neither takes this trick.
+## 2026-09-22 — the two name-keyed maps: built, measured, declined
+
+kanso#1563 and kanso#1564 took `eval::lookup` and `call_builtin` off
+`__memcmp_avx2_movbe`. The frame's next two callers are `eval_global` at
+332,026 calls and `call_named` at 165,949, and both are the same shape: a
+`Map<String, _>` probed with a `&str`, which hashes the bytes and then compares
+the key with `str == str` -- a memcmp call.
+
+The obvious continuation is to key those two maps by `Name` and probe them with
+a `&Name`, so the comparison is the inline word compare kanso#1563 built. The
+callers already hold one. `to_string()` on the insert would go too, since
+cloning an inline `Name` allocates nothing.
+
+IT WORKS AND IT COSTS MORE THAN IT SAVES.
+
+    memcmp calls           1,142,822 ->   644,915     -497,907
+    memcmp instructions   22,116,197 -> 12,339,438   -9,776,759
+    interpreted row      933,389,998 -> 937,705,542   +4,315,544
+
+`eval_global` and `call_named` leave the caller list entirely and the 497,907
+is their two lookup counts to within sixty-eight. The row still rises, and the
+whole-table diff says where:
+
+        +10,456,358  <Q as hashbrown::Equivalent<K>>::equivalent   2,984 -> 10,459,342
+         -9,776,759  __memcmp_avx2_movbe
+         +3,485,161  Interp::call
+         +2,149,368  __memcpy_avx_unaligned_erms
+         -2,103,532  Interp::eval
+         -1,313,332  Interp::eval_global
+
+A `HashMap<String, _>` probed by `&str` compares through a path that ends in a
+`memcmp` call. A `HashMap<Name, _>` probed by `&Name` compares through
+hashbrown's `Equivalent`, and that shim did not inline: it went from 2,984
+instructions to 10,459,342, which is 21 per probe against memcmp's 19.6 plus
+its call. The inline word compare is in there somewhere and never got the
+chance to pay. The memcpy rise is the two cold sites that now build a `Name` --
+`eval_binop`'s operator and `Value::FnRef`'s `Rc<str>` -- and `Interp::call`'s
+rise is the second of those.
+
+So the trick that worked twice does not extend to a hash-map probe, and the
+reason is in hashbrown rather than in the comparison. Reverted. Keyed maps stay
+`String`-keyed until somebody has a way to make `equivalent` inline, and that is
+a different question from the one kanso#1563 answered.
+
+What is still on the list, from the container's profile after kanso#1564:
+12,339,438 instructions over 644,915 calls, led by `eval_tail`'s closure at
+159,127 and `dispatch_loop` at 147,267, with `BigUint`'s own `PartialEq` at
+132,846 -- that last one is num_bigint comparing digits and is not a name at
+all.
