@@ -328,6 +328,26 @@ if command -v callgrind_annotate >/dev/null; then
   callgrind_annotate --threshold=90 /tmp/cg.compile 2>&1 | head -40
 fi
 
+# THE WHOLE TABLE, EVERY RUN, because localising a small move needs BOTH sides
+# and only one of them is ever the failing job. On 2026-09-22 this row read
+# 35,551,167 on main and 35,551,170 on a branch whose diff was the log and a
+# page. The listing above covers 90% of the profile and is cut at 40 rows, so
+# the comparison reached fifteen functions, every one of them equal to the
+# instruction, and the three were somewhere below. The whole table is about
+# 1,115 rows and 86 KB here, and it reaches functions that retire a single
+# instruction — which is where a start-up ifunc resolving differently on
+# another machine would show.
+#
+# It goes in the JOB LOG rather than the artifact beside the profile, because
+# the artifact is not reachable from every session: some egress policies refuse
+# the blob host outright, `gateway answered 403 to CONNECT`, which no
+# credential and no retry gets past. Collapsed, so it costs a reader nothing
+# until they want it.
+echo "::group::the whole function table, for diffing this job against another"
+callgrind_annotate --threshold=100 /tmp/cg.compile 2>/dev/null \
+  | sed -n 's/^ *\([0-9,][0-9,]*\) ([^)]*)  *\(.*\)$/\1 \2/p'
+echo "::endgroup::"
+
 # WHETHER IT LANDED ON THE ROW. One row, one value, compared exactly — the
 # ordinary ratchet every other counter in the tree gets.
 want=$(sed -n 's/^compile_instructions=//p' "$golden")

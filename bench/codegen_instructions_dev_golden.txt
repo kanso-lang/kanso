@@ -80,6 +80,11 @@
 # under five ten-thousandths of a per cent, with mixed signs -- which is what a
 # shifted binary looks like and not what work looks like.
 #
+# 2026-09-18, kanso#1502 on the tree merged with main, CI's sitting.
+# 596,159,774 -> 596,164,003, a RISE of 4,229 (+0.0007%).
+# LAYOUT. These rows carry runtime.c's bytes rather than compiling it, and
+# every binary's `.text` grew 32 bytes on this change; the moves are all under
+# two hundredths of a per cent.
 # 2026-09-18, THE GATE NOW CLEARS ITS OUTPUT PATH BEFORE EVERY BUILD, so this
 # row measures a different thing and the value below is the OLD one, left in
 # place for CI to move. `ld` reads whatever is already at `-o`, and what it
@@ -164,4 +169,9 @@
 # codegen_instructions_release could draw two values eleven apart on one binary
 # -- kanso#1502's job in this same sitting drew 6,820,866,355 and then
 # 6,820,866,344 -- and the name the pin fixes is what decided which.
-codegen_instructions_dev=596153756
+#
+# 2026-09-19, kanso#1502 re-merged onto main after kanso#1552 and kanso#1553,
+# CI's sitting on run 35419502516. codegen_instructions_dev 596,153,756 -> 596,158,173, +4,417 (+0.0007%).
+# The dev tier is -O0, so the shorter runtime.c barely registers.
+# `codegen_dev_again` read 596,158,173.
+codegen_instructions_dev=596158173
