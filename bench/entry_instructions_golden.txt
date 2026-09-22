@@ -976,7 +976,7 @@
 # CI's sitting on run 35419502516. entry_instructions 126,727,524 -> 126,728,843, +1,319 (+0.0010%).
 # Layout, for the same reason as the compile row. `entry_again` read
 # 126,728,843.
-entry_instructions=126700846
+entry_instructions=126696892
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

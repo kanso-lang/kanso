@@ -7913,6 +7913,103 @@ measured. The call counts said the cost is call overhead and that much holds.
 What the fix is was a guess until the call sites were read, and it was wrong
 twice before they were.
 
+## 2026-09-22 — call_builtin identifies itself inline, and the interpreted run falls another 2.42%
+
+kanso#1563 took `eval::lookup` off `__memcmp_avx2_movbe`. This is the second
+caller on that list: `Interp::call_builtin`, 12,535,464 instructions over
+564,790 calls.
+
+MEASURE FIRST, and the measurement chose a much smaller change than the one
+already written down. `call_builtin` is invoked 107,625 times and makes 5.25
+comparisons each -- 116 instructions per invocation spent working out which
+builtin it is. A `match` on a `&str` switches on the LENGTH and then walks the
+candidates of that length, and the buckets are wide:
+
+    length  3  ->  6 candidates      length  7  ->  7
+    length  4  ->  7                 length  8  ->  8
+    length  5  -> 12                 length  9  ->  6
+    length  6  -> 12                 length 11  ->  1
+
+Tallying the names at run time says which buckets matter. **Twelve distinct
+builtins account for every call in the corpus**, and every one of the hot ones
+sits in a wide bucket: `append` 29,631 calls at length 6, `length` 11,874 at 6,
+`slice` 7,700 at 5, `utf8` 5,504 at 4, `find2` 5,500 at 5, `bytes` 5,301 at 5.
+`append` alone is 37% of all dispatches. 5.25 is what walking a twelve-wide
+bucket costs.
+
+THE CHANGE IS ONE LINE AND FIFTY-ONE PREFIXES. `match name` becomes
+`match name.as_bytes()` and each pattern gains a `b`. Rust lowers a byte-string
+pattern to a length test and inline word compares; no call leaves the function.
+Nothing else moves -- the arm bodies are untouched, `name` stays in scope for
+the arity errors and the `_` arm's diagnostic, and the diff is 52 lines changed
+in one direction.
+
+    interpreted row   956,538,727 -> 933,389,998   -23,148,729   -2.42%
+    memcmp calls        1,707,612 ->   1,142,822      -564,790
+    memcmp cost        35,413,346 ->  22,116,197   -13,297,149
+
+The 564,790 is `call_builtin`'s own count exactly, and it is gone from the
+caller list altogether. The row falls by ten million more than the frame does,
+which is the bucket walk's own branches going with the calls.
+
+THE SPEC TOOK THREE TRIES AND THE FIRST TWO PROVED NOTHING. Both are recorded
+because each looked right.
+
+The first read the patterns off `src/eval.rs` and called every one. That is
+self-referential: rename `b"append"` to `b"appned"` and the spec calls
+`builtin_appned`, finds it dispatches, and passes. Watched doing exactly that.
+
+The second took its names from `lib/` instead -- a real oracle -- and passed
+the same mutation for a better reason. **The programs never reached the
+interpreter.** The checker gates `builtin_` names to std-origin files, so
+`builtin_append` in a scratch file is refused with `is internal to the standard
+library` before anything dispatches. The control says it plainest:
+`builtin_nosuchthing` draws that same refusal rather than `unknown builtin`. Every
+program in that spec, valid name or nonsense, produced one message that had
+nothing to do with the question.
+
+So the question moved to where it can be answered: two files that must agree.
+`lib/*.kso` names 46 builtins through the `builtin_` door and `src/eval.rs`
+dispatches 51, and a name in the first that is missing from the second would
+answer `unknown builtin` at run time. Mangling `append` turns that red and names
+the mangled entry; a `b` that lands inside the quotes turns a second assertion
+red; reverting the match to `&str` does not compile at all.
+
+CI'S SITTING, and it is a THIRD of what this box projected.
+
+    interp_instructions     908,952,299 -> 900,471,358   -8,480,941  -0.9330%
+    entry_instructions      126,691,703 -> 126,696,892      +5,189  +0.0041%
+    library_instructions    127,146,502 -> 127,149,930      +3,428  +0.0027%
+    compile_instructions     35,540,015 ->  35,541,148      +1,133  +0.0032%
+    emit_instructions        51,481,045 ->  51,481,382        +337  +0.0007%
+
+The container read the interpreted saving at 23,148,729 and CI reads 8,480,941:
+2.73 times apart, where the same projection for kanso#1563 an hour earlier was
+14% out. Both are falls and the direction is not in doubt; the size is, and the
+golden is CI's.
+
+That gap is the measurement rule this log keeps restating, at a magnitude worth
+recording. What the change removes is 564,790 CALLS -- a count the program
+decides, identical on any machine. What each call COSTS is the glibc the host
+carries: this container's 2.39-0ubuntu8.7 against the runner's 8.9, and a
+different AVX2 entry sequence behind the same name. So the count travels and the
+price does not, and a projection built from the price is worth what the price
+is. kanso#1563's entry predicted that shape without putting a number to it;
+this is the number.
+
+The four compile-side rows rise because byte patterns are more code.
+`startup_instructions` and both codegen rows did not move at all.
+
+Welfare 77.28677792407876 -> 77.2907927488371, banked after the goldens carried
+CI's rows. Development 78.49 -> 78.51 and production is unmoved, which is right:
+the interpreter is a development-side term and the benchmarks run compiled code
+that never reaches this dispatch.
+
+WHAT IS LEFT of the memcmp frame after both changes, on the container's profile:
+22,116,197 instructions over 1,142,822 calls, led by `eval_global` at 332,026
+and `call_named` at 165,949. Those resolve a name against the program's
+declarations rather than against a fixed list, so neither takes this trick.
+
 
 Worth setting beside kanso#1502, which took the same merge on the same day and
 read different numbers for five of the six. Only the interp row's +7 is shared.
