@@ -7627,6 +7627,140 @@ over 2,617,709 calls, 18.3 each, on names of twenty-two bytes or fewer.
 the callers it lists sum to about fifty thousand -- but the raw profile does,
 and summing each `cfn=` by its caller accounts for the frame exactly.
 
+## 2026-09-22 — the whole function table, for the six gates that still could not be diffed
+
+kanso#1558 gave `compile_instructions.sh` an uncapped print of its profile's
+function table, after three instructions could not be located from two job
+logs. The gate carried `--threshold=90 | head -40`: forty rows of the hundred
+and twenty-five that threshold has, fifteen functions once the headers come
+off, and every one of the fifteen equal across the two jobs.
+
+That fix landed for one gate. Six others carried the identical line.
+
+    entry_instructions     /tmp/cg.entry      threshold=90 | head -40
+    library_instructions   /tmp/cg.library    threshold=90 | head -40
+    startup_instructions   /tmp/cg.startup    threshold=90 | head -40
+    interp_instructions    /tmp/cg.interp     threshold=90 | head -40
+    instructions           /tmp/cg.$b         threshold=90 | head -40, two of fourteen
+    emit_instructions      /tmp/cg.emit       inclusive only
+
+The fourth is the gate STATUS.md's standing row is about. `interp_instructions`
+read 2,178,502,266 and 2,178,502,272 on two CI jobs of one commit, each stable
+across the gate's own second reading, and the row has been open since
+2026-09-15 for want of a carrier. The instrument that would say which frames
+moved did not exist on that gate. The fifth printed a breakdown for two of the
+fourteen benchmarks it profiles, so a move in any of the other twelve had
+nothing behind it at all.
+
+WHAT WENT IN. Each gate now prints its profile's whole exclusive table, on
+every run, before the comparison -- the same three properties kanso#1558
+established, for the same reason. On every run, because a diff needs the side
+that AGREED and the agreeing side never takes a failure path.
+
+Checked against a real profile rather than by reading: 659 rows off a
+`kanso --version` run, reaching functions that retire a single instruction.
+The top exclusive frame is `_mi_strnicmp` at 243,800, which is mimalloc
+resolving its options by name -- the frame the standing row's own measurement
+found moving 117 instructions per environment variable. The instrument sees
+what the row is about.
+
+`tests/every_callgrind_gate_prints_its_whole_table.rs` derives the governed
+list off disk: every gate writing a callgrind profile, less two exemptions
+named with reasons. Each of its three assertions was watched red on its own
+mutation -- the print removed, the print capped, the print moved into the
+failure path.
+
+TWO EXEMPTIONS, and they are reasons rather than spellings. `codegen_
+instructions.sh` names its profiles `/tmp/cg.codegen.$tier.%p`, one per
+process across the clang driver, the convention probe, `clang -cc1` and ld, at
+6.8 billion instructions on the release tier; it also already diffs its own two
+readings per frame. `path_independence.sh` writes `/tmp/cg.pi` and never reads
+it -- the count comes off valgrind's stderr and every measurement in its loop
+overwrites the same path, so nothing survives to print. Both want their own
+change and their own measurement of what it costs the job log.
+
+The derivation was wrong on its first run and the spec said so: filtering for
+a profile path with no shell expansion dropped `emit_instructions` and
+`instructions`, which write `"$out"` and `/tmp/cg.$b` and are one profile per
+run all the same. What separates codegen is many processes under one reading,
+which is why that is in the exemption list and not in the filter.
+
+This does not close the standing row. It builds the instrument the row has
+been guessing without, and the row comes off when a carrier for the six is
+found.
+## 2026-09-22 — the interpreted row moves with .text, and the frame that carries it is memcmp
+
+The instrument above was built for STATUS.md's standing row, which has wanted a
+carrier since 2026-09-15 for a six-instruction difference between two CI jobs on
+one commit. Its first use, on this container, three arms and a control:
+
+    arm                                  .text      .rodata           row
+    main, unpadded                   2,862,578      825,896   973,143,830
+    main, read again                 2,862,578      825,896   973,143,830
+    +64 KiB of rodata no code reads  2,862,578      891,432   973,143,830
+    +40 never-called functions       2,862,690      891,432   973,510,133
+    +38 of the same functions        2,862,690      891,432   973,510,133
+
+Each arm is a distinct binary by sha256. The control is the second row: one
+binary read twice is byte-identical, which is what CI also reports of its own
+second readings.
+
+GROWING RODATA DOES NOT MOVE IT. Sixty-four kilobytes of a `#[used]` array no
+code reads leaves the row unchanged to the instruction.
+
+GROWING TEXT DOES, and by a lot for the size: 112 bytes of `.text` moves the
+row **+366,303**, 0.038%. The forty probe functions are identical bodies and
+the linker folds them, which is why forty and thirty-eight give the same
+sections -- and the same row, on different binaries.
+
+WHERE IT GOES, off the whole-table diff:
+
+        +366,005  __memcmp_avx2_movbe [libc.so.6]
+            +320  _dl_relocate_object   (the probe's own relocations, outside
+            +200  _dl_relocate_object    the row's anchor)
+             +52  __memcpy_avx_unaligned_erms
+    single digits  eleven others, -4 to -1
+
+One frame is the move. The interpreter is deterministic and its input is fixed,
+so the same comparisons happen in every arm; what changed is where the bytes
+being compared sit. `__memcmp_avx2_movbe` takes a different number of
+instructions for the same comparison depending on its arguments' addresses.
+That the delta arrived with the `.text` growth is a difference-in-differences,
+and the mechanism inside memcmp is left open.
+
+WHAT THIS DOES NOT SHOW is that this carries the six. kanso#1558 reported CI's
+non-reproducing binaries as having identical section sizes, and the fifth arm
+here says two binaries with identical sections read an identical row. So section
+size is not the carrier of a six between two CI jobs. What the standing row
+gains is a frame to look at and one candidate struck off: its own note named
+`_mi_os_commit_ex`, `mi_bitmap_setN` and `_mi_prim_commit` as where to look
+next, and across every arm here the allocator's commit frames do not appear in
+the moved list at all.
+
+A NOTE ON READING THE TABLE, because the first diff of these two profiles was
+wrong and the mistake is easy. `callgrind_annotate` prints `count name`
+separated by spaces and the names contain spaces -- `<alloc::vec::into_iter::
+IntoIter<T,A> as core::iter::traits::iterator::Iterator>::try_fold`. Splitting
+on whitespace truncates every generic at its first space, six distinct
+instantiations collapse onto one key, and the diff then reported ten million
+instructions moving in `IntoIter`. Stripping thousands separators from the whole
+line rather than from the count does the same thing to `<T,A>`. Join on a tab
+and neither happens: 1,397 rows, 1,397 distinct keys, four movers. The printed
+table itself is faithful -- `callgrind_annotate` does not truncate when its
+output is not a terminal, checked by counting distinct keys with and without
+`COLUMNS` set, and they are equal.
+
+AND A LEAD THAT IS NOT ABOUT MEASUREMENT AT ALL. `__memcmp_avx2_movbe` is
+**4.71%** of the interpreted run, 47,999,433 instructions of 1,019,911,013.
+
+`callgrind_annotate --tree=caller` does not answer who calls it: at threshold
+100 the callers it lists sum to about fifty thousand, three parts in a thousand
+of the frame. The raw profile does. Callgrind records each call site as a
+`cfn=` beside its caller's `fn=` with the call's inclusive cost on the next
+line, so summing those by caller is a twenty-line read of the file, and it
+accounts for **47,999,433** -- the frame exactly, which is the check that the
+parse is right.
+
     13,336,477   27.8%   kanso::eval::lookup
     12,535,464   26.1%   kanso::eval::Interp::call_builtin
      6,390,396   13.3%   kanso::eval::Interp::eval_global
@@ -7720,6 +7854,64 @@ What would is comparing something other than bytes: a builtin resolved to an id
 once, where the checker already knows the name is a builtin, instead of
 resolved by its text at every call. That is a bigger change than this one and
 it is not specified here beyond the shape.
+
+     3,105,230    6.5%   kanso::eval::Interp::eval_tail::{{closure}}
+     2,988,189    6.2%   kanso::eval::Interp::dispatch_loop
+     2,834,403    5.9%   <num_bigint::biguint::BigUint as PartialEq>::eq
+       895,227    1.9%   hashbrown::map::HashMap::contains_key
+       418,640    0.9%   kanso::eval::eval_binop
+       331,938    0.7%   kanso::eval::match_one
+
+Six of the first eight are name resolution: looking a name up in the
+environment, choosing a builtin, resolving a global, dispatching a call. They
+are 41.6 million instructions between them, **4.1% of the interpreted run**,
+and what they are doing is comparing names byte by byte. §117 of the page
+records why: a name is the front end's identifier type, which keeps twenty-two
+bytes or fewer inline, so equality on it is a memcmp of those bytes. That was
+the right trade for the allocator -- it took 1.3 million allocations out -- and
+it left every comparison a byte compare.
+
+HOW BIG EACH CALL IS decides what the fix is, and the first draft of this
+paragraph guessed wrong. It said an interned name would make each comparison a
+word compare, which is true and is more work than the numbers ask for. The
+profile carries the call counts beside the costs:
+
+    memcmp total          2,617,709 calls    47,999,433    18.3 each
+    eval::lookup            909,375 calls    13,336,477    14.7 each
+    Interp::call_builtin    564,790 calls    12,535,464    22.2 each
+    Interp::eval_global     332,026 calls     6,390,396    19.2 each
+    Interp::call_named      165,949 calls     3,277,188    19.7 each
+
+Eighteen instructions a call, on names of twenty-two bytes or fewer. That is
+the AVX2 entry sequence and the call itself rather than the comparing: the
+bytes being compared fit in two registers.
+
+THEN READ THE CALL SITES, which is the step this entry skipped twice. It first
+said the fix was interning; corrected, it said an inline word compare on
+`Name`'s own `PartialEq`. Neither top caller compares a `Name` to a `Name`.
+
+`eval::lookup` walks the environment with `bound.as_str() == name`, a `Name`'s
+text against a `&str` the caller holds. `Interp::call_builtin` compares a
+`&str` against string literals. Those are two different shapes and only the
+first is the identifier type's to fix.
+
+This paragraph first said the second was an if-chain wanting a `match`. It is a
+`match name { ... }` already, over 49 string-literal arms, with three bare
+`name == "..."` tests ahead of it. Rust lowers a string match to a switch on
+the length and then a comparison against each candidate of that length, and
+those comparisons are the calls, so rearranging the arms buys nothing. What
+would is comparing something other than bytes -- a builtin resolved to an id
+once, where the checker already knows the name is a builtin.
+
+So the lead is two leads. The `lookup` half is 13,336,477 instructions, 1.3%
+of the interpreted run, and is one method and one call site. The
+`call_builtin` half is 12,535,464, 1.2%, and is a restructuring.
+`interp_instructions` weighs both on the development side.
+
+The lesson is the one this repository keeps paying for: a number bounds what it
+measured. The call counts said the cost is call overhead and that much holds.
+What the fix is was a guess until the call sites were read, and it was wrong
+twice before they were.
 
 
 Worth setting beside kanso#1502, which took the same merge on the same day and

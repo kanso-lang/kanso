@@ -3115,7 +3115,27 @@ a float             440.7 -&gt;          425.9        -14.8
 
 <p>so the reason written here is withdrawn. the rule is still not shipped, because the other objection stands untouched: it admits the two json openers, and the test that keeps scanners out of the rewind tier had to be edited to let them in. what has gone is the crash, and with it the case that the matter was settled — a measured 0.41 of the objective is a live question again rather than a closed one.</p>
 
-<h2 id="beattop"><span class="sec-num">118</span>nine instructions to find a pointer that never moved</h2>
+<h2 id="wholetable"><span class="sec-num">119</span>a profile you cannot diff</h2>
+
+<p>two builds of the same source read three instructions apart, and the job logs could not say where. each gate that counts instructions printed its profile&#39;s top frames as <code>--threshold=90 | head -40</code>: forty lines of the hundred and twenty-five that threshold has, fifteen functions once the headers come off. all fifteen were equal. the number is real and the instrument stopped one screen short of it.</p>
+
+<p>the whole table is about a thousand rows and reaches functions that retire a single instruction. printing it costs a few kilobytes of job log. six gates now do, and the one property that is easy to get wrong is that they do it on <em>every</em> run rather than on the failing one — a comparison needs the side that agreed, and the side that agreed never takes a failure path. a spec derives the list off disk so a seventh gate cannot skip it.</p>
+
+<p>the first thing it was pointed at was a row that has drifted by single digits between machines for a week. five builds on one machine, each a distinct binary:</p>
+
+<pre><code>main, unpadded                   .text 2,862,578   row 973,143,830
+main, read again                       2,862,578       973,143,830
++64 KiB of rodata no code reads        2,862,578       973,143,830
++40 never-called functions             2,862,690       973,510,133
++38 of the same functions              2,862,690       973,510,133</code></pre>
+
+<p>sixty-four kilobytes of data nothing reads leaves the row alone to the instruction. a hundred and twelve bytes of <em>code</em> nothing calls moves it by 366,303. the whole-table diff puts 366,005 of that in one frame, glibc&#39;s <code>__memcmp_avx2_movbe</code>, and the rest in eleven frames moving by four instructions or fewer. the program is deterministic and its input is fixed, so the same comparisons happen in every arm; what changed is where the compared bytes sit.</p>
+
+<p>that does not explain the drift it was built for — two binaries with identical section sizes read an identical row here, and the drifting builds have identical sections too. what it does is strike a candidate off and hand back a frame to look at.</p>
+
+<p>and the frame turned out to be worth looking at for a different reason. <code>callgrind_annotate</code> will not say who calls it: at full threshold the callers it lists come to three parts in a thousand of the frame. the raw profile will, because callgrind records every call site beside its caller with the call&#39;s cost on the next line, and summing those accounted for the frame exactly — 47,999,433 instructions over 2,617,709 calls, eighteen each, on identifiers of twenty-two bytes or fewer. a twentieth of the interpreted run was spent entering and leaving a function that compares bytes which fit in two registers. the next section is what came of that.</p>
+
+<h2 id="beattop"><span class="sec-num">120</span>nine instructions to find a pointer that never moved</h2>
 
 <p>a beat loop is one the compiler proved gives its arena back between laps, and <code>k_beat_iter</code> is what it calls to do that. the run program calls it <strong>2,692,766</strong> times for <strong>61,672,983</strong> instructions &#8212; 3.35% of everything it does, and 22.9 instructions a call against a fast path that is six stores and three tests.</p>
 
@@ -3150,7 +3170,7 @@ widebench        33,516,094 -&gt;     33,644,020      +127,926   +0.3817%</code>
 
 <p>the spec for that took two tries and both failures say something about the language. the first program accumulated strings, which compiles to a <em>carry</em> beat &#8212; that one computes its own mark, never reads the cache, and the spec passed with the maintenance torn out. the second carried a scalar and allocated nothing, and a loop with nothing to reclaim emits no beat at all. what it takes is both at once: laps that allocate, and a carried value small enough to cross one. each lap builds a padded string and keeps its length.</p>
 
-<h2 id="rowsthatmove"><span class="sec-num">119</span>a row that moves seven, and what two readings are worth</h2>
+<h2 id="rowsthatmove"><span class="sec-num">121</span>a row that moves seven, and what two readings are worth</h2>
 
 <p>the interpreted row sits at about 1.138 billion instructions and it has moved by <strong>seven</strong> three times this month, on trees whose compiler source the interpreted corpus never touches. seven is not a number anybody would chase. what it is good for is a question this page has had to answer repeatedly: when a counted row disagrees with its golden, how much evidence does it take to say what happened?</p>
 
@@ -3187,6 +3207,7 @@ kanso#1504      AMD  0x1a / 0x2   2,840,050   806,288   1,138,001,437</code></pr
 <p><strong>the draft of this section said something stronger, and it was wrong.</strong> the first write-up had <em>three</em> readings of seven, across three trees at three different absolute values, and concluded a pattern. the third reading was not a reading. it came from the gate&#8217;s second count, which was subtracting the printed line from its first pass and not its second &#8212; so a binary that counted one number was reported as counting two, exactly 3,015 apart, with <code>interp_printed=3015</code> sitting in the job log two screens above the error. that is the subject of the previous section.</p>
 
 <p>the shape is worth naming because it is not a slip about arithmetic. a claim was assembled out of three data points, one of which was an instrument reading itself, and the instrument had printed what it was doing. what makes three readings better than two is that they are independent; a number the tool generated is not a third opinion.</p>
+
 
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 

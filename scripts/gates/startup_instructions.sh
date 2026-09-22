@@ -133,6 +133,11 @@ printf 'startup_sample cpu="%s" sha=%.12s row=%s\n' \
 echo "=== where the entry compile's work is"
 callgrind_annotate --threshold=90 /tmp/cg.startup 2>&1 | head -40
 
+echo "::group::the whole function table, for diffing this job against another"
+callgrind_annotate --threshold=100 /tmp/cg.startup 2>/dev/null \
+  | sed -n 's/^ *\([0-9,][0-9,]*\) ([^)]*)  *\(.*\)$/\1 \2/p'
+echo "::endgroup::"
+
 want=$(sed -n 's/^startup_instructions=//p' "$golden")
 got=$(sed -n 's/^startup_instructions=//p' startup_ir_got.txt)
 case "$want" in
