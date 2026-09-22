@@ -7054,6 +7054,104 @@ something already settled.
 
 The surfaces the CARRYOOM claim reached are this log and §115 of the page, and
 both are corrected in this commit rather than only here.
+
+
+## 2026-09-22 — every program in the corpus under a sanitizer, and the one report it expects
+
+`src/runtime.c` reclaims memory in bulk, and the walks that decide what survives
+follow pointers into storage the reclaim can take back. The file's own comments
+carry two accounts of that going wrong — a `KStr` read in a munmap'd page, and a
+node below a mark holding a tenured pointer that `k_repaired_settle` still does
+not move. Both were found by a program crashing. Nothing in this tree had ever
+run a sanitizer over the corpus.
+
+It has now, and the result is a clean one:
+
+    81  CLEAN   67 mem-corpus programs, 13 benchmarks, scripts/ratchet
+     2  KNOWN   runbench and scanbench, the same guarded tail read
+     1  SKIP    bench/numeric, which does not compile — see below
+     0  FOUND
+
+THE INSTRUMENT WAS WATCHED FAILING FIRST, which is the only reason the zero is
+worth anything. `scripts/asan/sweep.sh --prove` patches a read of one byte from
+a block `k_ten_release` has just freed into a COPY of the runtime, builds the
+one fixture whose `.mem` golden pins `ten_frees=1`, and asserts the report
+names that function. It does:
+
+    #0 ... in k_ten_release .../runtime_broken.c:1547:33 heap-use-after-free
+
+THE ONE KNOWN REPORT is `k_b_find2_raw`, and reading it wrongly is easy.
+`k_tail_window` permits the final sixteen-byte load only when the pointer sits
+at least sixteen bytes below a page boundary, so the load cannot reach an
+unmapped page and the surplus is masked off afterwards. AddressSanitizer
+reports it anyway, and the address it prints is the LAST byte of the load
+rather than the first — so the report reads as though the access began ten
+bytes past the end when it began inside the buffer. It is classified KNOWN and
+printed rather than filtered, because a filter on that frame would hide every
+later finding in it.
+
+WHAT THE SWEEP TURNED UP BY ACCIDENT: `bench/numeric` has not compiled since
+kanso#505 migrated the tree. `main.kso` calls `sq_sum` with no import, and
+`lib.kso` beside it exports one; `kanso check bench/numeric` exits 2. Nothing
+in scripts/, .github/, tests/ or bench/ names the directory, which is why a
+benchmark being broken for that long went unnoticed. The import is restored in
+this commit and it runs: `sum 2666668666667000000`, which is
+n(n+1)(2n+1)/6 at n = 2,000,000.
+
+AND IT IS THE ONLY ONE. Every directory under `scripts/`, `lib/` and `bench/`
+holding `.kso` files was put through `kanso check`. Ten refuse, and nine of the
+ten are the checker being asked the wrong question rather than anything broken:
+eight are standard-library modules, which reach `builtin_*` names that only
+resolve inside std, and the two `bench/workahead` programs carry a statement
+beside their declarations, which is `kanso play`'s shape and not `check`'s —
+run properly they both exit 0 and agree on `report: 449999997`. `bench/numeric`
+is the only one that fails on its own merits.
+
+It is not wired into CI. Every runner would need `libclang-rt-*-dev`, and the
+known report would have to become a suppression maintained in two places. The
+sweep is for the question the runtime's comments keep raising, asked by hand.
+
+## 2026-09-22 — the tenure fixture does not catch the change it says it catches
+
+`tests/golden/mem/a_repaired_node_below_the_mark_holds_tenure.kso` ends its
+header with a promise:
+
+> The fixture pins `ten_blocks=1` beside `ten_frees=1` so that a change which
+> stops handing them up is a red test rather than a segfault in `k_copy_size`.
+
+It does not. Stopping the hand-up leaves every counter in its `.mem` vein
+byte-identical, so the test stays green.
+
+THE EXPERIMENT. `k_ten_hand_up` was replaced, in a COPY of the runtime, by a
+call to `k_ten_release` — the change the promise is about, which frees a
+depth's tenure blocks at the inner pop instead of passing them to the depth
+outside. Then:
+
+    the path is exercised    traced: HANDUP d=1 with a real block, once
+    every counter            identical, all forty-odd rows of the vein
+    under a sanitizer        clean, no report
+
+The counters cannot see it because `ten_frees` counts the block being freed
+either way. Handing up moves WHEN and at WHICH DEPTH the free happens, and the
+vein records neither.
+
+WHAT THE FIXTURE DOES ESTABLISH is narrower than its header claims. It builds
+the configuration the comment is about — a node below the mark holding a
+pointer into tenure — and it does not read through that pointer after the pop.
+So it reaches the construction and never the danger, which is why removing the
+hand-up changes nothing observable in it.
+
+WHAT WOULD CLOSE IT, neither done here. A counter that separates a hand-up from
+a release would make the promise true, and that is a counters change: every
+`.mem` file, twelve cost goldens, the emitted vein, the ch10 sample and the
+siblings, all in one pull request. Or the header's last paragraph goes, and the
+fixture keeps the claim it can support.
+
+A caveat on the sanitizer half: the binary was built `-O0` against a
+plain-malloc runtime, where the shipped one is `-O3 -flto`. That bounds the
+sanitizer result to this build. The counter result is not so bounded — those
+rows are deterministic, which is the whole reason they are pinned.
+
 ## 2026-09-22 — ten_handups: where a tenure block dies, which no counter could say
 
 kanso#1560 found that `a_repaired_node_below_the_mark_holds_tenure` does not
