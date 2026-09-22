@@ -7585,6 +7585,35 @@ reason is in hashbrown rather than in the comparison. Reverted. Keyed maps stay
 `String`-keyed until somebody has a way to make `equivalent` inline, and that is
 a different question from the one kanso#1563 answered.
 
+AND ONE THING THIS PULL REQUEST MEASURED WITHOUT MEANING TO. It changes
+`design/compiler-log.md` and `docs/compiler.html` and nothing else -- no
+`src/`, no `lib/`, no `Cargo` -- so the compiler CI built for it is the same
+source main's was, on a freshly built binary. `interp_instructions` came back
+equal to main's golden to the instruction, and every other vein with it.
+
+That is worth writing down beside STATUS.md's standing row, which has been open
+since 2026-09-15 on the premise that two CI jobs of ONE COMMIT read six apart.
+Tonight gave three sightings of single-digit drift and this is the fourth
+reading, the only one where the compiler source did not change at all, and it
+is the only one that did not drift:
+
+    tree                                       interp_instructions   vs main
+    main                                            900,471,358         --
+    this branch, compiler source identical          900,471,358          0
+    kanso#1504, runtime.c changed                   900,471,351         -7
+    kanso#1561 first sitting, a counter added       908,952,292         -7
+    kanso#1561 third sitting, same branch           900,471,344        -14
+
+The first two rows are the ones that matter together: different binaries from
+identical source, same reading. The rest changed `src/runtime.c`, which
+`include_str!` puts inside the compiler, so their bytes and their layout moved.
+kanso#1562 measured 112 bytes of `.text` moving this row 366,303 through
+`__memcmp_avx2_movbe`, and single digits are the small end of the same thing.
+
+It does not close the row -- one job is not the two the row describes, and the
+row's own pair was on a commit nobody has re-run since. What it does is put a
+control under it: when the compiler source is untouched, this row did not move.
+
 What is still on the list, from the container's profile after kanso#1564:
 12,339,438 instructions over 644,915 calls, led by `eval_tail`'s closure at
 159,127 and `dispatch_loop` at 147,267, with `BigUint`'s own `PartialEq` at
