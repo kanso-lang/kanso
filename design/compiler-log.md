@@ -6186,18 +6186,25 @@ the model main read 35,551,167 on the same morning.
     main af78401       50656a4ebe6f   family 0x19 model 0x11   35,551,167
     kanso#1556 att.1   6d7c7e355188   family 0x1a model 0x2    35,551,170
     kanso#1556 att.2   543f040c05d4   family 0x19 model 0x1    35,551,167
-    kanso#1559         c4649028a8d2   family 0x19 model 0x11   35,551,170
+    kanso#1559 att.1   c4649028a8d2   family 0x19 model 0x11   35,551,170
+    kanso#1559 att.2   93fab21748ce   family 0x19 model 0x1    35,551,167
 
 One model, both values. So the machine does not decide it, and the paragraph
 below that reasoned from the 0x19 pair agreeing is withdrawn: two jobs agreeing
 on a value was a coincidence of which binary they built, not a property of the
 silicon they ran on.
 
-What is left standing is the BINARY, and four jobs have now built four distinct
-ones from sources that cannot differ. Every one of the four carries the same
-four section sizes. So the thing that moves is inside a section whose length did
-not change, or in bytes no section size counts — and the whole-table print this
-commit adds is what would name the function, which is the reason it exists.
+What is left standing is the BINARY, and FIVE JOBS HAVE BUILT FIVE DISTINCT
+ONES from sources that cannot differ — 50656a4e, 6d7c7e35, 543f040c, c4649028,
+93fab217. Every one of the five carries the same four section sizes. So the
+thing that moves is inside a section whose length did not change, or in bytes no
+section size counts — and the whole-table print this commit adds is what would
+name the function, which is the reason it exists.
+
+THAT CI NEVER REPRODUCES A BINARY IS NOW THE QUESTION, because this container
+does: a forced recompile here gave the same sha twice. Whatever varies lives in
+the runner rather than in the sources, and until it is named this row cannot be
+pinned to a build.
 
 AND ALL THREE BINARIES PLACE THE SAME BYTES. The sections the gate prints are
 identical across the three, to the byte: `.rodata` 803,768, `.text` 2,836,114,
