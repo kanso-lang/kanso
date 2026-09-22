@@ -7212,3 +7212,64 @@ which is why that is in the exemption list and not in the filter.
 This does not close the standing row. It builds the instrument the row has
 been guessing without, and the row comes off when a carrier for the six is
 found.
+## 2026-09-22 — the interpreted row moves with .text, and the frame that carries it is memcmp
+
+The instrument above was built for STATUS.md's standing row, which has wanted a
+carrier since 2026-09-15 for a six-instruction difference between two CI jobs on
+one commit. Its first use, on this container, three arms and a control:
+
+    arm                                  .text      .rodata           row
+    main, unpadded                   2,862,578      825,896   973,143,830
+    main, read again                 2,862,578      825,896   973,143,830
+    +64 KiB of rodata no code reads  2,862,578      891,432   973,143,830
+    +40 never-called functions       2,862,690      891,432   973,510,133
+    +38 of the same functions        2,862,690      891,432   973,510,133
+
+Each arm is a distinct binary by sha256. The control is the second row: one
+binary read twice is byte-identical, which is what CI also reports of its own
+second readings.
+
+GROWING RODATA DOES NOT MOVE IT. Sixty-four kilobytes of a `#[used]` array no
+code reads leaves the row unchanged to the instruction.
+
+GROWING TEXT DOES, and by a lot for the size: 112 bytes of `.text` moves the
+row **+366,303**, 0.038%. The forty probe functions are identical bodies and
+the linker folds them, which is why forty and thirty-eight give the same
+sections -- and the same row, on different binaries.
+
+WHERE IT GOES, off the whole-table diff:
+
+        +366,005  __memcmp_avx2_movbe [libc.so.6]
+            +320  _dl_relocate_object   (the probe's own relocations, outside
+            +200  _dl_relocate_object    the row's anchor)
+             +52  __memcpy_avx_unaligned_erms
+    single digits  eleven others, -4 to -1
+
+One frame is the move. The interpreter is deterministic and its input is fixed,
+so the same comparisons happen in every arm; what changed is where the bytes
+being compared sit. `__memcmp_avx2_movbe` takes a different number of
+instructions for the same comparison depending on its arguments' addresses.
+That the delta arrived with the `.text` growth is a difference-in-differences,
+and the mechanism inside memcmp is left open.
+
+WHAT THIS DOES NOT SHOW is that this carries the six. kanso#1558 reported CI's
+non-reproducing binaries as having identical section sizes, and the fifth arm
+here says two binaries with identical sections read an identical row. So section
+size is not the carrier of a six between two CI jobs. What the standing row
+gains is a frame to look at and one candidate struck off: its own note named
+`_mi_os_commit_ex`, `mi_bitmap_setN` and `_mi_prim_commit` as where to look
+next, and across every arm here the allocator's commit frames do not appear in
+the moved list at all.
+
+A NOTE ON READING THE TABLE, because the first diff of these two profiles was
+wrong and the mistake is easy. `callgrind_annotate` prints `count name`
+separated by spaces and the names contain spaces -- `<alloc::vec::into_iter::
+IntoIter<T,A> as core::iter::traits::iterator::Iterator>::try_fold`. Splitting
+on whitespace truncates every generic at its first space, six distinct
+instantiations collapse onto one key, and the diff then reported ten million
+instructions moving in `IntoIter`. Stripping thousands separators from the whole
+line rather than from the count does the same thing to `<T,A>`. Join on a tab
+and neither happens: 1,397 rows, 1,397 distinct keys, four movers. The printed
+table itself is faithful -- `callgrind_annotate` does not truncate when its
+output is not a terminal, checked by counting distinct keys with and without
+`COLUMNS` set, and they are equal.
