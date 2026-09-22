@@ -216,7 +216,19 @@ higher_c = ["push_mut_fast" "put_mut_fast" "bytes_freed" "carry_dedup"]
 # took `thunk_evals` from 8,256 to 129 on the digest with this counter
 # unchanged, which is what a working memo looks like; a change that made the
 # same program strict would lower it while doing identical work.
-higher = text/concat higher_a (text/concat higher_b higher_c)
+# `ten_handups` is the presence counter for the hand-up itself, and it is here
+# for the reason `lower_a` states about presence counters: a change that drops
+# the kernel should read as a worsening and want its sentence. Its partners
+# cannot do that job. A hand-up moves a depth's blocks to the depth outside and
+# a release frees them where they are, so the block is allocated once and freed
+# once either way and `ten_blocks` and `ten_frees` are identical across the two.
+# Replacing `k_ten_hand_up` with `k_ten_release` at the one call site left every
+# .mem golden in the vein byte-identical; this counter goes to nought.
+higher_d = ["ten_handups"]
+
+higher_cd = text/concat higher_c higher_d
+
+higher = text/concat higher_a (text/concat higher_b higher_cd)
 
 bench_a = [["bench/cost_golden.txt" ""]]
 

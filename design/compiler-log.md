@@ -7054,3 +7054,62 @@ something already settled.
 
 The surfaces the CARRYOOM claim reached are this log and §115 of the page, and
 both are corrected in this commit rather than only here.
+## 2026-09-22 — ten_handups: where a tenure block dies, which no counter could say
+
+kanso#1560 found that `a_repaired_node_below_the_mark_holds_tenure` does not
+catch the change its header promises to catch, and named the fix without doing
+it: a counter separating a hand-up from a release. This is that counter, and
+the two claims the fixture was carrying are corrected with it.
+
+WHY THE PAIR IS BLIND. `k_ten_hand_up` moves a depth's tenure blocks to the
+depth outside; `k_ten_release` frees them where they are. Either way the block
+is claimed once and given back once, so `ten_blocks` and `ten_frees` are
+identical across the two. The hand-up moves only WHICH DEPTH does the freeing,
+and until now nothing recorded that. Replacing the call left all sixty-seven
+`.mem` goldens byte-identical.
+
+`ten_handups` counts a hand-up that moves a real block, after the early return.
+With it, three fixtures go red on the swap:
+
+    a_carried_value_written_into_an_older_node        1 -> 0
+    a_repaired_node_below_the_mark_holds_tenure       1 -> 0
+    an_inner_beat_opens_its_tenure_in_the_block_outside  4 -> 0
+
+The third also moves `ten_blocks` 5 -> 3, which is the whole of what any
+counter could see before. `bench/cost_golden_run.txt` reads 3, so the row is
+live on the benchmark corpus rather than only in the lazy tier.
+
+`scripts/ratchet/mutations/a_tenure_block_freed_where_it_was_handed_up.sh` is
+the swap, and its row gates the mem vein. Watched red before it was written
+down.
+
+WHAT MAKES THE REPAIRED-NODE CASE SAFE IS NOT THE HAND-UP. runtime.c said it
+was, in the paragraph above `k_ten_hand_up`, and the fixture's header said it
+too. Poisoning the depth's live tenure bytes -- 39,200 of them -- at three
+points one step apart in `k_beat_pop_slow` says which step matters:
+
+    before the carry's deep copy     dies, reading a length out of 0xAB
+    after the copy, before migrates  correct output
+    at the hand-up                   correct output
+
+The copy reads the tenured bytes out. After it nothing below the mark points
+into tenure, which is why the swap leaves that program clean under
+AddressSanitizer and why its output is byte-identical with the handed-up block
+poisoned. `c->used_flag` is 1 on that pop, so the copy is the step that runs.
+
+That is an isolation and not an attribution: the three poisons differ only in
+position, and the answer flips across one of the two gaps.
+
+The hand-up is load-bearing, on the other fixture. An inner beat that opens its
+tenure in the outer depth's block is the shape whose blocks must travel, and
+that is where the runtime's comment now points.
+
+VEINS. A minted counter is additive and moves the lot: twelve cost goldens and
+all sixty-seven `.mem` files, regenerated with `all_counters.sh --write`. The
+compile veins move too -- `src/runtime.c` is `include_str!`'d into the compiler,
+so its bytes are the compiler's -- and eight of them refuse comparison on this
+box, so CI takes those rows and the floor is banked after they land. Neither
+`bench/emitted_golden.txt` nor the book samples carry the tenure counters, so
+neither moves. `ten_handups` joins the trend gate's `higher` table in the change
+that mints it, for the reason `lower_a` gives about presence counters: dropping
+the kernel should read as a worsening and want its sentence.

@@ -1135,6 +1135,19 @@ ten_open = row
   (breaking "a_child_beat_that_opens_its_own_tenure_block")
   benchmarks
 
+# Where a tenure block dies. `ten_blocks` and `ten_frees` count the block being
+# claimed and given back and neither can say at which depth, so freeing a
+# depth's blocks instead of handing them up moved no counter at all until
+# `ten_handups` was minted on 2026-09-22. The fixture that documented the
+# hand-up had claimed for a fortnight to guard it.
+ten_where = row
+  "a tenure block freed at the depth that opened it instead of handed up"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_tenure_block_freed_where_it_was_handed_up")
+  release
+
 pop_fast = row
   "a beat pop with nothing to migrate that pays the migrates' frame"
   false
@@ -1777,7 +1790,9 @@ rows_b1e2 = text/concat rows_b1e1 [inline_pin chart_replay objective_row]
 
 rows_b1e3 = text/concat rows_b1e2 [one_char_memo length_memo]
 
-rows_b1e = text/concat rows_b1e3 [length_fold ten_open pop_fast push_walk]
+rows_b1e4 = text/concat rows_b1e3 [length_fold ten_open ten_where]
+
+rows_b1e = text/concat rows_b1e4 [pop_fast push_walk]
 
 rows_b1f = text/concat rows_b1e [scalar_words slice_words render_words]
 
