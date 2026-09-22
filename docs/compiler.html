@@ -3050,6 +3050,31 @@ all eleven                           35,458,768   0.95s</code></pre>
 
 <p>the measurement says those two scanners contribute nothing either way, so the whole 0.41 is available without touching them. what is owed is a rule that admits the sha256 pair on a property, leaves the scanners where that test wants them, and says why the difference is real.</p>
 
+
+<h2 id="pathandproperty"><span class="sec-num">115</span>a folder called lib was deciding a program's memory</h2>
+
+<p>the compiler decides which library loops may hand their arena back between laps. it decides it by asking whether the declaration&#8217;s <code>file</code> begins <code>std/</code> or <code>lib/</code>. that field is the one error origins are built from, a path meant for a diagnostic, and it is deciding how much memory a program holds: the same package under a directory called <code>lib</code> compiles to one that never reclaims a block, and one directory over to one that does. a test has pinned that since it was written, as a defect, with instructions for the day it goes.</p>
+
+<p>the prefix stands in for something real. a shared library driver threads its caller&#8217;s invariant source through the loop, and evacuating that copies an unbounded value every lap. removing it outright was built and measured on 2026-08-31: the digest went quadratic, 1.3 seconds to 68 at 128 KB.</p>
+
+<p>eleven imported loops lose a carry at that point on the run program. priced one at a time, every one of them reads the baseline on both columns, peak 38,604,496 and 0.26 seconds. so the cost is a pairing:</p>
+
+<pre><code>sha256/compress + sha256/turned      peak 35,458,768   1.01s
+sha256/blocked  + sha256/digested    peak 35,458,768   0.26s
+the other seven                      peak 38,604,496   0.27s</code></pre>
+
+<p>the expensive pair carries two slots each and the cheap pair one, and the whole 3,145,728 bytes sit with the cheap pair. that made the width of a carry look like the property to read, and a rule admitting a carry of at most one slot was built and measured. it is declined here, and what declined it is worth writing down.</p>
+
+<p><strong>under that rule the ratchet program dies.</strong> it runs clean on today&#8217;s compiler and runs out of memory on the new one. the runtime says <code>out of memory</code>, the driver translates that into <code>the program ran out of stack</code>, and neither sentence is what happened. printing the request at the failure gives it:</p>
+
+<pre><code>CARRYOOM need=18446744072171062384 depth=3 carry_n=1</code></pre>
+
+<p>that is 2<sup>64</sup> less 1,538,489,232. the walk that sizes a staged carry read a length of about minus one and a half billion out of a node it was asked to copy, the sum wrapped, and <code>malloc</code> refused it. a carried value whose interior the walk cannot read is the thing the prefix was keeping out, and carry width does not see it.</p>
+
+<p>the failing group is <code>list/holds_any?</code>: it appears in every coalition that dies and in none that survives. it is the driver behind <code>any?</code>, and the backtrace at the failure has one <code>any?</code> running inside another&#8217;s predicate. excluding the three list drivers that take a predicate runs the ratchet clean and still reads 35,458,768, so a rule shaped that way would ship the whole saving.</p>
+
+<p><strong>that rule is not shipped, because there is no small program that fails without it.</strong> a nested <code>any?</code> over two 800-element lists reads the same peak either way. the coalitions are not monotone either: two loops together die where either alone survives, and a third added back survives again, which is what a failure sitting near a memory limit looks like rather than a rule being broken. a guard swept out of one program is a guard nobody can check. the next step is the small program that makes the sizing walk read a garbage length; the rule follows from that, and not before.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>
