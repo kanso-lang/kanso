@@ -6062,6 +6062,16 @@ This box cannot arbitrate: `host_gate.sh` refuses it at glibc 2.39-0ubuntu8.7
 and rustc 1.94.1 against the golden's 8.9 and 1.98.1, so a reading taken here
 reproduces nothing.
 
+BUILT, in this commit. The gate now annotates the whole profile on EVERY run —
+`callgrind_annotate --threshold=100`, uncapped, inside a collapsed group — so
+two jobs can be diffed to the instruction from their logs alone. Verified
+against a real profile: 1,115 rows, 86 KB, reaching functions that retire one
+instruction. `tests/the_compile_gate_prints_the_whole_table.rs` pins the three
+properties that matter, and each was watched red for its own reason: the table
+is asked for at all, its pipeline does not truncate, and it is printed BEFORE
+the row is compared, since a job whose row agreed is the side a comparison is
+always missing and the failure path never emits one.
+
 The row is worth +0.0060 a tenth in the 2026-09-19 marginal table, the least
 valuable of the fourteen the objective reads, and on this pair it is the only
 one of twenty-seven veins that parted.
