@@ -2845,8 +2845,8 @@ impl<'a> Interp<'a> {
         if args.iter().any(is_failure) {
             return Ok(merged_failures(&args));
         }
-        match name {
-            "kill" => {
+        match name.as_bytes() {
+            b"kill" => {
                 let [handle] = arity(args, name, span)?;
                 let Value::Int(handle) = &handle else {
                     return Err(RuntimeError {
@@ -2856,7 +2856,7 @@ impl<'a> Interp<'a> {
                 };
                 Ok(Value::Desc(Rc::new(Desc::Kill(handle.to_i64().unwrap_or(-1)))))
             }
-            "run" | "start" => {
+            b"run" | b"start" => {
                 let [cmd, args_list] = arity(args, name, span)?;
                 let Value::Str(cmd) = cmd else {
                     return Err(RuntimeError {
@@ -2885,7 +2885,7 @@ impl<'a> Interp<'a> {
                     _ => Desc::Run(cmd, argv),
                 })))
             }
-            "read_file" => {
+            b"read_file" => {
                 let [path] = arity(args, name, span)?;
                 let Value::Str(path) = path else {
                     return Err(RuntimeError {
@@ -2895,7 +2895,7 @@ impl<'a> Interp<'a> {
                 };
                 Ok(Value::Desc(Rc::new(Desc::ReadFile(path))))
             }
-            "read_bytes" => {
+            b"read_bytes" => {
                 let [path] = arity(args, name, span)?;
                 let Value::Str(path) = path else {
                     return Err(RuntimeError {
@@ -2905,7 +2905,7 @@ impl<'a> Interp<'a> {
                 };
                 Ok(Value::Desc(Rc::new(Desc::ReadBytes(path))))
             }
-            "write" => {
+            b"write" => {
                 let [content] = arity(args, name, span)?;
                 let Value::Str(content) = content else {
                     return Err(RuntimeError { message: "write takes a string".to_string(), span });
@@ -2922,7 +2922,7 @@ impl<'a> Interp<'a> {
             // same program run natively got a descriptor. `now` reaching the
             // executor on that engine was a coincidence of coverage, not a
             // design; these two arms make the coincidence a rule.
-            "args" | "stdin" | "now" => {
+            b"args" | b"stdin" | b"now" => {
                 let [] = arity(args, name, span)?;
                 Ok(Value::Desc(Rc::new(match name {
                     "args" => Desc::Args,
@@ -2930,7 +2930,7 @@ impl<'a> Interp<'a> {
                     _ => Desc::Now,
                 })))
             }
-            "exists" | "is_dir" | "list_dir" => {
+            b"exists" | b"is_dir" | b"list_dir" => {
                 let [path] = arity(args, name, span)?;
                 let Value::Str(path) = path else {
                     return Err(RuntimeError { message: format!("{name} takes a string"), span });
@@ -2941,14 +2941,14 @@ impl<'a> Interp<'a> {
                     _ => Desc::ListDir(path),
                 })))
             }
-            "env" => {
+            b"env" => {
                 let [name] = arity(args, name, span)?;
                 let Value::Str(name) = name else {
                     return Err(RuntimeError { message: "env takes a string".to_string(), span });
                 };
                 Ok(Value::Desc(Rc::new(Desc::Env(name))))
             }
-            "write_err" => {
+            b"write_err" => {
                 let [content] = arity(args, name, span)?;
                 let Value::Str(content) = content else {
                     return Err(RuntimeError {
@@ -2958,7 +2958,7 @@ impl<'a> Interp<'a> {
                 };
                 Ok(Value::Desc(Rc::new(Desc::WriteErr(content))))
             }
-            "make_dir" => {
+            b"make_dir" => {
                 let [path] = arity(args, name, span)?;
                 let Value::Str(path) = &path else {
                     return Err(RuntimeError {
@@ -2968,7 +2968,7 @@ impl<'a> Interp<'a> {
                 };
                 Ok(Value::Desc(Rc::new(Desc::MakeDir(path.clone()))))
             }
-            "listen" => {
+            b"listen" => {
                 let [port] = arity(args, name, span)?;
                 let Value::Int(port) = &port else {
                     return Err(RuntimeError {
@@ -2978,7 +2978,7 @@ impl<'a> Interp<'a> {
                 };
                 Ok(Value::Desc(Rc::new(Desc::Listen(port.to_i64().unwrap_or(-1)))))
             }
-            "net_port" => {
+            b"net_port" => {
                 let [listener] = arity(args, name, span)?;
                 let Value::Int(listener) = &listener else {
                     return Err(RuntimeError {
@@ -2988,7 +2988,7 @@ impl<'a> Interp<'a> {
                 };
                 Ok(Value::Desc(Rc::new(Desc::SocketPort(listener.to_i64().unwrap_or(-1)))))
             }
-            "accept" => {
+            b"accept" => {
                 let [listener] = arity(args, name, span)?;
                 let Value::Int(listener) = &listener else {
                     return Err(RuntimeError {
@@ -2998,7 +2998,7 @@ impl<'a> Interp<'a> {
                 };
                 Ok(Value::Desc(Rc::new(Desc::Accept(listener.to_i64().unwrap_or(-1)))))
             }
-            "net_read" => {
+            b"net_read" => {
                 let [conn] = arity(args, name, span)?;
                 let Value::Int(conn) = &conn else {
                     return Err(RuntimeError {
@@ -3008,7 +3008,7 @@ impl<'a> Interp<'a> {
                 };
                 Ok(Value::Desc(Rc::new(Desc::Receive(conn.to_i64().unwrap_or(-1)))))
             }
-            "net_write" => {
+            b"net_write" => {
                 let [conn, text] = arity(args, name, span)?;
                 match (&conn, &text) {
                     (Value::Int(conn), Value::Str(text)) => Ok(Value::Desc(Rc::new(Desc::Send(
@@ -3024,7 +3024,7 @@ impl<'a> Interp<'a> {
                     }),
                 }
             }
-            "net_close" => {
+            b"net_close" => {
                 let [handle] = arity(args, name, span)?;
                 let Value::Int(handle) = &handle else {
                     return Err(RuntimeError {
@@ -3034,7 +3034,7 @@ impl<'a> Interp<'a> {
                 };
                 Ok(Value::Desc(Rc::new(Desc::CloseSocket(handle.to_i64().unwrap_or(-1)))))
             }
-            "write_file" => {
+            b"write_file" => {
                 let [path, content] = arity(args, name, span)?;
                 match (&path, &content) {
                     (Value::Str(path), Value::Str(content)) => {
@@ -3051,7 +3051,7 @@ impl<'a> Interp<'a> {
                     }),
                 }
             }
-            "sleep" => {
+            b"sleep" => {
                 let [ms] = arity(args, name, span)?;
                 match ms {
                     Value::Int(n) => {
@@ -3068,7 +3068,7 @@ impl<'a> Interp<'a> {
                     }),
                 }
             }
-            "random" => {
+            b"random" => {
                 let [n] = arity(args, name, span)?;
                 match n {
                     Value::Int(n) => {
@@ -3085,7 +3085,7 @@ impl<'a> Interp<'a> {
                     }),
                 }
             }
-            "print" => {
+            b"print" => {
                 let [text] = arity(args, name, span)?;
                 match text {
                     Value::Str(s) => Ok(Value::Desc(Rc::new(Desc::Print(s, span)))),
@@ -3102,11 +3102,11 @@ impl<'a> Interp<'a> {
                     }
                 }
             }
-            "at" => {
+            b"at" => {
                 let [container, index] = arity(args, name, span)?;
                 index_value(container, index, span)
             }
-            "push" => {
+            b"push" => {
                 let [list, item] = arity(args, name, span)?;
                 if !matches!(list, Value::List(_)) {
                     return Err(RuntimeError {
@@ -3122,7 +3122,7 @@ impl<'a> Interp<'a> {
                 next.push(item);
                 Ok(Value::List(Rc::new(next)))
             }
-            "put" => {
+            b"put" => {
                 let [map, key, value] = arity(args, name, span)?;
                 let Value::Map(entries) = map else {
                     return Err(RuntimeError {
@@ -3138,7 +3138,7 @@ impl<'a> Interp<'a> {
                 next.insert(key, value);
                 Ok(Value::Map(Rc::new(next)))
             }
-            "entries" => {
+            b"entries" => {
                 let [map] = arity(args, name, span)?;
                 let Value::Map(map_entries) = &map else {
                     return Err(RuntimeError { message: "entries takes a map".to_string(), span });
@@ -3158,7 +3158,7 @@ impl<'a> Interp<'a> {
                     .collect();
                 Ok(Value::List(Rc::new(list)))
             }
-            "bytes" => {
+            b"bytes" => {
                 let [text] = arity(args, name, span)?;
                 let Value::Str(text) = &text else {
                     return Err(RuntimeError { message: "bytes takes a string".to_string(), span });
@@ -3169,7 +3169,7 @@ impl<'a> Interp<'a> {
             // gavel would have taken away the only way to write byte data down
             // and left nothing in its place. Loud outside 0-255: a number that
             // is not a byte is a mistake, not a value to truncate.
-            "to_bytes" => {
+            b"to_bytes" => {
                 let [list] = arity(args, name, span)?;
                 if is_failure(&list) {
                     return Ok(list);
@@ -3203,7 +3203,7 @@ impl<'a> Interp<'a> {
                 }
                 Ok(Value::Bytes(Rc::new(raw)))
             }
-            "concat" => {
+            b"concat" => {
                 let [a, b] = arity(args, name, span)?;
                 let (Value::List(xs), Value::List(ys)) = (&a, &b) else {
                     return Err(RuntimeError {
@@ -3220,7 +3220,7 @@ impl<'a> Interp<'a> {
             // is no bytes literal and `[104 105]` is the only spelling a
             // program can write down. It is a library choice, spelled the same
             // on every engine, rather than a list quietly being bytes.
-            "utf8" => {
+            b"utf8" => {
                 let [list] = arity(args, name, span)?;
                 if is_failure(&list) {
                     return Ok(list);
@@ -3268,7 +3268,7 @@ impl<'a> Interp<'a> {
                     )),
                 }
             }
-            "split" => {
+            b"split" => {
                 let [text, sep] = arity(args, name, span)?;
                 let (Value::Str(text), Value::Str(sep)) = (&text, &sep) else {
                     return Err(RuntimeError {
@@ -3286,7 +3286,7 @@ impl<'a> Interp<'a> {
                     text.split(sep.as_str()).map(|p| Value::Str(p.to_string())).collect::<Vec<_>>();
                 Ok(Value::List(Rc::new(list)))
             }
-            "chars" => {
+            b"chars" => {
                 let [text] = arity(args, name, span)?;
                 let Value::Str(text) = &text else {
                     return Err(RuntimeError { message: "chars takes a string".to_string(), span });
@@ -3294,7 +3294,7 @@ impl<'a> Interp<'a> {
                 let list = text.chars().map(|c| Value::Str(c.to_string())).collect();
                 Ok(Value::List(Rc::new(list)))
             }
-            "char_code" => {
+            b"char_code" => {
                 let [c] = arity(args, name, span)?;
                 let code = match &c {
                     Value::Str(s) if s.chars().count() == 1 => {
@@ -3309,7 +3309,7 @@ impl<'a> Interp<'a> {
                 };
                 Ok(Value::Int(BigInt::from(code)))
             }
-            "from_code" => {
+            b"from_code" => {
                 let [code] = arity(args, name, span)?;
                 let Value::Int(n) = &code else {
                     return Err(RuntimeError {
@@ -3326,7 +3326,7 @@ impl<'a> Interp<'a> {
                     )),
                 }
             }
-            "join" => {
+            b"join" => {
                 let [list, sep] = arity(args, name, span)?;
                 let (Value::List(items), Value::Str(sep)) = (&list, &sep) else {
                     return Err(RuntimeError {
@@ -3354,7 +3354,7 @@ impl<'a> Interp<'a> {
                 }
                 Ok(Value::Str(parts.join(sep)))
             }
-            "append" => {
+            b"append" => {
                 let [acc, x] = arity(args, name, span)?;
                 for v in [&acc, &x] {
                     if is_failure(v) {
@@ -3393,7 +3393,7 @@ impl<'a> Interp<'a> {
                 }
                 Ok(Value::Bytes(Rc::new(out)))
             }
-            "find2_below" => {
+            b"find2_below" => {
                 let [cs, from, a, b, lim] = arity(args, name, span)?;
                 for v in [&cs, &from, &a, &b, &lim] {
                     if is_failure(v) {
@@ -3425,7 +3425,7 @@ impl<'a> Interp<'a> {
                 }
                 Ok(Value::Int(BigInt::from(at)))
             }
-            "find2" => {
+            b"find2" => {
                 let [cs, from, a, b] = arity(args, name, span)?;
                 for v in [&cs, &from, &a, &b] {
                     if is_failure(v) {
@@ -3449,7 +3449,7 @@ impl<'a> Interp<'a> {
                 }
                 Ok(Value::Int(BigInt::from(at)))
             }
-            "slice" => {
+            b"slice" => {
                 let [container, from, to] = arity(args, name, span)?;
                 let (Value::Int(from), Value::Int(to)) = (&from, &to) else {
                     return Err(RuntimeError {
@@ -3485,7 +3485,7 @@ impl<'a> Interp<'a> {
                     }),
                 }
             }
-            "bit_and" | "bit_or" | "bit_xor" => {
+            b"bit_and" | b"bit_or" | b"bit_xor" => {
                 let [a, b] = arity(args, name, span)?;
                 let (x, y) = match (whole(a, name, span)?, whole(b, name, span)?) {
                     (Ok(x), Ok(y)) => (x, y),
@@ -3498,14 +3498,14 @@ impl<'a> Interp<'a> {
                 };
                 Ok(Value::Int(bits.into()))
             }
-            "bit_not" => {
+            b"bit_not" => {
                 let [a] = arity(args, name, span)?;
                 match whole(a, name, span)? {
                     Ok(x) => Ok(Value::Int((!x).into())),
                     Err(bad) => Ok(bad),
                 }
             }
-            "bit_shl" | "bit_shr" => {
+            b"bit_shl" | b"bit_shr" => {
                 let [a, b] = arity(args, name, span)?;
                 let (bits, by) = match (whole(a, name, span)?, whole(b, name, span)?) {
                     (Ok(x), Ok(y)) => (x, y),
@@ -3523,7 +3523,7 @@ impl<'a> Interp<'a> {
                 };
                 Ok(Value::Int(out.into()))
             }
-            "sqrt" => {
+            b"sqrt" => {
                 let [x] = arity(args, name, span)?;
                 match x {
                     Value::Float(v) => Ok(Value::Float(v.sqrt())),
@@ -3538,7 +3538,7 @@ impl<'a> Interp<'a> {
                     }),
                 }
             }
-            "round" => {
+            b"round" => {
                 let [x] = arity(args, name, span)?;
                 match x {
                     Value::Int(n) => Ok(Value::Int(n)),
@@ -3553,7 +3553,7 @@ impl<'a> Interp<'a> {
                     }),
                 }
             }
-            "to_int" => {
+            b"to_int" => {
                 let [value] = arity(args, name, span)?;
                 let text = match &value {
                     Value::Str(s) => s.clone(),
@@ -3585,7 +3585,7 @@ impl<'a> Interp<'a> {
                     ),
                 })
             }
-            "to_float" => {
+            b"to_float" => {
                 let [value] = arity(args, name, span)?;
                 let text = match &value {
                     Value::Str(s) => s.clone(),
@@ -3621,18 +3621,18 @@ impl<'a> Interp<'a> {
                     ),
                 })
             }
-            "is_desc" => {
+            b"is_desc" => {
                 let [v] = arity(args, name, span)?;
                 Ok(match v {
                     Value::Desc(..) => Value::True,
                     _ => Value::False,
                 })
             }
-            "render_value" => {
+            b"render_value" => {
                 let [v] = arity(args, name, span)?;
                 Ok(Value::Str(render(self, &v, false)))
             }
-            "length" => {
+            b"length" => {
                 let [list] = arity(args, name, span)?;
                 match list {
                     Value::List(items) => Ok(Value::Int(BigInt::from(items.len()))),
@@ -3649,7 +3649,7 @@ impl<'a> Interp<'a> {
                     }),
                 }
             }
-            "map" => {
+            b"map" => {
                 let [list, f] = arity(args, name, span)?;
                 let Value::List(items) = list else {
                     return Err(RuntimeError { message: "map takes a list".to_string(), span });
@@ -3660,7 +3660,7 @@ impl<'a> Interp<'a> {
                     .collect::<Result<Vec<_>, _>>()?;
                 Ok(Value::List(Rc::new(mapped)))
             }
-            "filter" => {
+            b"filter" => {
                 let [list, f] = arity(args, name, span)?;
                 let Value::List(items) = list else {
                     return Err(RuntimeError { message: "filter takes a list".to_string(), span });
@@ -3683,7 +3683,7 @@ impl<'a> Interp<'a> {
                 }
                 Ok(Value::List(Rc::new(kept)))
             }
-            "sort" => {
+            b"sort" => {
                 let [list] = arity(args, name, span)?;
                 let Value::List(items) = list else {
                     return Err(RuntimeError { message: "sort takes a list".to_string(), span });
@@ -3705,7 +3705,7 @@ impl<'a> Interp<'a> {
                     false => Ok(Value::List(Rc::new(sorted))),
                 }
             }
-            "sum" => {
+            b"sum" => {
                 let [list] = arity(args, name, span)?;
                 let Value::List(items) = list else {
                     return Err(RuntimeError { message: "sum takes a list".to_string(), span });
