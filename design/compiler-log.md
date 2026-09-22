@@ -6026,6 +6026,28 @@ as artifacts; neither can be fetched from a container, because the blob host
 answers `CONNECT tunnel failed, response 403` — already recorded in the gate's
 header, and the reason the sha and the sections are emitted as notices.
 
+ORDINARY CARGO NON-DETERMINISM IS OUT, measured rather than assumed. There is
+no `build.rs` in this crate and no `env!` or `option_env!` in `src/`, so nothing
+embeds a commit or a timestamp. On one container, `touch src/lib.rs src/main.rs`
+followed by `cargo build --release` recompiled the crate and produced a
+BYTE-IDENTICAL binary, sha 5bdfd6b4029b both times. So two builds of identical
+sources under one toolchain agree, and CI's two shas are not that.
+
+What the two shas can still be: the four sections the gate prints are the
+LOADED ones, and a difference in `.comment`, the build id, or the unwinding
+tables moves a sha without moving an executed instruction. That half is not
+settled here.
+
+The silicon stays the live candidate, narrowed. glibc resolves its string
+routines by ifunc at start-up, the two the listing prints resolved the same, and
+the ones it does not print — strlen, memset, memchr and the rest — are where an
+AVX512 machine and one without it would part. Three instructions is the size of
+one such difference, not of a compiler change.
+
+This box cannot arbitrate: `host_gate.sh` refuses it at glibc 2.39-0ubuntu8.7
+and rustc 1.94.1 against the golden's 8.9 and 1.98.1, so a reading taken here
+reproduces nothing.
+
 The row is worth +0.0060 a tenth in the 2026-09-19 marginal table, the least
 valuable of the fourteen the objective reads, and on this pair it is the only
 one of twenty-seven veins that parted.
