@@ -40,11 +40,8 @@ fn gate_scripts() -> BTreeMap<String, String> {
         if path.extension().and_then(|e| e.to_str()) != Some("sh") {
             continue;
         }
-        let name = path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .expect("the name is utf-8")
-            .to_string();
+        let name =
+            path.file_name().and_then(|n| n.to_str()).expect("the name is utf-8").to_string();
         out.insert(name, std::fs::read_to_string(&path).expect("the script reads"));
     }
     out
@@ -53,11 +50,10 @@ fn gate_scripts() -> BTreeMap<String, String> {
 /// The profile paths a script writes, as written.
 fn profiles_written(body: &str) -> Vec<String> {
     let mut out = Vec::new();
-    for (_, rest) in body.match_indices("--callgrind-out-file=").map(|(i, m)| (i, &body[i + m.len()..])) {
-        let path: String = rest
-            .chars()
-            .take_while(|c| !c.is_whitespace() && *c != '\\')
-            .collect();
+    for (_, rest) in
+        body.match_indices("--callgrind-out-file=").map(|(i, m)| (i, &body[i + m.len()..]))
+    {
+        let path: String = rest.chars().take_while(|c| !c.is_whitespace() && *c != '\\').collect();
         let path = path.trim_matches('"').to_string();
         if !path.is_empty() && !out.contains(&path) {
             out.push(path);
@@ -176,7 +172,7 @@ fn every_profiling_gate_annotates_its_whole_profile() {
 fn the_whole_table_is_not_truncated() {
     for (name, body) in governed() {
         let lines: Vec<&str> = body.lines().collect();
-        for (at, cmd) in whole_table_lines(&body) {
+        for (at, _) in whole_table_lines(&body) {
             // The command and whatever it is piped into, to the end of the
             // pipeline. The cap that hid the three was on a continuation line.
             let mut pipeline = String::new();
