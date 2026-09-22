@@ -225,4 +225,4 @@
 # CI's sitting on run 35419502516. emit_instructions 51,616,373 -> 51,618,058, +1,685 (+0.0033%).
 # `codegen::emit_ir` inclusive, in the compiler's own process. Layout again:
 # the emitter writes the same IR either way. `emit_again` read 51,618,058.
-emit_instructions=51481045
+emit_instructions=51484112

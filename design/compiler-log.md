@@ -8372,5 +8372,28 @@ sections live in that file -- both are still there, and the duplicate-line
 count is main's, so the shape kanso#1557 recorded did not happen here.
 
 The run-side veins are this branch's own and survived the merge untouched;
-`text` and the fourteen work rows still read what the entry above records, and
-the trend gate agrees that every changed counter is priced.
+`text` and the fourteen work rows still read what the entry above records.
+
+CI'S SITTING ON THE MERGED TREE. Five compile-side rows moved and each rose,
+which is this branch's `.text` growth arriving on top of kanso#1563's falls:
+
+    entry_instructions      126,691,703 -> 126,700,846    +9,143   +0.0072%
+    library_instructions    127,146,502 -> 127,155,219    +8,717   +0.0069%
+    emit_instructions        51,481,045 ->  51,484,112    +3,067   +0.0060%
+    compile_instructions     35,540,015 ->  35,542,842    +2,827   +0.0080%
+    startup_instructions      3,362,329 ->   3,363,729    +1,400   +0.0416%
+
+`interp_instructions` read 908,952,299, byte-identical to main. That is the
+check that these five are layout: this branch adds a field to the mark and a
+global beside it, `src/runtime.c` is `include_str!`'d into the compiler so its
+bytes are the compiler's, and nothing here touches what the interpreter does.
+Both codegen rows and `compile_allocs` are identical too.
+
+THE FLOOR, AND THE THREE JOBS AN UNBANKED ONE REDDENS. This tree scored 77.34
+against the 77.28677792407876 it inherited from kanso#1563, and a rise nobody
+banks fails `the_undoctored_goldens_hold_the_floor` -- which runs in `specs`
+and in `the other host` as well as behind the welfare job, so the round came
+back red on three jobs with only one cause. Banked at 77.34, and the run-side
+falls compose with kanso#1563's development-side falls exactly as the two sides
+of the objective are meant to: production 57.13 -> 57.23, development 78.49
+unmoved.
