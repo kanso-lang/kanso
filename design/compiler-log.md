@@ -7325,13 +7325,17 @@ said the fix was interning; corrected, it said an inline word compare on
 `Name`'s own `PartialEq`. Neither top caller compares a `Name` to a `Name`.
 
 `eval::lookup` walks the environment with `bound.as_str() == name`, a `Name`'s
-text against a `&str` the caller holds. `Interp::call_builtin` is a chain of
-`name == "if"`, `name == "wrap_err"` and the rest, a `&str` against string
-literals. Those are two different shapes and only the first is the identifier
-type's to fix: an `eq_str` that compares the inline bytes as words when the
-name is inline and the lengths agree. The second is a long if-chain over
-literals, and what that wants is a `match`, which is a different change with a
-different risk.
+text against a `&str` the caller holds. `Interp::call_builtin` compares a
+`&str` against string literals. Those are two different shapes and only the
+first is the identifier type's to fix.
+
+This paragraph first said the second was an if-chain wanting a `match`. It is a
+`match name { ... }` already, over 49 string-literal arms, with three bare
+`name == "..."` tests ahead of it. Rust lowers a string match to a switch on
+the length and then a comparison against each candidate of that length, and
+those comparisons are the calls, so rearranging the arms buys nothing. What
+would is comparing something other than bytes -- a builtin resolved to an id
+once, where the checker already knows the name is a builtin.
 
 So the lead is two leads. The `lookup` half is 13,336,477 instructions, 1.3%
 of the interpreted run, and is one method and one call site. The
