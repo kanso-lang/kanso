@@ -7857,8 +7857,14 @@ have caught it: count the rows in the file against the rows you wrote.
     basket         32,776,834                        widebench     33,676,020
     indexbench      2,895,743
 
-The .text rows moved with them, +480 to +560 on each. None of the eleven is a
-welfare term, so the floor banked on the first pass still stands at 77.34.
+The .text rows moved with them, +480 to +560 on each. Summed, `text` reads
+1,755,820 -> 1,762,748, +6,928 bytes, +0.395% — the whole of what the cached
+mark costs in code, spread across every binary that links the runtime. The
+earlier table in this branch named that row at 1,762,300, a figure two
+landings old; the trend gate wants the value a row LANDED on and it was the
+one row of the fifteen the fourteen-row correction above did not re-read.
+None of the eleven is a welfare term, so the floor banked on the first pass
+still stands at 77.34.
 
 WHICH WAY AND WHY. The two falls are the branch's subject: `k_beat_iter` stops
 turning a depth back into `&k_beat_stack[depth - 1]` and reads a cached mark
