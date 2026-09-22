@@ -477,19 +477,19 @@ fn bind_all(env: Option<Rc<Env>>, binds: Bindings) -> Option<Rc<Env>> {
     }
 }
 
-fn lookup(env: &Option<Rc<Env>>, name: &str) -> Option<Value> {
+fn lookup(env: &Option<Rc<Env>>, name: &Name) -> Option<Value> {
     let mut cur = env.as_ref();
     while let Some(frame) = cur {
         match &**frame {
             Env::One(bound, value, parent) => {
-                if bound.as_str() == name {
+                if bound == name {
                     return Some(value.clone());
                 }
                 cur = parent.as_ref();
             }
             Env::Many(slots, parent) => {
                 for (bound, value) in slots.iter().rev() {
-                    if bound.as_str() == name {
+                    if bound == name {
                         return Some(value.clone());
                     }
                 }
@@ -1561,7 +1561,7 @@ impl<'a> Interp<'a> {
                 }
                 Stmt::Expr(expr) => result = self.eval(expr, env, frame)?,
                 Stmt::Set { target, field, value, span } => {
-                    let current = lookup(env, target).ok_or_else(|| RuntimeError {
+                    let current = lookup(env, &Name::new(target)).ok_or_else(|| RuntimeError {
                         message: format!("`set` target `{target}` is not bound"),
                         span: *span,
                     })?;
@@ -1982,10 +1982,10 @@ impl<'a> Interp<'a> {
         }
     }
 
-    fn eval_ident(&self, name: &str, span: Span, env: &Option<Rc<Env>>) -> EvalResult {
+    fn eval_ident(&self, name: &Name, span: Span, env: &Option<Rc<Env>>) -> EvalResult {
         match lookup(env, name) {
             Some(value) => Ok(value),
-            None => self.eval_global(name, span),
+            None => self.eval_global(name.as_str(), span),
         }
     }
 

@@ -7151,6 +7151,108 @@ A caveat on the sanitizer half: the binary was built `-O0` against a
 plain-malloc runtime, where the shipped one is `-O3 -flto`. That bounds the
 sanitizer result to this build. The counter result is not so bounded — those
 rows are deterministic, which is the whole reason they are pinned.
+## 2026-09-22 — name equality stops calling out, and the interpreted run falls 1.71%
+
+`__memcmp_avx2_movbe` was 4.71% of the interpreted run: 47,999,433 instructions
+over 2,617,709 calls, 18.3 each, on names of twenty-two bytes or fewer.
+`callgrind_annotate --tree=caller` does not say who calls it -- at threshold 100
+the callers it lists sum to about fifty thousand -- but the raw profile does,
+and summing each `cfn=` by its caller accounts for the frame exactly.
+
+    13,336,477   27.8%   kanso::eval::lookup
+    12,535,464   26.1%   kanso::eval::Interp::call_builtin
+     6,390,396   13.3%   kanso::eval::Interp::eval_global
+     3,277,188    6.8%   kanso::eval::Interp::call_named
+
+`eval::lookup` walks the environment comparing each bound name to the one being
+looked up. The comparing was never the cost: the bytes fit in two registers, and
+`str == str` checks the lengths and then calls out, so the fourteen instructions
+a comparison bought the AVX2 entry sequence and the call around it.
+
+THE FIRST ATTEMPT WAS WRONG AND THE MEASUREMENT SAID SO. It gave `Name` an
+`eq_str` taking a `&str`, padding it into a twenty-two byte buffer to get the
+same fixed-width loads. Every one of the 909,375 calls went, the frame fell
+13,336,477 -- and the row went UP 288,354. The zero-fill and the copy came to as
+much as the call they replaced. Both sides have to be inline already.
+
+WHAT LANDED. `PartialEq for Name` compares two inline names as `buf[0..16]` as a
+`u128` and `buf[14..22]` as a `u64`. The ranges cover all twenty-two bytes and
+overlap by two, which is what makes the second load fixed-width instead of a
+tail loop. `lookup` and `eval_ident` take a `&Name` rather than a `&str`, which
+they can because `Expr::Ident` has held a `Name` since the 2026-08-29 ruling;
+the one cold caller, a `set` statement's target, is a `String` and builds an
+inline `Name` at the call.
+
+    interpreted row   973,143,830 -> 956,538,727   -16,605,103   -1.71%
+    memcmp calls        2,617,709 ->   1,707,612      -910,097
+    memcmp cost        47,999,433 ->  35,413,346   -12,586,087
+
+The row falls by four million more than the frame does, which is `lookup` itself
+getting cheaper once the call is gone. Every other caller of memcmp is
+byte-identical across the two profiles, which is the check that nothing else
+moved.
+
+CI'S SITTING, and every row it moved fell.
+
+    interp_instructions     923,151,727 -> 908,952,299  -14,199,428  -1.5381%
+    emit_instructions        51,618,058 ->  51,481,045     -137,013  -0.2654%
+    library_instructions    127,184,941 -> 127,146,502      -38,439  -0.0302%
+    entry_instructions      126,728,843 -> 126,691,703      -37,140  -0.0293%
+    compile_instructions     35,549,673 ->  35,540,015       -9,658  -0.0272%
+    startup_instructions      3,363,186 ->   3,362,329         -857  -0.0255%
+
+Both codegen rows are byte-identical, which is right: they count the C
+toolchain and this change is kanso's own Rust.
+
+The five compile-side falls are not layout. The FRONT END compares names too --
+resolving, checking, inferring -- and `compile_instructions` is `kanso check`
+over a library, so it pays the same comparison the interpreter does. That was
+not predicted here before CI measured it.
+
+The container read the interpreted saving at 16,605,103 and CI reads
+14,199,428, 14% apart. Both are falls of the same shape and the golden is CI's;
+the container's figure never goes in it.
+
+Welfare 77.27959877643865 -> 77.28677792407876, banked in this commit and after
+the goldens carried CI's rows rather than before. Development moves 78.45 to
+78.49 and production does not move at all, which is what a change to the
+compiler's own Rust should look like. The saving is a floor rather than an estimate for a second reason: `.text`
+grew 4,832 bytes, and the entry two above this one measured `.text` growth
+pushing this row UP -- 112 bytes moved it +366,303 -- so whatever the layout term
+is doing here, it is working against the number above.
+
+THE SPEC. `tests/a_name_compares_by_the_word_and_still_by_the_text.rs` is about
+the two loads and where they meet. Byte 16 is the first byte only the second
+load sees, bytes 14 and 15 are read twice, byte 21 is the last byte anything
+sees, and a comparison that quietly stopped at byte 16 would pass a spec built
+from short names alone -- 89.8% of real identifiers are seven bytes or fewer, so
+the corpus would never have said. It flips one byte at each of the twenty-two
+positions in turn.
+
+Watched red on three mutations. Dropping the second load and shortening its
+range both fail `one_byte_apart_is_not_equal`. Dropping the LENGTH CHECK does
+not fail anything, and that is correct rather than a gap: `Name::new` zero-fills
+past the length, so two names of different lengths differ in the buffer as well.
+The check stays because a reader should not have to know about the fill to
+believe the comparison, and because it is what keeps this right if the fill ever
+changes.
+
+`call_builtin` is the other half and is not touched here: 12,535,464
+instructions over 564,790 calls, comparing a `&str` against string literals.
+
+WHAT SHAPE THOSE LITERALS ARE IN was written down wrong twice before it was
+read, and both wrong versions reached a pull request body. It is not an
+if-chain wanting a `match`. It IS a `match name { ... }` already, over 49
+string-literal arms -- three bare `name == "..."` tests sit ahead of it and the
+rest is the match. Rust lowers a string match to a switch on the length and
+then a comparison against each candidate of that length, and those comparisons
+are the calls. So no rearrangement of the arms helps.
+
+What would is comparing something other than bytes: a builtin resolved to an id
+once, where the checker already knows the name is a builtin, instead of
+resolved by its text at every call. That is a bigger change than this one and
+it is not specified here beyond the shape.
+
 
 ## 2026-09-22 — ten_handups: where a tenure block dies, which no counter could say
 
@@ -7241,3 +7343,26 @@ moves by single digits between jobs on one commit.
 Welfare reads 77.28 against a floor of 77.27959877643865 and the floor sentinel
 passes, so there is no rise to bank and no drop to explain. The five rises cost
 less than the score's own resolution at these magnitudes.
+## 2026-09-22 — kanso#1561 re-merged onto main after kanso#1563
+
+kanso#1563 landed the inline name compare and took six compile-side goldens
+with it. Neither side of this merge described the merged tree, so those six
+carry MAIN'S values forward and CI measures the difference; this branch's own
+readings on them were taken before that change existed and are not comparable
+with anything after it.
+
+    compile_instructions    35,540,015    entry_instructions   126,691,703
+    library_instructions   127,146,502    startup_instructions   3,362,329
+    emit_instructions       51,481,045    interp_instructions  908,952,299
+
+`bench/welfare_floor.json` did not conflict, so the floor this branch is scored
+against is kanso#1563's 77.28677792407876.
+
+Five page paragraphs conflicted, every one a `data-golden` span quoting those
+rows, every one resolved to main's figure: a span follows its golden. Resolved
+hunk by hunk rather than by taking the file whole, because §118 lives in it --
+it is still there, and the log kept every entry from both sides.
+
+The counter veins are untouched by the merge: the twelve cost goldens and all
+sixty-seven `.mem` files still agree, and `ten_handups` still reads 3 on the run
+program and 1, 1 and 4 on the three fixtures that see it.

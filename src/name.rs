@@ -126,8 +126,44 @@ impl Borrow<str> for Name {
 /// the same name whichever side of twenty-two bytes they fell on, and a
 /// derived impl would have made the representation observable.
 impl PartialEq for Name {
+    /// Two inline names compare as two overlapping words, with no call out.
+    ///
+    /// `eval::lookup` walks the environment comparing each bound name to the
+    /// one being looked up, and on the interpreted corpus that was 909,375
+    /// calls to `__memcmp_avx2_movbe` for 13,336,477 instructions -- 14.7
+    /// each, on names of twenty-two bytes or fewer. The comparing was never
+    /// the cost: the bytes fit in two registers, and what those fourteen
+    /// instructions bought was the AVX2 entry sequence and the call around it.
+    ///
+    /// The ranges `0..16` and `14..22` cover all twenty-two bytes and overlap
+    /// by two, which is what makes the second load fixed-width instead of a
+    /// tail loop. `Name::new` zero-fills past the length, so bytes beyond it
+    /// agree whenever the lengths do; the length is compared first anyway,
+    /// because a reader should not have to know about the fill to believe
+    /// this.
+    ///
+    /// An earlier draft took a `&str` on the other side and padded it into a
+    /// twenty-two byte buffer to get the same fixed loads. It removed all
+    /// 909,375 memcmp calls and cost 13.6 million instructions to do it --
+    /// the zero-fill and the copy came to as much as the call it replaced.
+    /// Both sides have to be inline already, which is why this sits on
+    /// `PartialEq` and the callers hand down a `Name`.
+    ///
+    /// The heap case falls back, because a name over twenty-two bytes is rare
+    /// enough to have been measured: 99.77% of identifier occurrences across
+    /// `lib/` are inline, and the thirty that are not appear once each.
+    #[inline]
     fn eq(&self, other: &Self) -> bool {
-        self.as_str() == other.as_str()
+        match (&self.0, &other.0) {
+            (Repr::Inline { len: a, buf: x }, Repr::Inline { len: b, buf: y }) => {
+                a == b
+                    && u128::from_ne_bytes(x[0..16].try_into().unwrap())
+                        == u128::from_ne_bytes(y[0..16].try_into().unwrap())
+                    && u64::from_ne_bytes(x[14..22].try_into().unwrap())
+                        == u64::from_ne_bytes(y[14..22].try_into().unwrap())
+            }
+            _ => self.as_str() == other.as_str(),
+        }
     }
 }
 
