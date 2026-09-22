@@ -7614,6 +7614,47 @@ It does not close the row -- one job is not the two the row describes, and the
 row's own pair was on a commit nobody has re-run since. What it does is put a
 control under it: when the compiler source is untouched, this row did not move.
 
+AND THE COMMIT THAT ADDED THE PARAGRAPH ABOVE REPRODUCED kanso#1558. This
+branch has now been through CI twice with byte-identical compiler source, and
+`compile_instructions` read differently:
+
+    0586890f   35,541,148   agreed with main
+    74f99dba   35,541,151   +3
+
+Three instructions, on a tree whose whole diff is `design/compiler-log.md` and
+`docs/compiler.html`. kanso#1558's own header describes that shape to the word
+-- 35,551,167 against 35,551,170 on a branch with exactly those two files --
+and this is the first time it has been caught twice on ONE branch, which takes
+the base out of the question along with the source. Every other row in the
+second job agreed with main to the instruction: `entry`, `library`, `startup`,
+`emit`, `interp`, both codegen rows, `compile_allocs`, `compile_peak_bytes`.
+One row of twelve moves and it is always the same one.
+
+THE INSTRUMENT IS THERE AND THIS SESSION CANNOT READ IT. kanso#1558 put an
+uncapped function table on this gate for exactly this moment and kanso#1562 put
+one on six more, so both jobs printed theirs. The compile table sits at step 19
+of 41, and the six gates after it now print tables of their own -- five or six
+thousand lines between it and the end of the log. The API this session reads
+job logs through returns a tail, and a tail that deep is not on offer; the
+artifact holds the raw profiles and its blob host answers
+`gateway answered 403 to CONNECT` here. So the diff that would name the three
+instructions is written down in two places and reachable from neither.
+
+That is a defect in the instrument rather than in the finding, and the remedy
+is small: print the table where a tail can reach it -- a final step of the job,
+after the summary -- or write it to the step summary. Not done here, because
+this pull request is a measurement and a CI change is a different one.
+
+AND THE OSCILLATION MAKES THE GATE UNPASSABLE BY EITHER ANSWER, which is worth
+stating plainly because it is not a thing a golden is built to survive. Leave
+`bench/compile_instructions_golden.txt` at main's 35,541,148 and the
+cost-goldens job fails, because CI measured 35,541,151. Set it to 35,541,151
+and the TREND gate refuses: a row worsened, nothing improved, and a pure
+regression is the one move it declines outright. Both are the gates working.
+The golden stays at main's figure, because 35,541,148 is what this tree read
+the first time and what main reads, and a coin that has come up three ways in
+two tosses is not a number to pin.
+
 What is still on the list, from the container's profile after kanso#1564:
 12,339,438 instructions over 644,915 calls, led by `eval_tail`'s closure at
 159,127 and `dispatch_loop` at 147,267, with `BigUint`'s own `PartialEq` at
