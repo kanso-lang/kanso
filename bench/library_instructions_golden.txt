@@ -1009,7 +1009,7 @@
 # own bytes moved and these rows carry them. The job read the same number twice
 # -- "this binary is stable" -- so the disagreement was with the golden rather
 # than within the run, and the change under test is the merge.
-library_instructions=127146502
+library_instructions=127149930
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

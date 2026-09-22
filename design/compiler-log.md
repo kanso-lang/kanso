@@ -7507,7 +7507,37 @@ answer `unknown builtin` at run time. Mangling `append` turns that red and names
 the mangled entry; a `b` that lands inside the quotes turns a second assertion
 red; reverting the match to `&str` does not compile at all.
 
-WHAT IS LEFT of the memcmp frame after both changes: 22,116,197 instructions
-over 1,142,822 calls, led by `eval_global` at 332,026 and `call_named` at
-165,949. Those resolve a name against the program's declarations rather than
-against a fixed list, so neither takes this trick.
+CI'S SITTING, and it is a THIRD of what this box projected.
+
+    interp_instructions     908,952,299 -> 900,471,358   -8,480,941  -0.9330%
+    entry_instructions      126,691,703 -> 126,696,892      +5,189  +0.0041%
+    library_instructions    127,146,502 -> 127,149,930      +3,428  +0.0027%
+    compile_instructions     35,540,015 ->  35,541,148      +1,133  +0.0032%
+    emit_instructions        51,481,045 ->  51,481,382        +337  +0.0007%
+
+The container read the interpreted saving at 23,148,729 and CI reads 8,480,941:
+2.73 times apart, where the same projection for kanso#1563 an hour earlier was
+14% out. Both are falls and the direction is not in doubt; the size is, and the
+golden is CI's.
+
+That gap is the measurement rule this log keeps restating, at a magnitude worth
+recording. What the change removes is 564,790 CALLS -- a count the program
+decides, identical on any machine. What each call COSTS is the glibc the host
+carries: this container's 2.39-0ubuntu8.7 against the runner's 8.9, and a
+different AVX2 entry sequence behind the same name. So the count travels and the
+price does not, and a projection built from the price is worth what the price
+is. kanso#1563's entry predicted that shape without putting a number to it;
+this is the number.
+
+The four compile-side rows rise because byte patterns are more code.
+`startup_instructions` and both codegen rows did not move at all.
+
+Welfare 77.28677792407876 -> 77.2907927488371, banked after the goldens carried
+CI's rows. Development 78.49 -> 78.51 and production is unmoved, which is right:
+the interpreter is a development-side term and the benchmarks run compiled code
+that never reaches this dispatch.
+
+WHAT IS LEFT of the memcmp frame after both changes, on the container's profile:
+22,116,197 instructions over 1,142,822 calls, led by `eval_global` at 332,026
+and `call_named` at 165,949. Those resolve a name against the program's
+declarations rather than against a fixed list, so neither takes this trick.
