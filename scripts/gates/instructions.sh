@@ -122,6 +122,16 @@ if command -v callgrind_annotate >/dev/null; then
     echo "=== where the work is: $b"
     callgrind_annotate --threshold=90 /tmp/cg.$b 2>&1 | head -40
   done
+  # The capped summaries above are for reading; these are for DIFFING two
+  # jobs. Every benchmark, uncapped, on every run -- the row that parts is
+  # never known in advance and a comparison needs the agreeing side too.
+  for b in jsonbench encodebench oneshot basket widebench deepbench escapebench \
+           pendbench indexbench scanbench digestbench readbench livebench runbench; do
+    echo "::group::the whole function table: $b"
+    callgrind_annotate --threshold=100 /tmp/cg.$b 2>/dev/null \
+      | sed -n 's/^ *\([0-9,][0-9,]*\) ([^)]*)  *\(.*\)$/\1 \2/p'
+    echo "::endgroup::"
+  done
 else
   echo "=== no callgrind_annotate on this host, so no breakdown"
 fi

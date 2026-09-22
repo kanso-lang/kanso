@@ -7151,3 +7151,64 @@ A caveat on the sanitizer half: the binary was built `-O0` against a
 plain-malloc runtime, where the shipped one is `-O3 -flto`. That bounds the
 sanitizer result to this build. The counter result is not so bounded — those
 rows are deterministic, which is the whole reason they are pinned.
+## 2026-09-22 — the whole function table, for the six gates that still could not be diffed
+
+kanso#1558 gave `compile_instructions.sh` an uncapped print of its profile's
+function table, after three instructions could not be located from two job
+logs. The gate carried `--threshold=90 | head -40`: forty rows of the hundred
+and twenty-five that threshold has, fifteen functions once the headers come
+off, and every one of the fifteen equal across the two jobs.
+
+That fix landed for one gate. Six others carried the identical line.
+
+    entry_instructions     /tmp/cg.entry      threshold=90 | head -40
+    library_instructions   /tmp/cg.library    threshold=90 | head -40
+    startup_instructions   /tmp/cg.startup    threshold=90 | head -40
+    interp_instructions    /tmp/cg.interp     threshold=90 | head -40
+    instructions           /tmp/cg.$b         threshold=90 | head -40, two of fourteen
+    emit_instructions      /tmp/cg.emit       inclusive only
+
+The fourth is the gate STATUS.md's standing row is about. `interp_instructions`
+read 2,178,502,266 and 2,178,502,272 on two CI jobs of one commit, each stable
+across the gate's own second reading, and the row has been open since
+2026-09-15 for want of a carrier. The instrument that would say which frames
+moved did not exist on that gate. The fifth printed a breakdown for two of the
+fourteen benchmarks it profiles, so a move in any of the other twelve had
+nothing behind it at all.
+
+WHAT WENT IN. Each gate now prints its profile's whole exclusive table, on
+every run, before the comparison -- the same three properties kanso#1558
+established, for the same reason. On every run, because a diff needs the side
+that AGREED and the agreeing side never takes a failure path.
+
+Checked against a real profile rather than by reading: 659 rows off a
+`kanso --version` run, reaching functions that retire a single instruction.
+The top exclusive frame is `_mi_strnicmp` at 243,800, which is mimalloc
+resolving its options by name -- the frame the standing row's own measurement
+found moving 117 instructions per environment variable. The instrument sees
+what the row is about.
+
+`tests/every_callgrind_gate_prints_its_whole_table.rs` derives the governed
+list off disk: every gate writing a callgrind profile, less two exemptions
+named with reasons. Each of its three assertions was watched red on its own
+mutation -- the print removed, the print capped, the print moved into the
+failure path.
+
+TWO EXEMPTIONS, and they are reasons rather than spellings. `codegen_
+instructions.sh` names its profiles `/tmp/cg.codegen.$tier.%p`, one per
+process across the clang driver, the convention probe, `clang -cc1` and ld, at
+6.8 billion instructions on the release tier; it also already diffs its own two
+readings per frame. `path_independence.sh` writes `/tmp/cg.pi` and never reads
+it -- the count comes off valgrind's stderr and every measurement in its loop
+overwrites the same path, so nothing survives to print. Both want their own
+change and their own measurement of what it costs the job log.
+
+The derivation was wrong on its first run and the spec said so: filtering for
+a profile path with no shell expansion dropped `emit_instructions` and
+`instructions`, which write `"$out"` and `/tmp/cg.$b` and are one profile per
+run all the same. What separates codegen is many processes under one reading,
+which is why that is in the exemption list and not in the filter.
+
+This does not close the standing row. It builds the instrument the row has
+been guessing without, and the row comes off when a carrier for the six is
+found.
