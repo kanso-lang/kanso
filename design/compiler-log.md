@@ -6061,3 +6061,49 @@ measurement, the number the sizing walk actually read, and a next step that is
 smaller than the one it started with — find the program that makes `k_copy_size`
 read a garbage length. The rule follows from that.
 
+
+## 2026-09-22 — every program in the corpus under a sanitizer, and the one report it expects
+
+`src/runtime.c` reclaims memory in bulk, and the walks that decide what survives
+follow pointers into storage the reclaim can take back. The file's own comments
+carry two accounts of that going wrong — a `KStr` read in a munmap'd page, and a
+node below a mark holding a tenured pointer that `k_repaired_settle` still does
+not move. Both were found by a program crashing. Nothing in this tree had ever
+run a sanitizer over the corpus.
+
+It has now, and the result is a clean one:
+
+    81  CLEAN   67 mem-corpus programs, 13 benchmarks, scripts/ratchet
+     2  KNOWN   runbench and scanbench, the same guarded tail read
+     1  SKIP    bench/numeric, which does not compile — see below
+     0  FOUND
+
+THE INSTRUMENT WAS WATCHED FAILING FIRST, which is the only reason the zero is
+worth anything. `scripts/asan/sweep.sh --prove` patches a read of one byte from
+a block `k_ten_release` has just freed into a COPY of the runtime, builds the
+one fixture whose `.mem` golden pins `ten_frees=1`, and asserts the report
+names that function. It does:
+
+    #0 ... in k_ten_release .../runtime_broken.c:1547:33 heap-use-after-free
+
+THE ONE KNOWN REPORT is `k_b_find2_raw`, and reading it wrongly is easy.
+`k_tail_window` permits the final sixteen-byte load only when the pointer sits
+at least sixteen bytes below a page boundary, so the load cannot reach an
+unmapped page and the surplus is masked off afterwards. AddressSanitizer
+reports it anyway, and the address it prints is the LAST byte of the load
+rather than the first — so the report reads as though the access began ten
+bytes past the end when it began inside the buffer. It is classified KNOWN and
+printed rather than filtered, because a filter on that frame would hide every
+later finding in it.
+
+WHAT THE SWEEP TURNED UP BY ACCIDENT: `bench/numeric` has not compiled since
+kanso#505 migrated the tree. `main.kso` calls `sq_sum` with no import, and
+`lib.kso` beside it exports one; `kanso check bench/numeric` exits 2. Nothing
+in scripts/, .github/, tests/ or bench/ names the directory, which is why a
+benchmark being broken for that long went unnoticed. The import is restored in
+this commit and it runs: `sum 2666668666667000000`, which is
+n(n+1)(2n+1)/6 at n = 2,000,000.
+
+It is not wired into CI. Every runner would need `libclang-rt-*-dev`, and the
+known report would have to become a suppression maintained in two places. The
+sweep is for the question the runtime's comments keep raising, asked by hand.
