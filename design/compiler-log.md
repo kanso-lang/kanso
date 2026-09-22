@@ -6176,6 +6176,13 @@ variables are separated in the direction the gate's header could not separate
 them from outside: the binary is inert across the pair that shares a family,
 and the outlier is the one that does not.
 
+AND ALL THREE BINARIES PLACE THE SAME BYTES. The sections the gate prints are
+identical across the three, to the byte: `.rodata` 803,768, `.text` 2,836,114,
+`.data` 12,672, `.bss` 29,912. Three shas, one layout. So the sha differences
+live where a section size cannot see them — the build id, `.comment`, the
+unwinding and debug tables, or bytes rearranged inside a section that did not
+change length. Nothing of that kind is executed by `kanso check`.
+
 One triple is not a law. What it licenses is the next experiment rather than a
 conclusion — the row read against family 0x1a again, on a binary that has
 already read 35,551,167 somewhere else — and the whole-table print below is what
