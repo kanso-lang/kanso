@@ -7842,6 +7842,24 @@ difference. Its sitting, golden before against CI's reading:
     codegen release       6,825,827,822 -> 6,837,945,401   +12,117,579
     interp_instructions     923,151,727 ->   923,151,726            -1
 
+CORRECTED, an hour later. The table above named three benchmarks because the
+first reading of CI's diff was filtered to three names, and ALL FOURTEEN moved —
+every benchmark links the runtime, so a runtime change reaches every row. The
+round that followed went red on `work` and `machine code` alone, with all eight
+instruction rows already agreeing, and that is what said so. Both veins carry
+fourteen rows and fourteen were set this time, which is the check that would
+have caught it: count the rows in the file against the rows you wrote.
+
+    deepbench     347,644,995 -> 347,635,275        livebench  2,793,281,380
+    escapebench    75,228,606                        scanbench    462,269,305
+    pendbench     208,139,955                        digestbench    9,966,673
+    oneshot        17,807,820                        readbench      4,627,056
+    basket         32,776,834                        widebench     33,676,020
+    indexbench      2,895,743
+
+The .text rows moved with them, +480 to +560 on each. None of the eleven is a
+welfare term, so the floor banked on the first pass still stands at 77.34.
+
 WHICH WAY AND WHY. The two falls are the branch's subject: `k_beat_iter` stops
 turning a depth back into `&k_beat_stack[depth - 1]` and reads a cached mark
 instead, and the run program iterates five times for every pop it makes. The
