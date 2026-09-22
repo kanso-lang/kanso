@@ -7318,11 +7318,27 @@ profile carries the call counts beside the costs:
 
 Eighteen instructions a call, on names of twenty-two bytes or fewer. That is
 the AVX2 entry sequence and the call itself rather than the comparing: the
-bytes being compared fit in two registers. So the fix is an inline word compare
-on the identifier type, not an interning table -- the same answer for a few
-instructions of `eq` instead of a `call`, and no new structure anywhere. Say
-six instructions against eighteen and it is about 31 million, **3.1% of the
-interpreted run**, which `interp_instructions` weighs on the development side.
+bytes being compared fit in two registers.
 
-Recorded as a lead. Building it is a compiler change and does not belong in a
-pull request about what the gates print.
+THEN READ THE CALL SITES, which is the step this entry skipped twice. It first
+said the fix was interning; corrected, it said an inline word compare on
+`Name`'s own `PartialEq`. Neither top caller compares a `Name` to a `Name`.
+
+`eval::lookup` walks the environment with `bound.as_str() == name`, a `Name`'s
+text against a `&str` the caller holds. `Interp::call_builtin` is a chain of
+`name == "if"`, `name == "wrap_err"` and the rest, a `&str` against string
+literals. Those are two different shapes and only the first is the identifier
+type's to fix: an `eq_str` that compares the inline bytes as words when the
+name is inline and the lengths agree. The second is a long if-chain over
+literals, and what that wants is a `match`, which is a different change with a
+different risk.
+
+So the lead is two leads. The `lookup` half is 13,336,477 instructions, 1.3%
+of the interpreted run, and is one method and one call site. The
+`call_builtin` half is 12,535,464, 1.2%, and is a restructuring.
+`interp_instructions` weighs both on the development side.
+
+The lesson is the one this repository keeps paying for: a number bounds what it
+measured. The call counts said the cost is call overhead and that much holds.
+What the fix is was a guess until the call sites were read, and it was wrong
+twice before they were.
