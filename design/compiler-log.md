@@ -7305,8 +7305,24 @@ bytes or fewer inline, so equality on it is a memcmp of those bytes. That was
 the right trade for the allocator -- it took 1.3 million allocations out -- and
 it left every comparison a byte compare.
 
-An interned name would make each of those a word compare. That is a compiler
-change rather than a measurement, so it is a lead recorded here and not
-something this pull request touches. `interp_instructions` is a
-development-side welfare term, so it is a lead with a number attached to it
-already.
+HOW BIG EACH CALL IS decides what the fix is, and the first draft of this
+paragraph guessed wrong. It said an interned name would make each comparison a
+word compare, which is true and is more work than the numbers ask for. The
+profile carries the call counts beside the costs:
+
+    memcmp total          2,617,709 calls    47,999,433    18.3 each
+    eval::lookup            909,375 calls    13,336,477    14.7 each
+    Interp::call_builtin    564,790 calls    12,535,464    22.2 each
+    Interp::eval_global     332,026 calls     6,390,396    19.2 each
+    Interp::call_named      165,949 calls     3,277,188    19.7 each
+
+Eighteen instructions a call, on names of twenty-two bytes or fewer. That is
+the AVX2 entry sequence and the call itself rather than the comparing: the
+bytes being compared fit in two registers. So the fix is an inline word compare
+on the identifier type, not an interning table -- the same answer for a few
+instructions of `eq` instead of a `call`, and no new structure anywhere. Say
+six instructions against eighteen and it is about 31 million, **3.1% of the
+interpreted run**, which `interp_instructions` weighs on the development side.
+
+Recorded as a lead. Building it is a compiler change and does not belong in a
+pull request about what the gates print.
