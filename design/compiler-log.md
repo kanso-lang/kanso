@@ -6062,6 +6062,25 @@ This box cannot arbitrate: `host_gate.sh` refuses it at glibc 2.39-0ubuntu8.7
 and rustc 1.94.1 against the golden's 8.9 and 1.98.1, so a reading taken here
 reproduces nothing.
 
+THE RE-RUN SETTLES IT, AND THE PREDICTION GOES DOWN FIRST. The failed job was
+re-run once. Its `compile instructions` step came back GREEN, so a third job on
+this same tree read 35,551,167 — the branch did not move the row, which was
+never in much doubt and is now measured. What the re-run's `compile_sample` line
+says next is decisive, and there are only two answers:
+
+    sha 6d7c7e355188 again, row 35,551,167
+        one binary counted two numbers on two machines. That is a REPRODUCTION
+        FAILURE by this vein's own definition, the silicon is the variable, and
+        the vein halts.
+
+    sha 50656a4ebe6f, row 35,551,167
+        the row tracks the BINARY and not the machine, the two shas are the
+        whole story, and what needs explaining is why one tree built twice
+        produced two binaries when this container builds it twice and gets one.
+
+Written before the reading, because the confound has stood for six days and a
+reading interpreted afterwards can be made to fit either.
+
 BUILT, in this commit. The gate now annotates the whole profile on EVERY run —
 `callgrind_annotate --threshold=100`, uncapped, inside a collapsed group — so
 two jobs can be diffed to the instruction from their logs alone. Verified
