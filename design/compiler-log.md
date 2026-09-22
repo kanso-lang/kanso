@@ -7192,9 +7192,31 @@ getting cheaper once the call is gone. Every other caller of memcmp is
 byte-identical across the two profiles, which is the check that nothing else
 moved.
 
-These are this container's readings and `bench/interp_instructions_golden.txt`
-refuses comparison here, so CI takes the row and the floor is banked after it
-lands. The saving is a floor rather than an estimate for a second reason: `.text`
+CI'S SITTING, and every row it moved fell.
+
+    interp_instructions     923,151,727 -> 908,952,299  -14,199,428  -1.5381%
+    emit_instructions        51,618,058 ->  51,481,045     -137,013  -0.2654%
+    library_instructions    127,184,941 -> 127,146,502      -38,439  -0.0302%
+    entry_instructions      126,728,843 -> 126,691,703      -37,140  -0.0293%
+    compile_instructions     35,549,673 ->  35,540,015       -9,658  -0.0272%
+    startup_instructions      3,363,186 ->   3,362,329         -857  -0.0255%
+
+Both codegen rows are byte-identical, which is right: they count the C
+toolchain and this change is kanso's own Rust.
+
+The five compile-side falls are not layout. The FRONT END compares names too --
+resolving, checking, inferring -- and `compile_instructions` is `kanso check`
+over a library, so it pays the same comparison the interpreter does. That was
+not predicted here before CI measured it.
+
+The container read the interpreted saving at 16,605,103 and CI reads
+14,199,428, 14% apart. Both are falls of the same shape and the golden is CI's;
+the container's figure never goes in it.
+
+Welfare 77.27959877643865 -> 77.28677792407876, banked in this commit and after
+the goldens carried CI's rows rather than before. Development moves 78.45 to
+78.49 and production does not move at all, which is what a change to the
+compiler's own Rust should look like. The saving is a floor rather than an estimate for a second reason: `.text`
 grew 4,832 bytes, and the entry two above this one measured `.text` growth
 pushing this row UP -- 112 bytes moved it +366,303 -- so whatever the layout term
 is doing here, it is working against the number above.
