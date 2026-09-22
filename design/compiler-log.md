@@ -6081,6 +6081,33 @@ says next is decisive, and there are only two answers:
 Written before the reading, because the confound has stood for six days and a
 reading interpreted afterwards can be made to fit either.
 
+THE READING, AND NEITHER BRANCH OF THE PREDICTION HAPPENED. The re-run built a
+THIRD binary and drew a THIRD machine:
+
+    job                 sha            silicon                  row
+    main af78401        50656a4ebe6f   family 0x19 model 0x11   35,551,167
+    kanso#1556 att. 1   6d7c7e355188   family 0x1a model 0x2    35,551,170
+    kanso#1556 att. 2   543f040c05d4   family 0x19 model 0x1    35,551,167
+
+The prediction assumed the re-run would reproduce one of the two shas. It
+reproduced neither, and that is the first result: THREE CI JOBS ON ONE TREE
+BUILT THREE DIFFERENT BINARIES, where this container rebuilding the same tree
+twice produced one. Whatever makes cargo's output vary is in the runner and not
+in the sources.
+
+The second result is the one the confound was in the way of. Attempts on
+family 0x19 model 0x11 and family 0x19 model 0x1 carry DIFFERENT binaries and
+agree on the row TO THE INSTRUCTION. So on that pair the sha moves the row by
+nothing, and the 35,551,170 belongs to the job that drew family 0x1a. The
+variables are separated in the direction the gate's header could not separate
+them from outside: the binary is inert across the pair that shares a family,
+and the outlier is the one that does not.
+
+One triple is not a law. What it licenses is the next experiment rather than a
+conclusion — the row read against family 0x1a again, on a binary that has
+already read 35,551,167 somewhere else — and the whole-table print below is what
+would say which function carries the three when it happens.
+
 BUILT, in this commit. The gate now annotates the whole profile on EVERY run —
 `callgrind_annotate --threshold=100`, uncapped, inside a collapsed group — so
 two jobs can be diffed to the instruction from their logs alone. Verified
