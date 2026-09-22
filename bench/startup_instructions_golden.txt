@@ -306,6 +306,11 @@
 # readings to the instruction, across two CI jobs on two different trees,
 # which is what `-Wl,-plugin-opt=jobs=1` bought.
 #
+# 2026-09-18, kanso#1502 on the tree merged with main, CI's sitting.
+# 3,951,796 -> 3,951,975, a RISE of 179 (+0.0045%).
+# LAYOUT. These rows carry runtime.c's bytes rather than compiling it, and
+# every binary's `.text` grew 32 bytes on this change; the moves are all under
+# two hundredths of a per cent.
 # 2026-09-18, kanso#1510 (kanso#1484 rebuilt) on the tree merged with main,
 # CI's sitting. 3,951,796 -> 3,384,249, a FALL of 567,547 (-14.3617%).
 # THIS IS THE CHANGE, and it is much larger here than anywhere else. The set
@@ -329,12 +334,28 @@
 # carried forward: kanso#1509 moved this row on its own and what this branch
 # adds on top of it has not been measured, so the merged reading is CI's.
 #
+# 2026-09-18, kanso#1502 on the tree merged with main after kanso#1509,
+# CI's sitting. 3,933,223 -> 3,933,390, a RISE of 167 (+0.0042%).
+# LAYOUT. The two divisions this branch merges live in float rendering,
+# which none of these routes runs: three are `kanso check`, `emit_ir`
+# stops before the backend, and the interpreted start-up links the runtime
+# without rendering a float. What moved is where the code sits. The second
+# reading in the same job matched the first to the instruction.
 # 2026-09-18, kanso#1510 (kanso#1484 rebuilt) on the tree merged with main
 # after kanso#1509, CI's sitting. 3,933,223 -> 3,364,974, a FALL of
 # 568,249 (-14.4474%). This is a route the removed derivation runs, and the saving lands here.
 # The second reading in the same job matched the first to the instruction.
 #
 # 2026-09-18, re-merged onto main after kanso#1510. THE VALUE BELOW IS MAIN'S,
+# carried forward: kanso#1510 moved this row and what this branch adds on top
+# has not been measured, so the merged reading is CI's.
+#
+# 2026-09-18, kanso#1502 on the tree merged with main after kanso#1510,
+# CI's sitting. 3,364,974 -> 3,363,173, a FALL of 1,801
+# (-0.0535%). LAYOUT. The two divisions this branch merges are in float
+# rendering and none of these routes renders a float. All six fell, where
+# the sitting before kanso#1510 landed had the same six rising: one layout
+# term, opposite sign, which is what a shifted binary looks like.
 # carried forward: kanso#1510 moved this row on its own and what this branch
 # adds on top of it has not been measured, so the merged reading is CI's.
 #
@@ -351,9 +372,33 @@
 # runs the compiler moves with them; none of these routes evaluates a name,
 # because all four stop before the interpreter and the fifth is the emitter.
 #
+# 2026-09-18, kanso#1502 on the tree merged with main after kanso#1516,
+# CI's sitting. 3,364,523 -> 3,363,366, a FALL of
+# 1,157 (-0.0344%).
+# LAYOUT. src/runtime.c is include_str!'d into the compiler (src/main.rs)
+# and digested into a constant (src/hash.rs), so editing it moves 450,100
+# bytes of the compiler's own .rodata and every route that runs the compiler
+# moves with it. None of these five routes executes the runtime: three stop
+# before codegen, the fourth writes IR, the fifth starts the interpreter.
+# ^ SUPERSEDED: that reading was taken before kanso#1517 landed under this
+#   branch. THE VALUE BELOW IS MAIN'S, carried forward; the merged
+#   reading is CI's.
+#
 # 2026-09-18, kanso#1517 on the tree merged with kanso#1516, CI's sitting.
 # 3,364,523 -> 3,362,788, a FALL of 1,735 (-0.0516%).
 # LAYOUT. `kanso play` takes the native path and builds no `Interp`.
+#
+# 2026-09-18, kanso#1502 on the tree merged with main after kanso#1517,
+# CI's sitting. 3,362,788 -> 3,363,586, a RISE of
+# 798 (+0.0237303%).
+# LAYOUT. src/runtime.c is include_str!'d into the compiler (src/main.rs)
+# and digested into a constant (src/hash.rs), so editing it moves 450,100
+# bytes of the compiler's own .rodata. None of these routes executes the
+# runtime: three stop before codegen, the fourth writes IR, the fifth
+# starts the interpreter.
+# ^ SUPERSEDED: that reading was taken before kanso#1520 landed under this
+#   branch. THE VALUE BELOW IS MAIN'S, carried forward; the merged
+#   reading is CI's.
 #
 # 2026-09-18, kanso#1520 against main at kanso#1519, CI's sitting.
 # 3,362,788 -> 3,363,378, a RISE of 590 (+0.0175%).
@@ -366,4 +411,12 @@
 # Layout, the same way.
 # 2026-09-18, kanso#1543. 3,363,916 -> 3,363,672, -244. Layout, and the only
 # one of the five that fell. Direction carries no information here.
-startup_instructions=3363672
+# 2026-09-19, kanso#1502 on the tree merged after kanso#1543 and kanso#1547,
+# CI's sitting. startup_instructions 3,363,672 -> 3,363,249, a move of -423.
+# 2026-09-19, kanso#1502 on the tree merged after kanso#1513, CI's sitting.
+# startup_instructions 3,363,249 -> 3,363,186, a move of -63.
+# LAYOUT. kanso#1513 added the fixed-temp pin to src/main.rs, so the compiler's
+# own bytes moved and these rows carry them. The job read the same number twice
+# -- "this binary is stable" -- so the disagreement was with the golden rather
+# than within the run, and the change under test is the merge.
+startup_instructions=3363186
