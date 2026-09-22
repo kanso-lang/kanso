@@ -5986,3 +5986,47 @@ seven non-sha256 groups read the baseline on both columns. So the whole +0.41 is
 available without touching them, and what the next session owes is a rule that
 admits the sha256 pair on a property rather than by name, leaves json's scanners
 where that test wants them, and says why the difference is real.
+
+## 2026-09-22 — compile_instructions read three apart on a tree that cannot reach the compiler
+
+kanso#1556 changes `design/compiler-log.md` and `docs/compiler.html` and nothing
+else. Only `lib/*.kso` is `include_str!`'d into the compiler, so its compiler
+sources are main's to the byte. CI disagreed anyway:
+
+    main        af78401   35,551,167   green
+    kanso#1556  f0167bd   35,551,170   red, +3
+
+The gate takes a second count in the same job whenever the row parts, and it
+read 35,551,170 again — VERDICT (1), the binary is stable, so the disagreement
+is with the golden rather than within the run.
+
+The two jobs differ in two things at once, which is the confound the gate's own
+header has been complaining about since 2026-09-16:
+
+    binary sha256   50656a4ebe6f   against   6d7c7e355188
+    silicon         family 0x19 model 0x11   family 0x1a model 0x2
+
+WHAT IT RULES OUT. The two builds have BYTE-IDENTICAL section sizes — .text
+2,836,114, .rodata 803,768, .data 12,672, .bss 29,912 on both — so the
+seven-binary ladder in the gate's header, which perturbs those sizes, does not
+describe this pair. And every one of the fifteen functions in the threshold-90
+listing agrees to the instruction across the two jobs, `__memcmp_avx2_movbe`
+at 1,129,005 and `__memcpy_avx_unaligned_erms` at 792,855 on each. So the
+feature block that `dispatch.sh differs` reported did NOT make glibc resolve a
+different string routine, which was the leading candidate. The three
+instructions are below that threshold, in the tail the listing does not print.
+
+The inclusive listing puts them inside `main`: PROGRAM TOTALS, the ld.so frame,
+both `(below main)` frames, `__libc_start_main` and `main` are each exactly 3
+apart, and `compile_printed` is 812 on both.
+
+WHAT WOULD FINISH IT is the frame-level diff of the two profiles, which the gate
+prints itself on VERDICT (2) and not on VERDICT (1). Both jobs uploaded theirs
+as artifacts; neither can be fetched from a container, because the blob host
+answers `CONNECT tunnel failed, response 403` — already recorded in the gate's
+header, and the reason the sha and the sections are emitted as notices.
+
+The row is worth +0.0060 a tenth in the 2026-09-19 marginal table, the least
+valuable of the fourteen the objective reads, and on this pair it is the only
+one of twenty-seven veins that parted.
+
