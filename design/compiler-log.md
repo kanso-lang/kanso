@@ -6993,3 +6993,64 @@ The script's own header has the general form of this already, about the
 on, so it grants nothing and nobody has to remember to delete it." The branches
 themselves have no such property, and this is the second mechanism in that file
 to be bitten by a leftover.
+
+## 2026-09-22 — the carry-width rule's decline does not reproduce
+
+kanso#1556 declined the carry-width rule three days ago on one observation:
+under it `kanso run scripts/ratchet` died, and printing the request at the
+point of failure gave `CARRYOOM need=18446744072171062384 depth=3 carry_n=1`.
+That entry and `docs/compiler.html` §115 both present it as what killed the
+rule. Rebuilt and re-run today, it does not happen.
+
+THE RECONSTRUCTION IS EXACT, which is the first thing to establish, because a
+negative result is worth nothing if the change was not really there. `src/beat.rs`
+is the ONLY compiler source differing between `dc368fb7` — the commit that built
+the rule — and its merge-base with main, and main's `src/` and `lib/` are
+byte-identical to that merge-base, since the two commits that have landed since
+touch CLAUDE.md, the log and the page. So main plus that one file IS the branch's
+compiler.
+
+THE POSITIVE CONTROL SAYS THE RULE IS LIVE. On `bench/runbench`, counters on:
+
+    main's compiler    arena_blocks 36   arena_peak_bytes 38,604,496
+    with the rule      arena_blocks 33   arena_peak_bytes 35,458,768
+
+Those are kanso#1556's own headline figures, to the byte.
+
+WHAT THE RULE DOES TO THE RATCHET, with that control passing:
+
+    kanso run scripts/ratchet          exit 0, three times, nothing on stderr
+    dev-tier binary                    exit 0, three times
+    release-tier binary (--release)    exit 0, three times
+    an AddressSanitizer build          clean, no report
+    peak RSS against main's            28,220 KB against 28,176 KB
+
+The WIP state of the rule, `6cc0e349`, was tried as well, on the chance the
+failure belonged to the earlier shape: same arena peak, same clean exit.
+
+NOT MEMORY PRESSURE EITHER. kanso#1556 read the non-monotone coalitions as "a
+failure sitting near a memory limit", and the natural reading of a
+non-reproduction is that this container has more room today. The peak RSS says
+otherwise: the rule's ratchet peaks slightly BELOW main's, and the whole program
+is 28 MB.
+
+ONE THING ABOUT THE BOX, said because this project treats external state as
+part of a measurement. Installing the sanitizer runtime earlier in the same
+session moved this container's glibc from 2.39-0ubuntu8.7 to 8.9, and every
+reading above was taken after that. Both arms share it, so the comparison is
+unaffected, and the arena peak is the evidence rather than the argument:
+35,458,768 here is kanso#1556's figure to the byte, measured on another box on
+another day.
+
+WHAT THIS LICENSES, AND WHAT IT DOES NOT. It does not re-land the rule.
+kanso#1556 carried a second and independent objection — the rule admits
+`json/array_open/3` and `json/obj_open/3`, so `beat::tests::
+json_decode_loops_stay_conservative` had to be updated, and that entry says
+itself that changing a test because the rule beneath it changed is ordinary
+while changing one to get green is not. That question is untouched by anything
+here. What this does is remove the reason the decline was actually written on,
+and put a measured +0.41 back in play as something to decide rather than
+something already settled.
+
+The surfaces the CARRYOOM claim reached are this log and §115 of the page, and
+both are corrected in this commit rather than only here.
