@@ -6102,6 +6102,14 @@ non-reproduction is that this container has more room today. The peak RSS says
 otherwise: the rule's ratchet peaks slightly BELOW main's, and the whole program
 is 28 MB.
 
+ONE THING ABOUT THE BOX, said because this project treats external state as
+part of a measurement. Installing the sanitizer runtime earlier in the same
+session moved this container's glibc from 2.39-0ubuntu8.7 to 8.9, and every
+reading above was taken after that. Both arms share it, so the comparison is
+unaffected, and the arena peak is the evidence rather than the argument:
+35,458,768 here is kanso#1556's figure to the byte, measured on another box on
+another day.
+
 WHAT THIS LICENSES, AND WHAT IT DOES NOT. It does not re-land the rule.
 kanso#1556 carried a second and independent objection — the rule admits
 `json/array_open/3` and `json/obj_open/3`, so `beat::tests::
