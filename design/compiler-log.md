@@ -8666,16 +8666,27 @@ The run-side veins are this branch's own and survived the merge untouched;
 CI'S SITTING ON THE MERGED TREE. Five compile-side rows moved and each rose,
 which is this branch's `.text` growth arriving on top of kanso#1563's falls:
 
-    entry_instructions      126,691,703 -> 126,700,846    +9,143   +0.0072%
-    library_instructions    127,146,502 -> 127,155,219    +8,717   +0.0069%
-    emit_instructions        51,481,045 ->  51,484,112    +3,067   +0.0060%
-    compile_instructions     35,540,015 ->  35,542,842    +2,827   +0.0080%
+    library_instructions    127,149,930 -> 127,158,876    +8,946   +0.0070%
+    entry_instructions      126,696,892 -> 126,702,408    +5,516   +0.0044%
+    compile_instructions     35,541,148 ->  35,544,159    +3,011   +0.0085%
+    emit_instructions        51,481,382 ->  51,484,057    +2,675   +0.0052%
     startup_instructions      3,362,329 ->   3,363,729    +1,400   +0.0416%
 
-`interp_instructions` read 908,952,299, byte-identical to main. That is the
-check that these five are layout: this branch adds a field to the mark and a
-global beside it, `src/runtime.c` is `include_str!`'d into the compiler so its
-bytes are the compiler's, and nothing here touches what the interpreter does.
+Taken three times as kanso#1563 and kanso#1564 landed underneath; the figures
+above are the last sitting and the ones on disk. `startup_instructions` is the
+one row CI reported as AGREEING this round, and it is in the table anyway: it
+agreed with the golden this branch already carried, which was 1,400 above
+main's. A row that agrees with its own branch has still moved against the base,
+and the trend gate compares against the base -- it asked for this row by name
+when the first draft of this table left it out.
+
+`interp_instructions` read 900,471,351 against main's 900,471,358, seven low. Seven on 900
+million is the drift STATUS.md's standing row is about rather than anything
+this branch did: it adds a field to the mark and a global beside it,
+`src/runtime.c` is `include_str!`'d into the compiler so its bytes are the
+compiler's, and nothing here touches what the interpreter does. kanso#1561's
+three sittings read seven low, then fourteen, on a branch that adds only a
+counter, so the size of the drift moves between sittings of one tree.
 Both codegen rows and `compile_allocs` are identical too.
 
 THE FLOOR, AND THE THREE JOBS AN UNBANKED ONE REDDENS. This tree scored 77.34
