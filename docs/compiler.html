@@ -3115,6 +3115,26 @@ a float             440.7 -&gt;          425.9        -14.8
 
 <p>so the reason written here is withdrawn. the rule is still not shipped, because the other objection stands untouched: it admits the two json openers, and the test that keeps scanners out of the rewind tier had to be edited to let them in. what has gone is the crash, and with it the case that the matter was settled — a measured 0.41 of the objective is a live question again rather than a closed one.</p>
 
+<h2 id="handup"><span class="sec-num">118</span>a test that could not fail</h2>
+
+<p>one of the memory fixtures ended its header with a promise. it builds a shape the runtime&#39;s comments call dangerous &#8212; a node below a beat&#39;s mark holding a pointer into a tenure block, which a rewind can free &#8212; and it said that a change which stopped handing those blocks to the depth outside would turn the test red rather than turning some later program into a crash. that promise was written on 2026-09-08 and was false for a fortnight.</p>
+
+<p>the runtime has two counters for tenure storage: blocks claimed and blocks freed. handing a depth&#39;s blocks up to the depth outside does not free them; it moves them, and the depth outside frees them when it pops. so the block is claimed once and given back once whether the hand-up happens or not. replacing the call with an outright free left all sixty-seven memory goldens byte-identical, and the fixture that promised to catch it passed.</p>
+
+<p>the missing counter is the hand-up itself, and minting it is a one-line change with a long tail: a new counter is additive, so twelve cost goldens and every memory golden move in the same commit. with it there, three fixtures go red on the swap instead of none. one of them also moves the block count from five to three, which is the whole of what any counter could see before.</p>
+
+<p>the fixture was carrying a second claim, and the experiment that checks it is cheap. the header said the hand-up is what makes the dangerous shape harmless here. the beat&#39;s pop does three things in order: it deep-copies the result out of the beat&#39;s storage, it migrates three registries, and it hands the tenure blocks up. writing garbage over the depth&#39;s 39,200 live tenured bytes at each of those three points gives:</p>
+
+<pre><code>before the deep copy              dies, reading a length out of 0xAB
+after the copy, before migrates   correct output
+at the hand-up                    correct output</code></pre>
+
+<p>the copy is what reads the tenured bytes out. after it, nothing below the mark still points into tenure, so freeing the block early costs this program nothing &#8212; which is also why it runs clean under a sanitizer with the hand-up removed. the hand-up is load-bearing, but on a different fixture: an inner beat that opens its tenure inside the outer depth&#39;s block, where the blocks really do have to travel.</p>
+
+<p>three poisons one step apart, with the answer flipping across one of the two gaps, isolates the step. a saving that merely arrived alongside a change leaves the mechanism open, which this page has had to withdraw once already.</p>
+
+<p>what closes it is the mutation script. the ratchet now applies exactly the swap the header describes and requires the memory vein to go red, so the promise is checked on every push rather than by whoever happens to read the comment.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>
