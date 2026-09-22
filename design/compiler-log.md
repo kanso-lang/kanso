@@ -5987,6 +5987,79 @@ available without touching them, and what the next session owes is a rule that
 admits the sha256 pair on a property rather than by name, leaves json's scanners
 where that test wants them, and says why the difference is real.
 
+## 2026-09-19 — carry width is not the property, and the ratchet says so in three voices
+
+`beat_loops` decides which imported loops may evacuate their slots and rewind by
+asking whether the declaration's `file` begins `std/` or `lib/`. That field is
+the one error origins are built from, and it is deciding a program's memory: the
+same package under a directory called `lib` compiles to one that never reclaims
+a block, and one directory over to one that does.
+`tests/a_program_is_not_its_directory.rs` has pinned that since it was written,
+as a defect.
+
+The prefix stands in for something real. A shared library driver threads its
+caller's invariant source through the loop, and evacuating that copies an
+unbounded value every lap; removing it outright on 2026-08-31 turned the digest
+quadratic, 1.3s to 68s at 128 KB.
+
+MEASURED, one group at a time, on runbench. Eleven imported groups lose a carry
+at that point. Alone, every one reads the baseline on both columns — peak
+38,604,496 and 0.26 seconds — so the cost is a pairing:
+
+    sha256/compress + sha256/turned      peak 35,458,768   1.01s
+    sha256/blocked  + sha256/digested    peak 35,458,768   0.26s
+    the other seven                      peak 38,604,496   0.27s
+
+The expensive pair carries two positions each and the cheap pair one, and the
+whole 3,145,728 bytes sit with the cheap pair. A rule admitting a carry of at
+most one position was built, measured at 77.6807 against a 77.2707 floor, and
+opened as kanso#1556.
+
+**IT IS DECLINED, and the reason took three translations to read.** Under the
+rule `kanso run scripts/ratchet` reports `the program ran out of stack:
+recursion went deeper than the stack holds`. The binary it runs prints
+`out of memory`. Printing the request at the point of failure gives the third
+and true version:
+
+    CARRYOOM need=18446744072171062384 depth=3 carry_n=1
+
+2^64 less 1,538,489,232. `k_copy_size` read a length of about minus one and a
+half billion out of a node it was sizing for the staged copy, the sum wrapped,
+and `malloc` refused it. What the prefix keeps out is a carried value whose
+interior the sizing walk cannot read, and the WIDTH of a carry does not see
+that at all. The rule was a proxy chosen from a pairing, and the pairing was
+about wall time.
+
+The sweep over which groups have to be rescued for the failure to appear:
+
+    {holds_all?, holds_any?}                     dies
+    {holds_all?, holds_any?, next}               dies
+    {holds_any?, next, next_skipped}             dies
+    {holds_all?, holds_any?, next, next_skipped} dies
+    all five                                     dies
+    every other subset tried                     runs
+
+`list/holds_any?/2` is in every coalition that dies and in none that survives.
+It drives `any?`, and the backtrace at the failure has one `any?` running inside
+another's predicate — `ratchet/read_it` to `any?` to `holds_any?` to the
+predicate closure to `any?` again. Excluding the three list drivers that take a
+predicate runs the ratchet clean AND still reads arena_peak_bytes 35,458,768
+against main's 38,604,496, so a rule shaped that way would ship the whole
+saving.
+
+**That rule is not shipped, because there is no small program that fails without
+it.** A nested `any?` over two 800-element lists reads 1,048,576 on both arms.
+The coalitions are not monotone: {holds_all?, holds_any?} dies where either
+alone runs, and {holds_all?, holds_any?, next_skipped, found_in} runs again —
+which is a failure sitting near a memory limit rather than a rule being broken,
+and it means a subset sweep cannot say which group is unsafe, only which one is
+over the line in this program. A guard swept out of one program is a guard
+nobody can check.
+
+What this branch leaves behind: the eleven groups and their carries, the pairing
+measurement, the number the sizing walk actually read, and a next step that is
+smaller than the one it started with — find the program that makes `k_copy_size`
+read a garbage length. The rule follows from that.
 ---
 
 ## 2026-09-17 — the digit loop carried a value it only needed at the end, and then the tail gave it back
