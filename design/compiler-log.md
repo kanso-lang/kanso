@@ -7237,7 +7237,18 @@ The check stays because a reader should not have to know about the fill to
 believe the comparison, and because it is what keeps this right if the fill ever
 changes.
 
-`call_builtin` is the other half and is not touched here. It is 12,535,464
-instructions over 564,790 calls comparing a `&str` against string literals in a
-chain, and what that wants is a `match` over the literals rather than an
-if-chain -- a different change with a different risk.
+`call_builtin` is the other half and is not touched here: 12,535,464
+instructions over 564,790 calls, comparing a `&str` against string literals.
+
+WHAT SHAPE THOSE LITERALS ARE IN was written down wrong twice before it was
+read, and both wrong versions reached a pull request body. It is not an
+if-chain wanting a `match`. It IS a `match name { ... }` already, over 49
+string-literal arms -- three bare `name == "..."` tests sit ahead of it and the
+rest is the match. Rust lowers a string match to a switch on the length and
+then a comparison against each candidate of that length, and those comparisons
+are the calls. So no rearrangement of the arms helps.
+
+What would is comparing something other than bytes: a builtin resolved to an id
+once, where the checker already knows the name is a builtin, instead of
+resolved by its text at every call. That is a bigger change than this one and
+it is not specified here beyond the shape.
