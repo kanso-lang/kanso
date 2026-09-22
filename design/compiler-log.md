@@ -6107,3 +6107,44 @@ n(n+1)(2n+1)/6 at n = 2,000,000.
 It is not wired into CI. Every runner would need `libclang-rt-*-dev`, and the
 known report would have to become a suppression maintained in two places. The
 sweep is for the question the runtime's comments keep raising, asked by hand.
+
+## 2026-09-22 — the tenure fixture does not catch the change it says it catches
+
+`tests/golden/mem/a_repaired_node_below_the_mark_holds_tenure.kso` ends its
+header with a promise:
+
+> The fixture pins `ten_blocks=1` beside `ten_frees=1` so that a change which
+> stops handing them up is a red test rather than a segfault in `k_copy_size`.
+
+It does not. Stopping the hand-up leaves every counter in its `.mem` vein
+byte-identical, so the test stays green.
+
+THE EXPERIMENT. `k_ten_hand_up` was replaced, in a COPY of the runtime, by a
+call to `k_ten_release` — the change the promise is about, which frees a
+depth's tenure blocks at the inner pop instead of passing them to the depth
+outside. Then:
+
+    the path is exercised    traced: HANDUP d=1 with a real block, once
+    every counter            identical, all forty-odd rows of the vein
+    under a sanitizer        clean, no report
+
+The counters cannot see it because `ten_frees` counts the block being freed
+either way. Handing up moves WHEN and at WHICH DEPTH the free happens, and the
+vein records neither.
+
+WHAT THE FIXTURE DOES ESTABLISH is narrower than its header claims. It builds
+the configuration the comment is about — a node below the mark holding a
+pointer into tenure — and it does not read through that pointer after the pop.
+So it reaches the construction and never the danger, which is why removing the
+hand-up changes nothing observable in it.
+
+WHAT WOULD CLOSE IT, neither done here. A counter that separates a hand-up from
+a release would make the promise true, and that is a counters change: every
+`.mem` file, twelve cost goldens, the emitted vein, the ch10 sample and the
+siblings, all in one pull request. Or the header's last paragraph goes, and the
+fixture keeps the claim it can support.
+
+A caveat on the sanitizer half: the binary was built `-O0` against a
+plain-malloc runtime, where the shipped one is `-O3 -flto`. That bounds the
+sanitizer result to this build. The counter result is not so bounded — those
+rows are deterministic, which is the whole reason they are pinned.
