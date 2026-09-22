@@ -7273,3 +7273,40 @@ and neither happens: 1,397 rows, 1,397 distinct keys, four movers. The printed
 table itself is faithful -- `callgrind_annotate` does not truncate when its
 output is not a terminal, checked by counting distinct keys with and without
 `COLUMNS` set, and they are equal.
+
+AND A LEAD THAT IS NOT ABOUT MEASUREMENT AT ALL. `__memcmp_avx2_movbe` is
+**4.71%** of the interpreted run, 47,999,433 instructions of 1,019,911,013.
+
+`callgrind_annotate --tree=caller` does not answer who calls it: at threshold
+100 the callers it lists sum to about fifty thousand, three parts in a thousand
+of the frame. The raw profile does. Callgrind records each call site as a
+`cfn=` beside its caller's `fn=` with the call's inclusive cost on the next
+line, so summing those by caller is a twenty-line read of the file, and it
+accounts for **47,999,433** -- the frame exactly, which is the check that the
+parse is right.
+
+    13,336,477   27.8%   kanso::eval::lookup
+    12,535,464   26.1%   kanso::eval::Interp::call_builtin
+     6,390,396   13.3%   kanso::eval::Interp::eval_global
+     3,277,188    6.8%   kanso::eval::Interp::call_named
+     3,105,230    6.5%   kanso::eval::Interp::eval_tail::{{closure}}
+     2,988,189    6.2%   kanso::eval::Interp::dispatch_loop
+     2,834,403    5.9%   <num_bigint::biguint::BigUint as PartialEq>::eq
+       895,227    1.9%   hashbrown::map::HashMap::contains_key
+       418,640    0.9%   kanso::eval::eval_binop
+       331,938    0.7%   kanso::eval::match_one
+
+Six of the first eight are name resolution: looking a name up in the
+environment, choosing a builtin, resolving a global, dispatching a call. They
+are 41.6 million instructions between them, **4.1% of the interpreted run**,
+and what they are doing is comparing names byte by byte. §117 of the page
+records why: a name is the front end's identifier type, which keeps twenty-two
+bytes or fewer inline, so equality on it is a memcmp of those bytes. That was
+the right trade for the allocator -- it took 1.3 million allocations out -- and
+it left every comparison a byte compare.
+
+An interned name would make each of those a word compare. That is a compiler
+change rather than a measurement, so it is a lead recorded here and not
+something this pull request touches. `interp_instructions` is a
+development-side welfare term, so it is a lead with a number attached to it
+already.
