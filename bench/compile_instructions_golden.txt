@@ -2230,7 +2230,7 @@
 # A layout row: `kanso check` stops before codegen, so a runtime.c change
 # cannot alter a decision this row counts, and the compiler's own bytes move
 # under it anyway. `compile_again` read 35,549,673.
-compile_instructions=35541148
+compile_instructions=35543171
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.
