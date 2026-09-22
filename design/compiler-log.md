@@ -6202,3 +6202,35 @@ The row is worth +0.0060 a tenth in the 2026-09-19 marginal table, the least
 valuable of the fourteen the objective reads, and on this pair it is the only
 one of twenty-seven veins that parted.
 
+
+## 2026-09-22 — a finished coordinated branch is a landmine for the next branch that shares its name
+
+kanso#1558 changes a log entry and one gate's output, and it went red on
+`kq specs` with two dozen `error[exhaustive]` and `error[effect]` diagnostics
+out of kq's source. The cause is in the job log's second line:
+
+    kq: claude/go-to-town-m0dicm (performance goldens from main)
+
+`.github/clone-sibling.sh` prefers a sibling branch NAMED AFTER the branch under
+test, which is how a language change and the sweep it forces in kq, vse and
+kanso-json get checked together. kq had a branch of that name. It was cut to
+check kq against kanso#1369, which merged on 2026-09-14; it was twelve commits
+ahead of kq main and twenty-five behind, with nothing open on it, and its source
+predates the err-reader and effect rulings the compiler now enforces.
+
+So a coordinated branch nobody closed answers for every later kanso branch that
+draws the same name, and branch names here are assigned rather than chosen.
+
+FIXED by taking kq main's tree onto that branch in a merge commit — history
+intact, every commit still reachable, no rewrite — after checking that kq's own
+suite passes against a build of kanso main with that tree: eleven fixture
+goldens against `jq -S`, the three cost goldens, the scale gate and the
+published-numbers stamp. Merging kq main into it properly was the other option
+and it is disproportionate: eleven conflicted files, among them the pin, the
+README's numbers and four goldens, all to revive a branch whose work is done.
+
+The script's own header has the general form of this already, about the
+`sibling-goldens-move` licence: "A file left behind now names a branch nobody is
+on, so it grants nothing and nobody has to remember to delete it." The branches
+themselves have no such property, and this is the second mechanism in that file
+to be bitten by a leftover.
