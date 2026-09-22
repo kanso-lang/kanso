@@ -492,5 +492,5 @@
 # CI's sitting on run 35419502516. interp_instructions 923,151,719 -> 923,151,727, +8.
 # Eight instructions on 923 million. The interpreter never reaches
 # src/runtime.c, so this is the binary's layout and nothing else.
-interp_instructions=923151727
+interp_instructions=923151719
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

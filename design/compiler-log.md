@@ -7203,11 +7203,41 @@ tenure in the outer depth's block is the shape whose blocks must travel, and
 that is where the runtime's comment now points.
 
 VEINS. A minted counter is additive and moves the lot: twelve cost goldens and
-all sixty-seven `.mem` files, regenerated with `all_counters.sh --write`. The
-compile veins move too -- `src/runtime.c` is `include_str!`'d into the compiler,
-so its bytes are the compiler's -- and eight of them refuse comparison on this
-box, so CI takes those rows and the floor is banked after they land. Neither
-`bench/emitted_golden.txt` nor the book samples carry the tenure counters, so
-neither moves. `ten_handups` joins the trend gate's `higher` table in the change
-that mints it, for the reason `lower_a` gives about presence counters: dropping
-the kernel should read as a worsening and want its sentence.
+all sixty-seven `.mem` files, regenerated with `all_counters.sh --write`.
+`ten_handups` joins the trend gate's `higher` table in the change that mints
+it, for the reason `lower_a` gives about presence counters: dropping the kernel
+should read as a worsening and want its sentence.
+
+TWO MORE PANELS THAN THIS ENTRY FIRST CLAIMED. It said the book samples do not
+carry the tenure counters, on a grep of `book/`. The counter panels live in
+`docs/book/samples/`, and `ch10/counters_counters.out` and
+`ch12/fused_counters.out` both print the whole counter block, so both gained
+`ten_handups=0` and both HTML panels were rewritten from them. CI's book-samples
+job is what said so. `bench/emitted_golden.txt` really does not carry them.
+
+THE COMPILE-SIDE ROWS, from CI, each with the value it landed on. `src/runtime.c`
+is `include_str!`'d into the compiler, so its bytes are the compiler's own and
+its layout moves with them; the benchmarks compile the counter out, which is why
+`machine code` and every run-side row agreed. Eight of these refuse comparison
+on this box, so they are CI's reading and not a projection; each was read twice
+in the job and both readings were identical.
+
+    compile_instructions             35,549,673 ->     35,552,219    +2,546
+    entry_instructions              126,728,843 ->    126,735,656    +6,813
+    library_instructions            127,184,941 ->    127,192,276    +7,335
+    startup_instructions              3,363,186 ->      3,365,595    +2,409
+    emit_instructions                51,618,058 ->     51,630,500   +12,442
+    interp_instructions             923,151,727 ->    923,151,719        -8
+    codegen_instructions_dev        596,158,173 ->    596,158,155       -18
+    codegen_instructions_release  6,825,827,822 ->  6,825,821,967    -5,855
+
+The five rises are the layout, and `emit_instructions` is the largest of them
+because it is the only row anchored inside the compiler's own emitting rather
+than around a child process. The three falls are not savings and nothing here
+could have made them ones: eight on 923 million is nine parts per billion, and
+the interp row is the subject of STATUS.md's standing row precisely because it
+moves by single digits between jobs on one commit.
+
+Welfare reads 77.28 against a floor of 77.27959877643865 and the floor sentinel
+passes, so there is no rise to bank and no drop to explain. The five rises cost
+less than the score's own resolution at these magnitudes.
