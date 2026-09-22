@@ -7257,6 +7257,369 @@ That is the standing shape from 2026-09-18 again: a verification that names one
 file keeps passing while the defect moves next door. It took a gate that reads
 the page's numbers to find it, and it found it by counting a drift four times
 instead of twice.
+## 2026-09-22 — compile_instructions read three apart on a tree that cannot reach the compiler
+
+kanso#1556 changes `design/compiler-log.md` and `docs/compiler.html` and nothing
+else. Only `lib/*.kso` is `include_str!`'d into the compiler, so its compiler
+sources are main's to the byte. CI disagreed anyway:
+
+    main        af78401   35,551,167   green
+    kanso#1556  f0167bd   35,551,170   red, +3
+
+The gate takes a second count in the same job whenever the row parts, and it
+read 35,551,170 again — VERDICT (1), the binary is stable, so the disagreement
+is with the golden rather than within the run.
+
+The two jobs differ in two things at once, which is the confound the gate's own
+header has been complaining about since 2026-09-16:
+
+    binary sha256   50656a4ebe6f   against   6d7c7e355188
+    silicon         family 0x19 model 0x11   family 0x1a model 0x2
+
+WHAT IT RULES OUT. The two builds have BYTE-IDENTICAL section sizes — .text
+2,836,114, .rodata 803,768, .data 12,672, .bss 29,912 on both — so the
+seven-binary ladder in the gate's header, which perturbs those sizes, does not
+describe this pair. And every one of the fifteen functions in the threshold-90
+listing agrees to the instruction across the two jobs, `__memcmp_avx2_movbe`
+at 1,129,005 and `__memcpy_avx_unaligned_erms` at 792,855 on each. So the
+feature block that `dispatch.sh differs` reported did NOT make glibc resolve a
+different string routine, which was the leading candidate. The three
+instructions are below that threshold, in the tail the listing does not print.
+
+The inclusive listing puts them inside `main`: PROGRAM TOTALS, the ld.so frame,
+both `(below main)` frames, `__libc_start_main` and `main` are each exactly 3
+apart, and `compile_printed` is 812 on both.
+
+WHAT WOULD FINISH IT is the frame-level diff of the two profiles, which the gate
+prints itself on VERDICT (2) and not on VERDICT (1). Both jobs uploaded theirs
+as artifacts; neither can be fetched from a container, because the blob host
+answers `CONNECT tunnel failed, response 403` — already recorded in the gate's
+header, and the reason the sha and the sections are emitted as notices.
+
+ORDINARY CARGO NON-DETERMINISM IS OUT, measured rather than assumed. There is
+no `build.rs` in this crate and no `env!` or `option_env!` in `src/`, so nothing
+embeds a commit or a timestamp. On one container, `touch src/lib.rs src/main.rs`
+followed by `cargo build --release` recompiled the crate and produced a
+BYTE-IDENTICAL binary, sha 5bdfd6b4029b both times. So two builds of identical
+sources under one toolchain agree, and CI's two shas are not that.
+
+What the two shas can still be: the four sections the gate prints are the
+LOADED ones, and a difference in `.comment`, the build id, or the unwinding
+tables moves a sha without moving an executed instruction. That half is not
+settled here.
+
+WHAT THE LOG WOULD HAVE TO CARRY for the next occurrence to be localizable. The
+gate prints the exclusive listing at `--threshold=90 | head -40`, and on this
+corpus that threshold has 125 function rows, so 85 of the rows it already
+computed are thrown away before the log sees them. The whole table is 1,115
+rows; 99 is 282 and 99.9 is 494. A three-instruction move can sit in a function
+too small to make any threshold, so only the whole table guarantees catching it.
+
+And the artifact is not an alternative from here, for a reason worth naming
+precisely: `productionresultssa7.blob.core.windows.net:443` is refused by this
+session's EGRESS POLICY — the proxy's own status endpoint records
+`connect_rejected, gateway answered 403 to CONNECT`. That is an organization
+policy denial rather than anything GitHub did, so no credential and no retry
+reaches it, and the job log is the only channel a session of this kind has.
+
+The silicon stays the live candidate, narrowed. glibc resolves its string
+routines by ifunc at start-up, the two the listing prints resolved the same, and
+the ones it does not print — strlen, memset, memchr and the rest — are where an
+AVX512 machine and one without it would part. Three instructions is the size of
+one such difference, not of a compiler change.
+
+This box cannot arbitrate: `host_gate.sh` refuses it at glibc 2.39-0ubuntu8.7
+and rustc 1.94.1 against the golden's 8.9 and 1.98.1, so a reading taken here
+reproduces nothing.
+
+THE RE-RUN SETTLES IT, AND THE PREDICTION GOES DOWN FIRST. The failed job was
+re-run once. Its `compile instructions` step came back GREEN, so a third job on
+this same tree read 35,551,167 — the branch did not move the row, which was
+never in much doubt and is now measured. What the re-run's `compile_sample` line
+says next is decisive, and there are only two answers:
+
+    sha 6d7c7e355188 again, row 35,551,167
+        one binary counted two numbers on two machines. That is a REPRODUCTION
+        FAILURE by this vein's own definition, the silicon is the variable, and
+        the vein halts.
+
+    sha 50656a4ebe6f, row 35,551,167
+        the row tracks the BINARY and not the machine, the two shas are the
+        whole story, and what needs explaining is why one tree built twice
+        produced two binaries when this container builds it twice and gets one.
+
+Written before the reading, because the confound has stood for six days and a
+reading interpreted afterwards can be made to fit either.
+
+THE READING, AND NEITHER BRANCH OF THE PREDICTION HAPPENED. The re-run built a
+THIRD binary and drew a THIRD machine:
+
+    job                 sha            silicon                  row
+    main af78401        50656a4ebe6f   family 0x19 model 0x11   35,551,167
+    kanso#1556 att. 1   6d7c7e355188   family 0x1a model 0x2    35,551,170
+    kanso#1556 att. 2   543f040c05d4   family 0x19 model 0x1    35,551,167
+
+The prediction assumed the re-run would reproduce one of the two shas. It
+reproduced neither, and that is the first result: THREE CI JOBS ON ONE TREE
+BUILT THREE DIFFERENT BINARIES, where this container rebuilding the same tree
+twice produced one. Whatever makes cargo's output vary is in the runner and not
+in the sources.
+
+The second result is the one the confound was in the way of. Attempts on
+family 0x19 model 0x11 and family 0x19 model 0x1 carry DIFFERENT binaries and
+agree on the row TO THE INSTRUCTION. So on that pair the sha moves the row by
+nothing, and the 35,551,170 belongs to the job that drew family 0x1a. The
+variables are separated in the direction the gate's header could not separate
+them from outside: the binary is inert across the pair that shares a family,
+and the outlier is the one that does not.
+
+A FOURTH READING KILLS THE SILICON. The entry above concluded, from three
+jobs, that the binary moves this row by nothing and that family 0x1a was the
+outlier. kanso#1559 — another tree that cannot reach the compiler, a log entry
+and a page paragraph — read 35,551,170 on **family 0x19 model 0x11**, which is
+the model main read 35,551,167 on the same morning.
+
+    job                sha            silicon                  row
+    main af78401       50656a4ebe6f   family 0x19 model 0x11   35,551,167
+    kanso#1556 att.1   6d7c7e355188   family 0x1a model 0x2    35,551,170
+    kanso#1556 att.2   543f040c05d4   family 0x19 model 0x1    35,551,167
+    kanso#1559 att.1   c4649028a8d2   family 0x19 model 0x11   35,551,170
+    kanso#1559 att.2   93fab21748ce   family 0x19 model 0x1    35,551,167
+
+One model, both values. So the machine does not decide it, and the paragraph
+below that reasoned from the 0x19 pair agreeing is withdrawn: two jobs agreeing
+on a value was a coincidence of which binary they built, not a property of the
+silicon they ran on.
+
+What is left standing is the BINARY, and FIVE JOBS HAVE BUILT FIVE DISTINCT
+ONES from sources that cannot differ — 50656a4e, 6d7c7e35, 543f040c, c4649028,
+93fab217. Every one of the five carries the same four section sizes. So the
+thing that moves is inside a section whose length did not change, or in bytes no
+section size counts — and the whole-table print this commit adds is what would
+name the function, which is the reason it exists.
+
+THAT CI NEVER REPRODUCES A BINARY IS NOW THE QUESTION, because this container
+does: a forced recompile here gave the same sha twice. Whatever varies lives in
+the runner rather than in the sources, and until it is named this row cannot be
+pinned to a build.
+
+AND ALL THREE BINARIES PLACE THE SAME BYTES. The sections the gate prints are
+identical across the three, to the byte: `.rodata` 803,768, `.text` 2,836,114,
+`.data` 12,672, `.bss` 29,912. Three shas, one layout. So the sha differences
+live where a section size cannot see them — the build id, `.comment`, the
+unwinding and debug tables, or bytes rearranged inside a section that did not
+change length. Nothing of that kind is executed by `kanso check`.
+
+One triple is not a law. What it licenses is the next experiment rather than a
+conclusion — the row read against family 0x1a again, on a binary that has
+already read 35,551,167 somewhere else — and the whole-table print below is what
+would say which function carries the three when it happens.
+
+BUILT, in this commit. The gate now annotates the whole profile on EVERY run —
+`callgrind_annotate --threshold=100`, uncapped, inside a collapsed group — so
+two jobs can be diffed to the instruction from their logs alone. Verified
+against a real profile: 1,115 rows, 86 KB, reaching functions that retire one
+instruction. `tests/the_compile_gate_prints_the_whole_table.rs` pins the three
+properties that matter, and each was watched red for its own reason: the table
+is asked for at all, its pipeline does not truncate, and it is printed BEFORE
+the row is compared, since a job whose row agreed is the side a comparison is
+always missing and the failure path never emits one.
+
+The row is worth +0.0060 a tenth in the 2026-09-19 marginal table, the least
+valuable of the fourteen the objective reads, and on this pair it is the only
+one of twenty-seven veins that parted.
+
+
+## 2026-09-22 — a finished coordinated branch is a landmine for the next branch that shares its name
+
+kanso#1558 changes a log entry and one gate's output, and it went red on
+`kq specs` with two dozen `error[exhaustive]` and `error[effect]` diagnostics
+out of kq's source. The cause is in the job log's second line:
+
+    kq: claude/go-to-town-m0dicm (performance goldens from main)
+
+`.github/clone-sibling.sh` prefers a sibling branch NAMED AFTER the branch under
+test, which is how a language change and the sweep it forces in kq, vse and
+kanso-json get checked together. kq had a branch of that name. It was cut to
+check kq against kanso#1369, which merged on 2026-09-14; it was twelve commits
+ahead of kq main and twenty-five behind, with nothing open on it, and its source
+predates the err-reader and effect rulings the compiler now enforces.
+
+So a coordinated branch nobody closed answers for every later kanso branch that
+draws the same name, and branch names here are assigned rather than chosen.
+
+FIXED by taking kq main's tree onto that branch in a merge commit — history
+intact, every commit still reachable, no rewrite — after checking that kq's own
+suite passes against a build of kanso main with that tree: eleven fixture
+goldens against `jq -S`, the three cost goldens, the scale gate and the
+published-numbers stamp. Merging kq main into it properly was the other option
+and it is disproportionate: eleven conflicted files, among them the pin, the
+README's numbers and four goldens, all to revive a branch whose work is done.
+
+The script's own header has the general form of this already, about the
+`sibling-goldens-move` licence: "A file left behind now names a branch nobody is
+on, so it grants nothing and nobody has to remember to delete it." The branches
+themselves have no such property, and this is the second mechanism in that file
+to be bitten by a leftover.
+
+## 2026-09-22 — the carry-width rule's decline does not reproduce
+
+kanso#1556 declined the carry-width rule three days ago on one observation:
+under it `kanso run scripts/ratchet` died, and printing the request at the
+point of failure gave `CARRYOOM need=18446744072171062384 depth=3 carry_n=1`.
+That entry and `docs/compiler.html` §115 both present it as what killed the
+rule. Rebuilt and re-run today, it does not happen.
+
+THE RECONSTRUCTION IS EXACT, which is the first thing to establish, because a
+negative result is worth nothing if the change was not really there. `src/beat.rs`
+is the ONLY compiler source differing between `dc368fb7` — the commit that built
+the rule — and its merge-base with main, and main's `src/` and `lib/` are
+byte-identical to that merge-base, since the two commits that have landed since
+touch CLAUDE.md, the log and the page. So main plus that one file IS the branch's
+compiler.
+
+THE POSITIVE CONTROL SAYS THE RULE IS LIVE. On `bench/runbench`, counters on:
+
+    main's compiler    arena_blocks 36   arena_peak_bytes 38,604,496
+    with the rule      arena_blocks 33   arena_peak_bytes 35,458,768
+
+Those are kanso#1556's own headline figures, to the byte.
+
+WHAT THE RULE DOES TO THE RATCHET, with that control passing:
+
+    kanso run scripts/ratchet          exit 0, three times, nothing on stderr
+    dev-tier binary                    exit 0, three times
+    release-tier binary (--release)    exit 0, three times
+    an AddressSanitizer build          clean, no report
+    peak RSS against main's            28,220 KB against 28,176 KB
+
+The WIP state of the rule, `6cc0e349`, was tried as well, on the chance the
+failure belonged to the earlier shape: same arena peak, same clean exit.
+
+NOT MEMORY PRESSURE EITHER. kanso#1556 read the non-monotone coalitions as "a
+failure sitting near a memory limit", and the natural reading of a
+non-reproduction is that this container has more room today. The peak RSS says
+otherwise: the rule's ratchet peaks slightly BELOW main's, and the whole program
+is 28 MB.
+
+ONE THING ABOUT THE BOX, said because this project treats external state as
+part of a measurement. Installing the sanitizer runtime earlier in the same
+session moved this container's glibc from 2.39-0ubuntu8.7 to 8.9, and every
+reading above was taken after that. Both arms share it, so the comparison is
+unaffected, and the arena peak is the evidence rather than the argument:
+35,458,768 here is kanso#1556's figure to the byte, measured on another box on
+another day.
+
+WHAT THIS LICENSES, AND WHAT IT DOES NOT. It does not re-land the rule.
+kanso#1556 carried a second and independent objection — the rule admits
+`json/array_open/3` and `json/obj_open/3`, so `beat::tests::
+json_decode_loops_stay_conservative` had to be updated, and that entry says
+itself that changing a test because the rule beneath it changed is ordinary
+while changing one to get green is not. That question is untouched by anything
+here. What this does is remove the reason the decline was actually written on,
+and put a measured +0.41 back in play as something to decide rather than
+something already settled.
+
+The surfaces the CARRYOOM claim reached are this log and §115 of the page, and
+both are corrected in this commit rather than only here.
+
+
+## 2026-09-22 — every program in the corpus under a sanitizer, and the one report it expects
+
+`src/runtime.c` reclaims memory in bulk, and the walks that decide what survives
+follow pointers into storage the reclaim can take back. The file's own comments
+carry two accounts of that going wrong — a `KStr` read in a munmap'd page, and a
+node below a mark holding a tenured pointer that `k_repaired_settle` still does
+not move. Both were found by a program crashing. Nothing in this tree had ever
+run a sanitizer over the corpus.
+
+It has now, and the result is a clean one:
+
+    81  CLEAN   67 mem-corpus programs, 13 benchmarks, scripts/ratchet
+     2  KNOWN   runbench and scanbench, the same guarded tail read
+     1  SKIP    bench/numeric, which does not compile — see below
+     0  FOUND
+
+THE INSTRUMENT WAS WATCHED FAILING FIRST, which is the only reason the zero is
+worth anything. `scripts/asan/sweep.sh --prove` patches a read of one byte from
+a block `k_ten_release` has just freed into a COPY of the runtime, builds the
+one fixture whose `.mem` golden pins `ten_frees=1`, and asserts the report
+names that function. It does:
+
+    #0 ... in k_ten_release .../runtime_broken.c:1547:33 heap-use-after-free
+
+THE ONE KNOWN REPORT is `k_b_find2_raw`, and reading it wrongly is easy.
+`k_tail_window` permits the final sixteen-byte load only when the pointer sits
+at least sixteen bytes below a page boundary, so the load cannot reach an
+unmapped page and the surplus is masked off afterwards. AddressSanitizer
+reports it anyway, and the address it prints is the LAST byte of the load
+rather than the first — so the report reads as though the access began ten
+bytes past the end when it began inside the buffer. It is classified KNOWN and
+printed rather than filtered, because a filter on that frame would hide every
+later finding in it.
+
+WHAT THE SWEEP TURNED UP BY ACCIDENT: `bench/numeric` has not compiled since
+kanso#505 migrated the tree. `main.kso` calls `sq_sum` with no import, and
+`lib.kso` beside it exports one; `kanso check bench/numeric` exits 2. Nothing
+in scripts/, .github/, tests/ or bench/ names the directory, which is why a
+benchmark being broken for that long went unnoticed. The import is restored in
+this commit and it runs: `sum 2666668666667000000`, which is
+n(n+1)(2n+1)/6 at n = 2,000,000.
+
+AND IT IS THE ONLY ONE. Every directory under `scripts/`, `lib/` and `bench/`
+holding `.kso` files was put through `kanso check`. Ten refuse, and nine of the
+ten are the checker being asked the wrong question rather than anything broken:
+eight are standard-library modules, which reach `builtin_*` names that only
+resolve inside std, and the two `bench/workahead` programs carry a statement
+beside their declarations, which is `kanso play`'s shape and not `check`'s —
+run properly they both exit 0 and agree on `report: 449999997`. `bench/numeric`
+is the only one that fails on its own merits.
+
+It is not wired into CI. Every runner would need `libclang-rt-*-dev`, and the
+known report would have to become a suppression maintained in two places. The
+sweep is for the question the runtime's comments keep raising, asked by hand.
+
+## 2026-09-22 — the tenure fixture does not catch the change it says it catches
+
+`tests/golden/mem/a_repaired_node_below_the_mark_holds_tenure.kso` ends its
+header with a promise:
+
+> The fixture pins `ten_blocks=1` beside `ten_frees=1` so that a change which
+> stops handing them up is a red test rather than a segfault in `k_copy_size`.
+
+It does not. Stopping the hand-up leaves every counter in its `.mem` vein
+byte-identical, so the test stays green.
+
+THE EXPERIMENT. `k_ten_hand_up` was replaced, in a COPY of the runtime, by a
+call to `k_ten_release` — the change the promise is about, which frees a
+depth's tenure blocks at the inner pop instead of passing them to the depth
+outside. Then:
+
+    the path is exercised    traced: HANDUP d=1 with a real block, once
+    every counter            identical, all forty-odd rows of the vein
+    under a sanitizer        clean, no report
+
+The counters cannot see it because `ten_frees` counts the block being freed
+either way. Handing up moves WHEN and at WHICH DEPTH the free happens, and the
+vein records neither.
+
+WHAT THE FIXTURE DOES ESTABLISH is narrower than its header claims. It builds
+the configuration the comment is about — a node below the mark holding a
+pointer into tenure — and it does not read through that pointer after the pop.
+So it reaches the construction and never the danger, which is why removing the
+hand-up changes nothing observable in it.
+
+WHAT WOULD CLOSE IT, neither done here. A counter that separates a hand-up from
+a release would make the promise true, and that is a counters change: every
+`.mem` file, twelve cost goldens, the emitted vein, the ch10 sample and the
+siblings, all in one pull request. Or the header's last paragraph goes, and the
+fixture keeps the claim it can support.
+
+A caveat on the sanitizer half: the binary was built `-O0` against a
+plain-malloc runtime, where the shipped one is `-O3 -flto`. That bounds the
+sanitizer result to this build. The counter result is not so bounded — those
+rows are deterministic, which is the whole reason they are pinned.
+
 Worth setting beside kanso#1502, which took the same merge on the same day and
 read different numbers for five of the six. Only the interp row's +7 is shared.
 So these are not a property of kanso#1520 that a branch inherits — they are

@@ -1,1 +1,3 @@
-print "sum {sq_sum 2000000 0}"
+import "./lib"
+
+print "sum {lib/sq_sum 2000000 0}"

@@ -333,6 +333,21 @@ gate reads `/^\.(text|rodata|data|bss)[ \t]/`, and the pull request landed
 the same alternation on all nine section lines across six gates with a spec
 reading them off disk, so the shape cannot go stale one gate at a time again.
 
+**A SECOND COUNTER NOW READS APART, and this one blocks merges.** On 2026-09-22
+`compile_instructions` read 35,551,167 on main and 35,551,170 on kanso#1556,
+whose diff is the log and the page and whose compiler sources are main's to the
+byte. The log entry of that date carries the pair. What it adds to this row: the
+two builds have byte-identical section sizes, and all fifteen functions in the
+threshold-90 listing agree to the instruction, `__memcmp_avx2_movbe` and
+`__memcpy_avx_unaligned_erms` included — so a different string routine, which
+was the candidate the differing feature block suggested, is out. The confound
+this row has always had is still there, because the binary sha and the silicon
+moved together again.
+
+The difference from the `interp_instructions` half is that a red row on a
+docs-only tree fails a required check, so any pull request can draw it from the
+runner pool. That is the cost of leaving this open, and it is new.
+
 If the reading cannot be made to repeat between machines, the question that
 follows is whether an exact pin is the right instrument for a counter whose
 artifact and host both move under it. That one is Clay's, and this row does
