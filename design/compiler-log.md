@@ -7366,3 +7366,30 @@ it is still there, and the log kept every entry from both sides.
 The counter veins are untouched by the merge: the twelve cost goldens and all
 sixty-seven `.mem` files still agree, and `ten_handups` still reads 3 on the run
 program and 1, 1 and 4 on the three fixtures that see it.
+
+CI'S SITTING ON THE MERGED TREE, each row with the value it landed on:
+
+    library_instructions    127,146,502 -> 127,154,981    +8,479   +0.0067%
+    entry_instructions      126,691,703 -> 126,700,022    +8,319   +0.0066%
+    compile_instructions     35,540,015 ->  35,543,499    +3,484   +0.0098%
+    startup_instructions      3,362,329 ->   3,363,118      +789   +0.0235%
+    emit_instructions        51,481,045 ->  51,481,529      +484   +0.0009%
+    interp_instructions     908,952,299 -> 908,952,292        -7   -0.0000%
+
+The five rises are the counter's own bytes. `ten_handups` adds a global, an
+increment behind a predicted-not-taken test and a line of stats output, and
+`src/runtime.c` is `include_str!`'d into the compiler, so the compiler carries
+those bytes whether or not anything counts. `compile_allocs`, `compile_peak_
+bytes`, both codegen rows and every run-side row are byte-identical.
+
+**THE INTERP ROW CAME BACK SEVEN LOWER, AND THAT IS THE STANDING ROW AGAIN.**
+Nothing on this branch can reach name comparison -- the only Rust that changed
+is a counter declaration, an increment and a `fprintf` -- and 908,952,292
+against main's 908,952,299 is the same single-digit drift STATUS.md's
+"a welfare counter reads three parts per billion" has been open on since
+2026-09-15. Seven in 909 million is eight parts per billion. It is recorded here
+as another sighting rather than explained: kanso#1562 measured `.text` growth
+moving this row through `__memcmp_avx2_movbe`, and this branch grows `.text`,
+so the direction is at least consistent with that. The floor holds at
+77.28677792407876 either way and the sentinel passes, so there is no rise to
+bank and nothing to defend.
