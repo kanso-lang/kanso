@@ -11,9 +11,14 @@
 //! ended there.
 //!
 //! The whole table is about 1,115 rows and reaches functions that retire a
-//! SINGLE instruction, which is where a start-up ifunc resolving differently on
-//! another machine shows up. A three-instruction move can sit in a function too
-//! small to make any threshold, so nothing short of the whole table catches one.
+//! SINGLE instruction, which is the resolution a three-instruction move needs.
+//! Such a move can sit in a function too small to make any threshold, so
+//! nothing short of the whole table catches one.
+//!
+//! Four jobs have now read this row on trees that cannot reach the compiler,
+//! two at 35,551,167 and two at 35,551,170, and one CPU model produced both
+//! values — so the machine is not the variable and the table is what would say
+//! what is.
 //!
 //! It has to be printed on EVERY run rather than on the failing one, because a
 //! comparison needs both sides and only one side is ever the job that failed.

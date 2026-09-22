@@ -6176,6 +6176,29 @@ variables are separated in the direction the gate's header could not separate
 them from outside: the binary is inert across the pair that shares a family,
 and the outlier is the one that does not.
 
+A FOURTH READING KILLS THE SILICON. The entry above concluded, from three
+jobs, that the binary moves this row by nothing and that family 0x1a was the
+outlier. kanso#1559 — another tree that cannot reach the compiler, a log entry
+and a page paragraph — read 35,551,170 on **family 0x19 model 0x11**, which is
+the model main read 35,551,167 on the same morning.
+
+    job                sha            silicon                  row
+    main af78401       50656a4ebe6f   family 0x19 model 0x11   35,551,167
+    kanso#1556 att.1   6d7c7e355188   family 0x1a model 0x2    35,551,170
+    kanso#1556 att.2   543f040c05d4   family 0x19 model 0x1    35,551,167
+    kanso#1559         c4649028a8d2   family 0x19 model 0x11   35,551,170
+
+One model, both values. So the machine does not decide it, and the paragraph
+below that reasoned from the 0x19 pair agreeing is withdrawn: two jobs agreeing
+on a value was a coincidence of which binary they built, not a property of the
+silicon they ran on.
+
+What is left standing is the BINARY, and four jobs have now built four distinct
+ones from sources that cannot differ. Every one of the four carries the same
+four section sizes. So the thing that moves is inside a section whose length did
+not change, or in bytes no section size counts — and the whole-table print this
+commit adds is what would name the function, which is the reason it exists.
+
 AND ALL THREE BINARIES PLACE THE SAME BYTES. The sections the gate prints are
 identical across the three, to the byte: `.rodata` 803,768, `.text` 2,836,114,
 `.data` 12,672, `.bss` 29,912. Three shas, one layout. So the sha differences
