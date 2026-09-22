@@ -6104,6 +6104,15 @@ benchmark being broken for that long went unnoticed. The import is restored in
 this commit and it runs: `sum 2666668666667000000`, which is
 n(n+1)(2n+1)/6 at n = 2,000,000.
 
+AND IT IS THE ONLY ONE. Every directory under `scripts/`, `lib/` and `bench/`
+holding `.kso` files was put through `kanso check`. Ten refuse, and nine of the
+ten are the checker being asked the wrong question rather than anything broken:
+eight are standard-library modules, which reach `builtin_*` names that only
+resolve inside std, and the two `bench/workahead` programs carry a statement
+beside their declarations, which is `kanso play`'s shape and not `check`'s —
+run properly they both exit 0 and agree on `report: 449999997`. `bench/numeric`
+is the only one that fails on its own merits.
+
 It is not wired into CI. Every runner would need `libclang-rt-*-dev`, and the
 known report would have to become a suppression maintained in two places. The
 sweep is for the question the runtime's comments keep raising, asked by hand.
