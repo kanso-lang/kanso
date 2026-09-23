@@ -10289,3 +10289,5 @@ both changes. Their emitted rows, counted here from the `.ll` files, read
 `digestbench defines=155 calls=1210 branches=819 lines=9012` and `runbench
 defines=523 calls=5749 branches=3445 lines=34623`. The `.text`, codegen and
 emit rows come from CI, and the floor is banked again after them.
+CI's cost goldens agreed with every merged row, and the floor is banked over
+them.
