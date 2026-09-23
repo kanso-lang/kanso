@@ -980,7 +980,8 @@ fn release_clang(stem: &str, ll_path: &str) -> std::io::Result<std::process::Exi
     // The objective weighs the two at about +1.6 and -0.26. ThinLTO was the
     // other way to shrink this link and was declined at -3.47% for +3.03%;
     // design/compiler-log.md has both.
-    let runtime_obj = cached_runtime_object("release", &["-O3"])?;
+    let runtime_obj = cached_runtime_object("release", &["-O3", "-DK_HOT_ELSEWHERE"])?;
+    let hot_obj = cached_object("release_hot", &hot_source(), &["-O3", "-flto"])?;
     std::process::Command::new("clang")
         .arg("-O3")
         .arg("-flto")
@@ -1089,6 +1090,7 @@ fn release_clang(stem: &str, ll_path: &str) -> std::io::Result<std::process::Exi
         .arg("-o")
         .arg(stem)
         .arg(ll_path)
+        .arg(&hot_obj)
         .arg(&runtime_obj)
         .arg("-lm")
         .status()
@@ -1145,7 +1147,78 @@ fn runtime_key(profile: &str, opt: &[&str], preserve: bool, counting: bool) -> u
 }
 
 fn cached_runtime_object(profile: &str, opt: &[&str]) -> std::io::Result<std::path::PathBuf> {
-    let source = include_str!("runtime.c");
+    cached_object(profile, include_str!("runtime.c"), opt)
+}
+
+/// The helpers a release build keeps in its LTO link, as a translation unit
+/// of their own. The runtime itself is machine code there, and the link can
+/// only inline what it holds as bitcode: `k_b_find2_raw`,
+/// `k_b_find2_below_raw` and `k_beat_iter` were 161,703,385 instructions of
+/// the run program's calls when the whole runtime went native. So the runtime
+/// is compiled `-DK_HOT_ELSEWHERE`, which leaves those three out, and this unit
+/// defines them.
+///
+/// The text is taken from `runtime.c` itself rather than kept in a second
+/// file, because a dozen specs read these functions out of that file and a
+/// copy would drift from what they check. The typedefs come the same way.
+/// The declarations below are the globals and functions the helpers reach,
+/// which `runtime.c` defines with external linkage for this unit's sake.
+fn hot_source() -> String {
+    let runtime = include_str!("runtime.c");
+    let mut out = String::from(concat!(
+        "#include <stdint.h>\n",
+        "#include <stddef.h>\n",
+        "#if defined(__aarch64__)\n#include <arm_neon.h>\n",
+        "#elif defined(__x86_64__)\n#include <tmmintrin.h>\n#endif\n",
+        "#ifdef KANSO_COUNTERS_BUILD\n#define K_COUNTING 1\n#else\n#define K_COUNTING 0\n#endif\n",
+    ));
+    for (start, end) in [
+        ("typedef struct { char* data; int len; int cap; } KStr;", "\n"),
+        ("typedef struct KBlock {", "\n"),
+        ("typedef struct { KBlock* block;", " KMark;\n"),
+        ("#define K_BEAT_MAX ", "\n"),
+    ] {
+        out.push_str(hot_text(runtime, start, end));
+    }
+    out.push_str(concat!(
+        "extern KBlock* k_blocks;\n",
+        "extern KStr* k_seek_str;\n",
+        "extern char* k_arena;\n",
+        "extern size_t k_arena_left;\n",
+        "extern long long k_stat_beat_iters;\n",
+        "extern long long k_stat_find2_calls;\n",
+        "extern KMark k_beat_stack[K_BEAT_MAX];\n",
+        "extern int k_beat_depth;\n",
+        "extern KMark* k_beat_top;\n",
+        "extern KMark* k_seek_under;\n",
+        "extern int k_buf_dirty;\n",
+        "void k_beat_rewind_slow(KMark* m);\n",
+        "__attribute__((noreturn, noinline)) void k_die(const char* msg);\n",
+    ));
+    for start in [
+        "static inline int k_tail_window(",
+        "static inline void k_beat_rewind(KMark* m) {",
+        "__attribute__((always_inline)) void k_beat_iter(void) {",
+        "__attribute__((always_inline)) long long k_b_find2_raw(",
+        "__attribute__((always_inline)) long long k_b_find2_below_raw(",
+    ] {
+        out.push_str(hot_text(runtime, start, "\n}\n"));
+    }
+    out
+}
+
+/// From `start` through the first `end` after it, inclusive. A function ends
+/// at the first closing brace in column zero, which is how every definition in
+/// `runtime.c` is written.
+fn hot_text<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
+    let from = source.find(start).unwrap_or_else(|| panic!("runtime.c no longer holds `{start}`"));
+    let to = from
+        + source[from..].find(end).unwrap_or_else(|| panic!("`{start}` has no end in runtime.c"))
+        + end.len();
+    &source[from..to]
+}
+
+fn cached_object(profile: &str, source: &str, opt: &[&str]) -> std::io::Result<std::path::PathBuf> {
     let preserve = closure_convention() == kanso::codegen::ClosureConvention::PreserveNone;
     let counting = kanso::codegen::counters_wanted();
     let key = runtime_key(profile, opt, preserve, counting);
@@ -1412,5 +1485,28 @@ mod a_cached_runtime_is_named_by_what_built_it {
             runtime_key("release", &["-O3"], false, false),
             runtime_key("release", &["-O3"], false, false),
         );
+    }
+}
+
+#[cfg(test)]
+mod the_hot_unit_is_taken_from_the_runtime {
+    use super::hot_source;
+
+    /// Every piece the release build's bitcode unit is assembled from is
+    /// still where the extraction looks for it. A signature edited in
+    /// `runtime.c` without the list in `hot_source` panics here rather than
+    /// in a user's release build.
+    #[test]
+    fn every_hot_definition_is_found() {
+        let unit = hot_source();
+        for name in [
+            "k_tail_window",
+            "k_beat_rewind",
+            "k_beat_iter",
+            "k_b_find2_raw",
+            "k_b_find2_below_raw",
+        ] {
+            assert!(unit.contains(&format!("{name}(")), "the hot unit lacks {name}");
+        }
     }
 }

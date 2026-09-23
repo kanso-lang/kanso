@@ -10725,6 +10725,24 @@ under the new flags until the temp directory was cleared, so the flags are in
 the key now. `the_runtime_key_names_the_flags` fails with "two flag sets share
 a cached runtime object" when they are taken out.
 
-Open: the three helpers. Keeping them in the LTO link while the rest of the
-runtime is machine code would give the run program back most of its +3.38%,
-and needs the globals they touch shared between two objects.
+**The three helpers stay in the link.** The runtime is compiled
+`-DK_HOT_ELSEWHERE`, which leaves out `k_b_find2_raw`, `k_b_find2_below_raw`
+and `k_beat_iter`, and a second object defines them as bitcode, so the LTO
+link inlines them into the program as it did. `hot_source` in src/main.rs
+builds that object's source from `runtime.c`'s own text: the three
+definitions, `k_tail_window` and `k_beat_rewind` beside them, and the typedefs
+they need. A dozen specs read these functions out of `runtime.c`, and a second
+copy would drift from what they check. The globals the helpers reach lose
+`static` so both objects can name them: `k_blocks`, `k_seek_str`,
+`k_beat_stack`, `k_beat_depth`, `k_beat_top`, `k_seek_under`, `k_buf_dirty`
+and two counters, and `k_beat_rewind_slow`.
+
+    codegen_instructions_release   6,598,715,476 -> 2,898,793,716   -56.07%
+    runbench                       1,810,051,241 -> 1,811,839,413    +0.10%
+
+The helpers cost the release row 50,210,510 instructions and give back
+59,359,748 of the run program's 61,147,920. Every counter vein and the lazy
+tier read what main has, the counting build included, which puts the two
+counters the helpers increment in the second object.
+`every_hot_definition_is_found` fails when a signature the extraction looks
+for is edited out of `runtime.c`.
