@@ -9931,3 +9931,46 @@ same skipped walk, and some may be the layout of a compiler that changed at
 278 places. Emit runs the code generator, which never evaluates, so its rise
 is the second kind until something shows otherwise. The allocation, memory
 and codegen rows did not move.
+
+---
+
+## 2026-09-23 — the tailcc pass reads code lines only, which fixes a string it broke and a fifth of start-up
+
+`narrow_tailcc` is the text pass at the end of `Backend::emit` that drops
+`tailcc` from every function a `musttail` does not reach. It read every line
+of the module, string constants included, and it looked up each line's callee
+with `symbol_of`, which allocates a `String`, before asking whether the line
+said `tailcc` at all.
+
+**The bug.** A string constant is one line opening with `@`, and its bytes are
+the program's. So `print "call tailcc here"` lost the word from its constant
+and kept the declared length, and clang refused the module:
+
+    error: constant expression type mismatch: got type '[9 x i8]' but expected '[16 x i8]'
+
+The interpreter printed the line. That is a divergence between engines, and
+`tests/golden/micro/a_string_may_spell_what_the_ir_spells.kso` pins it: three
+strings spelling `call tailcc`, `musttail call tailcc @f(` and `define tailcc`.
+Watched red on main, where `micro_corpus_agrees_across_engines` reported that
+the sample answers differently as a library. It is green here, and green in the
+release-built corpus.
+
+**The fix.** Lines opening with `@` are passed through untouched, and a line
+without `tailcc ` is copied before its callee is looked up. Every rewrite the
+pass makes needs that word, so the second change alters nothing but the cost.
+Nothing the emitter writes on a global line carries `tailcc`; the one format
+string that does is a function body. `runbench.ll` is byte-identical before
+and after.
+
+**What it cost.** `print "x"` emits 1,155 lines, none of them a `musttail`, and
+the pass ran `symbol_of` on nearly every one and three substring searches
+beside it. On this container, with the gates' own commands, the address-blind
+preload, and `GITHUB_ACTIONS=1` so the host gate measures instead of refusing:
+
+    startup_instructions   3,404,805 -> 2,698,935   -705,870   -20.7%
+    emit_instructions     51,896,570 -> 48,118,120  -3,778,450  -7.3%
+
+The container runs rustc 1.94.1 and the goldens were measured on 1.98.1, so
+these are this host's readings and CI's rows go into the goldens. No other row
+reads the pass: `kanso check` stops before codegen, and the codegen rows count
+clang, which is handed the same bytes.

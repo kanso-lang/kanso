@@ -7436,10 +7436,16 @@ fn ir_bytes(bytes: &[u8]) -> String {
 /// The set is read out of the emitted text rather than recomputed, because a
 /// second copy of "when do we musttail" would drift from the first and the
 /// symptom of drift is silent corruption.
+///
+/// Only code is read. A line opening with `@` defines a global, a string
+/// constant among them, and a constant's bytes are the program's: a program
+/// printing `call tailcc` once lost the words from its constant, kept the
+/// declared length, and clang refused the module.
 fn narrow_tailcc(ir: String) -> String {
+    let code = |line: &str| !line.starts_with('@');
     let mut keep: crate::hash::Set<String> = crate::hash::Set::default();
     let mut current: Option<String> = None;
-    for line in ir.lines() {
+    for line in ir.lines().filter(|line| code(line)) {
         if let Some(rest) = line.strip_prefix("define ") {
             current = symbol_of(rest);
         }
@@ -7492,6 +7498,13 @@ fn narrow_tailcc(ir: String) -> String {
 
     let mut out = String::with_capacity(ir.len());
     for line in ir.lines() {
+        // Every rewrite below needs the word, so a line without it is copied
+        // as it stands and its callee is never looked up.
+        if !code(line) || !line.contains("tailcc ") {
+            out.push_str(line);
+            out.push('\n');
+            continue;
+        }
         let named = symbol_of(line);
         let reroute = !line.contains("musttail call")
             && line.contains("call tailcc ")
@@ -7501,7 +7514,7 @@ fn narrow_tailcc(ir: String) -> String {
             let call = format!("@{}(", quoted(&name));
             let through = format!("@{}(", trampoline_name(&name));
             out.push_str(&line.replace("call tailcc ", "call ").replace(&call, &through));
-        } else if line.contains("tailcc ") && !named.as_ref().is_some_and(|n| keep.contains(n)) {
+        } else if !named.as_ref().is_some_and(|n| keep.contains(n)) {
             out.push_str(&line.replace("tailcc ", ""));
         } else {
             out.push_str(line);
