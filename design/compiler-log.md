@@ -10086,3 +10086,13 @@ On this container, with the gates' commands and `GITHUB_ACTIONS=1`:
 The short-tree guard in `codegen_instructions.sh` fails a build that ran fewer
 than four processes, which still holds; its message said a real build runs five
 and now says four, with the probe a fifth only before its answer is cached.
+
+**CI's rows**, taken into the goldens:
+
+    codegen_instructions_dev        596,192,991 ->   563,926,696   -5.41%
+    codegen_instructions_release  6,837,938,796 -> 6,805,672,501   -0.47%
+    startup_instructions                968,441 ->       967,869      -572
+
+Both codegen rows fell by 32,266,295, the same figure on each tier, which is one
+probe's compile. Start-up falls 572 instructions. The emitted, `.text`, emit and
+compile rows read what main has. The rise is banked.
