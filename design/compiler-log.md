@@ -10081,6 +10081,34 @@ call from the loops that rewind, because the large ones spend LTO's inlining
 budget before reaching it. `always_inline` on it reads 1,826,634,704, giving
 back 7,298,706, and every counter vein agrees. The net is +6,155,269, 0.34%.
 
+**CI's rows**, taken into the goldens. The rewind's cursor test is paid by
+every program that rewinds, and `always_inline` gives part of it back:
+
+    work_runbench        1,802,356,350 -> 1,809,683,884   +0.41%
+    work_encodebench     3,465,000,320 -> 3,479,505,321   +0.42%
+    work_livebench       2,793,281,380 -> 2,807,786,381   +0.52%
+    work_basket             32,776,834 ->    33,024,826   +0.76%
+    work_oneshot            17,807,820 ->    17,844,087   +0.20%
+    work_deepbench         347,635,275 ->   347,896,726   +0.08%
+    work_scanbench         462,269,305 ->   462,289,601
+    work_digestbench         9,966,673 ->     9,966,845
+    work_readbench           4,627,056 ->     4,627,255
+    work_jsonbench       1,133,645,592 -> 1,133,645,757
+    work_indexbench          2,895,743 ->     2,895,771
+    work_pendbench         208,139,955 ->   208,139,965
+    work_escapebench        75,228,606 ->    72,849,606   -3.16%
+    work_widebench          33,676,020 ->    33,660,074
+
+`text`, the sum of the benchmarks' `.text`, reads 1,767,676, the inlined
+rewind in every loop that makes one. `library_instructions` reads 126,699,213
+and `startup_instructions` 3,372,417, where `lib/regexp` and `src/runtime.c`
+are compiled into the compiler; `entry_instructions` reads 126,074,458 and the
+two codegen rows 596,206,478 and 6,841,764,937. The scan benchmark's peak fell
+by 160 MB while its instruction row moved by 20,296.
+
+With CI's rows the objective scores 82.09 against a floor of 77.37, and the
+rise is banked.
+
 **What moves.** The run program's peak is a deterministic counter and scores
 here: welfare 77.36 -> 82.10, production 57.23 -> 66.07, with the instruction
 rows as main has them. The fast rewind now compares before it stores, and the
