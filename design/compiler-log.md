@@ -9210,3 +9210,13 @@ tunables, main and this tree both read 933,390,005, with the memcmp term moving
 about CI's. The mechanism stays open. It is a layout term
 of the kind the 2026-09-15 ruling covers, priced here at the value it landed
 on.
+
+A CORRECTION to the entry above, "kanso#1561's compile row on the excluded gate,
+and the frame that IS the two faces", which landed on main with kanso#1504. It
+says interp's drift "has been measured at seven and fourteen rather than three".
+The only disagreement within one commit that the standing row records is six,
+2,178,502,266 against 2,178,502,272, on 2026-09-15. Seven and fourteen are
+moves between trees. The same twenty-eight jobs bear on that row: no tree among
+them read two interp values, on a row now near 900 million where the six was
+read near 2,178 million, so the six has not recurred in them. That is
+twenty-eight jobs, and it does not close the row.
