@@ -10746,3 +10746,46 @@ tier read what main has, the counting build included, which puts the two
 counters the helpers increment in the second object.
 `every_hot_definition_is_found` fails when a signature the extraction looks
 for is edited out of `runtime.c`.
+
+**CI's rows**, taken into the goldens:
+
+    codegen_instructions_release 6,598,389,807 -> 2,898,336,765   -56.08%
+    codegen_instructions_dev        473,884,358 ->   473,933,874   +49,516
+    work_runbench        1,793,157,817 ->   1,798,630,190   +0.31%
+    work_jsonbench       1,133,645,908 ->   1,138,862,859   +0.46%
+    work_encodebench     3,459,377,334 ->   3,481,870,112   +0.65%
+    work_livebench       2,787,658,394 ->   2,805,256,521   +0.63%
+    work_deepbench         349,491,458 ->     351,324,436   +0.52%
+    work_escapebench        72,849,606 ->      74,602,433   +2.41%
+    work_scanbench         462,285,827 ->     463,280,487   +0.22%
+    work_oneshot            19,769,235 ->      19,850,560   +0.41%
+    work_basket             32,569,017 ->      32,585,639   +0.05%
+    work_widebench          33,660,015 ->      33,660,736   +0.00%
+    work_pendbench         208,132,768 ->     208,152,834   +0.01%
+    work_indexbench          2,895,756 ->       2,906,581   +0.37%
+    work_digestbench         5,766,324 ->       5,767,585   +0.02%
+    work_readbench           4,627,255 ->       4,630,249   +0.06%
+
+CI reads the run program at +0.31% where this container read +0.10%, and
+every benchmark pays something: the helpers that stay in the link are the
+three the run program lost most to, and the other programs lean on runtime
+functions this change leaves outside it. escapebench pays most,
+2.41%. `text` rises on every program, 2,249,452 summed over the
+fourteen against 1,772,924 before -- a native runtime is linked whole, where the
+LTO link dropped what the program never reached -- and machine-code size
+carries no welfare term. `compile_instructions` reads 35,400,618,
+`entry_instructions` 125,944,855, `library_instructions` 126,522,330 and
+`startup_instructions` 975,983, each 2 above main: `runtime.c` is embedded in
+the compiler and grew by the guard comments, which moves the compiler's own
+layout. The `data-golden` spans quoting the three compile rows were rewritten
+by `golden_prose --write`. The objective reads 85.09 against 84.00, and the
+rise is banked.
+
+The trend gate first read this change as a pure regression. Both codegen rows
+were walked by it and named in no direction table, so the release row's fall
+counted toward neither side while fourteen work rows rose.
+`tests/every_compile_vein_row_has_a_direction.rs` exists to catch exactly that
+and missed it, because it matched vein files ending `instructions_golden.txt`
+and the codegen veins end `instructions_dev_golden.txt` and
+`instructions_release_golden.txt`. The spec now matches any instructions vein,
+went red naming the two rows, and the rows are in the table as lower-is-better.

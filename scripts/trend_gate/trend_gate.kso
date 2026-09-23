@@ -100,7 +100,17 @@ lower_gi = text/concat lower_gh ["interp_allocs" "interp_peak_bytes"]
 
 lower_gg = text/concat ["entry_instructions"] lower_gi
 
-lower_gs = text/concat lower_g lower_gg
+lower_gs0 = text/concat lower_g lower_gg
+
+# The two codegen rows joined the walk on 2026-09-17 and this table never, for
+# the reason the paragraph above gives about the entry and library rows: the
+# spec deriving the veins off disk matched on a suffix their names do not end
+# with. So the release row's -56% in kanso#1585 counted toward neither side,
+# and a change that bought it with a run-program rise read as a pure
+# regression. Lower is better for both.
+lower_gc = ["codegen_instructions_dev" "codegen_instructions_release"]
+
+lower_gs = text/concat lower_gs0 lower_gc
 
 # The runtime work vein, per benchmark. Four of these are welfare's run-speed
 # terms, so half the score's inputs were invisible to the gate that exists to

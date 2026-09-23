@@ -46,7 +46,13 @@ fn compile_veins(bench: &std::path::Path) -> Vec<std::path::PathBuf> {
     for entry in std::fs::read_dir(bench).expect("bench/ reads") {
         let path = entry.expect("a bench/ entry reads").path();
         let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
-        if name.ends_with("instructions_golden.txt") && name != "instructions_golden.txt" {
+        // `codegen_instructions_dev_golden.txt` puts its tier between the word
+        // and the suffix, so an ends-with on `instructions_golden.txt` walked
+        // past both codegen veins from the day they were added, and the gate
+        // read their rows as unclassified: kanso#1585's -56% on the release row
+        // counted toward neither side and the change read as a pure regression.
+        let instructions = name.contains("instructions") && name.ends_with("_golden.txt");
+        if instructions && name != "instructions_golden.txt" {
             out.push(path);
         }
     }
