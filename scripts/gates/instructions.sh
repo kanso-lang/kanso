@@ -127,10 +127,7 @@ if command -v callgrind_annotate >/dev/null; then
   # never known in advance and a comparison needs the agreeing side too.
   for b in jsonbench encodebench oneshot basket widebench deepbench escapebench \
            pendbench indexbench scanbench digestbench readbench livebench runbench; do
-    echo "::group::the whole function table: $b"
-    callgrind_annotate --threshold=100 /tmp/cg.$b 2>/dev/null \
-      | sed -n 's/^ *\([0-9,][0-9,]*\) ([^)]*)  *\(.*\)$/\1 \2/p'
-    echo "::endgroup::"
+    sh "$(dirname "$0")/function_table.sh" /tmp/cg.$b "$b"
   done
 else
   echo "=== no callgrind_annotate on this host, so no breakdown"
