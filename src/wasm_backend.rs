@@ -216,8 +216,12 @@ fn partial_lambda(
     let params: Vec<(String, crate::diag::Span)> =
         (0..arity - supplied.len()).map(|i| (format!("k#partial{i}"), span)).collect();
     let mut args = supplied.to_vec();
-    args.extend(params.iter().map(|(n, s)| Expr::Ident(Name::new(&n.clone()), *s)));
-    let head = Expr::Ident(Name::new(name), span);
+    args.extend(
+        params.iter().map(|(n, s)| {
+            Expr::Ident(Name::new(&n.clone()), *s, crate::ast::Resolution::default())
+        }),
+    );
+    let head = Expr::Ident(Name::new(name), span, crate::ast::Resolution::default());
     let body = Expr::App { head: Box::new(head), args, piped: false, span };
     Ok(Expr::Lambda { params, body: Box::new(body), span })
 }
@@ -714,7 +718,11 @@ impl<'a> WasmBackend<'a> {
             self.emit_expr(ctx, arg, false)?;
             ctx.body.call(RT_ARG);
         }
-        self.emit_expr(ctx, &Expr::Ident(name.clone(), span), false)?;
+        self.emit_expr(
+            ctx,
+            &Expr::Ident(name.clone(), span, crate::ast::Resolution::default()),
+            false,
+        )?;
         ctx.body.i32_const(supplied.len() as i64);
         ctx.body.call(RT_PARTIAL);
         Ok(())
@@ -755,9 +763,11 @@ impl<'a> WasmBackend<'a> {
             }
             // A hole is a none until the block fills it, the way the other two
             // engines build it.
-            Expr::Hole(span) => {
-                self.emit_expr(ctx, &Expr::Ident(Name::new("none"), *span), tail)?
-            }
+            Expr::Hole(span) => self.emit_expr(
+                ctx,
+                &Expr::Ident(Name::new("none"), *span, crate::ast::Resolution::default()),
+                tail,
+            )?,
             Expr::Int(n, _) => {
                 let lit = self.lit(LitKey::Int(n.clone()), || Lit::Int(n.clone()));
                 ctx.body.i32_const(lit as i64);
@@ -767,7 +777,7 @@ impl<'a> WasmBackend<'a> {
                 ctx.body.i32_const(lit as i64);
             }
             Expr::Str(parts, _) => self.emit_template(ctx, parts)?,
-            Expr::Ident(name, _) => self.emit_ident(ctx, name, tail)?,
+            Expr::Ident(name, _, _) => self.emit_ident(ctx, name, tail)?,
             Expr::List(items, _) => {
                 for item in items {
                     self.emit_element(ctx, item)?;
@@ -918,7 +928,7 @@ impl<'a> WasmBackend<'a> {
                 }
                 let mut all = held.clone();
                 all.extend(args.iter().cloned());
-                let callee = Expr::Ident(name.clone(), *nspan);
+                let callee = Expr::Ident(name.clone(), *nspan, crate::ast::Resolution::default());
                 let call =
                     Expr::App { head: Box::new(callee), args: all, piped: *piped, span: *span };
                 return self.emit_expr(ctx, &call, false);
@@ -1211,7 +1221,7 @@ impl<'a> WasmBackend<'a> {
     /// the element spells the group's own name.
     fn defers_self(&self, ctx: &Ctx, expr: &Expr) -> bool {
         fn mentions(expr: &Expr, of: &dyn Fn(&str) -> bool) -> bool {
-            if let Expr::Ident(n, _) | Expr::Partial(n, _) = expr {
+            if let Expr::Ident(n, _, _) | Expr::Partial(n, _) = expr {
                 if of(n) {
                     return true;
                 }
@@ -1342,9 +1352,9 @@ impl<'a> WasmBackend<'a> {
         // a partial, is the same case once more: any head that is not a name
         // is a value, computed and then called, and the runtime names what it
         // cannot call.
-        let keyword_head = matches!(head, Expr::Ident(n, _) if matches!(n.as_str(), "true" | "false" | "none" | "done"));
+        let keyword_head = matches!(head, Expr::Ident(n, _, _) if matches!(n.as_str(), "true" | "false" | "none" | "done"));
         let name = match head {
-            Expr::Ident(name, _) if !keyword_head => name,
+            Expr::Ident(name, _, _) if !keyword_head => name,
             _ => {
                 for arg in args {
                     self.emit_expr(ctx, arg, false)?;
@@ -1572,7 +1582,7 @@ impl<'a> WasmBackend<'a> {
         self.emit_expr(ctx, &args[0], false)?;
         ctx.body.local_set(piped_local);
         let closure: Result<(), String> = match head {
-            Expr::Ident(name, _)
+            Expr::Ident(name, _, _)
                 if self.dispatchers.contains_key(&(name.to_string(), args.len())) =>
             {
                 let target = self.dispatchers[&(name.to_string(), args.len())];
@@ -1601,7 +1611,7 @@ impl<'a> WasmBackend<'a> {
                 ctx.body.call(RT_MKCLOSURE);
                 Ok(())
             }
-            Expr::Ident(name, _) if crate::check::BUILTINS.contains(&name.as_str()) => {
+            Expr::Ident(name, _, _) if crate::check::BUILTINS.contains(&name.as_str()) => {
                 let rest = args.len() - 1;
                 let name_lit = self.str_lit(name);
                 let fallible = matches!(
@@ -1645,7 +1655,7 @@ impl<'a> WasmBackend<'a> {
                 Ok(())
             }
             Expr::Lambda { .. } if args.len() == 1 => self.emit_lambda(ctx, head),
-            Expr::Ident(name, _) if ctx.scope.contains_key(name.as_str()) && args.len() == 1 => {
+            Expr::Ident(name, _, _) if ctx.scope.contains_key(name.as_str()) && args.len() == 1 => {
                 ctx.body.local_get(ctx.scope[name.as_str()]);
                 Ok(())
             }
@@ -1663,7 +1673,7 @@ impl<'a> WasmBackend<'a> {
 
 fn free_idents(expr: &Expr, visit: &mut dyn FnMut(&str)) {
     match expr {
-        Expr::Ident(name, _) | Expr::Partial(name, _) => visit(name),
+        Expr::Ident(name, _, _) | Expr::Partial(name, _) => visit(name),
         Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
             for stmt in stmts {
                 match stmt {

@@ -263,7 +263,7 @@ impl<'a> Analysis<'a> {
     /// except as an argument the callee immediately destructures.
     fn tail_position_safe(&self, ty: &str, e: &Expr) -> bool {
         if let Expr::App { head, args, .. } = e {
-            if let Expr::Ident(name, _) = head.as_ref() {
+            if let Expr::Ident(name, _, _) = head.as_ref() {
                 if name == "if" && args.len() == 3 {
                     return !self.expr_mentions_ty(ty, &args[0])
                         && self.tail_position_safe(ty, &args[1])
@@ -357,7 +357,7 @@ impl<'a> Analysis<'a> {
                 !self.produces_ty(ty, body) && self.expr_safe_calls(ty, body)
             }
             Expr::App { head, args, .. } => {
-                let Expr::Ident(name, _) = head.as_ref() else {
+                let Expr::Ident(name, _, _) = head.as_ref() else {
                     // higher-order head: any ty inside is unsafe
                     return !self.produces_ty(ty, head)
                         && args
@@ -394,7 +394,7 @@ impl<'a> Analysis<'a> {
     fn produces_ty(&self, ty: &str, e: &Expr) -> bool {
         match e {
             Expr::App { head, args, .. } => match head.as_ref() {
-                Expr::Ident(name, _) => {
+                Expr::Ident(name, _, _) => {
                     name == ty
                         || (name == "if"
                             && args.len() == 3
@@ -436,7 +436,7 @@ impl<'a> Analysis<'a> {
     fn expr_mentions_ty(&self, ty: &str, e: &Expr) -> bool {
         // Conservative: ty appears anywhere in this (non-tail) expression.
         match e {
-            Expr::Ident(name, _) | Expr::Partial(name, _) => name == ty,
+            Expr::Ident(name, _, _) | Expr::Partial(name, _) => name == ty,
             Expr::Block(stmts, _) | Expr::Build(stmts, _) => stmts.iter().any(|st| match st {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
                     self.expr_mentions_ty(ty, expr)

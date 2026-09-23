@@ -79,7 +79,7 @@ fn direct_aliases<'a>(
         let [Stmt::Expr(Expr::App { head, args, piped: false, .. })] = decl.body.as_slice() else {
             continue;
         };
-        let Expr::Ident(callee, _) = head.as_ref() else { continue };
+        let Expr::Ident(callee, _, _) = head.as_ref() else { continue };
         // A hop through a named wrapper is a rename only when that wrapper is
         // its own group's single arm — a second arm makes it a dispatch, and
         // the value could take the other door.
@@ -109,7 +109,7 @@ fn direct_aliases<'a>(
         }
         let mut threads = true;
         for (param, arg) in decl.params.iter().zip(args) {
-            let (Pattern::Var(name, _), Expr::Ident(passed, _)) = (param, arg) else {
+            let (Pattern::Var(name, _), Expr::Ident(passed, _, _)) = (param, arg) else {
                 threads = false;
                 break;
             };
@@ -174,9 +174,13 @@ pub fn apply_wrappers(program: &mut Program, alias: &HashMap<String, HashMap<usi
 
 fn rewrite(expr: &mut Expr, alias: &HashMap<String, HashMap<usize, String>>) {
     if let Expr::App { head, args, .. } = expr {
-        if let Expr::Ident(name, span) = head.as_ref() {
+        if let Expr::Ident(name, span, _) = head.as_ref() {
             if let Some(builtin) = alias.get(name.as_str()).and_then(|a| a.get(&args.len())) {
-                **head = Expr::Ident(Name::new(&builtin.clone()), *span);
+                **head = Expr::Ident(
+                    Name::new(&builtin.clone()),
+                    *span,
+                    crate::ast::Resolution::default(),
+                );
             }
         }
     }

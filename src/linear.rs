@@ -156,13 +156,13 @@ impl<'a> Mentions<'a> {
 
     fn walk(&mut self, e: &'a Expr, d: usize) {
         match e {
-            Expr::Ident(n, _) => {
+            Expr::Ident(n, _, _) => {
                 self.bare.insert(n.as_str());
                 self.saw(n.as_str(), d);
             }
             Expr::App { head, args, .. } => {
                 match head.as_ref() {
-                    Expr::Ident(n, _) => {
+                    Expr::Ident(n, _, _) => {
                         let seen = self.heads.entry(n.as_str()).or_default();
                         if !seen.contains(&args.len()) {
                             seen.push(args.len());
@@ -389,7 +389,7 @@ impl<'a> Analysis<'a> {
     ) -> bool {
         let Handover { name, arity, i } = *q;
         if let Expr::App { head, args, .. } = e {
-            if matches!(head.as_ref(), Expr::Ident(n, _) if n == name)
+            if matches!(head.as_ref(), Expr::Ident(n, _, _) if n == name)
                 && args.len() == arity
                 && (!self.unique_in(&args[i], ctx, scoped)
                     || !hands_over_fresh(&args[i], lambda_bound))
@@ -399,7 +399,7 @@ impl<'a> Analysis<'a> {
             // a fold's own lambda is where an accumulator legitimately arrives
             // as a parameter; check the lambda in that light, and everything
             // else in this expression without it
-            if matches!(head.as_ref(), Expr::Ident(n, _) if self.folds.contains(n.as_str()))
+            if matches!(head.as_ref(), Expr::Ident(n, _, _) if self.folds.contains(n.as_str()))
                 && args.len() == 3
             {
                 if let (Expr::Lambda { params, body, .. }, true) =
@@ -496,7 +496,7 @@ impl<'a> Analysis<'a> {
     fn body_is_folder(&self, body: &Expr, acc: &str) -> bool {
         match body {
             // an arm that declines to write hands the accumulator back
-            Expr::Ident(n, _) if n == acc => true,
+            Expr::Ident(n, _, _) if n == acc => true,
             Expr::App { head, args, .. } => match head.as_ref() {
                 // the wrapper: the same folder, applied where it stands
                 Expr::Lambda { params, body: inner, .. } => {
@@ -505,12 +505,12 @@ impl<'a> Analysis<'a> {
                 }
                 // a conditional writes on some paths and not others, and the
                 // test it branches on must not be holding the accumulator
-                Expr::Ident(n, _) if n == "if" && args.len() == 3 => {
+                Expr::Ident(n, _, _) if n == "if" && args.len() == 3 => {
                     count_in_expr(acc, &args[0]) == 0
                         && self.body_is_folder(&args[1], acc)
                         && self.body_is_folder(&args[2], acc)
                 }
-                Expr::Ident(callee, _) => {
+                Expr::Ident(callee, _, _) => {
                     // the accumulator builtins are the ones whose result is
                     // unique when their first argument is, which the folder's
                     // contract already gives; they are not declarations, so
@@ -581,7 +581,7 @@ impl<'a> Analysis<'a> {
             // instead of recursion, and without it the encode path collapses
             // at `escape_able`, where the byte builder passes through one.
             Expr::App { head, args, .. }
-                if matches!(head.as_ref(), Expr::Ident(n, _) if self.folds.contains(n.as_str()))
+                if matches!(head.as_ref(), Expr::Ident(n, _, _) if self.folds.contains(n.as_str()))
                     && args.len() == 3 =>
             {
                 self.unique_in_with(&args[1], ctx, scoped, exempt)
@@ -591,7 +591,8 @@ impl<'a> Analysis<'a> {
             // encode loop returns `if done acc (step acc)` and neither arm
             // aliases, but an unknown head would have read it as opaque
             Expr::App { head, args, .. }
-                if matches!(head.as_ref(), Expr::Ident(n, _) if n == "if") && args.len() == 3 =>
+                if matches!(head.as_ref(), Expr::Ident(n, _, _) if n == "if")
+                    && args.len() == 3 =>
             {
                 self.unique_in_with(&args[1], ctx, scoped, exempt)
                     && self.unique_in_with(&args[2], ctx, scoped, exempt)
@@ -602,18 +603,18 @@ impl<'a> Analysis<'a> {
                 self.unique_in_with(early, ctx, scoped, exempt) && tail
             }
             Expr::App { head, args, .. } => match head.as_ref() {
-                Expr::Ident(n, _)
+                Expr::Ident(n, _, _)
                     if matches!(n.as_str(), "push" | "append" | "builtin_append")
                         && args.len() == 2 =>
                 {
                     self.unique_in(&args[0], ctx, scoped)
                 }
-                Expr::Ident(n, _) if n == "put" && args.len() == 3 => {
+                Expr::Ident(n, _, _) if n == "put" && args.len() == 3 => {
                     self.unique_in(&args[0], ctx, scoped)
                 }
                 // `concat` always allocates a fresh list (k_b_concat), so its
                 // result is uniquely owned regardless of its arguments.
-                Expr::Ident(n, _)
+                Expr::Ident(n, _, _)
                     if matches!(n.as_str(), "concat" | "text/concat" | "builtin_concat")
                         && args.len() == 2 =>
                 {
@@ -622,7 +623,7 @@ impl<'a> Analysis<'a> {
                 // and a byte builder is born fresh — it is the seed the whole
                 // encode chain is threaded from, so without it every
                 // accumulator downstream fails to prove unique at the root
-                Expr::Ident(n, _)
+                Expr::Ident(n, _, _)
                     if matches!(n.as_str(), "bytes" | "text/bytes" | "builtin_bytes")
                         && args.len() == 1 =>
                 {
@@ -632,11 +633,11 @@ impl<'a> Analysis<'a> {
                 // the result — the same fact as a list or map literal, which
                 // was missing only because a type is not a declaration and
                 // `returns_unique` is built from declarations
-                Expr::Ident(n, _) if self.types.contains(n.as_str()) => true,
-                Expr::Ident(n, _) => self.returns_unique.contains(&(n.to_string(), args.len())),
+                Expr::Ident(n, _, _) if self.types.contains(n.as_str()) => true,
+                Expr::Ident(n, _, _) => self.returns_unique.contains(&(n.to_string(), args.len())),
                 _ => false,
             },
-            Expr::Ident(name, _) => self.is_unique_source(name, ctx, scoped, exempt),
+            Expr::Ident(name, _, _) => self.is_unique_source(name, ctx, scoped, exempt),
             _ => false,
         }
     }
@@ -727,7 +728,7 @@ fn mark_folder_body(
                 mark_folder_body(a, decl, inner, out, inner_acc);
                 return;
             }
-            Expr::Ident(n, _) if n == "if" && args.len() == 3 => {
+            Expr::Ident(n, _, _) if n == "if" && args.len() == 3 => {
                 mark_folder_body(a, decl, &args[1], out, acc);
                 mark_folder_body(a, decl, &args[2], out, acc);
                 return;
@@ -752,7 +753,7 @@ fn takes_acc_first(args: &[Expr], acc: &str) -> bool {
 /// already gives a bare call site, and without it a tally copied its map once
 /// an element.
 fn takes_acc_first_with(args: &[Expr], acc: &str, forced_args: bool) -> bool {
-    if !matches!(args.first(), Some(Expr::Ident(n, _)) if n == acc) {
+    if !matches!(args.first(), Some(Expr::Ident(n, _, _)) if n == acc) {
         return false;
     }
     forced_args || args[1..].iter().map(|a| count_in_expr(acc, a)).sum::<usize>() == 0
@@ -777,14 +778,14 @@ fn walk_for_push_in(
     if let Expr::App { head, args, span, .. } = e {
         // push extends a list, append extends a byte builder, and each writes
         // into its own frontier when nobody else holds the value
-        if matches!(head.as_ref(), Expr::Ident(n, _) if matches!(n.as_str(), "push" | "append" | "builtin_append"))
+        if matches!(head.as_ref(), Expr::Ident(n, _, _) if matches!(n.as_str(), "push" | "append" | "builtin_append"))
             && args.len() == 2
             && a.unique_in(&args[0], decl, scoped)
         {
             out.insert((decl.file.clone(), span.line as usize, span.col as usize));
         }
         // put extends a map the same way, one arity over
-        if matches!(head.as_ref(), Expr::Ident(n, _) if n == "put")
+        if matches!(head.as_ref(), Expr::Ident(n, _, _) if n == "put")
             && args.len() == 3
             && a.unique_in_with(&args[0], decl, scoped, &[&args[1], &args[2]])
         {
@@ -792,7 +793,7 @@ fn walk_for_push_in(
         }
         // inside a validated folder the accumulator arrives as the lambda's
         // own parameter, and every push or append there is on a unique value
-        if matches!(head.as_ref(), Expr::Ident(n, _) if a.folds.contains(n.as_str()))
+        if matches!(head.as_ref(), Expr::Ident(n, _, _) if a.folds.contains(n.as_str()))
             && args.len() == 3
             && a.fold_owns_accumulator(args, decl, scoped)
         {
@@ -848,9 +849,9 @@ fn effective_uses(var: &str, body: &[Stmt]) -> usize {
 fn consumed_sibling_uses(var: &str, e: &Expr) -> usize {
     let mut n = 0;
     if let Expr::App { head, args, .. } = e {
-        let consuming = matches!(head.as_ref(), Expr::Ident(h, _)
+        let consuming = matches!(head.as_ref(), Expr::Ident(h, _, _)
             if matches!(h.as_str(), "put" | "push" | "append" | "builtin_append"));
-        if consuming && matches!(args.first(), Some(Expr::Ident(first, _)) if first == var) {
+        if consuming && matches!(args.first(), Some(Expr::Ident(first, _, _)) if first == var) {
             for sibling in &args[1..] {
                 n += count_in_expr(var, sibling);
             }
@@ -892,11 +893,11 @@ fn count_uses(var: &str, body: &[Stmt]) -> usize {
 /// this pass runs a read is the getter applied to the record, so both
 /// spellings are one read.
 fn field_reads_in(var: &str, e: &Expr) -> usize {
-    let is_var = |b: &Expr| matches!(b, Expr::Ident(n, _) if n == var);
+    let is_var = |b: &Expr| matches!(b, Expr::Ident(n, _, _) if n == var);
     let here = match e {
         Expr::Field { base, .. } => is_var(base),
         Expr::App { head, args, .. } => {
-            matches!(head.as_ref(), Expr::Ident(n, _) if crate::ast::getter_field(n).is_some())
+            matches!(head.as_ref(), Expr::Ident(n, _, _) if crate::ast::getter_field(n).is_some())
                 && args.len() == 1
                 && is_var(&args[0])
         }
@@ -906,10 +907,10 @@ fn field_reads_in(var: &str, e: &Expr) -> usize {
 }
 
 fn count_in_expr(var: &str, e: &Expr) -> usize {
-    let here = matches!(e, Expr::Ident(n, _) if n == var) as usize;
+    let here = matches!(e, Expr::Ident(n, _, _) if n == var) as usize;
     // `if c a b`: the condition always runs, exactly one arm follows it
     if let Expr::App { head, args, .. } = e {
-        if matches!(head.as_ref(), Expr::Ident(n, _) if n == "if") && args.len() == 3 {
+        if matches!(head.as_ref(), Expr::Ident(n, _, _) if n == "if") && args.len() == 3 {
             let cond = count_in_expr(var, &args[0]);
             let taken = count_in_expr(var, &args[1]).max(count_in_expr(var, &args[2]));
             return here + cond + taken;
@@ -1018,7 +1019,7 @@ fn walk_for_reuse(
         return;
     }
     if let Expr::App { head, args, span, .. } = e {
-        if let Expr::Ident(name, _) = head.as_ref() {
+        if let Expr::Ident(name, _, _) = head.as_ref() {
             if types.contains(name.as_str()) && !args.is_empty() {
                 if let Some(victim) = sole_finished_record(a, decl, args) {
                     out.insert((decl.file.clone(), span.line as usize, span.col as usize), victim);
@@ -1081,11 +1082,12 @@ fn sole_finished_record(a: &Analysis, decl: &FnDecl, args: &[Expr]) -> Option<St
 /// repository actually compiles.
 #[cfg(test)]
 fn mentioned_as_value(e: &Expr, name: &str, arity: usize) -> bool {
-    if let Expr::Ident(n, _) = e {
+    if let Expr::Ident(n, _, _) = e {
         return n == name;
     }
     if let Expr::App { head, args, .. } = e {
-        let called = matches!(head.as_ref(), Expr::Ident(n, _) if n == name) && args.len() == arity;
+        let called =
+            matches!(head.as_ref(), Expr::Ident(n, _, _) if n == name) && args.len() == arity;
         let escaping_head = match called {
             true => false,
             false => mentioned_as_value(head, name, arity),
@@ -1135,7 +1137,7 @@ fn hands_over_fresh(arg: &Expr, lambda_bound: Option<&HashSet<String>>) -> bool 
 }
 
 fn collect_idents_here(e: &Expr, out: &mut Vec<String>) {
-    if let Expr::Ident(name, _) = e {
+    if let Expr::Ident(name, _, _) = e {
         out.push(name.to_string());
     }
     for child in child_exprs(e) {
@@ -1267,7 +1269,7 @@ fn built_locals(joins: &Sites, decl: &FnDecl) -> HashSet<String> {
 fn called_somewhere(program: &Program, name: &str, arity: usize) -> bool {
     fn in_expr(e: &Expr, name: &str, arity: usize) -> bool {
         if let Expr::App { head, args, .. } = e {
-            if matches!(head.as_ref(), Expr::Ident(n, _) if n == name) && args.len() == arity {
+            if matches!(head.as_ref(), Expr::Ident(n, _, _) if n == name) && args.len() == arity {
                 return true;
             }
         }
@@ -1319,9 +1321,9 @@ fn forwards_into(carrying: &Slots, decl: &FnDecl, name: &str) -> bool {
 
 fn walk_forwards(carrying: &Slots, e: &Expr, name: &str, found: &mut bool) {
     if let Expr::App { head, args, .. } = e {
-        if let Expr::Ident(callee, _) = head.as_ref() {
+        if let Expr::Ident(callee, _, _) = head.as_ref() {
             for (i, arg) in args.iter().enumerate() {
-                if matches!(arg, Expr::Ident(n, _) if n == name)
+                if matches!(arg, Expr::Ident(n, _, _) if n == name)
                     && carrying.contains(&(callee.to_string(), args.len(), i))
                 {
                     *found = true;
@@ -1342,12 +1344,12 @@ fn collect_carried(
     out: &mut Sites,
 ) {
     if let Expr::App { head, args, .. } = e {
-        if let Expr::Ident(callee, _) = head.as_ref() {
+        if let Expr::Ident(callee, _, _) = head.as_ref() {
             for (i, arg) in args.iter().enumerate() {
                 if !carrying.contains(&(callee.to_string(), args.len(), i)) {
                     continue;
                 }
-                if let Expr::Ident(n, span) = arg {
+                if let Expr::Ident(n, span, _) = arg {
                     let holds = built.contains(n.as_str())
                         || param_names(decl).into_iter().any(|(j, p)| {
                             &p == n && carrying.contains(&(decl.name.clone(), decl.params.len(), j))
@@ -1377,7 +1379,7 @@ fn walk_for_builder(
     }
     if let Expr::Str(parts, span) = e {
         if parts.len() > 1 {
-            if let Some(TemplatePart::Interp(Expr::Ident(name, _))) = parts.first() {
+            if let Some(TemplatePart::Interp(Expr::Ident(name, _, _))) = parts.first() {
                 if let Some(i) = builder_param(a, decl, name, e) {
                     sites.insert((decl.file.clone(), span.line as usize, span.col as usize));
                     accs.insert((decl.name.clone(), decl.params.len(), i));

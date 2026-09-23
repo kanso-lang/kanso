@@ -647,7 +647,7 @@ fn wants_prelude(program: &ast::Program) -> bool {
     }
     fn in_expr(e: &ast::Expr) -> bool {
         match e {
-            ast::Expr::Ident(name, _) | ast::Expr::Partial(name, _) => {
+            ast::Expr::Ident(name, _, _) | ast::Expr::Partial(name, _) => {
                 name == MATH_FAILURE || name == DIVIDE_BY_ZERO
             }
             ast::Expr::Block(stmts, _) | ast::Expr::Build(stmts, _) => stmts.iter().any(in_stmt),
@@ -752,7 +752,11 @@ fn synthesize_getters(program: &mut ast::Program) {
                     fields: bound,
                     whole: None,
                 }],
-                body: vec![ast::Stmt::Expr(ast::Expr::Ident(Name::new(ast::GETTER_BINDER), *span))],
+                body: vec![ast::Stmt::Expr(ast::Expr::Ident(
+                    Name::new(ast::GETTER_BINDER),
+                    *span,
+                    crate::ast::Resolution::default(),
+                ))],
                 file: crate::ast::unstamped(),
                 synthetic: false,
             });
@@ -1145,7 +1149,7 @@ fn alias_stmt(
 
 fn alias_expr(e: &mut ast::Expr, aliases: &crate::hash::Map<String, String>, wrote: &mut Rewrites) {
     match e {
-        ast::Expr::Ident(name, sp) | ast::Expr::Partial(name, sp) => {
+        ast::Expr::Ident(name, sp, _) | ast::Expr::Partial(name, sp) => {
             if let Some(q) = aliases.get(name.as_str()) {
                 wrote.insert((sp.line, sp.col), name.clone());
                 *name = Name::new(q);
@@ -1347,7 +1351,7 @@ fn inline_single_use_chains(body: &mut Vec<ast::Stmt>, shorts: &crate::hash::Map
             idx += 1;
             continue;
         };
-        let Expr::Ident(aname, _) = head.as_ref() else {
+        let Expr::Ident(aname, _, _) = head.as_ref() else {
             idx += 1;
             continue;
         };
@@ -1387,7 +1391,7 @@ fn inline_single_use_chains(body: &mut Vec<ast::Stmt>, shorts: &crate::hash::Map
 }
 
 fn count_ident_uses(e: &ast::Expr, name: &str, uses: &mut usize) {
-    if let ast::Expr::Ident(n, _) = e {
+    if let ast::Expr::Ident(n, _, _) = e {
         if n == name {
             *uses += 1;
         }
@@ -1398,9 +1402,9 @@ fn count_ident_uses(e: &ast::Expr, name: &str, uses: &mut usize) {
 /// Is the sole use of `name` the collection argument of an enumerable call?
 fn coll_arg_use(e: &ast::Expr, name: &str, shorts: &crate::hash::Map<String, String>) -> bool {
     if let ast::Expr::App { head, args, .. } = e {
-        if let ast::Expr::Ident(h, _) = head.as_ref() {
+        if let ast::Expr::Ident(h, _, _) = head.as_ref() {
             if shorts.contains_key(h.as_str()) {
-                if let Some(ast::Expr::Ident(first, _)) = args.first() {
+                if let Some(ast::Expr::Ident(first, _, _)) = args.first() {
                     if first == name {
                         return true;
                     }
@@ -1413,7 +1417,7 @@ fn coll_arg_use(e: &ast::Expr, name: &str, shorts: &crate::hash::Map<String, Str
 
 fn substitute_ident(e: &mut ast::Expr, name: &str, replacement: &ast::Expr) {
     use ast::Expr;
-    if let Expr::Ident(n, _) = e {
+    if let Expr::Ident(n, _, _) = e {
         if n == name {
             *e = replacement.clone();
             return;
@@ -1563,7 +1567,7 @@ fn try_fuse_piped(
     #[allow(clippy::while_let_loop)]
     loop {
         let Expr::App { head, args, span, piped: true } = cur else { break };
-        let Expr::Ident(name, _) = head.as_ref() else { break };
+        let Expr::Ident(name, _, _) = head.as_ref() else { break };
         if !shorts.contains_key(name.as_str()) || args.is_empty() {
             break;
         }
@@ -1577,14 +1581,15 @@ fn try_fuse_piped(
     let span = stages[0].2;
     *counter += 1;
     let tmp = format!("froot{counter}");
-    let tmp_ident = || Expr::Ident(Name::new(&tmp.clone()), span);
+    let tmp_ident =
+        || Expr::Ident(Name::new(&tmp.clone()), span, crate::ast::Resolution::default());
     // the nested spelling with the bound subject as its innermost source
     let mut nested = tmp_ident();
     for (name, args, sspan) in stages.iter().rev() {
         let mut all = vec![nested];
         all.extend(args[1..].iter().cloned());
         nested = Expr::App {
-            head: Box::new(Expr::Ident(Name::new(name), *sspan)),
+            head: Box::new(Expr::Ident(Name::new(name), *sspan, crate::ast::Resolution::default())),
             args: all,
             span: *sspan,
             piped: false,
@@ -1597,20 +1602,20 @@ fn try_fuse_piped(
         let mut all = vec![original];
         all.extend(args[1..].iter().cloned());
         original = Expr::App {
-            head: Box::new(Expr::Ident(Name::new(name), *sspan)),
+            head: Box::new(Expr::Ident(Name::new(name), *sspan, crate::ast::Resolution::default())),
             args: all,
             span: *sspan,
             piped: true,
         };
     }
     let test = Expr::App {
-        head: Box::new(Expr::Ident(Name::new("is_desc"), span)),
+        head: Box::new(Expr::Ident(Name::new("is_desc"), span, crate::ast::Resolution::default())),
         args: vec![tmp_ident()],
         span,
         piped: false,
     };
     let picked = Expr::App {
-        head: Box::new(Expr::Ident(Name::new("if"), span)),
+        head: Box::new(Expr::Ident(Name::new("if"), span, crate::ast::Resolution::default())),
         args: vec![test, original, fused],
         span,
         piped: false,
@@ -1633,7 +1638,7 @@ fn try_fuse(
 ) -> Option<ast::Expr> {
     use ast::Expr;
     let Expr::App { head, args, span, piped: false } = e else { return None };
-    let Expr::Ident(cname, _) = head.as_ref() else { return None };
+    let Expr::Ident(cname, _, _) = head.as_ref() else { return None };
     let consumer = shorts.get(cname.as_str())?.clone();
     let span = *span;
     let lam = |params: Vec<&String>, body: Expr| Expr::Lambda {
@@ -1641,7 +1646,7 @@ fn try_fuse(
         body: Box::new(body),
         span,
     };
-    let ident = |n: &str| Expr::Ident(Name::new(n), span);
+    let ident = |n: &str| Expr::Ident(Name::new(n), span, crate::ast::Resolution::default());
     let call = |h: Expr, a: Vec<Expr>| Expr::App { head: Box::new(h), args: a, span, piped: false };
     *counter += 1;
     let acc = format!("facc{counter}");
@@ -1708,7 +1713,7 @@ fn try_fuse(
     #[allow(clippy::while_let_loop)]
     loop {
         let Expr::App { head: ahead, args: aargs, piped: false, .. } = &source else { break };
-        let Expr::Ident(aname, _) = ahead.as_ref() else { break };
+        let Expr::Ident(aname, _, _) = ahead.as_ref() else { break };
         let Some(adapter) = shorts.get(aname.as_str()).cloned() else { break };
         if aargs.len() != 2 {
             break;
@@ -2101,7 +2106,11 @@ fn synthesize_reader_groups(program: &mut ast::Program) {
                 fields: vec![ast::Pattern::Var(Name::new(ast::GETTER_BINDER), span)],
                 whole: None,
             }],
-            body: vec![ast::Stmt::Expr(ast::Expr::Ident(Name::new(ast::GETTER_BINDER), span))],
+            body: vec![ast::Stmt::Expr(ast::Expr::Ident(
+                Name::new(ast::GETTER_BINDER),
+                span,
+                crate::ast::Resolution::default(),
+            ))],
             file: crate::ast::unstamped(),
             synthetic: false,
         });
@@ -2148,11 +2157,11 @@ fn deny_expr(e: &mut ast::Expr) {
     let rhs = Box::new(std::mem::replace(rhs.as_mut(), zero));
     let same = ast::Expr::BinOp { op: "==", lhs, rhs, span };
     *e = ast::Expr::App {
-        head: Box::new(ast::Expr::Ident(Name::new("if"), span)),
+        head: Box::new(ast::Expr::Ident(Name::new("if"), span, crate::ast::Resolution::default())),
         args: vec![
             same,
-            ast::Expr::Ident(Name::new("false"), span),
-            ast::Expr::Ident(Name::new("true"), span),
+            ast::Expr::Ident(Name::new("false"), span, crate::ast::Resolution::default()),
+            ast::Expr::Ident(Name::new("true"), span, crate::ast::Resolution::default()),
         ],
         span,
         piped: false,
@@ -2162,7 +2171,11 @@ fn deny_expr(e: &mut ast::Expr) {
 fn desugar_expr(e: &mut ast::Expr) {
     if let ast::Expr::Field { base, name, span } = e {
         desugar_expr(base);
-        let head = ast::Expr::Ident(Name::new(&ast::getter_name(name)), *span);
+        let head = ast::Expr::Ident(
+            Name::new(&ast::getter_name(name)),
+            *span,
+            crate::ast::Resolution::default(),
+        );
         let base = std::mem::replace(base.as_mut(), ast::Expr::Int(0.into(), *span));
         *e = ast::Expr::App { head: Box::new(head), args: vec![base], span: *span, piped: false };
         return;
@@ -2206,7 +2219,7 @@ fn mentions_in_stmt<'a>(stmt: &'a ast::Stmt, out: &mut crate::hash::Set<&'a str>
 
 fn mentions_in_expr<'a>(e: &'a ast::Expr, out: &mut crate::hash::Set<&'a str>) {
     match e {
-        ast::Expr::Ident(name, _) | ast::Expr::Partial(name, _) => {
+        ast::Expr::Ident(name, _, _) | ast::Expr::Partial(name, _) => {
             // Only a name that could BE a getter's is worth remembering, and
             // every getter is synthesised in one place as `Get_{field}` — the
             // binder that makes `is_getter` true is one no source can spell,
@@ -2342,7 +2355,7 @@ fn rewrite_expr(e: &mut ast::Expr, owned: &crate::hash::Map<String, Owned>, boun
         // `&f` names a function the way a mention does, so it moves with the
         // module the way a mention does. Left behind, the sigil holds a bare
         // name after every declaration has been qualified away from it.
-        ast::Expr::Ident(name, _) | ast::Expr::Partial(name, _) => {
+        ast::Expr::Ident(name, _, _) | ast::Expr::Partial(name, _) => {
             if let Some(o) = owned.get(name.as_str()) {
                 if !bound.iter().any(|b| b == name) {
                     *name = Name::new(&o.spelling);
@@ -2938,7 +2951,7 @@ fn mark_bare_quals(
         // an import was a held name could not be written at all: drop the
         // import and the name does not resolve, keep it and this reads it as
         // unused.
-        if let ast::Expr::Ident(name, _) | ast::Expr::Partial(name, _) = e {
+        if let ast::Expr::Ident(name, _, _) | ast::Expr::Partial(name, _) = e {
             if !ast::has_slash(name) && asked.contains(name.as_str()) {
                 bare.insert(name.as_str());
             }
@@ -3010,7 +3023,7 @@ fn used_quals(program: &ast::Program, quals: &mut crate::hash::Set<String>) {
         match e {
             // `&shapes/make` names the module the way a call does: the sigil
             // holds the name rather than changing it.
-            ast::Expr::Ident(name, _) | ast::Expr::Partial(name, _) => mark(name, quals),
+            ast::Expr::Ident(name, _, _) | ast::Expr::Partial(name, _) => mark(name, quals),
             // `(x):shapes/num` names `shapes` exactly the way an annotation
             // does. Left out, an import whose only use is a widening target
             // reads as unused and the file cannot be written at all: drop the
@@ -3096,7 +3109,7 @@ fn expr_span(e: &ast::Expr) -> &diag::Span {
     match e {
         ast::Expr::Partial(_, s) => s,
         ast::Expr::Guard { span: s, .. }
-        | ast::Expr::Ident(_, s)
+        | ast::Expr::Ident(_, s, _)
         | ast::Expr::App { span: s, .. }
         | ast::Expr::Index { span: s, .. }
         | ast::Expr::BinOp { span: s, .. }
@@ -3127,7 +3140,7 @@ fn private_uses(
         exports: &crate::hash::Map<String, bool>,
         diags: &mut Vec<diag::Diagnostic>,
     ) {
-        if let ast::Expr::Ident(name, span) = e {
+        if let ast::Expr::Ident(name, span, _) = e {
             if let Some(false) = exports.get(name.as_str()) {
                 let (module, base) = ast::split_qual(name).unwrap_or(("", name));
                 let private = format!(
@@ -3207,7 +3220,7 @@ fn seq_calls_self(e: &ast::Expr, own: &str) -> bool {
 
 fn mentions_call(e: &ast::Expr, own: &str) -> bool {
     if let ast::Expr::App { head, .. } = e {
-        if matches!(head.as_ref(), ast::Expr::Ident(n, _) if n == own) {
+        if matches!(head.as_ref(), ast::Expr::Ident(n, _, _) if n == own) {
             return true;
         }
     }
@@ -3993,7 +4006,7 @@ fn replace_shape(e: &mut ast::Expr, shape: &str, name: &str) {
     }
     if shape_of(e) == shape {
         let span = e.span();
-        *e = Expr::Ident(Name::new(name), span);
+        *e = Expr::Ident(Name::new(name), span, crate::ast::Resolution::default());
         return;
     }
     walk_children_mut(e, &mut |c| replace_shape(c, shape, name));

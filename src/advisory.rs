@@ -195,9 +195,9 @@ fn expr_types<'a>(
     reads: &mut Vec<u32>,
 ) -> HashSet<&'a str> {
     match e {
-        Expr::Ident(name, _) => name_types(name, type_names, groups, returns, env, reads),
+        Expr::Ident(name, _, _) => name_types(name, type_names, groups, returns, env, reads),
         Expr::App { head, args, .. } => {
-            if let Expr::Ident(name, _) = head.as_ref() {
+            if let Expr::Ident(name, _, _) = head.as_ref() {
                 if name == "if" && args.len() == 3 {
                     let mut set = expr_types(&args[1], type_names, groups, returns, env, reads);
                     set.extend(expr_types(&args[2], type_names, groups, returns, env, reads));
@@ -270,9 +270,9 @@ fn accepted_types<'a>(
         }
         if let Some(Stmt::Expr(tail)) = decl.body.last() {
             let target = match tail {
-                Expr::Ident(name, _) => Some(name.as_str()),
+                Expr::Ident(name, _, _) => Some(name.as_str()),
                 Expr::App { head, .. } => match head.as_ref() {
-                    Expr::Ident(name, _) => Some(name.as_str()),
+                    Expr::Ident(name, _, _) => Some(name.as_str()),
                     _ => None,
                 },
                 _ => None,

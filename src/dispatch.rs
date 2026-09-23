@@ -117,7 +117,7 @@ fn walk(e: &Expr, name: &str, arity: usize, disc: usize, ok: &mut bool) {
         return;
     }
     if let Expr::App { head, args, piped, .. } = e {
-        if let Expr::Ident(callee, _) = head.as_ref() {
+        if let Expr::Ident(callee, _, _) = head.as_ref() {
             if callee == name && args.len() == arity && (*piped || !is_at_call(&args[disc])) {
                 *ok = false;
                 return;
