@@ -9208,3 +9208,27 @@ moving by 30 to 34 in every row. glibc's `memchr-avx2.S` carries the same
 page-offset test at its lines 77 and 78. On this container, once memcmp is
 preloaded, no libc function differs between the two trees, so that term has
 not been reproduced here.
+
+CI'S ROWS, on main's tree at 18fae808 with the preload, read by one job on
+family 0x6 model 0x6a. Each gate read twice and the two readings agreed:
+
+    row                     libc's memcmp    preloaded        delta
+    compile_instructions     35,543,672     36,200,554      +656,882
+    entry_instructions      126,702,408    129,110,493    +2,408,085
+    library_instructions    127,158,876    129,559,007    +2,400,131
+    startup_instructions      3,363,729      3,367,191        +3,462
+    interp_instructions     900,471,351    920,710,206   +20,238,855
+    emit_instructions        51,484,057     52,190,331      +706,274
+
+Only the six preloaded gates disagreed with their goldens. The replacement's
+own frames appear in every table, so the preload took. The rises run from
+0.10% on startup to 2.25% on interp; why interp pays the most is not measured
+here.
+
+The welfare terms are re-based after kanso#1561 lands under this branch, not
+before. On this container the preload made kanso#1561 and main read the same
+row. If CI agrees, kanso#1561's deltas vanish under the preload, and a re-base
+priced against main's rows now would leave the merged tree under the floor
+kanso#1561 banks. Re-basing after the merge prices the switch against the rows
+that floor was banked on. That is also the test of the prediction: the rows
+above should not move when kanso#1561 comes in underneath.

@@ -439,4 +439,4 @@
 # compares 32 bytes in one instruction. The value below was measured with it and
 # is not comparable with any reading taken before 2026-09-23.
 #
-startup_instructions=3363729
+startup_instructions=3367191
