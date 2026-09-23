@@ -2278,11 +2278,12 @@
 # 36,656,738 each, and the two processes' PROGRAM TOTALS agreed to the
 # instruction.
 #
-# The replacement compares eight bytes at a time, and its cost depends only on
-# the length and where the first difference falls. It costs more than libc's:
-# the compile row read 666,638 higher on that host, because the avx2 path
-# compares 32 bytes in one instruction. The value below was measured with it and
-# is not comparable with any reading taken before 2026-09-23.
+# The replacement's cost depends only on the length and where the first
+# difference falls: a head and a tail that may overlap up to 32 bytes, 32-byte
+# AVX2 steps above that. Its first version compared eight bytes a step and cost
+# three times libc's bcmp per call on the interpreted run; this one costs about
+# what libc's fast path does. The value below was measured with it and is not
+# comparable with any reading taken before 2026-09-23.
 #
 # AND memcpy AND memmove, the same day. With memcmp preloaded, merging
 # kanso#1561's runtime under this branch still moved the compile, entry and
@@ -2294,7 +2295,7 @@
 # overlap up to 128 bytes, 128-byte AVX2 steps above that. Copies libc makes internally, a thousand-odd instructions a run, cannot
 # be reached by a preload and are still counted as libc does them.
 #
-compile_instructions=35876811
+compile_instructions=35671647
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

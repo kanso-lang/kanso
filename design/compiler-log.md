@@ -9732,3 +9732,74 @@ The two binaries ran from `rb-base` and `rb-pad1000`, and the whole 14 was
 `strcspn` in the dynamic loader, which scans the executable's path. That is the
 reason `tests/every_counted_run_sits_at_one_fixed_path.rs` exists, met again
 from the other side. Run from one directory, the difference was zero.
+
+## 2026-09-23 — the preloaded compare costs what libc's does
+
+kanso#1571's memcmp and bcmp compared eight bytes a step and finished byte by
+byte. Their cost depended on nothing but the length and the first difference,
+which is what they were for, but they cost too much. On the interpreted run,
+`eval_global`, `call_named`, `eval_tail` and `dispatch_loop` together make
+about 780,000 equality comparisons, and each cost 44 to 48 instructions against
+about 15 on libc's AVX2 path. `compare` came to 42,011,663 instructions, 4.19%
+of the run. A row that weighs a name comparison at three times its cost
+overstates what removing one is worth, and removing them from `eval_global`
+is the next lead that profile offers.
+
+So `compare.c` takes the shape `copy.c` took. A comparison under 32 bytes loads
+a head and a tail that may overlap, 16, 8, 4 or 2 bytes each, and orders them
+as big-endian integers, which is correct because the overlapping bytes agree
+whenever the heads do. From 32 bytes up it steps 32 bytes at a time with an
+AVX2 compare and a movemask, then checks the last 32 bytes, overlapping what
+the loop already found equal. Every branch depends on the length or on the
+bytes, never on where they sit, and the helper's page-offset probe still reads
+one count at both offsets.
+
+On this container, with memcpy and memmove preloaded as before:
+
+    row                 libc          previous compare    this compare
+    interp       933,390,005 (a)        955,713,307        939,398,706
+    compile       35,990,100 (a)         36,335,519         36,125,644
+
+(a) read before kanso#1561 landed, so it is the scale of the gap rather than an
+exact baseline. `compare` on the interpreted run falls from 42,011,663 to
+25,396,950.
+
+`check.c` adds every length to 100, equal and then with one byte raised and one
+lowered at every position: 175,083 cases in all agree with libc. It was
+watched red with the 16-to-31-byte class skipping its tail:
+`compare disagrees with libc at n=24`.
+
+The six goldens hold kanso#1571's rows as placeholders and this branch is
+expected red once on cost goldens. When CI reads the rows, the four welfare
+baselines are scaled by the new row over the old, rounded up, as before.
+
+CI'S ROWS on fb997da5 (family 0x19 model 0x1), each gate read twice and
+agreeing, against kanso#1561's rows under libc:
+
+    row                     libc (kanso#1561)   preloaded      change
+    compile_instructions       35,540,661      35,671,647      +0.37%
+    entry_instructions        126,696,892     126,996,739      +0.24%
+    library_instructions      127,149,930     127,520,399      +0.29%
+    startup_instructions        3,362,329       3,372,848      +0.31%
+    interp_instructions       900,471,358     905,979,540      +0.61%
+    emit_instructions          51,481,382      51,172,461      -0.60%
+
+kanso#1571 landed at +0.79% to +2.36% on the same rows. The re-base is carried
+once more, from kanso#1571's rows to these, each baseline scaled by the new row
+over the old and rounded up: compile_instructions 673,557,765,
+startup_instructions 4,853,511, interp_instructions 2,191,885,330,
+emit_instructions 379,919,026. The score reads 77.3466 before and after.
+
+A NEGATIVE RESULT, from the profile this was meant to clear the way for. On the
+interpreted run `eval_global` is 57.0M instructions inclusive, 5.78%, and
+`eval::lookup` is 72.8M self. Much of both is a global name walking the whole
+environment chain, missing, and then going to a string-keyed map. Caching
+`eval_global` by the address of the `Name` it was asked about is unsound. Making
+`eval` take `&'a Expr`, which the cache needs to be safe, gives ten lifetime
+errors, and two of them (`c` and `expr` "does not live long enough") show the
+evaluator running expressions built at run time, whose addresses can be reused.
+A map keyed by `Name` was built in kanso#1565 and declined. What would work is
+a static scope pass that marks each identifier local or global, and it would
+have to follow the lexical binding forms exactly, because the checker lets a
+local shadow a bare-enrolled import. That is a large change to the reference
+interpreter, and it is left as a lead.
