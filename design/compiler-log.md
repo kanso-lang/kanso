@@ -8668,7 +8668,7 @@ which is this branch's `.text` growth arriving on top of kanso#1563's falls:
 
     library_instructions    127,149,930 -> 127,158,876    +8,946   +0.0070%
     entry_instructions      126,696,892 -> 126,702,408    +5,516   +0.0044%
-    compile_instructions     35,541,148 ->  35,544,159    +3,011   +0.0085%
+    compile_instructions     35,541,148 ->  35,544,162    +3,014   +0.0085%
     emit_instructions        51,481,382 ->  51,484,057    +2,675   +0.0052%
     startup_instructions      3,362,329 ->   3,363,729    +1,400   +0.0416%
 
@@ -8812,3 +8812,36 @@ whichever size happens to fold evenly.
 
 That is the same rule this log keeps paying for: never take a verdict from the
 last stage of a pipe, and break what a new check watches before trusting it.
+
+## 2026-09-23 — kanso#1504's compile row moved three on a merge that changed no code
+
+Merging main in twice (kanso#1567 and kanso#1566, a log entry and a CI change,
+neither reaching anything `include_str!` puts in the compiler) moved
+`compile_instructions` from 35,544,159 to **35,544,162**. The golden and the
+priced line above are updated to CI's reading; the row is now +3,014 against
+main's 35,541,148 rather than +3,011.
+
+This is the kanso#1558 phenomenon for the sixth time and the third branch, and
+two things about this sighting are worth keeping.
+
+**The gate's own second reading agrees with its first.** `compile_again` reads
+35,544,162 in the same job. So a job is internally consistent and the three
+appear BETWEEN jobs, which is what kanso#1565's three readings said and this
+confirms on a different tree.
+
+**The other five instruction rows match their goldens to the instruction** —
+`entry` 126,702,408, `library` 127,158,876, `startup` 3,363,729, `emit`
+51,484,057, `interp` 900,471,351, every one exact.
+
+That second fact rules something out, and the entry above about the six-row
+decomposition is why. A runtime.c change moves all six rows through two terms:
+a CONSTANT, the same in every table, which is glibc parsing `/proc/self/maps`
+at thread set-up; and `__memcmp_avx2_movbe`, which scales with the workload.
+The constant moves every row by the same amount. Five rows here did not move at
+all, so **the three cannot be the constant term**. Whatever carries it touches
+the compile workload and nothing else.
+
+What it is remains open. The reading that would name it is this job's packed
+compile table against one from a job of this same tree that read 35,544,159 —
+and that earlier job predates kanso#1566, so its table is at step 19 of 41 and
+out of reach. The next occurrence has both sides.
