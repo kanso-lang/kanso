@@ -10167,3 +10167,4 @@ after. Regenerated. With kanso#1583 merged from main, the codegen and start-up
 goldens hold a projection, each tier's row less the probe compile that change
 removed, and are replaced by CI's rows before the floor is banked again. The
 start-up projection is 972,482, this change's 4,613 on top of main's 967,869.
+CI read all three projected rows exactly, and the rise is banked over them.
