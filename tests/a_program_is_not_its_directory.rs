@@ -55,11 +55,8 @@ fn peak_under(where_it_sits: &str) -> u64 {
          churn (n - 1) [(acc[1] + junk[2]) (acc[2] + junk[7])]\n",
     )
     .expect("the loop writes");
-    std::fs::write(
-        pkg.join("main.kso"),
-        "import \"./churn\"\n\nprint (churn/churn 20000 [0 0])\n",
-    )
-    .expect("the entry writes");
+    std::fs::write(pkg.join("main.kso"), "import \"./churn\"\n\nprint (churn/churn 20000 [0 0])\n")
+        .expect("the entry writes");
 
     let done = Command::new(env!("CARGO_BIN_EXE_kanso"))
         .arg("run")
