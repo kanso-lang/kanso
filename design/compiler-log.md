@@ -9699,3 +9699,36 @@ startup_instructions 4,777,652, interp_instructions 2,230,017,575 and
 emit_instructions 380,008,132, against 671,773,822, 4,838,372, 2,178,559,085
 and 382,212,543 before this branch. The score reads 77.3466 before and after,
 and the history carries both steps as re-basings.
+
+## 2026-09-23 — the benchmark rows do not read where the runtime's data sits
+
+kanso#1571 left the benchmark rows in `instructions.sh` on its list of things
+not covered: the programs they count call libc's memcmp and memcpy from
+`runtime.c`, and the compile rows had moved when strings in the compiler's
+`.rodata` crossed page offsets. This measures whether the benchmark rows can
+move the same way.
+
+An unused array, kept with `__attribute__((used))`, was added to `runtime.c` at
+three sizes, and `bench/runbench` was built each time with `.text`
+byte-identical and `.rodata` grown by 1,008, 2,912 and 4,128 bytes. Counted the
+way `instructions.sh` counts it, from one fixed directory under `env -i`:
+
+    .rodata      row
+    43,528   1,820,479,435
+    44,536   1,820,479,435
+    46,440   1,820,479,435
+    47,656   1,820,479,435
+
+Four layouts, one number. The compiler's exposure came from comparing names
+held in `.rodata` against names on the heap. The runtime compares and copies
+values in its own arena, whose addresses do not follow the binary's data
+layout, so the same libc functions read the same paths here. This is one
+container and one benchmark, and a change to `.text` was not tried. It is
+enough to take the item off kanso#1571's list without adding a preload to
+programs that do not need one.
+
+The first attempt at this reported a move of 14, and it was the run directory.
+The two binaries ran from `rb-base` and `rb-pad1000`, and the whole 14 was
+`strcspn` in the dynamic loader, which scans the executable's path. That is the
+reason `tests/every_counted_run_sits_at_one_fixed_path.rs` exists, met again
+from the other side. Run from one directory, the difference was zero.
