@@ -693,9 +693,9 @@
 jsonbench 1133645908
 encodebench 3459377334
 oneshot 19769235
-basket 32571018
+basket 32569017
 widebench 33660015
-deepbench 349491437
+deepbench 349491458
 escapebench 72849606
 pendbench 208132768
 indexbench 2895756
@@ -760,4 +760,4 @@ livebench 2787658394
 #
 # The uniform -8 across six rows is one instruction on a path each program
 # takes eight times, and the four flat rows never take it at all.
-runbench 1793157837
+runbench 1793157817

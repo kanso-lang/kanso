@@ -10681,10 +10681,11 @@ program pays 2,011,342 instructions for a peak 1,048,576 bytes lower, and
 welfare rises; the rise is banked.
 
 kanso#1581 then landed on main. Merged over it, every counter vein and the
-emitted rows read what they read above. The instruction, `.text` and start-up
-goldens hold a projection, main's rows plus this change's own moves as
-measured over kanso#1579: `work_runbench` 1,793,157,837, `work_oneshot`
-19,769,235, `work_deepbench` 349,491,437, `work_basket` 32,571,018,
-`work_scanbench` 462,285,827, `work_digestbench` 5,766,324, `work_pendbench`
-208,132,768 and `startup_instructions` 975,981, with `text` summed at 1,773,020. CI's rows replace them, and
-the floor is banked after that.
+emitted rows read what they read above, and CI's rows are in the goldens:
+`work_runbench` 1,793,157,817, `work_oneshot` 19,769,235, `work_deepbench`
+349,491,458, `work_basket` 32,569,017, `work_scanbench` 462,285,827,
+`work_digestbench` 5,766,324, `work_pendbench` 208,132,768 and
+`startup_instructions` 975,981, with `text` summed at 1,772,924. The projection
+from main's rows plus this change's moves over kanso#1579 was exact for five
+of the eight and within 2,001 for the rest. The run program pays 2,011,322
+instructions for a peak 1,048,576 bytes lower, and the rise is banked.

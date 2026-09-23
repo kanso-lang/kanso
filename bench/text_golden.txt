@@ -785,13 +785,13 @@
 jsonbench text=123122
 encodebench text=136642
 oneshot text=133298
-basket text=113746
+basket text=113698
 widebench text=146002
-deepbench text=83154
+deepbench text=83138
 escapebench text=55666
-pendbench text=92338
+pendbench text=92322
 indexbench text=59090
-scanbench text=213506
+scanbench text=213490
 digestbench text=105970
 readbench text=55746
 livebench text=134962
