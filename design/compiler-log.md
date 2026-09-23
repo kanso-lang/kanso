@@ -10052,6 +10052,53 @@ tree reads 14 fewer, which is kanso#1577's own start-up move.
 
 Welfare scores 78.15 against a floor of 77.37, and the rise is banked.
 
+---
+
+## 2026-09-23 — the convention probe is asked once per clang, not once per build
+
+Both codegen rows count a `kanso build`'s whole child tree, and one of those
+children was not codegen. `closure_convention` asks whether this host's clang
+takes `preserve_none` by compiling a two-define module, and it asked on every
+build: a whole clang run, 32,201,483 instructions, 6.4% of the dev row, to
+learn what the build before it had learned.
+
+The answer belongs to the clang binary. `remembered_probe` keeps it in the temp
+directory beside the runtime objects, keyed by the clang the PATH resolves to,
+followed through its links, with the file's size and modification time, so
+installing another clang asks again. A key that cannot be formed, or a file
+holding anything but the one byte written there, means asking. The answer is
+staged under a pid-tagged name and renamed into place, so a build running
+beside the first reads the whole byte or nothing. The gates warm both tiers
+before counting, as they already do for the runtime object, so the counted
+build reads the cache.
+
+`tests/the_convention_probe_runs_once_per_clang.rs` puts a clang in front of the
+real one that logs every command, builds one program twice against one temp
+directory, and counts the probe's compiles: one. Watched red with the build
+asking `preserve_none_probe` directly again: two.
+
+On this container, with the gates' commands and `GITHUB_ACTIONS=1`:
+
+    codegen_instructions_dev        596,013,703 ->   563,812,220   -5.40%
+    codegen_instructions_release  6,843,200,439 -> 6,810,998,956   -0.47%
+    processes                     five -> four, each tier
+
+The short-tree guard in `codegen_instructions.sh` fails a build that ran fewer
+than four processes, which still holds; its message said a real build runs five
+and now says four, with the probe a fifth only before its answer is cached.
+
+**CI's rows**, taken into the goldens:
+
+    codegen_instructions_dev        596,192,991 ->   563,926,696   -5.41%
+    codegen_instructions_release  6,837,938,796 -> 6,805,672,501   -0.47%
+    startup_instructions                968,441 ->       967,869      -572
+
+Both codegen rows fell by 32,266,295, the same figure on each tier, which is one
+probe's compile. Start-up falls 572 instructions. The emitted, `.text`, emit and
+compile rows read what main has. The rise is banked.
+
+---
+
 ## 2026-09-23 — lambdas nothing reaches are pruned, and a trampoline is written only for a call that uses it
 
 At `-O0` clang compiles every function a module defines. The codegen corpus's
@@ -10113,3 +10160,10 @@ The emitted vein falls on twelve of its fourteen programs; escapebench and
 indexbench read what main has. runbench reads 528 defines
 against 599, and deepbench 86 against 115. Welfare rises 0.16, and the rise is
 banked.
+
+`specs` then failed on `compile_cost`, whose modules vein counts what the
+compiler emitted for a module: 5,377 lines and 99 defines before, 4,569 and 70
+after. Regenerated. With kanso#1583 merged from main, the codegen and start-up
+goldens hold a projection, each tier's row less the probe compile that change
+removed, and are replaced by CI's rows before the floor is banked again. The
+start-up projection is 972,482, this change's 4,613 on top of main's 967,869.
