@@ -419,4 +419,4 @@
 # own bytes moved and these rows carry them. The job read the same number twice
 # -- "this binary is stable" -- so the disagreement was with the golden rather
 # than within the run, and the change under test is the merge.
-startup_instructions=3363110
+startup_instructions=3363729
