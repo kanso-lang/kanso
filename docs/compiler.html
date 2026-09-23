@@ -3208,6 +3208,20 @@ kanso#1504      AMD  0x1a / 0x2   2,840,050   806,288   1,138,001,437</code></pr
 
 <p>the shape is worth naming because it is not a slip about arithmetic. a claim was assembled out of three data points, one of which was an instrument reading itself, and the instrument had printed what it was doing. what makes three readings better than two is that they are independent; a number the tool generated is not a third opinion.</p>
 
+<h2 id="keyedmaps"><span class="sec-num">122</span>the same trick, one layer out, declined</h2>
+
+<p>two changes had just taken a fifth of the interpreted run&#39;s <code>memcmp</code> traffic away by comparing short identifiers as machine words instead of calling out to the C library. the next two callers on that list are hash-map probes: an environment of globals and a table of resolved callees, both keyed by <code>String</code> and looked up with a <code>&amp;str</code>, which hashes the bytes and then compares the key by calling <code>memcmp</code>. key them by the identifier type instead and the comparison should be the same two word loads, for free, since the callers already hold one.</p>
+
+<p>it removes exactly the calls it was supposed to — 497,907 of them, which is the two lookup counts to within sixty-eight — and the row goes <em>up</em> by 4,315,544.</p>
+
+<pre><code>+10,456,358  &lt;Q as hashbrown::Equivalent&lt;K&gt;&gt;::equivalent   2,984 -&gt; 10,459,342
+ -9,776,759  __memcmp_avx2_movbe
+ +3,485,161  Interp::call
+ +2,149,368  __memcpy_avx_unaligned_erms</code></pre>
+
+<p>a map keyed by <code>String</code> and probed by <code>&amp;str</code> compares along a path that ends in a <code>memcmp</code> call. a map keyed by the identifier type and probed by the same compares through hashbrown&#39;s <code>Equivalent</code>, and that shim did not inline: 21 instructions a probe against <code>memcmp</code>&#39;s 19.6 plus its call. the word compare is in there and never got the chance to pay. the rest is two cold sites that now build an identifier where they used to pass a string slice.</p>
+
+<p>reverted. the cost sat in the machinery the library wraps around a comparison once you change what is being compared, rather than in the comparison itself — which is what the previous two sections were about. the same code, one layer further out, stops being free.</p>
 
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
