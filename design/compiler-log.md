@@ -10480,6 +10480,83 @@ is banked again.
 
 ---
 
+## 2026-09-23 — the seek cursor records which marks its string lies under, so a rewind asks one question
+
+kanso#1579 made the rewind's fast path forget the seek cursor only when the
+string it names sits in `[m->ptr, k_arena)`, the range the rewind hands back.
+That is exact and it cost five instructions an iteration: load the cursor and
+the arena pointer, two subtractions, a compare. CI read it as +0.41% on the
+run program after `always_inline` had given half of it back.
+
+The question can be answered when the cursor is set instead, which a scan
+does once per string it starts on, where a loop rewinds at every iteration.
+`k_seek_note` records the innermost mark the string lies under: the top mark
+if the string is not in the range that mark would hand back, one deeper if it
+is, and conservatively one deeper whenever a new block has been taken since
+the mark, because then the range is not one test. At depth zero the answer is
+the bottom of the stack, since every mark comes after the string, and past the
+stack's last slot it is one past the end, so every rewind forgets. The rewind
+then compares its own mark against that pointer:
+
+    cmp    %rdi, k_seek_under
+    jbe    keep
+    movq   $0, k_seek_str
+
+A mark pushed later than the one recorded cannot hand the string back, and
+one popped and pushed again in the same slot comes after the string too, so
+comparing slot addresses is enough. The slow path still forgets unconditionally.
+
+On this container:
+
+    runbench              1,826,634,704 -> 1,815,911,759   -10,722,945
+    against main          1,820,479,421 -> 1,815,911,759    -4,567,662   -0.25%
+    prose_check           15.1 s -> 13.1 s
+
+Every counter vein agrees, `seek_resumes` included; the beat differential
+reads 0 of its 96 layout pairs disagreeing, and
+`a_seek_cursor_does_not_outlive_its_string`, the fixture for the cursor kept
+past its string, passes. The mutation `a_rewind_that_forgets_every_seek_cursor`
+now replaces the new comparison and still takes
+`a_scan_keeps_its_place_in_the_text` from 408 to 276.
+
+**Declined on the way, recorded so it stays declined.** `encode_onto` is
+entered 2,380,860 times on the run program at 26 instructions of frame and
+dispatch a call, and most calls are leaves. Giving `elem_onto` and a new
+`value_onto` their own string and int arms, so a list element or a map value
+of those kinds never entered `encode_onto`, read 1,874,943,854 against main's
+1,820,479,421: +54,464,433, +2.99%, with the same output and all 23
+`lib/json` tests passing. The two small dispatchers cost more than the calls
+they saved. `docs/compiler.html` §81 and §110 found the dispatcher's frame is its own;
+this is the same wall from the caller's side.
+
+**CI's rows**, taken into the goldens, against kanso#1579's:
+
+    work_runbench             1,801,929,451 -> 1,791,146,495   -10,782,956   -0.60%
+    work_encodebench          3,479,505,321 -> 3,459,377,334   -20,127,987
+    work_livebench            2,807,786,381 -> 2,787,658,394   -20,127,987
+    work_basket                  33,024,826 ->    32,568,835      -455,991
+    work_deepbench              347,896,726 ->   347,687,558      -209,168
+    work_digestbench              5,799,501 ->     5,766,137       -33,364
+    work_jsonbench            1,133,645,757 -> 1,133,645,908          +151
+    work_pendbench              208,139,965 ->   208,139,970            +5
+    codegen_instructions_dev    473,849,441 ->   473,884,358       +34,917
+    codegen_instructions_release 6,585,606,376 -> 6,598,389,807 +12,783,431   +0.19%
+    startup_instructions            972,533 ->       972,482           -51
+
+The run program gets back more than kanso#1579's cursor test cost it, and the
+two encoders fall by the same 20,127,987, which is the rewind their loops take
+most often. jsonbench and pendbench move by 151 and 5 instructions, both
+programs that rewind rarely, where the note taken on every scan outweighs the
+test it saves. `.text` rises on all but the run program, 1,765,228 summed over
+the fourteen binaries, for `k_seek_note`'s body. The release codegen row rises
+0.19% for the same runtime code compiled and linked into every program.
+Against main, which does not yet carry kanso#1579, two more rows read worse.
+`work_indexbench` reads 2,895,756, 13 above main, and `work_scanbench`
+462,285,578, 16,273 above: both programs scan strings and seldom rewind, so
+they pay the note on every scan and collect little of what it saves.
+
+---
+
 ## 2026-09-23 — a call between a package's own modules is a cohort again
 
 A construction cohort brackets a call whose arguments are immutable: the arena
@@ -10602,3 +10679,12 @@ The emit projection was exact at 44,879,920, and both codegen rows read what
 main has. `text`, summed over the fourteen binaries, reads 1,771,932. The run
 program pays 2,011,342 instructions for a peak 1,048,576 bytes lower, and
 welfare rises; the rise is banked.
+
+kanso#1581 then landed on main. Merged over it, every counter vein and the
+emitted rows read what they read above. The instruction, `.text` and start-up
+goldens hold a projection, main's rows plus this change's own moves as
+measured over kanso#1579: `work_runbench` 1,793,157,837, `work_oneshot`
+19,769,235, `work_deepbench` 349,491,437, `work_basket` 32,571,018,
+`work_scanbench` 462,285,827, `work_digestbench` 5,766,324, `work_pendbench`
+208,132,768 and `startup_instructions` 975,981, with `text` summed at 1,773,020. CI's rows replace them, and
+the floor is banked after that.
