@@ -1,0 +1,20 @@
+# Reading a character by position in text that is not all ascii walks from a
+# remembered place rather than from the front, and a scan that tries every
+# position keeps that place as it goes. The scan's loop rewinds the arena at
+# each position, and the rewind used to forget the place whatever string it
+# named, so every position walked the subject from the front. It forgets it
+# now only when the string sat above the mark, which the subject here does not.
+# `seek_resumes` counts the walks that started from the remembered place.
+import "std/regexp"
+import "std/text"
+
+fn grow 0 acc
+  acc
+
+fn grow n acc
+  grow (n - 1) (text/append acc "café — thé ")
+
+pub play =
+  subject = text/utf8 (grow 12 (text/bytes ""))
+  hits = regexp/find_all "[a-z]+zzq" subject
+  print "found {length hits} in {length subject}"

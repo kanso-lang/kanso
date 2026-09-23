@@ -151,6 +151,11 @@ static long long k_stat_utf8_zerocopy = 0;
    allocates nothing. */
 static long long k_stat_str_scans = 0;
 static long long k_stat_str_scan_bytes = 0;
+/* A position-to-offset walk that started from the remembered cursor instead
+   of from the front of the string. A scan that rewinds between positions
+   loses the cursor if the rewind forgets it, and the walk then starts from
+   the front at every position: nothing else moves, and this reads nought. */
+static long long k_stat_seek_resumes = 0;
 static long long k_stat_carry_dedup = 0;
 static long long k_stat_bytes_malloc = 0;
 /* Where arena bytes go, by value shape. The totals above say how much was
@@ -467,9 +472,9 @@ static long long k_stat_cohort_frees = 0;
 static long long k_stat_cohort_kept = 0;
 /* One remembered position, so a forward sweep over a string does not restart
    at the front. It names its string by address, which is only meaningful for
-   as long as that address means that string — so `k_beat_rewind` forgets it,
-   because the arena hands the same addresses back and the next allocation
-   there is a different string.
+   as long as that address means that string — so `k_beat_rewind` forgets it
+   when the string sits above the mark, because the arena hands those
+   addresses back and the next allocation there is a different string.
 
    This used to say a reset was unnecessary, on the grounds that a string
    whose bytes changed is a builder and a builder never qualifies. The string
@@ -585,8 +590,8 @@ static void k_stats_dump(void) {
         k_stat_utf8_zerocopy,
         k_stat_carry_dedup, k_stat_bytes_malloc, k_stat_bytes_freed,
         k_perm_live, k_perm_peak);
-    fprintf(stderr, "str_scans=%lld\nstr_scan_bytes=%lld\n",
-            k_stat_str_scans, k_stat_str_scan_bytes);
+    fprintf(stderr, "str_scans=%lld\nstr_scan_bytes=%lld\nseek_resumes=%lld\n",
+            k_stat_str_scans, k_stat_str_scan_bytes, k_stat_seek_resumes);
     fprintf(stderr, "buf_reuse=%lld\nheld_peak_bytes=%lld\n", k_stat_buf_reuse, k_stat_held_peak);
     fprintf(stderr, "view_allocs=%lld\nview_frees=%lld\n",
             k_stat_view_allocs, k_stat_view_frees);
@@ -969,7 +974,8 @@ static void k_beat_rewind_slow(KMark* m) {
     k_seek_str = NULL;
 }
 
-/* What a rewind does in the common case is write three words. Everything else
+/* What a rewind does in the common case is write two words, and a third when
+   the seek cursor's string could be handed back. Everything else
    above — the buffer shelf, the three registries, retiring blocks — is
    conditional on state most programs never reach, and the call that finds all
    of it empty still pays the six callee-saved pushes those loops need. So the
@@ -1011,9 +1017,20 @@ static inline void k_beat_rewind(KMark* m) {
        depth it has already ranged, and `k_beat_rewind_slow` keeps its own. */
     if (__builtin_expect(!(k_buf_dirty | m->reg_any)
                          && k_blocks == m->block, 1)) {
+        /* The cursor names a string by its header's address, and the rewind
+           hands back every address from the mark up. A header below the mark
+           is not handed back, so a scan over a string that arrived from
+           outside the loop keeps its place; forgetting it there made every
+           position walk from the front, which is quadratic in the subject.
+           No block has been taken since the mark, so what is handed back is
+           exactly `[m->ptr, k_arena)` of this one. Both ends are needed: a
+           string in an older block can sit at a higher address than the
+           mark, and a test of the lower end alone forgot the cursor of every
+           page prose_check read. */
+        if ((uintptr_t)k_seek_str - (uintptr_t)m->ptr < (uintptr_t)k_arena - (uintptr_t)m->ptr)
+            k_seek_str = NULL;
         k_arena = m->ptr;
         k_arena_left = m->left;
-        k_seek_str = NULL;
         return;
     }
     k_beat_rewind_slow(m);
@@ -8100,6 +8117,7 @@ static long k_str_seek(KStr* s, long long from) {
     long at = 0;
     long long seen = 1;
     if (s == k_seek_str && s->cap != 0 && k_seek_byte < s->len) {
+        if (K_COUNTING) k_stat_seek_resumes++;
         /* A walk by index asks for the character after the one it just
            read, at every step: the cursor's own character or the next
            answers without the general walk below and its bookkeeping. */
@@ -8709,6 +8727,7 @@ static __attribute__((noinline)) KValue k_b_slice_walk(KStr* s, long long from, 
         long start = -1, end = -1, at = 0;
         long long seen = 0;
         if (s == k_seek_str && s->cap != 0) {
+            if (K_COUNTING) k_stat_seek_resumes++;
             at = k_seek_byte;
             /* `seen` counts characters already passed, and the loop increments
                before it compares — so resuming AT the remembered character
