@@ -1,0 +1,3 @@
+call tailcc here
+musttail call tailcc @f(i64 1)
+define tailcc %KValue @g(
