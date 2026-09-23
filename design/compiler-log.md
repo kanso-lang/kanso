@@ -9932,6 +9932,55 @@ same skipped walk, and some may be the layout of a compiler that changed at
 is the second kind until something shows otherwise. The allocation, memory
 and codegen rows did not move.
 
+## 2026-09-23 — a global keeps its resolution in a slot its node is stamped with
+
+kanso#1576 took the environment walk off a global. What it left is the
+string-keyed map: every use of a global still hashed its name and compared it
+in `eval_global`. Keeping the answer on the node was set aside in that entry,
+because a slot means something to one interpreter and an AST can outlive the
+interpreter that ran it.
+
+A generation stamp answers that. `Resolution` widens to an `AtomicU32`. Values
+from 65,536 up hold a sixteen-bit generation and a sixteen-bit slot. Each
+`Interp` takes its generation from a process-wide counter and keeps a table of
+the globals it has resolved. A node stamped by this interpreter reads its slot.
+A node stamped by any other is read as plain global, resolved by name, and
+stamped again, so a stale slot is never read. A node that cannot be stamped,
+because the generations ran out or the table is full, resolves by name each
+time and takes no slot, so the table cannot grow per execution. `Expr` stays
+at 56 bytes, measured again.
+
+The debug check now covers the slot as well: a node that reads a slot holding
+something other than what its name resolves to stops the run. The whole suite
+passes with it on, 591 tests, the eleven `wasm_engine` failures being the
+local absence of `docs/kanso.wasm`. It was watched red with each slot read
+from its neighbour: "`push` at line 11, column 4 read slot 5 and it is not what
+the name resolves to".
+
+On this container with the address-blind preload, the interpreted row reads
+879,893,558 against kanso#1576's 919,550,926, a further 39,657,368 (4.3%). The
+compile row reads 36,018,837 against 36,018,620. Together with kanso#1576 that
+is 59.5 million off the 939.4 million this container counted before either,
+about three quarters of the 80 million the scope-pass entry put as the
+ceiling.
+
+**CI's rows**, from the cost-goldens job of the first push, taken into the
+goldens:
+
+    interp_instructions     887,079,102 -> 853,048,810   -34,030,292   -3.84%
+    interp_peak_bytes           834,079 ->     846,367       +12,288   +1.47%
+    interp_allocs             1,063,795 ->   1,063,803            +8
+    compile_instructions     35,374,375 ->  35,400,616       +26,241   +0.07%
+    entry_instructions      126,091,396 -> 126,100,824        +9,428
+    library_instructions    126,613,848 -> 126,623,258        +9,410
+    startup_instructions      3,372,380 ->   3,372,366           -14
+    emit_instructions        51,381,691 ->  51,381,691     unchanged
+
+The memory is the slot table: 12,288 bytes is a doubled `Vec` of resolved
+globals, and the eight allocations are its growth. Interpreter speed carries
+0.11 of the development side and interpreter memory 0.04, and the objective
+scores the trade at 77.37 against a floor of 77.36, so the rise is banked.
+
 ---
 
 ## 2026-09-23 — the regexp scan rewinds at every start position, and a rewind keeps the seek cursor below the mark
