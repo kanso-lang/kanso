@@ -96,11 +96,7 @@ fn profiles_written(body: &str) -> Vec<String> {
 /// twice, to prove the memcmp every counted run preloads costs the same at
 /// two page offsets. Its verdict is the pair of counts, and a refusal prints
 /// both; there is no compiler frame in that profile to locate.
-const EXEMPT: [&str; 3] = [
-    "address_blind.sh",
-    "codegen_instructions.sh",
-    "path_independence.sh",
-];
+const EXEMPT: [&str; 3] = ["address_blind.sh", "codegen_instructions.sh", "path_independence.sh"];
 
 /// The scripts this spec governs: every gate that writes a callgrind profile
 /// and is not exempt above.
