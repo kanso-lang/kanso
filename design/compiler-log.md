@@ -9911,3 +9911,23 @@ isolated here; the compiler's own code changed at 278 places, and CI's rows
 will say whether it holds. Keeping `eval_global`'s answer on the node as well
 would take a slot index that means something only to one interpreter, and an
 AST can outlive the interpreter that ran it, so that is left alone.
+
+CI'S ROWS on 6a44d698 (family 0x19 model 0x11), each gate read twice and
+agreeing, against main at 4381c2a9:
+
+    row                     main           this branch      change
+    compile_instructions    35,671,647     35,374,375      -297,272  (-0.83%)
+    entry_instructions     126,996,739    126,091,396      -905,343  (-0.71%)
+    library_instructions   127,520,399    126,613,848      -906,551  (-0.71%)
+    startup_instructions     3,372,848      3,372,380          -468
+    interp_instructions    905,979,540    887,079,102   -18,900,438  (-2.09%)
+    emit_instructions       51,172,461     51,381,691      +209,230  (+0.41%)
+
+The interpreted row falls by what this container projected, within a tenth of a
+point. The three compile rows fall by 0.7 to 0.8% and emit rises by 0.4%, and
+nothing here isolates either. `kanso check` does evaluate: constants are
+knotted through the interpreter, so some of the compile-side fall may be the
+same skipped walk, and some may be the layout of a compiler that changed at
+278 places. Emit runs the code generator, which never evaluates, so its rise
+is the second kind until something shows otherwise. The allocation, memory
+and codegen rows did not move.

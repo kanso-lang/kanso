@@ -523,5 +523,5 @@
 # overlap up to 128 bytes, 128-byte AVX2 steps above that. Copies libc makes internally, a thousand-odd instructions a run, cannot
 # be reached by a preload and are still counted as libc does them.
 #
-interp_instructions=905979540
+interp_instructions=887079102
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
