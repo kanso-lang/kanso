@@ -9632,3 +9632,40 @@ and entry rows together) 671,773,822 to 684,500,178, startup_instructions
 4,838,372 to 4,845,369, interp_instructions 2,178,559,085 to 2,227,524,026,
 and emit_instructions 382,212,543 to 387,475,984. The score reads the floor
 kanso#1561 banked, 77.3466, and the history entry says this is a re-basing.
+
+THE PREDICTION, TESTED, AND HALF OF IT FAILED. With kanso#1561 merged
+underneath, CI read interp, startup and emit exactly as before: 920,710,206,
+3,367,191 and 52,190,331, on family 0x19 model 0x1 where the first reading was
+on family 0x6 model 0x6a. Compile, entry and library moved by +44, +122 and
++122, to 36,200,598, 129,110,615 and 129,559,129. In each of those three tables
+the whole move is one function, `__memcpy_avx_unaligned_erms`, and the other
+rows that differ are functions whose address moved and whose cost did not.
+On this container memcpy did not move between the two trees at all, so the
+extra is not bytes copied, which would show on any host.
+
+A probe says why. glibc's memmove, which serves memcpy, chooses part of its
+large-copy path by the distance between destination and source. The same 1,500
+bytes cost 177 instructions at a distance of 4096 and 179 at 5000, and 2,000
+bytes cost 225 and 227 at two other distances.
+
+So `scripts/gates/address_blind/copy.c` replaces memcpy and memmove as well. It
+moves 128 bytes a step with unaligned AVX2 loads and stores, then eight, then
+single bytes. Each step loads everything before it stores, and memmove walks
+backward when the destination starts inside the source. The 1,500-byte probe
+reads 243 at both distances, against libc's 177 and 179. A version moving 32
+bytes a step through words read 477, which would have weighed copying far
+above the rest of each row. On this container the compile row reads 36,704,844
+with both preloads, 0.13% above memcmp alone.
+
+`scripts/gates/address_blind/check.c` now runs before either probe. It compares
+all four replacements with libc on 80,000 cases, including overlapping moves in
+both directions, because a wrong memmove would corrupt the compiler under
+measurement rather than show up as a wrong count. It was watched red with
+memmove made to copy forward always: `memmove disagrees with libc: n=685
+src=1130 dst=1496`. A second probe, `copy_probe.c`, refuses unless the two
+distances cost the same.
+
+The six goldens keep the memcmp-only values as placeholders, and this branch is
+expected red once more on cost goldens. When CI reads the rows, the four
+welfare baselines above are scaled again by the new row over the golden they
+were re-based against, so the score stays at kanso#1561's floor.

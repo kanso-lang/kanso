@@ -245,4 +245,14 @@
 # compares 32 bytes in one instruction. The value below was measured with it and
 # is not comparable with any reading taken before 2026-09-23.
 #
+# AND memcpy AND memmove, the same day. With memcmp preloaded, merging
+# kanso#1561's runtime under this branch still moved the compile, entry and
+# library rows by 44, 122 and 122, and in each table the whole move was
+# __memcpy_avx_unaligned_erms. Its path for a large copy depends partly on the
+# distance between destination and source: 1,500 bytes cost 177 instructions at
+# one distance and 179 at another. scripts/gates/address_blind/copy.c replaces
+# both, 128 bytes a step with unaligned AVX2 moves, and costs what the length
+# says. Copies libc makes internally, a thousand-odd instructions a run, cannot
+# be reached by a preload and are still counted as libc does them.
+#
 emit_instructions=52190331
