@@ -7660,3 +7660,39 @@ What is still on the list, from the container's profile after kanso#1564:
 159,127 and `dispatch_loop` at 147,267, with `BigUint`'s own `PartialEq` at
 132,846 -- that last one is num_bigint comparing digits and is not a name at
 all.
+
+## 2026-09-23 — the third reading, and two corrections to the entry above
+
+A third CI job ran on this branch, on a head whose compiler source is again
+byte-identical to the two before it, and `compile_instructions` read
+**35,541,151** — the same as the second.
+
+    0586890f   35,541,148   agreed with main
+    74f99dba   35,541,151   +3
+    36cf8333   35,541,151   +3, the same as the job before it
+
+All twenty-six other veins read `success` in the summary block of all three
+jobs, `compile instructions` alone failing.
+
+THE ENTRY ABOVE CALLS THIS ROW A COIN AND THAT IS WITHDRAWN. Two readings of
+three agree, and they are the two most recent; counting main's own golden the
+four available readings run 148, 148, 151, 151, which is the shape of a step
+rather than of a toss. What sits between the first job and the second is not in
+the diff, because the source is identical across all three — it is whatever the
+runner pool handed out. Four points is what that claim rests on and it is not
+stretched further here. It does remove the argument that pinning 35,541,151
+would pin a figure that came up once.
+
+The comment on kanso#1565 carrying the same wording was corrected the same
+hour; this entry records it because the entry above is where the claim was
+written down first.
+
+AND THE PARAGRAPH SAYING THE INSTRUMENT CANNOT BE READ FROM HERE IS TOO BROAD.
+The log API saves an oversized result to a file on disk rather than refusing
+it, so the whole of what it returns is reachable by shell. What is true is
+narrower: it returns the last 5,000 lines and no more, whatever tail length is
+asked for — a 20,020-line job hands back 5,000 — so the `interp_instructions`
+table IS reachable and was read and diffed the same night, 1,726 rows from each
+of two jobs, and the `compile_instructions` table at step 19 of 41 is not.
+kanso#1566 packs every table into that tail, which is what makes this row's
+three jobs diffable frame by frame. None of them could be read at the time.
