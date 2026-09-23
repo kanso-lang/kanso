@@ -6476,6 +6476,474 @@ operations rather than a host, so work in the interpreted run would have moved
 it, and it did not move once. The size of any single reading proves nothing —
 the agreement of the counter beside it across four independent edits is the
 evidence.
+---
+
+## 2026-09-17 — the beat rewind's fast path: 23 instructions to 15
+
+`k_beat_iter` is what a compiler-proven beat loop calls between iterations to
+give the arena back. runbench calls it 2,692,766 times and it was 61,672,983
+instructions, 3.35% of the whole program. A task note from a fortnight ago
+put it at 0.6%; the note was an estimate and the profile is not.
+
+Per call that is 22.9 instructions, against a fast path of six stores and
+three tests. Disassembled, the path was 23 instructions and nine of them
+existed to turn `k_beat_depth` into `&k_beat_stack[depth - 1]`:
+
+    mov k_beat_depth,%eax / dec / cmp $0x3f / ja
+    mov %eax,%edx / mov %rdx,%rax / shl $5
+    lea k_beat_stack,%rcx / lea (%rcx,%rax,1),%rdi
+
+That address cannot change for the life of the loop, and the compiler cannot
+know it: the loop body calls other functions, any of which might push a beat.
+
+Two changes, measured separately.
+
+**The registry summary moves into the mark it describes.** `k_reg_any` was a
+parallel `int[K_BEAT_MAX]` indexed by depth, so the rewind — which has the
+mark pointer in hand — had to turn it back into a depth to read the flag. It
+is a field of `KMark` now, read at a displacement. In the same step the two
+flag tests become one: `k_buf_dirty` and `reg_any` are both zero on
+essentially every rewind, and `!(k_buf_dirty | m->reg_any)` is one branch
+where two predicted-taken jumps stood. 23 instructions to 20, and runbench
+1,840,367,648 → 1,832,202,462, −0.4437%.
+
+**The innermost mark is cached beside the depth.** `k_beat_top` holds
+`&k_beat_stack[k_beat_depth - 1]`, or NULL at depth zero, and the eight
+remaining address instructions become a load and a test. 20 to 15.
+
+The cache is not free, and where it is paid is worth writing down. Seven
+sites move the depth and each now maintains the pointer. At `k_beat_push`
+the new top is the mark just written and the range test is dead code, so
+that site is one store: +500,595 over 507,685 pushes. At `k_beat_pop` the
+new depth may be zero or past the top, so the cmov stays: eight instructions,
++4,004,752. Against those, `k_beat_iter` gives back 21,468,255.
+
+    k_beat_iter   61,672,983 -> 40,204,728   -21,468,255   -34.81%
+    k_beat_pop    14,517,216 -> 18,521,968    +4,004,752
+    k_beat_push   15,017,844 -> 15,518,439      +500,595
+    runbench   1,840,367,648 -> 1,823,406,517  -16,961,131   -0.9216%
+
+The three account for the total within 1,777 instructions. The ratio is what
+makes it pay: runbench iterates 2,692,766 times against 507,685 pops, five to
+one, so five instructions moved off the iteration buy eight onto the pop.
+
+These are this container's callgrind readings. `bench/instructions_golden.txt`
+refuses comparison here — the rows were measured on glibc 2.39-0ubuntu8.9 and
+clang 19.1.1 against this box's 8.7 and 18.1.3 — so CI takes the row and the
+floor is banked after it lands.
+
+**What the cache costs in safety, and what pays for it.** A stale `k_beat_top`
+is not a crash. It rewinds the arena to an OUTER loop's mark, freeing memory
+the inner loop is still reading, and what surfaces is a wrong answer somewhere
+else entirely. So the counting build asks at every iteration whether the
+cached pointer is the one the depth names, and dies by name when it is not.
+`tests/the_cached_beat_top_tracks_the_depth.rs` runs beats nested three deep
+under `--counters`; dropping the maintenance from `k_beat_pop` turns it red
+with `the cached beat top and the beat depth disagree`.
+
+Getting that spec to fail took two tries, and both failures are the reason it
+is worth having. The first program built strings into its accumulator, which
+compiles to a CARRY beat: `k_beat_iter_carry` computes its own mark and never
+reads the cache, so the emitted code called it four times, called `k_beat_iter`
+not at all, and the spec passed with the maintenance removed. The second
+carried a scalar and allocated nothing — and a loop with nothing to reclaim
+emits no beat at all. What the spec needs is both: laps that allocate, and a
+carried value that is a scalar. Each lap builds a padded string and keeps only
+its length.
+
+
+## 2026-09-17 — kanso#1504 on CI: the beat rewind's row, and the one thing it costs
+
+The container projected runbench 1,840,367,648 → 1,823,406,517, −16,961,131,
+−0.9216%. CI, on its own machine and its own baseline, reads 1,821,933,936 →
+1,804,998,570: a fall of **16,935,366, 0.9295%**. The two deltas are 25,765
+apart, 0.0014% of the number, which is as close as this vein gets between
+machines — and is why the per-frame attribution taken on the container can be
+trusted even though its absolute figures cannot be compared with CI's.
+
+    k_beat_iter   61,672,983 -> 40,204,728   -21,468,255   -34.81%
+    k_beat_pop    14,517,216 -> 18,521,968    +4,004,752
+    k_beat_push   15,017,844 -> 15,518,439      +500,595
+
+**Fourteen run-side rows moved, not one, and the spread is the finding.** The
+first push wrote runbench's number alone and CI refused it, which was right:
+thirteen rows were left describing a runtime this branch had widened. A vein is
+the whole file.
+
+    escapebench      84,780,592 ->     75,228,606    -9,551,986  -11.2667%
+    basket           33,678,746 ->     32,776,834      -901,912   -2.6780%
+    runbench      1,821,933,936 ->  1,804,998,570   -16,935,366   -0.9295%
+    livebench     2,825,430,323 ->  2,805,024,580   -20,405,743   -0.7222%
+    encodebench   3,497,149,260 ->  3,476,743,520   -20,405,740   -0.5835%
+    oneshot          17,888,155 ->     17,837,178       -50,977   -0.2850%
+    readbench         4,628,429 ->      4,627,056        -1,373   -0.0297%
+    digestbench       9,967,039 ->      9,966,673          -366   -0.0037%
+    scanbench       462,269,296 ->    462,269,305            +9   +0.0000%
+    jsonbench     1,133,644,520 ->  1,133,645,592        +1,072   +0.0001%
+    pendbench       208,138,815 ->    208,139,955        +1,140   +0.0005%
+    indexbench        2,895,708 ->      2,895,743           +35   +0.0012%
+    deepbench       347,289,236 ->    347,635,275      +346,039   +0.0996%
+    widebench        33,516,094 ->     33,644,020      +127,926   +0.3817%
+
+A row falls in proportion to how much its program beat-loops. escapebench is
+the extreme at 11.27% because escaping a string is a tight beat loop with
+almost nothing else in it, so the fifteen instructions are most of what a lap
+costs. The rises are the layout term: every binary grew 368 to 560 bytes,
+because the mark carries a field more and there is a new global beside it, and
+deepbench and widebench are the two paying that without beat loops to spend it
+on. The objective weighs `work_runbench` alone, so welfare reads 76.71 either
+way; the other thirteen rows are watched rather than scored, which is exactly
+why the vein is diffed whole.
+
+Eight compile-side rows moved, and seven of them are layout. `src/runtime.c`
+is `include_str!`'d into the compiler, so changing it changes the compiler's
+own bytes and what the linker does with them:
+
+    compile_instructions      35,869,355 ->     35,870,761      +1,406   +0.0039%
+    entry_instructions       127,872,255 ->    127,877,328      +5,073   +0.0040%
+    library_instructions     128,010,052 ->    128,015,155      +5,103   +0.0040%
+    interp_instructions    2,182,307,043 ->  2,182,420,936    +113,893   +0.0052%
+    startup_instructions       3,955,899 ->      3,957,812      +1,913   +0.0484%
+    codegen_instructions_dev 596,161,166 ->    596,182,348     +21,182   +0.0036%
+    emit_instructions         60,197,743 ->     60,201,844      +4,101   +0.0068%
+    runbench text                319,954 ->        320,514        +560
+
+The eighth is not layout. `codegen_instructions_release` rises **11,227,515,
+0.1645%** — that row counts the C toolchain and excludes kanso's own process,
+so it is the only one that COMPILES runtime.c rather than carrying its bytes,
+and clang at `-O3 -flto` now has a mark with a field more and a global beside
+it. Both readings in the job were identical.
+
+So the trade is: 11.2 million instructions once per release build, against
+16.9 million on every run of the program. The objective weighs run speed at
+0.45 on the production side and the release build at 0.15, and takes it —
+welfare 76.65 → 76.71, banked.
+
+**No page can quote the run-side vein.** Publishing CI's row, the page got
+`data-golden="run.runbench"` and `golden_prose` answered `UNKNOWN KEY
+run.runbench`. `golden_for` knows three families — decode, encode and compile —
+and anything else resolves against an empty golden;
+`bench/instructions_golden.txt` also writes `name value` rows where the
+parser wants `name=value`, so listing it would take widening the parser too.
+The attribute came off and the row is plain text on the page until both are
+done. kanso#1337 cost a run to the same gap on the library vein, and the
+gate's own comment records it.
+
+The gate itself is sound, and this entry nearly said otherwise. `--write`
+prints the unknown key and carries on, because there is nothing for it to
+rewrite, and reading that output alone it looks like a warning. Run plain,
+`golden_prose` exits 1 and `all_pages.sh` reports `pages objected:
+golden_prose` — checked by injecting the bogus key and reading the exit code
+rather than the text. A claim about what a guardrail does is worth the thirty
+seconds it takes to watch it fail.
+
+
+## 2026-09-18 — kanso#1504 re-merged onto main, and every run-side row named with the value it landed on
+
+Three landed underneath this branch while it sat dirty and invisible:
+kanso#1486, kanso#1496 and kanso#1507. The eight compile-side goldens carry
+MAIN'S values forward and the merged sitting is CI's; kanso#1507 in particular
+changed what the release-codegen row COUNTS, by pinning ld's LLVM plugin to one
+thread, so nothing this branch measured on that row is comparable with anything
+measured after it.
+
+The run-side veins are this branch's own and survived the merge untouched.
+Every one of the fifteen, named with the value it landed on:
+
+    work_basket        33,678,746 ->    32,776,834    -901,912   -2.678%
+    work_escapebench   84,780,592 ->    75,228,606  -9,551,986  -11.267%
+    work_runbench   1,821,933,936 -> 1,804,998,570 -16,935,366   -0.930%
+    work_livebench  2,825,430,323 -> 2,805,024,580 -20,405,743   -0.722%
+    work_encodebench 3,497,149,260 -> 3,476,743,520 -20,405,740  -0.583%
+    work_oneshot       17,888,155 ->    17,837,178     -50,977   -0.285%
+    work_readbench      4,628,429 ->     4,627,056      -1,373   -0.030%
+    work_digestbench    9,967,039 ->     9,966,673        -366   -0.004%
+    work_indexbench     2,895,708 ->     2,895,743         +35   +0.001%
+    work_scanbench    462,269,296 ->   462,269,305          +9   +0.000%
+    work_jsonbench  1,133,644,520 -> 1,133,645,592      +1,072   +0.000%
+    work_pendbench    208,138,815 ->   208,139,955      +1,140   +0.001%
+    work_deepbench    347,289,236 ->   347,635,275    +346,039   +0.100%
+    work_widebench     33,516,094 ->    33,644,020    +127,926   +0.382%
+    text                1,755,372 ->     1,762,300      +6,928   +0.395%
+
+**Nine fall and six rise, and the six are the layout term.** `k_beat_top` is a
+pointer the runtime now carries, so every binary grew: `text` is up 6,928
+bytes, 0.395%. The two largest rises sit near that figure without matching it
+— `work_widebench` 0.382%, `work_deepbench` 0.100% — which is what a shifted
+working set looks like, since how much a binary's growth costs a given run
+depends on what that run touches. The other four rises are 35, 9, 1,072 and
+1,140 instructions, a handful on runs of millions to billions.
+
+The falls are the change: a beat that finds its mark instead of computing it
+retires 23 instructions where it retired 15, and the benchmarks that rewind
+most often gain most. escapebench rewinds on every escape and gains 11.27%;
+the scanners and the index, which barely beat at all, do not move.
+## 2026-09-18 — kanso#1504's compile-side rows on the merged tree, and the release row reproducing
+
+The run-side veins were this branch's own and are recorded above. These eight
+are CI's sitting on the tree merged with kanso#1486, kanso#1496 and kanso#1507:
+
+    codegen_instructions_release 6,822,651,561 -> 6,841,893,129 +19,241,568 +0.2820%
+    emit_instructions               60,196,725 ->    60,221,314     +24,589 +0.0408%
+    codegen_instructions_dev       596,159,774 ->   596,180,956     +21,182 +0.0036%
+    interp_instructions          2,182,576,109 -> 2,182,585,809      +9,700 +0.0004%
+    startup_instructions             3,951,796 ->     3,953,725      +1,929 +0.0488%
+    compile_instructions            35,441,027 ->    35,441,565        +538 +0.0015%
+    library_instructions           126,804,425 ->   126,804,746        +321 +0.0003%
+    entry_instructions             126,349,040 ->   126,348,616        -424 -0.0003%
+
+**The release row is the one real cost and this branch expected to pay it.**
+It is the only row that COMPILES src/runtime.c rather than carrying its bytes,
+and the beat cache adds a pointer and the code that keeps it: 19.2 million
+instructions of clang and ld, 0.282%. The dev tier pays a twentieth of that for
+the same change, because `-O0` does far less with the extra code. The other six
+are under a twentieth of a per cent apiece and are layout.
+
+**AND THE RELEASE ROW REPRODUCED.** `codegen_release_again` read
+6,841,893,129 — the same number, in the same job. That matters more than the
+value: before kanso#1507 pinned ld's LLVM plugin to one thread, this row could
+not be read twice and get one answer, and it halted its own vein on exactly
+that failure two rounds ago. This is the first sitting where a tree that
+CHANGES runtime.c reads it twice and agrees, which is a stronger test of the
+pin than the trees that left runtime.c alone.
+
+The trade is the objective's to judge and it judges in favour: nine run-side
+veins fall, the largest 11.27%, against 19.2 million on a row weighted for
+production build cost. Welfare rose and is banked.
+**And the floor was banked twice on this branch, because the first bank broke
+the rule that exists for exactly this.** "Bank AFTER the goldens carry CI's
+rows, never before." The first `--set` here ran while the eight compile-side
+goldens still held MAIN'S values carried forward, so it recorded a score this
+container projected from rows nobody had measured: 76.71669769306608. CI then
+measured them, the release row came in 19.2 million higher than main's, and
+welfare read 0.01 BELOW the floor its own branch had just set. A branch cannot
+fail its own bank without something being wrong with the bank.
+
+The second `--set` is CI's figure, 76.7108285575541, and it is still a rise of
+0.053 over main's 76.6576 — the change is a gain, and the projection was
+simply too generous about a row it had not seen. Recorded rather than quietly
+re-run, because the failure looks exactly like a regression in the logs and is
+not one: nothing about the change moved between the two banks, only what was
+known about it.
+## 2026-09-18 — kanso#1504's rows re-measured on the tree merged with kanso#1509
+
+kanso#1509 landed under this branch and moved the compile-side rows on its own,
+so every figure this branch had measured before it was taken against a base
+that no longer exists. The five affected goldens were carried forward at main's
+values and the round re-measured them. CI's sitting, with the second reading in
+the same job matching the first to the instruction on all four rows that take
+one:
+
+    compile_instructions    35,441,774 ->    35,442,739    +965   (+0.0027%)
+    entry_instructions     126,350,802 ->   126,352,290  +1,488   (+0.0012%)
+    library_instructions   126,806,203 ->   126,807,903  +1,700   (+0.0013%)
+    startup_instructions     3,933,223 ->     3,935,119  +1,896   (+0.0482%)
+    emit_instructions       52,115,454 ->    52,140,118 +24,664   (+0.0473%)
+
+**All five are LAYOUT.** `src/runtime.c` is `include_str!`'d into the compiler,
+so a change to it changes the compiler's own bytes and the layout under them.
+None of these five routes runs the beat code this branch touches: three of them
+are `kanso check` and carry runtime.c's bytes without compiling it, `emit_ir`
+stops before the backend, and the interpreted start-up links the runtime but
+does not execute the rewind. The two largest rises in absolute terms are the
+two smallest baselines, which is what a fixed layout term looks like spread
+over rows of different sizes.
+
+`interp_instructions` held at 2,182,585,809, the value this branch measured
+before the re-merge, and both codegen rows agreed with their goldens:
+`codegen_instructions_dev` 596,180,956 and `codegen_instructions_release`
+6,841,893,129. **The release row reproducing is the thing worth noticing.**
+That row is the one kanso#1507 pinned by holding `ld`'s LLVM plugin to one
+thread, and this branch changes `src/runtime.c`, which is the only input the
+release row compiles rather than carries. It has now read the same number on
+two different jobs on two different trees that both change runtime.c.
+
+The floor is re-banked on these rows rather than on the projection the
+re-merge carried.
+
+## 2026-09-18 — kanso#1504's rows on the tree merged after kanso#1511, and a floor that had been banked on main's row
+
+CI's sitting on `38fa8750`, every row with the value it landed on:
+
+    compile_instructions      35,442,006 ->    35,442,391       +385  (+0.0011%)
+    entry_instructions       126,350,641 ->   126,351,986     +1,345  (+0.0011%)
+    library_instructions     126,806,286 ->   126,807,492     +1,206  (+0.0010%)
+    startup_instructions       3,363,379 ->     3,363,835       +456  (+0.0136%)
+    interp_instructions    2,182,527,453 -> 2,182,576,175    +48,722  (+0.0022%)
+    emit_instructions         51,543,408 ->    51,547,188     +3,780  (+0.0073%)
+    codegen_instructions_dev     596,157,624 ->   596,197,703    +40,079  (+0.0067%)
+    codegen_instructions_release 6,824,133,280 -> 6,841,691,425 +17,558,145 (+0.2573%)
+
+The first six are layout. The branch's own source has not moved since the
+previous sitting, and what changed under it is main.
+
+**The release row is not layout, and the floor had been banked as though it
+were.** The branch measured 6,841,893,129 for itself at `3db62375`. The
+2026-09-18 merge of kanso#1512 resolved
+`bench/codegen_instructions_release_golden.txt` toward main, so the tree
+carried main's 6,824,133,280 — and the floor was then re-banked on that tree,
+at 76.88347521753009, crediting the beat rewind with a codegen row 17.5
+million instructions cheaper than the one it produces. This job reads
+6,841,691,425, which is 201,704 below the branch's earlier figure and
+17,558,145 above main's. Two readings of the branch's own cost that agree to
+0.003% is what a real cost looks like; the value that sat between them for a
+day was main's.
+
+So the floor is re-banked at 76.87843049336072 on the tree's own eight rows.
+The floor before the bad bank was 76.87853949372271, so this is a restoration
+within 0.00014 rather than a regression admitted.
+
+**The rule it breaks is one this file already carries, with a different
+victim.** "Carry ALL rows forward or none" was written about the trend gate:
+leaving one row at the branch's value while the others take main's makes a
+fall that paid for a rise read as main's. The same resolution going the other
+way — a row taken from main while the rest stay the branch's — costs the
+FLOOR instead, and it is worse, because the trend gate says so out loud and a
+bank says nothing at all. A merge that touches a golden the branch has
+measured for itself is a merge that needs the branch's number put back before
+anything is banked on the tree.
+
+## 2026-09-18 — kanso#1504 re-merged onto main after kanso#1515
+
+kanso#1515 landed underneath this branch and took 14,155,510 instructions off
+the interpreted row, 2,182,584,048 -> 2,168,428,538. That row and the five
+compile-side rows beside it carry MAIN'S values now: this branch's readings
+were taken against a tree that no longer exists, and carrying main's forward
+gives each gate one number to fail against rather than none while making CI's
+diff read exactly what this branch does to today's main.
+
+`bench/codegen_instructions_release_golden.txt` did not conflict, so the
+branch's own 6,841,691,425 stands — the gain this PR is for is still in the
+tree while the six rows around it are main's. The floor is main's,
+76.82771395446468, because a floor banked on the branch's layout rows prices a
+tree that no longer exists; `interp_instructions` is a weighed development term
+and main's row is 14.2 million lower, so the merged tree scores above this
+floor and the ratchet follows CI's sitting.
+
+The three compile spans on the page follow the goldens and carry main's values
+with them.
+
+## 2026-09-18 — kanso#1504's rows on the tree merged after kanso#1515
+
+Six layout rows, one job, against the values carried forward from main:
+
+      compile           35,443,611 ->    35,443,639       +28   +0.0001%
+      entry            126,354,834 ->   126,356,158    +1,324   +0.0010%
+      library          126,810,299 ->   126,811,904    +1,605   +0.0013%
+      interpreted    2,168,428,538 -> 2,168,245,153  -183,385   -0.0085%
+      start-up           3,363,774 ->     3,364,590      +816   +0.0243%
+      emitting          51,546,788 ->    51,544,132    -2,656   -0.0052%
+
+Four rose, two fell, every one under three hundredths of a per cent and with
+mixed signs, which is what a shifted binary looks like. The compile, entry,
+library and emit rows each read the same value twice in the job.
+
+`codegen_instructions_release` reads 6,841,691,425, the branch's own row from
+its pre-merge sitting: main did not touch that golden, so the merge left it
+alone and it is the term this branch actually pays. `codegen_instructions_dev`
+reads 596,197,703, also the branch's own. The floor is banked at
+76.88172594705054.
+
+The same comparison beside kanso#1502's is worth keeping: both branches sat on
+identical carried-forward rows, and the interpreted row fell 183,385 here and
+162,511 there. Two different changes, two falls of the same order on a row
+neither of them executes, which is the layout term's size on this tree rather
+than anything either branch did.
+
+## 2026-09-18 — kanso#1504 re-merged onto main after kanso#1516
+
+kanso#1516 landed the interpreter's name memory underneath this branch, so all
+six layout rows and the floor carry MAIN'S values again. The branch's own
+readings were taken against a tree that no longer exists, and
+`bench/codegen_instructions_release_golden.txt` did not conflict, so the row
+this branch is actually for -- 6,841,691,425 -- is untouched by the merge.
+
+Third re-merge for this branch. Each costs it a round, and the cost is
+`required_status_checks.strict` with several changes in flight rather than
+anything wrong with any of them.
+
+## 2026-09-18 — kanso#1504 re-merged onto main after kanso#1517
+
+kanso#1517 landed the callee memory under this branch, so the five layout rows
+and the floor carry MAIN's values again and this round is deliberately red on
+them.
+
+The goldens auto-merged this time and that was checked rather than trusted:
+every one of the six instruction rows now reads main's value exactly —
+compile 35,486,173, entry 126,498,498, library 126,953,661, start-up 3,362,788,
+emitting 51,451,897, interpreted 1,963,826,350. An auto-merge on a golden is
+worth a diff, because git will take a clean apply on a file where the right
+answer is a judgement.
+
+Two rows are the branch's own and CI measured them: codegen release at
+6,841,691,425 and dev at 596,197,703. The release one costs 0.007 points and
+buys the run side 1,804,998,570, which is 14,293,146 instructions below the
+tree kanso#1502 sits on.
+
+Welfare reads 76.93 against main's 76.88. The 0.05 is not banked here for the
+same reason it was not banked on kanso#1502: welfare weighs the five carried
+rows, so a --set now would freeze a score this container projected rather than
+the one CI measures. The rows come first.
+
+## 2026-09-18 — kanso#1504, CI's rows on the tree merged after kanso#1517
+
+    compile_instructions      35,486,173 ->    35,487,349    +1,176   +0.0033%
+    entry_instructions       126,498,498 ->   126,500,546    +2,048   +0.0016%
+    library_instructions     126,953,661 ->   126,956,802    +3,141   +0.0025%
+    startup_instructions       3,362,788 ->     3,363,385      +597   +0.0178%
+    emit_instructions         51,451,897 ->    51,456,279    +4,382   +0.0085%
+    interp_instructions    1,963,826,350 -> 1,963,826,376       +26   +0.0000013%
+
+TWO BRANCHES MEASURED IN THE SAME HOUR GIVE THE INTERPRETED ROW A CROSS-CHECK
+IT HAS NOT HAD BEFORE. kanso#1502 and this one are different edits to
+`src/runtime.c` — two divisions in float rendering there, the cached beat top
+here — both merged onto the same main, both read by CI within two minutes of
+each other. The interpreted row moved 15 on one and 26 on the other.
+
+That is worth more than either number alone. The corpus decodes a document it
+built itself and never enters the C runtime, so neither edit can give it work;
+if one of them had, the two would not both land in the tens on a row of
+1,963,826,350. Both branches also read `interp_allocs` 4,810,437 and
+`interp_peak_bytes` 951,438 exactly, and an allocation counter counts operations
+rather than a host, so a row with real work in it would have moved that one too.
+
+The five layout rows rose on both branches, by different amounts in the same
+direction, which is the ordinary signature of a moved binary rather than of
+work.
+
+`compile_allocs` read 27,313. Both codegen rows are this branch's own and read
+exactly: 596,197,703 dev and 6,841,691,425 release.
+
+## 2026-09-18 — kanso#1504 re-merged onto main after kanso#1518
+
+Three conflicts, the same three as kanso#1502 took in the same hour and for the
+same reason: kanso#1518 moved the interpreted rows and left every layout golden
+alone, so those auto-merged.
+
+The interpreted rows carry main's — 1,555,890,579, 3,879,653 and 961,165. This
+branch's cached beat top moved that row by 26 instructions on 1.96 billion last
+sitting, so tens is what it should read again; anything larger is kanso#1518's
+arithmetic, not the beat's.
+
+## 2026-09-18 — kanso#1504, CI's row: nineteen instructions, and a third reading in the tens
+
+One vein disagreed and it disagreed by nineteen:
+
+    interp_instructions   1,555,890,579 -> 1,555,890,598   +19   +0.0000012%
+
+Every other row read its golden exactly — all five layout rows, both codegen
+rows, `compile_allocs`, and both interpreted memory rows.
+
+THREE RUNTIME EDITS IN ONE DAY HAVE NOW MOVED THIS ROW BY 15, 26 AND 19. They
+are three different functions in `src/runtime.c` — two divisions in Ryu's float
+rendering, the cached beat top, and the beat top again against a newer main —
+and every reading lands under thirty on a row of one and a half billion. The
+corpus decodes a document it built itself and never enters the C runtime, so
+none of them can be work.
+
+`interp_allocs` agreeing at 3,879,653 across all three is what makes that a
+check rather than an assertion. An allocation counter counts operations rather
+than a host, and real work in the interpreted run would have moved it.
 
 ## 2026-09-18 — the layout rows the kanso#1520 merge left on this branch
 
@@ -7698,6 +8166,693 @@ kanso#1566 packs every table into that tail, which is what makes this row's
 three jobs diffable frame by frame. None of them could be read at the time.
 
 
+
+Worth setting beside kanso#1502, which took the same merge on the same day and
+read different numbers for five of the six. Only the interp row's +7 is shared.
+So these are not a property of kanso#1520 that a branch inherits — they are
+where each branch's own code lands once the compiler around it is rebuilt, and
+a reader who saw one of the two sets would have been wrong to expect the other.
+
+The floor is banked at 77.17 after these rows, not before them.
+
+## 2026-09-18 — kanso#1504 on the merged tree, and a claim this branch withdraws
+
+`interp_instructions` re-bases from 1,138,001,430 to **1,138,001,437**, a rise
+of seven on a branch that caches the innermost beat mark and never enters the
+interpreted corpus. Every other row read its golden exactly, both codegen rows
+and `interp_allocs` at 2,539,998 included.
+
+kanso#1502 read the same 1,138,001,437 on the same day, on a different runner —
+Intel, family 0x6 model 0x6a, which `bench/dispatch.txt` does not record —
+changing two divisions in a float renderer. Two branches with nothing in common
+but their base, agreeing to the instruction, is what re-bases the row.
+
+**This branch withdraws a claim it made earlier today.** A log entry here
+described a pattern: the same seven, three times, on three different absolute
+values — 1,260,262,910 to ...917 on the kanso#1520 merge, kanso#1502's reading,
+and this one — and concluded it was layout jitter with three readings behind
+it. That entry, and the golden edit it justified, are off this branch.
+
+What went wrong is worth more than the retraction. The gate reported *this
+binary counted two numbers in one job: 1138001437 and then 1138004452*, and the
+entry was written treating that as noise to be explained. It was not noise. The
+difference is 3,015, both jobs printed `interp_printed=3015` two screens above
+the error, and the gate's second count was reading the raw anchored frame where
+its first reading had the printed line taken off. kanso#1524 fixes the gate and
+records the rest.
+
+So the pattern was two readings and an artifact wearing the same number. Two
+readings still re-base a row. They do not name a mechanism, and none is named
+here beyond the standing guess that it is layout.
+
+The lesson is the one already in CLAUDE.md, arrived at the expensive way: read
+the thing the number describes before running anything against it. The gate
+prints what it subtracted, as a notice, precisely so the next drift can be
+answered — and the entry that went wrong was written without reading it.
+
+## 2026-09-18 — three trees, three silicons, and what the seven is not
+
+The row was re-based on two agreeing readings with no mechanism named. Pulling
+the third job log puts real bounds on what the mechanism can be, so the guess
+gets narrowed rather than left standing.
+
+    tree            silicon            .text      .rodata   interp row
+    kanso#1522 PR   AMD  0x19 / 0x1   2,840,050   803,856   1,138,001,430
+    kanso#1502      Intel 0x6 / 0x6a  2,840,050   805,776   1,138,001,437
+    kanso#1504      AMD  0x1a / 0x2   2,840,050   806,288   1,138,001,437
+
+**The silicon is not it.** The two trees that agree to the instruction ran on
+an Intel part and an AMD Zen 5 part, whose feature blocks differ in fifty-odd
+rows — cache sizes, `rep_movsb_stop_threshold`, `isa_1`, the `xsave` sizes.
+kanso#1492 built `bench/dispatch.txt` and the `differs` reader to answer
+exactly this, and this is the first time it has had three jobs to answer with.
+Both runs also resolved to `__memcmp_avx2_movbe`, so the resolver picked the
+same implementation on both.
+
+That matters beyond this row. The standing ruling "a welfare counter reads
+three parts per billion" (2026-09-15) has sat with the resolver as its leading
+suspect since it was filed. On this row the suspect has an alibi.
+
+**`.text` is not it either, and that is the surprising one.** All three trees
+emit byte-identical `.text` — 2,840,050 — and the rows still differ. Two of the
+three branches change the compiler's own Rust in different places and the
+compiled size lands on the same number, which is itself worth knowing; what
+follows is that a row moving while `.text` holds cannot be explained by code
+layout in the ordinary sense.
+
+**`.rodata` is the only section that moves**: 803,856, 805,776, 806,288. The
+smallest reads 430 and the two larger read 437. Three points, and the two
+larger ones differ by 512 while reading the same row, so this is a
+correspondence and not yet a function.
+
+What this does not do is name a mechanism. It rules two out. The next reading
+that would say something is a tree whose `.rodata` matches one of these three
+exactly and whose row disagrees — that would rule `.rodata` out too — or a
+deliberate `.rodata` change of known size on an otherwise identical tree, which
+would make it a function or kill it.
+
+## 2026-09-18 — the .rodata correspondence, tested and killed
+
+The entry above left `.rodata` standing as the one candidate the three-tree
+table had not ruled out, and named the experiment that would settle it: a
+deliberate `.rodata` change of known size on an otherwise identical tree. That
+experiment is cheap, it runs on this container, and it was run.
+
+Main at `36433243`, release, callgrind, twice — once as it stands and once with
+4,096 bytes of non-zero immutable data added to `src/lib.rs` under `#[used]`,
+reached by nothing the program runs:
+
+    .rodata=823,832  .text=2,860,898   row=1,173,233,661
+    .rodata=827,928  .text=2,860,898   row=1,173,233,661
+
+`.rodata` grew by exactly 4,096, `.text` held byte-for-byte, and the row did
+not move by one instruction.
+
+**So `.rodata` size does not move this row, and the correspondence was three
+points lining up by chance.** 803,856 reading 430 and the two larger values
+reading 437 is what two coin flips look like when you only have three of them.
+The page section that recorded it as a correspondence rather than a function
+was right to, and is now corrected to say it is neither.
+
+That leaves all three candidates dead: not the silicon, not `.text` size, not
+`.rodata` size. What remains is the one thing the table could not separate —
+`.text` CONTENT. Equal size is not equal code, and the three trees are three
+different branches; which functions landed at which addresses, and how they
+aligned, differs between them while the section total happens to match. That is
+layout in the narrow sense of addresses rather than sizes, and nothing here
+isolates it.
+
+The next experiment, if the seven is ever worth more than it has cost: perturb
+`.text` at constant size on one tree — reorder two functions, or pad one — and
+read the row. This probe took four minutes and killed a published claim, which
+is the argument for running the cheap one before writing the careful sentence.
+
+The figures above are this container's and are not comparable with CI's, which
+is exactly why the experiment is sound: both readings come from the same box,
+and what is compared is the difference between them.
+
+## 2026-09-18 — kanso#1504 on the tree merged with kanso#1525: five layout rows, all down
+
+The linearity read landed on main and this branch took it. CI's sitting on the
+merged tree, against the rows main carried:
+
+    compile_instructions     35,552,188 ->    35,549,348    -2,840   -0.008%
+    entry_instructions      126,735,634 ->   126,728,937    -6,697   -0.005%
+    library_instructions    127,192,177 ->   127,184,826    -7,351   -0.006%
+    startup_instructions      3,365,595 ->     3,363,168    -2,427   -0.072%
+    emit_instructions        51,630,538 ->    51,617,748   -12,790   -0.025%
+
+**Every one of the five fell, and none of them is work this branch does.**
+`kanso check` stops before the beat rewind runs and `kanso play` on a one-line
+program never enters a beat loop, so nothing these rows count can be paying for
+a cached mark pointer. What moved is the layout: this branch adds a field to
+`KMark` and removes eight instructions from a runtime function, `src/runtime.c`
+is compiled into the binary that the front end also lives in, and the code
+landed differently around it.
+
+That they all moved the SAME WAY is what makes the reading easy this time. When
+kanso#1525 took this merge the four compile-side rows all ROSE by the same
+0.19%, and the entry there was that a uniform shift is what a layout move looks
+like. This is the same shape with the sign reversed and a tenth the size.
+
+The interpreted rows did not move at all — 1,075,174,600, 2,486,376 and 833,130,
+main's values to the unit. That is the check on the reading, and it is the
+strongest one available: the interpreted corpus is the workload most sensitive
+to `src/eval.rs`, this merge brought a large `src/eval.rs` change, and the rows
+that measure it agree exactly because kanso#1525 already priced them. A layout
+story that moved those too would not be a layout story.
+
+Both codegen rows and `compile_allocs` also read their goldens exactly.
+
+## 2026-09-18 — what the beat-top branch does to the interpreted row after kanso#1531
+
+The interpreted row on this branch is `interp_instructions=1,029,696,282`,
+where main reads 1,029,696,275. A rise of 7 instructions, 0.0000007%.
+
+Layout, and the mechanism is the same one this branch's earlier readings
+record. `kanso run --interp` never reaches the native runtime, but the binary
+it runs holds `src/runtime.c` as bytes, because the compiler `include_str!`s
+that file. This branch changes that file, so the code the interpreted run
+walks past is arranged differently and the row moves with the arrangement
+rather than with anything it measures.
+
+Seven instructions against a row of a billion. The trend gate asked for the
+sentence because the goldens carried the new value with nothing naming it.
+
+## 2026-09-18 — kanso#1504's rows on the tree merged after kanso#1533
+
+CI measured the beat-rewind branch on the tree carrying the dispatcher
+change. Six rows moved, all of them small, and three went each way:
+
+    compile_instructions   35,550,010 ->  35,549,668      -342  -0.0010%
+    entry_instructions    126,729,588 -> 126,729,774      +186  +0.0001%
+    library_instructions  127,186,008 -> 127,185,869      -139  -0.0001%
+    emit_instructions      51,617,476 ->  51,620,167    +2,691  +0.0052%
+    startup_instructions    3,363,916 ->   3,363,431      -485  -0.0144%
+    interp_instructions   995,837,536 -> 995,837,543        +7  +0.0000007%
+
+Four were counted twice in the one job and every repeat agreed to the
+instruction: compile_again 35,549,668, entry_again 126,729,774,
+library_again 127,185,869, emit_again 51,620,167.
+
+A change that only moves layout gives no sign about direction, and this
+sitting is the cleanest demonstration of that on record: one diff, six rows,
+three down and three up, all under 0.015%. `interp_allocs` and
+`interp_peak_bytes` are byte-identical, so nothing the interpreter counts
+changed, and the seven instructions on the interpreted row are the relink.
+kanso#1502 read +14 on its own tree in the same sitting and byte-identical on
+another. Re-based, not explained, and the header on each golden says so.
+
+The branch's own rows are the run-time ones and they fell: livebench
+2,825,430,323 -> 2,805,024,580 and runbench 1,821,933,936 -> 1,804,998,570.
+
+## 2026-09-18 — kanso#1504 reads the same seven instructions against a different baseline
+
+CI measured the beat-rewind branch again, this time on the tree merged after
+kanso#1534. Every row it moved before moved the same way, and the interpreted
+row did something worth writing down:
+
+    interp_instructions   975,944,763 -> 975,944,770   +7   +0.0000007%
+
+The sitting before this one read +7 as well, against a baseline of
+995,837,536. Two readings, two baselines 19,892,773 apart, the same seven
+instructions. The earlier note called it "what a relink moves this row by"
+and said it was re-based rather than explained; a second reading at a
+different absolute value is what turns that from a guess into a small
+measured fact about this branch's binary.
+
+`interp_allocs` and `interp_peak_bytes` are byte-identical in both sittings,
+so nothing the interpreter counts changed either time. The other five rows
+are as recorded above: -342, +186, -139, +2,691, -485.
+
+## 2026-09-18 — the same seven, a third time, against a third baseline
+
+    995,837,536 -> 995,837,543
+    975,944,763 -> 975,944,770
+    957,583,234 -> 957,583,241
+
+Three CI sittings of kanso#1504, each against a baseline the one before it did
+not have, spanning 38,254,302 instructions between the first and the last, and
+the delta is seven every time. `interp_allocs` and `interp_peak_bytes` are
+byte-identical in all three.
+
+The first note called it re-based rather than explained, which was right with
+one reading. Three make it a small measured fact instead: this branch's relink
+costs the interpreted row seven instructions, and the figure does not drift
+with the size of the row it sits on. A layout delta that reproduces across
+baselines is worth more than the same delta observed once, because once is
+consistent with noise that happened to land near seven.
+
+**AND THE RELEASE CODEGEN ROW PASSED THIS SITTING**, on the same branch whose
+previous sitting halted that vein with 6,841,691,436 then 6,841,691,425. That
+is what the temporary object's name being DRAWN predicts: most names give one
+number and a minority give another, so an unpinned branch fails the row
+intermittently. kanso#1512 measured nine of ten names at one value and
+`4b8c1a` at another; this is the tenth case arriving on its own, in a job
+nobody set up to look for it.
+
+## 2026-09-18 — the same seven, a fourth time, against a fourth baseline
+
+    995,837,536  ->  995,837,543   +7
+    975,944,763  ->  975,944,770   +7
+    957,583,234  ->  957,583,241   +7
+    939,042,794  ->  939,042,801   +7
+
+**The baselines span 56,794,742 instructions and the residue has not moved by
+one.** `interp_allocs` reads 1,410,530 and `interp_peak_bytes` 833,466, both
+byte-identical to the golden, so nothing the interpreter COUNTS changed.
+
+Four readings on four baselines is the strongest form the relink claim has
+taken. It is also the shape the release codegen draw has: a constant residue
+that survives large movement in the quantity it is a residue of. The two are
+different veins, different hosts within the job, and different magnitudes —
+seven here, eleven there — and nothing measured connects them. Written down
+beside each other because a constant residue is a narrow thing to look for and
+this tree now has two.
+
+The job also drew the release codegen vein again, which is this branch's
+second and the sixth today. That one is design/pending-gavels.md's to rule on
+and no work here moves it.
+
+## 2026-09-18 — three conflict markers shipped in the published page, and what did not catch them
+
+**A MISTAKE, caught by `no_published_page_carries_a_conflict_marker` on CI.**
+kanso#1504's `docs/compiler.html` went to CI carrying `<<<<<<< HEAD`,
+`>>>>>>> origin/main` and `=======`. Main never had them and no other branch
+did; it was this one resolution.
+
+**HOW.** The merge left the page unmerged with main's new section on one side
+and this branch's two on the other. A script then moved main's section ahead of
+this branch's and renumbered — and the block it cut, from `<h2 id="reserved">`
+to `<h2 id="coda">`, spanned the closing marker. So the move carried
+`>>>>>>> origin/main` with it and orphaned `=======` above the coda. Every line
+of both sides survived; three lines of git punctuation came along.
+
+**WHAT DID NOT CATCH IT, which is the part worth keeping.** The resolution was
+checked, and by four things:
+
+    git diff --diff-filter=U        no unmerged paths, because the script
+                                    had rewritten the file
+    comm -23 on the h2 anchors      nothing lost
+    sec-num duplicates              none
+    sh scripts/gates/all_pages.sh   all three gates green
+
+The three page gates read `data-golden` spans, the log's drift budget, and
+three families of sentence. A marker is none of those. The anchor and
+duplicate checks read `<h2 id=` and `sec-num`, and a marker is neither. Four
+checks, all passing, none of them looking at the thing that was wrong — which
+is the shape this tree already has a name for: a verification that names one
+file keeps passing while the defect moves next door.
+
+The spec existed and it worked, on the push. The container check that would
+have caught it before the push did not exist, and now does:
+`grep -cE '^<<<<<<< |^>>>>>>> |^=======$'` over the pages is part of the
+resolve-and-verify pass, beside the anchor diff.
+
+**AND THE RULE UNDER IT.** A script that moves a region of a file must not be
+run on a file that still has conflict markers in it, because the region it cuts
+is defined by content and the markers are content. Resolve first, then move.
+
+**AND THE SPEC WAS THIS SESSION'S OWN, WRITTEN THIS MORNING FOR THIS FAILURE.**
+`e9d99540`, 14:37 today, merged as kanso#1526, carrying this session's id. Its
+message says: "Today a merge resolution left `<<<<<<< HEAD`, `=======` and
+`>>>>>>> origin/main` in docs/compiler.html and the commit went in. All three
+page gates then ran on that tree and ALL THREE PASSED." Eight hours later the
+same file took the same three markers in the same place, past the same three
+gates plus two checks added since.
+
+So the honest version is not that a spec caught a mistake. **The lesson was
+found, written down, pinned in CI, and then repeated**, because what went into
+the tree was a spec and what was needed on the container was a grep. A spec
+guards the push. It does not guard the twenty minutes before the push, and that
+is where the same hands make the same move again.
+
+That is the whole argument for `verify_resolution.sh` being a script rather
+than a paragraph: the paragraph existed, in a commit message, in this file, and
+in the spec's own doc-comment, and it did not survive contact with a resolution
+at speed. The check now runs beside the anchor diff, and it was watched red on
+a planted marker before being trusted.
+
+kanso#1526's message also names the second half, which held again today: "the
+merge that leaves a marker is the same one that leaves two sections numbered
+88." Two sections numbered 97 is what the duplicate check caught on this same
+branch an hour earlier.
+
+---
+
+## 2026-09-19 — kanso#1504's release row, and what banking on a carried-forward value cost
+
+CI's sitting on the merged tree: `codegen_instructions_release` 6,824,133,280
+-> 6,841,691,425, a RISE of 17,558,145 (+0.2573%), with
+`codegen_release_again` reading 6,841,691,425 in the same job. The row
+reproduced.
+
+**THE VALUE WAS ALREADY RIGHT AND THE FILE HAD TWO OF IT.** 6,841,691,425 is
+exactly what the duplicated second row carried before it was deleted. What was
+wrong was that it sat BESIDE main's 6,824,133,280 rather than replacing it, and
+the reader adds rows with `+=`. So the branch had the correct measurement all
+along, inside a file that could not be read correctly.
+
+**AND CARRYING MAIN'S VALUE FORWARD COST A RED ROUND.** Deleting the duplicate
+left a choice of which single value to keep, and main's was chosen on the
+ground that neither was a reading of this tree. That reasoning holds and the
+outcome still cost a round, which is worth writing down rather than defending:
+when a duplicate is deleted and one of the two values came from CI on a tree
+this one descends from, that value is the better carry-forward, and the header
+says which sitting it was.
+
+**THE FLOOR ENTRY ABOVE IT IS A CORRECTION, and the mistake is the interesting
+part.** The floor was banked at 77.33 while the golden still held main's
+codegen row, because the sentinel fails an unbanked rise and the choice at that
+moment was between a red pull request and a number computed off a carried value.
+It was marked PROVISIONAL in its own `why`. CI then measured the row 17,558,145
+higher, the term costs 0.007 points, and the provisional floor was a hair too
+high — so the tree read as a FALL against a floor derived from itself.
+
+The rule that says bank after the goldens carry CI's rows is what this
+violates, and the violation was deliberate and flagged. What it shows is that
+the flag is not enough: a provisional floor makes the next reading look like a
+regression, and a reader who has not got this entry would spend the round
+looking for what got worse. The tree is a rise over main's 77.2665986848222 and
+always was.
+
+Both numbers now come from CI's sitting.
+
+---
+
+## 2026-09-19 — the relink seven, a fifth time, against a baseline it was projected onto
+
+`interp_instructions` 932,183,914 -> **932,183,921** on kanso#1504's merged
+tree. A RISE of SEVEN, and this one was written down before CI measured it.
+
+When kanso#1540 moved the baseline under this branch, the golden was rebased to
+main's 932,183,914 plus seven and the header said what that was:
+
+> So 932,183,921 is a PROJECTION off the fifth baseline, not a reading. Four
+> confirmations make it a good one and that is still not a measurement: CI
+> measures this tree, and a fifth agreement is worth having on the record where
+> a fifth assumption is worth nothing.
+
+CI read 932,183,921. The five now stand as:
+
+     995,837,536  ->    995,837,543   +7
+     975,944,763  ->    975,944,770   +7
+     957,583,234  ->    957,583,241   +7
+     939,042,794  ->    939,042,801   +7
+     932,183,914  ->    932,183,921   +7
+
+The baselines span 63,653,622 instructions and the residue has not moved by
+one. `interp_allocs` reads 1,309,483 and `interp_peak_bytes` 833,463, both
+byte-identical to main, so nothing the interpreter COUNTS changed. The seven is
+the relink, and a prediction that named its value in advance and was then
+measured is a stronger form of that claim than four agreements found after the
+fact.
+
+**AND THE ROW IS PRICED HERE BECAUSE THE TREND GATE ASKED.** It reported
+`interp_instructions` UNPRICED — worsened or re-based with no sentence in this
+branch's log delta naming it and the value it landed on — which is the gate
+doing exactly its job: the movement is fine and the silence was not.
+
+`emit_instructions` 51,617,476 -> 51,620,167 and the two codegen rows moved with
+the same relink; `work_runbench` 1,821,933,936 -> 1,804,998,570 and
+`work_escapebench` 84,780,592 -> 75,228,606 are what this branch is for.
+
+---
+
+## 2026-09-19 — kanso#1504 on the tree merged after kanso#1543, and the sixth baseline
+
+`interp_instructions` 923,151,727 -> **923,151,734**, a rise of SEVEN, and this
+one is a projection again rather than a reading.
+
+The baseline moved under this branch for the sixth time: main is now
+923,151,727 after the frame-node pool. The branch's own effect on this row is
+the relink seven, and the record it now has is worth stating because it decided
+how this file was written:
+
+     995,837,536  ->    995,837,543   +7
+     975,944,763  ->    975,944,770   +7
+     957,583,234  ->    957,583,241   +7
+     939,042,794  ->    939,042,801   +7
+     932,183,914  ->    932,183,921   +7    <- written down BEFORE CI read it
+
+Five readings across baselines spanning 63,653,622 instructions, the residue
+unmoved, and the fifth was a prediction this file carried in advance and the
+runner then confirmed exactly. That is the strongest form the claim has taken,
+and it is still a projection: CI measures this tree, and a disagreement is the
+finding rather than a number to quietly correct.
+
+The other five compile-side goldens took MAIN's rows unchanged. Those are
+kanso#1543's CI measurements on a tree this one descends from, which is the
+carry-forward rule this session learned the expensive way on the duplicated
+codegen row: when one of two values came from CI on an ancestor, that is the
+one to keep.
+
+`interp_allocs` and `interp_peak_bytes` are main's, untouched, so nothing the
+interpreter counts changed on this branch.
+
+---
+
+## 2026-09-19 — the relink seven broke on its sixth baseline, and it was a prediction
+
+    interp_instructions   923,151,727 ->  923,151,726      -1
+    compile_instructions   35,551,167 ->   35,549,341  -1,826
+    emit_instructions      51,619,793 ->   51,617,717  -2,076
+    entry_instructions    126,732,646 ->  126,729,042  -3,604
+    library_instructions  127,188,882 ->  127,184,937  -3,945
+    startup_instructions    3,363,672 ->    3,363,742     +70
+
+Every row read twice in the same job and agreed with itself.
+
+**THE SEVEN BROKE.** This branch's interpreted row had risen by exactly seven
+on five consecutive baselines spanning 63,653,622 instructions. The fifth was
+written into the golden as a PROJECTION before CI measured it — 932,183,921 —
+and the runner read 932,183,921. That agreement was recorded here as "the
+strongest form the claim has taken".
+
+On the sixth baseline it is MINUS ONE.
+
+**AND NOTHING ABOUT THE BRANCH CHANGED.** What changed underneath it was
+kanso#1543 landing the dispatch-pooling family, which moved the interpreter's
+own code. So the seven was a property of the five trees it was measured on
+rather than a constant of the relink, and the residue that looked like a law
+was a coincidence of layout that survived five baselines and died on the sixth.
+
+**THE PREDICTION BEING RIGHT ONCE IS WHAT MAKES THIS WORTH WRITING DOWN.** A
+projection confirmed in advance is the strongest evidence a claim of this kind
+can get short of a mechanism, and this one had it. It still broke, because
+nothing ever isolated WHY the relink cost seven — the entries that recorded it
+were careful to say the delta arrived with the change and left the mechanism
+open, and that caution is the only reason this is a correction rather than a
+theory collapsing.
+
+So: no projection replaces the figure above, and the next merge that moves this
+baseline gets no prediction from this branch. Five agreements bought one wrong
+answer in both size and sign.
+
+**The other five rows are layout re-basings** of a few thousand each. The beat
+cache changes src/runtime.c, which those rows carry without compiling, so what
+moved is where the bytes sit.
+
+## 2026-09-19 — kanso#1504's seventh baseline, and a bank that ran ahead of CI
+
+The branch went red on the two codegen rows again, and for the ordinary reason:
+it had banked a floor of 77.32716 while both codegen goldens still carried
+main's values. Those two rows are the only ones on this branch that measure
+what `src/runtime.c` costs to compile, so a bank taken before they carry CI's
+reading is a bank on a projection.
+
+CI's sitting, run 35419504606:
+
+    codegen_instructions_dev      596,153,756 -> 596,193,835     +40,079   +0.0067%
+    codegen_instructions_release  6,833,786,335 -> 6,843,462,951  +9,676,616  +0.1416%
+
+Both reproduced in the same job — `codegen_dev_again` and
+`codegen_release_again` read the same figures — which is kanso#1507's
+`-Wl,-plugin-opt=jobs=1` holding on a tree that changes runtime.c.
+
+Scored on those rows the tree reads 77.3244 against main's floor of
+77.26807421236497, so the branch is 0.056 ahead of main and 0.0028 behind its
+own premature bank. The floor is re-set to the measured number. The release
+row costs 0.008 points at weight 0.15, and the runtime saving the beat cache
+buys covers it.
+
+The two readings this branch has taken of the release row, +9,676,616 today
+and +19,241,568 on 2026-09-18, do not measure the same thing: kanso#1513's
+fixed-temp pin re-based the row by about 1.35 million underneath them. The
+golden's header now says so beside both numbers.
+
+
+## 2026-09-19 — the same five paragraphs, kept twice on a second branch
+
+kanso#1502 was found carrying five long paragraphs of docs/compiler.html in
+duplicate, both sides of a conflict kept with a blank line between the copies.
+The resolution check grew a test for it the same hour, and the next branch it
+ran against — this one — had all five as well. So the defect is not one bad
+resolution; it is what this repo's page conflicts do when both sides are kept,
+and it had been sitting in two branches at once.
+
+The page rendered correctly in both. What sees it is `golden_prose`, reporting
+one drifted number four times instead of twice, and now the resolution check
+before that.
+
+## 2026-09-18 — the layout rows the kanso#1520 merge left on the beat-top branch
+
+Renamed on 2026-09-22: kanso#1502 wrote an entry under the same title about
+its own branch, that one reached main first, and keeping both is the point —
+the two branches read DIFFERENT rows off the same merge. kanso#1520 landed under this branch — the clone sized for the growth that
+follows it — and every instruction row moved with the binary it rebuilt. This
+branch touches the beat reporter and nothing the front end runs, so none of the
+six is work anybody did on this branch; all six are where the code landed after
+another change resized the compiler around it. Written down because a number
+that changes without a sentence is the thing to catch.
+
+CI's readings on the merged tree, against the values carried forward from main:
+
+    compile_instructions      35,486,333 ->     35,489,169     +2,836
+    entry_instructions       126,498,292 ->    126,507,679     +9,387
+    library_instructions     126,954,304 ->    126,963,794     +9,490
+    interp_instructions    1,260,262,910 ->  1,260,262,917         +7
+    startup_instructions       3,363,378 ->      3,363,577       +199
+    emit_instructions         51,456,464 ->     51,456,185       -279
+
+The interp row's +7 is the same order as the ±13 the module row has drawn
+across trees whose compiler source was identical; kanso#1487 measured that one
+and it is a face of the layout rather than a cost. The compile-side three are
+larger and one-directional, which is what an inlining decision re-made against
+a different `src/eval.rs` looks like. Both compile memory rows and both codegen
+rows agreed without an edit, which is the check on that reading: allocation and
+peak counts are decisions the code makes, and they did not move.
+
+Worth setting beside kanso#1502, which took the same merge on the same day and
+read different numbers for five of the six. Only the interp row's +7 is shared.
+So these are not a property of kanso#1520 that a branch inherits — they are
+where each branch's own code lands once the compiler around it is rebuilt, and
+a reader who saw one of the two sets would have been wrong to expect the other.
+
+The floor is banked at 77.17 after these rows, not before them.
+
+## 2026-09-22 — kanso#1504's rows on the tree merged with kanso#1502, and the floor banked on them
+
+kanso#1502 landed at 19:00 and this branch merged it. Neither side's goldens
+described the merged tree, so the merge carried main's and CI measured the
+difference. Its sitting, golden before against CI's reading:
+
+    runbench              1,819,291,716 -> 1,802,356,350   -16,935,366   -0.93%
+    encodebench           3,485,406,060 -> 3,465,000,320   -20,405,740   -0.59%
+    jsonbench             1,133,644,520 -> 1,133,645,592        +1,072
+    runbench .text              319,986 ->       320,546          +560
+    encodebench .text           135,746 ->       136,306          +560
+    jsonbench .text             122,354 ->       122,882          +528
+    compile_instructions     35,549,673 ->    35,551,455        +1,782
+    entry_instructions      126,728,843 ->   126,733,982        +5,139
+    library_instructions    127,184,941 ->   127,190,464        +5,523
+    startup_instructions      3,363,186 ->     3,363,875          +689
+    emit_instructions        51,618,058 ->    51,623,314        +5,256
+    codegen dev             596,158,173 ->   596,192,991       +34,818
+    codegen release       6,825,827,822 -> 6,837,945,401   +12,117,579
+    interp_instructions     923,151,727 ->   923,151,726            -1
+
+CORRECTED, an hour later. The table above named three benchmarks because the
+first reading of CI's diff was filtered to three names, and ALL FOURTEEN moved —
+every benchmark links the runtime, so a runtime change reaches every row. The
+round that followed went red on `work` and `machine code` alone, with all eight
+instruction rows already agreeing, and that is what said so. Both veins carry
+fourteen rows and fourteen were set this time, which is the check that would
+have caught it: count the rows in the file against the rows you wrote.
+
+    deepbench     347,644,995 -> 347,635,275        livebench  2,793,281,380
+    escapebench    75,228,606                        scanbench    462,269,305
+    pendbench     208,139,955                        digestbench    9,966,673
+    oneshot        17,807,820                        readbench      4,627,056
+    basket         32,776,834                        widebench     33,676,020
+    indexbench      2,895,743
+
+The .text rows moved with them, +480 to +560 on each. Summed, `text` reads
+1,755,820 -> 1,762,748, +6,928 bytes, +0.395% — the whole of what the cached
+mark costs in code, spread across every binary that links the runtime. The
+earlier table in this branch named that row at 1,762,300, a figure two
+landings old; the trend gate wants the value a row LANDED on and it was the
+one row of the fifteen the fourteen-row correction above did not re-read.
+None of the eleven is a welfare term, so the floor banked on the first pass
+still stands at 77.34.
+
+WHICH WAY AND WHY. The two falls are the branch's subject: `k_beat_iter` stops
+turning a depth back into `&k_beat_stack[depth - 1]` and reads a cached mark
+instead, and the run program iterates five times for every pop it makes. The
+rises are the code that does it — 560 bytes of `.text` on every benchmark that
+links the runtime, and the compile-side rows moving with the bytes the compiler
+carries, since `src/runtime.c` is `include_str!`'d into it. The release codegen
+row is the largest of them at +12,117,579, and it is clang optimising 560 more
+bytes.
+
+The interp row came back one LOWER, which is the same size as the ±13 that row
+has drawn across trees whose compiler source was identical. It is not a saving
+and nothing on this branch could have made it one.
+
+Scored, the floor moves 77.27959877643865 -> 77.33517935341673, banked in this
+commit and after the goldens carried CI's rows rather than before. The page's
+eight drifted spans follow the goldens; four of them quote
+`compile_instructions` from four distinct paragraphs, checked against the
+duplicate-paragraph shape kanso#1557 recorded — no long line appears twice.
+## 2026-09-22 — kanso#1504 re-merged onto main after kanso#1563
+
+kanso#1563 landed the inline name compare at 22:08 and took six compile-side
+goldens and the welfare floor with it. Neither side of this merge described the
+merged tree, so the six goldens and `bench/welfare_floor.json` carry MAIN'S
+values forward and CI measures the difference. Nothing this branch had measured
+on those rows is comparable with anything measured after it: `interp_
+instructions` alone moved 923,151,727 to 908,952,299 on that change, and the
+five compile rows moved with it.
+
+    compile_instructions    35,540,015    entry_instructions   126,691,703
+    library_instructions   127,146,502    startup_instructions   3,362,329
+    emit_instructions       51,481,045    interp_instructions  908,952,299
+    floor          77.28677792407876
+
+Five page paragraphs conflicted, every one of them a `data-golden` span
+quoting those rows, and every one resolved to main's figure for the same
+reason the goldens were: a span follows its golden. Resolved hunk by hunk
+rather than by taking either file whole, because this branch's own two
+sections live in that file -- both are still there, and the duplicate-line
+count is main's, so the shape kanso#1557 recorded did not happen here.
+
+The run-side veins are this branch's own and survived the merge untouched;
+`text` and the fourteen work rows still read what the entry above records.
+
+CI'S SITTING ON THE MERGED TREE. Five compile-side rows moved and each rose,
+which is this branch's `.text` growth arriving on top of kanso#1563's falls:
+
+    library_instructions    127,149,930 -> 127,158,876    +8,946   +0.0070%
+    entry_instructions      126,696,892 -> 126,702,408    +5,516   +0.0044%
+    compile_instructions     35,540,661 ->  35,543,672    +3,011   +0.0085%
+    emit_instructions        51,481,382 ->  51,484,057    +2,675   +0.0052%
+    startup_instructions      3,362,329 ->   3,363,729    +1,400   +0.0416%
+
+Taken three times as kanso#1563 and kanso#1564 landed underneath; the figures
+above are the last sitting and the ones on disk. `startup_instructions` is the
+one row CI reported as AGREEING this round, and it is in the table anyway: it
+agreed with the golden this branch already carried, which was 1,400 above
+main's. A row that agrees with its own branch has still moved against the base,
+and the trend gate compares against the base -- it asked for this row by name
+when the first draft of this table left it out.
+
+`interp_instructions` read 900,471,351 against main's 900,471,358, seven low. Seven on 900
+million is the drift STATUS.md's standing row is about rather than anything
+this branch did: it adds a field to the mark and a global beside it,
+`src/runtime.c` is `include_str!`'d into the compiler so its bytes are the
+compiler's, and nothing here touches what the interpreter does. kanso#1561's
+three sittings read seven low, then fourteen, on a branch that adds only a
+counter, so the size of the drift moves between sittings of one tree.
+Both codegen rows and `compile_allocs` are identical too.
+
+THE FLOOR, AND THE THREE JOBS AN UNBANKED ONE REDDENS. This tree scored 77.34
+against the 77.28677792407876 it inherited from kanso#1563, and a rise nobody
+banks fails `the_undoctored_goldens_hold_the_floor` -- which runs in `specs`
+and in `the other host` as well as behind the welfare job, so the round came
+back red on three jobs with only one cause. Banked at 77.34, and the run-side
+falls compose with kanso#1563's development-side falls exactly as the two sides
+of the objective are meant to: production 57.13 -> 57.23, development 78.49
+unmoved.
 ## 2026-09-23 — the allocator's page commits are inside the anchor, and are worth 107,802
 
 STATUS.md's standing row — "a welfare counter reads three parts per billion" —
@@ -7841,3 +8996,113 @@ THE FALSIFIER IS IN THE GOLDEN'S HEADER, and it is the next thing to check: the
 row should now read ONE value where it drew two, because the faces differed only
 inside the excluded subtree. A second sitting that alternates means the
 exclusion is aimed at the wrong frame.
+## 2026-09-23 — kanso#1504's compile row moved three on a merge that changed no code
+
+Merging main in twice (kanso#1567 and kanso#1566, a log entry and a CI change,
+neither reaching anything `include_str!` puts in the compiler) moved
+`compile_instructions` from 35,544,159 to **35,544,162**.
+
+The golden was set to 35,544,162 on the strength of that, and the NEXT job read
+35,544,159 again. The entry after this one carries what the two jobs' tables say
+and why the golden is back at 35,544,159; what stands here is the pair of facts
+that sighting established.
+
+This is the kanso#1558 phenomenon for the sixth time and the third branch, and
+two things about this sighting are worth keeping.
+
+**The gate's own second reading agrees with its first.** `compile_again` reads
+35,544,162 in the same job. So a job is internally consistent and the three
+appear BETWEEN jobs, which is what kanso#1565's three readings said and this
+confirms on a different tree.
+
+**The other five instruction rows match their goldens to the instruction** —
+`entry` 126,702,408, `library` 127,158,876, `startup` 3,363,729, `emit`
+51,484,057, `interp` 900,471,351, every one exact.
+
+That second fact rules something out, and the entry above about the six-row
+decomposition is why. A runtime.c change moves all six rows through two terms:
+a CONSTANT, the same in every table, which is glibc parsing `/proc/self/maps`
+at thread set-up; and `__memcmp_avx2_movbe`, which scales with the workload.
+The constant moves every row by the same amount. Five rows here did not move at
+all, so **the three cannot be the constant term**. Whatever carries it touches
+the compile workload and nothing else.
+
+What it is remains open. The reading that would name it is this job's packed
+compile table against one from a job of this same tree that read 35,544,159 —
+and that earlier job predates kanso#1566, so its table is at step 19 of 41 and
+out of reach. The next occurrence has both sides.
+
+## 2026-09-23 — the three instructions are ReadDir::next, and the row is a directory walk
+
+The row that has drifted by single digits since 2026-09-15 has a named frame.
+
+kanso#1504's tree went through CI three times with identical compiler source and
+`compile_instructions` read **35,544,159**, then **35,544,162**, then
+**35,544,159** again. Not a step; it alternates. Both of the last two jobs ran
+under kanso#1566, so both packed their whole function tables into the log tail,
+and the two compile tables can be diffed against each other for the first time.
+
+**1,335 of 1,336 frames are byte-identical. One moved.**
+
+    -3     127 -> 124   <std::sys::fs::unix::ReadDir as Iterator>::next
+
+PROGRAM TOTALS moved -3. The gated row moved -3. The single frame moved -3. The
+three agree exactly, and the other five tables — entry, library, startup, emit,
+interp — are byte-identical between the two jobs, zero frames moved in any of
+them.
+
+**WHY THIS ROW AND NO OTHER.** `kanso check` routes a single argument by what it
+finds: a DIRECTORY is a module, a file of bare statements is an entry, a file of
+definitions alone is a library. The compile row checks `lib/json`, a directory,
+so its route opens one and walks it — `opendir` 51, `__getdents` 18, `readdir`
+171, `DirEntry::path` 8 are all in its table. The entry and library tables have
+no `ReadDir` frame AT ALL, because a single file is never walked. The emit and
+interp tables do have one, and it reads 124 in BOTH jobs: they walk a directory
+that did not move.
+
+So the carrier is directory iteration, and what a directory iteration costs is
+the filesystem's answer rather than the program's. The entries are the same
+entries; what readdir hands back them in — the packing of the dirent buffer,
+the order, the name lengths it walks — is state the code under test did not
+produce. That is what the 2026-09-15 ruling is about, in the words Clay used:
+clear it out so it is identical every run, or put it into a persistent known
+initial state.
+
+WHAT IS NOT ESTABLISHED. Why the walk costs three more in one job than another
+is open; the entry set is fixed and staged by `library_box.sh`, so the
+difference is in how the filesystem lays those entries out, and this is one pair
+of jobs. Nothing here says the `interp_instructions` half of the standing row
+has the same carrier — interp's own `ReadDir` frame did not move, and its drift
+has been measured at seven and fourteen rather than three.
+
+WHAT IT COSTS TODAY. This is the gate's exactness meeting a counter with
+external state under it. The golden goes back to 35,544,159, which two of the
+three jobs read including the most recent; the next job may read 35,544,162 and
+turn this pull request red again through nothing it did. A normalization that
+staged the corpus so the walk is identical every run would end it, and that is
+its own change.
+
+## 2026-09-23 — kanso#1504's compile row on the excluded gate, predicted before it was measured
+
+kanso#1570 is on main, so `compile_instructions` no longer counts the directory
+walk. This branch's golden follows, and the value was DERIVED rather than waited
+for.
+
+This row drew two faces on this tree, 35,544,159 and 35,544,162, and the walk
+cost 487 on the runner that read the first and 490 on the one that read the
+second. Subtracting each face's own walk gives the same number both ways:
+
+    35,544,159 - 487 = 35,543,672
+    35,544,162 - 490 = 35,543,672
+
+So the golden is 35,543,672, and the delta against main's excluded base of
+35,540,661 is +3,011 — identical to the +3,011 this branch priced against main's
+unexcluded 35,541,148, because both ends dropped by their own walk. The priced
+line above is restated on the new base and its delta is unchanged.
+
+That agreement is the check on the arithmetic rather than a coincidence: an
+exclusion that removed the right term has to leave every difference between two
+trees exactly as it was, and it does.
+
+IF CI DISAGREES, the prediction is wrong and the number it reports is the one to
+take. Writing it down first is what makes that worth knowing.
