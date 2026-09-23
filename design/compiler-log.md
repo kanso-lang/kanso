@@ -10159,3 +10159,13 @@ reads 0 of its 96 layout pairs disagreeing, and
 past its string, passes. The mutation `a_rewind_that_forgets_every_seek_cursor`
 now replaces the new comparison and still takes
 `a_scan_keeps_its_place_in_the_text` from 408 to 276.
+
+**Declined on the way, recorded so it stays declined.** `encode_onto` is
+entered 2,380,860 times on the run program at 26 instructions of frame and
+dispatch a call, and most calls are leaves. Giving `elem_onto` and a new
+`value_onto` their own string and int arms, so a list element or a map value
+of those kinds never entered `encode_onto`, read 1,874,943,854 against main's
+1,820,479,421: +54,464,433, +2.99%, with the same output and all 23
+`lib/json` tests passing. The two small dispatchers cost more than the calls
+they saved. `docs/compiler.html` §81 and §110 found the dispatcher's frame is its own;
+this is the same wall from the caller's side.
