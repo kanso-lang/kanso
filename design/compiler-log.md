@@ -10554,3 +10554,138 @@ Against main, which does not yet carry kanso#1579, two more rows read worse.
 `work_indexbench` reads 2,895,756, 13 above main, and `work_scanbench`
 462,285,578, 16,273 above: both programs scan strings and seldom rewind, so
 they pay the note on every scan and collect little of what it saves.
+
+---
+
+## 2026-09-23 — a call between a package's own modules is a cohort again
+
+A construction cohort brackets a call whose arguments are immutable: the arena
+is marked before the call and rewound after it when the answer is a scalar, or
+the answer is copied out when it is not. The license admitted a call only when
+the callee's module name extended the caller's by a segment. That was the
+spelling of nesting before module identity became the canonical path, and the
+archive entry "the qualified door" (2026-08-18) found the test had stopped
+matching and said it had to ask whether the caller's module imports the
+callee's. It was never rebuilt. Since then the only caller it admitted was the
+root module.
+
+The run program shows the cost. `runbench/tally` calls `index/total`,
+`escape/total` and `split/total`, each a phase that builds its own strings and
+answers a number, and none was bracketed. On a tree with kanso#1579,
+kanso#1580 and kanso#1581 merged, the index phase's doubled string and its
+slice, 1,572,880 and 1,380,032 bytes, stayed live after it returned, and the
+next allocation opened a fresh one-megabyte block on top of them. That was the
+run program's peak.
+
+The license now asks whether the callee is declared in another file than the
+caller. A direct call by name can only go down an import, so that is the
+relation the archive entry asked for.
+
+Admitting every such call cost the run program 13.1% of its instructions,
+because json's own modules call one another from its recursive descent,
+millions of times, and each call paid a push and a pop. So a caller that a
+cycle can reach gets no bracket. `cycle_reached` finds every cycle in what the
+bodies mention and every name those cycles reach. A caller outside that set
+runs a number of times its straight-line callers fix, which is where a phase
+starts and ends. Excluding only the members of cycles was not enough:
+`json/number_done` sits in no cycle, `scan` reaches it once per number, and
+jsonbench rose 5.3%.
+
+`tests/a_phase_gives_its_garbage_back.rs` builds a package whose `app` module
+calls `phase/churn` twice. It reads `cohort_frees=2` and an arena peak of
+3,145,744. Watched red with the old test: one free, and 5,242,912.
+
+On the merged tree, with the gates' commands:
+
+    runbench   arena peak        6,098,640 ->     5,050,064   -17.2%
+               instructions  1,808,039,943 -> 1,810,051,241   +0.11%
+    oneshot    instructions     17,945,090 ->    19,972,550   +11.3%
+    deepbench  instructions    356,864,590 ->   358,111,263   +0.35%
+
+jsonbench, encodebench, widebench, livebench, escapebench, indexbench and
+readbench read the same instructions to the unit. oneshot's rise is one pop
+around `json/decode` in `hold/report`. The survivor guard sizes a decoded
+document that is nearly all of what the call grew, keeps the region, and the
+sizing is the 2,027,460 instructions. The archive shows oneshot had this pop
+when the license was first generalized; its peak and allocations do not move.
+
+On main, with kanso#1579 and kanso#1580 merged, the run program's peak is the
+index phase, and it falls as measured on the merged tree above:
+
+    run program   arena peak      6,098,640 ->   5,050,064   -17.2%
+                  cohort_frees            1 ->           4
+
+The counters that read worse all arrived with the new pops, which is where a
+heap answer is copied out before its call's garbage is rewound, and none of
+them changes an output. In the run program `run_allocs` reads 5,698,908,
+`run_alloc_bytes` 458,172,125, `run_evac_allocs` 68,318, `run_evac_bytes`
+10,791,200 and `run_sh_buf` 109,369,344. One append moved from the in-place
+path to the copying one, `run_push_mut_fast` 1,098,391 and `run_push_mut_slow`
+1,638,122, and one more string was scanned from its start, `run_str_scans` 164
+and `run_str_scan_bytes` 5,473,158. pendbench and
+scanbench each gained one pop: `pend_allocs` reads 806,180,
+`pend_alloc_bytes` 45,529,344, `pend_evac_allocs` 2,431 and `pend_evac_bytes`
+384,944, and scanbench's `ten_handups` reads 1. digestbench and the mem vein
+read what main has.
+
+**CI's rows**, taken into the goldens:
+
+    work_runbench        1,794,573,732 -> 1,796,601,576   +2,027,844   +0.11%
+    work_oneshot            17,807,820 ->    19,783,275   +1,975,455  +11.09%
+    work_deepbench         347,635,275 ->   349,439,154   +1,803,879   +0.52%
+    work_scanbench         462,269,305 ->   462,283,315      +14,010
+    work_digestbench         5,773,783 ->     5,773,971         +188
+    work_basket             32,776,834 ->    32,777,016         +182
+    work_pendbench         208,139,955 ->   208,132,753       -7,202
+    startup_instructions       967,869 ->       971,368       +3,499
+    emit_instructions       45,953,348 ->    46,222,808     +269,460   +0.59%
+
+Each program that gained a pop gained two calls and a few lines per
+bracketed site, which the emitted vein counts: summed, `emitted_other_calls`
+reads 20,237 and `emitted_other_lines` 135,899. `text`, summed over the
+fourteen binaries, reads 1,766,412. `emit_instructions` is `cycle_reached`,
+a walk of every body and a Tarjan pass the emitter did not make before.
+`startup_instructions` counts kanso's own start and rose with the compiler's
+code; what in it costs 3,499 instructions was not isolated. Both codegen rows
+read what main has. The run program pays 2,027,844 instructions for a peak
+3,145,728 bytes lower, and welfare rises; the rise is banked.
+
+kanso#1582 then landed on main, which pruned lambdas nothing reaches. Merged
+over it, the emitted rows are counted here from the `.ll` files, and each
+program that gained a pop still gained its two calls a site: summed,
+`emitted_other_calls` reads 18,849 and `emitted_other_lines` 127,780. The
+start-up and emit goldens hold a projection, main's rows plus this change's own
+moves: `startup_instructions` 975,981 and `emit_instructions` 44,879,920. CI's
+rows replace them.
+
+kanso#1579 then landed on main, and the rows above were measured before it.
+Merged over it, the counters and emitted rows are regenerated here, summed
+`emitted_other_calls` 18,837 and `emitted_other_lines` 127,690, and the
+instruction, `.text` and start-up rows hold main's values until CI measures
+the merged tree. The floor is banked again after that.
+
+**CI's rows over the merged tree**, taken into the goldens:
+
+    work_runbench        1,801,929,451 -> 1,803,940,793   +2,011,342   +0.11%
+    work_oneshot            17,844,087 ->    19,819,542   +1,975,455  +11.07%
+    work_deepbench         347,896,726 ->   349,700,605   +1,803,879   +0.52%
+    work_basket             33,024,826 ->    33,027,009       +2,183
+    work_scanbench         462,289,601 ->   462,289,850         +249
+    work_digestbench         5,799,501 ->     5,799,688         +187
+    work_pendbench         208,139,965 ->   208,132,763       -7,202
+    startup_instructions       972,533 ->       976,032       +3,499
+
+The emit projection was exact at 44,879,920, and both codegen rows read what
+main has. `text`, summed over the fourteen binaries, reads 1,771,932. The run
+program pays 2,011,342 instructions for a peak 1,048,576 bytes lower, and
+welfare rises; the rise is banked.
+
+kanso#1581 then landed on main. Merged over it, every counter vein and the
+emitted rows read what they read above, and CI's rows are in the goldens:
+`work_runbench` 1,793,157,817, `work_oneshot` 19,769,235, `work_deepbench`
+349,491,458, `work_basket` 32,569,017, `work_scanbench` 462,285,827,
+`work_digestbench` 5,766,324, `work_pendbench` 208,132,768 and
+`startup_instructions` 975,981, with `text` summed at 1,772,924. The projection
+from main's rows plus this change's moves over kanso#1579 was exact for five
+of the eight and within 2,001 for the rest. The run program pays 2,011,322
+instructions for a peak 1,048,576 bytes lower, and the rise is banked.

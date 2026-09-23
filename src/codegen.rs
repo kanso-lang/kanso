@@ -1805,6 +1805,7 @@ pub fn emit_ir(program: &Program, convention: ClosureConvention) -> Result<Strin
             .map(|t| (t.name.clone(), t.members.clone()))
             .collect(),
         group_by_name: group_indices_by_name(program),
+        cycle_reached: cycle_reached(program),
         inference,
         escape,
         byte_disc,
@@ -1852,6 +1853,9 @@ struct Backend<'a> {
     /// declarations but also from call sites, and a `&str` key borrows as
     /// `str` where a tuple key would demand the program's lifetime.
     group_by_name: HashMap<&'a str, Vec<usize>>,
+    /// Names a cycle can reach, which get no cohort bracket. See
+    /// `cycle_reached`.
+    cycle_reached: crate::hash::Set<&'a str>,
     inference: infer::Inference,
     forwarders: HashMap<(String, usize), String>,
     /// subtype name -> parent name; non-empty programs get chain-aware
@@ -2321,6 +2325,64 @@ fn group_indices_by_name(program: &Program) -> HashMap<&str, Vec<usize>> {
         by_name.entry(decl.name.as_str()).or_default().push(at);
     }
     by_name
+}
+
+/// Every declared name a cycle can reach: the members of every cycle in what
+/// the bodies mention, and everything those members mention, onward.
+///
+/// A cohort bracket costs a push and a pop on every call it wraps, and pays
+/// only when the call leaves garbage worth a rewind. A name a cycle reaches
+/// can run once per element of something -- a parser's recursive descent, a
+/// loop, a helper one of those calls per number -- and its calls are the
+/// small ones. A name no cycle reaches runs a number of times fixed by
+/// straight-line code, which is where a phase of a program starts and ends.
+/// Names, not groups, and a mention counts whether it is a call or a value.
+/// A cycle through a closure some library calls back is not seen; that miss
+/// costs speed and nothing else, because the bracket is sound on any call
+/// the license admits.
+fn cycle_reached(program: &Program) -> crate::hash::Set<&str> {
+    fn mentions(expr: &Expr, index: &HashMap<&str, usize>, out: &mut Vec<usize>) {
+        if let Expr::Ident(n, _, _) | Expr::Partial(n, _) = expr {
+            if let Some(&at) = index.get(&**n) {
+                out.push(at);
+            }
+        }
+        crate::for_each_child(expr, |child| mentions(child, index, out));
+    }
+    let mut index: HashMap<&str, usize> = HashMap::default();
+    let mut names: Vec<&str> = Vec::new();
+    for decl in &program.fns {
+        index.entry(decl.name.as_str()).or_insert_with(|| {
+            names.push(decl.name.as_str());
+            names.len() - 1
+        });
+    }
+    let mut adj: Vec<Vec<usize>> = vec![Vec::new(); names.len()];
+    for decl in &program.fns {
+        let from = index[decl.name.as_str()];
+        for stmt in &decl.body {
+            match stmt {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => {
+                    mentions(expr, &index, &mut adj[from])
+                }
+                Stmt::Set { value, .. } => mentions(value, &index, &mut adj[from]),
+            }
+        }
+    }
+    let mut hot = vec![false; names.len()];
+    let mut queue: Vec<usize> = Vec::new();
+    for scc in crate::beat::sccs_of(&adj) {
+        if scc.len() >= 2 || adj[scc[0]].contains(&scc[0]) {
+            queue.extend(scc);
+        }
+    }
+    while let Some(at) = queue.pop() {
+        if !hot[at] {
+            hot[at] = true;
+            queue.extend(adj[at].iter().copied().filter(|&next| !hot[next]));
+        }
+    }
+    names.iter().zip(hot).filter(|(_, h)| *h).map(|(n, _)| *n).collect()
 }
 
 /// The lookup over that index. Keyed by NAME with arity filtered off the
@@ -7371,14 +7433,15 @@ impl<'a> Backend<'a> {
             // they can carry thunks whose forced values would die under a
             // cell the caller still holds.
             let arg_heapish = heapish & !BYTES;
-            let caller_mod = crate::ast::split_qual(&f.group).map(|(m, _)| m).unwrap_or("");
-            let callee_mod = crate::ast::split_qual(name).map(|(m, _)| m).unwrap_or("");
-            let crosses_down = callee_mod.len() > caller_mod.len()
-                && callee_mod.starts_with(caller_mod)
-                && (caller_mod.is_empty() || callee_mod.as_bytes()[caller_mod.len()] == b'/');
+            let crosses_down = self
+                .group_by_name
+                .get(name)
+                .and_then(|at| at.first())
+                .is_some_and(|&i| *self.program.fns[i].file != *f.file);
             let cohort_entry = !beat_entry
                 && !register_returned
                 && crosses_down
+                && !self.cycle_reached.contains(f.group.as_str())
                 && !f.synthetic
                 && !caller_loops
                 && emitted.iter().all(|e| f.set_of(e) & arg_heapish == 0);
