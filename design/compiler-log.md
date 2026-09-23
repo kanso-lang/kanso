@@ -9980,3 +9980,51 @@ The memory is the slot table: 12,288 bytes is a doubled `Vec` of resolved
 globals, and the eight allocations are its growth. Interpreter speed carries
 0.11 of the development side and interpreter memory 0.04, and the objective
 scores the trade at 77.37 against a floor of 77.36, so the rise is banked.
+
+---
+
+## 2026-09-23 — sha256 carries its eight words as arguments, and its loops rewind
+
+`docs/compiler.html` §114–115 put 3,145,728 bytes of the run program's peak in
+the digest phase and traced it to `sha256/blocked` and `sha256/digested` losing
+their carry to the library path prefix. Admitting a one-slot carry was built
+there and declined, because the sizing walk read a garbage length under it.
+This change makes the carry unnecessary instead of admitting it.
+
+Both loops held the eight working words as a list. `compress` built a new
+eight-element list every round and `digested` a new one every block, so a
+list crossed every rewind, and a list built inside the loop is a value the
+cluster analysis will only let cross by carrying it. The words are eight
+arguments now. A round passes six along unchanged and computes two with `&
+whole`, which infers as INT, so every slot is a threaded parameter or a
+scalar, and both clusters bracket with nothing carried:
+
+    sha256/compress/10, sha256/rounding/11   bracketed with its cluster
+    sha256/blocked/10, sha256/digested/11    bracketed with its cluster
+
+The answer becomes a list once per block, when the sixty-four rounds are done,
+and `digested` adds it into the running words. `turned`, `added`, `summed`,
+`summing`, `shifted_state` and `start` are gone. The five `kanso test lib/sha256` tests
+pass, and the run program prints `runbench 46013475` either way.
+
+On this container:
+
+    digestbench   allocs          23,582 ->     7,199
+                  alloc_bytes  1,998,801 ->   671,841
+                  arena peak   2,097,152 -> 1,048,576   2 blocks -> 1
+    run program   arena peak  38,604,496 -> 35,458,768
+                  instructions 1,820,479,421 -> 1,812,623,924   -0.43%
+
+The instruction fall is the per-round list going: no allocation, no length
+checks on `s[5]`, no copying six words into a new list. Welfare scores 77.78
+against a floor of 77.37 on the peak alone, with the instruction rows as main
+has them; CI's rows go in before the rise is banked.
+
+`tests/golden/mem/a_digest_holds_every_block_it_walked.kso` carried a header
+describing the 2026-08-31 state, with numbers its own golden had not held for
+weeks (1,980 allocations against a golden of 397). It says what the digest
+does now, and its golden reads 270.
+
+Section 115's garbage length in the carry-sizing walk is untouched by this
+and still open: it is reachable only when a library loop is admitted to the
+carry tier, which nothing now needs for this peak.
