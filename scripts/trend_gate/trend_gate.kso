@@ -224,7 +224,11 @@ higher_c = ["push_mut_fast" "put_mut_fast" "bytes_freed" "carry_dedup"]
 # once either way and `ten_blocks` and `ten_frees` are identical across the two.
 # Replacing `k_ten_hand_up` with `k_ten_release` at the one call site left every
 # .mem golden in the vein byte-identical; this counter goes to nought.
-higher_d = ["ten_handups"]
+# `seek_resumes` is the same kind of presence counter, for the seek cursor: a
+# walk that started from the remembered place instead of the front. Forgetting
+# the cursor moves no output and no allocation, so it is the only counter that
+# can say a scan went quadratic.
+higher_d = ["ten_handups" "seek_resumes"]
 
 higher_cd = text/concat higher_c higher_d
 

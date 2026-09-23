@@ -10294,6 +10294,192 @@ them.
 
 ---
 
+## 2026-09-23 — the regexp scan rewinds at every start position, and a rewind keeps the seek cursor below the mark
+
+`docs/compiler.html` §112–115 put 29,360,128 of the run program's 38,604,496
+arena bytes in the split phase and priced reclaiming them at +4.75 welfare,
+then went after it through the carry tier and found that tier closed to library
+loops by a path prefix. The loop holding the memory needs no carry at all.
+
+**Where the memory was.** Each phase count taken to its floor on its own, peak
+arena bytes of the counting run program:
+
+    baseline       38,604,496   36 blocks
+    encode = 1     38,604,496   decode = 1 the same
+    index = 1      35,651,584
+    digest = 1     35,458,768
+    split = 1       9,244,368    8 blocks
+
+The split phase is `regexp/find_all` over a subject no match can be found in.
+Its per-position loop is `scanned` -> `scanning` -> `skipping` -> `landed` ->
+`scanned`, a tail cycle. Instrumenting `eligible_clusters` showed the cycle
+passing the entry, value-use and allocation tests and then refused inside
+`cluster_edges_ok`:
+
+    refuse regexp/scanning/4 slot 2 set 0x7fdf
+
+Slot 2 is the position. Its set is everything but `DONE`, because the callers
+that resume a scan read their position out of a hit's field, `m.to` or
+`m.from + 1`, and `Expr::Field` infers as TOP. TOP includes `BYTES`, and the analysis refuses
+a slot that might be a byte builder, since evacuating one copies its buffer at
+every rewind. With the position fixed, the walk's answer was the next refusal:
+`landed` took it as its fourth argument, so a record crossed each position.
+
+**The change is in `lib/regexp` only.** The walk's answer is a local in
+`skipping`, which returns the hit or tail-calls onward, and `landed` is gone.
+`scanned` enters a new loop head, `probing`, once with `at | 0`; `|` infers
+as INT, and every edge inside the cycle passes `at + 1`, which infers as INT or
+FLOAT. The cluster is now `probing`/`scanning`/`skipping`, it carries nothing,
+and it brackets:
+
+    scanbench peak     161,480,704 -> 1,048,576    154 blocks -> 1
+    run arena peak      38,604,496 -> 9,244,368     36 blocks -> 8
+    run output         runbench 46013475 both ways
+
+`tests/golden/mem/a_scan_that_finds_nothing_keeps_nothing.kso` pins the shape
+at 156 characters: one block and 157 rewinds here, four blocks and none on
+main. `a_class_asks_by_the_byte`, whose pattern does match, moves one
+allocation and 80 bytes and rewinds 1,601 times; its output is unchanged.
+
+A second route was tried first and is not in the tree: typing a dot read as
+the union of that field's construction sets. It narrows nothing here, because
+the positions reach the records through the matcher's continuation lambdas,
+whose parameters infer as TOP. It also turned up that a type with fields used
+as a function value widens none of its field sets, which constructor patterns
+rely on. No compiled program reaches that: the native backend refuses the
+shape, "`point` as a bare value is not yet supported", and the interpreter,
+which runs it, does not read inference. It becomes live the day the backend
+accepts a type as a value.
+
+**The regression the first build carried.** `prose_check` ran past five
+minutes where main takes 28 seconds. Sampling the process put it in
+`k_b_slice_walk` under `worth_trying?`: a character read by position in text
+that is not all ascii resumes from one remembered place, `k_seek_str`, and
+`k_beat_rewind` forgot it on every rewind. With a rewind at every position,
+every position walked the page from the front.
+
+Forgetting it is only needed when the arena can hand the string's address back,
+and in the fast path that is exactly `[m->ptr, k_arena)`: no block has been
+taken since the mark. The first cut tested the lower end alone, which is sound
+and was still slow, because a page can sit in an older block at a higher
+address than the mark. The two-ended test, in `uintptr_t` so no unrelated
+pointers are subtracted, takes `prose_check` to 15.1 seconds, and its system
+time from 14.4 seconds to 0.5, since its memory no longer grows.
+
+`seek_resumes` is the presence counter for the cursor. The mutation
+`a_rewind_that_forgets_every_seek_cursor`, the old unconditional forget, takes
+`tests/golden/mem/a_scan_keeps_its_place_in_the_text.kso` from 408 to 276, and
+the ratchet carries it. The trend gate reads it as higher-is-better. All twelve
+cost goldens, the mem vein and the two book counter panels carry the line.
+
+**The counters that read worse.** The scans rewind now, so `scan_beat_iters`
+rises to 1,016, `run_beat_iters` to 2,693,195 and
+`a_class_asks_by_the_byte_beat_iters` to 1,601. That fixture's pattern matches,
+so its scan leaves the cluster with a hit each time, and the run pays one more
+allocation of 80 bytes and reuses one buffer fewer:
+`a_class_asks_by_the_byte_allocs` reads 10,469,
+`a_class_asks_by_the_byte_alloc_bytes` 468,255,
+`a_class_asks_by_the_byte_sh_buf` 118,432 and
+`a_class_asks_by_the_byte_buf_reuse` 0. Which allocation it is has not been
+isolated; the output is unchanged.
+`seek_resumes` is minted, and reads 689,999 on the run program.
+
+**What the cursor test costs.** On this container the run row reads
+1,820,479,435 on main and 1,833,933,410 with both changes, +13,453,975: the
+rewind's fast path now loads the cursor and the arena pointer and compares,
+five instructions on each of 2,693,195 iterations. `k_beat_iter` was a real
+call from the loops that rewind, because the large ones spend LTO's inlining
+budget before reaching it. `always_inline` on it reads 1,826,634,704, giving
+back 7,298,706, and every counter vein agrees. The net is +6,155,269, 0.34%.
+
+**CI's rows**, taken into the goldens. The rewind's cursor test is paid by
+every program that rewinds, and `always_inline` gives part of it back:
+
+    work_runbench        1,802,356,350 -> 1,809,683,884   +0.41%
+    work_encodebench     3,465,000,320 -> 3,479,505,321   +0.42%
+    work_livebench       2,793,281,380 -> 2,807,786,381   +0.52%
+    work_basket             32,776,834 ->    33,024,826   +0.76%
+    work_oneshot            17,807,820 ->    17,844,087   +0.20%
+    work_deepbench         347,635,275 ->   347,896,726   +0.08%
+    work_scanbench         462,269,305 ->   462,289,601
+    work_digestbench         9,966,673 ->     9,966,845
+    work_readbench           4,627,056 ->     4,627,255
+    work_jsonbench       1,133,645,592 -> 1,133,645,757
+    work_indexbench          2,895,743 ->     2,895,771
+    work_pendbench         208,139,955 ->   208,139,965
+    work_escapebench        75,228,606 ->    72,849,606   -3.16%
+    work_widebench          33,676,020 ->    33,660,074
+
+`text`, the sum of the benchmarks' `.text`, reads 1,767,676, the inlined
+rewind in every loop that makes one. `library_instructions` reads 126,699,213
+and `startup_instructions` 3,372,417, where `lib/regexp` and `src/runtime.c`
+are compiled into the compiler; `entry_instructions` reads 126,074,458 and the
+two codegen rows 596,206,478 and 6,841,764,937. The scan benchmark's peak fell
+by 160 MB while its instruction row moved by 20,296.
+
+With CI's rows the objective scores 82.09 against a floor of 77.37, and the
+rise is banked. On the tree merged with kanso#1578, `startup_instructions`
+reads 968,492: that change's 968,441 and this one's +51.
+
+**What moves.** The run program's peak is a deterministic counter and scores
+here: welfare 77.36 -> 82.10, production 57.23 -> 66.07, with the instruction
+rows as main has them. The fast rewind now compares before it stores, and the
+run program takes 2,693,195 beat iterations. The run row, the compile rows and the codegen rows come from CI,
+and the rise is banked after they land.
+
+Open: the carry tier's path prefix, which this change routed around rather
+than replaced; and a type used as a value, which must widen its field sets in
+`infer.rs` before the native backend accepts one.
+
+With kanso#1583 merged from main, the codegen and start-up goldens hold a
+projection until CI measures them: main's rows plus this change's own moves,
+which puts `codegen_instructions_dev` at 563,940,183,
+`codegen_instructions_release` at 6,809,498,642 and `startup_instructions` at
+967,920.
+
+kanso#1580 then landed on main, and the run program carries both changes. Its
+arena peak reads 6,098,640 in 6 blocks, against 35,458,768 with the digest
+change alone and 9,244,368 with the scan change alone. The two sets of rewinds
+add: `run_beat_iters` reads 2,709,445. The emitted rows are counted here from
+the `.ll` files, `runbench defines=595 calls=5982 branches=3540 lines=35805`.
+The instruction, `.text`, entry, library, codegen and emit rows come from CI,
+and the floor is banked again after them.
+
+**CI's rows over the merged tree**, taken into the goldens. The codegen and
+start-up projections above were exact.
+
+    work_runbench             1,794,573,732 -> 1,801,929,451   +7,355,719   +0.41%
+    work_digestbench              5,773,783 ->     5,799,501      +25,718
+    entry_instructions          125,949,337 ->   125,944,853       -4,484
+    library_instructions        126,452,016 ->   126,522,328      +70,312
+    text runbench                   319,218 ->       319,810
+    text digestbench                105,634 ->       105,938
+
+Every row here is this change's own cost measured on the new base, which is
+what the scan's rewinds, the seek-cursor test on every rewind and the new
+counter cost in instructions. The run program pays 0.41% for a peak that falls
+from 35,458,768 to 6,098,640. `library_instructions` rises with the library
+text the compiler carries, since lib/regexp is compiled into it. The
+`data-golden` spans quoting the entry and library rows were rewritten by
+`golden_prose --write`. Summed over the fourteen binaries, `text` reads
+1,764,140.
+
+kanso#1582 then landed on main. Merged over it, the emitted rows are counted
+here from the `.ll` files, `scanbench defines=271 calls=3108 branches=2112
+lines=19621` and `runbench defines=523 calls=5733 branches=3430 lines=34568`,
+and the codegen and start-up goldens hold a projection, main's rows plus this
+change's own moves: `codegen_instructions_dev` 473,848,240,
+`codegen_instructions_release` 6,588,771,476 and `startup_instructions`
+972,533. CI's rows replace them before the floor is banked again.
+CI read start-up exactly and both codegen rows differently from the
+projection: `codegen_instructions_dev` 473,849,441, 1,201 above it, and
+`codegen_instructions_release` 6,585,606,376, 3,165,100 below. The two moves
+of the release row do not add, which is the LTO link reading the combined
+program rather than either change alone. Welfare rises over the projection and
+is banked again.
+
+---
+
 ## 2026-09-23 — a call between a package's own modules is a cohort again
 
 A construction cohort brackets a call whose arguments are immutable: the arena
@@ -10346,25 +10532,24 @@ document that is nearly all of what the call grew, keeps the region, and the
 sizing is the 2,027,460 instructions. The archive shows oneshot had this pop
 when the license was first generalized; its peak and allocations do not move.
 
-On main, with kanso#1580 merged and the other two not yet, the run program's
-peak is the scan phase, and the change reaches it too:
+On main, with kanso#1579 and kanso#1580 merged, the run program's peak is the
+index phase, and it falls as measured on the merged tree above:
 
-    run program   arena peak     35,458,768 ->  32,313,040   -8.9%
-                  arena blocks           33 ->          32
-                  cohort_frees            1 ->           5
+    run program   arena peak      6,098,640 ->   5,050,064   -17.2%
+                  cohort_frees            1 ->           4
 
-The counters that read worse all arrived with the four new pops, which is
-where a heap answer is copied out before its call's garbage is rewound, and
-none of them changes an output. In the run program `run_allocs` reads
-5,698,910, `run_alloc_bytes` 458,172,173, `run_evac_allocs` 68,322,
-`run_evac_bytes` 10,791,296 and `run_sh_buf` 109,369,344. One append moved from
-the in-place path to the copying one, `run_push_mut_fast` 1,098,391 and
-`run_push_mut_slow` 1,638,122, and one more string was scanned from its start,
-`run_str_scans` 164 and `run_str_scan_bytes` 5,473,158. pendbench and
+The counters that read worse all arrived with the new pops, which is where a
+heap answer is copied out before its call's garbage is rewound, and none of
+them changes an output. In the run program `run_allocs` reads 5,698,908,
+`run_alloc_bytes` 458,172,125, `run_evac_allocs` 68,318, `run_evac_bytes`
+10,791,200 and `run_sh_buf` 109,369,344. One append moved from the in-place
+path to the copying one, `run_push_mut_fast` 1,098,391 and `run_push_mut_slow`
+1,638,122, and one more string was scanned from its start, `run_str_scans` 164
+and `run_str_scan_bytes` 5,473,158. pendbench and
 scanbench each gained one pop: `pend_allocs` reads 806,180,
 `pend_alloc_bytes` 45,529,344, `pend_evac_allocs` 2,431 and `pend_evac_bytes`
-384,944, and no other scanbench row moved. digestbench and the mem vein read
-what main has.
+384,944, and scanbench's `ten_handups` reads 1. digestbench and the mem vein
+read what main has.
 
 **CI's rows**, taken into the goldens:
 
@@ -10395,3 +10580,9 @@ program that gained a pop still gained its two calls a site: summed,
 start-up and emit goldens hold a projection, main's rows plus this change's own
 moves: `startup_instructions` 975,981 and `emit_instructions` 44,879,920. CI's
 rows replace them.
+
+kanso#1579 then landed on main, and the rows above were measured before it.
+Merged over it, the counters and emitted rows are regenerated here, summed
+`emitted_other_calls` 18,837 and `emitted_other_lines` 127,690, and the
+instruction, `.text` and start-up rows hold main's values until CI measures
+the merged tree. The floor is banked again after that.

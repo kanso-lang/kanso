@@ -1148,6 +1148,18 @@ ten_where = row
   (breaking "a_tenure_block_freed_where_it_was_handed_up")
   release
 
+# Where a rewind keeps its place in a string. The cursor is a position cache,
+# so forgetting it moves no output and no allocation; `seek_resumes` was minted
+# on 2026-09-23 so that a scan walking its subject from the front at every
+# position has a counter to show it.
+seek_kept = row
+  "a rewind that forgets the seek cursor whatever string it names"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_rewind_that_forgets_every_seek_cursor")
+  release
+
 pop_fast = row
   "a beat pop with nothing to migrate that pays the migrates' frame"
   false
@@ -1790,7 +1802,7 @@ rows_b1e2 = text/concat rows_b1e1 [inline_pin chart_replay objective_row]
 
 rows_b1e3 = text/concat rows_b1e2 [one_char_memo length_memo]
 
-rows_b1e4 = text/concat rows_b1e3 [length_fold ten_open ten_where]
+rows_b1e4 = text/concat rows_b1e3 [length_fold ten_open ten_where seek_kept]
 
 rows_b1e = text/concat rows_b1e4 [pop_fast push_walk]
 
