@@ -10099,6 +10099,121 @@ compile rows read what main has. The rise is banked.
 
 ---
 
+## 2026-09-23 — sha256 carries its eight words as arguments, and its loops rewind
+
+`docs/compiler.html` §114–115 put 3,145,728 bytes of the run program's peak in
+the digest phase and traced it to `sha256/blocked` and `sha256/digested` losing
+their carry to the library path prefix. Admitting a one-slot carry was built
+there and declined, because the sizing walk read a garbage length under it.
+This change makes the carry unnecessary instead of admitting it.
+
+Both loops held the eight working words as a list. `compress` built a new
+eight-element list every round and `digested` a new one every block, so a
+list crossed every rewind, and a list built inside the loop is a value the
+cluster analysis will only let cross by carrying it. The words are eight
+arguments now. A round passes six along unchanged and computes two with `&
+whole`, which infers as INT, so every slot is a threaded parameter or a
+scalar, and both clusters bracket with nothing carried:
+
+    sha256/compress/10, sha256/rounding/11   bracketed with its cluster
+    sha256/blocked/10, sha256/digested/11    bracketed with its cluster
+
+The answer becomes a list once per block, when the sixty-four rounds are done,
+and `digested` adds it into the running words. `turned`, `added`, `summed`,
+`summing`, `shifted_state` and `start` are gone. The five `kanso test lib/sha256` tests
+pass, and the run program prints `runbench 46013475` either way.
+
+On this container:
+
+    digestbench   allocs          23,582 ->     7,199
+                  alloc_bytes  1,998,801 ->   671,841
+                  arena peak   2,097,152 -> 1,048,576   2 blocks -> 1
+    run program   arena peak  38,604,496 -> 35,458,768
+                  instructions 1,820,479,421 -> 1,812,623,924   -0.43%
+
+The instruction fall is the per-round list going: no allocation, no length
+checks on `s[5]`, no copying six words into a new list. Welfare scores 77.78
+against a floor of 77.37 on the peak alone, with the instruction rows as main
+has them; CI's rows go in before the rise is banked.
+
+Three counters read worse, and each is the change working. Rewinds are what
+the loops do now, so `run_beat_iters` rises to 2,709,016, `digest_beat_iters`
+to 8,441 and `a_digest_holds_every_block_it_walked_beat_iters` to 76. The
+per-block sum built its list with eight pushes, and that list is gone, so
+`run_push_mut_fast` falls to 1,098,392, `digest_push_mut_fast` to 10,184 and
+`a_digest_holds_every_block_it_walked_push_mut_fast` to 120. With fewer lists
+built there are fewer buffers to hand on, so `run_buf_reuse` reads 144,961,
+`digest_buf_reuse` 1 and `a_digest_holds_every_block_it_walked_buf_reuse` 1.
+Every allocation and byte counter beside them fell.
+
+`tests/golden/mem/a_digest_holds_every_block_it_walked.kso` carried a header
+describing the 2026-08-31 state, with numbers its own golden had not held for
+weeks (1,980 allocations against a golden of 397). It says what the digest
+does now, and its golden reads 270.
+
+**CI's rows**, taken into the goldens:
+
+    runbench              1,802,356,350 -> 1,794,573,732   -7,782,618   -0.43%
+    digestbench               9,966,673 ->     5,773,783   -4,192,890   -42.07%
+    entry_instructions      126,100,824 ->   125,949,337     -151,487
+    library_instructions    126,623,258 ->   126,452,016     -171,242
+    runbench .text              320,546 ->       319,218
+    digestbench .text           108,274 ->       105,634
+
+The emitted vein reads four fewer defines for each of the two programs and,
+for runbench, 16 more calls with 22 fewer branches; the compile, start-up,
+emit, interpreted and codegen rows read what main has. Welfare scores 77.81
+against a floor of 77.37, and the rise is banked.
+
+Section 115's garbage length in the carry-sizing walk is untouched by this
+and still open: it is reachable only when a library loop is admitted to the
+carry tier, which nothing now needs for this peak.
+
+Two specs pinned the old digest, and both went red on CI as their own notes
+said they would.
+
+- `tests/sha256_peak.rs` pinned a peak that grew with the message and said a
+  streaming hash would read the same number at its two sizes. It now does:
+  7,340,064 at 65,536 bytes and at 131,072. A third size, 262,144, reads
+  24,117,296, and the rest of the growth is the padding. A copy of
+  `padded_bytes` made public and called alone, with no compression, reads the
+  same three numbers byte for byte, because it copies the message to append the
+  terminator and the length. The spec pins all three sizes and says so.
+- `tests/a_program_is_not_its_directory.rs` used a copy of the digest to show
+  the library path prefix changing a program's memory. The digest carries
+  nothing across a rewind now, so both directories read 1,048,576 and the copy
+  stopped showing the defect, which is still there. The package is now a
+  five-line loop with the shape the digest had: it builds a list it drops and
+  hands the next turn a list it keeps. Under `lib/` it reads 5,242,880 at
+  20,000 turns. In any other directory it reads one block.
+
+---
+
+## 2026-09-23 — ThinLTO for the release build, declined at a third of what it costs
+
+The release codegen row is 75% the linker. On this container, with the gate's
+own commands and `GITHUB_ACTIONS=1` so it measures, the codegen corpus's
+release build counted:
+
+    kanso 81,494,353   clang:probe 32,201,483   clang 31,669,971
+    clang -cc1 1,617,890,071   ld 5,161,438,914   total 6,843,200,439
+
+`ld` is the LTO link: it optimizes and emits the runtime together with the
+program, every build. `-flto=thin` for both the runtime object and the link,
+the one change:
+
+    codegen release    6,843,200,439 -> 6,605,682,161   -3.47%
+    run program        1,812,623,924 -> 1,867,477,968   +3.03%
+
+At today's ratios a per cent of the release codegen row is worth about 0.023
+of welfare and a per cent of the run row about 0.078, so the trade is +0.08
+against -0.24. ThinLTO imports less across modules than full LTO, and the run
+program is built on the runtime's small helpers being inlined into it. The
+container's clang is 18.1.3 where CI's is 19.1.1, so the sizes here are this
+host's; the ratio between them is the finding.
+
+---
+
 ## 2026-09-23 — lambdas nothing reaches are pruned, and a trampoline is written only for a call that uses it
 
 At `-O0` clang compiles every function a module defines. The codegen corpus's
@@ -10168,3 +10283,9 @@ goldens hold a projection, each tier's row less the probe compile that change
 removed, and are replaced by CI's rows before the floor is banked again. The
 start-up projection is 972,482, this change's 4,613 on top of main's 967,869.
 CI read all three projected rows exactly, and the rise is banked over them.
+
+kanso#1580 then landed on main, and the digest and run programs now carry
+both changes. Their emitted rows, counted here from the `.ll` files, read
+`digestbench defines=155 calls=1210 branches=819 lines=9012` and `runbench
+defines=523 calls=5749 branches=3445 lines=34623`. The `.text`, codegen and
+emit rows come from CI, and the floor is banked again after them.
