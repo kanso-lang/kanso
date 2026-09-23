@@ -1402,10 +1402,10 @@ fn forwarder_map(program: &Program) -> HashMap<(String, usize), String> {
         let Stmt::Expr(Expr::App { head, args, piped: false, .. }) = &d.body[0] else {
             continue;
         };
-        let Expr::Ident(callee, _) = head.as_ref() else { continue };
+        let Expr::Ident(callee, _, _) = head.as_ref() else { continue };
         let Some(target) = callee.strip_prefix("builtin_") else { continue };
         let all_forwarded = args.len() == params.len()
-            && args.iter().zip(&params).all(|(a, p)| matches!(a, Expr::Ident(n, _) if n == p));
+            && args.iter().zip(&params).all(|(a, p)| matches!(a, Expr::Ident(n, _, _) if n == p));
         if all_forwarded {
             out.insert((d.name.clone(), d.params.len()), target.to_string());
         }
@@ -1420,7 +1420,7 @@ fn forwarder_map(program: &Program) -> HashMap<(String, usize), String> {
 /// shape, so the question is cycle membership.
 pub(crate) fn knotted_constants(program: &Program) -> crate::hash::Set<String> {
     fn names(expr: &Expr, out: &mut Vec<String>) {
-        if let Expr::Ident(n, _) | Expr::Partial(n, _) = expr {
+        if let Expr::Ident(n, _, _) | Expr::Partial(n, _) = expr {
             out.push(n.to_string());
         }
         crate::for_each_child(expr, |child| names(child, out));
@@ -2808,7 +2808,7 @@ impl<'a> Backend<'a> {
         // inside the bracket: converted outside it, the header sits below the
         // mark and the join finds a string that is not a builder.
         let carried = match arg {
-            Some(Expr::Ident(_, span)) => self.builder_carried.contains(&(
+            Some(Expr::Ident(_, span, _)) => self.builder_carried.contains(&(
                 f.file.clone(),
                 span.line as usize,
                 span.col as usize,
@@ -3144,7 +3144,7 @@ impl<'a> Backend<'a> {
     /// itself is ordinary recursion and has a base case.
     fn defers_self(&self, f: &FnEmit, expr: &Expr) -> bool {
         fn mentions(expr: &Expr, name: &str) -> bool {
-            if let Expr::Ident(n, _) | Expr::Partial(n, _) = expr {
+            if let Expr::Ident(n, _, _) | Expr::Partial(n, _) = expr {
                 if n == name {
                     return true;
                 }
@@ -4544,7 +4544,7 @@ impl<'a> Backend<'a> {
     ) -> Option<&'e [Expr]> {
         let ty = self.escape.carries_ty(callee, arity, i)?;
         if let Expr::App { head, args, piped: false, .. } = arg {
-            if matches!(head.as_ref(), Expr::Ident(n, _) if n == ty)
+            if matches!(head.as_ref(), Expr::Ident(n, _, _) if n == ty)
                 && Some(&args.len()) == self.escape.field_count.get(ty).as_ref().map(|v| *v)
             {
                 return Some(args);
@@ -5022,8 +5022,10 @@ impl<'a> Backend<'a> {
         let params: Vec<(String, Span)> =
             (0..waiting).map(|i| (format!("k#partial{i}"), span)).collect();
         let mut args = supplied.to_vec();
-        args.extend(params.iter().map(|(n, s)| Expr::Ident(Name::new(&n.clone()), *s)));
-        let head = Expr::Ident(Name::new(name), span);
+        args.extend(params.iter().map(|(n, s)| {
+            Expr::Ident(Name::new(&n.clone()), *s, crate::ast::Resolution::default())
+        }));
+        let head = Expr::Ident(Name::new(name), span, crate::ast::Resolution::default());
         let body = Expr::App { head: Box::new(head), args, piped: false, span };
         Ok(Expr::Lambda { params, body: Box::new(body), span })
     }
@@ -5047,7 +5049,8 @@ impl<'a> Backend<'a> {
         supplied: &[Expr],
         span: Span,
     ) -> Result<String, String> {
-        let callee = self.emit_expr(f, &Expr::Ident(name.clone(), span))?;
+        let callee =
+            self.emit_expr(f, &Expr::Ident(name.clone(), span, crate::ast::Resolution::default()))?;
         let mut held: Vec<String> = Vec::new();
         for a in supplied {
             held.push(self.emit_expr(f, a)?);
@@ -5097,7 +5100,11 @@ impl<'a> Backend<'a> {
                         Stmt::Set { target, field, value, span } => {
                             let new = self.emit_expr(f, value)?;
                             let new = self.maybe_force(f, new);
-                            let ident = Expr::Ident(Name::new(&target.clone()), *span);
+                            let ident = Expr::Ident(
+                                Name::new(&target.clone()),
+                                *span,
+                                crate::ast::Resolution::default(),
+                            );
                             let tv = self.emit_expr(f, &ident)?;
                             let tv = self.maybe_force(f, tv);
                             let (label, _) = self.intern(&format!("{field}\0"));
@@ -5202,7 +5209,7 @@ impl<'a> Backend<'a> {
                 f.record(&out, STR | fails);
                 Ok(out)
             }
-            Expr::Ident(name, _) => {
+            Expr::Ident(name, _, _) => {
                 if let Some(temp) = f.lookup(name) {
                     return Ok(temp);
                 }
@@ -5345,7 +5352,11 @@ impl<'a> Backend<'a> {
                         if self.declared(name) {
                             let mut all = held.clone();
                             all.extend(args.iter().cloned());
-                            let callee = Expr::Ident(name.clone(), *nspan);
+                            let callee = Expr::Ident(
+                                name.clone(),
+                                *nspan,
+                                crate::ast::Resolution::default(),
+                            );
                             return self.emit_call_full(f, &Box::new(callee), &all, *piped, *span);
                         }
                     }
@@ -5553,7 +5564,7 @@ impl<'a> Backend<'a> {
             return Ok(());
         }
         if let Expr::App { head, args, piped: false, .. } = expr {
-            if let Expr::Ident(name, _) = head.as_ref() {
+            if let Expr::Ident(name, _, _) = head.as_ref() {
                 let bare = name.strip_prefix("builtin_").unwrap_or(name);
                 if self.forwarders.contains_key(&(bare.to_string(), args.len()))
                     || self.forwarders.contains_key(&(name.to_string(), args.len()))
@@ -5609,7 +5620,7 @@ impl<'a> Backend<'a> {
                 self.emit_ret(f, &value);
                 return Ok(());
             }
-            if let Expr::Ident(name, _) = &**head {
+            if let Expr::Ident(name, _, _) = &**head {
                 if name == "if" && f.lookup(name).is_none() {
                     // In tail position a failing condition returns rather than
                     // joining a phi, which is the whole difference from the
@@ -5821,7 +5832,7 @@ impl<'a> Backend<'a> {
         // labels the outer `if` already made.
         if let Expr::App { head, args, .. } = cond {
             if args.len() == 3 {
-                if let Expr::Ident(name, _) = &**head {
+                if let Expr::Ident(name, _, _) = &**head {
                     if name == "if" && f.lookup(name).is_none() {
                         let inner_then = f.label();
                         let inner_else = f.label();
@@ -5840,7 +5851,7 @@ impl<'a> Backend<'a> {
         }
         // The arms that desugaring writes. A constant answers the question
         // rather than being built and asked.
-        if let Expr::Ident(name, _) = cond {
+        if let Expr::Ident(name, _, _) = cond {
             if f.lookup(name).is_none() {
                 if name == "true" {
                     f.line(&format!("br label %{then_label}"));
@@ -6517,7 +6528,11 @@ impl<'a> Backend<'a> {
             }
             let piped_value = self.emit_expr(f, &args[0])?;
             if f.set_of(&piped_value) & DESC != 0 {
-                let mut body_args: Vec<Expr> = vec![Expr::Ident(Name::new("__piped"), span)];
+                let mut body_args: Vec<Expr> = vec![Expr::Ident(
+                    Name::new("__piped"),
+                    span,
+                    crate::ast::Resolution::default(),
+                )];
                 body_args.extend(args[1..].iter().cloned());
                 let lambda = Expr::Lambda {
                     params: vec![("__piped".to_string(), span)],
@@ -6675,7 +6690,7 @@ impl<'a> Backend<'a> {
             // puts `none` where the callee goes. A number there takes the
             // computed path already and dies naming itself, and these must say
             // the same words rather than the emitter's.
-            Expr::Ident(name, _) => {
+            Expr::Ident(name, _, _) => {
                 matches!(name.as_str(), "true" | "false" | "none" | "done")
                     || f.lookup(name).is_some()
                     || (call_arity >= 1
@@ -6714,7 +6729,7 @@ impl<'a> Backend<'a> {
             f.record(&t, TOP);
             return Ok(t);
         }
-        let Expr::Ident(name, _) = head else {
+        let Expr::Ident(name, _, _) = head else {
             unreachable!("non-ident heads take the computed path");
         };
         if name == "if" {
@@ -6758,7 +6773,7 @@ impl<'a> Backend<'a> {
         // can, and only that spelling is fused.
         if first.is_none() && args.len() == 1 && self.builtin_named(name, 1) == "utf8" {
             if let Expr::App { head: inner_head, args: inner_args, piped: false, .. } = &args[0] {
-                if let Expr::Ident(inner, _) = &**inner_head {
+                if let Expr::Ident(inner, _, _) = &**inner_head {
                     if self.builtin_named(inner, inner_args.len()) == "slice"
                         && inner_args.len() == 3
                     {
@@ -6803,7 +6818,7 @@ impl<'a> Backend<'a> {
         // so no origin has to move with it.
         if first.is_none() && args.len() == 2 && self.builtin_named(name, 2) == "append" {
             if let Expr::App { head: inner_head, args: inner_args, piped: false, .. } = &args[1] {
-                if let Expr::Ident(inner, _) = &**inner_head {
+                if let Expr::Ident(inner, _, _) = &**inner_head {
                     if self.builtin_named(inner, inner_args.len()) == "slice"
                         && inner_args.len() == 3
                     {
@@ -7345,7 +7360,7 @@ fn collect_idents(expr: &Expr, out: &mut Vec<String>) {
                 }
             }
         }
-        Expr::Ident(name, _) => out.push(name.to_string()),
+        Expr::Ident(name, _, _) => out.push(name.to_string()),
         Expr::List(items, _) => {
             for item in items {
                 collect_idents(item, out);

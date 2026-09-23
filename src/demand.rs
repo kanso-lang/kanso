@@ -48,12 +48,12 @@ impl<'a> DemandInfo<'a> {
 /// even if that callee would qualify, erring sound.
 fn param_stays_local(body: &[Stmt], name: &str) -> bool {
     fn operand_is(e: &Expr, name: &str) -> bool {
-        matches!(e, Expr::Ident(id, _) if id == name)
+        matches!(e, Expr::Ident(id, _, _) if id == name)
     }
     fn expr_safe(e: &Expr, name: &str, is_result: bool) -> bool {
         match e {
             Expr::Build(..) | Expr::Guard { .. } => false,
-            Expr::Ident(id, _) if id == name => is_result,
+            Expr::Ident(id, _, _) if id == name => is_result,
             Expr::Int(..)
             | Expr::Float(..)
             | Expr::Ident(..)
@@ -151,8 +151,8 @@ fn use_targets(expr: &Expr, name: &str, out: &mut Vec<(String, usize, usize)>) {
             }
             for (i, arg) in args.iter().enumerate() {
                 match arg {
-                    Expr::Ident(id, _) if id == name => {
-                        if let Expr::Ident(callee, _) = head.as_ref() {
+                    Expr::Ident(id, _, _) if id == name => {
+                        if let Expr::Ident(callee, _, _) = head.as_ref() {
                             out.push((callee.to_string(), args.len(), i));
                         }
                     }
@@ -239,7 +239,7 @@ fn collect_uses(
     uses: &mut Uses,
 ) {
     match expr {
-        Expr::Ident(id, _) | Expr::Partial(id, _) if id == name => uses.demanding += 1,
+        Expr::Ident(id, _, _) | Expr::Partial(id, _) if id == name => uses.demanding += 1,
         Expr::Int(..) | Expr::Float(..) | Expr::Ident(..) | Expr::Partial(..) | Expr::Hole(..) => {}
         Expr::Guard { cond, early, rest, .. } => {
             collect_uses(cond, name, discard, uses);
@@ -263,7 +263,7 @@ fn collect_uses(
         }
         Expr::App { head, args, .. } => {
             let discard_slots = match head.as_ref() {
-                Expr::Ident(callee, _) => discard.get(&(callee.as_str(), args.len())),
+                Expr::Ident(callee, _, _) => discard.get(&(callee.as_str(), args.len())),
                 _ => None,
             };
             if !matches!(head.as_ref(), Expr::Ident(..)) {
@@ -271,7 +271,7 @@ fn collect_uses(
             }
             for (i, arg) in args.iter().enumerate() {
                 match arg {
-                    Expr::Ident(id, _) if id == name => {
+                    Expr::Ident(id, _, _) if id == name => {
                         let deferrable =
                             discard_slots.is_some_and(|slots| slots.get(i).copied() == Some(true));
                         match deferrable {
@@ -341,7 +341,7 @@ fn expensive(expr: &Expr, fns: &HashSet<&str>) -> bool {
             }
         }),
         Expr::App { head, args, .. } => {
-            if let Expr::Ident(callee, _) = head.as_ref() {
+            if let Expr::Ident(callee, _, _) = head.as_ref() {
                 if fns.contains(callee.as_str()) {
                     return true;
                 }

@@ -1450,7 +1450,11 @@ impl<'a> Interp<'a> {
                 return Ok(Flow::Done(piped_value));
             }
             if let Value::Desc(inner) = piped_value {
-                let mut body_args: Vec<Expr> = vec![Expr::Ident(Name::new("__piped"), *span)];
+                let mut body_args: Vec<Expr> = vec![Expr::Ident(
+                    Name::new("__piped"),
+                    *span,
+                    crate::ast::Resolution::default(),
+                )];
                 body_args.extend(args[1..].iter().cloned());
                 let closure = Value::Closure(Rc::new(ClosureData {
                     params: vec![Name::new("__piped")],
@@ -1755,7 +1759,7 @@ impl<'a> Interp<'a> {
                 Ok(Value::Map(Rc::new(entries)))
             }
             Expr::Str(parts, _) => self.eval_template(parts, env, frame),
-            Expr::Ident(name, span) => self.eval_ident(name, *span, env),
+            Expr::Ident(name, span, resolved) => self.eval_ident_at(name, *span, resolved, env),
             Expr::Partial(name, span) => {
                 let callee = self.eval_ident(name, *span, env)?;
                 Ok(Value::Partial(Rc::new(callee), Rc::new(Vec::new())))
@@ -1835,8 +1839,11 @@ impl<'a> Interp<'a> {
                         return Ok(piped_value);
                     }
                     if let Value::Desc(inner) = piped_value {
-                        let mut body_args: Vec<Expr> =
-                            vec![Expr::Ident(Name::new("__piped"), *span)];
+                        let mut body_args: Vec<Expr> = vec![Expr::Ident(
+                            Name::new("__piped"),
+                            *span,
+                            crate::ast::Resolution::default(),
+                        )];
                         body_args.extend(args[1..].iter().cloned());
                         let closure = Value::Closure(Rc::new(ClosureData {
                             params: vec![Name::new("__piped")],
@@ -1979,6 +1986,60 @@ impl<'a> Interp<'a> {
                 let right = self.force_thunk(self.eval(rhs, env, frame)?)?;
                 join_values(left, right, *span)
             }
+        }
+    }
+
+    /// An identifier at a place in the text, which remembers whether it found
+    /// a local there. A global goes straight to `eval_global` without walking
+    /// the environment: on the interpreted corpus that walk missed 332,025
+    /// times over 1,071,803 frames, every one of them for a name no frame
+    /// could hold. The first execution decides, and the node keeps the answer,
+    /// because the frames a node can see are fixed by where it sits.
+    ///
+    /// Debug builds check the kept answer on every execution: a node marked
+    /// global that finds a local, or marked local that misses, stops the run.
+    /// Every spec runs in a debug build, so the differential suites check the
+    /// property on every program they carry.
+    fn eval_ident_at(
+        &self,
+        name: &Name,
+        span: Span,
+        resolved: &crate::ast::Resolution,
+        env: &Option<Rc<Env>>,
+    ) -> EvalResult {
+        use crate::ast::Resolution;
+        match resolved.get() {
+            Resolution::GLOBAL => {
+                debug_assert!(
+                    lookup(env, name).is_none(),
+                    "`{}` at {:?} was kept as global and found a local",
+                    name.as_str(),
+                    span
+                );
+                self.eval_global(name.as_str(), span)
+            }
+            Resolution::LOCAL => match lookup(env, name) {
+                Some(value) => Ok(value),
+                None => {
+                    debug_assert!(
+                        false,
+                        "`{}` at {:?} was kept as local and missed",
+                        name.as_str(),
+                        span
+                    );
+                    self.eval_global(name.as_str(), span)
+                }
+            },
+            _ => match lookup(env, name) {
+                Some(value) => {
+                    resolved.set(Resolution::LOCAL);
+                    Ok(value)
+                }
+                None => {
+                    resolved.set(Resolution::GLOBAL);
+                    self.eval_global(name.as_str(), span)
+                }
+            },
         }
     }
 
@@ -3815,7 +3876,7 @@ impl<'a> Interp<'a> {
 
     fn awaits_a_knot(&self, expr: &Expr) -> bool {
         fn names<'e>(expr: &'e Expr, out: &mut Vec<&'e str>) {
-            if let Expr::Ident(n, _) | Expr::Partial(n, _) = expr {
+            if let Expr::Ident(n, _, _) | Expr::Partial(n, _) = expr {
                 out.push(n);
             }
             crate::for_each_child(expr, |child| names(child, out));

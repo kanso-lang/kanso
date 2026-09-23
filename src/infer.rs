@@ -336,7 +336,7 @@ pub fn infer(program: &Program) -> Inference {
     let field_readers = field_readers(program, &type_names);
     let defers_into_containers = program.fns.iter().any(|d| {
         fn mentions(expr: &Expr, name: &str) -> bool {
-            if let Expr::Ident(n, _) | Expr::Partial(n, _) = expr {
+            if let Expr::Ident(n, _, _) | Expr::Partial(n, _) = expr {
                 if n == name {
                     return true;
                 }
@@ -568,12 +568,12 @@ enum Fact<'a> {
 /// The list whose length `e` reads, when `e` is `length xs`.
 fn length_of(e: &Expr) -> Option<&str> {
     let Expr::App { head, args, piped: false, .. } = e else { return None };
-    let Expr::Ident(name, _) = head.as_ref() else { return None };
+    let Expr::Ident(name, _, _) = head.as_ref() else { return None };
     if name != "length" || args.len() != 1 {
         return None;
     }
     match &args[0] {
-        Expr::Ident(xs, _) => Some(xs.as_str()),
+        Expr::Ident(xs, _, _) => Some(xs.as_str()),
         _ => None,
     }
 }
@@ -589,7 +589,7 @@ fn int_of(e: &Expr) -> Option<i64> {
 /// two of them, a field read, or a `length` of a name.
 fn same_expr(a: &Expr, b: &Expr) -> bool {
     match (a, b) {
-        (Expr::Ident(x, _), Expr::Ident(y, _)) => x == y,
+        (Expr::Ident(x, _, _), Expr::Ident(y, _, _)) => x == y,
         (Expr::Int(x, _), Expr::Int(y, _)) => x == y,
         (
             Expr::BinOp { op: p, lhs: l1, rhs: r1, .. },
@@ -611,11 +611,11 @@ fn facts_when<'a>(cond: &'a Expr, holds: bool, out: &mut Vec<Fact<'a>>) {
         // `a and b` is `if a b false`, `a or b` is `if a true b`, `not a` is
         // `if a false true`: the parser writes all three as an `if`
         Expr::App { head, args, piped: false, .. }
-            if args.len() == 3 && matches!(head.as_ref(), Expr::Ident(n, _) if n == "if") =>
+            if args.len() == 3 && matches!(head.as_ref(), Expr::Ident(n, _, _) if n == "if") =>
         {
             let lit = |e: &Expr| match e {
-                Expr::Ident(n, _) if n == "true" => Some(true),
-                Expr::Ident(n, _) if n == "false" => Some(false),
+                Expr::Ident(n, _, _) if n == "true" => Some(true),
+                Expr::Ident(n, _, _) if n == "false" => Some(false),
                 _ => None,
             };
             match (holds, lit(&args[1]), lit(&args[2])) {
@@ -767,7 +767,7 @@ fn callee_first(program: &Program) -> Vec<usize> {
         slot.1 += 1;
     }
     fn gather<'a>(expr: &'a Expr, names: &mut Vec<&'a str>) {
-        if let Expr::Ident(n, _) | Expr::Partial(n, _) = expr {
+        if let Expr::Ident(n, _, _) | Expr::Partial(n, _) = expr {
             names.push(n.as_str());
         }
         crate::for_each_child(expr, |child| gather(child, names));
@@ -1055,7 +1055,7 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut Env<'a>) -> Set {
             }
             STR | fails
         }
-        Expr::Ident(name, _) => ident_set(ctx, name, env),
+        Expr::Ident(name, _, _) => ident_set(ctx, name, env),
         Expr::List(items, _) => {
             for item in items {
                 let _ = eval_expr(ctx, item, env);
@@ -1082,7 +1082,7 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut Env<'a>) -> Set {
                 return (b & FAIL) | (k & FAIL) | DESC;
             }
             let proven = match base.as_ref() {
-                Expr::Ident(xs, _) => in_range(&ctx.facts, index, xs.as_str()),
+                Expr::Ident(xs, _, _) => in_range(&ctx.facts, index, xs.as_str()),
                 // a literal list has a known length, and a literal index
                 // into it is in range or not by arithmetic
                 Expr::List(items, _) => {
@@ -1166,7 +1166,7 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut Env<'a>) -> Set {
         // facts can hold in the arm they hold in (see `Fact`); the answer is
         // what `eval_call` gave it
         Expr::App { head, args, piped: false, .. }
-            if args.len() == 3 && matches!(head.as_ref(), Expr::Ident(n, _) if n == "if") =>
+            if args.len() == 3 && matches!(head.as_ref(), Expr::Ident(n, _, _) if n == "if") =>
         {
             let c = eval_expr(ctx, &args[0], env);
             let mark = ctx.facts.len();
@@ -1337,7 +1337,7 @@ fn str_shape<'a>(arg: &'a Expr, consts: &Consts<'a>) -> Option<(Option<&'a str>,
             };
             Some((exact, fixed))
         }
-        Expr::Ident(name, _) => consts.get(name.as_str()).map(|s| (Some(*s), s.len())),
+        Expr::Ident(name, _, _) => consts.get(name.as_str()).map(|s| (Some(*s), s.len())),
         _ => None,
     }
 }
@@ -1349,7 +1349,7 @@ fn str_shape<'a>(arg: &'a Expr, consts: &Consts<'a>) -> Option<(Option<&'a str>,
 fn is_literal(arg: &Expr, consts: &Consts<'_>) -> bool {
     match arg {
         Expr::Str(..) | Expr::Int(..) | Expr::Float(..) => true,
-        Expr::Ident(name, _) => consts.contains_key(name.as_str()),
+        Expr::Ident(name, _, _) => consts.contains_key(name.as_str()),
         _ => false,
     }
 }
@@ -1425,7 +1425,7 @@ fn eval_call<'a>(
     // for every other call and wrong here: native trusted that seed, left
     // the entry guard out of a group the callback handed the err on to, and
     // let the err into its body while the interpreter refused it.
-    let hands_err = matches!(head, Expr::Ident(n, _)
+    let hands_err = matches!(head, Expr::Ident(n, _, _)
         if (n == "rescue" || n == "annotate") && !env.contains_key(n.as_str()));
     let arg_sets: &mut [Set] = match args.len() <= inline.len() {
         true => {
@@ -1469,7 +1469,7 @@ fn eval_call<'a>(
         let fails: Set = arg_sets.iter().fold(0, |acc, s| acc | (s & FAIL));
         return eval_expr(ctx, body, &mut inner) | fails | piped_bits;
     }
-    let Expr::Ident(name, _) = head else {
+    let Expr::Ident(name, _, _) = head else {
         let _ = eval_expr(ctx, head, env);
         return TOP | piped_bits;
     };
@@ -1549,7 +1549,7 @@ fn eval_call<'a>(
 /// desc_yield with one level of binding lookthrough: an ident that names a
 /// tracked desc-valued local answers with that local's recorded yield.
 fn desc_yield_of<'a>(ctx: &mut Ctx<'a>, e: &'a Expr) -> Set {
-    if let Expr::Ident(name, _) = e {
+    if let Expr::Ident(name, _, _) = e {
         if let Some(y) = ctx.yields.get(name.as_str()) {
             return *y;
         }
@@ -1589,14 +1589,14 @@ fn desc_yield<'a>(ctx: &mut Ctx<'a>, e: &'a Expr) -> Set {
     match e {
         // the io constants referenced bare: stdin yields the input string,
         // args the argument list
-        Expr::Ident(n, _) if base(n) == "stdin" => STR,
-        Expr::Ident(n, _) if base(n) == "args" => LIST,
-        Expr::Ident(n, _) if base(n) == "now" => INT,
+        Expr::Ident(n, _, _) if base(n) == "stdin" => STR,
+        Expr::Ident(n, _, _) if base(n) == "args" => LIST,
+        Expr::Ident(n, _, _) if base(n) == "now" => INT,
         // a strict index yields its element, forced on the way out
         Expr::Index { strict: true, .. } => TOP & !FAIL & !THUNK,
         // an `if` yields whichever branch runs
         Expr::App { head, args, piped: false, .. }
-            if matches!(head.as_ref(), Expr::Ident(n, _) if n == "if") && args.len() == 3 =>
+            if matches!(head.as_ref(), Expr::Ident(n, _, _) if n == "if") && args.len() == 3 =>
         {
             desc_yield_of(ctx, &args[1]) | desc_yield_of(ctx, &args[2])
         }
@@ -1619,7 +1619,7 @@ fn desc_yield<'a>(ctx: &mut Ctx<'a>, e: &'a Expr) -> Set {
         // why the table is checked against the set of builtins that answer a
         // description, in tests/every_effect_builtin_says_what_it_yields.rs.
         Expr::App { head, args, piped, .. } => {
-            if let Expr::Ident(n, _) = head.as_ref() {
+            if let Expr::Ident(n, _, _) = head.as_ref() {
                 if let Some(y) = group_yield(ctx, n.as_str(), args.len()) {
                     return y;
                 }
@@ -1631,33 +1631,33 @@ fn desc_yield<'a>(ctx: &mut Ctx<'a>, e: &'a Expr) -> Set {
                 // a file that is not there yields none, which os/read_file names
                 // `file_not_found`; the text arm keeps its type, which the loop
                 // analyses read
-                Expr::Ident(n, _) if base(n) == "read_file" => STR | NONE,
+                Expr::Ident(n, _, _) if base(n) == "read_file" => STR | NONE,
                 // the same absence, and the bytes as they are
-                Expr::Ident(n, _) if base(n) == "read_bytes" => BYTES | NONE,
-                Expr::Ident(n, _) if base(n) == "stdin" => STR,
+                Expr::Ident(n, _, _) if base(n) == "read_bytes" => BYTES | NONE,
+                Expr::Ident(n, _, _) if base(n) == "stdin" => STR,
                 // status, stdout, stderr — the std wrapper reads them into a record
-                Expr::Ident(n, _) if base(n) == "run" => LIST,
+                Expr::Ident(n, _, _) if base(n) == "run" => LIST,
                 // the handle a later kill names, and the three socket
                 // handles the net wrappers read into their records
-                Expr::Ident(n, _)
+                Expr::Ident(n, _, _)
                     if matches!(base(n), "start" | "listen" | "accept" | "net_port") =>
                 {
                     INT
                 }
-                Expr::Ident(n, _) if base(n) == "args" => LIST,
-                Expr::Ident(n, _) if base(n) == "random" => INT,
+                Expr::Ident(n, _, _) if base(n) == "args" => LIST,
+                Expr::Ident(n, _, _) if base(n) == "random" => INT,
                 // the bytes a connection had waiting, as text
-                Expr::Ident(n, _) if base(n) == "net_read" => STR,
+                Expr::Ident(n, _, _) if base(n) == "net_read" => STR,
                 // an unset variable yields none, which is a value the consumer
                 // dispatches on rather than a failure it has to trap
-                Expr::Ident(n, _) if base(n) == "env" => STR | NONE,
-                Expr::Ident(n, _) if matches!(base(n), "exists" | "is_dir") => TRUE | FALSE,
-                Expr::Ident(n, _) if base(n) == "list_dir" => LIST,
-                Expr::Ident(n, _) if base(n) == "now" => INT,
+                Expr::Ident(n, _, _) if base(n) == "env" => STR | NONE,
+                Expr::Ident(n, _, _) if matches!(base(n), "exists" | "is_dir") => TRUE | FALSE,
+                Expr::Ident(n, _, _) if base(n) == "list_dir" => LIST,
+                Expr::Ident(n, _, _) if base(n) == "now" => INT,
                 // an unset variable yields none, which is a value the consumer
                 // dispatches on rather than a failure it has to trap; an
                 // effect with nothing to answer yields `done` when it finished
-                Expr::Ident(n, _)
+                Expr::Ident(n, _, _)
                     if matches!(
                         base(n),
                         "print"

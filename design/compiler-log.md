@@ -9865,3 +9865,69 @@ of `Expr`, which moves every compile-side row, and the flag must be an
 `AtomicU8` or similar if the AST is shared across the interpreter's stack
 thread. The ceiling it buys is the entry above's, about 8% of the interpreted
 row.
+
+## 2026-09-23 — an identifier remembers whether it found a local
+
+Built on the property the entry above tested. `Expr::Ident` gains a third field,
+a `Resolution` holding 0 until the node first runs, then 1 if it found a local
+and 2 if it did not. `eval_ident_at` sends a node kept as global straight to
+`eval_global`, so it no longer walks the environment. On the interpreted
+corpus that walk had missed 332,025 times across 1,071,803 frames. A node kept
+as local still walks, because it has to find which frame holds it.
+
+The field is an `AtomicU8` read and written with `Relaxed`, because an `Expr`
+can be reached from the interpreter's own stack thread. It fits in the enum's
+existing size: `size_of::<Expr>()` is 56 before and after, measured.
+`Expr::Ident` appeared 278 times across 16 files. The patterns took a `, _`
+and the constructors a `Resolution::default()`, applied from the compiler's
+own error spans, and rustfmt settled the result. A clone of a node copies what
+it knows. The evaluator's own clones go into thunks and closures, and each
+carries the environment it was defined in, so it runs where the node sits.
+The inliner does move nodes to new places, but it runs at load
+(`inline_builtin_wrappers` in `src/lib.rs`), before anything is evaluated and
+while every flag is still 0. These were read, not proven exhaustive; the check
+below is what would catch a path that was missed.
+
+THE CHECK THAT KEEPS IT HONEST. In a debug build every execution of a kept node
+checks the kept answer: a node kept as global that finds a local, or kept as
+local that misses, stops the run and names the identifier and its place. Every
+spec runs in a debug build, so the golden, differential and micro suites check
+the property on every program they carry. The whole suite passes with it on,
+591 tests, the eleven `wasm_engine` failures being the usual local absence of
+`docs/kanso.wasm`. It was watched red: with a first hit recorded as global
+instead of local, the golden suite stopped on `v` at line 11, column 12, "was
+kept as global and found a local".
+
+WHAT IT BUYS, on this container with the address-blind preload:
+
+    row                     main           this branch
+    interp_instructions   939,398,706     919,550,926    -19,847,780  (-2.11%)
+    compile_instructions   36,125,644      36,018,620       -107,024
+
+The interpreted row falls by about a quarter of the ceiling the scope-pass
+entry put at 80 million, because only the walk is gone: a global still pays
+`eval_global`'s string-keyed map on every use. The compile row's fall is not
+isolated here; the compiler's own code changed at 278 places, and CI's rows
+will say whether it holds. Keeping `eval_global`'s answer on the node as well
+would take a slot index that means something only to one interpreter, and an
+AST can outlive the interpreter that ran it, so that is left alone.
+
+CI'S ROWS on 6a44d698 (family 0x19 model 0x11), each gate read twice and
+agreeing, against main at 4381c2a9:
+
+    row                     main           this branch      change
+    compile_instructions    35,671,647     35,374,375      -297,272  (-0.83%)
+    entry_instructions     126,996,739    126,091,396      -905,343  (-0.71%)
+    library_instructions   127,520,399    126,613,848      -906,551  (-0.71%)
+    startup_instructions     3,372,848      3,372,380          -468
+    interp_instructions    905,979,540    887,079,102   -18,900,438  (-2.09%)
+    emit_instructions       51,172,461     51,381,691      +209,230  (+0.41%)
+
+The interpreted row falls by what this container projected, within a tenth of a
+point. The three compile rows fall by 0.7 to 0.8% and emit rises by 0.4%, and
+nothing here isolates either. `kanso check` does evaluate: constants are
+knotted through the interpreter, so some of the compile-side fall may be the
+same skipped walk, and some may be the layout of a compiler that changed at
+278 places. Emit runs the code generator, which never evaluates, so its rise
+is the second kind until something shows otherwise. The allocation, memory
+and codegen rows did not move.

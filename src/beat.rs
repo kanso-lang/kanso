@@ -245,7 +245,7 @@ fn demotable_entries(
         let from = (decl.name.clone(), decl.params.len());
         for tail in tail_exprs(decl.body.last()) {
             let Expr::App { head, args, piped: false, .. } = tail else { continue };
-            let Expr::Ident(callee, _) = head.as_ref() else { continue };
+            let Expr::Ident(callee, _, _) = head.as_ref() else { continue };
             let to = (callee.to_string(), args.len());
             if from == to {
                 cyclic.insert(from.clone());
@@ -311,15 +311,15 @@ fn accumulator_grows(program: &Program, name: &str, arity: usize, position: usiz
         });
         for tail in tail_exprs(decl.body.last()) {
             let Expr::App { head, args, piped: false, .. } = tail else { continue };
-            let Expr::Ident(callee, _) = head.as_ref() else { continue };
+            let Expr::Ident(callee, _, _) = head.as_ref() else { continue };
             if callee != name || args.len() != arity {
                 continue;
             }
             if let Expr::App { head: ah, args: aargs, .. } = &args[position] {
-                if let Expr::Ident(op, _) = ah.as_ref() {
+                if let Expr::Ident(op, _, _) = ah.as_ref() {
                     let extends_self = EXTENDING.contains(&op.as_str())
                         && aargs.first().is_some_and(
-                            |a| matches!(a, Expr::Ident(n, _) if Some(n.as_str()) == own),
+                            |a| matches!(a, Expr::Ident(n, _, _) if Some(n.as_str()) == own),
                         );
                     if extends_self {
                         return true;
@@ -422,14 +422,14 @@ fn is_chain(
     folds: &HashSet<String>,
 ) -> bool {
     match e {
-        Expr::Ident(p, _) => {
+        Expr::Ident(p, _, _) => {
             p == own
                 || locals
                     .get(p.as_str())
                     .is_some_and(|e2| is_chain(e2, own, decl, locals, mut_sites, chains, folds))
         }
         Expr::App { head, args, span, .. } => match head.as_ref() {
-            Expr::Ident(n, _)
+            Expr::Ident(n, _, _)
                 if matches!(n.as_str(), "append" | "builtin_append")
                     && args.len() == 2
                     && mut_sites.contains(&(
@@ -440,11 +440,11 @@ fn is_chain(
             {
                 is_chain(&args[0], own, decl, locals, mut_sites, chains, folds)
             }
-            Expr::Ident(n, _) if n == "if" && args.len() == 3 => {
+            Expr::Ident(n, _, _) if n == "if" && args.len() == 3 => {
                 is_chain(&args[1], own, decl, locals, mut_sites, chains, folds)
                     && is_chain(&args[2], own, decl, locals, mut_sites, chains, folds)
             }
-            Expr::Ident(n, _) if folds.contains(n.as_str()) && args.len() == 3 => {
+            Expr::Ident(n, _, _) if folds.contains(n.as_str()) && args.len() == 3 => {
                 let folder_chains = match &args[2] {
                     Expr::Lambda { params, body, .. } => params.first().is_some_and(|(p, _)| {
                         is_chain(body, p, decl, locals, mut_sites, chains, folds)
@@ -453,7 +453,7 @@ fn is_chain(
                 };
                 folder_chains && is_chain(&args[1], own, decl, locals, mut_sites, chains, folds)
             }
-            Expr::Ident(f, _) if chains.contains(&(f.to_string(), args.len())) => args
+            Expr::Ident(f, _, _) if chains.contains(&(f.to_string(), args.len())) => args
                 .first()
                 .is_some_and(|a| is_chain(a, own, decl, locals, mut_sites, chains, folds)),
             _ => false,
@@ -483,7 +483,7 @@ fn crossing_positions(
         }
         for tail in tail_exprs(decl.body.last()) {
             let Expr::App { head, args, piped: false, .. } = tail else { continue };
-            let Expr::Ident(callee, _) = head.as_ref() else { continue };
+            let Expr::Ident(callee, _, _) = head.as_ref() else { continue };
             if callee != name || args.len() != arity {
                 continue;
             }
@@ -554,7 +554,7 @@ fn eligible_clusters(
         let from = index[&(decl.name.clone(), decl.params.len())];
         for tail in tail_exprs(decl.body.last()) {
             let Expr::App { head, args, piped: false, .. } = tail else { continue };
-            let Expr::Ident(callee, _) = head.as_ref() else { continue };
+            let Expr::Ident(callee, _, _) = head.as_ref() else { continue };
             if let Some(&to) = index.get(&(callee.to_string(), args.len())) {
                 edges.push((from, to, di, args));
             }
@@ -663,7 +663,7 @@ fn cluster_edges_ok(
                     continue;
                 }
                 let fed_by_threaded = match arg {
-                    Expr::Ident(p, _) => decl
+                    Expr::Ident(p, _, _) => decl
                         .params
                         .iter()
                         .position(|pat| matches!(pat, Pattern::Var(n, _) if n == p))
@@ -739,14 +739,14 @@ fn cluster_edges_ok(
                 return None;
             }
             if let Expr::App { head: ah, args: aargs, .. } = arg {
-                if let Expr::Ident(op, _) = ah.as_ref() {
+                if let Expr::Ident(op, _, _) = ah.as_ref() {
                     let own = decl.params.get(i).and_then(|p| match p {
                         Pattern::Var(n, _) => Some(n.as_str()),
                         _ => None,
                     });
                     let extends_self = ["concat", "push", "put"].contains(&op.as_str())
                         && aargs.first().is_some_and(
-                            |a| matches!(a, Expr::Ident(n, _) if Some(n.as_str()) == own),
+                            |a| matches!(a, Expr::Ident(n, _, _) if Some(n.as_str()) == own),
                         );
                     if extends_self {
                         return None;
@@ -1054,7 +1054,7 @@ impl<'a> TailCalls<'a> {
         for decl in &program.fns {
             for tail in tail_exprs(decl.body.last()) {
                 let Expr::App { head, args, piped: false, .. } = tail else { continue };
-                let Expr::Ident(callee, _) = head.as_ref() else { continue };
+                let Expr::Ident(callee, _, _) = head.as_ref() else { continue };
                 let in_group = decl.name == *callee && decl.params.len() == args.len();
                 let seen = to.entry((callee.as_str(), args.len())).or_insert((false, false));
                 match in_group {
@@ -1177,7 +1177,7 @@ impl Site<'_> {
     /// copy by the emitter. Pushes and puts are not admitted here: a list or
     /// map grown in place still takes its next buffer from the arena.
     fn in_place_append(&self, head: &Expr, args: &[Expr], span: &crate::diag::Span) -> bool {
-        matches!(head, Expr::Ident(n, _) if matches!(n.as_str(), "append" | "builtin_append"))
+        matches!(head, Expr::Ident(n, _, _) if matches!(n.as_str(), "append" | "builtin_append"))
             && args.len() == 2
             && self.mut_sites.contains(&(
                 std::sync::Arc::clone(self.file),
@@ -1262,7 +1262,7 @@ fn expr_allocates(
                 // unique; a slice under the append is the emitter's fused
                 // copy, so only what the slice itself reads is asked about
                 let arg = match &args[1] {
-                    Expr::App { head: h, args: inner, .. } if matches!(h.as_ref(), Expr::Ident(n, _) if bare_builtin(n) == "slice") => {
+                    Expr::App { head: h, args: inner, .. } if matches!(h.as_ref(), Expr::Ident(n, _, _) if bare_builtin(n) == "slice") => {
                         inner
                             .iter()
                             .any(|a| expr_allocates(a, fn_names, allocating, seed_pass, site))
@@ -1272,7 +1272,7 @@ fn expr_allocates(
                 return expr_allocates(&args[0], fn_names, allocating, seed_pass, site) || arg;
             }
             let head_allocates = match head.as_ref() {
-                Expr::Ident(n, _) => {
+                Expr::Ident(n, _, _) => {
                     // a name that is neither a builtin nor a program function
                     // is a closure value: its body is unknowable, so it may
                     // allocate
@@ -1338,7 +1338,7 @@ fn expand_tail<'a>(e: &'a Expr, out: &mut Vec<&'a Expr>) {
         return;
     }
     if let Expr::App { head, args, piped, .. } = e {
-        if !piped && matches!(head.as_ref(), Expr::Ident(n, _) if n == "if") && args.len() == 3 {
+        if !piped && matches!(head.as_ref(), Expr::Ident(n, _, _) if n == "if") && args.len() == 3 {
             expand_tail(&args[1], out);
             expand_tail(&args[2], out);
             return;
@@ -1389,12 +1389,12 @@ fn scalar_elem(
         // one read back out is too. A put that stores anything else fails its
         // own clause and denies the licence, which is what makes the
         // assumption safe to make.
-        Expr::Index { base, .. } => matches!(base.as_ref(), Expr::Ident(b, _) if b == own),
+        Expr::Index { base, .. } => matches!(base.as_ref(), Expr::Ident(b, _, _) if b == own),
         // The ordinary shape is `push xs n`, where n is the loop's own
         // counter: a name rather than a literal, and a scalar all the same.
         // Reading its parameter set lets the common case through without
         // letting a name of unknown type through with it.
-        Expr::Ident(n, _) => {
+        Expr::Ident(n, _, _) => {
             matches!(n.as_str(), "true" | "false")
                 || decl
                     .params
@@ -1413,7 +1413,7 @@ fn scalar_elem(
         // the loop stopped sweeping: 1,048,576 bytes of arena became
         // 33,554,432 at four thousand rounds.
         Expr::App { head, args, .. } => match head.as_ref() {
-            Expr::Ident(n, _) => {
+            Expr::Ident(n, _, _) => {
                 let set = infer::builtin_set(n, &vec![infer::TOP; args.len()]);
                 if set != 0 && set & !FAIL & !SCALAR == 0 {
                     return true;
@@ -1466,7 +1466,7 @@ fn is_scalar_map_chain(
     mut_sites: &MutSites,
 ) -> bool {
     let Expr::App { head, .. } = e else { return false };
-    let Expr::Ident(n, _) = head.as_ref() else { return false };
+    let Expr::Ident(n, _, _) = head.as_ref() else { return false };
     matches!(n.as_str(), "put" | "builtin_put")
         && map_chain_rest(e, program, own, decl, inference, decl_index, locals, mut_sites)
 }
@@ -1483,14 +1483,14 @@ fn map_chain_rest(
     mut_sites: &MutSites,
 ) -> bool {
     match e {
-        Expr::Ident(p, _) => {
+        Expr::Ident(p, _, _) => {
             p == own
                 || locals.get(p.as_str()).is_some_and(|e2| {
                     map_chain_rest(e2, program, own, decl, inference, decl_index, locals, mut_sites)
                 })
         }
         Expr::App { head, args, span, .. } => match head.as_ref() {
-            Expr::Ident(n, _)
+            Expr::Ident(n, _, _)
                 if matches!(n.as_str(), "put" | "builtin_put")
                     && args.len() == 3
                     && mut_sites.contains(&(
@@ -1538,7 +1538,7 @@ fn is_scalar_list_chain(
     mut_sites: &MutSites,
 ) -> bool {
     match e {
-        Expr::Ident(p, _) => {
+        Expr::Ident(p, _, _) => {
             p == own
                 || locals.get(p.as_str()).is_some_and(|e2| {
                     is_scalar_list_chain(
@@ -1547,7 +1547,7 @@ fn is_scalar_list_chain(
                 })
         }
         Expr::App { head, args, span, .. } => match head.as_ref() {
-            Expr::Ident(n, _)
+            Expr::Ident(n, _, _)
                 if matches!(n.as_str(), "push" | "builtin_push")
                     && args.len() == 2
                     && mut_sites.contains(&(
@@ -1584,7 +1584,7 @@ fn arg_ok(
     position: usize,
     arg: &Expr,
 ) -> bool {
-    if let Expr::Ident(p, _) = arg {
+    if let Expr::Ident(p, _, _) = arg {
         let own = decl.params.iter().position(|pat| matches!(pat, Pattern::Var(n, _) if n == p));
         if let Some(j) = own {
             let set = inference.param(decl_index, j);
@@ -1696,7 +1696,7 @@ fn reachable_names<'a>(
 
 fn collect_names(e: &Expr, out: &mut HashSet<String>) {
     match e {
-        Expr::Ident(n, _) | Expr::Partial(n, _) => {
+        Expr::Ident(n, _, _) | Expr::Partial(n, _) => {
             out.insert(n.to_string());
         }
         Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
@@ -1790,7 +1790,7 @@ impl<'a> ValueUses<'a> {
 /// same order, collecting where it would have compared.
 fn collect_value_uses<'a>(e: &'a Expr, out: &mut crate::hash::Set<&'a str>) {
     match e {
-        Expr::Ident(n, _) | Expr::Partial(n, _) => {
+        Expr::Ident(n, _, _) | Expr::Partial(n, _) => {
             out.insert(n.as_str());
         }
         Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
@@ -1860,7 +1860,7 @@ fn collect_value_uses<'a>(e: &'a Expr, out: &mut crate::hash::Set<&'a str>) {
 #[cfg(test)]
 fn value_use(e: &Expr, name: &str) -> bool {
     match e {
-        Expr::Ident(n, _) | Expr::Partial(n, _) => n == name,
+        Expr::Ident(n, _, _) | Expr::Partial(n, _) => n == name,
         Expr::Block(stmts, _) | Expr::Build(stmts, _) => stmts.iter().any(|st| match st {
             Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
                 value_use(expr, name)
@@ -1947,7 +1947,7 @@ mod the_value_use_index_answers_what_the_scan_answered {
     /// index must answer NO for.
     fn collect_names_borrowed<'a>(e: &'a Expr, out: &mut crate::hash::Set<&'a str>) {
         if let Expr::App { head, .. } = e {
-            if let Expr::Ident(n, _) = head.as_ref() {
+            if let Expr::Ident(n, _, _) = head.as_ref() {
                 out.insert(n.as_str());
             }
         }
@@ -2369,7 +2369,7 @@ mod tests {
     }
 
     fn idents_in(e: &crate::ast::Expr, out: &mut crate::hash::Set<String>) {
-        if let crate::ast::Expr::Ident(n, _) = e {
+        if let crate::ast::Expr::Ident(n, _, _) = e {
             out.insert(n.to_string());
         }
         if let crate::ast::Expr::Str(parts, _) = e {
@@ -2453,7 +2453,7 @@ mod tests {
             let in_group = decl.name == name && decl.params.len() == arity;
             tail_exprs(decl.body.last()).into_iter().filter_map(move |tail| {
                 let Expr::App { head, args, piped: false, .. } = tail else { return None };
-                let Expr::Ident(callee, _) = head.as_ref() else { return None };
+                let Expr::Ident(callee, _, _) = head.as_ref() else { return None };
                 (callee == name && args.len() == arity).then_some(in_group)
             })
         })

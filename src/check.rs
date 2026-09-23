@@ -563,7 +563,7 @@ fn per_node_walk<'a>(
                 // never be filled and its `_` is refused where it stands.
                 let mut walk = down(flags);
                 if let Stmt::Bind { expr: Expr::App { head, .. }, .. } = stmt {
-                    if matches!(head.as_ref(), Expr::Ident(n, _) if tables.types.contains_key(n.as_str()))
+                    if matches!(head.as_ref(), Expr::Ident(n, _, _) if tables.types.contains_key(n.as_str()))
                     {
                         walk.hole_ok = true;
                     }
@@ -632,7 +632,7 @@ fn per_node_walk<'a>(
         // node alone and keep descending into all three children, which is why
         // the flags turn off here rather than the walk stopping.
         Expr::App { head, args, .. }
-            if matches!(head.as_ref(), Expr::Ident(n, _) if n == "if") && args.len() == 3 =>
+            if matches!(head.as_ref(), Expr::Ident(n, _, _) if n == "if") && args.len() == 3 =>
         {
             let arm = Flags { decidable: false, certain: false, ..down(flags) };
             per_node_walk(head, tables, state, down(flags), diags);
@@ -644,7 +644,7 @@ fn per_node_walk<'a>(
         // The head of a call spelled `err` is the raise itself, not a bare
         // mention of it.
         Expr::App { head, args, .. }
-            if matches!(head.as_ref(), Expr::Ident(n, _) if n == "err") && !args.is_empty() =>
+            if matches!(head.as_ref(), Expr::Ident(n, _, _) if n == "err") && !args.is_empty() =>
         {
             per_node_walk(head, tables, state, Flags { raised: false, ..flags }, diags);
             for arg in args {
@@ -702,7 +702,7 @@ fn per_node_walk<'a>(
 
 fn if_arity_at(expr: &Expr, diags: &mut Vec<Diagnostic>) {
     if let Expr::App { head, args, span, .. } = expr {
-        if matches!(head.as_ref(), Expr::Ident(name, _) if name == "if") && args.len() != 3 {
+        if matches!(head.as_ref(), Expr::Ident(name, _, _) if name == "if") && args.len() != 3 {
             diags.push(Diagnostic::new(
                 "arity",
                 format!(
@@ -726,7 +726,7 @@ fn boolean_equality_at(expr: &Expr, diags: &mut Vec<Diagnostic>) {
 }
 
 fn boolean_literal(expr: &Expr) -> Option<&'static str> {
-    let Expr::Ident(name, _) = expr else {
+    let Expr::Ident(name, _, _) = expr else {
         return None;
     };
     match name.as_str() {
@@ -787,7 +787,7 @@ fn collect_pattern_names<'a>(p: &'a Pattern, out: &mut crate::hash::Set<&'a str>
 
 /// `err` raises, so a bare mention of it is not a value.
 fn err_as_value_at(expr: &Expr, diags: &mut Vec<Diagnostic>) {
-    let (Expr::Ident(name, span) | Expr::Partial(name, span)) = expr else {
+    let (Expr::Ident(name, span, _) | Expr::Partial(name, span)) = expr else {
         return;
     };
     if name != "err" {
@@ -811,7 +811,7 @@ fn call_shaped_at(
 ) {
     if let Expr::List(items, _) = expr {
         for (at, item) in items.iter().enumerate() {
-            let Expr::Ident(name, span) = item else {
+            let Expr::Ident(name, span, _) = item else {
                 continue;
             };
             let following = items.len() - at - 1;
@@ -866,13 +866,13 @@ struct AfterInfer<'a, 'r> {
 fn effect_discarded_at(e: &Expr, tables: &AfterInfer, diags: &mut Vec<Diagnostic>) {
     use crate::infer::DESC;
     let Expr::App { head, args, piped: false, .. } = e else { return };
-    let Expr::Ident(name, _) = head.as_ref() else { return };
+    let Expr::Ident(name, _, _) = head.as_ref() else { return };
     if !tables.returns.contains_key(&(name.as_str(), args.len())) {
         return;
     }
     let describes = |e: &Expr| -> bool {
         let Expr::App { head, args, piped: false, .. } = e else { return false };
-        let Expr::Ident(name, _) = head.as_ref() else { return false };
+        let Expr::Ident(name, _, _) = head.as_ref() else { return false };
         tables.returns.get(&(name.as_str(), args.len())).is_some_and(|s| s & DESC != 0)
     };
     for (pos, arg) in args.iter().enumerate() {
@@ -920,8 +920,8 @@ fn raised_err_at(
     let raised = |e: &Expr| -> bool {
         match e {
             Expr::App { head, args, piped: false, .. } => match head.as_ref() {
-                Expr::Ident(name, _) if name == "err" => true,
-                Expr::Ident(name, _) => {
+                Expr::Ident(name, _, _) if name == "err" => true,
+                Expr::Ident(name, _, _) => {
                     raisers.get(&(name.as_str(), args.len())).is_some_and(|arms| {
                         arms.iter().any(|arm| crate::infer::arm_can_run(arm, args, consts))
                     })
@@ -971,7 +971,7 @@ fn raised_err_at(
             }
         }
         Expr::App { head, args, piped: false, .. } => {
-            let Expr::Ident(name, _) = head.as_ref() else { return };
+            let Expr::Ident(name, _, _) = head.as_ref() else { return };
             // A getter is synthesized from a field read, so nobody can give it
             // an arm, and the two routes check on opposite sides of the
             // rewrite that makes one: refusing here would refuse `xs[i].x`
@@ -1009,7 +1009,7 @@ fn raised_err_at(
 fn none_exhaustive_at(e: &Expr, tables: &AfterInfer, owner: &str, diags: &mut Vec<Diagnostic>) {
     use crate::infer::NONE;
     let Expr::App { head, args, piped: false, .. } = e else { return };
-    let Expr::Ident(name, _) = head.as_ref() else { return };
+    let Expr::Ident(name, _, _) = head.as_ref() else { return };
     // A getter is synthesized from a field read, so nobody can give it
     // an arm, and the play route checks before the read is rewritten
     // into one while the module route checks after: `xs[i].x` would be
@@ -1030,9 +1030,9 @@ fn none_exhaustive_at(e: &Expr, tables: &AfterInfer, owner: &str, diags: &mut Ve
     let yields_none = |e: &Expr| -> bool {
         match e {
             Expr::Index { strict: false, span, .. } => !tables.proven.contains(span),
-            Expr::Ident(name, _) => name == "none",
+            Expr::Ident(name, _, _) => name == "none",
             Expr::App { head, args, piped: false, .. } => match head.as_ref() {
-                Expr::Ident(name, _) => tables
+                Expr::Ident(name, _, _) => tables
                     .nones
                     .get(&(name.as_str(), args.len()))
                     .is_some_and(|&(s, _)| s & NONE != 0 && !unknown(s)),
@@ -1106,7 +1106,7 @@ fn never_describes(
         | Expr::MapLit(..)
         | Expr::Lambda { .. } => true,
         Expr::App { head, args, piped: false, .. } => match head.as_ref() {
-            Expr::Ident(name, _) => {
+            Expr::Ident(name, _, _) => {
                 returns.get(&(name.as_str(), args.len())).is_some_and(|set| set & (DESC | ERR) == 0)
             }
             _ => false,
@@ -1115,7 +1115,7 @@ fn never_describes(
         // and the fixpoint answers it at arity zero. `bound` is what makes
         // that safe: a name the declaration binds belongs to the local,
         // whatever the fixpoint says about a top-level constant sharing it.
-        Expr::Ident(name, _) => {
+        Expr::Ident(name, _, _) => {
             !bound.contains(name.as_str())
                 && returns.get(&(name.as_str(), 0)).is_some_and(|set| set & (DESC | ERR) == 0)
         }
@@ -1360,7 +1360,7 @@ fn check_after_infer<'p>(
             // holds, so it is asked before the short circuit below
             Expr::App { head, args, piped: false, .. }
                 if args.len() == 1
-                    && matches!(head.as_ref(), Expr::Ident(name, _) if name == "effect") =>
+                    && matches!(head.as_ref(), Expr::Ident(name, _, _) if name == "effect") =>
             {
                 !shadows("effect")
             }
@@ -1368,16 +1368,16 @@ fn check_after_infer<'p>(
             Expr::Index { strict: true, .. } => true,
             Expr::App { head, args, piped: false, .. } if any_boxed => match head.as_ref() {
                 // both branches of an `if` answering a box makes the `if` one
-                Expr::Ident(name, _) if name == "if" && args.len() == 3 => {
+                Expr::Ident(name, _, _) if name == "if" && args.len() == 3 => {
                     yields_box(&args[1], boxed_group, shadows, any_boxed)
                         && yields_box(&args[2], boxed_group, shadows, any_boxed)
                 }
-                Expr::Ident(name, _) => {
+                Expr::Ident(name, _, _) => {
                     boxed_group(name.as_str(), args.len()) && !shadows(name.as_str())
                 }
                 _ => false,
             },
-            Expr::Ident(name, _) if any_boxed => {
+            Expr::Ident(name, _, _) if any_boxed => {
                 boxed_group(name.as_str(), 0) && !shadows(name.as_str())
             }
             Expr::Seq(..) | Expr::Join { .. } => true,
@@ -1563,7 +1563,7 @@ fn check_after_infer<'p>(
                 }
             }
             Expr::App { head, args, piped: false, .. } => {
-                let Expr::Ident(name, _) = head.as_ref() else { return };
+                let Expr::Ident(name, _, _) = head.as_ref() else { return };
                 if name == "if" {
                     if let Some(cond) = args.first() {
                         if is_box(cond) {
@@ -1665,7 +1665,7 @@ fn check_after_infer<'p>(
 /// nothing and nothing else.
 fn none_in_collections_at(e: &Expr, diags: &mut Vec<Diagnostic>) {
     fn is_none_lit(e: &Expr) -> bool {
-        matches!(e, Expr::Ident(name, _) if name == "none")
+        matches!(e, Expr::Ident(name, _, _) if name == "none")
     }
     match e {
         Expr::List(items, _) => {
@@ -1706,7 +1706,7 @@ fn literal_type(e: &Expr) -> Option<&'static str> {
         },
         Expr::List(..) => Some("list"),
         Expr::MapLit(..) => Some("map"),
-        Expr::Ident(name, _) if name == "true" || name == "false" => Some("bool"),
+        Expr::Ident(name, _, _) if name == "true" || name == "false" => Some("bool"),
         _ => None,
     }
 }
@@ -1728,7 +1728,7 @@ fn field_supply(program: &Program) -> HashMap<(&str, &str), Vec<(&'static str, S
         }
         while let Some(cur) = stack.pop() {
             if let Expr::App { head, args, .. } = cur {
-                if let Expr::Ident(name, _) = head.as_ref() {
+                if let Expr::Ident(name, _, _) = head.as_ref() {
                     if let Some(ty) = program.types.iter().find(|t| t.name == *name) {
                         if ty.fields.len() == args.len() {
                             for ((field, _, _), arg) in ty.fields.iter().zip(args) {
@@ -1768,7 +1768,7 @@ fn check_field_conflicts(program: &Program, diags: &mut Vec<Diagnostic>) {
             if let Stmt::Bind { pattern: Pattern::Var(name, _), expr: Expr::App { head, .. } } =
                 stmt
             {
-                if let Expr::Ident(ty, _) = head.as_ref() {
+                if let Expr::Ident(ty, _, _) = head.as_ref() {
                     if program.types.iter().any(|t| t.name == *ty) {
                         built.insert(name.as_str(), ty.as_str());
                     }
@@ -1788,7 +1788,7 @@ fn check_field_conflicts(program: &Program, diags: &mut Vec<Diagnostic>) {
         }
         while let Some(cur) = stack.pop() {
             if let Expr::App { head, args, .. } = cur {
-                if let Expr::Ident(callee, _) = head.as_ref() {
+                if let Expr::Ident(callee, _, _) = head.as_ref() {
                     demand_conflicts(program, &supply, &built, callee, args, diags);
                 }
             }
@@ -1816,7 +1816,7 @@ fn demand_conflicts(
     for (param, arg) in target.params.iter().zip(args) {
         let Pattern::Annotated { ty: demanded, .. } = param else { continue };
         let Expr::Field { base, name: field, span } = arg else { continue };
-        let Expr::Ident(local, _) = base.as_ref() else { continue };
+        let Expr::Ident(local, _, _) = base.as_ref() else { continue };
         let Some(owner) = built.get(local.as_str()) else { continue };
         let Some(given) = supply.get(&(*owner, field.as_str())) else { continue };
         for (kind, where_) in given {
@@ -2080,7 +2080,7 @@ fn check_marker_calls(expr: &Expr, markers: &HashSet<String>, diags: &mut Vec<Di
             }
         }
         Expr::App { head, args, .. } => {
-            if let Expr::Ident(name, span) = &**head {
+            if let Expr::Ident(name, span, _) = &**head {
                 if markers.contains(name.as_str()) && !args.is_empty() {
                     diags.push(Diagnostic::new(
                         "signature",
@@ -2322,7 +2322,7 @@ fn type_in_hand<'a>(e: &'a Expr, plain: &HashMap<&'a str, HashSet<&'a str>>) -> 
         return plain.get_key_value(ty.as_str()).map(|(k, _)| *k);
     }
     let Expr::App { head, .. } = e else { return None };
-    let Expr::Ident(name, _) = head.as_ref() else { return None };
+    let Expr::Ident(name, _, _) = head.as_ref() else { return None };
     plain.get_key_value(name.as_str()).map(|(k, _)| *k)
 }
 
@@ -2480,7 +2480,7 @@ fn field_read_at<'a>(
         }
     }
     if certain {
-        if let Expr::Ident(b, _) = base.as_ref() {
+        if let Expr::Ident(b, _, _) = base.as_ref() {
             note_read(open, b.as_str(), name.as_str(), *span);
         }
     }
@@ -2494,7 +2494,7 @@ fn base_type<'a>(
     local: &HashMap<&'a str, &'a str>,
 ) -> Option<&'a str> {
     match base {
-        Expr::Ident(n, _) => local.get(n.as_str()).copied(),
+        Expr::Ident(n, _, _) => local.get(n.as_str()).copied(),
         other => type_in_hand(other, plain),
     }
 }
@@ -2684,7 +2684,7 @@ fn check_binding_patterns(program: &Program, diags: &mut Vec<Diagnostic>) {
 /// stays at run time is the same test on the interpreter's construction path.
 fn typeset_at(e: &Expr, annotating: &HashSet<&str>, diags: &mut Vec<Diagnostic>) {
     let named = match e {
-        Expr::Ident(name, span) | Expr::Partial(name, span) => Some((name.as_str(), span)),
+        Expr::Ident(name, span, _) | Expr::Partial(name, span) => Some((name.as_str(), span)),
         // A widening names its target after the colon, and a typeset is
         // not something a value can become: `(circle 1):shape` for a
         // typeset holding `circle` refused at RUN time, on both engines,
@@ -2801,7 +2801,7 @@ fn named_at<'a>(
     shadowable: &mut Vec<(usize, usize, &'a str)>,
 ) {
     if let Expr::App { head, args, .. } = e {
-        if let Expr::Ident(name, span) = &**head {
+        if let Expr::Ident(name, span, _) = &**head {
             let from = diags.len();
             arity_at(name, *span, args.len(), named, diags);
             if diags.len() > from {
@@ -3135,7 +3135,7 @@ fn literal_argument_at(
     diags: &mut Vec<Diagnostic>,
 ) {
     let Expr::App { head, args, .. } = e else { return };
-    let Expr::Ident(name, _) = &**head else { return };
+    let Expr::Ident(name, _, _) = &**head else { return };
     // THE CHEAP TEST COMES FIRST, and the shadowing lookup is not one.
     // Every arm below is guarded by `literal_kind(arg)`, so a call
     // with no literal argument can say nothing at all — and asking
@@ -3570,9 +3570,9 @@ impl<'a> BuildScan<'a> {
     /// The cohort entry an expression's value is proved to be, if any.
     fn born_of(&mut self, expr: &'a Expr, types: &HashMap<&'a str, &'a TypeDecl>) -> Option<Born> {
         match expr {
-            Expr::Ident(name, _) => self.born.as_ref()?.get(name.as_str()).copied(),
+            Expr::Ident(name, _, _) => self.born.as_ref()?.get(name.as_str()).copied(),
             Expr::App { head, args, .. } => match head.as_ref() {
-                Expr::Ident(name, _) if name == "if" && args.len() == 3 => {
+                Expr::Ident(name, _, _) if name == "if" && args.len() == 3 => {
                     let left = self.born_of(&args[1], types);
                     let right = self.born_of(&args[2], types);
                     Some(self.cohort.either(left?, right?))
@@ -3580,7 +3580,9 @@ impl<'a> BuildScan<'a> {
                 // The module route rewrites `x.name` to its getter before
                 // this walk runs, and the play route after it, so a field
                 // read arrives in both spellings.
-                Expr::Ident(name, _) if args.len() == 1 && getter_of(name.as_str()).is_some() => {
+                Expr::Ident(name, _, _)
+                    if args.len() == 1 && getter_of(name.as_str()).is_some() =>
+                {
                     let field = getter_of(name.as_str())?;
                     let base = self.born_of(&args[0], types)?;
                     self.cohort.field(base, field)
@@ -3588,7 +3590,7 @@ impl<'a> BuildScan<'a> {
                 // A call that merely returns a record may hand back something
                 // older; a constructor makes the record here, and its fields
                 // hold what its arguments were.
-                Expr::Ident(name, _) => {
+                Expr::Ident(name, _, _) => {
                     let decl = *types.get(name.as_str())?;
                     let mut fields = Vec::new();
                     for ((field, _, _), arg) in decl.fields.iter().zip(args) {
@@ -3760,7 +3762,7 @@ fn demanded_refs<'a>(
     types: &HashSet<&str>,
     out: &mut Vec<&'a str>,
 ) {
-    if let Expr::Ident(name, _) | Expr::Partial(name, _) = expr {
+    if let Expr::Ident(name, _, _) | Expr::Partial(name, _) = expr {
         if known.contains(name.as_str()) {
             out.push(name);
         }
@@ -3778,7 +3780,7 @@ fn demanded_refs<'a>(
         return;
     }
     if let Expr::App { head, args, .. } = expr {
-        if let Expr::Ident(name, _) = head.as_ref() {
+        if let Expr::Ident(name, _, _) = head.as_ref() {
             if types.contains(name.as_str()) {
                 // a constructor's arguments are stored, so only the head is a
                 // demand, and the head is a type rather than a constant
@@ -4165,7 +4167,7 @@ fn check_bare_ambiguity(program: &Program, diags: &mut Vec<Diagnostic>) {
     }
     fn walk(e: &Expr, torn: &HashMap<(&str, usize), Vec<String>>, diags: &mut Vec<Diagnostic>) {
         if let Expr::App { head, args, .. } = e {
-            if let Expr::Ident(name, span) = head.as_ref() {
+            if let Expr::Ident(name, span, _) = head.as_ref() {
                 if let Some(origins) = torn.get(&(name.as_str(), args.len())) {
                     let spellings = origins.join("` and `");
                     diags.push(Diagnostic::new(
@@ -4552,7 +4554,7 @@ impl<'a> Resolver<'a> {
                     }
                 }
             }
-            Expr::Ident(name, span) => self.resolve_name(name, *span),
+            Expr::Ident(name, span, _) => self.resolve_name(name, *span),
             Expr::List(items, _) => {
                 for item in items {
                     self.resolve_expr(item);
@@ -4563,7 +4565,7 @@ impl<'a> Resolver<'a> {
                 for arg in args {
                     self.resolve_expr(arg);
                 }
-                if let Expr::Ident(name, span) = &**head {
+                if let Expr::Ident(name, span, _) = &**head {
                     let local = self.locals.iter().any(|l| l.name == name.as_str());
                     if !local {
                         if let Some(fields) = self.declared.type_arity.get(name.as_str()) {
@@ -4759,7 +4761,7 @@ fn check_discarded_value(
 
     let refused = |e: &Expr| -> bool {
         let Expr::App { head, args, piped: false, .. } = e else { return false };
-        let Expr::Ident(name, _) = head.as_ref() else { return false };
+        let Expr::Ident(name, _, _) = head.as_ref() else { return false };
         // An err propagates through the group, so a line that only fails is
         // still doing something — a call is refused when it can be neither.
         match returns.get(&(name.as_str(), args.len())) {
@@ -4831,7 +4833,7 @@ fn decidable_failure_at(e: &Expr, diags: &mut Vec<Diagnostic>) {
         }
     }
     if let Expr::App { head, args, .. } = e {
-        if let Expr::Ident(name, _) = head.as_ref() {
+        if let Expr::Ident(name, _, _) = head.as_ref() {
             unparseable_conversion(name, args, diags);
         }
     }

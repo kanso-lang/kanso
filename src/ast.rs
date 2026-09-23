@@ -2,13 +2,52 @@ use crate::diag::Span;
 use crate::name::Name;
 use num_bigint::BigInt;
 
+/// Whether a name, at one place in the text, finds a local when it runs:
+/// 0 not yet known, 1 local, 2 global. The interpreter learns it on the node's
+/// first execution and keeps it, which is sound because the environment a
+/// node sees is fixed by where the node sits -- kanso#1575 found no node
+/// among 1,214 that both found a local and missed. A clone of a node copies
+/// what it knows, since the clone sits in the same place. Atomic because an
+/// `Expr` may be read from the interpreter's own stack thread; every access
+/// is `Relaxed`, and on this target that is an ordinary load or store.
+#[derive(Default)]
+pub struct Resolution(std::sync::atomic::AtomicU8);
+
+impl Resolution {
+    pub const UNKNOWN: u8 = 0;
+    pub const LOCAL: u8 = 1;
+    pub const GLOBAL: u8 = 2;
+    #[inline]
+    pub fn get(&self) -> u8 {
+        self.0.load(std::sync::atomic::Ordering::Relaxed)
+    }
+    #[inline]
+    pub fn set(&self, v: u8) {
+        self.0.store(v, std::sync::atomic::Ordering::Relaxed)
+    }
+}
+
+impl Clone for Resolution {
+    fn clone(&self) -> Self {
+        Resolution(std::sync::atomic::AtomicU8::new(self.get()))
+    }
+}
+
+/// Printed as nothing, so that a node's debug form reads the same before and
+/// after it has run.
+impl std::fmt::Debug for Resolution {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("_")
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum Expr {
     Int(BigInt, Span),
     Float(f64, Span),
     MapLit(Vec<(Expr, Expr)>, Span),
     Str(Vec<TemplatePart>, Span),
-    Ident(Name, Span),
+    Ident(Name, Span, Resolution),
     /// `&name` — the head of a partial application. Bare, it is superfluous
     /// (a name already denotes the function); applied to fewer arguments than
     /// any arm takes, it is the only spelling for a partial.
@@ -89,7 +128,7 @@ impl Expr {
             | Expr::Float(_, s)
             | Expr::MapLit(_, s)
             | Expr::Str(_, s)
-            | Expr::Ident(_, s)
+            | Expr::Ident(_, s, _)
             | Expr::Partial(_, s)
             | Expr::List(_, s)
             | Expr::App { span: s, .. }
@@ -371,7 +410,7 @@ impl FnDecl {
     /// carries its field's span, so checks that read declaration order have
     /// to leave it out — it was never placed by an author.
     pub fn is_getter(&self) -> bool {
-        matches!(self.body.as_slice(), [Stmt::Expr(Expr::Ident(name, _))] if name == GETTER_BINDER)
+        matches!(self.body.as_slice(), [Stmt::Expr(Expr::Ident(name, _, _))] if name == GETTER_BINDER)
     }
 }
 

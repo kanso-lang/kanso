@@ -1416,7 +1416,7 @@ fn reject_never_effect(e: &Expr, is_final: bool) -> Result<(), Diagnostic> {
 /// are spelling, the deferred if family is the semantics.
 fn logical_if(cond: Expr, then_e: Expr, else_e: Expr, span: Span) -> Expr {
     Expr::App {
-        head: Box::new(Expr::Ident(Name::new("if"), span)),
+        head: Box::new(Expr::Ident(Name::new("if"), span, crate::ast::Resolution::default())),
         args: vec![cond, then_e, else_e],
         span,
         piped: false,
@@ -1434,7 +1434,7 @@ fn expr_span(e: &Expr) -> Span {
         | Expr::Float(_, s)
         | Expr::MapLit(_, s)
         | Expr::Str(_, s)
-        | Expr::Ident(_, s)
+        | Expr::Ident(_, s, _)
         | Expr::List(_, s)
         | Expr::Seq(_, _, s)
         | Expr::Join { span: s, .. }
@@ -2012,7 +2012,7 @@ impl<'a> P<'a> {
                         Expr::App { head, .. } => head.as_ref(),
                         atom => atom,
                     };
-                    if let Expr::Ident(name, _) = head {
+                    if let Expr::Ident(name, _, _) = head {
                         if let Some(sigil) = crate::lexer::fused_sigil(name.as_str()) {
                             return Err(Diagnostic::new(
                                 "syntax",
@@ -2066,7 +2066,11 @@ impl<'a> P<'a> {
                             piped: true,
                         },
                         _ => {
-                            let head = Box::new(Expr::Ident(Name::new(word), span));
+                            let head = Box::new(Expr::Ident(
+                                Name::new(word),
+                                span,
+                                crate::ast::Resolution::default(),
+                            ));
                             Expr::App { head, args: vec![expr, callee], span, piped: false }
                         }
                     };
@@ -2094,7 +2098,12 @@ impl<'a> P<'a> {
             self.pos += 1;
             self.consumed(OR);
             let rhs = self.parse_and()?;
-            lhs = logical_if(lhs, Expr::Ident(Name::new("true"), span), rhs, span);
+            lhs = logical_if(
+                lhs,
+                Expr::Ident(Name::new("true"), span, crate::ast::Resolution::default()),
+                rhs,
+                span,
+            );
         }
         Ok(lhs)
     }
@@ -2106,7 +2115,12 @@ impl<'a> P<'a> {
             self.pos += 1;
             self.consumed(AND);
             let rhs = self.parse_not()?;
-            lhs = logical_if(lhs, rhs, Expr::Ident(Name::new("false"), span), span);
+            lhs = logical_if(
+                lhs,
+                rhs,
+                Expr::Ident(Name::new("false"), span, crate::ast::Resolution::default()),
+                span,
+            );
         }
         Ok(lhs)
     }
@@ -2123,8 +2137,8 @@ impl<'a> P<'a> {
         self.pos += 1;
         self.consumed(NOT);
         let inner = self.parse_not()?;
-        let yes = Expr::Ident(Name::new("false"), span);
-        let no = Expr::Ident(Name::new("true"), span);
+        let yes = Expr::Ident(Name::new("false"), span, crate::ast::Resolution::default());
+        let no = Expr::Ident(Name::new("true"), span, crate::ast::Resolution::default());
         Ok(logical_if(inner, yes, no, span))
     }
 
@@ -2286,7 +2300,11 @@ impl<'a> P<'a> {
         {
             if let Some((Tok::Ident(field), _, _)) = self.toks.get(self.pos + 2).cloned() {
                 self.pos += 3;
-                return Ok(Expr::Ident(Name::new(&crate::ast::getter_name(&field)), span));
+                return Ok(Expr::Ident(
+                    Name::new(&crate::ast::getter_name(&field)),
+                    span,
+                    crate::ast::Resolution::default(),
+                ));
             }
         }
         // `self.toks` is a `&'a [_]`, so the token this reads out borrows the
@@ -2312,7 +2330,7 @@ impl<'a> P<'a> {
             }
             Some(Tok::Ident(name)) => {
                 self.pos += 1;
-                Ok(Expr::Ident(name.clone(), span))
+                Ok(Expr::Ident(name.clone(), span, crate::ast::Resolution::default()))
             }
             Some(Tok::Op("&")) => {
                 self.pos += 1;
@@ -2464,7 +2482,7 @@ impl<'a> P<'a> {
             // meant a block, because every C-shaped language spells one with
             // braces. Naming one reading tells the other reader the wrong
             // thing, so name both.
-            Expr::Ident(name, span) => Err(Diagnostic::new(
+            Expr::Ident(name, span, _) => Err(Diagnostic::new(
                 "syntax",
                 format!(
                     "`{name}` is not a literal: a map's keys are literals, and a \

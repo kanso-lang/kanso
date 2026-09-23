@@ -68,7 +68,7 @@ fn classify<'a>(decl: &'a FnDecl, name: &str, arity: usize) -> Option<Arm<'a>> {
 /// A direct call to the group's own name at its own arity.
 fn is_self_call(expr: &Expr, name: &str, arity: usize) -> bool {
     let Expr::App { head, args, .. } = expr else { return false };
-    let Expr::Ident(callee, _) = head.as_ref() else { return false };
+    let Expr::Ident(callee, _, _) = head.as_ref() else { return false };
     callee == name && args.len() == arity
 }
 
@@ -77,7 +77,7 @@ fn is_self_call(expr: &Expr, name: &str, arity: usize) -> bool {
 fn int_arithmetic(expr: &Expr, ints: &[String]) -> bool {
     match expr {
         Expr::Int(..) => true,
-        Expr::Ident(n, _) => ints.iter().any(|known| known == n),
+        Expr::Ident(n, _, _) => ints.iter().any(|known| known == n),
         Expr::BinOp { op, lhs, rhs, .. } => {
             matches!(*op, "+" | "-" | "*") && int_arithmetic(lhs, ints) && int_arithmetic(rhs, ints)
         }
@@ -105,7 +105,7 @@ fn counter_names(decl: &FnDecl, counter: &[bool]) -> Vec<String> {
 fn mentions(expr: &Expr, name: &str) -> bool {
     let mut found = false;
     walk(expr, &mut |e| {
-        if let Expr::Ident(id, _) | Expr::Partial(id, _) = e {
+        if let Expr::Ident(id, _, _) | Expr::Partial(id, _) = e {
             if id == name {
                 found = true;
             }
@@ -251,7 +251,11 @@ pub fn rewrite(program: &mut Program) {
             let body = match arm {
                 Arm::Base(k) => vec![Stmt::Expr(Expr::BinOp {
                     op,
-                    lhs: Box::new(Expr::Ident(Name::new(&acc.clone()), span)),
+                    lhs: Box::new(Expr::Ident(
+                        Name::new(&acc.clone()),
+                        span,
+                        crate::ast::Resolution::default(),
+                    )),
                     rhs: Box::new(Expr::Int(k.clone(), span)),
                     span,
                 })],
@@ -259,12 +263,20 @@ pub fn rewrite(program: &mut Program) {
                     let mut args: Vec<Expr> = self_args.to_vec();
                     args.push(Expr::BinOp {
                         op,
-                        lhs: Box::new(Expr::Ident(Name::new(&acc.clone()), span)),
+                        lhs: Box::new(Expr::Ident(
+                            Name::new(&acc.clone()),
+                            span,
+                            crate::ast::Resolution::default(),
+                        )),
                         rhs: Box::new((*operand).clone()),
                         span,
                     });
                     vec![Stmt::Expr(Expr::App {
-                        head: Box::new(Expr::Ident(Name::new(&helper.clone()), span)),
+                        head: Box::new(Expr::Ident(
+                            Name::new(&helper.clone()),
+                            span,
+                            crate::ast::Resolution::default(),
+                        )),
                         args,
                         span,
                         piped: false,
@@ -296,8 +308,15 @@ pub fn rewrite(program: &mut Program) {
                 false => Pattern::Var(Name::new(&format!("trmcp{i}")), span),
             })
             .collect();
-        let mut wrapper_args: Vec<Expr> =
-            (0..*arity).map(|i| Expr::Ident(Name::new(&format!("trmcp{i}")), span)).collect();
+        let mut wrapper_args: Vec<Expr> = (0..*arity)
+            .map(|i| {
+                Expr::Ident(
+                    Name::new(&format!("trmcp{i}")),
+                    span,
+                    crate::ast::Resolution::default(),
+                )
+            })
+            .collect();
         wrapper_args.push(Expr::Int(identity, span));
         new_fns.push(FnDecl {
             name: name.to_string(),
@@ -305,7 +324,11 @@ pub fn rewrite(program: &mut Program) {
             span,
             params: wrapper_params,
             body: vec![Stmt::Expr(Expr::App {
-                head: Box::new(Expr::Ident(Name::new(&helper), span)),
+                head: Box::new(Expr::Ident(
+                    Name::new(&helper),
+                    span,
+                    crate::ast::Resolution::default(),
+                )),
                 args: wrapper_args,
                 span,
                 piped: false,
