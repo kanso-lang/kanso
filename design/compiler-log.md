@@ -10090,3 +10090,26 @@ The run program reads 1,820,479,435 against 1,820,479,421 and its `.text` is
 the same size: LTO was already dropping these at link time, so the release
 binary does not change, and the release codegen row should move only by what
 `clang -cc1` saves parsing them. CI's rows go into the goldens.
+
+**CI's rows**, taken into the goldens:
+
+    codegen_instructions_dev       596,192,991 ->   506,101,048   -15.11%
+    codegen_instructions_release 6,837,938,796 -> 6,617,211,630    -3.23%
+    emit_instructions               45,953,348 ->    44,610,460    -2.92%
+    startup_instructions               968,441 ->       973,054    +4,613
+
+The release row fell further than parsing alone would suggest: 220,727,166
+instructions, where the dev row's `clang -cc1` saving on this container was
+88,837,602. Which half of the release tree took it, the compile or the LTO link,
+was not measured.
+
+`startup_instructions` is the one row that rose. It reads 973,054, up 0.48%. It
+counts kanso's own start, not anything the compiler emits, so it arrived with
+the new code in the compiler binary. What in that code costs 4,613 instructions
+before `main` does any work was not isolated. The run program's instruction and
+`.text` rows read what main has.
+
+The emitted vein falls on twelve of its fourteen programs; escapebench and
+indexbench read what main has. runbench reads 528 defines
+against 599, and deepbench 86 against 115. Welfare rises 0.16, and the rise is
+banked.
