@@ -3279,6 +3279,21 @@ interp            +361  =    -2,235    +2,626       -34      +4</code></pre>
 
 <p>the runtime benchmarks were checked for the same exposure and do not have it. <code>runbench</code> built with its data section grown by one, three and four kilobytes counts 1,820,479,435 instructions each time. the runtime compares values in its own arena, and those addresses do not follow the binary&#39;s layout.</p>
 
+<h2 id="scanrewinds"><span class="sec-num">125</span>the scan gives its memory back</h2>
+
+<p>sections 112 to 115 put three quarters of the run program&#8217;s arena peak in one phase, the split phase, and priced reclaiming it at +4.75 welfare. they went after it through the carry tier, the machinery that copies a loop&#8217;s live values out before each rewind, and found that tier closed to library loops by a path prefix. none of that turned out to be needed. the loop that holds the memory needs to carry nothing.</p>
+
+<p><code>find_all</code> tries a match at every start position of its subject. the loop that does it is three functions calling one another in tail position, and the cluster analysis refused it a rewind for two reasons, both in the library&#8217;s spelling. the walk&#8217;s answer, a match or <code>none</code>, went to the next function as an argument, so a record crossed from one position to the next. and the position itself came out of a hit&#8217;s field at every entry. a field read is not typed, so the position&#8217;s set was everything, byte builders included, and the analysis will not let a slot that might hold a byte builder cross a rewind. the walk&#8217;s answer is a local now, and the loop is entered once with <code>at | 0</code>, which is typed as a whole number. what crosses a position is the compiled pattern, the subject and an integer, and the cluster rewinds at each one.</p>
+
+<pre><code>                       before          after
+scan benchmark peak    161,480,704     1,048,576   154 blocks to 1
+run program arena       38,604,496     9,244,368    36 blocks to 8
+welfare                      77.36         82.10   on this container</code></pre>
+
+<p>the welfare figure is scored with the instruction rows as they stand. the change moves those rows by little, and ci&#8217;s readings replace them before the gain is banked.</p>
+
+<p>the first build of it made <code>prose_check</code> run past five minutes where it had taken twenty-eight seconds. reading a character by position in text that is not all ascii resumes a walk from one remembered place, and the runtime forgot that place on every rewind, because the arena hands back the addresses above the mark and the next string there is a different one. the subject a scan walks arrived from outside the loop and sits below the mark, where nothing is handed back, so forgetting it was never needed. with a rewind at every position it was ruinous: every position walked the page from the front. the rewind now forgets the place only when the string lies in the range it hands back, and <code>prose_check</code> takes fifteen seconds. a new counter, <code>seek_resumes</code>, counts the walks that resumed, since forgetting the place moves no output and no allocation and nothing else could show it.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>

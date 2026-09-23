@@ -9931,3 +9931,90 @@ same skipped walk, and some may be the layout of a compiler that changed at
 278 places. Emit runs the code generator, which never evaluates, so its rise
 is the second kind until something shows otherwise. The allocation, memory
 and codegen rows did not move.
+
+---
+
+## 2026-09-23 — the regexp scan rewinds at every start position, and a rewind keeps the seek cursor below the mark
+
+`docs/compiler.html` §112–115 put 29,360,128 of the run program's 38,604,496
+arena bytes in the split phase and priced reclaiming them at +4.75 welfare,
+then went after it through the carry tier and found that tier closed to library
+loops by a path prefix. The loop holding the memory needs no carry at all.
+
+**Where the memory was.** Each phase count taken to its floor on its own, peak
+arena bytes of the counting run program:
+
+    baseline       38,604,496   36 blocks
+    encode = 1     38,604,496   decode = 1 the same
+    index = 1      35,651,584
+    digest = 1     35,458,768
+    split = 1       9,244,368    8 blocks
+
+The split phase is `regexp/find_all` over a subject no match can be found in.
+Its per-position loop is `scanned` -> `scanning` -> `skipping` -> `landed` ->
+`scanned`, a tail cycle. Instrumenting `eligible_clusters` showed the cycle
+passing the entry, value-use and allocation tests and then refused inside
+`cluster_edges_ok`:
+
+    refuse regexp/scanning/4 slot 2 set 0x7fdf
+
+Slot 2 is the position. Its set is everything but `DONE`, because the callers
+that resume a scan read their position out of a hit's field, `m.to` or
+`m.from + 1`, and `Expr::Field` infers as TOP. TOP includes `BYTES`, and the analysis refuses
+a slot that might be a byte builder, since evacuating one copies its buffer at
+every rewind. With the position fixed, the walk's answer was the next refusal:
+`landed` took it as its fourth argument, so a record crossed each position.
+
+**The change is in `lib/regexp` only.** The walk's answer is a local in
+`skipping`, which returns the hit or tail-calls onward, and `landed` is gone.
+`scanned` enters a new loop head, `probing`, once with `at | 0`; `|` infers
+as INT, and every edge inside the cycle passes `at + 1`, which infers as INT or
+FLOAT. The cluster is now `probing`/`scanning`/`skipping`, it carries nothing,
+and it brackets:
+
+    scanbench peak     161,480,704 -> 1,048,576    154 blocks -> 1
+    run arena peak      38,604,496 -> 9,244,368     36 blocks -> 8
+    run output         runbench 46013475 both ways
+
+`tests/golden/mem/a_scan_that_finds_nothing_keeps_nothing.kso` pins the shape
+at 156 characters: one block and 157 rewinds here, four blocks and none on
+main. `a_class_asks_by_the_byte`, whose pattern does match, moves one
+allocation and 80 bytes and rewinds 1,601 times; its output is unchanged.
+
+A second route was tried first and is not in the tree: typing a dot read as
+the union of that field's construction sets. It narrows nothing here, because
+the positions reach the records through the matcher's continuation lambdas,
+whose parameters infer as TOP. It also turned up that a type with fields used
+as a function value widens none of its field sets, which constructor patterns
+already rely on. That is unexamined and recorded as open.
+
+**The regression the first build carried.** `prose_check` ran past five
+minutes where main takes 28 seconds. Sampling the process put it in
+`k_b_slice_walk` under `worth_trying?`: a character read by position in text
+that is not all ascii resumes from one remembered place, `k_seek_str`, and
+`k_beat_rewind` forgot it on every rewind. With a rewind at every position,
+every position walked the page from the front.
+
+Forgetting it is only needed when the arena can hand the string's address back,
+and in the fast path that is exactly `[m->ptr, k_arena)`: no block has been
+taken since the mark. The first cut tested the lower end alone, which is sound
+and was still slow, because a page can sit in an older block at a higher
+address than the mark. The two-ended test, in `uintptr_t` so no unrelated
+pointers are subtracted, takes `prose_check` to 15.1 seconds, and its system
+time from 14.4 seconds to 0.5, since its memory no longer grows.
+
+`seek_resumes` is the presence counter for the cursor. The mutation
+`a_rewind_that_forgets_every_seek_cursor`, the old unconditional forget, takes
+`tests/golden/mem/a_scan_keeps_its_place_in_the_text.kso` from 408 to 276, and
+the ratchet carries it. The trend gate reads it as higher-is-better. All twelve
+cost goldens, the mem vein and the two book counter panels carry the line.
+
+**What moves.** The run program's peak is a deterministic counter and scores
+here: welfare 77.36 -> 82.10, production 57.23 -> 66.07, with the instruction
+rows as main has them. The fast rewind now compares before it stores, and the
+run program takes 2,693,195 beat iterations. The run row, the compile rows and the codegen rows come from CI,
+and the rise is banked after they land.
+
+Open: whether a type with fields used as a value should widen its field sets
+in `infer.rs`; and the carry tier's path prefix, which this change routed
+around rather than replaced.
