@@ -10041,3 +10041,10 @@ and the codegen rows count clang, which is handed the same bytes.
 The whole process is now 1,603,771 instructions, of which the row's
 `kanso::main` is 979,543 and the dynamic loader 396,850. Inside the row,
 `emit_ir` is 645,986, so emitting is still two thirds of what the row counts.
+
+**CI's rows**, taken into the goldens; every other row read what main has:
+
+    startup_instructions    3,372,380 ->    968,455   -2,403,925   -71.28%
+    emit_instructions      51,381,691 -> 45,953,348   -5,428,343   -10.56%
+
+Welfare scores 78.15 against a floor of 77.37, and the rise is banked.
