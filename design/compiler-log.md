@@ -7779,3 +7779,31 @@ property of that pair, not a constant of the project, and nothing here shows
 CI's three comes from this term. The next reading that would bear on it is the
 same decomposition across two jobs whose binaries are identical, which is now
 one command per job rather than unavailable.
+
+## 2026-09-23 — the compile row leaves the walk out, and the two faces were 487 and 490
+
+`compile_instructions` is measured with `<std::fs::ReadDir as Iterator>::next`
+inclusive subtracted, the way it already subtracts `std::io::stdio::_print` and
+for the same reason. CI's first sitting with the exclusion in:
+
+    compile_instructions   35,541,148 ->  35,540,661     -487   -0.0014%
+
+`compile_again` reads 35,540,661 too, so the gate's two readings agree on the
+excluded row as they did on the unexcluded one.
+
+THE ARITHMETIC CLOSES THE STORY. This row drew two faces, 35,541,148 and
+35,541,151. The excluded reading is 487 below the first. So the walk cost 487 on
+the runner that read the low face and 490 on the one that read the high face,
+and 490 is exactly what the walk measures on the container this session runs in.
+The two faces were never two compilers; they were one compiler and a directory
+walk that costs three more on some filesystems than others.
+
+WHAT IT COST AND WHAT IT BOUGHT. 487 instructions of 35.5 million, 0.0014%,
+which is the size of the term being excluded rather than a change in the
+compiler. What it buys is a row that can be pinned exactly again, which is what
+kanso#1504, kanso#1565 and kanso#1568 have each been unable to do.
+
+THE FALSIFIER IS IN THE GOLDEN'S HEADER, and it is the next thing to check: the
+row should now read ONE value where it drew two, because the faces differed only
+inside the excluded subtree. A second sitting that alternates means the
+exclusion is aimed at the wrong frame.
