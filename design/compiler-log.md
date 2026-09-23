@@ -9830,3 +9830,38 @@ The checker lets a local shadow a bare-enrolled import, so a name's being a
 global somewhere does not make every use of it global; the pass has to follow
 every binding form the evaluator has, lexically, and the interpreter is the
 oracle every other engine is held to.
+
+## 2026-09-23 — every identifier resolved the same way each time it ran, in two corpora
+
+The scope pass in the entry above needs one property to be true before it can
+be as cheap as it wants to be: that whether an identifier finds a local does not
+depend on which execution of it is running. If that holds, the answer can be
+learned on a node's first execution and kept in the node, with no pass over
+every binding form and no address-keyed table. The checker cannot simply be
+asked instead: it resolves the program it checks, and the evaluator also runs
+expressions it cloned, into a lazy bind's thunk among other places (`eval.rs`
+at the lazy bind site takes `expr.clone()`), which is where kanso#1573's ten
+lifetime errors came from. A verdict stored in the node travels with the clone.
+
+Tested, not argued. `eval_ident` was made to record, per node keyed by span and
+name, how many executions found a local and how many missed, in a scratch tree
+that was not kept:
+
+    interpreted corpus         388 nodes   253 always local   135 always global   0 both
+    400 golden programs        826 nodes                                          0 both
+
+No node did both. Keying by span can only merge nodes, never split one, so a
+collision would have shown as "both" rather than hidden one. The reading is
+consistent with the code read so far: the lazy bind captures its environment
+before it binds the name, which is the order the checker resolves in. The
+evaluator extends an environment at about ten places (`bind` and `bind_all`
+callers, `match_one`'s pattern binds, a closure's parameter, a synthesized
+`entry.bind_name`), and not all of them have been read against this property;
+two corpora are evidence, not a proof.
+
+What building it costs, so the next session prices it before starting.
+`Expr::Ident` appears 278 times across 16 files. A third field changes the size
+of `Expr`, which moves every compile-side row, and the flag must be an
+`AtomicU8` or similar if the AST is shared across the interpreter's stack
+thread. The ceiling it buys is the entry above's, about 8% of the interpreted
+row.
