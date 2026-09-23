@@ -742,6 +742,27 @@ jobs:
       # it is asked for. Before this step the job ran 20,020 lines and the
       # tail held two tables of the twenty. `if: always()` because the run
       # that most wants the tables is the one where a row went red.
+      # WHAT THE COMPILE ROW'S WALK SEES. `compile_instructions` drifts by three
+      # between hosts and the frame that carries it is
+      # `<std::sys::fs::unix::ReadDir as Iterator>::next` — the compile route
+      # checks a DIRECTORY, so it opens one and walks it, and two pairs of jobs
+      # isolated the whole delta to that one frame with every other table
+      # byte-identical. What a walk costs is the filesystem's answer, and the
+      # 2026-09-15 ruling says normalize external state or exclude it. Deciding
+      # which needs to know whether the ENTRY SET differs between hosts or only
+      # its layout, and nothing recorded that. `ls -f` prints readdir order
+      # rather than sorted order, which is the thing that would differ.
+      - name: what the compile row's directory walk sees
+        if: always()
+        run: |
+          for d in /tmp/kanso-compile-ir/compile_corpus \
+                   /tmp/kanso-compile-ir/entry_corpus \
+                   /tmp/kanso-compile-ir/interp_corpus; do
+            [ -d "$d" ] || continue
+            echo "#walk $d entries=$(ls -f -A "$d" | wc -l | tr -d ' ')"
+            ls -f "$d" | sed 's/^/#walk-entry /'
+          done
+          echo "#walk-fs $(stat -f -c '%T blocks=%b bsize=%s' /tmp 2>/dev/null || echo unknown)"
       - name: the function tables, packed to survive a log tail
         if: always()
         run: sh scripts/gates/function_tables_tail.sh

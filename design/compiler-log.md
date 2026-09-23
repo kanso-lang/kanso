@@ -8668,7 +8668,7 @@ which is this branch's `.text` growth arriving on top of kanso#1563's falls:
 
     library_instructions    127,149,930 -> 127,158,876    +8,946   +0.0070%
     entry_instructions      126,696,892 -> 126,702,408    +5,516   +0.0044%
-    compile_instructions     35,541,148 ->  35,544,159    +3,011   +0.0085%
+    compile_instructions     35,540,661 ->  35,543,672    +3,011   +0.0085%
     emit_instructions        51,481,382 ->  51,484,057    +2,675   +0.0052%
     startup_instructions      3,362,329 ->   3,363,729    +1,400   +0.0416%
 
@@ -8813,6 +8813,33 @@ whichever size happens to fold evenly.
 That is the same rule this log keeps paying for: never take a verdict from the
 last stage of a pipe, and break what a new check watches before trusting it.
 
+## 2026-09-23 — the compile row leaves the walk out, and the two faces were 487 and 490
+
+`compile_instructions` is measured with `<std::fs::ReadDir as Iterator>::next`
+inclusive subtracted, the way it already subtracts `std::io::stdio::_print` and
+for the same reason. CI's first sitting with the exclusion in:
+
+    compile_instructions   35,541,148 ->  35,540,661     -487   -0.0014%
+
+`compile_again` reads 35,540,661 too, so the gate's two readings agree on the
+excluded row as they did on the unexcluded one.
+
+THE ARITHMETIC CLOSES THE STORY. This row drew two faces, 35,541,148 and
+35,541,151. The excluded reading is 487 below the first. So the walk cost 487 on
+the runner that read the low face and 490 on the one that read the high face,
+and 490 is exactly what the walk measures on the container this session runs in.
+The two faces were never two compilers; they were one compiler and a directory
+walk that costs three more on some filesystems than others.
+
+WHAT IT COST AND WHAT IT BOUGHT. 487 instructions of 35.5 million, 0.0014%,
+which is the size of the term being excluded rather than a change in the
+compiler. What it buys is a row that can be pinned exactly again, which is what
+kanso#1504, kanso#1565 and kanso#1568 have each been unable to do.
+
+THE FALSIFIER IS IN THE GOLDEN'S HEADER, and it is the next thing to check: the
+row should now read ONE value where it drew two, because the faces differed only
+inside the excluded subtree. A second sitting that alternates means the
+exclusion is aimed at the wrong frame.
 ## 2026-09-23 — kanso#1504's compile row moved three on a merge that changed no code
 
 Merging main in twice (kanso#1567 and kanso#1566, a log entry and a CI change,
@@ -8898,3 +8925,28 @@ three jobs read including the most recent; the next job may read 35,544,162 and
 turn this pull request red again through nothing it did. A normalization that
 staged the corpus so the walk is identical every run would end it, and that is
 its own change.
+
+## 2026-09-23 — kanso#1504's compile row on the excluded gate, predicted before it was measured
+
+kanso#1570 is on main, so `compile_instructions` no longer counts the directory
+walk. This branch's golden follows, and the value was DERIVED rather than waited
+for.
+
+This row drew two faces on this tree, 35,544,159 and 35,544,162, and the walk
+cost 487 on the runner that read the first and 490 on the one that read the
+second. Subtracting each face's own walk gives the same number both ways:
+
+    35,544,159 - 487 = 35,543,672
+    35,544,162 - 490 = 35,543,672
+
+So the golden is 35,543,672, and the delta against main's excluded base of
+35,540,661 is +3,011 — identical to the +3,011 this branch priced against main's
+unexcluded 35,541,148, because both ends dropped by their own walk. The priced
+line above is restated on the new base and its delta is unchanged.
+
+That agreement is the check on the arithmetic rather than a coincidence: an
+exclusion that removed the right term has to leave every difference between two
+trees exactly as it was, and it does.
+
+IF CI DISAGREES, the prediction is wrong and the number it reports is the one to
+take. Writing it down first is what makes that worth knowing.
