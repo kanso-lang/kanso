@@ -10061,6 +10061,18 @@ time from 14.4 seconds to 0.5, since its memory no longer grows.
 the ratchet carries it. The trend gate reads it as higher-is-better. All twelve
 cost goldens, the mem vein and the two book counter panels carry the line.
 
+**The counters that read worse.** The scans rewind now, so `scan_beat_iters`
+rises to 1,016, `run_beat_iters` to 2,693,195 and
+`a_class_asks_by_the_byte_beat_iters` to 1,601. That fixture's pattern matches,
+so its scan leaves the cluster with a hit each time, and the run pays one more
+allocation of 80 bytes and reuses one buffer fewer:
+`a_class_asks_by_the_byte_allocs` reads 10,469,
+`a_class_asks_by_the_byte_alloc_bytes` 468,255,
+`a_class_asks_by_the_byte_sh_buf` 118,432 and
+`a_class_asks_by_the_byte_buf_reuse` 0. Which allocation it is has not been
+isolated; the output is unchanged.
+`seek_resumes` is minted, and reads 689,999 on the run program.
+
 **What the cursor test costs.** On this container the run row reads
 1,820,479,435 on main and 1,833,933,410 with both changes, +13,453,975: the
 rewind's fast path now loads the cursor and the arena pointer and compares,
