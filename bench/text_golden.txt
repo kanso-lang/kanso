@@ -792,7 +792,7 @@ escapebench text=55666
 pendbench text=90194
 indexbench text=58930
 scanbench text=211522
-digestbench text=108354
+digestbench text=105938
 readbench text=55746
 livebench text=134818
 # 2026-09-10 (kanso#1362): the backends build the partial over a value. Every
@@ -801,4 +801,4 @@ livebench text=134818
 # src/runtime.c, which is linked into every program. The 336-byte spread is the
 # arms a program's own dispatch makes reachable. Machine-code size carries no
 # welfare term (ruled 2026-09-05); this vein is exact and watched on its own.
-runbench text=320930
+runbench text=319810

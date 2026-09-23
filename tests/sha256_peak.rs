@@ -1,14 +1,17 @@
 //! A hash reads its message 64 bytes at a time and carries eight words of
 //! state, so what it holds should be a property of the algorithm rather than
-//! of the message. `sha256/hex` holds the message instead: doubling the input
-//! doubles the peak arena, exactly, and the constant is about seven thousand
-//! bytes of live memory for every byte hashed.
+//! of the message. Until kanso#1580 `sha256/hex` held every block it had read,
+//! and the peak grew with the message. It holds only its padded copy of the
+//! message now, and the spec pins that.
 //!
 //! This asserts what the hash DOES, not what it should do. The numbers are
-//! deterministic to the byte — three runs of each size agree — so they are
-//! pinned rather than bounded, and a change that makes the hash stream will
-//! turn this red. That is the point: the entry that stops matching is the
-//! reminder, the same contract tests/golden/wasm_gaps.txt keeps.
+//! deterministic to the byte, so they are pinned rather than bounded, and a
+//! change to what the hash holds turns this red. That is the point: the entry
+//! that stops matching is the reminder, the same contract
+//! tests/golden/wasm_gaps.txt keeps.
+//!
+//! The next three paragraphs describe the hash as it was before kanso#1580,
+//! and are kept because the figures in them were measured then.
 //!
 //! WHY IT MATTERS AWAY FROM THE TEST. `scripts/fingerprint` digests the site's
 //! assets, and docs/kanso.wasm is 1,604,098 bytes. At this rate that is roughly
@@ -57,41 +60,33 @@ fn peak_bytes(n: u64) -> u64 {
         .unwrap_or_else(|| panic!("no arena_peak_bytes in:\n{said}"))
 }
 
-/// Twice the message, more than twice the arena. A streaming hash would
-/// read the same number twice here, and when one does this assertion is the
-/// thing to delete.
+/// The hash streams its blocks now, and the peak left is the padded message.
 ///
-/// Until 2026-09-07 the pins were 7,340,032 at 1,024 bytes and 14,680,064 at
-/// 2,048, exactly linear, and seven kilobytes of arena a message byte. That
-/// was the round table: sha256's sixty-four constants were joined from eleven
-/// literal lists at every `rounds[at]`, sixty-four times a block, and the
-/// garbage of rebuilding them was the peak. Every constant is built once now,
-/// and what is left is the hash's own retention -- the schedule and the
-/// working words of every block, still held to the end -- which reads
-/// 1,048,576 at both old sizes because that is one arena block, the floor
-/// nothing smaller can show. The sizes below sit above the floor. The peak
-/// is no longer an exact doubling because the arena grows by whole blocks,
-/// but it grows with the message, which is the defect this spec is about.
+/// The history of the pins, so it is not re-derived. Until 2026-09-07 they
+/// were 7,340,032 at 1,024 bytes and 14,680,064 at 2,048, exactly linear: the
+/// round table was rebuilt at every `rounds[at]`. Until 2026-09-15 they were
+/// 17,825,808 and 40,894,496 at 65,536 and 131,072 bytes, and until
+/// 2026-09-23 19,922,976 and 32,505,888, re-pinned when the empty list
+/// literal opened with room for four. Each of those grew with the message,
+/// and the block loop carried its eight words as a list.
 ///
-/// Re-pinned 2026-09-15 when the empty list literal opened with room for
-/// four (the `empty_room` row). The message accumulator is built by pushing
-/// into `[]`, and where its buffer lands moved with the literal's shape: at
-/// 65,536 bytes the arena peak rose two blocks, 17,825,808 -> 19,922,976,
-/// while the permanent peak fell 2,621,472 -> 1,310,752; at 131,072 the
-/// arena fell eight blocks, 40,894,496 -> 32,505,888, and the permanent peak
-/// rose 2,621,472 -> 5,242,912. Summed, the smaller message holds 786,448
-/// bytes more and the larger 5,767,168 less. Both are placement, and both
-/// are still a peak that grows with the message.
+/// kanso#1580 carries the eight words as eight scalar arguments, the loop
+/// rewinds after every block, and the two old sizes read the same number:
+/// the reading this spec's earlier note said a streaming hash would give.
+/// The third size is what still grows. `padded_bytes` copies the message to
+/// append the terminator and the length, and a copy of `padded_bytes` made
+/// public and called alone, with no compression at all, reads 7,340,064,
+/// 7,340,064 and 24,117,296 at these three sizes: the same three numbers as
+/// the whole hash, byte for byte. So everything the hash holds past the
+/// arena's floor is that copy, and a padding that feeds the last block from
+/// the message rather than copying it would move the third pin.
 #[test]
-fn a_hash_holds_every_block_it_has_read() {
+fn a_hash_holds_its_padded_message_and_nothing_per_block() {
     let short = peak_bytes(65_536);
     let long = peak_bytes(131_072);
+    let longer = peak_bytes(262_144);
 
-    assert_eq!(short, 19_922_976, "the 65,536-byte peak moved");
-    assert_eq!(long, 32_505_888, "the 131,072-byte peak moved");
-    assert!(
-        long > short,
-        "the peak stopped growing with the message: {short} at 65,536 bytes \
-         and {long} at 131,072"
-    );
+    assert_eq!(short, 7_340_064, "the 65,536-byte peak moved");
+    assert_eq!(long, 7_340_064, "the 131,072-byte peak moved");
+    assert_eq!(longer, 24_117_296, "the 262,144-byte peak moved");
 }

@@ -853,10 +853,51 @@ fn narrow_tailcc(ir: String) -> String {
 fn closure_convention() -> kanso::codegen::ClosureConvention {
     use kanso::codegen::ClosureConvention;
     static ANSWER: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    match *ANSWER.get_or_init(preserve_none_probe) {
+    match *ANSWER.get_or_init(remembered_probe) {
         true => ClosureConvention::PreserveNone,
         false => ClosureConvention::Absent,
     }
+}
+
+/// The probe's answer, kept on disk beside the runtime objects.
+///
+/// The answer belongs to the clang binary, not to the process asking, and the
+/// probe is a whole clang run: 32,201,483 instructions, 6.4% of a dev build
+/// of the codegen corpus, paid by every build to learn what the last one
+/// learned. It is keyed by the clang the PATH resolves to, followed through
+/// its symlinks, with that file's size and modification time, so installing
+/// another clang asks again. A key that cannot be formed, or a file that holds
+/// anything but the one byte this writes, means asking.
+fn remembered_probe() -> bool {
+    let Some(identity) = clang_identity() else { return preserve_none_probe() };
+    let key = identity
+        .bytes()
+        .fold(0xcbf29ce484222325u64, |h, b| (h ^ b as u64).wrapping_mul(0x100000001b3));
+    let path = std::env::temp_dir().join(format!("kanso_pn_answer_{key:016x}"));
+    match std::fs::read(&path).ok().as_deref() {
+        Some(b"1") => return true,
+        Some(b"0") => return false,
+        _ => {}
+    }
+    let answer = preserve_none_probe();
+    // Written under a name of its own and renamed into place, so a build
+    // running beside this one reads the whole byte or nothing.
+    let staged = std::env::temp_dir().join(format!("kanso_pn_answer_{key:016x}_{}", pid_tag()));
+    if std::fs::write(&staged, if answer { b"1" } else { b"0" }).is_ok() {
+        let _ = std::fs::rename(&staged, &path);
+    }
+    answer
+}
+
+/// The clang this process would run, as a path followed through its links,
+/// with its size and modification time.
+fn clang_identity() -> Option<String> {
+    let dirs = std::env::var_os("PATH")?;
+    let found = std::env::split_paths(&dirs).map(|d| d.join("clang")).find(|p| p.is_file())?;
+    let real = std::fs::canonicalize(&found).ok()?;
+    let meta = std::fs::metadata(&real).ok()?;
+    let modified = meta.modified().ok()?.duration_since(std::time::UNIX_EPOCH).ok()?;
+    Some(format!("{}:{}:{}", real.display(), meta.len(), modified.as_nanos()))
 }
 
 /// The process id, always the same number of characters.

@@ -2162,11 +2162,14 @@ impl FnEmit {
     }
 }
 
-/// Dispatchers and wrappers nobody names. A dead caller still writes a call to
-/// its dead callee, so one sweep leaves the callee named by a caller that is
-/// itself about to go — hence the fixpoint. Only `d_` and `w_` symbols are
-/// candidates: everything else is either the entry, a builder the constant
-/// initialiser calls, or a switch the runtime calls by name.
+/// Dispatchers, wrappers and lambda bodies nobody names. A dead caller still
+/// writes a call to its dead callee, so one sweep leaves the callee named by a
+/// caller that is itself about to go — hence the fixpoint. Only `d_`, `w_` and
+/// `klam` symbols are candidates: everything else is either the entry, a
+/// builder the constant initialiser calls, or a switch the runtime calls by
+/// name. A lambda body is named by its wrapper or by the closure built over
+/// it, and one in a library function the program never reaches is named by
+/// neither; at `-O0` clang compiled each of them anyway.
 /// `cells` pairs a constant closure's cell with the wrapper it points at. The
 /// pointer lives in a module global rather than in any function body, so the
 /// wrapper is named by the cell rather than by a call, and a site that loads
@@ -2227,6 +2230,7 @@ fn prune_unnamed(body: &str, entry: &str, cells: &[(String, String, usize)]) -> 
                     && sym != "d_thunk_eval"
                     && (sym.starts_with("d_")
                         || sym.starts_with("w_")
+                        || sym.starts_with("klam")
                         || sym.starts_with("\"d_")
                         || sym.starts_with("\"w_"))
                     && !named(at, sym)
@@ -2683,6 +2687,7 @@ mod the_prune_agrees_with_the_search {
                     && sym != "d_thunk_eval"
                     && (sym.starts_with("d_")
                         || sym.starts_with("w_")
+                        || sym.starts_with("klam")
                         || sym.starts_with("\"d_")
                         || sym.starts_with("\"w_"))
                     && !named(at, sym)
@@ -2752,6 +2757,27 @@ mod the_prune_agrees_with_the_search {
         let kept = prune_unnamed(&body, "d_entry", &[]);
         assert!(kept.contains("@\"d_add/2\"("), "the named quoted block was pruned");
         assert!(!kept.contains("@\"d_sub/2\"()"), "the unnamed quoted block was kept");
+        agree_on(&body, "d_entry", &[]);
+    }
+
+    /// A lambda body is a candidate too. Its wrapper names it, so it goes in
+    /// the round after the wrapper does; one a closure is built over is named
+    /// by that construction and stays.
+    #[test]
+    fn a_lambda_body_goes_with_the_wrapper_that_named_it() {
+        let body = [
+            define(
+                "d_entry",
+                "  %c = call %KValue @k_closure(ptr @klam5, i64 1)\n  ret %KValue %c",
+            ),
+            define("w_klam3", "  %x = call %KValue @klam3()\n  ret %KValue %x"),
+            define("klam3", "  ret %KValue zeroinitializer"),
+            define("klam5", "  ret %KValue zeroinitializer"),
+        ]
+        .concat();
+        let kept = prune_unnamed(&body, "d_entry", &[]);
+        assert!(kept.contains("define %KValue @klam5("), "the lambda a closure names was pruned");
+        assert!(!kept.contains("define %KValue @klam3("), "the lambda nothing reaches was kept");
         agree_on(&body, "d_entry", &[]);
     }
 
@@ -7706,7 +7732,7 @@ fn narrow_tailcc(ir: String) -> String {
     // Kept functions whose arguments do not all fit in the eight registers
     // AArch64 passes them in. The count is the same on every host so the ir is
     // too; x86 passes fewer and does not exhibit the defect anyway.
-    let mut trampolines: Vec<String> = Vec::new();
+    let mut trampolines: Vec<(String, String)> = Vec::new();
     let mut spilling: crate::hash::Set<String> = crate::hash::Set::default();
     for line in ir.lines() {
         let Some(rest) = line.strip_prefix("define tailcc ") else { continue };
@@ -7730,16 +7756,20 @@ fn narrow_tailcc(ir: String) -> String {
             types.iter().enumerate().map(|(i, ty)| format!("{ty} %a{i}")).collect();
         let handed: Vec<String> =
             types.iter().enumerate().map(|(i, ty)| format!("{ty} %a{i}")).collect();
-        trampolines.push(format!(
-            "define {ret} @{}({}) {{\nentry:\n  %r = call tailcc {ret} @{}({})\n  ret {ret} %r\n}}\n",
-            trampoline_name(&name),
-            taken.join(", "),
-            quoted(&name),
-            handed.join(", ")
+        trampolines.push((
+            name.clone(),
+            format!(
+                "define {ret} @{}({}) {{\nentry:\n  %r = call tailcc {ret} @{}({})\n  ret {ret} %r\n}}\n",
+                trampoline_name(&name),
+                taken.join(", "),
+                quoted(&name),
+                handed.join(", ")
+            ),
         ));
         spilling.insert(name);
     }
 
+    let mut rerouted: crate::hash::Set<String> = crate::hash::Set::default();
     let mut out = String::with_capacity(ir.len());
     for line in ir.lines() {
         // Every rewrite below needs the word, so a line without it is copied
@@ -7758,6 +7788,7 @@ fn narrow_tailcc(ir: String) -> String {
             let call = format!("@{}(", quoted(&name));
             let through = format!("@{}(", trampoline_name(&name));
             out.push_str(&line.replace("call tailcc ", "call ").replace(&call, &through));
+            rerouted.insert(name);
         } else if !named.as_ref().is_some_and(|n| keep.contains(n)) {
             out.push_str(&line.replace("tailcc ", ""));
         } else {
@@ -7765,8 +7796,12 @@ fn narrow_tailcc(ir: String) -> String {
         }
         out.push('\n');
     }
-    for t in trampolines {
-        out.push_str(&t);
+    // A trampoline no call was rerouted through is a function nothing names,
+    // which clang compiles at `-O0` all the same.
+    for (name, t) in trampolines {
+        if rerouted.contains(&name) {
+            out.push_str(&t);
+        }
     }
     out
 }
@@ -7862,5 +7897,31 @@ mod the_emitter_group_index_answers_what_the_scan_answered {
         );
         let program = crate::compile("test.kso", src, false).expect("the fixture compiles");
         agrees_over(&program);
+    }
+}
+
+#[cfg(test)]
+mod a_trampoline_is_emitted_for_a_call_that_uses_it {
+    use super::narrow_tailcc;
+
+    /// Five KValues are ten registers, past the eight AArch64 passes, and the
+    /// musttail keeps the convention, so the function spills.
+    const LOOP: &str = "define tailcc %KValue @f(%KValue %a, %KValue %b, %KValue %c, %KValue %d, %KValue %e) {\nentry:\n  %r = musttail call tailcc %KValue @f(%KValue %a, %KValue %b, %KValue %c, %KValue %d, %KValue %e)\n  ret %KValue %r\n}\n";
+
+    #[test]
+    fn none_when_nothing_is_rerouted() {
+        let out = narrow_tailcc(LOOP.to_string());
+        assert!(!out.contains("@f.c("), "a trampoline nothing calls was emitted:\n{out}");
+    }
+
+    #[test]
+    fn one_when_a_call_goes_through_it() {
+        let caller = "define %KValue @g(%KValue %a) {\nentry:\n  %r = call tailcc %KValue @f(%KValue %a, %KValue %a, %KValue %a, %KValue %a, %KValue %a)\n  ret %KValue %r\n}\n";
+        let out = narrow_tailcc(format!("{LOOP}{caller}"));
+        assert!(
+            out.contains("define %KValue @f.c("),
+            "the rerouted call has no trampoline:\n{out}"
+        );
+        assert!(out.contains("call %KValue @f.c("), "the call was not rerouted:\n{out}");
     }
 }

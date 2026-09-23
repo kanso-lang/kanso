@@ -700,7 +700,7 @@ escapebench 72849606
 pendbench 208139965
 indexbench 2895771
 scanbench 462289601
-digestbench 9966845
+digestbench 5799501
 readbench 4627255
 livebench 2807786381
 # 2026-09-06 (the run program joins): `runbench 3043743748` is a NEW row and
@@ -760,4 +760,4 @@ livebench 2807786381
 #
 # The uniform -8 across six rows is one instruction on a path each program
 # takes eight times, and the four flat rows never take it at all.
-runbench 1809683884
+runbench 1801929451

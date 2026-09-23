@@ -10052,6 +10052,248 @@ tree reads 14 fewer, which is kanso#1577's own start-up move.
 
 Welfare scores 78.15 against a floor of 77.37, and the rise is banked.
 
+---
+
+## 2026-09-23 — the convention probe is asked once per clang, not once per build
+
+Both codegen rows count a `kanso build`'s whole child tree, and one of those
+children was not codegen. `closure_convention` asks whether this host's clang
+takes `preserve_none` by compiling a two-define module, and it asked on every
+build: a whole clang run, 32,201,483 instructions, 6.4% of the dev row, to
+learn what the build before it had learned.
+
+The answer belongs to the clang binary. `remembered_probe` keeps it in the temp
+directory beside the runtime objects, keyed by the clang the PATH resolves to,
+followed through its links, with the file's size and modification time, so
+installing another clang asks again. A key that cannot be formed, or a file
+holding anything but the one byte written there, means asking. The answer is
+staged under a pid-tagged name and renamed into place, so a build running
+beside the first reads the whole byte or nothing. The gates warm both tiers
+before counting, as they already do for the runtime object, so the counted
+build reads the cache.
+
+`tests/the_convention_probe_runs_once_per_clang.rs` puts a clang in front of the
+real one that logs every command, builds one program twice against one temp
+directory, and counts the probe's compiles: one. Watched red with the build
+asking `preserve_none_probe` directly again: two.
+
+On this container, with the gates' commands and `GITHUB_ACTIONS=1`:
+
+    codegen_instructions_dev        596,013,703 ->   563,812,220   -5.40%
+    codegen_instructions_release  6,843,200,439 -> 6,810,998,956   -0.47%
+    processes                     five -> four, each tier
+
+The short-tree guard in `codegen_instructions.sh` fails a build that ran fewer
+than four processes, which still holds; its message said a real build runs five
+and now says four, with the probe a fifth only before its answer is cached.
+
+**CI's rows**, taken into the goldens:
+
+    codegen_instructions_dev        596,192,991 ->   563,926,696   -5.41%
+    codegen_instructions_release  6,837,938,796 -> 6,805,672,501   -0.47%
+    startup_instructions                968,441 ->       967,869      -572
+
+Both codegen rows fell by 32,266,295, the same figure on each tier, which is one
+probe's compile. Start-up falls 572 instructions. The emitted, `.text`, emit and
+compile rows read what main has. The rise is banked.
+
+---
+
+## 2026-09-23 — sha256 carries its eight words as arguments, and its loops rewind
+
+`docs/compiler.html` §114–115 put 3,145,728 bytes of the run program's peak in
+the digest phase and traced it to `sha256/blocked` and `sha256/digested` losing
+their carry to the library path prefix. Admitting a one-slot carry was built
+there and declined, because the sizing walk read a garbage length under it.
+This change makes the carry unnecessary instead of admitting it.
+
+Both loops held the eight working words as a list. `compress` built a new
+eight-element list every round and `digested` a new one every block, so a
+list crossed every rewind, and a list built inside the loop is a value the
+cluster analysis will only let cross by carrying it. The words are eight
+arguments now. A round passes six along unchanged and computes two with `&
+whole`, which infers as INT, so every slot is a threaded parameter or a
+scalar, and both clusters bracket with nothing carried:
+
+    sha256/compress/10, sha256/rounding/11   bracketed with its cluster
+    sha256/blocked/10, sha256/digested/11    bracketed with its cluster
+
+The answer becomes a list once per block, when the sixty-four rounds are done,
+and `digested` adds it into the running words. `turned`, `added`, `summed`,
+`summing`, `shifted_state` and `start` are gone. The five `kanso test lib/sha256` tests
+pass, and the run program prints `runbench 46013475` either way.
+
+On this container:
+
+    digestbench   allocs          23,582 ->     7,199
+                  alloc_bytes  1,998,801 ->   671,841
+                  arena peak   2,097,152 -> 1,048,576   2 blocks -> 1
+    run program   arena peak  38,604,496 -> 35,458,768
+                  instructions 1,820,479,421 -> 1,812,623,924   -0.43%
+
+The instruction fall is the per-round list going: no allocation, no length
+checks on `s[5]`, no copying six words into a new list. Welfare scores 77.78
+against a floor of 77.37 on the peak alone, with the instruction rows as main
+has them; CI's rows go in before the rise is banked.
+
+Three counters read worse, and each is the change working. Rewinds are what
+the loops do now, so `run_beat_iters` rises to 2,709,016, `digest_beat_iters`
+to 8,441 and `a_digest_holds_every_block_it_walked_beat_iters` to 76. The
+per-block sum built its list with eight pushes, and that list is gone, so
+`run_push_mut_fast` falls to 1,098,392, `digest_push_mut_fast` to 10,184 and
+`a_digest_holds_every_block_it_walked_push_mut_fast` to 120. With fewer lists
+built there are fewer buffers to hand on, so `run_buf_reuse` reads 144,961,
+`digest_buf_reuse` 1 and `a_digest_holds_every_block_it_walked_buf_reuse` 1.
+Every allocation and byte counter beside them fell.
+
+`tests/golden/mem/a_digest_holds_every_block_it_walked.kso` carried a header
+describing the 2026-08-31 state, with numbers its own golden had not held for
+weeks (1,980 allocations against a golden of 397). It says what the digest
+does now, and its golden reads 270.
+
+**CI's rows**, taken into the goldens:
+
+    runbench              1,802,356,350 -> 1,794,573,732   -7,782,618   -0.43%
+    digestbench               9,966,673 ->     5,773,783   -4,192,890   -42.07%
+    entry_instructions      126,100,824 ->   125,949,337     -151,487
+    library_instructions    126,623,258 ->   126,452,016     -171,242
+    runbench .text              320,546 ->       319,218
+    digestbench .text           108,274 ->       105,634
+
+The emitted vein reads four fewer defines for each of the two programs and,
+for runbench, 16 more calls with 22 fewer branches; the compile, start-up,
+emit, interpreted and codegen rows read what main has. Welfare scores 77.81
+against a floor of 77.37, and the rise is banked.
+
+Section 115's garbage length in the carry-sizing walk is untouched by this
+and still open: it is reachable only when a library loop is admitted to the
+carry tier, which nothing now needs for this peak.
+
+Two specs pinned the old digest, and both went red on CI as their own notes
+said they would.
+
+- `tests/sha256_peak.rs` pinned a peak that grew with the message and said a
+  streaming hash would read the same number at its two sizes. It now does:
+  7,340,064 at 65,536 bytes and at 131,072. A third size, 262,144, reads
+  24,117,296, and the rest of the growth is the padding. A copy of
+  `padded_bytes` made public and called alone, with no compression, reads the
+  same three numbers byte for byte, because it copies the message to append the
+  terminator and the length. The spec pins all three sizes and says so.
+- `tests/a_program_is_not_its_directory.rs` used a copy of the digest to show
+  the library path prefix changing a program's memory. The digest carries
+  nothing across a rewind now, so both directories read 1,048,576 and the copy
+  stopped showing the defect, which is still there. The package is now a
+  five-line loop with the shape the digest had: it builds a list it drops and
+  hands the next turn a list it keeps. Under `lib/` it reads 5,242,880 at
+  20,000 turns. In any other directory it reads one block.
+
+---
+
+## 2026-09-23 — ThinLTO for the release build, declined at a third of what it costs
+
+The release codegen row is 75% the linker. On this container, with the gate's
+own commands and `GITHUB_ACTIONS=1` so it measures, the codegen corpus's
+release build counted:
+
+    kanso 81,494,353   clang:probe 32,201,483   clang 31,669,971
+    clang -cc1 1,617,890,071   ld 5,161,438,914   total 6,843,200,439
+
+`ld` is the LTO link: it optimizes and emits the runtime together with the
+program, every build. `-flto=thin` for both the runtime object and the link,
+the one change:
+
+    codegen release    6,843,200,439 -> 6,605,682,161   -3.47%
+    run program        1,812,623,924 -> 1,867,477,968   +3.03%
+
+At today's ratios a per cent of the release codegen row is worth about 0.023
+of welfare and a per cent of the run row about 0.078, so the trade is +0.08
+against -0.24. ThinLTO imports less across modules than full LTO, and the run
+program is built on the runtime's small helpers being inlined into it. The
+container's clang is 18.1.3 where CI's is 19.1.1, so the sizes here are this
+host's; the ratio between them is the finding.
+
+---
+
+## 2026-09-23 — lambdas nothing reaches are pruned, and a trampoline is written only for a call that uses it
+
+At `-O0` clang compiles every function a module defines. The codegen corpus's
+module defined 112, and 48 of them were named nowhere else in it. Most of
+those were `internal alwaysinline` helpers from DECLARES, which the always-
+inliner drops on its own. What clang was compiling for nothing was the rest:
+seventeen lifted lambda bodies, `klam0` to `klam16`, and three trampolines,
+`"d_list/advance_6.c"`, `"d_list/bounded_flat_5.c"` and
+`"d_list/bounded_more_5.c"`.
+
+`prune_unnamed` walks the module from the entry and strikes what nothing names,
+but it only ever considered `d_` and `w_` symbols. A lambda body is named by its
+wrapper or by the closure built over it; one inside a library function the
+program never reaches is named by neither, and it survived every prune.
+`klam` is a candidate now, in the prune and in the oracle beside it. The
+trampolines come from `narrow_tailcc`, which wrote one for every function
+that keeps `tailcc` and spills past eight registers, whether or not any call
+was rerouted through it. It writes one now only for a function a rerouted
+call names.
+
+Two specs, each watched red: `a_lambda_body_goes_with_the_wrapper_that_named_it`
+fails with "the lambda nothing reaches was kept" when `klam` is taken out of
+the prune's candidates, and `none_when_nothing_is_rerouted` fails when every
+trampoline is written again. Its first draft checked for a quoted name the
+emitter never writes and passed against the old code too; the name is `f.c`.
+
+On this container, with the gates' commands and `GITHUB_ACTIONS=1`:
+
+    codegen_instructions_dev   596,013,703 -> 505,923,202   -15.12%
+      clang -cc1               446,229,133 -> 357,391,531
+    emit_instructions           51,896,570 ->  50,057,227    -3.54%
+    codegen corpus module         6,107 lines -> 5,299, 112 defines -> 83
+    runbench.ll                  35,860 lines -> 34,853, 595 defines -> 528
+
+The run program reads 1,820,479,435 against 1,820,479,421 and its `.text` is
+the same size: LTO was already dropping these at link time, so the release
+binary does not change, and the release codegen row should move only by what
+`clang -cc1` saves parsing them. CI's rows go into the goldens.
+
+**CI's rows**, taken into the goldens:
+
+    codegen_instructions_dev       596,192,991 ->   506,101,048   -15.11%
+    codegen_instructions_release 6,837,938,796 -> 6,617,211,630    -3.23%
+    emit_instructions               45,953,348 ->    44,610,460    -2.92%
+    startup_instructions               968,441 ->       973,054    +4,613
+
+The release row fell further than parsing alone would suggest: 220,727,166
+instructions, where the dev row's `clang -cc1` saving on this container was
+88,837,602. Which half of the release tree took it, the compile or the LTO link,
+was not measured.
+
+`startup_instructions` is the one row that rose. It reads 973,054, up 0.48%. It
+counts kanso's own start, not anything the compiler emits, so it arrived with
+the new code in the compiler binary. What in that code costs 4,613 instructions
+before `main` does any work was not isolated. The run program's instruction and
+`.text` rows read what main has.
+
+The emitted vein falls on twelve of its fourteen programs; escapebench and
+indexbench read what main has. runbench reads 528 defines
+against 599, and deepbench 86 against 115. Welfare rises 0.16, and the rise is
+banked.
+
+`specs` then failed on `compile_cost`, whose modules vein counts what the
+compiler emitted for a module: 5,377 lines and 99 defines before, 4,569 and 70
+after. Regenerated. With kanso#1583 merged from main, the codegen and start-up
+goldens hold a projection, each tier's row less the probe compile that change
+removed, and are replaced by CI's rows before the floor is banked again. The
+start-up projection is 972,482, this change's 4,613 on top of main's 967,869.
+CI read all three projected rows exactly, and the rise is banked over them.
+
+kanso#1580 then landed on main, and the digest and run programs now carry
+both changes. Their emitted rows, counted here from the `.ll` files, read
+`digestbench defines=155 calls=1210 branches=819 lines=9012` and `runbench
+defines=523 calls=5749 branches=3445 lines=34623`. The `.text`, codegen and
+emit rows come from CI, and the floor is banked again after them.
+CI's cost goldens agreed with every merged row, and the floor is banked over
+them.
+
+---
+
 ## 2026-09-23 — the regexp scan rewinds at every start position, and a rewind keeps the seek cursor below the mark
 
 `docs/compiler.html` §112–115 put 29,360,128 of the run program's 38,604,496
@@ -10176,7 +10418,8 @@ two codegen rows 596,206,478 and 6,841,764,937. The scan benchmark's peak fell
 by 160 MB while its instruction row moved by 20,296.
 
 With CI's rows the objective scores 82.09 against a floor of 77.37, and the
-rise is banked.
+rise is banked. On the tree merged with kanso#1578, `startup_instructions`
+reads 968,492: that change's 968,441 and this one's +51.
 
 **What moves.** The run program's peak is a deterministic counter and scores
 here: welfare 77.36 -> 82.10, production 57.23 -> 66.07, with the instruction
@@ -10187,6 +10430,47 @@ and the rise is banked after they land.
 Open: the carry tier's path prefix, which this change routed around rather
 than replaced; and a type used as a value, which must widen its field sets in
 `infer.rs` before the native backend accepts one.
+
+With kanso#1583 merged from main, the codegen and start-up goldens hold a
+projection until CI measures them: main's rows plus this change's own moves,
+which puts `codegen_instructions_dev` at 563,940,183,
+`codegen_instructions_release` at 6,809,498,642 and `startup_instructions` at
+967,920.
+
+kanso#1580 then landed on main, and the run program carries both changes. Its
+arena peak reads 6,098,640 in 6 blocks, against 35,458,768 with the digest
+change alone and 9,244,368 with the scan change alone. The two sets of rewinds
+add: `run_beat_iters` reads 2,709,445. The emitted rows are counted here from
+the `.ll` files, `runbench defines=595 calls=5982 branches=3540 lines=35805`.
+The instruction, `.text`, entry, library, codegen and emit rows come from CI,
+and the floor is banked again after them.
+
+**CI's rows over the merged tree**, taken into the goldens. The codegen and
+start-up projections above were exact.
+
+    work_runbench             1,794,573,732 -> 1,801,929,451   +7,355,719   +0.41%
+    work_digestbench              5,773,783 ->     5,799,501      +25,718
+    entry_instructions          125,949,337 ->   125,944,853       -4,484
+    library_instructions        126,452,016 ->   126,522,328      +70,312
+    text runbench                   319,218 ->       319,810
+    text digestbench                105,634 ->       105,938
+
+Every row here is this change's own cost measured on the new base, which is
+what the scan's rewinds, the seek-cursor test on every rewind and the new
+counter cost in instructions. The run program pays 0.41% for a peak that falls
+from 35,458,768 to 6,098,640. `library_instructions` rises with the library
+text the compiler carries, since lib/regexp is compiled into it. The
+`data-golden` spans quoting the entry and library rows were rewritten by
+`golden_prose --write`. Summed over the fourteen binaries, `text` reads
+1,764,140.
+
+kanso#1582 then landed on main. Merged over it, the emitted rows are counted
+here from the `.ll` files, `scanbench defines=271 calls=3108 branches=2112
+lines=19621` and `runbench defines=523 calls=5733 branches=3430 lines=34568`,
+and the codegen and start-up goldens hold a projection, main's rows plus this
+change's own moves: `codegen_instructions_dev` 473,848,240,
+`codegen_instructions_release` 6,588,771,476 and `startup_instructions`
+972,533. CI's rows replace them before the floor is banked again.
 
 ---
 
