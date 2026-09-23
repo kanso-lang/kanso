@@ -8668,7 +8668,7 @@ which is this branch's `.text` growth arriving on top of kanso#1563's falls:
 
     library_instructions    127,149,930 -> 127,158,876    +8,946   +0.0070%
     entry_instructions      126,696,892 -> 126,702,408    +5,516   +0.0044%
-    compile_instructions     35,541,148 ->  35,544,162    +3,014   +0.0085%
+    compile_instructions     35,541,148 ->  35,544,159    +3,011   +0.0085%
     emit_instructions        51,481,382 ->  51,484,057    +2,675   +0.0052%
     startup_instructions      3,362,329 ->   3,363,729    +1,400   +0.0416%
 
@@ -8817,9 +8817,12 @@ last stage of a pipe, and break what a new check watches before trusting it.
 
 Merging main in twice (kanso#1567 and kanso#1566, a log entry and a CI change,
 neither reaching anything `include_str!` puts in the compiler) moved
-`compile_instructions` from 35,544,159 to **35,544,162**. The golden and the
-priced line above are updated to CI's reading; the row is now +3,014 against
-main's 35,541,148 rather than +3,011.
+`compile_instructions` from 35,544,159 to **35,544,162**.
+
+The golden was set to 35,544,162 on the strength of that, and the NEXT job read
+35,544,159 again. The entry after this one carries what the two jobs' tables say
+and why the golden is back at 35,544,159; what stands here is the pair of facts
+that sighting established.
 
 This is the kanso#1558 phenomenon for the sixth time and the third branch, and
 two things about this sighting are worth keeping.
@@ -8845,3 +8848,53 @@ What it is remains open. The reading that would name it is this job's packed
 compile table against one from a job of this same tree that read 35,544,159 —
 and that earlier job predates kanso#1566, so its table is at step 19 of 41 and
 out of reach. The next occurrence has both sides.
+
+## 2026-09-23 — the three instructions are ReadDir::next, and the row is a directory walk
+
+The row that has drifted by single digits since 2026-09-15 has a named frame.
+
+kanso#1504's tree went through CI three times with identical compiler source and
+`compile_instructions` read **35,544,159**, then **35,544,162**, then
+**35,544,159** again. Not a step; it alternates. Both of the last two jobs ran
+under kanso#1566, so both packed their whole function tables into the log tail,
+and the two compile tables can be diffed against each other for the first time.
+
+**1,335 of 1,336 frames are byte-identical. One moved.**
+
+    -3     127 -> 124   <std::sys::fs::unix::ReadDir as Iterator>::next
+
+PROGRAM TOTALS moved -3. The gated row moved -3. The single frame moved -3. The
+three agree exactly, and the other five tables — entry, library, startup, emit,
+interp — are byte-identical between the two jobs, zero frames moved in any of
+them.
+
+**WHY THIS ROW AND NO OTHER.** `kanso check` routes a single argument by what it
+finds: a DIRECTORY is a module, a file of bare statements is an entry, a file of
+definitions alone is a library. The compile row checks `lib/json`, a directory,
+so its route opens one and walks it — `opendir` 51, `__getdents` 18, `readdir`
+171, `DirEntry::path` 8 are all in its table. The entry and library tables have
+no `ReadDir` frame AT ALL, because a single file is never walked. The emit and
+interp tables do have one, and it reads 124 in BOTH jobs: they walk a directory
+that did not move.
+
+So the carrier is directory iteration, and what a directory iteration costs is
+the filesystem's answer rather than the program's. The entries are the same
+entries; what readdir hands back them in — the packing of the dirent buffer,
+the order, the name lengths it walks — is state the code under test did not
+produce. That is what the 2026-09-15 ruling is about, in the words Clay used:
+clear it out so it is identical every run, or put it into a persistent known
+initial state.
+
+WHAT IS NOT ESTABLISHED. Why the walk costs three more in one job than another
+is open; the entry set is fixed and staged by `library_box.sh`, so the
+difference is in how the filesystem lays those entries out, and this is one pair
+of jobs. Nothing here says the `interp_instructions` half of the standing row
+has the same carrier — interp's own `ReadDir` frame did not move, and its drift
+has been measured at seven and fourteen rather than three.
+
+WHAT IT COSTS TODAY. This is the gate's exactness meeting a counter with
+external state under it. The golden goes back to 35,544,159, which two of the
+three jobs read including the most recent; the next job may read 35,544,162 and
+turn this pull request red again through nothing it did. A normalization that
+staged the corpus so the walk is identical every run would end it, and that is
+its own change.
