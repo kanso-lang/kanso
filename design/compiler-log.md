@@ -9986,7 +9986,10 @@ the union of that field's construction sets. It narrows nothing here, because
 the positions reach the records through the matcher's continuation lambdas,
 whose parameters infer as TOP. It also turned up that a type with fields used
 as a function value widens none of its field sets, which constructor patterns
-already rely on. That is unexamined and recorded as open.
+rely on. No compiled program reaches that: the native backend refuses the
+shape, "`point` as a bare value is not yet supported", and the interpreter,
+which runs it, does not read inference. It becomes live the day the backend
+accepts a type as a value.
 
 **The regression the first build carried.** `prose_check` ran past five
 minutes where main takes 28 seconds. Sampling the process put it in
@@ -10015,6 +10018,6 @@ rows as main has them. The fast rewind now compares before it stores, and the
 run program takes 2,693,195 beat iterations. The run row, the compile rows and the codegen rows come from CI,
 and the rise is banked after they land.
 
-Open: whether a type with fields used as a value should widen its field sets
-in `infer.rs`; and the carry tier's path prefix, which this change routed
-around rather than replaced.
+Open: the carry tier's path prefix, which this change routed around rather
+than replaced; and a type used as a value, which must widen its field sets in
+`infer.rs` before the native backend accepts one.
