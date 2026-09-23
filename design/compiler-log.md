@@ -10364,3 +10364,22 @@ add: `run_beat_iters` reads 2,709,445. The emitted rows are counted here from
 the `.ll` files, `runbench defines=595 calls=5982 branches=3540 lines=35805`.
 The instruction, `.text`, entry, library, codegen and emit rows come from CI,
 and the floor is banked again after them.
+
+**CI's rows over the merged tree**, taken into the goldens. The codegen and
+start-up projections above were exact.
+
+    work_runbench             1,794,573,732 -> 1,801,929,451   +7,355,719   +0.41%
+    work_digestbench              5,773,783 ->     5,799,501      +25,718
+    entry_instructions          125,949,337 ->   125,944,853       -4,484
+    library_instructions        126,452,016 ->   126,522,328      +70,312
+    text runbench                   319,218 ->       319,810
+    text digestbench                105,634 ->       105,938
+
+Every row here is this change's own cost measured on the new base, which is
+what the scan's rewinds, the seek-cursor test on every rewind and the new
+counter cost in instructions. The run program pays 0.41% for a peak that falls
+from 35,458,768 to 6,098,640. `library_instructions` rises with the library
+text the compiler carries, since lib/regexp is compiled into it. The
+`data-golden` spans quoting the entry and library rows were rewritten by
+`golden_prose --write`. Summed over the fourteen binaries, `text` reads
+1,764,140.
