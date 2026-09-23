@@ -9162,3 +9162,34 @@ rows, which then replace the placeholders and are priced here.
 The `ten_handups` counter rows in the cost goldens are this branch's own and
 came through the merge intact.
 
+
+## 2026-09-23 — kanso#1561's combined rows, as CI read them
+
+The placeholders above came back from CI red as expected, and every row was
+read twice on one runner and agreed with itself. Against main at 18fae808:
+
+    row                            main           this tree      delta
+    compile_instructions           35,543,672     35,540,661     -3,011
+    entry_instructions            126,702,408    126,696,892     -5,516
+    library_instructions          127,158,876    127,149,930     -8,946
+    startup_instructions            3,363,729      3,362,329     -1,400
+    emit_instructions              51,484,057     51,481,382     -2,675
+    codegen_instructions_release 6,837,945,401  6,837,938,796     -6,605
+    codegen_instructions_dev       596,192,991    596,192,991          0
+    interp_instructions           900,471,351    900,471,358         +7
+
+`compile_instructions` lands on 35,540,661, which is main's excluded value from
+before kanso#1504 to the instruction. kanso#1504 moved the row by +3,011 and
+this tree, carrying both changes, moves it back by the same amount. That is
+where the combined layout put it; nothing here says why the two moves cancel.
+
+The six falls are `.text`-layout moves from a runtime.c edit that `include_str!`
+carries into the compiler. This branch changes no compiler Rust, and a counter
+increment behind a `K_COUNTING` test is not work any of these rows performs.
+
+`interp_instructions` rises by 7 to 900,471,358. Seven is the size of the step
+the standing interp row has drawn between runners without any change under it,
+so this reading does not separate a move made by this tree from the row's own
+drift. It arrived with the change and its mechanism is open. It is priced here
+at the value it landed on, and the next reading of main is what tells the two
+apart.
