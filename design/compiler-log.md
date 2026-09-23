@@ -10789,3 +10789,60 @@ and missed it, because it matched vein files ending `instructions_golden.txt`
 and the codegen veins end `instructions_dev_golden.txt` and
 `instructions_release_golden.txt`. The spec now matches any instructions vein,
 went red naming the two rows, and the rows are in the table as lower-is-better.
+
+---
+
+## 2026-09-23 — the runtime inlines at the program's threshold
+
+kanso#1585 compiled the release runtime as machine code, on its own, with
+`-O3`. While it was bitcode the LTO link had applied `-inline-threshold=2000`
+to it along with the program, so compiled alone it fell back to clang's
+default of 225, and helpers the runtime calls on itself stopped being inlined:
+comparing profiles, `k_b_push_grow` became a call of its own and read
+19,222,350 instructions on jsonbench, and `k_survives` 774,400 on runbench.
+The runtime is now compiled with the program's threshold.
+
+On this container, runbench at four thresholds for the runtime alone:
+
+    225     1,811,839,413
+    1000    1,809,106,361
+    2000    1,806,069,074
+    4000    1,805,972,054
+
+2000 is the program's value and 4000 buys 97,020 more. Against main before
+kanso#1585, the fourteen work rows read:
+
+    jsonbench -0.30%   encodebench -0.10%   oneshot -0.10%   basket -1.02%
+    widebench +0.67%   deepbench +2.33%     escapebench +1.63%
+    pendbench -0.01%   indexbench +0.39%    scanbench +1.66%
+    digestbench -0.09% readbench +0.07%     livebench -0.21%  runbench -0.22%
+
+deepbench and scanbench read worse at 2000 than at 225, where the rest read
+better; the run program is the one the objective weighs. The release codegen
+row reads 2,903,108,801 against 2,898,793,716 at 225, +0.15%, which is the
+linker placing a larger runtime object; the runtime's own compile is cached
+and the gate warms it before counting. CI's rows go into the goldens.
+
+**CI's rows**, taken into the goldens:
+
+    codegen_instructions_release 2,898,336,765 -> 2,900,713,494   +0.08%
+    work_jsonbench       1,138,862,859 ->   1,129,050,376   -0.86%
+    work_encodebench     3,481,870,112 ->   3,479,633,527   -0.06%
+    work_oneshot            19,850,560 ->      19,872,932   +0.11%
+    work_basket             32,585,639 ->      32,376,516   -0.64%
+    work_widebench          33,660,736 ->      33,530,471   -0.39%
+    work_deepbench         351,324,436 ->     359,347,473   +2.28%
+    work_escapebench        74,602,433 ->      74,053,454   -0.74%
+    work_pendbench         208,152,834 ->     208,259,451   +0.05%
+    work_indexbench          2,906,581 ->       2,907,171   +0.02%
+    work_scanbench         463,280,487 ->     468,791,320   +1.19%
+    work_digestbench         5,767,585 ->       5,787,538   +0.35%
+    work_readbench           4,630,249 ->       4,630,466   +0.00%
+    work_livebench       2,805,256,521 ->   2,803,274,864   -0.07%
+    work_runbench        1,798,630,190 ->   1,793,355,755   -0.29%
+
+CI reads the run program at -0.29% and the release row at +0.08%. The work
+rows that rise at 2000 are the ones this container showed rising, deepbench
+and scanbench most. `text`, summed over the fourteen binaries, reads
+3,372,588: a runtime that inlines more is a larger object, linked
+whole. The objective rises, and the rise is banked.
