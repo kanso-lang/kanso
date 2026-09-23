@@ -10214,6 +10214,86 @@ host's; the ratio between them is the finding.
 
 ---
 
+## 2026-09-23 — lambdas nothing reaches are pruned, and a trampoline is written only for a call that uses it
+
+At `-O0` clang compiles every function a module defines. The codegen corpus's
+module defined 112, and 48 of them were named nowhere else in it. Most of
+those were `internal alwaysinline` helpers from DECLARES, which the always-
+inliner drops on its own. What clang was compiling for nothing was the rest:
+seventeen lifted lambda bodies, `klam0` to `klam16`, and three trampolines,
+`"d_list/advance_6.c"`, `"d_list/bounded_flat_5.c"` and
+`"d_list/bounded_more_5.c"`.
+
+`prune_unnamed` walks the module from the entry and strikes what nothing names,
+but it only ever considered `d_` and `w_` symbols. A lambda body is named by its
+wrapper or by the closure built over it; one inside a library function the
+program never reaches is named by neither, and it survived every prune.
+`klam` is a candidate now, in the prune and in the oracle beside it. The
+trampolines come from `narrow_tailcc`, which wrote one for every function
+that keeps `tailcc` and spills past eight registers, whether or not any call
+was rerouted through it. It writes one now only for a function a rerouted
+call names.
+
+Two specs, each watched red: `a_lambda_body_goes_with_the_wrapper_that_named_it`
+fails with "the lambda nothing reaches was kept" when `klam` is taken out of
+the prune's candidates, and `none_when_nothing_is_rerouted` fails when every
+trampoline is written again. Its first draft checked for a quoted name the
+emitter never writes and passed against the old code too; the name is `f.c`.
+
+On this container, with the gates' commands and `GITHUB_ACTIONS=1`:
+
+    codegen_instructions_dev   596,013,703 -> 505,923,202   -15.12%
+      clang -cc1               446,229,133 -> 357,391,531
+    emit_instructions           51,896,570 ->  50,057,227    -3.54%
+    codegen corpus module         6,107 lines -> 5,299, 112 defines -> 83
+    runbench.ll                  35,860 lines -> 34,853, 595 defines -> 528
+
+The run program reads 1,820,479,435 against 1,820,479,421 and its `.text` is
+the same size: LTO was already dropping these at link time, so the release
+binary does not change, and the release codegen row should move only by what
+`clang -cc1` saves parsing them. CI's rows go into the goldens.
+
+**CI's rows**, taken into the goldens:
+
+    codegen_instructions_dev       596,192,991 ->   506,101,048   -15.11%
+    codegen_instructions_release 6,837,938,796 -> 6,617,211,630    -3.23%
+    emit_instructions               45,953,348 ->    44,610,460    -2.92%
+    startup_instructions               968,441 ->       973,054    +4,613
+
+The release row fell further than parsing alone would suggest: 220,727,166
+instructions, where the dev row's `clang -cc1` saving on this container was
+88,837,602. Which half of the release tree took it, the compile or the LTO link,
+was not measured.
+
+`startup_instructions` is the one row that rose. It reads 973,054, up 0.48%. It
+counts kanso's own start, not anything the compiler emits, so it arrived with
+the new code in the compiler binary. What in that code costs 4,613 instructions
+before `main` does any work was not isolated. The run program's instruction and
+`.text` rows read what main has.
+
+The emitted vein falls on twelve of its fourteen programs; escapebench and
+indexbench read what main has. runbench reads 528 defines
+against 599, and deepbench 86 against 115. Welfare rises 0.16, and the rise is
+banked.
+
+`specs` then failed on `compile_cost`, whose modules vein counts what the
+compiler emitted for a module: 5,377 lines and 99 defines before, 4,569 and 70
+after. Regenerated. With kanso#1583 merged from main, the codegen and start-up
+goldens hold a projection, each tier's row less the probe compile that change
+removed, and are replaced by CI's rows before the floor is banked again. The
+start-up projection is 972,482, this change's 4,613 on top of main's 967,869.
+CI read all three projected rows exactly, and the rise is banked over them.
+
+kanso#1580 then landed on main, and the digest and run programs now carry
+both changes. Their emitted rows, counted here from the `.ll` files, read
+`digestbench defines=155 calls=1210 branches=819 lines=9012` and `runbench
+defines=523 calls=5749 branches=3445 lines=34623`. The `.text`, codegen and
+emit rows come from CI, and the floor is banked again after them.
+CI's cost goldens agreed with every merged row, and the floor is banked over
+them.
+
+---
+
 ## 2026-09-23 — the regexp scan rewinds at every start position, and a rewind keeps the seek cursor below the mark
 
 `docs/compiler.html` §112–115 put 29,360,128 of the run program's 38,604,496
@@ -10383,3 +10463,11 @@ text the compiler carries, since lib/regexp is compiled into it. The
 `data-golden` spans quoting the entry and library rows were rewritten by
 `golden_prose --write`. Summed over the fourteen binaries, `text` reads
 1,764,140.
+
+kanso#1582 then landed on main. Merged over it, the emitted rows are counted
+here from the `.ll` files, `scanbench defines=271 calls=3108 branches=2112
+lines=19621` and `runbench defines=523 calls=5733 branches=3430 lines=34568`,
+and the codegen and start-up goldens hold a projection, main's rows plus this
+change's own moves: `codegen_instructions_dev` 473,848,240,
+`codegen_instructions_release` 6,588,771,476 and `startup_instructions`
+972,533. CI's rows replace them before the floor is banked again.
