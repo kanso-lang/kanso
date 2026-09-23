@@ -348,10 +348,11 @@ printf 'codegen_instructions_%s=%s\n' "$tier" "$sum" > codegen_${tier}_got.txt
 cat codegen_${tier}_got.txt
 
 if [ "$seen" -lt 4 ]; then
-  echo "::error::this build ran $seen processes and a real one runs five:"
-  echo "::error::kanso, the clang driver, clang -cc1, ld, and the linker's own"
-  echo "::error::child. A build that is REFUSED still emits the IR first, so a"
-  echo "::error::short tree is the shape of a build that never wrote anything."
+  echo "::error::this build ran $seen processes and a real one runs at least"
+  echo "::error::four: kanso, the clang driver, clang -cc1 and ld. The convention"
+  echo "::error::probe's clang is a fifth only when its answer is not cached yet."
+  echo "::error::A build that is REFUSED still emits the IR first, so a short"
+  echo "::error::tree is the shape of a build that never wrote anything."
   exit 1
 fi
 
