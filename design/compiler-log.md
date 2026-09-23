@@ -10176,7 +10176,8 @@ two codegen rows 596,206,478 and 6,841,764,937. The scan benchmark's peak fell
 by 160 MB while its instruction row moved by 20,296.
 
 With CI's rows the objective scores 82.09 against a floor of 77.37, and the
-rise is banked.
+rise is banked. On the tree merged with kanso#1578, `startup_instructions`
+reads 968,492: that change's 968,441 and this one's +51.
 
 **What moves.** The run program's peak is a deterministic counter and scores
 here: welfare 77.36 -> 82.10, production 57.23 -> 66.07, with the instruction
