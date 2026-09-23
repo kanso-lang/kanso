@@ -7657,3 +7657,62 @@ whichever size happens to fold evenly.
 
 That is the same rule this log keeps paying for: never take a verdict from the
 last stage of a pipe, and break what a new check watches before trusting it.
+
+## 2026-09-23 — the reserve arm moves frame_for, not the commits, and the entry above says otherwise
+
+The entry above is headed "the allocator's page commits are inside the anchor,
+and are worth 107,802". The second half is wrong, and this entry carries the
+correction and what the number actually is.
+
+WHAT WAS DONE WRONG. The reserve arm's commit frames were read — two to zero,
+the third down 6,486 — and the row was read, 107,802 higher. The two were put
+together without diffing the arm frame by frame. That is a
+difference-in-differences presented as a mechanism, which is the failure this
+log has a rule about, committed inside the entry that cites the rule.
+
+WHAT THE FRAMES SAY. The matched pair is `MIMALLOC_EAGER_COMMIT=1` against
+`MIMALLOC_RESERVE_OS_MEMORY=256MiB` — one variable each, so the cost of reading
+one more environment variable cancels. 84 frames move.
+
+    sum of falls   -15,794          sum of rises  +121,461
+
+    what falls                            what rises
+      -6,486  mi_bitmap_setN               +111,696  kanso::eval::Interp::frame_for
+      -5,401  _mi_os_commit_ex               +2,808  _mi_os_reuse
+      -1,144  _mi_subproc                    +2,237  __vfscanf_internal      [libc]
+        -730  _mi_prim_commit                +1,105  ____strtoul_l_internal  [libc]
+        -438  mprotect                [libc]   +367  mi_bchunk_xsetNC
+        -432  mi_arena_try_alloc_at            +216  _mi_prim_reuse
+
+The commit path inside the anchor is worth about **15,794**. The row rises
+because `kanso::eval::Interp::frame_for` costs 111,696 more when the arena is
+reserved up front, and that frame is the interpreter's own. Two further passes
+of both arms read 933,390,854 and 933,498,656 on the row and 12,341,583 and
+12,453,279 on `frame_for`, to the instruction each time.
+
+THE DIRECTION WAS MISLEADING TOO. "Worth 107,802" reads as a saving. Reserving
+makes the row LARGER by 107,802 and the whole process larger by 105,667: it
+removes the commits and costs more than they were.
+
+AND THE CORRECTED FINDING IS THE STRONGER ONE. A knob that changes nothing but
+where the heap starts moves kanso's own hot interpreter function by 111,696
+instructions, reproducibly. The standing row has wanted a mechanism in the
+compiler's own code since 2026-09-15; the frame diff of the interp tables
+earlier the same night could offer only an address relocation, flagged there as
+an attribution rather than a mechanism. This is in a named function.
+
+What it does NOT show is that CI's three or six comes from heap placement. A
+256MiB reservation is a wholesale intervention, not the difference between two
+runners, and nothing on this box varies run to run. What it shows is that this
+row is layout-sensitive in kanso's own code, which is the thing the row has been
+trying to establish.
+
+WHAT STANDS from the entry above, unchanged: the commit frames are inside the
+anchor; neither spelling of eager commit moves anything, zero frames different
+out of 1,396; the allocator's option reading falls outside the anchor while
+`MIMALLOC_VERBOSE=1` moves 217,814 of PROGRAM TOTALS and leaves the row
+byte-identical; and nothing varied run to run in any arm.
+
+Surfaces the wrong attribution reached: this log (corrected here, the log being
+append-only), kanso#1567's title and body, and its merge commit message, which
+cannot be edited. A comment on kanso#1567 carries the same correction.
