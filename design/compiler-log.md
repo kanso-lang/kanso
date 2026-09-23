@@ -9106,3 +9106,105 @@ trees exactly as it was, and it does.
 
 IF CI DISAGREES, the prediction is wrong and the number it reports is the one to
 take. Writing it down first is what makes that worth knowing.
+
+## 2026-09-23 — memcmp chose its path by page offset, and the counted runs now preload one that does not
+
+Two findings, both on STATUS.md's row "A welfare counter reads three parts per
+billion", and a normalization under the 2026-09-15 ruling that the second one
+calls for.
+
+### The interp half: one value per tree in 132 jobs
+
+A survey of 132 cost-goldens jobs from 2026-09-17 to 2026-09-23, keyed on the
+commit CI built (the merge commit for a pull request) and on the tree hashes of
+`src`, `lib` and `bench/interp_corpus`, found 36 trees read by two or more jobs.
+Grouped by tree and by the `scripts/gates` tree together, every one of 37 groups
+read exactly one `interp_instructions` value, on CPU families 0x6, 0x19 and 0x1a
+alike. `startup_instructions` and `entry_instructions` are single-valued the
+same way. The only splits inside a tree follow a gate change: two trees read two
+values each, and in both the lower value came only from gates tree 275581a8 and
+the higher only from 59d917a7, 3,199 apart, which is the printed-line term the
+second one subtracts. Eight jobs whose `interp_again` differed from their first
+reading differ by exactly that job's `interp_printed`, in the gate versions
+whose second pass did not yet subtract it.
+
+The six the row records, 2,178,502,266 against 2,178,502,272, was read on
+kanso#1492's job on 2026-09-17, before kanso#1505 took the printed line off the
+interp row that evening. The printed term itself varies between jobs on one
+tree: 3,186 on one job and 3,199 on another, both on tree ffb98cc870. So a gate
+that still counted printing could draw two values on one commit, and the six is
+the size of move that term makes. That is consistent with the six and does not
+isolate it, because those two jobs predate the notice that prints the term.
+What stands is that since the term came off, no tree has read two values.
+
+### The compile rows: libc's memcmp reads the address
+
+kanso#1561 adds forty lines to `src/runtime.c`, which the compiler embeds with
+`include_str!`, and moved every compile-side row by a few thousand
+instructions. Profiled on this container for main and for kanso#1561, the
+interp process's `__memcmp_avx2_movbe` differed by +3,857 over identical call
+counts: `<Name as PartialEq<str>>::eq` made 1,129 calls in both and cost 2,698
+more, `check::builtin_arity` made 5,887 in both and cost 1,081 more.
+Line-level counts, against glibc 2.39's `memcmp-avx2-movbe.S`, place it: 478
+calls left the no-page-cross path at lines 414 to 423 and took
+`L(page_cross_less_vec)` at 429 onward. The test at 407 to 411 is
+
+    movl  %edi, %eax
+    orl   %esi, %eax
+    andl  $(PAGE_SIZE - 1), %eax
+    cmpl  $(PAGE_SIZE - VEC_SIZE), %eax
+    jg    L(page_cross_less_vec)
+
+which asks where the operands sit and nothing about what they hold. Forty lines
+of runtime moved strings in `.rodata` across page offsets, and the same
+comparisons took the other branch.
+
+THE ISOLATION. A replacement `memcmp` and `bcmp` whose cost depends only on
+the length and on where the first difference falls, preloaded into
+`kanso check compile_corpus` with the gate's own tunables, on both trees:
+
+    tree        libc's memcmp        preloaded
+    main          35,990,100        36,656,738
+    kanso#1561    35,992,788        36,656,738
+
+The 2,688 between the trees is exactly the memcmp delta, and with the preload
+the two processes' PROGRAM TOTALS read 37,292,002 each. The only rows that
+still differ are functions whose address moved and whose cost did not. A byte
+loop showed the same thing at 37,803,013 on both, 5% above libc's figure,
+which is why the version that shipped compares eight bytes at a time.
+
+THE NORMALIZATION. The 2026-09-15 ruling names "a layout the linker chose" as
+state a counter must not read. So compile, entry, library, startup, interp and
+emit now run `scripts/gates/address_blind.sh`, which builds
+`scripts/gates/address_blind/compare.c`, compares the same sixteen bytes at page
+offset 64 and at 4080 under callgrind counting only the comparing frame, refuses
+unless the two counts agree, and prints the library's path. Every `env -i` line
+in those six gates preloads it. Without the preload the self-test reads 26 and
+32 and refuses; with it, 35 and 35.
+`tests/every_counted_kanso_run_compares_blind.rs` derives the gates from disk,
+every script that runs `./kanso` under callgrind, and asserts each resolves the
+library before its first run and preloads it on every `env -i` line. It was
+watched red twice: with the preload dropped from one line of the library gate,
+and with the interp gate's call to the helper replaced.
+
+WHAT IT COSTS AND HOW IT IS PRICED. The replacement reads about 1.9% more than
+libc's fast path on the compile row, because avx2 compares 32 bytes in an
+instruction. The six goldens hold main's values as placeholders, this branch is
+expected red once on cost goldens, and CI's rows replace them. Every golden's
+header says its value is not comparable with a reading taken before today. The
+welfare terms these rows feed are re-based by the same ratio, as the compile
+term's baseline was re-based by 465,864 when the row began counting the
+compiler's own frame. This is a measurement change, and it should neither
+score as the compiler getting slower nor let a later change bank the difference.
+
+WHAT IS NOT COVERED. `codegen_instructions` counts clang and ld, whose work
+genuinely changes with the runtime they compile; whether they also read
+addresses is a separate measurement. The benchmark rows in `instructions.sh`
+count programs the compiler emits, which call libc's memcmp from `runtime.c`
+and presumably have the same exposure; nothing here measures that. The
+compiler page's section "two terms under every row", carried by kanso#1568,
+tabulates kanso#1561's first CI reading, and one of its columns is `memchr`
+moving by 30 to 34 in every row. glibc's `memchr-avx2.S` carries the same
+page-offset test at its lines 77 and 78. On this container, once memcmp is
+preloaded, no libc function differs between the two trees, so that term has
+not been reproduced here.

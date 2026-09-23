@@ -56,6 +56,13 @@ tune=$tune:glibc.malloc.mmap_threshold=131072
 tune=$tune:glibc.malloc.trim_threshold=131072
 tune=$tune:glibc.malloc.top_pad=131072
 tune=$tune:glibc.malloc.tcache_count=7
+# memcmp and bcmp are replaced for the counted run by one whose cost depends on
+# the length and the first difference and not on where the operands sit.
+# libc's avx2 memcmp takes a longer branch when either operand lies within 32
+# bytes of a page end, so a change that only moves strings in .rodata moved
+# this row. address_blind.sh proves the replacement at two page offsets before
+# printing its path.
+blind=$(sh scripts/gates/address_blind.sh)
 
 # THE BOX IS RE-STAGED AND WARMED BEFORE EACH MEASURED RUN, for the reason
 # codegen_instructions.sh gives at length: `kanso build X` writes its output
@@ -65,7 +72,7 @@ tune=$tune:glibc.malloc.tcache_count=7
 # and the first MEASURED run pays for compiling runtime.c.
 stage_and_warm() {
   sh scripts/gates/codegen_box.sh
-  ( cd "$box" && env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" \
+  ( cd "$box" && env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" LD_PRELOAD="$blind" \
       ./kanso build pkg/codegen_corpus >/dev/null 2>&1 )
 }
 
@@ -84,7 +91,7 @@ reading() {
   # callgrind -- and `a_host_bound_gate_is_reported_not_credited` reads for
   # both words on a single operative line. Wrapped across a continuation it
   # found the host_gate call and not the callgrind one, and said so.
-  ( cd "$box" && env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" \
+  ( cd "$box" && env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" LD_PRELOAD="$blind" \
       valgrind --tool=callgrind --callgrind-out-file="$out" --cache-sim=no --branch-sim=no \
       ./kanso build pkg/codegen_corpus >/dev/null 2>/dev/null )
 }

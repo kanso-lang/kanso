@@ -115,6 +115,13 @@ tune=$tune:glibc.malloc.mmap_threshold=131072
 tune=$tune:glibc.malloc.trim_threshold=131072
 tune=$tune:glibc.malloc.top_pad=131072
 tune=$tune:glibc.malloc.tcache_count=7
+# memcmp and bcmp are replaced for the counted run by one whose cost depends on
+# the length and the first difference and not on where the operands sit.
+# libc's avx2 memcmp takes a longer branch when either operand lies within 32
+# bytes of a page end, so a change that only moves strings in .rodata moved
+# this row. address_blind.sh proves the replacement at two page offsets before
+# printing its path.
+blind=$(sh scripts/gates/address_blind.sh)
 # NO ASLR KNOB, and the reason is a measurement rather than an omission. The
 # row read two values 508 apart and `setarch -R` was tried against them on the
 # ruling of 2026-09-03. It changed nothing twice over: on the container it read
@@ -127,7 +134,7 @@ tune=$tune:glibc.malloc.tcache_count=7
 # already names the binary as a cause the cpu key cannot see.
 (
   cd "$box"
-  env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" valgrind --tool=callgrind \
+  env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" LD_PRELOAD="$blind" valgrind --tool=callgrind \
     --callgrind-out-file=/tmp/cg.compile ./kanso check compile_corpus \
     >/dev/null 2>/dev/null
 )
@@ -429,7 +436,7 @@ fi
 # by hand.
 (
   cd "$box"
-  env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" valgrind --tool=callgrind \
+  env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" LD_PRELOAD="$blind" valgrind --tool=callgrind \
     --callgrind-out-file=/tmp/cg.compile2 ./kanso check compile_corpus \
     >/dev/null 2>/dev/null
 )

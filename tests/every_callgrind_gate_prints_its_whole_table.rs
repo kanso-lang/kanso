@@ -76,7 +76,7 @@ fn profiles_written(body: &str) -> Vec<String> {
 }
 
 /// A gate is exempt only for a reason written down here, and the list is
-/// asserted to be exactly these two — a seventh gate cannot join it quietly.
+/// asserted to be exactly these three — another gate cannot join it quietly.
 ///
 /// `codegen_instructions.sh` names its profiles `/tmp/cg.codegen.$tier.%p`:
 /// one file per process across the clang driver, the convention probe,
@@ -91,7 +91,16 @@ fn profiles_written(body: &str) -> Vec<String> {
 /// measurement in its loop, so there is no profile left to print by the time
 /// the gate has a verdict. Making that gate name which frames moved means
 /// keeping both profiles first.
-const EXEMPT: [&str; 2] = ["codegen_instructions.sh", "path_independence.sh"];
+///
+/// `address_blind.sh` profiles a probe of about thirty-five instructions,
+/// twice, to prove the memcmp every counted run preloads costs the same at
+/// two page offsets. Its verdict is the pair of counts, and a refusal prints
+/// both; there is no compiler frame in that profile to locate.
+const EXEMPT: [&str; 3] = [
+    "address_blind.sh",
+    "codegen_instructions.sh",
+    "path_independence.sh",
+];
 
 /// The scripts this spec governs: every gate that writes a callgrind profile
 /// and is not exempt above.

@@ -2264,6 +2264,26 @@
 # A layout row: `kanso check` stops before codegen, so a runtime.c change
 # cannot alter a decision this row counts, and the compiler's own bytes move
 # under it anyway. `compile_again` read 35,549,673.
+# AND memcmp IS PRELOADED, 2026-09-23, under the same rule.
+#
+# Every run this gate counts preloads scripts/gates/address_blind/compare.c
+# over libc's memcmp and bcmp. glibc's __memcmp_avx2_movbe asks, for a
+# comparison under 32 bytes, whether (s1 | s2) & 4095 lies within 32 bytes of
+# a page end, and takes a longer branch when it does. So comparing the same
+# bytes cost a different number of instructions depending on where the linker
+# put one operand and the allocator put the other. kanso#1561 added forty lines
+# to src/runtime.c, which the compiler embeds. On one host that moved 478 of the
+# compile row's comparisons onto the page-cross branch with every call count
+# unchanged, and that row rose 2,688. With the preload the two trees read
+# 36,656,738 each, and the two processes' PROGRAM TOTALS agreed to the
+# instruction.
+#
+# The replacement compares eight bytes at a time, and its cost depends only on
+# the length and where the first difference falls. It costs more than libc's:
+# the compile row read 666,638 higher on that host, because the avx2 path
+# compares 32 bytes in one instruction. The value below was measured with it and
+# is not comparable with any reading taken before 2026-09-23.
+#
 compile_instructions=35543672
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
