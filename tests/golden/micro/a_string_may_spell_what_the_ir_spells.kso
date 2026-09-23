@@ -1,0 +1,11 @@
+# A string constant is written into the emitted module as a line of its own,
+# and the pass that drops `tailcc` from calls that do not need it read every
+# line of that module. So a program printing the words `call tailcc` lost them
+# from the constant and kept its declared length, and clang refused the module:
+# the interpreter printed this sample and the compiler could not build it. The
+# pass now leaves every global's line alone, and the strings below spell each
+# word it looks for.
+pub play =
+  print "call tailcc here"
+  >> print "musttail call tailcc @f(i64 1)"
+  >> print "define tailcc %KValue @g("

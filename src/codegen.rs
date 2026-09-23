@@ -28,52 +28,6 @@ enum ArmCase {
     Rec(i64, usize),
 }
 
-/// The eight inlined fast paths in DECLARES each ask `k_stats_on` before they
-/// take the shortcut, because the shortcut bypasses the runtime call that
-/// would have counted. A binary nobody is going to count does not need the
-/// question: folding the eight gates to a constant and relinking the shipped
-/// recipe reads 2,141,315,030 -> 2,115,346,210 on the run program, a fall of
-/// 25,968,820 (1.2128%), with `.text` 2,048 bytes smaller and stdout byte for
-/// byte the same.
-///
-/// The gate is exactly three lines wherever it appears, and this REFUSES to
-/// proceed on anything else rather than silently leaving one in: a ninth site
-/// written a different way must turn the build red, not go quietly unstripped.
-fn without_stats_gate(lines: Vec<&str>) -> Vec<String> {
-    let mut out: Vec<String> = Vec::with_capacity(lines.len());
-    let mut i = 0;
-    let mut stripped = 0;
-    while i < lines.len() {
-        let line = lines[i];
-        if !line.contains("load i32, ptr @k_stats_on") {
-            out.push(line.to_string());
-            i += 1;
-            continue;
-        }
-        let icmp = lines.get(i + 1).copied().unwrap_or("");
-        let br = lines.get(i + 2).copied().unwrap_or("");
-        assert!(
-            icmp.contains("= icmp ne i32 ") && icmp.trim_end().ends_with(", 0"),
-            "the stats gate's second line is not the icmp this expects: {icmp}"
-        );
-        let fast = br
-            .rsplit_once("label %")
-            .map(|(_, name)| name.trim())
-            .filter(|_| br.trim_start().starts_with("br i1 "))
-            .unwrap_or_else(|| {
-                panic!("the stats gate's third line is not the br this expects: {br}")
-            });
-        out.push(format!("  br label %{fast}"));
-        stripped += 1;
-        i += 3;
-    }
-    assert_eq!(
-        stripped, STATS_GATE_SITES,
-        "the stats gate moved: DECLARES holds a different number of them"
-    );
-    out
-}
-
 /// Whether this build wants the allocation counters. BOTH halves of a binary
 /// ask it -- the emitter for the eight inlined gates, and the runtime object
 /// for its own twenty-seven -- because a counting runtime linked against
@@ -91,7 +45,7 @@ pub fn counters_wanted() -> bool {
 }
 
 /// How many `k_stats_on` gates DECLARES carries. Pinned so that adding one
-/// without teaching `without_stats_gate` about it fails loudly.
+/// without teaching `index_declares` about it fails the build.
 pub const STATS_GATE_SITES: usize = 8;
 
 const DECLARES: &str = r#"%KValue = type { i64, i64 }
@@ -1281,6 +1235,305 @@ declare %KValue @k_force(%KValue)
 declare %KValue @k_force_unless_black(%KValue)
 
 "#;
+
+/// One line of DECLARES, located when the compiler is compiled.
+///
+/// Every module the emitter writes begins with DECLARES, less the declares its
+/// program never calls and, in a build nobody will count, less the stats gates.
+/// Doing that at run time meant splitting 1,186 lines, finding each declare's
+/// symbol, asking every line whether it opened a gate, and allocating a
+/// `String` per kept line to join afterwards: 1.1 million instructions of the
+/// 2.7 million `print "x"` cost to build. The text is a constant, so the scan
+/// runs in const evaluation and a build reads the finished table.
+#[derive(Clone, Copy)]
+struct DeclareLine {
+    start: usize,
+    end: usize,
+    /// The symbol a `declare` line names, `sym_start == sym_end` when the line
+    /// is not one the program's calls decide.
+    sym_start: usize,
+    sym_end: usize,
+    /// What the line becomes in a build without counters: `Keep`, `Fold` with
+    /// the fast path's label, or `Folded` for the two lines a gate folds.
+    shipped: Shipped,
+}
+
+/// The eight inlined fast paths in DECLARES each ask `k_stats_on` before they
+/// take the shortcut, because the shortcut bypasses the runtime call that
+/// would have counted. A binary nobody is going to count does not need the
+/// question: folding the eight gates to a constant and relinking the shipped
+/// recipe reads 2,141,315,030 -> 2,115,346,210 on the run program, a fall of
+/// 25,968,820 (1.2128%), with `.text` 2,048 bytes smaller and stdout byte for
+/// byte the same.
+///
+/// The gate is exactly three lines wherever it appears, and `index_declares`
+/// REFUSES anything else rather than silently leaving one in: a ninth site
+/// written a different way turns the compiler's own build red.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Shipped {
+    Keep,
+    Fold { label_start: usize, label_end: usize },
+    Folded,
+}
+
+const fn declares_line_count(text: &[u8]) -> usize {
+    let mut n = 0;
+    let mut i = 0;
+    while i < text.len() {
+        if text[i] == b'\n' {
+            n += 1;
+        }
+        i += 1;
+    }
+    match !text.is_empty() && text[text.len() - 1] != b'\n' {
+        true => n + 1,
+        false => n,
+    }
+}
+
+/// Where `needle` first occurs in `text[from..to]`, or `to`.
+const fn find_in(text: &[u8], from: usize, to: usize, needle: &[u8]) -> usize {
+    let mut i = from;
+    while i + needle.len() <= to {
+        let mut j = 0;
+        while j < needle.len() && text[i + j] == needle[j] {
+            j += 1;
+        }
+        if j == needle.len() {
+            return i;
+        }
+        i += 1;
+    }
+    to
+}
+
+const fn starts_at(text: &[u8], at: usize, to: usize, prefix: &[u8]) -> bool {
+    at + prefix.len() <= to && find_in(text, at, at + prefix.len(), prefix) == at
+}
+
+const fn is_space(b: u8) -> bool {
+    matches!(b, b' ' | b'\t' | b'\n' | b'\r' | 0x0b | 0x0c)
+}
+
+const DECLARES_LINES: usize = declares_line_count(DECLARES.as_bytes());
+
+/// The table, and the refusals the run-time fold used to make, raised while
+/// the compiler compiles: a gate written any other way is a build error.
+const fn index_declares() -> [DeclareLine; DECLARES_LINES] {
+    let text = DECLARES.as_bytes();
+    let blank = DeclareLine { start: 0, end: 0, sym_start: 0, sym_end: 0, shipped: Shipped::Keep };
+    let mut out = [blank; DECLARES_LINES];
+    let mut at = 0;
+    let mut n = 0;
+    while n < DECLARES_LINES {
+        let end = find_in(text, at, text.len(), b"\n");
+        let mut line =
+            DeclareLine { start: at, end, sym_start: at, sym_end: at, shipped: Shipped::Keep };
+        if starts_at(text, at, end, b"declare ") {
+            let rest = at + b"declare ".len();
+            let sigil = find_in(text, rest, end, b"@");
+            if sigil < end {
+                let paren = find_in(text, sigil + 1, end, b"(");
+                if paren < end {
+                    line.sym_start = sigil + 1;
+                    line.sym_end = paren;
+                }
+            }
+        }
+        out[n] = line;
+        at = end + 1;
+        n += 1;
+    }
+    let mut stripped = 0;
+    let mut i = 0;
+    while i < DECLARES_LINES {
+        let l = out[i];
+        if find_in(text, l.start, l.end, b"load i32, ptr @k_stats_on") < l.end {
+            assert!(i + 2 < DECLARES_LINES, "a stats gate runs off the end of DECLARES");
+            let icmp = out[i + 1];
+            let mut icmp_end = icmp.end;
+            while icmp_end > icmp.start && is_space(text[icmp_end - 1]) {
+                icmp_end -= 1;
+            }
+            assert!(
+                find_in(text, icmp.start, icmp.end, b"= icmp ne i32 ") < icmp.end
+                    && icmp_end >= icmp.start + 3
+                    && text[icmp_end - 3] == b','
+                    && text[icmp_end - 2] == b' '
+                    && text[icmp_end - 1] == b'0',
+                "the stats gate's second line is not the icmp this expects"
+            );
+            let br = out[i + 2];
+            let mut br_start = br.start;
+            while br_start < br.end && is_space(text[br_start]) {
+                br_start += 1;
+            }
+            assert!(
+                starts_at(text, br_start, br.end, b"br i1 "),
+                "the stats gate's third line is not the br this expects"
+            );
+            // The last `label %`, as rsplit_once finds it.
+            let mut last = br.end;
+            let mut k = br.start;
+            while k < br.end {
+                let hit = find_in(text, k, br.end, b"label %");
+                if hit == br.end {
+                    break;
+                }
+                last = hit;
+                k = hit + 1;
+            }
+            assert!(last < br.end, "the stats gate's third line is not the br this expects");
+            let mut label_start = last + b"label %".len();
+            let mut label_end = br.end;
+            while label_start < label_end && is_space(text[label_start]) {
+                label_start += 1;
+            }
+            while label_end > label_start && is_space(text[label_end - 1]) {
+                label_end -= 1;
+            }
+            out[i].shipped = Shipped::Fold { label_start, label_end };
+            out[i + 1].shipped = Shipped::Folded;
+            out[i + 2].shipped = Shipped::Folded;
+            stripped += 1;
+            i += 3;
+            continue;
+        }
+        i += 1;
+    }
+    assert!(
+        stripped == STATS_GATE_SITES,
+        "the stats gate moved: DECLARES holds a different number of them"
+    );
+    // `emit` hands only what follows DECLARES to `narrow_tailcc`, which is
+    // right while the preamble names no convention for that pass to narrow.
+    assert!(
+        find_in(text, 0, text.len(), b"tailcc") == text.len(),
+        "DECLARES spells tailcc, so emit must narrow it with the rest"
+    );
+    out
+}
+
+static DECLARE_LINES: [DeclareLine; DECLARES_LINES] = index_declares();
+
+/// DECLARES as a module wants it: joined by newlines with no newline after the
+/// last, keeping a `declare` only when `referenced` says the program calls its
+/// symbol, and folding each stats gate to its fast branch unless `counting`.
+fn declares_for(referenced: impl Fn(&str) -> bool, counting: bool) -> String {
+    let mut out = String::with_capacity(DECLARES.len());
+    let mut first = true;
+    for line in &DECLARE_LINES {
+        if line.sym_start < line.sym_end && !referenced(&DECLARES[line.sym_start..line.sym_end]) {
+            continue;
+        }
+        let piece = match (counting, line.shipped) {
+            (false, Shipped::Folded) => continue,
+            (false, Shipped::Fold { label_start, label_end }) => {
+                if !first {
+                    out.push('\n');
+                }
+                out.push_str("  br label %");
+                out.push_str(&DECLARES[label_start..label_end]);
+                first = false;
+                continue;
+            }
+            _ => &DECLARES[line.start..line.end],
+        };
+        if !first {
+            out.push('\n');
+        }
+        out.push_str(piece);
+        first = false;
+    }
+    out
+}
+
+#[cfg(test)]
+mod the_declares_table_is_the_scan_it_replaced {
+    use super::{declares_for, DECLARES, STATS_GATE_SITES};
+
+    /// The scan the table replaced, kept verbatim as the oracle: the filter
+    /// that dropped uncalled declares, then the fold of the stats gates.
+    fn scanned(referenced: impl Fn(&str) -> bool, counting: bool) -> String {
+        let kept: Vec<&str> = DECLARES
+            .lines()
+            .filter(|line| {
+                let Some(rest) = line.strip_prefix("declare ") else { return true };
+                let Some(at) = rest.find('@') else { return true };
+                let sym = &rest[at + 1..];
+                let Some(paren) = sym.find('(') else { return true };
+                referenced(&sym[..paren])
+            })
+            .collect();
+        match counting {
+            true => kept.join("\n"),
+            false => without_stats_gate(kept).join("\n"),
+        }
+    }
+
+    fn without_stats_gate(lines: Vec<&str>) -> Vec<String> {
+        let mut out: Vec<String> = Vec::with_capacity(lines.len());
+        let mut i = 0;
+        let mut stripped = 0;
+        while i < lines.len() {
+            let line = lines[i];
+            if !line.contains("load i32, ptr @k_stats_on") {
+                out.push(line.to_string());
+                i += 1;
+                continue;
+            }
+            let icmp = lines.get(i + 1).copied().unwrap_or("");
+            let br = lines.get(i + 2).copied().unwrap_or("");
+            assert!(
+                icmp.contains("= icmp ne i32 ") && icmp.trim_end().ends_with(", 0"),
+                "the stats gate's second line is not the icmp this expects: {icmp}"
+            );
+            let fast = br
+                .rsplit_once("label %")
+                .map(|(_, name)| name.trim())
+                .filter(|_| br.trim_start().starts_with("br i1 "))
+                .unwrap_or_else(|| {
+                    panic!("the stats gate's third line is not the br this expects: {br}")
+                });
+            out.push(format!("  br label %{fast}"));
+            stripped += 1;
+            i += 3;
+        }
+        assert_eq!(
+            stripped, STATS_GATE_SITES,
+            "the stats gate moved: DECLARES holds a different number of them"
+        );
+        out
+    }
+
+    /// Every choice of which declares survive that the emitter can make is a
+    /// predicate on the symbol, so a handful that cut DECLARES different ways
+    /// -- all, none, and three that split it -- over both kinds of build.
+    #[test]
+    fn every_build_reads_the_same_preamble() {
+        let cuts: [fn(&str) -> bool; 5] = [
+            |_| true,
+            |_| false,
+            |s| s.len() % 2 == 0,
+            |s| s.contains("_b_"),
+            |s| s.ends_with("_fast"),
+        ];
+        for counting in [true, false] {
+            for cut in cuts {
+                assert_eq!(declares_for(cut, counting), scanned(cut, counting));
+            }
+        }
+    }
+
+    /// A gate folds to one line where it was three, so a build without
+    /// counters is shorter by exactly two lines a gate.
+    #[test]
+    fn a_shipped_build_folds_every_gate() {
+        let counted = declares_for(|_| true, true).lines().count();
+        let shipped = declares_for(|_| true, false).lines().count();
+        assert_eq!(counted - shipped, 2 * STATS_GATE_SITES);
+    }
+}
 
 pub(crate) const BUILTIN_CALLS: [&str; 57] = [
     "effect",
@@ -3460,23 +3713,9 @@ impl<'a> Backend<'a> {
             let referenced = |sym: &str| {
                 body_calls.contains(sym) || twin_calls.contains(sym) || declares_context_calls(sym)
             };
-            let kept: Vec<&str> = DECLARES
-                .lines()
-                .filter(|line| {
-                    let Some(rest) = line.strip_prefix("declare ") else { return true };
-                    let Some(at) = rest.find('@') else { return true };
-                    let sym = &rest[at + 1..];
-                    let Some(paren) = sym.find('(') else { return true };
-                    referenced(&sym[..paren])
-                })
-                .collect();
-            match counters_wanted() {
-                true => kept.join("\n"),
-                false => without_stats_gate(kept).join("\n"),
-            }
+            declares_for(referenced, counters_wanted())
         };
-        let mut out = declares;
-        out.push('\n');
+        let mut out = String::new();
         out.push_str(&call_twins);
         for cell in &self.caf_cells {
             let _ = writeln!(out, "@{cell} = internal global %KValue zeroinitializer");
@@ -3512,7 +3751,12 @@ impl<'a> Backend<'a> {
         }
         out.push('\n');
         out.push_str(&body);
-        Ok(narrow_tailcc(out))
+        let narrowed = narrow_tailcc(out);
+        let mut module = String::with_capacity(declares.len() + 1 + narrowed.len());
+        module.push_str(&declares);
+        module.push('\n');
+        module.push_str(&narrowed);
+        Ok(module)
     }
 
     fn intern(&mut self, text: &str) -> (String, usize) {
@@ -7436,10 +7680,16 @@ fn ir_bytes(bytes: &[u8]) -> String {
 /// The set is read out of the emitted text rather than recomputed, because a
 /// second copy of "when do we musttail" would drift from the first and the
 /// symptom of drift is silent corruption.
+///
+/// Only code is read. A line opening with `@` defines a global, a string
+/// constant among them, and a constant's bytes are the program's: a program
+/// printing `call tailcc` once lost the words from its constant, kept the
+/// declared length, and clang refused the module.
 fn narrow_tailcc(ir: String) -> String {
+    let code = |line: &str| !line.starts_with('@');
     let mut keep: crate::hash::Set<String> = crate::hash::Set::default();
     let mut current: Option<String> = None;
-    for line in ir.lines() {
+    for line in ir.lines().filter(|line| code(line)) {
         if let Some(rest) = line.strip_prefix("define ") {
             current = symbol_of(rest);
         }
@@ -7492,6 +7742,13 @@ fn narrow_tailcc(ir: String) -> String {
 
     let mut out = String::with_capacity(ir.len());
     for line in ir.lines() {
+        // Every rewrite below needs the word, so a line without it is copied
+        // as it stands and its callee is never looked up.
+        if !code(line) || !line.contains("tailcc ") {
+            out.push_str(line);
+            out.push('\n');
+            continue;
+        }
         let named = symbol_of(line);
         let reroute = !line.contains("musttail call")
             && line.contains("call tailcc ")
@@ -7501,7 +7758,7 @@ fn narrow_tailcc(ir: String) -> String {
             let call = format!("@{}(", quoted(&name));
             let through = format!("@{}(", trampoline_name(&name));
             out.push_str(&line.replace("call tailcc ", "call ").replace(&call, &through));
-        } else if line.contains("tailcc ") && !named.as_ref().is_some_and(|n| keep.contains(n)) {
+        } else if !named.as_ref().is_some_and(|n| keep.contains(n)) {
             out.push_str(&line.replace("tailcc ", ""));
         } else {
             out.push_str(line);
