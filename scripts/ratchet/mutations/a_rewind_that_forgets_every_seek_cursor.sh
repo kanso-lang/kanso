@@ -1,6 +1,6 @@
 #!/bin/sh
-# A beat's rewind forgets the seek cursor only when the string it names sat
-# above the mark, since those are the addresses the arena hands back. This
+# A beat's rewind forgets the seek cursor only when the string it names does
+# not lie under the mark, since the arena hands back what is above it. This
 # mutation forgets it on every rewind, which is what the runtime did before
 # 2026-09-23.
 #
@@ -10,9 +10,9 @@
 # than five minutes where it had taken fifteen seconds.
 # a_scan_keeps_its_place_in_the_text reads seek_resumes=276 against 408.
 set -e
-grep -q '^        if ((uintptr_t)k_seek_str - (uintptr_t)m->ptr < (uintptr_t)k_arena - (uintptr_t)m->ptr)$' src/runtime.c || {
+grep -q '^        if (m < k_seek_under)$' src/runtime.c || {
   echo "the rewind's cursor test changed shape; rewrite this" >&2
   exit 1
 }
-sed -i 's|^        if ((uintptr_t)k_seek_str - (uintptr_t)m->ptr < (uintptr_t)k_arena - (uintptr_t)m->ptr)$|        if (1)|' src/runtime.c
+sed -i 's|^        if (m < k_seek_under)$|        if (1)|' src/runtime.c
 grep -q '^        if (1)$' src/runtime.c

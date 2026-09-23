@@ -739,6 +739,31 @@ static int k_beat_depth = 0;
    every iteration -- see `tests/the_cached_beat_top_tracks_the_depth.rs`. */
 static KMark* k_beat_top = NULL;
 
+/* The innermost mark the seek cursor's string lies under: allocated before
+   that mark was pushed, so a rewind to it or to any mark pushed later cannot
+   hand the string's address back. A rewind to an outer mark can, and forgets
+   the cursor. Working this out when the cursor is set, which a scan does once
+   per string it starts on, leaves the rewind one comparison, which every loop
+   pays at every iteration.
+
+   At depth zero no mark exists yet, so every mark ever pushed comes after the
+   string. Past the deepest mark the stack holds, nothing is known, and the
+   answer is one past the stack's end so that every rewind forgets. With a
+   mark in hand, a string in the range the mark would hand back sits above it,
+   and so does any string once a new block has been taken, since the range is
+   then more than one block and one test cannot bound it. */
+static KMark* k_seek_under = k_beat_stack;
+
+static inline void k_seek_note(KStr* s) {
+    k_seek_str = s;
+    KMark* top = k_beat_top;
+    if (k_beat_depth == 0) { k_seek_under = k_beat_stack; return; }
+    if (!top) { k_seek_under = k_beat_stack + K_BEAT_MAX; return; }
+    int above = k_blocks != top->block
+        || (uintptr_t)s - (uintptr_t)top->ptr < (uintptr_t)k_arena - (uintptr_t)top->ptr;
+    k_seek_under = above ? top + 1 : top;
+}
+
 static inline void k_beat_set_depth(int d) {
     k_beat_depth = d;
     /* `d > 0 && d <= K_BEAT_MAX` as one unsigned compare: a depth of zero
@@ -1018,16 +1043,12 @@ static inline void k_beat_rewind(KMark* m) {
     if (__builtin_expect(!(k_buf_dirty | m->reg_any)
                          && k_blocks == m->block, 1)) {
         /* The cursor names a string by its header's address, and the rewind
-           hands back every address from the mark up. A header below the mark
-           is not handed back, so a scan over a string that arrived from
+           hands back every address from the mark up. A string under this
+           mark is not handed back, so a scan over a string that arrived from
            outside the loop keeps its place; forgetting it there made every
            position walk from the front, which is quadratic in the subject.
-           No block has been taken since the mark, so what is handed back is
-           exactly `[m->ptr, k_arena)` of this one. Both ends are needed: a
-           string in an older block can sit at a higher address than the
-           mark, and a test of the lower end alone forgot the cursor of every
-           page prose_check read. */
-        if ((uintptr_t)k_seek_str - (uintptr_t)m->ptr < (uintptr_t)k_arena - (uintptr_t)m->ptr)
+           `k_seek_note` recorded which marks the string lies under. */
+        if (m < k_seek_under)
             k_seek_str = NULL;
         k_arena = m->ptr;
         k_arena_left = m->left;
@@ -8148,7 +8169,7 @@ static long k_str_seek(KStr* s, long long from) {
     }
     while (at < s->len) {
         if (seen == from) {
-            k_seek_str = s;
+            k_seek_note(s);
             k_seek_char = from;
             k_seek_byte = at;
             return at;
@@ -8774,7 +8795,7 @@ static __attribute__((noinline)) KValue k_b_slice_walk(KStr* s, long long from, 
             at += k_cp_len((unsigned char)s->data[at]);
         }
         if (start >= 0 && from >= 1) {
-            k_seek_str = s;
+            k_seek_note(s);
             k_seek_char = from;
             k_seek_byte = start;
         }

@@ -10118,3 +10118,44 @@ and the rise is banked after they land.
 Open: the carry tier's path prefix, which this change routed around rather
 than replaced; and a type used as a value, which must widen its field sets in
 `infer.rs` before the native backend accepts one.
+
+---
+
+## 2026-09-23 — the seek cursor records which marks its string lies under, so a rewind asks one question
+
+kanso#1579 made the rewind's fast path forget the seek cursor only when the
+string it names sits in `[m->ptr, k_arena)`, the range the rewind hands back.
+That is exact and it cost five instructions an iteration: load the cursor and
+the arena pointer, two subtractions, a compare. CI read it as +0.41% on the
+run program after `always_inline` had given half of it back.
+
+The question can be answered when the cursor is set instead, which a scan
+does once per string it starts on, where a loop rewinds at every iteration.
+`k_seek_note` records the innermost mark the string lies under: the top mark
+if the string is not in the range that mark would hand back, one deeper if it
+is, and conservatively one deeper whenever a new block has been taken since
+the mark, because then the range is not one test. At depth zero the answer is
+the bottom of the stack, since every mark comes after the string, and past the
+stack's last slot it is one past the end, so every rewind forgets. The rewind
+then compares its own mark against that pointer:
+
+    cmp    %rdi, k_seek_under
+    jbe    keep
+    movq   $0, k_seek_str
+
+A mark pushed later than the one recorded cannot hand the string back, and
+one popped and pushed again in the same slot comes after the string too, so
+comparing slot addresses is enough. The slow path still forgets unconditionally.
+
+On this container:
+
+    runbench              1,826,634,704 -> 1,815,911,759   -10,722,945
+    against main          1,820,479,421 -> 1,815,911,759    -4,567,662   -0.25%
+    prose_check           15.1 s -> 13.1 s
+
+Every counter vein agrees, `seek_resumes` included; the beat differential
+reads 0 of its 96 layout pairs disagreeing, and
+`a_seek_cursor_does_not_outlive_its_string`, the fixture for the cursor kept
+past its string, passes. The mutation `a_rewind_that_forgets_every_seek_cursor`
+now replaces the new comparison and still takes
+`a_scan_keeps_its_place_in_the_text` from 408 to 276.
