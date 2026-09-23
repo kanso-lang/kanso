@@ -10870,3 +10870,25 @@ the welfare script against main's goldens scaled by these ratios, -O1 reads
 +0.19 and -O2 +0.11; the objective weighs a release build at 0.15 of
 production against run speed's 0.45, and at these ratios the build's saving
 is the larger. CI's rows go into the goldens.
+
+**CI's rows**, taken into the goldens:
+
+    codegen_instructions_release 2,900,713,494 -> 1,751,097,561   -39.63%
+    work_jsonbench       1,129,050,376 ->   1,196,422,427   +5.97%
+    work_encodebench     3,479,633,527 ->   3,356,324,328   -3.54%
+    work_oneshot            19,872,932 ->      20,373,089   +2.52%
+    work_basket             32,376,516 ->      32,678,753   +0.93%
+    work_widebench          33,530,471 ->      34,746,491   +3.63%
+    work_deepbench         359,347,473 ->     366,363,489   +1.95%
+    work_escapebench        74,053,454 ->      80,047,456   +8.09%
+    work_pendbench         208,259,451 ->     209,065,155   +0.39%
+    work_indexbench          2,907,171 ->       2,927,166   +0.69%
+    work_scanbench         468,791,320 ->     451,724,087   -3.64%
+    work_digestbench         5,787,538 ->       5,866,515   +1.36%
+    work_readbench           4,630,466 ->       4,630,465   -0.00%
+    work_livebench       2,803,274,864 ->   2,824,128,034   +0.74%
+    work_runbench        1,793,355,755 ->   1,853,571,514   +3.36%
+
+CI reads the run program at +3.36% where this container read +4.97%. `text`,
+summed over the fourteen binaries, reads 3,215,292 against
+3,372,588. The objective rises, and the rise is banked.
