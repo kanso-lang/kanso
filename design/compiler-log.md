@@ -9983,6 +9983,75 @@ scores the trade at 77.37 against a floor of 77.36, so the rise is banked.
 
 ---
 
+## 2026-09-23 — the tailcc pass reads code lines only, and the preamble is indexed when the compiler compiles
+
+Two text passes at the end of `Backend::emit` ran over every line of the
+module, and the module of a one-line program is 1,155 lines, 1,186 of them
+DECLARES before pruning. Between them they were most of what `print "x"` cost
+to build.
+
+**The bug.** `narrow_tailcc` drops `tailcc` from every function a `musttail`
+does not reach. It read string constants as well as code, and a string
+constant is one line opening with `@` whose bytes are the program's. So
+`print "call tailcc here"` lost the word from its constant and kept the
+declared length, and clang refused the module:
+
+    error: constant expression type mismatch: got type '[9 x i8]' but expected '[16 x i8]'
+
+The interpreter printed the line. That is a divergence between engines, and
+`tests/golden/micro/a_string_may_spell_what_the_ir_spells.kso` pins it with
+three strings spelling `call tailcc`, `musttail call tailcc @f(` and
+`define tailcc`. Watched red on main, where `micro_corpus_agrees_across_engines`
+reported that the sample answers differently as a library. It is green here,
+and green in the release-built corpus.
+
+**The first fix.** Lines opening with `@` are passed through, and a line
+without `tailcc ` is copied before `symbol_of` allocates its callee's name.
+Every rewrite the pass makes needs that word, so the second half changes only
+the cost. Nothing the emitter writes on a global line carries `tailcc`.
+
+**The second.** DECLARES is a constant, and every build split it into lines,
+found each declare's symbol, asked every line whether it opened a stats gate,
+and allocated a `String` per kept line to join afterwards. `index_declares` now
+does that scan in const evaluation, and `declares_for` walks the finished table
+into one buffer. The refusals the run-time fold made about a malformed gate are
+const assertions, so a ninth gate or a misshapen one fails the compiler's own
+build; changing `STATS_GATE_SITES` to 9 was watched fail with `evaluation
+panicked: the stats gate moved`. The old scan is kept verbatim as the oracle in
+`the_declares_table_is_the_scan_it_replaced`, which compares the two over five
+cuts of which declares survive, counted and shipped. Breaking the fold's label
+by one space turned it red.
+
+DECLARES holds no `tailcc`, and a third const assertion says so, so `emit` now
+hands `narrow_tailcc` only what follows the preamble.
+
+**What moved.** `runbench.ll` is byte-identical, and so is the start-up
+program's module in both a counted and a shipped build. On this container, with
+the gates' own commands, the address-blind preload, and `GITHUB_ACTIONS=1` so
+the host gate measures instead of refusing:
+
+    startup_instructions   3,404,805 ->   979,543   -2,425,262   -71.2%
+    emit_instructions     51,896,570 -> 46,378,063   -5,518,507   -10.6%
+
+The first fix alone read 2,698,935 and 48,118,120. The container runs rustc
+1.94.1 and the goldens were measured on 1.98.1, so CI's rows go into the
+goldens. No other row reads either pass: `kanso check` stops before codegen,
+and the codegen rows count clang, which is handed the same bytes.
+
+The whole process is now 1,603,771 instructions, of which the row's
+`kanso::main` is 979,543 and the dynamic loader 396,850. Inside the row,
+`emit_ir` is 645,986, so emitting is still two thirds of what the row counts.
+
+**CI's rows**, taken into the goldens; every other row read what main has:
+
+    startup_instructions    3,372,366 ->    968,441   -2,403,925   -71.28%
+    emit_instructions      51,381,691 -> 45,953,348   -5,428,343   -10.56%
+
+The first reading was 968,455, taken before main was merged in; the merged
+tree reads 14 fewer, which is kanso#1577's own start-up move.
+
+Welfare scores 78.15 against a floor of 77.37, and the rise is banked.
+
 ## 2026-09-23 — the regexp scan rewinds at every start position, and a rewind keeps the seek cursor below the mark
 
 `docs/compiler.html` §112–115 put 29,360,128 of the run program's 38,604,496
