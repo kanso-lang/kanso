@@ -58,6 +58,29 @@ int main(void) {
         }
         cases += 4;
     }
+    /* Every length up to 100, equal and then with one byte raised and one
+       lowered at every position, which crosses each size class of the
+       comparison and puts the first difference in every part of it. */
+    for (size_t n = 0; n <= 100; n++) {
+        for (size_t i = 0; i < n; i++) x[i] = y[i] = (unsigned char)(0x41 + i * 7);
+        if (blind_memcmp(x, y, n) != 0 || blind_bcmp(x, y, n) != 0) {
+            fprintf(stderr, "compare calls equal bytes different at n=%zu\n", n);
+            return 1;
+        }
+        cases++;
+        for (size_t pos = 0; pos < n; pos++) {
+            for (int d = -1; d <= 1; d += 2) {
+                for (size_t i = 0; i < n; i++) y[i] = x[i];
+                y[pos] = (unsigned char)(y[pos] + d);
+                if (sign(blind_memcmp(x, y, n)) != sign(memcmp(x, y, n)) ||
+                    (blind_bcmp(x, y, n) == 0) != (memcmp(x, y, n) == 0)) {
+                    fprintf(stderr, "compare disagrees with libc: n=%zu pos=%zu d=%d\n", n, pos, d);
+                    return 1;
+                }
+                cases++;
+            }
+        }
+    }
     /* Every length up to 300 at every distance from -140 to 140 between
        source and destination, which crosses each size class's boundary and
        every overlap in both directions. */
