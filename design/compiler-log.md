@@ -10822,3 +10822,27 @@ better; the run program is the one the objective weighs. The release codegen
 row reads 2,903,108,801 against 2,898,793,716 at 225, +0.15%, which is the
 linker placing a larger runtime object; the runtime's own compile is cached
 and the gate warms it before counting. CI's rows go into the goldens.
+
+**CI's rows**, taken into the goldens:
+
+    codegen_instructions_release 2,898,336,765 -> 2,900,713,494   +0.08%
+    work_jsonbench       1,138,862,859 ->   1,129,050,376   -0.86%
+    work_encodebench     3,481,870,112 ->   3,479,633,527   -0.06%
+    work_oneshot            19,850,560 ->      19,872,932   +0.11%
+    work_basket             32,585,639 ->      32,376,516   -0.64%
+    work_widebench          33,660,736 ->      33,530,471   -0.39%
+    work_deepbench         351,324,436 ->     359,347,473   +2.28%
+    work_escapebench        74,602,433 ->      74,053,454   -0.74%
+    work_pendbench         208,152,834 ->     208,259,451   +0.05%
+    work_indexbench          2,906,581 ->       2,907,171   +0.02%
+    work_scanbench         463,280,487 ->     468,791,320   +1.19%
+    work_digestbench         5,767,585 ->       5,787,538   +0.35%
+    work_readbench           4,630,249 ->       4,630,466   +0.00%
+    work_livebench       2,805,256,521 ->   2,803,274,864   -0.07%
+    work_runbench        1,798,630,190 ->   1,793,355,755   -0.29%
+
+CI reads the run program at -0.29% and the release row at +0.08%. The work
+rows that rise at 2000 are the ones this container showed rising, deepbench
+and scanbench most. `text`, summed over the fourteen binaries, reads
+3,372,588: a runtime that inlines more is a larger object, linked
+whole. The objective rises, and the rise is banked.
