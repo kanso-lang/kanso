@@ -136,6 +136,14 @@ static long long k_stat_append_grow = 0;
    it, the free count goes to nought. */
 static long long k_stat_ten_blocks = 0;
 static long long k_stat_ten_frees = 0;
+/* Where a tenure block dies, which the pair above cannot say. A hand-up moves
+   a depth's blocks to the depth outside, which frees them later; a release
+   frees them here. Either way the block was allocated once and freed once, so
+   `ten_blocks` and `ten_frees` read the same on both. Replacing the hand-up
+   with a release therefore left every .mem golden byte-identical -- including
+   the fixture whose own comment said such a change would turn it red. Found
+   on 2026-09-22 by making the change and running the vein. */
+static long long k_stat_ten_handups = 0;
 static long long k_stat_utf8_zerocopy = 0;
 /* Characters counted by walking, which a string that can cache its count
    pays once and a builder pays on every read. Quadratic when a builder is
@@ -582,8 +590,8 @@ static void k_stats_dump(void) {
     fprintf(stderr, "buf_reuse=%lld\nheld_peak_bytes=%lld\n", k_stat_buf_reuse, k_stat_held_peak);
     fprintf(stderr, "view_allocs=%lld\nview_frees=%lld\n",
             k_stat_view_allocs, k_stat_view_frees);
-    fprintf(stderr, "ten_blocks=%lld\nten_frees=%lld\n",
-            k_stat_ten_blocks, k_stat_ten_frees);
+    fprintf(stderr, "ten_blocks=%lld\nten_frees=%lld\nten_handups=%lld\n",
+            k_stat_ten_blocks, k_stat_ten_frees, k_stat_ten_handups);
     fprintf(stderr,
         "sh_str=%lld\nsh_rec=%lld\nsh_buf=%lld\nsh_map=%lld\nsh_bytes=%lld\n",
         k_stat_sh_str, k_stat_sh_rec, k_stat_sh_buf, k_stat_sh_map, k_stat_sh_bytes);
@@ -1552,14 +1560,32 @@ static void* k_ten_alloc(size_t n) {
    benchmark corpus — widebench, indexbench and scanbench tenure and never
    repair; encodebench and pendbench repair and never tenure — so no shape
    already in the tree does both. Building the carried list inside the bind
-   and the accumulator outside it does. Reaching it is harmless, and the hand
-   up above is why: the beat's result is a heap value, so the block goes to
-   the depth outside instead of being freed, and it outlives every read of the
-   repaired node. The fixture pins `ten_blocks=1` beside `ten_frees=1` so that
-   a change which stops handing them up is a red test rather than a segfault
-   in the next program somebody writes this way. */
+   and the accumulator outside it does.
+
+   Reaching it is harmless, and until 2026-09-22 this comment said the hand up
+   was why: the beat's result is a heap value, so the block goes to the depth
+   outside instead of being freed and outlives every read of the repaired node.
+   The carry's deep copy is what makes it harmless. `k_beat_pop_slow` runs the
+   copy first and hands up after, and poisoning the depth's live tenure bytes
+   at three points one step apart says which step matters — before the copy the
+   fixture dies reading a length out of 0xAB, after the copy and before the
+   three migrates it is correct, and at the hand up it is correct. The copy
+   reads the tenured bytes out; after it nothing below the mark points into
+   tenure, which is why replacing the hand up with a release leaves this
+   program clean under AddressSanitizer.
+
+   The hand up is load-bearing elsewhere — an inner beat that shares the outer
+   depth's block, which is a different fixture — and `ten_handups` is what
+   makes the difference visible. `ten_blocks` and `ten_frees` cannot see it:
+   the hand up moves only WHERE the free happens, so the block is claimed once
+   and given back once either way. This comment's last two lines used to claim
+   the fixture below turned red on a change that stopped handing them up. It
+   did not, for a fortnight, and all sixty-seven .mem goldens agreed with it.
+   `scripts/ratchet/mutations/a_tenure_block_freed_where_it_was_handed_up.sh`
+   makes the claim a thing CI checks rather than a thing written here. */
 static void k_ten_hand_up(long long d) {
     if (!k_ten_blocks[d] || d == 0) return;
+    if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) k_stat_ten_handups++;
     KTenBlock* tail = k_ten_blocks[d];
     while (tail->next) tail = tail->next;
     tail->next = k_ten_blocks[d - 1];
