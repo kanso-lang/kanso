@@ -10020,10 +10020,34 @@ checks on `s[5]`, no copying six words into a new list. Welfare scores 77.78
 against a floor of 77.37 on the peak alone, with the instruction rows as main
 has them; CI's rows go in before the rise is banked.
 
+Three counters read worse, and each is the change working. Rewinds are what
+the loops do now, so `run_beat_iters` rises to 2,709,016, `digest_beat_iters`
+to 8,441 and `a_digest_holds_every_block_it_walked_beat_iters` to 76. The
+per-block sum built its list with eight pushes, and that list is gone, so
+`run_push_mut_fast` falls to 1,098,392, `digest_push_mut_fast` to 10,184 and
+`a_digest_holds_every_block_it_walked_push_mut_fast` to 120. With fewer lists
+built there are fewer buffers to hand on, so `run_buf_reuse` reads 144,961,
+`digest_buf_reuse` 1 and `a_digest_holds_every_block_it_walked_buf_reuse` 1.
+Every allocation and byte counter beside them fell.
+
 `tests/golden/mem/a_digest_holds_every_block_it_walked.kso` carried a header
 describing the 2026-08-31 state, with numbers its own golden had not held for
 weeks (1,980 allocations against a golden of 397). It says what the digest
 does now, and its golden reads 270.
+
+**CI's rows**, taken into the goldens:
+
+    runbench              1,802,356,350 -> 1,794,573,732   -7,782,618   -0.43%
+    digestbench               9,966,673 ->     5,773,783   -4,192,890   -42.07%
+    entry_instructions      126,100,824 ->   125,949,337     -151,487
+    library_instructions    126,623,258 ->   126,452,016     -171,242
+    runbench .text              320,546 ->       319,218
+    digestbench .text           108,274 ->       105,634
+
+The emitted vein reads four fewer defines for each of the two programs and,
+for runbench, 16 more calls with 22 fewer branches; the compile, start-up,
+emit, interpreted and codegen rows read what main has. Welfare scores 77.81
+against a floor of 77.37, and the rise is banked.
 
 Section 115's garbage length in the carry-sizing walk is untouched by this
 and still open: it is reachable only when a library loop is admitted to the
