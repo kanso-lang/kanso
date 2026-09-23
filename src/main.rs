@@ -1004,8 +1004,15 @@ fn release_clang(stem: &str, ll_path: &str) -> std::io::Result<std::process::Exi
         // all read 1,380,698,213 and 2,053,358,047, +13.7%, because the link's
         // pipeline expects its input already simplified. Scored by the
         // objective against main's goldens, -O1 is +0.19 and -O2 +0.11.
-        .arg("-O1")
-        .arg("-Wl,-plugin-opt=O3")
+        //
+        // On Linux only. `-plugin-opt` is the gold plugin's spelling and
+        // Apple's ld64 refuses it ("ld: unknown options: -plugin-opt=O3"),
+        // so elsewhere both steps stay at -O3 as they were.
+        .args(if cfg!(target_os = "linux") {
+            &["-O1", "-Wl,-plugin-opt=O3"][..]
+        } else {
+            &["-O3"][..]
+        })
         .arg("-flto")
         // Eight times clang's default of 250. The run program spends one
         // instruction in ten on `push`, `pop` and `ret` -- 215,229,225 of

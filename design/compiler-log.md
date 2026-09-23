@@ -10892,3 +10892,9 @@ is the larger. CI's rows go into the goldens.
 CI reads the run program at +3.36% where this container read +4.97%. `text`,
 summed over the fourteen binaries, reads 3,215,292 against
 3,372,588. The objective rises, and the rise is banked.
+
+`the other host (macos, arm)` failed eight native targets on the first round
+with `ld: unknown options: -plugin-opt=O3`. `-plugin-opt` is the gold plugin's
+spelling and Apple's ld64 has no such option, so the split is Linux-only and
+other hosts keep `-O3` for both steps, as they were. The rows above are
+Linux's and do not move.
