@@ -28,14 +28,45 @@
 //! egress policy refusing the blob host with `gateway answered 403 to CONNECT`,
 //! which no credential and no retry gets past.
 
-const GATE: &str = include_str!("../scripts/gates/compile_instructions.sh");
+const GATE_SOURCE: &str = include_str!("../scripts/gates/compile_instructions.sh");
+
+/// The shared script the gate reaches its annotate through.
+const HELPER: &str = include_str!("../scripts/gates/function_table.sh");
+
+/// The gate with the helper's body substituted where it calls it, and the
+/// helper's `"$profile"` replaced by the profile the call passes — so every
+/// property below reads one text and still means what it meant when the
+/// pipeline was written out inside this gate.
+///
+/// The call sits exactly where the print used to, so the order test is
+/// unaffected. A gate that goes back to inlining its own annotate reads
+/// unchanged through here.
+fn gate() -> String {
+    let mut out = String::new();
+    for line in GATE_SOURCE.lines() {
+        match call_argument(line) {
+            Some(profile) => out.push_str(&HELPER.replace("\"$profile\"", profile)),
+            None => out.push_str(line),
+        }
+        out.push('\n');
+    }
+    out
+}
+
+/// The profile a `function_table.sh` call names, if this line is one.
+fn call_argument(line: &str) -> Option<&str> {
+    if !line.contains("function_table.sh") {
+        return None;
+    }
+    line.split_whitespace().find(|w| w.starts_with("/tmp/cg."))
+}
 
 /// The gate's uncapped, exclusive annotate of the compile profile.
 ///
 /// `--inclusive=yes` is a different reading and the gate makes two of those;
 /// this looks for the exclusive one, which is the per-function table.
-fn whole_table_command() -> &'static str {
-    GATE.lines()
+fn whole_table_command(gate: &str) -> String {
+    gate.lines()
         .find(|l| {
             let l = l.trim_start();
             l.starts_with("callgrind_annotate")
@@ -43,6 +74,7 @@ fn whole_table_command() -> &'static str {
                 && l.contains("/tmp/cg.compile")
                 && !l.contains("--inclusive")
         })
+        .map(str::to_string)
         .unwrap_or_else(|| {
             panic!(
                 "scripts/gates/compile_instructions.sh prints no whole function \
@@ -55,7 +87,8 @@ fn whole_table_command() -> &'static str {
 
 #[test]
 fn the_compile_gate_annotates_the_whole_profile() {
-    let cmd = whole_table_command();
+    let gate = gate();
+    let cmd = whole_table_command(&gate);
     assert!(
         cmd.contains("--threshold=100"),
         "the whole-table annotate must ask for the whole table: {cmd}"
@@ -66,8 +99,10 @@ fn the_compile_gate_annotates_the_whole_profile() {
 #[test]
 fn the_whole_table_is_not_truncated() {
     // The command and whatever it is piped into, up to the end of the pipeline.
-    let start = GATE.find(whole_table_command()).expect("the command is in the script");
-    let tail = &GATE[start..];
+    let gate = gate();
+    let cmd = whole_table_command(&gate);
+    let start = gate.find(&cmd).expect("the command is in the script");
+    let tail = &gate[start..];
     let pipeline: String = {
         let mut out = String::new();
         for line in tail.lines() {
@@ -95,8 +130,10 @@ fn the_whole_table_is_not_truncated() {
 /// the green side never emits, and a comparison needs the green side.
 #[test]
 fn the_whole_table_is_printed_before_the_comparison() {
-    let table = GATE.find(whole_table_command()).expect("the command is in the script");
-    let compare = GATE
+    let gate = gate();
+    let cmd = whole_table_command(&gate);
+    let table = gate.find(&cmd).expect("the command is in the script");
+    let compare = gate
         .find("if [ \"$got\" = \"$want\" ]; then")
         .expect("the gate compares the row against the golden");
     assert!(
