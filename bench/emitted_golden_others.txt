@@ -210,7 +210,7 @@ escapebench defines=48 calls=106 branches=120 lines=1556
 pendbench defines=131 calls=1181 branches=695 lines=7114
 scanbench defines=333 calls=3274 branches=2223 lines=20633
 indexbench defines=53 calls=136 branches=129 lines=1824
-digestbench defines=195 calls=1503 branches=955 lines=10401
+digestbench defines=191 calls=1369 branches=933 lines=10025
 readbench defines=62 calls=158 branches=148 lines=2170
 livebench defines=142 calls=1237 branches=817 lines=9333
-runbench defines=599 calls=5982 branches=3577 lines=36085
+runbench defines=595 calls=5998 branches=3555 lines=35860

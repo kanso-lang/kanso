@@ -10099,6 +10099,121 @@ compile rows read what main has. The rise is banked.
 
 ---
 
+## 2026-09-23 — sha256 carries its eight words as arguments, and its loops rewind
+
+`docs/compiler.html` §114–115 put 3,145,728 bytes of the run program's peak in
+the digest phase and traced it to `sha256/blocked` and `sha256/digested` losing
+their carry to the library path prefix. Admitting a one-slot carry was built
+there and declined, because the sizing walk read a garbage length under it.
+This change makes the carry unnecessary instead of admitting it.
+
+Both loops held the eight working words as a list. `compress` built a new
+eight-element list every round and `digested` a new one every block, so a
+list crossed every rewind, and a list built inside the loop is a value the
+cluster analysis will only let cross by carrying it. The words are eight
+arguments now. A round passes six along unchanged and computes two with `&
+whole`, which infers as INT, so every slot is a threaded parameter or a
+scalar, and both clusters bracket with nothing carried:
+
+    sha256/compress/10, sha256/rounding/11   bracketed with its cluster
+    sha256/blocked/10, sha256/digested/11    bracketed with its cluster
+
+The answer becomes a list once per block, when the sixty-four rounds are done,
+and `digested` adds it into the running words. `turned`, `added`, `summed`,
+`summing`, `shifted_state` and `start` are gone. The five `kanso test lib/sha256` tests
+pass, and the run program prints `runbench 46013475` either way.
+
+On this container:
+
+    digestbench   allocs          23,582 ->     7,199
+                  alloc_bytes  1,998,801 ->   671,841
+                  arena peak   2,097,152 -> 1,048,576   2 blocks -> 1
+    run program   arena peak  38,604,496 -> 35,458,768
+                  instructions 1,820,479,421 -> 1,812,623,924   -0.43%
+
+The instruction fall is the per-round list going: no allocation, no length
+checks on `s[5]`, no copying six words into a new list. Welfare scores 77.78
+against a floor of 77.37 on the peak alone, with the instruction rows as main
+has them; CI's rows go in before the rise is banked.
+
+Three counters read worse, and each is the change working. Rewinds are what
+the loops do now, so `run_beat_iters` rises to 2,709,016, `digest_beat_iters`
+to 8,441 and `a_digest_holds_every_block_it_walked_beat_iters` to 76. The
+per-block sum built its list with eight pushes, and that list is gone, so
+`run_push_mut_fast` falls to 1,098,392, `digest_push_mut_fast` to 10,184 and
+`a_digest_holds_every_block_it_walked_push_mut_fast` to 120. With fewer lists
+built there are fewer buffers to hand on, so `run_buf_reuse` reads 144,961,
+`digest_buf_reuse` 1 and `a_digest_holds_every_block_it_walked_buf_reuse` 1.
+Every allocation and byte counter beside them fell.
+
+`tests/golden/mem/a_digest_holds_every_block_it_walked.kso` carried a header
+describing the 2026-08-31 state, with numbers its own golden had not held for
+weeks (1,980 allocations against a golden of 397). It says what the digest
+does now, and its golden reads 270.
+
+**CI's rows**, taken into the goldens:
+
+    runbench              1,802,356,350 -> 1,794,573,732   -7,782,618   -0.43%
+    digestbench               9,966,673 ->     5,773,783   -4,192,890   -42.07%
+    entry_instructions      126,100,824 ->   125,949,337     -151,487
+    library_instructions    126,623,258 ->   126,452,016     -171,242
+    runbench .text              320,546 ->       319,218
+    digestbench .text           108,274 ->       105,634
+
+The emitted vein reads four fewer defines for each of the two programs and,
+for runbench, 16 more calls with 22 fewer branches; the compile, start-up,
+emit, interpreted and codegen rows read what main has. Welfare scores 77.81
+against a floor of 77.37, and the rise is banked.
+
+Section 115's garbage length in the carry-sizing walk is untouched by this
+and still open: it is reachable only when a library loop is admitted to the
+carry tier, which nothing now needs for this peak.
+
+Two specs pinned the old digest, and both went red on CI as their own notes
+said they would.
+
+- `tests/sha256_peak.rs` pinned a peak that grew with the message and said a
+  streaming hash would read the same number at its two sizes. It now does:
+  7,340,064 at 65,536 bytes and at 131,072. A third size, 262,144, reads
+  24,117,296, and the rest of the growth is the padding. A copy of
+  `padded_bytes` made public and called alone, with no compression, reads the
+  same three numbers byte for byte, because it copies the message to append the
+  terminator and the length. The spec pins all three sizes and says so.
+- `tests/a_program_is_not_its_directory.rs` used a copy of the digest to show
+  the library path prefix changing a program's memory. The digest carries
+  nothing across a rewind now, so both directories read 1,048,576 and the copy
+  stopped showing the defect, which is still there. The package is now a
+  five-line loop with the shape the digest had: it builds a list it drops and
+  hands the next turn a list it keeps. Under `lib/` it reads 5,242,880 at
+  20,000 turns. In any other directory it reads one block.
+
+---
+
+## 2026-09-23 — ThinLTO for the release build, declined at a third of what it costs
+
+The release codegen row is 75% the linker. On this container, with the gate's
+own commands and `GITHUB_ACTIONS=1` so it measures, the codegen corpus's
+release build counted:
+
+    kanso 81,494,353   clang:probe 32,201,483   clang 31,669,971
+    clang -cc1 1,617,890,071   ld 5,161,438,914   total 6,843,200,439
+
+`ld` is the LTO link: it optimizes and emits the runtime together with the
+program, every build. `-flto=thin` for both the runtime object and the link,
+the one change:
+
+    codegen release    6,843,200,439 -> 6,605,682,161   -3.47%
+    run program        1,812,623,924 -> 1,867,477,968   +3.03%
+
+At today's ratios a per cent of the release codegen row is worth about 0.023
+of welfare and a per cent of the run row about 0.078, so the trade is +0.08
+against -0.24. ThinLTO imports less across modules than full LTO, and the run
+program is built on the runtime's small helpers being inlined into it. The
+container's clang is 18.1.3 where CI's is 19.1.1, so the sizes here are this
+host's; the ratio between them is the finding.
+
+---
+
 ## 2026-09-23 — a call between a package's own modules is a cohort again
 
 A construction cohort brackets a call whose arguments are immutable: the arena
@@ -10151,25 +10266,23 @@ document that is nearly all of what the call grew, keeps the region, and the
 sizing is the 2,027,460 instructions. The archive shows oneshot had this pop
 when the license was first generalized; its peak and allocations do not move.
 
-On main, before those three merge, the run program's peak is the scan phase,
-and the change reaches it too:
+On main, with kanso#1580 merged and the other two not yet, the run program's
+peak is the scan phase, and the change reaches it too:
 
-    run program   arena peak     38,604,496 ->  32,313,040   -16.3%
-                  arena blocks           36 ->          33
+    run program   arena peak     35,458,768 ->  32,313,040   -8.9%
+                  arena blocks           33 ->          32
                   cohort_frees            1 ->           5
 
 The counters that read worse all arrived with the four new pops, which is
 where a heap answer is copied out before its call's garbage is rewound, and
 none of them changes an output. In the run program `run_allocs` reads
-5,730,660, `run_alloc_bytes` 460,743,981, `run_evac_allocs` 68,324,
-`run_evac_bytes` 10,791,456 and `run_sh_buf` 111,685,152. One append moved from
-the in-place path to the copying one, `run_push_mut_fast` 1,100,141 and
-`run_push_mut_slow` 1,638,372, and one more string was scanned from its start,
+5,698,910, `run_alloc_bytes` 458,172,173, `run_evac_allocs` 68,322,
+`run_evac_bytes` 10,791,296 and `run_sh_buf` 109,369,344. One append moved from
+the in-place path to the copying one, `run_push_mut_fast` 1,098,391 and
+`run_push_mut_slow` 1,638,122, and one more string was scanned from its start,
 `run_str_scans` 164 and `run_str_scan_bytes` 5,473,158. pendbench and
-digestbench each gained one pop: `pend_allocs` reads 806,180,
+scanbench each gained one pop: `pend_allocs` reads 806,180,
 `pend_alloc_bytes` 45,529,344, `pend_evac_allocs` 2,431 and `pend_evac_bytes`
-384,944; `digest_allocs` reads 23,584, `digest_alloc_bytes` 1,998,897,
-`digest_evac_allocs` 62, `digest_evac_bytes` 4,720, `digest_str_scans` 19 and
-`digest_str_scan_bytes` 96. scanbench gained one pop and no other row moved. The mem
-vein reads what main has. Welfare is scored here on the peak with main's
+384,944, and no other scanbench row moved. digestbench and the mem vein read
+what main has. Welfare is scored here on the peak with main's
 instruction rows; CI's rows go into the goldens before the rise is banked.
