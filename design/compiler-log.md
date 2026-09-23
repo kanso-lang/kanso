@@ -9803,3 +9803,30 @@ a static scope pass that marks each identifier local or global, and it would
 have to follow the lexical binding forms exactly, because the checker lets a
 local shadow a bare-enrolled import. That is a large change to the reference
 interpreter, and it is left as a lead.
+
+## 2026-09-23 — what a scope pass would save the interpreted run, counted
+
+The negative result in the entry above leaves one route to the global-name
+cost: a static pass that marks each identifier local or global, so that a
+global never walks the environment chain and never reaches the string-keyed
+map. Before building it, the ceiling. A counter in `eval::lookup` for one run
+of the interpreted corpus, in a scratch tree that was not kept:
+
+    lookups that found a local      724,304   frames walked  1,590,733   2.2 each
+    lookups that missed             332,025   frames walked  1,071,803   3.2 each
+
+Every miss is a global. The profile counts 332,026 calls into `eval_global`
+where the counter saw 332,025 misses; the one apart is not explained here. Misses are 31% of lookups and
+40% of the frames walked, because a miss walks the whole chain where a hit
+stops early. `eval::lookup` is 72,789,828 instructions self on this run, so
+the misses are roughly 29 million of it if steps cost alike, and
+`eval_global` is 57,004,207 inclusive, most of which is the map. Together
+that is of the order of 80 million of the 939,398,706 this container counts
+for the interpreted row, about 8%, and it is the largest single lead the
+profile offers.
+
+What the pass has to get right is the reason it is not built in this entry.
+The checker lets a local shadow a bare-enrolled import, so a name's being a
+global somewhere does not make every use of it global; the pass has to follow
+every binding form the evaluator has, lexically, and the interpreter is the
+oracle every other engine is held to.
