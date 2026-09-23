@@ -10284,5 +10284,26 @@ the in-place path to the copying one, `run_push_mut_fast` 1,098,391 and
 scanbench each gained one pop: `pend_allocs` reads 806,180,
 `pend_alloc_bytes` 45,529,344, `pend_evac_allocs` 2,431 and `pend_evac_bytes`
 384,944, and no other scanbench row moved. digestbench and the mem vein read
-what main has. Welfare is scored here on the peak with main's
-instruction rows; CI's rows go into the goldens before the rise is banked.
+what main has.
+
+**CI's rows**, taken into the goldens:
+
+    work_runbench        1,794,573,732 -> 1,796,601,576   +2,027,844   +0.11%
+    work_oneshot            17,807,820 ->    19,783,275   +1,975,455  +11.09%
+    work_deepbench         347,635,275 ->   349,439,154   +1,803,879   +0.52%
+    work_scanbench         462,269,305 ->   462,283,315      +14,010
+    work_digestbench         5,773,783 ->     5,773,971         +188
+    work_basket             32,776,834 ->    32,777,016         +182
+    work_pendbench         208,139,955 ->   208,132,753       -7,202
+    startup_instructions       967,869 ->       971,368       +3,499
+    emit_instructions       45,953,348 ->    46,222,808     +269,460   +0.59%
+
+Each program that gained a pop gained two calls and a few lines per
+bracketed site, which the emitted vein counts: summed, `emitted_other_calls`
+reads 20,237 and `emitted_other_lines` 135,899. `text`, summed over the
+fourteen binaries, reads 1,766,412. `emit_instructions` is `cycle_reached`,
+a walk of every body and a Tarjan pass the emitter did not make before.
+`startup_instructions` counts kanso's own start and rose with the compiler's
+code; what in it costs 3,499 instructions was not isolated. Both codegen rows
+read what main has. The run program pays 2,027,844 instructions for a peak
+3,145,728 bytes lower, and welfare rises; the rise is banked.
