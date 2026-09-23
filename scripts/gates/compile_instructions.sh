@@ -343,10 +343,7 @@ fi
 # the blob host outright, `gateway answered 403 to CONNECT`, which no
 # credential and no retry gets past. Collapsed, so it costs a reader nothing
 # until they want it.
-echo "::group::the whole function table, for diffing this job against another"
-callgrind_annotate --threshold=100 /tmp/cg.compile 2>/dev/null \
-  | sed -n 's/^ *\([0-9,][0-9,]*\) ([^)]*)  *\(.*\)$/\1 \2/p'
-echo "::endgroup::"
+sh "$(dirname "$0")/function_table.sh" /tmp/cg.compile compile
 
 # WHETHER IT LANDED ON THE ROW. One row, one value, compared exactly — the
 # ordinary ratchet every other counter in the tree gets.

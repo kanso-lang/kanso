@@ -8759,3 +8759,56 @@ rather than in this entry.
 
 Measured against a release build of the tree at `354e24d4`, using
 `scripts/gates/function_table.sh` for the per-frame readings.
+## 2026-09-23 — the tables were printed and unreadable, so they are packed into the tail
+
+kanso#1558 and kanso#1562 put an uncapped whole function table on seven gates,
+for the standing row that moves by three instructions on byte-identical source.
+The reasoning was that naming which frames carry a delta takes both jobs' whole
+tables, which it does. What neither change checked is whether a table that is
+printed can be READ.
+
+It mostly cannot. A log API returns the TAIL of a job and caps it: asking for
+60,000 lines of the 20,020-line `cost goldens` job returned exactly the last
+5,000, and those held two function tables of the twenty the job prints. The
+other eighteen are written down in a place nothing reaches. The artifact beside
+the profiles is not an answer either — its blob host answers `gateway answered
+403 to CONNECT` under some egress policies, which is why the tables went into
+the log in the first place.
+
+So each table is now also emitted PACKED, in a step that runs last:
+gzip+base64 at 200 columns turns 1,726 rows into 189 lines, and twenty tables
+fit in the tail together with room for the steps after them. The step carries
+`if: always()`, because the run that most wants the tables is the one where a
+row went red. `scripts/gates/function_table.sh` annotates and stashes one
+profile — the seven gates now call it instead of each carrying a copy of the
+pipeline — and `scripts/gates/function_tables_tail.sh` packs whatever was
+stashed, prints the recipe for reading a block back, and reports its own line
+count against a budget rather than leaving an overflow to be discovered by a
+reader whose tail starts halfway through a block.
+
+Each `#table` line carries the sha256 of the DECODED table, so a short tail is
+distinguishable from a whole one, and the index of table names is printed last
+and unpacked, so a reader who got only the final handful of lines still learns
+which tables the job carried.
+
+TWO THINGS THIS COST, both from the same habit of trusting a check's shape
+rather than running it.
+
+`fold` ends its last chunk WITHOUT a newline, so `cat "$body"; echo "#end
+$name"` put the end marker on the tail of the final base64 line. A reader's
+`sed` range then runs to the end of the log instead of to the end of the block.
+The spec written for the round trip did not catch it: its fixture folded on a
+200-byte boundary, where the defect does not appear. It was found by running
+the pair against a real callgrind profile, which is the entry a reader actually
+uses.
+
+And the round trip passed anyway, on the broken format, for a second reason.
+The recipe is a pipeline ending in `gunzip`, `gunzip` is content with rubbish
+after a complete stream, and a pipeline's status is its last stage's. `base64`
+printed `invalid input` while the recovered table came out byte-identical. The
+spec now reads stderr as well as the status, and a separate spec asserts each
+marker is on a line of its own at five table sizes, because the defect hides at
+whichever size happens to fold evenly.
+
+That is the same rule this log keeps paying for: never take a verdict from the
+last stage of a pipe, and break what a new check watches before trusting it.

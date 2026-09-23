@@ -735,6 +735,16 @@ jobs:
             esac
           done
           exit $fail
+      # LAST, and after the verdict, because this is the instrument rather
+      # than a gate. Every table the gates above printed is re-emitted packed
+      # here, so all of them land inside the last 5,000 lines of the job log --
+      # which is the whole of what a log API hands back, whatever tail length
+      # it is asked for. Before this step the job ran 20,020 lines and the
+      # tail held two tables of the twenty. `if: always()` because the run
+      # that most wants the tables is the one where a row went red.
+      - name: the function tables, packed to survive a log tail
+        if: always()
+        run: sh scripts/gates/function_tables_tail.sh
 
   downstream:
     name: kq specs (a real program, gating)
