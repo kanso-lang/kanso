@@ -10586,3 +10586,19 @@ Merged over it, the counters and emitted rows are regenerated here, summed
 `emitted_other_calls` 18,837 and `emitted_other_lines` 127,690, and the
 instruction, `.text` and start-up rows hold main's values until CI measures
 the merged tree. The floor is banked again after that.
+
+**CI's rows over the merged tree**, taken into the goldens:
+
+    work_runbench        1,801,929,451 -> 1,803,940,793   +2,011,342   +0.11%
+    work_oneshot            17,844,087 ->    19,819,542   +1,975,455  +11.07%
+    work_deepbench         347,896,726 ->   349,700,605   +1,803,879   +0.52%
+    work_basket             33,024,826 ->    33,027,009       +2,183
+    work_scanbench         462,289,601 ->   462,289,850         +249
+    work_digestbench         5,799,501 ->     5,799,688         +187
+    work_pendbench         208,139,965 ->   208,132,763       -7,202
+    startup_instructions       972,533 ->       976,032       +3,499
+
+The emit projection was exact at 44,879,920, and both codegen rows read what
+main has. `text`, summed over the fourteen binaries, reads 1,771,932. The run
+program pays 2,011,342 instructions for a peak 1,048,576 bytes lower, and
+welfare rises; the rise is banked.
