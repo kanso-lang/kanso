@@ -307,7 +307,19 @@ fn begun e@(err _) _
 fn begun prog s
   scanned prog s 1
 
+# The scan tries every start position, and a position that matches nothing
+# leaves nothing behind, so its loop rewinds the arena at each step. Two things
+# let the compiler see that. The walk's answer is a local rather than an
+# argument, so no record crosses from one position to the next. And a position
+# is a whole number, which `| 0` states where the loop is entered: callers read
+# theirs out of a hit's fields, and a field read is not typed, so without it
+# the loop's position could be anything, a byte builder included, and the loop
+# would be refused its rewind. Without the rewind every position's scratch lived
+# until the scan finished, and the arena grew with the subject.
 fn scanned prog s at
+  probing prog s (at | 0)
+
+fn probing prog s at
   scanning prog s at (at > length s + 1)
 
 fn scanning _ _ _ true
@@ -317,10 +329,12 @@ fn scanning prog s at false
   skipping prog s at (worth_trying? prog s at)
 
 fn skipping prog s at false
-  scanned prog s (at + 1)
+  probing prog s (at + 1)
 
 fn skipping prog s at true
-  landed prog s at (walked prog.node s at [] (to caught -> arrival to caught))
+  end = walked prog.node s at [] (to caught -> arrival to caught)
+  return probing prog s (at + 1) if end == none
+  hit at end.to (caught_in_order end.caught 1 [] prog.wanted)
 
 fn worth_trying? prog s at
   open_start? prog.starters (at > length s) (text/slice s at at)
@@ -335,12 +349,6 @@ fn worth_trying? prog s at
 # the set was being asked whether it holds no character at all.
 fn open_start? set past_end c
   set == "" or past_end or c == "" or in? set c
-
-fn landed prog s at none
-  scanned prog s (at + 1)
-
-fn landed prog _ at end
-  hit at end.to (caught_in_order end.caught 1 [] prog.wanted)
 
 # A group can be entered more than once — `(ab)+` captures its last pass — so
 # the latest record for a slot is the one that stands.
