@@ -980,7 +980,18 @@ fn release_clang(stem: &str, ll_path: &str) -> std::io::Result<std::process::Exi
     // The objective weighs the two at about +1.6 and -0.26. ThinLTO was the
     // other way to shrink this link and was declined at -3.47% for +3.03%;
     // design/compiler-log.md has both.
-    let runtime_obj = cached_runtime_object("release", &["-O3", "-DK_HOT_ELSEWHERE"])?;
+    //
+    // The runtime inlines at the program's threshold. The LTO link applied
+    // `-inline-threshold=2000` to the runtime as well while the runtime was
+    // bitcode, and compiled on its own it fell back to clang's 225: helpers
+    // such as `k_b_push_grow` stopped being inlined into their callers inside
+    // the runtime. On runbench the ladder read 1,811,839,413 at 225,
+    // 1,809,106,361 at 1000, 1,806,069,074 at 2000 and 1,805,972,054 at 4000.
+    // The object is compiled once and cached, so the build pays it once.
+    let runtime_obj = cached_runtime_object(
+        "release",
+        &["-O3", "-mllvm", "-inline-threshold=2000", "-DK_HOT_ELSEWHERE"],
+    )?;
     let hot_obj = cached_object("release_hot", &hot_source(), &["-O3", "-flto"])?;
     std::process::Command::new("clang")
         .arg("-O3")

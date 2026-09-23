@@ -10789,3 +10789,36 @@ and missed it, because it matched vein files ending `instructions_golden.txt`
 and the codegen veins end `instructions_dev_golden.txt` and
 `instructions_release_golden.txt`. The spec now matches any instructions vein,
 went red naming the two rows, and the rows are in the table as lower-is-better.
+
+---
+
+## 2026-09-23 — the runtime inlines at the program's threshold
+
+kanso#1585 compiled the release runtime as machine code, on its own, with
+`-O3`. While it was bitcode the LTO link had applied `-inline-threshold=2000`
+to it along with the program, so compiled alone it fell back to clang's
+default of 225, and helpers the runtime calls on itself stopped being inlined:
+comparing profiles, `k_b_push_grow` became a call of its own and read
+19,222,350 instructions on jsonbench, and `k_survives` 774,400 on runbench.
+The runtime is now compiled with the program's threshold.
+
+On this container, runbench at four thresholds for the runtime alone:
+
+    225     1,811,839,413
+    1000    1,809,106,361
+    2000    1,806,069,074
+    4000    1,805,972,054
+
+2000 is the program's value and 4000 buys 97,020 more. Against main before
+kanso#1585, the fourteen work rows read:
+
+    jsonbench -0.30%   encodebench -0.10%   oneshot -0.10%   basket -1.02%
+    widebench +0.67%   deepbench +2.33%     escapebench +1.63%
+    pendbench -0.01%   indexbench +0.39%    scanbench +1.66%
+    digestbench -0.09% readbench +0.07%     livebench -0.21%  runbench -0.22%
+
+deepbench and scanbench read worse at 2000 than at 225, where the rest read
+better; the run program is the one the objective weighs. The release codegen
+row reads 2,903,108,801 against 2,898,793,716 at 225, +0.15%, which is the
+linker placing a larger runtime object; the runtime's own compile is cached
+and the gate warms it before counting. CI's rows go into the goldens.
