@@ -10150,3 +10150,26 @@ around `json/decode` in `hold/report`. The survivor guard sizes a decoded
 document that is nearly all of what the call grew, keeps the region, and the
 sizing is the 2,027,460 instructions. The archive shows oneshot had this pop
 when the license was first generalized; its peak and allocations do not move.
+
+On main, before those three merge, the run program's peak is the scan phase,
+and the change reaches it too:
+
+    run program   arena peak     38,604,496 ->  32,313,040   -16.3%
+                  arena blocks           36 ->          33
+                  cohort_frees            1 ->           5
+
+The counters that read worse all arrived with the four new pops, which is
+where a heap answer is copied out before its call's garbage is rewound, and
+none of them changes an output. In the run program `run_allocs` reads
+5,730,660, `run_alloc_bytes` 460,743,981, `run_evac_allocs` 68,324,
+`run_evac_bytes` 10,791,456 and `run_sh_buf` 111,685,152. One append moved from
+the in-place path to the copying one, `run_push_mut_fast` 1,100,141 and
+`run_push_mut_slow` 1,638,372, and one more string was scanned from its start,
+`run_str_scans` 164 and `run_str_scan_bytes` 5,473,158. pendbench and
+digestbench each gained one pop: `pend_allocs` reads 806,180,
+`pend_alloc_bytes` 45,529,344, `pend_evac_allocs` 2,431 and `pend_evac_bytes`
+384,944; `digest_allocs` reads 23,584, `digest_alloc_bytes` 1,998,897,
+`digest_evac_allocs` 62, `digest_evac_bytes` 4,720, `digest_str_scans` 19 and
+`digest_str_scan_bytes` 96. scanbench gained one pop and no other row moved. The mem
+vein reads what main has. Welfare is scored here on the peak with main's
+instruction rows; CI's rows go into the goldens before the rise is banked.
