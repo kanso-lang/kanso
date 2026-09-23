@@ -2337,7 +2337,7 @@ fn group_indices_by_name(program: &Program) -> HashMap<&str, Vec<usize>> {
 /// costs speed and nothing else, because the bracket is sound on any call
 /// the license admits.
 fn cycle_reached(program: &Program) -> crate::hash::Set<&str> {
-    fn mentions<'p>(expr: &Expr, index: &HashMap<&'p str, usize>, out: &mut Vec<usize>) {
+    fn mentions(expr: &Expr, index: &HashMap<&str, usize>, out: &mut Vec<usize>) {
         if let Expr::Ident(n, _, _) | Expr::Partial(n, _) = expr {
             if let Some(&at) = index.get(&**n) {
                 out.push(at);
