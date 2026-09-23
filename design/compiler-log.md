@@ -7802,3 +7802,75 @@ whichever size happens to fold evenly.
 
 That is the same rule this log keeps paying for: never take a verdict from the
 last stage of a pipe, and break what a new check watches before trusting it.
+
+## 2026-09-23 — the compile row leaves the walk out, and the two faces were 487 and 490
+
+`compile_instructions` is measured with `<std::fs::ReadDir as Iterator>::next`
+inclusive subtracted, the way it already subtracts `std::io::stdio::_print` and
+for the same reason. CI's first sitting with the exclusion in:
+
+    compile_instructions   35,541,148 ->  35,540,661     -487   -0.0014%
+
+`compile_again` reads 35,540,661 too, so the gate's two readings agree on the
+excluded row as they did on the unexcluded one.
+
+THE ARITHMETIC CLOSES THE STORY. This row drew two faces, 35,541,148 and
+35,541,151. The excluded reading is 487 below the first. So the walk cost 487 on
+the runner that read the low face and 490 on the one that read the high face,
+and 490 is exactly what the walk measures on the container this session runs in.
+The two faces were never two compilers; they were one compiler and a directory
+walk that costs three more on some filesystems than others.
+
+WHAT IT COST AND WHAT IT BOUGHT. 487 instructions of 35.5 million, 0.0014%,
+which is the size of the term being excluded rather than a change in the
+compiler. What it buys is a row that can be pinned exactly again, which is what
+kanso#1504, kanso#1565 and kanso#1568 have each been unable to do.
+
+THE FALSIFIER IS IN THE GOLDEN'S HEADER, and it is the next thing to check: the
+row should now read ONE value where it drew two, because the faces differed only
+inside the excluded subtree. A second sitting that alternates means the
+exclusion is aimed at the wrong frame.
+
+## 2026-09-23 — kanso#1561's compile row on the excluded gate, and the frame that IS the two faces
+
+kanso#1570 is on main, so `compile_instructions` no longer counts the directory
+walk. This branch's golden follows, derived rather than waited for:
+
+    compile_instructions   35,540,661 ->  35,542,684    +2,023   +0.0057%
+
+THE DERIVATION, and it rests on a relation checked at both ends. The walk's
+inclusive cost is 363 plus the self cost of
+`<std::sys::fs::unix::ReadDir as Iterator>::next`, the frame that carries the
+drift. Two independent points fix that: a job whose frame read 124 had a walk of
+487, because main went 35,541,148 -> 35,540,661 under the exclusion; and this
+container, whose frame reads 127, measures the walk at 490. This branch's job
+read 124, so its walk was 487 and 35,543,171 - 487 = 35,542,684.
+
+THE FRAME'S SELF COST IS THE TWO FACES, across five jobs and three trees:
+
+    job                        frame self   row
+    kanso#1566 job 2                  124   35,541,148   (low)
+    kanso#1568                        127   35,541,151   (high)
+    kanso#1561                        124   35,543,171
+    kanso#1504 job 3                  124   35,544,159
+    kanso#1504 job 4                  127   35,544,162
+
+124 or 127, three apart, tracking the face every time. Nothing else in the
+compile table moved between any of those pairs.
+
+TWO CHECKS THAT DID NOT HAVE TO AGREE AND DO.
+
+The delta against main is +2,023 on the excluded gate and was +2,023 on the
+unexcluded one, because both ends dropped by their own walk. An exclusion that
+removed the right term has to leave every difference between two trees exactly
+as it was.
+
+And +2,023 is the `__memcmp_avx2_movbe` delta measured between this branch and
+main in the six-row decomposition earlier today. The gated row moved by exactly
+the memcmp term and by nothing else, which places the constant that entry
+attributed to the `/proc/self/maps` parse OUTSIDE `kanso::main`'s inclusive
+anchor — where a thread set-up cost belongs. That was not predicted; it falls
+out of two measurements taken for different reasons.
+
+IF CI DISAGREES the derivation is wrong and its number is the one to take.
+

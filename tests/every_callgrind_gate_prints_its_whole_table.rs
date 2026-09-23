@@ -314,3 +314,38 @@ fn the_packed_step_runs_last_and_runs_on_a_red_job() {
         );
     }
 }
+
+#[test]
+fn the_walk_listing_runs_on_a_red_job_and_before_the_packed_tables() {
+    // `compile_instructions` drifts by three between hosts and the frame that
+    // carries it is a directory walk. Deciding between the two remedies the
+    // 2026-09-15 ruling allows — normalize the state, or exclude the term and
+    // name the exclusion — needs to know whether the ENTRY SET differs between
+    // hosts or only its layout. Nothing recorded that, so a step prints it.
+    //
+    // It has to survive a red job, because the jobs worth comparing are the
+    // ones where the row disagreed.
+    let ci = std::fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join(".github/workflows/ci.yml"),
+    )
+    .expect("the workflow reads");
+    let at = ci.find("#walk-entry ").unwrap_or_else(|| {
+        panic!(
+            "no CI step lists what the compile row's directory walk sees. The \
+             three instructions are in that walk and the remedy turns on what \
+             the walk is handed."
+        )
+    });
+    let head = ci[..at].rfind("      - name:").expect("the step has a name");
+    assert!(
+        ci[head..at].contains("if: always()"),
+        "the walk listing does not carry `if: always()`, so the jobs where the \
+         row disagreed — the only ones worth comparing — do not print it"
+    );
+    let packed = ci.find("function_tables_tail.sh").expect("the packed step exists");
+    assert!(
+        at < packed,
+        "the walk listing comes after the packed tables, which are meant to be \
+         the last thing in the job"
+    );
+}
