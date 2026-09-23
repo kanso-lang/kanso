@@ -477,6 +477,18 @@ fn bind_all(env: Option<Rc<Env>>, binds: Bindings) -> Option<Rc<Env>> {
     }
 }
 
+/// Each interpreter's generation, for the stamps it leaves on the AST. Sixteen
+/// bits, and 0 once they run out, which switches stamping off for that
+/// interpreter rather than letting a stamp come round again.
+fn next_generation() -> u16 {
+    static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(1);
+    let g = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    match g {
+        1..=0xffff => g as u16,
+        _ => 0,
+    }
+}
+
 fn lookup(env: &Option<Rc<Env>>, name: &Name) -> Option<Value> {
     let mut cur = env.as_ref();
     while let Some(frame) = cur {
@@ -1211,6 +1223,20 @@ enum Named<'a> {
     FnRef(Rc<str>),
 }
 
+impl Named<'_> {
+    /// Whether two resolutions are the same one, for the debug check on a
+    /// global's slot: the same variant, and for a constant the same
+    /// declaration, for a reference or a record the same text.
+    fn same_as(&self, other: &Named<'_>) -> bool {
+        match (self, other) {
+            (Named::Constant(a), Named::Constant(b)) => std::ptr::eq(*a, *b),
+            (Named::EmptyRecord(a), Named::EmptyRecord(b)) => a == b,
+            (Named::FnRef(a), Named::FnRef(b)) => a == b,
+            (a, b) => std::mem::discriminant(a) == std::mem::discriminant(b),
+        }
+    }
+}
+
 pub struct Interp<'a> {
     fns: Map<&'a str, Rc<Vec<&'a FnDecl>>>,
     types: Map<&'a str, &'a TypeDecl>,
@@ -1249,6 +1275,13 @@ pub struct Interp<'a> {
     /// `Interp` and evaluates nothing, and that route is a weighed welfare
     /// term -- the same reason `cycles` above is a `OnceCell`.
     names: RefCell<Map<String, Named<'a>>>,
+    /// What a global resolved to, by the slot its node was stamped with.
+    /// Filled on first sight, for the reason `names` above is.
+    slots: RefCell<Vec<Named<'a>>>,
+    /// This interpreter's stamp on the nodes it resolves; see `Resolution`.
+    /// 0 when the process has made more interpreters than sixteen bits hold,
+    /// which turns stamping off rather than letting a stamp be reused.
+    generation: u16,
     /// One entry per name this run has CALLED, filled on first sight for the
     /// reason `names` above is.
     callees: RefCell<Map<String, Callee<'a>>>,
@@ -1334,6 +1367,8 @@ impl<'a> Interp<'a> {
             cycles: std::cell::OnceCell::new(),
             in_place: std::cell::OnceCell::new(),
             names: RefCell::new(Map::default()),
+            slots: RefCell::new(Vec::new()),
+            generation: next_generation(),
             callees: RefCell::new(Map::default()),
             frames: RefCell::new(Map::default()),
             program,
@@ -2008,16 +2043,28 @@ impl<'a> Interp<'a> {
         env: &Option<Rc<Env>>,
     ) -> EvalResult {
         use crate::ast::Resolution;
-        match resolved.get() {
-            Resolution::GLOBAL => {
-                debug_assert!(
-                    lookup(env, name).is_none(),
-                    "`{}` at {:?} was kept as global and found a local",
-                    name.as_str(),
-                    span
-                );
-                self.eval_global(name.as_str(), span)
-            }
+        let v = resolved.get();
+        if let Some(slot) = Resolution::slot_for(v, self.generation) {
+            debug_assert!(
+                lookup(env, name).is_none(),
+                "`{}` at {:?} was kept as global and found a local",
+                name.as_str(),
+                span
+            );
+            let named = self.slots.borrow()[slot].clone();
+            debug_assert!(
+                self.names
+                    .borrow()
+                    .get(name.as_str())
+                    .is_some_and(|by_name| by_name.same_as(&named)),
+                "`{}` at {:?} read slot {} and it is not what the name resolves to",
+                name.as_str(),
+                span,
+                slot
+            );
+            return self.named_value(name.as_str(), named);
+        }
+        match v {
             Resolution::LOCAL => match lookup(env, name) {
                 Some(value) => Ok(value),
                 None => {
@@ -2030,17 +2077,46 @@ impl<'a> Interp<'a> {
                     self.eval_global(name.as_str(), span)
                 }
             },
+            v if Resolution::is_global(v) => {
+                debug_assert!(
+                    lookup(env, name).is_none(),
+                    "`{}` at {:?} was kept as global and found a local",
+                    name.as_str(),
+                    span
+                );
+                self.global_at(name.as_str(), span, resolved)
+            }
             _ => match lookup(env, name) {
                 Some(value) => {
                     resolved.set(Resolution::LOCAL);
                     Ok(value)
                 }
-                None => {
-                    resolved.set(Resolution::GLOBAL);
-                    self.eval_global(name.as_str(), span)
-                }
+                None => self.global_at(name.as_str(), span, resolved),
             },
         }
+    }
+
+    /// A global reached from a node that does not yet carry this
+    /// interpreter's stamp: resolve it by name, keep it in a slot, stamp the
+    /// node, and evaluate it.
+    fn global_at(&self, name: &str, span: Span, resolved: &crate::ast::Resolution) -> EvalResult {
+        use crate::ast::Resolution;
+        let named = self.resolve_named(name, span)?;
+        // A slot is taken only when the stamp can be written, so a node that
+        // cannot be stamped -- stamping switched off, or the table full --
+        // resolves by name each time rather than growing the table each time.
+        let stamp = {
+            let mut slots = self.slots.borrow_mut();
+            match Resolution::stamped(self.generation, slots.len()) {
+                Resolution::GLOBAL => Resolution::GLOBAL,
+                stamp => {
+                    slots.push(named.clone());
+                    stamp
+                }
+            }
+        };
+        resolved.set(stamp);
+        self.named_value(name, named)
     }
 
     fn eval_ident(&self, name: &Name, span: Span, env: &Option<Rc<Env>>) -> EvalResult {
@@ -2055,18 +2131,28 @@ impl<'a> Interp<'a> {
     /// carry this one's frame.
     #[inline(never)]
     fn eval_global(&self, name: &str, span: Span) -> EvalResult {
+        let named = self.resolve_named(name, span)?;
+        self.named_value(name, named)
+    }
+
+    /// What a global name resolves to, by name, once per run.
+    fn resolve_named(&self, name: &str, span: Span) -> Result<Named<'a>, RuntimeError> {
         // The borrow is dropped before anything below runs: `knotted` evaluates
         // a constant's body, which reaches `eval_ident` again and would find
         // this cell already borrowed.
         let known = self.names.borrow().get(name).cloned();
-        let named = match known {
-            Some(named) => named,
+        match known {
+            Some(named) => Ok(named),
             None => {
                 let named = self.resolve(name, span)?;
                 self.names.borrow_mut().insert(name.to_string(), named.clone());
-                named
+                Ok(named)
             }
-        };
+        }
+    }
+
+    /// The value a resolved global stands for.
+    fn named_value(&self, name: &str, named: Named<'a>) -> EvalResult {
         match named {
             Named::Constant(constant) => self.knotted(name, constant),
             Named::Args => Ok(Value::Desc(Rc::new(Desc::Args))),

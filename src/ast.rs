@@ -2,34 +2,65 @@ use crate::diag::Span;
 use crate::name::Name;
 use num_bigint::BigInt;
 
-/// Whether a name, at one place in the text, finds a local when it runs:
-/// 0 not yet known, 1 local, 2 global. The interpreter learns it on the node's
-/// first execution and keeps it, which is sound because the environment a
-/// node sees is fixed by where the node sits -- kanso#1575 found no node
-/// among 1,214 that both found a local and missed. A clone of a node copies
-/// what it knows, since the clone sits in the same place. Atomic because an
-/// `Expr` may be read from the interpreter's own stack thread; every access
-/// is `Relaxed`, and on this target that is an ordinary load or store.
+/// Whether a name, at one place in the text, finds a local when it runs, and
+/// for a global, where the running interpreter keeps what it resolved to.
+///
+/// 0 not yet known, 1 local, 2 global with no slot for the running
+/// interpreter; from 65,536 up, a global stamped with an interpreter's
+/// generation in the high sixteen bits and its slot in that interpreter's
+/// table in the low sixteen. The interpreter learns it on the node's first
+/// execution and keeps it, which is sound because the environment a node sees
+/// is fixed by where the node sits -- kanso#1575 found no node among 1,214
+/// that both found a local and missed. A slot means something only to the
+/// interpreter that stamped it, and an AST can outlive that interpreter, so a
+/// stamp from another generation is read as plain global and the name is
+/// resolved again. A clone of a node copies what it knows, since the clone
+/// sits in the same place. Atomic because an `Expr` may be read from the
+/// interpreter's own stack thread; every access is `Relaxed`, and on this
+/// target that is an ordinary load or store.
 #[derive(Default)]
-pub struct Resolution(std::sync::atomic::AtomicU8);
+pub struct Resolution(std::sync::atomic::AtomicU32);
 
 impl Resolution {
-    pub const UNKNOWN: u8 = 0;
-    pub const LOCAL: u8 = 1;
-    pub const GLOBAL: u8 = 2;
+    pub const UNKNOWN: u32 = 0;
+    pub const LOCAL: u32 = 1;
+    pub const GLOBAL: u32 = 2;
     #[inline]
-    pub fn get(&self) -> u8 {
+    pub fn get(&self) -> u32 {
         self.0.load(std::sync::atomic::Ordering::Relaxed)
     }
     #[inline]
-    pub fn set(&self, v: u8) {
+    pub fn set(&self, v: u32) {
         self.0.store(v, std::sync::atomic::Ordering::Relaxed)
+    }
+    /// Whether a raw value is a global, stamped or not.
+    #[inline]
+    pub fn is_global(v: u32) -> bool {
+        v == Self::GLOBAL || v >= 1 << 16
+    }
+    /// The slot a raw value names for `generation`, if it was stamped by it.
+    #[inline]
+    pub fn slot_for(v: u32, generation: u16) -> Option<usize> {
+        match v >> 16 {
+            g if g != 0 && g == generation as u32 => Some((v & 0xffff) as usize),
+            _ => None,
+        }
+    }
+    /// The raw value for a global kept in `slot` by `generation`, or plain
+    /// global when either does not fit.
+    #[inline]
+    pub fn stamped(generation: u16, slot: usize) -> u32 {
+        match (generation, slot) {
+            (0, _) => Self::GLOBAL,
+            (_, s) if s > 0xffff => Self::GLOBAL,
+            (g, s) => ((g as u32) << 16) | s as u32,
+        }
     }
 }
 
 impl Clone for Resolution {
     fn clone(&self) -> Self {
-        Resolution(std::sync::atomic::AtomicU8::new(self.get()))
+        Resolution(std::sync::atomic::AtomicU32::new(self.get()))
     }
 }
 
