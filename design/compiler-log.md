@@ -9187,9 +9187,26 @@ The six falls are `.text`-layout moves from a runtime.c edit that `include_str!`
 carries into the compiler. This branch changes no compiler Rust, and a counter
 increment behind a `K_COUNTING` test is not work any of these rows performs.
 
-`interp_instructions` rises by 7 to 900,471,358. Seven is the size of the step
-the standing interp row has drawn between runners without any change under it,
-so this reading does not separate a move made by this tree from the row's own
-drift. It arrived with the change and its mechanism is open. It is priced here
-at the value it landed on, and the next reading of main is what tells the two
-apart.
+`interp_instructions` rises by 7 to 900,471,358, and the rise belongs to this
+tree. Twenty-eight saved cost-goldens jobs from the last two days read the row
+at 900,471,344, 900,471,351 or 900,471,358, and the value follows the tree and
+nothing else: every job whose `startup_instructions` read 3,362,329 read 358,
+on four CPU models (family 0x6 model 0xcf, 0x19/0x1, 0x19/0x11, 0x1a/0x2), and
+every job at 3,363,729 read 351. The compile row draws two faces per tree from
+the directory walk; this row draws one. So the steps of 7 are moves between
+trees, and there is no runner drift here to hide one in.
+
+The packed self-cost tables of a 351 job (kanso#1504) and this tree's 358 job
+differ in two libc functions: `__memcmp_avx2_movbe` by -2,836 and
+`__memcpy_avx_unaligned_erms` by +42. Every other differing row is a
+function whose address moved and whose cost did not. Most of the memcmp term
+sits outside the anchor, since the row moved by 7 and not by thousands, and
+self cost cannot say which few instructions fall inside `run_interpreted_on_stack`.
+
+This host does not reproduce it. Run by hand with the gate's own command and
+tunables, main and this tree both read 933,390,005, with the memcmp term moving
++3,857 and the row not at all. This container's rustc is 1.94.1 against CI's
+1.98.1, so the binaries lay out differently and this reading says nothing
+about CI's. The mechanism stays open. It is a layout term
+of the kind the 2026-09-15 ruling covers, priced here at the value it landed
+on.
