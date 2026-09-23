@@ -10028,3 +10028,28 @@ does now, and its golden reads 270.
 Section 115's garbage length in the carry-sizing walk is untouched by this
 and still open: it is reachable only when a library loop is admitted to the
 carry tier, which nothing now needs for this peak.
+
+---
+
+## 2026-09-23 — ThinLTO for the release build, declined at a third of what it costs
+
+The release codegen row is 75% the linker. On this container, with the gate's
+own commands and `GITHUB_ACTIONS=1` so it measures, the codegen corpus's
+release build counted:
+
+    kanso 81,494,353   clang:probe 32,201,483   clang 31,669,971
+    clang -cc1 1,617,890,071   ld 5,161,438,914   total 6,843,200,439
+
+`ld` is the LTO link: it optimizes and emits the runtime together with the
+program, every build. `-flto=thin` for both the runtime object and the link,
+the one change:
+
+    codegen release    6,843,200,439 -> 6,605,682,161   -3.47%
+    run program        1,812,623,924 -> 1,867,477,968   +3.03%
+
+At today's ratios a per cent of the release codegen row is worth about 0.023
+of welfare and a per cent of the run row about 0.078, so the trade is +0.08
+against -0.24. ThinLTO imports less across modules than full LTO, and the run
+program is built on the runtime's small helpers being inlined into it. The
+container's clang is 18.1.3 where CI's is 19.1.1, so the sizes here are this
+host's; the ratio between them is the finding.
