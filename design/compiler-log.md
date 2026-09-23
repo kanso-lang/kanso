@@ -10528,3 +10528,25 @@ of those kinds never entered `encode_onto`, read 1,874,943,854 against main's
 `lib/json` tests passing. The two small dispatchers cost more than the calls
 they saved. `docs/compiler.html` §81 and §110 found the dispatcher's frame is its own;
 this is the same wall from the caller's side.
+
+**CI's rows**, taken into the goldens, against kanso#1579's:
+
+    work_runbench             1,801,929,451 -> 1,791,146,495   -10,782,956   -0.60%
+    work_encodebench          3,479,505,321 -> 3,459,377,334   -20,127,987
+    work_livebench            2,807,786,381 -> 2,787,658,394   -20,127,987
+    work_basket                  33,024,826 ->    32,568,835      -455,991
+    work_deepbench              347,896,726 ->   347,687,558      -209,168
+    work_digestbench              5,799,501 ->     5,766,137       -33,364
+    work_jsonbench            1,133,645,757 -> 1,133,645,908          +151
+    work_pendbench              208,139,965 ->   208,139,970            +5
+    codegen_instructions_dev    473,849,441 ->   473,884,358       +34,917
+    codegen_instructions_release 6,585,606,376 -> 6,598,389,807 +12,783,431   +0.19%
+    startup_instructions            972,533 ->       972,482           -51
+
+The run program gets back more than kanso#1579's cursor test cost it, and the
+two encoders fall by the same 20,127,987, which is the rewind their loops take
+most often. jsonbench and pendbench move by 151 and 5 instructions, both
+programs that rewind rarely, where the note taken on every scan outweighs the
+test it saves. `.text` rises on all but the run program, 1,765,228 summed over
+the fourteen binaries, for `k_seek_note`'s body. The release codegen row rises
+0.19% for the same runtime code compiled and linked into every program.
