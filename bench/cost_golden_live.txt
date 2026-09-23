@@ -40,6 +40,7 @@ view_allocs=2761
 view_frees=0
 ten_blocks=0
 ten_frees=0
+ten_handups=0
 sh_str=468096
 sh_rec=214041600
 sh_buf=72048320

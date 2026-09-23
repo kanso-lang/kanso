@@ -8167,6 +8167,103 @@ three jobs diffable frame by frame. None of them could be read at the time.
 
 
 
+## 2026-09-22 — ten_handups: where a tenure block dies, which no counter could say
+
+kanso#1560 found that `a_repaired_node_below_the_mark_holds_tenure` does not
+catch the change its header promises to catch, and named the fix without doing
+it: a counter separating a hand-up from a release. This is that counter, and
+the two claims the fixture was carrying are corrected with it.
+
+WHY THE PAIR IS BLIND. `k_ten_hand_up` moves a depth's tenure blocks to the
+depth outside; `k_ten_release` frees them where they are. Either way the block
+is claimed once and given back once, so `ten_blocks` and `ten_frees` are
+identical across the two. The hand-up moves only WHICH DEPTH does the freeing,
+and until now nothing recorded that. Replacing the call left all sixty-seven
+`.mem` goldens byte-identical.
+
+`ten_handups` counts a hand-up that moves a real block, after the early return.
+With it, three fixtures go red on the swap:
+
+    a_carried_value_written_into_an_older_node        1 -> 0
+    a_repaired_node_below_the_mark_holds_tenure       1 -> 0
+    an_inner_beat_opens_its_tenure_in_the_block_outside  4 -> 0
+
+The third also moves `ten_blocks` 5 -> 3, which is the whole of what any
+counter could see before. `bench/cost_golden_run.txt` reads 3, so the row is
+live on the benchmark corpus rather than only in the lazy tier.
+
+`scripts/ratchet/mutations/a_tenure_block_freed_where_it_was_handed_up.sh` is
+the swap, and its row gates the mem vein. Watched red before it was written
+down.
+
+WHAT MAKES THE REPAIRED-NODE CASE SAFE IS NOT THE HAND-UP. runtime.c said it
+was, in the paragraph above `k_ten_hand_up`, and the fixture's header said it
+too. Poisoning the depth's live tenure bytes -- 39,200 of them -- at three
+points one step apart in `k_beat_pop_slow` says which step matters:
+
+    before the carry's deep copy     dies, reading a length out of 0xAB
+    after the copy, before migrates  correct output
+    at the hand-up                   correct output
+
+The copy reads the tenured bytes out. After it nothing below the mark points
+into tenure, which is why the swap leaves that program clean under
+AddressSanitizer and why its output is byte-identical with the handed-up block
+poisoned. `c->used_flag` is 1 on that pop, so the copy is the step that runs.
+
+That is an isolation and not an attribution: the three poisons differ only in
+position, and the answer flips across one of the two gaps.
+
+The hand-up is load-bearing, on the other fixture. An inner beat that opens its
+tenure in the outer depth's block is the shape whose blocks must travel, and
+that is where the runtime's comment now points.
+
+VEINS. A minted counter is additive and moves the lot: twelve cost goldens and
+all sixty-seven `.mem` files, regenerated with `all_counters.sh --write`.
+`ten_handups` joins the trend gate's `higher` table in the change that mints
+it, for the reason `lower_a` gives about presence counters: dropping the kernel
+should read as a worsening and want its sentence.
+
+TWO MORE PANELS THAN THIS ENTRY FIRST CLAIMED. It said the book samples do not
+carry the tenure counters, on a grep of `book/`. The counter panels live in
+`docs/book/samples/`, and `ch10/counters_counters.out` and
+`ch12/fused_counters.out` both print the whole counter block, so both gained
+`ten_handups=0` and both HTML panels were rewritten from them. CI's book-samples
+job is what said so. `bench/emitted_golden.txt` really does not carry them.
+
+THE COMPILE-SIDE ROWS, from CI, each with the value it landed on. `src/runtime.c`
+is `include_str!`'d into the compiler, so its bytes are the compiler's own and
+its layout moves with them; the benchmarks compile the counter out, which is why
+`machine code` and every run-side row agreed. Eight of these refuse comparison
+on this box, so they are CI's reading and not a projection; each was read twice
+in the job and both readings were identical.
+
+    compile_instructions             35,549,673 ->     35,552,219    +2,546
+    entry_instructions              126,728,843 ->    126,735,656    +6,813
+    library_instructions            127,184,941 ->    127,192,276    +7,335
+    startup_instructions              3,363,186 ->      3,365,595    +2,409
+    emit_instructions                51,618,058 ->     51,630,500   +12,442
+    interp_instructions             923,151,727 ->    923,151,719        -8
+    codegen_instructions_dev        596,158,173 ->    596,158,155       -18
+    codegen_instructions_release  6,825,827,822 ->  6,825,821,967    -5,855
+
+The five rises are the layout, and `emit_instructions` is the largest of them
+because it is the only row anchored inside the compiler's own emitting rather
+than around a child process. The three falls are not savings and nothing here
+could have made them ones: eight on 923 million is nine parts per billion, and
+the interp row is the subject of STATUS.md's standing row precisely because it
+moves by single digits between jobs on one commit.
+
+Welfare reads 77.28 against a floor of 77.27959877643865 and the floor sentinel
+passes, so there is no rise to bank and no drop to explain. The five rises cost
+less than the score's own resolution at these magnitudes.
+## 2026-09-22 — kanso#1561 re-merged onto main after kanso#1563
+
+kanso#1563 landed the inline name compare and took six compile-side goldens
+with it. Neither side of this merge described the merged tree, so those six
+carry MAIN'S values forward and CI measures the difference; this branch's own
+readings on them were taken before that change existed and are not comparable
+with anything after it.
+
 Worth setting beside kanso#1502, which took the same merge on the same day and
 read different numbers for five of the six. Only the interp row's +7 is shared.
 So these are not a property of kanso#1520 that a branch inherits — they are
@@ -8807,6 +8904,51 @@ five compile rows moved with it.
     compile_instructions    35,540,015    entry_instructions   126,691,703
     library_instructions   127,146,502    startup_instructions   3,362,329
     emit_instructions       51,481,045    interp_instructions  908,952,299
+
+`bench/welfare_floor.json` did not conflict, so the floor this branch is scored
+against is kanso#1563's 77.28677792407876.
+
+Five page paragraphs conflicted, every one a `data-golden` span quoting those
+rows, every one resolved to main's figure: a span follows its golden. Resolved
+hunk by hunk rather than by taking the file whole, because §118 lives in it --
+it is still there, and the log kept every entry from both sides.
+
+The counter veins are untouched by the merge: the twelve cost goldens and all
+sixty-seven `.mem` files still agree, and `ten_handups` still reads 3 on the run
+program and 1, 1 and 4 on the three fixtures that see it.
+
+CI'S SITTING ON THE MERGED TREE, each row with the value it landed on. The
+branch was re-merged twice as kanso#1563 and then kanso#1564 landed, so these
+are the third sitting and the figures below are the ones on disk:
+
+    library_instructions    127,149,930 -> 127,156,898    +6,968   +0.0055%
+    entry_instructions      126,696,892 -> 126,702,373    +5,481   +0.0043%
+    compile_instructions     35,541,148 ->  35,543,171    +2,023   +0.0057%
+    startup_instructions      3,363,118 ->   3,363,110        -8   -0.0002%
+    emit_instructions        51,481,382 ->  51,481,601      +219   +0.0004%
+    interp_instructions     900,471,358 -> 900,471,344       -14   -0.0000%
+
+The five rises are the counter's own bytes. `ten_handups` adds a global, an
+increment behind a predicted-not-taken test and a line of stats output, and
+`src/runtime.c` is `include_str!`'d into the compiler, so the compiler carries
+those bytes whether or not anything counts. `compile_allocs`, `compile_peak_
+bytes`, both codegen rows and every run-side row are byte-identical.
+
+**THE INTERP ROW DRIFTS BY SINGLE DIGITS EVERY SITTING, AND THAT IS THE
+STANDING ROW AGAIN.** Against main it read seven low on the first sitting and
+fourteen low on this one, and `startup_instructions` came back eight low here
+too. Nothing on this branch can reach name comparison -- the only Rust that
+changed is a counter declaration, an increment and a `fprintf` -- and a drift
+that changes size between sittings of the same branch is the same thing
+STATUS.md's
+"a welfare counter reads three parts per billion" has been open on since
+2026-09-15. Seven in 909 million is eight parts per billion. It is recorded here
+as another sighting rather than explained: kanso#1562 measured `.text` growth
+moving this row through `__memcmp_avx2_movbe`, and this branch grows `.text`,
+so the direction is at least consistent with that. The floor holds at
+77.28677792407876 either way and the sentinel passes, so there is no rise to
+bank and nothing to defend.
+
     floor          77.28677792407876
 
 Five page paragraphs conflicted, every one of them a `data-golden` span
@@ -8969,6 +9111,128 @@ whichever size happens to fold evenly.
 That is the same rule this log keeps paying for: never take a verdict from the
 last stage of a pipe, and break what a new check watches before trusting it.
 
+## 2026-09-23 — the reserve arm moves frame_for, not the commits, and the entry above says otherwise
+
+The entry above is headed "the allocator's page commits are inside the anchor,
+and are worth 107,802". The second half is wrong, and this entry carries the
+correction and what the number actually is.
+
+WHAT WAS DONE WRONG. The reserve arm's commit frames were read — two to zero,
+the third down 6,486 — and the row was read, 107,802 higher. The two were put
+together without diffing the arm frame by frame. That is a
+difference-in-differences presented as a mechanism, which is the failure this
+log has a rule about, committed inside the entry that cites the rule.
+
+WHAT THE FRAMES SAY. The matched pair is `MIMALLOC_EAGER_COMMIT=1` against
+`MIMALLOC_RESERVE_OS_MEMORY=256MiB` — one variable each, so the cost of reading
+one more environment variable cancels. 84 frames move.
+
+    sum of falls   -15,794          sum of rises  +121,461
+
+    what falls                            what rises
+      -6,486  mi_bitmap_setN               +111,696  kanso::eval::Interp::frame_for
+      -5,401  _mi_os_commit_ex               +2,808  _mi_os_reuse
+      -1,144  _mi_subproc                    +2,237  __vfscanf_internal      [libc]
+        -730  _mi_prim_commit                +1,105  ____strtoul_l_internal  [libc]
+        -438  mprotect                [libc]   +367  mi_bchunk_xsetNC
+        -432  mi_arena_try_alloc_at            +216  _mi_prim_reuse
+
+The commit path inside the anchor is worth about **15,794**. The row rises
+because `kanso::eval::Interp::frame_for` costs 111,696 more when the arena is
+reserved up front, and that frame is the interpreter's own. Two further passes
+of both arms read 933,390,854 and 933,498,656 on the row and 12,341,583 and
+12,453,279 on `frame_for`, to the instruction each time.
+
+THE DIRECTION WAS MISLEADING TOO. "Worth 107,802" reads as a saving. Reserving
+makes the row LARGER by 107,802 and the whole process larger by 105,667: it
+removes the commits and costs more than they were.
+
+AND THE CORRECTED FINDING IS THE STRONGER ONE. A knob that changes nothing but
+where the heap starts moves kanso's own hot interpreter function by 111,696
+instructions, reproducibly. The standing row has wanted a mechanism in the
+compiler's own code since 2026-09-15; the frame diff of the interp tables
+earlier the same night could offer only an address relocation, flagged there as
+an attribution rather than a mechanism. This is in a named function.
+
+What it does NOT show is that CI's three or six comes from heap placement. A
+256MiB reservation is a wholesale intervention, not the difference between two
+runners, and nothing on this box varies run to run. What it shows is that this
+row is layout-sensitive in kanso's own code, which is the thing the row has been
+trying to establish.
+
+WHAT STANDS from the entry above, unchanged: the commit frames are inside the
+anchor; neither spelling of eager commit moves anything, zero frames different
+out of 1,396; the allocator's option reading falls outside the anchor while
+`MIMALLOC_VERBOSE=1` moves 217,814 of PROGRAM TOTALS and leaves the row
+byte-identical; and nothing varied run to run in any arm.
+
+Surfaces the wrong attribution reached: this log (corrected here, the log being
+append-only), kanso#1567's title and body, and its merge commit message, which
+cannot be edited. A comment on kanso#1567 carries the same correction.
+
+## 2026-09-23 — what a runtime.c change does to the six rows, decomposed exactly
+
+kanso#1566 put every function table inside the log tail, and kanso#1561 is the
+first branch with a compiler change to run under it. Its whole Rust-visible
+diff is a counter declaration, an increment and an fprintf in `src/runtime.c` —
+which `include_str!` puts inside the compiler, so the compiler's own bytes move.
+Diffing its six tables against main's, frame by frame, joining on the first
+space:
+
+    table      TOTALS Δ  =  constant     memcmp    memchr    rest
+    compile        -246  =    -2,235    +2,023       -34      +0
+    entry        +3,212  =    -2,235    +5,481       -34      +0
+    library      +4,699  =    -2,235    +6,968       -34      +0
+    startup      -1,488  =    -2,235      +781       -34      +0
+    emit           -628  =    -2,235    +1,637       -30      +0
+    interp         +361  =    -2,235    +2,626       -34      +4
+
+Three terms account for every row exactly. NOT ONE NAMED KANSO FRAME MOVED in
+any of the six.
+
+**The constant is 29 frames that move by the SAME amount in all six tables**,
+summing to -2,235 whatever the workload — 36.9 million instructions for the
+compile row against 946.9 million for interp. Workload-proportional work cannot
+do that; a fixed cost paid once per process can. The named frames say what it
+is:
+
+    -1,180  __vfscanf_internal            -38  __isoc23_sscanf
+      -582  ____strtoul_l_internal        -29  _IO_setb
+       -88  _IO_sputbackc                 -24  pthread_getattr_np
+       -73  getdelim                      -24  _IO_no_init
+       -40  _IO_str_init_static_internal   -4  getline
+
+`getdelim`, `sscanf`, `strtoul` and the `_IO_*` family are what reading a text
+file line by line is made of, and `pthread_getattr_np` moves with them. That
+frame is the one CLAUDE.md's 2026-09-15 normalization ruling names by hand, and
+what it parses is `/proc/self/maps`. So the constant is glibc reading this
+process's own memory map once at thread set-up, and what it reads differs
+because the binary's layout differs.
+
+That inference is as far as a FLAT table goes, and it should be said plainly: a
+flat profile has no caller edges, so this is the signature of the maps parse
+rather than a demonstration that `pthread_getattr_np` called those frames. The
+raw profile's `cfn=`/`calls=` pairs would settle it.
+
+**The varying term is `__memcmp_avx2_movbe`**, +781 on the startup row to +6,968
+on library. It scales with the workload, which is what a `.text`-layout effect
+does, and it is the frame kanso#1562 identified as the carrier.
+
+WHAT THIS GIVES THE STANDING ROW. Its question since 2026-09-15 has been what
+carries a single-digit drift on trees that cannot reach the compiler's
+decisions. The answer here is two terms, both in libc, and one of them is
+already ruled to need normalizing. The maps parse is CONSTANT per binary pair
+and rides on every row at once, so it moves rows a change cannot otherwise
+touch; and -2,235 is three orders of magnitude bigger than the three
+instructions kanso#1565 is standing down on, so a smaller layout difference
+producing a smaller constant is the shape to look for next.
+
+WHAT IT IS NOT. One pair of jobs on two different binaries. The -2,235 is a
+property of that pair, not a constant of the project, and nothing here shows
+CI's three comes from this term. The next reading that would bear on it is the
+same decomposition across two jobs whose binaries are identical, which is now
+one command per job rather than unavailable.
+
 ## 2026-09-23 — the compile row leaves the walk out, and the two faces were 487 and 490
 
 `compile_instructions` is measured with `<std::fs::ReadDir as Iterator>::next`
@@ -8996,6 +9260,51 @@ THE FALSIFIER IS IN THE GOLDEN'S HEADER, and it is the next thing to check: the
 row should now read ONE value where it drew two, because the faces differed only
 inside the excluded subtree. A second sitting that alternates means the
 exclusion is aimed at the wrong frame.
+
+## 2026-09-23 — kanso#1561's compile row on the excluded gate, and the frame that IS the two faces
+
+kanso#1570 is on main, so `compile_instructions` no longer counts the directory
+walk. This branch's golden follows, derived rather than waited for:
+
+    compile_instructions   35,540,661 ->  35,542,684    +2,023   +0.0057%
+
+THE DERIVATION, and it rests on a relation checked at both ends. The walk's
+inclusive cost is 363 plus the self cost of
+`<std::sys::fs::unix::ReadDir as Iterator>::next`, the frame that carries the
+drift. Two independent points fix that: a job whose frame read 124 had a walk of
+487, because main went 35,541,148 -> 35,540,661 under the exclusion; and this
+container, whose frame reads 127, measures the walk at 490. This branch's job
+read 124, so its walk was 487 and 35,543,171 - 487 = 35,542,684.
+
+THE FRAME'S SELF COST IS THE TWO FACES, across five jobs and three trees:
+
+    job                        frame self   row
+    kanso#1566 job 2                  124   35,541,148   (low)
+    kanso#1568                        127   35,541,151   (high)
+    kanso#1561                        124   35,543,171
+    kanso#1504 job 3                  124   35,544,159
+    kanso#1504 job 4                  127   35,544,162
+
+124 or 127, three apart, tracking the face every time. Nothing else in the
+compile table moved between any of those pairs.
+
+TWO CHECKS THAT DID NOT HAVE TO AGREE AND DO.
+
+The delta against main is +2,023 on the excluded gate and was +2,023 on the
+unexcluded one, because both ends dropped by their own walk. An exclusion that
+removed the right term has to leave every difference between two trees exactly
+as it was.
+
+And +2,023 is the `__memcmp_avx2_movbe` delta measured between this branch and
+main in the six-row decomposition earlier today. The gated row moved by exactly
+the memcmp term and by nothing else, which places the constant that entry
+attributed to the `/proc/self/maps` parse OUTSIDE `kanso::main`'s inclusive
+anchor — where a thread set-up cost belongs. That was not predicted; it falls
+out of two measurements taken for different reasons.
+
+IF CI DISAGREES the derivation is wrong and its number is the one to take.
+
+
 ## 2026-09-23 — kanso#1504's compile row moved three on a merge that changed no code
 
 Merging main in twice (kanso#1567 and kanso#1566, a log entry and a CI change,
@@ -9106,6 +9415,89 @@ trees exactly as it was, and it does.
 
 IF CI DISAGREES, the prediction is wrong and the number it reports is the one to
 take. Writing it down first is what makes that worth knowing.
+
+## 2026-09-23 — kanso#1561 on main after kanso#1504: two runtime.c changes, measured by CI
+
+kanso#1504 landed underneath this branch, and both change `src/runtime.c`, which
+`include_str!` puts inside the compiler. The runtime merged without a conflict,
+both changes are present — `k_beat_top` from kanso#1504 and `k_stat_ten_handups`
+from this branch — and the tree builds.
+
+THE DERIVED GOLDEN ABOVE DOES NOT SURVIVE THIS. 35,542,684 was this branch's
+excluded compile row on main as it stood before kanso#1504. The tree now carries
+both changes, a combination no job has measured, and layout effects do not add:
+this branch's +2,023 against old main was entirely `__memcmp_avx2_movbe`, which
+is a `.text`-layout term, and two layout moves do not compose into the sum of
+their deltas. So it is not derived this time.
+
+Eight golden files conflicted — compile, entry, library, startup, emit, interp
+and both codegen tiers — each as this branch's reading on old main against
+kanso#1504's. Neither describes the combined tree and this host cannot measure
+it, different rustc. Each takes main's value as a PLACEHOLDER, and this branch
+is expected to go red once on `cost goldens` so that CI can report the combined
+rows, which then replace the placeholders and are priced here.
+
+The `ten_handups` counter rows in the cost goldens are this branch's own and
+came through the merge intact.
+
+
+## 2026-09-23 — kanso#1561's combined rows, as CI read them
+
+The placeholders above came back from CI red as expected, and every row was
+read twice on one runner and agreed with itself. Against main at 18fae808:
+
+    row                            main           this tree      delta
+    compile_instructions           35,543,672     35,540,661     -3,011
+    entry_instructions            126,702,408    126,696,892     -5,516
+    library_instructions          127,158,876    127,149,930     -8,946
+    startup_instructions            3,363,729      3,362,329     -1,400
+    emit_instructions              51,484,057     51,481,382     -2,675
+    codegen_instructions_release 6,837,945,401  6,837,938,796     -6,605
+    codegen_instructions_dev       596,192,991    596,192,991          0
+    interp_instructions           900,471,351    900,471,358         +7
+
+`compile_instructions` lands on 35,540,661, which is main's excluded value from
+before kanso#1504 to the instruction. kanso#1504 moved the row by +3,011 and
+this tree, carrying both changes, moves it back by the same amount. That is
+where the combined layout put it; nothing here says why the two moves cancel.
+
+The six falls are `.text`-layout moves from a runtime.c edit that `include_str!`
+carries into the compiler. This branch changes no compiler Rust, and a counter
+increment behind a `K_COUNTING` test is not work any of these rows performs.
+
+`interp_instructions` rises by 7 to 900,471,358, and the rise belongs to this
+tree. Twenty-eight saved cost-goldens jobs from the last two days read the row
+at 900,471,344, 900,471,351 or 900,471,358, and the value follows the tree and
+nothing else: every job whose `startup_instructions` read 3,362,329 read 358,
+on four CPU models (family 0x6 model 0xcf, 0x19/0x1, 0x19/0x11, 0x1a/0x2), and
+every job at 3,363,729 read 351. The compile row draws two faces per tree from
+the directory walk; this row draws one. So the steps of 7 are moves between
+trees, and there is no runner drift here to hide one in.
+
+The packed self-cost tables of a 351 job (kanso#1504) and this tree's 358 job
+differ in two libc functions: `__memcmp_avx2_movbe` by -2,836 and
+`__memcpy_avx_unaligned_erms` by +42. Every other differing row is a
+function whose address moved and whose cost did not. Most of the memcmp term
+sits outside the anchor, since the row moved by 7 and not by thousands, and
+self cost cannot say which few instructions fall inside `run_interpreted_on_stack`.
+
+This host does not reproduce it. Run by hand with the gate's own command and
+tunables, main and this tree both read 933,390,005, with the memcmp term moving
++3,857 and the row not at all. This container's rustc is 1.94.1 against CI's
+1.98.1, so the binaries lay out differently and this reading says nothing
+about CI's. The mechanism stays open. It is a layout term
+of the kind the 2026-09-15 ruling covers, priced here at the value it landed
+on.
+
+A CORRECTION to the entry above, "kanso#1561's compile row on the excluded gate,
+and the frame that IS the two faces", which landed on main with kanso#1504. It
+says interp's drift "has been measured at seven and fourteen rather than three".
+The only disagreement within one commit that the standing row records is six,
+2,178,502,266 against 2,178,502,272, on 2026-09-15. Seven and fourteen are
+moves between trees. The same twenty-eight jobs bear on that row: no tree among
+them read two interp values, on a row now near 900 million where the six was
+read near 2,178 million, so the six has not recurred in them. That is
+twenty-eight jobs, and it does not close the row.
 
 ## 2026-09-23 — memcmp chose its path by page offset, and the counted runs now preload one that does not
 
@@ -9232,3 +9624,11 @@ priced against main's rows now would leave the merged tree under the floor
 kanso#1561 banks. Re-basing after the merge prices the switch against the rows
 that floor was banked on. That is also the test of the prediction: the rows
 above should not move when kanso#1561 comes in underneath.
+
+THE RE-BASE, done on the merge with kanso#1561. Four baselines in
+`bench/welfare_floor.json` are scaled by the preloaded row over kanso#1561's
+row, each rounded up so that no ratio falls: compile_instructions (the compile
+and entry rows together) 671,773,822 to 684,500,178, startup_instructions
+4,838,372 to 4,845,369, interp_instructions 2,178,559,085 to 2,227,524,026,
+and emit_instructions 382,212,543 to 387,475,984. The score reads the floor
+kanso#1561 banked, 77.3466, and the history entry says this is a re-basing.

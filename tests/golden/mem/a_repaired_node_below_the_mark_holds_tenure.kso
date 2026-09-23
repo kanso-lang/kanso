@@ -16,12 +16,19 @@
 # pendbench), and none that do both, which is why four earlier attempts
 # missed: the shapes are disjoint in everything the corpus runs.
 #
-# Reaching it is harmless here, and the reason is the fix kanso#1209 landed: a
-# beat whose result is a heap value hands its tenure blocks to the depth
-# outside instead of freeing them, so the block outlives the read below. That
-# is what `ten_blocks=1` beside `ten_frees=1` records. A change that stops
-# handing them up turns this fixture red instead of turning some future
-# program into a segfault in `k_copy_size`.
+# Reaching it is harmless here. This comment used to say the reason was the fix
+# kanso#1209 landed -- a beat whose result is a heap value hands its tenure
+# blocks to the depth outside instead of freeing them, so the block outlives
+# the read below -- and to claim that a change which stopped handing them up
+# turned this fixture red. Neither held. The carry's deep copy runs before the
+# hand up and reads the tenured bytes out, so nothing below the mark still
+# points into tenure by the time the block moves; and `ten_blocks=1` beside
+# `ten_frees=1` reads the same whether the block is handed up or freed here,
+# because the hand up moves only where the free happens.
+#
+# What the fixture now pins is `ten_handups=1`, which goes to nought on that
+# change. The block that the hand up really keeps alive belongs to
+# an_inner_beat_opens_its_tenure_in_the_block_outside, not to this program.
 import "std/io"
 import "std/list"
 
