@@ -10822,3 +10822,27 @@ better; the run program is the one the objective weighs. The release codegen
 row reads 2,903,108,801 against 2,898,793,716 at 225, +0.15%, which is the
 linker placing a larger runtime object; the runtime's own compile is cached
 and the gate warms it before counting. CI's rows go into the goldens.
+
+---
+
+## 2026-09-23 — the program is optimized once, at the link
+
+A release build ran the optimizer over the program twice. `clang -O3 -flto`
+put the program's IR through the full pipeline in `clang -cc1` on the way to
+bitcode, 1,394,202,866 instructions on the codegen corpus, and the LTO link
+ran its own `-O3` pipeline over the program and the hot helpers together.
+The pre-link level is now `-O1`, with `-Wl,-plugin-opt=O3` after the driver's
+own so the link stays at `-O3`. On this container, over kanso#1586:
+
+                          release codegen     runbench
+    -O3, as it was        2,903,108,801       1,806,069,074
+    -O2                   2,536,822,676       1,815,479,975   +0.52%
+    -O1                   1,751,444,900       1,895,750,256   +4.97%
+    no pre-link passes    1,380,698,213       2,053,358,047  +13.69%
+
+The link's pipeline expects its input already simplified, which is why
+removing the pre-link passes outright costs the run program 13.69%. Scored by
+the welfare script against main's goldens scaled by these ratios, -O1 reads
++0.19 and -O2 +0.11; the objective weighs a release build at 0.15 of
+production against run speed's 0.45, and at these ratios the build's saving
+is the larger. CI's rows go into the goldens.
