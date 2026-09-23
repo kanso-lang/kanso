@@ -8697,3 +8697,65 @@ back red on three jobs with only one cause. Banked at 77.34, and the run-side
 falls compose with kanso#1563's development-side falls exactly as the two sides
 of the objective are meant to: production 57.13 -> 57.23, development 78.49
 unmoved.
+## 2026-09-23 — the allocator's page commits are inside the anchor, and are worth 107,802
+
+STATUS.md's standing row — "a welfare counter reads three parts per billion" —
+ends by naming where to look next: the frames that moved between its corpus
+arms were `_mi_os_commit_ex`, `mi_bitmap_setN` and `_mi_prim_commit`, the
+allocator committing pages. That lead is measured here. It does not close the
+row, and what it rules out is as useful as what it finds.
+
+SIX ARMS of the interp gate's exact run, same box, same binary, same
+`env -i PATH=... GLIBC_TUNABLES=...` line, differing by at most one variable.
+The row is the gate's own anchor, `run_interpreted_on_stack` inclusive. Every
+arm was read twice and the two commit arms three times; every reading in this
+entry repeated to the instruction.
+
+    arm                                   the row      PROGRAM TOTALS
+    nothing extra                      933,390,836        980,366,329
+    MIMALLOC_EAGER_COMMIT=1            933,390,854        980,383,626
+    MIMALLOC_EAGER_COMMIT=0            933,390,854        980,383,626
+    MIMALLOC_EAGER_COMMIX=1            933,390,854        980,383,626
+    MIMALLOC_ARENA_EAGER_COMMIT=0      933,390,854        980,384,520
+    MIMALLOC_RESERVE_OS_MEMORY=256MiB  933,498,656        980,489,293
+
+THE COMMIT PATH IS INSIDE THE ANCHOR AND IT IS LARGE. Reserving the arena up
+front takes `_mi_os_commit_ex` from 5,401 to zero and `_mi_prim_commit` from
+730 to zero, and drops `mi_bitmap_setN` from 30,665 to 24,179 — and the row
+moves 107,802. That is 0.0115% of the row and four orders of magnitude more
+than the six this row is about, so page commitment is not a small term hiding
+at the bottom of the profile. It is a real part of what the gate counts.
+
+WHAT THIS RULES OUT. Neither spelling of eager commit moves anything at all:
+`MIMALLOC_EAGER_COMMIT` at 1 and at 0 give the same row, the same PROGRAM
+TOTALS, and the same three commit frames, and so does `MIMALLOC_EAGER_COMMIX`,
+a name of the same length that mimalloc has never heard of. B against C is zero
+frames different out of 1,396. The commit frames move for one knob in six, and
+that knob is the one that stops the commits happening.
+
+AND THE ALLOCATOR'S OPTION READING IS OUTSIDE THE ANCHOR, which corrects the
+shape of this row's own candidate. `MIMALLOC_VERBOSE=1` moves 107 frames and
+217,814 instructions of PROGRAM TOTALS — `_mi_vsnprintf` +87,496,
+`mi_buffered_out` +19,234 — and leaves the row byte-identical at 933,390,854.
+So mimalloc IS reading its environment, and every instruction it spends doing
+so falls outside `run_interpreted_on_stack`. The 117-per-variable term this row
+recorded on 2026-09-19 is a fact about the process, not about the number the
+gate pins. One extra variable costs this row 18.
+
+NOTHING VARIED RUN TO RUN. Every arm is byte-identical across its repeats, so
+this box still cannot reproduce the six, and the control the row already has
+stands.
+
+WHAT IS LEFT, and it is a question rather than a measurement. Page commitment
+has the shape the row has been looking for: it is page-granular, so it moves in
+lumps rather than smoothly, and how many pages a run commits depends on where
+the allocator's heap starts. `MIMALLOC_RESERVE_OS_MEMORY` would put it into a
+persistent known initial state, which is the 2026-09-15 ruling's own phrasing.
+Against that: committing pages is work the program really does, so reserving
+them up front normalizes by changing the subject, and the row would stop
+counting 107,802 instructions the production allocator spends. Which of those
+the ruling means is not cloud's to decide alone, and it belongs in the ledger
+rather than in this entry.
+
+Measured against a release build of the tree at `354e24d4`, using
+`scripts/gates/function_table.sh` for the per-frame readings.
