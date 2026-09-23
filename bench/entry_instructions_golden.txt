@@ -976,7 +976,37 @@
 # CI's sitting on run 35419502516. entry_instructions 126,727,524 -> 126,728,843, +1,319 (+0.0010%).
 # Layout, for the same reason as the compile row. `entry_again` read
 # 126,728,843.
-entry_instructions=126696892
+# AND memcmp IS PRELOADED, 2026-09-23, under the same rule.
+#
+# Every run this gate counts preloads scripts/gates/address_blind/compare.c
+# over libc's memcmp and bcmp. glibc's __memcmp_avx2_movbe asks, for a
+# comparison under 32 bytes, whether (s1 | s2) & 4095 lies within 32 bytes of
+# a page end, and takes a longer branch when it does. So comparing the same
+# bytes cost a different number of instructions depending on where the linker
+# put one operand and the allocator put the other. kanso#1561 added forty lines
+# to src/runtime.c, which the compiler embeds. On one host that moved 478 of the
+# compile row's comparisons onto the page-cross branch with every call count
+# unchanged, and that row rose 2,688. With the preload the two trees read
+# 36,656,738 each, and the two processes' PROGRAM TOTALS agreed to the
+# instruction.
+#
+# The replacement compares eight bytes at a time, and its cost depends only on
+# the length and where the first difference falls. It costs more than libc's:
+# the compile row read 666,638 higher on that host, because the avx2 path
+# compares 32 bytes in one instruction. The value below was measured with it and
+# is not comparable with any reading taken before 2026-09-23.
+#
+# AND memcpy AND memmove, the same day. With memcmp preloaded, merging
+# kanso#1561's runtime under this branch still moved the compile, entry and
+# library rows by 44, 122 and 122, and in each table the whole move was
+# __memcpy_avx_unaligned_erms. Its path for a large copy depends partly on the
+# distance between destination and source: 1,500 bytes cost 177 instructions at
+# one distance and 179 at another. scripts/gates/address_blind/copy.c replaces
+# both and chooses every branch by the length: a head and a tail that may
+# overlap up to 128 bytes, 128-byte AVX2 steps above that. Copies libc makes internally, a thousand-odd instructions a run, cannot
+# be reached by a preload and are still counted as libc does them.
+#
+entry_instructions=127696380
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

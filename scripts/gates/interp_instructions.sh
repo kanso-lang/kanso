@@ -56,6 +56,13 @@ tune=$tune:glibc.malloc.mmap_threshold=131072
 tune=$tune:glibc.malloc.trim_threshold=131072
 tune=$tune:glibc.malloc.top_pad=131072
 tune=$tune:glibc.malloc.tcache_count=7
+# memcmp and bcmp are replaced for the counted run by one whose cost depends on
+# the length and the first difference and not on where the operands sit.
+# libc's avx2 memcmp takes a longer branch when either operand lies within 32
+# bytes of a page end, so a change that only moves strings in .rodata moved
+# this row. address_blind.sh proves the replacement at two page offsets before
+# printing its path.
+blind=$(sh scripts/gates/address_blind.sh)
 # THE CORPUS IS NAMED RELATIVE TO THE BOX. The count tracks the length of the
 # path the compiler is handed — about 160 instructions a character, because
 # the absolute path is copied and walked — so `interp_corpus` and
@@ -63,7 +70,7 @@ tune=$tune:glibc.malloc.tcache_count=7
 # run. library_box.sh carries the measurement.
 (
   cd "$box"
-  env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" valgrind --tool=callgrind \
+  env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" LD_PRELOAD="$blind" valgrind --tool=callgrind \
     --callgrind-out-file=/tmp/cg.interp ./kanso run interp_corpus --interp \
     >/dev/null 2>/dev/null
 )
@@ -176,7 +183,7 @@ fi
 # was going to fail anyway. kanso#1463 does the same for the compile gates.
 (
   cd "$box"
-  env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" valgrind --tool=callgrind \
+  env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" LD_PRELOAD="$blind" valgrind --tool=callgrind \
     --callgrind-out-file=/tmp/cg.interp2 ./kanso run interp_corpus --interp \
     >/dev/null 2>/dev/null
 )

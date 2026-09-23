@@ -56,6 +56,13 @@ tune=$tune:glibc.malloc.mmap_threshold=131072
 tune=$tune:glibc.malloc.trim_threshold=131072
 tune=$tune:glibc.malloc.top_pad=131072
 tune=$tune:glibc.malloc.tcache_count=7
+# memcmp and bcmp are replaced for the counted run by one whose cost depends on
+# the length and the first difference and not on where the operands sit.
+# libc's avx2 memcmp takes a longer branch when either operand lies within 32
+# bytes of a page end, so a change that only moves strings in .rodata moved
+# this row. address_blind.sh proves the replacement at two page offsets before
+# printing its path.
+blind=$(sh scripts/gates/address_blind.sh)
 # THE CORPUS IS NAMED RELATIVE TO THE BOX. The count tracks the length of the
 # path the compiler is handed — about 160 instructions a character, because
 # the absolute path is copied and walked — so `entry_corpus/main.kso` and
@@ -77,12 +84,12 @@ tune=$tune:glibc.malloc.tcache_count=7
 # reading after the first would have seen anyway.
 (
   cd "$box"
-  env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" \
+  env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" LD_PRELOAD="$blind" \
     ./kanso play startup_corpus/main.kso >/dev/null 2>/dev/null
 )
 (
   cd "$box"
-  env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" valgrind --tool=callgrind \
+  env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" LD_PRELOAD="$blind" valgrind --tool=callgrind \
     --callgrind-out-file=/tmp/cg.startup ./kanso play startup_corpus/main.kso \
     >/dev/null 2>/dev/null
 )
@@ -171,7 +178,7 @@ fi
 # that was going to fail anyway.
 (
   cd "$box"
-  env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" valgrind --tool=callgrind \
+  env -i PATH=/usr/bin:/bin GLIBC_TUNABLES="$tune" LD_PRELOAD="$blind" valgrind --tool=callgrind \
     --callgrind-out-file=/tmp/cg.startup2 ./kanso play startup_corpus/main.kso \
     >/dev/null 2>/dev/null
 )

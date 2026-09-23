@@ -9498,3 +9498,204 @@ moves between trees. The same twenty-eight jobs bear on that row: no tree among
 them read two interp values, on a row now near 900 million where the six was
 read near 2,178 million, so the six has not recurred in them. That is
 twenty-eight jobs, and it does not close the row.
+
+## 2026-09-23 — memcmp chose its path by page offset, and the counted runs now preload one that does not
+
+Two findings, both on STATUS.md's row "A welfare counter reads three parts per
+billion", and a normalization under the 2026-09-15 ruling that the second one
+calls for.
+
+### The interp half: one value per tree in 132 jobs
+
+A survey of 132 cost-goldens jobs from 2026-09-17 to 2026-09-23, keyed on the
+commit CI built (the merge commit for a pull request) and on the tree hashes of
+`src`, `lib` and `bench/interp_corpus`, found 36 trees read by two or more jobs.
+Grouped by tree and by the `scripts/gates` tree together, every one of 37 groups
+read exactly one `interp_instructions` value, on CPU families 0x6, 0x19 and 0x1a
+alike. `startup_instructions` and `entry_instructions` are single-valued the
+same way. The only splits inside a tree follow a gate change: two trees read two
+values each, and in both the lower value came only from gates tree 275581a8 and
+the higher only from 59d917a7, 3,199 apart, which is the printed-line term the
+second one subtracts. Eight jobs whose `interp_again` differed from their first
+reading differ by exactly that job's `interp_printed`, in the gate versions
+whose second pass did not yet subtract it.
+
+The six the row records, 2,178,502,266 against 2,178,502,272, was read on
+kanso#1492's job on 2026-09-17, before kanso#1505 took the printed line off the
+interp row that evening. The printed term itself varies between jobs on one
+tree: 3,186 on one job and 3,199 on another, both on tree ffb98cc870. So a gate
+that still counted printing could draw two values on one commit, and the six is
+the size of move that term makes. That is consistent with the six and does not
+isolate it, because those two jobs predate the notice that prints the term.
+What stands is that since the term came off, no tree has read two values.
+
+### The compile rows: libc's memcmp reads the address
+
+kanso#1561 adds forty lines to `src/runtime.c`, which the compiler embeds with
+`include_str!`, and moved every compile-side row by a few thousand
+instructions. Profiled on this container for main and for kanso#1561, the
+interp process's `__memcmp_avx2_movbe` differed by +3,857 over identical call
+counts: `<Name as PartialEq<str>>::eq` made 1,129 calls in both and cost 2,698
+more, `check::builtin_arity` made 5,887 in both and cost 1,081 more.
+Line-level counts, against glibc 2.39's `memcmp-avx2-movbe.S`, place it: 478
+calls left the no-page-cross path at lines 414 to 423 and took
+`L(page_cross_less_vec)` at 429 onward. The test at 407 to 411 is
+
+    movl  %edi, %eax
+    orl   %esi, %eax
+    andl  $(PAGE_SIZE - 1), %eax
+    cmpl  $(PAGE_SIZE - VEC_SIZE), %eax
+    jg    L(page_cross_less_vec)
+
+which asks where the operands sit and nothing about what they hold. Forty lines
+of runtime moved strings in `.rodata` across page offsets, and the same
+comparisons took the other branch.
+
+THE ISOLATION. A replacement `memcmp` and `bcmp` whose cost depends only on
+the length and on where the first difference falls, preloaded into
+`kanso check compile_corpus` with the gate's own tunables, on both trees:
+
+    tree        libc's memcmp        preloaded
+    main          35,990,100        36,656,738
+    kanso#1561    35,992,788        36,656,738
+
+The 2,688 between the trees is exactly the memcmp delta, and with the preload
+the two processes' PROGRAM TOTALS read 37,292,002 each. The only rows that
+still differ are functions whose address moved and whose cost did not. A byte
+loop showed the same thing at 37,803,013 on both, 5% above libc's figure,
+which is why the version that shipped compares eight bytes at a time.
+
+THE NORMALIZATION. The 2026-09-15 ruling names "a layout the linker chose" as
+state a counter must not read. So compile, entry, library, startup, interp and
+emit now run `scripts/gates/address_blind.sh`, which builds
+`scripts/gates/address_blind/compare.c`, compares the same sixteen bytes at page
+offset 64 and at 4080 under callgrind counting only the comparing frame, refuses
+unless the two counts agree, and prints the library's path. Every `env -i` line
+in those six gates preloads it. Without the preload the self-test reads 26 and
+32 and refuses; with it, 35 and 35.
+`tests/every_counted_kanso_run_compares_blind.rs` derives the gates from disk,
+every script that runs `./kanso` under callgrind, and asserts each resolves the
+library before its first run and preloads it on every `env -i` line. It was
+watched red twice: with the preload dropped from one line of the library gate,
+and with the interp gate's call to the helper replaced.
+
+WHAT IT COSTS AND HOW IT IS PRICED. The replacement reads about 1.9% more than
+libc's fast path on the compile row, because avx2 compares 32 bytes in an
+instruction. The six goldens hold main's values as placeholders, this branch is
+expected red once on cost goldens, and CI's rows replace them. Every golden's
+header says its value is not comparable with a reading taken before today. The
+welfare terms these rows feed are re-based by the same ratio, as the compile
+term's baseline was re-based by 465,864 when the row began counting the
+compiler's own frame. This is a measurement change, and it should neither
+score as the compiler getting slower nor let a later change bank the difference.
+
+WHAT IS NOT COVERED. `codegen_instructions` counts clang and ld, whose work
+genuinely changes with the runtime they compile; whether they also read
+addresses is a separate measurement. The benchmark rows in `instructions.sh`
+count programs the compiler emits, which call libc's memcmp from `runtime.c`
+and presumably have the same exposure; nothing here measures that. The
+compiler page's section "two terms under every row", carried by kanso#1568,
+tabulates kanso#1561's first CI reading, and one of its columns is `memchr`
+moving by 30 to 34 in every row. glibc's `memchr-avx2.S` carries the same
+page-offset test at its lines 77 and 78. On this container, once memcmp is
+preloaded, no libc function differs between the two trees, so that term has
+not been reproduced here.
+
+CI'S ROWS, on main's tree at 18fae808 with the preload, read by one job on
+family 0x6 model 0x6a. Each gate read twice and the two readings agreed:
+
+    row                     libc's memcmp    preloaded        delta
+    compile_instructions     35,543,672     36,200,554      +656,882
+    entry_instructions      126,702,408    129,110,493    +2,408,085
+    library_instructions    127,158,876    129,559,007    +2,400,131
+    startup_instructions      3,363,729      3,367,191        +3,462
+    interp_instructions     900,471,351    920,710,206   +20,238,855
+    emit_instructions        51,484,057     52,190,331      +706,274
+
+Only the six preloaded gates disagreed with their goldens. The replacement's
+own frames appear in every table, so the preload took. The rises run from
+0.10% on startup to 2.25% on interp; why interp pays the most is not measured
+here.
+
+The welfare terms are re-based after kanso#1561 lands under this branch, not
+before. On this container the preload made kanso#1561 and main read the same
+row. If CI agrees, kanso#1561's deltas vanish under the preload, and a re-base
+priced against main's rows now would leave the merged tree under the floor
+kanso#1561 banks. Re-basing after the merge prices the switch against the rows
+that floor was banked on. That is also the test of the prediction: the rows
+above should not move when kanso#1561 comes in underneath.
+
+THE RE-BASE, done on the merge with kanso#1561. Four baselines in
+`bench/welfare_floor.json` are scaled by the preloaded row over kanso#1561's
+row, each rounded up so that no ratio falls: compile_instructions (the compile
+and entry rows together) 671,773,822 to 684,500,178, startup_instructions
+4,838,372 to 4,845,369, interp_instructions 2,178,559,085 to 2,227,524,026,
+and emit_instructions 382,212,543 to 387,475,984. The score reads the floor
+kanso#1561 banked, 77.3466, and the history entry says this is a re-basing.
+
+THE PREDICTION, TESTED, AND HALF OF IT FAILED. With kanso#1561 merged
+underneath, CI read interp, startup and emit exactly as before: 920,710,206,
+3,367,191 and 52,190,331, on family 0x19 model 0x1 where the first reading was
+on family 0x6 model 0x6a. Compile, entry and library moved by +44, +122 and
++122, to 36,200,598, 129,110,615 and 129,559,129. In each of those three tables
+the whole move is one function, `__memcpy_avx_unaligned_erms`, and the other
+rows that differ are functions whose address moved and whose cost did not.
+On this container memcpy did not move between the two trees at all, so the
+extra is not bytes copied, which would show on any host.
+
+A probe says why. glibc's memmove, which serves memcpy, chooses part of its
+large-copy path by the distance between destination and source. The same 1,500
+bytes cost 177 instructions at a distance of 4096 and 179 at 5000, and 2,000
+bytes cost 225 and 227 at two other distances.
+
+So `scripts/gates/address_blind/copy.c` replaces memcpy and memmove as well,
+choosing every branch by the length alone. Up to 128 bytes it loads a head and
+a tail that may overlap and stores both, the way libc handles short copies.
+Above that it loads the far end first, moves 128 bytes a step with unaligned
+AVX2 loads and stores, and stores the far end last. Everything a step writes
+was loaded before the step writes it, and memmove walks backward when the
+destination starts inside the source. The 1,500-byte probe reads 151 at both
+distances, against libc's 177 and 179.
+
+It took three tries. Moving 32 bytes a step through words read 477 on that
+probe. A version finishing with single bytes went to CI on 77297b88 and read
+startup 3,486,298 and emit 53,551,685, because it cost 1.9 times libc's memcpy on start-up's short copies,
+which would have weighed copying above the rest of each row. With the size
+classes, this container's compile row reads 36,335,519 with both preloads, 1%
+above libc's 35,990,100, and the preloaded memcpy costs 477,178 instructions
+there against libc's 799,618.
+
+`scripts/gates/address_blind/check.c` now runs before either probe. It compares
+all four replacements with libc on 80,000 random cases and on every length to
+300 at every distance from -140 to 140, 164,882 in all, because a wrong memmove would corrupt the compiler under
+measurement rather than show up as a wrong count. It was watched red with
+memmove made to copy forward always: `memmove disagrees with libc: n=685
+src=1130 dst=1496`. It was watched red again with
+the forward move re-reading its tail after the loop instead of before:
+`memmove disagrees with libc: n=947 src=633 dst=615`. A second probe,
+`copy_probe.c`, refuses unless the two distances cost the same.
+
+The six goldens keep the memcmp-only values as placeholders, and this branch is
+expected red once more on cost goldens. When CI reads the rows, the four
+welfare baselines above are scaled again by the new row over the golden they
+were re-based against, so the score stays at kanso#1561's floor.
+
+THE ROWS THIS BRANCH LANDS, read by CI on f4b0ce05 (family 0x19 model 0x11)
+with memcmp, bcmp, memcpy and memmove all preloaded, each gate read twice with
+the two readings agreeing. Against kanso#1561's rows under libc:
+
+    row                     libc (kanso#1561)   preloaded      change
+    compile_instructions       35,540,661      35,876,811      +0.95%
+    entry_instructions        126,696,892     127,696,380      +0.79%
+    library_instructions      127,149,930     128,229,577      +0.85%
+    startup_instructions        3,362,329       3,320,132      -1.25%
+    interp_instructions       900,471,358     921,740,873      +2.36%
+    emit_instructions          51,481,382      51,184,463      -0.58%
+
+The re-base above is carried forward once more, from the memcmp-only rows to
+these, with the same rule: each baseline scaled by the new row over the old
+and rounded up. The final baselines are compile_instructions 677,304,273,
+startup_instructions 4,777,652, interp_instructions 2,230,017,575 and
+emit_instructions 380,008,132, against 671,773,822, 4,838,372, 2,178,559,085
+and 382,212,543 before this branch. The score reads 77.3466 before and after,
+and the history carries both steps as re-basings.
