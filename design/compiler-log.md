@@ -10044,7 +10044,10 @@ The whole process is now 1,603,771 instructions, of which the row's
 
 **CI's rows**, taken into the goldens; every other row read what main has:
 
-    startup_instructions    3,372,380 ->    968,455   -2,403,925   -71.28%
+    startup_instructions    3,372,366 ->    968,441   -2,403,925   -71.28%
     emit_instructions      51,381,691 -> 45,953,348   -5,428,343   -10.56%
+
+The first reading was 968,455, taken before main was merged in; the merged
+tree reads 14 fewer, which is kanso#1577's own start-up move.
 
 Welfare scores 78.15 against a floor of 77.37, and the rise is banked.
