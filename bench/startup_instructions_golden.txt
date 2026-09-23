@@ -450,4 +450,4 @@
 # overlap up to 128 bytes, 128-byte AVX2 steps above that. Copies libc makes internally, a thousand-odd instructions a run, cannot
 # be reached by a preload and are still counted as libc does them.
 #
-startup_instructions=975981
+startup_instructions=975983

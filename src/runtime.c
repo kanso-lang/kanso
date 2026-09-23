@@ -123,7 +123,7 @@ static long long k_stat_thunk_escaped = 0;
 static long long k_stat_el_parses = 0;
 static long long k_stat_ryu_renders = 0;
 static long long k_stat_utf8_bytes = 0;
-static long long k_stat_find2_calls = 0;
+long long k_stat_find2_calls = 0;
 static long long k_stat_append_fast = 0;
 static long long k_stat_append_rendered = 0;
 static long long k_stat_append_grow = 0;
@@ -462,7 +462,7 @@ static KValue* k_map_sorted(KMap* m, long long* out_len);
    recycles the same warm pages instead of marching through cold memory. If no
    boundary is ever signalled the arena only grows, exactly as before. */
 typedef struct KBlock { struct KBlock* next; size_t cap; } KBlock;
-static KBlock* k_blocks = NULL;
+KBlock* k_blocks = NULL;
 static KBlock* k_spare = NULL;
 /* bytes held by the live chain, and the most it ever held: the process's
    deterministic peak, the number the one-shot welfare term watches */
@@ -485,7 +485,7 @@ static long long k_stat_cohort_kept = 0;
    A single cell is safe because the scheduler is green — every fibre runs on
    the one thread — and it would need to move into the fibre if that ever
    stopped being true. */
-static KStr* k_seek_str = NULL;
+KStr* k_seek_str = NULL;
 static long long k_seek_char = 0;
 static long k_seek_byte = 0;
 
@@ -500,7 +500,7 @@ static long long k_stat_allocs = 0;
 static long long k_stat_alloc_bytes = 0;
 static long long k_stat_blocks = 0;
 static long long k_stat_perm_allocs = 0;
-static long long k_stat_beat_iters = 0;
+long long k_stat_beat_iters = 0;
 static long long k_stat_evac_bytes = 0;
 static long long k_stat_evac_allocs = 0;
 /* What DECIDING costs, where evac_allocs and evac_bytes count what copying
@@ -728,8 +728,8 @@ static int k_is_heap(long long tag);
 typedef struct { KBlock* block; char* ptr; size_t left; long long bytes;
                  int reg_any; } KMark;
 #define K_BEAT_MAX 64
-static KMark k_beat_stack[K_BEAT_MAX];
-static int k_beat_depth = 0;
+KMark k_beat_stack[K_BEAT_MAX];
+int k_beat_depth = 0;
 /* The innermost mark, or NULL at depth zero. It is what `k_beat_depth` says
    and is kept beside it because the rewind's fast path wants the pointer and
    never the number: deriving it took a load, a decrement, a range test and
@@ -737,7 +737,7 @@ static int k_beat_depth = 0;
    does not change for the life of the loop. Every write to the depth goes
    through `k_beat_set_depth`, and the counting build checks the two agree at
    every iteration -- see `tests/the_cached_beat_top_tracks_the_depth.rs`. */
-static KMark* k_beat_top = NULL;
+KMark* k_beat_top = NULL;
 
 /* The innermost mark the seek cursor's string lies under: allocated before
    that mark was pushed, so a rewind to it or to any mark pushed later cannot
@@ -752,7 +752,7 @@ static KMark* k_beat_top = NULL;
    mark in hand, a string in the range the mark would hand back sits above it,
    and so does any string once a new block has been taken, since the range is
    then more than one block and one test cannot bound it. */
-static KMark* k_seek_under = k_beat_stack;
+KMark* k_seek_under = k_beat_stack;
 
 static inline void k_seek_note(KStr* s) {
     k_seek_str = s;
@@ -777,7 +777,7 @@ static inline void k_beat_set_depth(int d) {
    the flush is a 96-byte memset, which a beat loop paid once an iteration to
    clear a shelf that was already empty. Programs that never donate a buffer
    never write it, so the memset becomes one test. */
-static int k_buf_dirty = 0;
+int k_buf_dirty = 0;
 static void k_buf_flush(void);
 
 /* Malloc-backed builder chunks handed to strings by the zerocopy finish.
@@ -976,7 +976,7 @@ static void k_chunkreg_migrate(int d) {
     k_reg_any_at(d) &= ~K_REG_CHUNK;
 }
 
-static void k_beat_rewind_slow(KMark* m) {
+void k_beat_rewind_slow(KMark* m) {
     k_buf_flush();
     long long d = m - k_beat_stack;
     if (d >= 0 && d < K_BEAT_MAX) {
@@ -1095,6 +1095,13 @@ void k_beat_push(void) {
    a test for the seek cursor, the run program paid 13,453,975 instructions
    for it, five an iteration; taking the call away gives back 7,298,706 of
    them. */
+/* K_HOT_ELSEWHERE: a release build compiles this file as machine code and
+   defines this function and the two byte scans in a small bitcode unit of
+   their own, which the LTO link inlines into the program. `hot_source` in
+   src/main.rs builds that unit from this file's own text, so these three and
+   everything they touch stay here, with the globals they read given external
+   linkage for its sake. */
+#ifndef K_HOT_ELSEWHERE
 __attribute__((always_inline)) void k_beat_iter(void) {
     if (K_COUNTING) k_stat_beat_iters++;
     KMark* m = k_beat_top;
@@ -1104,6 +1111,9 @@ __attribute__((always_inline)) void k_beat_iter(void) {
     }
     if (m) k_beat_rewind(m);
 }
+#else
+void k_beat_iter(void);
+#endif
 
 KValue k_beat_pop(KValue r);
 
@@ -8245,6 +8255,7 @@ static inline int k_tail_window(const unsigned char* p) {
    bytes 99.99% of the time, so the setup was half the call. The scalar tail
    and the loop are small enough that eight copies cost the .text vein less
    than the calls cost the work vein. */
+#ifndef K_HOT_ELSEWHERE
 __attribute__((always_inline)) long long k_b_find2_raw(const unsigned char* d, long long len, long long from,
                         long long a, long long b) {
     if (K_COUNTING) k_stat_find2_calls++;
@@ -8291,6 +8302,10 @@ __attribute__((always_inline)) long long k_b_find2_raw(const unsigned char* d, l
     }
     return len + 1;
 }
+#else
+long long k_b_find2_raw(const unsigned char* d, long long len, long long from,
+                        long long a, long long b);
+#endif
 
 KValue k_b_find2(KValue cs, KValue from, KValue a, KValue b) {
     if (!k_not_failure(cs)) { if (K_COUNTING) k_stat_find2_calls++; return cs; }
@@ -8600,6 +8615,7 @@ KValue k_b_append_rendered(KValue acc, KValue v, long long mutate) {
 
    always_inline for the reason k_b_find2_raw gives: the byte pair and the
    limit are literals at every emitted site, and the broadcasts fold. */
+#ifndef K_HOT_ELSEWHERE
 __attribute__((always_inline)) long long k_b_find2_below_raw(const unsigned char* d, long long len,
                               long long from, long long a, long long b,
                               long long floor_v) {
@@ -8655,6 +8671,11 @@ __attribute__((always_inline)) long long k_b_find2_below_raw(const unsigned char
     }
     return (len + 1);
 }
+#else
+long long k_b_find2_below_raw(const unsigned char* d, long long len,
+                              long long from, long long a, long long b,
+                              long long floor_v);
+#endif
 
 KValue k_b_find2_below(KValue cs, KValue from, KValue a, KValue b, KValue lim) {
     if (!k_not_failure(cs)) { if (K_COUNTING) k_stat_find2_calls++; return cs; }

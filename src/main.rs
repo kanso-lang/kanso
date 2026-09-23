@@ -969,7 +969,19 @@ fn preserve_none_probe() -> bool {
 }
 
 fn release_clang(stem: &str, ll_path: &str) -> std::io::Result<std::process::ExitStatus> {
-    let runtime_obj = cached_runtime_object("release", &["-O3", "-flto"])?;
+    // THE RUNTIME IS LINKED AS MACHINE CODE, NOT AS BITCODE. It was `-O3
+    // -flto`, which put the whole runtime through the LTO link beside the
+    // program on every release build, and the runtime is three quarters of
+    // what that link generates code for: on the codegen corpus 59,082 bytes
+    // of runtime `.text` against 19,135 of program. Built native, the release
+    // row reads 2,848,583,206 against 6,598,715,476, -56.8%, and the run
+    // program pays +3.38%, almost all of it three helpers the link used to
+    // inline -- `k_b_find2_raw`, `k_b_find2_below_raw` and `k_beat_iter`.
+    // The objective weighs the two at about +1.6 and -0.26. ThinLTO was the
+    // other way to shrink this link and was declined at -3.47% for +3.03%;
+    // design/compiler-log.md has both.
+    let runtime_obj = cached_runtime_object("release", &["-O3", "-DK_HOT_ELSEWHERE"])?;
+    let hot_obj = cached_object("release_hot", &hot_source(), &["-O3", "-flto"])?;
     std::process::Command::new("clang")
         .arg("-O3")
         .arg("-flto")
@@ -1078,6 +1090,7 @@ fn release_clang(stem: &str, ll_path: &str) -> std::io::Result<std::process::Exi
         .arg("-o")
         .arg(stem)
         .arg(ll_path)
+        .arg(&hot_obj)
         .arg(&runtime_obj)
         .arg("-lm")
         .status()
@@ -1099,9 +1112,11 @@ fn dev_clang(stem: &str, ll_path: &str) -> std::io::Result<std::process::ExitSta
         .status()
 }
 
-fn cached_runtime_object(profile: &str, opt: &[&str]) -> std::io::Result<std::path::PathBuf> {
+/// What names a cached runtime object: everything that decides what clang
+/// makes of the one source. Two builds that differ in any of these must not
+/// share an object.
+fn runtime_key(profile: &str, opt: &[&str], preserve: bool, counting: bool) -> u64 {
     use std::hash::{Hash, Hasher};
-    let source = include_str!("runtime.c");
     let mut hasher = std::hash::DefaultHasher::new();
     // THE SOURCE'S DIGEST, NOT THE SOURCE. `runtime.c` is a constant of this
     // binary, so what it hashes to was settled by the compiler that built it;
@@ -1114,7 +1129,6 @@ fn cached_runtime_object(profile: &str, opt: &[&str]) -> std::io::Result<std::pa
     // object built under the other answer and link it against IR built under
     // the new one. The two halves disagreeing about registers is a
     // miscompile, so it goes in the key.
-    let preserve = closure_convention() == kanso::codegen::ClosureConvention::PreserveNone;
     preserve.hash(&mut hasher);
     // The same reason, for the same kind of reason: whether the runtime carries
     // its twenty-seven counter gates is a `-D` the caller decides, not a fact
@@ -1122,9 +1136,92 @@ fn cached_runtime_object(profile: &str, opt: &[&str]) -> std::io::Result<std::pa
     // that wanted the other. A shipped binary linked against a counting runtime
     // pays for gates it can never reach; a counting binary linked against a
     // gate-free one reports zeros and the goldens all move at once.
-    let counting = kanso::codegen::counters_wanted();
     counting.hash(&mut hasher);
-    let key = hasher.finish();
+    // And the flags the object is compiled with. They were not in the key, so
+    // changing a profile's flags left every machine linking the object the
+    // old flags built: a bitcode runtime cached before the release build went
+    // native would have been linked as bitcode for as long as it stayed in
+    // the temp directory, and nothing would have said so.
+    opt.hash(&mut hasher);
+    hasher.finish()
+}
+
+fn cached_runtime_object(profile: &str, opt: &[&str]) -> std::io::Result<std::path::PathBuf> {
+    cached_object(profile, include_str!("runtime.c"), opt)
+}
+
+/// The helpers a release build keeps in its LTO link, as a translation unit
+/// of their own. The runtime itself is machine code there, and the link can
+/// only inline what it holds as bitcode: `k_b_find2_raw`,
+/// `k_b_find2_below_raw` and `k_beat_iter` were 161,703,385 instructions of
+/// the run program's calls when the whole runtime went native. So the runtime
+/// is compiled `-DK_HOT_ELSEWHERE`, which leaves those three out, and this unit
+/// defines them.
+///
+/// The text is taken from `runtime.c` itself rather than kept in a second
+/// file, because a dozen specs read these functions out of that file and a
+/// copy would drift from what they check. The typedefs come the same way.
+/// The declarations below are the globals and functions the helpers reach,
+/// which `runtime.c` defines with external linkage for this unit's sake.
+fn hot_source() -> String {
+    let runtime = include_str!("runtime.c");
+    let mut out = String::from(concat!(
+        "#include <stdint.h>\n",
+        "#include <stddef.h>\n",
+        "#if defined(__aarch64__)\n#include <arm_neon.h>\n",
+        "#elif defined(__x86_64__)\n#include <tmmintrin.h>\n#endif\n",
+        "#ifdef KANSO_COUNTERS_BUILD\n#define K_COUNTING 1\n#else\n#define K_COUNTING 0\n#endif\n",
+    ));
+    for (start, end) in [
+        ("typedef struct { char* data; int len; int cap; } KStr;", "\n"),
+        ("typedef struct KBlock {", "\n"),
+        ("typedef struct { KBlock* block;", " KMark;\n"),
+        ("#define K_BEAT_MAX ", "\n"),
+    ] {
+        out.push_str(hot_text(runtime, start, end));
+    }
+    out.push_str(concat!(
+        "extern KBlock* k_blocks;\n",
+        "extern KStr* k_seek_str;\n",
+        "extern char* k_arena;\n",
+        "extern size_t k_arena_left;\n",
+        "extern long long k_stat_beat_iters;\n",
+        "extern long long k_stat_find2_calls;\n",
+        "extern KMark k_beat_stack[K_BEAT_MAX];\n",
+        "extern int k_beat_depth;\n",
+        "extern KMark* k_beat_top;\n",
+        "extern KMark* k_seek_under;\n",
+        "extern int k_buf_dirty;\n",
+        "void k_beat_rewind_slow(KMark* m);\n",
+        "__attribute__((noreturn, noinline)) void k_die(const char* msg);\n",
+    ));
+    for start in [
+        "static inline int k_tail_window(",
+        "static inline void k_beat_rewind(KMark* m) {",
+        "__attribute__((always_inline)) void k_beat_iter(void) {",
+        "__attribute__((always_inline)) long long k_b_find2_raw(",
+        "__attribute__((always_inline)) long long k_b_find2_below_raw(",
+    ] {
+        out.push_str(hot_text(runtime, start, "\n}\n"));
+    }
+    out
+}
+
+/// From `start` through the first `end` after it, inclusive. A function ends
+/// at the first closing brace in column zero, which is how every definition in
+/// `runtime.c` is written.
+fn hot_text<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
+    let from = source.find(start).unwrap_or_else(|| panic!("runtime.c no longer holds `{start}`"));
+    let to = from
+        + source[from..].find(end).unwrap_or_else(|| panic!("`{start}` has no end in runtime.c"))
+        + end.len();
+    &source[from..to]
+}
+
+fn cached_object(profile: &str, source: &str, opt: &[&str]) -> std::io::Result<std::path::PathBuf> {
+    let preserve = closure_convention() == kanso::codegen::ClosureConvention::PreserveNone;
+    let counting = kanso::codegen::counters_wanted();
+    let key = runtime_key(profile, opt, preserve, counting);
     let object = std::env::temp_dir().join(format!("kanso_runtime_{profile}_{key:016x}.o"));
     if object.exists() {
         return Ok(object);
@@ -1366,5 +1463,50 @@ mod a_temp_path_is_the_same_length_every_run {
     fn a_wider_pid_widens_the_field() {
         assert_eq!(pid_tag_of(12_345_678), "12345678");
         assert_ne!(pid_tag_of(12_345_678), pid_tag_of(2_345_678));
+    }
+}
+
+#[cfg(test)]
+mod a_cached_runtime_is_named_by_what_built_it {
+    use super::runtime_key;
+
+    /// A runtime object built with one set of flags is not the object another
+    /// set asks for. The release profile went from bitcode to machine code by
+    /// changing its flags alone, and with the flags outside the key every
+    /// machine that had built the bitcode object kept linking it.
+    #[test]
+    fn the_runtime_key_names_the_flags() {
+        assert_ne!(
+            runtime_key("release", &["-O3", "-flto"], false, false),
+            runtime_key("release", &["-O3"], false, false),
+            "two flag sets share a cached runtime object"
+        );
+        assert_eq!(
+            runtime_key("release", &["-O3"], false, false),
+            runtime_key("release", &["-O3"], false, false),
+        );
+    }
+}
+
+#[cfg(test)]
+mod the_hot_unit_is_taken_from_the_runtime {
+    use super::hot_source;
+
+    /// Every piece the release build's bitcode unit is assembled from is
+    /// still where the extraction looks for it. A signature edited in
+    /// `runtime.c` without the list in `hot_source` panics here rather than
+    /// in a user's release build.
+    #[test]
+    fn every_hot_definition_is_found() {
+        let unit = hot_source();
+        for name in [
+            "k_tail_window",
+            "k_beat_rewind",
+            "k_beat_iter",
+            "k_b_find2_raw",
+            "k_b_find2_below_raw",
+        ] {
+            assert!(unit.contains(&format!("{name}(")), "the hot unit lacks {name}");
+        }
     }
 }
