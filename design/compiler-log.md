@@ -8009,6 +8009,162 @@ WHAT IS LEFT of the memcmp frame after both changes, on the container's profile:
 22,116,197 instructions over 1,142,822 calls, led by `eval_global` at 332,026
 and `call_named` at 165,949. Those resolve a name against the program's
 declarations rather than against a fixed list, so neither takes this trick.
+## 2026-09-22 — the two name-keyed maps: built, measured, declined
+
+kanso#1563 and kanso#1564 took `eval::lookup` and `call_builtin` off
+`__memcmp_avx2_movbe`. The frame's next two callers are `eval_global` at
+332,026 calls and `call_named` at 165,949, and both are the same shape: a
+`Map<String, _>` probed with a `&str`, which hashes the bytes and then compares
+the key with `str == str` -- a memcmp call.
+
+The obvious continuation is to key those two maps by `Name` and probe them with
+a `&Name`, so the comparison is the inline word compare kanso#1563 built. The
+callers already hold one. `to_string()` on the insert would go too, since
+cloning an inline `Name` allocates nothing.
+
+IT WORKS AND IT COSTS MORE THAN IT SAVES.
+
+    memcmp calls           1,142,822 ->   644,915     -497,907
+    memcmp instructions   22,116,197 -> 12,339,438   -9,776,759
+    interpreted row      933,389,998 -> 937,705,542   +4,315,544
+
+`eval_global` and `call_named` leave the caller list entirely and the 497,907
+is their two lookup counts to within sixty-eight. The row still rises, and the
+whole-table diff says where:
+
+        +10,456,358  <Q as hashbrown::Equivalent<K>>::equivalent   2,984 -> 10,459,342
+         -9,776,759  __memcmp_avx2_movbe
+         +3,485,161  Interp::call
+         +2,149,368  __memcpy_avx_unaligned_erms
+         -2,103,532  Interp::eval
+         -1,313,332  Interp::eval_global
+
+A `HashMap<String, _>` probed by `&str` compares through a path that ends in a
+`memcmp` call. A `HashMap<Name, _>` probed by `&Name` compares through
+hashbrown's `Equivalent`, and that shim did not inline: it went from 2,984
+instructions to 10,459,342, which is 21 per probe against memcmp's 19.6 plus
+its call. The inline word compare is in there somewhere and never got the
+chance to pay. The memcpy rise is the two cold sites that now build a `Name` --
+`eval_binop`'s operator and `Value::FnRef`'s `Rc<str>` -- and `Interp::call`'s
+rise is the second of those.
+
+So the trick that worked twice does not extend to a hash-map probe, and the
+reason is in hashbrown rather than in the comparison. Reverted. Keyed maps stay
+`String`-keyed until somebody has a way to make `equivalent` inline, and that is
+a different question from the one kanso#1563 answered.
+
+AND ONE THING THIS PULL REQUEST MEASURED WITHOUT MEANING TO. It changes
+`design/compiler-log.md` and `docs/compiler.html` and nothing else -- no
+`src/`, no `lib/`, no `Cargo` -- so the compiler CI built for it is the same
+source main's was, on a freshly built binary. `interp_instructions` came back
+equal to main's golden to the instruction, and every other vein with it.
+
+That is worth writing down beside STATUS.md's standing row, which has been open
+since 2026-09-15 on the premise that two CI jobs of ONE COMMIT read six apart.
+Tonight gave three sightings of single-digit drift and this is the fourth
+reading, the only one where the compiler source did not change at all, and it
+is the only one that did not drift:
+
+    tree                                       interp_instructions   vs main
+    main                                            900,471,358         --
+    this branch, compiler source identical          900,471,358          0
+    kanso#1504, runtime.c changed                   900,471,351         -7
+    kanso#1561 first sitting, a counter added       908,952,292         -7
+    kanso#1561 third sitting, same branch           900,471,344        -14
+
+The first two rows are the ones that matter together: different binaries from
+identical source, same reading. The rest changed `src/runtime.c`, which
+`include_str!` puts inside the compiler, so their bytes and their layout moved.
+kanso#1562 measured 112 bytes of `.text` moving this row 366,303 through
+`__memcmp_avx2_movbe`, and single digits are the small end of the same thing.
+
+It does not close the row -- one job is not the two the row describes, and the
+row's own pair was on a commit nobody has re-run since. What it does is put a
+control under it: when the compiler source is untouched, this row did not move.
+
+AND THE COMMIT THAT ADDED THE PARAGRAPH ABOVE REPRODUCED kanso#1558. This
+branch has now been through CI twice with byte-identical compiler source, and
+`compile_instructions` read differently:
+
+    0586890f   35,541,148   agreed with main
+    74f99dba   35,541,151   +3
+
+Three instructions, on a tree whose whole diff is `design/compiler-log.md` and
+`docs/compiler.html`. kanso#1558's own header describes that shape to the word
+-- 35,551,167 against 35,551,170 on a branch with exactly those two files --
+and this is the first time it has been caught twice on ONE branch, which takes
+the base out of the question along with the source. Every other row in the
+second job agreed with main to the instruction: `entry`, `library`, `startup`,
+`emit`, `interp`, both codegen rows, `compile_allocs`, `compile_peak_bytes`.
+One row of twelve moves and it is always the same one.
+
+THE INSTRUMENT IS THERE AND THIS SESSION CANNOT READ IT. kanso#1558 put an
+uncapped function table on this gate for exactly this moment and kanso#1562 put
+one on six more, so both jobs printed theirs. The compile table sits at step 19
+of 41, and the six gates after it now print tables of their own -- five or six
+thousand lines between it and the end of the log. The API this session reads
+job logs through returns a tail, and a tail that deep is not on offer; the
+artifact holds the raw profiles and its blob host answers
+`gateway answered 403 to CONNECT` here. So the diff that would name the three
+instructions is written down in two places and reachable from neither.
+
+That is a defect in the instrument rather than in the finding, and the remedy
+is small: print the table where a tail can reach it -- a final step of the job,
+after the summary -- or write it to the step summary. Not done here, because
+this pull request is a measurement and a CI change is a different one.
+
+AND THE OSCILLATION MAKES THE GATE UNPASSABLE BY EITHER ANSWER, which is worth
+stating plainly because it is not a thing a golden is built to survive. Leave
+`bench/compile_instructions_golden.txt` at main's 35,541,148 and the
+cost-goldens job fails, because CI measured 35,541,151. Set it to 35,541,151
+and the TREND gate refuses: a row worsened, nothing improved, and a pure
+regression is the one move it declines outright. Both are the gates working.
+The golden stays at main's figure, because 35,541,148 is what this tree read
+the first time and what main reads, and a coin that has come up three ways in
+two tosses is not a number to pin.
+
+What is still on the list, from the container's profile after kanso#1564:
+12,339,438 instructions over 644,915 calls, led by `eval_tail`'s closure at
+159,127 and `dispatch_loop` at 147,267, with `BigUint`'s own `PartialEq` at
+132,846 -- that last one is num_bigint comparing digits and is not a name at
+all.
+
+## 2026-09-23 — the third reading, and two corrections to the entry above
+
+A third CI job ran on this branch, on a head whose compiler source is again
+byte-identical to the two before it, and `compile_instructions` read
+**35,541,151** — the same as the second.
+
+    0586890f   35,541,148   agreed with main
+    74f99dba   35,541,151   +3
+    36cf8333   35,541,151   +3, the same as the job before it
+
+All twenty-six other veins read `success` in the summary block of all three
+jobs, `compile instructions` alone failing.
+
+THE ENTRY ABOVE CALLS THIS ROW A COIN AND THAT IS WITHDRAWN. Two readings of
+three agree, and they are the two most recent; counting main's own golden the
+four available readings run 148, 148, 151, 151, which is the shape of a step
+rather than of a toss. What sits between the first job and the second is not in
+the diff, because the source is identical across all three — it is whatever the
+runner pool handed out. Four points is what that claim rests on and it is not
+stretched further here. It does remove the argument that pinning 35,541,151
+would pin a figure that came up once.
+
+The comment on kanso#1565 carrying the same wording was corrected the same
+hour; this entry records it because the entry above is where the claim was
+written down first.
+
+AND THE PARAGRAPH SAYING THE INSTRUMENT CANNOT BE READ FROM HERE IS TOO BROAD.
+The log API saves an oversized result to a file on disk rather than refusing
+it, so the whole of what it returns is reachable by shell. What is true is
+narrower: it returns the last 5,000 lines and no more, whatever tail length is
+asked for — a 20,020-line job hands back 5,000 — so the `interp_instructions`
+table IS reachable and was read and diffed the same night, 1,726 rows from each
+of two jobs, and the `compile_instructions` table at step 19 of 41 is not.
+kanso#1566 packs every table into that tail, which is what makes this row's
+three jobs diffable frame by frame. None of them could be read at the time.
+
 
 
 Worth setting beside kanso#1502, which took the same merge on the same day and
