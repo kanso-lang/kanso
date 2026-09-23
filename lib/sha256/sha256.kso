@@ -100,57 +100,47 @@ h6 = 528734635
 
 h7 = 1541459225
 
-start = [h0 h1 h2 h3 h4 h5 h6 h7]
+# The eight working words, in the standard's order, as eight arguments: a b c
+# d e f g h. Each round computes two of them and passes the other six along,
+# so a round allocates nothing, and the answer is a list only once, when the
+# sixty-four rounds are done. Held as a list, the words were a fresh list
+# every round, the one value that crossed from round to round, and the loop
+# could not hand its arena back between rounds or between blocks.
+fn compress a b c d e f g h w at
+  rounding a b c d e f g h w at (at > 64)
 
-# The eight working words, in the standard's order: a b c d e f g h read as
-# positions one to eight. They are a list rather than a record because the
-# names the standard uses are single letters, and a local named for a field is
-# a collision waiting in a language where a field read is an application.
-fn compress s _ _ true
-  s
+fn rounding a b c d e f g h _ _ true
+  [a b c d e f g h]
 
-fn compress s w at false
-  return s if length s < 8 or at < 1 or length w < at or length rounds < at
-  mixed = big_sigma1 s[5] + choice s[5] s[6] s[7]
+fn rounding a b c d e f g h w at false
+  return [a b c d e f g h] if at < 1 or length w < at or length rounds < at
+  mixed = big_sigma1 e + choice e f g
   fed = rounds[at] + w[at]
-  t1 = s[8] + mixed + fed & whole
-  t2 = big_sigma0 s[1] + majority s[1] s[2] s[3] & whole
-  moved = shifted_state s t1 t2
-  turned moved w (at + 1)
-
-fn shifted_state s t1 t2
-  return s if length s < 8
-  leading = t1 + t2 & whole
-  fifth = s[4] + t1 & whole
-  [leading s[1] s[2] s[3] fifth s[5] s[6] s[7]]
-
-fn turned s w at
-  compress s w at (at > 64)
-
-fn added old new
-  summed old new 1 []
-
-fn summed old new at acc
-  summing old new at acc (at > 8)
-
-fn summing _ _ _ acc true
-  acc
-
-fn summing old new at acc false
-  return acc if at < 1 or length old < at or length new < at
-  word = old[at] + new[at] & whole
-  summed old new (at + 1) (push acc word)
+  t1 = h + mixed + fed & whole
+  t2 = big_sigma0 a + majority a b c & whole
+  compress (t1 + t2 & whole) a b c (d + t1 & whole) e f g w (at + 1)
 
 # The padded message, block by block. `at` is a one-based byte offset into it.
-fn digested _ s _ true
-  s
+# The running hash is eight words, carried the way the rounds carry theirs.
+fn digested _ a b c d e f g h _ true
+  [a b c d e f g h]
 
-fn digested padded s at false
+fn digested padded a b c d e f g h at false
   w = schedule (first_sixteen padded at 0 []) 17 false
-  blocked padded (added s (compress s w 1 false)) (at + 64)
+  r = compress a b c d e f g h w 1
+  return [a b c d e f g h] if length r < 8
+  na = a + r[1] & whole
+  nb = b + r[2] & whole
+  nc = c + r[3] & whole
+  nd = d + r[4] & whole
+  ne = e + r[5] & whole
+  nf = f + r[6] & whole
+  ng = g + r[7] & whole
+  nh = h + r[8] & whole
+  blocked padded na nb nc nd ne nf ng nh (at + 64)
 
-fn blocked padded s at
-  digested padded s at (at > length padded)
+fn blocked padded a b c d e f g h at
+  digested padded a b c d e f g h at (at > length padded)
 
 fn first_sixteen padded at i w
   gathered padded at i w (i > 15)
@@ -193,7 +183,7 @@ fn laid acc total at false
 
 # The digest, big-endian, as sixty-four lowercase hex characters.
 pub fn hex b
-  final = digested (padded_bytes b) start 1 false
+  final = blocked (padded_bytes b) h0 h1 h2 h3 h4 h5 h6 h7 1
   spelled final 1 ""
 
 fn spelled words at acc
