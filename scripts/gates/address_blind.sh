@@ -5,7 +5,8 @@
 # Three proofs, in order, and the gate refuses on the first that fails:
 #
 #   - check.c runs memcmp, bcmp, memcpy and memmove against libc's own answers
-#     on 80,000 cases, overlapping moves in both directions included. A wrong
+#     on 80,000 random cases and on every length to 300 at every distance
+#     from -140 to 140, overlapping moves in both directions included. A wrong
 #     replacement would not show as a wrong count; it would corrupt the
 #     compiler under measurement.
 #   - probe.c compares the same sixteen bytes at page offset 64 and at 4080,

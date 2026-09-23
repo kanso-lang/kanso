@@ -58,6 +58,32 @@ int main(void) {
         }
         cases += 4;
     }
+    /* Every length up to 300 at every distance from -140 to 140 between
+       source and destination, which crosses each size class's boundary and
+       every overlap in both directions. */
+    for (size_t n = 0; n <= 300; n++) {
+        for (long dist = -140; dist <= 140; dist++) {
+            size_t src = 1024, dst = (size_t)(1024 + dist);
+            memcpy(x, a, 4096);
+            memcpy(y, a, 4096);
+            memmove(x + dst, x + src, n);
+            blind_memmove(y + dst, y + src, n);
+            if (memcmp(x, y, 4096)) {
+                fprintf(stderr, "memmove disagrees with libc: n=%zu distance=%ld\n", n, dist);
+                return 1;
+            }
+            cases++;
+        }
+        memcpy(x, a, 4096);
+        memcpy(y, a, 4096);
+        memcpy(x + 3000, a + 7, n);
+        blind_memcpy(y + 3000, a + 7, n);
+        if (memcmp(x, y, 4096)) {
+            fprintf(stderr, "memcpy disagrees with libc at n=%zu\n", n);
+            return 1;
+        }
+        cases++;
+    }
     printf("%ld cases agree with libc\n", cases);
     return 0;
 }

@@ -9648,22 +9648,32 @@ large-copy path by the distance between destination and source. The same 1,500
 bytes cost 177 instructions at a distance of 4096 and 179 at 5000, and 2,000
 bytes cost 225 and 227 at two other distances.
 
-So `scripts/gates/address_blind/copy.c` replaces memcpy and memmove as well. It
-moves 128 bytes a step with unaligned AVX2 loads and stores, then eight, then
-single bytes. Each step loads everything before it stores, and memmove walks
-backward when the destination starts inside the source. The 1,500-byte probe
-reads 243 at both distances, against libc's 177 and 179. A version moving 32
-bytes a step through words read 477, which would have weighed copying far
-above the rest of each row. On this container the compile row reads 36,704,844
-with both preloads, 0.13% above memcmp alone.
+So `scripts/gates/address_blind/copy.c` replaces memcpy and memmove as well,
+choosing every branch by the length alone. Up to 128 bytes it loads a head and
+a tail that may overlap and stores both, the way libc handles short copies.
+Above that it loads the far end first, moves 128 bytes a step with unaligned
+AVX2 loads and stores, and stores the far end last. Everything a step writes
+was loaded before the step writes it, and memmove walks backward when the
+destination starts inside the source. The 1,500-byte probe reads 151 at both
+distances, against libc's 177 and 179.
+
+It took three tries. Moving 32 bytes a step through words read 477 on that
+probe. A version finishing with single bytes went to CI on 77297b88 and read
+startup 3,486,298 and emit 53,551,685, because it cost 1.9 times libc's memcpy on start-up's short copies,
+which would have weighed copying above the rest of each row. With the size
+classes, this container's compile row reads 36,335,519 with both preloads, 1%
+above libc's 35,990,100, and the preloaded memcpy costs 477,178 instructions
+there against libc's 799,618.
 
 `scripts/gates/address_blind/check.c` now runs before either probe. It compares
-all four replacements with libc on 80,000 cases, including overlapping moves in
-both directions, because a wrong memmove would corrupt the compiler under
+all four replacements with libc on 80,000 random cases and on every length to
+300 at every distance from -140 to 140, 164,882 in all, because a wrong memmove would corrupt the compiler under
 measurement rather than show up as a wrong count. It was watched red with
 memmove made to copy forward always: `memmove disagrees with libc: n=685
-src=1130 dst=1496`. A second probe, `copy_probe.c`, refuses unless the two
-distances cost the same.
+src=1130 dst=1496`. It was watched red again with
+the forward move re-reading its tail after the loop instead of before:
+`memmove disagrees with libc: n=947 src=633 dst=615`. A second probe,
+`copy_probe.c`, refuses unless the two distances cost the same.
 
 The six goldens keep the memcmp-only values as placeholders, and this branch is
 expected red once more on cost goldens. When CI reads the rows, the four
