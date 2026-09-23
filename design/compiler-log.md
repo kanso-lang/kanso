@@ -10012,6 +10012,14 @@ time from 14.4 seconds to 0.5, since its memory no longer grows.
 the ratchet carries it. The trend gate reads it as higher-is-better. All twelve
 cost goldens, the mem vein and the two book counter panels carry the line.
 
+**What the cursor test costs.** On this container the run row reads
+1,820,479,435 on main and 1,833,933,410 with both changes, +13,453,975: the
+rewind's fast path now loads the cursor and the arena pointer and compares,
+five instructions on each of 2,693,195 iterations. `k_beat_iter` was a real
+call from the loops that rewind, because the large ones spend LTO's inlining
+budget before reaching it. `always_inline` on it reads 1,826,634,704, giving
+back 7,298,706, and every counter vein agrees. The net is +6,155,269, 0.34%.
+
 **What moves.** The run program's peak is a deterministic counter and scores
 here: welfare 77.36 -> 82.10, production 57.23 -> 66.07, with the instruction
 rows as main has them. The fast rewind now compares before it stores, and the
