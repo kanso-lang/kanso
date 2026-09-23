@@ -9679,3 +9679,23 @@ The six goldens keep the memcmp-only values as placeholders, and this branch is
 expected red once more on cost goldens. When CI reads the rows, the four
 welfare baselines above are scaled again by the new row over the golden they
 were re-based against, so the score stays at kanso#1561's floor.
+
+THE ROWS THIS BRANCH LANDS, read by CI on f4b0ce05 (family 0x19 model 0x11)
+with memcmp, bcmp, memcpy and memmove all preloaded, each gate read twice with
+the two readings agreeing. Against kanso#1561's rows under libc:
+
+    row                     libc (kanso#1561)   preloaded      change
+    compile_instructions       35,540,661      35,876,811      +0.95%
+    entry_instructions        126,696,892     127,696,380      +0.79%
+    library_instructions      127,149,930     128,229,577      +0.85%
+    startup_instructions        3,362,329       3,320,132      -1.25%
+    interp_instructions       900,471,358     921,740,873      +2.36%
+    emit_instructions          51,481,382      51,184,463      -0.58%
+
+The re-base above is carried forward once more, from the memcmp-only rows to
+these, with the same rule: each baseline scaled by the new row over the old
+and rounded up. The final baselines are compile_instructions 677,304,273,
+startup_instructions 4,777,652, interp_instructions 2,230,017,575 and
+emit_instructions 380,008,132, against 671,773,822, 4,838,372, 2,178,559,085
+and 382,212,543 before this branch. The score reads 77.3466 before and after,
+and the history carries both steps as re-basings.
