@@ -10471,6 +10471,12 @@ and the codegen and start-up goldens hold a projection, main's rows plus this
 change's own moves: `codegen_instructions_dev` 473,848,240,
 `codegen_instructions_release` 6,588,771,476 and `startup_instructions`
 972,533. CI's rows replace them before the floor is banked again.
+CI read start-up exactly and both codegen rows differently from the
+projection: `codegen_instructions_dev` 473,849,441, 1,201 above it, and
+`codegen_instructions_release` 6,585,606,376, 3,165,100 below. The two moves
+of the release row do not add, which is the LTO link reading the combined
+program rather than either change alone. Welfare rises over the projection and
+is banked again.
 
 ---
 
