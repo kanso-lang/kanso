@@ -16,14 +16,27 @@
 //! saying which frames moved did not exist. This spec is why the fix cannot
 //! land for one gate again.
 //!
-//! Three properties, and the third is the one that is easy to get wrong:
+//! Four properties, and the last two are the ones that are easy to get wrong:
 //!
 //!   * the annotate asks for the whole table (`--threshold=100`), exclusive
 //!     rather than `--inclusive=yes`, which is a different reading;
 //!   * nothing truncates it;
 //!   * it runs BEFORE the row is compared, because a comparison of two jobs
 //!     needs the agreeing side and the agreeing side is the one that never
-//!     takes a failure path.
+//!     takes a failure path;
+//!   * the table is STASHED, so the end-of-job step can re-emit it packed.
+//!
+//! That fourth one is kanso#1565's finding. Printing the table is not the
+//! same as being able to read it: a log API returns the tail of a job and
+//! caps it at 5,000 lines however long a tail is asked for, and the `cost
+//! goldens` job runs 20,020 lines. Two tables of the twenty came back. A gate
+//! that prints inline and never stashes is invisible to the packed step and
+//! is back in that position, which is why this is a property and not a habit.
+//!
+//! The gates reach the annotate through `function_table.sh` rather than each
+//! carrying their own copy, so every property below reads the gate with the
+//! helper substituted where it is called. A gate is free to keep an inline
+//! annotate; what it may not do is print a table nothing can read.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -100,6 +113,36 @@ fn governed() -> BTreeMap<String, String> {
         .collect()
 }
 
+/// The shared script that annotates one profile, prints it collapsed, and
+/// stashes a copy for the packed end-of-job step.
+const HELPER: &str = "function_table.sh";
+
+/// The directory the packed step reads. A table that does not land here is
+/// printed and unreadable, which is the position kanso#1565 was in.
+const STASH: &str = "KANSO_FUNCTION_TABLES";
+
+/// A gate with the helper's body substituted where it calls it, so a gate that
+/// delegates and a gate that inlines read the same to every test here. The
+/// call sits exactly where the print used to, so relative order is preserved
+/// and the before-the-comparison test still means what it meant.
+fn resolved(body: &str) -> String {
+    if !body.contains(HELPER) {
+        return body.to_string();
+    }
+    let helper = std::fs::read_to_string(gates_dir().join(HELPER))
+        .expect("scripts/gates/function_table.sh reads");
+    let mut out = String::new();
+    for line in body.lines() {
+        if line.contains(HELPER) {
+            out.push_str(&helper);
+        } else {
+            out.push_str(line);
+        }
+        out.push('\n');
+    }
+    out
+}
+
 /// The uncapped, exclusive annotate of a profile, and the line it sits on.
 fn whole_table_lines(body: &str) -> Vec<(usize, &str)> {
     body.lines()
@@ -156,6 +199,7 @@ fn every_profiling_gate_is_governed_or_exempt() {
 #[test]
 fn every_profiling_gate_annotates_its_whole_profile() {
     for (name, body) in governed() {
+        let body = resolved(&body);
         assert!(
             !whole_table_lines(&body).is_empty(),
             "scripts/gates/{name} profiles a fixed file and prints no whole \
@@ -171,6 +215,7 @@ fn every_profiling_gate_annotates_its_whole_profile() {
 #[test]
 fn the_whole_table_is_not_truncated() {
     for (name, body) in governed() {
+        let body = resolved(&body);
         let lines: Vec<&str> = body.lines().collect();
         for (at, _) in whole_table_lines(&body) {
             // The command and whatever it is piped into, to the end of the
@@ -200,6 +245,7 @@ fn the_whole_table_is_not_truncated() {
 #[test]
 fn the_whole_table_is_printed_before_the_comparison() {
     for (name, body) in governed() {
+        let body = resolved(&body);
         let Some(compare) = body.find("if [ \"$got\" = \"$want\" ]; then") else {
             // Not every governed gate compares one row that way;
             // `instructions.sh` diffs a whole file. Those have nothing to be
@@ -218,4 +264,88 @@ fn the_whole_table_is_printed_before_the_comparison() {
              the one that is always missing."
         );
     }
+}
+
+#[test]
+fn every_profiling_gate_stashes_its_table_where_the_packed_step_reads() {
+    for (name, body) in governed() {
+        let body = resolved(&body);
+        assert!(
+            body.contains(STASH),
+            "scripts/gates/{name} prints a whole function table and never \
+             stashes it under ${STASH}, so the packed end-of-job step cannot \
+             re-emit it. A printed table that falls outside the last 5,000 \
+             lines of the job log is written down and unreadable, which is \
+             the position eighteen of twenty tables were in on 2026-09-22."
+        );
+    }
+}
+
+#[test]
+fn the_packed_step_runs_last_and_runs_on_a_red_job() {
+    let ci = std::fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join(".github/workflows/ci.yml"),
+    )
+    .expect("the workflow reads");
+    let at = ci.find("function_tables_tail.sh").unwrap_or_else(|| {
+        panic!(
+            "no CI step runs scripts/gates/function_tables_tail.sh, so the \
+             tables are stashed and never emitted. Stashing without emitting \
+             is worse than the inline print it replaced."
+        )
+    });
+    // The step's own block, back to the `- name:` that opens it.
+    let head = ci[..at].rfind("      - name:").expect("the step has a name");
+    let step = &ci[head..at];
+    assert!(
+        step.contains("if: always()"),
+        "the packed-tables step does not carry `if: always()`, so the run that \
+         most wants the tables — the one where a row went red and the verdict \
+         step failed — is the run that does not print them:\n{step}"
+    );
+    // Nothing that prints a table may come after it, or the tail fills with
+    // rows again and the packing bought nothing.
+    let after = &ci[at..];
+    for later in ["instructions.sh", "function_table.sh"] {
+        assert!(
+            !after.contains(later),
+            "the cost-goldens job runs `{later}` AFTER the packed tables, so \
+             its output pushes them back out of the log tail."
+        );
+    }
+}
+
+#[test]
+fn the_walk_listing_runs_on_a_red_job_and_before_the_packed_tables() {
+    // `compile_instructions` drifts by three between hosts and the frame that
+    // carries it is a directory walk. Deciding between the two remedies the
+    // 2026-09-15 ruling allows — normalize the state, or exclude the term and
+    // name the exclusion — needs to know whether the ENTRY SET differs between
+    // hosts or only its layout. Nothing recorded that, so a step prints it.
+    //
+    // It has to survive a red job, because the jobs worth comparing are the
+    // ones where the row disagreed.
+    let ci = std::fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join(".github/workflows/ci.yml"),
+    )
+    .expect("the workflow reads");
+    let at = ci.find("#walk-entry ").unwrap_or_else(|| {
+        panic!(
+            "no CI step lists what the compile row's directory walk sees. The \
+             three instructions are in that walk and the remedy turns on what \
+             the walk is handed."
+        )
+    });
+    let head = ci[..at].rfind("      - name:").expect("the step has a name");
+    assert!(
+        ci[head..at].contains("if: always()"),
+        "the walk listing does not carry `if: always()`, so the jobs where the \
+         row disagreed — the only ones worth comparing — do not print it"
+    );
+    let packed = ci.find("function_tables_tail.sh").expect("the packed step exists");
+    assert!(
+        at < packed,
+        "the walk listing comes after the packed tables, which are meant to be \
+         the last thing in the job"
+    );
 }

@@ -94,10 +94,7 @@ printf 'emit_binary sha256=%s\n' "$(sha256sum "$box/kanso" | cut -d' ' -f1)"
 echo "=== the profile's top frames, inclusive"
 callgrind_annotate --inclusive=yes --threshold=99 /tmp/cg.emit 2>&1 | head -24
 
-echo "::group::the whole function table, for diffing this job against another"
-callgrind_annotate --threshold=100 /tmp/cg.emit 2>/dev/null \
-  | sed -n 's/^ *\([0-9,][0-9,]*\) ([^)]*)  *\(.*\)$/\1 \2/p'
-echo "::endgroup::"
+sh "$(dirname "$0")/function_table.sh" /tmp/cg.emit emit
 
 got=$(emit_cost /tmp/cg.emit)
 case "$got" in

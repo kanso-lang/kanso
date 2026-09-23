@@ -7696,3 +7696,148 @@ table IS reachable and was read and diffed the same night, 1,726 rows from each
 of two jobs, and the `compile_instructions` table at step 19 of 41 is not.
 kanso#1566 packs every table into that tail, which is what makes this row's
 three jobs diffable frame by frame. None of them could be read at the time.
+
+
+## 2026-09-23 — the allocator's page commits are inside the anchor, and are worth 107,802
+
+STATUS.md's standing row — "a welfare counter reads three parts per billion" —
+ends by naming where to look next: the frames that moved between its corpus
+arms were `_mi_os_commit_ex`, `mi_bitmap_setN` and `_mi_prim_commit`, the
+allocator committing pages. That lead is measured here. It does not close the
+row, and what it rules out is as useful as what it finds.
+
+SIX ARMS of the interp gate's exact run, same box, same binary, same
+`env -i PATH=... GLIBC_TUNABLES=...` line, differing by at most one variable.
+The row is the gate's own anchor, `run_interpreted_on_stack` inclusive. Every
+arm was read twice and the two commit arms three times; every reading in this
+entry repeated to the instruction.
+
+    arm                                   the row      PROGRAM TOTALS
+    nothing extra                      933,390,836        980,366,329
+    MIMALLOC_EAGER_COMMIT=1            933,390,854        980,383,626
+    MIMALLOC_EAGER_COMMIT=0            933,390,854        980,383,626
+    MIMALLOC_EAGER_COMMIX=1            933,390,854        980,383,626
+    MIMALLOC_ARENA_EAGER_COMMIT=0      933,390,854        980,384,520
+    MIMALLOC_RESERVE_OS_MEMORY=256MiB  933,498,656        980,489,293
+
+THE COMMIT PATH IS INSIDE THE ANCHOR AND IT IS LARGE. Reserving the arena up
+front takes `_mi_os_commit_ex` from 5,401 to zero and `_mi_prim_commit` from
+730 to zero, and drops `mi_bitmap_setN` from 30,665 to 24,179 — and the row
+moves 107,802. That is 0.0115% of the row and four orders of magnitude more
+than the six this row is about, so page commitment is not a small term hiding
+at the bottom of the profile. It is a real part of what the gate counts.
+
+WHAT THIS RULES OUT. Neither spelling of eager commit moves anything at all:
+`MIMALLOC_EAGER_COMMIT` at 1 and at 0 give the same row, the same PROGRAM
+TOTALS, and the same three commit frames, and so does `MIMALLOC_EAGER_COMMIX`,
+a name of the same length that mimalloc has never heard of. B against C is zero
+frames different out of 1,396. The commit frames move for one knob in six, and
+that knob is the one that stops the commits happening.
+
+AND THE ALLOCATOR'S OPTION READING IS OUTSIDE THE ANCHOR, which corrects the
+shape of this row's own candidate. `MIMALLOC_VERBOSE=1` moves 107 frames and
+217,814 instructions of PROGRAM TOTALS — `_mi_vsnprintf` +87,496,
+`mi_buffered_out` +19,234 — and leaves the row byte-identical at 933,390,854.
+So mimalloc IS reading its environment, and every instruction it spends doing
+so falls outside `run_interpreted_on_stack`. The 117-per-variable term this row
+recorded on 2026-09-19 is a fact about the process, not about the number the
+gate pins. One extra variable costs this row 18.
+
+NOTHING VARIED RUN TO RUN. Every arm is byte-identical across its repeats, so
+this box still cannot reproduce the six, and the control the row already has
+stands.
+
+WHAT IS LEFT, and it is a question rather than a measurement. Page commitment
+has the shape the row has been looking for: it is page-granular, so it moves in
+lumps rather than smoothly, and how many pages a run commits depends on where
+the allocator's heap starts. `MIMALLOC_RESERVE_OS_MEMORY` would put it into a
+persistent known initial state, which is the 2026-09-15 ruling's own phrasing.
+Against that: committing pages is work the program really does, so reserving
+them up front normalizes by changing the subject, and the row would stop
+counting 107,802 instructions the production allocator spends. Which of those
+the ruling means is not cloud's to decide alone, and it belongs in the ledger
+rather than in this entry.
+
+Measured against a release build of the tree at `354e24d4`, using
+`scripts/gates/function_table.sh` for the per-frame readings.
+## 2026-09-23 — the tables were printed and unreadable, so they are packed into the tail
+
+kanso#1558 and kanso#1562 put an uncapped whole function table on seven gates,
+for the standing row that moves by three instructions on byte-identical source.
+The reasoning was that naming which frames carry a delta takes both jobs' whole
+tables, which it does. What neither change checked is whether a table that is
+printed can be READ.
+
+It mostly cannot. A log API returns the TAIL of a job and caps it: asking for
+60,000 lines of the 20,020-line `cost goldens` job returned exactly the last
+5,000, and those held two function tables of the twenty the job prints. The
+other eighteen are written down in a place nothing reaches. The artifact beside
+the profiles is not an answer either — its blob host answers `gateway answered
+403 to CONNECT` under some egress policies, which is why the tables went into
+the log in the first place.
+
+So each table is now also emitted PACKED, in a step that runs last:
+gzip+base64 at 200 columns turns 1,726 rows into 189 lines, and twenty tables
+fit in the tail together with room for the steps after them. The step carries
+`if: always()`, because the run that most wants the tables is the one where a
+row went red. `scripts/gates/function_table.sh` annotates and stashes one
+profile — the seven gates now call it instead of each carrying a copy of the
+pipeline — and `scripts/gates/function_tables_tail.sh` packs whatever was
+stashed, prints the recipe for reading a block back, and reports its own line
+count against a budget rather than leaving an overflow to be discovered by a
+reader whose tail starts halfway through a block.
+
+Each `#table` line carries the sha256 of the DECODED table, so a short tail is
+distinguishable from a whole one, and the index of table names is printed last
+and unpacked, so a reader who got only the final handful of lines still learns
+which tables the job carried.
+
+TWO THINGS THIS COST, both from the same habit of trusting a check's shape
+rather than running it.
+
+`fold` ends its last chunk WITHOUT a newline, so `cat "$body"; echo "#end
+$name"` put the end marker on the tail of the final base64 line. A reader's
+`sed` range then runs to the end of the log instead of to the end of the block.
+The spec written for the round trip did not catch it: its fixture folded on a
+200-byte boundary, where the defect does not appear. It was found by running
+the pair against a real callgrind profile, which is the entry a reader actually
+uses.
+
+And the round trip passed anyway, on the broken format, for a second reason.
+The recipe is a pipeline ending in `gunzip`, `gunzip` is content with rubbish
+after a complete stream, and a pipeline's status is its last stage's. `base64`
+printed `invalid input` while the recovered table came out byte-identical. The
+spec now reads stderr as well as the status, and a separate spec asserts each
+marker is on a line of its own at five table sizes, because the defect hides at
+whichever size happens to fold evenly.
+
+That is the same rule this log keeps paying for: never take a verdict from the
+last stage of a pipe, and break what a new check watches before trusting it.
+
+## 2026-09-23 — the compile row leaves the walk out, and the two faces were 487 and 490
+
+`compile_instructions` is measured with `<std::fs::ReadDir as Iterator>::next`
+inclusive subtracted, the way it already subtracts `std::io::stdio::_print` and
+for the same reason. CI's first sitting with the exclusion in:
+
+    compile_instructions   35,541,148 ->  35,540,661     -487   -0.0014%
+
+`compile_again` reads 35,540,661 too, so the gate's two readings agree on the
+excluded row as they did on the unexcluded one.
+
+THE ARITHMETIC CLOSES THE STORY. This row drew two faces, 35,541,148 and
+35,541,151. The excluded reading is 487 below the first. So the walk cost 487 on
+the runner that read the low face and 490 on the one that read the high face,
+and 490 is exactly what the walk measures on the container this session runs in.
+The two faces were never two compilers; they were one compiler and a directory
+walk that costs three more on some filesystems than others.
+
+WHAT IT COST AND WHAT IT BOUGHT. 487 instructions of 35.5 million, 0.0014%,
+which is the size of the term being excluded rather than a change in the
+compiler. What it buys is a row that can be pinned exactly again, which is what
+kanso#1504, kanso#1565 and kanso#1568 have each been unable to do.
+
+THE FALSIFIER IS IN THE GOLDEN'S HEADER, and it is the next thing to check: the
+row should now read ONE value where it drew two, because the faces differed only
+inside the excluded subtree. A second sitting that alternates means the
+exclusion is aimed at the wrong frame.

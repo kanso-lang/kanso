@@ -282,11 +282,50 @@ printed_cost() {
   callgrind_annotate --inclusive=yes --threshold=100 "$1" 2>/dev/null \
     | awk '/:std::io::stdio::_print \[/ && !seen { gsub(/,/, "", $1); print $1; seen = 1 }'
 }
+# AND THE DIRECTORY WALK IS EXCLUDED FOR THE SAME REASON, under the same rule.
+#
+# `kanso check` routes a single argument by what it finds, and this gate hands
+# it a DIRECTORY, so the compile opens one and walks it. What that walk costs is
+# the filesystem's answer. `compile_instructions` alternated across four CI jobs
+# on one tree with identical compiler source:
+#
+#   35,544,159   35,544,162   35,544,159   35,544,162
+#
+# Three independent pairs of jobs were diffed frame by frame once kanso#1566 put
+# the whole function tables inside the readable part of the job log, and every
+# one of them put the WHOLE delta, both signs, in a single frame of 1,336:
+# `<std::sys::fs::unix::ReadDir as Iterator>::next`. In all three the entry,
+# library, startup, emit and interp tables were byte-identical -- zero frames
+# moved -- and the row delta, the table's PROGRAM TOTALS delta and that one
+# frame's delta agreed exactly. The entry and library rows check single FILES
+# and carry no such frame at all, which is why this row alone drifts.
+#
+# It cannot be normalized from here. kanso#1569 printed what the walk is handed
+# on each host: the entry SET is identical, one file with a fixed name staged by
+# library_box.sh, and what differs is the ORDER readdir returns it in -- `.`,
+# `..`, then the file on a GitHub runner, and the file first on the container
+# this was written from. That order is the filesystem's and no staging changes
+# it. So the term is left out, as the rule provides, and the golden's header
+# says so.
+#
+# `<std::fs::ReadDir as Iterator>::next` is the outer, public frame; its subtree
+# is the whole per-entry iteration including the sys-internal frame that carries
+# the drift and the libc `readdir` beneath it. 490 instructions on the profile
+# this was read from, against 445 for the inner frame alone.
+walked_cost() {
+  callgrind_annotate --inclusive=yes --threshold=100 "$1" 2>/dev/null \
+    | awk '/:<std::fs::ReadDir as core::iter::traits::iterator::Iterator>::next \[/ && !seen { gsub(/,/, "", $1); print $1; seen = 1 }'
+}
 own=$(callgrind_annotate --inclusive=yes --threshold=100 /tmp/cg.compile 2>/dev/null \
       | awk '/kanso::main/ && !seen { gsub(/,/, "", $1); print $1; seen = 1 }')
 printed=$(printed_cost /tmp/cg.compile)
 case "$printed" in '' | *[!0-9]*) printed=0 ;; esac
-own=$((own - printed))
+walked=$(walked_cost /tmp/cg.compile)
+case "$walked" in '' | *[!0-9]*) walked=0 ;; esac
+own=$((own - printed - walked))
+# The walk's own cost, printed for the same reason the printed line's is: a row
+# that drifts again is unanswerable from a number that only appears subtracted.
+echo "::notice::compile_walked=${walked}"
 # WHAT WAS TAKEN OFF, where a reader can see it. If this row ever drifts
 # again, the first question is whether the printed line's own cost moved --
 # and that question is unanswerable from a number that only ever appears
@@ -343,10 +382,7 @@ fi
 # the blob host outright, `gateway answered 403 to CONNECT`, which no
 # credential and no retry gets past. Collapsed, so it costs a reader nothing
 # until they want it.
-echo "::group::the whole function table, for diffing this job against another"
-callgrind_annotate --threshold=100 /tmp/cg.compile 2>/dev/null \
-  | sed -n 's/^ *\([0-9,][0-9,]*\) ([^)]*)  *\(.*\)$/\1 \2/p'
-echo "::endgroup::"
+sh "$(dirname "$0")/function_table.sh" /tmp/cg.compile compile
 
 # WHETHER IT LANDED ON THE ROW. One row, one value, compared exactly — the
 # ordinary ratchet every other counter in the tree gets.
@@ -401,7 +437,9 @@ again=$(callgrind_annotate --inclusive=yes --threshold=100 /tmp/cg.compile2 2>/d
         | awk '/kanso::main/ && !seen { gsub(/,/, "", $1); print $1; seen = 1 }')
 again_printed=$(printed_cost /tmp/cg.compile2)
 case "$again_printed" in '' | *[!0-9]*) again_printed=0 ;; esac
-again=$((again - again_printed))
+again_walked=$(walked_cost /tmp/cg.compile2)
+case "$again_walked" in '' | *[!0-9]*) again_walked=0 ;; esac
+again=$((again - again_printed - again_walked))
 printf 'compile_again row=%s (the first reading was %s)\n' "$again" "$got"
 # AND INTO THE ARTIFACT, because the job log is the expensive place to read it
 # from. The `*_got.txt` files are catted in one step at the end of the job,
