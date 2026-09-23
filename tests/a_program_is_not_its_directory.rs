@@ -10,7 +10,7 @@
 //! field error origins are built from — a path meant for a diagnostic, read as
 //! a semantic marker. So a package kept in a directory called `lib` compiles to
 //! a program that never reclaims a block, and the same package one directory
-//! over compiles to one that does. Twenty-six times the peak, from the name of
+//! over compiles to one that does. Five times the peak, from the name of
 //! a folder.
 //!
 //! WHY IT IS STILL HERE. Removing the test was built and measured on
@@ -25,10 +25,19 @@
 //! program reads the same peak. `current_dir(at)` with a bare `.` argument
 //! stamps `./main.kso` in both arms, so the directory name never reaches `file`
 //! at all — the run happens from the grandparent and names `lib/app` and
-//! `elsewhere/app` on the command line. And a `std/sha256` import reads `std/`
-//! in BOTH arms and so answers the same either way, which is a passing test
-//! that proves nothing; the digest is copied into the package instead, so the
-//! loops under test are the package's own.
+//! `elsewhere/app` on the command line. And a `std/` import reads `std/` in
+//! BOTH arms and so answers the same either way, which is a passing test that
+//! proves nothing; the loop under test is the package's own.
+//!
+//! WHY THE LOOP IS FIVE LINES AND NOT THE DIGEST. Until 2026-09-23 the package
+//! was a copy of lib/sha256, whose block loop carried a list of eight words
+//! from one block to the next. kanso#1580 rewrote the digest to carry the
+//! eight words as eight scalar arguments, and a loop that carries no list
+//! needs no carry tier, so both arms read 1,048,576 and the copy stopped
+//! showing the defect. The defect had not moved. `churn` below is the shape
+//! the digest used to have and nothing else: a tail loop that builds a list
+//! it drops and hands the next turn a list it keeps. Under `lib/` it reads
+//! 5,242,880; anywhere else, one block.
 
 use std::process::Command;
 
@@ -37,21 +46,18 @@ fn peak_under(where_it_sits: &str) -> u64 {
     let root = std::env::temp_dir().join(format!("kanso-dirflag-{where_it_sits}"));
     let _ = std::fs::remove_dir_all(&root);
     let pkg = root.join(where_it_sits).join("app");
-    std::fs::create_dir_all(pkg.join("digest")).expect("a package to build");
-    std::fs::create_dir_all(pkg.join("walk")).expect("a package to build");
-
-    let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("lib/sha256/sha256.kso");
-    std::fs::copy(&source, pkg.join("digest").join("digest.kso")).expect("the digest copies");
+    std::fs::create_dir_all(pkg.join("churn")).expect("a package to build");
     std::fs::write(
-        pkg.join("walk").join("walk.kso"),
-        "pub fn bytes 0 acc\n  acc\n\n\
-         pub fn bytes n acc\n  bytes (n - 1) (push acc (n % 251))\n",
+        pkg.join("churn").join("churn.kso"),
+        "pub fn churn 0 acc\n  acc\n\n\
+         pub fn churn n acc\n  \
+         junk = [n (n + 1) (n + 2) (n + 3) (n + 4) (n + 5) (n + 6) (n + 7)]\n  \
+         churn (n - 1) [(acc[1] + junk[2]) (acc[2] + junk[7])]\n",
     )
-    .expect("the byte builder writes");
+    .expect("the loop writes");
     std::fs::write(
         pkg.join("main.kso"),
-        "import \"./digest\"\nimport \"./walk\"\n\n\
-         print (digest/hex (walk/bytes 4096 []))\n",
+        "import \"./churn\"\n\nprint (churn/churn 20000 [0 0])\n",
     )
     .expect("the entry writes");
 
@@ -78,7 +84,7 @@ fn the_directory_a_package_sits_in_changes_its_memory() {
     let in_lib = peak_under("lib");
     let elsewhere = peak_under("elsewhere");
 
-    assert_eq!(in_lib, 2_097_152, "the peak under lib/ moved");
+    assert_eq!(in_lib, 5_242_880, "the peak under lib/ moved");
     assert_eq!(elsewhere, 1_048_576, "the peak outside lib/ moved");
     assert_ne!(
         in_lib, elsewhere,

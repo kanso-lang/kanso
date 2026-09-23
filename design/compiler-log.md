@@ -10122,6 +10122,24 @@ Section 115's garbage length in the carry-sizing walk is untouched by this
 and still open: it is reachable only when a library loop is admitted to the
 carry tier, which nothing now needs for this peak.
 
+Two specs pinned the old digest, and both went red on CI as their own notes
+said they would.
+
+- `tests/sha256_peak.rs` pinned a peak that grew with the message and said a
+  streaming hash would read the same number at its two sizes. It now does:
+  7,340,064 at 65,536 bytes and at 131,072. A third size, 262,144, reads
+  24,117,296, and the rest of the growth is the padding. A copy of
+  `padded_bytes` made public and called alone, with no compression, reads the
+  same three numbers byte for byte, because it copies the message to append the
+  terminator and the length. The spec pins all three sizes and says so.
+- `tests/a_program_is_not_its_directory.rs` used a copy of the digest to show
+  the library path prefix changing a program's memory. The digest carries
+  nothing across a rewind now, so both directories read 1,048,576 and the copy
+  stopped showing the defect, which is still there. The package is now a
+  five-line loop with the shape the digest had: it builds a list it drops and
+  hands the next turn a list it keeps. Under `lib/` it reads 5,242,880 at
+  20,000 turns. In any other directory it reads one block.
+
 ---
 
 ## 2026-09-23 — ThinLTO for the release build, declined at a third of what it costs
