@@ -10689,3 +10689,42 @@ emitted rows read what they read above, and CI's rows are in the goldens:
 from main's rows plus this change's moves over kanso#1579 was exact for five
 of the eight and within 2,001 for the rest. The run program pays 2,011,322
 instructions for a peak 1,048,576 bytes lower, and the rise is banked.
+
+---
+
+## 2026-09-23 — the runtime links as machine code, and the release build costs less than half
+
+The release codegen row is three quarters the LTO link, and the ThinLTO entry
+above found where: `ld` optimizes and generates code for the runtime together
+with the program on every release build. Split by phase on the codegen corpus,
+the link is 1,727,215,014 instructions of optimization and 3,168,917,243 of
+code generation. What it generates code for is mostly the runtime:
+
+    runtime .text    59,082 bytes   k_exec 9,980, k_render_at 4,548, ...
+    program .text    19,135 bytes
+
+`cached_runtime_object("release", ...)` compiled the runtime `-O3 -flto`,
+which is bitcode. It compiles `-O3` now, which is machine code, and the link
+optimizes and generates the program alone. On this container, with the gates'
+commands and `GITHUB_ACTIONS=1`:
+
+    codegen_instructions_release   6,598,715,476 -> 2,848,583,206   -56.8%
+    runbench                       1,810,051,241 -> 1,871,199,161    +3.38%
+
+The run program's rise is three helpers the link used to inline into their
+callers: `k_b_find2_below_raw` +62,131,590, `k_b_find2_raw` +56,425,515 and
+`k_beat_iter` +43,146,280, against callers that read that much less. At
+today's ratios the release row's fall is worth about +1.6 and the run row's
+rise about -0.26. ThinLTO shrank the same link and was declined at -3.47% for
++3.03%; this is the trade that version was reaching for, with the runtime
+kept whole.
+
+The runtime object's cache key did not include the flags it was compiled
+with. A machine that had built the bitcode object would have kept linking it
+under the new flags until the temp directory was cleared, so the flags are in
+the key now. `the_runtime_key_names_the_flags` fails with "two flag sets share
+a cached runtime object" when they are taken out.
+
+Open: the three helpers. Keeping them in the LTO link while the rest of the
+runtime is machine code would give the run program back most of its +3.38%,
+and needs the globals they touch shared between two objects.
