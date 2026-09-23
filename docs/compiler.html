@@ -3204,7 +3204,7 @@ kanso#1504      AMD  0x1a / 0x2   2,840,050   806,288   1,138,001,437</code></pr
 
 <p>the probe took four minutes and killed a claim that had already reached a log entry and this page. the general lesson is not about this row: when a section names the experiment that would settle something, that is the experiment to run before the careful sentence, not after.</p>
 
-<p><strong>the draft of this section said something stronger, and it was wrong.</strong> the first write-up had <em>three</em> readings of seven, across three trees at three different absolute values, and concluded a pattern. the third reading was not a reading. it came from the gate&#8217;s second count, which was subtracting the printed line from its first pass and not its second &#8212; so a binary that counted one number was reported as counting two, exactly 3,015 apart, with <code>interp_printed=3015</code> sitting in the job log two screens above the error. that is the subject of the previous section.</p>
+<p><strong>the draft of this section said something stronger, and it was wrong.</strong> the first write-up had <em>three</em> readings of seven, across three trees at three different absolute values, and concluded a pattern. the third reading was not a reading. it came from the gate&#8217;s second count, which was subtracting the printed line from its first pass and not its second &#8212; so a binary that counted one number was reported as counting two, exactly 3,015 apart, with <code>interp_printed=3015</code> sitting in the job log two screens above the error. that is the subject of section 88.</p>
 
 <p>the shape is worth naming because it is not a slip about arithmetic. a claim was assembled out of three data points, one of which was an instrument reading itself, and the instrument had printed what it was doing. what makes three readings better than two is that they are independent; a number the tool generated is not a third opinion.</p>
 
@@ -3222,6 +3222,30 @@ kanso#1504      AMD  0x1a / 0x2   2,840,050   806,288   1,138,001,437</code></pr
 <p>a map keyed by <code>String</code> and probed by <code>&amp;str</code> compares along a path that ends in a <code>memcmp</code> call. a map keyed by the identifier type and probed by the same compares through hashbrown&#39;s <code>Equivalent</code>, and that shim did not inline: 21 instructions a probe against <code>memcmp</code>&#39;s 19.6 plus its call. the word compare is in there and never got the chance to pay. the rest is two cold sites that now build an identifier where they used to pass a string slice.</p>
 
 <p>reverted. the cost sat in the machinery the library wraps around a comparison once you change what is being compared, rather than in the comparison itself — which is what the previous two sections were about. the same code, one layer further out, stops being free.</p>
+
+<h2 id="twoterms"><span class="sec-num">123</span>two terms under every row</h2>
+
+<p>the tables from section 119 sat in the job log where nothing could read them. a log api hands back the tail of a job and caps it at five thousand lines; the job that prints them runs twenty thousand, and the tables are most of that, so two of the twenty came back. each table is packed now — gzip and base64, two hundred columns wide — which turns seventeen hundred rows into a hundred and ninety lines and puts all twenty inside the tail together. the block carries the digest of what it unpacks to, so a reader can tell a whole one from a cut one.</p>
+
+<p>the first change to arrive under that was a counter added to the c runtime: a declaration, an increment, and a line of output. the runtime is <code>include_str!</code>&#39;d into the compiler, so the compiler&#39;s own bytes move with it. six rows count instructions on this tree, and all six moved. diffing each table against the same table from a build without the counter:</p>
+
+<pre><code>table      total delta  =  constant     memcmp    memchr    rest
+compile           -246  =    -2,235    +2,023       -34      +0
+entry           +3,212  =    -2,235    +5,481       -34      +0
+library         +4,699  =    -2,235    +6,968       -34      +0
+startup         -1,488  =    -2,235      +781       -34      +0
+emit              -628  =    -2,235    +1,637       -30      +0
+interp            +361  =    -2,235    +2,626       -34      +4</code></pre>
+
+<p>three terms account for every row exactly, and none of them is in the compiler. not one named function in the kanso binary changed its self cost by a single instruction, across all six tables.</p>
+
+<p>the first term is twenty-nine frames that move by the <em>same</em> amount everywhere — the same &minus;2,235 whether the workload is thirty-seven million instructions or nine hundred and forty-seven million. work that scales with the input cannot do that; a fixed cost paid once per process can. the frames name themselves: <code>getdelim</code>, <code>sscanf</code>, <code>strtoul</code>, and the <code>_IO_*</code> family, which is what reading a text file line by line is made of, with <code>pthread_getattr_np</code> moving alongside them. that function&#39;s job is parsing <code>/proc/self/maps</code>. so the constant is the c library reading this process&#39;s own memory map once at thread set-up, and what it reads differs because the binary&#39;s layout differs.</p>
+
+<p>that is as far as a flat profile goes, and the limit is worth stating: a flat table has no caller edges, so this is the signature of that parse rather than proof of it. the raw profile&#39;s call records would settle it.</p>
+
+<p>the second term is <code>__memcmp_avx2_movbe</code>, between seven hundred and eighty-one and six thousand nine hundred and sixty-eight depending on the row. it scales with the workload, which is what a code-layout effect does, and it is the same frame the previous section handed back.</p>
+
+<p>what this is for: a row on this project has drifted by single digits between builds for weeks, on trees that cannot reach any decision the compiler makes. the answer here is two carriers, both in the c library, and one of them is already under a standing rule that external state gets normalised before it is measured. neither is a cause yet. the map parse is a property of one pair of binaries rather than a constant of the project, and &minus;2,235 is three orders of magnitude larger than the three instructions that started the search. what changed is that the next occurrence can be taken apart the same way, in one command, instead of counted and left alone.</p>
 
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 

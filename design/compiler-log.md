@@ -8969,6 +8969,128 @@ whichever size happens to fold evenly.
 That is the same rule this log keeps paying for: never take a verdict from the
 last stage of a pipe, and break what a new check watches before trusting it.
 
+## 2026-09-23 — the reserve arm moves frame_for, not the commits, and the entry above says otherwise
+
+The entry above is headed "the allocator's page commits are inside the anchor,
+and are worth 107,802". The second half is wrong, and this entry carries the
+correction and what the number actually is.
+
+WHAT WAS DONE WRONG. The reserve arm's commit frames were read — two to zero,
+the third down 6,486 — and the row was read, 107,802 higher. The two were put
+together without diffing the arm frame by frame. That is a
+difference-in-differences presented as a mechanism, which is the failure this
+log has a rule about, committed inside the entry that cites the rule.
+
+WHAT THE FRAMES SAY. The matched pair is `MIMALLOC_EAGER_COMMIT=1` against
+`MIMALLOC_RESERVE_OS_MEMORY=256MiB` — one variable each, so the cost of reading
+one more environment variable cancels. 84 frames move.
+
+    sum of falls   -15,794          sum of rises  +121,461
+
+    what falls                            what rises
+      -6,486  mi_bitmap_setN               +111,696  kanso::eval::Interp::frame_for
+      -5,401  _mi_os_commit_ex               +2,808  _mi_os_reuse
+      -1,144  _mi_subproc                    +2,237  __vfscanf_internal      [libc]
+        -730  _mi_prim_commit                +1,105  ____strtoul_l_internal  [libc]
+        -438  mprotect                [libc]   +367  mi_bchunk_xsetNC
+        -432  mi_arena_try_alloc_at            +216  _mi_prim_reuse
+
+The commit path inside the anchor is worth about **15,794**. The row rises
+because `kanso::eval::Interp::frame_for` costs 111,696 more when the arena is
+reserved up front, and that frame is the interpreter's own. Two further passes
+of both arms read 933,390,854 and 933,498,656 on the row and 12,341,583 and
+12,453,279 on `frame_for`, to the instruction each time.
+
+THE DIRECTION WAS MISLEADING TOO. "Worth 107,802" reads as a saving. Reserving
+makes the row LARGER by 107,802 and the whole process larger by 105,667: it
+removes the commits and costs more than they were.
+
+AND THE CORRECTED FINDING IS THE STRONGER ONE. A knob that changes nothing but
+where the heap starts moves kanso's own hot interpreter function by 111,696
+instructions, reproducibly. The standing row has wanted a mechanism in the
+compiler's own code since 2026-09-15; the frame diff of the interp tables
+earlier the same night could offer only an address relocation, flagged there as
+an attribution rather than a mechanism. This is in a named function.
+
+What it does NOT show is that CI's three or six comes from heap placement. A
+256MiB reservation is a wholesale intervention, not the difference between two
+runners, and nothing on this box varies run to run. What it shows is that this
+row is layout-sensitive in kanso's own code, which is the thing the row has been
+trying to establish.
+
+WHAT STANDS from the entry above, unchanged: the commit frames are inside the
+anchor; neither spelling of eager commit moves anything, zero frames different
+out of 1,396; the allocator's option reading falls outside the anchor while
+`MIMALLOC_VERBOSE=1` moves 217,814 of PROGRAM TOTALS and leaves the row
+byte-identical; and nothing varied run to run in any arm.
+
+Surfaces the wrong attribution reached: this log (corrected here, the log being
+append-only), kanso#1567's title and body, and its merge commit message, which
+cannot be edited. A comment on kanso#1567 carries the same correction.
+
+## 2026-09-23 — what a runtime.c change does to the six rows, decomposed exactly
+
+kanso#1566 put every function table inside the log tail, and kanso#1561 is the
+first branch with a compiler change to run under it. Its whole Rust-visible
+diff is a counter declaration, an increment and an fprintf in `src/runtime.c` —
+which `include_str!` puts inside the compiler, so the compiler's own bytes move.
+Diffing its six tables against main's, frame by frame, joining on the first
+space:
+
+    table      TOTALS Δ  =  constant     memcmp    memchr    rest
+    compile        -246  =    -2,235    +2,023       -34      +0
+    entry        +3,212  =    -2,235    +5,481       -34      +0
+    library      +4,699  =    -2,235    +6,968       -34      +0
+    startup      -1,488  =    -2,235      +781       -34      +0
+    emit           -628  =    -2,235    +1,637       -30      +0
+    interp         +361  =    -2,235    +2,626       -34      +4
+
+Three terms account for every row exactly. NOT ONE NAMED KANSO FRAME MOVED in
+any of the six.
+
+**The constant is 29 frames that move by the SAME amount in all six tables**,
+summing to -2,235 whatever the workload — 36.9 million instructions for the
+compile row against 946.9 million for interp. Workload-proportional work cannot
+do that; a fixed cost paid once per process can. The named frames say what it
+is:
+
+    -1,180  __vfscanf_internal            -38  __isoc23_sscanf
+      -582  ____strtoul_l_internal        -29  _IO_setb
+       -88  _IO_sputbackc                 -24  pthread_getattr_np
+       -73  getdelim                      -24  _IO_no_init
+       -40  _IO_str_init_static_internal   -4  getline
+
+`getdelim`, `sscanf`, `strtoul` and the `_IO_*` family are what reading a text
+file line by line is made of, and `pthread_getattr_np` moves with them. That
+frame is the one CLAUDE.md's 2026-09-15 normalization ruling names by hand, and
+what it parses is `/proc/self/maps`. So the constant is glibc reading this
+process's own memory map once at thread set-up, and what it reads differs
+because the binary's layout differs.
+
+That inference is as far as a FLAT table goes, and it should be said plainly: a
+flat profile has no caller edges, so this is the signature of the maps parse
+rather than a demonstration that `pthread_getattr_np` called those frames. The
+raw profile's `cfn=`/`calls=` pairs would settle it.
+
+**The varying term is `__memcmp_avx2_movbe`**, +781 on the startup row to +6,968
+on library. It scales with the workload, which is what a `.text`-layout effect
+does, and it is the frame kanso#1562 identified as the carrier.
+
+WHAT THIS GIVES THE STANDING ROW. Its question since 2026-09-15 has been what
+carries a single-digit drift on trees that cannot reach the compiler's
+decisions. The answer here is two terms, both in libc, and one of them is
+already ruled to need normalizing. The maps parse is CONSTANT per binary pair
+and rides on every row at once, so it moves rows a change cannot otherwise
+touch; and -2,235 is three orders of magnitude bigger than the three
+instructions kanso#1565 is standing down on, so a smaller layout difference
+producing a smaller constant is the shape to look for next.
+
+WHAT IT IS NOT. One pair of jobs on two different binaries. The -2,235 is a
+property of that pair, not a constant of the project, and nothing here shows
+CI's three comes from this term. The next reading that would bear on it is the
+same decomposition across two jobs whose binaries are identical, which is now
+one command per job rather than unavailable.
+
 ## 2026-09-23 — the compile row leaves the walk out, and the two faces were 487 and 490
 
 `compile_instructions` is measured with `<std::fs::ReadDir as Iterator>::next`
