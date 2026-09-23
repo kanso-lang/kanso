@@ -10846,3 +10846,55 @@ rows that rise at 2000 are the ones this container showed rising, deepbench
 and scanbench most. `text`, summed over the fourteen binaries, reads
 3,372,588: a runtime that inlines more is a larger object, linked
 whole. The objective rises, and the rise is banked.
+
+---
+
+## 2026-09-23 — the program is optimized once, at the link
+
+A release build ran the optimizer over the program twice. `clang -O3 -flto`
+put the program's IR through the full pipeline in `clang -cc1` on the way to
+bitcode, 1,394,202,866 instructions on the codegen corpus, and the LTO link
+ran its own `-O3` pipeline over the program and the hot helpers together.
+The pre-link level is now `-O1`, with `-Wl,-plugin-opt=O3` after the driver's
+own so the link stays at `-O3`. On this container, over kanso#1586:
+
+                          release codegen     runbench
+    -O3, as it was        2,903,108,801       1,806,069,074
+    -O2                   2,536,822,676       1,815,479,975   +0.52%
+    -O1                   1,751,444,900       1,895,750,256   +4.97%
+    no pre-link passes    1,380,698,213       2,053,358,047  +13.69%
+
+The link's pipeline expects its input already simplified, which is why
+removing the pre-link passes outright costs the run program 13.69%. Scored by
+the welfare script against main's goldens scaled by these ratios, -O1 reads
++0.19 and -O2 +0.11; the objective weighs a release build at 0.15 of
+production against run speed's 0.45, and at these ratios the build's saving
+is the larger. CI's rows go into the goldens.
+
+**CI's rows**, taken into the goldens:
+
+    codegen_instructions_release 2,900,713,494 -> 1,751,097,561   -39.63%
+    work_jsonbench       1,129,050,376 ->   1,196,422,427   +5.97%
+    work_encodebench     3,479,633,527 ->   3,356,324,328   -3.54%
+    work_oneshot            19,872,932 ->      20,373,089   +2.52%
+    work_basket             32,376,516 ->      32,678,753   +0.93%
+    work_widebench          33,530,471 ->      34,746,491   +3.63%
+    work_deepbench         359,347,473 ->     366,363,489   +1.95%
+    work_escapebench        74,053,454 ->      80,047,456   +8.09%
+    work_pendbench         208,259,451 ->     209,065,155   +0.39%
+    work_indexbench          2,907,171 ->       2,927,166   +0.69%
+    work_scanbench         468,791,320 ->     451,724,087   -3.64%
+    work_digestbench         5,787,538 ->       5,866,515   +1.36%
+    work_readbench           4,630,466 ->       4,630,465   -0.00%
+    work_livebench       2,803,274,864 ->   2,824,128,034   +0.74%
+    work_runbench        1,793,355,755 ->   1,853,571,514   +3.36%
+
+CI reads the run program at +3.36% where this container read +4.97%. `text`,
+summed over the fourteen binaries, reads 3,215,292 against
+3,372,588. The objective rises, and the rise is banked.
+
+`the other host (macos, arm)` failed eight native targets on the first round
+with `ld: unknown options: -plugin-opt=O3`. `-plugin-opt` is the gold plugin's
+spelling and Apple's ld64 has no such option, so the split is Linux-only and
+other hosts keep `-O3` for both steps, as they were. The rows above are
+Linux's and do not move.

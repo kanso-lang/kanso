@@ -782,23 +782,23 @@
 # Against main the sum is still a RISE, 1,707,852 -> 1,735,116 (+27,264),
 # kanso#1433's inlining and kanso#1435's masked tail less kanso#1436 and this.
 #
-jsonbench text=231602
-encodebench text=241618
-oneshot text=239794
-basket text=222578
-widebench text=250354
-deepbench text=208402
-escapebench text=185250
-pendbench text=211442
-indexbench text=185218
-scanbench text=329586
-digestbench text=223346
-readbench text=185570
-livebench text=241330
+jsonbench text=212546
+encodebench text=231650
+oneshot text=220866
+basket text=216722
+widebench text=238114
+deepbench text=199794
+escapebench text=185234
+pendbench text=208658
+indexbench text=185042
+scanbench text=303794
+digestbench text=217922
+readbench text=185602
+livebench text=221698
 # 2026-09-10 (kanso#1362): the backends build the partial over a value. Every
 # one of the fourteen rows RISES, by 2,096 bytes on eight of them and 2,432 on
 # the other six: k_partial0..4 and the branch each of k_call0..4 gains are in
 # src/runtime.c, which is linked into every program. The 336-byte spread is the
 # arms a program's own dispatch makes reachable. Machine-code size carries no
 # welfare term (ruled 2026-09-05); this vein is exact and watched on its own.
-runbench text=416498
+runbench text=387650

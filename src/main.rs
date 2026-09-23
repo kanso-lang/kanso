@@ -994,7 +994,25 @@ fn release_clang(stem: &str, ll_path: &str) -> std::io::Result<std::process::Exi
     )?;
     let hot_obj = cached_object("release_hot", &hot_source(), &["-O3", "-flto"])?;
     std::process::Command::new("clang")
-        .arg("-O3")
+        // THE PROGRAM IS OPTIMIZED ONCE, AT THE LINK. `-O3` here ran the full
+        // pipeline on the program's IR as clang -cc1 turned it into bitcode,
+        // and the LTO link then ran it again over program and hot helpers
+        // together. `-O1` before the link and `plugin-opt=O3` at it, on this
+        // container: the release codegen row 2,903,108,801 -> 1,751,444,900,
+        // -39.7%, and the run program 1,806,069,074 -> 1,895,750,256, +4.97%.
+        // `-O2` read 2,536,822,676 and 1,815,479,975; no pre-link passes at
+        // all read 1,380,698,213 and 2,053,358,047, +13.7%, because the link's
+        // pipeline expects its input already simplified. Scored by the
+        // objective against main's goldens, -O1 is +0.19 and -O2 +0.11.
+        //
+        // On Linux only. `-plugin-opt` is the gold plugin's spelling and
+        // Apple's ld64 refuses it ("ld: unknown options: -plugin-opt=O3"),
+        // so elsewhere both steps stay at -O3 as they were.
+        .args(if cfg!(target_os = "linux") {
+            &["-O1", "-Wl,-plugin-opt=O3"][..]
+        } else {
+            &["-O3"][..]
+        })
         .arg("-flto")
         // Eight times clang's default of 250. The run program spends one
         // instruction in ten on `push`, `pop` and `ret` -- 215,229,225 of
