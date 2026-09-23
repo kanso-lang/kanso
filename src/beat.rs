@@ -781,7 +781,7 @@ fn tail_sccs(n: usize, edges: &[(usize, usize, usize, &Vec<Expr>)]) -> Vec<Vec<u
 }
 
 /// Iterative Tarjan over an adjacency list.
-fn sccs_of(adj: &[Vec<usize>]) -> Vec<Vec<usize>> {
+pub(crate) fn sccs_of(adj: &[Vec<usize>]) -> Vec<Vec<usize>> {
     let n = adj.len();
     let mut index = vec![usize::MAX; n];
     let mut low = vec![0usize; n];

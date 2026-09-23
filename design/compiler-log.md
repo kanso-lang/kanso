@@ -10051,3 +10051,57 @@ The first reading was 968,455, taken before main was merged in; the merged
 tree reads 14 fewer, which is kanso#1577's own start-up move.
 
 Welfare scores 78.15 against a floor of 77.37, and the rise is banked.
+
+---
+
+## 2026-09-23 — a call between a package's own modules is a cohort again
+
+A construction cohort brackets a call whose arguments are immutable: the arena
+is marked before the call and rewound after it when the answer is a scalar, or
+the answer is copied out when it is not. The license admitted a call only when
+the callee's module name extended the caller's by a segment. That was the
+spelling of nesting before module identity became the canonical path, and the
+archive entry "the qualified door" (2026-08-18) found the test had stopped
+matching and said it had to ask whether the caller's module imports the
+callee's. It was never rebuilt. Since then the only caller it admitted was the
+root module.
+
+The run program shows the cost. `runbench/tally` calls `index/total`,
+`escape/total` and `split/total`, each a phase that builds its own strings and
+answers a number, and none was bracketed. On a tree with kanso#1579,
+kanso#1580 and kanso#1581 merged, the index phase's doubled string and its
+slice, 1,572,880 and 1,380,032 bytes, stayed live after it returned, and the
+next allocation opened a fresh one-megabyte block on top of them. That was the
+run program's peak.
+
+The license now asks whether the callee is declared in another file than the
+caller. A direct call by name can only go down an import, so that is the
+relation the archive entry asked for.
+
+Admitting every such call cost the run program 13.1% of its instructions,
+because json's own modules call one another from its recursive descent,
+millions of times, and each call paid a push and a pop. So a caller that a
+cycle can reach gets no bracket. `cycle_reached` finds every cycle in what the
+bodies mention and every name those cycles reach. A caller outside that set
+runs a number of times its straight-line callers fix, which is where a phase
+starts and ends. Excluding only the members of cycles was not enough:
+`json/number_done` sits in no cycle, `scan` reaches it once per number, and
+jsonbench rose 5.3%.
+
+`tests/a_phase_gives_its_garbage_back.rs` builds a package whose `app` module
+calls `phase/churn` twice. It reads `cohort_frees=2` and an arena peak of
+3,145,744. Watched red with the old test: one free, and 5,242,912.
+
+On the merged tree, with the gates' commands:
+
+    runbench   arena peak        6,098,640 ->     5,050,064   -17.2%
+               instructions  1,808,039,943 -> 1,810,051,241   +0.11%
+    oneshot    instructions     17,945,090 ->    19,972,550   +11.3%
+    deepbench  instructions    356,864,590 ->   358,111,263   +0.35%
+
+jsonbench, encodebench, widebench, livebench, escapebench, indexbench and
+readbench read the same instructions to the unit. oneshot's rise is one pop
+around `json/decode` in `hold/report`. The survivor guard sizes a decoded
+document that is nearly all of what the call grew, keeps the region, and the
+sizing is the 2,027,460 instructions. The archive shows oneshot had this pop
+when the license was first generalized; its peak and allocations do not move.
