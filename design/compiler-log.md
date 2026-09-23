@@ -10550,3 +10550,7 @@ programs that rewind rarely, where the note taken on every scan outweighs the
 test it saves. `.text` rises on all but the run program, 1,765,228 summed over
 the fourteen binaries, for `k_seek_note`'s body. The release codegen row rises
 0.19% for the same runtime code compiled and linked into every program.
+Against main, which does not yet carry kanso#1579, two more rows read worse.
+`work_indexbench` reads 2,895,756, 13 above main, and `work_scanbench`
+462,285,578, 16,273 above: both programs scan strings and seldom rewind, so
+they pay the note on every scan and collect little of what it saves.
