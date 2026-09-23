@@ -1948,6 +1948,40 @@
 # the excluded subtree is 812 and 825, which is the same cost plus or minus the
 # thirteen that lived inside it.
 #
+# AND THE DIRECTORY WALK IS LEFT OUT TOO, 2026-09-23, under the same rule.
+#
+# `<std::fs::ReadDir as Iterator>::next` inclusive is subtracted as well. This
+# gate hands `kanso check` a DIRECTORY, so the compile opens one and walks it,
+# and what a walk costs is the filesystem's answer. This row alternated across
+# four CI jobs on one tree whose compiler source was identical:
+#
+#   35,544,159   35,544,162   35,544,159   35,544,162
+#
+# kanso#1566 put every function table inside the readable part of the job log,
+# and three independent pairs of jobs were then diffed frame by frame. All
+# three put the WHOLE delta, both signs, in one frame of 1,336 --
+# `<std::sys::fs::unix::ReadDir as Iterator>::next`. In all three the entry,
+# library, startup, emit and interp tables were byte-identical, zero frames
+# moved, and the row delta, the table's PROGRAM TOTALS delta and that frame's
+# delta agreed exactly. The entry and library rows check single FILES and carry
+# no such frame at all, which is why this row alone drew.
+#
+# Normalizing was tried first and is not available. kanso#1569 printed what the
+# walk is handed on each host. The entry SET is identical -- one file, one fixed
+# name, staged by library_box.sh -- and what differs is the ORDER readdir hands
+# it back in: `.`, `..`, then the file on a GitHub runner, and the file first on
+# the container this was written from, on two different filesystems of the same
+# family. Nothing staged differently changes that order.
+#
+# So the term is excluded. The frame subtracted is the outer, public one, whose
+# subtree is the whole per-entry iteration including the sys-internal frame that
+# carries the drift and the libc readdir beneath it -- 490 instructions against
+# 445 for the inner frame alone, on the profile this was read from.
+#
+# WHAT WOULD FALSIFY THIS: the row should now read ONE value where it drew two,
+# because the two faces differed only inside the excluded subtree. If it still
+# alternates, the exclusion is aimed at the wrong frame.
+#
 # 2026-09-17 (kanso#1470): compile_instructions 35,964,325 -> 35,964,307, a FALL
 # of 18 (-0.00005%). This branch adds ninety lines to src/main.rs and nothing to
 # the compile path; `kanso check` never reaches the tier flag. The row is a
