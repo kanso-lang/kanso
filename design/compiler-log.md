@@ -9980,3 +9980,44 @@ The memory is the slot table: 12,288 bytes is a doubled `Vec` of resolved
 globals, and the eight allocations are its growth. Interpreter speed carries
 0.11 of the development side and interpreter memory 0.04, and the objective
 scores the trade at 77.37 against a floor of 77.36, so the rise is banked.
+
+---
+
+## 2026-09-23 — lambdas nothing reaches are pruned, and a trampoline is written only for a call that uses it
+
+At `-O0` clang compiles every function a module defines. The codegen corpus's
+module defined 112, and 48 of them were named nowhere else in it. Most of
+those were `internal alwaysinline` helpers from DECLARES, which the always-
+inliner drops on its own. What clang was compiling for nothing was the rest:
+seventeen lifted lambda bodies, `klam0` to `klam16`, and three trampolines,
+`"d_list/advance_6.c"`, `"d_list/bounded_flat_5.c"` and
+`"d_list/bounded_more_5.c"`.
+
+`prune_unnamed` walks the module from the entry and strikes what nothing names,
+but it only ever considered `d_` and `w_` symbols. A lambda body is named by its
+wrapper or by the closure built over it; one inside a library function the
+program never reaches is named by neither, and it survived every prune.
+`klam` is a candidate now, in the prune and in the oracle beside it. The
+trampolines come from `narrow_tailcc`, which wrote one for every function
+that keeps `tailcc` and spills past eight registers, whether or not any call
+was rerouted through it. It writes one now only for a function a rerouted
+call names.
+
+Two specs, each watched red: `a_lambda_body_goes_with_the_wrapper_that_named_it`
+fails with "the lambda nothing reaches was kept" when `klam` is taken out of
+the prune's candidates, and `none_when_nothing_is_rerouted` fails when every
+trampoline is written again. Its first draft checked for a quoted name the
+emitter never writes and passed against the old code too; the name is `f.c`.
+
+On this container, with the gates' commands and `GITHUB_ACTIONS=1`:
+
+    codegen_instructions_dev   596,013,703 -> 505,923,202   -15.12%
+      clang -cc1               446,229,133 -> 357,391,531
+    emit_instructions           51,896,570 ->  50,057,227    -3.54%
+    codegen corpus module         6,107 lines -> 5,299, 112 defines -> 83
+    runbench.ll                  35,860 lines -> 34,853, 595 defines -> 528
+
+The run program reads 1,820,479,435 against 1,820,479,421 and its `.text` is
+the same size: LTO was already dropping these at link time, so the release
+binary does not change, and the release codegen row should move only by what
+`clang -cc1` saves parsing them. CI's rows go into the goldens.
