@@ -1971,7 +1971,19 @@ unbuilt_arm = row
 
 rows_b1u = text/concat rows_b1v [unbuilt_arm]
 
-rows_b = text/concat rows_b1u [compile_mem compile_mem_host]
+# A cycle nothing reaches is not emitted. The mutation starts every definition
+# marked, and the spec's summing program defines the merge again.
+dead_cycle = row
+  "a cycle nothing reaches emitted"
+  true
+  "cargo test --release --test a_cycle_nothing_reaches_is_not_emitted"
+  "specs (unit, golden, differential)"
+  (breaking "a_cycle_nothing_reaches_emitted")
+  release
+
+rows_b1cy = text/concat rows_b1u [dead_cycle]
+
+rows_b = text/concat rows_b1cy [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 

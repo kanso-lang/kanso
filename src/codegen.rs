@@ -2889,10 +2889,11 @@ impl FnEmit {
     }
 }
 
-/// Dispatchers, wrappers and lambda bodies nobody names. A dead caller still
-/// writes a call to its dead callee, so one sweep leaves the callee named by a
-/// caller that is itself about to go — hence the fixpoint. Only `d_`, `w_` and
-/// `klam` symbols are candidates: everything else is either the entry, a
+/// Dispatchers, wrappers and lambda bodies nothing live names. A block is kept
+/// when a chain of names reaches it from the entry or from a block that is not
+/// a candidate; a dead caller's call to its callee does not count, and neither
+/// does a cycle of dead blocks naming each other. Only `d_`, `w_` and `klam`
+/// symbols are candidates: everything else is either the entry, a
 /// builder the constant initialiser calls, or a switch the runtime calls by
 /// name. A lambda body is named by its wrapper or by the closure built over
 /// it, and one in a library function the program never reaches is named by
@@ -2903,7 +2904,7 @@ impl FnEmit {
 /// the cell is what keeps it.
 fn prune_unnamed(body: &str, entry: &str, cells: &[(String, String, usize)]) -> String {
     let blocks = ir_defines(body);
-    let mut alive = vec![true; blocks.len()];
+    let mut alive = vec![false; blocks.len()];
     {
         // Every name this prune will ever ask about: one per block, plus the
         // closure cells. The index is keyed on exactly these, so a name
@@ -2914,8 +2915,8 @@ fn prune_unnamed(body: &str, entry: &str, cells: &[(String, String, usize)]) -> 
             .chain(cells.iter().map(|(cell, _, _)| cell.as_str()))
             .filter(|sym| !sym.is_empty())
             .collect();
-        // Which of those names each block writes, read off once per block, and
-        // how many LIVE blocks write each name. The search this replaced asked
+        // Which of those names each block writes, read off once per block. The
+        // search this replaced asked
         // the question once per (block, name) pair and built a fresh two-way
         // searcher for each: 72.10% of `kanso build bench/runbench`, with
         // `names_symbol` 71.71% of the process on its own.
@@ -2934,47 +2935,52 @@ fn prune_unnamed(body: &str, entry: &str, cells: &[(String, String, usize)]) -> 
                 }
             }
         }
-        let mut mentions: crate::hash::Map<&str, usize> = crate::hash::Map::default();
-        for written in &names {
-            for name in written {
-                *mentions.entry(name).or_insert(0) += 1;
-            }
-        }
-        loop {
-            let elsewhere = |at: usize, name: &str| {
-                mentions.get(name).copied().unwrap_or(0) > usize::from(names[at].contains(name))
-            };
-            let named = |at: usize, sym: &str| {
-                elsewhere(at, sym)
-                    || cells.iter().any(|(cell, w, _)| w == sym && elsewhere(at, cell.as_str()))
-            };
-            let doomed = blocks.iter().enumerate().position(|(at, (sym, _))| {
+        // A mark from the roots rather than a count of mentions. Striking a
+        // block once nothing else named it was reference counting, and a
+        // cycle names itself: std/list's merge sort is merge, merge_on, pick
+        // and advance calling round, so a program that never sorts struck
+        // `sort`, `msort` and `span` and kept the four, which nothing could
+        // call.
+        let at_sym: crate::hash::Map<&str, usize> = blocks
+            .iter()
+            .enumerate()
+            .filter(|(_, (sym, _))| !sym.is_empty())
+            .map(|(at, (sym, _))| (sym.as_str(), at))
+            .collect();
+        let wrapped: crate::hash::Map<&str, &str> =
+            cells.iter().map(|(cell, w, _)| (cell.as_str(), w.as_str())).collect();
+        let mut work: Vec<usize> = blocks
+            .iter()
+            .enumerate()
+            .filter(|(_, (sym, _))| {
                 // The runtime calls the thunk dispatcher itself, from
-                // `k_force`, so no emitted line names it and it would go on
-                // the first sweep.
-                alive[at]
-                    && sym != entry
-                    && sym != "d_thunk_eval"
-                    && (sym.starts_with("d_")
+                // `k_force`, so no emitted line names it.
+                sym == entry
+                    || sym == "d_thunk_eval"
+                    || !(sym.starts_with("d_")
                         || sym.starts_with("w_")
                         || sym.starts_with("klam")
                         || sym.starts_with("\"d_")
                         || sym.starts_with("\"w_"))
-                    && !named(at, sym)
-            });
-            match doomed {
-                // The block is struck off rather than removed, so `names` and
-                // `mentions` keep their indices; the counts drop by what it
-                // wrote, which is what the search would have stopped finding.
-                Some(at) => {
-                    alive[at] = false;
-                    for name in &names[at] {
-                        if let Some(n) = mentions.get_mut(name) {
-                            *n -= 1;
+            })
+            .map(|(at, _)| at)
+            .collect();
+        for &at in &work {
+            alive[at] = true;
+        }
+        while let Some(at) = work.pop() {
+            for name in &names[at] {
+                // A cell is a module global, so the wrapper it points at is
+                // named by whoever loads the cell rather than by a call.
+                let target = wrapped.get(name).map_or(*name, |w| *w);
+                for sym in [*name, target] {
+                    if let Some(&next) = at_sym.get(sym) {
+                        if !alive[next] {
+                            alive[next] = true;
+                            work.push(next);
                         }
                     }
                 }
-                None => break,
             }
         }
     }
@@ -3904,47 +3910,38 @@ fn names_symbol(text: &str, sym: &str) -> bool {
 mod the_prune_agrees_with_the_search {
     use super::*;
 
-    /// The fixpoint as it was written before the index, kept as the oracle.
+    /// The mark written the slow way, kept as the oracle.
     ///
     /// It asks `names_symbol` once per (block, name) pair, which is what made
-    /// it 72.10% of `kanso build bench/runbench`. It is the definition of the
-    /// right answer and nothing else, so it stays here rather than in the
-    /// commit message.
+    /// the search this replaced 72.10% of `kanso build bench/runbench`. It is
+    /// the definition of the right answer and nothing else, so it stays here
+    /// rather than in the commit message.
     fn by_search(body: &str, entry: &str, cells: &[(String, String, usize)]) -> String {
-        let mut blocks = ir_defines(body);
+        let blocks = ir_defines(body);
+        let candidate = |sym: &str| {
+            sym != entry
+                && sym != "d_thunk_eval"
+                && (sym.starts_with("d_")
+                    || sym.starts_with("w_")
+                    || sym.starts_with("klam")
+                    || sym.starts_with("\"d_")
+                    || sym.starts_with("\"w_"))
+        };
+        let mut alive: Vec<bool> = blocks.iter().map(|(sym, _)| !candidate(sym)).collect();
         loop {
-            let named = |at: usize, sym: &str| {
-                if blocks
-                    .iter()
-                    .enumerate()
-                    .any(|(k, (_, text))| k != at && names_symbol(text, sym))
-                {
-                    return true;
-                }
-                cells.iter().any(|(cell, w, _)| {
-                    w == sym
-                        && blocks
-                            .iter()
-                            .enumerate()
-                            .any(|(k, (_, text))| k != at && names_symbol(text, cell))
-                })
+            let named = |sym: &str| {
+                blocks.iter().zip(&alive).any(|((_, text), live)| *live && names_symbol(text, sym))
             };
-            let doomed = blocks.iter().enumerate().position(|(at, (sym, _))| {
-                sym != entry
-                    && sym != "d_thunk_eval"
-                    && (sym.starts_with("d_")
-                        || sym.starts_with("w_")
-                        || sym.starts_with("klam")
-                        || sym.starts_with("\"d_")
-                        || sym.starts_with("\"w_"))
-                    && !named(at, sym)
+            let woken = blocks.iter().enumerate().position(|(at, (sym, _))| {
+                !alive[at]
+                    && (named(sym) || cells.iter().any(|(cell, w, _)| w == sym && named(cell)))
             });
-            match doomed {
-                Some(at) => blocks.remove(at),
+            match woken {
+                Some(at) => alive[at] = true,
                 None => break,
             };
         }
-        blocks.into_iter().map(|(_, text)| text).collect()
+        blocks.into_iter().zip(alive).filter(|(_, live)| *live).map(|((_, text), _)| text).collect()
     }
 
     fn define(sym: &str, body: &str) -> String {
@@ -3971,6 +3968,25 @@ mod the_prune_agrees_with_the_search {
         ]
         .concat();
         assert!(!prune_unnamed(&body, "d_entry", &[]).contains("@d_c("));
+        agree_on(&body, "d_entry", &[]);
+    }
+
+    /// Blocks that name each other and nothing live names. std/list's merge
+    /// sort is four of them calling round, and counting mentions kept all
+    /// four in every program that imported the library and never sorted.
+    #[test]
+    fn a_cycle_nothing_reaches_goes_whole() {
+        let body = [
+            define("d_entry", "  %x = call %KValue @d_kept()\n  ret %KValue %x"),
+            define("d_kept", "  ret %KValue zeroinitializer"),
+            define("d_merge", "  %x = call %KValue @d_pick()\n  ret %KValue %x"),
+            define("d_pick", "  %x = call %KValue @d_merge()\n  ret %KValue %x"),
+        ]
+        .concat();
+        let kept = prune_unnamed(&body, "d_entry", &[]);
+        assert!(kept.contains("@d_kept("), "the named block was pruned");
+        assert!(!kept.contains("@d_merge("), "a cycle nothing reaches was kept");
+        assert!(!kept.contains("@d_pick("), "a cycle nothing reaches was kept");
         agree_on(&body, "d_entry", &[]);
     }
 
