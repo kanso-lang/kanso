@@ -11166,3 +11166,57 @@ Marking the scanners `noinline` instead reads the same 1,917,945,517: the link
 does not inline a plain definition back. `the_scanners_are_found_without_their
 _attribute` lifts the unit from runtime text with the attribute removed, and
 went red with the start strings keyed on the attribute again.
+
+## 2026-09-24 — a wildcard arm keeps a record slot boxed
+
+Found while writing a dev-tier spec. This program printed 7 under the oracle
+and ran out of stack natively, under `kanso run`, `kanso play` and a
+`kanso build` binary alike:
+
+    type point
+      x
+      y
+
+    fn total (point x y)
+      x + y
+
+    fn total _
+      0
+
+    print "{total (point 3 4) + total 5}"
+
+The escape analysis gave `total`'s parameter the by-value record convention,
+because every arm that names a record there names `point`. The `_` arm did not
+count against it. A caller converts its argument for that convention with
+`k_parsed_words`, which passes a failure through and otherwise reads two
+fields off a record. The int 5 has no fields, and that read is where the stack
+ran out. The analysis now also asks the inference which shapes reach the
+position, and keeps the convention only when every one is a record, a failure
+or a thunk that is forced before the call. The json decoder's carried slots
+receive records and failures only, so they keep it: the runtime counter sweep
+and the compile sweep agree with every golden this host can compare.
+
+`tests/golden/micro/a_wildcard_arm_keeps_a_record_slot_boxed.kso` is the
+program above, and the micro corpus runs it on every engine and as a release
+build. Without the fix it went red on the native engine, which printed
+nothing.
+
+A record of another type needed a second rule. The inference has one bit for
+every record, so it cannot tell a `pair` from a `point`, and `total (pair 1 2)`
+printed 10 natively where the oracle printed 7: the pair's two fields were
+read as a point's. An arm that takes any value at the position, meaning a
+name, `_` or an annotated name, now keeps the slot boxed as well.
+`a_wildcard_arm_takes_a_record_of_another_type.kso` pins it. With only the
+first rule it printed 10. The two rules together still leave every vein this
+host can compare where it was. The first rule is still needed for a literal
+arm, since `fn total 5` beside a record arm lets an int reach the slot with no
+wildcard in sight.
+
+CI's rows. The two new checks run at every emit, for every carried position,
+and cost the one-line start-up program 47 instructions:
+
+    startup_instructions   870,779 ->    870,826   +47
+    emit_instructions   43,339,387 -> 43,339,434   +47
+
+Every other row agreed. The fix builds the differential law, which the
+language rests on, so the floor comes down by what it costs.

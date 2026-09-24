@@ -1,0 +1,16 @@
+# A group with a record arm and a wildcard arm at the same position. The native
+# backend passed that position as the record's two words, which is sound only
+# when every value reaching it is a record or a failure, and turned the int
+# below into words with a runtime call that reads fields off a record. The int
+# has none, and the program ran out of stack where the oracle printed 7.
+type point
+  x
+  y
+
+fn total (point x y)
+  x + y
+
+fn total _
+  0
+
+pub play = print "{total (point 3 4) + total 5}"
