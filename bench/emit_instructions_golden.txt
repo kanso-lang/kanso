@@ -276,4 +276,7 @@
 # 2026-09-24 (kanso#1618): a counting run builds its own binary, and the
 # counters setting is read once. emit_instructions 42,892,990 -> 42,866,674, a
 # FALL of 26,316 (-0.0614%).
-emit_instructions=42866674
+#
+# 2026-09-24 (kanso#1620): an arm no value reaches is not emitted.
+# emit_instructions 42,866,674 -> 35,545,509, a FALL of 7,321,165 (-17.0789%).
+emit_instructions=35545509

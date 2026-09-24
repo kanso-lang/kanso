@@ -12813,3 +12813,63 @@ before kanso#1613, whose rise is priced in its own entry. `text` sums to
 3,486,864 against main's 3,420,592 (+66,272): 2,432 bytes of runtime in each
 of the fourteen programs and the regexp's helpers in the two that match.
 
+## 2026-09-24 — an arm no value reaches is not emitted
+
+std/list's `next` has an arm for every lazy adapter the library declares:
+bounded, capped, counting, cursor, cycled, grown, mapped, paired, repeated,
+sifted, skipped. A program that maps once reaches `next`, so it emitted every
+arm and everything each arm calls. The codegen corpus is sixty-two lines that
+map and fold, and it emitted 4,628 lines of IR, 1,560 of which were
+adapters it never builds and what they call.
+
+`without_unbuilt_arms` drops an arm before anything is emitted when a record
+type in its pattern, at any depth, has no value in the program. A value of a
+declared type exists only if an expression names the type -- a construction,
+a partial, a constructor passed on, an upcast to it -- or if the runtime
+builds it, and the runtime builds one record type, `entry`, id 0, in
+`entries`. A subtype's value matches its parent's patterns, so building one
+builds its ancestors. Counting names over every declaration found every
+adapter built, because std/list declares a builder for each, so reachability
+and construction are one fixpoint: a group is reached when a live arm names
+it, an arm is live when its group is reached and nothing in its pattern is
+unbuilt, and a live arm's body builds what it names. The roots are the entry,
+every constant, and the groups the emitter calls without the source naming
+them, which are the renderer and the user operators. A group whose every arm
+would go keeps them all, so a call that reaches it fails as it did. The
+interpreter is untouched, and the golden, micro and differential corpora all
+pass.
+
+On the codegen corpus the IR falls 4,628 -> 3,068 lines (172,246 -> 117,491
+bytes). The child tree of a dev build on this box reads 287,264,761 ->
+200,819,456 instructions (-30.1%) and of a release build 1,613,493,611 ->
+856,255,424 (-46.9%). The compile golden's module row falls 3,581 -> 2,181
+lines and 45 -> 35 defines, and seven benchmarks emit less:
+`emitted_other_lines` for encodebench 9,640 -> 8,242, widebench 10,623 ->
+9,225, deepbench 4,284 -> 2,886, pendbench 5,330 -> 4,260 and digestbench
+8,087 -> 6,688. Over the carried tree of kanso#1619, whose regexp helpers
+scanbench and runbench also emit, scanbench falls 18,930 -> 17,524 and
+runbench 33,871 -> 33,009. The decoder's
+own golden and every runtime counter are unchanged.
+
+CI's rows, over the carried tree of kanso#1619. `codegen_instructions_dev`
+falls 287,912,357 -> 201,466,586 (-30.03%) and
+`codegen_instructions_release` 1,614,559,051 -> 857,150,087 (-46.91%).
+`emit_instructions` falls 42,866,674 -> 35,545,509 (-17.08%), since there is
+less to write. The pass itself costs little: `compile_instructions` lands at
+25,396,458 (+970), `entry_instructions` at 86,465,684 (+4,299),
+`library_instructions` at 87,008,618 (+4,301), and `startup_instructions` at
+639,966 (+3,847, +0.60%), each a clone of the program and a walk of its
+bodies in a build that emits. On the run side encodebench falls 13,099,200
+and pendbench 6,198. Three rows rise: `work_deepbench` lands at 367,712,368
+(+1,296,000, +0.35%), `work_basket` at 32,576,428 (+14,964) and
+`work_digestbench` at 5,842,662 (+14), which is the dispatch of groups that
+lost arms laid out and inlined differently. Every program's `text` falls, by
+5,648 to 9,632 bytes, and `text` sums to 3,420,864 against the carried tree's
+3,486,864 (-66,000).
+
+Spec: `tests/an_arm_no_value_reaches_is_not_emitted` builds a program that
+maps and one that drops. The first must not define `d_list/next_skipped_2`,
+the second must, and both must print what the interpreter prints. Watched red
+with the pass returning nothing: the mapping program defined it. The ratchet
+carries the mutation.
+

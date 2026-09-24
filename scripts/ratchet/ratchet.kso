@@ -1959,7 +1959,19 @@ oversize_tail = row
 
 rows_b1v = text/concat rows_b1p [slice_view view_cstr oversize_tail]
 
-rows_b = text/concat rows_b1v [compile_mem compile_mem_host]
+# An arm no value can reach is not emitted. The mutation keeps every arm, and
+# the spec's mapping program defines next_skipped again.
+unbuilt_arm = row
+  "an arm no value reaches emitted"
+  true
+  "cargo test --release --test an_arm_no_value_reaches_is_not_emitted"
+  "specs (unit, golden, differential)"
+  (breaking "an_arm_no_value_reaches_emitted")
+  release
+
+rows_b1u = text/concat rows_b1v [unbuilt_arm]
+
+rows_b = text/concat rows_b1u [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 
