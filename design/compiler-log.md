@@ -13019,6 +13019,29 @@ word, which allocates nothing and answers the same byte, the magnitude's, for
 a negative number as it did before. On this box the interpreted corpus reads
 846,937,172 -> 818,016,245 -> 802,836,171 -> 790,883,683 across the three.
 
+Moving a dispatch's arguments into the winner's bindings rather than cloning
+them was measured and declined. `match_one` clones 620,601 values on the
+interpreted corpus and the dispatcher drops its own copies once the winner is
+known, so binding a parameter matched whole to a placeholder and moving the
+argument in afterwards looked like most of `Value::clone`. It read 790,883,683
+-> 790,646,809 on this box: nearly every one of those clones is a field bound
+out of a record pattern, which the record still holds, and a parameter matched
+whole is a small share of them.
+
+CI's rows, over kanso#1620's. `codegen_instructions_dev` falls 201,466,586 ->
+144,314,284 (-28.37%) and `codegen_instructions_release` 857,150,087 ->
+713,520,095 (-16.76%). `emit_instructions` falls 35,545,509 -> 30,190,261
+(-15.07%) and `startup_instructions` 639,966 -> 601,897 (-5.95%), since `kanso
+play` emits the program to key its binary cache. `interp_instructions` lands
+at 733,050,032 (-6.69%): the two loops in `call_named` and `call_builtin` more
+than take back the 4,189,569 the collect's layout had cost.
+`compile_instructions` lands at 25,460,259 (+0.25%), `entry_instructions` at
+86,678,016 (+0.25%) and `library_instructions` at 87,221,497 (+0.24%), which
+is the layout of a compiler whose emitter and interpreter both changed; `kanso
+check` reaches neither. Every runtime row and every `text` row is unchanged,
+and so is every allocation counter but one: `interp_allocs` falls 1,036,127 ->
+983,321, by 52,806, which is `low_byte`'s call count, one vector each.
+
 Two dev-tier leads were measured and declined. At `-O0` FastISel selects
 none of the corpus: it refuses `insertvalue` on `%KValue`, the aggregate
 argument and the aggregate return, so every function falls back to

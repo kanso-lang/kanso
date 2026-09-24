@@ -471,4 +471,8 @@
 #
 # 2026-09-24 (kanso#1620): an arm no value reaches is not emitted.
 # startup_instructions 636,119 -> 639,966, a RISE of 3,847 (+0.6048%).
-startup_instructions=639966
+#
+# kanso#1621 at CI's sitting: dead cycles, unnamed strings, dead failure
+# paths, reboxed words, the interpreter's argument loops and low byte.
+# startup_instructions 639,966 -> 601,897, a FALL of 38,069 (-5.9486%).
+startup_instructions=601897

@@ -279,4 +279,8 @@
 #
 # 2026-09-24 (kanso#1620): an arm no value reaches is not emitted.
 # emit_instructions 42,866,674 -> 35,545,509, a FALL of 7,321,165 (-17.0789%).
-emit_instructions=35545509
+#
+# kanso#1621 at CI's sitting: dead cycles, unnamed strings, dead failure
+# paths, reboxed words, the interpreter's argument loops and low byte.
+# emit_instructions 35,545,509 -> 30,190,261, a FALL of 5,355,248 (-15.0659%).
+emit_instructions=30190261

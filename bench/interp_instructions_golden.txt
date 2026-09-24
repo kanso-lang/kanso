@@ -540,5 +540,10 @@
 # 2026-09-24 (kanso#1613): a byte view read in its frame keeps its header
 # there. interp_instructions 786,092,249 -> 785,584,543, a FALL of 507,706
 # (-0.0646%).
-interp_instructions=785584543
+#
+# kanso#1621 at CI's sitting: dead cycles, unnamed strings, dead failure
+# paths, reboxed words, the interpreter's argument loops and low byte.
+# interp_instructions 785,584,543 -> 733,050,032, a FALL of 52,534,511
+# (-6.6873%).
+interp_instructions=733050032
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
