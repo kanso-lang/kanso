@@ -12019,3 +12019,36 @@ block edge, ends at a delimiter and at the end of the bytes, positions
 outside the bytes, and a `.` past the end inside the same block. Counting
 every mark in the block went red on that last case (`-4` for `4`), and
 stepping one past the found byte went red on the runs (`17` for `16`).
+
+CI's sitting for the branch that carries this change, the beat pass
+classifying once and the shipped-module skip together, over main ef56eac8:
+
+    runbench               1,813,492,695 -> 1,775,946,549   -2.07%
+    jsonbench              1,196,422,558 -> 1,142,229,058   -4.53%
+    compile_instructions      33,315,822 ->    25,473,385  -23.54%
+    entry_instructions       118,942,141 ->    85,271,986  -28.31%
+    library_instructions     119,486,941 ->    85,824,404  -28.17%
+    interp_instructions      852,977,487 ->   785,998,385   -7.85%
+    emit_instructions         45,206,776 ->    42,350,970   -6.32%
+    startup_instructions         672,962 ->       628,645   -6.59%
+    codegen_instructions_dev     287,891,869 ->   287,815,887
+    codegen_instructions_release 1,614,704,366 -> 1,614,369,990
+    compile_peak_bytes           777,072 ->       768,704
+    interp_allocs              1,048,350 ->     1,036,127
+    interp_peak_bytes            846,191 ->       837,389
+
+One row is worse. `text`, the size of each benchmark's machine code, rises
+on all fourteen, 3,256,224 -> 3,267,232 summed, 11,008 bytes. Every binary
+carries the SSE2 span routine whether or not it decodes, which is 496 bytes
+on the ten that never read a JSON number. jsonbench, oneshot and livebench
+rise 1,536 and runbench 1,440, the routine plus its call sites. The objective does not weigh
+`text`, and the runtime saving on the decoders pays for it many times over.
+
+The first CI round was red in three places besides the goldens. The ch08
+panel quoting lib/json/number.kso still showed `scan_at`, so it now quotes
+`scan`, `spanned` and the two `number_done` arms. The new diagnostic,
+`number_span takes bytes and a position`, had no golden; it has one in the
+runtime corpus, `a_list_is_not_bytes_for_number_span`. And the ratchet's
+mutation for a module rewritten twice anchored on the `let diags =` line the
+skip replaced with a `match`, so it now anchors on the `false =>` arm and
+inserts after the `};` that closes the match.

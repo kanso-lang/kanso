@@ -280,4 +280,8 @@ front_end_visits=7400
 # 2026-09-24, kanso#1603 over main 68495456, CI's sitting. The lexer and nine
 # front-end places stop allocating what they drop. compile_peak_bytes 787,956
 # -> 777,072, a FALL of 10,884 (-1.3813%).
-compile_peak_bytes=777072
+#
+# 2026-09-24, kanso#1605 (number span, beat classified once, shipped std
+# modules skip their check), CI's row: compile_peak_bytes 777,072 -> 768,704,
+# a FALL of 8,368 (-1.0769%).
+compile_peak_bytes=768704

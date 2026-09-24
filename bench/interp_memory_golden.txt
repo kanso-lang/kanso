@@ -219,7 +219,11 @@
 # module no longer asks that module's merged check, whose answer is fixed when
 # the binary is built. interp_allocs 1,049,281 -> 1,048,350, a FALL of 931
 # (-0.0887%).
-interp_allocs=1048350
+#
+# 2026-09-24, kanso#1605 (number span, beat classified once, shipped std
+# modules skip their check), CI's row: interp_allocs 1,048,350 -> 1,036,127, a
+# FALL of 12,223 (-1.1659%).
+interp_allocs=1036127
 #
 # 2026-09-18, kanso#1518 against main at kanso#1517, CI's sitting.
 # 951,438 -> 961,165, a RISE of
@@ -278,5 +282,9 @@ interp_allocs=1048350
 # 2026-09-24, kanso#1603 over main 68495456, CI's sitting. The lexer and nine
 # front-end places stop allocating what they drop. interp_peak_bytes 846,367
 # -> 846,191, a FALL of 176 (-0.0208%).
-interp_peak_bytes=846191
+#
+# 2026-09-24, kanso#1605 (number span, beat classified once, shipped std
+# modules skip their check), CI's row: interp_peak_bytes 846,191 -> 837,389, a
+# FALL of 8,802 (-1.0402%).
+interp_peak_bytes=837389
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
