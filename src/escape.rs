@@ -149,6 +149,17 @@ fn analyze_inner(program: &Program, inference: &crate::infer::Inference) -> Esca
             .fold(0, |acc, (i, _)| acc | inference.param(i, *at));
         reaching & !(crate::infer::REC | crate::infer::FAIL | crate::infer::THUNK) == 0
     });
+    // The inference has one bit for every record, so it cannot say a `circle`
+    // never reaches a slot whose `_` arm would take one. An arm that takes any
+    // value at the position keeps the slot boxed.
+    carries.retain(|(name, arity, at), _| {
+        !program.fns.iter().filter(|f| f.name == *name && f.params.len() == *arity).any(|f| {
+            matches!(
+                f.params.get(*at),
+                Some(Pattern::Var(..) | Pattern::Wildcard(..) | Pattern::Annotated { .. })
+            )
+        })
+    });
     EscapeInfo { field_count, returns, carries }
 }
 

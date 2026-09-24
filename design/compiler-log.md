@@ -10985,6 +10985,13 @@ program above, and the micro corpus runs it on every engine and as a release
 build. Without the fix it went red on the native engine, which printed
 nothing.
 
-This does not cover a record of another type reaching a slot that has a
-wildcard arm. The inference has one bit for every record, so it cannot tell
-`circle` from `point` there. That case is still open.
+A record of another type needed a second rule. The inference has one bit for
+every record, so it cannot tell a `pair` from a `point`, and `total (pair 1 2)`
+printed 10 natively where the oracle printed 7: the pair's two fields were
+read as a point's. An arm that takes any value at the position, meaning a
+name, `_` or an annotated name, now keeps the slot boxed as well.
+`a_wildcard_arm_takes_a_record_of_another_type.kso` pins it. With only the
+first rule it printed 10. The two rules together still leave every vein this
+host can compare where it was. The first rule is still needed for a literal
+arm, since `fn total 5` beside a record arm lets an int reach the slot with no
+wildcard in sight.
