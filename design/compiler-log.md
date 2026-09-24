@@ -12470,6 +12470,77 @@ and `emitted_other_defines` 1,731 over the other thirteen. The compile
 golden's corpus rows sum to `lines` 1,505, one more each, and `module_lines`
 reads 3,581.
 
+## 2026-09-24 — a long slice shares its string's bytes, and an oversize block leaves its neighbour open
+
+`text/slice` of a string now returns a header whose `data` points into its
+parent when the slice is sixty-four bytes or more, where it used to copy the
+bytes. A parent with room (`cap > 0`) is a builder, whose storage moves and
+is freed as it grows, so its slices are still copies. Every other string's
+bytes live exactly as long as the string does, and evacuation copies a view's
+own bytes and nothing around them, so a view never holds more of its parent
+than the parent would have held alone.
+
+A view does not end in a terminator, because the byte after it is its
+parent's. The runtime reads a terminator only where it hands a string to the
+C library: the three `fopen`s, both `stat`s, `getenv`, `opendir`, the argv of
+both process spawns, the directory sort's `strcmp` and the runtime's own
+error sentences, which print with `%s`. Each now goes through `k_cstr`, which
+returns the data when it is terminated and a terminated copy otherwise. The
+two copies evacuation makes wrote `len + 1` bytes, taking the terminator
+along; they now write `len` and a zero.
+
+On the run program the slice alone takes the arena peak 5,050,064 ->
+4,718,608 and `arena_blocks` 6 -> 5; with the split below it reads 4,194,304. `alloc_bytes` falls 413,717,453 -> 412,321,053,
+`sh_str` 35,646,128 -> 34,249,728 and `str_scans` 163 -> 161, because a view
+of a slice whose character count is known carries the count. basket and scan
+fall by a slice each. The view's length test first sat ahead of the ascii
+path's one-character case, which the ascii cache answers, and CI read
+scanbench 417,133,247 -> 421,136,287 (+4,003,040): a matcher slicing one
+character at a time, 1,001,004 slices, four instructions each. The
+one-character case is now asked first. On this box scanbench then reads
+441,704,194 -> 440,702,231 (-1,001,963) and runbench 1,739,715,210 ->
+1,738,092,378 (-1,622,832), with the split below included.
+
+The peak's makeup was read by printing the live blocks at each new peak.
+Before, the top was 1,380,032 + 1,572,880 + 1,048,576 + 1,048,576: the index
+shape's slice, the subject it was cut from, and two ordinary blocks. After, it
+is 1,572,880 and three ordinary blocks. The page's section 133 said the old
+peak was four 1 MiB blocks and one block of 855,760 bytes. That is the right
+total and an impossible shape, because a block is 1 MiB or it is exactly one
+allocation larger than 1 MiB. The section is corrected.
+
+With the slice shared, the index shape's top was the subject's block and a
+fresh 1 MiB block pushed straight after it, while the block before the
+subject still had room. An allocation larger than a block gets a block of
+exactly its size, and that block became the bump region with nothing left in
+it, so the next small allocation opened a new one. Now, when the current
+block has 4 KiB or more left, `k_alloc_oversize` splits that tail off as a
+block of its own and pushes it back above the oversize block to serve what
+follows. The host shrinks to the part in use, so no two blocks cover the same
+bytes and every walk over the chain reads it as before. A rewind that pops a
+tail gives its bytes back to the host, and never to the spare list, since
+malloc never handed them out. `KBlock` gains the `host` pointer and a pad, 32
+bytes where it was 16, which moves the arena that follows it by sixteen bytes
+and costs nothing a block holds.
+
+The split alone moves nothing on main: there the two oversize allocations
+are the top, and both land above the same tail. Over the shared slice it takes
+the run program's arena peak from 4,718,608 to 4,194,304. That is what the run
+reads with the index shape cut to one character, so the index shape no longer
+sets the peak.
+
+Specs: `tests/golden/mem/a_long_slice_shares_its_text` reads alloc_bytes
+16,464 for a thousand slices of ninety-eight characters, one ascii and one
+walked, and 128,464 with views off. `tests/golden/runtime/
+a_long_slice_ends_where_it_was_cut` prints a sixty-four-character slice
+through an error sentence, and with `k_cstr` handing over the parent's bytes
+the sentence runs on into the rest of the line.
+`tests/golden/mem/an_oversize_string_leaves_its_neighbour_open` doubles a
+string to 2,097,152 bytes and prints a sentence after it: its arena peak reads
+3,145,744, one block and the string, and 4,194,336 with the split off. The
+ratchet carries all three as mutations.
+
+
 ## 2026-09-24 — a greedy run of one character is counted, then backed off
 
 std/regexp walks a pattern by continuations. A repetition takes one more of

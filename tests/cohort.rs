@@ -23,6 +23,14 @@ use std::process::Command;
 /// constants over the 400,496 the two cohorts copy, watched red at the old
 /// value the day the widening landed.
 ///
+/// The input doubled to 400,000 escapes on 2026-09-24. An oversize allocation
+/// stopped stranding the block before it that day, so the read's 1.2 MB left
+/// the decode room it had been denied, and at 200,000 the decode grew less
+/// than the half a block the cohort waits for: one cohort, evac_bytes=704 and
+/// a peak a block lower. At 400,000 the decode's garbage crosses the
+/// threshold again and the pin reads what it was written to read, the decoded
+/// string copied twice.
+///
 /// The input is written here rather than committed, because what this needs
 /// is a large text with a small tree and that runs to a megabyte — six times
 /// the largest data file in the repo. Escapes give the ratio: six bytes of
@@ -34,7 +42,7 @@ use std::process::Command;
 #[test]
 fn a_bound_branch_chosen_pipe_still_fires_the_cohort() {
     let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/golden/cohort");
-    let escapes = "\\u0041".repeat(200_000);
+    let escapes = "\\u0041".repeat(400_000);
     std::fs::write(format!("{dir}/escapes.json"), format!("\"{escapes}\""))
         .expect("the input writes");
 
@@ -48,9 +56,9 @@ fn a_bound_branch_chosen_pipe_still_fires_the_cohort() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert_eq!(stdout, "held 200000\n", "stdout mismatch: {stderr}");
+    assert_eq!(stdout, "held 400000\n", "stdout mismatch: {stderr}");
     assert!(stderr.contains("cohort_frees=2"), "a cohort never fired: {stderr}");
-    assert!(stderr.contains("evac_bytes=400768"), "the decode's cohort kept its region: {stderr}");
+    assert!(stderr.contains("evac_bytes=800768"), "the decode's cohort kept its region: {stderr}");
     assert!(output.status.success());
 }
 

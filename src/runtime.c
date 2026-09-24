@@ -468,7 +468,11 @@ static KValue* k_map_sorted(KMap* m, long long* out_len);
    call, retiring newer blocks to a spare pool for reuse — a steady-state loop
    recycles the same warm pages instead of marching through cold memory. If no
    boundary is ever signalled the arena only grows, exactly as before. */
-typedef struct KBlock { struct KBlock* next; size_t cap; } KBlock;
+/* `host` is set on a tail: the unused end of a block, split off to stay the
+   bump region when an oversize allocation is given a block of its own. Real
+   blocks leave it null. The pad keeps the arena that follows the header on a
+   sixteen-byte boundary. */
+typedef struct KBlock { struct KBlock* next; size_t cap; struct KBlock* host; size_t pad; } KBlock;
 KBlock* k_blocks = NULL;
 static KBlock* k_spare = NULL;
 /* bytes held by the live chain, and the most it ever held: the process's
@@ -638,6 +642,7 @@ static void k_arena_push(size_t need) {
         b = malloc(sizeof(KBlock) + need);
         if (!b) { fputs("out of memory\n", stderr); exit(1); }
         b->cap = need;
+        b->host = NULL;
         if (K_COUNTING) k_stat_blocks++;
     }
     b->next = k_blocks;
@@ -686,8 +691,47 @@ __attribute__((constructor)) static void k_stats_switch(void) {
    k_map_lit, k_rec, k_b_append_slice and k_b_push on runbench, and the
    refill paid twelve a call over 1,278 calls. The six cold helpers that
    carry the attribute are the ones a hot function calls and nothing else. */
+/* An allocation larger than a block gets a block of exactly its size, and
+   that block used to become the bump region with nothing left in it, so the
+   next small allocation opened a fresh 1 MiB block while the one before still
+   had room. The run program's index shape builds a 1,572,864-byte string and
+   then allocates a header, and that header's block was the top of the whole
+   program's peak. So when the current block has a useful tail, the tail is
+   split off as a block of its own -- its host shrinks to the part in use, so
+   no two blocks cover the same bytes -- and pushed back on top of the
+   oversize block to go on serving small allocations. A rewind that pops a
+   tail gives its bytes back to the host rather than to the spare list, since
+   they were never a block malloc handed out. */
+#define K_TAIL_MIN 4096
+static __attribute__((noinline)) void* k_alloc_oversize(size_t n) {
+    KBlock* host = k_blocks;
+    char* tail = k_arena;
+    size_t left = k_arena_left;
+    if (!host || left < K_TAIL_MIN + sizeof(KBlock)) {
+        k_arena_push(n);
+        void* p = k_arena;
+        k_arena += n;
+        k_arena_left -= n;
+        return p;
+    }
+    /* The host keeps the bytes in use and the tail takes the rest, header
+       and all, so the split leaves the live total where it was. */
+    host->cap = (size_t)(tail - (char*)(host + 1));
+    k_arena_push(n);
+    void* p = k_arena;
+    KBlock* t = (KBlock*)tail;
+    t->cap = left - sizeof(KBlock);
+    t->host = host;
+    t->next = k_blocks;
+    k_blocks = t;
+    k_arena = (char*)(t + 1);
+    k_arena_left = t->cap;
+    return p;
+}
+
 static __attribute__((noinline, preserve_most)) void* k_alloc_refill(size_t n) {
-    k_arena_push(n > (1 << 20) ? n : (size_t)(1 << 20));
+    if (n > (1 << 20)) return k_alloc_oversize(n);
+    k_arena_push((size_t)(1 << 20));
     void* p = k_arena;
     k_arena += n;
     k_arena_left -= n;
@@ -996,6 +1040,11 @@ void k_beat_rewind_slow(KMark* m) {
     while (k_blocks != m->block) {
         KBlock* b = k_blocks;
         k_blocks = b->next;
+        if (b->host) {
+            /* a tail goes back to the block it was cut from */
+            b->host->cap += sizeof(KBlock) + b->cap;
+            continue;
+        }
         k_live_block_bytes -= (long long)b->cap;
         b->next = k_spare;
         k_spare = b;
@@ -2112,7 +2161,8 @@ static KValue k_deep_copy(KValue v, KCopy* cp) {
                 ns->data = s->data;
             } else {
                 ns->data = k_copy_alloc(cp, (size_t)s->len + 1);
-                memcpy(ns->data, s->data, (size_t)s->len + 1);
+                memcpy(ns->data, s->data, (size_t)s->len);
+                ns->data[s->len] = 0;
             }
             out.payload = k_ptr(ns);
             break;
@@ -2246,7 +2296,8 @@ static void k_repair_interior(KValue v, void* p, KCopy* cp) {
             KStr* st = (KStr*)p;
             if (k_survives_x(st->data, cp->mark)) break;
             char* d = k_copy_alloc(cp, (size_t)st->len + 1);
-            memcpy(d, st->data, (size_t)st->len + 1);
+            memcpy(d, st->data, (size_t)st->len);
+            d[st->len] = 0;
             st->data = d;
             st->cap = st->cap < 0 ? st->cap : 0;
             break;
@@ -2886,6 +2937,45 @@ static inline __attribute__((always_inline)) KStr* k_str_alloc(long long len) {
     return s;
 }
 
+/* A slice of a long string shares the string's bytes: a header whose `data`
+   points into the parent. Copying costs the bytes twice while both are live,
+   and the parent is usually dying as its slice is made -- the index phase of
+   the run program slices 1,380,000 bytes out of a 1,572,864-byte string that
+   nothing reads again, and the copy was the top of the program's peak. A
+   parent with room (`cap > 0`) is a builder, whose storage moves and is
+   freed as it grows, so it is copied as before; any other string's bytes
+   live exactly as long as the string does, and a holder of the view holds
+   them for that long too. Evacuation copies a view's own bytes and nothing
+   around them.
+
+   The view does not end in a terminator, since the byte after it is its
+   parent's. Nothing in the runtime reads one except what hands a string to
+   the C library, which goes through `k_cstr`, and the copies, which write
+   their own. Short slices keep the copy: below this length the header and
+   the bytes fit the same sixteen-byte rounding the view's header alone
+   takes, and a copy has no parent to hold. */
+#define K_STR_VIEW_MIN 64
+static KValue k_str_view(KStr* parent, long long at, long long len, long long chars) {
+    if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0))
+        k_stat_sh_str += (long long)sizeof(KStr);
+    KStr* s = k_alloc(sizeof(KStr));
+    s->len = (int)len;
+    s->data = parent->data + at;
+    s->cap = chars < 2147483647LL ? (int)(-chars - 1) : 0;
+    KValue v; v.tag = K_STR; v.payload = k_ptr(s); return v;
+}
+
+/* A string as the C library wants it, ending in a zero byte. Every string
+   the runtime makes carries one except a view, whose next byte belongs to
+   its parent; that one is copied. */
+static char* k_cstr(KStr* s) {
+    if (s->data[s->len] == 0) return s->data;
+    char* c = k_alloc((size_t)s->len + 1);
+    memcpy(c, s->data, (size_t)s->len);
+    c[s->len] = 0;
+    return c;
+}
+
 /* A string literal evaluates to the same value every time, so it is built
    once, in permanent storage, and the slot hands it back thereafter. The
    emitter passes one slot per interned literal; the ascii cache below is
@@ -3333,7 +3423,7 @@ KValue k_keyed_check(KValue v, long long entries) {
     if (v.tag != K_REC) {
         KValue r = k_render(v, 1);
         fprintf(stderr, "%serror[runtime]:%s cannot read fields of %s; keyed reads take a record\n",
-                k_c_err(), k_c_off(), k_as_str(r)->data);
+                k_c_err(), k_c_off(), k_cstr(k_as_str(r)));
         exit(1);
     }
     if (entries >= k_as_rec(v)->nfields)
@@ -3360,7 +3450,7 @@ __attribute__((noreturn, noinline)) void k_die_destructure(KValue v, const char*
     fprintf(stderr,
             "%serror[runtime]:%s cannot destructure %s as `%s`; bindings are irrefutable, "
             "so handle other types by dispatch first\n",
-            k_c_err(), k_c_off(), k_as_str(shown)->data, ty);
+            k_c_err(), k_c_off(), k_cstr(k_as_str(shown)), ty);
     exit(1);
 }
 
@@ -3371,7 +3461,7 @@ void k_no_field(KValue v, const char* name) {
     if (v.tag != K_REC) {
         KValue shown = k_render(v, 1);
         fprintf(stderr, "%serror[runtime]:%s `.` reads a field of a record, not %s\n",
-                k_c_err(), k_c_off(), k_as_str(shown)->data);
+                k_c_err(), k_c_off(), k_cstr(k_as_str(shown)));
         exit(1);
     }
     KRec* r = k_as_rec(v);
@@ -3383,14 +3473,14 @@ void k_no_field(KValue v, const char* name) {
 __attribute__((noreturn, noinline)) static void k_die_got(const char* msg, KValue v) {
     KValue shown = k_render(v, 0);
     fprintf(stderr, "%serror[runtime]:%s %s, got %s\n", k_c_err(), k_c_off(), msg,
-            k_as_str(shown)->data);
+            k_cstr(k_as_str(shown)));
     exit(1);
 }
 
 __attribute__((noreturn, noinline)) static void k_die_value(const char* msg, KValue v) {
     KValue shown = k_render(v, 1);
     fprintf(stderr, "%serror[runtime]:%s %s, not %s\n", k_c_err(), k_c_off(), msg,
-            k_as_str(shown)->data);
+            k_cstr(k_as_str(shown)));
     exit(1);
 }
 
@@ -3402,7 +3492,7 @@ KValue k_b_field(KValue v, const char* name) {
     if (v.tag != K_REC) {
         KValue shown = k_render(v, 1);
         fprintf(stderr, "%serror[runtime]:%s `.` reads a field of a record, not %s\n",
-                k_c_err(), k_c_off(), k_as_str(shown)->data);
+                k_c_err(), k_c_off(), k_cstr(k_as_str(shown)));
         exit(1);
     }
     KRec* r = k_as_rec(v);
@@ -5664,7 +5754,7 @@ static KValue k_exec(KDesc* d) {
                gives a list index the top set, and the loop analyses read that
                set. jsonbench's decode loop stopped rewinding. */
             KStr* p = k_as_str(d->x);
-            FILE* fh = fopen(p->data, "rb");
+            FILE* fh = fopen(k_cstr(p), "rb");
             if (!fh) {
                 if (errno == ENOENT || errno == ENOTDIR) {
                     return k_none();
@@ -5701,7 +5791,7 @@ static KValue k_exec(KDesc* d) {
                of what the bytes are. They go straight into the arena, the
                way to_bytes builds a value, so nothing is copied twice. */
             KStr* p = k_as_str(d->x);
-            FILE* fh = fopen(p->data, "rb");
+            FILE* fh = fopen(k_cstr(p), "rb");
             if (!fh) {
                 if (errno == ENOENT || errno == ENOTDIR) {
                     return k_none();
@@ -5810,7 +5900,7 @@ static KValue k_exec(KDesc* d) {
         }
         case 5: {
             KStr* p = k_as_str(d->x);
-            FILE* fh = fopen(p->data, "wb");
+            FILE* fh = fopen(k_cstr(p), "wb");
             if (!fh) {
                 return k_err(k_concat(k_str("cannot write "), d->x), NULL);
             }
@@ -5857,7 +5947,7 @@ static KValue k_exec(KDesc* d) {
             return k_done();
         }
         case 13: {
-            const char* found = getenv(k_as_str(d->x)->data);
+            const char* found = getenv(k_cstr(k_as_str(d->x)));
             return found ? k_str(found) : k_none();
         }
         case 26: {
@@ -5883,11 +5973,11 @@ static KValue k_exec(KDesc* d) {
             KList* args = k_as_list(d->y);
             long long argc = args->len;
             char** argv = malloc(sizeof(char*) * (size_t)(argc + 2));
-            argv[0] = k_as_str(d->x)->data;
+            argv[0] = k_cstr(k_as_str(d->x));
             for (long long i = 0; i < argc; i++) {
                 KValue item = args->items[i];
                 if (item.tag != K_STR) k_die("run takes a list of argument strings");
-                argv[i + 1] = k_as_str(item)->data;
+                argv[i + 1] = k_cstr(k_as_str(item));
             }
             argv[argc + 1] = NULL;
             int outp[2], errp[2], gonep[2];
@@ -5958,15 +6048,15 @@ static KValue k_exec(KDesc* d) {
         }
         case 14: {
             struct stat st;
-            return k_bool(stat(k_as_str(d->x)->data, &st) == 0);
+            return k_bool(stat(k_cstr(k_as_str(d->x)), &st) == 0);
         }
         case 18: {
             struct stat st;
-            int seen = stat(k_as_str(d->x)->data, &st) == 0;
+            int seen = stat(k_cstr(k_as_str(d->x)), &st) == 0;
             return k_bool(seen && S_ISDIR(st.st_mode));
         }
         case 15: {
-            DIR* dh = opendir(k_as_str(d->x)->data);
+            DIR* dh = opendir(k_cstr(k_as_str(d->x)));
             if (!dh) {
                 return k_err(k_concat(k_concat(k_str("cannot list "), d->x),
                                       k_str(": no such directory or unreadable")), NULL);
@@ -5985,7 +6075,7 @@ static KValue k_exec(KDesc* d) {
             for (long long i = 1; i < n; i++) {
                 KValue key = items[i];
                 long long j = i - 1;
-                while (j >= 0 && strcmp(k_as_str(items[j])->data, k_as_str(key)->data) > 0) {
+                while (j >= 0 && strcmp(k_cstr(k_as_str(items[j])), k_cstr(k_as_str(key))) > 0) {
                     items[j + 1] = items[j];
                     j--;
                 }
@@ -6113,11 +6203,11 @@ static long long k_fork_kid(KValue cmd, KValue argv_list) {
     KList* args = k_as_list(argv_list);
     long long argc = args->len;
     char** argv = malloc(sizeof(char*) * (size_t)(argc + 2));
-    argv[0] = k_as_str(cmd)->data;
+    argv[0] = k_cstr(k_as_str(cmd));
     for (long long i = 0; i < argc; i++) {
         KValue item = args->items[i];
         if (item.tag != K_STR) k_die("run takes a list of argument strings");
-        argv[i + 1] = k_as_str(item)->data;
+        argv[i + 1] = k_cstr(k_as_str(item));
     }
     argv[argc + 1] = NULL;
     int outp[2], errp[2], gonep[2];
@@ -9030,6 +9120,13 @@ KValue k_b_slice(KValue container, KValue fromv, KValue tov) {
            anything else a gate reads. */
         if (k_str_chars(s) == (long long)s->len) {
             if (from < 1 || from > to || to > (long long)s->len) return k_str_n("", 0);
+            /* One character first: a matcher slices one at a time, a million
+               times a run on scanbench, and the ascii cache answers it. The
+               length test below cost those four instructions apiece when it
+               came first. */
+            if (to == from) return k_str_n(s->data + (from - 1), 1);
+            if (to - from + 1 >= K_STR_VIEW_MIN && s->cap <= 0)
+                return k_str_view(s, from - 1, to - from + 1, to - from + 1);
             return k_str_n(s->data + (from - 1), to - from + 1);
         }
         return k_b_slice_walk(s, from, to);
@@ -9107,6 +9204,8 @@ static __attribute__((noinline)) KValue k_b_slice_walk(KStr* s, long long from, 
         if (from < 1 || from > to || start < 0) return k_str_n("", 0);
         if (end < 0) end = s->len;
         if (seen <= to) return k_str_n("", 0);
+        if (end - start >= K_STR_VIEW_MIN && s->cap <= 0)
+            return k_str_view(s, start, end - start, to - from + 1);
         return k_str_n(s->data + start, end - start);
     }
 }
@@ -10293,7 +10392,7 @@ static void k_report_trace(KErrBox* box) {
     }
     if (box->cause) {
         KValue cr = k_render(box->cause->reason, 1);
-        fprintf(stderr, "%s  caused by: %s%s\n", k_c_dim(), k_as_str(cr)->data, k_c_off());
+        fprintf(stderr, "%s  caused by: %s%s\n", k_c_dim(), k_cstr(k_as_str(cr)), k_c_off());
         k_report_trace(box->cause);
     }
 }
@@ -10323,7 +10422,7 @@ static int k_exit_status(KValue e) {
 static void k_report_err(KValue e, const char* reached) {
     KValue r = k_render(k_err_inner(e), 1);
     fprintf(stderr, "%serror[endpoint]:%s unhandled err reached %s: %s\n",
-            k_c_err(), k_c_off(), reached, k_as_str(r)->data);
+            k_c_err(), k_c_off(), reached, k_cstr(k_as_str(r)));
     k_report_trace(k_err_box(e));
 }
 

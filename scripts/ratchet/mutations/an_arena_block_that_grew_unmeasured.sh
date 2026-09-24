@@ -12,9 +12,9 @@
 # is the message it is hashing rather than the size of its own text, so it is
 # the only vein whose headline row a change like this can reach.
 set -e
-grep -q 'k_arena_push(n > (1 << 20) ? n : (size_t)(1 << 20));' src/runtime.c || {
+grep -q 'k_arena_push((size_t)(1 << 20));' src/runtime.c || {
   echo "the refill block size moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's/k_arena_push(n > (1 << 20) ? n : (size_t)(1 << 20));/k_arena_push(n > (1 << 21) ? n : (size_t)(1 << 21));/' src/runtime.c
-grep -q '(size_t)(1 << 21)' src/runtime.c
+sed -i 's/k_arena_push((size_t)(1 << 20));/k_arena_push((size_t)(1 << 21));/' src/runtime.c
+grep -q 'k_arena_push((size_t)(1 << 21));' src/runtime.c
