@@ -11500,3 +11500,30 @@ against a character, equal bytes behind two pointers, multi-byte text and a
 last-byte difference. With the length check dropped from the new path, the
 native engine answered `"a" == "ab"` true and the interpreter false, so the
 corpus went red on the engine that changed.
+
+The same branch then took one more runtime path. A beat's rewind at the end of
+each loop iteration checked the shelf and the registries, compared the seek
+cursor's mark and restored the arena pointer and its remaining count. When
+nothing was allocated since the mark, the pointer already equals the mark's,
+the block is the same, and so the restore writes back what is there. No
+string can lie above a mark nothing was allocated past, so the cursor has
+nothing to forget either. `k_beat_rewind` now returns there. A loop that only
+pushes into a list it owns takes that exit on every iteration. A loop that
+allocates pays one extra comparison.
+
+Measured on this container, both sides built and counted here:
+
+    runbench        1,856,032,715 -> 1,852,458,662    -3,574,053   -0.19%
+    escapebench        83,605,696 ->    80,014,690    -3,591,006   -4.30%
+    basket             32,800,063 ->    32,460,035      -340,028   -1.04%
+    encodebench     3,516,817,001 -> 3,521,676,598    +4,859,597   +0.14%
+    livebench       2,795,889,600 -> 2,800,749,197    +4,859,597   +0.17%
+    deepbench         374,547,103 ->   374,651,687      +104,584   +0.03%
+
+The encoder's loops allocate on every iteration, so they pay the comparison
+and never take the exit. The objective weighs runbench alone, and it falls.
+No allocation counter moves, and the lazy tier agrees, since the exit changes
+no state the rewind would not have written back.
+
+With both changes, runbench reads 1,856,032,715 -> 1,845,541,051 on this
+container, -10,491,664 (-0.57%). CI's rows go into the goldens.

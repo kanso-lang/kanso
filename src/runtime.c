@@ -1045,6 +1045,13 @@ static inline void k_beat_rewind(KMark* m) {
        depth it has already ranged, and `k_beat_rewind_slow` keeps its own. */
     if (__builtin_expect(!(k_buf_dirty | m->reg_any)
                          && k_blocks == m->block, 1)) {
+        /* Nothing was allocated since the mark: the same block and the same
+           pointer mean the same room left, so the two stores below would
+           write back what is already there, and no string can lie above a
+           mark nothing was allocated past, so the cursor has nothing to
+           forget. A loop that only pushes into a list it owns takes this
+           exit every iteration; escapebench's 1.55 million did. */
+        if (k_arena == m->ptr) return;
         /* The cursor names a string by its header's address, and the rewind
            hands back every address from the mark up. A string under this
            mark is not handed back, so a scan over a string that arrived from
