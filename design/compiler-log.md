@@ -12430,9 +12430,15 @@ program fell 11,110,137 instructions where a hand edit of the IR without the
 slow arm had shown 28,013,580. Proving the string removes the arm. On the
 run program `escape_onto` qualifies and `regexp/in?` does not.
 
-On this container, against main:
+CI's sitting, against main:
 
-    runbench    1,768,671,540 -> 1,739,715,210   -28,956,330   -1.64%
+    runbench    1,750,593,608 -> 1,717,879,328   -32,714,280   -1.87%
+    livebench   2,626,918,335 -> 2,481,521,540  -145,396,795   -5.54%
+    oneshot        19,420,522 ->    19,057,035      -363,487   -1.87%
+
+and on this container runbench read 1,768,671,540 -> 1,739,715,210. Every
+other row is byte-identical, and `text` falls for the three programs that
+moved.
 
 The run program's allocations fall 5,280,394 -> 4,337,644, one per escaped
 string, and `sh_bytes` 31,270,680 -> 8,644,680. The live program's fall
