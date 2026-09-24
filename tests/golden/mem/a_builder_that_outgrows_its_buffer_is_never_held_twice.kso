@@ -1,0 +1,15 @@
+# A builder only this function holds grows by doubling, and each grow used to
+# take a new buffer, copy the old one into it and free the old one, so for a
+# moment both were held: held_peak_bytes read 202,780 here, the last two
+# buffers and their headers. The grow is a realloc now, which extends the block
+# or remaps it and never holds the two at once, and the peak is the last buffer
+# alone, 135,182.
+import "std/text"
+
+fn fill acc 0
+  acc
+
+fn fill acc n
+  fill (text/append acc 120) (n - 1)
+
+pub play = print "{length (fill (text/bytes "") 100000)}"

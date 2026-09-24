@@ -1884,9 +1884,82 @@ rows_b1oa = text/concat rows_b1n [append_rendered arm_narrowed arms_apart]
 
 rows_b1o = text/concat rows_b1oa [dedup_key_owned fused_names_owned]
 
-rows_b1p = text/concat rows_b1o [list_test_first framed_view]
+# A map whose pairs are already in order is its own sorted view. The mutation
+# copies them into a view again, and the fixture
+# a_map_whose_keys_arrived_in_order_is_its_own_view reads view_allocs=1 and
+# held_peak_bytes=32016 against its 0 and 0.
+ordered_view = row
+  "ordered pairs copied into a view"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "ordered_pairs_copied_into_a_view")
+  release
 
-rows_b = text/concat rows_b1p [compile_mem compile_mem_host]
+# A builder only one function holds grows by realloc. The mutation sends the
+# grow back through malloc, copy and free, and the fixture
+# a_builder_that_outgrows_its_buffer_is_never_held_twice reads
+# held_peak_bytes=202780 against its 135182.
+regrow = row
+  "a unique builder copied to grow"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_unique_builder_copied_to_grow")
+  release
+
+# A greedy run of one character is counted, then backed off in order. The
+# mutation drops the count's ceiling, and the micro fixture
+# a_greedy_run_of_one_character_backs_off_in_order reads a five-character match
+# where `x\{2,3}x` takes four.
+counted_run = row
+  "a counted run that ignores its ceiling"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_counted_run_that_ignores_its_ceiling")
+  release
+
+rows_b1q = text/concat rows_b1o [list_test_first framed_view]
+
+rows_b1p = text/concat rows_b1q [ordered_view regrow counted_run]
+
+# A slice of a long string shares the string's bytes. The mutation makes every
+# slice a copy again, and the fixture a_long_slice_shares_its_text reads
+# alloc_bytes=128464 against its 16464.
+slice_view = row
+  "a long slice copied out of its string"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_long_slice_copied_out_of_its_string")
+  release
+
+# A view reaches the C library through `k_cstr`, which terminates it. The
+# mutation hands over the parent's bytes, and the runtime fixture
+# a_long_slice_ends_where_it_was_cut prints the rest of the parent's line.
+view_cstr = row
+  "a view handed to the c library unterminated"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_view_handed_to_the_c_library_unterminated")
+  release
+
+# An oversize allocation leaves the block before it open for what follows. The
+# mutation strands that block's tail, and the fixture
+# an_oversize_string_leaves_its_neighbour_open reads a second 1 MiB block.
+oversize_tail = row
+  "an oversize block that strands its neighbour"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "an_oversize_block_that_strands_its_neighbour")
+  release
+
+rows_b1v = text/concat rows_b1p [slice_view view_cstr oversize_tail]
+
+rows_b = text/concat rows_b1v [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 

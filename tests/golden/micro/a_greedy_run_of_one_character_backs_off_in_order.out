@@ -1,0 +1,16 @@
+a+ab on aaab: [aaab]
+[ab]*b on abab: [abab]
+x{2,3}x on xxxxx: [xxxx]
+x{2,3}x on xx: none
+a{0,2}a on aaaa: [aaa]
+.*c on ab\ncd: [c]
+[^c]+c on xyzc: [xyzc]
+[a-z]+zzq on abc: none
+b* on aaa: []
+(a+)(a) on aaaa: ["aaa" "a"]
+(a*)b(a*) on aab: ["aa" ""]
+[0-9]+$ on a12b34: [34]
+a+? on aaa: [a]
+a*?b on aab: [aab]
+(ab)+ on ababx: [abab]
+find_all [a-c]+ on abxbcya: ["ab" "bc" "a"]

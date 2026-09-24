@@ -772,7 +772,8 @@ fn at_quantifier? chars at
 # empty here.
 fn in? set c
   cb = text/bytes c
-  member? set c (text/bytes set) cb (length cb == 1)
+  bs = text/bytes set
+  member? set c bs cb (length cb == 1)
 
 fn member? _ _ bs cb true
   return false if length cb < 1
@@ -1214,7 +1215,63 @@ fn reads? _ _ false
 # A repetition offers its choices in the order its greed asks for, and the
 # continuation decides which one survives. `most` of -1 means no ceiling.
 fn walked (rep node least most greedy) s at slots k
+  repeat_from node least most greedy s at slots k (greedy and one_char? node)
+
+fn repeat_from node least most greedy s at slots k false
   repeat node least most greedy s at 0 slots k
+
+# A greedy repetition of one character at a time needs no continuation per
+# character: every character it takes is one position on, and nothing it takes
+# is captured. So the run is counted first, and the rest of the pattern is
+# offered the longest run, then one shorter, down to the least, which is the
+# order the general walk tries them in. `[a-z]+zzq` over a subject with no
+# `zzq` in it built a closure and made a call for every character of every
+# start, about a thousand instructions a character.
+fn repeat_from node least most _ s at slots k true
+  backing least at (run_of node s at 0 most) slots k
+
+fn one_char? (lit _)
+  true
+
+fn one_char? (dot _)
+  true
+
+fn one_char? (cls _ _)
+  true
+
+fn one_char? _
+  false
+
+fn run_of node s at n most
+  return n if most >= 0 and n >= most
+  run_on node s at n most (takes_one? node s (at + n))
+
+fn run_on node s at n most true
+  run_of node s at (n + 1) most
+
+fn run_on _ _ _ n _ false
+  n
+
+fn takes_one? (lit c) s at
+  at <= length s and text/slice s at at == c
+
+fn takes_one? (dot _) s at
+  at <= length s and text/slice s at at != "\n"
+
+fn takes_one? (cls set negated) s at
+  here = at <= length s
+  here and in_class? set negated (sliced s at here)
+
+fn backing least at n slots k
+  return none if n < least
+  tried = k (at + n) slots
+  backed tried least at n slots k
+
+fn backed none least at n slots k
+  backing least at (n - 1) slots k
+
+fn backed won _ _ _ _ _
+  won
 
 fn repeat node least most greedy s at reps slots k
   capped = most >= 0 and reps >= most

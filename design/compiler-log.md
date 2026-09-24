@@ -12470,6 +12470,261 @@ and `emitted_other_defines` 1,731 over the other thirteen. The compile
 golden's corpus rows sum to `lines` 1,505, one more each, and `module_lines`
 reads 3,581.
 
+## 2026-09-24 — a counting run builds its own binary
+
+`kanso run` keeps each program's binary in the temp directory under a key
+made of the program's IR and the runtime's digest. A run under
+`KANSO_COUNTERS` emits the same IR and links a counting runtime, and the key
+did not say which, so a counting run after an ordinary one ran the ordinary
+binary and printed no counters. The mem vein runs its fixtures that way, and a
+fixture run once by hand before its golden existed regenerated as the
+sentence saying the binary had no counters. The key now carries a mark for
+a counting build.
+
+`tests/a_counting_run_builds_its_own_binary` runs a program nobody else runs,
+once plainly and once counting, and reads the counters on the second. It
+failed on main with an empty stderr and passes with the mark. The compiler's
+own layout moves, so the compile-side rows are CI's to report.
+
+`counters_wanted` is now read once and kept. The emitter, the runtime
+object's key and the program binary's key each asked, and each ask walks the
+environment. The one place that sets the flag, `--counters`, does it while
+parsing the arguments, before anything asks. On this box `startup_instructions`
+reads 643,462 on main and on the keyed build, and 643,146 read once.
+
+CI's rows with both commits: `compile_instructions` 25,432,497 -> 25,395,488,
+`entry_instructions` 85,149,814 -> 85,032,735, `library_instructions`
+85,700,954 -> 85,584,660 and `emit_instructions` 42,892,990 -> 42,866,674,
+each a read of the environment the emitter no longer repeats.
+`startup_instructions` reads 636,119 against 636,107, a rise of 12
+(+0.0019%), which is the layout of a binary that moved; this box read that
+row 316 lower. The codegen and interpreter rows read as main's.
+
+
+## 2026-09-24 — a long slice shares its string's bytes, and an oversize block leaves its neighbour open
+
+`text/slice` of a string now returns a header whose `data` points into its
+parent when the slice is sixty-four bytes or more, where it used to copy the
+bytes. A parent with room (`cap > 0`) is a builder, whose storage moves and
+is freed as it grows, so its slices are still copies. Every other string's
+bytes live exactly as long as the string does, and evacuation copies a view's
+own bytes and nothing around them, so a view never holds more of its parent
+than the parent would have held alone.
+
+A view does not end in a terminator, because the byte after it is its
+parent's. The runtime reads a terminator only where it hands a string to the
+C library: the three `fopen`s, both `stat`s, `getenv`, `opendir`, the argv of
+both process spawns, the directory sort's `strcmp` and the runtime's own
+error sentences, which print with `%s`. Each now goes through `k_cstr`, which
+returns the data when it is terminated and a terminated copy otherwise. The
+two copies evacuation makes wrote `len + 1` bytes, taking the terminator
+along; they now write `len` and a zero.
+
+On the run program the slice alone takes the arena peak 5,050,064 ->
+4,718,608 and `arena_blocks` 6 -> 5; with the split below it reads 4,194,304. `alloc_bytes` falls 413,717,453 -> 412,321,053,
+`sh_str` 35,646,128 -> 34,249,728 and `str_scans` 163 -> 161, because a view
+of a slice whose character count is known carries the count. basket and scan
+fall by a slice each. The view's length test first sat ahead of the ascii
+path's one-character case, which the ascii cache answers, and CI read
+scanbench 417,133,247 -> 421,136,287 (+4,003,040): a matcher slicing one
+character at a time, 1,001,004 slices, four instructions each. The
+one-character case is now asked first. On this box scanbench then reads
+441,704,194 -> 440,702,231 (-1,001,963) and runbench 1,739,715,210 ->
+1,738,092,378 (-1,622,832), with the split below included.
+
+The peak's makeup was read by printing the live blocks at each new peak.
+Before, the top was 1,380,032 + 1,572,880 + 1,048,576 + 1,048,576: the index
+shape's slice, the subject it was cut from, and two ordinary blocks. After, it
+is 1,572,880 and three ordinary blocks. The page's section 133 said the old
+peak was four 1 MiB blocks and one block of 855,760 bytes. That is the right
+total and an impossible shape, because a block is 1 MiB or it is exactly one
+allocation larger than 1 MiB. The section is corrected.
+
+With the slice shared, the index shape's top was the subject's block and a
+fresh 1 MiB block pushed straight after it, while the block before the
+subject still had room. An allocation larger than a block gets a block of
+exactly its size, and that block became the bump region with nothing left in
+it, so the next small allocation opened a new one. Now, when the current
+block has 4 KiB or more left, `k_alloc_oversize` splits that tail off as a
+block of its own and pushes it back above the oversize block to serve what
+follows. The host shrinks to the part in use, so no two blocks cover the same
+bytes and every walk over the chain reads it as before. A rewind that pops a
+tail gives its bytes back to the host, and never to the spare list, since
+malloc never handed them out. `KBlock` gains the `host` pointer and a pad, 32
+bytes where it was 16, which moves the arena that follows it by sixteen bytes
+and costs nothing a block holds.
+
+The split alone moves nothing on main: there the two oversize allocations
+are the top, and both land above the same tail. Over the shared slice it takes
+the run program's arena peak from 4,718,608 to 4,194,304. That is what the run
+reads with the index shape cut to one character, so the index shape no longer
+sets the peak.
+
+Specs: `tests/golden/mem/a_long_slice_shares_its_text` reads alloc_bytes
+16,464 for a thousand slices of ninety-eight characters, one ascii and one
+walked, and 128,464 with views off. `tests/golden/runtime/
+a_long_slice_ends_where_it_was_cut` prints a sixty-four-character slice
+through an error sentence, and with `k_cstr` handing over the parent's bytes
+the sentence runs on into the rest of the line.
+`tests/golden/mem/an_oversize_string_leaves_its_neighbour_open` doubles a
+string to 2,097,152 bytes and prints a sentence after it: its arena peak reads
+3,145,744, one block and the string, and 4,194,336 with the split off. The
+ratchet carries all three as mutations.
+
+
+## 2026-09-24 — a greedy run of one character is counted, then backed off
+
+std/regexp walks a pattern by continuations. A repetition takes one more of
+its body by walking the body with a continuation that asks for the next one,
+so every character a greedy `[a-z]+` takes costs a closure capturing eight
+values, a call into it and a call back into the repetition. The run
+program's scan phase runs `[a-z]+zzq` over a subject that never contains
+`zzq`, and at every start position the repetition takes the rest of the
+subject and then gives it back a character at a time. That was 91,806
+steps at about a thousand instructions each, 5.4% of runbench.
+
+When the body is one character, a literal, a dot or a class, none of that is
+needed: each character it takes moves the position by one and captures
+nothing. `walked` now counts such a run in one pass, stopping at the
+repetition's ceiling, and offers the rest of the pattern the longest run,
+then one shorter, down to the floor. That is the order the general walk
+tries lengths in, so the matches are the same. Lazy repetitions, and any
+repetition of a group, a sequence or an alternation, still take the general
+walk. The class test also binds the set's bytes once instead of building
+them inline.
+
+On this container, against main:
+
+    runbench    1,739,715,210 -> 1,710,209,853   -29,505,357   -1.70%
+
+`a_greedy_run_of_one_character_backs_off_in_order` in the micro corpus runs
+sixteen patterns that give characters back, hit floors and ceilings, match
+nothing, stop a dot at a newline, negate a class, capture on either side of a
+run, meet an end anchor, and repeat lazily or over a group. Every engine
+prints what the library printed before the change. The ratchet row
+`counted_run` drops the count's ceiling, and `x{2,3}x` on "xxxxx" takes five
+characters where it takes four.
+
+The library is compiled into every program that imports it, and the new
+functions are code in the two that scan: `emitted_other_defines` reads 1,747,
+`emitted_other_calls` 18,794, `emitted_other_branches` 11,468 and
+`emitted_other_lines` 117,099, all of it scanbench and runbench.
+
+## 2026-09-24 — a map whose pairs are in order is its own view
+
+A map keeps its pairs in the order they were put and builds a sorted,
+deduplicated view the first time something reads it. The view is a copy of
+the pairs in a malloc'd buffer, held for as long as the map lives, and it is
+what `held_peak_bytes` measures on the run program: 728,040 bytes, the views
+of the top-level document's 2,761 objects, which the encoder reads ninety
+times.
+
+Every one of those objects had its keys put in ascending order with none
+repeated, so every view was a copy of pairs that were already sorted. The
+view build now checks that first, n - 1 key comparisons, and when it holds it
+points the view at the pairs. The paths that write through a view were
+already few:
+
+- a replace of a key already present patches the value in place, which is
+  the same slot in both;
+- the in-place put appends a pair and then inserts it into the view, and for
+  an alias it extends the view when the new key sorts last and otherwise
+  turns the alias into a copy before inserting;
+- the in-place put's growth path moves the pairs to a bigger buffer, and
+  moves an alias with them;
+- the registry flush and the carry path free a view, and both now ask whether
+  it is one.
+
+Pairs are frontier-shared between maps, but a map that shares a buffer sees
+only its own prefix, and no append changes a prefix.
+
+On this container, against main:
+
+    runbench         1,768,671,540 -> 1,763,871,501   -4,800,039   -0.27%
+    held_peak_bytes        728,040 ->       416,312     -311,728
+    view_allocs              2,761 ->             0
+
+`arena_peak_bytes` does not move. What `held_peak_bytes` still holds is the
+encoder's output builders.
+
+The copy an out-of-order insert makes is sized to 1, 3, 7, 15, the series a
+view built at the first read would have reached by then. The first build
+dropped the alias there and let the next read build a view at its exact size,
+and doubling from an exact size overshoots the series: `growing_map`, 800 keys
+in descending order, held 73,696 bytes of view where main holds 49,120, and
+`fused_tally` 10,720 against 7,744. Sized to the series, no counter in any
+golden rises.
+
+`a_transient_maps_view_is_freed` exists to show a transient map's view being
+freed, and its keys were put in order, so it now built no view to free. Its
+seed takes `b` and the put takes `a`, and it reads what it read on main.
+
+`a_map_whose_keys_arrived_in_order_is_its_own_view` in the mem vein reads
+`view_allocs=0` and `held_peak_bytes=0` for a thousand ascending keys; the
+ratchet row `ordered_view` copies the pairs into a view again and the fixture
+reads one view of 32,016 bytes. `a_map_read_in_order_shares_its_pairs` in the
+micro corpus reads maps between writes that keep the order, break it, repeat a
+key, outgrow the first buffer and share another map's pairs, and every engine
+prints the same maps. With the insert made to extend an alias whatever the
+new key, the native build printed a descending map in the order it was put.
+
+## 2026-09-24 — a builder only one function holds grows by realloc
+
+A builder grows by doubling, and a grow at a site the linearity analysis
+proved unique took a new buffer, copied the old one into it and freed the
+old one. That is what `realloc` does, and glibc does it better: it extends
+the block in place when the space after it is free, and past its mmap
+threshold it remaps the pages instead of copying them. The unique grow now
+calls `realloc`, counted as the malloc and the free it replaces so that
+`bytes_malloc`, `bytes_freed` and `allocs` keep their meaning. The old and
+new buffers are also never both held, and the run program's
+`held_peak_bytes` was taken at exactly that moment, when the encoder's
+output builder went from about 128 KB to about 256 KB.
+
+Carried with the ordered view in the same pull request. On this container,
+each against main before either:
+
+    ordered view alone  runbench -4,800,039   held_peak_bytes 728,040 -> 416,312
+    realloc alone       runbench -20,873,318  held_peak_bytes 728,040 -> 589,266
+
+and the two together, against main with kanso#1613:
+
+    runbench         1,739,715,210 -> 1,710,701,594   -29,013,616   -1.67%
+    held_peak_bytes        728,040 ->       277,538     -450,502
+
+Most of the instruction saving is the memcpy that the remap skips.
+
+`a_builder_that_outgrows_its_buffer_is_never_held_twice` in the mem vein
+appends 100,000 bytes to a unique builder and reads `held_peak_bytes=135182`,
+the last buffer alone. The ratchet row `regrow` sends the grow back through
+malloc, copy and free, and the fixture reads 202,780, the last two buffers.
+
+The same grow decides where the new buffer lives by asking whether the
+builder's header dies at the innermost rewind. It asked that as two walks of
+the block chain, whether the header is live and whether it is at or below the
+mark, and the second walked every block under the mark. `k_above_mark` asks
+the one question with a walk that stops at the mark's block, and gives the
+same answer for every pointer. On the 176,697 grows of the run program that
+is 2,527,440 instructions, 1,710,701,594 -> 1,708,174,154, and every counter
+vein agrees with the goldens.
+
+CI's sitting of the three together, against main with kanso#1613:
+
+    runbench      1,717,879,328 -> 1,686,535,157   -31,344,171   -1.82%
+    livebench     2,481,521,540 -> 2,370,527,779  -110,993,761   -4.47%
+    encodebench   3,164,604,377 -> 3,055,075,047  -109,529,330   -3.46%
+    oneshot          19,057,035 ->    16,662,299    -2,394,736  -12.57%
+
+Three rows rise. `work_basket` reads 32,567,631 (+220,378) and
+`work_jsonbench` 1,127,375,513 (+325,050), and on this container both rises
+are `k_b_put_mut`: basket's 9,077,621 -> 9,400,908, jsonbench's +171,000. The
+in-place put now asks whether a map's view is an alias before it inserts
+into it or grows it, which is a compare on every put into a map that has a
+view. `work_widebench` reads 29,833,857 (+48,000). `text` sums to 3,443,664,
+1,648 bytes more a binary for the alias paths and the regrow, and the two
+codegen rows rise with it: `codegen_instructions_dev` reads 287,845,497 and
+`codegen_instructions_release` 1,614,602,673.
+
 ## 2026-09-24 — four more ideas measured and declined
 
 Each of these was built and measured on the run program, and each gave back
@@ -12510,3 +12765,51 @@ less than it cost.
   builders' checks are the part that costs, and the decoder's tokens, which
   a slice could have vouched for, are ascii of four to seven bytes: checking
   one costs less than proving its two ends.
+
+## 2026-09-24 — four pull requests carried together
+
+kanso#1614, kanso#1615, kanso#1617 and kanso#1618 each touched the log, and
+three of them the runtime and the ratchet's row list, so each would have
+merged main again behind the one before it and waited on a ratchet that takes
+over an hour for a runtime branch. They are carried here over main at
+kanso#1616 and land together.
+
+The conflicts were the log, where every entry is kept; the ratchet's row
+list, where every row is kept and the lists chain `rows_b1q`, `rows_b1p`,
+`rows_b1v`; the page, where kanso#1614 and kanso#1617 had each written a
+section 135, and the second is now 136, with section 133's pointer to it
+moved; and the cost goldens and the floor, which were regenerated rather than
+merged.
+
+The counter veins, regenerated over the combined tree, move three files. On
+the run program `arena_peak_bytes` falls 5,050,064 -> 4,194,304 and
+`held_peak_bytes`, which kanso#1614 took from 728,040 to 277,538, holds
+there, so `run_peak_bytes` reads 4,492,354 against main's 5,798,616.
+`allocs` falls 4,337,644 -> 4,147,652 and `alloc_bytes` 413,717,453 ->
+397,171,773.
+
+CI's reading of the combined tree. runbench falls 1,686,535,157 ->
+1,655,310,739 (-31,224,418, -1.85%) and scanbench 417,133,247 -> 296,418,691,
+the regexp's counted run. jsonbench, oneshot, basket, deepbench, indexbench,
+digestbench and livebench fall too. Five rows rise by what a runtime this
+size moves in layout: `escapebench` lands at 76,459,452 (+2,998),
+`pendbench` 209,069,804 (+4,181), `readbench` 4,631,756 (+809),
+`encodebench` 3,055,075,201 (+154) and `widebench` 29,833,954 (+97). Every
+program's `text` grows 2,432 bytes, the runtime's own growth, and runbench's
+`text` lands at 415,784 and scanbench's at 323,672, which also carry the
+regexp's larger helpers. `entry_instructions` lands at 86,461,385
+(+1,428,650, +1.68%) and `library_instructions` at 87,004,317 (+1,419,657,
++1.66%), which is kanso#1615's larger regexp library compiled on each of
+those routes; its own rows were never taken before the carry.
+`codegen_instructions_dev` lands at 287,912,357 (+66,860, +0.02%), and
+`codegen_instructions_release` falls to 1,614,559,051. The compile, emit,
+start-up and interpreter rows read as kanso#1618 left them.
+
+By the trend gate's keys: `work_escapebench` lands at 76,459,452,
+`work_pendbench` at 209,069,804 and `work_readbench` at 4,631,756, the layout
+rises above. `work_basket` reads 32,561,464 and `work_jsonbench`
+1,127,061,575, each below main's golden and above the history's reading from
+before kanso#1613, whose rise is priced in its own entry. `text` sums to
+3,486,864 against main's 3,420,592 (+66,272): 2,432 bytes of runtime in each
+of the fourteen programs and the regexp's helpers in the two that match.
+

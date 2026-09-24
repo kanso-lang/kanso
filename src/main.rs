@@ -1727,10 +1727,14 @@ fn ended_by_signal(_status: &std::process::ExitStatus, _program: Option<&ast::Pr
 fn cached_program_binary(ir: &str) -> std::io::Result<std::path::PathBuf> {
     // 128 bits of the IR, at a third of SipHash's cost: see `hash::key_of`.
     // The runtime the binary would be linked against is a constant, so its
-    // digest is folded in rather than walked.
+    // digest is folded in rather than walked. Whether it counts is not: a
+    // counting run and an ordinary one emit the same IR and link different
+    // runtimes, so without the mark the second of them ran the first one's
+    // binary, and a counting run printed no counters.
     let (ka, kb) = kanso::hash::key_of(ir.as_bytes());
     let (ra, rb) = kanso::hash::RUNTIME_DIGEST;
-    let key = format!("{:016x}{:016x}", ka ^ ra, kb ^ rb.rotate_left(17));
+    let counting = if kanso::codegen::counters_wanted() { "c" } else { "" };
+    let key = format!("{:016x}{:016x}{counting}", ka ^ ra, kb ^ rb.rotate_left(17));
     let binary = std::env::temp_dir().join(format!("kanso_run_{key}"));
     if binary.exists() {
         return Ok(binary);

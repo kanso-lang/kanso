@@ -1,0 +1,17 @@
+# A slice of sixty-four characters or more shares its parent's bytes, so the
+# byte after it is the parent's rather than a terminator. The runtime's own
+# sentences hand a value to the C library, which reads to a terminator: this
+# condition is the first sixty-four characters of a longer line, and the
+# sentence has to stop where the slice does.
+import "std/text"
+
+pub fn opaque v
+  v
+
+head = "0123456789012345678901234567890123456789"
+
+tail = "012345678901234567890123 and the rest of the line"
+
+line = text/join [head tail] ""
+
+pub play = print "{if (opaque (text/slice line 1 64)) "a" "b"}"

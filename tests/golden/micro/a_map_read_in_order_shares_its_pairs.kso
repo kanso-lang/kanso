@@ -1,0 +1,50 @@
+# A map's sorted view is what a read looks things up in. When the pairs were
+# put with their keys already ascending and none repeated, the native build
+# lets the pairs be the view instead of copying them. These maps are read at
+# every step while they are still being written: puts that keep the keys
+# ascending, puts that break the order, puts of a key already there, puts
+# past the first buffer's room, and puts onto a map whose pairs another map
+# shares. Every engine has to print the same maps.
+fn bump none
+  1
+
+fn bump n
+  n + 1
+
+fn ascending m 0
+  m
+
+fn ascending m n
+  ascending (put m (20 - n) (bump m[20 - n])) (n - 1)
+
+fn descending m 0
+  m
+
+fn descending m n
+  descending (put m n (bump m[n])) (n - 1)
+
+fn again m 0
+  m
+
+fn again m n
+  again (put m (n % 5) (bump m[n % 5])) (n - 1)
+
+pub play =
+  base = { "a":1 "b":2 }
+  size = length base
+  wider = put base "c" 3
+  before = put base "a0" 9
+  twice = put wider "b" 7
+  up = ascending {} 20
+  down = descending {} 20
+  both = again up 12
+  fresh = again (ascending {} 10) 12
+  print "base: {size} {base}"
+  print "wider: {wider}"
+  print "before: {before}"
+  print "twice: {twice} {base}"
+  print "up: {up}"
+  print "down: {down}"
+  print "both: {both}"
+  print "fresh: {fresh}"
+  print "up still: {length up} {up[7]} {up[19]}"

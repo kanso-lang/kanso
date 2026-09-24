@@ -1,0 +1,26 @@
+# `text/slice` of a long string shares the string's bytes: the slice is a
+# sixteen-byte header pointing into its parent. Each of these slices is
+# ninety-eight characters of a line of a hundred, and each was a copy of 128
+# bytes; alloc_bytes reads the headers alone. One line is ascii and takes the
+# direct path; the other ends in two-byte characters, so its slice takes the
+# walk that counts them, and it shares too.
+import "std/text"
+
+fifty = "abcdefghijabcdefghijabcdefghijabcdefghijabcdefghij"
+
+last = "abcdefghijabcdefghijabcdefghijabcdefghijabcdefghéé"
+
+ascii = text/join [fifty fifty] ""
+
+wide = text/join [fifty last] ""
+
+fn cut s
+  length (text/slice s 2 99)
+
+fn walk 0 acc
+  print acc
+
+fn walk n acc
+  walk (n - 1) (acc + cut ascii + cut wide)
+
+pub play = walk 500 0

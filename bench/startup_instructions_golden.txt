@@ -464,4 +464,8 @@
 #
 # 2026-09-24 (kanso#1613): a byte view read in its frame keeps its header
 # there. startup_instructions 635,557 -> 636,107, a RISE of 550 (+0.0865%).
-startup_instructions=636107
+#
+# 2026-09-24 (kanso#1618): a counting run builds its own binary, and the
+# counters setting is read once. startup_instructions 636,107 -> 636,119, a
+# RISE of 12 (+0.0019%).
+startup_instructions=636119
