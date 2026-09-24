@@ -1995,7 +1995,19 @@ dead_string = row
 
 rows_b1st = text/concat rows_b1cy [dead_string]
 
-rows_b = text/concat rows_b1st [compile_mem compile_mem_host]
+# A block nothing branches to is not emitted. The mutation keeps every block,
+# and the spec's module carries failure paths nothing reaches again.
+dead_block = row
+  "a block nothing branches to emitted"
+  true
+  "cargo test --release --test a_block_nothing_branches_to_is_not_emitted"
+  "specs (unit, golden, differential)"
+  (breaking "a_block_nothing_branches_to_emitted")
+  release
+
+rows_b1bk = text/concat rows_b1st [dead_block]
+
+rows_b = text/concat rows_b1bk [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 

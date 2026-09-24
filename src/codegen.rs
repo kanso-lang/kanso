@@ -2756,17 +2756,19 @@ impl FnEmit {
     /// The function's body: what the emitters wrote, with the stack slots at
     /// the head of the entry block so each one dominates its uses.
     fn body(&self) -> String {
+        let reached = without_unreached_blocks(&self.out);
+        let out = reached.as_deref().unwrap_or(&self.out);
         if self.entry_allocas.is_empty() {
-            return self.out.clone();
+            return out.to_string();
         }
         let mut head = String::new();
-        let mut rest = self.out.as_str();
-        if let Some(end) = self.out.find('\n') {
-            let first = &self.out[..end];
+        let mut rest = out;
+        if let Some(end) = out.find('\n') {
+            let first = &out[..end];
             if first.ends_with(':') && !first.starts_with(' ') {
                 head.push_str(first);
                 head.push('\n');
-                rest = &self.out[end + 1..];
+                rest = &out[end + 1..];
             }
         }
         for slot in &self.entry_allocas {
@@ -3567,6 +3569,121 @@ fn group_indices_in<'s>(
         .filter(move |at| program.fns[*at].params.len() == arity)
 }
 
+/// A function body without the blocks its entry cannot reach, or `None` when
+/// every block is reached.
+///
+/// The emitter opens a block before it knows whether anything will branch to
+/// it. A dispatcher's `failN` is the common case: when every parameter's
+/// check was proved away, nothing jumps to the failure path, yet its blocks
+/// were written, parsed by clang and thrown away by its first pass. They were
+/// 13% of the decoder's lines.
+///
+/// A block is a label line and the lines under it; its successors are the
+/// `label %name` operands it writes. A `phi` in a kept block loses the entries
+/// that name a dropped block. When a `phi` cannot be read with certainty the
+/// body is returned untouched, which is always correct.
+fn without_unreached_blocks(out: &str) -> Option<String> {
+    let mut blocks: Vec<(&str, Vec<&str>)> = Vec::new();
+    for line in out.lines() {
+        match line.strip_suffix(':') {
+            Some(label) if !line.starts_with(' ') && !label.contains(' ') => {
+                blocks.push((label, Vec::new()))
+            }
+            _ => match blocks.last_mut() {
+                Some((_, lines)) => lines.push(line),
+                None => return None,
+            },
+        }
+    }
+    let at: crate::hash::Map<&str, usize> =
+        blocks.iter().enumerate().map(|(i, (label, _))| (*label, i)).collect();
+    let mut reached = vec![false; blocks.len()];
+    let mut work = vec![0usize];
+    reached[0] = true;
+    while let Some(b) = work.pop() {
+        for line in &blocks[b].1 {
+            let mut rest = *line;
+            while let Some(p) = rest.find("label %") {
+                rest = &rest[p + 7..];
+                let end = rest
+                    .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '.'))
+                    .unwrap_or(rest.len());
+                if let Some(&next) = at.get(&rest[..end]) {
+                    if !reached[next] {
+                        reached[next] = true;
+                        work.push(next);
+                    }
+                }
+            }
+        }
+    }
+    if reached.iter().all(|r| *r) {
+        return None;
+    }
+    let dropped: crate::hash::Set<&str> =
+        blocks.iter().zip(&reached).filter(|(_, r)| !**r).map(|((label, _), _)| *label).collect();
+    let mut kept = String::with_capacity(out.len());
+    for ((label, lines), _) in blocks.iter().zip(&reached).filter(|(_, r)| **r) {
+        kept.push_str(label);
+        kept.push_str(":\n");
+        for line in lines {
+            match line.contains(" = phi ") {
+                true => kept.push_str(&phi_without(line, &dropped)?),
+                false => kept.push_str(line),
+            }
+            kept.push('\n');
+        }
+    }
+    Some(kept)
+}
+
+/// A `phi` line without the entries whose block is in `dropped`. Each entry
+/// is `[ value, %label ]` with brackets balanced inside the value; anything
+/// else, or a `phi` left with no entry, answers `None`.
+fn phi_without(line: &str, dropped: &crate::hash::Set<&str>) -> Option<String> {
+    let open = line.find('[')?;
+    let (head, mut rest) = line.split_at(open);
+    let mut entries: Vec<&str> = Vec::new();
+    loop {
+        rest = rest.trim_start();
+        if !rest.starts_with('[') {
+            return None;
+        }
+        let mut depth = 0i32;
+        let mut end = None;
+        for (i, c) in rest.char_indices() {
+            match c {
+                '[' | '{' | '(' | '<' => depth += 1,
+                ']' | '}' | ')' | '>' => depth -= 1,
+                _ => {}
+            }
+            if depth == 0 {
+                end = Some(i);
+                break;
+            }
+        }
+        let end = end?;
+        entries.push(&rest[..=end]);
+        rest = rest[end + 1..].trim_start();
+        match rest.strip_prefix(',') {
+            Some(more) => rest = more,
+            None if rest.is_empty() => break,
+            None => return None,
+        }
+    }
+    let kept: Vec<&str> = entries
+        .into_iter()
+        .filter(|e| {
+            let label = e.trim_end_matches(']').trim_end().rsplit(", %").next().unwrap_or("");
+            !dropped.contains(label)
+        })
+        .collect();
+    if kept.is_empty() {
+        return None;
+    }
+    Some(format!("{head}{}", kept.join(", ")))
+}
+
 /// Every unquoted `@sym` that `text` writes, in one pass. A symbol runs from
 /// the `@` over letters, digits, `_`, `.` and `$`, which is LLVM's own rule for
 /// a name that needs no quotes, so `@s12` never answers for `@s12_lit`.
@@ -4011,6 +4128,22 @@ mod the_prune_agrees_with_the_search {
         assert!(!kept.contains("@d_merge("), "a cycle nothing reaches was kept");
         assert!(!kept.contains("@d_pick("), "a cycle nothing reaches was kept");
         agree_on(&body, "d_entry", &[]);
+    }
+
+    /// A block nothing branches to goes, and a `phi` in a kept block loses
+    /// the entry that named it. A constant holding a comma stays one entry.
+    #[test]
+    fn a_block_nothing_branches_to_goes_with_its_phi_entry() {
+        let out = "entry:\n  br label %L1\nL2:\n  br label %L1\nL1:\n  \
+                   %x = phi %KValue [ { i64 0, i64 1 }, %entry ], [ %y, %L2 ]\n  \
+                   ret %KValue %x\n";
+        let kept = without_unreached_blocks(out).expect("a block goes");
+        assert_eq!(
+            kept,
+            "entry:\n  br label %L1\nL1:\n  %x = phi %KValue [ { i64 0, i64 1 }, %entry ]\n  \
+             ret %KValue %x\n"
+        );
+        assert_eq!(without_unreached_blocks("entry:\n  ret %KValue %x\n"), None);
     }
 
     /// The delimiter rule, which is the whole reason `names_symbol` exists:
