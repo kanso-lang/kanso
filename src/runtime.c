@@ -845,7 +845,7 @@ static void k_viewreg_flush(int d) {
     for (long long i = 0; i < k_viewreg_n[d]; i++) {
         KMap* m = k_viewreg[d][i];
         if (m->sorted) {
-            k_view_free(m->sorted);
+            if (m->sorted != m->pairs) k_view_free(m->sorted);
             m->sorted = NULL;
             m->sorted_len = 0;
         }
@@ -2281,8 +2281,9 @@ static void k_repair_interior(KValue v, void* p, KCopy* cp) {
                 nb->cap = cap;
                 nb->used = 2 * mp->len;
                 memcpy(nb + 1, mp->pairs, sizeof(KValue) * (size_t)(2 * mp->len));
+                int aliased = mp->sorted == mp->pairs;
                 mp->pairs = (KValue*)(nb + 1);
-                if (mp->sorted) k_view_free(mp->sorted);
+                if (mp->sorted && !aliased) k_view_free(mp->sorted);
                 mp->sorted = NULL;
                 mp->sorted_len = 0;
             }
@@ -6927,6 +6928,24 @@ static void k_view_free(KValue* view) {
 static __attribute__((noinline, preserve_most)) void k_map_sort_build(KMap* m) {
     {
         long long n = m->len;
+        /* PAIRS ALREADY IN ORDER ARE THEIR OWN VIEW. A decoded object whose
+           keys arrived ascending with none repeated has nothing to sort and
+           nothing to drop, and a copy of its pairs is the whole of what the
+           view would be: the run program's doc held 728,040 bytes of such
+           copies for as long as it lived. The view then points at the pairs.
+           Nothing writes through a view but the in-place put, which keeps the
+           alias only while the keys stay ascending and drops it otherwise,
+           and the growth path, which moves it with the pairs; every free of a
+           view asks first whether it is one. Pairs are frontier-shared, but a
+           map that shares them sees only its own prefix, which no append
+           changes. */
+        long long a = 1;
+        while (a < n && k_key_cmp(m->pairs[(a - 1) * 2], m->pairs[a * 2]) < 0) a++;
+        if (a >= n) {
+            m->sorted = m->pairs;
+            m->sorted_len = n;
+            return;
+        }
         /* The view lives outside the arena for the same reason a builder's
            buffer does: a below-mark map header must never hold a pointer a
            rewind can free. That retires the registry sweep each rewind paid
@@ -7093,6 +7112,27 @@ static void k_map_view_insert_built(KMap* m, KValue key, KValue val) {
    the write always makes. */
 static inline void k_map_view_insert(KMap* m, KValue key, KValue val) {
     if (!m->sorted) return;
+    if (m->sorted == m->pairs) {
+        /* the pair is already appended at len - 1: still in order, the view
+           is one longer and nothing is copied */
+        if (m->sorted_len == 0 || k_key_cmp(m->pairs[(m->len - 2) * 2], key) < 0) {
+            m->sorted_len = m->len;
+            return;
+        }
+        /* out of order, the view becomes a copy of the ordered prefix, at the
+           room a view built on the first read would have grown to by now --
+           1, 3, 7, 15, the insert's own series -- and the key goes in as it
+           would have. Sized any other way the series overshoots: dropping the
+           view and letting the next read build one at its exact size left a
+           map taking 800 keys in descending order holding 73,696 bytes of view
+           where it had held 49,120. */
+        long long room = 1;
+        while (room < m->sorted_len) room = room * 2 + 1;
+        KValue* own = k_view_alloc(room);
+        memcpy(own, m->sorted, sizeof(KValue) * 2 * (size_t)m->sorted_len);
+        m->sorted = own;
+        if (k_born_this_beat(m)) k_viewreg_add(m);
+    }
     k_map_view_insert_built(m, key, val);
 }
 
@@ -7134,6 +7174,7 @@ KValue k_b_put_mut(KValue mv, KValue key, KValue val) {
         np[m->len * 2] = key;
         np[m->len * 2 + 1] = val;
         k_buf_of(np)->used = m->len * 2 + 2;
+        if (m->sorted == m->pairs) m->sorted = np;
         if (k_buf_of(m->pairs)->cap < 0) {
             free(k_buf_of(m->pairs));
         } else {
@@ -8670,6 +8711,27 @@ static __attribute__((noinline, cold, preserve_most)) KBuf* k_bytes_buf_malloc(l
     }
     return buf;
 }
+/* The unique builder's grow, where the old buffer has no other holder: one
+   realloc in place of a malloc, a copy and a free. glibc extends the block
+   where it can and, past its mmap threshold, remaps the pages rather than
+   copying them; and the old and new buffers are never both held, which is
+   the moment the run program's `held_peak_bytes` was taken. Counted as the
+   malloc and the free it replaces, so the counters keep their meaning. */
+static __attribute__((noinline, cold, preserve_most)) KBuf* k_bytes_buf_regrow(KBuf* old,
+                                                                              long long cap) {
+    long long was = (long long)sizeof(KBuf) + old->cap;
+    KBuf* buf = realloc(old, sizeof(KBuf) + (size_t)cap);
+    if (!buf) { fputs("out of memory\n", stderr); exit(1); }
+    if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) {
+        if (K_COUNTING) k_stat_allocs++;
+        k_stat_alloc_bytes += (long long)(sizeof(KBuf) + (size_t)cap);
+        if (K_COUNTING) k_stat_bytes_malloc++;
+        if (K_COUNTING) k_stat_bytes_freed++;
+        k_stat_held_live += (long long)(sizeof(KBuf) + (size_t)cap) - was;
+        if (k_stat_held_live > k_stat_held_peak) k_stat_held_peak = k_stat_held_live;
+    }
+    return buf;
+}
 static __attribute__((noinline, cold, preserve_most)) void k_bytes_buf_release(KBuf* old) {
     if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) {
         if (K_COUNTING) k_stat_bytes_freed++;
@@ -8695,7 +8757,7 @@ static __attribute__((noinline)) KValue k_b_append_grow(KValue acc, KBytes* a,
     int dies = 0;
     if (k_beat_depth > 0 && k_beat_depth <= K_BEAT_MAX) {
         KMark* inner = &k_beat_stack[k_beat_depth - 1];
-        dies = mutate ? (k_survives(a, NULL) && !k_survives(a, inner)) : 1;
+        dies = mutate ? k_above_mark(a, inner) : 1;
     }
     /* Where the buffer comes from, and the sign the new cap carries. That is
        the whole of the difference between the two regimes, so it is decided
@@ -8704,6 +8766,17 @@ static __attribute__((noinline)) KValue k_b_append_grow(KValue acc, KBytes* a,
        an allocator that reclaims nothing pays for every intermediate size a
        builder passes through rather than the size it reached, where malloc
        plus a free on the owned path pays for one buffer at a time. */
+    if (mutate && !dies && k_bytes_malloced(a)) {
+        KBuf* grown = k_bytes_buf_regrow(((KBuf*)a->data) - 1, cap);
+        grown->cap = cap;
+        grown->used = a->len + n;
+        unsigned char* at = (unsigned char*)(grown + 1);
+        k_copy_short((char*)at + a->len, (const char*)src, n);
+        a->len += n;
+        a->data = at;
+        a->cap = cap;
+        return acc;
+    }
     KBuf* buf;
     long long marked;
     if (dies) {

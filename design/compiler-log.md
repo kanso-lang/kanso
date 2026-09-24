@@ -12470,6 +12470,121 @@ and `emitted_other_defines` 1,731 over the other thirteen. The compile
 golden's corpus rows sum to `lines` 1,505, one more each, and `module_lines`
 reads 3,581.
 
+## 2026-09-24 — a map whose pairs are in order is its own view
+
+A map keeps its pairs in the order they were put and builds a sorted,
+deduplicated view the first time something reads it. The view is a copy of
+the pairs in a malloc'd buffer, held for as long as the map lives, and it is
+what `held_peak_bytes` measures on the run program: 728,040 bytes, the views
+of the top-level document's 2,761 objects, which the encoder reads ninety
+times.
+
+Every one of those objects had its keys put in ascending order with none
+repeated, so every view was a copy of pairs that were already sorted. The
+view build now checks that first, n - 1 key comparisons, and when it holds it
+points the view at the pairs. The paths that write through a view were
+already few:
+
+- a replace of a key already present patches the value in place, which is
+  the same slot in both;
+- the in-place put appends a pair and then inserts it into the view, and for
+  an alias it extends the view when the new key sorts last and otherwise
+  turns the alias into a copy before inserting;
+- the in-place put's growth path moves the pairs to a bigger buffer, and
+  moves an alias with them;
+- the registry flush and the carry path free a view, and both now ask whether
+  it is one.
+
+Pairs are frontier-shared between maps, but a map that shares a buffer sees
+only its own prefix, and no append changes a prefix.
+
+On this container, against main:
+
+    runbench         1,768,671,540 -> 1,763,871,501   -4,800,039   -0.27%
+    held_peak_bytes        728,040 ->       416,312     -311,728
+    view_allocs              2,761 ->             0
+
+`arena_peak_bytes` does not move. What `held_peak_bytes` still holds is the
+encoder's output builders.
+
+The copy an out-of-order insert makes is sized to 1, 3, 7, 15, the series a
+view built at the first read would have reached by then. The first build
+dropped the alias there and let the next read build a view at its exact size,
+and doubling from an exact size overshoots the series: `growing_map`, 800 keys
+in descending order, held 73,696 bytes of view where main holds 49,120, and
+`fused_tally` 10,720 against 7,744. Sized to the series, no counter in any
+golden rises.
+
+`a_transient_maps_view_is_freed` exists to show a transient map's view being
+freed, and its keys were put in order, so it now built no view to free. Its
+seed takes `b` and the put takes `a`, and it reads what it read on main.
+
+`a_map_whose_keys_arrived_in_order_is_its_own_view` in the mem vein reads
+`view_allocs=0` and `held_peak_bytes=0` for a thousand ascending keys; the
+ratchet row `ordered_view` copies the pairs into a view again and the fixture
+reads one view of 32,016 bytes. `a_map_read_in_order_shares_its_pairs` in the
+micro corpus reads maps between writes that keep the order, break it, repeat a
+key, outgrow the first buffer and share another map's pairs, and every engine
+prints the same maps. With the insert made to extend an alias whatever the
+new key, the native build printed a descending map in the order it was put.
+
+## 2026-09-24 — a builder only one function holds grows by realloc
+
+A builder grows by doubling, and a grow at a site the linearity analysis
+proved unique took a new buffer, copied the old one into it and freed the
+old one. That is what `realloc` does, and glibc does it better: it extends
+the block in place when the space after it is free, and past its mmap
+threshold it remaps the pages instead of copying them. The unique grow now
+calls `realloc`, counted as the malloc and the free it replaces so that
+`bytes_malloc`, `bytes_freed` and `allocs` keep their meaning. The old and
+new buffers are also never both held, and the run program's
+`held_peak_bytes` was taken at exactly that moment, when the encoder's
+output builder went from about 128 KB to about 256 KB.
+
+Carried with the ordered view in the same pull request. On this container,
+each against main before either:
+
+    ordered view alone  runbench -4,800,039   held_peak_bytes 728,040 -> 416,312
+    realloc alone       runbench -20,873,318  held_peak_bytes 728,040 -> 589,266
+
+and the two together, against main with kanso#1613:
+
+    runbench         1,739,715,210 -> 1,710,701,594   -29,013,616   -1.67%
+    held_peak_bytes        728,040 ->       277,538     -450,502
+
+Most of the instruction saving is the memcpy that the remap skips.
+
+`a_builder_that_outgrows_its_buffer_is_never_held_twice` in the mem vein
+appends 100,000 bytes to a unique builder and reads `held_peak_bytes=135182`,
+the last buffer alone. The ratchet row `regrow` sends the grow back through
+malloc, copy and free, and the fixture reads 202,780, the last two buffers.
+
+The same grow decides where the new buffer lives by asking whether the
+builder's header dies at the innermost rewind. It asked that as two walks of
+the block chain, whether the header is live and whether it is at or below the
+mark, and the second walked every block under the mark. `k_above_mark` asks
+the one question with a walk that stops at the mark's block, and gives the
+same answer for every pointer. On the 176,697 grows of the run program that
+is 2,527,440 instructions, 1,710,701,594 -> 1,708,174,154, and every counter
+vein agrees with the goldens.
+
+CI's sitting of the three together, against main with kanso#1613:
+
+    runbench      1,717,879,328 -> 1,686,535,157   -31,344,171   -1.82%
+    livebench     2,481,521,540 -> 2,370,527,779  -110,993,761   -4.47%
+    encodebench   3,164,604,377 -> 3,055,075,047  -109,529,330   -3.46%
+    oneshot          19,057,035 ->    16,662,299    -2,394,736  -12.57%
+
+Three rows rise. `work_basket` reads 32,567,631 (+220,378) and
+`work_jsonbench` 1,127,375,513 (+325,050), and on this container both rises
+are `k_b_put_mut`: basket's 9,077,621 -> 9,400,908, jsonbench's +171,000. The
+in-place put now asks whether a map's view is an alias before it inserts
+into it or grows it, which is a compare on every put into a map that has a
+view. `work_widebench` reads 29,833,857 (+48,000). `text` sums to 3,443,664,
+1,648 bytes more a binary for the alias paths and the regrow, and the two
+codegen rows rise with it: `codegen_instructions_dev` reads 287,845,497 and
+`codegen_instructions_release` 1,614,602,673.
+
 ## 2026-09-24 — four more ideas measured and declined
 
 Each of these was built and measured on the run program, and each gave back

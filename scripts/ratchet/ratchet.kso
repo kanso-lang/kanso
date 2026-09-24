@@ -1884,7 +1884,33 @@ rows_b1oa = text/concat rows_b1n [append_rendered arm_narrowed arms_apart]
 
 rows_b1o = text/concat rows_b1oa [dedup_key_owned fused_names_owned]
 
-rows_b1p = text/concat rows_b1o [list_test_first framed_view]
+# A map whose pairs are already in order is its own sorted view. The mutation
+# copies them into a view again, and the fixture
+# a_map_whose_keys_arrived_in_order_is_its_own_view reads view_allocs=1 and
+# held_peak_bytes=32016 against its 0 and 0.
+ordered_view = row
+  "ordered pairs copied into a view"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "ordered_pairs_copied_into_a_view")
+  release
+
+# A builder only one function holds grows by realloc. The mutation sends the
+# grow back through malloc, copy and free, and the fixture
+# a_builder_that_outgrows_its_buffer_is_never_held_twice reads
+# held_peak_bytes=202780 against its 135182.
+regrow = row
+  "a unique builder copied to grow"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_unique_builder_copied_to_grow")
+  release
+
+rows_b1q = text/concat rows_b1o [list_test_first framed_view]
+
+rows_b1p = text/concat rows_b1q [ordered_view regrow]
 
 rows_b = text/concat rows_b1p [compile_mem compile_mem_host]
 
