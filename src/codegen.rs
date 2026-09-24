@@ -39,9 +39,17 @@ enum ArmCase {
 /// .mem vein -- which sets KANSO_COUNTERS around a build it drives through the
 /// library and has no way to pass a flag -- silently got a gate-free binary,
 /// and every allocation counter in the corpus moved at once.
+///
+/// Read once and kept. The emitter, the runtime object's key and the program
+/// binary's key all ask, and each read walks the environment; the one place
+/// that sets the flag, `--counters`, does it while parsing the arguments,
+/// before anything asks.
 pub fn counters_wanted() -> bool {
-    std::env::var_os("KANSO_COUNTERS_BUILD").is_some()
-        || std::env::var_os("KANSO_COUNTERS").is_some()
+    static WANTED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *WANTED.get_or_init(|| {
+        std::env::var_os("KANSO_COUNTERS_BUILD").is_some()
+            || std::env::var_os("KANSO_COUNTERS").is_some()
+    })
 }
 
 /// How many `k_stats_on` gates DECLARES carries. Pinned so that adding one
