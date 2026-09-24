@@ -12470,6 +12470,37 @@ and `emitted_other_defines` 1,731 over the other thirteen. The compile
 golden's corpus rows sum to `lines` 1,505, one more each, and `module_lines`
 reads 3,581.
 
+## 2026-09-24 — a counting run builds its own binary
+
+`kanso run` keeps each program's binary in the temp directory under a key
+made of the program's IR and the runtime's digest. A run under
+`KANSO_COUNTERS` emits the same IR and links a counting runtime, and the key
+did not say which, so a counting run after an ordinary one ran the ordinary
+binary and printed no counters. The mem vein runs its fixtures that way, and a
+fixture run once by hand before its golden existed regenerated as the
+sentence saying the binary had no counters. The key now carries a mark for
+a counting build.
+
+`tests/a_counting_run_builds_its_own_binary` runs a program nobody else runs,
+once plainly and once counting, and reads the counters on the second. It
+failed on main with an empty stderr and passes with the mark. The compiler's
+own layout moves, so the compile-side rows are CI's to report.
+
+`counters_wanted` is now read once and kept. The emitter, the runtime
+object's key and the program binary's key each asked, and each ask walks the
+environment. The one place that sets the flag, `--counters`, does it while
+parsing the arguments, before anything asks. On this box `startup_instructions`
+reads 643,462 on main and on the keyed build, and 643,146 read once.
+
+CI's rows with both commits: `compile_instructions` 25,432,497 -> 25,395,488,
+`entry_instructions` 85,149,814 -> 85,032,735, `library_instructions`
+85,700,954 -> 85,584,660 and `emit_instructions` 42,892,990 -> 42,866,674,
+each a read of the environment the emitter no longer repeats.
+`startup_instructions` reads 636,119 against 636,107, a rise of 12
+(+0.0019%), which is the layout of a binary that moved; this box read that
+row 316 lower. The codegen and interpreter rows read as main's.
+
+
 ## 2026-09-24 — a long slice shares its string's bytes, and an oversize block leaves its neighbour open
 
 `text/slice` of a string now returns a header whose `data` points into its

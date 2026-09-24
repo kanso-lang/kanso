@@ -272,4 +272,8 @@
 # 2026-09-24 (kanso#1613): a byte view read in its frame keeps its header
 # there. emit_instructions 42,771,526 -> 42,892,990, a RISE of 121,464
 # (+0.2840%).
-emit_instructions=42892990
+#
+# 2026-09-24 (kanso#1618): a counting run builds its own binary, and the
+# counters setting is read once. emit_instructions 42,892,990 -> 42,866,674, a
+# FALL of 26,316 (-0.0614%).
+emit_instructions=42866674
