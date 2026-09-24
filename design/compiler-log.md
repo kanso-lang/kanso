@@ -11469,6 +11469,334 @@ start-up 866,580 and emit 43,320,508. The next CI round replaces them.
 CI's rows over kanso#1593 and main: start-up 866,580 and emit 43,320,508, as
 summed, and the dev row 359,558,108, read twice alike, 77,592 above the sum.
 
+## 2026-09-24 — a dev module leaves out the helpers nothing reaches
+
+DECLARES defines thirty-three runtime helpers, and every module carries all of
+them. A release build inlines them and the optimiser drops what is unused. At
+`-O0` nothing drops an unused internal function, so `clang -cc1` selected
+instructions for every helper in every dev module. On the codegen corpus
+twenty-four of the thirty-three were called by nothing: the dev module defined
+thirty-five internal functions, thirty-three helpers and two closure twins,
+and eleven of them were reached.
+
+When the compiler is built, `index_helpers` reads each helper's extent in the
+dev text, from its `define` to its lone closing brace, and the helpers each one
+calls by `@name(`. It then closes those calls to a fixed point, one bit per
+helper in a `u64`. At emit, `declares_for_program` marks the helpers the
+program's bodies and twins name, takes everything they reach, and skips the
+line ranges of the rest. The release text is unchanged and still carries every
+helper, because its inliner drops them anyway.
+
+The first draft scanned the whole text once per helper inside the const
+evaluator, which rustc stopped as taking too long; one pass that tracks the
+current helper by line does the same work.
+
+Measured on this container, clang 18, with the codegen gate's environment:
+
+    codegen_instructions_dev   430,900,667 -> 396,836,531   -7.90%
+      clang -cc1               314,696,278 -> 280,905,590
+      ld                        84,671,938 ->  84,398,490
+    startup_instructions           875,795 ->     801,634   -8.47%
+
+Start-up falls because `kanso play` emits a dev module for its one-line
+program, and that module no longer writes the thirty-two helpers `print`
+does not call. CI's rows replace these.
+
+`tests/a_dev_module_defines_only_the_helpers_it_reaches.rs` builds a bare
+`print` and a program with a closure call and an append on both tiers. It
+requires both binaries to print the same thing and every internal function
+the dev module defines to be named on some other line of it. With every helper
+counted as reached it went red on both programs, listing the helpers nothing
+called.
+
+CI's rows for the pruning, taken into the goldens. The dev row read the same
+number twice in one job:
+
+    codegen_instructions_dev     431,017,582 ->   396,949,978   -7.90%
+    startup_instructions             866,508 ->       775,903   -10.46%
+    emit_instructions             43,320,461 ->    43,295,953   -24,508
+
+Over kanso#1594's rows on top of kanso#1593, this change's rows are written as
+its own measured moves applied to its parent's: the dev row 325,412,912,
+start-up 775,975 and emit 43,296,000. The next CI round replaces them.
+
+CI's rows over kanso#1594's: the dev row 326,056,595, read twice alike, and
+start-up 775,975 and emit 43,296,000, as summed.
+
+## 2026-09-24 — a release module leaves out the helpers nothing reaches too
+
+The dev tier's helper pruning applies to release modules as well. A release
+build inlines its helpers, and the optimiser removes the ones nothing calls.
+But clang parses all thirty-three first and runs the early passes over them.
+`declares_for_program` now takes the release text's helper index
+(`HELPERS_RELEASE`, built from DECLARES the way `HELPERS_DEV` is built from
+the dev text), so the two tiers keep the same helpers.
+
+Measured on this container, clang 18, gate environment, release tier:
+
+    clang (the -flto compile)   555,145,625 -> 545,749,531   -9,396,094
+    ld (the LTO link)         1,164,544,832 -> 1,164,544,832   unchanged
+    codegen_instructions_release 1,751,444,900 -> 1,742,048,806   -0.54%
+
+The link's count is identical, which is what dropping text the optimiser
+would have deleted anyway should look like. The runtime counter sweep agrees
+with every golden, `bench/text_golden.txt` included. The emitted-code goldens
+fall because each module defines fewer functions: the decoder goes from 134
+defines and 9,052 lines to 119 and 8,814. The compile-cost goldens fall for
+the same reason. CI's codegen rows replace the local ones above.
+
+Two specs assumed every module carried every helper, and both now state their
+property over the helpers a module defines. `perf_ratchet`'s
+`hot_predicates_are_inline_definitions_not_declares` checks that each hot
+predicate the program calls is an `alwaysinline` definition, and it fails if
+the program calls none. `the_counting_build_and_the_shipped_one_agree` now
+expects the gates that DECLARES holds in the helpers the module defines,
+counted by `codegen::stats_gates_carried`, rather than all eight. With every
+gate folded in the counting build it went red, 0 against 4. The pruning spec,
+renamed to `tests/a_module_defines_only_the_helpers_it_reaches.rs`, now holds
+the release module to the same rule. It went red when the release tier was
+handed no helper index.
+
+This clears the way for helpers that only one tier calls: a release module
+that does not call one no longer carries it.
+
+**Declined: a block of its own for each return.** FastISel cannot lower a
+`%KValue` return, and a terminator it cannot lower sends its whole block to
+SelectionDAG. Moving each such `ret` into a one-instruction block, and each
+`br` into a `%KValue` phi block into a trampoline, was tried on the pruned
+corpus module with a text rewrite. `clang -cc1 -O0` read 287,802,692 as
+emitted, 297,839,204 with 163 returns split, and 301,669,877 with 222 returns
+and branches split. Each block SelectionDAG takes costs a fixed setup, so
+splitting added blocks faster than it removed work. An all-SelectionDAG
+compile of the same module read 335,125,013, so FastISel saves 47 million
+instructions today.
+
+CI's rows for the release pruning, over kanso#1595's:
+
+    codegen_instructions_release 1,643,086,293 -> 1,634,830,087   -8,256,206
+    startup_instructions               775,975 ->       776,882   +907
+    emit_instructions               43,296,000 ->    43,332,550   +36,550
+
+Both tiers' rows read the same number twice in one job. Emit and start-up pay
+for the release tier now walking the helper index to find what a module
+reaches. The objective weighs release codegen far above the emit row, which
+has saturated, so the trade comes out ahead.
+
+## 2026-09-24 — the dev tier asks its hot predicates in two words
+
+At -O0 clang's fast instruction selector lowers a call only when every
+argument is a scalar. A call passing a `%KValue` goes to SelectionDAG on its
+own. On the pruned codegen corpus 216 of those calls went to `k_not_failure`,
+`k_check_rec_fast` and `k_truthy`, and 168 of them to `k_not_failure`, which
+reads only the tag. DECLARES now carries `k_not_failure_w(i64 tag)`,
+`k_truthy_w(i64 tag, i64 pay)` and `k_check_rec_fast_w(i64 tag, i64 pay, ...)`.
+A dev module extracts the value's words and calls those, and each slow path
+builds the `%KValue` back only where it calls the runtime. `FnEmit::predicate`
+does the rewrite at every site that writes one of the three calls. A release
+module never calls the two-word forms, so kanso#1596's pruning leaves them
+out, and the emitted-code and compile-cost goldens do not move.
+
+The sites were chosen with a text rewrite of the corpus module before any
+emitter change. `clang -cc1 -O0` read 287,802,692 as emitted, 270,908,624 with
+`k_not_failure` called on the tag, and 264,829,993 with all three rewritten.
+Writing the tag test inline at each site read 272,759,087, which is worse than
+the call on the tag.
+
+Measured on this container, clang 18, gate environment:
+
+    clang -cc1 (dev)            280,905,590 -> 256,343,115
+    codegen_instructions_dev    396,836,531 -> 372,274,647   -6.19%
+    startup_instructions            787,528 ->     798,956   +11,428
+
+Start-up pays for three more names in the sorted list that each `declare` line
+is looked up in. The binary search goes one level deeper, which is 159 more
+`memcmp` calls on the one-line program. A dev codegen fall of 6.19% is worth
+more to the objective than a start-up rise of 1.45%. CI's rows replace these.
+
+`tests/a_dev_build_asks_its_predicates_in_words.rs` builds a program with a
+record test between two record arms, a truth test and a failure test on both
+tiers. It requires the same output from each, that the dev module passes no
+temporary `%KValue` to any of the three, that it calls each two-word form, and
+that the release module calls none of them. It went red with the dev tier
+asking the `%KValue` forms. The first draft of its program had a record arm
+beside a wildcard arm, which is how kanso#1597 was found.
+
+CI's rows, over kanso#1596's:
+
+    codegen_instructions_dev     326,056,595 ->   301,084,979   -7.66%
+    startup_instructions             776,882 ->       788,333   +11,451
+    emit_instructions             43,332,550 ->    45,838,870   +2,506,320
+
+Both dev readings agreed. The emit row rises by more than the rewrite's own
+frames: each predicate call now writes two or three lines where it wrote one,
+and every pass over the body text (the call scans, the reachability pass,
+the formatting and allocation behind each line) pays for the extra lines. The
+objective weighs the emit row lightly and dev codegen heavily, and welfare
+rises 0.03 on the three together.
+
+## 2026-09-24 — a literal's words are written, not extracted
+
+The arithmetic fast path reads each operand's payload with `inline_payload`,
+and for a literal operand that was `extractvalue %KValue { i64 0, i64 1 }, 1`:
+the number 1 with an instruction around it. clang's fast selector at -O0 does
+not lower an `extractvalue` of a constant, so the rest of the block went to
+SelectionDAG. The pruned corpus module had 48 of them, and a text rewrite that
+wrote the word instead took `clang -cc1` from 263,368,026 to 260,365,961.
+`inline_tag` and `inline_payload` now answer a literal's word directly, and
+the argument to an unboxed parameter goes through `inline_payload` rather than
+writing its own `extractvalue`.
+
+Measured on this container, clang 18, gate environment:
+
+    clang -cc1 (dev)            256,343,115 -> 251,483,787
+    codegen_instructions_dev    372,274,647 -> 367,410,698   -1.31%
+    startup_instructions            798,956 ->     798,960   +4
+
+The release module loses the same lines, and the optimiser had already folded
+them, so the runtime counter sweep, `bench/text_golden.txt` included, agrees
+with every golden. The emitted-code goldens fall, the decoder from 8,814 lines
+to 8,650, and the compile-cost goldens with them. CI's rows replace the local
+ones above.
+
+`tests/a_literal_s_words_are_written_not_extracted.rs` builds a countdown on
+both tiers and requires that neither module reads a word off a literal and
+that both print 55. It went red with `literal_word` answering nothing.
+
+CI's rows, over kanso#1598's, each read twice alike where the gate reads twice:
+
+    codegen_instructions_dev       301,084,979 ->   296,677,065   -1.46%
+    codegen_instructions_release 1,634,830,087 -> 1,633,515,589   -0.08%
+    startup_instructions               788,333 ->       788,337   +4
+    emit_instructions               45,838,870 ->    45,620,520   -218,350
+
+The four instructions of start-up are the literal check on the one-line
+program's few operands.
+
+## 2026-09-24 — the type tables are arrays, not switches
+
+Every module defines four functions the runtime calls to print a record and
+read a field by name: `k_type_name`, `k_type_shown`, `k_type_field_count` and
+`k_type_field_name`. Each was a switch over the type id, with an arm per type,
+and `k_type_field_name` held a nested switch per type's fields. clang's fast
+selector at -O0 does not lower a switch, and on the codegen corpus a text
+rewrite of those eighteen switches into compare chains alone took `clang
+-cc1` from 258,576,424 to 255,915,152. The ids are dense, 0 for the entry and
+a type's position plus one, and an alias's slot falls back as it did. So
+each lookup is now a load from a constant array behind a bounds check. The
+arrays and the four functions are written into `globals`, beside the interned
+strings, and not into the body that the call scans and the reachability pass
+read.
+
+Measured on this container, clang 18, gate environment:
+
+    codegen_instructions_dev        367,410,698 ->   360,741,989   -1.82%
+    codegen_instructions_release  1,742,456,776 -> 1,723,410,294   -1.09%
+      clang (-flto compile)         545,440,966 ->   538,359,753
+      ld (the LTO link)           1,165,261,367 -> 1,153,296,098
+    startup_instructions                798,960 ->       750,547   -6.06%
+
+The first draft wrote the four functions and their arrays into the body. The
+dev row fell the same, but start-up rose to 824,547, because every pass over
+the body walked the longer text. Moving the arrays alone out of it left
+start-up at 814,293, and moving the functions with them took it to 750,547.
+The runtime counter sweep agrees with every golden. The emitted-code goldens
+fall, the decoder from 8,650 lines and 771 branches to 8,570 and 764 and one
+call more, where `k_type_field_name` asks `k_type_field_count` for its bound.
+The compile-cost goldens fall with them. CI's rows replace the local ones
+above.
+
+`tests/type_tables_are_read_not_switched.rs` prints two records and reads
+fields by name, both keyed and with `.b`, on both tiers. It requires the
+output the interpreter gives and that no module switches on a type id. It
+went red against the switch tables.
+
+The dispatchers' own switches are left. A compare chain in their place was
+worth 1,965,238 instructions to the dev compile, and the release tier wants
+the switch for its jump tables.
+
+CI's rows, over kanso#1599's, with both codegen tiers read twice alike:
+
+    codegen_instructions_dev       296,677,065 ->   289,762,106   -2.33%
+    codegen_instructions_release 1,633,515,589 -> 1,614,704,366   -1.15%
+    startup_instructions               788,337 ->       740,091   -6.12%
+    emit_instructions               45,620,520 ->    45,195,370   -0.93%
+
+Every benchmark's work rises by between 26 and 938 instructions, and its
+`.text` shrinks. The switch arms were straight-line returns and the table is a
+bounds check, a load and a return, so each lookup the runtime makes costs a
+few instructions more. The run program's work goes from 1,813,491,551 to
+1,813,492,695 (work_runbench 1,813,492,695). The rest land at work_jsonbench
+1,196,422,558, work_encodebench 3,178,192,129, work_oneshot 19,927,890,
+work_basket 32,679,271, work_widebench 30,153,767, work_deepbench
+366,364,093, work_escapebench 80,047,462, work_pendbench 209,065,629,
+work_indexbench 2,927,172, work_scanbench 451,725,005, work_digestbench
+5,866,958, work_readbench 4,630,497 and work_livebench 2,645,995,367. The run
+row's rise is six parts in ten million, which the objective weighs far below
+the codegen and start-up falls.
+
+## 2026-09-24 — a dev dispatcher compares instead of switching
+
+A dispatcher whose arms discriminate on int literals, or on a value's tag,
+compiles to a branch on that value, written as a `switch`. clang's fast
+selector at -O0 does not lower a switch, and the block went to SelectionDAG.
+`FnEmit::switch_on` writes the switch in a release module, where the
+optimiser makes a jump table of it, and a compare and a branch per case in a
+dev module. The three dispatcher sites use it. `d_thunk_eval` keeps its
+switch: its arms load and pass `%KValue`s and return one, so they go to
+SelectionDAG whatever branches to them.
+
+Measured on this container, clang 18, gate environment:
+
+    clang -cc1 (dev)            244,780,924 -> 243,383,587
+    codegen_instructions_dev    360,741,989 -> 359,341,981   -0.39%
+    startup_instructions            750,547 ->     750,547
+
+The release module is unchanged, and so are the emitted-code, compile-cost and
+runtime goldens. `tests/a_dev_dispatcher_compares_instead_of_switching.rs`
+builds a four-arm int dispatcher on both tiers. It requires the same output
+from each, no switch outside the thunk dispatcher in the dev module, and a
+switch in the release module. It went red with the dev tier writing the
+switch.
+
+The compiler page's §132 covers this change and the three before it on the
+dev tier.
+
+CI's rows, over kanso#1600's, the dev row read twice alike:
+
+    codegen_instructions_dev    289,762,106 -> 287,891,869   -0.65%
+    emit_instructions            45,195,370 ->  45,312,275   +116,905
+
+The emit row pays for the compare chain's extra lines, as the two-word
+predicates' did.
+
+## 2026-09-24 — each declare line knows whether DECLARES calls it
+
+A module keeps a `declare` line from DECLARES when the program calls its
+symbol, or when one of DECLARES's own definitions does. The second question
+was a binary search over the 65 context-call names, asked for every `declare`
+line of every module. Each comparison went through `memcmp`, and each probe
+cost about thirty instructions on the start-up program. The answer depends
+on DECLARES alone, so `index_declares` now computes it when the compiler is
+built, as `DeclareLine::context`, and emit asks only the program's own calls.
+
+The modules are byte-identical: the codegen corpus's dev and release modules
+compare equal to the ones the previous compiler wrote. Measured on this
+container, with the gate's environment:
+
+    startup_instructions   750,547 -> 693,898   -7.55%
+
+The unit test `every_declare_line_knows_whether_declares_calls_it` holds every
+line's flag, in both the release and the dev text, to the binary search it
+replaced. It went red, on `k_truthy_bad`, with the flag left false. CI's
+start-up and emit rows replace the local one above.
+
+CI's rows, over kanso#1601's:
+
+    startup_instructions         740,091 ->     683,920   -7.59%
+    emit_instructions         45,312,275 ->  45,259,445   -52,830
+
+The codegen rows are unchanged, as byte-identical modules should leave them.
+
 ## 2026-09-24 — two strings compare without opening an equality generation
 
 `==` and `!=` reach the runtime as `k_cmp`, which sent every pair through
