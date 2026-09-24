@@ -6,8 +6,9 @@
 # a_map_whose_keys_arrived_in_order_is_its_own_view, which reads view_allocs=0
 # and held_peak_bytes=0 and turns to one view of 32,016 bytes.
 set -e
-target='        if (a >= n) {'
-n=$(grep -cF "$target" src/runtime.c)
-[ "$n" -eq 1 ] || { echo "the ordered-pairs alias changed shape ($n); rewrite this" >&2; exit 1; }
+grep -qF '        if (a >= n) {' src/runtime.c || {
+  echo "the ordered-pairs alias moved; this mutation needs rewriting" >&2
+  exit 1
+}
 sed -i 's|^        if (a >= n) {$|        if (0 \&\& a >= n) {|' src/runtime.c
 [ "$(grep -cF '        if (0 && a >= n) {' src/runtime.c)" -eq 1 ]
