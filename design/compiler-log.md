@@ -11220,3 +11220,166 @@ and cost the one-line start-up program 47 instructions:
 
 Every other row agreed. The fix builds the differential law, which the
 language rests on, so the floor comes down by what it costs.
+
+## 2026-09-24 — a release build links with lld where it can
+
+The release build's LTO link ran in GNU ld with LLVM's plugin. On the codegen
+corpus that process was 1,163,896,203 instructions, of which LLVM itself was
+926,724,119. The rest was the linker's own work: 128,765,719 in libc,
+52,810,020 in libbfd and 14,726,035 in the dynamic loader. lld does the same
+LTO in-process with less around it:
+
+    codegen, release tier   1,750,778,100 -> 1,676,140,277   -4.26%   (this container)
+    runbench                1,895,843,054 -> 1,895,843,321   +267
+
+The program is the same code: lld honours the link's `O3` and the inlining
+threshold, and an `O2` link measured the same day moved runbench +0.31%.
+
+lld is asked for, not assumed. An lld from a different LLVM release than
+clang's cannot read clang's bitcode, and a runner can carry one, so
+`lld_links_lto` links a one-line LTO program with `-fuse-ld=lld` and uses lld
+only if that succeeds. The answer is remembered under the identities of both
+tools, the way the calling-convention probe's is. Only Linux asks; Apple's
+ld64 is untouched. CI's cost-goldens job installs `lld-19` beside `clang-19`,
+puts it on PATH and asserts the version, as it does for clang. It also
+installs the image's default `lld`: the codegen gate runs under `env -i
+PATH=/usr/bin:/bin`, where clang is the image's 18, and the first round, with
+only 19 installed, left both codegen rows exactly where they were.
+`tests/a_release_build_links_with_lld_when_it_can.rs` builds a release binary
+and requires lld's `Linker:` stamp in it exactly when lld can take the link.
+It went red with `-fuse-ld=bfd` in the flag's place.
+
+**The dev tier links with it too.** Its link has no LTO in it, and GNU ld
+still spent 85,738,887 instructions on the codegen corpus against lld's
+45,154,514:
+
+    codegen, dev tier         475,880,595 ->   435,319,658   -8.52%   (this container)
+
+The same probe decides, since an lld that can take an LTO link can take a
+plain one. The spec builds both tiers and went red on each with
+`-fuse-ld=bfd` in that tier's place.
+
+**The specs job's runner has lld beside clang but not on PATH.** The spec's
+own probe said lld could take the link and kanso, finding no `ld.lld` on PATH,
+never asked; the binary carried no stamp and the spec went red. What is on
+PATH is now part of the probe's key and not a condition of asking, so the
+probe decides wherever clang can find lld. The ratchet's toolchain installs
+the same packages as the cost-goldens job, which
+`the_ratchet_carries_what_its_gates_need` requires.
+
+**lld links on every thread unless told not to, and a count cannot have
+that.** Two CI runs of one tree read the dev row 434,345,526 and 434,337,763
+and the release row 1,677,317,287 and 1,677,792,392: the thread pool's
+scheduling lands in callgrind's count. Three dev links on this container read
+434,957,073, 434,928,291 and 434,926,291 on the default and 434,600,869 three
+times with `--threads=1`. `KANSO_LTO_JOBS`, which the gates already set to ask
+for one LTO job, now sets lld's thread count too. A user's build keeps every
+thread.
+
+**CI's rows**, from the first run, taken into the goldens and replaced by the
+next round's:
+
+    codegen_instructions_dev      473,933,874 ->   434,345,526   -8.35%
+    codegen_instructions_release 1,751,097,561 -> 1,677,317,287   -4.21%
+    startup_instructions              870,779 ->       870,804   +25
+    work_basket                    32,678,753 ->    32,678,777   +24
+    work_runbench               1,853,571,514 -> 1,853,571,431   -83
+    compile_instructions, entry_instructions and library_instructions -2 each
+
+The benchmarks are now linked by lld as well. Their `.text` sums to 3,215,152
+against 3,215,292, and every work row but basket moved by 20 to 116
+instructions, down. Basket rose 24 and start-up 25, which is layout: the
+binaries lld links place the same code differently, and the compiler's own
+bytes grew by the probe. The objective rises, and the rise is banked.
+
+## 2026-09-24 — a build runs clang's jobs without the driver
+
+A build spawned three processes: the clang driver, `clang -cc1`, and the
+linker. The driver of a dev build on the codegen corpus retired 31,702,963
+instructions, 26,450,962 of them in the dynamic loader's `_dl_start`
+relocating libLLVM and libclang-cpp. Its only work was deciding the two
+commands it then ran, and those depend on the toolchain, the flags and the
+file names, never on the program.
+
+So the driver is asked once, with `-###`, for a build whose input and output
+carry placeholder names in a stage directory of their own. The two commands
+are kept under a key naming both tools, every flag and object, and the two
+environment variables the driver reads for paths. Every later build runs them
+directly with its own names put back, and the link writes straight to the
+build's output. The driver still runs when it prints anything but two jobs,
+when a job's program is missing, when `-save-temps` is asked for, off Linux,
+and when `KANSO_CLANG_DRIVER` is set.
+
+    codegen, dev tier        434,010,676 ->   401,968,983   -7.38%   (this container)
+    codegen, release tier  1,676,647,397 -> 1,644,593,553   -1.91%
+
+Both counts are the child tree with the job cache warm, the way the gate
+reads it. The binaries are byte-identical to the driver's on both tiers.
+`tests/a_build_runs_clang_s_jobs_without_its_driver.rs` builds each tier
+through the driver, then by asking and by replaying, and compares the bytes.
+It went red with the output's placeholder left in the link: no `main` was
+written where the driver's had been.
+
+**No path of the process reaches a job.** The gate sets `KANSO_FIXED_TEMPS`,
+which adds `-save-temps=obj` to a release build so the LTO object has the
+same name every run. ld's plugin hashes that path, and a random one moved the
+row by eleven instructions one run in eleven. The replay drops that option and
+fixes the names itself. The object is `<name>.o` relative to the stage, the
+stage is named by a digest of the output path rather than the pid, the two
+compilation directories are `.`, and the replay refuses a job that still names
+the stage. Under the gate's own environment, with lld on one thread, three
+release replays read 1,641,527,539 each and two driver builds 1,674,062,024
+each, -1.94%. Two dev replays read 401,763,944 against the driver's
+433,335,421, -7.29%.
+
+CLAUDE.md lists the codegen row's child tree as "the clang driver, the
+convention probe's clang, `clang -cc1` and ld". A warm build no longer has
+the driver in it.
+
+CI's rows go into the goldens.
+
+**The gate's floor on processes, and the pipe.** The first CI round for this
+change failed two ways, and neither was about the rows. First,
+`codegen_instructions.sh` refused a tree of fewer than four processes, and a
+warm build with no driver is three: kanso, `clang -cc1` and ld. It exited
+before its second reading, so the job printed one number per tier and no
+verdict. The floor is three now, and the message names the driver as one of
+the two answers that are cached. Second, `asked` read the driver's `-###`
+listing with `.output()`, and
+`tests/the_compiler_never_drains_a_childs_pipes.rs` forbids that anywhere in
+src/main.rs, because draining a pipe is scheduling rather than work. The
+listing now goes to a file in the stage, and the call is `.status()`.
+
+CI's rows, taken into the goldens:
+
+    codegen_instructions_dev       434,345,526 ->   402,338,337   -7.37%
+    codegen_instructions_release 1,677,317,287 -> 1,643,423,398   -2.02%
+
+Two readings of each tier on this container, clang 18, agreed to the
+instruction: 401,763,927 dev and 1,642,105,200 release. kanso#1592's dev row
+read 434,007,475 and then 434,007,432 in one CI job, and here the lld link was
+the process that moved, by 43 instructions: it links the object the driver
+names with a random suffix. The replay names that object itself, so this
+change carries kanso#1592 and supersedes it.
+
+CI's rows over main with kanso#1589 and kanso#1590, where both codegen tiers
+read the same number twice in one job:
+
+    codegen_instructions_dev       402,338,337 ->   402,356,485
+    codegen_instructions_release 1,643,423,398 -> 1,643,086,293
+
+lld lays the linked benchmarks out differently from GNU ld. Each benchmark's
+`.text` grows six bytes, and each one's work falls by between 20 and 116
+instructions: runbench's work goes from 1,813,491,634 to 1,813,491,551, and
+its text from 390,914 to 390,920 bytes. The text rows for every benchmark in
+bench/text_golden.txt are this runner's sitting: jsonbench text=215816,
+encodebench text=234920, oneshot text=224136, basket text=219992, widebench
+text=241384, deepbench text=203064, escapebench text=188504, pendbench
+text=211928, indexbench text=188312, scanbench text=307064, digestbench
+text=221192, readbench text=188872, livebench text=224968 and runbench
+text=390920. Summed, the `text` counter goes from 3,260,988 to 3,261,072. The
+objective does not weigh machine-code size.
+
+Over main with kanso#1597, whose two checks cost start-up 47 instructions on
+the same 870,779 this change added 25 to, the start-up row is written as
+870,851: the two moves summed. The next CI round says whether they add.
