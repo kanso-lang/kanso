@@ -1254,16 +1254,21 @@ impl WithoutDriver for std::process::Command {
     }
 }
 
-const STAGE_MARK: &str = "\u{1}stage\u{1}";
 const IN_MARK: &str = "kanso_replay_in";
 const OUT_MARK: &str = "kanso_replay_out";
 
 /// The two jobs for `args`, run directly. None when the replay cannot be
 /// trusted, and the caller runs the driver.
 fn replayed(args: &[String]) -> Option<std::io::Result<std::process::ExitStatus>> {
+    // `-save-temps=obj` is only ever asked for to give the LTO object a name
+    // that is the same every run, because ld's plugin hashes that path and a
+    // random one moved the release row by eleven instructions one run in
+    // eleven. The replay's names are fixed already, so it leaves the option to
+    // the driver, which still needs it.
+    let args: Vec<String> = args.iter().filter(|a| *a != "-save-temps=obj").cloned().collect();
     // Exactly one `-o`, and the input is the argument after it: that is the
     // only shape `dev_clang` and `release_clang` hand over, and anything else
-    // (the fixed-temps option adds jobs) goes to the driver.
+    // goes to the driver.
     let o = args.iter().position(|a| a == "-o")?;
     if args.iter().filter(|a| *a == "-o").count() != 1
         || args.iter().any(|a| a.starts_with("-save-temps"))
@@ -1292,7 +1297,13 @@ fn replayed(args: &[String]) -> Option<std::io::Result<std::process::ExitStatus>
     let key = kanso::hash::digest_of(identity.as_bytes());
     let cache = std::env::temp_dir().join(format!("kanso_jobs_{:016x}{:016x}", key.0, key.1));
 
-    let stage = std::env::temp_dir().join(format!("kanso_stage_{}", pid_tag()));
+    // Named for the output rather than the process. The jobs run inside it,
+    // and lld's LTO reads the directory it runs in into what it hashes: with a
+    // stage named for the pid, three runs of one release build read
+    // 1,644,357,816 and 1,644,922,716 apart. Two builds writing the same
+    // output were already racing for it, so sharing a stage costs nothing new.
+    let named = kanso::hash::digest_of(out_abs.to_string_lossy().as_bytes());
+    let stage = std::env::temp_dir().join(format!("kanso_stage_{:016x}", named.0));
     let _ = std::fs::remove_dir_all(&stage);
     std::fs::create_dir_all(&stage).ok()?;
     let stage_str = stage.to_str()?.to_string();
@@ -1316,9 +1327,7 @@ fn replayed(args: &[String]) -> Option<std::io::Result<std::process::ExitStatus>
     let _ = std::fs::remove_file(stage.join(format!("{IN_MARK}.ll")));
     #[cfg(unix)]
     std::os::unix::fs::symlink(&ll_abs, stage.join(format!("{ll_name}.ll"))).ok()?;
-    let put_back = |a: &str| {
-        a.replace(STAGE_MARK, &stage_str).replace(IN_MARK, ll_name).replace(OUT_MARK, out_name)
-    };
+    let put_back = |a: &str| a.replace(IN_MARK, ll_name).replace(OUT_MARK, out_name);
     let mut status = None;
     for (n, job) in jobs.iter().enumerate() {
         let mut argv: Vec<String> = job.iter().map(|a| put_back(a)).collect();
@@ -1363,14 +1372,28 @@ fn asked(shape: &[String], stage: &std::path::Path, stage_str: &str) -> Option<V
         return None;
     }
     // The object cc1 writes and the linker reads: the driver names it in its
-    // temp directory with a random suffix, and the replay names it in the stage.
+    // temp directory with a random suffix, and the replay names it beside the
+    // input, relative to the stage both jobs run in. NO PATH OF THE STAGE'S
+    // REACHES A JOB. The stage is named for the process, and ld's LLVM plugin
+    // hashes the object's path, so a path carrying the pid would put back the
+    // eleven-instruction wobble `-save-temps=obj` exists to remove. The two
+    // compilation directories are the stage's too, and are only written into
+    // debug information, which these builds do not ask for; they are `.`.
     let at = jobs[0].iter().position(|a| a == "-o")?;
     let temp_obj = jobs[0].get(at + 1)?.clone();
-    let ours = format!("{stage_str}/{IN_MARK}.o");
+    let ours = format!("{IN_MARK}.o");
     for job in &mut jobs {
         for a in job.iter_mut() {
-            *a = a.replace(&temp_obj, &ours).replace(stage_str, STAGE_MARK);
+            *a = a.replace(&temp_obj, &ours);
+            for dir in ["-fdebug-compilation-dir=", "-fcoverage-compilation-dir="] {
+                if a.starts_with(dir) {
+                    *a = format!("{dir}.");
+                }
+            }
         }
+    }
+    if jobs.iter().flatten().any(|a| a.contains(stage_str)) {
+        return None;
     }
     Some(jobs)
 }

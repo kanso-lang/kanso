@@ -10967,6 +10967,15 @@ through the driver, then by asking and by replaying, and compares the bytes.
 It went red with the output's placeholder left in the link: no `main` was
 written where the driver's had been.
 
+**No path of the process reaches a job.** The gate sets `KANSO_FIXED_TEMPS`,
+which adds `-save-temps=obj` to a release build so the LTO object has the
+same name every run. ld's plugin hashes that path, and a random one moved the
+row by eleven instructions one run in eleven. The replay drops that option and
+fixes the names itself. The object is `<name>.o` relative to the stage, the
+stage is named by a digest of the output path rather than the pid, the two
+compilation directories are `.`, and the replay refuses a job that still names
+the stage.
+
 CLAUDE.md lists the codegen row's child tree as "the clang driver, the
 convention probe's clang, `clang -cc1` and ld". A warm build no longer has
 the driver in it.
