@@ -8757,7 +8757,7 @@ static __attribute__((noinline)) KValue k_b_append_grow(KValue acc, KBytes* a,
     int dies = 0;
     if (k_beat_depth > 0 && k_beat_depth <= K_BEAT_MAX) {
         KMark* inner = &k_beat_stack[k_beat_depth - 1];
-        dies = mutate ? (k_survives(a, NULL) && !k_survives(a, inner)) : 1;
+        dies = mutate ? k_above_mark(a, inner) : 1;
     }
     /* Where the buffer comes from, and the sign the new cap carries. That is
        the whole of the difference between the two regimes, so it is decided

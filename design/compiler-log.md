@@ -12558,3 +12558,12 @@ Most of the instruction saving is the memcpy that the remap skips.
 appends 100,000 bytes to a unique builder and reads `held_peak_bytes=135182`,
 the last buffer alone. The ratchet row `regrow` sends the grow back through
 malloc, copy and free, and the fixture reads 202,780, the last two buffers.
+
+The same grow decides where the new buffer lives by asking whether the
+builder's header dies at the innermost rewind. It asked that as two walks of
+the block chain, whether the header is live and whether it is at or below the
+mark, and the second walked every block under the mark. `k_above_mark` asks
+the one question with a walk that stops at the mark's block, and gives the
+same answer for every pointer. On the 176,697 grows of the run program that
+is 2,527,440 instructions, 1,710,701,594 -> 1,708,174,154, and every counter
+vein agrees with the goldens.
