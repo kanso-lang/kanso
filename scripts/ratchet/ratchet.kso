@@ -994,6 +994,14 @@ arm_narrowed = row
   (breaking "an_arm_not_told_what_the_switch_decided")
   benches
 
+arms_apart = row
+  "a dispatcher's heavy arms inlined into the frame its cheap arms pay"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_dispatchers_heavy_arms_inlined_into_its_frame")
+  benches
+
 shared_path = row
   "a path copied once per declaration instead of shared"
   false
@@ -1860,7 +1868,7 @@ fused_names_owned = row
   (breaking "the_fused_name_set_owns_its_names")
   release
 
-rows_b1oa = text/concat rows_b1n [append_rendered arm_narrowed]
+rows_b1oa = text/concat rows_b1n [append_rendered arm_narrowed arms_apart]
 
 rows_b1o = text/concat rows_b1oa [dedup_key_owned fused_names_owned]
 

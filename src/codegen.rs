@@ -2209,6 +2209,7 @@ fn emit_ir_for(
             .collect(),
         group_by_name: group_indices_by_name(program),
         cycle_reached: cycle_reached(program),
+        kept_out: kept_out(program),
         inference,
         escape,
         byte_disc,
@@ -2264,6 +2265,8 @@ struct Backend<'a> {
     /// Names a cycle can reach, which get no cohort bracket. See
     /// `cycle_reached`.
     cycle_reached: crate::hash::Set<&'a str>,
+    /// See `kept_out`.
+    kept_out: crate::hash::Set<&'a str>,
     inference: infer::Inference,
     forwarders: HashMap<(String, usize), String>,
     /// subtype name -> parent name; non-empty programs get chain-aware
@@ -2868,6 +2871,104 @@ fn cycle_reached(program: &Program) -> crate::hash::Set<&str> {
         }
     }
     names.iter().zip(hot).filter(|(_, h)| *h).map(|(n, _)| *n).collect()
+}
+
+/// Functions a dispatcher calls from its heavy arms, kept out of line.
+///
+/// A group of clauses compiles to one function with a switch at its head, and
+/// LLVM gives that function one frame. When one arm inlines a callee that
+/// loops, the loop's registers are callee-saved ones, so the prologue pushes
+/// six of them and the epilogue pops them on every call -- including the calls
+/// whose arm is a single append. The encoder's `encode_onto` is that shape:
+/// 2,380,860 calls on runbench, 1,438,110 of them scalars that paid the frame
+/// of the string arm's inlined escaper. A callee that can reach a cycle, named
+/// in an arm of a group that also has an arm reaching none, stays a call, and
+/// the dispatcher's cheap arms keep a frame of their own size.
+fn kept_out(program: &Program) -> crate::hash::Set<&str> {
+    fn mentions(expr: &Expr, index: &HashMap<&str, usize>, out: &mut Vec<usize>) {
+        if let Expr::Ident(n, _, _) | Expr::Partial(n, _) = expr {
+            if let Some(&at) = index.get(&**n) {
+                out.push(at);
+            }
+        }
+        crate::for_each_child(expr, |child| mentions(child, index, out));
+    }
+    fn decl_mentions(decl: &FnDecl, index: &HashMap<&str, usize>) -> Vec<usize> {
+        let mut out = Vec::new();
+        for stmt in &decl.body {
+            match stmt {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => mentions(expr, index, &mut out),
+                Stmt::Set { value, .. } => mentions(value, index, &mut out),
+            }
+        }
+        out
+    }
+    let mut index: HashMap<&str, usize> = HashMap::default();
+    let mut names: Vec<&str> = Vec::new();
+    for decl in &program.fns {
+        index.entry(decl.name.as_str()).or_insert_with(|| {
+            names.push(decl.name.as_str());
+            names.len() - 1
+        });
+    }
+    let mut adj: Vec<Vec<usize>> = vec![Vec::new(); names.len()];
+    let per_decl: Vec<Vec<usize>> = program.fns.iter().map(|d| decl_mentions(d, &index)).collect();
+    for (decl, m) in program.fns.iter().zip(&per_decl) {
+        adj[index[decl.name.as_str()]].extend(m.iter().copied());
+    }
+    // loops: a name in a cycle, and every name that can reach one
+    let mut loops = vec![false; names.len()];
+    let mut callers: Vec<Vec<usize>> = vec![Vec::new(); names.len()];
+    for (from, to) in adj.iter().enumerate() {
+        for &t in to {
+            callers[t].push(from);
+        }
+    }
+    let mut queue: Vec<usize> = Vec::new();
+    for scc in crate::beat::sccs_of(&adj) {
+        if scc.len() >= 2 || adj[scc[0]].contains(&scc[0]) {
+            queue.extend(scc);
+        }
+    }
+    while let Some(at) = queue.pop() {
+        if !loops[at] {
+            loops[at] = true;
+            queue.extend(callers[at].iter().copied().filter(|&c| !loops[c]));
+        }
+    }
+    let mut out = crate::hash::Set::default();
+    let mut groups: HashMap<(&str, usize), Vec<usize>> = HashMap::default();
+    for (at, decl) in program.fns.iter().enumerate() {
+        groups.entry((decl.name.as_str(), decl.params.len())).or_default().push(at);
+    }
+    for ((name, _), clauses) in &groups {
+        if clauses.len() < 2 {
+            continue;
+        }
+        // a switch on the argument's type, where the arms do unrelated work
+        let typed = |c: &usize| {
+            program.fns[*c]
+                .params
+                .iter()
+                .any(|p| matches!(p, crate::ast::Pattern::Annotated { .. }))
+        };
+        if !clauses.iter().any(typed) {
+            continue;
+        }
+        let own = index[name];
+        let heavy = |c: &usize| per_decl[*c].iter().any(|&m| m != own && loops[m]);
+        if clauses.iter().all(heavy) || !clauses.iter().any(heavy) {
+            continue;
+        }
+        for c in clauses {
+            for &m in &per_decl[*c] {
+                if m != own && loops[m] {
+                    out.insert(names[m]);
+                }
+            }
+        }
+    }
+    out
 }
 
 /// The lookup over that index. Keyed by NAME with arity filtered off the
@@ -4735,7 +4836,8 @@ impl<'a> Backend<'a> {
         f.group = name.to_string();
         f.arity = arity;
         let sym_hdr = dsym(name, arity);
-        let header = format!("define tailcc {ret} @{sym_hdr}({}) {{", params.join(", "));
+        let apart = if self.kept_out.contains(name) { " noinline" } else { "" };
+        let header = format!("define tailcc {ret} @{sym_hdr}({}){apart} {{", params.join(", "));
         let (hop_name, _) = self.intern(&format!("{name}\0"));
         f.start_block("entry");
         self.rebox_params(&mut f, name, arity);
@@ -5202,7 +5304,8 @@ impl<'a> Backend<'a> {
         f.ret_ty = ret.to_string();
         f.group = name.to_string();
         f.arity = arity;
-        let header = format!("define tailcc {ret} @{sym_hdr}({}) {{", params.join(", "));
+        let apart = if self.kept_out.contains(name) { " noinline" } else { "" };
+        let header = format!("define tailcc {ret} @{sym_hdr}({}){apart} {{", params.join(", "));
         let (hop_name, _) = self.intern(&format!("{name}\0"));
         f.start_block("entry");
         self.rebox_params(&mut f, name, arity);
