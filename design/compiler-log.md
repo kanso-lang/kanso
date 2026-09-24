@@ -11789,3 +11789,10 @@ The unit test `every_declare_line_knows_whether_declares_calls_it` holds every
 line's flag, in both the release and the dev text, to the binary search it
 replaced. It went red, on `k_truthy_bad`, with the flag left false. CI's
 start-up and emit rows replace the local one above.
+
+CI's rows, over kanso#1601's:
+
+    startup_instructions         740,091 ->     683,920   -7.59%
+    emit_instructions         45,312,275 ->  45,259,445   -52,830
+
+The codegen rows are unchanged, as byte-identical modules should leave them.
