@@ -2615,6 +2615,11 @@ struct FnEmit {
     /// the dev tier's instruction selector can lower where it cannot lower a
     /// call passing a `%KValue`.
     words: bool,
+    /// Values whose two words are already in hand, tag then payload. An
+    /// unboxed parameter crosses as a raw i64 and is boxed on entry, and every
+    /// read of its tag or payload used to take it back apart with an
+    /// `extractvalue`; the tag is 0 and the payload is the argument itself.
+    known_words: crate::hash::Map<String, (String, String)>,
 }
 /// Whether a line the emitters wrote is a stack slot, asked at the ONE place
 /// the needle can be.
@@ -2664,6 +2669,7 @@ impl FnEmit {
             frame_held: false,
             raw_byte: crate::hash::Map::default(),
             words,
+            known_words: crate::hash::Map::default(),
         }
     }
 
@@ -2756,17 +2762,19 @@ impl FnEmit {
     /// The function's body: what the emitters wrote, with the stack slots at
     /// the head of the entry block so each one dominates its uses.
     fn body(&self) -> String {
+        let unboxed = self.without_unread_reboxes();
+        let out = unboxed.as_deref().unwrap_or(&self.out);
         if self.entry_allocas.is_empty() {
-            return self.out.clone();
+            return out.to_string();
         }
         let mut head = String::new();
-        let mut rest = self.out.as_str();
-        if let Some(end) = self.out.find('\n') {
-            let first = &self.out[..end];
+        let mut rest = out;
+        if let Some(end) = out.find('\n') {
+            let first = &out[..end];
             if first.ends_with(':') && !first.starts_with(' ') {
                 head.push_str(first);
                 head.push('\n');
-                rest = &self.out[end + 1..];
+                rest = &out[end + 1..];
             }
         }
         for slot in &self.entry_allocas {
@@ -2774,6 +2782,34 @@ impl FnEmit {
         }
         head.push_str(rest);
         head
+    }
+
+    /// The body without the boxing of an unboxed parameter nothing reads.
+    /// Every read of such a parameter's words is answered from
+    /// `known_words`, so in a function that only compares and passes it on,
+    /// the `insertvalue` on entry builds a value no line names.
+    fn without_unread_reboxes(&self) -> Option<String> {
+        let mut out: Option<String> = None;
+        for (value, (_, payload)) in &self.known_words {
+            let text = out.as_deref().unwrap_or(&self.out);
+            let line = format!(
+                "  {value} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 {payload}, 1\n"
+            );
+            let Some(at) = text.find(&line) else { continue };
+            let named = text.match_indices(value.as_str()).any(|(i, _)| {
+                i != at + 2
+                    && !text[i + value.len()..]
+                        .bytes()
+                        .next()
+                        .is_some_and(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'.')
+            });
+            if !named {
+                let mut kept = text[..at].to_string();
+                kept.push_str(&text[at + line.len()..]);
+                out = Some(kept);
+            }
+        }
+        out
     }
 
     fn boxing_any_parsed_operand(&mut self, text: &str) -> String {
@@ -4306,6 +4342,9 @@ fn inline_tag(f: &mut FnEmit, value: &str) -> String {
     if let Some(word) = literal_word(value, 0) {
         return word.to_string();
     }
+    if let Some((tag, _)) = f.known_words.get(value) {
+        return tag.clone();
+    }
     let t = f.tmp();
     f.line(&format!("{t} = extractvalue %KValue {value}, 0"));
     t
@@ -4314,6 +4353,9 @@ fn inline_tag(f: &mut FnEmit, value: &str) -> String {
 fn inline_payload(f: &mut FnEmit, value: &str) -> String {
     if let Some(word) = literal_word(value, 1) {
         return word.to_string();
+    }
+    if let Some((_, payload)) = f.known_words.get(value) {
+        return payload.clone();
     }
     let t = f.tmp();
     f.line(&format!("{t} = extractvalue %KValue {value}, 1"));
@@ -4557,6 +4599,7 @@ impl<'a> Backend<'a> {
                 // saying so lets arithmetic on it skip the tag test and the
                 // boxed fallback it guards
                 f.record(&format!("%x{i}"), INT);
+                f.known_words.insert(format!("%x{i}"), ("0".to_string(), format!("%x{i}r")));
             }
         }
     }

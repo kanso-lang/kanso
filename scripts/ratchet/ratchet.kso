@@ -2007,7 +2007,19 @@ dead_block = row
 
 rows_b1bk = text/concat rows_b1st [dead_block]
 
-rows_b = text/concat rows_b1bk [compile_mem compile_mem_host]
+# An unboxed parameter is read as its word. The mutation records nothing, and
+# the spec's module takes its parameters back apart again.
+unboxed_word = row
+  "an unboxed parameter taken apart"
+  true
+  "cargo test --release --test an_unboxed_parameter_is_read_as_its_word"
+  "specs (unit, golden, differential)"
+  (breaking "an_unboxed_parameter_taken_apart")
+  release
+
+rows_b1uw = text/concat rows_b1bk [unboxed_word]
+
+rows_b = text/concat rows_b1uw [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 
