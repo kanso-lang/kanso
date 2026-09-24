@@ -11466,6 +11466,9 @@ main with kanso#1597, the three rows this change moves are written as the
 two changes' measured deltas summed over main's: the dev row 359,480,516,
 start-up 866,580 and emit 43,320,508. The next CI round replaces them.
 
+CI's rows over kanso#1593 and main: start-up 866,580 and emit 43,320,508, as
+summed, and the dev row 359,558,108, read twice alike, 77,592 above the sum.
+
 ## 2026-09-24 — a dev module leaves out the helpers nothing reaches
 
 DECLARES defines thirty-three runtime helpers, and every module carries all of
@@ -11516,3 +11519,6 @@ number twice in one job:
 Over kanso#1594's rows on top of kanso#1593, this change's rows are written as
 its own measured moves applied to its parent's: the dev row 325,412,912,
 start-up 775,975 and emit 43,296,000. The next CI round replaces them.
+
+CI's rows over kanso#1594's: the dev row 326,056,595, read twice alike, and
+start-up 775,975 and emit 43,296,000, as summed.
