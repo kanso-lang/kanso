@@ -10967,8 +10967,7 @@ The dev tier is the one that compiles fast, and its binaries' speed is not a
 term in the objective. The release tier, where inlining the helpers is the
 point, keeps the attribute. `emit_ir_dev` gives the dev tier's module, and
 `kanso build` without `--release`, `kanso run` and `kanso play` use it. The
-attribute's offset on each `define` line of DECLARES is found when the
-compiler is built: see below.
+dev module's text is made when the compiler is built: see below.
 
 No helper needs inlining to be correct. None allocates on the stack, reads a
 frame or return address, or makes a `musttail` call, and the program calls

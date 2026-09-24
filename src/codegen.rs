@@ -1441,7 +1441,7 @@ const DECLARES_DEV_LEN: usize =
 /// leaving the attribute out costs it nothing per line: a check in the loop
 /// below cost `kanso play`'s start-up 10,508 instructions on a one-line
 /// program, measured before the text moved here.
-const DECLARES_DEV_BYTES: [u8; DECLARES_DEV_LEN] = {
+static DECLARES_DEV_BYTES: [u8; DECLARES_DEV_LEN] = {
     let text = DECLARES.as_bytes();
     let mut out = [0u8; DECLARES_DEV_LEN];
     let mut at = 0;
@@ -1472,7 +1472,7 @@ const DECLARES_DEV_BYTES: [u8; DECLARES_DEV_LEN] = {
     out
 };
 
-const DECLARES_DEV: &str = match std::str::from_utf8(&DECLARES_DEV_BYTES) {
+static DECLARES_DEV: &str = match std::str::from_utf8(&DECLARES_DEV_BYTES) {
     Ok(text) => text,
     Err(_) => panic!("the dev text is not utf-8"),
 };
