@@ -10898,3 +10898,30 @@ with `ld: unknown options: -plugin-opt=O3`. `-plugin-opt` is the gold plugin's
 spelling and Apple's ld64 has no such option, so the split is Linux-only and
 other hosts keep `-O3` for both steps, as they were. The rows above are
 Linux's and do not move.
+
+## 2026-09-24 — a release build links with lld where it can
+
+The release build's LTO link ran in GNU ld with LLVM's plugin. On the codegen
+corpus that process was 1,163,896,203 instructions, of which LLVM itself was
+926,724,119. The rest was the linker's own work: 128,765,719 in libc,
+52,810,020 in libbfd and 14,726,035 in the dynamic loader. lld does the same
+LTO in-process with less around it:
+
+    codegen, release tier   1,750,778,100 -> 1,676,140,277   -4.26%   (this container)
+    runbench                1,895,843,054 -> 1,895,843,321   +267
+
+The program is the same code: lld honours the link's `O3` and the inlining
+threshold, and an `O2` link measured the same day moved runbench +0.31%.
+
+lld is asked for, not assumed. An lld from a different LLVM release than
+clang's cannot read clang's bitcode, and a runner can carry one, so
+`lld_links_lto` links a one-line LTO program with `-fuse-ld=lld` and uses lld
+only if that succeeds. The answer is remembered under the identities of both
+tools, the way the calling-convention probe's is. Only Linux asks; Apple's
+ld64 is untouched. CI's cost-goldens job installs `lld-19` beside `clang-19`,
+puts it on PATH and asserts the version, as it does for clang.
+`tests/a_release_build_links_with_lld_when_it_can.rs` builds a release binary
+and requires lld's `Linker:` stamp in it exactly when lld can take the link.
+It went red with `-fuse-ld=bfd` in the flag's place.
+
+CI's rows go into the goldens.

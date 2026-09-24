@@ -892,8 +892,73 @@ fn remembered_probe() -> bool {
 /// The clang this process would run, as a path followed through its links,
 /// with its size and modification time.
 fn clang_identity() -> Option<String> {
+    tool_identity("clang")
+}
+
+/// Whether clang can hand an LTO link to lld, asked once per pair of tools.
+///
+/// lld links a release build for 4.26% fewer instructions than GNU ld with
+/// LLVM's plugin, measured on the codegen corpus on this container:
+/// 1,750,778,100 against 1,676,140,277. Nearly all of the difference is the
+/// linker's own work -- the plugin process spent 128,765,719 in libc and
+/// 52,810,020 in libbfd around LLVM's 926,724,119 -- and the program it
+/// produces runs within 281 instructions of GNU ld's on runbench.
+///
+/// It is asked rather than assumed because an lld from another LLVM release
+/// than clang's cannot read clang's bitcode, and a runner can carry one: the
+/// probe links a one-line LTO program, and anything short of success keeps
+/// GNU ld. The answer is remembered under the identities of both tools, so
+/// installing either asks again.
+fn lld_links_lto() -> bool {
+    let (Some(clang), Some(lld)) = (tool_identity("clang"), tool_identity("ld.lld")) else {
+        return false;
+    };
+    let key = format!("{clang}|{lld}")
+        .bytes()
+        .fold(0xcbf29ce484222325u64, |h, b| (h ^ b as u64).wrapping_mul(0x100000001b3));
+    let path = std::env::temp_dir().join(format!("kanso_lld_answer_{key:016x}"));
+    match std::fs::read(&path).ok().as_deref() {
+        Some(b"1") => return true,
+        Some(b"0") => return false,
+        _ => {}
+    }
+    let answer = lld_probe();
+    let staged = std::env::temp_dir().join(format!("kanso_lld_answer_{key:016x}_{}", pid_tag()));
+    if std::fs::write(&staged, if answer { b"1" } else { b"0" }).is_ok() {
+        let _ = std::fs::rename(&staged, &path);
+    }
+    answer
+}
+
+fn lld_probe() -> bool {
+    let dir = std::env::temp_dir();
+    let ll = dir.join(format!("kanso_lld_probe_{}.ll", pid_tag()));
+    let out = dir.join(format!("kanso_lld_probe_{}", pid_tag()));
+    if std::fs::write(&ll, "define i32 @main() {\n  ret i32 0\n}\n").is_err() {
+        return false;
+    }
+    // Output thrown away rather than read, for the reason `preserve_none_probe`
+    // gives.
+    let ok = std::process::Command::new("clang")
+        .args(["-O1", "-flto", "-fuse-ld=lld", "-Wl,-plugin-opt=O3", "-Wno-override-module"])
+        .arg(&ll)
+        .arg("-o")
+        .arg(&out)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    let _ = std::fs::remove_file(&ll);
+    let _ = std::fs::remove_file(&out);
+    ok
+}
+
+/// A tool on PATH, as a path followed through its links, with its size and
+/// modification time.
+fn tool_identity(name: &str) -> Option<String> {
     let dirs = std::env::var_os("PATH")?;
-    let found = std::env::split_paths(&dirs).map(|d| d.join("clang")).find(|p| p.is_file())?;
+    let found = std::env::split_paths(&dirs).map(|d| d.join(name)).find(|p| p.is_file())?;
     let real = std::fs::canonicalize(&found).ok()?;
     let meta = std::fs::metadata(&real).ok()?;
     let modified = meta.modified().ok()?.duration_since(std::time::UNIX_EPOCH).ok()?;
@@ -1014,6 +1079,12 @@ fn release_clang(stem: &str, ll_path: &str) -> std::io::Result<std::process::Exi
             &["-O3"][..]
         })
         .arg("-flto")
+        // lld where it can take the LTO link: `lld_links_lto` says why.
+        .args(if cfg!(target_os = "linux") && lld_links_lto() {
+            &["-fuse-ld=lld"][..]
+        } else {
+            &[][..]
+        })
         // Eight times clang's default of 250. The run program spends one
         // instruction in ten on `push`, `pop` and `ret` -- 215,229,225 of
         // 2,185,625,151 in the binary's own code -- and the functions paying

@@ -263,7 +263,7 @@ jobs:
       - name: clang 19, for the closure calling convention
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends clang-19
+          sudo apt-get install -y -qq --no-install-recommends clang-19 lld-19
           # /usr/bin/clang is a package-owned symlink to ../lib/llvm-18/bin/clang,
           # NOT an update-alternatives path, so `update-alternatives --install`
           # registers an alternative and leaves the symlink alone. The first
@@ -272,12 +272,21 @@ jobs:
           # a vein nobody expected. /usr/local/bin precedes /usr/bin on the
           # runner, so a symlink there wins without touching the dpkg file.
           sudo ln -sf /usr/bin/clang-19 /usr/local/bin/clang
+          # lld 19 takes the release build's LTO link where it can
+          # (`lld_links_lto` in src/main.rs), and the build looks for `ld.lld`
+          # on PATH. An lld from another release cannot read clang 19's
+          # bitcode, so the one on PATH has to be 19's as well.
+          sudo ln -sf /usr/bin/ld.lld-19 /usr/local/bin/ld.lld
           # AND THE SELECTION IS ASSERTED, not printed. The first version of
           # this step printed the version and checked nothing, so a silent
           # no-op passed as success and cost a round.
           clang --version
           clang --version | head -1 | grep -q 'clang version 19' || {
             echo "::error::clang 19 is installed but not selected: $(clang --version | head -1)"
+            exit 1
+          }
+          ld.lld --version | grep -q 'LLD 19' || {
+            echo "::error::lld 19 is installed but not selected: $(ld.lld --version 2>&1 | head -1)"
             exit 1
           }
       - name: build the benchmarks
