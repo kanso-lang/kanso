@@ -206,10 +206,10 @@
 # importing std/text now emits, so each such row reads five lines more. The
 # three that decode JSON also lose the byte-class arms of the number scan:
 # oneshot 8,505 -> 8,357, livebench 8,644 -> 8,496, runbench 33,372 -> 33,224.
-encodebench defines=109 calls=775 branches=491 lines=5510
-oneshot defines=111 calls=800 branches=584 lines=6095
+encodebench defines=109 calls=759 branches=483 lines=5374
+oneshot defines=111 calls=788 branches=578 lines=5987
 basket defines=97 calls=870 branches=560 lines=5125
-widebench defines=116 calls=834 branches=516 lines=5817
+widebench defines=116 calls=818 branches=508 lines=5681
 deepbench defines=43 calls=207 branches=147 lines=1674
 escapebench defines=19 calls=71 branches=44 lines=628
 pendbench defines=62 calls=493 branches=288 lines=2807
@@ -217,5 +217,5 @@ scanbench defines=226 calls=2069 branches=1490 lines=12624
 indexbench defines=17 calls=49 branches=25 lines=526
 digestbench defines=115 calls=613 branches=412 lines=4560
 readbench defines=20 calls=50 branches=23 lines=558
-livebench defines=112 calls=825 branches=604 lines=6215
-runbench defines=494 calls=4308 branches=2758 lines=25224
+livebench defines=112 calls=813 branches=598 lines=6107
+runbench defines=494 calls=4296 branches=2752 lines=25116
