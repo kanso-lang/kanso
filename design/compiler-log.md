@@ -12469,3 +12469,27 @@ and `emitted_defines` 118 for the decoder, and `emitted_other_lines` 115,794
 and `emitted_other_defines` 1,731 over the other thirteen. The compile
 golden's corpus rows sum to `lines` 1,505, one more each, and `module_lines`
 reads 3,581.
+
+## 2026-09-24 — three more ideas measured and declined
+
+Each of these was built and measured on the run program, and each gave back
+less than it cost.
+
+- Parsing a number's digits eight at a time. The float and integer parsers
+  took fast_float's eight-digit conversion, with the digits shifted up so the
+  unused lanes read as leading zeros. runbench rose 1,768,671,540 ->
+  1,772,691,930 (+4,020,390): `k_b_to_float_slice` 41,479,317 -> 45,289,035
+  and `k_b_to_int_slice` 21,977,802 -> 22,188,474. A chunk costs about
+  thirty-five instructions, and the run's numbers have three or four digits
+  either side of the point, which the byte loop reads for about nine a digit.
+  It would pay on runs of five digits or more.
+- Giving a list four slots on its first push instead of eight. runbench rose
+  13,825,862 (+0.78%) and `sh_buf` fell 108,745,936 -> 101,402,528, but
+  `arena_peak_bytes` stayed at 5,050,064. The peak is counted in 1 MiB blocks
+  and the saving drops none of them.
+- Arena blocks of 256 KiB instead of 1 MiB, on the tree of kanso#1614.
+  runbench rose 1,710,701,594 -> 1,722,748,393 (+0.70%) and
+  `arena_peak_bytes` fell 5,050,064 -> 4,787,920. Scored by the objective's
+  marginals that is about +0.06 for memory against -0.04 for instructions,
+  and the memory side is where this program's live set happens to fall
+  against a block boundary: 512 KiB reads the same peak as 1 MiB.
