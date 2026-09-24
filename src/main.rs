@@ -907,12 +907,17 @@ fn clang_identity() -> Option<String> {
 /// It is asked rather than assumed because an lld from another LLVM release
 /// than clang's cannot read clang's bitcode, and a runner can carry one: the
 /// probe links a one-line LTO program, and anything short of success keeps
-/// GNU ld. The answer is remembered under the identities of both tools, so
-/// installing either asks again.
+/// GNU ld. The answer is remembered under clang's identity and that of the
+/// `ld.lld` on PATH, if there is one.
 fn lld_links_lto() -> bool {
-    let (Some(clang), Some(lld)) = (tool_identity("clang"), tool_identity("ld.lld")) else {
+    // clang finds lld in its own LLVM directory as well as on PATH, so what
+    // is on PATH is part of the key and not a condition: a runner with lld
+    // only beside clang answered the spec's probe yes while this said no
+    // without asking.
+    let Some(clang) = tool_identity("clang") else {
         return false;
     };
+    let lld = tool_identity("ld.lld").unwrap_or_default();
     let key = format!("{clang}|{lld}")
         .bytes()
         .fold(0xcbf29ce484222325u64, |h, b| (h ^ b as u64).wrapping_mul(0x100000001b3));

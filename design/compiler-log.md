@@ -10989,7 +10989,28 @@ The same probe decides, since an lld that can take an LTO link can take a
 plain one. The spec builds both tiers and went red on each with
 `-fuse-ld=bfd` in that tier's place.
 
-CI's rows go into the goldens.
+**The specs job's runner has lld beside clang but not on PATH.** The spec's
+own probe said lld could take the link and kanso, finding no `ld.lld` on PATH,
+never asked; the binary carried no stamp and the spec went red. What is on
+PATH is now part of the probe's key and not a condition of asking, so the
+probe decides wherever clang can find lld. The ratchet's toolchain installs
+the same packages as the cost-goldens job, which
+`the_ratchet_carries_what_its_gates_need` requires.
+
+**CI's rows**, taken into the goldens:
+
+    codegen_instructions_dev      473,933,874 ->   434,345,526   -8.35%
+    codegen_instructions_release 1,751,097,561 -> 1,677,317,287   -4.21%
+    startup_instructions              870,779 ->       870,804   +25
+    work_basket                    32,678,753 ->    32,678,777   +24
+    work_runbench               1,853,571,514 -> 1,853,571,431   -83
+    compile_instructions, entry_instructions and library_instructions -2 each
+
+The benchmarks are now linked by lld as well. Their `.text` sums to 3,215,152
+against 3,215,292, and every work row but basket moved by 20 to 116
+instructions, down. Basket rose 24 and start-up 25, which is layout: the
+binaries lld links place the same code differently, and the compiler's own
+bytes grew by the probe. The objective rises, and the rise is banked.
 
 ## 2026-09-24 — a build runs clang's jobs without the driver
 
