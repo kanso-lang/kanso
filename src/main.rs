@@ -1197,7 +1197,10 @@ fn cached_runtime_object(profile: &str, opt: &[&str]) -> std::io::Result<std::pa
 /// The declarations below are the globals and functions the helpers reach,
 /// which `runtime.c` defines with external linkage for this unit's sake.
 fn hot_source() -> String {
-    let runtime = include_str!("runtime.c");
+    hot_source_of(include_str!("runtime.c"))
+}
+
+fn hot_source_of(runtime: &str) -> String {
     let mut out = String::from(concat!(
         "#include <stdint.h>\n",
         "#include <stddef.h>\n",
@@ -1228,16 +1231,29 @@ fn hot_source() -> String {
         "void k_beat_rewind_slow(KMark* m);\n",
         "__attribute__((noreturn, noinline)) void k_die(const char* msg);\n",
     ));
+    // Each definition is found by its name and taken from the start of the
+    // line that names it, attribute and all. The two scanners are matched on
+    // the signature rather than on `always_inline`, because the ratchet row
+    // that puts them out of line removes that attribute, and a lift keyed on
+    // it found nothing and the tree stopped building: the row read UNBUILT
+    // on kanso#1585.
     for start in [
         "static inline int k_tail_window(",
         "static inline void k_beat_rewind(KMark* m) {",
         "__attribute__((always_inline)) void k_beat_iter(void) {",
-        "__attribute__((always_inline)) long long k_b_find2_raw(",
-        "__attribute__((always_inline)) long long k_b_find2_below_raw(",
+        "long long k_b_find2_raw(const unsigned char* d,",
+        "long long k_b_find2_below_raw(const unsigned char* d,",
     ] {
-        out.push_str(hot_text(runtime, start, "\n}\n"));
+        out.push_str(hot_line_text(runtime, start, "\n}\n"));
     }
     out
+}
+
+/// `hot_text` from the start of the line holding `start`.
+fn hot_line_text<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
+    let at = source.find(start).unwrap_or_else(|| panic!("runtime.c no longer holds `{start}`"));
+    let line = source[..at].rfind('\n').map_or(0, |n| n + 1);
+    hot_text(source, &source[line..at + start.len()], end)
 }
 
 /// From `start` through the first `end` after it, inclusive. A function ends
@@ -1539,6 +1555,25 @@ mod the_hot_unit_is_taken_from_the_runtime {
             "k_b_find2_below_raw",
         ] {
             assert!(unit.contains(&format!("{name}(")), "the hot unit lacks {name}");
+        }
+    }
+
+    /// The ratchet row for the two scanners removes their `always_inline`,
+    /// and the release build must still find them: a lift keyed on the
+    /// attribute stopped the mutated tree building, and the row read UNBUILT
+    /// on kanso#1585. Watched red with the scanners' start strings keyed on
+    /// the attribute again.
+    #[test]
+    fn the_scanners_are_found_without_their_attribute() {
+        let bare = include_str!("runtime.c")
+            .replace("__attribute__((always_inline)) long long k_b_find2", "long long k_b_find2");
+        assert_ne!(bare, include_str!("runtime.c"), "the attribute is no longer there to remove");
+        let unit = super::hot_source_of(&bare);
+        for name in ["k_b_find2_raw", "k_b_find2_below_raw"] {
+            assert!(
+                unit.contains(&format!("\nlong long {name}(")),
+                "the bare {name} was not lifted"
+            );
         }
     }
 }
