@@ -204,23 +204,19 @@ pub fn key_of(bytes: &[u8]) -> (u64, u64) {
     const K2: u64 = 0xc2b2_ae3d_27d4_eb4f;
     let mut a: u64 = 0x2545_f491_4f6c_dd1d;
     let mut b: u64 = 0x1656_67b1_9e37_79f9;
-    let round = |acc: u64, word: &[u8]| {
-        acc.wrapping_add(u64::from_le_bytes(word.try_into().unwrap()).wrapping_mul(K2))
-            .rotate_left(31)
-            .wrapping_mul(K1)
+    let round = |acc: u64, pair: &[u8; 16], half: usize| {
+        let word = u64::from_le_bytes(pair[half * 8..half * 8 + 8].try_into().unwrap());
+        acc.wrapping_add(word.wrapping_mul(K2)).rotate_left(31).wrapping_mul(K1)
     };
-    let mut pairs = bytes.chunks_exact(16);
-    for pair in &mut pairs {
-        let (x, y) = pair.split_at(8);
-        a = round(a, x);
-        b = round(b, y);
+    let (pairs, rest) = bytes.as_chunks::<16>();
+    for pair in pairs {
+        a = round(a, pair, 0);
+        b = round(b, pair, 1);
     }
     let mut tail = [0u8; 16];
-    let rest = pairs.remainder();
     tail[..rest.len()].copy_from_slice(rest);
-    let (x, y) = tail.split_at(8);
-    a = round(a, x);
-    b = round(b, y);
+    a = round(a, &tail, 0);
+    b = round(b, &tail, 1);
     // The zero-padded tail cannot tell a short input from one ending in
     // zeros, so the length goes in as well.
     a ^= bytes.len() as u64;

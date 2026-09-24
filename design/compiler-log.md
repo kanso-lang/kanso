@@ -10912,7 +10912,7 @@ round (multiply the word, add, rotate, multiply) and murmur3's finaliser
 mixes each lane. The key is 128 bits, where SipHash gave this one 64, and a
 collision here runs a different program than the one asked for.
 
-    startup_instructions   995,155 -> 923,919   -7.16%   (this container)
+    startup_instructions   995,155 -> 908,786   -8.68%   (this container)
 
 **The first draft was wrong, and the spec found it.** It used xor, multiply
 and rotate, with no multiply after the rotate. An odd multiply flips only the
