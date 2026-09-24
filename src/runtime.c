@@ -122,6 +122,9 @@ static long long k_stat_thunk_frees = 0;
 static long long k_stat_thunk_escaped = 0;
 static long long k_stat_el_parses = 0;
 static long long k_stat_ryu_renders = 0;
+/* renders whose digits the short path found, without ryu's multiplies; a
+   merge that loses the path takes this to zero */
+static long long k_stat_ryu_short = 0;
 static long long k_stat_utf8_bytes = 0;
 long long k_stat_find2_calls = 0;
 static long long k_stat_append_fast = 0;
@@ -577,7 +580,7 @@ static void k_stats_dump(void) {
     fprintf(stderr,
         "thunk_allocs=%lld\nthunk_forces=%lld\nthunk_evals=%lld\n"
         "thunk_frees=%lld\nthunk_escaped=%lld\nthunk_live_exit=%lld\n"
-        "el_parses=%lld\nryu_renders=%lld\nutf8_bytes=%lld\n"
+        "el_parses=%lld\nryu_renders=%lld\nryu_short=%lld\nutf8_bytes=%lld\n"
         "find2_calls=%lld\nappend_fast=%lld\nappend_grow=%lld\n"
         "append_rendered=%lld\n"
         "utf8_zerocopy=%lld\ncarry_dedup=%lld\nbytes_malloc=%lld\nbytes_freed=%lld\n"
@@ -585,7 +588,7 @@ static void k_stats_dump(void) {
         k_stat_thunk_allocs, k_stat_thunk_forces, k_stat_thunk_evals,
         k_stat_thunk_frees, k_stat_thunk_escaped,
         k_stat_thunk_allocs - k_stat_thunk_frees, k_stat_el_parses,
-        k_stat_ryu_renders, k_stat_utf8_bytes, k_stat_find2_calls,
+        k_stat_ryu_renders, k_stat_ryu_short, k_stat_utf8_bytes, k_stat_find2_calls,
         k_stat_append_fast, k_stat_append_grow, k_stat_append_rendered,
         k_stat_utf8_zerocopy,
         k_stat_carry_dedup, k_stat_bytes_malloc, k_stat_bytes_freed,
@@ -4109,9 +4112,101 @@ static inline int ryu_multiple_of_pow2(uint64_t v, int p) {
     return (v & ((1ULL << p) - 1)) == 0;
 }
 
-/* shortest digits + decimal exponent for a positive finite double; returns
-   digit count, digits in dig[], value = dig * 10^*e10 */
-static int ryu_d2d(double f, char* dig, int* e10) {
+/* the digits of `output`, most significant first, two at a time; returns
+   the count */
+static inline int ryu_write(uint64_t output, char* dig) {
+    int n = ryu_declen(output);
+    int a = n;
+    while (output >= 100) {
+        uint32_t c = (uint32_t)(output % 100);
+        output /= 100;
+        a -= 2;
+        __builtin_memcpy(dig + a, RYU_DIGITS + c * 2, 2);
+    }
+    if (output >= 10) __builtin_memcpy(dig, RYU_DIGITS + (uint32_t)output * 2, 2);
+    else dig[0] = (char)('0' + (uint32_t)output);
+    dig[n] = 0;
+    return n;
+}
+
+/* Exact powers of ten, as doubles: every one through 1e22 is representable,
+   and the short path below reads the first sixteen. */
+static const double RYU_POW10D[16] = {
+    1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7,
+    1e8, 1e9, 1e10, 1e11, 1e12, 1e13, 1e14, 1e15,
+};
+static const uint64_t RYU_POW10U[16] = {
+    1ULL, 10ULL, 100ULL, 1000ULL, 10000ULL, 100000ULL, 1000000ULL, 10000000ULL,
+    100000000ULL, 1000000000ULL, 10000000000ULL, 100000000000ULL,
+    1000000000000ULL, 10000000000000ULL, 100000000000000ULL, 1000000000000000ULL,
+};
+
+/* A SHORT DECIMAL IS FOUND BY SCALING, and proved by dividing back.
+   Most floats a program writes down have few digits -- every one in
+   the encode corpus has seven or fewer -- and for those the search
+   below replaces the 125-bit multiplies and the digit removal with a
+   multiply and a division per decimal place.
+
+   Let u be the gap to the next double up, so the interval of decimals
+   that read back as f is at most u wide. While u * 10^p <= 1/4:
+     - at most one decimal with p places lies in it, since the scaled
+       interval is narrower than the gap between integers;
+     - that decimal, times 10^p, is within 1/8 of f * 10^p exactly,
+       and the rounded product is within 1/4 of that, so rounding the
+       product finds it;
+     - m / 10^p is one correctly rounded division of two exact
+       doubles, so it equals f exactly when m * 10^-p reads back as f
+       under the same round-half-even strtod uses.
+   So the first p that passes gives the one decimal with the fewest
+   places. It is also the one ryu picks: a shorter candidate would sit
+   at a larger power of ten inside the same interval, and that power
+   of ten is itself a one-digit candidate at a place already tried.
+   When the bound fails before a place passes, `ryu_long` decides.
+
+   The range keeps every scaled product below 2^51 and every
+   candidate a normal double: f in [2^-20, 2^50). `limit` is
+   1/(4u), a power of two built from the exponent directly. */
+static inline int ryu_short(double f, int64_t* mo, int* po) {
+    uint64_t bits;
+    __builtin_memcpy(&bits, &f, 8);
+    uint32_t ieee_e = (uint32_t)(bits >> 52) & 0x7FF;
+    if ((uint32_t)(ieee_e - 1003) >= 70) return 0;
+    uint64_t lbits = (uint64_t)(2096 - ieee_e) << 52;
+    double limit;
+    __builtin_memcpy(&limit, &lbits, 8);
+    for (int p = 0; p < 16 && RYU_POW10D[p] <= limit; p++) {
+        /* signed, because every product is below 2^51 and a signed
+           conversion is one instruction each way on x86-64, where an
+           unsigned one was a dozen */
+        double y = f * RYU_POW10D[p];
+        int64_t m = (int64_t)y;
+        m += y - (double)m >= 0.5;
+        if ((double)m / RYU_POW10D[p] == f) {
+            if (K_COUNTING) k_stat_ryu_short++;
+            *mo = m;
+            *po = p;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/* The short decimal m * 10^-p as ryu's digits: an integer's trailing zeros
+   come off into the exponent, and a fraction has none, since it would then
+   have had fewer places. */
+static inline int ryu_short_digits(int64_t m, int p, char* dig, int* e10) {
+    int z = 0;
+    if (p == 0) {
+        while (m % 10 == 0) { m /= 10; z++; }
+    }
+    *e10 = z - p;
+    return ryu_write((uint64_t)m, dig);
+}
+
+/* ryu itself, for the floats the short path leaves: shortest digits and
+   decimal exponent of a positive finite double; returns the digit count,
+   digits in dig[], value = dig * 10^*e10 */
+static __attribute__((noinline, cold)) int ryu_long(double f, char* dig, int* e10) {
     uint64_t bits;
     __builtin_memcpy(&bits, &f, 8);
     uint64_t ieee_m = bits & ((1ULL << 52) - 1);
@@ -4267,18 +4362,16 @@ static int ryu_d2d(double f, char* dig, int* e10) {
         output = vr + (vr == vm || round_up);
     }
     *e10 = e10v + removed;
-    int n = ryu_declen(output);
-    int a = n;
-    while (output >= 100) {
-        uint32_t c = (uint32_t)(output % 100);
-        output /= 100;
-        a -= 2;
-        __builtin_memcpy(dig + a, RYU_DIGITS + c * 2, 2);
-    }
-    if (output >= 10) __builtin_memcpy(dig, RYU_DIGITS + (uint32_t)output * 2, 2);
-    else dig[0] = (char)('0' + (uint32_t)output);
-    dig[n] = 0;
-    return n;
+    return ryu_write(output, dig);
+}
+
+/* shortest digits + decimal exponent for a positive finite double; returns
+   digit count, digits in dig[], value = dig * 10^*e10 */
+static int ryu_d2d(double f, char* dig, int* e10) {
+    int64_t m;
+    int p;
+    if (ryu_short(f, &m, &p)) return ryu_short_digits(m, p, dig, e10);
+    return ryu_long(f, dig, e10);
 }
 
 /* format (digits, k, e10) exactly as the probe would have: %g with
@@ -4293,7 +4386,42 @@ static long long render_ryu(double d, char* buf) {
     }
     char dig[20];
     int e10;
-    int k = ryu_d2d(d, dig, &e10);
+    int k;
+    int64_t sm;
+    int sp;
+    if (ryu_short(d, &sm, &sp)) {
+        /* THE SHORT DECIMAL IS WRITTEN FROM m AND p, without the digit
+           buffer. Below 10^15 and from 10^-4 up, the text is the plain form
+           below with P = 15: m / 10^p, then when p > 0 a point and m's last
+           p digits, zeros kept in front. That is what the plain branches
+           write from ryu's digits, and they walked those digits a byte at a
+           time to place the point. */
+        uint64_t m = (uint64_t)sm;
+        uint64_t pw = RYU_POW10U[sp];
+        if (m < 1000000000000000ULL && m * 10000 >= pw) {
+            uint64_t whole = m / pw, part = m - whole * pw;
+            char* o = buf + ryu_write(whole, buf);
+            if (sp) {
+                *o++ = '.';
+                char* w = o + sp;
+                o = w;
+                int left = sp;
+                while (left >= 2) {
+                    uint32_t c = (uint32_t)(part % 100);
+                    part /= 100;
+                    w -= 2;
+                    __builtin_memcpy(w, RYU_DIGITS + c * 2, 2);
+                    left -= 2;
+                }
+                if (left) *--w = (char)('0' + (uint32_t)part);
+            }
+            *o = 0;
+            return (long long)(o - buf);
+        }
+        k = ryu_short_digits(sm, sp, dig, &e10);
+    } else {
+        k = ryu_long(d, dig, &e10);
+    }
     if (k == 0) {
         /* The digit core read an all-ones exponent. Any sign is already
            written: the caller sends -inf here as +inf behind a minus, and
