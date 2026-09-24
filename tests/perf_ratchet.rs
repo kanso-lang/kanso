@@ -45,7 +45,20 @@ fn hot_predicates_are_inline_definitions_not_declares() {
         "k_bool",
         "k_none",
     ];
-    for name in all {
+    // A module carries only the helpers its program calls, so each one this
+    // program calls must be an inline definition, and it must call some.
+    let called: Vec<&str> = all
+        .into_iter()
+        .filter(|name| {
+            ir.contains(&format!("call i64 @{name}("))
+                || ir.contains(&format!("call %KValue @{name}("))
+        })
+        .collect();
+    assert!(
+        !called.is_empty(),
+        "the program calls none of the hot predicates, so this proves nothing"
+    );
+    for name in called {
         let line = define_line(name);
 
         assert!(

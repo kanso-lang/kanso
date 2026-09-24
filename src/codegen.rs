@@ -1069,6 +1069,51 @@ define internal i64 @k_check_bool(%KValue %v) alwaysinline {
   %r = zext i1 %c to i64
   ret i64 %r
 }
+define internal i64 @k_not_failure_w(i64 %tag) alwaysinline {
+  %ne = icmp ne i64 %tag, 5
+  %r = zext i1 %ne to i64
+  ret i64 %r
+}
+define internal i64 @k_truthy_w(i64 %tag, i64 %pay) alwaysinline {
+  %t = icmp eq i64 %tag, 2
+  br i1 %t, label %yes, label %chkf
+yes:
+  ret i64 1
+chkf:
+  %f = icmp eq i64 %tag, 3
+  br i1 %f, label %no, label %bad
+no:
+  ret i64 0
+bad:
+  %v0 = insertvalue %KValue undef, i64 %tag, 0
+  %v = insertvalue %KValue %v0, i64 %pay, 1
+  %r = call i64 @k_truthy_bad(%KValue %v)
+  ret i64 %r
+}
+define internal i64 @k_check_rec_fast_w(i64 %tag, i64 %pay, i64 %t, i64 %n) alwaysinline {
+  %issub = icmp eq i64 %tag, 15
+  br i1 %issub, label %slow, label %plain
+plain:
+  %isrec = icmp eq i64 %tag, 7
+  br i1 %isrec, label %rec, label %no
+no:
+  ret i64 0
+rec:
+  %r = inttoptr i64 %pay to ptr
+  %tid = load i64, ptr %r
+  %np = getelementptr i8, ptr %r, i64 8
+  %nf = load i64, ptr %np
+  %et = icmp eq i64 %tid, %t
+  %en = icmp eq i64 %nf, %n
+  %both = and i1 %et, %en
+  %out = zext i1 %both to i64
+  ret i64 %out
+slow:
+  %v0 = insertvalue %KValue undef, i64 %tag, 0
+  %v = insertvalue %KValue %v0, i64 %pay, 1
+  %s = call i64 @k_check_rec(%KValue %v, i64 %t, i64 %n)
+  ret i64 %s
+}
 declare i64 @k_truthy_bad(%KValue)
 
 declare %KValue @k_caf_freeze(%KValue)
@@ -1256,6 +1301,11 @@ struct DeclareLine {
     /// What the line becomes in a build without counters: `Keep`, `Fold` with
     /// the fast path's label, or `Folded` for the two lines a gate folds.
     shipped: Shipped,
+    /// Whether DECLARES's own definitions call the symbol, which keeps the
+    /// line whatever the program calls. Answered when the compiler is built:
+    /// asked at emit time it was a binary search over the context calls for
+    /// every `declare` line of every module.
+    context: bool,
 }
 
 const INLINE_ATTR: &[u8] = b" alwaysinline";
@@ -1319,18 +1369,45 @@ const fn is_space(b: u8) -> bool {
 
 const DECLARES_LINES: usize = declares_line_count(DECLARES.as_bytes());
 
+/// Whether `text[from..to]` is one of the symbols DECLARES calls from its own
+/// definitions.
+const fn context_calls_name(text: &[u8], from: usize, to: usize) -> bool {
+    let mut n = 0;
+    while n < DECLARES_CONTEXT_CALLS.len() {
+        let name = DECLARES_CONTEXT_CALLS[n].as_bytes();
+        if name.len() == to - from && find_in(text, from, to, name) == from {
+            return true;
+        }
+        n += 1;
+    }
+    false
+}
+
 /// The table, and the refusals the run-time fold used to make, raised while
 /// the compiler compiles: a gate written any other way is a build error.
 const fn index_declares(text: &str) -> [DeclareLine; DECLARES_LINES] {
     let text = text.as_bytes();
-    let blank = DeclareLine { start: 0, end: 0, sym_start: 0, sym_end: 0, shipped: Shipped::Keep };
+    let blank = DeclareLine {
+        start: 0,
+        end: 0,
+        sym_start: 0,
+        sym_end: 0,
+        shipped: Shipped::Keep,
+        context: false,
+    };
     let mut out = [blank; DECLARES_LINES];
     let mut at = 0;
     let mut n = 0;
     while n < DECLARES_LINES {
         let end = find_in(text, at, text.len(), b"\n");
-        let mut line =
-            DeclareLine { start: at, end, sym_start: at, sym_end: at, shipped: Shipped::Keep };
+        let mut line = DeclareLine {
+            start: at,
+            end,
+            sym_start: at,
+            sym_end: at,
+            shipped: Shipped::Keep,
+            context: false,
+        };
         if starts_at(text, at, end, b"declare ") {
             let rest = at + b"declare ".len();
             let sigil = find_in(text, rest, end, b"@");
@@ -1339,6 +1416,7 @@ const fn index_declares(text: &str) -> [DeclareLine; DECLARES_LINES] {
                 if paren < end {
                     line.sym_start = sigil + 1;
                     line.sym_end = paren;
+                    line.context = context_calls_name(text, sigil + 1, paren);
                 }
             }
         }
@@ -1479,40 +1557,238 @@ static DECLARES_DEV: &str = match std::str::from_utf8(&DECLARES_DEV_BYTES) {
 
 static DECLARE_LINES_DEV: [DeclareLine; DECLARES_LINES] = index_declares(DECLARES_DEV);
 
+/// One runtime helper DECLARES defines: where its name sits in the text, the
+/// lines from its `define` to its closing brace, and every helper it reaches
+/// by calls, itself included, as a bit per helper.
+#[derive(Clone, Copy)]
+struct Helper {
+    sym_start: usize,
+    sym_end: usize,
+    first: usize,
+    last: usize,
+    reaches: u64,
+}
+
+const fn helper_count(text: &str) -> usize {
+    let text = text.as_bytes();
+    let mut n = 0;
+    let mut at = 0;
+    while at < text.len() {
+        let end = find_in(text, at, text.len(), b"\n");
+        if starts_at(text, at, end, b"define internal ") {
+            n += 1;
+        }
+        at = end + 1;
+    }
+    n
+}
+
+const HELPERS: usize = helper_count(DECLARES);
+
+/// The helpers of `text`, found when the compiler is built. A helper runs
+/// from a `define internal` line to the next line that is a lone `}`, and it
+/// reaches every helper whose `@name(` its body writes, and theirs in turn.
+const fn index_helpers(text: &str) -> [Helper; HELPERS] {
+    const { assert!(HELPERS <= 64, "the helpers no longer fit the bit set that tracks them") };
+    let bytes = text.as_bytes();
+    let blank = Helper { sym_start: 0, sym_end: 0, first: 0, last: 0, reaches: 0 };
+    let mut out = [blank; HELPERS];
+    let mut n = 0;
+    let mut line = 0;
+    let mut at = 0;
+    let mut open = false;
+    while at < bytes.len() {
+        let end = find_in(bytes, at, bytes.len(), b"\n");
+        if starts_at(bytes, at, end, b"define internal ") {
+            let sigil = find_in(bytes, at, end, b"@");
+            let paren = find_in(bytes, sigil, end, b"(");
+            out[n] = Helper {
+                sym_start: sigil + 1,
+                sym_end: paren,
+                first: line,
+                last: line,
+                reaches: 1 << n,
+            };
+            open = true;
+        } else if open && end == at + 1 && bytes[at] == b'}' {
+            out[n].last = line;
+            open = false;
+            n += 1;
+        }
+        at = end + 1;
+        line += 1;
+    }
+    assert!(n == HELPERS && !open, "a helper in DECLARES has no closing brace of its own");
+    // Direct calls: every `@name(` in a helper's body that names a helper,
+    // read in one pass over the text.
+    let mut h = 0;
+    let mut at = 0;
+    let mut line = 0;
+    while at < bytes.len() && h < HELPERS {
+        let end = find_in(bytes, at, bytes.len(), b"\n");
+        if line >= out[h].last {
+            h += 1;
+        } else if line > out[h].first {
+            let mut k = at;
+            while k < end {
+                if bytes[k] == b'@' {
+                    let mut g = 0;
+                    while g < HELPERS {
+                        let len = out[g].sym_end - out[g].sym_start;
+                        if k + 1 + len < end && bytes[k + 1 + len] == b'(' {
+                            let mut same = true;
+                            let mut i = 0;
+                            while i < len {
+                                if bytes[k + 1 + i] != bytes[out[g].sym_start + i] {
+                                    same = false;
+                                    break;
+                                }
+                                i += 1;
+                            }
+                            if same {
+                                out[h].reaches |= 1 << g;
+                            }
+                        }
+                        g += 1;
+                    }
+                }
+                k += 1;
+            }
+        }
+        at = end + 1;
+        line += 1;
+    }
+    // And their calls, to a fixed point.
+    let mut changed = true;
+    while changed {
+        changed = false;
+        let mut h = 0;
+        while h < HELPERS {
+            let mut g = 0;
+            while g < HELPERS {
+                if out[h].reaches & (1 << g) != 0
+                    && out[h].reaches | out[g].reaches != out[h].reaches
+                {
+                    out[h].reaches |= out[g].reaches;
+                    changed = true;
+                }
+                g += 1;
+            }
+            h += 1;
+        }
+    }
+    out
+}
+
+static HELPERS_DEV: [Helper; HELPERS] = index_helpers(DECLARES_DEV);
+static HELPERS_RELEASE: [Helper; HELPERS] = index_helpers(DECLARES);
+
 /// DECLARES as a module wants it: joined by newlines with no newline after the
 /// last, keeping a `declare` only when `referenced` says the program calls its
 /// symbol, and folding each stats gate to its fast branch unless `counting`.
+#[cfg(test)]
 fn declares_for(referenced: impl Fn(&str) -> bool, counting: bool, inline: bool) -> String {
-    let (text, lines) = match inline {
-        true => (DECLARES, &DECLARE_LINES),
-        false => (DECLARES_DEV, &DECLARE_LINES_DEV),
+    declares_for_program(referenced, |_| true, counting, inline, false)
+}
+
+/// `declares_for`, for a program that calls the helpers `called` names. A dev
+/// module leaves out every helper neither the program nor a helper it calls
+/// reaches: at `-O0` nothing removes an unused internal function, and the
+/// codegen corpus compiled twenty-four of its thirty-three for nothing.
+/// Unreached helpers are skipped a whole block at a time, so the lines that
+/// are kept pay nothing for it.
+fn declares_for_program(
+    referenced: impl Fn(&str) -> bool,
+    called: impl Fn(&str) -> bool,
+    counting: bool,
+    inline: bool,
+    keep_context: bool,
+) -> String {
+    let (text, lines, helpers): (&str, &[DeclareLine], &[Helper]) = match inline {
+        true => (DECLARES, &DECLARE_LINES, &HELPERS_RELEASE),
+        false => (DECLARES_DEV, &DECLARE_LINES_DEV, &HELPERS_DEV),
     };
+    let mut live = 0u64;
+    for helper in helpers {
+        if called(&text[helper.sym_start..helper.sym_end]) {
+            live |= helper.reaches;
+        }
+    }
     let mut out = String::with_capacity(text.len());
     let mut first = true;
+    let mut from = 0;
+    for (n, helper) in helpers.iter().enumerate() {
+        if live & (1 << n) == 0 {
+            declare_lines(
+                &mut out,
+                &mut first,
+                text,
+                &lines[from..helper.first],
+                &referenced,
+                counting,
+                keep_context,
+            );
+            from = helper.last + 1;
+        }
+    }
+    declare_lines(&mut out, &mut first, text, &lines[from..], &referenced, counting, keep_context);
+    out
+}
+
+/// How many `k_stats_on` gates DECLARES holds in the helpers `ir` defines. A
+/// module carries only the helpers its program reaches, so a counting build's
+/// gates are these and not all `STATS_GATE_SITES` of them.
+pub fn stats_gates_carried(ir: &str) -> usize {
+    HELPERS_RELEASE
+        .iter()
+        .filter(|h| {
+            let call = format!("@{}(", &DECLARES[h.sym_start..h.sym_end]);
+            ir.lines().any(|l| l.starts_with("define internal ") && l.contains(&call))
+        })
+        .map(|h| {
+            DECLARE_LINES[h.first..=h.last]
+                .iter()
+                .filter(|l| DECLARES[l.start..l.end].contains("load i32, ptr @k_stats_on"))
+                .count()
+        })
+        .sum()
+}
+
+fn declare_lines(
+    out: &mut String,
+    first: &mut bool,
+    text: &str,
+    lines: &[DeclareLine],
+    referenced: &impl Fn(&str) -> bool,
+    counting: bool,
+    keep_context: bool,
+) {
     for line in lines {
-        if line.sym_start < line.sym_end && !referenced(&text[line.sym_start..line.sym_end]) {
+        if line.sym_start < line.sym_end
+            && !(keep_context && line.context)
+            && !referenced(&text[line.sym_start..line.sym_end])
+        {
             continue;
         }
         let piece = match (counting, line.shipped) {
             (false, Shipped::Folded) => continue,
             (false, Shipped::Fold { label_start, label_end }) => {
-                if !first {
+                if !*first {
                     out.push('\n');
                 }
                 out.push_str("  br label %");
                 out.push_str(&text[label_start..label_end]);
-                first = false;
+                *first = false;
                 continue;
             }
             _ => &text[line.start..line.end],
         };
-        if !first {
+        if !*first {
             out.push('\n');
         }
         out.push_str(piece);
-        first = false;
+        *first = false;
     }
-    out
 }
 
 #[cfg(test)]
@@ -1944,6 +2220,7 @@ fn emit_ir_for(
         beat,
         type_ids,
         strings: Vec::new(),
+        globals: String::new(),
         interned: HashMap::default(),
         body: String::new(),
         lift_counter: 0,
@@ -2005,6 +2282,10 @@ struct Backend<'a> {
     beat: crate::beat::Beats,
     type_ids: HashMap<&'a str, i64>,
     strings: Vec<(String, Vec<u8>)>,
+    /// Constant tables the module defines, written beside the interned
+    /// strings rather than into `body`, so the scans that read the body for
+    /// calls do not walk them.
+    globals: String,
     interned: HashMap<Vec<u8>, String>,
     body: String,
     lift_counter: usize,
@@ -2093,6 +2374,10 @@ struct FnEmit {
     /// i64 phi emitted beside it, so the crossing can take the raw form and
     /// leave the box for the dead-code pass.
     raw_byte: crate::hash::Map<String, String>,
+    /// Whether the hot predicates are called in their two-word forms, which
+    /// the dev tier's instruction selector can lower where it cannot lower a
+    /// call passing a `%KValue`.
+    words: bool,
 }
 /// Whether a line the emitters wrote is a stack slot, asked at the ONE place
 /// the needle can be.
@@ -2121,7 +2406,7 @@ pub fn is_a_stack_slot(text: &str) -> bool {
 }
 
 impl FnEmit {
-    fn new() -> Self {
+    fn new(words: bool) -> Self {
         FnEmit {
             out: String::new(),
             tmp: 0,
@@ -2140,6 +2425,50 @@ impl FnEmit {
             lazy_cells: Vec::new(),
             entry_allocas: Vec::new(),
             raw_byte: crate::hash::Map::default(),
+            words,
+        }
+    }
+
+    /// Writes `{r} = {call}`, where `call` asks one of the hot predicates about
+    /// a `%KValue` in the form a release module inlines. The dev tier asks the
+    /// two-word form instead (`k_not_failure_w`, `k_truthy_w`,
+    /// `k_check_rec_fast_w` in DECLARES), with the value's words pulled out
+    /// first and passed as scalars. At -O0 clang's fast instruction selector
+    /// lowers a call only when every argument is a scalar, so each call passing
+    /// a `%KValue` went to the slow selector on its own: 216 of them on the
+    /// codegen corpus. A release module never calls the two-word forms, so it
+    /// never carries them.
+    fn predicate(&mut self, r: &str, call: String) {
+        const FORMS: [(&str, &str, bool); 3] = [
+            ("call i64 @k_not_failure(%KValue ", "k_not_failure_w", false),
+            ("call i64 @k_truthy(%KValue ", "k_truthy_w", true),
+            ("call i64 @k_check_rec_fast(%KValue ", "k_check_rec_fast_w", true),
+        ];
+        if !self.words {
+            self.line(&format!("{r} = {call}"));
+            return;
+        }
+        let split = FORMS.iter().find_map(|(prefix, to, pay)| {
+            let rest = call.strip_prefix(prefix)?;
+            // A constant operand spells its own commas; it keeps the old form.
+            let end = rest.find([',', ')']).filter(|_| rest.starts_with('%'))?;
+            Some((*to, *pay, rest[..end].to_string(), rest[end..].to_string()))
+        });
+        match split {
+            Some((to, pay, value, rest)) => {
+                let tag = self.tmp();
+                self.line(&format!("{tag} = extractvalue %KValue {value}, 0"));
+                let words = match pay {
+                    true => {
+                        let p = self.tmp();
+                        self.line(&format!("{p} = extractvalue %KValue {value}, 1"));
+                        format!("i64 {tag}, i64 {p}")
+                    }
+                    false => format!("i64 {tag}"),
+                };
+                self.line(&format!("{r} = call i64 @{to}({words}{rest}"));
+            }
+            None => self.line(&format!("{r} = {call}")),
         }
     }
 
@@ -2258,6 +2587,31 @@ impl FnEmit {
     fn start_block(&mut self, label: &str) {
         let _ = writeln!(self.out, "{label}:");
         self.cur_label = label.to_string();
+    }
+
+    /// Branches on `value` to the label its case names, or to `dflt`. A
+    /// release module writes a `switch`, which its optimiser turns into a jump
+    /// table. clang's fast instruction selector at -O0 does not lower one, so
+    /// a dev module asks the cases in turn with a compare and a branch each,
+    /// which it does.
+    fn switch_on(&mut self, value: &str, dflt: &str, cases: &[String]) {
+        if !self.words {
+            self.line(&format!("switch i64 {value}, label %{dflt} [\n{}\n  ]", cases.join("\n")));
+            return;
+        }
+        for case in cases {
+            let (n, target) = case
+                .trim()
+                .strip_prefix("i64 ")
+                .and_then(|c| c.split_once(", label %"))
+                .expect("a case reads `i64 N, label %L`");
+            let hit = self.tmp();
+            self.line(&format!("{hit} = icmp eq i64 {value}, {n}"));
+            let next = self.label();
+            self.line(&format!("br i1 {hit}, label %{target}, label %{next}"));
+            self.start_block(&next);
+        }
+        self.line(&format!("br label %{dflt}"));
     }
 
     fn bind(&mut self, name: &str, temp: &str) {
@@ -2590,22 +2944,23 @@ fn symbols_before_newline(text: &str) -> crate::hash::Set<&str> {
 /// The symbols DECLARES calls from its own inline definitions, written down
 /// rather than scanned for.
 ///
-/// DECLARES is a `const`: the same 62 names in every process kanso has ever
-/// run. Reading them off it cost 62 answers for 1,024 lines of scanning, and
+/// DECLARES is a `const`: the same 65 names in every process kanso runs.
+/// Reading them off it once cost 62 answers for 1,024 lines of scanning, and
 /// the scanning was 94% of the index this branch builds -- 292,701 of the
 /// 278,812 `called_symbols` charges on the start-up corpus came through
 /// `Once::call_once_force`, over 1,023 calls, against 18,159 from the emitter's
 /// two. On a program that emits one `print` that is the whole of the index's
 /// cost, and `kanso play` paid it to learn nothing it could not have been told.
 ///
-/// Sorted, and asked with a binary search: 62 names is six comparisons an ask
-/// and 163 asks a module, where a hash set costs a table to build first.
+/// Sorted, which is what the oracle's binary search needs. Emit never asks
+/// the list: each `declare` line reads `DeclareLine::context`, computed from
+/// it when the compiler is built.
 ///
 /// `tests/the_declares_symbols_are_the_ones_declares_calls.rs` recomputes this
 /// list from DECLARES with the same scan it replaces and asserts they are the
 /// same set, so an edit to DECLARES that adds or drops a call turns that spec
 /// red rather than silently leaving a symbol out of a program's declares.
-static DECLARES_CONTEXT_CALLS: &[&str] = &[
+const DECLARES_CONTEXT_CALLS: &[&str] = &[
     "k_b_append",
     "k_b_append_byte",
     "k_b_append_mut",
@@ -2652,6 +3007,7 @@ static DECLARES_CONTEXT_CALLS: &[&str] = &[
     "k_check_int",
     "k_check_rec",
     "k_check_rec_fast",
+    "k_check_rec_fast_w",
     "k_check_tag",
     "k_field",
     "k_field_fast",
@@ -2663,15 +3019,38 @@ static DECLARES_CONTEXT_CALLS: &[&str] = &[
     "k_int",
     "k_none",
     "k_not_failure",
+    "k_not_failure_w",
     "k_str_lit",
     "k_str_lit_fast",
     "k_truthy",
     "k_truthy_bad",
+    "k_truthy_w",
     "llvm.memcpy.p0.p0.i64",
 ];
 
+/// The binary search each `declare` line used to ask at emit time, kept as
+/// the oracle for `DeclareLine::context`.
+#[cfg(test)]
 fn declares_context_calls(sym: &str) -> bool {
     DECLARES_CONTEXT_CALLS.binary_search(&sym).is_ok()
+}
+
+#[cfg(test)]
+mod every_declare_line_knows_whether_declares_calls_it {
+    use super::{declares_context_calls, DECLARES, DECLARES_DEV, DECLARE_LINES, DECLARE_LINES_DEV};
+
+    #[test]
+    fn the_flag_is_the_search() {
+        let mut asked = 0;
+        for (text, lines) in [(DECLARES, &DECLARE_LINES), (DECLARES_DEV, &DECLARE_LINES_DEV)] {
+            for line in lines.iter().filter(|l| l.sym_start < l.sym_end) {
+                let sym = &text[line.sym_start..line.sym_end];
+                assert_eq!(line.context, declares_context_calls(sym), "{sym}");
+                asked += usize::from(line.context);
+            }
+        }
+        assert!(asked > 0, "no declare line is one DECLARES calls, so this proves nothing");
+    }
 }
 
 #[cfg(test)]
@@ -3169,13 +3548,47 @@ fn dsym(name: &str, arity: usize) -> String {
     quoted(&format!("d_{name}_{arity}"))
 }
 
+/// A lookup from a type id to one of `names`, read out of a constant array
+/// rather than a switch, with `fallback` for an id past the end.
+fn type_table(globals: &mut String, symbol: &str, names: &[String], fallback: &str) {
+    let slots = names.len();
+    let row: Vec<String> = names.iter().map(|n| format!("ptr @{n}")).collect();
+    let _ = writeln!(
+        globals,
+        "@{symbol}_table = private unnamed_addr constant [{slots} x ptr] [{}]",
+        row.join(", ")
+    );
+    let _ = writeln!(
+        globals,
+        "define ptr @{symbol}(i64 %id) {{\nentry:\n  %in = icmp ult i64 %id, {slots}\n  \
+         br i1 %in, label %T, label %TD\nT:\n  \
+         %at = getelementptr [{slots} x ptr], ptr @{symbol}_table, i64 0, i64 %id\n  \
+         %name = load ptr, ptr %at\n  ret ptr %name\nTD:\n  ret ptr @{fallback}\n}}\n"
+    );
+}
+
+/// Word `n` of `value` when it is a literal `{ i64 A, i64 B }`. Reading one
+/// off a constant with `extractvalue` is an instruction clang's fast selector
+/// at -O0 does not handle, and it sends the rest of the block to the slow one.
+fn literal_word(value: &str, n: usize) -> Option<&str> {
+    let inner = value.strip_prefix("{ i64 ")?.strip_suffix(" }")?;
+    let (a, b) = inner.split_once(", i64 ")?;
+    Some(if n == 0 { a } else { b })
+}
+
 fn inline_tag(f: &mut FnEmit, value: &str) -> String {
+    if let Some(word) = literal_word(value, 0) {
+        return word.to_string();
+    }
     let t = f.tmp();
     f.line(&format!("{t} = extractvalue %KValue {value}, 0"));
     t
 }
 
 fn inline_payload(f: &mut FnEmit, value: &str) -> String {
+    if let Some(word) = literal_word(value, 1) {
+        return word.to_string();
+    }
     let t = f.tmp();
     f.line(&format!("{t} = extractvalue %KValue {value}, 1"));
     t
@@ -3202,7 +3615,7 @@ fn inline_not_failure(f: &mut FnEmit, value: &str) -> String {
 /// reached BECAUSE a value is outside the set recorded for it.
 fn not_failure_test(f: &mut FnEmit, value: &str) -> String {
     let r = f.tmp();
-    f.line(&format!("{r} = call i64 @k_not_failure(%KValue {value})"));
+    f.predicate(&r, format!("call i64 @k_not_failure(%KValue {value})"));
     let ok = f.tmp();
     f.line(&format!("{ok} = icmp ne i64 {r}, 0"));
     ok
@@ -3362,8 +3775,7 @@ impl<'a> Backend<'a> {
             f.line(&format!("{p} = insertvalue %parsed {a}, i64 {w1}, 1"));
             format!("%parsed {p}")
         } else if self.unboxed_param(callee, arity, i) {
-            let p = f.tmp();
-            f.line(&format!("{p} = extractvalue %KValue {e}, 1"));
+            let p = inline_payload(f, e);
             format!("i64 {p}")
         } else {
             format!("%KValue {e}")
@@ -3633,7 +4045,7 @@ impl<'a> Backend<'a> {
         expr: &Expr,
         outer: &FnEmit,
     ) -> Result<(), String> {
-        let mut f = FnEmit::new();
+        let mut f = FnEmit::new(!self.inline_helpers);
         f.origin_prefix = outer.origin_prefix.clone();
         f.hako = outer.hako.clone();
         f.hako = outer.hako.clone();
@@ -3929,10 +4341,10 @@ impl<'a> Backend<'a> {
             // seeded table makes this count differ between two runs of one
             // binary, which the compile rows read as a reproduction failure.
             let twin_calls = called_symbols(&call_twins);
-            let referenced = |sym: &str| {
-                body_calls.contains(sym) || twin_calls.contains(sym) || declares_context_calls(sym)
-            };
-            declares_for(referenced, counters_wanted(), self.inline_helpers)
+            // A symbol DECLARES's own definitions call is kept as well, and
+            // each line knows whether it is one: `DeclareLine::context`.
+            let called = |sym: &str| body_calls.contains(sym) || twin_calls.contains(sym);
+            declares_for_program(called, called, counters_wanted(), self.inline_helpers, true)
         };
         let mut out = String::new();
         out.push_str(&call_twins);
@@ -3968,6 +4380,7 @@ impl<'a> Backend<'a> {
             );
             let _ = writeln!(out, "@{name}_lit = internal global %KValue zeroinitializer");
         }
+        out.push_str(&self.globals);
         out.push('\n');
         out.push_str(&body);
         let narrowed = narrow_tailcc(out);
@@ -4012,102 +4425,100 @@ impl<'a> Backend<'a> {
     }
 
     fn emit_type_names(&mut self) {
-        let mut body = String::new();
-        body.push_str("define ptr @k_type_name(i64 %id) {\nentry:\n");
-        let mut arms = String::new();
-        let mut cases = String::new();
+        // One slot per id: 0 is the entry, a declared type is its position
+        // plus one, and an alias's position falls back, since the alias
+        // constructs and matches under its origin's id.
+        let (fallback, _) = self.intern("record\0");
+        let (entry_name, _) = self.intern("entry\0");
+        let slots = self.program.types.len() + 1;
+        let mut names = vec![fallback.clone(); slots];
+        names[0] = entry_name;
         // The spelling a rendered record prints, beside the identity the
         // runtime matches on. RULED 2026-08-29, "records print qualified,
         // everywhere": the root's own types take the root's name.
-        let mut shown_arms = String::new();
+        let mut shown = names.clone();
         let mut differs = false;
         let root = self.program.root.clone();
         for ty in &self.program.types {
             if ty.origin.is_some() {
-                // an alias shares its origin's id; the origin owns the case
+                // an alias shares its origin's id; the origin owns the slot
                 continue;
             }
-            let id = self.type_ids[ty.name.as_str()];
+            let id = self.type_ids[ty.name.as_str()] as usize;
             let (name, _len) = self.intern(&format!("{}\0", ty.name));
-            let _ = writeln!(cases, "    i64 {id}, label %T{id}");
-            let _ = writeln!(arms, "T{id}:\n  ret ptr @{name}");
-            let shown = match root.is_empty() || crate::ast::has_slash(&ty.name) {
+            shown[id] = match root.is_empty() || crate::ast::has_slash(&ty.name) {
                 true => name.clone(),
                 false => {
                     differs = true;
                     self.intern(&format!("{root}/{}\0", ty.name)).0
                 }
             };
-            let _ = writeln!(shown_arms, "T{id}:\n  ret ptr @{shown}");
+            names[id] = name;
         }
-        let (entry_name, _) = self.intern("entry\0");
-        let _ = writeln!(cases, "    i64 0, label %T0");
-        let _ = writeln!(arms, "T0:\n  ret ptr @{entry_name}");
-        let _ = writeln!(shown_arms, "T0:\n  ret ptr @{entry_name}");
-        let (fallback, _) = self.intern("record\0");
-        let _ = writeln!(body, "  switch i64 %id, label %TD [\n{cases}  ]");
-        body.push_str(&arms);
-        let _ = writeln!(body, "TD:\n  ret ptr @{fallback}");
-        body.push_str("}\n\n");
+        type_table(&mut self.globals, "k_type_name", &names, &fallback);
         // A program whose root declares no bare type prints every record
         // under the identity's spelling, and the second table is an alias
         // rather than a copy of the first.
         match differs {
-            true => {
-                body.push_str("define ptr @k_type_shown(i64 %id) {\nentry:\n");
-                let _ = writeln!(body, "  switch i64 %id, label %TD [\n{cases}  ]");
-                body.push_str(&shown_arms);
-                let _ = writeln!(body, "TD:\n  ret ptr @{fallback}");
-                body.push_str("}\n\n");
-            }
-            false => body.push_str("@k_type_shown = alias ptr (i64), ptr @k_type_name\n\n"),
+            true => type_table(&mut self.globals, "k_type_shown", &shown, &fallback),
+            false => self.globals.push_str("@k_type_shown = alias ptr (i64), ptr @k_type_name\n"),
         }
-        self.body.push_str(&body);
     }
 
-    /// Field metadata for keyed reads: name-indexed lookup resolves against
-    /// these per-type switch tables at runtime.
+    /// Field metadata for keyed reads: name-indexed lookup reads these
+    /// per-type tables at runtime.
     fn emit_type_fields(&mut self) {
-        let mut tables: Vec<(i64, Vec<String>)> = vec![(0, vec!["key".into(), "value".into()])];
+        let slots = self.program.types.len() + 1;
+        let mut tables: Vec<Vec<String>> = vec![Vec::new(); slots];
+        tables[0] = vec!["key".into(), "value".into()];
         for ty in &self.program.types {
             if ty.origin.is_some() {
-                // an alias shares its origin's id; the origin owns the case
+                // an alias shares its origin's id; the origin owns the slot
                 continue;
             }
-            let id = self.type_ids[ty.name.as_str()];
-            let fields = ty.fields.iter().map(|(name, _, _)| name.clone()).collect();
-            tables.push((id, fields));
+            let id = self.type_ids[ty.name.as_str()] as usize;
+            tables[id] = ty.fields.iter().map(|(name, _, _)| name.clone()).collect();
         }
-        let mut body = String::new();
-        body.push_str("define i64 @k_type_field_count(i64 %id) {\nentry:\n");
-        let mut cases = String::new();
-        let mut arms = String::new();
-        for (id, fields) in &tables {
-            let _ = writeln!(cases, "    i64 {id}, label %C{id}");
-            let _ = writeln!(arms, "C{id}:\n  ret i64 {}", fields.len());
-        }
-        let _ = writeln!(body, "  switch i64 %id, label %CD [\n{cases}  ]");
-        body.push_str(&arms);
-        body.push_str("CD:\n  ret i64 0\n}\n\n");
-        body.push_str("define ptr @k_type_field_name(i64 %id, i64 %i) {\nentry:\n");
         let (empty, _) = self.intern("\0");
-        let mut cases = String::new();
-        let mut arms = String::new();
-        for (id, fields) in &tables {
-            let _ = writeln!(cases, "    i64 {id}, label %T{id}");
-            let mut inner = String::new();
-            for (i, field) in fields.iter().enumerate() {
-                let (name, _) = self.intern(&format!("{field}\0"));
-                let _ = writeln!(inner, "    i64 {i}, label %T{id}F{i}");
-                let _ = writeln!(arms, "T{id}F{i}:\n  ret ptr @{name}");
+        let mut globals = String::new();
+        let counts: Vec<String> = tables.iter().map(|f| f.len().to_string()).collect();
+        let _ = writeln!(
+            globals,
+            "@k_type_field_counts = private unnamed_addr constant [{slots} x i64] [{}]",
+            counts.iter().map(|c| format!("i64 {c}")).collect::<Vec<_>>().join(", ")
+        );
+        let mut rows = Vec::with_capacity(slots);
+        for (id, fields) in tables.iter().enumerate() {
+            if fields.is_empty() {
+                rows.push("ptr null".to_string());
+                continue;
             }
-            let _ = writeln!(arms, "T{id}:\n  switch i64 %i, label %TD [\n{inner}  ]");
+            let names: Vec<String> = fields
+                .iter()
+                .map(|field| format!("ptr @{}", self.intern(&format!("{field}\0")).0))
+                .collect();
+            let _ = writeln!(
+                globals,
+                "@k_type_fields_{id} = private unnamed_addr constant [{} x ptr] [{}]",
+                names.len(),
+                names.join(", ")
+            );
+            rows.push(format!("ptr @k_type_fields_{id}"));
         }
-        let _ = writeln!(body, "  switch i64 %id, label %TD [\n{cases}  ]");
-        body.push_str(&arms);
-        let _ = writeln!(body, "TD:\n  ret ptr @{empty}");
-        body.push_str("}\n\n");
-        self.body.push_str(&body);
+        let _ = writeln!(
+            globals,
+            "@k_type_fields = private unnamed_addr constant [{slots} x ptr] [{}]",
+            rows.join(", ")
+        );
+        let _ = writeln!(
+            globals,
+            "define i64 @k_type_field_count(i64 %id) {{\nentry:\n  %in = icmp ult i64 %id, {slots}\n  br i1 %in, label %C, label %CD\nC:\n  %at = getelementptr [{slots} x i64], ptr @k_type_field_counts, i64 0, i64 %id\n  %n = load i64, ptr %at\n  ret i64 %n\nCD:\n  ret i64 0\n}}\n"
+        );
+        let _ = writeln!(
+            globals,
+            "define ptr @k_type_field_name(i64 %id, i64 %i) {{\nentry:\n  %n = call i64 @k_type_field_count(i64 %id)\n  %in = icmp ult i64 %i, %n\n  br i1 %in, label %T, label %TD\nT:\n  %at = getelementptr [{slots} x ptr], ptr @k_type_fields, i64 0, i64 %id\n  %row = load ptr, ptr %at\n  %f = getelementptr ptr, ptr %row, i64 %i\n  %name = load ptr, ptr %f\n  ret ptr %name\nTD:\n  ret ptr @{empty}\n}}\n"
+        );
+        self.globals.push_str(&globals);
     }
 
     /// A group whose arms discriminate on one parameter with int/none literals
@@ -4319,7 +4730,7 @@ impl<'a> Backend<'a> {
     ) -> Result<(), String> {
         let params = self.abi_params(name, arity);
         let ret = self.ret_ty(name, arity);
-        let mut f = FnEmit::new();
+        let mut f = FnEmit::new(!self.inline_helpers);
         f.ret_ty = ret.to_string();
         f.group = name.to_string();
         f.arity = arity;
@@ -4414,14 +4825,17 @@ impl<'a> Backend<'a> {
             if !rec_arms.is_empty() {
                 cases.push(format!("    i64 7, label %{rec7}"));
             }
-            f.line(&format!("switch i64 {tag}, label %{dflt} [\n{}\n  ]", cases.join("\n")));
+            f.switch_on(&tag, &dflt, &cases);
             if !rec_arms.is_empty() {
                 f.start_block(&rec7);
                 for (id, nfields, label) in &rec_arms {
                     let c = f.tmp();
-                    f.line(&format!(
-                        "{c} = call i64 @k_check_rec_fast(%KValue {dv}, i64 {id}, i64 {nfields})"
-                    ));
+                    f.predicate(
+                        &c,
+                        format!(
+                            "call i64 @k_check_rec_fast(%KValue {dv}, i64 {id}, i64 {nfields})"
+                        ),
+                    );
                     let b = f.tmp();
                     f.line(&format!("{b} = icmp ne i64 {c}, 0"));
                     let next = f.label();
@@ -4504,15 +4918,7 @@ impl<'a> Backend<'a> {
                 for (_, l) in &nullary_cases {
                     cases.push(format!("    i64 256, label %{l}"));
                 }
-                f.line(&format!(
-                    "switch i64 %x{disc}r, label %{generic_label} [
-{}
-  ]",
-                    cases.join(
-                        "
-"
-                    )
-                ));
+                f.switch_on(&format!("%x{disc}r"), &generic_label, &cases);
             } else {
                 let is_int = f.tmp();
                 f.line(&format!("{is_int} = icmp eq i64 {tag}, 0"));
@@ -4523,15 +4929,7 @@ impl<'a> Backend<'a> {
                 let payload = inline_payload(&mut f, &dv);
                 let cases: Vec<String> =
                     int_cases.iter().map(|(n, l)| format!("    i64 {n}, label %{l}")).collect();
-                f.line(&format!(
-                    "switch i64 {payload}, label %{generic_label} [
-{}
-  ]",
-                    cases.join(
-                        "
-"
-                    )
-                ));
+                f.switch_on(&payload, &generic_label, &cases);
                 f.start_block(&not_int);
                 // nullary tags, then generic (non-failure) or propagation
                 for (t, l) in &nullary_cases {
@@ -4800,7 +5198,7 @@ impl<'a> Backend<'a> {
         }
         let params = self.abi_params(name, arity);
         let ret = self.ret_ty(name, arity);
-        let mut f = FnEmit::new();
+        let mut f = FnEmit::new(!self.inline_helpers);
         f.ret_ty = ret.to_string();
         f.group = name.to_string();
         f.arity = arity;
@@ -5119,7 +5517,7 @@ impl<'a> Backend<'a> {
     ) -> Result<(), String> {
         let check = |backend: &mut Backend, f: &mut FnEmit, call: String| {
             let c = f.tmp();
-            f.line(&format!("{c} = {call}"));
+            f.predicate(&c, call);
             let b = f.tmp();
             f.line(&format!("{b} = icmp ne i64 {c}, 0"));
             let ok = f.label();
@@ -5202,7 +5600,7 @@ impl<'a> Backend<'a> {
                 for member in &members {
                     let call = self.type_check_call(value, member)?;
                     let c = f.tmp();
-                    f.line(&format!("{c} = {call}"));
+                    f.predicate(&c, call);
                     acc = Some(match acc {
                         None => c,
                         Some(prev) => {
@@ -5375,10 +5773,13 @@ impl<'a> Backend<'a> {
                                 .get(ty.as_str())
                                 .ok_or_else(|| format!("native backend: unknown type `{ty}`"))?;
                             let c = f.tmp();
-                            f.line(&format!(
-                                "{c} = call i64 @k_check_rec_fast(%KValue {value}, i64 {id}, i64 {})",
-                                fields.len()
-                            ));
+                            f.predicate(
+                                &c,
+                                format!(
+                                    "call i64 @k_check_rec_fast(%KValue {value}, i64 {id}, i64 {})",
+                                    fields.len()
+                                ),
+                            );
                             let b = f.tmp();
                             f.line(&format!("{b} = icmp ne i64 {c}, 0"));
                             let ok = f.label();
@@ -6014,7 +6415,7 @@ impl<'a> Backend<'a> {
             self.emit_ret(f, &c);
             f.start_block(&check);
             let tv = f.tmp();
-            f.line(&format!("{tv} = call i64 @k_truthy(%KValue {c})"));
+            f.predicate(&tv, format!("call i64 @k_truthy(%KValue {c})"));
             let tb = f.tmp();
             f.line(&format!("{tb} = icmp ne i64 {tv}, 0"));
             let early_label = f.label();
@@ -6386,7 +6787,7 @@ impl<'a> Backend<'a> {
         };
         f.start_block(&check);
         let tv = f.tmp();
-        f.line(&format!("{tv} = call i64 @k_truthy(%KValue {v})"));
+        f.predicate(&tv, format!("call i64 @k_truthy(%KValue {v})"));
         let tb = f.tmp();
         f.line(&format!("{tb} = icmp ne i64 {tv}, 0"));
         f.line(&format!("br i1 {tb}, label %{then_label}, label %{else_label}"));
@@ -7758,7 +8159,7 @@ impl<'a> Backend<'a> {
         body: &Expr,
         outer: &FnEmit,
     ) -> Result<(), String> {
-        let mut f = FnEmit::new();
+        let mut f = FnEmit::new(!self.inline_helpers);
         f.origin_prefix = outer.origin_prefix.clone();
         f.hako = outer.hako.clone();
         // A lifted lambda is still code from the file it was written in, and
