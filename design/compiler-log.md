@@ -11276,3 +11276,10 @@ requires both binaries to print the same thing and every internal function
 the dev module defines to be named on some other line of it. With every helper
 counted as reached it went red on both programs, listing the helpers nothing
 called.
+
+CI's rows for the pruning, taken into the goldens. The dev row read the same
+number twice in one job:
+
+    codegen_instructions_dev     431,017,582 ->   396,949,978   -7.90%
+    startup_instructions             866,508 ->       775,903   -10.46%
+    emit_instructions             43,320,461 ->    43,295,953   -24,508
