@@ -11383,3 +11383,39 @@ objective does not weigh machine-code size.
 Over main with kanso#1597, whose two checks cost start-up 47 instructions on
 the same 870,779 this change added 25 to, the start-up row is written as
 870,851: the two moves summed. The next CI round says whether they add.
+
+## 2026-09-24 — the lexer stops allocating per word and per number
+
+Four allocations or conversions the lexer made for every token of a kind,
+each for a value that lived one statement:
+
+- `lex_word` built a `String` for every identifier and keyword, matched it
+  against the keywords and copied it into a `Name`. On an ascii line the word
+  is now borrowed from the source.
+- `Scanner::new` decoded every line into characters as UTF-8. An ascii line's
+  bytes are now widened instead.
+- An operator was found by collecting it and the next character into a
+  two-character `String` and comparing that to each spelling. It is now
+  compared a character at a time.
+- An integer literal was collected into a `String` and parsed by `BigInt`'s
+  general radix conversion. One of eighteen digits or fewer, which always
+  fits a `u64`, is now summed where it lies; a longer one takes the old path.
+
+Measured on this container against main, in the gates' own environment:
+
+    compile_instructions     36,020,748 ->  35,022,168   -2.77%
+    entry_instructions      128,029,876 -> 124,752,107   -2.56%
+    library_instructions    128,618,323 -> 125,307,971   -2.57%
+    startup_instructions        876,369 ->     871,732   -0.53%
+    compile_allocs               27,313 ->      22,567   -17.38%
+
+The allocation count is the same on every host, so its golden moves here.
+The instruction rows are CI's to measure. The interpreted run's row does not
+move, since it counts only the run.
+
+`tests/an_integer_literal_reads_the_same_at_every_width.rs` reads literals
+either side of the eighteen-digit edge, at `i64`'s limit, and past 64 bits,
+on both engines. Past 64 bits it requires the interpreter's answer and the
+native engine's refusal by name. It went red with the fast path widened to
+twenty digits. The identifier and line changes are exercised by every
+program the suite compiles.

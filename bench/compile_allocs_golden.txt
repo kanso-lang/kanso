@@ -477,4 +477,4 @@
 # compile_allocs 27,397 -> 27,313, a FALL of 84 (-0.3066%).
 # The alias canonicaliser's fixpoint ran twice over a program nothing had
 # rewritten between the rounds. 84 allocations is what the second round cost.
-compile_allocs=27313
+compile_allocs=22567
