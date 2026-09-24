@@ -11892,6 +11892,45 @@ spec in the suite passes except the wasm engine's, which needs a
 The interpreted run moves because the interpreter lexes and parses its
 program before running it. Every row falls, and the rise is banked.
 
+## 2026-09-24 — a dispatcher's heavy arms stay out of its frame
+
+A group of clauses that switches on its argument's type compiles to one
+function, and LLVM gives that function one frame. The encoder's
+`encode_onto` is eight clauses: true, false, null, an int and a float each
+append a few bytes, and a string, a list and a map each run a loop. LLVM
+inlined all three loops, the escaper's among them, and their registers are
+callee-saved ones. So the function pushed six registers and popped them on
+every one of runbench's 2,380,860 calls, 1,438,110 of them for a scalar
+whose arm is one call into the runtime. An earlier experiment kept only the
+escaper out of line and read +1.24%: the list and map arms still needed the
+frame, so every call kept it and the string arm paid for a call on top.
+
+`kept_out` names the callees to keep as calls. A name is loop-bearing when
+it sits in a cycle of the call graph or can reach one. In a group that
+switches on type, with at least one clause that calls nothing loop-bearing
+and at least one that does, every loop-bearing function the heavy clauses
+name is defined `noinline`. On runbench that is `escape_onto`,
+`encode_list` and `encode_map` and nothing else. Two wider rules were tried
+first and are recorded so they are not tried again. The same rule without
+the type condition marked eighty-six functions, the decoder's scanning
+loops among them, and runbench rose 5.7%. Marking the decoder's four value
+parsers as well as the encoder's three added only 921,789 instructions of
+saving over the encoder alone.
+
+Measured on this container, both sides built from one tree:
+
+    encodebench   3,516,841,151 -> 3,438,943,935   -77,897,216   -2.22%
+    livebench     2,795,835,875 -> 2,683,373,059  -112,462,816   -4.02%
+    runbench      1,846,944,217 -> 1,820,829,169   -26,115,048   -1.41%
+    oneshot          20,252,928 ->    19,971,752      -281,176   -1.39%
+    widebench        30,090,895 ->    29,722,895      -368,000   -1.22%
+
+The other nine benchmarks read the same to the instruction. The instruction
+rows will be CI's. No allocation counter moves. The ratchet gains a row,
+"a dispatcher's heavy arms inlined into the frame its cheap arms pay", whose
+mutation takes the mark off both headers that write it; the work vein is its
+witness, and the table above is that mutation measured.
+
 ## 2026-09-24 — a number is read out of the bytes it sits in
 
 Every JSON number the decoder meets ends in `text/to_int (text/slice cs
