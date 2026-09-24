@@ -10898,3 +10898,55 @@ with `ld: unknown options: -plugin-opt=O3`. `-plugin-opt` is the gold plugin's
 spelling and Apple's ld64 has no such option, so the split is Linux-only and
 other hosts keep `-O3` for both steps, as they were. The rows above are
 Linux's and do not move.
+
+## 2026-09-24 — the program cache keys its IR at a third of SipHash's cost
+
+`kanso play` and `kanso run` reuse a linked binary when its key matches, and
+the key was `DefaultHasher` over the emitted IR. The start-up corpus is one
+`print`, and its IR is 40,413 bytes, almost all of it runtime declarations.
+Hashing that cost 101,260 instructions, about a tenth of the start-up row:
+SipHash at two and a half instructions a byte.
+
+`hash::key_of` replaces it. Two lanes take alternate words in xxHash64's
+round (multiply the word, add, rotate, multiply) and murmur3's finaliser
+mixes each lane. The key is 128 bits, where SipHash gave this one 64, and a
+collision here runs a different program than the one asked for.
+
+    startup_instructions   995,155 -> 908,786   -8.68%   (this container)
+
+**The first draft was wrong, and the spec found it.** It used xor, multiply
+and rotate, with no multiply after the rotate. An odd multiply flips only the
+top bit when the top bit flips, the rotate carries that bit to bit 30 whole,
+and a flip of bit 30 in the lane's next word erases it: 1,010 of 32,768
+single-bit changes to an IR-shaped input met another one's key.
+`tests/the_program_key_sees_every_bit.rs` holds three properties: every
+single-bit change gives a key no other one gives; no pair of top-bit changes
+in words the same lane reads cancels (65,280 pairs); and a short input is not
+one padded with zeros. Watched red twice. Without the rotate, 3,866 single
+changes collide and 4,920 pairs cancel. Without the multiply after it, 3,633
+and 61.
+
+**The same profile named a second cost.** `narrow_tailcc` strips the tail
+call convention from functions no `musttail` reaches, and it read the
+program's body three times, splitting it into lines on each pass. Splitting a
+string is a search for each newline, and the three splits of the one-line
+program's body were 75,721 instructions. The body is now split once and its
+lines walked three times. runbench's IR, 1,199,233 bytes, is byte-identical
+before and after.
+
+    startup_instructions   908,786 -> 876,314   -3.57%   (this container)
+                           995,155 -> 876,314  -11.94%   both changes
+
+A shortcut was tried first and dropped: returning the body untouched when it
+never spells `tailcc`. That never fires, because every user function is
+emitted with the convention and this pass is what strips it, and the row
+read 913,993 against 908,786.
+
+**CI's rows**, taken into the goldens:
+
+    startup_instructions     975,983 ->     870,779   -10.78%
+    emit_instructions     44,879,920 ->  43,339,387    -3.43%
+
+`emit_instructions` counts `codegen::emit_ir` on the compile corpus, and the
+single split is what moved it. No other row moved. The objective rises, and the
+rise is banked.
