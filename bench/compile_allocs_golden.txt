@@ -486,4 +486,9 @@
 # per-group vectors, the module's name set, the demand pass's discard rows,
 # fusion's two name maps, and the shadow resolver's locals and per-scope set.
 # compile_allocs 27,313 -> 15,341, a FALL of 11,972 (-43.83%).
-compile_allocs=15341
+#
+# 2026-09-24, this branch (claude/std-checked-once). An import of a shipped
+# module no longer asks that module's merged check, whose answer is fixed when
+# the binary is built. compile_allocs 15,341 -> 14,354, a FALL of 987
+# (-6.4337%).
+compile_allocs=14354

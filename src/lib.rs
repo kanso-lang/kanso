@@ -2710,8 +2710,12 @@ fn load_dependencies(
                 files.iter().map(|(n, s)| (format!("{path}/{n}"), s.to_string())).collect();
             let borrowed: Vec<(&str, &str)> =
                 qualified.iter().map(|(n, s)| (n.as_str(), s.as_str())).collect();
-            let mut dep =
-                compile_module_inner(std::path::Path::new(path), false, visited, Some(&borrowed))?;
+            let shipped = path.starts_with("std/");
+            let outer = SHIPPED_STD.with(|c| c.replace(shipped));
+            let compiled =
+                compile_module_inner(std::path::Path::new(path), false, visited, Some(&borrowed));
+            SHIPPED_STD.with(|c| c.set(outer));
+            let mut dep = compiled?;
             qualify(&mut dep, qual, &mut exports, &mut claims, &mut surfaced);
             dep_program.types.extend(dep.types);
             dep_program.fns.extend(dep.fns);
@@ -3372,6 +3376,44 @@ fn walk_children<'a, F: FnMut(&'a ast::Expr) -> bool>(e: &'a ast::Expr, f: &mut 
 
 /// A module is a directory: every .kso file in it shares one namespace.
 /// Canonical ordering holds per file; an overload group lives in one file.
+/// Every module the loader serves from the copy embedded in this binary.
+/// `tests/every_shipped_module_checks_clean.rs` holds this list to the
+/// loader's table and compiles each with its merged check asked.
+pub const SHIPPED_MODULES: [&str; 15] = [
+    "std/render",
+    "std/list",
+    "std/time",
+    "std/io",
+    "std/os",
+    "std/text",
+    "std/math",
+    "std/bits",
+    "std/testing",
+    "std/net",
+    "std/net/http",
+    "std/path",
+    "std/sha256",
+    "std/regexp",
+    "std/json",
+];
+
+/// Compiles one shipped module the way an import loads it, with the merged
+/// check asked rather than skipped. An import skips it because the answer is
+/// fixed when the binary is built; this is where that answer is checked.
+pub fn check_shipped(path: &str) -> Result<(), String> {
+    let outer = CHECK_SHIPPED.with(|c| c.replace(true));
+    let import = ast::Import {
+        path: path.to_string(),
+        span: diag::Span::at(0, 0),
+        alias: None,
+        renames: Vec::new(),
+    };
+    let mut visited = crate::hash::Set::default();
+    let loaded = load_dependencies(std::path::Path::new("."), &[import], &mut visited);
+    CHECK_SHIPPED.with(|c| c.set(outer));
+    loaded.map(|_| ())
+}
+
 pub fn compile_module(dir: &std::path::Path, require_entry: bool) -> Result<ast::Program, String> {
     LOCK.with(|l| *l.borrow_mut() = hako::read_lock(dir));
     let mut visited = crate::hash::Set::default();
@@ -3397,6 +3439,11 @@ thread_local! {
     /// Whether the current root compile is an entry file, whose imports may
     /// name the module directory it sits in or beside without being cycles.
     static ENTRY_COMPILE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// Whether the module being compiled is the shipped library's, loaded
+    /// from the copy embedded in this binary. Set around a `std/` import only.
+    static SHIPPED_STD: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// Set by `check_shipped`, which asks the check the loader skips.
+    static CHECK_SHIPPED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     /// Modules handed in as sources rather than read from disk, by import
     /// path. The browser compiles a program with no filesystem under it, and
     /// a program is a library plus the entry file that runs it.
@@ -3900,9 +3947,19 @@ fn compile_module_loaded(
     let counts = inline::group_sizes(&merged);
     let builtins = inline::aliases_from(&merged, &counts);
     let wrappers = inline::wrapper_table(&builtins, &counts);
-    let diags = phase::watched("check_merged", || {
-        check::check_merged_after_aliases_with(&merged, require_entry, &rewritten, builtins)
-    });
+    // A shipped library module, merged with its dependencies, holds nothing
+    // but the shipped library, which is fixed when this binary is built and
+    // checked clean as a root by `every_shipped_module_checks_clean`. Its
+    // merged check answers the same empty list in every program that imports
+    // it, and it was asked once per import in every compile.
+    let shipped =
+        SHIPPED_STD.with(|c| c.get()) && embedded.is_some() && !CHECK_SHIPPED.with(|c| c.get());
+    let diags = match shipped {
+        true => Vec::new(),
+        false => phase::watched("check_merged", || {
+            check::check_merged_after_aliases_with(&merged, require_entry, &rewritten, builtins)
+        }),
+    };
     inline::apply_wrappers(&mut merged, &wrappers);
     if !diags.is_empty() {
         // The name an import writes, never the file behind it. A module in a

@@ -126,7 +126,11 @@
 # refuse, so it is gone and its rounds and visits with it. What is left is
 # inference's own. compile_peak_bytes reads 776,055 on this container, the
 # figure already recorded, so the row below is unchanged. Banked.
-front_end_rounds=47
+#
+# 2026-09-24, this branch (claude/std-checked-once). An import of a shipped
+# module no longer asks that module's merged check, whose answer is fixed when
+# the binary is built. front_end_rounds 47 -> 15, a FALL of 32 (-68.0851%).
+front_end_rounds=15
 # 2026-09-06 (the array's second walk over the same whitespace): visits 17,169
 # -> 17,115, a fall of 54, or 0.31%, and rounds hold at 40. Two expressions
 # leave lib/json — `array_items`'s `skip_ws` binding and its use — so the front
@@ -186,7 +190,12 @@ front_end_rounds=47
 # 22,437, a FALL of 12 (-0.0534%); front_end_rounds unchanged at 62. One
 # binding fewer in lib/json/number.kso is one expression fewer for the
 # front end to visit on each round it is dirty.
-front_end_visits=15474
+#
+# 2026-09-24, this branch (claude/std-checked-once). An import of a shipped
+# module no longer asks that module's merged check, whose answer is fixed when
+# the binary is built. front_end_visits 15,474 -> 7,576, a FALL of 7,898
+# (-51.0405%).
+front_end_visits=7576
 # 2026-08-31 (the AST's identifiers are inline names): 728,030 -> 713,606, a
 # fall of 14,424, or 1.98%. Banked. The peak falls with the traffic because a
 # short name's bytes now live inside the AST node the allocator already gave

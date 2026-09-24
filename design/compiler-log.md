@@ -11891,3 +11891,54 @@ spec in the suite passes except the wasm engine's, which needs a
 
 The interpreted run moves because the interpreter lexes and parses its
 program before running it. Every row falls, and the rise is banked.
+
+## 2026-09-24 — an import of a shipped module skips a check fixed at build time
+
+Every module is compiled on top of its dependencies and then checked merged
+with them: its own functions and theirs, through one inference and every
+check that reads it. For a shipped module that merged program is the
+shipped library and nothing else, embedded in the binary by `include_str!`,
+so the check gives the same empty answer in every program that imports it.
+It was asked once per import in every compile anyway. On the entry corpus
+that was seventeen merged checks, one per module the ten imports reach,
+before the entry's own; `check_merged_after_aliases_with` was 54.5 million of
+the row's 119.6 million instructions.
+
+An import of a `std/` module now skips that check. The loader marks the
+compile it starts for a `std/` path, and only that path: a module handed in
+by the browser and the embedded `./hako` are checked as before. The entry
+path's own merged check still reads every function the program holds,
+shipped ones included. Planting a division by a literal zero in std/text
+showed it. A program importing std/text is refused at that check whether or
+not the module's own check runs.
+
+`kanso::check_shipped` asks the skipped check for one module, and
+`tests/every_shipped_module_checks_clean.rs` asks it for every module in
+`SHIPPED_MODULES`. It also holds that list to the loader's table, read out
+of the source, so a module added to the table cannot be skipped by every
+import and checked by nothing. With the planted division the spec went red
+on `std/text` with `error[value]: division by zero (module std/text)`.
+
+Measured on this container, main and the branch built and counted here:
+
+    compile_instructions     33,752,913 ->  26,242,711   -22.25%
+    entry_instructions      120,345,927 ->  86,840,719   -27.84%
+    library_instructions    120,905,216 ->  87,395,127   -27.72%
+    startup_instructions        682,061 ->     659,077    -3.37%
+    compile_allocs               15,341 ->      14,354    -6.43%
+    front_end_rounds                 47 ->          15
+    front_end_visits             15,474 ->       7,576
+    interp_allocs             1,049,281 ->   1,048,350
+    interp_instructions     879,786,540 -> 879,803,604   +17,064
+
+The allocation, round and visit counts are the same on every host and move
+here; the instruction rows are CI's. `compile_peak_bytes` does not move: the
+front end's peak is reached later than any of the skipped checks.
+`interp_instructions` rises by 17,064, two millionths, with its allocations
+down 931. The interpreted run's anchor counts the run and not the compile,
+so this reads as layout, the move this family of rows makes on an edit to
+the compiler's own Rust.
+
+`tests/inference_passes.rs` counted four whole-program inference passes for
+its sample module and counts two now. The sample imports two shipped
+modules, and each of those skipped checks carried one inference pass.
