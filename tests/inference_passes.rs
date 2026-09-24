@@ -7,6 +7,11 @@
 //! moving either number. One did, and every gate in the repository stayed
 //! green.
 //!
+//! It read four until 2026-09-24, when an import of a shipped module stopped
+//! asking that module's merged check: two of the four were std modules the
+//! sample imports, whose answer is fixed when the binary is built and is
+//! asked by `tests/every_shipped_module_checks_clean.rs` instead.
+//!
 //! Pinned here as a watched trend, not a floor. A pass added for a good
 //! reason is fine; saying which one and why in design/compiler-log.md is the
 //! price of moving the number.
@@ -25,10 +30,10 @@ fn passes_for_the_sample() -> u64 {
 }
 
 #[test]
-fn the_front_end_infers_the_whole_program_four_times() {
+fn the_front_end_infers_the_whole_program_twice() {
     assert_eq!(
         passes_for_the_sample(),
-        4,
+        2,
         "the whole-program inference pass count moved; if that is intended, \
          name the pass and the reason in design/compiler-log.md and update \
          this number"
