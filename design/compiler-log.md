@@ -12469,3 +12469,44 @@ and `emitted_defines` 118 for the decoder, and `emitted_other_lines` 115,794
 and `emitted_other_defines` 1,731 over the other thirteen. The compile
 golden's corpus rows sum to `lines` 1,505, one more each, and `module_lines`
 reads 3,581.
+
+## 2026-09-24 — four more ideas measured and declined
+
+Each of these was built and measured on the run program, and each gave back
+less than it cost.
+
+- Parsing a number's digits eight at a time. The float and integer parsers
+  took fast_float's eight-digit conversion, with the digits shifted up so the
+  unused lanes read as leading zeros. runbench rose 1,768,671,540 ->
+  1,772,691,930 (+4,020,390): `k_b_to_float_slice` 41,479,317 -> 45,289,035
+  and `k_b_to_int_slice` 21,977,802 -> 22,188,474. A chunk costs about
+  thirty-five instructions, and the run's numbers have three or four digits
+  either side of the point, which the byte loop reads for about nine a digit.
+  It would pay on runs of five digits or more.
+- Giving a list four slots on its first push instead of eight. runbench rose
+  13,825,862 (+0.78%) and `sh_buf` fell 108,745,936 -> 101,402,528, but
+  `arena_peak_bytes` stayed at 5,050,064. The peak is counted in 1 MiB blocks
+  and the saving drops none of them.
+- Arena blocks of 256 KiB instead of 1 MiB, on the tree of kanso#1614.
+  runbench rose 1,710,701,594 -> 1,722,748,393 (+0.70%) and
+  `arena_peak_bytes` fell 5,050,064 -> 4,787,920. Scored by the objective's
+  marginals that is about +0.06 for memory against -0.04 for instructions,
+  and the memory side is where this program's live set happens to fall
+  against a block boundary: 512 KiB reads the same peak as 1 MiB.
+- Marking bytes known to be valid UTF-8 so that `utf8` of them skips the
+  check, on the tree of kanso#1614, where runbench reads 1,708,174,154. A
+  fourth header word held a magic value when the bytes were a string's view,
+  a slice of known bytes cut at two character boundaries, or a builder that
+  had been appended only known pieces and ascii bytes. Skipping every check
+  outright reads 1,673,709,248, so -34,464,906 was the most it could give.
+  Tracked through every append, `k_b_utf8` fell 57,584,088 -> 11,241,558 but
+  runbench rose to 1,738,916,203 (+30,742,049). The byte arms paid a test per
+  byte (`str_char` +10,361,142, `escape_onto` +9,750,330), the counts the
+  check had seeded were taken later by `k_str_chars_scan` (+13,280,220), and
+  the larger arms pushed `encode_onto` out of its callers (+35,175,886 over
+  the encoder's four functions). Tracked only on views and their slices, with
+  every owned buffer unknown so that no append writes more, runbench rose to
+  1,721,492,961 (+13,318,807). Of what `utf8` spends on this program, the
+  builders' checks are the part that costs, and the decoder's tokens, which
+  a slice could have vouched for, are ascii of four to seven bytes: checking
+  one costs less than proving its two ends.
