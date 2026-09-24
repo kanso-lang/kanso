@@ -66,6 +66,10 @@ fn every_rendered_float_reads_back_as_itself_and_no_shorter_one_does() {
 #include <stdlib.h>
 #include <math.h>
 
+/* the runtime's counting switch and the one counter the core bumps */
+#define K_COUNTING 0
+static long long k_stat_ryu_short;
+
 {digits}
 {declen}
 {copy}
@@ -78,7 +82,7 @@ static long long render(double d, char* buf) {{
 }}
 static uint64_t bits_of(double d) {{ uint64_t b; memcpy(&b, &d, 8); return b; }}
 
-static long long seen, bad_trip, bad_len, bad_short;
+static long long seen, bad_trip, bad_len, bad_short, bad_near;
 static double first_bad; static int have_first;
 static const char* first_why = "";
 
@@ -106,6 +110,29 @@ static void one(double d) {{
        shortest failures that were the counter's, not the renderer's. */
     char dig[24]; int e10;
     int k = ryu_d2d(d < 0 ? -d : d, dig, &e10);
+    /* Closest: of the k-digit decimals that read back as d, the one nearest
+       it. glibc's `%.*e` is exact, so its digits are the nearest k-digit
+       decimal, rounded half-even; when that one reads back, it is the one to
+       choose. It need not read back. Below a power of two the doubles are
+       twice as dense, so the interval that reads back as d is half as wide on
+       that side, and the nearest decimal can sit outside it while a farther
+       one above sits inside: 2^-1017 prints as 7.120236347223045e-307 though
+       ...044 is nearer. Round trip and shortest both pass a renderer that
+       picks a neighbour of the right length. */
+    if (d != 0) {{
+        char near[40], got[24]; int g = 0;
+        snprintf(near, sizeof near, "%.*e", k - 1, fabs(d));
+        for (const char* c = near; *c && *c != 'e'; c++) if (*c != '.') got[g++] = *c;
+        got[g] = 0;
+        if (bits_of(strtod(near, NULL)) == bits_of(fabs(d))
+            && (g != k || memcmp(got, dig, (size_t)k) != 0)) {{
+            bad_near++;
+            if (!have_first) {{ first_bad = d; have_first = 1; first_why = "closest"; }}
+            if (bad_near <= 5)
+                printf("  near %.17g -> \"%s\" but the nearest %d digits are \"%s\"\n",
+                       d, dig, k, got);
+        }}
+    }}
     if (k > 1) {{
         snprintf(shorter, sizeof shorter, "%.*e", k - 2, d);
         if (bits_of(strtod(shorter, NULL)) == bits_of(d)) {{
@@ -134,6 +161,18 @@ int main(void) {{
         one((double)m / 1000.0);
         one(-(double)m / 100.0);
     }}
+    /* 2b. short decimals of every length a double holds, at every scale the
+       renderer's short path searches, and the doubles either side of each */
+    for (long long i = 0; i < 1000000; i++) {{
+        x ^= x << 13; x ^= x >> 7; x ^= x << 17;
+        static const double p10[23] = {{1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8,
+            1e9, 1e10, 1e11, 1e12, 1e13, 1e14, 1e15, 1e16, 1e17, 1e18, 1e19, 1e20,
+            1e21, 1e22}};
+        int len = 1 + (int)(x % 17);
+        double m = (double)((x >> 8) % (uint64_t)p10[len]);
+        double v = m / p10[(x >> 40) % 23];
+        one(v); one(nextafter(v, 0.0)); one(nextafter(v, INFINITY));
+    }}
     /* 3. both sides of every binary exponent, subnormals included */
     for (int e = -1074; e <= 1023; e++) {{
         double p = ldexp(1.0, e);
@@ -150,10 +189,11 @@ int main(void) {{
     }}
 
     printf("%lld rendered, %lld do not read back, %lld length disagrees, "
-           "%lld not shortest\n", seen, bad_trip, bad_len, bad_short);
+           "%lld not shortest, %lld not closest\n", seen, bad_trip, bad_len, bad_short,
+           bad_near);
     if (have_first) printf("first %s at %.17g (bits %016llx)\n",
                            first_why, first_bad, (unsigned long long)bits_of(first_bad));
-    return (bad_trip || bad_len || bad_short) != 0;
+    return (bad_trip || bad_len || bad_short || bad_near) != 0;
 }}
 "#
     );
