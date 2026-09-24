@@ -12527,3 +12527,34 @@ micro corpus reads maps between writes that keep the order, break it, repeat a
 key, outgrow the first buffer and share another map's pairs, and every engine
 prints the same maps. With the insert made to extend an alias whatever the
 new key, the native build printed a descending map in the order it was put.
+
+## 2026-09-24 — a builder only one function holds grows by realloc
+
+A builder grows by doubling, and a grow at a site the linearity analysis
+proved unique took a new buffer, copied the old one into it and freed the
+old one. That is what `realloc` does, and glibc does it better: it extends
+the block in place when the space after it is free, and past its mmap
+threshold it remaps the pages instead of copying them. The unique grow now
+calls `realloc`, counted as the malloc and the free it replaces so that
+`bytes_malloc`, `bytes_freed` and `allocs` keep their meaning. The old and
+new buffers are also never both held, and the run program's
+`held_peak_bytes` was taken at exactly that moment, when the encoder's
+output builder went from about 128 KB to about 256 KB.
+
+Carried with the ordered view in the same pull request. On this container,
+each against main before either:
+
+    ordered view alone  runbench -4,800,039   held_peak_bytes 728,040 -> 416,312
+    realloc alone       runbench -20,873,318  held_peak_bytes 728,040 -> 589,266
+
+and the two together, against main with kanso#1613:
+
+    runbench         1,739,715,210 -> 1,710,701,594   -29,013,616   -1.67%
+    held_peak_bytes        728,040 ->       277,538     -450,502
+
+Most of the instruction saving is the memcpy that the remap skips.
+
+`a_builder_that_outgrows_its_buffer_is_never_held_twice` in the mem vein
+appends 100,000 bytes to a unique builder and reads `held_peak_bytes=135182`,
+the last buffer alone. The ratchet row `regrow` sends the grow back through
+malloc, copy and free, and the fixture reads 202,780, the last two buffers.

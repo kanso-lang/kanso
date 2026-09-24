@@ -1896,7 +1896,19 @@ ordered_view = row
   (breaking "ordered_pairs_copied_into_a_view")
   release
 
-rows_b1p = text/concat rows_b1o [list_test_first framed_view ordered_view]
+# A builder only one function holds grows by realloc. The mutation sends the
+# grow back through malloc, copy and free, and the fixture
+# a_builder_that_outgrows_its_buffer_is_never_held_twice reads
+# held_peak_bytes=202780 against its 135182.
+regrow = row
+  "a unique builder copied to grow"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_unique_builder_copied_to_grow")
+  release
+
+rows_b1p = text/concat rows_b1o [list_test_first framed_view ordered_view regrow]
 
 rows_b = text/concat rows_b1p [compile_mem compile_mem_host]
 

@@ -8711,6 +8711,27 @@ static __attribute__((noinline, cold, preserve_most)) KBuf* k_bytes_buf_malloc(l
     }
     return buf;
 }
+/* The unique builder's grow, where the old buffer has no other holder: one
+   realloc in place of a malloc, a copy and a free. glibc extends the block
+   where it can and, past its mmap threshold, remaps the pages rather than
+   copying them; and the old and new buffers are never both held, which is
+   the moment the run program's `held_peak_bytes` was taken. Counted as the
+   malloc and the free it replaces, so the counters keep their meaning. */
+static __attribute__((noinline, cold, preserve_most)) KBuf* k_bytes_buf_regrow(KBuf* old,
+                                                                              long long cap) {
+    long long was = (long long)sizeof(KBuf) + old->cap;
+    KBuf* buf = realloc(old, sizeof(KBuf) + (size_t)cap);
+    if (!buf) { fputs("out of memory\n", stderr); exit(1); }
+    if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) {
+        if (K_COUNTING) k_stat_allocs++;
+        k_stat_alloc_bytes += (long long)(sizeof(KBuf) + (size_t)cap);
+        if (K_COUNTING) k_stat_bytes_malloc++;
+        if (K_COUNTING) k_stat_bytes_freed++;
+        k_stat_held_live += (long long)(sizeof(KBuf) + (size_t)cap) - was;
+        if (k_stat_held_live > k_stat_held_peak) k_stat_held_peak = k_stat_held_live;
+    }
+    return buf;
+}
 static __attribute__((noinline, cold, preserve_most)) void k_bytes_buf_release(KBuf* old) {
     if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) {
         if (K_COUNTING) k_stat_bytes_freed++;
@@ -8745,6 +8766,17 @@ static __attribute__((noinline)) KValue k_b_append_grow(KValue acc, KBytes* a,
        an allocator that reclaims nothing pays for every intermediate size a
        builder passes through rather than the size it reached, where malloc
        plus a free on the owned path pays for one buffer at a time. */
+    if (mutate && !dies && k_bytes_malloced(a)) {
+        KBuf* grown = k_bytes_buf_regrow(((KBuf*)a->data) - 1, cap);
+        grown->cap = cap;
+        grown->used = a->len + n;
+        unsigned char* at = (unsigned char*)(grown + 1);
+        k_copy_short((char*)at + a->len, (const char*)src, n);
+        a->len += n;
+        a->data = at;
+        a->cap = cap;
+        return acc;
+    }
     KBuf* buf;
     long long marked;
     if (dies) {
