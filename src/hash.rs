@@ -174,3 +174,64 @@ pub const fn digest_of(bytes: &[u8]) -> (u64, u64) {
 /// of what this is for: that nothing walks the source at run time, and that
 /// this constant is the digest of the bytes it names.
 pub const RUNTIME_DIGEST: (u64, u64) = digest_of(include_str!("runtime.c").as_bytes());
+
+/// A 128-bit key for bytes read at RUN time, where `digest_of` is for bytes
+/// known when the compiler is built.
+///
+/// `cached_program_binary` keys the linked program on its IR, and a collision
+/// there runs a different program than the one asked for. `DefaultHasher`
+/// gave it 64 bits of SipHash at about two and a half instructions a byte:
+/// the one-line start-up corpus emits 40,413 bytes of IR, mostly runtime
+/// declarations, and hashing them cost 101,260 instructions, about a tenth of
+/// the start-up row.
+///
+/// Two lanes take alternate words, in xxHash64's round: the word is
+/// multiplied, added, rotated, and multiplied again. A multiply carries a
+/// difference only upward, so the rotate brings a high-bit difference back
+/// down, and the multiply after it spreads that difference before the next
+/// word arrives. Both halves matter. Without the rotate a difference
+/// confined to the top bits stays there and a later one can cancel it, which
+/// is the shape of the word-FNV in `digest_of`, and why that one carries a
+/// second, rotating accumulator. Without the second multiply the top bit is
+/// the exception: an odd multiply flips only the top bit when the top bit
+/// flips, the rotate moves it to bit 30 whole, and a flip of bit 30 in the
+/// lane's next word erases it. The first draft of this function had that
+/// shape, and 1,010 of 32,768 single-bit changes met another one's key.
+/// Each lane is then run through murmur3's finaliser so every output bit
+/// depends on every input bit.
+pub fn key_of(bytes: &[u8]) -> (u64, u64) {
+    const K1: u64 = 0x9e37_79b9_7f4a_7c15;
+    const K2: u64 = 0xc2b2_ae3d_27d4_eb4f;
+    let mut a: u64 = 0x2545_f491_4f6c_dd1d;
+    let mut b: u64 = 0x1656_67b1_9e37_79f9;
+    let round = |acc: u64, word: &[u8]| {
+        acc.wrapping_add(u64::from_le_bytes(word.try_into().unwrap()).wrapping_mul(K2))
+            .rotate_left(31)
+            .wrapping_mul(K1)
+    };
+    let mut pairs = bytes.chunks_exact(16);
+    for pair in &mut pairs {
+        let (x, y) = pair.split_at(8);
+        a = round(a, x);
+        b = round(b, y);
+    }
+    let mut tail = [0u8; 16];
+    let rest = pairs.remainder();
+    tail[..rest.len()].copy_from_slice(rest);
+    let (x, y) = tail.split_at(8);
+    a = round(a, x);
+    b = round(b, y);
+    // The zero-padded tail cannot tell a short input from one ending in
+    // zeros, so the length goes in as well.
+    a ^= bytes.len() as u64;
+    b = b.wrapping_add(bytes.len() as u64);
+    (fmix(a ^ b.rotate_left(32)), fmix(b ^ a))
+}
+
+fn fmix(mut h: u64) -> u64 {
+    h ^= h >> 33;
+    h = h.wrapping_mul(0xff51_afd7_ed55_8ccd);
+    h ^= h >> 33;
+    h = h.wrapping_mul(0xc4ce_b9fe_1a85_ec53);
+    h ^ (h >> 33)
+}

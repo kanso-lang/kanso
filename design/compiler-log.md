@@ -10898,3 +10898,33 @@ with `ld: unknown options: -plugin-opt=O3`. `-plugin-opt` is the gold plugin's
 spelling and Apple's ld64 has no such option, so the split is Linux-only and
 other hosts keep `-O3` for both steps, as they were. The rows above are
 Linux's and do not move.
+
+## 2026-09-24 — the program cache keys its IR at a third of SipHash's cost
+
+`kanso play` and `kanso run` reuse a linked binary when its key matches, and
+the key was `DefaultHasher` over the emitted IR. The start-up corpus is one
+`print`, and its IR is 40,413 bytes, almost all of it runtime declarations.
+Hashing that cost 101,260 instructions, about a tenth of the start-up row:
+SipHash at two and a half instructions a byte.
+
+`hash::key_of` replaces it. Two lanes take alternate words in xxHash64's
+round (multiply the word, add, rotate, multiply) and murmur3's finaliser
+mixes each lane. The key is 128 bits, where SipHash gave this one 64, and a
+collision here runs a different program than the one asked for.
+
+    startup_instructions   995,155 -> 923,919   -7.16%   (this container)
+
+**The first draft was wrong, and the spec found it.** It used xor, multiply
+and rotate, with no multiply after the rotate. An odd multiply flips only the
+top bit when the top bit flips, the rotate carries that bit to bit 30 whole,
+and a flip of bit 30 in the lane's next word erases it: 1,010 of 32,768
+single-bit changes to an IR-shaped input met another one's key.
+`tests/the_program_key_sees_every_bit.rs` holds three properties: every
+single-bit change gives a key no other one gives; no pair of top-bit changes
+in words the same lane reads cancels (65,280 pairs); and a short input is not
+one padded with zeros. Watched red twice. Without the rotate, 3,866 single
+changes collide and 4,920 pairs cancel. Without the multiply after it, 3,633
+and 61.
+
+CI's start-up row goes into the golden. `compile_instructions` and the other
+layout rows may move with the compiler's bytes; they are projected from CI.
