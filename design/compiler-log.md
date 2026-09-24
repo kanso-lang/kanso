@@ -10935,3 +10935,37 @@ plain one. The spec builds both tiers and went red on each with
 `-fuse-ld=bfd` in that tier's place.
 
 CI's rows go into the goldens.
+
+## 2026-09-24 — a build runs clang's jobs without the driver
+
+A build spawned three processes: the clang driver, `clang -cc1`, and the
+linker. The driver of a dev build on the codegen corpus retired 31,702,963
+instructions, 26,450,962 of them in the dynamic loader's `_dl_start`
+relocating libLLVM and libclang-cpp. Its only work was deciding the two
+commands it then ran, and those depend on the toolchain, the flags and the
+file names, never on the program.
+
+So the driver is asked once, with `-###`, for a build whose input and output
+carry placeholder names in a stage directory of their own. The two commands
+are kept under a key naming both tools, every flag and object, and the two
+environment variables the driver reads for paths. Every later build runs them
+directly with its own names put back, and the link writes straight to the
+build's output. The driver still runs when it prints anything but two jobs,
+when a job's program is missing, when `-save-temps` is asked for, off Linux,
+and when `KANSO_CLANG_DRIVER` is set.
+
+    codegen, dev tier        434,010,676 ->   401,968,983   -7.38%   (this container)
+    codegen, release tier  1,676,647,397 -> 1,644,593,553   -1.91%
+
+Both counts are the child tree with the job cache warm, the way the gate
+reads it. The binaries are byte-identical to the driver's on both tiers.
+`tests/a_build_runs_clang_s_jobs_without_its_driver.rs` builds each tier
+through the driver, then by asking and by replaying, and compares the bytes.
+It went red with the output's placeholder left in the link: no `main` was
+written where the driver's had been.
+
+CLAUDE.md lists the codegen row's child tree as "the clang driver, the
+convention probe's clang, `clang -cc1` and ld". A warm build no longer has
+the driver in it.
+
+CI's rows go into the goldens.

@@ -1193,7 +1193,7 @@ fn release_clang(stem: &str, ll_path: &str) -> std::io::Result<std::process::Exi
         .arg(&hot_obj)
         .arg(&runtime_obj)
         .arg("-lm")
-        .status()
+        .without_driver()
 }
 
 /// Dev (the default): the program compiles unoptimized and links against a
@@ -1218,7 +1218,195 @@ fn dev_clang(stem: &str, ll_path: &str) -> std::io::Result<std::process::ExitSta
         .arg(ll_path)
         .arg(&runtime_obj)
         .arg("-lm")
-        .status()
+        .without_driver()
+}
+
+/// A clang command that runs the jobs its driver would have run, without the
+/// driver.
+///
+/// Every LLVM process spends most of its start-up relocating libLLVM: the
+/// driver of a dev build is 31,702,963 instructions, 83% of them in the
+/// dynamic loader, and it does nothing a build needs beyond deciding the two
+/// commands it then spawns -- `clang -cc1` and the linker. Those commands
+/// depend on the toolchain, the flags and the file names, and on nothing a
+/// program's IR says. So the driver is asked once, with `-###`, for a build
+/// whose files carry placeholder names in a directory of their own; the
+/// answer is kept under a key naming the tools, the flags and the objects;
+/// and every later build runs the two commands with its own names put back.
+///
+/// Anything unexpected -- a driver that prints other than two jobs, a key
+/// that cannot be formed, a job whose program is missing -- runs the driver
+/// as before. `KANSO_CLANG_DRIVER` forces the driver, which is how the spec
+/// compares the two.
+trait WithoutDriver {
+    fn without_driver(&mut self) -> std::io::Result<std::process::ExitStatus>;
+}
+
+impl WithoutDriver for std::process::Command {
+    fn without_driver(&mut self) -> std::io::Result<std::process::ExitStatus> {
+        let args: Vec<String> = self.get_args().map(|a| a.to_string_lossy().into_owned()).collect();
+        if cfg!(target_os = "linux") && std::env::var_os("KANSO_CLANG_DRIVER").is_none() {
+            if let Some(status) = replayed(&args) {
+                return status;
+            }
+        }
+        self.status()
+    }
+}
+
+const STAGE_MARK: &str = "\u{1}stage\u{1}";
+const IN_MARK: &str = "kanso_replay_in";
+const OUT_MARK: &str = "kanso_replay_out";
+
+/// The two jobs for `args`, run directly. None when the replay cannot be
+/// trusted, and the caller runs the driver.
+fn replayed(args: &[String]) -> Option<std::io::Result<std::process::ExitStatus>> {
+    // Exactly one `-o`, and the input is the argument after it: that is the
+    // only shape `dev_clang` and `release_clang` hand over, and anything else
+    // (the fixed-temps option adds jobs) goes to the driver.
+    let o = args.iter().position(|a| a == "-o")?;
+    if args.iter().filter(|a| *a == "-o").count() != 1
+        || args.iter().any(|a| a.starts_with("-save-temps"))
+    {
+        return None;
+    }
+    let out = std::path::Path::new(args.get(o + 1)?);
+    let ll = std::path::Path::new(args.get(o + 2)?);
+    let ll_name = ll.file_stem()?.to_str()?;
+    let out_name = out.file_name()?.to_str()?;
+    let cwd = std::env::current_dir().ok()?;
+    let ll_abs = cwd.join(ll);
+    let out_abs = cwd.join(out);
+    let mut shape: Vec<String> = args.to_vec();
+    shape[o + 1] = OUT_MARK.to_string();
+    shape[o + 2] = format!("{IN_MARK}.ll");
+
+    let identity = format!(
+        "{}|{}|{}|{}|{}",
+        tool_identity("clang")?,
+        tool_identity("ld.lld").unwrap_or_default(),
+        shape.join("\u{0}"),
+        std::env::var("LIBRARY_PATH").unwrap_or_default(),
+        std::env::var("COMPILER_PATH").unwrap_or_default(),
+    );
+    let key = kanso::hash::digest_of(identity.as_bytes());
+    let cache = std::env::temp_dir().join(format!("kanso_jobs_{:016x}{:016x}", key.0, key.1));
+
+    let stage = std::env::temp_dir().join(format!("kanso_stage_{}", pid_tag()));
+    let _ = std::fs::remove_dir_all(&stage);
+    std::fs::create_dir_all(&stage).ok()?;
+    let stage_str = stage.to_str()?.to_string();
+    let jobs = match std::fs::read_to_string(&cache).ok().and_then(|t| jobs_of(&t)) {
+        Some(jobs) => jobs,
+        None => {
+            let jobs = asked(&shape, &stage, &stage_str)?;
+            let staged = std::env::temp_dir().join(format!(
+                "kanso_jobs_{:016x}{:016x}_{}",
+                key.0,
+                key.1,
+                pid_tag()
+            ));
+            let text: Vec<String> = jobs.iter().map(|j| j.join("\u{0}")).collect();
+            if std::fs::write(&staged, text.join("\n")).is_ok() {
+                let _ = std::fs::rename(&staged, &cache);
+            }
+            jobs
+        }
+    };
+    let _ = std::fs::remove_file(stage.join(format!("{IN_MARK}.ll")));
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(&ll_abs, stage.join(format!("{ll_name}.ll"))).ok()?;
+    let put_back = |a: &str| {
+        a.replace(STAGE_MARK, &stage_str).replace(IN_MARK, ll_name).replace(OUT_MARK, out_name)
+    };
+    let mut status = None;
+    for (n, job) in jobs.iter().enumerate() {
+        let mut argv: Vec<String> = job.iter().map(|a| put_back(a)).collect();
+        // The link writes where the build asked, not into the stage.
+        if n + 1 == jobs.len() {
+            let at = argv.iter().position(|a| a == "-o")?;
+            argv[at + 1] = out_abs.to_str()?.to_string();
+        }
+        let ran =
+            std::process::Command::new(&argv[0]).args(&argv[1..]).current_dir(&stage).status();
+        let failed = !matches!(&ran, Ok(s) if s.success());
+        status = Some(ran);
+        if failed {
+            break;
+        }
+    }
+    let _ = std::fs::remove_dir_all(&stage);
+    status
+}
+
+/// The driver's jobs for `shape`, with the stage and the driver's own temporary
+/// object replaced by marks. None unless there are exactly two and both name a
+/// program that exists.
+fn asked(shape: &[String], stage: &std::path::Path, stage_str: &str) -> Option<Vec<Vec<String>>> {
+    // The driver refuses an input that is not there, even when only asked.
+    std::fs::write(stage.join(format!("{IN_MARK}.ll")), "").ok()?;
+    let said = std::process::Command::new("clang")
+        .arg("-###")
+        .args(shape)
+        .current_dir(stage)
+        .output()
+        .ok()?;
+    if !said.status.success() {
+        return None;
+    }
+    let text = String::from_utf8(said.stderr).ok()?;
+    let mut jobs: Vec<Vec<String>> =
+        text.lines().filter(|l| l.starts_with(" \"")).map(quoted_args).collect::<Option<_>>()?;
+    if jobs.len() != 2
+        || jobs.iter().any(|j| j.is_empty() || !std::path::Path::new(&j[0]).is_file())
+    {
+        return None;
+    }
+    // The object cc1 writes and the linker reads: the driver names it in its
+    // temp directory with a random suffix, and the replay names it in the stage.
+    let at = jobs[0].iter().position(|a| a == "-o")?;
+    let temp_obj = jobs[0].get(at + 1)?.clone();
+    let ours = format!("{stage_str}/{IN_MARK}.o");
+    for job in &mut jobs {
+        for a in job.iter_mut() {
+            *a = a.replace(&temp_obj, &ours).replace(stage_str, STAGE_MARK);
+        }
+    }
+    Some(jobs)
+}
+
+/// One `-###` line: arguments in double quotes, with `\` escaping the next
+/// character.
+fn quoted_args(line: &str) -> Option<Vec<String>> {
+    let mut args = Vec::new();
+    let mut chars = line.chars();
+    loop {
+        match chars.next() {
+            None => return Some(args),
+            Some(' ') => continue,
+            Some('"') => {
+                let mut arg = String::new();
+                loop {
+                    match chars.next()? {
+                        '\\' => arg.push(chars.next()?),
+                        '"' => break,
+                        c => arg.push(c),
+                    }
+                }
+                args.push(arg);
+            }
+            Some(_) => return None,
+        }
+    }
+}
+
+fn jobs_of(text: &str) -> Option<Vec<Vec<String>>> {
+    let jobs: Vec<Vec<String>> =
+        text.split('\n').map(|j| j.split('\u{0}').map(str::to_string).collect()).collect();
+    match jobs.len() == 2 && jobs.iter().all(|j| std::path::Path::new(&j[0]).is_file()) {
+        true => Some(jobs),
+        false => None,
+    }
 }
 
 /// What names a cached runtime object: everything that decides what clang
