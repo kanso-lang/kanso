@@ -11962,3 +11962,34 @@ num-bigint takes underscores as separators, where its own `to_float` and
 native refuse it. And `"123456789012345678901234567890.5"` is reported as
 overflowing natively and as not an integer by the interpreter. Those are the
 next change, with an adversarial golden of their own.
+
+CI's sitting, over main ef56eac8:
+
+    runbench      1,813,492,695 -> 1,805,310,423   -8,182,272   -0.45%
+    jsonbench     1,196,422,558 -> 1,187,932,917   -8,489,641   -0.71%
+    oneshot          19,927,890 ->    19,872,995      -54,895
+    livebench     2,645,995,367 -> 2,645,949,841      -45,526
+
+Several rows are worse, each by a small amount:
+
+- `text` rises on all fourteen binaries, 3,744 bytes each and 3,309,600
+  summed. Every binary carries both new doors and the two text parsers,
+  whether or not it reads a number.
+- `emit_instructions` goes to 45,239,459 (+32,683). The emitter asks each
+  one-argument call whether it is one of the two conversions over a slice.
+- `codegen_instructions_dev` goes to 287,916,082 and
+  `codegen_instructions_release` to 1,614,729,561. clang compiles the
+  larger runtime.
+- `startup_instructions` goes to 673,771 (+809).
+- `work_widebench` goes to 30,361,821 (+208,054, 0.69%). widebench binds
+  its slice to a name before converting it, so it never reaches the fused
+  door and calls `k_b_to_int` and `k_b_to_float`, which now call the text
+  parsers. On this container's clang 18 the same two binaries read
+  30,090,895 and 30,090,909. The rise is clang 19's answer to the split,
+  and the mechanism is not isolated further.
+- `work_encodebench` goes to 3,178,219,787 (+27,658), `work_digestbench`
+  to 5,867,017 (+59) and `work_readbench` to 4,630,551 (+54). None of the
+  three reads a number.
+
+The objective weighs runbench and not the others. Welfare reads 86.04
+against a floor of 86.01, and the rise is banked.

@@ -453,4 +453,7 @@
 # 2026-09-24, kanso#1603 over main 68495456, CI's sitting. The lexer and nine
 # front-end places stop allocating what they drop. startup_instructions
 # 683,920 -> 672,962, a FALL of 10,958 (-1.6022%).
-startup_instructions=672962
+#
+# 2026-09-24, kanso#1608 (numbers read in place), CI's row:
+# startup_instructions 672,962 -> 673,771, a RISE of 809 (+0.1202%).
+startup_instructions=673771

@@ -260,4 +260,7 @@
 # 2026-09-24, kanso#1603 over main 68495456, CI's sitting. The lexer and nine
 # front-end places stop allocating what they drop. emit_instructions
 # 45,259,445 -> 45,206,776, a FALL of 52,669 (-0.1164%).
-emit_instructions=45206776
+#
+# 2026-09-24, kanso#1608 (numbers read in place), CI's row: emit_instructions
+# 45,206,776 -> 45,239,459, a RISE of 32,683 (+0.0723%).
+emit_instructions=45239459
