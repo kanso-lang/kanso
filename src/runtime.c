@@ -1045,6 +1045,13 @@ static inline void k_beat_rewind(KMark* m) {
        depth it has already ranged, and `k_beat_rewind_slow` keeps its own. */
     if (__builtin_expect(!(k_buf_dirty | m->reg_any)
                          && k_blocks == m->block, 1)) {
+        /* Nothing was allocated since the mark: the same block and the same
+           pointer mean the same room left, so the two stores below would
+           write back what is already there, and no string can lie above a
+           mark nothing was allocated past, so the cursor has nothing to
+           forget. A loop that only pushes into a list it owns takes this
+           exit every iteration; escapebench's 1.55 million did. */
+        if (k_arena == m->ptr) return;
         /* The cursor names a string by its header's address, and the rewind
            hands back every address from the mark up. A string under this
            mark is not handed back, so a scan over a string that arrived from
@@ -5093,6 +5100,20 @@ static int k_order(KValue a, KValue b) {
 }
 
 KValue k_cmp(KValue a, KValue b, long long op) {
+    /* Two strings asked whether they are equal. k_eq opens a cycle-tracking
+       generation and walks a dozen tag tests to reach the same length and
+       byte compare it ends with here; std/regexp asks this of one character
+       against a pattern literal at every step, 91,378 times on runbench's
+       scan, where it cost ninety instructions a question. A one-character
+       string comes from k_str_n's cache and a literal is permanent, so the
+       same text is usually the same pointer. */
+    if (op <= 1 && a.tag == K_STR && b.tag == K_STR) {
+        KStr* sa = k_as_str(a);
+        KStr* sb = k_as_str(b);
+        int same = sa == sb
+            || (sa->len == sb->len && memcmp(sa->data, sb->data, (size_t)sa->len) == 0);
+        return k_bool(op == 0 ? same : !same);
+    }
     if (a.tag == K_SUB) a = k_sub_base(a);
     if (b.tag == K_SUB) b = k_sub_base(b);
     if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);

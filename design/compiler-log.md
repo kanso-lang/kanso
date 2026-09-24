@@ -11891,3 +11891,88 @@ spec in the suite passes except the wasm engine's, which needs a
 
 The interpreted run moves because the interpreter lexes and parses its
 program before running it. Every row falls, and the rise is banked.
+
+## 2026-09-24 — two strings compare without opening an equality generation
+
+`==` and `!=` reach the runtime as `k_cmp`, which sent every pair through
+`k_eq`. That opens a cycle-tracking generation, since a record can hold
+itself, and then walks a dozen tag tests: an opaque check on each side, two
+subtype tests, three thunk tests and the bytes-against-list pair. Only then
+does it reach the length and byte compare a string needs. std/regexp asks
+this at every step of a literal: `text/slice s at at == c`, one character
+against the pattern's. On runbench's scan that is 91,378 questions, at about
+ninety instructions each.
+
+`k_cmp` now answers two strings asked `==` or `!=` itself: the same pointer,
+or the same length and bytes. A one-character slice comes from `k_str_n`'s
+cache and a literal is permanent, so the equal case is usually the pointer.
+Anything that is not two strings takes the old road, subtypes and thunks
+included, so the two cannot disagree on a pair they both see.
+
+Measured on this container, in the gate's environment:
+
+    the scan phase alone (split/total 428)   88,511,374 ->    81,593,763
+    work_runbench                         1,856,032,715 -> 1,849,115,104   -0.37%
+
+The allocation veins and the lazy tier do not move. The instruction rows are
+CI's.
+
+`tests/golden/micro/two_strings_compare_by_their_bytes.kso` builds its pairs
+at run time: a prefix on either side, the empty string against itself and
+against a character, equal bytes behind two pointers, multi-byte text and a
+last-byte difference. With the length check dropped from the new path, the
+native engine answered `"a" == "ab"` true and the interpreter false, so the
+corpus went red on the engine that changed.
+
+The same branch then took one more runtime path. A beat's rewind at the end of
+each loop iteration checked the shelf and the registries, compared the seek
+cursor's mark and restored the arena pointer and its remaining count. When
+nothing was allocated since the mark, the pointer already equals the mark's,
+the block is the same, and so the restore writes back what is there. No
+string can lie above a mark nothing was allocated past, so the cursor has
+nothing to forget either. `k_beat_rewind` now returns there. A loop that only
+pushes into a list it owns takes that exit on every iteration. A loop that
+allocates pays one extra comparison.
+
+Measured on this container, both sides built and counted here:
+
+    runbench        1,856,032,715 -> 1,852,458,662    -3,574,053   -0.19%
+    escapebench        83,605,696 ->    80,014,690    -3,591,006   -4.30%
+    basket             32,800,063 ->    32,460,035      -340,028   -1.04%
+    encodebench     3,516,817,001 -> 3,521,676,598    +4,859,597   +0.14%
+    livebench       2,795,889,600 -> 2,800,749,197    +4,859,597   +0.17%
+    deepbench         374,547,103 ->   374,651,687      +104,584   +0.03%
+
+The encoder's loops allocate on every iteration, so they pay the comparison
+and never take the exit. The objective weighs runbench alone, and it falls.
+No allocation counter moves, and the lazy tier agrees, since the exit changes
+no state the rewind would not have written back.
+
+With both changes, runbench reads 1,856,032,715 -> 1,845,541,051 on this
+container, -10,491,664 (-0.57%). CI's rows go into the goldens.
+
+**CI's rows**, over main with kanso#1602, taken into the goldens:
+
+    work_runbench      1,813,492,695 -> 1,804,051,708    -9,440,987   -0.52%
+    work_scanbench       451,725,005 ->   417,133,254   -34,591,751   -7.66%
+    work_escapebench      80,047,462 ->    76,456,459    -3,591,003   -4.49%
+    work_basket           32,679,271 ->    32,347,253      -332,018   -1.02%
+    work_digestbench       5,866,958 ->     5,842,672       -24,286   -0.41%
+    work_encodebench   3,178,192,129 -> 3,179,984,475    +1,792,346   +0.06%
+    work_livebench     2,645,995,367 -> 2,653,048,163    +7,052,796   +0.27%
+    work_deepbench       366,364,093 ->   366,468,663      +104,570   +0.03%
+    work_oneshot          19,927,890 ->    19,945,518       +17,628   +0.09%
+    work_readbench         4,630,497 ->     4,630,893          +396   +0.01%
+    work_widebench        30,153,767 ->    30,153,803           +36   +0.00%
+    codegen_instructions_dev      287,891,869 ->   287,894,238   +2,369
+    codegen_instructions_release 1,614,704,366 -> 1,614,817,091  +112,725
+
+scanbench runs the regexp scan at its full size, which is why it falls the
+furthest. The rows that rise are loops that allocate on every iteration and
+so pay the rewind's comparison without taking its exit. The encoder is the
+largest of them. `text`, summed over the fourteen binaries, reads 3,258,368
+against 3,256,224: 128 to 224 bytes a binary, since every binary carries both
+paths. The two codegen rows
+rise because the runtime the link carries is larger: the dev row counts the
+link, and the release row compiles the hot unit where the rewind lives.
+The objective weighs runbench, which falls, and the rise is banked.

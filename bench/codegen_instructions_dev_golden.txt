@@ -174,4 +174,9 @@
 # CI's sitting on run 35419502516. codegen_instructions_dev 596,153,756 -> 596,158,173, +4,417 (+0.0007%).
 # The dev tier is -O0, so the shorter runtime.c barely registers.
 # `codegen_dev_again` read 596,158,173.
-codegen_instructions_dev=287891869
+#
+# 2026-09-24, kanso#1604 over main 68495456, CI's sitting. The runtime the
+# link carries holds the string fast path and the rewind's early exit.
+# codegen_instructions_dev 287,891,869 -> 287,894,238, a RISE of 2,369
+# (+0.0008%).
+codegen_instructions_dev=287894238

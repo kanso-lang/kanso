@@ -690,19 +690,25 @@
 # 9,830,203 still stand above it, priced in kanso#1432's and kanso#1430's
 # entries; nothing here moves them.
 #
-jsonbench 1196422558
-encodebench 3178192129
-oneshot 19927890
-basket 32679271
-widebench 30153767
-deepbench 366364093
-escapebench 80047462
-pendbench 209065629
-indexbench 2927172
-scanbench 451725005
-digestbench 5866958
-readbench 4630497
-livebench 2645995367
+# 2026-09-24, kanso#1604 over main 68495456, CI's sitting: two strings compare
+# without opening an equality generation, and a beat's rewind returns when
+# nothing was allocated since its mark. runbench 1,813,492,695 -> 1,804,051,708
+# (-0.5206%), scanbench -7.6577%, escapebench -4.4861%, basket -1.0160%; the
+# encoder's allocating loops pay the rewind's comparison, encodebench +0.0564%
+# and livebench +0.2665%.
+jsonbench 1196422554
+encodebench 3179984475
+oneshot 19945518
+basket 32347253
+widebench 30153803
+deepbench 366468663
+escapebench 76456459
+pendbench 209065628
+indexbench 2927133
+scanbench 417133254
+digestbench 5842672
+readbench 4630893
+livebench 2653048163
 # 2026-09-06 (the run program joins): `runbench 3043743748` is a NEW row and
 # nothing regressed to make it appear. It is the program Clay's gavel that day
 # made the objective's whole run-speed term, and the thirteen rows above it
@@ -760,4 +766,4 @@ livebench 2645995367
 #
 # The uniform -8 across six rows is one instruction on a path each program
 # takes eight times, and the four flat rows never take it at all.
-runbench 1813492695
+runbench 1804051708
