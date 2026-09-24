@@ -12456,9 +12456,12 @@ build printed invalid UTF-8 and ran out of stack.
 The analysis asks only about bindings of `bytes` and the parameters a view
 is handed to, and a program with no such binding pays one scan of its
 top-level statements. Its first build asked about every parameter of every
-group and put CI's `emit_instructions` at 45,378,600 against 42,771,526. On
-this container `emit_ir_for` over the codegen corpus reads 43,093,902 against
-main's 42,923,030, where that first build read 45,671,353.
+group and put CI's `emit_instructions` at 45,378,600 against 42,771,526. As
+built, `emit_instructions` reads 42,892,990, +121,464 (+0.28%), the analysis
+on a corpus that does bind a view. `startup_instructions` reads 636,107
+(+550) and `codegen_instructions_release` 1,613,900,206 (+4,754), both the
+twin's text in every program. The compile, entry, library, interpreter and
+dev codegen rows fall by layout.
 
 The emitted code grows by the twin: one comment line in every program, and
 its body in the four programs that frame a view. `emitted_lines` reads 8,412

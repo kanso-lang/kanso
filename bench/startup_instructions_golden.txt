@@ -461,4 +461,7 @@
 # 2026-09-24, kanso#1611 (carrying kanso#1605, #1608, #1609 and #1610 over
 # main with kanso#1604), CI's row: startup_instructions 628,645 -> 635,557, a
 # RISE of 6,912 (+1.0995%).
-startup_instructions=635557
+#
+# 2026-09-24 (kanso#1613): a byte view read in its frame keeps its header
+# there. startup_instructions 635,557 -> 636,107, a RISE of 550 (+0.0865%).
+startup_instructions=636107
