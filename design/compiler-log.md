@@ -12448,7 +12448,8 @@ them afterwards. With the analysis made to accept every view, the native
 build printed invalid UTF-8 and ran out of stack.
 
 The emitted code grows. Every program carries the twin's comment, seven
-lines, and the programs that frame a view carry its body: `lines` reads 8,418
-for the decoder against 8,394 and 33,220 for the run program against 33,196,
-and `defines` 118 and 514. The compile golden's corpus rows each read seven
-lines more, and the module row reads `lines=3587` against 3,580.
+lines, and the four programs that frame a view carry its body as well.
+`emitted_lines` reads 8,418 and `emitted_defines` 118 for the decoder, and
+`emitted_other_lines` 115,872 and `emitted_other_defines` 1,731 over the
+other thirteen. The compile golden's corpus rows sum to `lines` 1,535, seven
+more each, and `module_lines` reads 3,587.
