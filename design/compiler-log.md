@@ -10942,5 +10942,11 @@ never spells `tailcc`. That never fires, because every user function is
 emitted with the convention and this pass is what strips it, and the row
 read 913,993 against 908,786.
 
-CI's start-up row goes into the golden. `compile_instructions` and the other
-layout rows may move with the compiler's bytes; they are projected from CI.
+**CI's rows**, taken into the goldens:
+
+    startup_instructions     975,983 ->     870,779   -10.78%
+    emit_instructions     44,879,920 ->  43,339,387    -3.43%
+
+`emit_instructions` counts `codegen::emit_ir` on the compile corpus, and the
+single split is what moved it. No other row moved. The objective rises, and the
+rise is banked.
