@@ -12469,3 +12469,51 @@ and `emitted_defines` 118 for the decoder, and `emitted_other_lines` 115,794
 and `emitted_other_defines` 1,731 over the other thirteen. The compile
 golden's corpus rows sum to `lines` 1,505, one more each, and `module_lines`
 reads 3,581.
+
+## 2026-09-24 — a long slice shares its string's bytes
+
+`text/slice` of a string now returns a header whose `data` points into its
+parent when the slice is sixty-four bytes or more, where it used to copy the
+bytes. A parent with room (`cap > 0`) is a builder, whose storage moves and
+is freed as it grows, so its slices are still copies. Every other string's
+bytes live exactly as long as the string does, and evacuation copies a view's
+own bytes and nothing around them, so a view never holds more of its parent
+than the parent would have held alone.
+
+A view does not end in a terminator, because the byte after it is its
+parent's. The runtime reads a terminator only where it hands a string to the
+C library: the three `fopen`s, both `stat`s, `getenv`, `opendir`, the argv of
+both process spawns, the directory sort's `strcmp` and the runtime's own
+error sentences, which print with `%s`. Each now goes through `k_cstr`, which
+returns the data when it is terminated and a terminated copy otherwise. The
+two copies evacuation makes wrote `len + 1` bytes, taking the terminator
+along; they now write `len` and a zero.
+
+On the run program the arena peak falls 5,050,064 -> 4,718,608 and
+`arena_blocks` 6 -> 5. `alloc_bytes` falls 413,717,453 -> 412,321,053,
+`sh_str` 35,646,128 -> 34,249,728 and `str_scans` 163 -> 161, because a view
+of a slice whose character count is known carries the count. basket and scan
+fall by a slice each. On this box runbench reads 1,739,715,210 ->
+1,739,021,439 (-693,771).
+
+The peak's makeup was read by printing the live blocks at each new peak.
+Before, the top was 1,380,032 + 1,572,880 + 1,048,576 + 1,048,576: the index
+shape's slice, the subject it was cut from, and two ordinary blocks. After, it
+is 1,572,880 and three ordinary blocks. The page's section 133 said the old
+peak was four 1 MiB blocks and one block of 855,760 bytes. That is the right
+total and an impossible shape, because a block is 1 MiB or it is exactly one
+allocation larger than 1 MiB. The section is corrected.
+
+The rest of the index shape's top is the doubling that builds the subject: a
+chain of joins whose earlier strings stay in the arena until the phase ends.
+A join cannot extend its first piece in place, because the list literal
+holding the pieces is allocated after it.
+
+Specs: `tests/golden/mem/a_long_slice_shares_its_text` reads alloc_bytes
+16,464 for a thousand slices of ninety-eight characters, one ascii and one
+walked, and 128,464 with views off. `tests/golden/runtime/
+a_long_slice_ends_where_it_was_cut` prints a sixty-four-character slice
+through an error sentence, and with `k_cstr` handing over the parent's bytes
+the sentence runs on into the rest of the line. The ratchet carries both as
+mutations.
+

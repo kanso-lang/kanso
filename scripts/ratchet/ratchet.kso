@@ -1884,9 +1884,33 @@ rows_b1oa = text/concat rows_b1n [append_rendered arm_narrowed arms_apart]
 
 rows_b1o = text/concat rows_b1oa [dedup_key_owned fused_names_owned]
 
+# A slice of a long string shares the string's bytes. The mutation makes every
+# slice a copy again, and the fixture a_long_slice_shares_its_text reads
+# alloc_bytes=128464 against its 16464.
+slice_view = row
+  "a long slice copied out of its string"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_long_slice_copied_out_of_its_string")
+  release
+
+# A view reaches the C library through `k_cstr`, which terminates it. The
+# mutation hands over the parent's bytes, and the runtime fixture
+# a_long_slice_ends_where_it_was_cut prints the rest of the parent's line.
+view_cstr = row
+  "a view handed to the c library unterminated"
+  true
+  "cargo test --release --test golden runtime_corpus_reports_endpoint_violations"
+  "specs (unit, golden, differential)"
+  (breaking "a_view_handed_to_the_c_library_unterminated")
+  release
+
 rows_b1p = text/concat rows_b1o [list_test_first framed_view]
 
-rows_b = text/concat rows_b1p [compile_mem compile_mem_host]
+rows_b1v = text/concat rows_b1p [slice_view view_cstr]
+
+rows_b = text/concat rows_b1v [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 
