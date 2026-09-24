@@ -1901,7 +1901,7 @@ slice_view = row
 view_cstr = row
   "a view handed to the c library unterminated"
   true
-  "cargo test --release --test golden runtime_corpus_reports_endpoint_violations"
+  "cargo test --release --test golden runtime_corpus"
   "specs (unit, golden, differential)"
   (breaking "a_view_handed_to_the_c_library_unterminated")
   release
