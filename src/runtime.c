@@ -9121,6 +9121,10 @@ static __attribute__((noinline, cold, preserve_most)) KValue k_b_to_int_slow(con
     return k_int(n);
 }
 
+static KValue k_to_int_text(const char* data, long long len, const char* origin);
+static KValue k_to_float_text(const char* data, long long len, const char* origin);
+KValue k_b_to_float(KValue v, const char* origin);
+
 KValue k_b_to_int(KValue sv, const char* origin) {
     if (!k_not_failure(sv)) return sv;
     if (sv.tag == K_INT) return sv;
@@ -9129,6 +9133,10 @@ KValue k_b_to_int(KValue sv, const char* origin) {
     long long len;
     if (sv.tag == K_STR) { KStr* s = k_as_str(sv); data = s->data; len = s->len; }
     else { KBytes* b = k_as_bytes(sv); data = (const char*)b->data; len = b->len; }
+    return k_to_int_text(data, len, origin);
+}
+
+static KValue k_to_int_text(const char* data, long long len, const char* origin) {
     /* Strict [-]?digits{1,18} parses in a bare loop (18 digits cannot
        overflow i64); every other shape — longer runs, leading space or '+',
        junk — falls through to strtoll so behavior stays exactly libc's. */
@@ -9143,6 +9151,36 @@ KValue k_b_to_int(KValue sv, const char* origin) {
         if (j == len) return k_int(start ? -acc : acc);
     }
     return k_b_to_int_slow(data, len, origin);
+}
+
+/* `to_int (slice cs a b)` and `to_float (slice cs a b)`, where the slice is
+   built for the one purpose of being read as a number and dropped. The JSON
+   decoder does this for every number it meets, 417,483 of them on runbench,
+   and each built a view header in the arena to hand a pointer and a length
+   to the parse. These read the range straight out of `cs`. Anything but
+   bytes and two positions inside them takes the long way, slice then parse,
+   so the two spellings cannot disagree on a value or on the err a bad range
+   gives. */
+KValue k_b_to_int_slice(KValue cs, KValue fromv, KValue tov, const char* origin) {
+    if (cs.tag == K_BYTES && fromv.tag == K_INT && tov.tag == K_INT) {
+        KBytes* b = k_as_bytes(cs);
+        long long from = fromv.payload, to = tov.payload;
+        if (from >= 1 && from <= to && to <= b->len) {
+            return k_to_int_text((const char*)b->data + (from - 1), to - from + 1, origin);
+        }
+    }
+    return k_b_to_int(k_b_slice(cs, fromv, tov), origin);
+}
+
+KValue k_b_to_float_slice(KValue cs, KValue fromv, KValue tov, const char* origin) {
+    if (cs.tag == K_BYTES && fromv.tag == K_INT && tov.tag == K_INT) {
+        KBytes* b = k_as_bytes(cs);
+        long long from = fromv.payload, to = tov.payload;
+        if (from >= 1 && from <= to && to <= b->len) {
+            return k_to_float_text((const char*)b->data + (from - 1), to - from + 1, origin);
+        }
+    }
+    return k_b_to_float(k_b_slice(cs, fromv, tov), origin);
 }
 
 KValue k_b_sqrt(KValue v) {
@@ -9945,6 +9983,7 @@ static int k_el_parse(unsigned long long w, long long q, double* out) {
     return 1;
 }
 
+
 KValue k_b_to_float(KValue v, const char* origin) {
     if (!k_not_failure(v)) return v;
     if (v.tag == K_FLOAT) return v;
@@ -9954,6 +9993,10 @@ KValue k_b_to_float(KValue v, const char* origin) {
     long long len;
     if (v.tag == K_STR) { KStr* s = k_as_str(v); data = s->data; len = s->len; }
     else { KBytes* b = k_as_bytes(v); data = (const char*)b->data; len = b->len; }
+    return k_to_float_text(data, len, origin);
+}
+
+static KValue k_to_float_text(const char* data, long long len, const char* origin) {
     /* the fast path: a plain decimal scanned into (w, q) and parsed by
        eisel-lemire; anything it can't be certain about — overlong digits,
        exotic forms, halfway cases — falls through to strtod, which stays

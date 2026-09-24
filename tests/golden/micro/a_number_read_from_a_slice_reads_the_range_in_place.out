@@ -1,0 +1,18 @@
+int middle: 1234
+int one: 2
+int signed: -1234
+int stops short: 12
+int with a point: err "-1234.5" is not an integer
+int inverted: err "" is not an integer
+int below one: err "" is not an integer
+int past end: err "" is not an integer
+int no digits: err "x" is not an integer
+int of a string: 77
+float point: -1234.5
+float exponent: -123450.0
+float whole: 1234.0
+float inverted: err "" is not a number
+float below one: err "" is not a number
+float past end: err "" is not a number
+float no digits: err "y" is not a number
+float of a string: 2.5

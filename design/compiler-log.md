@@ -11891,3 +11891,52 @@ spec in the suite passes except the wasm engine's, which needs a
 
 The interpreted run moves because the interpreter lexes and parses its
 program before running it. Every row falls, and the rise is banked.
+
+## 2026-09-24 — a number is read out of the bytes it sits in
+
+Every JSON number the decoder meets ends in `text/to_int (text/slice cs
+start (p - 1))` or the same with `to_float`. The slice builds a view of the
+range for the one purpose of handing it to the converter, which parses it
+and drops it. The emitter now sees that pair and calls
+`k_b_to_int_slice` or `k_b_to_float_slice` with the source and the two ends.
+When the source is bytes and the range lies inside it, the door parses the
+bytes where they sit. Any other shape, including an inverted range, a start
+below one, an end past the length or a string source, falls back to the
+slice and the converter it replaces, so the answer is the one the pair gave.
+The two converters' bodies moved into `k_to_int_text` and `k_to_float_text`,
+which take a pointer and a length, and the old doors call them too. Only the
+builtin spelling is fused, as with the append fusion above it, and the
+interpreter is unchanged.
+
+Measured on this container, both sides built here from main ef56eac8:
+
+    runbench      1,856,033,857 -> 1,846,944,217   -9,089,640   -0.49%
+
+The instruction rows will be CI's. The allocation counters fall wherever a
+number is decoded, one view fewer per number:
+
+    decode   allocs     4,390,215 -> 3,757,665   alloc_bytes 246,359,648 -> 226,118,048
+    decode   sh_bytes  21,567,600 -> 6,386,400
+    run      allocs     5,698,908 -> 5,280,394   alloc_bytes 458,172,125 -> 443,885,453
+    run      sh_bytes  41,290,272 -> 31,270,680  sh_buf 109,369,344 -> 108,745,936
+    run      evac_allocs 68,318 -> 62,993        survive_slots 110,799 -> 108,671
+    oneshot  allocs        53,579 -> 49,362
+    live     allocs     7,544,011 -> 7,539,794
+
+Two counters on the run program read worse by their direction tables.
+`run_ten_frees` falls 7 -> 1 and `run_ten_handups` 4 -> 2, while
+`run_ten_blocks` falls 7 -> 6 and `run_cohort_frees` moves 4 -> 2. With
+fewer views to evacuate, the tenure allocator claims one block fewer, and
+the beat cycles that used to fill and then empty whole blocks no longer
+fill them, so there is less to hand up and less to give back. No peak row
+on the run program moves, so nothing is held that was not held before. `push_mut_slow` falls 1,638,122 -> 1,638,121 and
+`push_mut_fast` rises by the same one. The decoder's emitted code falls:
+defines 119 -> 117, calls 1,182 -> 1,172, branches 764 -> 762, lines 8,570
+-> 8,542, as the two library wrappers are no longer reached.
+
+`tests/golden/micro/a_number_read_from_a_slice_reads_the_range_in_place.kso`
+reads integers and floats out of ranges in the middle, at one digit, with a
+sign and an exponent, stopping inside the digits, inverted, starting below
+one, ending past the length, holding no digits, and out of a string. Parsing
+one byte short in the integer door went red on six lines of it (`123` for
+`1234`, `err ""` for `2`).

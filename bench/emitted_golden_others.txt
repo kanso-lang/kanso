@@ -202,7 +202,7 @@
 # indexbench 147 -> 146 and the rest by one -- with branches and lines falling
 # by the twin's body. Banked.
 encodebench defines=132 calls=1466 branches=880 lines=9634
-oneshot defines=119 calls=1179 branches=753 lines=8505
+oneshot defines=117 calls=1169 branches=751 lines=8477
 basket defines=100 calls=1139 branches=691 lines=6698
 widebench defines=147 calls=1653 branches=973 lines=10617
 deepbench defines=61 calls=665 branches=440 lines=4283
@@ -212,5 +212,5 @@ scanbench defines=251 calls=3093 branches=2022 lines=18276
 indexbench defines=24 calls=110 branches=53 lines=980
 digestbench defines=138 calls=1200 branches=749 lines=8081
 readbench defines=27 calls=111 branches=51 lines=1083
-livebench defines=120 calls=1207 branches=774 lines=8644
-runbench defines=515 calls=5746 branches=3382 lines=33372
+livebench defines=118 calls=1197 branches=772 lines=8616
+runbench defines=513 calls=5736 branches=3380 lines=33344

@@ -1,0 +1,41 @@
+# `to_int (slice cs a b)` and `to_float (slice cs a b)` reach fused doors that
+# read the number out of `cs` without building the view. Every case has to
+# answer the way the unfused pair did: a range in the middle, one digit, the
+# whole source, a sign, an exponent, a range that stops inside the digits,
+# an inverted range, a start below one, an end past the length, a range with
+# no number in it, and a string rather than bytes.
+import "std/text"
+
+src = text/bytes "x-1234.5e2y"
+
+fn shown (err reason)
+  "err {reason}"
+
+fn shown other
+  "{other}"
+
+fn int_of cs a z
+  shown (text/to_int (text/slice cs a z))
+
+fn float_of cs a z
+  shown (text/to_float (text/slice cs a z))
+
+pub play =
+  print "int middle: {int_of src 3 6}"
+  print "int one: {int_of src 4 4}"
+  print "int signed: {int_of src 2 6}"
+  print "int stops short: {int_of src 3 4}"
+  print "int with a point: {int_of src 2 8}"
+  print "int inverted: {int_of src 6 3}"
+  print "int below one: {int_of src 0 3}"
+  print "int past end: {int_of src 3 40}"
+  print "int no digits: {int_of src 1 1}"
+  print "int of a string: {int_of "a77b" 2 3}"
+  print "float point: {float_of src 2 8}"
+  print "float exponent: {float_of src 2 10}"
+  print "float whole: {float_of src 3 6}"
+  print "float inverted: {float_of src 8 2}"
+  print "float below one: {float_of src 0 6}"
+  print "float past end: {float_of src 2 40}"
+  print "float no digits: {float_of src 11 11}"
+  print "float of a string: {float_of "a2.5b" 2 4}"

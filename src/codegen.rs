@@ -1252,6 +1252,8 @@ declare %KValue @k_b_find2_below(%KValue, %KValue, %KValue, %KValue, %KValue)
 declare i64 @k_b_find2_below_raw(ptr, i64, i64, i64, i64, i64)
 declare %KValue @k_b_append(%KValue, %KValue)
 declare %KValue @k_b_append_slice(%KValue, %KValue, %KValue, %KValue, i64)
+declare %KValue @k_b_to_int_slice(%KValue, %KValue, %KValue, ptr)
+declare %KValue @k_b_to_float_slice(%KValue, %KValue, %KValue, ptr)
 declare %KValue @k_b_append_rendered(%KValue, %KValue, i64)
 declare %KValue @k_b_sort(%KValue)
 declare %KValue @k_b_sum(%KValue)
@@ -7707,6 +7709,46 @@ impl<'a> Backend<'a> {
                             parts[0], parts[1], parts[2], i64::from(mutate)
                         ));
                         f.record(&t, infer::builtin_set("append", &[f.set_of(&acc), sliced]));
+                        return Ok(t);
+                    }
+                }
+            }
+        }
+        // `to_int (slice cs a b)` and `to_float (slice cs a b)` build a view
+        // for the one purpose of reading a number out of it, which is every
+        // number the JSON decoder meets. The fused doors read the range out
+        // of `cs` in place. Only the builtin spelling is fused, as above, and
+        // the origin moves with the call because both conversions can give
+        // birth to an err.
+        if first.is_none() && args.len() == 1 {
+            let door = match self.builtin_named(name, 1).as_str() {
+                "to_int" => Some("to_int"),
+                "to_float" => Some("to_float"),
+                _ => None,
+            };
+            if let (
+                Some(door),
+                Expr::App { head: inner_head, args: inner_args, piped: false, .. },
+            ) = (door, &args[0])
+            {
+                if let Expr::Ident(inner, _, _) = &**inner_head {
+                    if self.builtin_named(inner, inner_args.len()) == "slice"
+                        && inner_args.len() == 3
+                    {
+                        let mut parts = Vec::new();
+                        for a in inner_args {
+                            let v = self.emit_expr(f, a)?;
+                            parts.push(self.maybe_force(f, v));
+                        }
+                        let sets: Vec<Set> = parts.iter().map(|e| f.set_of(e)).collect();
+                        let sliced = infer::builtin_set("slice", &sets);
+                        let origin = self.origin_arg(f, span);
+                        let t = f.tmp();
+                        f.line(&format!(
+                            "{t} = call %KValue @k_b_{door}_slice(%KValue {}, %KValue {}, %KValue {}, {origin})",
+                            parts[0], parts[1], parts[2]
+                        ));
+                        f.record(&t, infer::builtin_set(door, &[sliced]));
                         return Ok(t);
                     }
                 }
