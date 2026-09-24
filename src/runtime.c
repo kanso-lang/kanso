@@ -468,7 +468,11 @@ static KValue* k_map_sorted(KMap* m, long long* out_len);
    call, retiring newer blocks to a spare pool for reuse — a steady-state loop
    recycles the same warm pages instead of marching through cold memory. If no
    boundary is ever signalled the arena only grows, exactly as before. */
-typedef struct KBlock { struct KBlock* next; size_t cap; } KBlock;
+/* `host` is set on a tail: the unused end of a block, split off to stay the
+   bump region when an oversize allocation is given a block of its own. Real
+   blocks leave it null. The pad keeps the arena that follows the header on a
+   sixteen-byte boundary. */
+typedef struct KBlock { struct KBlock* next; size_t cap; struct KBlock* host; size_t pad; } KBlock;
 KBlock* k_blocks = NULL;
 static KBlock* k_spare = NULL;
 /* bytes held by the live chain, and the most it ever held: the process's
@@ -638,6 +642,7 @@ static void k_arena_push(size_t need) {
         b = malloc(sizeof(KBlock) + need);
         if (!b) { fputs("out of memory\n", stderr); exit(1); }
         b->cap = need;
+        b->host = NULL;
         if (K_COUNTING) k_stat_blocks++;
     }
     b->next = k_blocks;
@@ -686,8 +691,47 @@ __attribute__((constructor)) static void k_stats_switch(void) {
    k_map_lit, k_rec, k_b_append_slice and k_b_push on runbench, and the
    refill paid twelve a call over 1,278 calls. The six cold helpers that
    carry the attribute are the ones a hot function calls and nothing else. */
+/* An allocation larger than a block gets a block of exactly its size, and
+   that block used to become the bump region with nothing left in it, so the
+   next small allocation opened a fresh 1 MiB block while the one before still
+   had room. The run program's index shape builds a 1,572,864-byte string and
+   then allocates a header, and that header's block was the top of the whole
+   program's peak. So when the current block has a useful tail, the tail is
+   split off as a block of its own -- its host shrinks to the part in use, so
+   no two blocks cover the same bytes -- and pushed back on top of the
+   oversize block to go on serving small allocations. A rewind that pops a
+   tail gives its bytes back to the host rather than to the spare list, since
+   they were never a block malloc handed out. */
+#define K_TAIL_MIN 4096
+static __attribute__((noinline)) void* k_alloc_oversize(size_t n) {
+    KBlock* host = k_blocks;
+    char* tail = k_arena;
+    size_t left = k_arena_left;
+    if (!host || left < K_TAIL_MIN + sizeof(KBlock)) {
+        k_arena_push(n);
+        void* p = k_arena;
+        k_arena += n;
+        k_arena_left -= n;
+        return p;
+    }
+    /* The host keeps the bytes in use and the tail takes the rest, header
+       and all, so the split leaves the live total where it was. */
+    host->cap = (size_t)(tail - (char*)(host + 1));
+    k_arena_push(n);
+    void* p = k_arena;
+    KBlock* t = (KBlock*)tail;
+    t->cap = left - sizeof(KBlock);
+    t->host = host;
+    t->next = k_blocks;
+    k_blocks = t;
+    k_arena = (char*)(t + 1);
+    k_arena_left = t->cap;
+    return p;
+}
+
 static __attribute__((noinline, preserve_most)) void* k_alloc_refill(size_t n) {
-    k_arena_push(n > (1 << 20) ? n : (size_t)(1 << 20));
+    if (n > (1 << 20)) return k_alloc_oversize(n);
+    k_arena_push((size_t)(1 << 20));
     void* p = k_arena;
     k_arena += n;
     k_arena_left -= n;
@@ -996,6 +1040,11 @@ void k_beat_rewind_slow(KMark* m) {
     while (k_blocks != m->block) {
         KBlock* b = k_blocks;
         k_blocks = b->next;
+        if (b->host) {
+            /* a tail goes back to the block it was cut from */
+            b->host->cap += sizeof(KBlock) + b->cap;
+            continue;
+        }
         k_live_block_bytes -= (long long)b->cap;
         b->next = k_spare;
         k_spare = b;

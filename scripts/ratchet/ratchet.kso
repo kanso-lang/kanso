@@ -1908,7 +1908,18 @@ view_cstr = row
 
 rows_b1p = text/concat rows_b1o [list_test_first framed_view]
 
-rows_b1v = text/concat rows_b1p [slice_view view_cstr]
+# An oversize allocation leaves the block before it open for what follows. The
+# mutation strands that block's tail, and the fixture
+# an_oversize_string_leaves_its_neighbour_open reads a second 1 MiB block.
+oversize_tail = row
+  "an oversize block that strands its neighbour"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "an_oversize_block_that_strands_its_neighbour")
+  release
+
+rows_b1v = text/concat rows_b1p [slice_view view_cstr oversize_tail]
 
 rows_b = text/concat rows_b1v [compile_mem compile_mem_host]
 
