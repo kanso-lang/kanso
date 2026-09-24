@@ -11089,3 +11089,23 @@ closed until FastISel selects `tailcc`. GlobalISel was measured on the same
 IR at 1,070,967,706, three times the default. Running `instcombine` after the
 always-inliner cost 41,445,873 in `opt` and saved 19,550,143 in `llc`, a net
 loss of 21,895,730.
+
+## 2026-09-24 — the scanners' ratchet row builds again
+
+The ratchet on kanso#1585 failed one row, marked UNBUILT: "the two byte
+scanners called out of line with their constants". Its mutation removes
+`always_inline` from `k_b_find2_raw` and `k_b_find2_below_raw`. Since #1585
+the release build lifts both into a small bitcode unit, and `hot_source` found
+them by a start string that included the attribute. With the attribute gone
+it found nothing, the compiler panicked, and the mutated tree never reached
+the gate. Every branch touching runtime.c selects that row, so the same
+failure waited for each of them.
+
+`hot_source` now finds each definition by its signature and takes it from the
+start of the line, attribute and all. The text it lifts from the unmutated
+runtime is byte-identical, 2,242 and 2,893 bytes. The mutated tree builds, and
+runbench reads 1,917,945,517 against 1,867,504,844, which the work vein sees.
+Marking the scanners `noinline` instead reads the same 1,917,945,517: the link
+does not inline a plain definition back. `the_scanners_are_found_without_their
+_attribute` lifts the unit from runtime text with the attribute removed, and
+went red with the start strings keyed on the attribute again.
