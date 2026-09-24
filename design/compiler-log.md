@@ -10926,5 +10926,21 @@ one padded with zeros. Watched red twice. Without the rotate, 3,866 single
 changes collide and 4,920 pairs cancel. Without the multiply after it, 3,633
 and 61.
 
+**The same profile named a second cost.** `narrow_tailcc` strips the tail
+call convention from functions no `musttail` reaches, and it read the
+program's body three times, splitting it into lines on each pass. Splitting a
+string is a search for each newline, and the three splits of the one-line
+program's body were 75,721 instructions. The body is now split once and its
+lines walked three times. runbench's IR, 1,199,233 bytes, is byte-identical
+before and after.
+
+    startup_instructions   908,786 -> 876,314   -3.57%   (this container)
+                           995,155 -> 876,314  -11.94%   both changes
+
+A shortcut was tried first and dropped: returning the body untouched when it
+never spells `tailcc`. That never fires, because every user function is
+emitted with the convention and this pass is what strips it, and the row
+read 913,993 against 908,786.
+
 CI's start-up row goes into the golden. `compile_instructions` and the other
 layout rows may move with the compiler's bytes; they are projected from CI.
