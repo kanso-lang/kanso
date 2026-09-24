@@ -10999,4 +10999,14 @@ through `emit_ir_dev`. Both entry points call `emit_ir_for`, which is kept out
 of line, and the gate now reads that frame. It found 43,868,047 on this
 container.
 
-CI's rows go into the goldens.
+**CI's rows**, taken into the goldens:
+
+    codegen_instructions_dev     473,933,874 ->   431,017,582   -9.06%
+    startup_instructions             870,779 ->       880,309   +9,530
+    emit_instructions             43,339,387 ->    43,359,136   +19,749
+
+The dev row is the saving. Start-up and the emitter pay for the entry point:
+`emit_ir_for` is now a frame of its own, kept out of line for the anchor,
+where `emit_ir` had been inlined into its caller, and the dev module's helper
+lines are written as two slices each. The objective weighs the dev row far
+above the other two at these sizes, and it rises. The rise is banked.
