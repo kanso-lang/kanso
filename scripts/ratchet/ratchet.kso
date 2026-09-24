@@ -1946,7 +1946,6 @@ view_cstr = row
   (breaking "a_view_handed_to_the_c_library_unterminated")
   release
 
-
 # An oversize allocation leaves the block before it open for what follows. The
 # mutation strands that block's tail, and the fixture
 # an_oversize_string_leaves_its_neighbour_open reads a second 1 MiB block.
