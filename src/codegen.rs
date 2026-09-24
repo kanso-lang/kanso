@@ -653,13 +653,7 @@ slow:
   %f = call %KValue @k_b_bytes(%KValue %sv)
   ret %KValue %f
 }
-; The same view with its header in the caller's frame, at %hdr, for a
-; binding `framed_views` has shown is only ever read while that frame stands,
-; of a value inference has proven a string. Nothing is allocated, so the
-; counting path takes it too: the header is not an arena byte and
-; k_stat_sh_bytes has nothing to count. There is no slow arm, and that is the
-; point of the proof: with one, the view is a phi over two pointers and LLVM
-; keeps the header in memory.
+; A proven string's view with its header at %hdr: `framed_views` says why.
 define internal %KValue @k_b_bytes_frame(%KValue %sv, ptr %hdr) alwaysinline {
   %sp = extractvalue %KValue %sv, 1
   %s = inttoptr i64 %sp to ptr
@@ -2218,11 +2212,13 @@ fn emit_ir_for(
     let mut beat = crate::beat::beat_loops(program, &inference, &in_place_pushes);
     beat.ids.retain(|(n, a), _| escape.returns_ty(n, *a).is_none());
     beat.demoted.retain(|(_, callee)| beat.ids.contains_key(callee));
+    let forwarders = forwarder_map(program);
+    let framed = framed_views(program, &forwarders);
     let mut backend = Backend {
         convention,
         inline_helpers,
         program,
-        forwarders: forwarder_map(program),
+        forwarders,
         sub_parents: program
             .types
             .iter()
@@ -2237,7 +2233,7 @@ fn emit_ir_for(
         group_by_name: group_indices_by_name(program),
         cycle_reached: cycle_reached(program),
         kept_out: kept_out(program),
-        framed_views: framed_views(program, &forwarder_map(program)),
+        framed_views: framed,
         inference,
         escape,
         byte_disc,
@@ -3174,47 +3170,31 @@ fn framed_views(
         }
         out
     };
-    // the parameters read only as a view, largest set first: every position
-    // whose clauses all take a plain name or `_`, then drop the ones a
-    // clause's body uses otherwise until nothing more drops
-    let mut safe: crate::hash::Set<(String, usize, usize)> = crate::hash::Set::default();
-    for ((name, n), clauses) in &groups {
-        for i in 0..*n {
-            let plain = clauses.iter().all(|c| {
-                !c.is_getter() && matches!(c.params[i], Pattern::Var(..) | Pattern::Wildcard(_))
-            });
-            if plain {
-                safe.insert((name.to_string(), *n, i));
+    // the bindings that could qualify, before anything is asked of their uses
+    let mut candidates = Vec::new();
+    for d in &program.fns {
+        if d.is_getter() {
+            continue;
+        }
+        for (i, st) in d.body.iter().enumerate() {
+            let Stmt::Bind { pattern: Pattern::Var(x, _), expr } = st else { continue };
+            let Expr::App { head, args, piped: false, span } = expr else { continue };
+            let Expr::Ident(h, _, _) = head.as_ref() else { continue };
+            if args.len() != 1 {
+                continue;
+            }
+            let target = match forwarders.get(&(h.to_string(), 1)) {
+                Some(b) => b.as_str(),
+                None if groups.contains_key(&(h.as_str(), 1)) => continue,
+                None => h.strip_prefix("builtin_").unwrap_or(h),
+            };
+            if target == "bytes" {
+                candidates.push((d, i, x.as_str(), h.as_str(), *span));
             }
         }
     }
-    loop {
-        let mut drop = Vec::new();
-        for key in &safe {
-            let clauses = &groups[&(key.0.as_str(), key.1)];
-            let holds = clauses.iter().all(|c| {
-                let Pattern::Var(p, _) = &c.params[key.2] else { return true };
-                let mut cx = Cx { groups: &groups, forwarders, safe: &safe, locals: locals_for(c) };
-                // the parameter itself is not a callee the body may bind
-                cx.locals.remove(p.as_str());
-                let twice = c
-                    .params
-                    .iter()
-                    .enumerate()
-                    .any(|(j, q)| j != key.2 && matches!(q, Pattern::Var(o, _) if o == p));
-                let shadowed = twice || bound_in(&c.body).contains(p.as_str());
-                !shadowed && stmts_read_only(&c.body, p, &cx)
-            });
-            if !holds {
-                drop.push(key.clone());
-            }
-        }
-        if drop.is_empty() {
-            break;
-        }
-        for key in drop {
-            safe.remove(&key);
-        }
+    if candidates.is_empty() {
+        return crate::hash::Set::default();
     }
     // names on a cycle of the call graph, which may not hold a view
     let mut index: HashMap<&str, usize> = HashMap::default();
@@ -3248,38 +3228,111 @@ fn framed_views(
             }
         }
     }
-    let mut out = crate::hash::Set::default();
-    for d in &program.fns {
-        if cyclic[index[d.name.as_str()]] || d.is_getter() {
+    candidates.retain(|(d, ..)| !cyclic[index[d.name.as_str()]]);
+    if candidates.is_empty() {
+        return crate::hash::Set::default();
+    }
+    // the parameters a view can reach, found by following it into each callee
+    // it is handed to; nothing else is ever asked about
+    fn handed(
+        expr: &Expr,
+        x: &str,
+        locals: &crate::hash::Set<String>,
+        user: &dyn Fn(&str, usize) -> bool,
+        out: &mut Vec<(String, usize, usize)>,
+    ) {
+        if let Expr::App { head, args, piped: false, .. } = expr {
+            if let Expr::Ident(h, _, _) = head.as_ref() {
+                if !locals.contains(h.as_str()) && user(h.as_str(), args.len()) {
+                    for (i, a) in args.iter().enumerate() {
+                        if is_x(a, x) {
+                            out.push((h.to_string(), args.len(), i));
+                        }
+                    }
+                }
+            }
+        }
+        crate::for_each_child(expr, |c| handed(c, x, locals, user, out));
+    }
+    let user = |h: &str, n: usize| {
+        !forwarders.contains_key(&(h.to_string(), n)) && groups.contains_key(&(h, n))
+    };
+    let mut reached: crate::hash::Set<(String, usize, usize)> = crate::hash::Set::default();
+    let mut work = Vec::new();
+    for (d, i, x, _, _) in &candidates {
+        let locals = locals_for(d);
+        for st in &d.body[i + 1..] {
+            handed(stmt_expr(st), x, &locals, &user, &mut work);
+        }
+    }
+    while let Some(key) = work.pop() {
+        if !reached.insert(key.clone()) {
             continue;
         }
+        for c in &groups[&(key.0.as_str(), key.1)] {
+            if let Pattern::Var(p, _) = &c.params[key.2] {
+                let locals = locals_for(c);
+                for st in &c.body {
+                    handed(stmt_expr(st), p, &locals, &user, &mut work);
+                }
+            }
+        }
+    }
+    // of those, the ones read only as a view, largest set first: every
+    // position whose clauses all take a plain name or `_`, then drop the ones
+    // a clause's body uses otherwise until nothing more drops
+    let mut safe: crate::hash::Set<(String, usize, usize)> = reached
+        .into_iter()
+        .filter(|(name, n, i)| {
+            groups[&(name.as_str(), *n)].iter().all(|c| {
+                !c.is_getter() && matches!(c.params[*i], Pattern::Var(..) | Pattern::Wildcard(_))
+            })
+        })
+        .collect();
+    loop {
+        let mut drop = Vec::new();
+        for key in &safe {
+            let clauses = &groups[&(key.0.as_str(), key.1)];
+            let holds = clauses.iter().all(|c| {
+                let Pattern::Var(p, _) = &c.params[key.2] else { return true };
+                let mut cx = Cx { groups: &groups, forwarders, safe: &safe, locals: locals_for(c) };
+                // the parameter itself is not a callee the body may bind
+                cx.locals.remove(p.as_str());
+                let twice = c
+                    .params
+                    .iter()
+                    .enumerate()
+                    .any(|(j, q)| j != key.2 && matches!(q, Pattern::Var(o, _) if o == p));
+                let shadowed = twice || bound_in(&c.body).contains(p.as_str());
+                !shadowed && stmts_read_only(&c.body, p, &cx)
+            });
+            if !holds {
+                drop.push(key.clone());
+            }
+        }
+        if drop.is_empty() {
+            break;
+        }
+        for key in drop {
+            safe.remove(&key);
+        }
+    }
+    let mut out = crate::hash::Set::default();
+    for (d, i, x, h, span) in candidates {
         let locals = locals_for(d);
-        for (i, st) in d.body.iter().enumerate() {
-            let Stmt::Bind { pattern: Pattern::Var(x, _), expr } = st else { continue };
-            let Expr::App { head, args, piped: false, span } = expr else { continue };
-            let Expr::Ident(h, _, _) = head.as_ref() else { continue };
-            if args.len() != 1 || locals.contains(h.as_str()) {
-                continue;
-            }
-            let target = match forwarders.get(&(h.to_string(), 1)) {
-                Some(b) => b.as_str(),
-                None if groups.contains_key(&(h.as_str(), 1)) => continue,
-                None => h.strip_prefix("builtin_").unwrap_or(h),
-            };
-            if target != "bytes" {
-                continue;
-            }
-            let rest = &d.body[i + 1..];
-            let mut params = crate::hash::Set::default();
-            for p in &d.params {
-                pattern_names(p, &mut params);
-            }
-            let rebound = params.contains(x.as_str()) || bound_in(rest).contains(x.as_str());
-            let mut cx = Cx { groups: &groups, forwarders, safe: &safe, locals: locals.clone() };
-            cx.locals.remove(x.as_str());
-            if !rebound && stmts_read_only(rest, x, &cx) {
-                out.insert((d.name.clone(), d.params.len(), *span));
-            }
+        if locals.contains(h) {
+            continue;
+        }
+        let rest = &d.body[i + 1..];
+        let mut params = crate::hash::Set::default();
+        for p in &d.params {
+            pattern_names(p, &mut params);
+        }
+        let rebound = params.contains(x) || bound_in(rest).contains(x);
+        let mut cx = Cx { groups: &groups, forwarders, safe: &safe, locals };
+        cx.locals.remove(x);
+        if !rebound && stmts_read_only(rest, x, &cx) {
+            out.insert((d.name.clone(), d.params.len(), span));
         }
     }
     out
@@ -6166,7 +6219,10 @@ impl<'a> Backend<'a> {
                     // Only a proven string: a header that may be the frame's
                     // or the arena's is a pointer LLVM cannot take apart,
                     // and the frame then saved 11,110,137 of the 28,013,580
-                    // instructions it saves on runbench when it can.
+                    // instructions it saves on runbench when it can. So
+                    // `k_b_bytes_frame` has no slow arm. It allocates nothing,
+                    // and the counting build takes it too: the header is not an
+                    // arena byte, and k_stat_sh_bytes has nothing to count.
                     let v = self.emit_expr(f, &args[0])?;
                     let arg_sets = [f.set_of(&v)];
                     let t = f.tmp();

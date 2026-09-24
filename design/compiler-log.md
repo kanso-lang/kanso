@@ -12447,9 +12447,16 @@ returns them and rebound, two at a time at the same stack depth, and reads
 them afterwards. With the analysis made to accept every view, the native
 build printed invalid UTF-8 and ran out of stack.
 
-The emitted code grows. Every program carries the twin's comment, seven
-lines, and the four programs that frame a view carry its body as well.
-`emitted_lines` reads 8,418 and `emitted_defines` 118 for the decoder, and
-`emitted_other_lines` 115,872 and `emitted_other_defines` 1,731 over the
-other thirteen. The compile golden's corpus rows sum to `lines` 1,535, seven
-more each, and `module_lines` reads 3,587.
+The analysis asks only about bindings of `bytes` and the parameters a view
+is handed to, and a program with no such binding pays one scan of its
+top-level statements. Its first build asked about every parameter of every
+group and put CI's `emit_instructions` at 45,378,600 against 42,771,526. On
+this container `emit_ir_for` over the codegen corpus reads 43,093,902 against
+main's 42,923,030, where that first build read 45,671,353.
+
+The emitted code grows by the twin: one comment line in every program, and
+its body in the four programs that frame a view. `emitted_lines` reads 8,412
+and `emitted_defines` 118 for the decoder, and `emitted_other_lines` 115,794
+and `emitted_other_defines` 1,731 over the other thirteen. The compile
+golden's corpus rows sum to `lines` 1,505, one more each, and `module_lines`
+reads 3,581.
