@@ -12996,6 +12996,15 @@ instructions, and `Backend::emit` falls 339,769 -> 325,775 on this box with
 the module unchanged. The mutation for the string spec now marks every string
 named, and watched red again: 239 strings and cells that nothing named.
 
+Reading every box built from words as its words, rather than only the unboxed
+parameters, was measured and declined. `FnEmit::write` recorded each line of
+the boxing shape, and runbench's extracts from such boxes fell 1,130 -> 18,
+but the record is a test and an allocation on every line the emitter writes:
+on this box `emit_ir_for` rose 30,613,012 -> 31,136,898 (+1.7%) while the dev
+child tree fell 45,406 and the release tree rose 337,442. clang at `-O0` folds
+an extract of an `insertvalue` for nearly nothing, so the lines were cheap to
+keep.
+
 Two dev-tier leads were measured and declined. At `-O0` FastISel selects
 none of the corpus: it refuses `insertvalue` on `%KValue`, the aggregate
 argument and the aggregate return, so every function falls back to

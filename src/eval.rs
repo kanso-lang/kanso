@@ -2406,7 +2406,19 @@ impl<'a> Interp<'a> {
         if let Callee::Group(overloads) = callee {
             return self.dispatch(name, &overloads, args, span);
         }
-        let args = args.into_iter().map(|a| self.force_thunk(a)).collect::<Result<Vec<_>, _>>()?;
+        // Forced where they lie, and only where a thunk is: `force_thunk`
+        // hands any other value back as it came. The collect this replaced
+        // moved every argument through a `Result` adapter, and whether rustc
+        // inlined the adapter's fold moved with edits nowhere near here:
+        // kanso#1621 changed only the emitter and the interpreted row rose
+        // 4,189,569, all of it this one collect laid out as a call.
+        let mut args = args;
+        for slot in args.iter_mut() {
+            if let Value::Thunk(cell) = slot {
+                let thunk = Value::Thunk(cell.clone());
+                *slot = self.force_thunk(thunk)?;
+            }
+        }
         self.call_builtin(name, args, span, frame)
     }
 
