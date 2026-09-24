@@ -11067,3 +11067,27 @@ convention probe's clang, `clang -cc1` and ld". A warm build no longer has
 the driver in it.
 
 CI's rows go into the goldens.
+
+**The gate's floor on processes, and the pipe.** The first CI round for this
+change failed two ways, and neither was about the rows. First,
+`codegen_instructions.sh` refused a tree of fewer than four processes, and a
+warm build with no driver is three: kanso, `clang -cc1` and ld. It exited
+before its second reading, so the job printed one number per tier and no
+verdict. The floor is three now, and the message names the driver as one of
+the two answers that are cached. Second, `asked` read the driver's `-###`
+listing with `.output()`, and
+`tests/the_compiler_never_drains_a_childs_pipes.rs` forbids that anywhere in
+src/main.rs, because draining a pipe is scheduling rather than work. The
+listing now goes to a file in the stage, and the call is `.status()`.
+
+CI's rows, taken into the goldens:
+
+    codegen_instructions_dev       434,345,526 ->   402,338,337   -7.37%
+    codegen_instructions_release 1,677,317,287 -> 1,643,423,398   -2.02%
+
+Two readings of each tier on this container, clang 18, agreed to the
+instruction: 401,763,927 dev and 1,642,105,200 release. kanso#1592's dev row
+read 434,007,475 and then 434,007,432 in one CI job, and here the lld link was
+the process that moved, by 43 instructions: it links the object the driver
+names with a random suffix. The replay names that object itself, so this
+change carries kanso#1592 and supersedes it.

@@ -1374,16 +1374,21 @@ fn replayed(args: &[String]) -> Option<std::io::Result<std::process::ExitStatus>
 fn asked(shape: &[String], stage: &std::path::Path, stage_str: &str) -> Option<Vec<Vec<String>>> {
     // The driver refuses an input that is not there, even when only asked.
     std::fs::write(stage.join(format!("{IN_MARK}.ll")), "").ok()?;
+    // The driver prints its jobs on stderr. They go to a file rather than a
+    // pipe, so no read loop that scheduling can lengthen lands in the row.
+    let listing = stage.join("jobs");
     let said = std::process::Command::new("clang")
         .arg("-###")
         .args(shape)
         .current_dir(stage)
-        .output()
+        .stdout(std::process::Stdio::null())
+        .stderr(std::fs::File::create(&listing).ok()?)
+        .status()
         .ok()?;
-    if !said.status.success() {
+    if !said.success() {
         return None;
     }
-    let text = String::from_utf8(said.stderr).ok()?;
+    let text = std::fs::read_to_string(&listing).ok()?;
     let mut jobs: Vec<Vec<String>> =
         text.lines().filter(|l| l.starts_with(" \"")).map(quoted_args).collect::<Option<_>>()?;
     if jobs.len() != 2
