@@ -12469,3 +12469,20 @@ and `emitted_defines` 118 for the decoder, and `emitted_other_lines` 115,794
 and `emitted_other_defines` 1,731 over the other thirteen. The compile
 golden's corpus rows sum to `lines` 1,505, one more each, and `module_lines`
 reads 3,581.
+
+## 2026-09-24 — a counting run builds its own binary
+
+`kanso run` keeps each program's binary in the temp directory under a key
+made of the program's IR and the runtime's digest. A run under
+`KANSO_COUNTERS` emits the same IR and links a counting runtime, and the key
+did not say which, so a counting run after an ordinary one ran the ordinary
+binary and printed no counters. The mem vein runs its fixtures that way, and a
+fixture run once by hand before its golden existed regenerated as the
+sentence saying the binary had no counters. The key now carries a mark for
+a counting build.
+
+`tests/a_counting_run_builds_its_own_binary` runs a program nobody else runs,
+once plainly and once counting, and reads the counters on the second. It
+failed on main with an empty stderr and passes with the mark. The compiler's
+own layout moves, so the compile-side rows are CI's to report.
+
