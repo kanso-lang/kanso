@@ -1060,7 +1060,10 @@
 # 2026-09-24 (kanso#1619, carrying kanso#1614, #1615, #1617 and #1618).
 # library_instructions 85,584,660 -> 87,004,317, a RISE of 1,419,657
 # (+1.6588%).
-library_instructions=87004317
+#
+# 2026-09-24 (kanso#1620): an arm no value reaches is not emitted.
+# library_instructions 87,004,317 -> 87,008,618, a RISE of 4,301 (+0.0049%).
+library_instructions=87008618
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

@@ -12847,8 +12847,23 @@ lines and 45 -> 35 defines, and seven benchmarks emit less:
 `emitted_other_lines` for encodebench 9,640 -> 8,242, widebench 10,623 ->
 9,225, deepbench 4,284 -> 2,886, pendbench 5,330 -> 4,260, scanbench 18,282 ->
 16,876, digestbench 8,087 -> 6,688 and runbench 33,214 -> 32,352. The decoder's
-own golden and every runtime counter are unchanged. The codegen, emit and
-run instruction rows are CI's.
+own golden and every runtime counter are unchanged.
+
+CI's rows, over the carried tree of kanso#1619. `codegen_instructions_dev`
+falls 287,912,357 -> 201,466,586 (-30.03%) and
+`codegen_instructions_release` 1,614,559,051 -> 857,150,087 (-46.91%).
+`emit_instructions` falls 42,866,674 -> 35,545,509 (-17.08%), since there is
+less to write. The pass itself costs little: `compile_instructions` lands at
+25,396,458 (+970), `entry_instructions` at 86,465,684 (+4,299),
+`library_instructions` at 87,008,618 (+4,301), and `startup_instructions` at
+639,966 (+3,847, +0.60%), each a clone of the program and a walk of its
+bodies in a build that emits. On the run side encodebench falls 13,099,200
+and pendbench 6,198. Three rows rise: `work_deepbench` lands at 367,712,368
+(+1,296,000, +0.35%), `work_basket` at 32,576,428 (+14,964) and
+`work_digestbench` at 5,842,662 (+14), which is the dispatch of groups that
+lost arms laid out and inlined differently. Every program's `text` falls, by
+5,648 to 9,632 bytes, and `text` sums to 3,420,864 against the carried tree's
+3,486,864 (-66,000).
 
 Spec: `tests/an_arm_no_value_reaches_is_not_emitted` builds a program that
 maps and one that drops. The first must not define `d_list/next_skipped_2`,

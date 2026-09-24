@@ -691,16 +691,16 @@
 # entries; nothing here moves them.
 #
 jsonbench 1127061575
-encodebench 3055075201
+encodebench 3041976001
 oneshot 16660346
-basket 32561464
+basket 32576428
 widebench 29833954
-deepbench 366416368
+deepbench 367712368
 escapebench 76459452
-pendbench 209069804
+pendbench 209063606
 indexbench 2855794
 scanbench 296418691
-digestbench 5842648
+digestbench 5842662
 readbench 4631756
 livebench 2370480940
 # 2026-09-06 (the run program joins): `runbench 3043743748` is a NEW row and
@@ -760,4 +760,4 @@ livebench 2370480940
 #
 # The uniform -8 across six rows is one instruction on a path each program
 # takes eight times, and the four flat rows never take it at all.
-runbench 1655310739
+runbench 1655310689

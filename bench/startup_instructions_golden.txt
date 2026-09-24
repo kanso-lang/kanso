@@ -468,4 +468,7 @@
 # 2026-09-24 (kanso#1618): a counting run builds its own binary, and the
 # counters setting is read once. startup_instructions 636,107 -> 636,119, a
 # RISE of 12 (+0.0019%).
-startup_instructions=636119
+#
+# 2026-09-24 (kanso#1620): an arm no value reaches is not emitted.
+# startup_instructions 636,119 -> 639,966, a RISE of 3,847 (+0.6048%).
+startup_instructions=639966
