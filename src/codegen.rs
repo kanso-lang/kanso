@@ -2550,6 +2550,31 @@ impl FnEmit {
         self.cur_label = label.to_string();
     }
 
+    /// Branches on `value` to the label its case names, or to `dflt`. A
+    /// release module writes a `switch`, which its optimiser turns into a jump
+    /// table. clang's fast instruction selector at -O0 does not lower one, so
+    /// a dev module asks the cases in turn with a compare and a branch each,
+    /// which it does.
+    fn switch_on(&mut self, value: &str, dflt: &str, cases: &[String]) {
+        if !self.words {
+            self.line(&format!("switch i64 {value}, label %{dflt} [\n{}\n  ]", cases.join("\n")));
+            return;
+        }
+        for case in cases {
+            let (n, target) = case
+                .trim()
+                .strip_prefix("i64 ")
+                .and_then(|c| c.split_once(", label %"))
+                .expect("a case reads `i64 N, label %L`");
+            let hit = self.tmp();
+            self.line(&format!("{hit} = icmp eq i64 {value}, {n}"));
+            let next = self.label();
+            self.line(&format!("br i1 {hit}, label %{target}, label %{next}"));
+            self.start_block(&next);
+        }
+        self.line(&format!("br label %{dflt}"));
+    }
+
     fn bind(&mut self, name: &str, temp: &str) {
         self.versions.insert(name.to_string(), temp.to_string());
     }
@@ -4740,7 +4765,7 @@ impl<'a> Backend<'a> {
             if !rec_arms.is_empty() {
                 cases.push(format!("    i64 7, label %{rec7}"));
             }
-            f.line(&format!("switch i64 {tag}, label %{dflt} [\n{}\n  ]", cases.join("\n")));
+            f.switch_on(&tag, &dflt, &cases);
             if !rec_arms.is_empty() {
                 f.start_block(&rec7);
                 for (id, nfields, label) in &rec_arms {
@@ -4833,15 +4858,7 @@ impl<'a> Backend<'a> {
                 for (_, l) in &nullary_cases {
                     cases.push(format!("    i64 256, label %{l}"));
                 }
-                f.line(&format!(
-                    "switch i64 %x{disc}r, label %{generic_label} [
-{}
-  ]",
-                    cases.join(
-                        "
-"
-                    )
-                ));
+                f.switch_on(&format!("%x{disc}r"), &generic_label, &cases);
             } else {
                 let is_int = f.tmp();
                 f.line(&format!("{is_int} = icmp eq i64 {tag}, 0"));
@@ -4852,15 +4869,7 @@ impl<'a> Backend<'a> {
                 let payload = inline_payload(&mut f, &dv);
                 let cases: Vec<String> =
                     int_cases.iter().map(|(n, l)| format!("    i64 {n}, label %{l}")).collect();
-                f.line(&format!(
-                    "switch i64 {payload}, label %{generic_label} [
-{}
-  ]",
-                    cases.join(
-                        "
-"
-                    )
-                ));
+                f.switch_on(&payload, &generic_label, &cases);
                 f.start_block(&not_int);
                 // nullary tags, then generic (non-failure) or propagation
                 for (t, l) in &nullary_cases {

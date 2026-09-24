@@ -3333,6 +3333,14 @@ welfare                      77.37         82.09</code></pre>
 
 <p>moving each return into a block of its own, so that only the return took the slow path, made the compile slower: 287,802,692 instructions became 297,839,204, because each block the slow selector takes pays a fixed cost to set up.</p>
 
+<h2 id="fastselector"><span class="sec-num">132</span>what the fast selector can read</h2>
+
+<p>at -O0 clang picks machine instructions with a fast selector that handles a narrow set of instructions and hands everything else to the slow one. an instruction it cannot handle sends the rest of its block to the slow selector, and on the codegen corpus that was most of the dev build's time. four changes each removed one kind of instruction it could not handle.</p>
+
+<p>the three predicates the dev build calls most, the failure test, the truth test and the record test, took the two-word value as an argument, and the fast selector cannot pass one. a dev module now pulls out the value's tag and payload and calls forms that take them as two plain integers. a literal's tag and payload used to be read off the literal with an instruction the fast selector refuses, and the emitter now writes the numbers themselves. the four functions the runtime uses to print a record and read a field by name were switches over the type id. they are loads from constant arrays now, written outside the text the emitter's own passes read, which also took the start-up row down 6 per cent and the release build's codegen down 1.1. a dispatcher on int literals or on a tag compiles to a switch, and a dev module now compares the cases in turn instead. release keeps the switch for its jump table.</p>
+
+<p>on this container the four together took the dev codegen row from 396,836,531 instructions to 359,341,981. the returns remain: a function that returns the two-word value still sends its return block to the slow selector, and there are 164 of those on the corpus.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>

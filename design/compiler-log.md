@@ -11440,3 +11440,30 @@ went red against the switch tables.
 The dispatchers' own switches are left. A compare chain in their place was
 worth 1,965,238 instructions to the dev compile, and the release tier wants
 the switch for its jump tables.
+
+## 2026-09-24 — a dev dispatcher compares instead of switching
+
+A dispatcher whose arms discriminate on int literals, or on a value's tag,
+compiles to a branch on that value, written as a `switch`. clang's fast
+selector at -O0 does not lower a switch, and the block went to SelectionDAG.
+`FnEmit::switch_on` writes the switch in a release module, where the
+optimiser makes a jump table of it, and a compare and a branch per case in a
+dev module. The three dispatcher sites use it. `d_thunk_eval` keeps its
+switch: its arms load and pass `%KValue`s and return one, so they go to
+SelectionDAG whatever branches to them.
+
+Measured on this container, clang 18, gate environment:
+
+    clang -cc1 (dev)            244,780,924 -> 243,383,587
+    codegen_instructions_dev    360,741,989 -> 359,341,981   -0.39%
+    startup_instructions            750,547 ->     750,547
+
+The release module is unchanged, and so are the emitted-code, compile-cost and
+runtime goldens. `tests/a_dev_dispatcher_compares_instead_of_switching.rs`
+builds a four-arm int dispatcher on both tiers. It requires the same output
+from each, no switch outside the thunk dispatcher in the dev module, and a
+switch in the release module. It went red with the dev tier writing the
+switch.
+
+The compiler page's §132 covers this change and the three before it on the
+dev tier.
