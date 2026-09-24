@@ -11057,7 +11057,10 @@ row by eleven instructions one run in eleven. The replay drops that option and
 fixes the names itself. The object is `<name>.o` relative to the stage, the
 stage is named by a digest of the output path rather than the pid, the two
 compilation directories are `.`, and the replay refuses a job that still names
-the stage.
+the stage. Under the gate's own environment, with lld on one thread, three
+release replays read 1,641,527,539 each and two driver builds 1,674,062,024
+each, -1.94%. Two dev replays read 401,763,944 against the driver's
+433,335,421, -7.29%.
 
 CLAUDE.md lists the codegen row's child tree as "the clang driver, the
 convention probe's clang, `clang -cc1` and ld". A warm build no longer has
