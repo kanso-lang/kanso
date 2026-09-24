@@ -1069,6 +1069,51 @@ define internal i64 @k_check_bool(%KValue %v) alwaysinline {
   %r = zext i1 %c to i64
   ret i64 %r
 }
+define internal i64 @k_not_failure_w(i64 %tag) alwaysinline {
+  %ne = icmp ne i64 %tag, 5
+  %r = zext i1 %ne to i64
+  ret i64 %r
+}
+define internal i64 @k_truthy_w(i64 %tag, i64 %pay) alwaysinline {
+  %t = icmp eq i64 %tag, 2
+  br i1 %t, label %yes, label %chkf
+yes:
+  ret i64 1
+chkf:
+  %f = icmp eq i64 %tag, 3
+  br i1 %f, label %no, label %bad
+no:
+  ret i64 0
+bad:
+  %v0 = insertvalue %KValue undef, i64 %tag, 0
+  %v = insertvalue %KValue %v0, i64 %pay, 1
+  %r = call i64 @k_truthy_bad(%KValue %v)
+  ret i64 %r
+}
+define internal i64 @k_check_rec_fast_w(i64 %tag, i64 %pay, i64 %t, i64 %n) alwaysinline {
+  %issub = icmp eq i64 %tag, 15
+  br i1 %issub, label %slow, label %plain
+plain:
+  %isrec = icmp eq i64 %tag, 7
+  br i1 %isrec, label %rec, label %no
+no:
+  ret i64 0
+rec:
+  %r = inttoptr i64 %pay to ptr
+  %tid = load i64, ptr %r
+  %np = getelementptr i8, ptr %r, i64 8
+  %nf = load i64, ptr %np
+  %et = icmp eq i64 %tid, %t
+  %en = icmp eq i64 %nf, %n
+  %both = and i1 %et, %en
+  %out = zext i1 %both to i64
+  ret i64 %out
+slow:
+  %v0 = insertvalue %KValue undef, i64 %tag, 0
+  %v = insertvalue %KValue %v0, i64 %pay, 1
+  %s = call i64 @k_check_rec(%KValue %v, i64 %t, i64 %n)
+  ret i64 %s
+}
 declare i64 @k_truthy_bad(%KValue)
 
 declare %KValue @k_caf_freeze(%KValue)
@@ -2285,6 +2330,10 @@ struct FnEmit {
     /// i64 phi emitted beside it, so the crossing can take the raw form and
     /// leave the box for the dead-code pass.
     raw_byte: crate::hash::Map<String, String>,
+    /// Whether the hot predicates are called in their two-word forms, which
+    /// the dev tier's instruction selector can lower where it cannot lower a
+    /// call passing a `%KValue`.
+    words: bool,
 }
 /// Whether a line the emitters wrote is a stack slot, asked at the ONE place
 /// the needle can be.
@@ -2313,7 +2362,7 @@ pub fn is_a_stack_slot(text: &str) -> bool {
 }
 
 impl FnEmit {
-    fn new() -> Self {
+    fn new(words: bool) -> Self {
         FnEmit {
             out: String::new(),
             tmp: 0,
@@ -2332,6 +2381,50 @@ impl FnEmit {
             lazy_cells: Vec::new(),
             entry_allocas: Vec::new(),
             raw_byte: crate::hash::Map::default(),
+            words,
+        }
+    }
+
+    /// Writes `{r} = {call}`, where `call` asks one of the hot predicates about
+    /// a `%KValue` in the form a release module inlines. The dev tier asks the
+    /// two-word form instead (`k_not_failure_w`, `k_truthy_w`,
+    /// `k_check_rec_fast_w` in DECLARES), with the value's words pulled out
+    /// first and passed as scalars. At -O0 clang's fast instruction selector
+    /// lowers a call only when every argument is a scalar, so each call passing
+    /// a `%KValue` went to the slow selector on its own: 216 of them on the
+    /// codegen corpus. A release module never calls the two-word forms, so it
+    /// never carries them.
+    fn predicate(&mut self, r: &str, call: String) {
+        const FORMS: [(&str, &str, bool); 3] = [
+            ("call i64 @k_not_failure(%KValue ", "k_not_failure_w", false),
+            ("call i64 @k_truthy(%KValue ", "k_truthy_w", true),
+            ("call i64 @k_check_rec_fast(%KValue ", "k_check_rec_fast_w", true),
+        ];
+        if !self.words {
+            self.line(&format!("{r} = {call}"));
+            return;
+        }
+        let split = FORMS.iter().find_map(|(prefix, to, pay)| {
+            let rest = call.strip_prefix(prefix)?;
+            // A constant operand spells its own commas; it keeps the old form.
+            let end = rest.find([',', ')']).filter(|_| rest.starts_with('%'))?;
+            Some((*to, *pay, rest[..end].to_string(), rest[end..].to_string()))
+        });
+        match split {
+            Some((to, pay, value, rest)) => {
+                let tag = self.tmp();
+                self.line(&format!("{tag} = extractvalue %KValue {value}, 0"));
+                let words = match pay {
+                    true => {
+                        let p = self.tmp();
+                        self.line(&format!("{p} = extractvalue %KValue {value}, 1"));
+                        format!("i64 {tag}, i64 {p}")
+                    }
+                    false => format!("i64 {tag}"),
+                };
+                self.line(&format!("{r} = call i64 @{to}({words}{rest}"));
+            }
+            None => self.line(&format!("{r} = {call}")),
         }
     }
 
@@ -2782,15 +2875,15 @@ fn symbols_before_newline(text: &str) -> crate::hash::Set<&str> {
 /// The symbols DECLARES calls from its own inline definitions, written down
 /// rather than scanned for.
 ///
-/// DECLARES is a `const`: the same 62 names in every process kanso has ever
-/// run. Reading them off it cost 62 answers for 1,024 lines of scanning, and
+/// DECLARES is a `const`: the same 65 names in every process kanso runs.
+/// Reading them off it once cost 62 answers for 1,024 lines of scanning, and
 /// the scanning was 94% of the index this branch builds -- 292,701 of the
 /// 278,812 `called_symbols` charges on the start-up corpus came through
 /// `Once::call_once_force`, over 1,023 calls, against 18,159 from the emitter's
 /// two. On a program that emits one `print` that is the whole of the index's
 /// cost, and `kanso play` paid it to learn nothing it could not have been told.
 ///
-/// Sorted, and asked with a binary search: 62 names is six comparisons an ask
+/// Sorted, and asked with a binary search: 65 names is seven comparisons an ask
 /// and 163 asks a module, where a hash set costs a table to build first.
 ///
 /// `tests/the_declares_symbols_are_the_ones_declares_calls.rs` recomputes this
@@ -2844,6 +2937,7 @@ static DECLARES_CONTEXT_CALLS: &[&str] = &[
     "k_check_int",
     "k_check_rec",
     "k_check_rec_fast",
+    "k_check_rec_fast_w",
     "k_check_tag",
     "k_field",
     "k_field_fast",
@@ -2855,10 +2949,12 @@ static DECLARES_CONTEXT_CALLS: &[&str] = &[
     "k_int",
     "k_none",
     "k_not_failure",
+    "k_not_failure_w",
     "k_str_lit",
     "k_str_lit_fast",
     "k_truthy",
     "k_truthy_bad",
+    "k_truthy_w",
     "llvm.memcpy.p0.p0.i64",
 ];
 
@@ -3394,7 +3490,7 @@ fn inline_not_failure(f: &mut FnEmit, value: &str) -> String {
 /// reached BECAUSE a value is outside the set recorded for it.
 fn not_failure_test(f: &mut FnEmit, value: &str) -> String {
     let r = f.tmp();
-    f.line(&format!("{r} = call i64 @k_not_failure(%KValue {value})"));
+    f.predicate(&r, format!("call i64 @k_not_failure(%KValue {value})"));
     let ok = f.tmp();
     f.line(&format!("{ok} = icmp ne i64 {r}, 0"));
     ok
@@ -3825,7 +3921,7 @@ impl<'a> Backend<'a> {
         expr: &Expr,
         outer: &FnEmit,
     ) -> Result<(), String> {
-        let mut f = FnEmit::new();
+        let mut f = FnEmit::new(!self.inline_helpers);
         f.origin_prefix = outer.origin_prefix.clone();
         f.hako = outer.hako.clone();
         f.hako = outer.hako.clone();
@@ -4512,7 +4608,7 @@ impl<'a> Backend<'a> {
     ) -> Result<(), String> {
         let params = self.abi_params(name, arity);
         let ret = self.ret_ty(name, arity);
-        let mut f = FnEmit::new();
+        let mut f = FnEmit::new(!self.inline_helpers);
         f.ret_ty = ret.to_string();
         f.group = name.to_string();
         f.arity = arity;
@@ -4612,9 +4708,10 @@ impl<'a> Backend<'a> {
                 f.start_block(&rec7);
                 for (id, nfields, label) in &rec_arms {
                     let c = f.tmp();
-                    f.line(&format!(
-                        "{c} = call i64 @k_check_rec_fast(%KValue {dv}, i64 {id}, i64 {nfields})"
-                    ));
+                    f.predicate(
+                        &c,
+                        format!("call i64 @k_check_rec_fast(%KValue {dv}, i64 {id}, i64 {nfields})"),
+                    );
                     let b = f.tmp();
                     f.line(&format!("{b} = icmp ne i64 {c}, 0"));
                     let next = f.label();
@@ -4993,7 +5090,7 @@ impl<'a> Backend<'a> {
         }
         let params = self.abi_params(name, arity);
         let ret = self.ret_ty(name, arity);
-        let mut f = FnEmit::new();
+        let mut f = FnEmit::new(!self.inline_helpers);
         f.ret_ty = ret.to_string();
         f.group = name.to_string();
         f.arity = arity;
@@ -5312,7 +5409,7 @@ impl<'a> Backend<'a> {
     ) -> Result<(), String> {
         let check = |backend: &mut Backend, f: &mut FnEmit, call: String| {
             let c = f.tmp();
-            f.line(&format!("{c} = {call}"));
+            f.predicate(&c, call);
             let b = f.tmp();
             f.line(&format!("{b} = icmp ne i64 {c}, 0"));
             let ok = f.label();
@@ -5395,7 +5492,7 @@ impl<'a> Backend<'a> {
                 for member in &members {
                     let call = self.type_check_call(value, member)?;
                     let c = f.tmp();
-                    f.line(&format!("{c} = {call}"));
+                    f.predicate(&c, call);
                     acc = Some(match acc {
                         None => c,
                         Some(prev) => {
@@ -5568,10 +5665,13 @@ impl<'a> Backend<'a> {
                                 .get(ty.as_str())
                                 .ok_or_else(|| format!("native backend: unknown type `{ty}`"))?;
                             let c = f.tmp();
-                            f.line(&format!(
-                                "{c} = call i64 @k_check_rec_fast(%KValue {value}, i64 {id}, i64 {})",
-                                fields.len()
-                            ));
+                            f.predicate(
+                                &c,
+                                format!(
+                                    "call i64 @k_check_rec_fast(%KValue {value}, i64 {id}, i64 {})",
+                                    fields.len()
+                                ),
+                            );
                             let b = f.tmp();
                             f.line(&format!("{b} = icmp ne i64 {c}, 0"));
                             let ok = f.label();
@@ -6207,7 +6307,7 @@ impl<'a> Backend<'a> {
             self.emit_ret(f, &c);
             f.start_block(&check);
             let tv = f.tmp();
-            f.line(&format!("{tv} = call i64 @k_truthy(%KValue {c})"));
+            f.predicate(&tv, format!("call i64 @k_truthy(%KValue {c})"));
             let tb = f.tmp();
             f.line(&format!("{tb} = icmp ne i64 {tv}, 0"));
             let early_label = f.label();
@@ -6579,7 +6679,7 @@ impl<'a> Backend<'a> {
         };
         f.start_block(&check);
         let tv = f.tmp();
-        f.line(&format!("{tv} = call i64 @k_truthy(%KValue {v})"));
+        f.predicate(&tv, format!("call i64 @k_truthy(%KValue {v})"));
         let tb = f.tmp();
         f.line(&format!("{tb} = icmp ne i64 {tv}, 0"));
         f.line(&format!("br i1 {tb}, label %{then_label}, label %{else_label}"));
@@ -7951,7 +8051,7 @@ impl<'a> Backend<'a> {
         body: &Expr,
         outer: &FnEmit,
     ) -> Result<(), String> {
-        let mut f = FnEmit::new();
+        let mut f = FnEmit::new(!self.inline_helpers);
         f.origin_prefix = outer.origin_prefix.clone();
         f.hako = outer.hako.clone();
         // A lifted lambda is still code from the file it was written in, and
