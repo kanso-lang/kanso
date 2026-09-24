@@ -1,0 +1,19 @@
+# A map's sorted view is what a read looks things up in, and it is held
+# outside the arena for as long as the map lives. A thousand keys put in
+# ascending order, none repeated, are already sorted, so the native build
+# lets the pairs be the view: view_allocs reads 0 and held_peak_bytes 0,
+# where a copy of the pairs was one view of 32,016 bytes. A decoded JSON
+# object whose keys arrive in order is read the same way.
+fn fill m 0
+  m
+
+fn fill m n
+  fill (put m (1000 - n) n) (n - 1)
+
+fn total _ 0 acc
+  acc
+
+fn total m n acc
+  total m (n - 1) (acc + m[n - 1])
+
+pub play = print "{total (fill {} 1000) 1000 0}"

@@ -1872,7 +1872,19 @@ rows_b1oa = text/concat rows_b1n [append_rendered arm_narrowed arms_apart]
 
 rows_b1o = text/concat rows_b1oa [dedup_key_owned fused_names_owned]
 
-rows_b1p = text/concat rows_b1o [list_test_first]
+# A map whose pairs are already in order is its own sorted view. The mutation
+# copies them into a view again, and the fixture
+# a_map_whose_keys_arrived_in_order_is_its_own_view reads view_allocs=1 and
+# held_peak_bytes=32016 against its 0 and 0.
+ordered_view = row
+  "ordered pairs copied into a view"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "ordered_pairs_copied_into_a_view")
+  release
+
+rows_b1p = text/concat rows_b1o [list_test_first ordered_view]
 
 rows_b = text/concat rows_b1p [compile_mem compile_mem_host]
 

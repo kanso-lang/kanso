@@ -11,13 +11,17 @@
 #
 # A header born inside the beat dies at the rewind, and that is the only moment
 # anything can know its view became garbage.
-seed = { "a":0 }
+#
+# The key put is below the seed's, so the pairs are out of order and the read
+# builds a view of its own. Pairs already in order are their own view and
+# allocate none, which would leave nothing here to free.
+seed = { "b":0 }
 
 fn tally 0 acc
   print acc
 
 fn tally n acc
-  m = put seed "b" n
+  m = put seed "a" n
   tally (n - 1) (acc + length m)
 
 pub play = tally 20000 0
