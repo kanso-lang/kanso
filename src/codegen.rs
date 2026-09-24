@@ -1250,6 +1250,7 @@ declare %KValue @k_b_find2(%KValue, %KValue, %KValue, %KValue)
 declare i64 @k_b_find2_raw(ptr, i64, i64, i64, i64)
 declare %KValue @k_b_find2_below(%KValue, %KValue, %KValue, %KValue, %KValue)
 declare i64 @k_b_find2_below_raw(ptr, i64, i64, i64, i64, i64)
+declare %KValue @k_b_number_span(%KValue, %KValue)
 declare %KValue @k_b_append(%KValue, %KValue)
 declare %KValue @k_b_append_slice(%KValue, %KValue, %KValue, %KValue, i64)
 declare %KValue @k_b_append_rendered(%KValue, %KValue, i64)
@@ -1910,7 +1911,7 @@ mod the_declares_table_is_the_scan_it_replaced {
     }
 }
 
-pub(crate) const BUILTIN_CALLS: [&str; 57] = [
+pub(crate) const BUILTIN_CALLS: [&str; 58] = [
     "effect",
     "net_port",
     "start",
@@ -1920,6 +1921,7 @@ pub(crate) const BUILTIN_CALLS: [&str; 57] = [
     "append",
     "find2",
     "find2_below",
+    "number_span",
     "bytes",
     "to_bytes",
     "bind",

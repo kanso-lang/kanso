@@ -11796,3 +11796,42 @@ CI's rows, over kanso#1601's:
     emit_instructions         45,312,275 ->  45,259,445   -52,830
 
 The codegen rows are unchanged, as byte-identical modules should leave them.
+
+## 2026-09-24 — a JSON number's end is found sixteen bytes at a time
+
+lib/json found where a number ends by walking it: `scan_at` dispatched on
+each byte, with arms for `.`, `e`, `E`, `+`, `-`, a digit and anything
+else. The emitted loop was tight, 17 instructions a byte on the digit arm,
+but runbench decodes 417,483 numbers and the loop cost 80,293,356
+instructions, 23 a character.
+
+`text/number_span cs p` answers the same question in one call: the first
+position at or after `p` whose byte cannot be part of a number, negated when
+a `.`, `e` or `E` went past. That sign is the float mark the walk carried as
+an argument. A position outside the bytes is its own answer, as the walk
+stopped there. The native runtime classifies sixteen bytes a step with SSE2
+and walks what is left one byte at a time. The interpreter walks every byte,
+and the wasm engine reaches the builtin through the interpreter. It is
+`builtin_number_span` underneath, public in std/text the way `find2_below`
+is, because the frozen decoders jsonbench and its siblings build are
+generated from lib/json and a `builtin_` name is refused outside std.
+
+Measured on this container, both sides built and counted here:
+
+    runbench      1,856,032,715 -> 1,815,628,135   -40,404,580   -2.18%
+
+The instruction rows are CI's. `number_spans` is the scan's presence
+counter, so every cost golden gains a line, 417,483 on the run program and
+zero where nothing decodes. No other counter moves. kq's veins gain the
+same line, and that is kq's pin bump to absorb. The decoder's emitted code
+falls: calls 1,182 -> 1,165, branches 764 -> 747, lines 8,570 -> 8,422, and
+the front end's visits on the corpus 15,474 -> 15,131. Every program that
+imports std/text now emits the five-line forwarder, so each row of the
+emitted golden for the other benchmarks reads five lines more.
+
+`tests/golden/micro/a_number_span_ends_where_the_byte_walk_ends.kso` puts
+runs either side of sixteen and thirty-two bytes, a mark on each side of a
+block edge, ends at a delimiter and at the end of the bytes, positions
+outside the bytes, and a `.` past the end inside the same block. Counting
+every mark in the block went red on that last case (`-4` for `4`), and
+stepping one past the found byte went red on the runs (`17` for `16`).

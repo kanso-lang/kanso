@@ -120,7 +120,7 @@ fn parse_array cs p
   array_open cs cs[p] p
 
 fn parse_number cs p
-  scan cs p p false
+  scan cs p p
 
 fn parse_object cs p
   obj_open cs cs[p] p

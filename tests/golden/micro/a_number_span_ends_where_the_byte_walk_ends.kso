@@ -1,0 +1,29 @@
+# `text/number_span` answers where a JSON number's bytes end, negated when a
+# `.`, `e` or `E` went past, and a position outside the bytes is its own
+# answer. The runtime classifies sixteen bytes a step and walks the rest one
+# at a time, so these runs sit either side of sixteen and thirty-two, put the
+# mark just before and just after a block edge, and end both at a delimiter
+# and at the end of the bytes, where only the byte walk can answer. A mark
+# past the end in the same block is not the number's.
+import "std/list"
+import "std/text"
+
+fn digits n
+  text/join (list/to_list (list/map (list/take list/naturals n) (_ -> "7"))) ""
+
+fn span s p
+  text/number_span (text/bytes s) p
+
+closing = text/from_code 125
+
+fn ran n tail
+  span "{digits n}{tail}" 1
+
+pub play =
+  print "{span "12,3" 1} {span "12,3" 4} {span "-1.5e+3]" 1} {span "x" 1}"
+  >> print "{span "12" 0} {span "12" (0 - 3)} {span "12" 3} {span "12" 9}"
+  >> print "{ran 15 ","} {ran 16 ","} {ran 17 ","} {ran 31 closing}"
+  >> print "{ran 32 " "} {ran 33 "/"} {ran 15 ""} {ran 16 ""} {ran 17 ""}"
+  >> print "{ran 15 ".5,"} {ran 16 "e9,"} {ran 17 "E-2 "} {ran 31 ".0"}"
+  >> print "{span "{digits 14}.{digits 20}:" 1} {span "1+-+-eEe..," 1}"
+  >> print "{ran 3 ",1.5e5 past the end"} {ran 20 ":2.5, and more to scan"}"

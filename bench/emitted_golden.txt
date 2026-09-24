@@ -233,7 +233,11 @@
 # matches a failure whoever raised it now, so the emitter asks nothing about
 # the raiser. The foreign-only licence moved to the rescue word, which the
 # decoder never writes, so nothing came back the other way. Banked.
+#
+# 2026-09-24: the number scan is one call to text/number_span where it was a
+# dispatch arm per byte class. calls 1,182 -> 1,165, branches 764 -> 747,
+# lines 8,570 -> 8,422; defines stay 119.
 defines=119
-calls=1182
-branches=764
-lines=8570
+calls=1165
+branches=747
+lines=8422

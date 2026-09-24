@@ -201,16 +201,21 @@
 # oneshot 1,200 -> 1,197, readbench 163 -> 162, livebench 1,224 -> 1,221,
 # indexbench 147 -> 146 and the rest by one -- with branches and lines falling
 # by the twin's body. Banked.
-encodebench defines=132 calls=1466 branches=880 lines=9634
-oneshot defines=119 calls=1179 branches=753 lines=8505
-basket defines=100 calls=1139 branches=691 lines=6698
-widebench defines=147 calls=1653 branches=973 lines=10617
+#
+# 2026-09-24: std/text gains `number_span`, a five-line forwarder every program
+# importing std/text now emits, so each such row reads five lines more. The
+# three that decode JSON also lose the byte-class arms of the number scan:
+# oneshot 8,505 -> 8,357, livebench 8,644 -> 8,496, runbench 33,372 -> 33,224.
+encodebench defines=132 calls=1466 branches=880 lines=9639
+oneshot defines=119 calls=1162 branches=736 lines=8357
+basket defines=100 calls=1139 branches=691 lines=6703
+widebench defines=147 calls=1653 branches=973 lines=10622
 deepbench defines=61 calls=665 branches=440 lines=4283
 escapebench defines=19 calls=79 branches=46 lines=721
-pendbench defines=81 calls=980 branches=525 lines=5324
-scanbench defines=251 calls=3093 branches=2022 lines=18276
-indexbench defines=24 calls=110 branches=53 lines=980
-digestbench defines=138 calls=1200 branches=749 lines=8081
-readbench defines=27 calls=111 branches=51 lines=1083
-livebench defines=120 calls=1207 branches=774 lines=8644
-runbench defines=515 calls=5746 branches=3382 lines=33372
+pendbench defines=81 calls=980 branches=525 lines=5329
+scanbench defines=251 calls=3093 branches=2022 lines=18281
+indexbench defines=24 calls=110 branches=53 lines=985
+digestbench defines=138 calls=1200 branches=749 lines=8086
+readbench defines=27 calls=111 branches=51 lines=1088
+livebench defines=120 calls=1190 branches=757 lines=8496
+runbench defines=515 calls=5729 branches=3365 lines=33224

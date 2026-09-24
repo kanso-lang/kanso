@@ -93,3 +93,9 @@ pub fn to_int s
 
 pub fn utf8 codes
   builtin_utf8 codes
+
+# The first position at or after p whose byte cannot be part of a JSON
+# number, negated when a `.`, `e` or `E` went past; p itself when it lies
+# outside the bytes.
+pub fn number_span cs p
+  builtin_number_span cs p

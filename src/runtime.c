@@ -127,6 +127,10 @@ static long long k_stat_ryu_renders = 0;
 static long long k_stat_ryu_short = 0;
 static long long k_stat_utf8_bytes = 0;
 long long k_stat_find2_calls = 0;
+/* JSON number spans classified by k_b_number_span, the presence counter for
+   that scan: a decoder that walks its numbers a byte at a time again reads
+   zero here. */
+long long k_stat_number_spans = 0;
 static long long k_stat_append_fast = 0;
 static long long k_stat_append_rendered = 0;
 static long long k_stat_append_grow = 0;
@@ -581,7 +585,7 @@ static void k_stats_dump(void) {
         "thunk_allocs=%lld\nthunk_forces=%lld\nthunk_evals=%lld\n"
         "thunk_frees=%lld\nthunk_escaped=%lld\nthunk_live_exit=%lld\n"
         "el_parses=%lld\nryu_renders=%lld\nryu_short=%lld\nutf8_bytes=%lld\n"
-        "find2_calls=%lld\nappend_fast=%lld\nappend_grow=%lld\n"
+        "find2_calls=%lld\nnumber_spans=%lld\nappend_fast=%lld\nappend_grow=%lld\n"
         "append_rendered=%lld\n"
         "utf8_zerocopy=%lld\ncarry_dedup=%lld\nbytes_malloc=%lld\nbytes_freed=%lld\n"
         "perm_live_bytes=%lld\nperm_peak_bytes=%lld\n",
@@ -589,6 +593,7 @@ static void k_stats_dump(void) {
         k_stat_thunk_frees, k_stat_thunk_escaped,
         k_stat_thunk_allocs - k_stat_thunk_frees, k_stat_el_parses,
         k_stat_ryu_renders, k_stat_ryu_short, k_stat_utf8_bytes, k_stat_find2_calls,
+        k_stat_number_spans,
         k_stat_append_fast, k_stat_append_grow, k_stat_append_rendered,
         k_stat_utf8_zerocopy,
         k_stat_carry_dedup, k_stat_bytes_malloc, k_stat_bytes_freed,
@@ -8446,6 +8451,63 @@ KValue k_b_find2(KValue cs, KValue from, KValue a, KValue b) {
     KBytes* by = k_as_bytes(cs);
     return k_int(k_b_find2_raw(by->data, by->len, from.payload, a.payload,
                                b.payload));
+}
+
+/* Where a JSON number's bytes end. The answer is the first position at or
+   after `from` whose byte cannot be part of a number -- anything but a digit,
+   `+`, `-`, `.`, `e` or `E` -- and it comes back negated when a `.`, `e` or
+   `E` went past, which is what makes the number a float. A position outside
+   the bytes is its own answer, as the byte walk it replaces would stop there.
+   lib/json walked a number one byte a step, a dispatch on every byte, and it
+   cost the run program 23 instructions a character; sixteen bytes are
+   classified here at once. */
+static int k_number_byte(unsigned char c) {
+    return (unsigned)(c - '0') < 10 || c == '+' || c == '-' || c == '.' || c == 'e' || c == 'E';
+}
+
+KValue k_b_number_span(KValue cs, KValue fromv) {
+    if (K_COUNTING) k_stat_number_spans++;
+    if (!k_not_failure(cs)) return cs;
+    if (!k_not_failure(fromv)) return fromv;
+    if (cs.tag != K_BYTES || fromv.tag != K_INT) k_die("number_span takes bytes and a position");
+    KBytes* by = k_as_bytes(cs);
+    const unsigned char* d = by->data;
+    long long len = by->len;
+    long long from = fromv.payload;
+    if (from < 1 || from > len) return fromv;
+    long long i = from - 1;
+    int mark = 0;
+#if defined(__x86_64__)
+    const __m128i zero = _mm_set1_epi8('0');
+    const __m128i nine = _mm_set1_epi8(9);
+    while (i + 16 <= len) {
+        __m128i v = _mm_loadu_si128((const __m128i*)(d + i));
+        __m128i off = _mm_sub_epi8(v, zero);
+        __m128i digit = _mm_cmpeq_epi8(_mm_min_epu8(off, nine), off);
+        __m128i point = _mm_or_si128(
+            _mm_cmpeq_epi8(v, _mm_set1_epi8('.')),
+            _mm_or_si128(_mm_cmpeq_epi8(v, _mm_set1_epi8('e')),
+                         _mm_cmpeq_epi8(v, _mm_set1_epi8('E'))));
+        __m128i sign = _mm_or_si128(_mm_cmpeq_epi8(v, _mm_set1_epi8('+')),
+                                    _mm_cmpeq_epi8(v, _mm_set1_epi8('-')));
+        unsigned in = (unsigned)_mm_movemask_epi8(_mm_or_si128(digit, _mm_or_si128(point, sign)));
+        unsigned marks = (unsigned)_mm_movemask_epi8(point);
+        unsigned out = ~in & 0xffffu;
+        if (out) {
+            unsigned k = (unsigned)__builtin_ctz(out);
+            if (marks & ((1u << k) - 1)) mark = 1;
+            i += k;
+            return k_int(mark ? -(i + 1) : i + 1);
+        }
+        if (marks) mark = 1;
+        i += 16;
+    }
+#endif
+    while (i < len && k_number_byte(d[i])) {
+        if (d[i] == '.' || d[i] == 'e' || d[i] == 'E') mark = 1;
+        i++;
+    }
+    return k_int(mark ? -(i + 1) : i + 1);
 }
 
 

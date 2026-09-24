@@ -1241,6 +1241,7 @@ fn expr_allocates(
         "char_code",
         "find2",
         "find2_below",
+        "number_span",
         "if",
         "length",
         "sum",

@@ -24,6 +24,7 @@ ryu_renders=2123
 ryu_short=2123
 utf8_bytes=450566
 find2_calls=31847
+number_spans=4217
 append_fast=97066
 append_grow=1786
 append_rendered=4217
