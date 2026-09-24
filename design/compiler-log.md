@@ -10970,3 +10970,28 @@ about fifteen significant digits, or outside [2^-20, 2^50), and those still
 cost what they did.
 
 CI's instruction rows go into the goldens.
+
+## 2026-09-24 — declined: keeping a dispatcher's big arms out of line
+
+`encode_onto` saves and restores six callee-saved registers on every one of
+its 2,380,860 calls a run, about 62 million instructions. The emitted
+dispatcher is small, but the link inlines `encode_list`, `encode_map` and
+`escape_onto` into it. After that, the true, false, null and number arms,
+each a runtime call in tail position, pay the frame the string and container
+arms need.
+
+Marking the three callees `noinline` in runbench.ll and relinking with the
+release command takes the run program from 1,867,504,858 to 1,841,390,170,
+-1.40%. The pairs taken alone do not help: the two container callees read
+1,868,242,224 and `escape_onto` alone reads 1,890,472,678. The emitter has no
+way to name those three without the profile, so three general rules were
+measured the same way:
+
+    every function in a recursive cycle            2,283,659,459   +22.3%
+    every user call inside a dispatcher             1,880,320,396   +0.69%
+    user calls inside a recursive dispatcher        1,869,244,114   +0.09%
+
+The last rule is the one that includes `encode_onto`, and the other 62
+dispatchers it covers spend what that one saves. The gain belongs to one
+function's arm frequencies, which is profile data, so this is declined until
+the emitter has a profile to read.
