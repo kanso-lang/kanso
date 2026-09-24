@@ -1256,7 +1256,12 @@ struct DeclareLine {
     /// What the line becomes in a build without counters: `Keep`, `Fold` with
     /// the fast path's label, or `Folded` for the two lines a gate folds.
     shipped: Shipped,
+    /// Where ` alwaysinline` sits on a helper's `define` line, `end` when the
+    /// line carries none. A dev build leaves it out: see `emit_ir_dev`.
+    inline_at: usize,
 }
+
+const INLINE_ATTR: &[u8] = b" alwaysinline";
 
 /// The eight inlined fast paths in DECLARES each ask `k_stats_on` before they
 /// take the shortcut, because the shortcut bypasses the runtime call that
@@ -1321,14 +1326,30 @@ const DECLARES_LINES: usize = declares_line_count(DECLARES.as_bytes());
 /// the compiler compiles: a gate written any other way is a build error.
 const fn index_declares() -> [DeclareLine; DECLARES_LINES] {
     let text = DECLARES.as_bytes();
-    let blank = DeclareLine { start: 0, end: 0, sym_start: 0, sym_end: 0, shipped: Shipped::Keep };
+    let blank = DeclareLine {
+        start: 0,
+        end: 0,
+        sym_start: 0,
+        sym_end: 0,
+        shipped: Shipped::Keep,
+        inline_at: 0,
+    };
     let mut out = [blank; DECLARES_LINES];
     let mut at = 0;
     let mut n = 0;
     while n < DECLARES_LINES {
         let end = find_in(text, at, text.len(), b"\n");
-        let mut line =
-            DeclareLine { start: at, end, sym_start: at, sym_end: at, shipped: Shipped::Keep };
+        let mut line = DeclareLine {
+            start: at,
+            end,
+            sym_start: at,
+            sym_end: at,
+            shipped: Shipped::Keep,
+            inline_at: end,
+        };
+        if starts_at(text, at, end, b"define ") {
+            line.inline_at = find_in(text, at, end, INLINE_ATTR);
+        }
         if starts_at(text, at, end, b"declare ") {
             let rest = at + b"declare ".len();
             let sigil = find_in(text, rest, end, b"@");
@@ -1419,7 +1440,7 @@ static DECLARE_LINES: [DeclareLine; DECLARES_LINES] = index_declares();
 /// DECLARES as a module wants it: joined by newlines with no newline after the
 /// last, keeping a `declare` only when `referenced` says the program calls its
 /// symbol, and folding each stats gate to its fast branch unless `counting`.
-fn declares_for(referenced: impl Fn(&str) -> bool, counting: bool) -> String {
+fn declares_for(referenced: impl Fn(&str) -> bool, counting: bool, inline: bool) -> String {
     let mut out = String::with_capacity(DECLARES.len());
     let mut first = true;
     for line in &DECLARE_LINES {
@@ -1442,7 +1463,13 @@ fn declares_for(referenced: impl Fn(&str) -> bool, counting: bool) -> String {
         if !first {
             out.push('\n');
         }
-        out.push_str(piece);
+        match inline || line.inline_at == line.end {
+            true => out.push_str(piece),
+            false => {
+                out.push_str(&DECLARES[line.start..line.inline_at]);
+                out.push_str(&DECLARES[line.inline_at + INLINE_ATTR.len()..line.end]);
+            }
+        }
         first = false;
     }
     out
@@ -1520,7 +1547,7 @@ mod the_declares_table_is_the_scan_it_replaced {
         ];
         for counting in [true, false] {
             for cut in cuts {
-                assert_eq!(declares_for(cut, counting), scanned(cut, counting));
+                assert_eq!(declares_for(cut, counting, true), scanned(cut, counting));
             }
         }
     }
@@ -1529,8 +1556,8 @@ mod the_declares_table_is_the_scan_it_replaced {
     /// counters is shorter by exactly two lines a gate.
     #[test]
     fn a_shipped_build_folds_every_gate() {
-        let counted = declares_for(|_| true, true).lines().count();
-        let shipped = declares_for(|_| true, false).lines().count();
+        let counted = declares_for(|_| true, true, true).lines().count();
+        let shipped = declares_for(|_| true, false, true).lines().count();
         assert_eq!(counted - shipped, 2 * STATS_GATE_SITES);
     }
 }
@@ -1741,6 +1768,33 @@ impl ClosureConvention {
 }
 
 pub fn emit_ir(program: &Program, convention: ClosureConvention) -> Result<String, String> {
+    emit_ir_for(program, convention, true)
+}
+
+/// The module a dev build compiles: the same as `emit_ir`'s, with the
+/// runtime's helpers left to be called rather than marked `alwaysinline`.
+///
+/// A dev build compiles at `-O0`, where the always-inliner still copies every
+/// helper into every call site and the instruction selector then walks each
+/// copy. The codegen corpus's module carries thirty-six such definitions, and
+/// without the attribute `clang -cc1` read 316,180,072 instructions against
+/// 359,109,516, -11.95%. What a dev binary gives up is the inlining itself,
+/// which the dev tier does not promise: it is the tier that compiles fast.
+/// No helper needs to be inlined to be correct. None allocates on the stack,
+/// reads a frame or return address, or makes a `musttail` call, and the
+/// program's calls into them are all plain calls.
+pub fn emit_ir_dev(program: &Program, convention: ClosureConvention) -> Result<String, String> {
+    emit_ir_for(program, convention, false)
+}
+
+/// The work both tiers share, and the frame `emit_instructions` anchors on.
+/// Kept out of line so the anchor exists whichever entry point reached it.
+#[inline(never)]
+fn emit_ir_for(
+    program: &Program,
+    convention: ClosureConvention,
+    inline_helpers: bool,
+) -> Result<String, String> {
     let knotted = knotted_constants(program);
     let inference = infer::infer(program);
     let mut type_ids = HashMap::default();
@@ -1791,6 +1845,7 @@ pub fn emit_ir(program: &Program, convention: ClosureConvention) -> Result<Strin
     beat.demoted.retain(|(_, callee)| beat.ids.contains_key(callee));
     let mut backend = Backend {
         convention,
+        inline_helpers,
         program,
         forwarders: forwarder_map(program),
         sub_parents: program
@@ -1837,6 +1892,10 @@ pub fn emit_ir(program: &Program, convention: ClosureConvention) -> Result<Strin
 struct Backend<'a> {
     /// see `ClosureConvention`; decided by the caller, never probed here
     convention: ClosureConvention,
+    /// Whether the runtime's helpers go out as `alwaysinline`: yes for a
+    /// release build, where inlining them is the point, and no for a dev
+    /// build. See `emit_ir_dev`.
+    inline_helpers: bool,
     program: &'a Program,
     /// Which declarations make up each group, by name, in program order.
     ///
@@ -2959,11 +3018,11 @@ fn named_as_a_value(text: &str, temp: &str) -> bool {
 /// callable, a fnref, a wrong arity, a failing argument. That is why the
 /// order here may differ from the runtime's: the arm only fires where all
 /// the orders agree.
-fn call_twin(n: usize, convention: ClosureConvention) -> String {
+fn call_twin(n: usize, convention: ClosureConvention, inline: bool) -> String {
     let args: String = (0..n).map(|i| format!(", %KValue %a{i}")).collect();
     let mut s = String::new();
-    let _ =
-        writeln!(s, "define internal %KValue @k_call{n}_fast(%KValue %f{args}) alwaysinline {{");
+    let attr = if inline { " alwaysinline" } else { "" };
+    let _ = writeln!(s, "define internal %KValue @k_call{n}_fast(%KValue %f{args}){attr} {{");
     let _ = writeln!(s, "  %ftag = extractvalue %KValue %f, 0");
     let _ = writeln!(s, "  %isclo = icmp eq i64 %ftag, 11");
     let _ = writeln!(s, "  br i1 %isclo, label %arity, label %slow");
@@ -3778,7 +3837,7 @@ impl<'a> Backend<'a> {
         let body_lines = symbols_before_newline(&body);
         let call_twins: String = (0..=4)
             .filter(|n| body_calls.contains(format!("k_call{n}_fast").as_str()))
-            .map(|n| call_twin(n, self.convention))
+            .map(|n| call_twin(n, self.convention, self.inline_helpers))
             .collect();
         let declares: String = {
             // BOTH SIDES OF THIS BUILT THE SAME INDEX. kanso#1461 landed one
@@ -3801,7 +3860,7 @@ impl<'a> Backend<'a> {
             let referenced = |sym: &str| {
                 body_calls.contains(sym) || twin_calls.contains(sym) || declares_context_calls(sym)
             };
-            declares_for(referenced, counters_wanted())
+            declares_for(referenced, counters_wanted(), self.inline_helpers)
         };
         let mut out = String::new();
         out.push_str(&call_twins);

@@ -10950,3 +10950,42 @@ read 913,993 against 908,786.
 `emit_instructions` counts `codegen::emit_ir` on the compile corpus, and the
 single split is what moved it. No other row moved. The objective rises, and the
 rise is banked.
+
+## 2026-09-24 — a dev build calls the runtime's helpers instead of inlining them
+
+Every module carries the runtime's small helpers as definitions: tag tests,
+the fast arms of append, index and length, and the closure-call twins, all
+`alwaysinline`. At `-O0` the always-inliner still honours the attribute and
+copies each helper into every call site, and the instruction selector then
+walks every copy. On the codegen corpus's module, which defines thirty-six of
+them:
+
+    clang -cc1 -O0, as emitted            359,109,516
+    clang -cc1 -O0, attribute removed     316,180,072   -11.95%   (this container)
+
+The dev tier is the one that compiles fast, and its binaries' speed is not a
+term in the objective. The release tier, where inlining the helpers is the
+point, keeps the attribute. `emit_ir_dev` gives the dev tier's module, and
+`kanso build` without `--release`, `kanso run` and `kanso play` use it. The
+attribute's offset on each `define` line of DECLARES is found when the
+compiler is built, beside the other indexes `index_declares` makes, so
+leaving it out costs no scan.
+
+No helper needs inlining to be correct. None allocates on the stack, reads a
+frame or return address, or makes a `musttail` call, and the program calls
+them only with plain calls. The whole suite passes with dev modules built
+this way.
+
+`tests/a_dev_build_calls_the_runtime_helpers.rs` builds a program with a
+closure call and an append on both tiers. It requires that the dev module
+define no helper `alwaysinline`, that the release module define some, and
+that both binaries print the same line. It went red with `emit_ir_dev` asking
+for inlined helpers.
+
+**The emit gate's anchor moves with the work.** `emit_instructions` read
+`codegen::emit_ir` inclusive on a dev build, and a dev build now enters
+through `emit_ir_dev`. Both entry points call `emit_ir_for`, which is kept out
+of line, and the gate now reads that frame. It found 43,868,047 on this
+container.
+
+CI's rows go into the goldens.

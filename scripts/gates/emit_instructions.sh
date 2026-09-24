@@ -10,7 +10,7 @@
 # is the work this project actually wrote: turning a checked program into LLVM
 # IR. Nothing counted it.
 #
-# `codegen::emit_ir` is that work and the whole of it, and the anchor is exact
+# `codegen::emit_ir_for` is that work and the whole of it, and the anchor is exact
 # rather than approximate: measured 2026-09-17 on this project's container,
 # four profiles — two readings of the shipped binary and two of a probe binary
 # whose `pid_tag_of` returns a constant — all read the frame at 394,910,642
@@ -79,7 +79,7 @@ stage_and_warm() {
 # The frame's inclusive cost, read out of a profile.
 emit_cost() {
   callgrind_annotate --inclusive=yes --threshold=99 "$1" 2>/dev/null \
-    | awk '/:kanso::codegen::emit_ir \[/ && !seen { gsub(/,/, "", $1); print $1; seen = 1 }'
+    | awk '/:kanso::codegen::emit_ir_for \[/ && !seen { gsub(/,/, "", $1); print $1; seen = 1 }'
 }
 
 reading() {
@@ -106,7 +106,7 @@ sh "$(dirname "$0")/function_table.sh" /tmp/cg.emit emit
 got=$(emit_cost /tmp/cg.emit)
 case "$got" in
   '' | *[!0-9]*)
-    echo "::error::the profile holds no kanso::codegen::emit_ir frame, so this"
+    echo "::error::the profile holds no kanso::codegen::emit_ir_for frame, so this"
     echo "::error::row has nothing to read. The frames the profile DOES hold are"
     echo "::error::printed above; a build that refused would show a short one."
     exit 1
