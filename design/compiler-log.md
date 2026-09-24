@@ -12369,3 +12369,35 @@ bodies the encoder now calls. `work_digestbench` reads 5,842,731 (+59) and
 `work_readbench` 4,630,947 (+54); neither program touches the code that
 changed, and both moved by the same few dozen instructions in kanso#1608's
 own sitting.
+
+## 2026-09-24 — what sets runbench's memory peak, and three ideas measured and declined
+
+`arena_peak_bytes` on the run program is 5,050,064: four 1 MiB blocks and an
+855,760-byte block for the index shape's subject string. Zeroing one phase at
+a time names what holds them. The top-level `doc = json/decode raw` keeps two
+blocks for the whole run; with `doc` decoded from `"[1]"` the floor is one.
+The decode loop adds two more, because each decode starts partway into a
+block; with a tiny `doc` it adds one. The pending-cell shape adds one, the
+index shape adds the oversize block, and encode, deep, escape, split and
+digest add nothing. Smaller blocks barely move it: 512 KiB reads
+5,050,064, 256 KiB 4,787,920 and 128 KiB 4,845,568, so block rounding accounts
+for at most a quarter of a megabyte of the peak.
+
+The executed `run` is the entry's bare clone of `runbench/run`, and the cohort
+license leaves a synthetic clone unbracketed, so the top-level decode has no
+cohort. Lifting that exclusion as an experiment gave it one, and the pop kept
+the region (`cohort_kept=1`) with the peak unchanged: the region is mostly the
+tree the run goes on to use.
+
+Declined, with the numbers:
+
+- A shared cache for four- to seven-byte tokens in `k_b_utf8_slice_raw`, a
+  thousand permanent slots that never evict. Run allocations 5,280,394 ->
+  4,685,773 and `sh_str` 35,646,128 -> 16,558,928, with 596,055 tokens
+  shared, but runbench rose 1,768,671,540 -> 1,777,292,093 (+0.49%) and the
+  peak did not move. A token's arena path is one bump, and the lookup costs
+  more than the bump it replaces.
+- Keeping `escape_rest` out of line as well, so `escape_onto`'s clean path
+  drops its frame: runbench 1,820,829,169 -> 1,822,724,299.
+- Moving `to_float`'s strtod fallback out of line to drop its frame from the
+  fast path: 106,513 instructions, 0.006%.
