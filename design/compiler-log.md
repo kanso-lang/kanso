@@ -10950,3 +10950,140 @@ read 913,993 against 908,786.
 `emit_instructions` counts `codegen::emit_ir` on the compile corpus, and the
 single split is what moved it. No other row moved. The objective rises, and the
 rise is banked.
+
+## 2026-09-24 — a short float is rendered by scaling and dividing back
+
+`render_ryu` was 4.33% of the run program: 82,180,980 instructions over
+191,070 calls, 430 a float. Every float in the encode corpus has seven or fewer
+significant digits, and for a decimal that short ryu's 125-bit multiplies and
+its digit removal do more work than the answer needs.
+
+`ryu_d2d` now tries the decimal places in order first. At place p it rounds
+f·10^p to an integer m and accepts m·10^-p when `(double)m / 10^p == f`. The
+division is one correctly rounded operation on two exact doubles, so a match
+proves the decimal reads back as f under strtod's round-half-even. It cannot
+miss one: while ulp(f)·10^p ≤ 1/4, at most one decimal with p places reads back
+as f, it lies within 1/8 of the exact product, and the rounded product is
+within 1/4 of that. So the first place that passes gives the shortest decimal,
+and the one ryu would choose. A decimal with fewer significant digits at a
+later place would have to sit across a power of ten from it, and that power of
+ten is a one-digit candidate at a place already tried. The path covers f in
+[2^-20, 2^50); outside that range, or when the bound runs out, ryu decides as
+before.
+
+The conversions are signed. Every product is below 2^51, and on x86-64 an
+unsigned double conversion is about a dozen instructions each way where a
+signed one is one. The unsigned first build saved 14,344,110; the signed one
+saves twice that.
+
+    render_ryu        82,180,980 -> 53,842,770    430 -> 282 a float
+    runbench       1,895,843,068 -> 1,867,504,858   -1.49%   (this container)
+
+**The harness came first.** A differential fuzzer takes `ryu_d2d` and
+`render_ryu` out of the runtime at HEAD and out of the working tree, compiles
+both, and compares digits, exponent and rendered text. It covers random doubles
+across the path's exponent range and past both ends, short decimals of one to
+seventeen digits at every scale to 10^22 with their neighbours on both sides,
+decimals ending in a 5, and both sides of every binary exponent and power of
+ten in range. 1,495,188,243 compared, 0 differ. Three mutations each went red:
+dropping the rounding step (7,088 differ in 1,286,385), loosening the bound
+sixty-four times (69,680) and not stripping an integer's trailing zeros
+(117,369).
+
+**The shipped spec gained the property this rests on.**
+`every_rendered_float_reads_back_as_itself` checked round trip and shortest,
+and both pass a renderer that picks the wrong neighbour of the right length.
+The loosened-bound mutation did exactly that. The spec now also checks
+closest: when the nearest k-digit decimal (glibc's `%.*e`, which is exact)
+reads back, the renderer must have chosen it. The condition matters. The
+first draft required the nearest decimal whether or not it read back, and it
+reported 93 failures, every one a power of two. There the doubles below are
+twice as dense, so the interval that reads back is half as wide on that side:
+2^-1017 prints as 7.120236347223045e-307 although ...044 is nearer, and Python's
+`repr` agrees. The spec also gained a million short decimals of every length,
+with their neighbours. Watched red: the loosened bound gives 208,683 not
+closest and 28,657 not shortest, and the dropped rounding gives 25,474 not
+shortest.
+
+**A presence counter, `ryu_short`,** counts the floats the short path settled.
+It sits after `ryu_renders` in every counter dump, so all twelve cost goldens,
+the .mem vein and the two book samples that print counters gained the line.
+It equals `ryu_renders` in every golden: 191,070 on the run program, 849,200 on
+encode and live, 8,000 on wide and 2,123 on oneshot. The trend gate reads it as
+higher-is-better beside `seek_resumes`. No allocation counter moves; rendering
+allocates nothing.
+
+**The general loop is now outside every benchmark.** Because no benchmark float
+reaches ryu's digit-removal loop, the ratchet row that guarded its two-a-trip
+shape through the work vein could not go red any more, and it is retired. Its
+replacement closes the short path, and `run_counters` goes red on
+`ryu_short=191070` -> `0`. The objective does not see floats of more than
+about fifteen significant digits, or outside [2^-20, 2^50), and those still
+cost what they did.
+
+**CI's rows**, taken into the goldens:
+
+    work_runbench         1,853,571,514 ->   1,825,042,054   -1.54%
+    work_encodebench      3,356,324,328 ->   3,229,526,728   -3.78%
+    work_livebench        2,824,128,034 ->   2,697,330,434   -4.49%
+    work_widebench           34,746,491 ->      30,712,160  -11.61%
+    work_oneshot             20,373,089 ->      20,056,095   -1.56%
+    startup_instructions        975,983 ->         976,034   +51
+    codegen_instructions_dev    473,933,874 ->   473,952,844   +18,970
+    codegen_instructions_release 1,751,097,561 -> 1,751,553,021  +455,460
+
+Merged over kanso#1591, which took start-up to 870,779, CI reads 870,779
+again. The +51 above did not carry over: it was projected at 870,830, main's
+value plus this change's own delta, and the projection was wrong, so the row
+is CI's.
+
+`text`, summed over the fourteen binaries, reads 3,244,860 against 3,215,292:
+2,112 bytes more in each, which is the short path and the digit writer it
+shares with ryu. The three codegen and start-up rows rise because the runtime
+the corpus builds is larger by the same code. The objective rises by 0.08, and
+the rise is banked.
+
+## 2026-09-24 — declined: keeping a dispatcher's big arms out of line
+
+`encode_onto` saves and restores six callee-saved registers on every one of
+its 2,380,860 calls a run, about 62 million instructions. The emitted
+dispatcher is small, but the link inlines `encode_list`, `encode_map` and
+`escape_onto` into it. After that, the true, false, null and number arms,
+each a runtime call in tail position, pay the frame the string and container
+arms need.
+
+Marking the three callees `noinline` in runbench.ll and relinking with the
+release command takes the run program from 1,867,504,858 to 1,841,390,170,
+-1.40%. The pairs taken alone do not help: the two container callees read
+1,868,242,224 and `escape_onto` alone reads 1,890,472,678. The emitter has no
+way to name those three without the profile, so three general rules were
+measured the same way:
+
+    every function in a recursive cycle            2,283,659,459   +22.3%
+    every user call inside a dispatcher             1,880,320,396   +0.69%
+    user calls inside a recursive dispatcher        1,869,244,114   +0.09%
+
+The last rule is the one that includes `encode_onto`, and the other 62
+dispatchers it covers spend what that one saves. The gain belongs to one
+function's arm frequencies, which is profile data, so this is declined until
+the emitter has a profile to read.
+
+## 2026-09-24 — the scanners' ratchet row builds again
+
+The ratchet on kanso#1585 failed one row, marked UNBUILT: "the two byte
+scanners called out of line with their constants". Its mutation removes
+`always_inline` from `k_b_find2_raw` and `k_b_find2_below_raw`. Since #1585
+the release build lifts both into a small bitcode unit, and `hot_source` found
+them by a start string that included the attribute. With the attribute gone
+it found nothing, the compiler panicked, and the mutated tree never reached
+the gate. Every branch touching runtime.c selects that row, so the same
+failure waited for each of them.
+
+`hot_source` now finds each definition by its signature and takes it from the
+start of the line, attribute and all. The text it lifts from the unmutated
+runtime is byte-identical, 2,242 and 2,893 bytes. The mutated tree builds, and
+runbench reads 1,917,945,517 against 1,867,504,844, which the work vein sees.
+Marking the scanners `noinline` instead reads the same 1,917,945,517: the link
+does not inline a plain definition back. `the_scanners_are_found_without_their
+_attribute` lifts the unit from runtime text with the attribute removed, and
+went red with the start strings keyed on the attribute again.
