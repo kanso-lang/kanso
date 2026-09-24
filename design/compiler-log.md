@@ -11700,3 +11700,24 @@ switch.
 
 The compiler page's §132 covers this change and the three before it on the
 dev tier.
+
+## 2026-09-24 — each declare line knows whether DECLARES calls it
+
+A module keeps a `declare` line from DECLARES when the program calls its
+symbol, or when one of DECLARES's own definitions does. The second question
+was a binary search over the 65 context-call names, asked for every `declare`
+line of every module. Each comparison went through `memcmp`, and each probe
+cost about thirty instructions on the start-up program. The answer depends
+on DECLARES alone, so `index_declares` now computes it when the compiler is
+built, as `DeclareLine::context`, and emit asks only the program's own calls.
+
+The modules are byte-identical: the codegen corpus's dev and release modules
+compare equal to the ones the previous compiler wrote. Measured on this
+container, with the gate's environment:
+
+    startup_instructions   750,547 -> 693,898   -7.55%
+
+The unit test `every_declare_line_knows_whether_declares_calls_it` holds every
+line's flag, in both the release and the dev text, to the binary search it
+replaced. It went red, on `k_truthy_bad`, with the flag left false. CI's
+start-up and emit rows replace the local one above.

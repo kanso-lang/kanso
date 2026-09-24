@@ -1301,6 +1301,11 @@ struct DeclareLine {
     /// What the line becomes in a build without counters: `Keep`, `Fold` with
     /// the fast path's label, or `Folded` for the two lines a gate folds.
     shipped: Shipped,
+    /// Whether DECLARES's own definitions call the symbol, which keeps the
+    /// line whatever the program calls. Answered when the compiler is built:
+    /// asked at emit time it was a binary search over the context calls for
+    /// every `declare` line of every module.
+    context: bool,
 }
 
 const INLINE_ATTR: &[u8] = b" alwaysinline";
@@ -1364,18 +1369,45 @@ const fn is_space(b: u8) -> bool {
 
 const DECLARES_LINES: usize = declares_line_count(DECLARES.as_bytes());
 
+/// Whether `text[from..to]` is one of the symbols DECLARES calls from its own
+/// definitions.
+const fn context_calls_name(text: &[u8], from: usize, to: usize) -> bool {
+    let mut n = 0;
+    while n < DECLARES_CONTEXT_CALLS.len() {
+        let name = DECLARES_CONTEXT_CALLS[n].as_bytes();
+        if name.len() == to - from && find_in(text, from, to, name) == from {
+            return true;
+        }
+        n += 1;
+    }
+    false
+}
+
 /// The table, and the refusals the run-time fold used to make, raised while
 /// the compiler compiles: a gate written any other way is a build error.
 const fn index_declares(text: &str) -> [DeclareLine; DECLARES_LINES] {
     let text = text.as_bytes();
-    let blank = DeclareLine { start: 0, end: 0, sym_start: 0, sym_end: 0, shipped: Shipped::Keep };
+    let blank = DeclareLine {
+        start: 0,
+        end: 0,
+        sym_start: 0,
+        sym_end: 0,
+        shipped: Shipped::Keep,
+        context: false,
+    };
     let mut out = [blank; DECLARES_LINES];
     let mut at = 0;
     let mut n = 0;
     while n < DECLARES_LINES {
         let end = find_in(text, at, text.len(), b"\n");
-        let mut line =
-            DeclareLine { start: at, end, sym_start: at, sym_end: at, shipped: Shipped::Keep };
+        let mut line = DeclareLine {
+            start: at,
+            end,
+            sym_start: at,
+            sym_end: at,
+            shipped: Shipped::Keep,
+            context: false,
+        };
         if starts_at(text, at, end, b"declare ") {
             let rest = at + b"declare ".len();
             let sigil = find_in(text, rest, end, b"@");
@@ -1384,6 +1416,7 @@ const fn index_declares(text: &str) -> [DeclareLine; DECLARES_LINES] {
                 if paren < end {
                     line.sym_start = sigil + 1;
                     line.sym_end = paren;
+                    line.context = context_calls_name(text, sigil + 1, paren);
                 }
             }
         }
@@ -1655,7 +1688,7 @@ static HELPERS_RELEASE: [Helper; HELPERS] = index_helpers(DECLARES);
 /// symbol, and folding each stats gate to its fast branch unless `counting`.
 #[cfg(test)]
 fn declares_for(referenced: impl Fn(&str) -> bool, counting: bool, inline: bool) -> String {
-    declares_for_program(referenced, |_| true, counting, inline)
+    declares_for_program(referenced, |_| true, counting, inline, false)
 }
 
 /// `declares_for`, for a program that calls the helpers `called` names. A dev
@@ -1669,6 +1702,7 @@ fn declares_for_program(
     called: impl Fn(&str) -> bool,
     counting: bool,
     inline: bool,
+    keep_context: bool,
 ) -> String {
     let (text, lines, helpers): (&str, &[DeclareLine], &[Helper]) = match inline {
         true => (DECLARES, &DECLARE_LINES, &HELPERS_RELEASE),
@@ -1692,11 +1726,12 @@ fn declares_for_program(
                 &lines[from..helper.first],
                 &referenced,
                 counting,
+                keep_context,
             );
             from = helper.last + 1;
         }
     }
-    declare_lines(&mut out, &mut first, text, &lines[from..], &referenced, counting);
+    declare_lines(&mut out, &mut first, text, &lines[from..], &referenced, counting, keep_context);
     out
 }
 
@@ -1726,9 +1761,13 @@ fn declare_lines(
     lines: &[DeclareLine],
     referenced: &impl Fn(&str) -> bool,
     counting: bool,
+    keep_context: bool,
 ) {
     for line in lines {
-        if line.sym_start < line.sym_end && !referenced(&text[line.sym_start..line.sym_end]) {
+        if line.sym_start < line.sym_end
+            && !(keep_context && line.context)
+            && !referenced(&text[line.sym_start..line.sym_end])
+        {
             continue;
         }
         let piece = match (counting, line.shipped) {
@@ -2913,14 +2952,15 @@ fn symbols_before_newline(text: &str) -> crate::hash::Set<&str> {
 /// two. On a program that emits one `print` that is the whole of the index's
 /// cost, and `kanso play` paid it to learn nothing it could not have been told.
 ///
-/// Sorted, and asked with a binary search: 65 names is seven comparisons an ask
-/// and 163 asks a module, where a hash set costs a table to build first.
+/// Sorted, which is what the oracle's binary search needs. Emit never asks
+/// the list: each `declare` line reads `DeclareLine::context`, computed from
+/// it when the compiler is built.
 ///
 /// `tests/the_declares_symbols_are_the_ones_declares_calls.rs` recomputes this
 /// list from DECLARES with the same scan it replaces and asserts they are the
 /// same set, so an edit to DECLARES that adds or drops a call turns that spec
 /// red rather than silently leaving a symbol out of a program's declares.
-static DECLARES_CONTEXT_CALLS: &[&str] = &[
+const DECLARES_CONTEXT_CALLS: &[&str] = &[
     "k_b_append",
     "k_b_append_byte",
     "k_b_append_mut",
@@ -2988,8 +3028,29 @@ static DECLARES_CONTEXT_CALLS: &[&str] = &[
     "llvm.memcpy.p0.p0.i64",
 ];
 
+/// The binary search each `declare` line used to ask at emit time, kept as
+/// the oracle for `DeclareLine::context`.
+#[cfg(test)]
 fn declares_context_calls(sym: &str) -> bool {
     DECLARES_CONTEXT_CALLS.binary_search(&sym).is_ok()
+}
+
+#[cfg(test)]
+mod every_declare_line_knows_whether_declares_calls_it {
+    use super::{declares_context_calls, DECLARES, DECLARES_DEV, DECLARE_LINES, DECLARE_LINES_DEV};
+
+    #[test]
+    fn the_flag_is_the_search() {
+        let mut asked = 0;
+        for (text, lines) in [(DECLARES, &DECLARE_LINES), (DECLARES_DEV, &DECLARE_LINES_DEV)] {
+            for line in lines.iter().filter(|l| l.sym_start < l.sym_end) {
+                let sym = &text[line.sym_start..line.sym_end];
+                assert_eq!(line.context, declares_context_calls(sym), "{sym}");
+                asked += usize::from(line.context);
+            }
+        }
+        assert!(asked > 0, "no declare line is one DECLARES calls, so this proves nothing");
+    }
 }
 
 #[cfg(test)]
@@ -4280,11 +4341,10 @@ impl<'a> Backend<'a> {
             // seeded table makes this count differ between two runs of one
             // binary, which the compile rows read as a reproduction failure.
             let twin_calls = called_symbols(&call_twins);
-            let referenced = |sym: &str| {
-                body_calls.contains(sym) || twin_calls.contains(sym) || declares_context_calls(sym)
-            };
+            // A symbol DECLARES's own definitions call is kept as well, and
+            // each line knows whether it is one: `DeclareLine::context`.
             let called = |sym: &str| body_calls.contains(sym) || twin_calls.contains(sym);
-            declares_for_program(referenced, called, counters_wanted(), self.inline_helpers)
+            declares_for_program(called, called, counters_wanted(), self.inline_helpers, true)
         };
         let mut out = String::new();
         out.push_str(&call_twins);
