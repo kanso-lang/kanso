@@ -209,7 +209,12 @@
 # not move on either host, where kanso#1543's rose 616 for the vector it kept:
 # a retained 80-byte node is not resident at the high-water mark, because the
 # node it replaces was resident there before.
-interp_allocs=1063803
+#
+# 2026-09-24, kanso#1603 over main 68495456, CI's sitting. The lexer and nine
+# front-end places stop allocating what they drop. The interpreter lexes and
+# parses its program before it runs it. interp_allocs 1,063,803 -> 1,049,281,
+# a FALL of 14,522 (-1.3651%).
+interp_allocs=1049281
 #
 # 2026-09-18, kanso#1518 against main at kanso#1517, CI's sitting.
 # 951,438 -> 961,165, a RISE of
@@ -264,5 +269,9 @@ interp_allocs=1063803
 # Traffic falls 126,147 and residency rises 616, which is the two rows doing
 # what the gate's own message says they do: a total and a high-water mark,
 # free to move apart.
-interp_peak_bytes=846367
+#
+# 2026-09-24, kanso#1603 over main 68495456, CI's sitting. The lexer and nine
+# front-end places stop allocating what they drop. interp_peak_bytes 846,367
+# -> 846,191, a FALL of 176 (-0.0208%).
+interp_peak_bytes=846191
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

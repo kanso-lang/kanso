@@ -2209,8 +2209,11 @@ pub fn check_file_shadow(
         .collect();
     let declared =
         Declared { fn_arities: &fn_arities, type_arity: &type_arity, types: &declared_type_names };
+    // One vector of locals for the whole file. Every body leaves it empty, and
+    // a fresh one per declaration grew from nothing each time.
+    let mut locals = Vec::new();
     for decl in &program.fns {
-        check_fn_body_shadow(decl, &globals, &mut diags, shadowable, &declared);
+        check_fn_body_shadow(decl, &globals, &mut diags, shadowable, &declared, &mut locals);
     }
     diags.sort_by_key(|d| (d.span.line, d.span.col));
     diags
@@ -4292,16 +4295,17 @@ struct Resolver<'a> {
     std_origin: bool,
 }
 
-fn check_fn_body_shadow(
-    decl: &FnDecl,
-    globals: &HashSet<&str>,
+fn check_fn_body_shadow<'a>(
+    decl: &'a FnDecl,
+    globals: &'a HashSet<&'a str>,
     diags: &mut Vec<Diagnostic>,
-    shadowable: &HashSet<String>,
-    declared: &Declared,
+    shadowable: &'a HashSet<String>,
+    declared: &'a Declared<'a>,
+    locals: &mut Vec<Local<'a>>,
 ) {
     let mut resolver = Resolver {
         globals,
-        locals: Vec::new(),
+        locals: std::mem::take(locals),
         diags: Vec::new(),
         std_origin: decl.file.starts_with("std/"),
         shadowable,
@@ -4347,6 +4351,7 @@ fn check_fn_body_shadow(
     }
     resolver.flush_unused(0);
     diags.append(&mut resolver.diags);
+    *locals = resolver.locals;
 }
 
 impl<'a> Resolver<'a> {
@@ -4451,23 +4456,27 @@ impl<'a> Resolver<'a> {
         // reaching them through `self` would be one borrow doing both. Owning
         // the names instead was a `String` per binding in every scope the
         // checker left.
+        //
+        // A binding is shadowed when a later one in the same scope has its
+        // name. A scope holds a handful of bindings, so the later ones are
+        // scanned rather than gathered into a set, which was a table built for
+        // every scope the checker closed.
         {
-            let mut shadowed: HashSet<&str> = HashSet::default();
-            let locals = &self.locals;
+            let locals = &self.locals[from..];
             let diags = &mut self.diags;
-            for local in locals[from..].iter().rev() {
+            for (at, local) in locals.iter().enumerate().rev() {
                 // `_:type` ascribes without binding: there is no name to use
                 if local.name == "_" {
                     continue;
                 }
-                if !local.used && !shadowed.contains(local.name) {
+                let shadowed = locals[at + 1..].iter().any(|l| l.name == local.name);
+                if !local.used && !shadowed {
                     diags.push(Diagnostic::new(
                         "unused",
                         format!("unused binding `{}`", local.name),
                         local.span,
                     ));
                 }
-                shadowed.insert(local.name);
             }
         }
         self.locals.truncate(from);
@@ -4770,6 +4779,9 @@ fn check_discarded_value(
         }
     };
 
+    // One vector for every statement: a fresh one per statement was an
+    // allocation for each of lib/json's 718 expression lines.
+    let mut leaves = Vec::new();
     for decl in &program.fns {
         if decl.synthetic {
             continue;
@@ -4779,7 +4791,7 @@ fn check_discarded_value(
             let Stmt::Expr(expr) = stmt else { continue };
             // Adjacent lines are one joined expression by now, so the members
             // of a group are leaves of its join spine rather than statements.
-            let mut leaves = Vec::new();
+            leaves.clear();
             flatten_join(expr, &mut leaves);
             // The body's result is the last leaf of the last statement; every
             // other leaf is a line whose value nothing reads.

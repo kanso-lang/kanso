@@ -523,5 +523,10 @@
 # overlap up to 128 bytes, 128-byte AVX2 steps above that. Copies libc makes internally, a thousand-odd instructions a run, cannot
 # be reached by a preload and are still counted as libc does them.
 #
-interp_instructions=853048810
+#
+# 2026-09-24, kanso#1603 over main 68495456, CI's sitting. The lexer and nine
+# front-end places stop allocating what they drop. The interpreter lexes and
+# parses its program before it runs it. interp_instructions 853,048,810 ->
+# 852,977,487, a FALL of 71,323 (-0.0084%).
+interp_instructions=852977487
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
