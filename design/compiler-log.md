@@ -10968,8 +10968,7 @@ term in the objective. The release tier, where inlining the helpers is the
 point, keeps the attribute. `emit_ir_dev` gives the dev tier's module, and
 `kanso build` without `--release`, `kanso run` and `kanso play` use it. The
 attribute's offset on each `define` line of DECLARES is found when the
-compiler is built, beside the other indexes `index_declares` makes, so
-leaving it out costs no scan.
+compiler is built: see below.
 
 No helper needs inlining to be correct. None allocates on the stack, reads a
 frame or return address, or makes a `musttail` call, and the program calls
@@ -11005,8 +11004,12 @@ container.
     startup_instructions             870,779 ->       880,309   +9,530
     emit_instructions             43,339,387 ->    43,359,136   +19,749
 
-The dev row is the saving. Start-up and the emitter pay for the entry point:
-`emit_ir_for` is now a frame of its own, kept out of line for the anchor,
-where `emit_ir` had been inlined into its caller, and the dev module's helper
-lines are written as two slices each. The objective weighs the dev row far
-above the other two at these sizes, and it rises. The rise is banked.
+The dev row is the saving. The start-up rise was the first draft's: every
+line of DECLARES asked whether it carried the attribute, 6,192 instructions of
+`Backend::emit` on the one-line program and 10,508 in all. The dev text and
+its line index are now made when the compiler is built, as `DECLARES_DEV` and
+`DECLARE_LINES_DEV`, and `declares_for` picks a pair once. Start-up on this
+container read 902,425 with the check and 875,795 without, against main's
+876,314, and the next CI round's rows replace the two above. A unit test holds
+the dev text to the release text with the attribute stripped by a scan at run
+time, and went red when the dev branch was handed the release pair.

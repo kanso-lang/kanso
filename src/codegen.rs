@@ -1256,9 +1256,6 @@ struct DeclareLine {
     /// What the line becomes in a build without counters: `Keep`, `Fold` with
     /// the fast path's label, or `Folded` for the two lines a gate folds.
     shipped: Shipped,
-    /// Where ` alwaysinline` sits on a helper's `define` line, `end` when the
-    /// line carries none. A dev build leaves it out: see `emit_ir_dev`.
-    inline_at: usize,
 }
 
 const INLINE_ATTR: &[u8] = b" alwaysinline";
@@ -1324,32 +1321,16 @@ const DECLARES_LINES: usize = declares_line_count(DECLARES.as_bytes());
 
 /// The table, and the refusals the run-time fold used to make, raised while
 /// the compiler compiles: a gate written any other way is a build error.
-const fn index_declares() -> [DeclareLine; DECLARES_LINES] {
-    let text = DECLARES.as_bytes();
-    let blank = DeclareLine {
-        start: 0,
-        end: 0,
-        sym_start: 0,
-        sym_end: 0,
-        shipped: Shipped::Keep,
-        inline_at: 0,
-    };
+const fn index_declares(text: &str) -> [DeclareLine; DECLARES_LINES] {
+    let text = text.as_bytes();
+    let blank = DeclareLine { start: 0, end: 0, sym_start: 0, sym_end: 0, shipped: Shipped::Keep };
     let mut out = [blank; DECLARES_LINES];
     let mut at = 0;
     let mut n = 0;
     while n < DECLARES_LINES {
         let end = find_in(text, at, text.len(), b"\n");
-        let mut line = DeclareLine {
-            start: at,
-            end,
-            sym_start: at,
-            sym_end: at,
-            shipped: Shipped::Keep,
-            inline_at: end,
-        };
-        if starts_at(text, at, end, b"define ") {
-            line.inline_at = find_in(text, at, end, INLINE_ATTR);
-        }
+        let mut line =
+            DeclareLine { start: at, end, sym_start: at, sym_end: at, shipped: Shipped::Keep };
         if starts_at(text, at, end, b"declare ") {
             let rest = at + b"declare ".len();
             let sigil = find_in(text, rest, end, b"@");
@@ -1435,16 +1416,81 @@ const fn index_declares() -> [DeclareLine; DECLARES_LINES] {
     out
 }
 
-static DECLARE_LINES: [DeclareLine; DECLARES_LINES] = index_declares();
+static DECLARE_LINES: [DeclareLine; DECLARES_LINES] = index_declares(DECLARES);
+
+/// How many `define` lines of `text` carry the attribute a dev build leaves
+/// out.
+const fn inline_defines(text: &[u8]) -> usize {
+    let mut n = 0;
+    let mut at = 0;
+    while at < text.len() {
+        let end = find_in(text, at, text.len(), b"\n");
+        if starts_at(text, at, end, b"define ") && find_in(text, at, end, INLINE_ATTR) < end {
+            n += 1;
+        }
+        at = end + 1;
+    }
+    n
+}
+
+const DECLARES_DEV_LEN: usize =
+    DECLARES.len() - INLINE_ATTR.len() * inline_defines(DECLARES.as_bytes());
+
+/// DECLARES with ` alwaysinline` taken off every `define` line, made when the
+/// compiler is built. A dev build writes this text rather than DECLARES, so
+/// leaving the attribute out costs it nothing per line: a check in the loop
+/// below cost `kanso play`'s start-up 10,508 instructions on a one-line
+/// program, measured before the text moved here.
+const DECLARES_DEV_BYTES: [u8; DECLARES_DEV_LEN] = {
+    let text = DECLARES.as_bytes();
+    let mut out = [0u8; DECLARES_DEV_LEN];
+    let mut at = 0;
+    let mut o = 0;
+    while at < text.len() {
+        let end = find_in(text, at, text.len(), b"\n");
+        let cut = match starts_at(text, at, end, b"define ") {
+            true => find_in(text, at, end, INLINE_ATTR),
+            false => end,
+        };
+        let mut i = at;
+        while i < end {
+            if i == cut {
+                i += INLINE_ATTR.len();
+                continue;
+            }
+            out[o] = text[i];
+            o += 1;
+            i += 1;
+        }
+        if end < text.len() {
+            out[o] = b'\n';
+            o += 1;
+        }
+        at = end + 1;
+    }
+    assert!(o == DECLARES_DEV_LEN, "the dev text is not the length it was sized for");
+    out
+};
+
+const DECLARES_DEV: &str = match std::str::from_utf8(&DECLARES_DEV_BYTES) {
+    Ok(text) => text,
+    Err(_) => panic!("the dev text is not utf-8"),
+};
+
+static DECLARE_LINES_DEV: [DeclareLine; DECLARES_LINES] = index_declares(DECLARES_DEV);
 
 /// DECLARES as a module wants it: joined by newlines with no newline after the
 /// last, keeping a `declare` only when `referenced` says the program calls its
 /// symbol, and folding each stats gate to its fast branch unless `counting`.
 fn declares_for(referenced: impl Fn(&str) -> bool, counting: bool, inline: bool) -> String {
-    let mut out = String::with_capacity(DECLARES.len());
+    let (text, lines) = match inline {
+        true => (DECLARES, &DECLARE_LINES),
+        false => (DECLARES_DEV, &DECLARE_LINES_DEV),
+    };
+    let mut out = String::with_capacity(text.len());
     let mut first = true;
-    for line in &DECLARE_LINES {
-        if line.sym_start < line.sym_end && !referenced(&DECLARES[line.sym_start..line.sym_end]) {
+    for line in lines {
+        if line.sym_start < line.sym_end && !referenced(&text[line.sym_start..line.sym_end]) {
             continue;
         }
         let piece = match (counting, line.shipped) {
@@ -1454,25 +1500,51 @@ fn declares_for(referenced: impl Fn(&str) -> bool, counting: bool, inline: bool)
                     out.push('\n');
                 }
                 out.push_str("  br label %");
-                out.push_str(&DECLARES[label_start..label_end]);
+                out.push_str(&text[label_start..label_end]);
                 first = false;
                 continue;
             }
-            _ => &DECLARES[line.start..line.end],
+            _ => &text[line.start..line.end],
         };
         if !first {
             out.push('\n');
         }
-        match inline || line.inline_at == line.end {
-            true => out.push_str(piece),
-            false => {
-                out.push_str(&DECLARES[line.start..line.inline_at]);
-                out.push_str(&DECLARES[line.inline_at + INLINE_ATTR.len()..line.end]);
-            }
-        }
+        out.push_str(piece);
         first = false;
     }
     out
+}
+
+#[cfg(test)]
+mod the_dev_declares_are_the_release_ones_without_the_attribute {
+    use super::declares_for;
+
+    /// The oracle: the release text, with ` alwaysinline` taken off each
+    /// `define` line by a scan at run time.
+    fn stripped(text: &str) -> String {
+        text.split('\n')
+            .map(|l| match l.starts_with("define ") {
+                true => l.replacen(" alwaysinline", "", 1),
+                false => l.to_string(),
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    #[test]
+    fn every_selection_agrees() {
+        let none = |_: &str| false;
+        let all = |_: &str| true;
+        for counting in [false, true] {
+            let dev = declares_for(all, counting, false);
+            assert_eq!(dev, stripped(&declares_for(all, counting, true)));
+            assert!(!dev.lines().any(|l| l.starts_with("define ") && l.contains(" alwaysinline")));
+            assert_eq!(
+                declares_for(none, counting, false),
+                stripped(&declares_for(none, counting, true))
+            );
+        }
+    }
 }
 
 #[cfg(test)]
