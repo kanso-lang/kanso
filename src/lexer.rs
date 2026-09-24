@@ -567,8 +567,14 @@ thread_local! {
 impl<'a> Scanner<'a> {
     fn new(content: &'a str, line: usize, col_offset: usize) -> Scanner<'a> {
         let mut chars = CHAR_BUFS.with(|pool| pool.borrow_mut().pop()).unwrap_or_default();
-        chars.extend(content.chars());
-        Scanner { chars, src: content, ascii: content.is_ascii(), pos: 0, line, col_offset }
+        // On an ascii line every byte is a character, so the bytes are widened
+        // rather than decoded.
+        let ascii = content.is_ascii();
+        match ascii {
+            true => chars.extend(content.bytes().map(char::from)),
+            false => chars.extend(content.chars()),
+        }
+        Scanner { chars, src: content, ascii, pos: 0, line, col_offset }
     }
 }
 
@@ -753,9 +759,15 @@ fn lex_line(content: &str, line: usize, col_offset: usize) -> Result<LexedLine, 
             tokens.push((Tok::Bind, span, s.span().col));
             continue;
         }
-        let two = [c, s.peek(1).unwrap_or(' ')].iter().collect::<String>();
-        if let Some(op) = OPS.iter().find(|op| **op == two || (op.len() == 1 && op.starts_with(c)))
-        {
+        // The two-character spellings come first in OPS, so `>=` is found
+        // before `>`. Compared a character at a time: building the pair as a
+        // `String` to compare against was an allocation per operator.
+        let next = s.peek(1);
+        if let Some(op) = OPS.iter().find(|op| match op.as_bytes() {
+            [a, b] => c == *a as char && next == Some(*b as char),
+            [a] => c == *a as char,
+            _ => false,
+        }) {
             s.pos += op.len();
             tokens.push((Tok::Op(op), span, s.span().col));
             continue;
@@ -790,6 +802,16 @@ impl Scanner<'_> {
             let value = text.parse::<f64>().expect("digit-dot-digit parses as f64");
             return Ok(Tok::Float(value));
         }
+        // Eighteen digits always fit a u64, so a literal that short is summed
+        // where it lies. Collecting it into a `String` and handing that to
+        // `BigInt`'s parser was an allocation and a general radix conversion
+        // per integer literal.
+        if self.pos - start <= 18 {
+            let value = self.chars[start..self.pos]
+                .iter()
+                .fold(0u64, |n, c| n * 10 + u64::from(*c as u8 - b'0'));
+            return Ok(Tok::Int(BigInt::from(value)));
+        }
         let text: String = self.chars[start..self.pos].iter().collect();
         let value = text.parse::<BigInt>().expect("digits parse as BigInt");
         Ok(Tok::Int(value))
@@ -822,9 +844,17 @@ impl Scanner<'_> {
         // into `src` and the word is one copy rather than a re-encode per
         // character. `String::from_iter<&char>` under `lex_line` was 361,176
         // instructions before this.
-        let word: String = match self.ascii {
-            true => self.src[start..self.pos].to_string(),
-            false => self.chars[start..self.pos].iter().collect(),
+        // Borrowed rather than copied: `Name::new` keeps its own copy, so the
+        // `String` this used to build lived for one match and was freed, an
+        // allocation per identifier.
+        let src = self.src;
+        let owned: String;
+        let word: &str = match self.ascii {
+            true => &src[start..self.pos],
+            false => {
+                owned = self.chars[start..self.pos].iter().collect();
+                &owned
+            }
         };
         if word.len() > 1 && word.starts_with('_') {
             return Err(Diagnostic::new(
@@ -835,7 +865,7 @@ impl Scanner<'_> {
                 self.span(),
             ));
         }
-        Ok(match word.as_str() {
+        Ok(match word {
             "_" => Tok::Underscore,
             // `and` and `or` are spelled, not punctuated: a reader says them
             // aloud the way they mean them, and `&` `|` stay with the bits
@@ -847,7 +877,7 @@ impl Scanner<'_> {
             "type" => Tok::KwType,
             "pub" => Tok::KwPub,
             "import" => Tok::KwImport,
-            _ => Tok::Ident(Name::new(&word)),
+            _ => Tok::Ident(Name::new(word)),
         })
     }
 
@@ -1018,9 +1048,12 @@ fn required_gap(prev: &Tok, next: &Tok) -> usize {
 /// side, so the run is read from the colon an annotation starts with,
 /// walking over a slice prefix — `:[]<int>effect` — on the way. The marks
 /// are on the second token of each pair, the one the diagnostic points at.
+// Empty when the line holds no effect type, which is nearly every line: the
+// vector was a zeroed allocation per line lexed, 799 of them on lib/json, to
+// answer `false` at every position.
 fn effect_type_runs(tokens: &[(Tok, Span, u32)]) -> Vec<bool> {
     let n = tokens.len();
-    let mut tight = vec![false; n];
+    let mut tight = Vec::new();
     let tok = |k: usize| tokens.get(k).map(|(t, _, _)| t);
     for start in 0..n {
         if !matches!(tok(start), Some(Tok::Colon)) {
@@ -1034,6 +1067,9 @@ fn effect_type_runs(tokens: &[(Tok, Span, u32)]) -> Vec<bool> {
         }
         if !matches!(tok(open), Some(Tok::Op("<"))) {
             continue;
+        }
+        if tight.is_empty() {
+            tight = vec![false; n];
         }
         tight[open] = true;
         let mut depth = 0i32;
@@ -1065,7 +1101,7 @@ fn validate_spacing(lexed_line: &LexedLine, line: usize, diags: &mut Vec<Diagnos
         let (prev, _, prev_end) = &pair[0];
         let (next, next_span, _) = &pair[1];
         let gap = (next_span.col as usize).saturating_sub(*prev_end as usize);
-        if effect_tight[at + 1] {
+        if effect_tight.get(at + 1) == Some(&true) {
             if gap != 0 {
                 diags.push(Diagnostic::new(
                     "formatting",

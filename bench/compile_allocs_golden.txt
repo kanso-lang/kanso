@@ -477,4 +477,13 @@
 # compile_allocs 27,397 -> 27,313, a FALL of 84 (-0.3066%).
 # The alias canonicaliser's fixpoint ran twice over a program nothing had
 # rewritten between the rounds. 84 allocations is what the second round cost.
-compile_allocs=27313
+#
+# 2026-09-24, kanso#1603. The lexer stops allocating per word and per number,
+# and nine places in the front end stop allocating containers they fill once
+# and drop: the spacing check's effect-type row, the unused-line check's
+# leaves, the alias canonicaliser's per-site vectors and per-name sets,
+# qualify's bound names and owned keys and its twice-composed spelling, trmc's
+# per-group vectors, the module's name set, the demand pass's discard rows,
+# fusion's two name maps, and the shadow resolver's locals and per-scope set.
+# compile_allocs 27,313 -> 15,341, a FALL of 11,972 (-43.83%).
+compile_allocs=15341
