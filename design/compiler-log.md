@@ -11797,6 +11797,101 @@ CI's rows, over kanso#1601's:
 
 The codegen rows are unchanged, as byte-identical modules should leave them.
 
+## 2026-09-24 — the lexer stops allocating per word and per number
+
+Four allocations or conversions the lexer made for every token of a kind,
+each for a value that lived one statement:
+
+- `lex_word` built a `String` for every identifier and keyword, matched it
+  against the keywords and copied it into a `Name`. On an ascii line the word
+  is now borrowed from the source.
+- `Scanner::new` decoded every line into characters as UTF-8. An ascii line's
+  bytes are now widened instead.
+- An operator was found by collecting it and the next character into a
+  two-character `String` and comparing that to each spelling. It is now
+  compared a character at a time.
+- An integer literal was collected into a `String` and parsed by `BigInt`'s
+  general radix conversion. One of eighteen digits or fewer, which always
+  fits a `u64`, is now summed where it lies; a longer one takes the old path.
+
+Measured on this container against main, in the gates' own environment:
+
+    compile_instructions     36,020,748 ->  35,022,168   -2.77%
+    entry_instructions      128,029,876 -> 124,752,107   -2.56%
+    library_instructions    128,618,323 -> 125,307,971   -2.57%
+    startup_instructions        876,369 ->     871,732   -0.53%
+    compile_allocs               27,313 ->      22,567   -17.38%
+
+The allocation count is the same on every host, so its golden moves here.
+The instruction rows are CI's to measure. The interpreted run's row does not
+move, since it counts only the run.
+
+`tests/an_integer_literal_reads_the_same_at_every_width.rs` reads literals
+either side of the eighteen-digit edge, at `i64`'s limit, and past 64 bits,
+on both engines. Past 64 bits it requires the interpreter's answer and the
+native engine's refusal by name. It went red with the fast path widened to
+twenty digits. The identifier and line changes are exercised by every
+program the suite compiles.
+
+The same branch then took the allocation profile past the lexer. The
+allocator's callers were attributed back through the generic frames (vector
+growth, hash-table growth, `String` clones) to the first compiler function
+above them. Nine places were allocating a container that is filled once and
+dropped, and most of them held a single entry:
+
+- the spacing check built a zeroed `bool` row per line to mark effect-type
+  runs, which almost no line holds. It is now empty until one is found.
+- the unused-line check built a vector of join leaves per statement. One is
+  now cleared and refilled.
+- the alias canonicaliser kept a `Vec` per declaration site and a `HashSet`
+  per bare name, to learn whether a name had exactly one target. The first
+  entry now lives in the map, and the set is a three-state count.
+- `qualify` kept its bound names as `String`s and cloned the whole list for
+  every scope and lambda. They are `Name`s now, which hold a short name
+  inline. Its owned-name keys became `Name`s too, and each qualified
+  spelling, which it composed twice (once as a key, once for the
+  declaration), is composed once and moved.
+- trmc kept three vectors per dispatch group before two tests that turn
+  nearly every group away. The tests now read the arms in place.
+- the module's set of every declared name held `String`s. It holds `Name`s.
+- the demand pass built a zeroed discard row per group. A group with no
+  wildcard now has no entry, which reads the same at the one place it is
+  consulted.
+- fusion's two name tables held `String` pairs. They hold `Name` pairs.
+- the shadow resolver started each declaration with an empty vector of
+  locals, and built a hash set per closed scope to find shadowed bindings.
+  One vector now serves the file, and the few later bindings in a scope are
+  scanned.
+
+Measured on this container, the lexer's rows above as the base:
+
+    compile_instructions     35,022,168 ->  33,798,765   -3.49%
+    entry_instructions      124,752,107 -> 120,510,858   -3.40%
+    library_instructions    125,307,971 -> 121,070,327   -3.38%
+    startup_instructions        871,732 ->     864,859   -0.79%
+    compile_allocs               22,567 ->      15,341   -32.02%
+
+Over main, the whole branch takes compile_allocs from 27,313 to 15,341,
+-43.83%, and compile_instructions from 36,020,748 to 33,798,765, -6.17%.
+The allocation golden moves here and the instruction rows are CI's. Every
+spec in the suite passes except the wasm engine's, which needs a
+`docs/kanso.wasm` this container has no target to build; CI builds it.
+
+**CI's rows**, over main with kanso#1602, taken into the goldens:
+
+    compile_instructions     35,400,616 ->  33,315,822   -5.89%
+    entry_instructions      125,944,853 -> 118,942,141   -5.56%
+    library_instructions    126,522,328 -> 119,486,941   -5.56%
+    startup_instructions        683,920 ->     672,962   -1.60%
+    emit_instructions        45,259,445 ->  45,206,776   -0.12%
+    compile_peak_bytes          787,956 ->     777,072   -1.38%
+    interp_instructions     853,048,810 -> 852,977,487   -0.01%
+    interp_allocs             1,063,803 ->   1,049,281   -1.37%
+    interp_peak_bytes           846,367 ->     846,191   -0.02%
+
+The interpreted run moves because the interpreter lexes and parses its
+program before running it. Every row falls, and the rise is banked.
+
 ## 2026-09-24 — two strings compare without opening an equality generation
 
 `==` and `!=` reach the runtime as `k_cmp`, which sent every pair through
