@@ -1,4 +1,4 @@
-//! A dev module defines only the runtime helpers its program reaches.
+//! A module defines only the runtime helpers its program reaches.
 //!
 //! Every module carries the emitter's helpers -- tag tests, the fast arms of
 //! append and index, the stats gates -- as internal functions. A release build
@@ -13,8 +13,14 @@
 //! program has to link and print what the release build prints: a helper
 //! dropped while something still called it would leave the link unresolved.
 //!
+//! A release build's optimiser drops unused helpers too, but only after clang
+//! has parsed them, and on the codegen corpus leaving them out of the text
+//! took `clang` from 555,145,625 to 545,749,531 with the LTO link's count
+//! unchanged. So the release module is held to the same rule.
+//!
 //! Watched red with every helper counted as reached: the dev module for
-//! `print "hi"` defined helpers nothing called.
+//! `print "hi"` defined helpers nothing called. Watched red again with the
+//! release tier handed no helper index: the release module did the same.
 
 use std::process::Command;
 
@@ -59,7 +65,7 @@ fn each(program: &str, printed: &str) {
     std::fs::create_dir_all(&dir).expect("a scratch directory");
     std::fs::write(dir.join("main.kso"), program).expect("the program writes");
     let (dev, dev_out) = build(&dir, false);
-    let (_, release_out) = build(&dir, true);
+    let (release, release_out) = build(&dir, true);
     let _ = std::fs::remove_dir_all(&dir);
     assert_eq!(dev_out, printed);
     assert_eq!(release_out, printed);
@@ -67,6 +73,11 @@ fn each(program: &str, printed: &str) {
         uncalled(&dev),
         Vec::<String>::new(),
         "the dev module defines helpers nothing calls"
+    );
+    assert_eq!(
+        uncalled(&release),
+        Vec::<String>::new(),
+        "the release module defines helpers nothing calls"
     );
 }
 

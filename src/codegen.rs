@@ -1603,6 +1603,7 @@ const fn index_helpers(text: &str) -> [Helper; HELPERS] {
 }
 
 static HELPERS_DEV: [Helper; HELPERS] = index_helpers(DECLARES_DEV);
+static HELPERS_RELEASE: [Helper; HELPERS] = index_helpers(DECLARES);
 
 /// DECLARES as a module wants it: joined by newlines with no newline after the
 /// last, keeping a `declare` only when `referenced` says the program calls its
@@ -1625,7 +1626,7 @@ fn declares_for_program(
     inline: bool,
 ) -> String {
     let (text, lines, helpers): (&str, &[DeclareLine], &[Helper]) = match inline {
-        true => (DECLARES, &DECLARE_LINES, &[]),
+        true => (DECLARES, &DECLARE_LINES, &HELPERS_RELEASE),
         false => (DECLARES_DEV, &DECLARE_LINES_DEV, &HELPERS_DEV),
     };
     let mut live = 0u64;
@@ -1652,6 +1653,25 @@ fn declares_for_program(
     }
     declare_lines(&mut out, &mut first, text, &lines[from..], &referenced, counting);
     out
+}
+
+/// How many `k_stats_on` gates DECLARES holds in the helpers `ir` defines. A
+/// module carries only the helpers its program reaches, so a counting build's
+/// gates are these and not all `STATS_GATE_SITES` of them.
+pub fn stats_gates_carried(ir: &str) -> usize {
+    HELPERS_RELEASE
+        .iter()
+        .filter(|h| {
+            let call = format!("@{}(", &DECLARES[h.sym_start..h.sym_end]);
+            ir.lines().any(|l| l.starts_with("define internal ") && l.contains(&call))
+        })
+        .map(|h| {
+            DECLARE_LINES[h.first..=h.last]
+                .iter()
+                .filter(|l| DECLARES[l.start..l.end].contains("load i32, ptr @k_stats_on"))
+                .count()
+        })
+        .sum()
 }
 
 fn declare_lines(

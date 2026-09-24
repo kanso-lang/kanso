@@ -11060,3 +11060,40 @@ requires both binaries to print the same thing and every internal function
 the dev module defines to be named on some other line of it. With every helper
 counted as reached it went red on both programs, listing the helpers nothing
 called.
+
+## 2026-09-24 — a release module leaves out the helpers nothing reaches too
+
+The dev tier's helper pruning applies to release modules as well. A release
+build inlines its helpers, and the optimiser removes the ones nothing calls.
+But clang parses all thirty-three first and runs the early passes over them.
+`declares_for_program` now takes the release text's helper index
+(`HELPERS_RELEASE`, built from DECLARES the way `HELPERS_DEV` is built from
+the dev text), so the two tiers keep the same helpers.
+
+Measured on this container, clang 18, gate environment, release tier:
+
+    clang (the -flto compile)   555,145,625 -> 545,749,531   -9,396,094
+    ld (the LTO link)         1,164,544,832 -> 1,164,544,832   unchanged
+    codegen_instructions_release 1,751,444,900 -> 1,742,048,806   -0.54%
+
+The link's count is identical, which is what dropping text the optimiser
+would have deleted anyway should look like. The runtime counter sweep agrees
+with every golden, `bench/text_golden.txt` included. The emitted-code goldens
+fall because each module defines fewer functions: the decoder goes from 134
+defines and 9,052 lines to 119 and 8,814. The compile-cost goldens fall for
+the same reason. CI's codegen rows replace the local ones above.
+
+Two specs assumed every module carried every helper, and both now state their
+property over the helpers a module defines. `perf_ratchet`'s
+`hot_predicates_are_inline_definitions_not_declares` checks that each hot
+predicate the program calls is an `alwaysinline` definition, and it fails if
+the program calls none. `the_counting_build_and_the_shipped_one_agree` now
+expects the gates that DECLARES holds in the helpers the module defines,
+counted by `codegen::stats_gates_carried`, rather than all eight. With every
+gate folded in the counting build it went red, 0 against 4. The pruning spec,
+renamed to `tests/a_module_defines_only_the_helpers_it_reaches.rs`, now holds
+the release module to the same rule. It went red when the release tier was
+handed no helper index.
+
+This clears the way for helpers that only one tier calls: a release module
+that does not call one no longer carries it.
