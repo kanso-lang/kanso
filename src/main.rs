@@ -1562,14 +1562,15 @@ mod the_hot_unit_is_taken_from_the_runtime {
     /// the attribute again.
     #[test]
     fn the_scanners_are_found_without_their_attribute() {
-        let bare = include_str!("runtime.c").replace(
-            "__attribute__((always_inline)) long long k_b_find2",
-            "long long k_b_find2",
-        );
+        let bare = include_str!("runtime.c")
+            .replace("__attribute__((always_inline)) long long k_b_find2", "long long k_b_find2");
         assert_ne!(bare, include_str!("runtime.c"), "the attribute is no longer there to remove");
         let unit = super::hot_source_of(&bare);
         for name in ["k_b_find2_raw", "k_b_find2_below_raw"] {
-            assert!(unit.contains(&format!("\nlong long {name}(")), "the bare {name} was not lifted");
+            assert!(
+                unit.contains(&format!("\nlong long {name}(")),
+                "the bare {name} was not lifted"
+            );
         }
     }
 }
