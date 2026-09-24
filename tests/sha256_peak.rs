@@ -80,13 +80,18 @@ fn peak_bytes(n: u64) -> u64 {
 /// the whole hash, byte for byte. So everything the hash holds past the
 /// arena's floor is that copy, and a padding that feeds the last block from
 /// the message rather than copying it would move the third pin.
+///
+/// All three fell by one block, to 6,291,488, 6,291,488 and 23,068,720, on
+/// 2026-09-24, when an oversize allocation stopped stranding the block before
+/// it: the allocations after the message's copy land in that block's tail
+/// instead of opening a fresh 1 MiB.
 #[test]
 fn a_hash_holds_its_padded_message_and_nothing_per_block() {
     let short = peak_bytes(65_536);
     let long = peak_bytes(131_072);
     let longer = peak_bytes(262_144);
 
-    assert_eq!(short, 7_340_064, "the 65,536-byte peak moved");
-    assert_eq!(long, 7_340_064, "the 131,072-byte peak moved");
-    assert_eq!(longer, 24_117_296, "the 262,144-byte peak moved");
+    assert_eq!(short, 6_291_488, "the 65,536-byte peak moved");
+    assert_eq!(long, 6_291_488, "the 131,072-byte peak moved");
+    assert_eq!(longer, 23_068_720, "the 262,144-byte peak moved");
 }
