@@ -10969,7 +10969,22 @@ replacement closes the short path, and `run_counters` goes red on
 about fifteen significant digits, or outside [2^-20, 2^50), and those still
 cost what they did.
 
-CI's instruction rows go into the goldens.
+**CI's rows**, taken into the goldens:
+
+    work_runbench         1,853,571,514 ->   1,825,042,054   -1.54%
+    work_encodebench      3,356,324,328 ->   3,229,526,728   -3.78%
+    work_livebench        2,824,128,034 ->   2,697,330,434   -4.49%
+    work_widebench           34,746,491 ->      30,712,160  -11.61%
+    work_oneshot             20,373,089 ->      20,056,095   -1.56%
+    startup_instructions        975,983 ->         976,034   +51
+    codegen_instructions_dev    473,933,874 ->   473,952,844   +18,970
+    codegen_instructions_release 1,751,097,561 -> 1,751,553,021  +455,460
+
+`text`, summed over the fourteen binaries, reads 3,244,860 against 3,215,292:
+2,112 bytes more in each, which is the short path and the digit writer it
+shares with ryu. The three codegen and start-up rows rise because the runtime
+the corpus builds is larger by the same code. The objective rises by 0.08, and
+the rise is banked.
 
 ## 2026-09-24 — declined: keeping a dispatcher's big arms out of line
 
