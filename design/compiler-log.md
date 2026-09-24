@@ -11048,6 +11048,22 @@ runbench reads 1,861,738,918, which the work vein sees. The short-path row's
 mutation now patches `ryu_short`'s range test, the line the restructure
 rewrote. No counter moves.
 
+**CI's rows**, taken into the goldens:
+
+    work_runbench         1,825,042,054 ->   1,813,491,634   -0.63%
+    work_encodebench      3,229,526,728 ->   3,178,191,528   -1.59%
+    work_livebench        2,697,330,434 ->   2,645,995,234   -1.90%
+    work_widebench           30,712,160 ->      30,153,189   -1.82%
+    work_oneshot             20,056,095 ->      19,927,757   -0.64%
+    startup_instructions        976,034 ->         975,983   -51
+    codegen_instructions_release 1,751,553,021 -> 1,750,938,263  -614,758
+    codegen_instructions_dev    473,952,844 ->   473,969,350   +16,506
+
+`text`, summed over the fourteen binaries, reads 3,260,988 against 3,244,860,
+1,152 bytes more in each: the direct writer beside the branches it skips.
+`codegen_instructions_dev` rises by the same code compiled at -O0. The
+objective rises, and the rise is banked.
+
 ## 2026-09-24 — the dev tier's instruction selector falls back on the calling convention
 
 `llc -O0` on the codegen corpus's IR spends 137,115,835 of 326,668,822
