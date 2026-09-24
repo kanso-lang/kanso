@@ -11032,9 +11032,10 @@ cost what they did.
     codegen_instructions_dev    473,933,874 ->   473,952,844   +18,970
     codegen_instructions_release 1,751,097,561 -> 1,751,553,021  +455,460
 
-Merged over kanso#1591, which took start-up to 870,779 without this runtime,
-the row is projected at 870,830: main's value and this change's +51. CI
-confirms it or its reading replaces it.
+Merged over kanso#1591, which took start-up to 870,779, CI reads 870,779
+again. The +51 above did not carry over: it was projected at 870,830, main's
+value plus this change's own delta, and the projection was wrong, so the row
+is CI's.
 
 `text`, summed over the fourteen binaries, reads 3,244,860 against 3,215,292:
 2,112 bytes more in each, which is the short path and the digit writer it
