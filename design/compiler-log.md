@@ -11760,3 +11760,11 @@ switch.
 
 The compiler page's §132 covers this change and the three before it on the
 dev tier.
+
+CI's rows, over kanso#1600's, the dev row read twice alike:
+
+    codegen_instructions_dev    289,762,106 -> 287,891,869   -0.65%
+    emit_instructions            45,195,370 ->  45,312,275   +116,905
+
+The emit row pays for the compare chain's extra lines, as the two-word
+predicates' did.
