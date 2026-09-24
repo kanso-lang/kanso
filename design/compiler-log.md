@@ -11012,3 +11012,11 @@ container read 902,425 with the check and 875,795 without, against main's
 876,314, and the next CI round's rows replace the two above. A unit test holds
 the dev text to the release text with the attribute stripped by a scan at run
 time, and went red when the dev branch was handed the release pair.
+
+The next CI round, with the dev text made when the compiler is built:
+
+    startup_instructions             880,309 ->       866,508   -13,801
+    emit_instructions             43,359,136 ->    43,320,461   -38,675
+
+Against main's 870,779 and 43,339,387 both rows now fall, and the floor is
+banked on them.
