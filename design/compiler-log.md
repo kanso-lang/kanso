@@ -12874,7 +12874,7 @@ with the pass returning nothing: the mapping program defined it. The ratchet
 carries the mutation.
 
 
-## 2026-09-24 — a cycle nothing reaches is not emitted
+## 2026-09-24 — a cycle nothing reaches is not emitted, nor a string nothing names
 
 `prune_unnamed` struck a definition from the emitted module once no other
 surviving definition named it. That is reference counting, and a cycle names
@@ -12914,3 +12914,24 @@ sums a list and one that sorts it. The first must not define
 `d_list/merge_5`, the second must, and both must print what the interpreter
 prints. Watched red against the counting prune: the summing program defined
 the merge. The ratchet carries the mutation, which starts every block marked.
+
+The strings that pruned functions interned are left out too. A string is
+interned when the emitter reaches a literal or an err site, and the function
+that asked for it may be pruned afterwards. On the codegen corpus, after the
+mark, 198 of 270 strings and 264 of their literal cells were named by nothing:
+31,191 of the module's 85,984 bytes. Each is now emitted only when the body or
+a type table names it, read off by `unquoted_globals` in one pass. The corpus
+IR falls again, 2,073 -> 1,611 lines, the module row 1,488 -> 1,149, the
+decoder 6,849 -> 6,410, and runbench 31,460 -> 29,993. Every other benchmark
+falls with them. `tests/a_string_nothing_names_is_not_emitted` builds a
+program that sums a list and asserts every string and literal cell left in its
+module is named somewhere else. Watched red with every string emitted: 328
+were named by nothing. The ratchet carries the mutation.
+
+Two dev-tier leads were measured and declined. At `-O0` FastISel selects
+none of the corpus: it refuses `insertvalue` on `%KValue`, the aggregate
+argument and the aggregate return, so every function falls back to
+SelectionDAG, which is 34,446,800 of `clang -cc1`'s 111,055,320. Passing a
+value as two words is a change to every signature the emitter writes and every
+runtime entry point, which is too big a change to take on here. GlobalISel
+(`-mllvm -global-isel`) segfaults on the module under LLVM 18.
