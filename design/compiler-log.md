@@ -12845,8 +12845,10 @@ bytes). The child tree of a dev build on this box reads 287,264,761 ->
 856,255,424 (-46.9%). The compile golden's module row falls 3,581 -> 2,181
 lines and 45 -> 35 defines, and seven benchmarks emit less:
 `emitted_other_lines` for encodebench 9,640 -> 8,242, widebench 10,623 ->
-9,225, deepbench 4,284 -> 2,886, pendbench 5,330 -> 4,260, scanbench 18,282 ->
-16,876, digestbench 8,087 -> 6,688 and runbench 33,214 -> 32,352. The decoder's
+9,225, deepbench 4,284 -> 2,886, pendbench 5,330 -> 4,260 and digestbench
+8,087 -> 6,688. Over the carried tree of kanso#1619, whose regexp helpers
+scanbench and runbench also emit, scanbench falls 18,930 -> 17,524 and
+runbench 33,871 -> 33,009. The decoder's
 own golden and every runtime counter are unchanged.
 
 CI's rows, over the carried tree of kanso#1619. `codegen_instructions_dev`
