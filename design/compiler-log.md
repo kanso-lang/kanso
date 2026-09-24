@@ -12401,3 +12401,61 @@ Declined, with the numbers:
   drops its frame: runbench 1,820,829,169 -> 1,822,724,299.
 - Moving `to_float`'s strtod fallback out of line to drop its frame from the
   fast path: 106,513 instructions, 0.006%.
+
+## 2026-09-24 — a map whose pairs are in order is its own view
+
+A map keeps its pairs in the order they were put and builds a sorted,
+deduplicated view the first time something reads it. The view is a copy of
+the pairs in a malloc'd buffer, held for as long as the map lives, and it is
+what `held_peak_bytes` measures on the run program: 728,040 bytes, the views
+of the top-level document's 2,761 objects, which the encoder reads ninety
+times.
+
+Every one of those objects had its keys put in ascending order with none
+repeated, so every view was a copy of pairs that were already sorted. The
+view build now checks that first, n - 1 key comparisons, and when it holds it
+points the view at the pairs. The paths that write through a view were
+already few:
+
+- a replace of a key already present patches the value in place, which is
+  the same slot in both;
+- the in-place put appends a pair and then inserts it into the view, and for
+  an alias it extends the view when the new key sorts last and otherwise
+  turns the alias into a copy before inserting;
+- the in-place put's growth path moves the pairs to a bigger buffer, and
+  moves an alias with them;
+- the registry flush and the carry path free a view, and both now ask whether
+  it is one.
+
+Pairs are frontier-shared between maps, but a map that shares a buffer sees
+only its own prefix, and no append changes a prefix.
+
+On this container, against main:
+
+    runbench         1,768,671,540 -> 1,763,871,501   -4,800,039   -0.27%
+    held_peak_bytes        728,040 ->       416,312     -311,728
+    view_allocs              2,761 ->             0
+
+`arena_peak_bytes` does not move. What `held_peak_bytes` still holds is the
+encoder's output builders.
+
+The copy an out-of-order insert makes is sized to 1, 3, 7, 15, the series a
+view built at the first read would have reached by then. The first build
+dropped the alias there and let the next read build a view at its exact size,
+and doubling from an exact size overshoots the series: `growing_map`, 800 keys
+in descending order, held 73,696 bytes of view where main holds 49,120, and
+`fused_tally` 10,720 against 7,744. Sized to the series, no counter in any
+golden rises.
+
+`a_transient_maps_view_is_freed` exists to show a transient map's view being
+freed, and its keys were put in order, so it now built no view to free. Its
+seed takes `b` and the put takes `a`, and it reads what it read on main.
+
+`a_map_whose_keys_arrived_in_order_is_its_own_view` in the mem vein reads
+`view_allocs=0` and `held_peak_bytes=0` for a thousand ascending keys; the
+ratchet row `ordered_view` copies the pairs into a view again and the fixture
+reads one view of 32,016 bytes. `a_map_read_in_order_shares_its_pairs` in the
+micro corpus reads maps between writes that keep the order, break it, repeat a
+key, outgrow the first buffer and share another map's pairs, and every engine
+prints the same maps. With the insert made to extend an alias whatever the
+new key, the native build printed a descending map in the order it was put.
