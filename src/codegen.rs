@@ -5728,29 +5728,34 @@ impl<'a> Backend<'a> {
             }
         }
 
-        f.start_block("nomatch");
-        // no arm matched: the discriminator is the only possible failure here
-        let disc_fail = f.tmp();
-        f.line(&format!("{disc_fail} = extractvalue %KValue {dv}, 0"));
-        let is_err = f.tmp();
-        f.line(&format!("{is_err} = icmp eq i64 {disc_fail}, 5"));
-        let is_none = f.tmp();
-        f.line(&format!("{is_none} = icmp eq i64 {disc_fail}, 4"));
-        let failing = f.tmp();
-        f.line(&format!("{failing} = or i1 {is_err}, {is_none}"));
-        let ret_disc = f.label();
-        let die = f.label();
-        f.line(&format!("br i1 {failing}, label %{ret_disc}, label %{die}"));
-        f.start_block(&ret_disc);
-        let hopped = f.tmp();
-        f.line(&format!("{hopped} = call %KValue @k_err_hop(%KValue {dv}, ptr @{hop_name})"));
-        self.emit_ret_failure(&mut f, name, arity, &hopped);
-        f.start_block(&die);
-        let msg =
-            format!("no overload of `{}` matches these arguments\0", crate::ast::spoken(name));
-        let (m, _len) = self.intern(&msg);
-        f.line(&format!("call void @k_die(ptr @{m})"));
-        f.line("unreachable");
+        // A switch whose cases cover every value the discriminator can hold
+        // never falls to `nomatch`, and then the failure path is blocks
+        // nothing reaches, the way a dispatcher's `fail` is.
+        if branches_to(&f.out, "nomatch") {
+            f.start_block("nomatch");
+            // no arm matched: the discriminator is the only possible failure here
+            let disc_fail = f.tmp();
+            f.line(&format!("{disc_fail} = extractvalue %KValue {dv}, 0"));
+            let is_err = f.tmp();
+            f.line(&format!("{is_err} = icmp eq i64 {disc_fail}, 5"));
+            let is_none = f.tmp();
+            f.line(&format!("{is_none} = icmp eq i64 {disc_fail}, 4"));
+            let failing = f.tmp();
+            f.line(&format!("{failing} = or i1 {is_err}, {is_none}"));
+            let ret_disc = f.label();
+            let die = f.label();
+            f.line(&format!("br i1 {failing}, label %{ret_disc}, label %{die}"));
+            f.start_block(&ret_disc);
+            let hopped = f.tmp();
+            f.line(&format!("{hopped} = call %KValue @k_err_hop(%KValue {dv}, ptr @{hop_name})"));
+            self.emit_ret_failure(&mut f, name, arity, &hopped);
+            f.start_block(&die);
+            let msg =
+                format!("no overload of `{}` matches these arguments\0", crate::ast::spoken(name));
+            let (m, _len) = self.intern(&msg);
+            f.line(&format!("call void @k_die(ptr @{m})"));
+            f.line("unreachable");
+        }
         // arm bodies: patterns are known matched, only bind generics
         for (k, decl) in decls.iter().enumerate() {
             f.start_block(&arm_labels[k]);
