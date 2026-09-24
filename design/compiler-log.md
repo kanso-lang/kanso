@@ -11010,3 +11010,40 @@ The last rule is the one that includes `encode_onto`, and the other 62
 dispatchers it covers spend what that one saves. The gain belongs to one
 function's arm frequencies, which is profile data, so this is declined until
 the emitter has a profile to read.
+
+## 2026-09-24 — a short float's text is written from its scaled integer
+
+The short path finds a float's decimal as an integer m and a place count p,
+and handed ryu's digit buffer back to `render_ryu`. The plain branches then
+placed the decimal point by walking that buffer a byte at a time, copied the
+digits after it, and ran `ryu_declen`'s ladder a second time. For a value from
+10^-4 up to 10^15 the text is m / 10^p, then a point and m's last p digits with
+their leading zeros. `render_ryu` now writes that straight into the output,
+the integer part through `ryu_write` and the fraction two digits at a time.
+Values outside that range, and floats the short path leaves, go through the
+digit buffer and the branches as before.
+
+The search moved into its own `ryu_short`, so `render_ryu` runs it once and
+hands a miss to ryu's core, now `ryu_long`, without searching a second time.
+`ryu_d2d` is the pair of them and still answers the spec harness. `ryu_long` is
+`noinline, cold`: inlined, its registers set the frame every short render paid.
+
+    render_ryu     53,842,770 -> 44,289,000   the direct writer
+                   44,289,000 -> 42,463,170   ryu_long kept out of line
+                   282 -> 222 instructions a float
+    runbench    1,867,504,858 -> 1,856,125,258   -0.61%   (this container)
+
+The differential fuzzer compared this core against main's, before either
+short path, on the same classes as the first sitting: 1,495,188,243 compared, 0
+differ. Three mutations of the writer each went red: dropping the odd leading
+digit of the fraction (140,311 differ in 1,884,414), admitting values down to
+10^-5 (17,762) and admitting sixteen-digit integers (209). The float spec
+passes unchanged.
+
+**Two ratchet rows follow the path.** The row that walked the plain branches'
+digit copies a byte at a time guarded code no benchmark float reaches now: under
+that mutation runbench and encodebench read 1,856,125,258 and 3,516,909,606,
+identical to the unmutated tree. Its replacement closes the direct writer, and
+runbench reads 1,861,738,918, which the work vein sees. The short-path row's
+mutation now patches `ryu_short`'s range test, the line the restructure
+rewrote. No counter moves.
