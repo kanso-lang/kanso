@@ -9158,6 +9158,24 @@ KValue k_b_from_code(KValue nv, const char* origin) {
    scanner guarantees is the delimiter at data[len]. So we parse in place
    straight from the bytes, skipping the string the scanner would otherwise
    allocate per number. */
+/* the bytes libc's isspace answers yes to in the C locale */
+static int k_num_space(char c) {
+    return c == ' ' || (c >= '\t' && c <= '\r');
+}
+
+/* The refusal both slow paths give. The interpreter reads bytes as text
+   before it parses them, and bytes that are not utf-8 are refused as bytes
+   rather than quoted; ascii is always utf-8, so only a range holding a high
+   byte is asked. */
+static KValue k_not_a_number(const char* data, long long len, const char* tail,
+                             const char* as_bytes, const char* origin) {
+    long long chars;
+    if (!k_all_ascii(data, len) && k_utf8_bad(data, len, origin, &chars).tag == K_ERR)
+        return k_err(k_str(as_bytes), origin);
+    KValue str = k_str_n(data, len);
+    return k_err(k_concat(k_concat(k_str("\""), str), k_str(tail)), origin);
+}
+
 /* Everything past the bare digit loop: libc's strtoll and the two refusals.
    It is a separate function so the fast path above carries no frame -- with
    the calls in the same body the compiler pinned the string's data, length
@@ -9167,8 +9185,21 @@ KValue k_b_from_code(KValue nv, const char* origin) {
 static __attribute__((noinline, cold, preserve_most)) KValue k_b_to_int_slow(const char* data, long long len, const char* origin) {
     char* end = NULL;
     errno = 0;
-    long long n = strtoll(data, &end, 10);
-    if (errno == ERANGE) {
+    /* strtoll reads until a byte stops it, and a range read out of the
+       middle of bytes has more digits after its last one. So the slow path
+       parses a terminated copy, and `end` is measured against that. */
+    char small[64];
+    char* copy = len < 64 ? small : malloc((size_t)len + 1);
+    memcpy(copy, data, (size_t)len);
+    copy[len] = 0;
+    long long n = strtoll(copy, &end, 10);
+    /* strtoll also skips leading space, which the interpreter's parse does
+       not; a number that starts with one is not an integer on either. */
+    int whole = len != 0 && end == copy + len && !k_num_space(copy[0]);
+    int range = errno == ERANGE;
+    if (copy != small) free(copy);
+    if (!whole) return k_not_a_number(data, len, "\" is not an integer", "bytes are not an integer", origin);
+    if (range) {
         /* strtoll saturates while consuming every digit — without this check
            an overflowing literal decodes as a silently wrong value. Loud
            limit beats quiet lie until native bignum tiering ships. */
@@ -9176,12 +9207,12 @@ static __attribute__((noinline, cold, preserve_most)) KValue k_b_to_int_slow(con
         return k_err(k_concat(k_concat(k_str("\""), str),
             k_str("\" overflows this engine's integers")), origin);
     }
-    if (len == 0 || end != data + len) {
-        KValue str = k_str_n(data, len);
-        return k_err(k_concat(k_concat(k_str("\""), str), k_str("\" is not an integer")), origin);
-    }
     return k_int(n);
 }
+
+static KValue k_to_int_text(const char* data, long long len, const char* origin);
+static KValue k_to_float_text(const char* data, long long len, const char* origin);
+KValue k_b_to_float(KValue v, const char* origin);
 
 KValue k_b_to_int(KValue sv, const char* origin) {
     if (!k_not_failure(sv)) return sv;
@@ -9191,6 +9222,10 @@ KValue k_b_to_int(KValue sv, const char* origin) {
     long long len;
     if (sv.tag == K_STR) { KStr* s = k_as_str(sv); data = s->data; len = s->len; }
     else { KBytes* b = k_as_bytes(sv); data = (const char*)b->data; len = b->len; }
+    return k_to_int_text(data, len, origin);
+}
+
+static KValue k_to_int_text(const char* data, long long len, const char* origin) {
     /* Strict [-]?digits{1,18} parses in a bare loop (18 digits cannot
        overflow i64); every other shape — longer runs, leading space or '+',
        junk — falls through to strtoll so behavior stays exactly libc's. */
@@ -9205,6 +9240,36 @@ KValue k_b_to_int(KValue sv, const char* origin) {
         if (j == len) return k_int(start ? -acc : acc);
     }
     return k_b_to_int_slow(data, len, origin);
+}
+
+/* `to_int (slice cs a b)` and `to_float (slice cs a b)`, where the slice is
+   built for the one purpose of being read as a number and dropped. The JSON
+   decoder does this for every number it meets, 417,483 of them on runbench,
+   and each built a view header in the arena to hand a pointer and a length
+   to the parse. These read the range straight out of `cs`. Anything but
+   bytes and two positions inside them takes the long way, slice then parse,
+   so the two spellings cannot disagree on a value or on the err a bad range
+   gives. */
+KValue k_b_to_int_slice(KValue cs, KValue fromv, KValue tov, const char* origin) {
+    if (cs.tag == K_BYTES && fromv.tag == K_INT && tov.tag == K_INT) {
+        KBytes* b = k_as_bytes(cs);
+        long long from = fromv.payload, to = tov.payload;
+        if (from >= 1 && from <= to && to <= b->len) {
+            return k_to_int_text((const char*)b->data + (from - 1), to - from + 1, origin);
+        }
+    }
+    return k_b_to_int(k_b_slice(cs, fromv, tov), origin);
+}
+
+KValue k_b_to_float_slice(KValue cs, KValue fromv, KValue tov, const char* origin) {
+    if (cs.tag == K_BYTES && fromv.tag == K_INT && tov.tag == K_INT) {
+        KBytes* b = k_as_bytes(cs);
+        long long from = fromv.payload, to = tov.payload;
+        if (from >= 1 && from <= to && to <= b->len) {
+            return k_to_float_text((const char*)b->data + (from - 1), to - from + 1, origin);
+        }
+    }
+    return k_b_to_float(k_b_slice(cs, fromv, tov), origin);
 }
 
 KValue k_b_sqrt(KValue v) {
@@ -10007,6 +10072,7 @@ static int k_el_parse(unsigned long long w, long long q, double* out) {
     return 1;
 }
 
+
 KValue k_b_to_float(KValue v, const char* origin) {
     if (!k_not_failure(v)) return v;
     if (v.tag == K_FLOAT) return v;
@@ -10016,6 +10082,10 @@ KValue k_b_to_float(KValue v, const char* origin) {
     long long len;
     if (v.tag == K_STR) { KStr* s = k_as_str(v); data = s->data; len = s->len; }
     else { KBytes* b = k_as_bytes(v); data = (const char*)b->data; len = b->len; }
+    return k_to_float_text(data, len, origin);
+}
+
+static KValue k_to_float_text(const char* data, long long len, const char* origin) {
     /* the fast path: a plain decimal scanned into (w, q) and parsed by
        eisel-lemire; anything it can't be certain about — overlong digits,
        exotic forms, halfway cases — falls through to strtod, which stays
@@ -10094,12 +10164,23 @@ KValue k_b_to_float(KValue v, const char* origin) {
             }
         }
     }
+    /* The fallback parses a terminated copy, for the reason k_b_to_int_slow
+       gives: a range read out of the middle of bytes has more digits after
+       its last one, and strtod would read them. */
     char* end = NULL;
-    double d = strtod(data, &end);
-    if (len == 0 || end != data + len) {
-        KValue str = k_str_n(data, len);
-        return k_err(k_concat(k_concat(k_str("\""), str), k_str("\" is not a number")), origin);
-    }
+    char small[64];
+    char* copy = len < 64 ? small : malloc((size_t)len + 1);
+    memcpy(copy, data, (size_t)len);
+    copy[len] = 0;
+    double d = strtod(copy, &end);
+    /* strtod reads more than the interpreter's parse does: leading space, a
+       hex float (`0x1p3`) and a nan with a payload (`nan(1)`). None of them
+       is a number on the oracle, so none of them is one here. */
+    int whole = len != 0 && end == copy + len && !k_num_space(copy[0])
+        && !memchr(copy, 'x', (size_t)len) && !memchr(copy, 'X', (size_t)len)
+        && !memchr(copy, '(', (size_t)len);
+    if (copy != small) free(copy);
+    if (!whole) return k_not_a_number(data, len, "\" is not a number", "bytes are not a number", origin);
     return k_float(d);
 }
 

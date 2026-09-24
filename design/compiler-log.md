@@ -11892,6 +11892,169 @@ spec in the suite passes except the wasm engine's, which needs a
 The interpreted run moves because the interpreter lexes and parses its
 program before running it. Every row falls, and the rise is banked.
 
+## 2026-09-24 — a number is read out of the bytes it sits in
+
+Every JSON number the decoder meets ends in `text/to_int (text/slice cs
+start (p - 1))` or the same with `to_float`. The slice builds a view of the
+range for the one purpose of handing it to the converter, which parses it
+and drops it. The emitter now sees that pair and calls
+`k_b_to_int_slice` or `k_b_to_float_slice` with the source and the two ends.
+When the source is bytes and the range lies inside it, the door parses the
+bytes where they sit. Any other shape, including an inverted range, a start
+below one, an end past the length or a string source, falls back to the
+slice and the converter it replaces, so the answer is the one the pair gave.
+The two converters' bodies moved into `k_to_int_text` and `k_to_float_text`,
+which take a pointer and a length, and the old doors call them too. Only the
+builtin spelling is fused, as with the append fusion above it, and the
+interpreter is unchanged.
+
+Measured on this container, both sides built here from main ef56eac8:
+
+    runbench      1,856,033,857 -> 1,846,944,217   -9,089,640   -0.49%
+
+The instruction rows will be CI's. The allocation counters fall wherever a
+number is decoded, one view fewer per number:
+
+    decode   allocs     4,390,215 -> 3,757,665   alloc_bytes 246,359,648 -> 226,118,048
+    decode   sh_bytes  21,567,600 -> 6,386,400
+    run      allocs     5,698,908 -> 5,280,394   alloc_bytes 458,172,125 -> 443,885,453
+    run      sh_bytes  41,290,272 -> 31,270,680  sh_buf 109,369,344 -> 108,745,936
+    run      evac_allocs 68,318 -> 62,993        survive_slots 110,799 -> 108,671
+    oneshot  allocs        53,579 -> 49,362
+    live     allocs     7,544,011 -> 7,539,794
+
+Two counters on the run program read worse by their direction tables.
+`run_ten_frees` falls 7 -> 1 and `run_ten_handups` 4 -> 2, while
+`run_ten_blocks` falls 7 -> 6 and `run_cohort_frees` moves 4 -> 2. With
+fewer views to evacuate, the tenure allocator claims one block fewer, and
+the beat cycles that used to fill and then empty whole blocks no longer
+fill them, so there is less to hand up and less to give back. No peak row
+on the run program moves, so nothing is held that was not held before. `push_mut_slow` falls 1,638,122 -> 1,638,121 and
+`push_mut_fast` rises by the same one. The decoder's emitted code falls:
+defines 119 -> 117, calls 1,182 -> 1,172, branches 764 -> 762, lines 8,570
+-> 8,542, as the two library wrappers are no longer reached.
+
+`tests/golden/micro/a_number_read_from_a_slice_reads_the_range_in_place.kso`
+reads integers and floats out of ranges in the middle, at one digit, with a
+sign and an exponent, stopping inside the digits, inverted, starting below
+one, ending past the length, holding no digits, and out of a string. Parsing
+one byte short in the integer door went red on six lines of it (`123` for
+`1234`, `err ""` for `2`).
+
+Writing the spec turned up a native bug that predates this change. A float
+with more than nineteen significant digits leaves the Eisel-Lemire path for
+strtod, and strtod reads until a byte stops it. A range read out of the middle
+of bytes is followed by more digits, so strtod read past it and the parse was
+refused: `text/to_float (text/slice long 1 22)` over twenty-nine digits said
+`"1234567890123456789012" is not a number` on main, where the interpreter
+answers `1.2345678901234568e+21`. The integer slow path had the same shape
+through strtoll. Both slow paths now parse a terminated copy of the range, on
+the stack up to sixty-three bytes. The golden carries the case, and on the
+unfixed runtime its last line goes red with the refusal above. runbench reads
+1,846,944,217 either way, since no call there leaves the fast path.
+
+The same probe found four more places where native and the interpreter
+disagree about what a number is, in every form (a string, bytes and a slice
+all agree within each engine, so none of this is new). Native accepts a
+leading space and a hex float, `" 12"` and `"0x1f"`, where the interpreter
+refuses both. The interpreter's `to_int` accepts `"1_000"`, because
+num-bigint takes underscores as separators, where its own `to_float` and
+native refuse it. And `"123456789012345678901234567890.5"` is reported as
+overflowing natively and as not an integer by the interpreter. Those are the
+next change, with an adversarial golden of their own.
+
+CI's sitting, over main ef56eac8:
+
+    runbench      1,813,492,695 -> 1,805,310,423   -8,182,272   -0.45%
+    jsonbench     1,196,422,558 -> 1,187,932,917   -8,489,641   -0.71%
+    oneshot          19,927,890 ->    19,872,995      -54,895
+    livebench     2,645,995,367 -> 2,645,949,841      -45,526
+
+Several rows are worse, each by a small amount:
+
+- `text` rises on all fourteen binaries, 3,744 bytes each and 3,309,600
+  summed. Every binary carries both new doors and the two text parsers,
+  whether or not it reads a number.
+- `emit_instructions` goes to 45,239,459 (+32,683). The emitter asks each
+  one-argument call whether it is one of the two conversions over a slice.
+- `codegen_instructions_dev` goes to 287,916,082 and
+  `codegen_instructions_release` to 1,614,729,561. clang compiles the
+  larger runtime.
+- `startup_instructions` goes to 673,771 (+809).
+- `work_widebench` goes to 30,361,821 (+208,054, 0.69%). widebench binds
+  its slice to a name before converting it, so it never reaches the fused
+  door and calls `k_b_to_int` and `k_b_to_float`, which now call the text
+  parsers. On this container's clang 18 the same two binaries read
+  30,090,895 and 30,090,909. The rise is clang 19's answer to the split,
+  and the mechanism is not isolated further.
+- `work_encodebench` goes to 3,178,219,787 (+27,658), `work_digestbench`
+  to 5,867,017 (+59) and `work_readbench` to 4,630,551 (+54). None of the
+  three reads a number.
+
+The objective weighs runbench and not the others. Welfare reads 86.04
+against a floor of 86.01, and the rise is banked.
+
+## 2026-09-24 — a number is the same number on every engine
+
+The probe written for the previous entry found four shapes of text where
+native and the interpreter disagreed about what `to_int` or `to_float`
+returns. The interpreter is the oracle, and in three of the four it was
+right. Native's digit loops handle every ordinary number and pass everything
+else to strtoll or strtod, which read more than the interpreter's parse:
+
+- a leading space or tab, which libc skips, so `" 12"` was 12 natively and
+  refused by the interpreter;
+- a hex float, `"0x1f"` and `"0x1p3"`, which strtod reads as 31 and 8;
+- a nan with a payload, `"nan(1)"`;
+- `"123456789012345678901234567890.5"` in `to_int`, which natively reported
+  the overflow strtoll raised on the digits before the point. The
+  interpreter reported that it is not an integer, which is the better
+  answer: no number of digits would make it one.
+
+The slow paths now refuse the first three and ask whether the whole range was
+read before asking whether it overflowed. Bytes that are not utf-8 are
+refused as bytes, `bytes are not an integer`, which is what the interpreter
+says because it reads bytes as text before it parses them; natively they had
+been quoted, high byte and all. Only a range holding a byte above 127 is
+checked, so the error path of an ascii number costs no utf-8 pass and moves
+no utf-8 counter.
+
+The fourth disagreement was the interpreter's own. num-bigint reads `_` as a
+digit separator, so `to_int "1_000"` was 1000 there and refused natively,
+while the interpreter's own `to_float "1_000"` refused it too. `to_int` now
+refuses text holding an underscore before it asks num-bigint.
+
+`tests/golden/micro/a_number_is_the_same_number_on_every_engine.kso` asks
+each case of a string, of its bytes and of a range cut out of longer bytes.
+On the unfixed tree native went red on ten lines and the interpreter on
+one, the separator.
+
+## 2026-09-24 — four ideas measured and declined
+
+Recorded so the same profile does not send anyone back to them.
+
+`find2_below` over a string, so the encoder skips `text/bytes s` for a clean
+string. Built as an experiment on the number span's branch: run allocations
+5,698,908 -> 4,915,728 and shared bytes 41,290,272 -> 22,493,952, with
+`arena_peak_bytes` unmoved at 5,050,064. The per-string view does not set the
+peak. What remains is about one per cent of runbench, and the change widens
+a public std/text function to strings, which is surface. Declined; the
+compiler page carries it as item 16.
+
+Caching each shipped module's compile by path, so an entry importing
+std/text through five libraries compiles it once. `compile_peak_bytes` went
+768,704 -> 1,030,180, because the cache holds every tree for the whole
+compile. Presizing the front end's hash maps failed the same way at +1.09%
+on the peak. Both declined; item 17.
+
+`noinline` on the escape body, so the encoder's leaf arms skip its frame:
+runbench 1,856,032,701 -> 1,879,000,521, +1.24%. The inlined scan is worth
+more than the frame.
+
+Fusing `length s[i]` over text into a range test. It is 690,000 calls on
+runbench, but the fusion would skip the very index walk the index shape is
+there to keep linear. Not built.
+
 ## 2026-09-24 — an import of a shipped module skips a check fixed at build time
 
 Every module is compiled on top of its dependencies and then checked merged

@@ -1,0 +1,22 @@
+space: err " 12" is not a number | err " 12" is not a number | err " 12" is not a number
+space: err " 12" is not an integer | err " 12" is not an integer | err " 12" is not an integer
+tab: err "	12" is not a number | err "	12" is not a number | err "	12" is not a number
+tab: err "	12" is not an integer | err "	12" is not an integer | err "	12" is not an integer
+hex: err "0x1f" is not a number | err "0x1f" is not a number | err "0x1f" is not a number
+hex exponent: err "0x1p3" is not a number | err "0x1p3" is not a number | err "0x1p3" is not a number
+nan payload: err "nan(1)" is not a number | err "nan(1)" is not a number | err "nan(1)" is not a number
+nan: nan | nan | nan
+infinity: -inf | -inf | -inf
+separator: err "1_000" is not an integer | err "1_000" is not an integer | err "1_000" is not an integer
+separator: err "1_000" is not a number | err "1_000" is not a number | err "1_000" is not a number
+plus: 12 | 12 | 12
+plus: 0.005 | 0.005 | 0.005
+sign alone: err "-" is not an integer | err "-" is not an integer | err "-" is not an integer
+sign alone: err "-" is not a number | err "-" is not a number | err "-" is not a number
+point alone: err "." is not a number | err "." is not a number | err "." is not a number
+exponent alone: err "1e" is not a number | err "1e" is not a number | err "1e" is not a number
+trailing space: err "12 " is not an integer | err "12 " is not an integer | err "12 " is not an integer
+long fraction: err "123456789012345678901234567890.5" is not an integer | err "123456789012345678901234567890.5" is not an integer | err "123456789012345678901234567890.5" is not an integer
+long: 1.2345678901234568e+29 | 1.2345678901234568e+29 | 1.2345678901234568e+29
+not utf-8: err bytes are not an integer
+not utf-8: err bytes are not a number
