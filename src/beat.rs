@@ -127,19 +127,25 @@ impl Beats {
 
 pub fn beat_loops(program: &Program, inference: &infer::Inference, mut_sites: &MutSites) -> Beats {
     let chains = chain_groups(program, mut_sites);
+    // Which groups allocate, and each group's verdict, are asked of the same
+    // program by all three passes below and do not change between them. They
+    // were computed five times and three times a build, which was seven per
+    // cent of `kanso play` on a one-line program.
+    let allocating = alloc_groups(program, mut_sites);
+    let classes = classify_all(program, inference, mut_sites, &chains, &allocating);
     let mut ids = HashMap::default();
     let mut carried = HashMap::default();
     let mut next = 0;
-    for (name, arity, v) in classify_all(program, inference, mut_sites, &chains) {
-        if v == Verdict::Beat {
-            ids.insert((name, arity), next);
+    for (name, arity, v) in &classes {
+        if *v == Verdict::Beat {
+            ids.insert((name.clone(), *arity), next);
             next += 1;
         }
     }
     let mut demoted = HashSet::default();
     let mut cluster_edges: Vec<(usize, Vec<(Group, Group)>)> = Vec::new();
     let mut rewind: HashSet<(Group, Group)> = HashSet::default();
-    for cluster in eligible_clusters(program, inference, mut_sites, &chains) {
+    for cluster in eligible_clusters(program, inference, mut_sites, &chains, &allocating) {
         for member in &cluster.members {
             ids.insert(member.clone(), next);
         }
@@ -161,7 +167,9 @@ pub fn beat_loops(program: &Program, inference: &infer::Inference, mut_sites: &M
             demoted.insert(entry);
         }
     }
-    for (callee, callers, positions) in demotable_entries(program, inference, mut_sites, &chains) {
+    for (callee, callers, positions) in
+        demotable_entries(program, inference, mut_sites, &chains, &allocating, &classes)
+    {
         ids.insert(callee.clone(), next);
         next += 1;
         for caller in callers {
@@ -171,13 +179,13 @@ pub fn beat_loops(program: &Program, inference: &infer::Inference, mut_sites: &M
             carried.insert(callee, positions);
         }
     }
-    for (name, arity, v) in classify_all(program, inference, mut_sites, &chains) {
+    for (name, arity, v) in &classes {
         if let Verdict::CarryBeat { positions } = v {
-            let g = (name, arity);
+            let g = (name.clone(), *arity);
             if !ids.contains_key(&g) {
                 ids.insert(g.clone(), next);
                 next += 1;
-                carried.insert(g, positions);
+                carried.insert(g, positions.clone());
             }
         }
     }
@@ -235,9 +243,10 @@ fn demotable_entries(
     inference: &infer::Inference,
     mut_sites: &MutSites,
     chains: &HashSet<Group>,
+    allocating: &HashSet<&str>,
+    classes: &[(String, usize, Verdict)],
 ) -> Vec<(Group, Vec<Group>, Vec<usize>)> {
     let value_uses = ValueUses::of(program);
-    let allocating = alloc_groups(program, mut_sites);
     let mut cyclic: HashSet<Group> = HashSet::default();
     // a group is cyclic when any tail path returns to it (self-edge or SCC)
     let mut tail_edges: Vec<(Group, Group)> = Vec::new();
@@ -257,10 +266,11 @@ fn demotable_entries(
         cyclic.extend(cluster);
     }
     let mut out = Vec::new();
-    for (name, arity, v) in classify_all(program, inference, mut_sites, chains) {
-        if v != Verdict::OutsideTailCall {
+    for (name, arity, v) in classes {
+        if *v != Verdict::OutsideTailCall {
             continue;
         }
+        let (name, arity) = (name.clone(), *arity);
         let group = (name.clone(), arity);
         // beat-worthy apart from the entry? crossing args become carried
         let crossing = crossing_positions(program, inference, mut_sites, chains, &name, arity);
@@ -537,6 +547,7 @@ fn eligible_clusters(
     inference: &infer::Inference,
     mut_sites: &MutSites,
     chains: &HashSet<Group>,
+    allocating: &HashSet<&str>,
 ) -> Vec<Cluster> {
     let value_uses = ValueUses::of(program);
     let groups: Vec<(String, usize)> = {
@@ -561,7 +572,6 @@ fn eligible_clusters(
         }
     }
     let sccs = tail_sccs(groups.len(), &edges);
-    let allocating = alloc_groups(program, mut_sites);
     let mut mentions: Option<HashMap<&str, HashSet<String>>> = None;
     let mut out = Vec::new();
     for scc in sccs {
@@ -885,22 +895,25 @@ pub fn report(
     mut_sites: &MutSites,
 ) -> Vec<String> {
     let chains = chain_groups(program, mut_sites);
-    let demoted: HashSet<Group> = demotable_entries(program, inference, mut_sites, &chains)
-        .into_iter()
-        .map(|(callee, _, _)| callee)
-        .collect();
-    let clustered: HashSet<Group> = eligible_clusters(program, inference, mut_sites, &chains)
-        .into_iter()
-        .flat_map(|cluster| cluster.members)
-        .collect();
-    let mut rows: Vec<(String, usize, Verdict)> =
-        classify_all(program, inference, mut_sites, &chains)
+    let allocating = alloc_groups(program, mut_sites);
+    let classes = classify_all(program, inference, mut_sites, &chains, &allocating);
+    let demoted: HashSet<Group> =
+        demotable_entries(program, inference, mut_sites, &chains, &allocating, &classes)
             .into_iter()
-            .filter(|(name, arity, _)| {
-                let g = (name.clone(), *arity);
-                !clustered.contains(&g) && !demoted.contains(&g)
-            })
+            .map(|(callee, _, _)| callee)
             .collect();
+    let clustered: HashSet<Group> =
+        eligible_clusters(program, inference, mut_sites, &chains, &allocating)
+            .into_iter()
+            .flat_map(|cluster| cluster.members)
+            .collect();
+    let mut rows: Vec<(String, usize, Verdict)> = classes
+        .into_iter()
+        .filter(|(name, arity, _)| {
+            let g = (name.clone(), *arity);
+            !clustered.contains(&g) && !demoted.contains(&g)
+        })
+        .collect();
     for (name, arity) in clustered.iter().chain(demoted.iter()) {
         rows.push((name.clone(), *arity, Verdict::Beat));
     }
@@ -941,7 +954,6 @@ pub fn report(
             };
             // classify stops at the first blocker; say what else is waiting,
             // so a fix aimed at one reason is not a surprise when it lands
-            let allocating = alloc_groups(program, mut_sites);
             let also: Vec<String> =
                 blockers(program, inference, mut_sites, &chains, &allocating, name, *arity)
                     .into_iter()
@@ -1010,8 +1022,8 @@ fn classify_all(
     inference: &infer::Inference,
     mut_sites: &MutSites,
     chains: &HashSet<Group>,
+    allocating: &HashSet<&str>,
 ) -> Vec<(String, usize, Verdict)> {
-    let allocating = alloc_groups(program, mut_sites);
     let tails = TailCalls::of(program);
     let value_uses = ValueUses::of(program);
     let mut groups: Vec<(String, usize)> = {
@@ -1025,7 +1037,7 @@ fn classify_all(
         .filter_map(|(name, arity)| {
             let whole =
                 Whole { program, value_uses: &value_uses, inference, mut_sites, tails: &tails };
-            classify(&whole, chains, &allocating, &name, arity).map(|v| (name, arity, v))
+            classify(&whole, chains, allocating, &name, arity).map(|v| (name, arity, v))
         })
         .collect()
 }

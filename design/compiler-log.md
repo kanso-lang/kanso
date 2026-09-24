@@ -11796,3 +11796,32 @@ CI's rows, over kanso#1601's:
     emit_instructions         45,312,275 ->  45,259,445   -52,830
 
 The codegen rows are unchanged, as byte-identical modules should leave them.
+
+## 2026-09-24 — the beat pass classifies each group once
+
+`beat::beat_loops` asks three passes of the same program: which groups get
+a plain beat, which cycles get a cluster, and which entries are demoted.
+All three read the set of groups that allocate and each group's verdict.
+Neither changes between the passes, but `alloc_groups` ran five times a
+build and `classify_all` three. `beat_loops` now computes both once and
+hands them down; `report` does the same.
+
+On `kanso play` of a one-line program the pass fell from 47,824
+instructions to 25,105. Measured on this container, both sides built and
+counted here:
+
+    startup_instructions      693,898 ->    671,493      -22,405   -3.23%
+    emit_instructions      45,678,945 -> 43,543,044   -2,135,901   -4.68%
+
+The emitted IR of runbench, scanbench, deepbench, pendbench and escapebench
+is byte-identical between the two compilers, so no runtime or code vein
+moves. CI's rows go into the goldens.
+
+Two measurements from the same day are declined here so they stay
+declined. Marking `d_json/escape_onto_2` `noinline`, so that
+`encode_onto`'s leaf arms would skip the six-register frame the inlined
+escape scan needs, took runbench from 1,856,032,701 to 1,879,000,521, 1.24%
+more work. And lld's `--lto-CGO2` and `--lto-CGO1` on the release link moved
+the codegen corpus's release children from 1,613,540,338 to 1,613,169,031
+and 1,612,366,289. The code-generation level barely moves the link; its
+cost is in the pipeline level, which was declined before.
