@@ -12469,3 +12469,41 @@ and `emitted_defines` 118 for the decoder, and `emitted_other_lines` 115,794
 and `emitted_other_defines` 1,731 over the other thirteen. The compile
 golden's corpus rows sum to `lines` 1,505, one more each, and `module_lines`
 reads 3,581.
+
+## 2026-09-24 — a greedy run of one character is counted, then backed off
+
+std/regexp walks a pattern by continuations. A repetition takes one more of
+its body by walking the body with a continuation that asks for the next one,
+so every character a greedy `[a-z]+` takes costs a closure capturing eight
+values, a call into it and a call back into the repetition. The run
+program's scan phase runs `[a-z]+zzq` over a subject that never contains
+`zzq`, and at every start position the repetition takes the rest of the
+subject and then gives it back a character at a time. That was 91,806
+steps at about a thousand instructions each, 5.4% of runbench.
+
+When the body is one character, a literal, a dot or a class, none of that is
+needed: each character it takes moves the position by one and captures
+nothing. `walked` now counts such a run in one pass, stopping at the
+repetition's ceiling, and offers the rest of the pattern the longest run,
+then one shorter, down to the floor. That is the order the general walk
+tries lengths in, so the matches are the same. Lazy repetitions, and any
+repetition of a group, a sequence or an alternation, still take the general
+walk. The class test also binds the set's bytes once instead of building
+them inline.
+
+On this container, against main:
+
+    runbench    1,739,715,210 -> 1,710,209,853   -29,505,357   -1.70%
+
+`a_greedy_run_of_one_character_backs_off_in_order` in the micro corpus runs
+sixteen patterns that give characters back, hit floors and ceilings, match
+nothing, stop a dot at a newline, negate a class, capture on either side of a
+run, meet an end anchor, and repeat lazily or over a group. Every engine
+prints what the library printed before the change. The ratchet row
+`counted_run` drops the count's ceiling, and `x{2,3}x` on "xxxxx" takes five
+characters where it takes four.
+
+The library is compiled into every program that imports it, and the new
+functions are code in the two that scan: `emitted_other_defines` reads 1,747,
+`emitted_other_calls` 18,794, `emitted_other_branches` 11,468 and
+`emitted_other_lines` 117,099, all of it scanbench and runbench.
