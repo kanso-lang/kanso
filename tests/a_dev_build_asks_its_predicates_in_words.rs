@@ -48,15 +48,19 @@ fn the_dev_module_passes_words_and_prints_what_release_prints() {
     // a group whose argument may be a failure.
     std::fs::write(
         dir.join("shapes.kso"),
-        "type point\n  x\n  y\n\nfn sum (point x y)\n  x + y\n\nfn sum _\n  0\n\n\
+        "type point\n  x\n  y\n\ntype pair\n  a\n  b\n\n\
+         fn sum (point x y)\n  x + y\n\nfn sum (pair a b)\n  a * b\n\n\
          fn pick b\n  if b \"yes\" \"no\"\n\nfn half n\n  return err \"odd\" if n % 2 == 1\n  n / 2\n\n\
          fn shown (err _)\n  \"failed\"\n\nfn shown n\n  \"{n}\"\n\n\
-         pub fn first n\n  \"{sum (point n 4)} {sum 5} {pick (sum 5 == 0)}\"\n\n\
+         pub fn first n\n  \"{sum (point n 4)} {sum (pair 5 0)} {pick (sum (pair 5 0) == 0)}\"\n\n\
          pub fn second n\n  \"{shown (half n)} {shown (half (n - 1))}\"\n",
     )
     .expect("the library writes");
-    std::fs::write(dir.join("main.kso"), "import \"./shapes\"\n\nprint (shapes/first 3)\nprint (shapes/second 4)\n")
-        .expect("the program writes");
+    std::fs::write(
+        dir.join("main.kso"),
+        "import \"./shapes\"\n\nprint (shapes/first 3)\nprint (shapes/second 4)\n",
+    )
+    .expect("the program writes");
     let (dev, dev_out) = build(&dir, false);
     let (release, release_out) = build(&dir, true);
     let _ = std::fs::remove_dir_all(&dir);

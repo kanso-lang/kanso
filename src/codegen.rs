@@ -4710,7 +4710,9 @@ impl<'a> Backend<'a> {
                     let c = f.tmp();
                     f.predicate(
                         &c,
-                        format!("call i64 @k_check_rec_fast(%KValue {dv}, i64 {id}, i64 {nfields})"),
+                        format!(
+                            "call i64 @k_check_rec_fast(%KValue {dv}, i64 {id}, i64 {nfields})"
+                        ),
                     );
                     let b = f.tmp();
                     f.line(&format!("{b} = icmp ne i64 {c}, 0"));
