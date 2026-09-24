@@ -186,4 +186,8 @@
 # 2026-09-24 (kanso#1613): a byte view read in its frame keeps its header
 # there. codegen_instructions_dev 287,840,242 -> 287,838,862, a FALL of 1,380
 # (-0.0005%).
-codegen_instructions_dev=287838862
+#
+# 2026-09-24 (kanso#1614): the ordered view, the in-place builder grow and the
+# mark walk. codegen_instructions_dev 287,838,862 -> 287,845,497, a RISE of
+# 6,635 (+0.0023%).
+codegen_instructions_dev=287845497

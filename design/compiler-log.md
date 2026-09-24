@@ -12567,3 +12567,20 @@ the one question with a walk that stops at the mark's block, and gives the
 same answer for every pointer. On the 176,697 grows of the run program that
 is 2,527,440 instructions, 1,710,701,594 -> 1,708,174,154, and every counter
 vein agrees with the goldens.
+
+CI's sitting of the three together, against main with kanso#1613:
+
+    runbench      1,717,879,328 -> 1,686,535,157   -31,344,171   -1.82%
+    livebench     2,481,521,540 -> 2,370,527,779  -110,993,761   -4.47%
+    encodebench   3,164,604,377 -> 3,055,075,047  -109,529,330   -3.46%
+    oneshot          19,057,035 ->    16,662,299    -2,394,736  -12.57%
+
+Three rows rise. `work_basket` reads 32,567,631 (+220,378) and
+`work_jsonbench` 1,127,375,513 (+325,050), and on this container both rises
+are `k_b_put_mut`: basket's 9,077,621 -> 9,400,908, jsonbench's +171,000. The
+in-place put now asks whether a map's view is an alias before it inserts
+into it or grows it, which is a compare on every put into a map that has a
+view. `work_widebench` reads 29,833,857 (+48,000). `text` sums to 3,443,664,
+1,648 bytes more a binary for the alias paths and the regrow, and the two
+codegen rows rise with it: `codegen_instructions_dev` reads 287,845,497 and
+`codegen_instructions_release` 1,614,602,673.
