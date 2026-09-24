@@ -12968,6 +12968,25 @@ asserts that no function in a module extracts a word from a boxed unboxed
 parameter. Watched red with the words unrecorded: nine reads took a parameter
 back apart. The ratchet carries the mutation.
 
+A switch dispatcher writes its `nomatch` only when a case falls to it. A
+switch whose cases cover every value its discriminator can hold never does,
+and its failure path was the 13-line residue left in std/json's byte switches
+after the early close. The decoder's emitted lines fall 5,211 -> 5,104 and
+runbench's 25,224 -> 25,117. The block spec now decodes a string with an
+escape in it, which reaches those switches, and watched red with `nomatch`
+always written: 18 blocks nothing reached, the first of them
+`d_json/str_char_4`'s. The ratchet carries the mutation.
+
+A tag already known to be the int tag is not compared with it. Arithmetic on
+two values asks whether both tags are 0 before it takes the fast path, and a
+literal's tag is known, so `n + 1` wrote `icmp eq i64 0, 0` and an `and` on
+every addition; a byte index with a literal key did the same beside its bytes
+test. `both_ints` skips a known tag and answers `true` for two. The decoder's
+emitted lines fall 5,104 -> 5,063 and runbench's 25,117 -> 24,854.
+`tests/a_tag_known_to_be_int_is_not_compared` asserts that no line in a module
+compares two constants, and watched red with every tag compared: five lines
+compared 0 with 0. The ratchet carries the mutation.
+
 Two dev-tier leads were measured and declined. At `-O0` FastISel selects
 none of the corpus: it refuses `insertvalue` on `%KValue`, the aggregate
 argument and the aggregate return, so every function falls back to
