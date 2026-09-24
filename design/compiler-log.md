@@ -11815,7 +11815,16 @@ counted here:
 
 The emitted IR of runbench, scanbench, deepbench, pendbench and escapebench
 is byte-identical between the two compilers, so no runtime or code vein
-moves. CI's rows go into the goldens.
+moves.
+
+The emitter's two symbol scans, `called_symbols` and `queries_named`, found
+each `@` with a byte-at-a-time `position`. They use `str::find` now, which
+is memchr for an ascii character. Over the change above:
+
+    startup_instructions      671,493 ->    669,976       -1,517
+    emit_instructions      43,543,044 -> 42,414,714   -1,128,330
+
+CI's rows go into the goldens.
 
 Two measurements from the same day are declined here so they stay
 declined. Marking `d_json/escape_onto_2` `noinline`, so that

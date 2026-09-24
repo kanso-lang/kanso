@@ -2773,7 +2773,8 @@ fn queries_named<'a>(text: &str, queries: &crate::hash::Set<&'a str>) -> crate::
     let bytes = text.as_bytes();
     let mut found = crate::hash::Set::default();
     let mut at = 0;
-    while let Some(next) = bytes[at..].iter().position(|b| *b == b'@') {
+    // `find` on an ascii char is memchr; `position` walked a byte a step.
+    while let Some(next) = text[at..].find('@') {
         let from = at + next + 1;
         at = from;
         let end = match bytes.get(from) {
@@ -2899,7 +2900,8 @@ fn called_symbols(text: &str) -> crate::hash::Set<&str> {
     let bytes = text.as_bytes();
     let mut found = crate::hash::Set::default();
     let mut at = 0;
-    while let Some(next) = bytes[at..].iter().position(|b| *b == b'@') {
+    // `find` on an ascii char is memchr; `position` walked a byte a step.
+    while let Some(next) = text[at..].find('@') {
         let from = at + next + 1;
         let mut to = from;
         while to < bytes.len() && bytes[to] != b'(' && bytes[to] != b'\n' {
