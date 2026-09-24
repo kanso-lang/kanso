@@ -7776,9 +7776,13 @@ fn ir_bytes(bytes: &[u8]) -> String {
 /// declared length, and clang refused the module.
 fn narrow_tailcc(ir: String) -> String {
     let code = |line: &str| !line.starts_with('@');
+    // Split once and walk the lines three times. Splitting is a search for
+    // every newline, and three splits of a one-line program's body were
+    // 75,721 of the start-up row's instructions.
+    let lines: Vec<&str> = ir.lines().collect();
     let mut keep: crate::hash::Set<String> = crate::hash::Set::default();
     let mut current: Option<String> = None;
-    for line in ir.lines().filter(|line| code(line)) {
+    for &line in lines.iter().filter(|line| code(line)) {
         if let Some(rest) = line.strip_prefix("define ") {
             current = symbol_of(rest);
         }
@@ -7797,7 +7801,7 @@ fn narrow_tailcc(ir: String) -> String {
     // too; x86 passes fewer and does not exhibit the defect anyway.
     let mut trampolines: Vec<(String, String)> = Vec::new();
     let mut spilling: crate::hash::Set<String> = crate::hash::Set::default();
-    for line in ir.lines() {
+    for &line in &lines {
         let Some(rest) = line.strip_prefix("define tailcc ") else { continue };
         let Some(name) = symbol_of(rest) else { continue };
         if !keep.contains(&name) {
@@ -7834,7 +7838,7 @@ fn narrow_tailcc(ir: String) -> String {
 
     let mut rerouted: crate::hash::Set<String> = crate::hash::Set::default();
     let mut out = String::with_capacity(ir.len());
-    for line in ir.lines() {
+    for &line in &lines {
         // Every rewrite below needs the word, so a line without it is copied
         // as it stands and its callee is never looked up.
         if !code(line) || !line.contains("tailcc ") {
