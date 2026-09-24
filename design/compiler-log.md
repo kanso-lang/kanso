@@ -11465,3 +11465,6 @@ Over kanso#1593, which runs clang's two jobs itself and links with lld, and
 main with kanso#1597, the three rows this change moves are written as the
 two changes' measured deltas summed over main's: the dev row 359,480,516,
 start-up 866,580 and emit 43,320,508. The next CI round replaces them.
+
+CI's rows over kanso#1593 and main: start-up 866,580 and emit 43,320,508, as
+summed, and the dev row 359,558,108, read twice alike, 77,592 above the sum.
