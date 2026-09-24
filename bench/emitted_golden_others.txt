@@ -201,16 +201,16 @@
 # oneshot 1,200 -> 1,197, readbench 163 -> 162, livebench 1,224 -> 1,221,
 # indexbench 147 -> 146 and the rest by one -- with branches and lines falling
 # by the twin's body. Banked.
-encodebench defines=148 calls=1476 branches=933 lines=10409
-oneshot defines=134 calls=1187 branches=778 lines=8985
-basket defines=121 calls=1158 branches=761 lines=7621
-widebench defines=163 calls=1663 branches=1026 lines=11415
-deepbench defines=86 calls=688 branches=519 lines=5272
-escapebench defines=48 calls=106 branches=120 lines=1556
-pendbench defines=104 calls=1000 branches=603 lines=6291
-scanbench defines=271 calls=3110 branches=2112 lines=19624
-indexbench defines=53 calls=136 branches=129 lines=1824
-digestbench defines=155 calls=1214 branches=819 lines=9016
-readbench defines=56 calls=137 branches=130 lines=1968
-livebench defines=135 calls=1215 branches=799 lines=9127
-runbench defines=523 calls=5747 branches=3430 lines=34582
+encodebench defines=132 calls=1466 branches=880 lines=9634
+oneshot defines=119 calls=1179 branches=753 lines=8505
+basket defines=100 calls=1139 branches=691 lines=6698
+widebench defines=147 calls=1653 branches=973 lines=10617
+deepbench defines=61 calls=665 branches=440 lines=4283
+escapebench defines=19 calls=79 branches=46 lines=721
+pendbench defines=81 calls=980 branches=525 lines=5324
+scanbench defines=251 calls=3093 branches=2022 lines=18276
+indexbench defines=24 calls=110 branches=53 lines=980
+digestbench defines=138 calls=1200 branches=749 lines=8081
+readbench defines=27 calls=111 branches=51 lines=1083
+livebench defines=120 calls=1207 branches=774 lines=8644
+runbench defines=515 calls=5746 branches=3382 lines=33372

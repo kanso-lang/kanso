@@ -79,9 +79,14 @@ fn the_counting_build_and_the_shipped_one_agree() {
     );
 
     let gates = |ir: &str| ir.matches("load i32, ptr @k_stats_on").count();
+    // A module carries only the helpers its program reaches, so the gates to
+    // expect are the ones DECLARES holds in those helpers. The sample appends,
+    // so there are some.
+    let carried = kanso::codegen::stats_gates_carried(&counting_ir);
+    assert!(carried > 0, "the sample reaches no gated helper, so this proves nothing");
     assert_eq!(
         gates(&counting_ir),
-        kanso::codegen::STATS_GATE_SITES,
+        carried,
         "the --counters build lost a gate: its inlined fast paths would stop counting"
     );
     assert_eq!(

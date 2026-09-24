@@ -233,7 +233,7 @@
 # matches a failure whoever raised it now, so the emitter asks nothing about
 # the raiser. The foreign-only licence moved to the rescue word, which the
 # decoder never writes, so nothing came back the other way. Banked.
-defines=134
-calls=1190
-branches=789
-lines=9052
+defines=119
+calls=1182
+branches=764
+lines=8570
