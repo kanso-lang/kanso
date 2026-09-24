@@ -234,6 +234,6 @@
 # the raiser. The foreign-only licence moved to the rescue word, which the
 # decoder never writes, so nothing came back the other way. Banked.
 defines=119
-calls=1181
-branches=771
-lines=8650
+calls=1182
+branches=764
+lines=8570

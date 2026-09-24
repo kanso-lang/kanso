@@ -2181,6 +2181,7 @@ fn emit_ir_for(
         beat,
         type_ids,
         strings: Vec::new(),
+        globals: String::new(),
         interned: HashMap::default(),
         body: String::new(),
         lift_counter: 0,
@@ -2242,6 +2243,10 @@ struct Backend<'a> {
     beat: crate::beat::Beats,
     type_ids: HashMap<&'a str, i64>,
     strings: Vec<(String, Vec<u8>)>,
+    /// Constant tables the module defines, written beside the interned
+    /// strings rather than into `body`, so the scans that read the body for
+    /// calls do not walk them.
+    globals: String,
     interned: HashMap<Vec<u8>, String>,
     body: String,
     lift_counter: usize,
@@ -3457,6 +3462,25 @@ fn dsym(name: &str, arity: usize) -> String {
     quoted(&format!("d_{name}_{arity}"))
 }
 
+/// A lookup from a type id to one of `names`, read out of a constant array
+/// rather than a switch, with `fallback` for an id past the end.
+fn type_table(globals: &mut String, symbol: &str, names: &[String], fallback: &str) {
+    let slots = names.len();
+    let row: Vec<String> = names.iter().map(|n| format!("ptr @{n}")).collect();
+    let _ = writeln!(
+        globals,
+        "@{symbol}_table = private unnamed_addr constant [{slots} x ptr] [{}]",
+        row.join(", ")
+    );
+    let _ = writeln!(
+        globals,
+        "define ptr @{symbol}(i64 %id) {{\nentry:\n  %in = icmp ult i64 %id, {slots}\n  \
+         br i1 %in, label %T, label %TD\nT:\n  \
+         %at = getelementptr [{slots} x ptr], ptr @{symbol}_table, i64 0, i64 %id\n  \
+         %name = load ptr, ptr %at\n  ret ptr %name\nTD:\n  ret ptr @{fallback}\n}}\n"
+    );
+}
+
 /// Word `n` of `value` when it is a literal `{ i64 A, i64 B }`. Reading one
 /// off a constant with `extractvalue` is an instruction clang's fast selector
 /// at -O0 does not handle, and it sends the rest of the block to the slow one.
@@ -4271,6 +4295,7 @@ impl<'a> Backend<'a> {
             );
             let _ = writeln!(out, "@{name}_lit = internal global %KValue zeroinitializer");
         }
+        out.push_str(&self.globals);
         out.push('\n');
         out.push_str(&body);
         let narrowed = narrow_tailcc(out);
@@ -4315,102 +4340,100 @@ impl<'a> Backend<'a> {
     }
 
     fn emit_type_names(&mut self) {
-        let mut body = String::new();
-        body.push_str("define ptr @k_type_name(i64 %id) {\nentry:\n");
-        let mut arms = String::new();
-        let mut cases = String::new();
+        // One slot per id: 0 is the entry, a declared type is its position
+        // plus one, and an alias's position falls back, since the alias
+        // constructs and matches under its origin's id.
+        let (fallback, _) = self.intern("record\0");
+        let (entry_name, _) = self.intern("entry\0");
+        let slots = self.program.types.len() + 1;
+        let mut names = vec![fallback.clone(); slots];
+        names[0] = entry_name;
         // The spelling a rendered record prints, beside the identity the
         // runtime matches on. RULED 2026-08-29, "records print qualified,
         // everywhere": the root's own types take the root's name.
-        let mut shown_arms = String::new();
+        let mut shown = names.clone();
         let mut differs = false;
         let root = self.program.root.clone();
         for ty in &self.program.types {
             if ty.origin.is_some() {
-                // an alias shares its origin's id; the origin owns the case
+                // an alias shares its origin's id; the origin owns the slot
                 continue;
             }
-            let id = self.type_ids[ty.name.as_str()];
+            let id = self.type_ids[ty.name.as_str()] as usize;
             let (name, _len) = self.intern(&format!("{}\0", ty.name));
-            let _ = writeln!(cases, "    i64 {id}, label %T{id}");
-            let _ = writeln!(arms, "T{id}:\n  ret ptr @{name}");
-            let shown = match root.is_empty() || crate::ast::has_slash(&ty.name) {
+            shown[id] = match root.is_empty() || crate::ast::has_slash(&ty.name) {
                 true => name.clone(),
                 false => {
                     differs = true;
                     self.intern(&format!("{root}/{}\0", ty.name)).0
                 }
             };
-            let _ = writeln!(shown_arms, "T{id}:\n  ret ptr @{shown}");
+            names[id] = name;
         }
-        let (entry_name, _) = self.intern("entry\0");
-        let _ = writeln!(cases, "    i64 0, label %T0");
-        let _ = writeln!(arms, "T0:\n  ret ptr @{entry_name}");
-        let _ = writeln!(shown_arms, "T0:\n  ret ptr @{entry_name}");
-        let (fallback, _) = self.intern("record\0");
-        let _ = writeln!(body, "  switch i64 %id, label %TD [\n{cases}  ]");
-        body.push_str(&arms);
-        let _ = writeln!(body, "TD:\n  ret ptr @{fallback}");
-        body.push_str("}\n\n");
+        type_table(&mut self.globals, "k_type_name", &names, &fallback);
         // A program whose root declares no bare type prints every record
         // under the identity's spelling, and the second table is an alias
         // rather than a copy of the first.
         match differs {
-            true => {
-                body.push_str("define ptr @k_type_shown(i64 %id) {\nentry:\n");
-                let _ = writeln!(body, "  switch i64 %id, label %TD [\n{cases}  ]");
-                body.push_str(&shown_arms);
-                let _ = writeln!(body, "TD:\n  ret ptr @{fallback}");
-                body.push_str("}\n\n");
-            }
-            false => body.push_str("@k_type_shown = alias ptr (i64), ptr @k_type_name\n\n"),
+            true => type_table(&mut self.globals, "k_type_shown", &shown, &fallback),
+            false => self.globals.push_str("@k_type_shown = alias ptr (i64), ptr @k_type_name\n"),
         }
-        self.body.push_str(&body);
     }
 
-    /// Field metadata for keyed reads: name-indexed lookup resolves against
-    /// these per-type switch tables at runtime.
+    /// Field metadata for keyed reads: name-indexed lookup reads these
+    /// per-type tables at runtime.
     fn emit_type_fields(&mut self) {
-        let mut tables: Vec<(i64, Vec<String>)> = vec![(0, vec!["key".into(), "value".into()])];
+        let slots = self.program.types.len() + 1;
+        let mut tables: Vec<Vec<String>> = vec![Vec::new(); slots];
+        tables[0] = vec!["key".into(), "value".into()];
         for ty in &self.program.types {
             if ty.origin.is_some() {
-                // an alias shares its origin's id; the origin owns the case
+                // an alias shares its origin's id; the origin owns the slot
                 continue;
             }
-            let id = self.type_ids[ty.name.as_str()];
-            let fields = ty.fields.iter().map(|(name, _, _)| name.clone()).collect();
-            tables.push((id, fields));
+            let id = self.type_ids[ty.name.as_str()] as usize;
+            tables[id] = ty.fields.iter().map(|(name, _, _)| name.clone()).collect();
         }
-        let mut body = String::new();
-        body.push_str("define i64 @k_type_field_count(i64 %id) {\nentry:\n");
-        let mut cases = String::new();
-        let mut arms = String::new();
-        for (id, fields) in &tables {
-            let _ = writeln!(cases, "    i64 {id}, label %C{id}");
-            let _ = writeln!(arms, "C{id}:\n  ret i64 {}", fields.len());
-        }
-        let _ = writeln!(body, "  switch i64 %id, label %CD [\n{cases}  ]");
-        body.push_str(&arms);
-        body.push_str("CD:\n  ret i64 0\n}\n\n");
-        body.push_str("define ptr @k_type_field_name(i64 %id, i64 %i) {\nentry:\n");
         let (empty, _) = self.intern("\0");
-        let mut cases = String::new();
-        let mut arms = String::new();
-        for (id, fields) in &tables {
-            let _ = writeln!(cases, "    i64 {id}, label %T{id}");
-            let mut inner = String::new();
-            for (i, field) in fields.iter().enumerate() {
-                let (name, _) = self.intern(&format!("{field}\0"));
-                let _ = writeln!(inner, "    i64 {i}, label %T{id}F{i}");
-                let _ = writeln!(arms, "T{id}F{i}:\n  ret ptr @{name}");
+        let mut globals = String::new();
+        let counts: Vec<String> = tables.iter().map(|f| f.len().to_string()).collect();
+        let _ = writeln!(
+            globals,
+            "@k_type_field_counts = private unnamed_addr constant [{slots} x i64] [{}]",
+            counts.iter().map(|c| format!("i64 {c}")).collect::<Vec<_>>().join(", ")
+        );
+        let mut rows = Vec::with_capacity(slots);
+        for (id, fields) in tables.iter().enumerate() {
+            if fields.is_empty() {
+                rows.push("ptr null".to_string());
+                continue;
             }
-            let _ = writeln!(arms, "T{id}:\n  switch i64 %i, label %TD [\n{inner}  ]");
+            let names: Vec<String> = fields
+                .iter()
+                .map(|field| format!("ptr @{}", self.intern(&format!("{field}\0")).0))
+                .collect();
+            let _ = writeln!(
+                globals,
+                "@k_type_fields_{id} = private unnamed_addr constant [{} x ptr] [{}]",
+                names.len(),
+                names.join(", ")
+            );
+            rows.push(format!("ptr @k_type_fields_{id}"));
         }
-        let _ = writeln!(body, "  switch i64 %id, label %TD [\n{cases}  ]");
-        body.push_str(&arms);
-        let _ = writeln!(body, "TD:\n  ret ptr @{empty}");
-        body.push_str("}\n\n");
-        self.body.push_str(&body);
+        let _ = writeln!(
+            globals,
+            "@k_type_fields = private unnamed_addr constant [{slots} x ptr] [{}]",
+            rows.join(", ")
+        );
+        let _ = writeln!(
+            globals,
+            "define i64 @k_type_field_count(i64 %id) {{\nentry:\n  %in = icmp ult i64 %id, {slots}\n  br i1 %in, label %C, label %CD\nC:\n  %at = getelementptr [{slots} x i64], ptr @k_type_field_counts, i64 0, i64 %id\n  %n = load i64, ptr %at\n  ret i64 %n\nCD:\n  ret i64 0\n}}\n"
+        );
+        let _ = writeln!(
+            globals,
+            "define ptr @k_type_field_name(i64 %id, i64 %i) {{\nentry:\n  %n = call i64 @k_type_field_count(i64 %id)\n  %in = icmp ult i64 %i, %n\n  br i1 %in, label %T, label %TD\nT:\n  %at = getelementptr [{slots} x ptr], ptr @k_type_fields, i64 0, i64 %id\n  %row = load ptr, ptr %at\n  %f = getelementptr ptr, ptr %row, i64 %i\n  %name = load ptr, ptr %f\n  ret ptr %name\nTD:\n  ret ptr @{empty}\n}}\n"
+        );
+        self.globals.push_str(&globals);
     }
 
     /// A group whose arms discriminate on one parameter with int/none literals

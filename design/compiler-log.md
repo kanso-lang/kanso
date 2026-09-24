@@ -11398,3 +11398,45 @@ ones above.
 `tests/a_literal_s_words_are_written_not_extracted.rs` builds a countdown on
 both tiers and requires that neither module reads a word off a literal and
 that both print 55. It went red with `literal_word` answering nothing.
+
+## 2026-09-24 — the type tables are arrays, not switches
+
+Every module defines four functions the runtime calls to print a record and
+read a field by name: `k_type_name`, `k_type_shown`, `k_type_field_count` and
+`k_type_field_name`. Each was a switch over the type id, with an arm per type,
+and `k_type_field_name` held a nested switch per type's fields. clang's fast
+selector at -O0 does not lower a switch, and on the codegen corpus a text
+rewrite of those eighteen switches into compare chains alone took `clang
+-cc1` from 258,576,424 to 255,915,152. The ids are dense, 0 for the entry and
+a type's position plus one, and an alias's slot falls back as it did. So
+each lookup is now a load from a constant array behind a bounds check. The
+arrays and the four functions are written into `globals`, beside the interned
+strings, and not into the body that the call scans and the reachability pass
+read.
+
+Measured on this container, clang 18, gate environment:
+
+    codegen_instructions_dev        367,410,698 ->   360,741,989   -1.82%
+    codegen_instructions_release  1,742,456,776 -> 1,723,410,294   -1.09%
+      clang (-flto compile)         545,440,966 ->   538,359,753
+      ld (the LTO link)           1,165,261,367 -> 1,153,296,098
+    startup_instructions                798,960 ->       750,547   -6.06%
+
+The first draft wrote the four functions and their arrays into the body. The
+dev row fell the same, but start-up rose to 824,547, because every pass over
+the body walked the longer text. Moving the arrays alone out of it left
+start-up at 814,293, and moving the functions with them took it to 750,547.
+The runtime counter sweep agrees with every golden. The emitted-code goldens
+fall, the decoder from 8,650 lines and 771 branches to 8,570 and 764 and one
+call more, where `k_type_field_name` asks `k_type_field_count` for its bound.
+The compile-cost goldens fall with them. CI's rows replace the local ones
+above.
+
+`tests/type_tables_are_read_not_switched.rs` prints two records and reads
+fields by name, both keyed and with `.b`, on both tiers. It requires the
+output the interpreter gives and that no module switches on a type id. It
+went red against the switch tables.
+
+The dispatchers' own switches are left. A compare chain in their place was
+worth 1,965,238 instructions to the dev compile, and the release tier wants
+the switch for its jump tables.
