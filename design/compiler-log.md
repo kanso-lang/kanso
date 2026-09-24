@@ -11012,3 +11012,43 @@ container read 902,425 with the check and 875,795 without, against main's
 876,314, and the next CI round's rows replace the two above. A unit test holds
 the dev text to the release text with the attribute stripped by a scan at run
 time, and went red when the dev branch was handed the release pair.
+
+## 2026-09-24 — a dev module leaves out the helpers nothing reaches
+
+DECLARES defines thirty-three runtime helpers, and every module carries all of
+them. A release build inlines them and the optimiser drops what is unused. At
+`-O0` nothing drops an unused internal function, so `clang -cc1` selected
+instructions for every helper in every dev module. On the codegen corpus
+twenty-four of the thirty-three were called by nothing: the dev module defined
+thirty-five internal functions, thirty-three helpers and two closure twins,
+and eleven of them were reached.
+
+When the compiler is built, `index_helpers` reads each helper's extent in the
+dev text, from its `define` to its lone closing brace, and the helpers each one
+calls by `@name(`. It then closes those calls to a fixed point, one bit per
+helper in a `u64`. At emit, `declares_for_program` marks the helpers the
+program's bodies and twins name, takes everything they reach, and skips the
+line ranges of the rest. The release text is unchanged and still carries every
+helper, because its inliner drops them anyway.
+
+The first draft scanned the whole text once per helper inside the const
+evaluator, which rustc stopped as taking too long; one pass that tracks the
+current helper by line does the same work.
+
+Measured on this container, clang 18, with the codegen gate's environment:
+
+    codegen_instructions_dev   430,900,667 -> 396,836,531   -7.90%
+      clang -cc1               314,696,278 -> 280,905,590
+      ld                        84,671,938 ->  84,398,490
+    startup_instructions           875,795 ->     801,634   -8.47%
+
+Start-up falls because `kanso play` emits a dev module for its one-line
+program, and that module no longer writes the thirty-two helpers `print`
+does not call. CI's rows replace these.
+
+`tests/a_dev_module_defines_only_the_helpers_it_reaches.rs` builds a bare
+`print` and a program with a closure call and an append on both tiers. It
+requires both binaries to print the same thing and every internal function
+the dev module defines to be named on some other line of it. With every helper
+counted as reached it went red on both programs, listing the helpers nothing
+called.

@@ -1479,16 +1479,189 @@ static DECLARES_DEV: &str = match std::str::from_utf8(&DECLARES_DEV_BYTES) {
 
 static DECLARE_LINES_DEV: [DeclareLine; DECLARES_LINES] = index_declares(DECLARES_DEV);
 
+/// One runtime helper DECLARES defines: where its name sits in the text, the
+/// lines from its `define` to its closing brace, and every helper it reaches
+/// by calls, itself included, as a bit per helper.
+#[derive(Clone, Copy)]
+struct Helper {
+    sym_start: usize,
+    sym_end: usize,
+    first: usize,
+    last: usize,
+    reaches: u64,
+}
+
+const fn helper_count(text: &str) -> usize {
+    let text = text.as_bytes();
+    let mut n = 0;
+    let mut at = 0;
+    while at < text.len() {
+        let end = find_in(text, at, text.len(), b"\n");
+        if starts_at(text, at, end, b"define internal ") {
+            n += 1;
+        }
+        at = end + 1;
+    }
+    n
+}
+
+const HELPERS: usize = helper_count(DECLARES);
+
+/// The helpers of `text`, found when the compiler is built. A helper runs
+/// from a `define internal` line to the next line that is a lone `}`, and it
+/// reaches every helper whose `@name(` its body writes, and theirs in turn.
+const fn index_helpers(text: &str) -> [Helper; HELPERS] {
+    const { assert!(HELPERS <= 64, "the helpers no longer fit the bit set that tracks them") };
+    let bytes = text.as_bytes();
+    let blank = Helper { sym_start: 0, sym_end: 0, first: 0, last: 0, reaches: 0 };
+    let mut out = [blank; HELPERS];
+    let mut n = 0;
+    let mut line = 0;
+    let mut at = 0;
+    let mut open = false;
+    while at < bytes.len() {
+        let end = find_in(bytes, at, bytes.len(), b"\n");
+        if starts_at(bytes, at, end, b"define internal ") {
+            let sigil = find_in(bytes, at, end, b"@");
+            let paren = find_in(bytes, sigil, end, b"(");
+            out[n] = Helper {
+                sym_start: sigil + 1,
+                sym_end: paren,
+                first: line,
+                last: line,
+                reaches: 1 << n,
+            };
+            open = true;
+        } else if open && end == at + 1 && bytes[at] == b'}' {
+            out[n].last = line;
+            open = false;
+            n += 1;
+        }
+        at = end + 1;
+        line += 1;
+    }
+    assert!(n == HELPERS && !open, "a helper in DECLARES has no closing brace of its own");
+    // Direct calls: every `@name(` in a helper's body that names a helper,
+    // read in one pass over the text.
+    let mut h = 0;
+    let mut at = 0;
+    let mut line = 0;
+    while at < bytes.len() && h < HELPERS {
+        let end = find_in(bytes, at, bytes.len(), b"\n");
+        if line >= out[h].last {
+            h += 1;
+        } else if line > out[h].first {
+            let mut k = at;
+            while k < end {
+                if bytes[k] == b'@' {
+                    let mut g = 0;
+                    while g < HELPERS {
+                        let len = out[g].sym_end - out[g].sym_start;
+                        if k + 1 + len < end && bytes[k + 1 + len] == b'(' {
+                            let mut same = true;
+                            let mut i = 0;
+                            while i < len {
+                                if bytes[k + 1 + i] != bytes[out[g].sym_start + i] {
+                                    same = false;
+                                    break;
+                                }
+                                i += 1;
+                            }
+                            if same {
+                                out[h].reaches |= 1 << g;
+                            }
+                        }
+                        g += 1;
+                    }
+                }
+                k += 1;
+            }
+        }
+        at = end + 1;
+        line += 1;
+    }
+    // And their calls, to a fixed point.
+    let mut changed = true;
+    while changed {
+        changed = false;
+        let mut h = 0;
+        while h < HELPERS {
+            let mut g = 0;
+            while g < HELPERS {
+                if out[h].reaches & (1 << g) != 0
+                    && out[h].reaches | out[g].reaches != out[h].reaches
+                {
+                    out[h].reaches |= out[g].reaches;
+                    changed = true;
+                }
+                g += 1;
+            }
+            h += 1;
+        }
+    }
+    out
+}
+
+static HELPERS_DEV: [Helper; HELPERS] = index_helpers(DECLARES_DEV);
+
 /// DECLARES as a module wants it: joined by newlines with no newline after the
 /// last, keeping a `declare` only when `referenced` says the program calls its
 /// symbol, and folding each stats gate to its fast branch unless `counting`.
+#[cfg(test)]
 fn declares_for(referenced: impl Fn(&str) -> bool, counting: bool, inline: bool) -> String {
-    let (text, lines) = match inline {
-        true => (DECLARES, &DECLARE_LINES),
-        false => (DECLARES_DEV, &DECLARE_LINES_DEV),
+    declares_for_program(referenced, |_| true, counting, inline)
+}
+
+/// `declares_for`, for a program that calls the helpers `called` names. A dev
+/// module leaves out every helper neither the program nor a helper it calls
+/// reaches: at `-O0` nothing removes an unused internal function, and the
+/// codegen corpus compiled twenty-four of its thirty-three for nothing.
+/// Unreached helpers are skipped a whole block at a time, so the lines that
+/// are kept pay nothing for it.
+fn declares_for_program(
+    referenced: impl Fn(&str) -> bool,
+    called: impl Fn(&str) -> bool,
+    counting: bool,
+    inline: bool,
+) -> String {
+    let (text, lines, helpers): (&str, &[DeclareLine], &[Helper]) = match inline {
+        true => (DECLARES, &DECLARE_LINES, &[]),
+        false => (DECLARES_DEV, &DECLARE_LINES_DEV, &HELPERS_DEV),
     };
+    let mut live = 0u64;
+    for helper in helpers {
+        if called(&text[helper.sym_start..helper.sym_end]) {
+            live |= helper.reaches;
+        }
+    }
     let mut out = String::with_capacity(text.len());
     let mut first = true;
+    let mut from = 0;
+    for (n, helper) in helpers.iter().enumerate() {
+        if live & (1 << n) == 0 {
+            declare_lines(
+                &mut out,
+                &mut first,
+                text,
+                &lines[from..helper.first],
+                &referenced,
+                counting,
+            );
+            from = helper.last + 1;
+        }
+    }
+    declare_lines(&mut out, &mut first, text, &lines[from..], &referenced, counting);
+    out
+}
+
+fn declare_lines(
+    out: &mut String,
+    first: &mut bool,
+    text: &str,
+    lines: &[DeclareLine],
+    referenced: &impl Fn(&str) -> bool,
+    counting: bool,
+) {
     for line in lines {
         if line.sym_start < line.sym_end && !referenced(&text[line.sym_start..line.sym_end]) {
             continue;
@@ -1496,23 +1669,22 @@ fn declares_for(referenced: impl Fn(&str) -> bool, counting: bool, inline: bool)
         let piece = match (counting, line.shipped) {
             (false, Shipped::Folded) => continue,
             (false, Shipped::Fold { label_start, label_end }) => {
-                if !first {
+                if !*first {
                     out.push('\n');
                 }
                 out.push_str("  br label %");
                 out.push_str(&text[label_start..label_end]);
-                first = false;
+                *first = false;
                 continue;
             }
             _ => &text[line.start..line.end],
         };
-        if !first {
+        if !*first {
             out.push('\n');
         }
         out.push_str(piece);
-        first = false;
+        *first = false;
     }
-    out
 }
 
 #[cfg(test)]
@@ -3932,7 +4104,8 @@ impl<'a> Backend<'a> {
             let referenced = |sym: &str| {
                 body_calls.contains(sym) || twin_calls.contains(sym) || declares_context_calls(sym)
             };
-            declares_for(referenced, counters_wanted(), self.inline_helpers)
+            let called = |sym: &str| body_calls.contains(sym) || twin_calls.contains(sym);
+            declares_for_program(referenced, called, counters_wanted(), self.inline_helpers)
         };
         let mut out = String::new();
         out.push_str(&call_twins);
