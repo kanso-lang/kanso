@@ -12928,6 +12928,29 @@ program that sums a list and asserts every string and literal cell left in its
 module is named somewhere else. Watched red with every string emitted: 328
 were named by nothing. The ratchet carries the mutation.
 
+A dispatcher stops at the arm that leaves no way into the next. The emitter
+opens arm k's `fail` block before it knows whether any parameter check will
+branch to it, and when every check is proved away nothing does, so the arms
+after it and the whole failure path were blocks nothing reached. They were 7%
+of the corpus's IR, 9% of runbench's and 13% of the decoder's, and clang
+parsed each one only to delete it in its first pass. Dropping unreached blocks
+after the fact, a pass over every function body, took the corpus to 1,480
+lines but cost the emitter more than clang saved: `emit_ir_for` on this box
+rose 33,539,504 -> 37,473,772. That pass is declined. Almost every such block
+has the one shape, so the dispatcher now asks once per arm whether its text
+branches to `fail{k}` and stops writing when it does not. The corpus IR is the
+same 1,480 lines, and `emit_ir_for` falls to 30,538,357 (-8.9%). The decoder's
+emitted lines fall 6,410 -> 5,406 and runbench's 29,993 -> 26,033;
+encodebench, oneshot, widebench, livebench, scanbench, digestbench and the
+rest fall with them. The compile golden's module row falls 1,149 -> 1,079, and
+its five samples fall between 14 and 34 lines each, the string filter's share
+included; `guards` loses a define, a function whose one caller sat in a dead
+failure path. `tests/a_block_nothing_branches_to_is_not_emitted` builds a
+program with a dispatcher whose checks are proved away and asserts every block
+in its module is reached from its function's entry. Watched red with the early
+close taken out: 22 blocks nothing reached, the first of them
+`d_list/fold_3`'s `fail2`. The ratchet carries the mutation.
+
 Two dev-tier leads were measured and declined. At `-O0` FastISel selects
 none of the corpus: it refuses `insertvalue` on `%KValue`, the aggregate
 argument and the aggregate return, so every function falls back to
