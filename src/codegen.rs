@@ -9217,6 +9217,19 @@ fn ir_bytes(bytes: &[u8]) -> String {
 /// constant among them, and a constant's bytes are the program's: a program
 /// printing `call tailcc` once lost the words from its constant, kept the
 /// declared length, and clang refused the module.
+/// Whether `line` holds `needle`, found from the byte `at` places into it.
+/// `str::contains` builds a substring searcher for every call, about a
+/// hundred instructions before it reads a byte, and `narrow_tailcc` asks two
+/// or three of these of every line it walks: 178 calls on a one-line
+/// program's start-up. The anchor byte is found by memchr, and the needle is
+/// compared where one lands. Pick `at` so the anchor is rare in the emitter's
+/// lines.
+fn holds(line: &str, needle: &str, at: usize) -> bool {
+    let anchor = needle.as_bytes()[at] as char;
+    line.match_indices(anchor)
+        .any(|(i, _)| i >= at && line.as_bytes()[i - at..].starts_with(needle.as_bytes()))
+}
+
 fn narrow_tailcc(ir: String) -> String {
     let code = |line: &str| !line.starts_with('@');
     // Split once and walk the lines three times. Splitting is a search for
@@ -9229,7 +9242,7 @@ fn narrow_tailcc(ir: String) -> String {
         if let Some(rest) = line.strip_prefix("define ") {
             current = symbol_of(rest);
         }
-        if line.contains("musttail call") {
+        if holds(line, "musttail call", 0) {
             // both ends of a musttail edge must agree on the convention
             if let Some(callee) = symbol_of(line) {
                 keep.insert(callee);
@@ -9284,13 +9297,13 @@ fn narrow_tailcc(ir: String) -> String {
     for &line in &lines {
         // Every rewrite below needs the word, so a line without it is copied
         // as it stands and its callee is never looked up.
-        if !code(line) || !line.contains("tailcc ") {
+        if !code(line) || !holds(line, "tailcc ", 4) {
             out.push_str(line);
             out.push('\n');
             continue;
         }
         let named = symbol_of(line);
-        let reroute = !line.contains("musttail call")
+        let reroute = !holds(line, "musttail call", 0)
             && line.contains("call tailcc ")
             && named.as_ref().is_some_and(|n| spilling.contains(n));
         if reroute {

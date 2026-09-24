@@ -13005,6 +13005,20 @@ child tree fell 45,406 and the release tree rose 337,442. clang at `-O0` folds
 an extract of an `insertvalue` for nearly nothing, so the lines were cheap to
 keep.
 
+The interpreted row rose 4,189,569 between two sittings of this branch that
+changed only the emitter, and the whole rise was one collect in `call_named`:
+the arguments to a builtin were forced through a `Result` adapter, and rustc
+stopped inlining the adapter's fold into it, laying out as a call what had
+been inline. The argument forcing is now a loop that forces a thunk where it
+lies and leaves every other value alone, which is what `force_thunk` did with
+them anyway, so there is nothing left for the layout to decide. The same shape
+in `call_builtin`, a map through `sub_base` into a fresh collect, now rewrites
+only a subtype's slot. And `low_byte` read a number's first byte by writing
+out all of its bytes with `to_bytes_le`; it now reads the magnitude's lowest
+word, which allocates nothing and answers the same byte, the magnitude's, for
+a negative number as it did before. On this box the interpreted corpus reads
+846,937,172 -> 818,016,245 -> 802,836,171 -> 790,883,683 across the three.
+
 Two dev-tier leads were measured and declined. At `-O0` FastISel selects
 none of the corpus: it refuses `insertvalue` on `%KValue`, the aggregate
 argument and the aggregate return, so every function falls back to
