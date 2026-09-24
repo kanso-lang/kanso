@@ -1908,9 +1908,21 @@ regrow = row
   (breaking "a_unique_builder_copied_to_grow")
   release
 
+# A greedy run of one character is counted, then backed off in order. The
+# mutation drops the count's ceiling, and the micro fixture
+# a_greedy_run_of_one_character_backs_off_in_order reads a five-character match
+# where `x\{2,3}x` takes four.
+counted_run = row
+  "a counted run that ignores its ceiling"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_counted_run_that_ignores_its_ceiling")
+  release
+
 rows_b1q = text/concat rows_b1o [list_test_first framed_view]
 
-rows_b1p = text/concat rows_b1q [ordered_view regrow]
+rows_b1p = text/concat rows_b1q [ordered_view regrow counted_run]
 
 rows_b = text/concat rows_b1p [compile_mem compile_mem_host]
 
