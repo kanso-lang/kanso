@@ -12510,3 +12510,47 @@ less than it cost.
   builders' checks are the part that costs, and the decoder's tokens, which
   a slice could have vouched for, are ascii of four to seven bytes: checking
   one costs less than proving its two ends.
+
+## 2026-09-24 — an arm no value reaches is not emitted
+
+std/list's `next` has an arm for every lazy adapter the library declares:
+bounded, capped, counting, cursor, cycled, grown, mapped, paired, repeated,
+sifted, skipped. A program that maps once reaches `next`, so it emitted every
+arm and everything each arm calls. The codegen corpus is sixty-two lines that
+map and fold, and it emitted 4,628 lines of IR, 1,560 of which were
+adapters it never builds and what they call.
+
+`without_unbuilt_arms` drops an arm before anything is emitted when a record
+type in its pattern, at any depth, has no value in the program. A value of a
+declared type exists only if an expression names the type -- a construction,
+a partial, a constructor passed on, an upcast to it -- or if the runtime
+builds it, and the runtime builds one record type, `entry`, id 0, in
+`entries`. A subtype's value matches its parent's patterns, so building one
+builds its ancestors. Counting names over every declaration found every
+adapter built, because std/list declares a builder for each, so reachability
+and construction are one fixpoint: a group is reached when a live arm names
+it, an arm is live when its group is reached and nothing in its pattern is
+unbuilt, and a live arm's body builds what it names. The roots are the entry,
+every constant, and the groups the emitter calls without the source naming
+them, which are the renderer and the user operators. A group whose every arm
+would go keeps them all, so a call that reaches it fails as it did. The
+interpreter is untouched, and the golden, micro and differential corpora all
+pass.
+
+On the codegen corpus the IR falls 4,628 -> 3,068 lines (172,246 -> 117,491
+bytes). The child tree of a dev build on this box reads 287,264,761 ->
+200,819,456 instructions (-30.1%) and of a release build 1,613,493,611 ->
+856,255,424 (-46.9%). The compile golden's module row falls 3,581 -> 2,181
+lines and 45 -> 35 defines, and seven benchmarks emit less:
+`emitted_other_lines` for encodebench 9,640 -> 8,242, widebench 10,623 ->
+9,225, deepbench 4,284 -> 2,886, pendbench 5,330 -> 4,260, scanbench 18,282 ->
+16,876, digestbench 8,087 -> 6,688 and runbench 33,214 -> 32,352. The decoder's
+own golden and every runtime counter are unchanged. The codegen, emit and
+run instruction rows are CI's.
+
+Spec: `tests/an_arm_no_value_reaches_is_not_emitted` builds a program that
+maps and one that drops. The first must not define `d_list/next_skipped_2`,
+the second must, and both must print what the interpreter prints. Watched red
+with the pass returning nothing: the mapping program defined it. The ratchet
+carries the mutation.
+
