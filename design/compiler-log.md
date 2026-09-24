@@ -11097,3 +11097,14 @@ handed no helper index.
 
 This clears the way for helpers that only one tier calls: a release module
 that does not call one no longer carries it.
+
+**Declined: a block of its own for each return.** FastISel cannot lower a
+`%KValue` return, and a terminator it cannot lower sends its whole block to
+SelectionDAG. Moving each such `ret` into a one-instruction block, and each
+`br` into a `%KValue` phi block into a trampoline, was tried on the pruned
+corpus module with a text rewrite. `clang -cc1 -O0` read 287,802,692 as
+emitted, 297,839,204 with 163 returns split, and 301,669,877 with 222 returns
+and branches split. Each block SelectionDAG takes costs a fixed setup, so
+splitting added blocks faster than it removed work. An all-SelectionDAG
+compile of the same module read 335,125,013, so FastISel saves 47 million
+instructions today.
