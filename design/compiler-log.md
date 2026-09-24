@@ -11621,6 +11621,19 @@ that the release module calls none of them. It went red with the dev tier
 asking the `%KValue` forms. The first draft of its program had a record arm
 beside a wildcard arm, which is how kanso#1597 was found.
 
+CI's rows, over kanso#1596's:
+
+    codegen_instructions_dev     326,056,595 ->   301,084,979   -7.66%
+    startup_instructions             776,882 ->       788,333   +11,451
+    emit_instructions             43,332,550 ->    45,838,870   +2,506,320
+
+Both dev readings agreed. The emit row rises by more than the rewrite's own
+frames: each predicate call now writes two or three lines where it wrote one,
+and every pass over the body text (the call scans, the reachability pass,
+the formatting and allocation behind each line) pays for the extra lines. The
+objective weighs the emit row lightly and dev codegen heavily, and welfare
+rises 0.03 on the three together.
+
 ## 2026-09-24 — a literal's words are written, not extracted
 
 The arithmetic fast path reads each operand's payload with `inline_payload`,
@@ -11648,6 +11661,16 @@ ones above.
 `tests/a_literal_s_words_are_written_not_extracted.rs` builds a countdown on
 both tiers and requires that neither module reads a word off a literal and
 that both print 55. It went red with `literal_word` answering nothing.
+
+CI's rows, over kanso#1598's, each read twice alike where the gate reads twice:
+
+    codegen_instructions_dev       301,084,979 ->   296,677,065   -1.46%
+    codegen_instructions_release 1,634,830,087 -> 1,633,515,589   -0.08%
+    startup_instructions               788,333 ->       788,337   +4
+    emit_instructions               45,838,870 ->    45,620,520   -218,350
+
+The four instructions of start-up are the literal check on the one-line
+program's few operands.
 
 ## 2026-09-24 — the type tables are arrays, not switches
 
@@ -11691,6 +11714,26 @@ The dispatchers' own switches are left. A compare chain in their place was
 worth 1,965,238 instructions to the dev compile, and the release tier wants
 the switch for its jump tables.
 
+CI's rows, over kanso#1599's, with both codegen tiers read twice alike:
+
+    codegen_instructions_dev       296,677,065 ->   289,762,106   -2.33%
+    codegen_instructions_release 1,633,515,589 -> 1,614,704,366   -1.15%
+    startup_instructions               788,337 ->       740,091   -6.12%
+    emit_instructions               45,620,520 ->    45,195,370   -0.93%
+
+Every benchmark's work rises by between 26 and 938 instructions, and its
+`.text` shrinks. The switch arms were straight-line returns and the table is a
+bounds check, a load and a return, so each lookup the runtime makes costs a
+few instructions more. The run program's work goes from 1,813,491,551 to
+1,813,492,695 (work_runbench 1,813,492,695). The rest land at work_jsonbench
+1,196,422,558, work_encodebench 3,178,192,129, work_oneshot 19,927,890,
+work_basket 32,679,271, work_widebench 30,153,767, work_deepbench
+366,364,093, work_escapebench 80,047,462, work_pendbench 209,065,629,
+work_indexbench 2,927,172, work_scanbench 451,725,005, work_digestbench
+5,866,958, work_readbench 4,630,497 and work_livebench 2,645,995,367. The run
+row's rise is six parts in ten million, which the objective weighs far below
+the codegen and start-up falls.
+
 ## 2026-09-24 — a dev dispatcher compares instead of switching
 
 A dispatcher whose arms discriminate on int literals, or on a value's tag,
@@ -11717,6 +11760,14 @@ switch.
 
 The compiler page's §132 covers this change and the three before it on the
 dev tier.
+
+CI's rows, over kanso#1600's, the dev row read twice alike:
+
+    codegen_instructions_dev    289,762,106 -> 287,891,869   -0.65%
+    emit_instructions            45,195,370 ->  45,312,275   +116,905
+
+The emit row pays for the compare chain's extra lines, as the two-word
+predicates' did.
 
 ## 2026-09-24 — each declare line knows whether DECLARES calls it
 
