@@ -2756,19 +2756,17 @@ impl FnEmit {
     /// The function's body: what the emitters wrote, with the stack slots at
     /// the head of the entry block so each one dominates its uses.
     fn body(&self) -> String {
-        let reached = without_unreached_blocks(&self.out);
-        let out = reached.as_deref().unwrap_or(&self.out);
         if self.entry_allocas.is_empty() {
-            return out.to_string();
+            return self.out.clone();
         }
         let mut head = String::new();
-        let mut rest = out;
-        if let Some(end) = out.find('\n') {
-            let first = &out[..end];
+        let mut rest = self.out.as_str();
+        if let Some(end) = self.out.find('\n') {
+            let first = &self.out[..end];
             if first.ends_with(':') && !first.starts_with(' ') {
                 head.push_str(first);
                 head.push('\n');
-                rest = &out[end + 1..];
+                rest = &self.out[end + 1..];
             }
         }
         for slot in &self.entry_allocas {
@@ -3569,119 +3567,16 @@ fn group_indices_in<'s>(
         .filter(move |at| program.fns[*at].params.len() == arity)
 }
 
-/// A function body without the blocks its entry cannot reach, or `None` when
-/// every block is reached.
-///
-/// The emitter opens a block before it knows whether anything will branch to
-/// it. A dispatcher's `failN` is the common case: when every parameter's
-/// check was proved away, nothing jumps to the failure path, yet its blocks
-/// were written, parsed by clang and thrown away by its first pass. They were
-/// 13% of the decoder's lines.
-///
-/// A block is a label line and the lines under it; its successors are the
-/// `label %name` operands it writes. A `phi` in a kept block loses the entries
-/// that name a dropped block. When a `phi` cannot be read with certainty the
-/// body is returned untouched, which is always correct.
-fn without_unreached_blocks(out: &str) -> Option<String> {
-    let mut blocks: Vec<(&str, Vec<&str>)> = Vec::new();
-    for line in out.lines() {
-        match line.strip_suffix(':') {
-            Some(label) if !line.starts_with(' ') && !label.contains(' ') => {
-                blocks.push((label, Vec::new()))
-            }
-            _ => match blocks.last_mut() {
-                Some((_, lines)) => lines.push(line),
-                None => return None,
-            },
-        }
-    }
-    let at: crate::hash::Map<&str, usize> =
-        blocks.iter().enumerate().map(|(i, (label, _))| (*label, i)).collect();
-    let mut reached = vec![false; blocks.len()];
-    let mut work = vec![0usize];
-    reached[0] = true;
-    while let Some(b) = work.pop() {
-        for line in &blocks[b].1 {
-            let mut rest = *line;
-            while let Some(p) = rest.find("label %") {
-                rest = &rest[p + 7..];
-                let end = rest
-                    .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '.'))
-                    .unwrap_or(rest.len());
-                if let Some(&next) = at.get(&rest[..end]) {
-                    if !reached[next] {
-                        reached[next] = true;
-                        work.push(next);
-                    }
-                }
-            }
-        }
-    }
-    if reached.iter().all(|r| *r) {
-        return None;
-    }
-    let dropped: crate::hash::Set<&str> =
-        blocks.iter().zip(&reached).filter(|(_, r)| !**r).map(|((label, _), _)| *label).collect();
-    let mut kept = String::with_capacity(out.len());
-    for ((label, lines), _) in blocks.iter().zip(&reached).filter(|(_, r)| **r) {
-        kept.push_str(label);
-        kept.push_str(":\n");
-        for line in lines {
-            match line.contains(" = phi ") {
-                true => kept.push_str(&phi_without(line, &dropped)?),
-                false => kept.push_str(line),
-            }
-            kept.push('\n');
-        }
-    }
-    Some(kept)
-}
-
-/// A `phi` line without the entries whose block is in `dropped`. Each entry
-/// is `[ value, %label ]` with brackets balanced inside the value; anything
-/// else, or a `phi` left with no entry, answers `None`.
-fn phi_without(line: &str, dropped: &crate::hash::Set<&str>) -> Option<String> {
-    let open = line.find('[')?;
-    let (head, mut rest) = line.split_at(open);
-    let mut entries: Vec<&str> = Vec::new();
-    loop {
-        rest = rest.trim_start();
-        if !rest.starts_with('[') {
-            return None;
-        }
-        let mut depth = 0i32;
-        let mut end = None;
-        for (i, c) in rest.char_indices() {
-            match c {
-                '[' | '{' | '(' | '<' => depth += 1,
-                ']' | '}' | ')' | '>' => depth -= 1,
-                _ => {}
-            }
-            if depth == 0 {
-                end = Some(i);
-                break;
-            }
-        }
-        let end = end?;
-        entries.push(&rest[..=end]);
-        rest = rest[end + 1..].trim_start();
-        match rest.strip_prefix(',') {
-            Some(more) => rest = more,
-            None if rest.is_empty() => break,
-            None => return None,
-        }
-    }
-    let kept: Vec<&str> = entries
-        .into_iter()
-        .filter(|e| {
-            let label = e.trim_end_matches(']').trim_end().rsplit(", %").next().unwrap_or("");
-            !dropped.contains(label)
-        })
-        .collect();
-    if kept.is_empty() {
-        return None;
-    }
-    Some(format!("{head}{}", kept.join(", ")))
+/// Whether `text` writes a branch to `label`: `label %name` with the name
+/// ending there, so `fail1` is not answered by `label %fail10`.
+fn branches_to(text: &str, label: &str) -> bool {
+    let probe = format!("label %{label}");
+    text.match_indices(&probe).any(|(at, _)| {
+        !text[at + probe.len()..]
+            .bytes()
+            .next()
+            .is_some_and(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'.')
+    })
 }
 
 /// Every unquoted `@sym` that `text` writes, in one pass. A symbol runs from
@@ -4128,22 +4023,6 @@ mod the_prune_agrees_with_the_search {
         assert!(!kept.contains("@d_merge("), "a cycle nothing reaches was kept");
         assert!(!kept.contains("@d_pick("), "a cycle nothing reaches was kept");
         agree_on(&body, "d_entry", &[]);
-    }
-
-    /// A block nothing branches to goes, and a `phi` in a kept block loses
-    /// the entry that named it. A constant holding a comma stays one entry.
-    #[test]
-    fn a_block_nothing_branches_to_goes_with_its_phi_entry() {
-        let out = "entry:\n  br label %L1\nL2:\n  br label %L1\nL1:\n  \
-                   %x = phi %KValue [ { i64 0, i64 1 }, %entry ], [ %y, %L2 ]\n  \
-                   ret %KValue %x\n";
-        let kept = without_unreached_blocks(out).expect("a block goes");
-        assert_eq!(
-            kept,
-            "entry:\n  br label %L1\nL1:\n  %x = phi %KValue [ { i64 0, i64 1 }, %entry ]\n  \
-             ret %KValue %x\n"
-        );
-        assert_eq!(without_unreached_blocks("entry:\n  ret %KValue %x\n"), None);
     }
 
     /// The delimiter rule, which is the whole reason `names_symbol` exists:
@@ -6089,8 +5968,15 @@ impl<'a> Backend<'a> {
         // releasing it there emits a use LLVM's verifier refuses. The cells
         // an arm registers are its own: each arm starts from this watermark.
         let cells_before = f.lazy_cells.len();
+        // Whether an arm left a way into the next one. An arm whose every
+        // parameter check was proved away never branches to its `fail`, and
+        // then the arms after it and the failure path below are blocks nothing
+        // reaches: 13% of the decoder's emitted lines were such blocks, each
+        // parsed by clang only to be deleted by its first pass.
+        let mut open = true;
         for (k, decl) in decls.iter().enumerate() {
             let fail = format!("fail{k}");
+            let arm_at = f.out.len();
             f.lazy_cells.truncate(cells_before);
             f.versions.clear();
             f.origin_prefix = format!("{} at {}", crate::ast::frame_name(&decl.name), decl.file);
@@ -6110,9 +5996,17 @@ impl<'a> Backend<'a> {
                 }
             }
             self.emit_fn_body(&mut f, &decl.body)?;
+            if !branches_to(&f.out[arm_at..], &fail) {
+                open = false;
+                break;
+            }
             f.start_block(&fail);
         }
         f.lazy_cells.truncate(cells_before);
+        if !open {
+            let _ = writeln!(self.body, "{header}\n{}}}\n", f.body());
+            return Ok(());
+        }
         for i in 0..arity {
             let val = match self.escape.carries_ty(name, arity, i).is_some() {
                 true => format!("%x{i}s"),
