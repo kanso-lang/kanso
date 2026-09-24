@@ -4338,6 +4338,31 @@ fn literal_word(value: &str, n: usize) -> Option<&str> {
     Some(if n == 0 { a } else { b })
 }
 
+/// An `i1` saying both tags are the int tag, 0. A tag already known to be 0,
+/// a literal's or an unboxed parameter's, needs no compare, and two such
+/// need no `and`: `n + 1` used to write `icmp eq i64 0, 0` and an `and` for
+/// the literal on every addition.
+fn both_ints(f: &mut FnEmit, ta: &str, tb: &str) -> String {
+    let mut tests: Vec<String> = Vec::new();
+    for tag in [ta, tb] {
+        if tag != "0" {
+            let t = f.tmp();
+            f.line(&format!("{t} = icmp eq i64 {tag}, 0"));
+            tests.push(t);
+        }
+    }
+    match tests.as_slice() {
+        [] => "true".to_string(),
+        [one] => one.clone(),
+        [a, b] => {
+            let both = f.tmp();
+            f.line(&format!("{both} = and i1 {a}, {b}"));
+            both
+        }
+        _ => unreachable!("two tags make at most two tests"),
+    }
+}
+
 fn inline_tag(f: &mut FnEmit, value: &str) -> String {
     if let Some(word) = literal_word(value, 0) {
         return word.to_string();
@@ -7673,12 +7698,7 @@ impl<'a> Backend<'a> {
         let _ = span;
         let ta = inline_tag(f, a);
         let tb = inline_tag(f, b);
-        let ia = f.tmp();
-        f.line(&format!("{ia} = icmp eq i64 {ta}, 0"));
-        let ib = f.tmp();
-        f.line(&format!("{ib} = icmp eq i64 {tb}, 0"));
-        let both = f.tmp();
-        f.line(&format!("{both} = and i1 {ia}, {ib}"));
+        let both = both_ints(f, &ta, &tb);
         let fast = f.label();
         let slow = f.label();
         f.line(&format!("br i1 {both}, label %{fast}, label %{slow}"));
@@ -7891,12 +7911,7 @@ impl<'a> Backend<'a> {
         }
         let ta = inline_tag(f, a);
         let tb = inline_tag(f, b);
-        let ia = f.tmp();
-        f.line(&format!("{ia} = icmp eq i64 {ta}, 0"));
-        let ib = f.tmp();
-        f.line(&format!("{ib} = icmp eq i64 {tb}, 0"));
-        let both = f.tmp();
-        f.line(&format!("{both} = and i1 {ia}, {ib}"));
+        let both = both_ints(f, &ta, &tb);
         let fast = f.label();
         let slow = f.label();
         let merge = f.label();
@@ -8065,10 +8080,17 @@ impl<'a> Backend<'a> {
         let is_bytes = f.tmp();
         f.line(&format!("{is_bytes} = icmp eq i64 {ct}, 13"));
         let kt = inline_tag(f, key);
-        let is_int = f.tmp();
-        f.line(&format!("{is_int} = icmp eq i64 {kt}, 0"));
-        let both = f.tmp();
-        f.line(&format!("{both} = and i1 {is_bytes}, {is_int}"));
+        // a literal index's tag is known, and then the bytes test is the test
+        let both = match kt.as_str() {
+            "0" => is_bytes,
+            _ => {
+                let is_int = f.tmp();
+                f.line(&format!("{is_int} = icmp eq i64 {kt}, 0"));
+                let both = f.tmp();
+                f.line(&format!("{both} = and i1 {is_bytes}, {is_int}"));
+                both
+            }
+        };
         let fast = f.label();
         let slow = f.label();
         let merge = f.label();

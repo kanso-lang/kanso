@@ -2031,7 +2031,19 @@ dead_nomatch = row
 
 rows_b1nm = text/concat rows_b1uw [dead_nomatch]
 
-rows_b = text/concat rows_b1nm [compile_mem compile_mem_host]
+# A tag known to be the int tag is not compared. The mutation compares every
+# tag, and the spec's module compares 0 with 0 again.
+known_tag = row
+  "a known int tag compared"
+  true
+  "cargo test --release --test a_tag_known_to_be_int_is_not_compared"
+  "specs (unit, golden, differential)"
+  (breaking "a_known_int_tag_compared")
+  release
+
+rows_b1kt = text/concat rows_b1nm [known_tag]
+
+rows_b = text/concat rows_b1kt [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 
