@@ -1,0 +1,23 @@
+# `text/bytes` of a string borrows the string's bytes and writes only a
+# three-word header. `measure` makes a view, sits on no cycle of the call
+# graph, and only reads the view: a length, a byte through a helper that reads
+# it too, and a scan. So the native build writes the header in `measure`'s
+# frame and the arena never sees it, and sh_bytes reads 0 for the thousand
+# views, where each was an allocation of 32 bytes. JSON's escaper makes a
+# view this way for every string it writes.
+import "std/text"
+
+fn first_of bs
+  bs[1]
+
+fn measure s
+  bs = text/bytes s
+  length bs + first_of bs + text/find2_below bs 1 34 34 32
+
+fn walk 0 acc
+  print acc
+
+fn walk n acc
+  walk (n - 1) (acc + measure "ab\"c")
+
+pub play = walk 1000 0

@@ -1048,7 +1048,11 @@
 # 2026-09-24, kanso#1605 (number span, beat classified once, shipped std
 # modules skip their check), CI's row: library_instructions 119,486,941 ->
 # 85,824,404, a FALL of 33,662,537 (-28.1726%).
-library_instructions=85824404
+#
+# 2026-09-24 (kanso#1613): a byte view read in its frame keeps its header
+# there. library_instructions 85,824,404 -> 85,700,954, a FALL of 123,450
+# (-0.1438%).
+library_instructions=85700954
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

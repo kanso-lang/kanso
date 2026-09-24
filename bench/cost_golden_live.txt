@@ -1,5 +1,5 @@
-allocs=7534272
-alloc_bytes=660745152
+allocs=3344272
+alloc_bytes=526665152
 arena_blocks=2
 arena_peak_bytes=2097152
 cohort_frees=1
@@ -48,4 +48,4 @@ sh_str=468096
 sh_rec=214041600
 sh_buf=72048320
 sh_map=0
-sh_bytes=100612176
+sh_bytes=52176
