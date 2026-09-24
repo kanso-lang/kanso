@@ -12951,6 +12951,23 @@ in its module is reached from its function's entry. Watched red with the early
 close taken out: 22 blocks nothing reached, the first of them
 `d_list/fold_3`'s `fail2`. The ratchet carries the mutation.
 
+An unboxed parameter is read as its word. An integer parameter the escape
+analysis unboxes crosses as `i64 %xNr` and is boxed on entry, and every read
+of its tag or payload took the box back apart with an `extractvalue`, though
+the tag is 0 and the payload is the argument. `FnEmit` now records the two
+words a boxed parameter was built from, `inline_tag` and `inline_payload`
+answer from the record, and a box that nothing else reads is left out of the
+body. The corpus IR falls 1,480 -> 1,453 lines, the decoder's 5,406 -> 5,211
+and runbench's 26,033 -> 25,224. On this box the dev child tree reads
+144,052,165 against 144,536,585 and the release tree 713,344,643 against
+713,946,965, and `emit_ir_for` rises 197,598 (+0.65%) for the scan that finds
+an unread box. The two development terms share a satiation, so at their
+current ratios a per cent of dev codegen is worth about eight of emitting, and
+the trade comes out ahead. `tests/an_unboxed_parameter_is_read_as_its_word`
+asserts that no function in a module extracts a word from a boxed unboxed
+parameter. Watched red with the words unrecorded: nine reads took a parameter
+back apart. The ratchet carries the mutation.
+
 Two dev-tier leads were measured and declined. At `-O0` FastISel selects
 none of the corpus: it refuses `insertvalue` on `%KValue`, the aggregate
 argument and the aggregate return, so every function falls back to

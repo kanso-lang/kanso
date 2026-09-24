@@ -240,4 +240,4 @@
 defines=84
 calls=641
 branches=501
-lines=5406
+lines=5211
