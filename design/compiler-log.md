@@ -12028,3 +12028,29 @@ refuses text holding an underscore before it asks num-bigint.
 each case of a string, of its bytes and of a range cut out of longer bytes.
 On the unfixed tree native went red on ten lines and the interpreter on
 one, the separator.
+
+## 2026-09-24 — four ideas measured and declined
+
+Recorded so the same profile does not send anyone back to them.
+
+`find2_below` over a string, so the encoder skips `text/bytes s` for a clean
+string. Built as an experiment on the number span's branch: run allocations
+5,698,908 -> 4,915,728 and shared bytes 41,290,272 -> 22,493,952, with
+`arena_peak_bytes` unmoved at 5,050,064. The per-string view does not set the
+peak. What remains is about one per cent of runbench, and the change widens
+a public std/text function to strings, which is surface. Declined; the
+compiler page carries it as item 16.
+
+Caching each shipped module's compile by path, so an entry importing
+std/text through five libraries compiles it once. `compile_peak_bytes` went
+768,704 -> 1,030,180, because the cache holds every tree for the whole
+compile. Presizing the front end's hash maps failed the same way at +1.09%
+on the peak. Both declined; item 17.
+
+`noinline` on the escape body, so the encoder's leaf arms skip its frame:
+runbench 1,856,032,701 -> 1,879,000,521, +1.24%. The inlined scan is worth
+more than the frame.
+
+Fusing `length s[i]` over text into a range test. It is 690,000 calls on
+runbench, but the fusion would skip the very index walk the index shape is
+there to keep linear. Not built.
