@@ -21,6 +21,7 @@ thunk_escaped=0
 thunk_live_exit=0
 el_parses=0
 ryu_renders=0
+ryu_short=0
 utf8_bytes=1492
 find2_calls=0
 append_fast=194
