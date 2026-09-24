@@ -21,6 +21,7 @@ thunk_escaped=0
 thunk_live_exit=50
 el_parses=210177
 ryu_renders=191070
+ryu_short=191070
 utf8_bytes=24415348
 find2_calls=3109759
 append_fast=8834013
