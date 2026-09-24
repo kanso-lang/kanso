@@ -12987,6 +12987,15 @@ emitted lines fall 5,104 -> 5,063 and runbench's 25,117 -> 24,854.
 compares two constants, and watched red with every tag compared: five lines
 compared 0 with 0. The ratchet carries the mutation.
 
+The string filter reads names by number. It collected every unquoted `@name`
+in the body and the type tables into a hash set and asked the set about `sN`
+and `sN_lit`, which are the only names it ever asks about, and `intern` names
+string N `sN`. `named_strings` reads each `@s` name as a number into a pair of
+flags. On `kanso play`'s start-up for a one-line program the set was 23,334
+instructions, and `Backend::emit` falls 339,769 -> 325,775 on this box with
+the module unchanged. The mutation for the string spec now marks every string
+named, and watched red again: 239 strings and cells that nothing named.
+
 Two dev-tier leads were measured and declined. At `-O0` FastISel selects
 none of the corpus: it refuses `insertvalue` on `%KValue`, the aggregate
 argument and the aggregate return, so every function falls back to
