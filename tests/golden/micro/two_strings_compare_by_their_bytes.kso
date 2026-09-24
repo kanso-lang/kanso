@@ -1,0 +1,29 @@
+# `==` and `!=` between two strings answer on length and bytes, and the
+# runtime asks the pointer first because a one-character slice and a literal
+# of the same character are usually the same string. These pairs are built at
+# run time so no pass can answer them early: a prefix on either side, the
+# empty string against itself and against a character, the same bytes behind
+# two pointers, a multi-byte character against its neighbour, and one byte
+# different at the end. A length check dropped from the pointer path answers
+# the shorter-on-the-left prefix as equal.
+import "std/text"
+
+fn cut s from to
+  text/slice s from to
+
+fn asked a b
+  "{a == b} {a != b}"
+
+source = "abcabcé€x"
+
+pub play =
+  print (asked (cut source 1 1) "a")
+  >> print (asked (cut source 1 2) "a")
+  >> print (asked (cut source 1 0) "")
+  >> print (asked (cut source 1 3) (cut source 4 6))
+  >> print (asked (cut source 7 8) "é€")
+  >> print (asked (cut source 7 7) "è")
+  >> print (asked (cut source 1 3) "abd")
+  >> print (asked "" (cut source 2 1))
+  >> print (asked (cut source 1 1) (cut source 1 2))
+  >> print (asked (cut source 2 1) (cut source 1 1))

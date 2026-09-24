@@ -11468,3 +11468,35 @@ start-up 866,580 and emit 43,320,508. The next CI round replaces them.
 
 CI's rows over kanso#1593 and main: start-up 866,580 and emit 43,320,508, as
 summed, and the dev row 359,558,108, read twice alike, 77,592 above the sum.
+
+## 2026-09-24 — two strings compare without opening an equality generation
+
+`==` and `!=` reach the runtime as `k_cmp`, which sent every pair through
+`k_eq`. That opens a cycle-tracking generation, since a record can hold
+itself, and then walks a dozen tag tests: an opaque check on each side, two
+subtype tests, three thunk tests and the bytes-against-list pair. Only then
+does it reach the length and byte compare a string needs. std/regexp asks
+this at every step of a literal: `text/slice s at at == c`, one character
+against the pattern's. On runbench's scan that is 91,378 questions, at about
+ninety instructions each.
+
+`k_cmp` now answers two strings asked `==` or `!=` itself: the same pointer,
+or the same length and bytes. A one-character slice comes from `k_str_n`'s
+cache and a literal is permanent, so the equal case is usually the pointer.
+Anything that is not two strings takes the old road, subtypes and thunks
+included, so the two cannot disagree on a pair they both see.
+
+Measured on this container, in the gate's environment:
+
+    the scan phase alone (split/total 428)   88,511,374 ->    81,593,763
+    work_runbench                         1,856,032,715 -> 1,849,115,104   -0.37%
+
+The allocation veins and the lazy tier do not move. The instruction rows are
+CI's.
+
+`tests/golden/micro/two_strings_compare_by_their_bytes.kso` builds its pairs
+at run time: a prefix on either side, the empty string against itself and
+against a character, equal bytes behind two pointers, multi-byte text and a
+last-byte difference. With the length check dropped from the new path, the
+native engine answered `"a" == "ab"` true and the interpreter false, so the
+corpus went red on the engine that changed.
