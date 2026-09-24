@@ -12051,4 +12051,7 @@ panel quoting lib/json/number.kso still showed `scan_at`, so it now quotes
 runtime corpus, `a_list_is_not_bytes_for_number_span`. And the ratchet's
 mutation for a module rewritten twice anchored on the `let diags =` line the
 skip replaced with a `match`, so it now anchors on the `false =>` arm and
-inserts after the `};` that closes the match.
+inserts after the `};` that closes the match. The second round found the
+two book samples that print every counter, ch10's `counters` and ch12's
+`fused`, one line short: each now carries `number_spans=0`, and their panels
+were rewritten from the samples.
