@@ -11419,3 +11419,47 @@ on both engines. Past 64 bits it requires the interpreter's answer and the
 native engine's refusal by name. It went red with the fast path widened to
 twenty digits. The identifier and line changes are exercised by every
 program the suite compiles.
+
+The same branch then took the allocation profile past the lexer. The
+allocator's callers were attributed back through the generic frames (vector
+growth, hash-table growth, `String` clones) to the first compiler function
+above them. Nine places were allocating a container that is filled once and
+dropped, and most of them held a single entry:
+
+- the spacing check built a zeroed `bool` row per line to mark effect-type
+  runs, which almost no line holds. It is now empty until one is found.
+- the unused-line check built a vector of join leaves per statement. One is
+  now cleared and refilled.
+- the alias canonicaliser kept a `Vec` per declaration site and a `HashSet`
+  per bare name, to learn whether a name had exactly one target. The first
+  entry now lives in the map, and the set is a three-state count.
+- `qualify` kept its bound names as `String`s and cloned the whole list for
+  every scope and lambda. They are `Name`s now, which hold a short name
+  inline. Its owned-name keys became `Name`s too, and each qualified
+  spelling, which it composed twice (once as a key, once for the
+  declaration), is composed once and moved.
+- trmc kept three vectors per dispatch group before two tests that turn
+  nearly every group away. The tests now read the arms in place.
+- the module's set of every declared name held `String`s. It holds `Name`s.
+- the demand pass built a zeroed discard row per group. A group with no
+  wildcard now has no entry, which reads the same at the one place it is
+  consulted.
+- fusion's two name tables held `String` pairs. They hold `Name` pairs.
+- the shadow resolver started each declaration with an empty vector of
+  locals, and built a hash set per closed scope to find shadowed bindings.
+  One vector now serves the file, and the few later bindings in a scope are
+  scanned.
+
+Measured on this container, the lexer's rows above as the base:
+
+    compile_instructions     35,022,168 ->  33,798,765   -3.49%
+    entry_instructions      124,752,107 -> 120,510,858   -3.40%
+    library_instructions    125,307,971 -> 121,070,327   -3.38%
+    startup_instructions        871,732 ->     864,859   -0.79%
+    compile_allocs               22,567 ->      15,341   -32.02%
+
+Over main, the whole branch takes compile_allocs from 27,313 to 15,341,
+-43.83%, and compile_instructions from 36,020,748 to 33,798,765, -6.17%.
+The allocation golden moves here and the instruction rows are CI's. Every
+spec in the suite passes except the wasm engine's, which needs a
+`docs/kanso.wasm` this container has no target to build; CI builds it.

@@ -176,29 +176,41 @@ pub fn rewrite(program: &mut Program) {
     // accumulated in `new_fns` and extended on at the end, which is what makes
     // the borrow hold for the whole walk. Cloning a name per declaration to
     // look one up was 990 blocks of the front end's allocations.
-    let mut groups: HashMap<(&str, usize), Vec<usize>> = HashMap::default();
+    //
+    // A group's first arm is kept in its entry and only the second and later
+    // reach the vector, and the two tests that turn nearly every group away
+    // read the arms in place: a `Vec` of indices, one of arms and one of
+    // counter flags per group was 1,036 of lib/json's allocations, for the
+    // handful of groups that get past the counter test.
+    let mut groups: HashMap<(&str, usize), (usize, Vec<usize>)> = HashMap::default();
     for (i, decl) in program.fns.iter().enumerate() {
-        groups.entry((decl.name.as_str(), decl.params.len())).or_default().push(i);
+        match groups.entry((decl.name.as_str(), decl.params.len())) {
+            std::collections::hash_map::Entry::Occupied(mut o) => o.get_mut().1.push(i),
+            std::collections::hash_map::Entry::Vacant(v) => {
+                v.insert((i, Vec::new()));
+            }
+        }
     }
     let mut new_fns: Vec<FnDecl> = Vec::new();
-    for ((name, arity), idxs) in &groups {
+    for ((name, arity), (first, rest)) in &groups {
         if crate::ast::has_slash(name) || *arity == 0 {
             continue;
         }
-        let decls: Vec<&FnDecl> = idxs.iter().map(|i| &program.fns[*i]).collect();
-        if decls.iter().any(|d| d.synthetic) {
+        let arms_of = || std::iter::once(first).chain(rest).map(|i| &program.fns[*i]);
+        if arms_of().any(|d| d.synthetic) {
             continue;
         }
         // the counter positions: where some arm dispatches on an integer
         // literal. The wrapper ascribes those, so only integer arguments
         // ever take the loop; without one, nothing bounds the descent and
         // the group is left alone.
-        let counter: Vec<bool> = (0..*arity)
-            .map(|i| decls.iter().any(|d| matches!(d.params.get(i), Some(Pattern::IntLit(..)))))
-            .collect();
-        if !counter.iter().any(|c| *c) {
+        let counter_at =
+            |i: usize| arms_of().any(|d| matches!(d.params.get(i), Some(Pattern::IntLit(..))));
+        if !(0..*arity).any(counter_at) {
             continue;
         }
+        let decls: Vec<&FnDecl> = arms_of().collect();
+        let counter: Vec<bool> = (0..*arity).map(counter_at).collect();
         let arms: Option<Vec<Arm>> = decls.iter().map(|d| classify(d, name, *arity)).collect();
         let Some(arms) = arms else { continue };
         let mut ops = arms.iter().filter_map(|a| match a {

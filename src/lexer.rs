@@ -1048,9 +1048,12 @@ fn required_gap(prev: &Tok, next: &Tok) -> usize {
 /// side, so the run is read from the colon an annotation starts with,
 /// walking over a slice prefix — `:[]<int>effect` — on the way. The marks
 /// are on the second token of each pair, the one the diagnostic points at.
+// Empty when the line holds no effect type, which is nearly every line: the
+// vector was a zeroed allocation per line lexed, 799 of them on lib/json, to
+// answer `false` at every position.
 fn effect_type_runs(tokens: &[(Tok, Span, u32)]) -> Vec<bool> {
     let n = tokens.len();
-    let mut tight = vec![false; n];
+    let mut tight = Vec::new();
     let tok = |k: usize| tokens.get(k).map(|(t, _, _)| t);
     for start in 0..n {
         if !matches!(tok(start), Some(Tok::Colon)) {
@@ -1064,6 +1067,9 @@ fn effect_type_runs(tokens: &[(Tok, Span, u32)]) -> Vec<bool> {
         }
         if !matches!(tok(open), Some(Tok::Op("<"))) {
             continue;
+        }
+        if tight.is_empty() {
+            tight = vec![false; n];
         }
         tight[open] = true;
         let mut depth = 0i32;
@@ -1095,7 +1101,7 @@ fn validate_spacing(lexed_line: &LexedLine, line: usize, diags: &mut Vec<Diagnos
         let (prev, _, prev_end) = &pair[0];
         let (next, next_span, _) = &pair[1];
         let gap = (next_span.col as usize).saturating_sub(*prev_end as usize);
-        if effect_tight[at + 1] {
+        if effect_tight.get(at + 1) == Some(&true) {
             if gap != 0 {
                 diags.push(Diagnostic::new(
                     "formatting",

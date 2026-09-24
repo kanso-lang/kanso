@@ -1038,6 +1038,29 @@ fn bound_in_expr<'a>(e: &'a ast::Expr, out: &mut crate::hash::Set<&'a str>) {
 /// have written before trusting the entry.
 pub type Rewrites = crate::hash::Map<(u32, u32), Name>;
 
+/// A declaration's source position and arity, which a synthetic bare alias
+/// shares with the qualified declaration it stands for.
+type Site<'a> = (&'a str, usize, usize, usize);
+
+/// The qualified declarations a bare name could stand for, counted only as far
+/// as the one question asked of them: exactly one, or not. A set per name was
+/// an allocation for every bare name with a twin, to hold a single entry.
+enum Targets<'a> {
+    None,
+    One(&'a str),
+    Many,
+}
+
+impl<'a> Targets<'a> {
+    fn add(&mut self, name: &'a str) {
+        *self = match *self {
+            Targets::None => Targets::One(name),
+            Targets::One(was) if was == name => Targets::One(was),
+            _ => Targets::Many,
+        };
+    }
+}
+
 pub fn canonicalize_bare_aliases(program: &mut ast::Program) -> Rewrites {
     use crate::hash::{Map as HashMap, Set as HashSet};
     // A synthetic bare alias and the qualified declaration it stands for are
@@ -1045,34 +1068,38 @@ pub fn canonicalize_bare_aliases(program: &mut ast::Program) -> Rewrites {
     // them. Finding the twin used to be a scan of every declaration for every
     // synthetic one — quadratic in the program, with a `format!` per pair
     // inside the inner loop.
-    let mut at_site: HashMap<(&str, usize, usize, usize), Vec<&str>> =
+    // A site nearly always holds one declaration, so the first is kept in the
+    // entry and only a second reaches the vector: a `Vec` per site was an
+    // allocation for each of lib/json's non-synthetic declarations.
+    let mut at_site: HashMap<Site, (&str, Vec<&str>)> =
         HashMap::with_capacity_and_hasher(program.fns.len(), Default::default());
     for twin in &program.fns {
         if !twin.synthetic {
-            at_site
-                .entry((
-                    &twin.file,
-                    twin.span.line as usize,
-                    twin.span.col as usize,
-                    twin.params.len(),
-                ))
-                .or_default()
-                .push(twin.name.as_str());
+            let key =
+                (&*twin.file, twin.span.line as usize, twin.span.col as usize, twin.params.len());
+            match at_site.entry(key) {
+                std::collections::hash_map::Entry::Occupied(mut o) => {
+                    o.get_mut().1.push(twin.name.as_str())
+                }
+                std::collections::hash_map::Entry::Vacant(v) => {
+                    v.insert((twin.name.as_str(), Vec::new()));
+                }
+            }
         }
     }
-    let mut by_name: HashMap<&str, (bool, HashSet<&str>)> =
+    let mut by_name: HashMap<&str, (bool, Targets)> =
         HashMap::with_capacity_and_hasher(program.fns.len(), Default::default());
     for d in &program.fns {
         if ast::has_slash(&d.name) {
             continue;
         }
-        let entry = by_name.entry(d.name.as_str()).or_insert((true, HashSet::default()));
+        let entry = by_name.entry(d.name.as_str()).or_insert((true, Targets::None));
         entry.0 &= d.synthetic;
         if d.synthetic {
-            if let Some(twins) =
+            if let Some((first, rest)) =
                 at_site.get(&(&d.file, d.span.line as usize, d.span.col as usize, d.params.len()))
             {
-                for name in twins {
+                for name in std::iter::once(first).chain(rest) {
                     // `qual/name`, asked without building the needle. A
                     // `format!("/{}", d.name)` here cost a String per
                     // synthetic declaration, which is most of what this pass
@@ -1080,7 +1107,7 @@ pub fn canonicalize_bare_aliases(program: &mut ast::Program) -> Rewrites {
                     let qualified =
                         name.strip_suffix(d.name.as_str()).is_some_and(|qual| qual.ends_with('/'));
                     if qualified {
-                        entry.1.insert(name);
+                        entry.1.add(name);
                     }
                 }
             }
@@ -1108,11 +1135,11 @@ pub fn canonicalize_bare_aliases(program: &mut ast::Program) -> Rewrites {
     }
     let aliases: HashMap<String, String> = by_name
         .into_iter()
-        .filter(|(name, (all_synthetic, targets))| {
-            *all_synthetic && targets.len() == 1 && !skip.contains(*name)
-        })
-        .map(|(bare, (_, targets))| {
-            (bare.to_string(), (*targets.iter().next().expect("one target")).to_string())
+        .filter_map(|(bare, (all_synthetic, targets))| match targets {
+            Targets::One(target) if all_synthetic && !skip.contains(bare) => {
+                Some((bare.to_string(), target.to_string()))
+            }
+            _ => None,
         })
         .collect();
     if aliases.is_empty() {
@@ -1272,7 +1299,7 @@ pub fn fuse_enumerable(program: &mut ast::Program) {
     if std::env::var_os("KANSO_NO_FUSE").is_some() {
         return;
     }
-    let mut shorts: crate::hash::Map<String, String> = crate::hash::Map::default();
+    let mut shorts: crate::hash::Map<Name, Name> = crate::hash::Map::default();
     // The set is asked `contains` and then dropped, so it borrows. Owning the
     // short names cost a `String` apiece for a table read once and thrown away.
     // `shorts` below still owns: it outlives the borrow the rewrite mutates
@@ -1286,7 +1313,7 @@ pub fn fuse_enumerable(program: &mut ast::Program) {
     for d in &program.fns {
         let short = ast::split_qual(&d.name).map(|(_, s)| s).unwrap_or(&d.name);
         if std_names.contains(short) {
-            shorts.insert(d.name.clone(), short.to_string());
+            shorts.insert(Name::new(&d.name), Name::new(short));
         }
     }
     // the fold the rewrite names: a real decl in this program, whichever
@@ -1307,15 +1334,13 @@ pub fn fuse_enumerable(program: &mut ast::Program) {
     // file_under), resolved to whatever qualified spelling the module
     // graph produced — privacy is a check-time property, and fusion runs
     // after the check
-    let helpers: crate::hash::Map<String, String> = program
+    let helpers: crate::hash::Map<Name, Name> = program
         .fns
         .iter()
         .filter(|d| d.file.starts_with("std/list") && !d.synthetic)
         .map(|d| {
-            let short = ast::split_qual(&d.name)
-                .map(|(_, s)| s.to_string())
-                .unwrap_or_else(|| d.name.clone());
-            (short, d.name.clone())
+            let short = ast::split_qual(&d.name).map_or(d.name.as_str(), |(_, s)| s);
+            (Name::new(short), Name::new(&d.name))
         })
         .collect();
     let mut counter = 0usize;
@@ -1338,7 +1363,7 @@ pub fn fuse_enumerable(program: &mut ast::Program) {
 /// adapter application and whose name is used exactly once — as the
 /// collection argument of a later enumerable call — inlines back into the
 /// chain before fusion looks. The binding was a rename, not an escape.
-fn inline_single_use_chains(body: &mut Vec<ast::Stmt>, shorts: &crate::hash::Map<String, String>) {
+fn inline_single_use_chains(body: &mut Vec<ast::Stmt>, shorts: &crate::hash::Map<Name, Name>) {
     use ast::{Expr, Stmt};
     const ADAPTERS: [&str; 5] = ["drop", "map", "reject", "select", "take"];
     let mut idx = 0;
@@ -1400,7 +1425,7 @@ fn count_ident_uses(e: &ast::Expr, name: &str, uses: &mut usize) {
 }
 
 /// Is the sole use of `name` the collection argument of an enumerable call?
-fn coll_arg_use(e: &ast::Expr, name: &str, shorts: &crate::hash::Map<String, String>) -> bool {
+fn coll_arg_use(e: &ast::Expr, name: &str, shorts: &crate::hash::Map<Name, Name>) -> bool {
     if let ast::Expr::App { head, args, .. } = e {
         if let ast::Expr::Ident(h, _, _) = head.as_ref() {
             if shorts.contains_key(h.as_str()) {
@@ -1480,9 +1505,9 @@ fn substitute_ident(e: &mut ast::Expr, name: &str, replacement: &ast::Expr) {
 
 fn fuse_expr(
     e: &mut ast::Expr,
-    shorts: &crate::hash::Map<String, String>,
+    shorts: &crate::hash::Map<Name, Name>,
     fold_name: &str,
-    helpers: &crate::hash::Map<String, String>,
+    helpers: &crate::hash::Map<Name, Name>,
     counter: &mut usize,
 ) {
     use ast::Expr;
@@ -1555,9 +1580,9 @@ fn fuse_expr(
 /// is one tag test per chain and a second copy of the chain's code.
 fn try_fuse_piped(
     e: &ast::Expr,
-    shorts: &crate::hash::Map<String, String>,
+    shorts: &crate::hash::Map<Name, Name>,
     fold_name: &str,
-    helpers: &crate::hash::Map<String, String>,
+    helpers: &crate::hash::Map<Name, Name>,
     counter: &mut usize,
 ) -> Option<ast::Expr> {
     use ast::{Expr, Pattern, Stmt};
@@ -1631,9 +1656,9 @@ fn try_fuse_piped(
 
 fn try_fuse(
     e: &ast::Expr,
-    shorts: &crate::hash::Map<String, String>,
+    shorts: &crate::hash::Map<Name, Name>,
     fold_name: &str,
-    helpers: &crate::hash::Map<String, String>,
+    helpers: &crate::hash::Map<Name, Name>,
     counter: &mut usize,
 ) -> Option<ast::Expr> {
     use ast::Expr;
@@ -1876,7 +1901,7 @@ fn qualify(
     // asked for later, because `declared_names` merges the two namespaces and
     // a caller downstream cannot tell them apart from the name alone.
     let type_names: crate::hash::Set<&str> = dep.types.iter().map(|t| t.name.as_str()).collect();
-    let owned: crate::hash::Map<String, Owned> = check::declared_names(dep)
+    let owned: crate::hash::Map<Name, Owned> = check::declared_names(dep)
         .into_iter()
         .filter(|n| !getters.contains(*n))
         .filter(|n| !ast::has_slash(n))
@@ -1886,7 +1911,7 @@ fn qualify(
                 true => ast::bare_space(qual, n),
                 false => ast::qualified(qual, n),
             };
-            (n.to_string(), Owned { spelling, a_type: type_names.contains(n) })
+            (Name::new(n), Owned { spelling, a_type: type_names.contains(n) })
         })
         .collect();
     // The prelude's own declarations go, rather than travelling under this
@@ -1989,8 +2014,10 @@ fn qualify(
                 // from this module's own dependency and keeps its canonical
                 // spelling — it still enrolls, it just does not get a second
                 // prefix.
+                // The key is already that spelling, so it moves rather than
+                // being composed a second time.
                 if !ast::has_slash(&f.name) {
-                    f.name = ast::qualified(qual, &f.name);
+                    f.name = key;
                 }
             }
         }
@@ -2261,21 +2288,22 @@ fn mentions_in_expr<'a>(e: &'a ast::Expr, out: &mut crate::hash::Set<&'a str>) {
 /// function. Field getters make this reachable — `left` is a declared name
 /// the moment some type has that field — where before the shadow ban made
 /// the case impossible to write.
-fn pattern_binds(p: &ast::Pattern, out: &mut Vec<String>) {
+// The names are `Name`s so that a short one is copied rather than allocated:
+// a `String` per binding, and another per binding every time a scope cloned
+// the list, was the largest source of allocations in `qualify`.
+fn pattern_binds(p: &ast::Pattern, out: &mut Vec<Name>) {
     match p {
-        ast::Pattern::Var(name, _) | ast::Pattern::Annotated { name, .. } => {
-            out.push(name.to_string())
-        }
+        ast::Pattern::Var(name, _) | ast::Pattern::Annotated { name, .. } => out.push(name.clone()),
         ast::Pattern::Ctor { fields, whole, .. } => {
             if let Some(named) = whole {
-                out.push(named.0.to_string());
+                out.push(named.0.clone());
             }
             for f in fields {
                 pattern_binds(f, out);
             }
         }
         ast::Pattern::Keyed { entries, .. } => {
-            out.extend(entries.iter().map(|e| e.bind_name.clone()))
+            out.extend(entries.iter().map(|e| Name::new(&e.bind_name)))
         }
         _ => {}
     }
@@ -2298,7 +2326,7 @@ struct Owned {
     a_type: bool,
 }
 
-fn rewrite_pattern(p: &mut ast::Pattern, owned: &crate::hash::Map<String, Owned>) {
+fn rewrite_pattern(p: &mut ast::Pattern, owned: &crate::hash::Map<Name, Owned>) {
     match p {
         ast::Pattern::Ctor { ty, fields, .. } => {
             if let Some(o) = owned.get(ty.as_str()).filter(|o| o.a_type) {
@@ -2317,8 +2345,8 @@ fn rewrite_pattern(p: &mut ast::Pattern, owned: &crate::hash::Map<String, Owned>
 
 fn rewrite_stmt(
     stmt: &mut ast::Stmt,
-    owned: &crate::hash::Map<String, Owned>,
-    bound: &mut Vec<String>,
+    owned: &crate::hash::Map<Name, Owned>,
+    bound: &mut Vec<Name>,
 ) {
     match stmt {
         ast::Stmt::Bind { expr, pattern } => {
@@ -2331,18 +2359,14 @@ fn rewrite_stmt(
     }
 }
 
-fn rewrite_scope(
-    stmts: &mut [ast::Stmt],
-    owned: &crate::hash::Map<String, Owned>,
-    bound: &[String],
-) {
+fn rewrite_scope(stmts: &mut [ast::Stmt], owned: &crate::hash::Map<Name, Owned>, bound: &[Name]) {
     let mut inner = bound.to_vec();
     for stmt in stmts {
         rewrite_stmt(stmt, owned, &mut inner);
     }
 }
 
-fn rewrite_expr(e: &mut ast::Expr, owned: &crate::hash::Map<String, Owned>, bound: &[String]) {
+fn rewrite_expr(e: &mut ast::Expr, owned: &crate::hash::Map<Name, Owned>, bound: &[Name]) {
     match e {
         ast::Expr::Guard { cond, early, rest, .. } => {
             rewrite_expr(cond, owned, bound);
@@ -2394,7 +2418,7 @@ fn rewrite_expr(e: &mut ast::Expr, owned: &crate::hash::Map<String, Owned>, boun
         }
         ast::Expr::Lambda { params, body, .. } => {
             let mut inner = bound.to_vec();
-            inner.extend(params.iter().map(|(n, _)| n.clone()));
+            inner.extend(params.iter().map(|(n, _)| Name::new(n)));
             rewrite_expr(body, owned, &inner);
         }
         ast::Expr::List(items, _) => {
@@ -3797,15 +3821,18 @@ fn compile_module_loaded(
     for (_, _, program) in &mut parsed {
         open_qualified_doors(program, &surfaced, &exports);
     }
-    let mut all_names = crate::hash::Set::default();
+    // Names rather than Strings: this set is only ever read back as `&str`,
+    // and a short name is held inline where a String was an allocation for
+    // every declaration in the build.
+    let mut all_names: crate::hash::Set<Name> = crate::hash::Set::default();
     let mut all_markers = crate::hash::Set::default();
     let mut all_type_names = crate::hash::Set::default();
     for (_, _, program) in &parsed {
-        all_names.extend(check::declared_names(program).into_iter().map(String::from));
+        all_names.extend(check::declared_names(program).into_iter().map(Name::new));
         all_markers.extend(check::marker_names(program));
         all_type_names.extend(program.types.iter().map(|t| t.name.clone()));
     }
-    all_names.extend(check::declared_names(&dep_program).into_iter().map(String::from));
+    all_names.extend(check::declared_names(&dep_program).into_iter().map(Name::new));
     all_markers.extend(check::marker_names(&dep_program));
     all_type_names.extend(dep_program.types.iter().map(|t| t.name.clone()));
     let shadowable: crate::hash::Set<String> = dep_program
@@ -3822,7 +3849,7 @@ fn compile_module_loaded(
         // shadow check only ever reads.
         let extern_globals: crate::hash::Set<&str> = {
             let own = check::declared_names(program);
-            all_names.iter().map(String::as_str).filter(|n| !own.contains(n)).collect()
+            all_names.iter().map(Name::as_str).filter(|n| !own.contains(n)).collect()
         };
         let mut diags = check::resolve_markers(program, &all_markers);
         diags.extend(check::check_typesets(program, &all_type_names));
