@@ -935,6 +935,29 @@ fn lld_links_lto() -> bool {
     answer
 }
 
+/// The arguments that put a link in lld, or none.
+///
+/// lld links on every hardware thread by default, which a user's build wants
+/// and a measurement cannot have: under callgrind the thread pool's
+/// scheduling lands in the count, and the codegen rows read 434,345,526 and
+/// 434,337,763 on two CI runs of one tree, and 1,677,317,287 and 1,677,792,392
+/// on release. Three dev links here read 434,957,073, 434,928,291 and
+/// 434,926,291 on the default and 434,600,869 three times with `--threads=1`.
+/// `KANSO_LTO_JOBS` is already how a measurement asks for one LTO job, so it
+/// sets lld's thread count as well.
+fn lld_args() -> Vec<String> {
+    if !(cfg!(target_os = "linux") && lld_links_lto()) {
+        return Vec::new();
+    }
+    let mut args = vec!["-fuse-ld=lld".to_string()];
+    if let Ok(n) = std::env::var("KANSO_LTO_JOBS") {
+        if !n.is_empty() {
+            args.push(format!("-Wl,--threads={n}"));
+        }
+    }
+    args
+}
+
 fn lld_probe() -> bool {
     let dir = std::env::temp_dir();
     let ll = dir.join(format!("kanso_lld_probe_{}.ll", pid_tag()));
@@ -1085,11 +1108,7 @@ fn release_clang(stem: &str, ll_path: &str) -> std::io::Result<std::process::Exi
         })
         .arg("-flto")
         // lld where it can take the LTO link: `lld_links_lto` says why.
-        .args(if cfg!(target_os = "linux") && lld_links_lto() {
-            &["-fuse-ld=lld"][..]
-        } else {
-            &[][..]
-        })
+        .args(lld_args())
         // Eight times clang's default of 250. The run program spends one
         // instruction in ten on `push`, `pop` and `ret` -- 215,229,225 of
         // 2,185,625,151 in the binary's own code -- and the functions paying
@@ -1212,11 +1231,7 @@ fn dev_clang(stem: &str, ll_path: &str) -> std::io::Result<std::process::ExitSta
         // codegen corpus GNU ld spent 85,738,887 instructions and lld
         // 45,154,514. The same probe decides, since an lld that can take an
         // LTO link can take a plain one.
-        .args(if cfg!(target_os = "linux") && lld_links_lto() {
-            &["-fuse-ld=lld"][..]
-        } else {
-            &[][..]
-        })
+        .args(lld_args())
         .arg("-Wno-override-module")
         .arg("-o")
         .arg(stem)

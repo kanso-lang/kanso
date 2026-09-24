@@ -10997,7 +10997,17 @@ probe decides wherever clang can find lld. The ratchet's toolchain installs
 the same packages as the cost-goldens job, which
 `the_ratchet_carries_what_its_gates_need` requires.
 
-**CI's rows**, taken into the goldens:
+**lld links on every thread unless told not to, and a count cannot have
+that.** Two CI runs of one tree read the dev row 434,345,526 and 434,337,763
+and the release row 1,677,317,287 and 1,677,792,392: the thread pool's
+scheduling lands in callgrind's count. Three dev links on this container read
+434,957,073, 434,928,291 and 434,926,291 on the default and 434,600,869 three
+times with `--threads=1`. `KANSO_LTO_JOBS`, which the gates already set to ask
+for one LTO job, now sets lld's thread count too. A user's build keeps every
+thread.
+
+**CI's rows**, from the first run, taken into the goldens and replaced by the
+next round's:
 
     codegen_instructions_dev      473,933,874 ->   434,345,526   -8.35%
     codegen_instructions_release 1,751,097,561 -> 1,677,317,287   -4.21%
