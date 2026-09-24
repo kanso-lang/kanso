@@ -10924,4 +10924,14 @@ puts it on PATH and asserts the version, as it does for clang.
 and requires lld's `Linker:` stamp in it exactly when lld can take the link.
 It went red with `-fuse-ld=bfd` in the flag's place.
 
+**The dev tier links with it too.** Its link has no LTO in it, and GNU ld
+still spent 85,738,887 instructions on the codegen corpus against lld's
+45,154,514:
+
+    codegen, dev tier         475,880,595 ->   435,319,658   -8.52%   (this container)
+
+The same probe decides, since an lld that can take an LTO link can take a
+plain one. The spec builds both tiers and went red on each with
+`-fuse-ld=bfd` in that tier's place.
+
 CI's rows go into the goldens.

@@ -1203,6 +1203,15 @@ fn dev_clang(stem: &str, ll_path: &str) -> std::io::Result<std::process::ExitSta
     let runtime_obj = cached_runtime_object("dev", &["-O2"])?;
     std::process::Command::new("clang")
         .arg("-O0")
+        // The dev link has no LTO in it, and lld still halves it: on the
+        // codegen corpus GNU ld spent 85,738,887 instructions and lld
+        // 45,154,514. The same probe decides, since an lld that can take an
+        // LTO link can take a plain one.
+        .args(if cfg!(target_os = "linux") && lld_links_lto() {
+            &["-fuse-ld=lld"][..]
+        } else {
+            &[][..]
+        })
         .arg("-Wno-override-module")
         .arg("-o")
         .arg(stem)
