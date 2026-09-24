@@ -11307,3 +11307,21 @@ read 434,007,475 and then 434,007,432 in one CI job, and here the lld link was
 the process that moved, by 43 instructions: it links the object the driver
 names with a random suffix. The replay names that object itself, so this
 change carries kanso#1592 and supersedes it.
+
+CI's rows over main with kanso#1589 and kanso#1590, where both codegen tiers
+read the same number twice in one job:
+
+    codegen_instructions_dev       402,338,337 ->   402,356,485
+    codegen_instructions_release 1,643,423,398 -> 1,643,086,293
+
+lld lays the linked benchmarks out differently from GNU ld. Each benchmark's
+`.text` grows six bytes, and each one's work falls by between 20 and 116
+instructions: runbench's work goes from 1,813,491,634 to 1,813,491,551, and
+its text from 390,914 to 390,920 bytes. The text rows for every benchmark in
+bench/text_golden.txt are this runner's sitting: jsonbench text=215816,
+encodebench text=234920, oneshot text=224136, basket text=219992, widebench
+text=241384, deepbench text=203064, escapebench text=188504, pendbench
+text=211928, indexbench text=188312, scanbench text=307064, digestbench
+text=221192, readbench text=188872, livebench text=224968 and runbench
+text=390920. Summed, the `text` counter goes from 3,260,988 to 3,261,072. The
+objective does not weigh machine-code size.
