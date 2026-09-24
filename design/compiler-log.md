@@ -11236,3 +11236,10 @@ The next CI round, with the dev text made when the compiler is built:
 
 Against main's 870,779 and 43,339,387 both rows now fall, and the floor is
 banked on them.
+
+Over main with kanso#1589 and kanso#1590, the dev row read 431,093,381 twice
+in one job. That is 75,799 above the 431,017,582 taken before the merge, and
+it is the link: `codegen_instructions_dev` now includes ld linking the
+runtime those two changes grew. The floor was banked on the earlier row
+before CI had measured the merge, and it is set again on this one, which is
+still above main's.
