@@ -3724,9 +3724,16 @@ impl<'a> Interp<'a> {
                         })
                     }
                 };
-                Ok(match text.parse::<BigInt>() {
-                    Ok(n) => Value::Int(n),
-                    Err(_) => err_value(
+                // num-bigint reads `_` as a digit separator, which neither
+                // `to_float` nor the native parse does, so "1_000" was an
+                // integer on this engine alone.
+                let parsed = match text.contains('_') {
+                    true => None,
+                    false => text.parse::<BigInt>().ok(),
+                };
+                Ok(match parsed {
+                    Some(n) => Value::Int(n),
+                    None => err_value(
                         Value::Str(format!("\"{text}\" is not an integer")),
                         origin_at(frame, span),
                     ),

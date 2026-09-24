@@ -11962,3 +11962,38 @@ num-bigint takes underscores as separators, where its own `to_float` and
 native refuse it. And `"123456789012345678901234567890.5"` is reported as
 overflowing natively and as not an integer by the interpreter. Those are the
 next change, with an adversarial golden of their own.
+
+## 2026-09-24 — a number is the same number on every engine
+
+The probe written for the previous entry found four shapes of text where
+native and the interpreter disagreed about what `to_int` or `to_float`
+returns. The interpreter is the oracle, and in three of the four it was
+right. Native's digit loops handle every ordinary number and pass everything
+else to strtoll or strtod, which read more than the interpreter's parse:
+
+- a leading space or tab, which libc skips, so `" 12"` was 12 natively and
+  refused by the interpreter;
+- a hex float, `"0x1f"` and `"0x1p3"`, which strtod reads as 31 and 8;
+- a nan with a payload, `"nan(1)"`;
+- `"123456789012345678901234567890.5"` in `to_int`, which natively reported
+  the overflow strtoll raised on the digits before the point. The
+  interpreter reported that it is not an integer, which is the better
+  answer: no number of digits would make it one.
+
+The slow paths now refuse the first three and ask whether the whole range was
+read before asking whether it overflowed. Bytes that are not utf-8 are
+refused as bytes, `bytes are not an integer`, which is what the interpreter
+says because it reads bytes as text before it parses them; natively they had
+been quoted, high byte and all. Only a range holding a byte above 127 is
+checked, so the error path of an ascii number costs no utf-8 pass and moves
+no utf-8 counter.
+
+The fourth disagreement was the interpreter's own. num-bigint reads `_` as a
+digit separator, so `to_int "1_000"` was 1000 there and refused natively,
+while the interpreter's own `to_float "1_000"` refused it too. `to_int` now
+refuses text holding an underscore before it asks num-bigint.
+
+`tests/golden/micro/a_number_is_the_same_number_on_every_engine.kso` asks
+each case of a string, of its bytes and of a range cut out of longer bytes.
+On the unfixed tree native went red on ten lines and the interpreter on
+one, the separator.

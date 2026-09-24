@@ -1,0 +1,51 @@
+# What `to_int` and `to_float` accept, asked of text at the edges of what a
+# number is. Native parses in a digit loop and hands everything else to libc,
+# which reads more than the interpreter does: leading space, a hex float and
+# a nan with a payload. The interpreter read `_` as a digit separator in
+# `to_int` alone. Each line is asked of a string, of its bytes, and of a
+# range cut out of longer bytes, so the three doors are held to one answer.
+import "std/text"
+
+fn shown (err reason)
+  "err {reason}"
+
+fn shown other
+  "{other}"
+
+fn fl s
+  cut = text/slice (text/bytes "{s}9") 1 (length (text/bytes s))
+  a = shown (text/to_float s)
+  b = shown (text/to_float (text/bytes s))
+  "{a} | {b} | {shown (text/to_float cut)}"
+
+fn it s
+  cut = text/slice (text/bytes "{s}7") 1 (length (text/bytes s))
+  a = shown (text/to_int s)
+  b = shown (text/to_int (text/bytes s))
+  "{a} | {b} | {shown (text/to_int cut)}"
+
+raw = text/to_bytes [49 255 50]
+
+pub play =
+  print "space: {fl " 12"}"
+  print "space: {it " 12"}"
+  print "tab: {fl "\t12"}"
+  print "tab: {it "\t12"}"
+  print "hex: {fl "0x1f"}"
+  print "hex exponent: {fl "0x1p3"}"
+  print "nan payload: {fl "nan(1)"}"
+  print "nan: {fl "nan"}"
+  print "infinity: {fl "-infinity"}"
+  print "separator: {it "1_000"}"
+  print "separator: {fl "1_000"}"
+  print "plus: {it "+12"}"
+  print "plus: {fl "+.5e-2"}"
+  print "sign alone: {it "-"}"
+  print "sign alone: {fl "-"}"
+  print "point alone: {fl "."}"
+  print "exponent alone: {fl "1e"}"
+  print "trailing space: {it "12 "}"
+  print "long fraction: {it "123456789012345678901234567890.5"}"
+  print "long: {fl "123456789012345678901234567890.5"}"
+  print "not utf-8: {shown (text/to_int raw)}"
+  print "not utf-8: {shown (text/to_float raw)}"

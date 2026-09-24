@@ -9096,6 +9096,24 @@ KValue k_b_from_code(KValue nv, const char* origin) {
    scanner guarantees is the delimiter at data[len]. So we parse in place
    straight from the bytes, skipping the string the scanner would otherwise
    allocate per number. */
+/* the bytes libc's isspace answers yes to in the C locale */
+static int k_num_space(char c) {
+    return c == ' ' || (c >= '\t' && c <= '\r');
+}
+
+/* The refusal both slow paths give. The interpreter reads bytes as text
+   before it parses them, and bytes that are not utf-8 are refused as bytes
+   rather than quoted; ascii is always utf-8, so only a range holding a high
+   byte is asked. */
+static KValue k_not_a_number(const char* data, long long len, const char* tail,
+                             const char* as_bytes, const char* origin) {
+    long long chars;
+    if (!k_all_ascii(data, len) && k_utf8_bad(data, len, origin, &chars).tag == K_ERR)
+        return k_err(k_str(as_bytes), origin);
+    KValue str = k_str_n(data, len);
+    return k_err(k_concat(k_concat(k_str("\""), str), k_str(tail)), origin);
+}
+
 /* Everything past the bare digit loop: libc's strtoll and the two refusals.
    It is a separate function so the fast path above carries no frame -- with
    the calls in the same body the compiler pinned the string's data, length
@@ -9113,9 +9131,12 @@ static __attribute__((noinline, cold, preserve_most)) KValue k_b_to_int_slow(con
     memcpy(copy, data, (size_t)len);
     copy[len] = 0;
     long long n = strtoll(copy, &end, 10);
-    int whole = len != 0 && end == copy + len;
+    /* strtoll also skips leading space, which the interpreter's parse does
+       not; a number that starts with one is not an integer on either. */
+    int whole = len != 0 && end == copy + len && !k_num_space(copy[0]);
     int range = errno == ERANGE;
     if (copy != small) free(copy);
+    if (!whole) return k_not_a_number(data, len, "\" is not an integer", "bytes are not an integer", origin);
     if (range) {
         /* strtoll saturates while consuming every digit — without this check
            an overflowing literal decodes as a silently wrong value. Loud
@@ -9123,10 +9144,6 @@ static __attribute__((noinline, cold, preserve_most)) KValue k_b_to_int_slow(con
         KValue str = k_str_n(data, len);
         return k_err(k_concat(k_concat(k_str("\""), str),
             k_str("\" overflows this engine's integers")), origin);
-    }
-    if (!whole) {
-        KValue str = k_str_n(data, len);
-        return k_err(k_concat(k_concat(k_str("\""), str), k_str("\" is not an integer")), origin);
     }
     return k_int(n);
 }
@@ -10094,12 +10111,14 @@ static KValue k_to_float_text(const char* data, long long len, const char* origi
     memcpy(copy, data, (size_t)len);
     copy[len] = 0;
     double d = strtod(copy, &end);
-    int whole = len != 0 && end == copy + len;
+    /* strtod reads more than the interpreter's parse does: leading space, a
+       hex float (`0x1p3`) and a nan with a payload (`nan(1)`). None of them
+       is a number on the oracle, so none of them is one here. */
+    int whole = len != 0 && end == copy + len && !k_num_space(copy[0])
+        && !memchr(copy, 'x', (size_t)len) && !memchr(copy, 'X', (size_t)len)
+        && !memchr(copy, '(', (size_t)len);
     if (copy != small) free(copy);
-    if (!whole) {
-        KValue str = k_str_n(data, len);
-        return k_err(k_concat(k_concat(k_str("\""), str), k_str("\" is not a number")), origin);
-    }
+    if (!whole) return k_not_a_number(data, len, "\" is not a number", "bytes are not a number", origin);
     return k_float(d);
 }
 
