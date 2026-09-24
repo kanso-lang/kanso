@@ -10950,3 +10950,41 @@ read 913,993 against 908,786.
 `emit_instructions` counts `codegen::emit_ir` on the compile corpus, and the
 single split is what moved it. No other row moved. The objective rises, and the
 rise is banked.
+
+## 2026-09-24 — a wildcard arm keeps a record slot boxed
+
+Found while writing a dev-tier spec. This program printed 7 under the oracle
+and ran out of stack natively, under `kanso run`, `kanso play` and a
+`kanso build` binary alike:
+
+    type point
+      x
+      y
+
+    fn total (point x y)
+      x + y
+
+    fn total _
+      0
+
+    print "{total (point 3 4) + total 5}"
+
+The escape analysis gave `total`'s parameter the by-value record convention,
+because every arm that names a record there names `point`. The `_` arm did not
+count against it. A caller converts its argument for that convention with
+`k_parsed_words`, which passes a failure through and otherwise reads two
+fields off a record. The int 5 has no fields, and that read is where the stack
+ran out. The analysis now also asks the inference which shapes reach the
+position, and keeps the convention only when every one is a record, a failure
+or a thunk that is forced before the call. The json decoder's carried slots
+receive records and failures only, so they keep it: the runtime counter sweep
+and the compile sweep agree with every golden this host can compare.
+
+`tests/golden/micro/a_wildcard_arm_keeps_a_record_slot_boxed.kso` is the
+program above, and the micro corpus runs it on every engine and as a release
+build. Without the fix it went red on the native engine, which printed
+nothing.
+
+This does not cover a record of another type reaching a slot that has a
+wildcard arm. The inference has one bit for every record, so it cannot tell
+`circle` from `point` there. That case is still open.
