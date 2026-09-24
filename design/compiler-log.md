@@ -10982,6 +10982,17 @@ define no helper `alwaysinline`, that the release module define some, and
 that both binaries print the same line. It went red with `emit_ir_dev` asking
 for inlined helpers.
 
+**What still sends the dev tier to SelectionDAG is the aggregate.** With the
+helpers called rather than inlined, `clang -cc1` still spends 164,838,950 of
+338,572,876 instructions in `SelectionDAGISel`, and FastISel's remarks name 265
+calls, 157 returns and 59 branches into blocks with `%KValue` phis: calls that
+pass a `%KValue`, returns of one, and phis of one. Routing each function's
+returns through a stack slot and one small return block was measured and
+declined. FastISel cannot store an aggregate either, and `cc1` read 328,312,489
+against 316,182,558. What would reach it is a dev module that carries a
+`%KValue` as two `i64`s through calls, returns and phis, which is an emitter
+change of its own.
+
 **The emit gate's anchor moves with the work.** `emit_instructions` read
 `codegen::emit_ir` inclusive on a dev build, and a dev build now enters
 through `emit_ir_dev`. Both entry points call `emit_ir_for`, which is kept out
