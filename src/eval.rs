@@ -2950,7 +2950,16 @@ impl<'a> Interp<'a> {
         // std wrapper modules reach natives through the builtin_ prefix;
         // the checker gates those names to std-origin files
         let name = name.strip_prefix("builtin_").unwrap_or(name);
-        let args: Vec<Value> = args.into_iter().map(sub_base).collect();
+        // In place, and only where a subtype's value is: every other value is
+        // its own base. The in-place collect this replaced was 1.2% of the
+        // interpreted corpus.
+        let mut args = args;
+        for slot in args.iter_mut() {
+            if let Value::Sub { inner, .. } = slot {
+                let base = sub_base((**inner).clone());
+                *slot = base;
+            }
+        }
         if name == "if" {
             return self.builtin_if(args, span);
         }
