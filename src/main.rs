@@ -896,8 +896,101 @@ fn remembered_probe() -> bool {
 /// The clang this process would run, as a path followed through its links,
 /// with its size and modification time.
 fn clang_identity() -> Option<String> {
+    tool_identity("clang")
+}
+
+/// Whether clang can hand an LTO link to lld, asked once per pair of tools.
+///
+/// lld links a release build for 4.26% fewer instructions than GNU ld with
+/// LLVM's plugin, measured on the codegen corpus on this container:
+/// 1,750,778,100 against 1,676,140,277. Nearly all of the difference is the
+/// linker's own work -- the plugin process spent 128,765,719 in libc and
+/// 52,810,020 in libbfd around LLVM's 926,724,119 -- and the program it
+/// produces runs within 281 instructions of GNU ld's on runbench.
+///
+/// It is asked rather than assumed because an lld from another LLVM release
+/// than clang's cannot read clang's bitcode, and a runner can carry one: the
+/// probe links a one-line LTO program, and anything short of success keeps
+/// GNU ld. The answer is remembered under clang's identity and that of the
+/// `ld.lld` on PATH, if there is one.
+fn lld_links_lto() -> bool {
+    // clang finds lld in its own LLVM directory as well as on PATH, so what
+    // is on PATH is part of the key and not a condition: a runner with lld
+    // only beside clang answered the spec's probe yes while this said no
+    // without asking.
+    let Some(clang) = tool_identity("clang") else {
+        return false;
+    };
+    let lld = tool_identity("ld.lld").unwrap_or_default();
+    let key = format!("{clang}|{lld}")
+        .bytes()
+        .fold(0xcbf29ce484222325u64, |h, b| (h ^ b as u64).wrapping_mul(0x100000001b3));
+    let path = std::env::temp_dir().join(format!("kanso_lld_answer_{key:016x}"));
+    match std::fs::read(&path).ok().as_deref() {
+        Some(b"1") => return true,
+        Some(b"0") => return false,
+        _ => {}
+    }
+    let answer = lld_probe();
+    let staged = std::env::temp_dir().join(format!("kanso_lld_answer_{key:016x}_{}", pid_tag()));
+    if std::fs::write(&staged, if answer { b"1" } else { b"0" }).is_ok() {
+        let _ = std::fs::rename(&staged, &path);
+    }
+    answer
+}
+
+/// The arguments that put a link in lld, or none.
+///
+/// lld links on every hardware thread by default, which a user's build wants
+/// and a measurement cannot have: under callgrind the thread pool's
+/// scheduling lands in the count, and the codegen rows read 434,345,526 and
+/// 434,337,763 on two CI runs of one tree, and 1,677,317,287 and 1,677,792,392
+/// on release. Three dev links here read 434,957,073, 434,928,291 and
+/// 434,926,291 on the default and 434,600,869 three times with `--threads=1`.
+/// `KANSO_LTO_JOBS` is already how a measurement asks for one LTO job, so it
+/// sets lld's thread count as well.
+fn lld_args() -> Vec<String> {
+    if !(cfg!(target_os = "linux") && lld_links_lto()) {
+        return Vec::new();
+    }
+    let mut args = vec!["-fuse-ld=lld".to_string()];
+    if let Ok(n) = std::env::var("KANSO_LTO_JOBS") {
+        if !n.is_empty() {
+            args.push(format!("-Wl,--threads={n}"));
+        }
+    }
+    args
+}
+
+fn lld_probe() -> bool {
+    let dir = std::env::temp_dir();
+    let ll = dir.join(format!("kanso_lld_probe_{}.ll", pid_tag()));
+    let out = dir.join(format!("kanso_lld_probe_{}", pid_tag()));
+    if std::fs::write(&ll, "define i32 @main() {\n  ret i32 0\n}\n").is_err() {
+        return false;
+    }
+    // Output thrown away rather than read, for the reason `preserve_none_probe`
+    // gives.
+    let ok = std::process::Command::new("clang")
+        .args(["-O1", "-flto", "-fuse-ld=lld", "-Wl,-plugin-opt=O3", "-Wno-override-module"])
+        .arg(&ll)
+        .arg("-o")
+        .arg(&out)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    let _ = std::fs::remove_file(&ll);
+    let _ = std::fs::remove_file(&out);
+    ok
+}
+
+/// A tool on PATH, as a path followed through its links, with its size and
+/// modification time.
+fn tool_identity(name: &str) -> Option<String> {
     let dirs = std::env::var_os("PATH")?;
-    let found = std::env::split_paths(&dirs).map(|d| d.join("clang")).find(|p| p.is_file())?;
+    let found = std::env::split_paths(&dirs).map(|d| d.join(name)).find(|p| p.is_file())?;
     let real = std::fs::canonicalize(&found).ok()?;
     let meta = std::fs::metadata(&real).ok()?;
     let modified = meta.modified().ok()?.duration_since(std::time::UNIX_EPOCH).ok()?;
@@ -1018,6 +1111,8 @@ fn release_clang(stem: &str, ll_path: &str) -> std::io::Result<std::process::Exi
             &["-O3"][..]
         })
         .arg("-flto")
+        // lld where it can take the LTO link: `lld_links_lto` says why.
+        .args(lld_args())
         // Eight times clang's default of 250. The run program spends one
         // instruction in ten on `push`, `pop` and `ret` -- 215,229,225 of
         // 2,185,625,151 in the binary's own code -- and the functions paying
@@ -1126,7 +1221,7 @@ fn release_clang(stem: &str, ll_path: &str) -> std::io::Result<std::process::Exi
         .arg(&hot_obj)
         .arg(&runtime_obj)
         .arg("-lm")
-        .status()
+        .without_driver()
 }
 
 /// Dev (the default): the program compiles unoptimized and links against a
@@ -1136,13 +1231,234 @@ fn dev_clang(stem: &str, ll_path: &str) -> std::io::Result<std::process::ExitSta
     let runtime_obj = cached_runtime_object("dev", &["-O2"])?;
     std::process::Command::new("clang")
         .arg("-O0")
+        // The dev link has no LTO in it, and lld still halves it: on the
+        // codegen corpus GNU ld spent 85,738,887 instructions and lld
+        // 45,154,514. The same probe decides, since an lld that can take an
+        // LTO link can take a plain one.
+        .args(lld_args())
         .arg("-Wno-override-module")
         .arg("-o")
         .arg(stem)
         .arg(ll_path)
         .arg(&runtime_obj)
         .arg("-lm")
+        .without_driver()
+}
+
+/// A clang command that runs the jobs its driver would have run, without the
+/// driver.
+///
+/// Every LLVM process spends most of its start-up relocating libLLVM: the
+/// driver of a dev build is 31,702,963 instructions, 83% of them in the
+/// dynamic loader, and it does nothing a build needs beyond deciding the two
+/// commands it then spawns -- `clang -cc1` and the linker. Those commands
+/// depend on the toolchain, the flags and the file names, and on nothing a
+/// program's IR says. So the driver is asked once, with `-###`, for a build
+/// whose files carry placeholder names in a directory of their own; the
+/// answer is kept under a key naming the tools, the flags and the objects;
+/// and every later build runs the two commands with its own names put back.
+///
+/// Anything unexpected -- a driver that prints other than two jobs, a key
+/// that cannot be formed, a job whose program is missing -- runs the driver
+/// as before. `KANSO_CLANG_DRIVER` forces the driver, which is how the spec
+/// compares the two.
+trait WithoutDriver {
+    fn without_driver(&mut self) -> std::io::Result<std::process::ExitStatus>;
+}
+
+impl WithoutDriver for std::process::Command {
+    fn without_driver(&mut self) -> std::io::Result<std::process::ExitStatus> {
+        let args: Vec<String> = self.get_args().map(|a| a.to_string_lossy().into_owned()).collect();
+        if cfg!(target_os = "linux") && std::env::var_os("KANSO_CLANG_DRIVER").is_none() {
+            if let Some(status) = replayed(&args) {
+                return status;
+            }
+        }
+        self.status()
+    }
+}
+
+const IN_MARK: &str = "kanso_replay_in";
+const OUT_MARK: &str = "kanso_replay_out";
+
+/// The two jobs for `args`, run directly. None when the replay cannot be
+/// trusted, and the caller runs the driver.
+fn replayed(args: &[String]) -> Option<std::io::Result<std::process::ExitStatus>> {
+    // `-save-temps=obj` is only ever asked for to give the LTO object a name
+    // that is the same every run, because ld's plugin hashes that path and a
+    // random one moved the release row by eleven instructions one run in
+    // eleven. The replay's names are fixed already, so it leaves the option to
+    // the driver, which still needs it.
+    let args: Vec<String> = args.iter().filter(|a| *a != "-save-temps=obj").cloned().collect();
+    // Exactly one `-o`, and the input is the argument after it: that is the
+    // only shape `dev_clang` and `release_clang` hand over, and anything else
+    // goes to the driver.
+    let o = args.iter().position(|a| a == "-o")?;
+    if args.iter().filter(|a| *a == "-o").count() != 1
+        || args.iter().any(|a| a.starts_with("-save-temps"))
+    {
+        return None;
+    }
+    let out = std::path::Path::new(args.get(o + 1)?);
+    let ll = std::path::Path::new(args.get(o + 2)?);
+    let ll_name = ll.file_stem()?.to_str()?;
+    let out_name = out.file_name()?.to_str()?;
+    let cwd = std::env::current_dir().ok()?;
+    let ll_abs = cwd.join(ll);
+    let out_abs = cwd.join(out);
+    let mut shape: Vec<String> = args.to_vec();
+    shape[o + 1] = OUT_MARK.to_string();
+    shape[o + 2] = format!("{IN_MARK}.ll");
+
+    let identity = format!(
+        "{}|{}|{}|{}|{}",
+        tool_identity("clang")?,
+        tool_identity("ld.lld").unwrap_or_default(),
+        shape.join("\u{0}"),
+        std::env::var("LIBRARY_PATH").unwrap_or_default(),
+        std::env::var("COMPILER_PATH").unwrap_or_default(),
+    );
+    let key = kanso::hash::digest_of(identity.as_bytes());
+    let cache = std::env::temp_dir().join(format!("kanso_jobs_{:016x}{:016x}", key.0, key.1));
+
+    // Named for the output rather than the process. The jobs run inside it,
+    // and lld's LTO reads the directory it runs in into what it hashes: with a
+    // stage named for the pid, three runs of one release build read
+    // 1,644,357,816 and 1,644,922,716 apart. Two builds writing the same
+    // output were already racing for it, so sharing a stage costs nothing new.
+    let named = kanso::hash::digest_of(out_abs.to_string_lossy().as_bytes());
+    let stage = std::env::temp_dir().join(format!("kanso_stage_{:016x}", named.0));
+    let _ = std::fs::remove_dir_all(&stage);
+    std::fs::create_dir_all(&stage).ok()?;
+    let stage_str = stage.to_str()?.to_string();
+    let jobs = match std::fs::read_to_string(&cache).ok().and_then(|t| jobs_of(&t)) {
+        Some(jobs) => jobs,
+        None => {
+            let jobs = asked(&shape, &stage, &stage_str)?;
+            let staged = std::env::temp_dir().join(format!(
+                "kanso_jobs_{:016x}{:016x}_{}",
+                key.0,
+                key.1,
+                pid_tag()
+            ));
+            let text: Vec<String> = jobs.iter().map(|j| j.join("\u{0}")).collect();
+            if std::fs::write(&staged, text.join("\n")).is_ok() {
+                let _ = std::fs::rename(&staged, &cache);
+            }
+            jobs
+        }
+    };
+    let _ = std::fs::remove_file(stage.join(format!("{IN_MARK}.ll")));
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(&ll_abs, stage.join(format!("{ll_name}.ll"))).ok()?;
+    let put_back = |a: &str| a.replace(IN_MARK, ll_name).replace(OUT_MARK, out_name);
+    let mut status = None;
+    for (n, job) in jobs.iter().enumerate() {
+        let mut argv: Vec<String> = job.iter().map(|a| put_back(a)).collect();
+        // The link writes where the build asked, not into the stage.
+        if n + 1 == jobs.len() {
+            let at = argv.iter().position(|a| a == "-o")?;
+            argv[at + 1] = out_abs.to_str()?.to_string();
+        }
+        let ran =
+            std::process::Command::new(&argv[0]).args(&argv[1..]).current_dir(&stage).status();
+        let failed = !matches!(&ran, Ok(s) if s.success());
+        status = Some(ran);
+        if failed {
+            break;
+        }
+    }
+    let _ = std::fs::remove_dir_all(&stage);
+    status
+}
+
+/// The driver's jobs for `shape`, with the stage and the driver's own temporary
+/// object replaced by marks. None unless there are exactly two and both name a
+/// program that exists.
+fn asked(shape: &[String], stage: &std::path::Path, stage_str: &str) -> Option<Vec<Vec<String>>> {
+    // The driver refuses an input that is not there, even when only asked.
+    std::fs::write(stage.join(format!("{IN_MARK}.ll")), "").ok()?;
+    // The driver prints its jobs on stderr. They go to a file rather than a
+    // pipe, so no read loop that scheduling can lengthen lands in the row.
+    let listing = stage.join("jobs");
+    let said = std::process::Command::new("clang")
+        .arg("-###")
+        .args(shape)
+        .current_dir(stage)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::fs::File::create(&listing).ok()?)
         .status()
+        .ok()?;
+    if !said.success() {
+        return None;
+    }
+    let text = std::fs::read_to_string(&listing).ok()?;
+    let mut jobs: Vec<Vec<String>> =
+        text.lines().filter(|l| l.starts_with(" \"")).map(quoted_args).collect::<Option<_>>()?;
+    if jobs.len() != 2
+        || jobs.iter().any(|j| j.is_empty() || !std::path::Path::new(&j[0]).is_file())
+    {
+        return None;
+    }
+    // The object cc1 writes and the linker reads: the driver names it in its
+    // temp directory with a random suffix, and the replay names it beside the
+    // input, relative to the stage both jobs run in. NO PATH OF THE STAGE'S
+    // REACHES A JOB. The stage is named for the process, and ld's LLVM plugin
+    // hashes the object's path, so a path carrying the pid would put back the
+    // eleven-instruction wobble `-save-temps=obj` exists to remove. The two
+    // compilation directories are the stage's too, and are only written into
+    // debug information, which these builds do not ask for; they are `.`.
+    let at = jobs[0].iter().position(|a| a == "-o")?;
+    let temp_obj = jobs[0].get(at + 1)?.clone();
+    let ours = format!("{IN_MARK}.o");
+    for job in &mut jobs {
+        for a in job.iter_mut() {
+            *a = a.replace(&temp_obj, &ours);
+            for dir in ["-fdebug-compilation-dir=", "-fcoverage-compilation-dir="] {
+                if a.starts_with(dir) {
+                    *a = format!("{dir}.");
+                }
+            }
+        }
+    }
+    if jobs.iter().flatten().any(|a| a.contains(stage_str)) {
+        return None;
+    }
+    Some(jobs)
+}
+
+/// One `-###` line: arguments in double quotes, with `\` escaping the next
+/// character.
+fn quoted_args(line: &str) -> Option<Vec<String>> {
+    let mut args = Vec::new();
+    let mut chars = line.chars();
+    loop {
+        match chars.next() {
+            None => return Some(args),
+            Some(' ') => continue,
+            Some('"') => {
+                let mut arg = String::new();
+                loop {
+                    match chars.next()? {
+                        '\\' => arg.push(chars.next()?),
+                        '"' => break,
+                        c => arg.push(c),
+                    }
+                }
+                args.push(arg);
+            }
+            Some(_) => return None,
+        }
+    }
+}
+
+fn jobs_of(text: &str) -> Option<Vec<Vec<String>>> {
+    let jobs: Vec<Vec<String>> =
+        text.split('\n').map(|j| j.split('\u{0}').map(str::to_string).collect()).collect();
+    match jobs.len() == 2 && jobs.iter().all(|j| std::path::Path::new(&j[0]).is_file()) {
+        true => Some(jobs),
+        false => None,
+    }
 }
 
 /// What names a cached runtime object: everything that decides what clang

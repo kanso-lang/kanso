@@ -174,4 +174,4 @@
 # CI's sitting on run 35419502516. codegen_instructions_dev 596,153,756 -> 596,158,173, +4,417 (+0.0007%).
 # The dev tier is -O0, so the shorter runtime.c barely registers.
 # `codegen_dev_again` read 596,158,173.
-codegen_instructions_dev=396949978
+codegen_instructions_dev=325412912

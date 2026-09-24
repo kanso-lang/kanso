@@ -347,10 +347,14 @@ echo "::notice::codegen_procs_${tier} first=[$(processes_in /tmp/cg.codegen.$tie
 printf 'codegen_instructions_%s=%s\n' "$tier" "$sum" > codegen_${tier}_got.txt
 cat codegen_${tier}_got.txt
 
-if [ "$seen" -lt 4 ]; then
+# THREE since kanso#1593, which runs the driver's two jobs itself: the driver
+# is asked for them once and the answer is cached like the probe's, so a warm
+# build is kanso, clang -cc1 and ld.
+if [ "$seen" -lt 3 ]; then
   echo "::error::this build ran $seen processes and a real one runs at least"
-  echo "::error::four: kanso, the clang driver, clang -cc1 and ld. The convention"
-  echo "::error::probe's clang is a fifth only when its answer is not cached yet."
+  echo "::error::three: kanso, clang -cc1 and ld. The clang driver and the"
+  echo "::error::convention probe's clang run only while their answers are not"
+  echo "::error::cached yet."
   echo "::error::A build that is REFUSED still emits the IR first, so a short"
   echo "::error::tree is the shape of a build that never wrote anything."
   exit 1
