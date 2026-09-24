@@ -10919,7 +10919,10 @@ clang's cannot read clang's bitcode, and a runner can carry one, so
 only if that succeeds. The answer is remembered under the identities of both
 tools, the way the calling-convention probe's is. Only Linux asks; Apple's
 ld64 is untouched. CI's cost-goldens job installs `lld-19` beside `clang-19`,
-puts it on PATH and asserts the version, as it does for clang.
+puts it on PATH and asserts the version, as it does for clang. It also
+installs the image's default `lld`: the codegen gate runs under `env -i
+PATH=/usr/bin:/bin`, where clang is the image's 18, and the first round, with
+only 19 installed, left both codegen rows exactly where they were.
 `tests/a_release_build_links_with_lld_when_it_can.rs` builds a release binary
 and requires lld's `Linker:` stamp in it exactly when lld can take the link.
 It went red with `-fuse-ld=bfd` in the flag's place.
