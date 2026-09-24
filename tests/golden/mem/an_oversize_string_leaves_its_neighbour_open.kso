@@ -1,0 +1,14 @@
+# A string larger than a block gets a block of exactly its size. The block
+# the arena was bumping in still has room, and it stays the bump region: the
+# allocations after the string land in it rather than in a fresh 1 MiB block.
+# Doubling sixteen bytes seventeen times makes a string of 2,097,152, and the
+# sentence that prints its length is made afterwards.
+import "std/text"
+
+fn doubled s 0
+  s
+
+fn doubled s n
+  doubled (text/join [s s] "") (n - 1)
+
+pub play = print "{length (doubled "abcdefghijklmnop" 17)} {length ["x" "y"]}"
