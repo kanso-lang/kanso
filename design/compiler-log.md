@@ -12401,3 +12401,71 @@ Declined, with the numbers:
   drops its frame: runbench 1,820,829,169 -> 1,822,724,299.
 - Moving `to_float`'s strtod fallback out of line to drop its frame from the
   fast path: 106,513 instructions, 0.006%.
+
+## 2026-09-24 — a byte view read in its frame keeps its header there
+
+`text/bytes s` of a string borrows the string's bytes and writes a
+three-word header (length, data, capacity) into the arena. JSON's
+`escape_onto` makes one for every string it writes, 942,750 on the run
+program, and only reads it: a length, a scan, some bytes by index, slices to
+append. The header cost the bump, and every read went through memory.
+
+`framed_views` in src/codegen.rs finds the bindings `x = bytes e` whose
+header can live in the function's own frame. The function must sit on no
+cycle of the call graph, so the frame is not claimed again on each pass of a
+loop. Every later mention of `x` must be a read that keeps nothing: the first
+argument of `length`, `find2`, `find2_below` or `slice` (a slice writes its
+own header over the same bytes), the base of an index, or an argument to a
+parameter that is read the same way in every clause, found as the largest
+such set. A return, a list, a closure, `>>`, a binding the demand pass may
+make lazy, or a call through a name the body binds all fail it. The function
+then makes its tail calls as plain calls, since a tail call gives the frame
+back before the callee reads the header.
+
+The emitter frames a view only when inference has proven its argument a
+string. The first build also framed views of values that might not be
+strings, with a slow arm to `k_b_bytes`. The view was then a phi over a stack
+pointer and an arena pointer, LLVM kept the header in memory, and the run
+program fell 11,110,137 instructions where a hand edit of the IR without the
+slow arm had shown 28,013,580. Proving the string removes the arm. On the
+run program `escape_onto` qualifies and `regexp/in?` does not.
+
+CI's sitting, against main:
+
+    runbench    1,750,593,608 -> 1,717,879,328   -32,714,280   -1.87%
+    livebench   2,626,918,335 -> 2,481,521,540  -145,396,795   -5.54%
+    oneshot        19,420,522 ->    19,057,035      -363,487   -1.87%
+
+and on this container runbench read 1,768,671,540 -> 1,739,715,210. Every
+other row is byte-identical, and `text` falls for the three programs that
+moved.
+
+The run program's allocations fall 5,280,394 -> 4,337,644, one per escaped
+string, and `sh_bytes` 31,270,680 -> 8,644,680. The live program's fall
+7,539,794 -> 3,349,794.
+
+`a_view_read_where_it_was_made_allocates_no_header` in the mem vein reads
+`allocs=2` and `sh_bytes=0` for a thousand views; the ratchet row
+`framed_view` empties the set and the fixture reads `allocs=1002`.
+`a_view_that_outlives_its_frame_keeps_its_header` in the micro corpus makes
+views that are returned, listed, captured, handed through a parameter that
+returns them and rebound, two at a time at the same stack depth, and reads
+them afterwards. With the analysis made to accept every view, the native
+build printed invalid UTF-8 and ran out of stack.
+
+The analysis asks only about bindings of `bytes` and the parameters a view
+is handed to, and a program with no such binding pays one scan of its
+top-level statements. Its first build asked about every parameter of every
+group and put CI's `emit_instructions` at 45,378,600 against 42,771,526. As
+built, `emit_instructions` reads 42,892,990, +121,464 (+0.28%), the analysis
+on a corpus that does bind a view. `startup_instructions` reads 636,107
+(+550) and `codegen_instructions_release` 1,613,900,206 (+4,754), both the
+twin's text in every program. The compile, entry, library, interpreter and
+dev codegen rows fall by layout.
+
+The emitted code grows by the twin: one comment line in every program, and
+its body in the four programs that frame a view. `emitted_lines` reads 8,412
+and `emitted_defines` 118 for the decoder, and `emitted_other_lines` 115,794
+and `emitted_other_defines` 1,731 over the other thirteen. The compile
+golden's corpus rows sum to `lines` 1,505, one more each, and `module_lines`
+reads 3,581.

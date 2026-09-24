@@ -276,4 +276,8 @@
 # 2026-09-24, kanso#1611 (carrying kanso#1605, #1608, #1609 and #1610 over
 # main with kanso#1604), CI's row: codegen_instructions_release 1,614,369,990
 # -> 1,613,895,452, a FALL of 474,538 (-0.0294%).
-codegen_instructions_release=1613895452
+#
+# 2026-09-24 (kanso#1613): a byte view read in its frame keeps its header
+# there. codegen_instructions_release 1,613,895,452 -> 1,613,900,206, a RISE
+# of 4,754 (+0.0003%).
+codegen_instructions_release=1613900206

@@ -653,6 +653,23 @@ slow:
   %f = call %KValue @k_b_bytes(%KValue %sv)
   ret %KValue %f
 }
+; A proven string's view with its header at %hdr: `framed_views` says why.
+define internal %KValue @k_b_bytes_frame(%KValue %sv, ptr %hdr) alwaysinline {
+  %sp = extractvalue %KValue %sv, 1
+  %s = inttoptr i64 %sp to ptr
+  %data = load ptr, ptr %s
+  %lenp = getelementptr i8, ptr %s, i64 8
+  %len32 = load i32, ptr %lenp
+  %len = sext i32 %len32 to i64
+  store i64 %len, ptr %hdr
+  %hd = getelementptr i8, ptr %hdr, i64 8
+  store ptr %data, ptr %hd
+  %hc = getelementptr i8, ptr %hdr, i64 16
+  store i64 0, ptr %hc
+  %pi = ptrtoint ptr %hdr to i64
+  %r0 = insertvalue %KValue { i64 13, i64 undef }, i64 %pi, 1
+  ret %KValue %r0
+}
 define internal %KValue @k_int(i64 %n) alwaysinline {
   %v = insertvalue %KValue { i64 0, i64 undef }, i64 %n, 1
   ret %KValue %v
@@ -2195,11 +2212,13 @@ fn emit_ir_for(
     let mut beat = crate::beat::beat_loops(program, &inference, &in_place_pushes);
     beat.ids.retain(|(n, a), _| escape.returns_ty(n, *a).is_none());
     beat.demoted.retain(|(_, callee)| beat.ids.contains_key(callee));
+    let forwarders = forwarder_map(program);
+    let framed = framed_views(program, &forwarders);
     let mut backend = Backend {
         convention,
         inline_helpers,
         program,
-        forwarders: forwarder_map(program),
+        forwarders,
         sub_parents: program
             .types
             .iter()
@@ -2214,6 +2233,7 @@ fn emit_ir_for(
         group_by_name: group_indices_by_name(program),
         cycle_reached: cycle_reached(program),
         kept_out: kept_out(program),
+        framed_views: framed,
         inference,
         escape,
         byte_disc,
@@ -2271,6 +2291,8 @@ struct Backend<'a> {
     cycle_reached: crate::hash::Set<&'a str>,
     /// See `kept_out`.
     kept_out: crate::hash::Set<&'a str>,
+    /// See `framed_views`: (group, arity, span of the `bytes` call).
+    framed_views: crate::hash::Set<(String, usize, Span)>,
     inference: infer::Inference,
     forwarders: HashMap<(String, usize), String>,
     /// subtype name -> parent name; non-empty programs get chain-aware
@@ -2373,6 +2395,9 @@ struct FnEmit {
     lazy_cells: Vec<String>,
     /// Stack slots the body asked for, held back for the entry block.
     entry_allocas: Vec<String>,
+    /// Whether a byte view's header lives in this frame, which turns the
+    /// body's tail calls into plain ones: `framed_views` says why.
+    frame_held: bool,
     /// A non-strict byte index builds a `%KValue` — the byte, or none — and a
     /// byte discriminator immediately collapses it back to one i64. The box
     /// is a phi over a struct, and LLVM will not sink the `extractvalue` into
@@ -2431,6 +2456,7 @@ impl FnEmit {
             arity: 0,
             lazy_cells: Vec::new(),
             entry_allocas: Vec::new(),
+            frame_held: false,
             raw_byte: crate::hash::Map::default(),
             words,
         }
@@ -2976,6 +3002,342 @@ fn kept_out(program: &Program) -> crate::hash::Set<&str> {
     out
 }
 
+/// The byte views that live in their function's frame. `bytes s` of a
+/// string writes a three-word header -- length, data, capacity -- and the
+/// header is all it allocates, since the view borrows the string's bytes.
+/// JSON's `escape_onto` makes one per string it writes, 942,750 on the run
+/// program, and reads it for a length, a scan and some slices before it
+/// returns. A header in the arena costs the bump and every read through it;
+/// a header in the frame is three stores LLVM takes apart into registers.
+///
+/// The frame must outlive every read. So a binding `x = bytes e` qualifies
+/// when its function sits on no cycle of the call graph, which keeps the
+/// frame from being claimed once per pass of a loop, and every mention of `x`
+/// after it is one of these reads:
+///   - the first argument of `length`, `find2`, `find2_below` or `slice`,
+///     none of which keeps the header (a slice writes a header of its own
+///     over the same bytes);
+///   - the base of an index;
+///   - an argument to a function whose parameter there is itself read only
+///     this way, in every clause, found as the largest such set.
+///
+/// Anything else fails it: a return, a record or list, a closure or `>>`
+/// that could run after the frame is gone, a binding (which the demand pass
+/// may make lazy), an argument to a name the body binds itself. A function
+/// holding such a view makes its tail calls as plain calls, because a tail
+/// call gives the frame back before the callee reads the header.
+fn framed_views(
+    program: &Program,
+    forwarders: &HashMap<(String, usize), String>,
+) -> crate::hash::Set<(String, usize, Span)> {
+    struct Cx<'a> {
+        groups: &'a HashMap<(&'a str, usize), Vec<&'a FnDecl>>,
+        forwarders: &'a HashMap<(String, usize), String>,
+        safe: &'a crate::hash::Set<(String, usize, usize)>,
+        locals: crate::hash::Set<String>,
+    }
+    fn pattern_names(p: &Pattern, out: &mut crate::hash::Set<String>) {
+        match p {
+            Pattern::Var(n, _) => {
+                out.insert(n.to_string());
+            }
+            Pattern::Annotated { name, .. } => {
+                out.insert(name.to_string());
+            }
+            Pattern::Ctor { fields, whole, .. } => {
+                for f in fields {
+                    pattern_names(f, out);
+                }
+                if let Some(w) = whole {
+                    out.insert(w.0.to_string());
+                }
+            }
+            Pattern::Keyed { entries, .. } => {
+                for e in entries {
+                    out.insert(e.bind_name.clone());
+                }
+            }
+            _ => {}
+        }
+    }
+    fn stmt_expr(st: &Stmt) -> &Expr {
+        match st {
+            Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
+        }
+    }
+    fn locals_of(expr: &Expr, out: &mut crate::hash::Set<String>) {
+        match expr {
+            Expr::Lambda { params, .. } => {
+                for (n, _) in params {
+                    out.insert(n.clone());
+                }
+            }
+            Expr::Block(stmts, _) | Expr::Build(stmts, _) | Expr::Guard { rest: stmts, .. } => {
+                for st in stmts {
+                    if let Stmt::Bind { pattern, .. } = st {
+                        pattern_names(pattern, out);
+                    }
+                }
+            }
+            _ => {}
+        }
+        crate::for_each_child(expr, |c| locals_of(c, out));
+    }
+    // every name a body binds for itself, beside its parameters
+    fn bound_in(stmts: &[Stmt]) -> crate::hash::Set<String> {
+        let mut out = crate::hash::Set::default();
+        for st in stmts {
+            if let Stmt::Bind { pattern, .. } = st {
+                pattern_names(pattern, &mut out);
+            }
+            locals_of(stmt_expr(st), &mut out);
+        }
+        out
+    }
+    fn mentions(expr: &Expr, x: &str) -> bool {
+        if let Expr::Ident(n, _, _) = expr {
+            if n.as_str() == x {
+                return true;
+            }
+        }
+        let mut found = false;
+        crate::for_each_child(expr, |c| found = found || mentions(c, x));
+        found
+    }
+    fn is_x(expr: &Expr, x: &str) -> bool {
+        matches!(expr, Expr::Ident(n, _, _) if n.as_str() == x)
+    }
+    fn stmts_read_only(stmts: &[Stmt], x: &str, cx: &Cx) -> bool {
+        stmts.iter().all(|st| match st {
+            Stmt::Expr(e) => reads_only(e, x, cx),
+            Stmt::Bind { expr, .. } | Stmt::Set { value: expr, .. } => !mentions(expr, x),
+        })
+    }
+    fn reads_only(expr: &Expr, x: &str, cx: &Cx) -> bool {
+        match expr {
+            Expr::Ident(n, _, _) => n.as_str() != x,
+            Expr::Lambda { .. } | Expr::Seq(..) | Expr::Build(..) => !mentions(expr, x),
+            Expr::Index { base, index, .. } if is_x(base, x) => reads_only(index, x, cx),
+            Expr::Block(stmts, _) => stmts_read_only(stmts, x, cx),
+            Expr::Guard { cond, early, rest, .. } => {
+                reads_only(cond, x, cx) && reads_only(early, x, cx) && stmts_read_only(rest, x, cx)
+            }
+            Expr::App { head, args, piped: false, .. } => {
+                let Expr::Ident(h, _, _) = head.as_ref() else {
+                    return !mentions(expr, x);
+                };
+                let h = h.as_str();
+                if h == x {
+                    return false;
+                }
+                let n = args.len();
+                let local = cx.locals.contains(h);
+                let forwarded = cx.forwarders.get(&(h.to_string(), n)).map(String::as_str);
+                let user = !local && forwarded.is_none() && cx.groups.contains_key(&(h, n));
+                let builtin = match (local, forwarded) {
+                    (true, _) => None,
+                    (false, Some(b)) => Some(b),
+                    (false, None) if user => None,
+                    (false, None) => Some(h.strip_prefix("builtin_").unwrap_or(h)),
+                };
+                args.iter().enumerate().all(|(i, a)| {
+                    if !is_x(a, x) {
+                        return reads_only(a, x, cx);
+                    }
+                    match builtin {
+                        Some(b) => {
+                            i == 0 && matches!(b, "length" | "find2" | "find2_below" | "slice")
+                        }
+                        None => user && cx.safe.contains(&(h.to_string(), n, i)),
+                    }
+                })
+            }
+            _ => {
+                let mut ok = true;
+                crate::for_each_child(expr, |c| ok = ok && reads_only(c, x, cx));
+                ok
+            }
+        }
+    }
+    let mut groups: HashMap<(&str, usize), Vec<&FnDecl>> = HashMap::default();
+    for d in &program.fns {
+        groups.entry((d.name.as_str(), d.params.len())).or_default().push(d);
+    }
+    let locals_for = |d: &FnDecl| {
+        let mut out = bound_in(&d.body);
+        for p in &d.params {
+            pattern_names(p, &mut out);
+        }
+        out
+    };
+    // the bindings that could qualify, before anything is asked of their uses
+    let mut candidates = Vec::new();
+    for d in &program.fns {
+        if d.is_getter() {
+            continue;
+        }
+        for (i, st) in d.body.iter().enumerate() {
+            let Stmt::Bind { pattern: Pattern::Var(x, _), expr } = st else { continue };
+            let Expr::App { head, args, piped: false, span } = expr else { continue };
+            let Expr::Ident(h, _, _) = head.as_ref() else { continue };
+            if args.len() != 1 {
+                continue;
+            }
+            let target = match forwarders.get(&(h.to_string(), 1)) {
+                Some(b) => b.as_str(),
+                None if groups.contains_key(&(h.as_str(), 1)) => continue,
+                None => h.strip_prefix("builtin_").unwrap_or(h),
+            };
+            if target == "bytes" {
+                candidates.push((d, i, x.as_str(), h.as_str(), *span));
+            }
+        }
+    }
+    if candidates.is_empty() {
+        return crate::hash::Set::default();
+    }
+    // names on a cycle of the call graph, which may not hold a view
+    let mut index: HashMap<&str, usize> = HashMap::default();
+    let mut names: Vec<&str> = Vec::new();
+    for d in &program.fns {
+        index.entry(d.name.as_str()).or_insert_with(|| {
+            names.push(d.name.as_str());
+            names.len() - 1
+        });
+    }
+    fn callees(expr: &Expr, index: &HashMap<&str, usize>, out: &mut Vec<usize>) {
+        if let Expr::Ident(n, _, _) | Expr::Partial(n, _) = expr {
+            if let Some(&at) = index.get(&**n) {
+                out.push(at);
+            }
+        }
+        crate::for_each_child(expr, |c| callees(c, index, out));
+    }
+    let mut adj: Vec<Vec<usize>> = vec![Vec::new(); names.len()];
+    for d in &program.fns {
+        let from = index[d.name.as_str()];
+        for st in &d.body {
+            callees(stmt_expr(st), &index, &mut adj[from]);
+        }
+    }
+    let mut cyclic = vec![false; names.len()];
+    for scc in crate::beat::sccs_of(&adj) {
+        if scc.len() >= 2 || adj[scc[0]].contains(&scc[0]) {
+            for at in scc {
+                cyclic[at] = true;
+            }
+        }
+    }
+    candidates.retain(|(d, ..)| !cyclic[index[d.name.as_str()]]);
+    if candidates.is_empty() {
+        return crate::hash::Set::default();
+    }
+    // the parameters a view can reach, found by following it into each callee
+    // it is handed to; nothing else is ever asked about
+    fn handed(
+        expr: &Expr,
+        x: &str,
+        locals: &crate::hash::Set<String>,
+        user: &dyn Fn(&str, usize) -> bool,
+        out: &mut Vec<(String, usize, usize)>,
+    ) {
+        if let Expr::App { head, args, piped: false, .. } = expr {
+            if let Expr::Ident(h, _, _) = head.as_ref() {
+                if !locals.contains(h.as_str()) && user(h.as_str(), args.len()) {
+                    for (i, a) in args.iter().enumerate() {
+                        if is_x(a, x) {
+                            out.push((h.to_string(), args.len(), i));
+                        }
+                    }
+                }
+            }
+        }
+        crate::for_each_child(expr, |c| handed(c, x, locals, user, out));
+    }
+    let user = |h: &str, n: usize| {
+        !forwarders.contains_key(&(h.to_string(), n)) && groups.contains_key(&(h, n))
+    };
+    let mut reached: crate::hash::Set<(String, usize, usize)> = crate::hash::Set::default();
+    let mut work = Vec::new();
+    for (d, i, x, _, _) in &candidates {
+        let locals = locals_for(d);
+        for st in &d.body[i + 1..] {
+            handed(stmt_expr(st), x, &locals, &user, &mut work);
+        }
+    }
+    while let Some(key) = work.pop() {
+        if !reached.insert(key.clone()) {
+            continue;
+        }
+        for c in &groups[&(key.0.as_str(), key.1)] {
+            if let Pattern::Var(p, _) = &c.params[key.2] {
+                let locals = locals_for(c);
+                for st in &c.body {
+                    handed(stmt_expr(st), p, &locals, &user, &mut work);
+                }
+            }
+        }
+    }
+    // of those, the ones read only as a view, largest set first: every
+    // position whose clauses all take a plain name or `_`, then drop the ones
+    // a clause's body uses otherwise until nothing more drops
+    let mut safe: crate::hash::Set<(String, usize, usize)> = reached
+        .into_iter()
+        .filter(|(name, n, i)| {
+            groups[&(name.as_str(), *n)].iter().all(|c| {
+                !c.is_getter() && matches!(c.params[*i], Pattern::Var(..) | Pattern::Wildcard(_))
+            })
+        })
+        .collect();
+    loop {
+        let mut drop = Vec::new();
+        for key in &safe {
+            let clauses = &groups[&(key.0.as_str(), key.1)];
+            let holds = clauses.iter().all(|c| {
+                let Pattern::Var(p, _) = &c.params[key.2] else { return true };
+                let mut cx = Cx { groups: &groups, forwarders, safe: &safe, locals: locals_for(c) };
+                // the parameter itself is not a callee the body may bind
+                cx.locals.remove(p.as_str());
+                let twice = c
+                    .params
+                    .iter()
+                    .enumerate()
+                    .any(|(j, q)| j != key.2 && matches!(q, Pattern::Var(o, _) if o == p));
+                let shadowed = twice || bound_in(&c.body).contains(p.as_str());
+                !shadowed && stmts_read_only(&c.body, p, &cx)
+            });
+            if !holds {
+                drop.push(key.clone());
+            }
+        }
+        if drop.is_empty() {
+            break;
+        }
+        for key in drop {
+            safe.remove(&key);
+        }
+    }
+    let mut out = crate::hash::Set::default();
+    for (d, i, x, h, span) in candidates {
+        let locals = locals_for(d);
+        if locals.contains(h) {
+            continue;
+        }
+        let rest = &d.body[i + 1..];
+        let mut params = crate::hash::Set::default();
+        for p in &d.params {
+            pattern_names(p, &mut params);
+        }
+        let rebound = params.contains(x) || bound_in(rest).contains(x);
+        let mut cx = Cx { groups: &groups, forwarders, safe: &safe, locals };
+        cx.locals.remove(x);
+        if !rebound && stmts_read_only(rest, x, &cx) {
+            out.insert((d.name.clone(), d.params.len(), span));
+        }
+    }
+    out
+}
+
 /// The lookup over that index. Keyed by NAME with arity filtered off the
 /// result, because the names come from call sites as well as declarations and
 /// a `&str` key borrows as `str` where a tuple key would demand the program's
@@ -3091,6 +3453,7 @@ const DECLARES_CONTEXT_CALLS: &[&str] = &[
     "k_b_bit_xor_fast",
     "k_b_bytes",
     "k_b_bytes_fast",
+    "k_b_bytes_frame",
     "k_b_find2",
     "k_b_find2_below",
     "k_b_find2_below_fast",
@@ -5849,6 +6212,33 @@ impl<'a> Backend<'a> {
                     }
                     f.bind(name, &t);
                 }
+                Stmt::Bind {
+                    pattern: Pattern::Var(name, _),
+                    expr: Expr::App { args, span, .. },
+                } if self.framed_views.contains(&(f.group.clone(), f.arity, *span)) => {
+                    // Only a proven string: a header that may be the frame's
+                    // or the arena's is a pointer LLVM cannot take apart,
+                    // and the frame then saved 11,110,137 of the 28,013,580
+                    // instructions it saves on runbench when it can. So
+                    // `k_b_bytes_frame` has no slow arm. It allocates nothing,
+                    // and the counting build takes it too: the header is not an
+                    // arena byte, and k_stat_sh_bytes has nothing to count.
+                    let v = self.emit_expr(f, &args[0])?;
+                    let arg_sets = [f.set_of(&v)];
+                    let t = f.tmp();
+                    if arg_sets[0] == STR {
+                        let slot = f.tmp();
+                        f.line(&format!("{slot} = alloca [3 x i64], align 8"));
+                        f.line(&format!(
+                            "{t} = call %KValue @k_b_bytes_frame(%KValue {v}, ptr {slot})"
+                        ));
+                        f.frame_held = true;
+                    } else {
+                        f.line(&format!("{t} = call %KValue @k_b_bytes_fast(%KValue {v})"));
+                    }
+                    f.record(&t, infer::builtin_set("bytes", &arg_sets));
+                    f.bind(name, &t);
+                }
                 Stmt::Bind { pattern, expr } => {
                     self.emit_bind(f, pattern, expr)?;
                 }
@@ -6740,8 +7130,14 @@ impl<'a> Backend<'a> {
                                 ));
                             }
                         }
+                        // a header in this frame must outlive the callee's
+                        // reads of it, so the call keeps the frame
+                        let kind = match f.frame_held {
+                            true => "call",
+                            false => "musttail call",
+                        };
                         f.line(&format!(
-                            "{t} = musttail call tailcc {callee_ret} @{}({})",
+                            "{t} = {kind} tailcc {callee_ret} @{}({})",
                             dsym(name, n),
                             args_ir.join(", ")
                         ));
