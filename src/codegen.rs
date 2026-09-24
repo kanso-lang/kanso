@@ -3615,27 +3615,42 @@ fn branches_to(text: &str, label: &str) -> bool {
     })
 }
 
-/// Every unquoted `@sym` that `text` writes, in one pass. A symbol runs from
-/// the `@` over letters, digits, `_`, `.` and `$`, which is LLVM's own rule for
-/// a name that needs no quotes, so `@s12` never answers for `@s12_lit`.
-fn unquoted_globals(text: &str) -> crate::hash::Set<&str> {
-    let bytes = text.as_bytes();
-    let mut found = crate::hash::Set::default();
-    let mut at = 0;
-    while let Some(next) = text[at..].find('@') {
-        let from = at + next + 1;
-        let mut to = from;
-        while to < bytes.len()
-            && (bytes[to].is_ascii_alphanumeric() || matches!(bytes[to], b'_' | b'.' | b'$'))
-        {
-            to += 1;
+/// Which interned strings the texts name, by index: whether `@sN` appears,
+/// and whether `@sN_lit` does. `intern` names string N `sN`, so a name is read
+/// as a number and nothing is hashed. A name ends where LLVM's unquoted names
+/// do, at the first byte that is not a letter, digit, `_`, `.` or `$`, so
+/// `@s12` never answers for `@s12_lit` or `@s120`.
+///
+/// Collecting every `@name` into a set and asking it was 23,334 instructions
+/// of `kanso play`'s start-up on a one-line program, most of it hashing names
+/// nothing would ask about.
+fn named_strings(texts: &[&str], count: usize) -> Vec<[bool; 2]> {
+    let name_byte = |b: u8| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.' | b'$');
+    let mut named = vec![[false; 2]; count];
+    for text in texts {
+        let bytes = text.as_bytes();
+        let mut at = 0;
+        while let Some(next) = text[at..].find("@s") {
+            let from = at + next + 2;
+            at = from;
+            let mut to = from;
+            let mut n = 0usize;
+            while to < bytes.len() && bytes[to].is_ascii_digit() {
+                n = n.saturating_mul(10).saturating_add(usize::from(bytes[to] - b'0'));
+                to += 1;
+            }
+            if to == from || n >= count {
+                continue;
+            }
+            let ends = |i: usize| !bytes.get(i).is_some_and(|b| name_byte(*b));
+            if ends(to) {
+                named[n][0] = true;
+            } else if bytes[to..].starts_with(b"_lit") && ends(to + 4) {
+                named[n][1] = true;
+            }
         }
-        if to > from {
-            found.insert(&text[from..to]);
-        }
-        at = from;
     }
-    found
+    named
 }
 
 /// Every `sym` for which `text` writes `@sym(`, collected in one pass.
@@ -5170,12 +5185,9 @@ impl<'a> Backend<'a> {
         // strings and 264 of their literal cells were named by nothing, 36% of
         // the module's bytes, each parsed and laid out by clang all the same.
         // Only the body and the type tables name a string.
-        let named = unquoted_globals(&body);
-        let tabled = unquoted_globals(&self.globals);
-        let wanted = |sym: &str| named.contains(sym) || tabled.contains(sym);
-        for (name, bytes) in &self.strings {
-            let lit = format!("{name}_lit");
-            if wanted(name) {
+        let named = named_strings(&[&body, &self.globals], self.strings.len());
+        for ((name, bytes), [string, lit]) in self.strings.iter().zip(named) {
+            if string {
                 let _ = writeln!(
                     out,
                     "@{name} = private unnamed_addr constant [{} x i8] c\"{}\"",
@@ -5183,8 +5195,8 @@ impl<'a> Backend<'a> {
                     ir_bytes(bytes)
                 );
             }
-            if wanted(&lit) {
-                let _ = writeln!(out, "@{lit} = internal global %KValue zeroinitializer");
+            if lit {
+                let _ = writeln!(out, "@{name}_lit = internal global %KValue zeroinitializer");
             }
         }
         out.push_str(&self.globals);

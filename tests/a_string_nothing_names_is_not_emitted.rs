@@ -10,7 +10,7 @@
 //! somewhere besides its own definition, and the binary must print what the
 //! interpreter prints.
 //!
-//! Watched red with every interned string emitted: the module carried 328
+//! Watched red with every interned string emitted: the module carried 239
 //! strings and literal cells that nothing named.
 
 use std::process::Command;
