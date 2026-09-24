@@ -1983,7 +1983,19 @@ dead_cycle = row
 
 rows_b1cy = text/concat rows_b1u [dead_cycle]
 
-rows_b = text/concat rows_b1cy [compile_mem compile_mem_host]
+# A string nothing names is not emitted. The mutation wants every interned
+# string, and the spec's module carries strings nothing names again.
+dead_string = row
+  "a string nothing names emitted"
+  true
+  "cargo test --release --test a_string_nothing_names_is_not_emitted"
+  "specs (unit, golden, differential)"
+  (breaking "a_string_nothing_names_emitted")
+  release
+
+rows_b1st = text/concat rows_b1cy [dead_string]
+
+rows_b = text/concat rows_b1st [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 

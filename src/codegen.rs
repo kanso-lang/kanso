@@ -3567,6 +3567,29 @@ fn group_indices_in<'s>(
         .filter(move |at| program.fns[*at].params.len() == arity)
 }
 
+/// Every unquoted `@sym` that `text` writes, in one pass. A symbol runs from
+/// the `@` over letters, digits, `_`, `.` and `$`, which is LLVM's own rule for
+/// a name that needs no quotes, so `@s12` never answers for `@s12_lit`.
+fn unquoted_globals(text: &str) -> crate::hash::Set<&str> {
+    let bytes = text.as_bytes();
+    let mut found = crate::hash::Set::default();
+    let mut at = 0;
+    while let Some(next) = text[at..].find('@') {
+        let from = at + next + 1;
+        let mut to = from;
+        while to < bytes.len()
+            && (bytes[to].is_ascii_alphanumeric() || matches!(bytes[to], b'_' | b'.' | b'$'))
+        {
+            to += 1;
+        }
+        if to > from {
+            found.insert(&text[from..to]);
+        }
+        at = from;
+    }
+    found
+}
+
 /// Every `sym` for which `text` writes `@sym(`, collected in one pass.
 ///
 /// This answers `text.contains(&format!("@{sym}("))` exactly, for any `sym`
@@ -5062,14 +5085,27 @@ impl<'a> Backend<'a> {
                 "@{cell} = internal constant %KValue                  {{ i64 11, i64 ptrtoint (ptr @{cell}_clo to i64) }}"
             );
         }
+        // A string is interned when a function asks for it, and the function
+        // may since have been pruned: on the codegen corpus 198 of 270
+        // strings and 264 of their literal cells were named by nothing, 36% of
+        // the module's bytes, each parsed and laid out by clang all the same.
+        // Only the body and the type tables name a string.
+        let named = unquoted_globals(&body);
+        let tabled = unquoted_globals(&self.globals);
+        let wanted = |sym: &str| named.contains(sym) || tabled.contains(sym);
         for (name, bytes) in &self.strings {
-            let _ = writeln!(
-                out,
-                "@{name} = private unnamed_addr constant [{} x i8] c\"{}\"",
-                bytes.len(),
-                ir_bytes(bytes)
-            );
-            let _ = writeln!(out, "@{name}_lit = internal global %KValue zeroinitializer");
+            let lit = format!("{name}_lit");
+            if wanted(name) {
+                let _ = writeln!(
+                    out,
+                    "@{name} = private unnamed_addr constant [{} x i8] c\"{}\"",
+                    bytes.len(),
+                    ir_bytes(bytes)
+                );
+            }
+            if wanted(&lit) {
+                let _ = writeln!(out, "@{lit} = internal global %KValue zeroinitializer");
+            }
         }
         out.push_str(&self.globals);
         out.push('\n');
