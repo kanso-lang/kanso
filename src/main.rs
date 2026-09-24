@@ -1405,14 +1405,13 @@ fn ended_by_signal(_status: &std::process::ExitStatus, _program: Option<&ast::Pr
 }
 
 fn cached_program_binary(ir: &str) -> std::io::Result<std::path::PathBuf> {
-    use std::hash::{Hash, Hasher};
-    let mut hasher = std::hash::DefaultHasher::new();
-    ir.hash(&mut hasher);
-    // The same swap, for the same reason: this key names the runtime the
-    // binary would be linked against, and that runtime is a constant.
-    kanso::hash::RUNTIME_DIGEST.hash(&mut hasher);
-    let key = hasher.finish();
-    let binary = std::env::temp_dir().join(format!("kanso_run_{key:016x}"));
+    // 128 bits of the IR, at a third of SipHash's cost: see `hash::key_of`.
+    // The runtime the binary would be linked against is a constant, so its
+    // digest is folded in rather than walked.
+    let (ka, kb) = kanso::hash::key_of(ir.as_bytes());
+    let (ra, rb) = kanso::hash::RUNTIME_DIGEST;
+    let key = format!("{:016x}{:016x}", ka ^ ra, kb ^ rb.rotate_left(17));
+    let binary = std::env::temp_dir().join(format!("kanso_run_{key}"));
     if binary.exists() {
         return Ok(binary);
     }
@@ -1421,9 +1420,9 @@ fn cached_program_binary(ir: &str) -> std::io::Result<std::path::PathBuf> {
     // rewrite what the other's clang was already reading — which surfaces as
     // a segmentation fault inside LLVM's assembly lexer, blamed on the
     // program rather than on the race.
-    let ll_path = std::env::temp_dir().join(format!("kanso_run_{key:016x}_{}.ll", pid_tag()));
+    let ll_path = std::env::temp_dir().join(format!("kanso_run_{key}_{}.ll", pid_tag()));
     std::fs::write(&ll_path, ir)?;
-    let staging = std::env::temp_dir().join(format!("kanso_run_{key:016x}_{}", pid_tag()));
+    let staging = std::env::temp_dir().join(format!("kanso_run_{key}_{}", pid_tag()));
     let ll = ll_path.to_string_lossy().into_owned();
     let out = staging.to_string_lossy().into_owned();
     let status = dev_clang(&out, &ll)?;
