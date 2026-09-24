@@ -11855,3 +11855,29 @@ no state the rewind would not have written back.
 
 With both changes, runbench reads 1,856,032,715 -> 1,845,541,051 on this
 container, -10,491,664 (-0.57%). CI's rows go into the goldens.
+
+**CI's rows**, over main with kanso#1602, taken into the goldens:
+
+    work_runbench      1,813,492,695 -> 1,804,051,708    -9,440,987   -0.52%
+    work_scanbench       451,725,005 ->   417,133,254   -34,591,751   -7.66%
+    work_escapebench      80,047,462 ->    76,456,459    -3,591,003   -4.49%
+    work_basket           32,679,271 ->    32,347,253      -332,018   -1.02%
+    work_digestbench       5,866,958 ->     5,842,672       -24,286   -0.41%
+    work_encodebench   3,178,192,129 -> 3,179,984,475    +1,792,346   +0.06%
+    work_livebench     2,645,995,367 -> 2,653,048,163    +7,052,796   +0.27%
+    work_deepbench       366,364,093 ->   366,468,663      +104,570   +0.03%
+    work_oneshot          19,927,890 ->    19,945,518       +17,628   +0.09%
+    work_readbench         4,630,497 ->     4,630,893          +396   +0.01%
+    work_widebench        30,153,767 ->    30,153,803           +36   +0.00%
+    codegen_instructions_dev      287,891,869 ->   287,894,238   +2,369
+    codegen_instructions_release 1,614,704,366 -> 1,614,817,091  +112,725
+
+scanbench runs the regexp scan at its full size, which is why it falls the
+furthest. The rows that rise are loops that allocate on every iteration and
+so pay the rewind's comparison without taking its exit. The encoder is the
+largest of them. `text`, summed over the fourteen binaries, reads 3,258,368
+against 3,256,224: 128 to 224 bytes a binary, since every binary carries both
+paths. The two codegen rows
+rise because the runtime the link carries is larger: the dev row counts the
+link, and the release row compiles the hot unit where the rewind lives.
+The objective weighs runbench, which falls, and the rise is banked.
