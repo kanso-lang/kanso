@@ -237,7 +237,7 @@
 # 2026-09-24: the number scan is one call to text/number_span where it was a
 # dispatch arm per byte class. calls 1,182 -> 1,165, branches 764 -> 747,
 # lines 8,570 -> 8,422; defines stay 119.
-defines=118
-calls=1155
-branches=745
-lines=8412
+defines=84
+calls=846
+branches=585
+lines=6849

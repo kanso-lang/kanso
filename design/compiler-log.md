@@ -12873,3 +12873,44 @@ the second must, and both must print what the interpreter prints. Watched red
 with the pass returning nothing: the mapping program defined it. The ratchet
 carries the mutation.
 
+
+## 2026-09-24 — a cycle nothing reaches is not emitted
+
+`prune_unnamed` struck a definition from the emitted module once no other
+surviving definition named it. That is reference counting, and a cycle names
+itself. std/list sorts by merging, and the merge is four functions calling
+round: `merge`, `merge_on`, `pick` and `advance`. A program that imported
+std/list and never sorted struck `sort`, `msort` and `span`, then kept the
+four, because each was still named by the one before it, along with `drain`,
+which only they call. The same shape kept std/list's window helpers
+`bounded_flat` and `bounded_more` once the arm prune had dropped the arms that
+call them, and std/text's two trimming walks, `from_front` through
+`past_the_end` and `step_in` back to itself, and `from_back` with
+`step_back`.
+
+The prune now marks. The roots are the entry, `d_thunk_eval`, and every block
+that is not a candidate. A block is kept when the mark reaches it by a name
+some live block writes, or by a closure cell a live block loads. The oracle in
+the unit tests is the same mark written the slow way, one `names_symbol`
+search per question, and a new unit test builds a two-block cycle nothing
+names and asserts both go.
+
+On the codegen corpus the IR falls 3,068 -> 2,073 lines. The child tree of a
+dev build on this box reads 200,891,196 -> 155,302,680 instructions (-22.7%)
+and of a release build 856,351,463 -> 718,270,625 (-16.1%). In the dev tier,
+`clang -cc1` takes 111,055,320 of that, and 35,541,211 of those are clang
+compiling an empty module, so the fixed floor is about a third of the
+compile. The compile golden's module row falls 2,181 -> 1,488 lines and 35
+-> 28 defines. The decoder's emitted lines fall 8,412 -> 6,849 and 118 -> 84
+defines. Every other benchmark emits less: encodebench 8,242 -> 7,330, oneshot
+8,347 -> 8,104, widebench 9,225 -> 7,781, deepbench 2,886 -> 2,159, pendbench
+4,260 -> 3,544, scanbench 17,524 -> 15,765, indexbench 986 -> 766,
+digestbench 6,688 -> 5,776, readbench 1,089 -> 847, livebench 8,486 ->
+8,243 and runbench 33,009 -> 31,460. The twelve cost veins and the lazy tier
+are unchanged.
+
+Spec: `tests/a_cycle_nothing_reaches_is_not_emitted` builds a program that
+sums a list and one that sorts it. The first must not define
+`d_list/merge_5`, the second must, and both must print what the interpreter
+prints. Watched red against the counting prune: the summing program defined
+the merge. The ratchet carries the mutation, which starts every block marked.
