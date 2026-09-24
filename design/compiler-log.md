@@ -12492,3 +12492,11 @@ environment. The one place that sets the flag, `--counters`, does it while
 parsing the arguments, before anything asks. On this box `startup_instructions`
 reads 643,462 on main and on the keyed build, and 643,146 read once.
 
+CI's rows with both commits: `compile_instructions` 25,432,497 -> 25,395,488,
+`entry_instructions` 85,149,814 -> 85,032,735, `library_instructions`
+85,700,954 -> 85,584,660 and `emit_instructions` 42,892,990 -> 42,866,674,
+each a read of the environment the emitter no longer repeats.
+`startup_instructions` reads 636,119 against 636,107, a rise of 12
+(+0.0019%), which is the layout of a binary that moved; this box read that
+row 316 lower. The codegen and interpreter rows read as main's.
+

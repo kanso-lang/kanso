@@ -1052,7 +1052,11 @@
 # 2026-09-24 (kanso#1613): a byte view read in its frame keeps its header
 # there. library_instructions 85,824,404 -> 85,700,954, a FALL of 123,450
 # (-0.1438%).
-library_instructions=85700954
+#
+# 2026-09-24 (kanso#1618): a counting run builds its own binary, and the
+# counters setting is read once. library_instructions 85,700,954 ->
+# 85,584,660, a FALL of 116,294 (-0.1357%).
+library_instructions=85584660
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.
