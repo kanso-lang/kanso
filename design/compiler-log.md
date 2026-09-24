@@ -12342,3 +12342,30 @@ inserts after the `};` that closes the match. The second round found the
 two book samples that print every counter, ch10's `counters` and ch12's
 `fused`, one line short: each now carries `number_spans=0`, and their panels
 were rewritten from the samples.
+
+## 2026-09-24 — the number work and the dispatch frames land together
+
+kanso#1611 carries kanso#1605 (the number span, with the beat pass
+classifying once and shipped std modules skipping their fixed check),
+kanso#1608 (numbers read in place), kanso#1609 (numbers agree across
+engines) and kanso#1610 (a type dispatcher's heavy arms kept out of its
+frame), over main with kanso#1604. Each carried entry above stands as
+written. CI's sitting on the combined tree, against main:
+
+    runbench      1,804,051,708 -> 1,750,593,608   -53,458,100   -2.96%
+    jsonbench     1,196,422,554 -> 1,127,050,463   -69,372,091   -5.80%
+    livebench     2,653,048,163 -> 2,626,918,335   -26,129,828   -0.98%
+    encodebench   3,179,984,475 -> 3,164,604,377   -15,380,098   -0.48%
+    oneshot          19,945,518 ->    19,420,522      -524,996   -2.63%
+    widebench        30,153,803 ->    29,785,857      -367,946   -1.22%
+
+The dispatch rule reads smaller on CI than on this container, where it took
+encodebench down 2.22% and livebench 4.02% by itself; CI's clang 19 had
+already spent less on those frames.
+
+Three rows are worse. `text` sums to 3,421,248, the SSE2 span routine, the
+two slice doors and the text parsers in every binary, and the out-of-line
+bodies the encoder now calls. `work_digestbench` reads 5,842,731 (+59) and
+`work_readbench` 4,630,947 (+54); neither program touches the code that
+changed, and both moved by the same few dozen instructions in kanso#1608's
+own sitting.

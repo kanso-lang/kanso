@@ -457,4 +457,8 @@
 # 2026-09-24, kanso#1605 (number span, beat classified once, shipped std
 # modules skip their check), CI's row: startup_instructions 672,962 ->
 # 628,645, a FALL of 44,317 (-6.5854%).
-startup_instructions=628645
+#
+# 2026-09-24, kanso#1611 (carrying kanso#1605, #1608, #1609 and #1610 over
+# main with kanso#1604), CI's row: startup_instructions 628,645 -> 635,557, a
+# RISE of 6,912 (+1.0995%).
+startup_instructions=635557
