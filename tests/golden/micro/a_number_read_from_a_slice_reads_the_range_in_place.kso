@@ -4,9 +4,16 @@
 # whole source, a sign, an exponent, a range that stops inside the digits,
 # an inverted range, a start below one, an end past the length, a range with
 # no number in it, and a string rather than bytes.
+#
+# A float with more than nineteen significant digits leaves the fast path for
+# strtod, which reads until a byte stops it. Out of the middle of bytes the
+# next byte is another digit, so strtod read past the range and the parse was
+# refused as not a number, in the old pair as much as in the fused door.
 import "std/text"
 
 src = text/bytes "x-1234.5e2y"
+
+long = text/bytes "12345678901234567890123456789"
 
 fn shown (err reason)
   "err {reason}"
@@ -39,3 +46,4 @@ pub play =
   print "float past end: {float_of src 2 40}"
   print "float no digits: {float_of src 11 11}"
   print "float of a string: {float_of "a2.5b" 2 4}"
+  print "float of many digits: {float_of long 1 22}"

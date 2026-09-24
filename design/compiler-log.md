@@ -11940,3 +11940,25 @@ sign and an exponent, stopping inside the digits, inverted, starting below
 one, ending past the length, holding no digits, and out of a string. Parsing
 one byte short in the integer door went red on six lines of it (`123` for
 `1234`, `err ""` for `2`).
+
+Writing the spec turned up a native bug that predates this change. A float
+with more than nineteen significant digits leaves the Eisel-Lemire path for
+strtod, and strtod reads until a byte stops it. A range read out of the middle
+of bytes is followed by more digits, so strtod read past it and the parse was
+refused: `text/to_float (text/slice long 1 22)` over twenty-nine digits said
+`"1234567890123456789012" is not a number` on main, where the interpreter
+answers `1.2345678901234568e+21`. The integer slow path had the same shape
+through strtoll. Both slow paths now parse a terminated copy of the range, on
+the stack up to sixty-three bytes. The golden carries the case, and on the
+unfixed runtime its last line goes red with the refusal above. runbench reads
+1,846,944,217 either way, since no call there leaves the fast path.
+
+The same probe found four more places where native and the interpreter
+disagree about what a number is, in every form (a string, bytes and a slice
+all agree within each engine, so none of this is new). Native accepts a
+leading space and a hex float, `" 12"` and `"0x1f"`, where the interpreter
+refuses both. The interpreter's `to_int` accepts `"1_000"`, because
+num-bigint takes underscores as separators, where its own `to_float` and
+native refuse it. And `"123456789012345678901234567890.5"` is reported as
+overflowing natively and as not an integer by the interpreter. Those are the
+next change, with an adversarial golden of their own.

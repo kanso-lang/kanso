@@ -16,3 +16,4 @@ float below one: err "" is not a number
 float past end: err "" is not a number
 float no digits: err "y" is not a number
 float of a string: 2.5
+float of many digits: 1.2345678901234568e+21

@@ -9105,8 +9105,18 @@ KValue k_b_from_code(KValue nv, const char* origin) {
 static __attribute__((noinline, cold, preserve_most)) KValue k_b_to_int_slow(const char* data, long long len, const char* origin) {
     char* end = NULL;
     errno = 0;
-    long long n = strtoll(data, &end, 10);
-    if (errno == ERANGE) {
+    /* strtoll reads until a byte stops it, and a range read out of the
+       middle of bytes has more digits after its last one. So the slow path
+       parses a terminated copy, and `end` is measured against that. */
+    char small[64];
+    char* copy = len < 64 ? small : malloc((size_t)len + 1);
+    memcpy(copy, data, (size_t)len);
+    copy[len] = 0;
+    long long n = strtoll(copy, &end, 10);
+    int whole = len != 0 && end == copy + len;
+    int range = errno == ERANGE;
+    if (copy != small) free(copy);
+    if (range) {
         /* strtoll saturates while consuming every digit — without this check
            an overflowing literal decodes as a silently wrong value. Loud
            limit beats quiet lie until native bignum tiering ships. */
@@ -9114,7 +9124,7 @@ static __attribute__((noinline, cold, preserve_most)) KValue k_b_to_int_slow(con
         return k_err(k_concat(k_concat(k_str("\""), str),
             k_str("\" overflows this engine's integers")), origin);
     }
-    if (len == 0 || end != data + len) {
+    if (!whole) {
         KValue str = k_str_n(data, len);
         return k_err(k_concat(k_concat(k_str("\""), str), k_str("\" is not an integer")), origin);
     }
@@ -10075,9 +10085,18 @@ static KValue k_to_float_text(const char* data, long long len, const char* origi
             }
         }
     }
+    /* The fallback parses a terminated copy, for the reason k_b_to_int_slow
+       gives: a range read out of the middle of bytes has more digits after
+       its last one, and strtod would read them. */
     char* end = NULL;
-    double d = strtod(data, &end);
-    if (len == 0 || end != data + len) {
+    char small[64];
+    char* copy = len < 64 ? small : malloc((size_t)len + 1);
+    memcpy(copy, data, (size_t)len);
+    copy[len] = 0;
+    double d = strtod(copy, &end);
+    int whole = len != 0 && end == copy + len;
+    if (copy != small) free(copy);
+    if (!whole) {
         KValue str = k_str_n(data, len);
         return k_err(k_concat(k_concat(k_str("\""), str), k_str("\" is not a number")), origin);
     }
