@@ -3457,13 +3457,28 @@ fn dsym(name: &str, arity: usize) -> String {
     quoted(&format!("d_{name}_{arity}"))
 }
 
+/// Word `n` of `value` when it is a literal `{ i64 A, i64 B }`. Reading one
+/// off a constant with `extractvalue` is an instruction clang's fast selector
+/// at -O0 does not handle, and it sends the rest of the block to the slow one.
+fn literal_word(value: &str, n: usize) -> Option<&str> {
+    let inner = value.strip_prefix("{ i64 ")?.strip_suffix(" }")?;
+    let (a, b) = inner.split_once(", i64 ")?;
+    Some(if n == 0 { a } else { b })
+}
+
 fn inline_tag(f: &mut FnEmit, value: &str) -> String {
+    if let Some(word) = literal_word(value, 0) {
+        return word.to_string();
+    }
     let t = f.tmp();
     f.line(&format!("{t} = extractvalue %KValue {value}, 0"));
     t
 }
 
 fn inline_payload(f: &mut FnEmit, value: &str) -> String {
+    if let Some(word) = literal_word(value, 1) {
+        return word.to_string();
+    }
     let t = f.tmp();
     f.line(&format!("{t} = extractvalue %KValue {value}, 1"));
     t
@@ -3650,8 +3665,7 @@ impl<'a> Backend<'a> {
             f.line(&format!("{p} = insertvalue %parsed {a}, i64 {w1}, 1"));
             format!("%parsed {p}")
         } else if self.unboxed_param(callee, arity, i) {
-            let p = f.tmp();
-            f.line(&format!("{p} = extractvalue %KValue {e}, 1"));
+            let p = inline_payload(f, e);
             format!("i64 {p}")
         } else {
             format!("%KValue {e}")

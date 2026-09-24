@@ -11370,3 +11370,31 @@ temporary `%KValue` to any of the three, that it calls each two-word form, and
 that the release module calls none of them. It went red with the dev tier
 asking the `%KValue` forms. The first draft of its program had a record arm
 beside a wildcard arm, which is how kanso#1597 was found.
+
+## 2026-09-24 — a literal's words are written, not extracted
+
+The arithmetic fast path reads each operand's payload with `inline_payload`,
+and for a literal operand that was `extractvalue %KValue { i64 0, i64 1 }, 1`:
+the number 1 with an instruction around it. clang's fast selector at -O0 does
+not lower an `extractvalue` of a constant, so the rest of the block went to
+SelectionDAG. The pruned corpus module had 48 of them, and a text rewrite that
+wrote the word instead took `clang -cc1` from 263,368,026 to 260,365,961.
+`inline_tag` and `inline_payload` now answer a literal's word directly, and
+the argument to an unboxed parameter goes through `inline_payload` rather than
+writing its own `extractvalue`.
+
+Measured on this container, clang 18, gate environment:
+
+    clang -cc1 (dev)            256,343,115 -> 251,483,787
+    codegen_instructions_dev    372,274,647 -> 367,410,698   -1.31%
+    startup_instructions            798,956 ->     798,960   +4
+
+The release module loses the same lines, and the optimiser had already folded
+them, so the runtime counter sweep, `bench/text_golden.txt` included, agrees
+with every golden. The emitted-code goldens fall, the decoder from 8,814 lines
+to 8,650, and the compile-cost goldens with them. CI's rows replace the local
+ones above.
+
+`tests/a_literal_s_words_are_written_not_extracted.rs` builds a countdown on
+both tiers and requires that neither module reads a word off a literal and
+that both print 55. It went red with `literal_word` answering nothing.
