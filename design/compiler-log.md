@@ -12935,3 +12935,13 @@ SelectionDAG, which is 34,446,800 of `clang -cc1`'s 111,055,320. Passing a
 value as two words is a change to every signature the emitter writes and every
 runtime entry point, which is too big a change to take on here. GlobalISel
 (`-mllvm -global-isel`) segfaults on the module under LLVM 18.
+
+Most of each tool's fixed cost is the dynamic loader relocating LLVM's shared
+libraries. `clang -cc1` on an empty module reads 35,541,211 instructions,
+26,069,125 of them in `_dl_relocate_object` for libclang-cpp and libLLVM, and
+`ld.lld` linking an empty object reads 40,530,158, 17,699,276 of them the same
+way. A dev build pays both, about 44 million of its 145.7 million. Running
+`llc -O0 -disable-verify` in place of `clang -cc1` loads libLLVM alone and
+reads 95,768,077 on the corpus against 102,053,958, but it writes different
+unwind tables and relaxation, and Xcode's clang ships no `llc`, so the dev
+tier would carry two back ends for about 4% of one row. Declined.
