@@ -11331,3 +11331,42 @@ and branches split. Each block SelectionDAG takes costs a fixed setup, so
 splitting added blocks faster than it removed work. An all-SelectionDAG
 compile of the same module read 335,125,013, so FastISel saves 47 million
 instructions today.
+
+## 2026-09-24 — the dev tier asks its hot predicates in two words
+
+At -O0 clang's fast instruction selector lowers a call only when every
+argument is a scalar. A call passing a `%KValue` goes to SelectionDAG on its
+own. On the pruned codegen corpus 216 of those calls went to `k_not_failure`,
+`k_check_rec_fast` and `k_truthy`, and 168 of them to `k_not_failure`, which
+reads only the tag. DECLARES now carries `k_not_failure_w(i64 tag)`,
+`k_truthy_w(i64 tag, i64 pay)` and `k_check_rec_fast_w(i64 tag, i64 pay, ...)`.
+A dev module extracts the value's words and calls those, and each slow path
+builds the `%KValue` back only where it calls the runtime. `FnEmit::predicate`
+does the rewrite at every site that writes one of the three calls. A release
+module never calls the two-word forms, so kanso#1596's pruning leaves them
+out, and the emitted-code and compile-cost goldens do not move.
+
+The sites were chosen with a text rewrite of the corpus module before any
+emitter change. `clang -cc1 -O0` read 287,802,692 as emitted, 270,908,624 with
+`k_not_failure` called on the tag, and 264,829,993 with all three rewritten.
+Writing the tag test inline at each site read 272,759,087, which is worse than
+the call on the tag.
+
+Measured on this container, clang 18, gate environment:
+
+    clang -cc1 (dev)            280,905,590 -> 256,343,115
+    codegen_instructions_dev    396,836,531 -> 372,274,647   -6.19%
+    startup_instructions            787,528 ->     798,956   +11,428
+
+Start-up pays for three more names in the sorted list that each `declare` line
+is looked up in. The binary search goes one level deeper, which is 159 more
+`memcmp` calls on the one-line program. A dev codegen fall of 6.19% is worth
+more to the objective than a start-up rise of 1.45%. CI's rows replace these.
+
+`tests/a_dev_build_asks_its_predicates_in_words.rs` builds a program with a
+record test between two record arms, a truth test and a failure test on both
+tiers. It requires the same output from each, that the dev module passes no
+temporary `%KValue` to any of the three, that it calls each two-word form, and
+that the release module calls none of them. It went red with the dev tier
+asking the `%KValue` forms. The first draft of its program had a record arm
+beside a wildcard arm, which is how kanso#1597 was found.
