@@ -11047,3 +11047,29 @@ identical to the unmutated tree. Its replacement closes the direct writer, and
 runbench reads 1,861,738,918, which the work vein sees. The short-path row's
 mutation now patches `ryu_short`'s range test, the line the restructure
 rewrote. No counter moves.
+
+## 2026-09-24 — the dev tier's instruction selector falls back on the calling convention
+
+`llc -O0` on the codegen corpus's IR spends 137,115,835 of 326,668,822
+instructions, 41.97%, in SelectionDAG's per-block selection, against
+6,953,622 in FastISel. FastISel works through a block from its terminator, and
+a terminator it cannot select sends the whole block to SelectionDAG. Its
+remarks name 307 `br label` terminators into blocks with `%KValue` phis, 158
+`ret %KValue` and 66 calls.
+
+The aggregate looked like the cause, which would have made this an emitter
+ABI change. Before sizing that, the corpus IR was rewritten so that user
+functions return `void` and their callers read a stand-in runtime call. The
+rewrite is wrong as a program and fine as a codegen measurement. `llc` then
+read 323,782,838, -0.88%, and the misses moved rather than shrank: 265 calls
+and 78 returns, most of them `ret void` in `tailcc` functions. FastISel on
+x86-64 selects neither calls nor returns in the `tailcc` convention.
+
+`tailcc` is what guarantees the tail calls that let mutual recursion run in
+constant stack, and a dev build without it would overflow on the deep
+recursion a release build runs. So the fallback is the convention's, and
+taking the aggregate out of the returns would not remove it. The lead is
+closed until FastISel selects `tailcc`. GlobalISel was measured on the same
+IR at 1,070,967,706, three times the default. Running `instcombine` after the
+always-inliner cost 41,445,873 in `opt` and saved 19,550,143 in `llc`, a net
+loss of 21,895,730.
