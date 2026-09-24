@@ -12765,3 +12765,26 @@ less than it cost.
   builders' checks are the part that costs, and the decoder's tokens, which
   a slice could have vouched for, are ascii of four to seven bytes: checking
   one costs less than proving its two ends.
+
+## 2026-09-24 — four pull requests carried together
+
+kanso#1614, kanso#1615, kanso#1617 and kanso#1618 each touched the log, and
+three of them the runtime and the ratchet's row list, so each would have
+merged main again behind the one before it and waited on a ratchet that takes
+over an hour for a runtime branch. They are carried here over main at
+kanso#1616 and land together.
+
+The conflicts were the log, where every entry is kept; the ratchet's row
+list, where every row is kept and the lists chain `rows_b1q`, `rows_b1p`,
+`rows_b1v`; the page, where kanso#1614 and kanso#1617 had each written a
+section 135, and the second is now 136, with section 133's pointer to it
+moved; and the cost goldens and the floor, which were regenerated rather than
+merged.
+
+The counter veins, regenerated over the combined tree, move three files. On
+the run program `arena_peak_bytes` falls 5,050,064 -> 4,194,304 and
+`held_peak_bytes`, which kanso#1614 took from 728,040 to 277,538, holds
+there, so `run_peak_bytes` reads 4,492,354 against main's 5,798,616.
+`allocs` falls 4,337,644 -> 4,147,652 and `alloc_bytes` 413,717,453 ->
+397,171,773. The instruction and compile-side rows are CI's.
+
