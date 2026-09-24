@@ -16,15 +16,17 @@
 # eighty characters and rustfmt wrapped it across three lines, so the anchor
 # opens the statement and the insertion goes after the `});` that closes it.
 # Putting the four calls straight after the opening line would put them inside
-# the closure, where they do not compile.
+# the closure, where they do not compile. kanso#1605 put the check inside a
+# match, so a shipped std module can skip it, and the statement now closes on
+# the `};` that ends the match rather than on the closure's `});`.
 set -e
-target='    let diags = phase::watched("check_merged", || {'
+target='        false => phase::watched("check_merged", || {'
 n=$(grep -cF "$target" src/lib.rs)
 [ "$n" -eq 1 ] || { echo "the merged check moved or multiplied ($n); rewrite this" >&2; exit 1; }
 awk '
   { print }
-  index($0, "let diags = phase::watched(\"check_merged\"") { open = 1; next }
-  open && $0 == "    });" {
+  index($0, "false => phase::watched(\"check_merged\"") { open = 1; next }
+  open && $0 == "    };" {
       print "    finish_program(&mut merged);"
       print "    phase::watched(\"desugar_field_reads\", || desugar_field_reads(&mut merged));"
       print "    phase::watched(\"prune_unused_getters\", || prune_unused_getters(&mut merged));"

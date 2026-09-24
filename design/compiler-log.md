@@ -11976,3 +11976,396 @@ paths. The two codegen rows
 rise because the runtime the link carries is larger: the dev row counts the
 link, and the release row compiles the hot unit where the rewind lives.
 The objective weighs runbench, which falls, and the rise is banked.
+
+## 2026-09-24 — a dispatcher's heavy arms stay out of its frame
+
+A group of clauses that switches on its argument's type compiles to one
+function, and LLVM gives that function one frame. The encoder's
+`encode_onto` is eight clauses: true, false, null, an int and a float each
+append a few bytes, and a string, a list and a map each run a loop. LLVM
+inlined all three loops, the escaper's among them, and their registers are
+callee-saved ones. So the function pushed six registers and popped them on
+every one of runbench's 2,380,860 calls, 1,438,110 of them for a scalar
+whose arm is one call into the runtime. An earlier experiment kept only the
+escaper out of line and read +1.24%: the list and map arms still needed the
+frame, so every call kept it and the string arm paid for a call on top.
+
+`kept_out` names the callees to keep as calls. A name is loop-bearing when
+it sits in a cycle of the call graph or can reach one. In a group that
+switches on type, with at least one clause that calls nothing loop-bearing
+and at least one that does, every loop-bearing function the heavy clauses
+name is defined `noinline`. On runbench that is `escape_onto`,
+`encode_list` and `encode_map` and nothing else. Two wider rules were tried
+first and are recorded so they are not tried again. The same rule without
+the type condition marked eighty-six functions, the decoder's scanning
+loops among them, and runbench rose 5.7%. Marking the decoder's four value
+parsers as well as the encoder's three added only 921,789 instructions of
+saving over the encoder alone.
+
+Measured on this container, both sides built from one tree:
+
+    encodebench   3,516,841,151 -> 3,438,943,935   -77,897,216   -2.22%
+    livebench     2,795,835,875 -> 2,683,373,059  -112,462,816   -4.02%
+    runbench      1,846,944,217 -> 1,820,829,169   -26,115,048   -1.41%
+    oneshot          20,252,928 ->    19,971,752      -281,176   -1.39%
+    widebench        30,090,895 ->    29,722,895      -368,000   -1.22%
+
+The other nine benchmarks read the same to the instruction. The instruction
+rows will be CI's. No allocation counter moves. The ratchet gains a row,
+"a dispatcher's heavy arms inlined into the frame its cheap arms pay", whose
+mutation takes the mark off both headers that write it; the work vein is its
+witness, and the table above is that mutation measured.
+
+## 2026-09-24 — a number is read out of the bytes it sits in
+
+Every JSON number the decoder meets ends in `text/to_int (text/slice cs
+start (p - 1))` or the same with `to_float`. The slice builds a view of the
+range for the one purpose of handing it to the converter, which parses it
+and drops it. The emitter now sees that pair and calls
+`k_b_to_int_slice` or `k_b_to_float_slice` with the source and the two ends.
+When the source is bytes and the range lies inside it, the door parses the
+bytes where they sit. Any other shape, including an inverted range, a start
+below one, an end past the length or a string source, falls back to the
+slice and the converter it replaces, so the answer is the one the pair gave.
+The two converters' bodies moved into `k_to_int_text` and `k_to_float_text`,
+which take a pointer and a length, and the old doors call them too. Only the
+builtin spelling is fused, as with the append fusion above it, and the
+interpreter is unchanged.
+
+Measured on this container, both sides built here from main ef56eac8:
+
+    runbench      1,856,033,857 -> 1,846,944,217   -9,089,640   -0.49%
+
+The instruction rows will be CI's. The allocation counters fall wherever a
+number is decoded, one view fewer per number:
+
+    decode   allocs     4,390,215 -> 3,757,665   alloc_bytes 246,359,648 -> 226,118,048
+    decode   sh_bytes  21,567,600 -> 6,386,400
+    run      allocs     5,698,908 -> 5,280,394   alloc_bytes 458,172,125 -> 443,885,453
+    run      sh_bytes  41,290,272 -> 31,270,680  sh_buf 109,369,344 -> 108,745,936
+    run      evac_allocs 68,318 -> 62,993        survive_slots 110,799 -> 108,671
+    oneshot  allocs        53,579 -> 49,362
+    live     allocs     7,544,011 -> 7,539,794
+
+Two counters on the run program read worse by their direction tables.
+`run_ten_frees` falls 7 -> 1 and `run_ten_handups` 4 -> 2, while
+`run_ten_blocks` falls 7 -> 6 and `run_cohort_frees` moves 4 -> 2. With
+fewer views to evacuate, the tenure allocator claims one block fewer, and
+the beat cycles that used to fill and then empty whole blocks no longer
+fill them, so there is less to hand up and less to give back. No peak row
+on the run program moves, so nothing is held that was not held before. `push_mut_slow` falls 1,638,122 -> 1,638,121 and
+`push_mut_fast` rises by the same one. The decoder's emitted code falls:
+defines 119 -> 117, calls 1,182 -> 1,172, branches 764 -> 762, lines 8,570
+-> 8,542, as the two library wrappers are no longer reached.
+
+`tests/golden/micro/a_number_read_from_a_slice_reads_the_range_in_place.kso`
+reads integers and floats out of ranges in the middle, at one digit, with a
+sign and an exponent, stopping inside the digits, inverted, starting below
+one, ending past the length, holding no digits, and out of a string. Parsing
+one byte short in the integer door went red on six lines of it (`123` for
+`1234`, `err ""` for `2`).
+
+Writing the spec turned up a native bug that predates this change. A float
+with more than nineteen significant digits leaves the Eisel-Lemire path for
+strtod, and strtod reads until a byte stops it. A range read out of the middle
+of bytes is followed by more digits, so strtod read past it and the parse was
+refused: `text/to_float (text/slice long 1 22)` over twenty-nine digits said
+`"1234567890123456789012" is not a number` on main, where the interpreter
+answers `1.2345678901234568e+21`. The integer slow path had the same shape
+through strtoll. Both slow paths now parse a terminated copy of the range, on
+the stack up to sixty-three bytes. The golden carries the case, and on the
+unfixed runtime its last line goes red with the refusal above. runbench reads
+1,846,944,217 either way, since no call there leaves the fast path.
+
+The same probe found four more places where native and the interpreter
+disagree about what a number is, in every form (a string, bytes and a slice
+all agree within each engine, so none of this is new). Native accepts a
+leading space and a hex float, `" 12"` and `"0x1f"`, where the interpreter
+refuses both. The interpreter's `to_int` accepts `"1_000"`, because
+num-bigint takes underscores as separators, where its own `to_float` and
+native refuse it. And `"123456789012345678901234567890.5"` is reported as
+overflowing natively and as not an integer by the interpreter. Those are the
+next change, with an adversarial golden of their own.
+
+CI's sitting, over main ef56eac8:
+
+    runbench      1,813,492,695 -> 1,805,310,423   -8,182,272   -0.45%
+    jsonbench     1,196,422,558 -> 1,187,932,917   -8,489,641   -0.71%
+    oneshot          19,927,890 ->    19,872,995      -54,895
+    livebench     2,645,995,367 -> 2,645,949,841      -45,526
+
+Several rows are worse, each by a small amount:
+
+- `text` rises on all fourteen binaries, 3,744 bytes each and 3,309,600
+  summed. Every binary carries both new doors and the two text parsers,
+  whether or not it reads a number.
+- `emit_instructions` goes to 45,239,459 (+32,683). The emitter asks each
+  one-argument call whether it is one of the two conversions over a slice.
+- `codegen_instructions_dev` goes to 287,916,082 and
+  `codegen_instructions_release` to 1,614,729,561. clang compiles the
+  larger runtime.
+- `startup_instructions` goes to 673,771 (+809).
+- `work_widebench` goes to 30,361,821 (+208,054, 0.69%). widebench binds
+  its slice to a name before converting it, so it never reaches the fused
+  door and calls `k_b_to_int` and `k_b_to_float`, which now call the text
+  parsers. On this container's clang 18 the same two binaries read
+  30,090,895 and 30,090,909. The rise is clang 19's answer to the split,
+  and the mechanism is not isolated further.
+- `work_encodebench` goes to 3,178,219,787 (+27,658), `work_digestbench`
+  to 5,867,017 (+59) and `work_readbench` to 4,630,551 (+54). None of the
+  three reads a number.
+
+The objective weighs runbench and not the others. Welfare reads 86.04
+against a floor of 86.01, and the rise is banked.
+
+## 2026-09-24 — a number is the same number on every engine
+
+The probe written for the previous entry found four shapes of text where
+native and the interpreter disagreed about what `to_int` or `to_float`
+returns. The interpreter is the oracle, and in three of the four it was
+right. Native's digit loops handle every ordinary number and pass everything
+else to strtoll or strtod, which read more than the interpreter's parse:
+
+- a leading space or tab, which libc skips, so `" 12"` was 12 natively and
+  refused by the interpreter;
+- a hex float, `"0x1f"` and `"0x1p3"`, which strtod reads as 31 and 8;
+- a nan with a payload, `"nan(1)"`;
+- `"123456789012345678901234567890.5"` in `to_int`, which natively reported
+  the overflow strtoll raised on the digits before the point. The
+  interpreter reported that it is not an integer, which is the better
+  answer: no number of digits would make it one.
+
+The slow paths now refuse the first three and ask whether the whole range was
+read before asking whether it overflowed. Bytes that are not utf-8 are
+refused as bytes, `bytes are not an integer`, which is what the interpreter
+says because it reads bytes as text before it parses them; natively they had
+been quoted, high byte and all. Only a range holding a byte above 127 is
+checked, so the error path of an ascii number costs no utf-8 pass and moves
+no utf-8 counter.
+
+The fourth disagreement was the interpreter's own. num-bigint reads `_` as a
+digit separator, so `to_int "1_000"` was 1000 there and refused natively,
+while the interpreter's own `to_float "1_000"` refused it too. `to_int` now
+refuses text holding an underscore before it asks num-bigint.
+
+`tests/golden/micro/a_number_is_the_same_number_on_every_engine.kso` asks
+each case of a string, of its bytes and of a range cut out of longer bytes.
+On the unfixed tree native went red on ten lines and the interpreter on
+one, the separator.
+
+## 2026-09-24 — four ideas measured and declined
+
+Recorded so the same profile does not send anyone back to them.
+
+`find2_below` over a string, so the encoder skips `text/bytes s` for a clean
+string. Built as an experiment on the number span's branch: run allocations
+5,698,908 -> 4,915,728 and shared bytes 41,290,272 -> 22,493,952, with
+`arena_peak_bytes` unmoved at 5,050,064. The per-string view does not set the
+peak. What remains is about one per cent of runbench, and the change widens
+a public std/text function to strings, which is surface. Declined; the
+compiler page carries it as item 16.
+
+Caching each shipped module's compile by path, so an entry importing
+std/text through five libraries compiles it once. `compile_peak_bytes` went
+768,704 -> 1,030,180, because the cache holds every tree for the whole
+compile. Presizing the front end's hash maps failed the same way at +1.09%
+on the peak. Both declined; item 17.
+
+`noinline` on the escape body, so the encoder's leaf arms skip its frame:
+runbench 1,856,032,701 -> 1,879,000,521, +1.24%. The inlined scan is worth
+more than the frame.
+
+Fusing `length s[i]` over text into a range test. It is 690,000 calls on
+runbench, but the fusion would skip the very index walk the index shape is
+there to keep linear. Not built.
+
+## 2026-09-24 — an import of a shipped module skips a check fixed at build time
+
+Every module is compiled on top of its dependencies and then checked merged
+with them: its own functions and theirs, through one inference and every
+check that reads it. For a shipped module that merged program is the
+shipped library and nothing else, embedded in the binary by `include_str!`,
+so the check gives the same empty answer in every program that imports it.
+It was asked once per import in every compile anyway. On the entry corpus
+that was seventeen merged checks, one per module the ten imports reach,
+before the entry's own; `check_merged_after_aliases_with` was 54.5 million of
+the row's 119.6 million instructions.
+
+An import of a `std/` module now skips that check. The loader marks the
+compile it starts for a `std/` path, and only that path: a module handed in
+by the browser and the embedded `./hako` are checked as before. The entry
+path's own merged check still reads every function the program holds,
+shipped ones included. Planting a division by a literal zero in std/text
+showed it. A program importing std/text is refused at that check whether or
+not the module's own check runs.
+
+`kanso::check_shipped` asks the skipped check for one module, and
+`tests/every_shipped_module_checks_clean.rs` asks it for every module in
+`SHIPPED_MODULES`. It also holds that list to the loader's table, read out
+of the source, so a module added to the table cannot be skipped by every
+import and checked by nothing. With the planted division the spec went red
+on `std/text` with `error[value]: division by zero (module std/text)`.
+
+Measured on this container, main and the branch built and counted here:
+
+    compile_instructions     33,752,913 ->  26,242,711   -22.25%
+    entry_instructions      120,345,927 ->  86,840,719   -27.84%
+    library_instructions    120,905,216 ->  87,395,127   -27.72%
+    startup_instructions        682,061 ->     659,077    -3.37%
+    compile_allocs               15,341 ->      14,354    -6.43%
+    front_end_rounds                 47 ->          15
+    front_end_visits             15,474 ->       7,576
+    interp_allocs             1,049,281 ->   1,048,350
+    interp_instructions     879,786,540 -> 879,803,604   +17,064
+
+The allocation, round and visit counts are the same on every host and move
+here; the instruction rows are CI's. `compile_peak_bytes` does not move: the
+front end's peak is reached later than any of the skipped checks.
+`interp_instructions` rises by 17,064, two millionths, with its allocations
+down 931. The interpreted run's anchor counts the run and not the compile,
+so this reads as layout, the move this family of rows makes on an edit to
+the compiler's own Rust.
+
+`tests/inference_passes.rs` counted four whole-program inference passes for
+its sample module and counts two now. The sample imports two shipped
+modules, and each of those skipped checks carried one inference pass.
+
+## 2026-09-24 — the beat pass classifies each group once
+
+`beat::beat_loops` asks three passes of the same program: which groups get
+a plain beat, which cycles get a cluster, and which entries are demoted.
+All three read the set of groups that allocate and each group's verdict.
+Neither changes between the passes, but `alloc_groups` ran five times a
+build and `classify_all` three. `beat_loops` now computes both once and
+hands them down; `report` does the same.
+
+On `kanso play` of a one-line program the pass fell from 47,824
+instructions to 25,105. Measured on this container, both sides built and
+counted here:
+
+    startup_instructions      693,898 ->    671,493      -22,405   -3.23%
+    emit_instructions      45,678,945 -> 43,543,044   -2,135,901   -4.68%
+
+The emitted IR of runbench, scanbench, deepbench, pendbench and escapebench
+is byte-identical between the two compilers, so no runtime or code vein
+moves.
+
+The emitter's two symbol scans, `called_symbols` and `queries_named`, found
+each `@` with a byte-at-a-time `position`. They use `str::find` now, which
+is memchr for an ascii character. Over the change above:
+
+    startup_instructions      671,493 ->    669,976       -1,517
+    emit_instructions      43,543,044 -> 42,414,714   -1,128,330
+
+CI's rows go into the goldens.
+
+Two measurements from the same day are declined here so they stay
+declined. Marking `d_json/escape_onto_2` `noinline`, so that
+`encode_onto`'s leaf arms would skip the six-register frame the inlined
+escape scan needs, took runbench from 1,856,032,701 to 1,879,000,521, 1.24%
+more work. And lld's `--lto-CGO2` and `--lto-CGO1` on the release link moved
+the codegen corpus's release children from 1,613,540,338 to 1,613,169,031
+and 1,612,366,289. The code-generation level barely moves the link; its
+cost is in the pipeline level, which was declined before.
+
+## 2026-09-24 — a JSON number's end is found sixteen bytes at a time
+
+lib/json found where a number ends by walking it: `scan_at` dispatched on
+each byte, with arms for `.`, `e`, `E`, `+`, `-`, a digit and anything
+else. The emitted loop was tight, 17 instructions a byte on the digit arm,
+but runbench decodes 417,483 numbers and the loop cost 80,293,356
+instructions, 23 a character.
+
+`text/number_span cs p` answers the same question in one call: the first
+position at or after `p` whose byte cannot be part of a number, negated when
+a `.`, `e` or `E` went past. That sign is the float mark the walk carried as
+an argument. A position outside the bytes is its own answer, as the walk
+stopped there. The native runtime classifies sixteen bytes a step with SSE2
+and walks what is left one byte at a time. The interpreter walks every byte,
+and the wasm engine reaches the builtin through the interpreter. It is
+`builtin_number_span` underneath, public in std/text the way `find2_below`
+is, because the frozen decoders jsonbench and its siblings build are
+generated from lib/json and a `builtin_` name is refused outside std.
+
+Measured on this container, both sides built and counted here:
+
+    runbench      1,856,032,715 -> 1,815,628,135   -40,404,580   -2.18%
+
+The instruction rows are CI's. `number_spans` is the scan's presence
+counter, so every cost golden gains a line, 417,483 on the run program and
+zero where nothing decodes. No other counter moves. kq's veins gain the
+same line, and that is kq's pin bump to absorb. The decoder's emitted code
+falls: calls 1,182 -> 1,165, branches 764 -> 747, lines 8,570 -> 8,422, and
+the front end's visits on the corpus 15,474 -> 15,131. Every program that
+imports std/text now emits the five-line forwarder, so each row of the
+emitted golden for the other benchmarks reads five lines more.
+
+`tests/golden/micro/a_number_span_ends_where_the_byte_walk_ends.kso` puts
+runs either side of sixteen and thirty-two bytes, a mark on each side of a
+block edge, ends at a delimiter and at the end of the bytes, positions
+outside the bytes, and a `.` past the end inside the same block. Counting
+every mark in the block went red on that last case (`-4` for `4`), and
+stepping one past the found byte went red on the runs (`17` for `16`).
+
+CI's sitting for the branch that carries this change, the beat pass
+classifying once and the shipped-module skip together, over main ef56eac8:
+
+    runbench               1,813,492,695 -> 1,775,946,549   -2.07%
+    jsonbench              1,196,422,558 -> 1,142,229,058   -4.53%
+    compile_instructions      33,315,822 ->    25,473,385  -23.54%
+    entry_instructions       118,942,141 ->    85,271,986  -28.31%
+    library_instructions     119,486,941 ->    85,824,404  -28.17%
+    interp_instructions      852,977,487 ->   785,998,385   -7.85%
+    emit_instructions         45,206,776 ->    42,350,970   -6.32%
+    startup_instructions         672,962 ->       628,645   -6.59%
+    codegen_instructions_dev     287,891,869 ->   287,815,887
+    codegen_instructions_release 1,614,704,366 -> 1,614,369,990
+    compile_peak_bytes           777,072 ->       768,704
+    interp_allocs              1,048,350 ->     1,036,127
+    interp_peak_bytes            846,191 ->       837,389
+
+One row is worse. `text`, the size of each benchmark's machine code, rises
+on all fourteen, 3,256,224 -> 3,267,232 summed, 11,008 bytes. Every binary
+carries the SSE2 span routine whether or not it decodes, which is 496 bytes
+on the ten that never read a JSON number. jsonbench, oneshot and livebench
+rise 1,536 and runbench 1,440, the routine plus its call sites. The objective does not weigh
+`text`, and the runtime saving on the decoders pays for it many times over.
+
+The first CI round was red in three places besides the goldens. The ch08
+panel quoting lib/json/number.kso still showed `scan_at`, so it now quotes
+`scan`, `spanned` and the two `number_done` arms. The new diagnostic,
+`number_span takes bytes and a position`, had no golden; it has one in the
+runtime corpus, `a_list_is_not_bytes_for_number_span`. And the ratchet's
+mutation for a module rewritten twice anchored on the `let diags =` line the
+skip replaced with a `match`, so it now anchors on the `false =>` arm and
+inserts after the `};` that closes the match. The second round found the
+two book samples that print every counter, ch10's `counters` and ch12's
+`fused`, one line short: each now carries `number_spans=0`, and their panels
+were rewritten from the samples.
+
+## 2026-09-24 — the number work and the dispatch frames land together
+
+kanso#1611 carries kanso#1605 (the number span, with the beat pass
+classifying once and shipped std modules skipping their fixed check),
+kanso#1608 (numbers read in place), kanso#1609 (numbers agree across
+engines) and kanso#1610 (a type dispatcher's heavy arms kept out of its
+frame), over main with kanso#1604. Each carried entry above stands as
+written. CI's sitting on the combined tree, against main:
+
+    runbench      1,804,051,708 -> 1,750,593,608   -53,458,100   -2.96%
+    jsonbench     1,196,422,554 -> 1,127,050,463   -69,372,091   -5.80%
+    livebench     2,653,048,163 -> 2,626,918,335   -26,129,828   -0.98%
+    encodebench   3,179,984,475 -> 3,164,604,377   -15,380,098   -0.48%
+    oneshot          19,945,518 ->    19,420,522      -524,996   -2.63%
+    widebench        30,153,803 ->    29,785,857      -367,946   -1.22%
+
+The dispatch rule reads smaller on CI than on this container, where it took
+encodebench down 2.22% and livebench 4.02% by itself; CI's clang 19 had
+already spent less on those frames.
+
+Three rows are worse. `text` sums to 3,421,248, the SSE2 span routine, the
+two slice doors and the text parsers in every binary, and the out-of-line
+bodies the encoder now calls. `work_digestbench` reads 5,842,731 (+59) and
+`work_readbench` 4,630,947 (+54); neither program touches the code that
+changed, and both moved by the same few dozen instructions in kanso#1608's
+own sitting.

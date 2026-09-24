@@ -291,31 +291,24 @@ err at 1: unexpected character `?`</code></pre>
 
 <h2>numbers without a lexer</h2>
 
-<p>numbers get the same treatment, and one walk answers both questions. the scan moves forward while the byte could belong to a number, and the three arms that read a <code>.</code>, an <code>e</code> or an <code>E</code> hand the rest of the walk a <code>true</code>. by the time the number ends, the scan already knows which converter to call, so the mark travels as an argument rather than as a second pass over the same bytes:</p>
+<p>numbers get the same treatment, and one call answers both questions. <code>text/number_span</code> starts at the number's first byte and returns the position of the first byte that cannot belong to it, negated when a <code>.</code>, an <code>e</code> or an <code>E</code> went past. the runtime classifies sixteen bytes at a time, where a walk written in kanso dispatched on every byte. by the time the answer comes back, the library knows where the number ends and which converter to call:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">lib/json/number.kso</div>
-  <pre><code><span class="c"># float marks: . E e</span>
-<span class="k">fn</span> <span class="f">_scan_at</span> cs <span class="n">46</span> start p <span class="o">_</span>
-  <span class="f">_scan</span> cs start (p <span class="o">+</span> <span class="n">1</span>) <span class="t">true</span>
+  <pre><code><span class="k">fn</span> <span class="f">scan</span> cs start p
+  <span class="f">spanned</span> cs start (<span class="f">text/number_span</span> cs p)
 
-<span class="k">fn</span> <span class="f">_scan_at</span> cs <span class="n">69</span> start p <span class="o">_</span>
-  <span class="f">_scan</span> cs start (p <span class="o">+</span> <span class="n">1</span>) <span class="t">true</span>
+<span class="k">fn</span> <span class="f">spanned</span> cs start e
+  <span class="f">if</span> (e <span class="o">&lt;</span> <span class="n">0</span>) (<span class="f">number_done</span> cs start (<span class="n">0</span> <span class="o">-</span> e) <span class="t">true</span>) (<span class="f">number_done</span> cs start e <span class="t">false</span>)
 
-<span class="k">fn</span> <span class="f">_scan_at</span> cs <span class="n">101</span> start p <span class="o">_</span>
-  <span class="f">_scan</span> cs start (p <span class="o">+</span> <span class="n">1</span>) <span class="t">true</span>
+<span class="k">fn</span> <span class="f">number_done</span> cs start p <span class="t">true</span>
+  <span class="f">parsed</span> p (<span class="f">number_ok</span> start (<span class="f">text/to_float</span> (<span class="f">text/slice</span> cs start (p <span class="o">-</span> <span class="n">1</span>))))
 
-<span class="k">fn</span> <span class="f">_scan_at</span> cs c start p m
-  <span class="f">if</span> (<span class="n">47</span> <span class="o">&lt;</span> c and c <span class="o">&lt;</span> <span class="n">58</span>) (<span class="f">_scan</span> cs start (p <span class="o">+</span> <span class="n">1</span>) m) (<span class="f">_number_done</span> cs start p m)
-
-<span class="k">fn</span> <span class="f">_number_done</span> cs start p <span class="t">true</span>
-  <span class="f">parsed</span> p (<span class="f">_number_ok</span> start (<span class="f">to_float</span> (<span class="f">slice</span> cs start (p <span class="o">-</span> <span class="n">1</span>))))
-
-<span class="k">fn</span> <span class="f">_number_done</span> cs start p <span class="t">false</span>
-  <span class="f">parsed</span> p (<span class="f">_number_ok</span> start (<span class="f">to_int</span> (<span class="f">slice</span> cs start (p <span class="o">-</span> <span class="n">1</span>))))</code></pre>
+<span class="k">fn</span> <span class="f">number_done</span> cs start p <span class="t">false</span>
+  <span class="f">parsed</span> p (<span class="f">number_ok</span> start (<span class="f">text/to_int</span> (<span class="f">text/slice</span> cs start (p <span class="o">-</span> <span class="n">1</span>))))</code></pre>
 </div>
 
-<p>replay the decision on its own inputs. the sample below keeps the two questions apart, one walk each, which is what the library did before it learned to carry the mark; it prints which converter would fire:</p>
+<p>replay the decision on its own inputs. the sample below asks the two questions apart, one walk each, in kanso rather than in the runtime; it prints which converter would fire:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">numbers.kso</div>

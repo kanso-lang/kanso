@@ -269,7 +269,11 @@
 # kanso#1513's fixed-temp name are both holding on a tree that changes
 # runtime.c.
 #
-# 2026-09-24, kanso#1604 over main 68495456, CI's sitting. The hot unit the
-# LTO link inlines holds the rewind's early exit. codegen_instructions_release
-# 1,614,704,366 -> 1,614,817,091, a RISE of 112,725 (+0.0070%).
-codegen_instructions_release=1614817091
+# 2026-09-24, kanso#1605 (number span, beat classified once, shipped std
+# modules skip their check), CI's row: codegen_instructions_release
+# 1,614,704,366 -> 1,614,369,990, a FALL of 334,376 (-0.0207%).
+#
+# 2026-09-24, kanso#1611 (carrying kanso#1605, #1608, #1609 and #1610 over
+# main with kanso#1604), CI's row: codegen_instructions_release 1,614,369,990
+# -> 1,613,895,452, a FALL of 474,538 (-0.0294%).
+codegen_instructions_release=1613895452

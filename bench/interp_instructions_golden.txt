@@ -528,5 +528,13 @@
 # front-end places stop allocating what they drop. The interpreter lexes and
 # parses its program before it runs it. interp_instructions 853,048,810 ->
 # 852,977,487, a FALL of 71,323 (-0.0084%).
-interp_instructions=852977487
+#
+# 2026-09-24, kanso#1605 (number span, beat classified once, shipped std
+# modules skip their check), CI's row: interp_instructions 852,977,487 ->
+# 785,998,385, a FALL of 66,979,102 (-7.8524%).
+#
+# 2026-09-24, kanso#1611 (carrying kanso#1605, #1608, #1609 and #1610 over
+# main with kanso#1604), CI's row: interp_instructions 785,998,385 ->
+# 786,092,249, a RISE of 93,864 (+0.0119%).
+interp_instructions=786092249
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

@@ -260,4 +260,12 @@
 # 2026-09-24, kanso#1603 over main 68495456, CI's sitting. The lexer and nine
 # front-end places stop allocating what they drop. emit_instructions
 # 45,259,445 -> 45,206,776, a FALL of 52,669 (-0.1164%).
-emit_instructions=45206776
+#
+# 2026-09-24, kanso#1605 (number span, beat classified once, shipped std
+# modules skip their check), CI's row: emit_instructions 45,206,776 ->
+# 42,350,970, a FALL of 2,855,806 (-6.3172%).
+#
+# 2026-09-24, kanso#1611 (carrying kanso#1605, #1608, #1609 and #1610 over
+# main with kanso#1604), CI's row: emit_instructions 42,350,970 -> 42,771,526,
+# a RISE of 420,556 (+0.9930%).
+emit_instructions=42771526

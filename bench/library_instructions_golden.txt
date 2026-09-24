@@ -1044,7 +1044,11 @@
 # 2026-09-24, kanso#1603 over main 68495456, CI's sitting. The lexer and nine
 # front-end places stop allocating what they drop. library_instructions
 # 126,522,328 -> 119,486,941, a FALL of 7,035,387 (-5.5606%).
-library_instructions=119486941
+#
+# 2026-09-24, kanso#1605 (number span, beat classified once, shipped std
+# modules skip their check), CI's row: library_instructions 119,486,941 ->
+# 85,824,404, a FALL of 33,662,537 (-28.1726%).
+library_instructions=85824404
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

@@ -1,43 +1,13 @@
 import "std/text"
 
-# The scan and the float test used to be two walks over the same bytes: one
-# asking where the number ends, one asking whether a `.`, `e` or `E` went
-# past. The mark rides along with the scan now, so each number's bytes are
-# read once. It rides as a boolean argument rather than in a record beside
-# the end position, because a record here is an allocation per number.
-fn scan cs start p m
-  scan_at cs cs[p] start p m
+# Where the number's bytes end, and whether a `.`, `e` or `E` went past, in
+# one call: the runtime classifies sixteen bytes a step where a walk here
+# dispatched on every byte. A negative answer is the end of a float.
+fn scan cs start p
+  spanned cs start (text/number_span cs p)
 
-# float marks: . E e
-fn scan_at cs 46 start p _
-  scan cs start (p + 1) true
-
-fn scan_at cs 69 start p _
-  scan cs start (p + 1) true
-
-fn scan_at cs 101 start p _
-  scan cs start (p + 1) true
-
-# the signs a number may carry, which say nothing about its kind
-fn scan_at cs 43 start p m
-  scan cs start (p + 1) m
-
-fn scan_at cs 45 start p m
-  scan cs start (p + 1) m
-
-fn scan_at cs none start p m
-  number_done cs start p m
-
-# The digit test is written INTO the `if` rather than bound to a name first.
-# A bound boolean is a value: the emitter materialises the comparison as a
-# tagged true-or-false and the `if` takes it apart again, which is three
-# instructions -- `mov $3` / `sbb $0` / `cmp $2` -- on every byte of every
-# number. Asked in place, `emit_cond` walks the `and` and branches off the
-# flags. That is 9,608,940 instructions of runbench, 0.4795%. The mark is
-# spelled `m` here only so the line fits eighty columns; the emitter learning
-# to see through a once-used binding would give the longer name back.
-fn scan_at cs c start p m
-  if (47 < c and c < 58) (scan cs start (p + 1) m) (number_done cs start p m)
+fn spanned cs start e
+  if (e < 0) (number_done cs start (0 - e) true) (number_done cs start e false)
 
 fn number_done cs start p true
   parsed p (number_ok start (text/to_float (text/slice cs start (p - 1))))

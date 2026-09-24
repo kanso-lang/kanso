@@ -3572,6 +3572,38 @@ impl<'a> Interp<'a> {
                 }
                 Ok(Value::Int(BigInt::from(at)))
             }
+            b"number_span" => {
+                let [cs, from] = arity(args, name, span)?;
+                for v in [&cs, &from] {
+                    if is_failure(v) {
+                        return Ok(v.clone());
+                    }
+                }
+                let (Value::Bytes(items), Value::Int(from)) = (&cs, &from) else {
+                    return Err(RuntimeError {
+                        message: "number_span takes bytes and a position".to_string(),
+                        span,
+                    });
+                };
+                // The first position at or after `from` whose byte cannot be
+                // part of a number, negated when a `.`, `e` or `E` went past.
+                // A position outside the bytes is its own answer.
+                let len = items.len();
+                let start = match usize::try_from(from.clone()) {
+                    Ok(p) if p >= 1 && p <= len => p,
+                    _ => return Ok(Value::Int(from.clone())),
+                };
+                let mut at = start - 1;
+                let mut float = false;
+                while at < len
+                    && matches!(items[at], b'0'..=b'9' | b'+' | b'-' | b'.' | b'e' | b'E')
+                {
+                    float |= matches!(items[at], b'.' | b'e' | b'E');
+                    at += 1;
+                }
+                let end = BigInt::from(at + 1);
+                Ok(Value::Int(if float { -end } else { end }))
+            }
             b"find2" => {
                 let [cs, from, a, b] = arity(args, name, span)?;
                 for v in [&cs, &from, &a, &b] {
@@ -3724,9 +3756,16 @@ impl<'a> Interp<'a> {
                         })
                     }
                 };
-                Ok(match text.parse::<BigInt>() {
-                    Ok(n) => Value::Int(n),
-                    Err(_) => err_value(
+                // num-bigint reads `_` as a digit separator, which neither
+                // `to_float` nor the native parse does, so "1_000" was an
+                // integer on this engine alone.
+                let parsed = match text.contains('_') {
+                    true => None,
+                    false => text.parse::<BigInt>().ok(),
+                };
+                Ok(match parsed {
+                    Some(n) => Value::Int(n),
+                    None => err_value(
                         Value::Str(format!("\"{text}\" is not an integer")),
                         origin_at(frame, span),
                     ),

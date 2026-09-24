@@ -1,0 +1,3 @@
+import "std/text"
+
+pub play = print "{text/number_span [49 50] 1}"
