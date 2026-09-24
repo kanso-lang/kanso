@@ -706,7 +706,11 @@ fn program_args() -> Vec<String> {
 }
 
 fn build(program: &ast::Program, file: &str, release: bool, built_as: Option<String>) -> ExitCode {
-    let ir = match kanso::codegen::emit_ir(program, closure_convention()) {
+    let emitted = match release {
+        true => kanso::codegen::emit_ir(program, closure_convention()),
+        false => kanso::codegen::emit_ir_dev(program, closure_convention()),
+    };
+    let ir = match emitted {
         Ok(ir) => ir,
         Err(unsupported) => {
             eprintln!("error: {unsupported}");
@@ -1672,7 +1676,7 @@ fn run(program: &ast::Program, file: &str, source: &str, plan: bool) -> ExitCode
     if plan {
         return run_plan(program, file, source);
     }
-    let ir = match kanso::codegen::emit_ir(program, closure_convention()) {
+    let ir = match kanso::codegen::emit_ir_dev(program, closure_convention()) {
         Ok(ir) => ir,
         Err(unsupported) => {
             eprintln!("error: {unsupported}");

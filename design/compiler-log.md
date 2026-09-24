@@ -11383,3 +11383,88 @@ objective does not weigh machine-code size.
 Over main with kanso#1597, whose two checks cost start-up 47 instructions on
 the same 870,779 this change added 25 to, the start-up row is written as
 870,851: the two moves summed. The next CI round says whether they add.
+
+## 2026-09-24 — a dev build calls the runtime's helpers instead of inlining them
+
+Every module carries the runtime's small helpers as definitions: tag tests,
+the fast arms of append, index and length, and the closure-call twins, all
+`alwaysinline`. At `-O0` the always-inliner still honours the attribute and
+copies each helper into every call site, and the instruction selector then
+walks every copy. On the codegen corpus's module, which defines thirty-six of
+them:
+
+    clang -cc1 -O0, as emitted            359,109,516
+    clang -cc1 -O0, attribute removed     316,180,072   -11.95%   (this container)
+
+The dev tier is the one that compiles fast, and its binaries' speed is not a
+term in the objective. The release tier, where inlining the helpers is the
+point, keeps the attribute. `emit_ir_dev` gives the dev tier's module, and
+`kanso build` without `--release`, `kanso run` and `kanso play` use it. The
+dev module's text is made when the compiler is built: see below.
+
+No helper needs inlining to be correct. None allocates on the stack, reads a
+frame or return address, or makes a `musttail` call, and the program calls
+them only with plain calls. The whole suite passes with dev modules built
+this way.
+
+`tests/a_dev_build_calls_the_runtime_helpers.rs` builds a program with a
+closure call and an append on both tiers. It requires that the dev module
+define no helper `alwaysinline`, that the release module define some, and
+that both binaries print the same line. It went red with `emit_ir_dev` asking
+for inlined helpers.
+
+**What still sends the dev tier to SelectionDAG is the aggregate.** With the
+helpers called rather than inlined, `clang -cc1` still spends 164,838,950 of
+338,572,876 instructions in `SelectionDAGISel`, and FastISel's remarks name 265
+calls, 157 returns and 59 branches into blocks with `%KValue` phis: calls that
+pass a `%KValue`, returns of one, and phis of one. Routing each function's
+returns through a stack slot and one small return block was measured and
+declined. FastISel cannot store an aggregate either, and `cc1` read 328,312,489
+against 316,182,558. What would reach it is a dev module that carries a
+`%KValue` as two `i64`s through calls, returns and phis, which is an emitter
+change of its own.
+
+**The emit gate's anchor moves with the work.** `emit_instructions` read
+`codegen::emit_ir` inclusive on a dev build, and a dev build now enters
+through `emit_ir_dev`. Both entry points call `emit_ir_for`, which is kept out
+of line, and the gate now reads that frame. It found 43,868,047 on this
+container.
+
+**CI's rows**, taken into the goldens:
+
+    codegen_instructions_dev     473,933,874 ->   431,017,582   -9.06%
+    startup_instructions             870,779 ->       880,309   +9,530
+    emit_instructions             43,339,387 ->    43,359,136   +19,749
+
+The dev row is the saving. The start-up rise was the first draft's: every
+line of DECLARES asked whether it carried the attribute, 6,192 instructions of
+`Backend::emit` on the one-line program and 10,508 in all. The dev text and
+its line index are now made when the compiler is built, as `DECLARES_DEV` and
+`DECLARE_LINES_DEV`, and `declares_for` picks a pair once. Start-up on this
+container read 902,425 with the check and 875,795 without, against main's
+876,314, and the next CI round's rows replace the two above. A unit test holds
+the dev text to the release text with the attribute stripped by a scan at run
+time, and went red when the dev branch was handed the release pair.
+
+The next CI round, with the dev text made when the compiler is built:
+
+    startup_instructions             880,309 ->       866,508   -13,801
+    emit_instructions             43,359,136 ->    43,320,461   -38,675
+
+Against main's 870,779 and 43,339,387 both rows now fall, and the floor is
+banked on them.
+
+Over main with kanso#1589 and kanso#1590, the dev row read 431,093,381 twice
+in one job. That is 75,799 above the 431,017,582 taken before the merge, and
+it is the link: `codegen_instructions_dev` now includes ld linking the
+runtime those two changes grew. The floor was banked on the earlier row
+before CI had measured the merge, and it is set again on this one, which is
+still above main's.
+
+Over kanso#1593, which runs clang's two jobs itself and links with lld, and
+main with kanso#1597, the three rows this change moves are written as the
+two changes' measured deltas summed over main's: the dev row 359,480,516,
+start-up 866,580 and emit 43,320,508. The next CI round replaces them.
+
+CI's rows over kanso#1593 and main: start-up 866,580 and emit 43,320,508, as
+summed, and the dev row 359,558,108, read twice alike, 77,592 above the sum.
