@@ -9047,6 +9047,11 @@ KValue k_b_slice(KValue container, KValue fromv, KValue tov) {
            anything else a gate reads. */
         if (k_str_chars(s) == (long long)s->len) {
             if (from < 1 || from > to || to > (long long)s->len) return k_str_n("", 0);
+            /* One character first: a matcher slices one at a time, a million
+               times a run on scanbench, and the ascii cache answers it. The
+               length test below cost those four instructions apiece when it
+               came first. */
+            if (to == from) return k_str_n(s->data + (from - 1), 1);
             if (to - from + 1 >= K_STR_VIEW_MIN && s->cap <= 0)
                 return k_str_view(s, from - 1, to - from + 1, to - from + 1);
             return k_str_n(s->data + (from - 1), to - from + 1);

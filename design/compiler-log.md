@@ -12493,8 +12493,13 @@ On the run program the slice alone takes the arena peak 5,050,064 ->
 4,718,608 and `arena_blocks` 6 -> 5; with the split below it reads 4,194,304. `alloc_bytes` falls 413,717,453 -> 412,321,053,
 `sh_str` 35,646,128 -> 34,249,728 and `str_scans` 163 -> 161, because a view
 of a slice whose character count is known carries the count. basket and scan
-fall by a slice each. On this box runbench reads 1,739,715,210 ->
-1,739,021,439 (-693,771).
+fall by a slice each. The view's length test first sat ahead of the ascii
+path's one-character case, which the ascii cache answers, and CI read
+scanbench 417,133,247 -> 421,136,287 (+4,003,040): a matcher slicing one
+character at a time, 1,001,004 slices, four instructions each. The
+one-character case is now asked first. On this box scanbench then reads
+441,704,194 -> 440,702,231 (-1,001,963) and runbench 1,739,715,210 ->
+1,738,092,378 (-1,622,832), with the split below included.
 
 The peak's makeup was read by printing the live blocks at each new peak.
 Before, the top was 1,380,032 + 1,572,880 + 1,048,576 + 1,048,576: the index
