@@ -1,0 +1,19 @@
+# The same group as a_wildcard_arm_keeps_a_record_slot_boxed, handed a record
+# of another type. The inference has one bit for every record, so it could not
+# say a `pair` never reaches the slot, and the native backend passed the pair's
+# two fields as a point's: it printed 10 where the oracle printed 7.
+type point
+  x
+  y
+
+type pair
+  a
+  b
+
+fn total (point x y)
+  x + y
+
+fn total _
+  0
+
+pub play = print "{total (point 3 4) + total (pair 1 2)}"

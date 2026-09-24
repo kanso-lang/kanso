@@ -131,6 +131,35 @@ fn analyze_inner(program: &Program, inference: &crate::infer::Inference) -> Esca
         let first = named.next();
         named.all(|ty| Some(ty) == first)
     });
+    // A by-value slot is handed a record's words, and a caller turns what it
+    // holds into them with `k_parsed_words`, which reads two fields off a
+    // record and passes a failure through. Nothing else has words to hand
+    // over. An arm that takes anything at the position -- `_`, a name, a
+    // literal -- lets a caller pass something else, and `total 5` beside
+    // `total (point x y)` reached the runtime as an int it read fields off,
+    // until the stack ran out. So the slot stays boxed unless every shape the
+    // inference sees reaching it is a record, a failure or a thunk forced
+    // before the call.
+    carries.retain(|(name, arity, at), _| {
+        let reaching = program
+            .fns
+            .iter()
+            .enumerate()
+            .filter(|(_, f)| f.name == *name && f.params.len() == *arity)
+            .fold(0, |acc, (i, _)| acc | inference.param(i, *at));
+        reaching & !(crate::infer::REC | crate::infer::FAIL | crate::infer::THUNK) == 0
+    });
+    // The inference has one bit for every record, so it cannot say a `circle`
+    // never reaches a slot whose `_` arm would take one. An arm that takes any
+    // value at the position keeps the slot boxed.
+    carries.retain(|(name, arity, at), _| {
+        !program.fns.iter().filter(|f| f.name == *name && f.params.len() == *arity).any(|f| {
+            matches!(
+                f.params.get(*at),
+                Some(Pattern::Var(..) | Pattern::Wildcard(..) | Pattern::Annotated { .. })
+            )
+        })
+    });
     EscapeInfo { field_count, returns, carries }
 }
 
