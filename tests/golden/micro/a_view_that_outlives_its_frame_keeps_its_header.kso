@@ -1,0 +1,66 @@
+# `text/bytes` of a string writes a header and borrows the string's bytes.
+# The native build keeps that header in the frame of the function that made
+# the view when every later mention of the view only reads it while that
+# frame stands. Each function below lets its view outlive the frame some other
+# way: returned, kept in a list, captured by a function, handed through a
+# parameter that returns it, rebound to another name, deferred past `>>`.
+# Each makes two views, one after the other, at the same depth of the stack,
+# and reads both only afterwards, so a header left in a dead frame reads the
+# second string where the first belongs. The last function only reads its
+# view and is the case the frame is for.
+import "std/text"
+
+fn returned s
+  bs = text/bytes s
+  bs
+
+fn listed s
+  bs = text/bytes s
+  [bs]
+
+fn captured s
+  bs = text/bytes s
+  (i -> bs[i])
+
+fn same bs
+  bs
+
+fn handed s
+  bs = text/bytes s
+  same bs
+
+fn rebound s
+  bs = text/bytes s
+  cs = bs
+  cs
+
+fn first_of bs
+  bs[1]
+
+fn read_only s
+  bs = text/bytes s
+  length bs + first_of bs + text/find2_below bs 1 98 98 32
+
+fn word none
+  "none"
+
+fn word v
+  text/utf8 v
+
+pub play =
+  a = returned "first"
+  b = returned "second"
+  la = listed "alpha"
+  lb = listed "beta"
+  ca = captured "abc"
+  cb = captured "xyz"
+  ha = handed "left"
+  hb = handed "right"
+  ra = rebound "up"
+  rb = rebound "down"
+  print "returned: {word a} {word b}"
+  print "listed: {word la[1]} {word lb[1]}"
+  print "captured: {ca 1} {cb 1}"
+  print "handed: {word ha} {word hb}"
+  print "rebound: {word ra} {word rb}"
+  print "read only: {read_only "abc"} {read_only "xbz"}"

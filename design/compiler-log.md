@@ -12369,3 +12369,54 @@ bodies the encoder now calls. `work_digestbench` reads 5,842,731 (+59) and
 `work_readbench` 4,630,947 (+54); neither program touches the code that
 changed, and both moved by the same few dozen instructions in kanso#1608's
 own sitting.
+
+## 2026-09-24 — a byte view read in its frame keeps its header there
+
+`text/bytes s` of a string borrows the string's bytes and writes a
+three-word header (length, data, capacity) into the arena. JSON's
+`escape_onto` makes one for every string it writes, 942,750 on the run
+program, and only reads it: a length, a scan, some bytes by index, slices to
+append. The header cost the bump, and every read went through memory.
+
+`framed_views` in src/codegen.rs finds the bindings `x = bytes e` whose
+header can live in the function's own frame. The function must sit on no
+cycle of the call graph, so the frame is not claimed again on each pass of a
+loop. Every later mention of `x` must be a read that keeps nothing: the first
+argument of `length`, `find2`, `find2_below` or `slice` (a slice writes its
+own header over the same bytes), the base of an index, or an argument to a
+parameter that is read the same way in every clause, found as the largest
+such set. A return, a list, a closure, `>>`, a binding the demand pass may
+make lazy, or a call through a name the body binds all fail it. The function
+then makes its tail calls as plain calls, since a tail call gives the frame
+back before the callee reads the header.
+
+The emitter frames a view only when inference has proven its argument a
+string. The first build also framed views of values that might not be
+strings, with a slow arm to `k_b_bytes`. The view was then a phi over a stack
+pointer and an arena pointer, LLVM kept the header in memory, and the run
+program fell 11,110,137 instructions where a hand edit of the IR without the
+slow arm had shown 28,013,580. Proving the string removes the arm. On the
+run program `escape_onto` qualifies and `regexp/in?` does not.
+
+On this container, against main:
+
+    runbench    1,768,671,540 -> 1,739,715,210   -28,956,330   -1.64%
+
+The run program's allocations fall 5,280,394 -> 4,337,644, one per escaped
+string, and `sh_bytes` 31,270,680 -> 8,644,680. The live program's fall
+7,539,794 -> 3,349,794.
+
+`a_view_read_where_it_was_made_allocates_no_header` in the mem vein reads
+`allocs=2` and `sh_bytes=0` for a thousand views; the ratchet row
+`framed_view` empties the set and the fixture reads `allocs=1002`.
+`a_view_that_outlives_its_frame_keeps_its_header` in the micro corpus makes
+views that are returned, listed, captured, handed through a parameter that
+returns them and rebound, two at a time at the same stack depth, and reads
+them afterwards. With the analysis made to accept every view, the native
+build printed invalid UTF-8 and ran out of stack.
+
+The emitted code grows. Every program carries the twin's comment, seven
+lines, and the programs that frame a view carry its body: `lines` reads 8,418
+for the decoder against 8,394 and 33,220 for the run program against 33,196,
+and `defines` 118 and 514. The compile golden's corpus rows each read seven
+lines more, and the module row reads `lines=3587` against 3,580.

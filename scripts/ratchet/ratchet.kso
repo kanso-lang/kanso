@@ -1868,11 +1868,23 @@ fused_names_owned = row
   (breaking "the_fused_name_set_owns_its_names")
   release
 
+# A byte view a function only reads while its frame stands keeps its header in
+# that frame. The mutation sends every view back to the arena, and the fixture
+# a_view_read_where_it_was_made_allocates_no_header reads allocs=1002 against
+# its 2.
+framed_view = row
+  "a view read in its frame given an arena header"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_view_read_in_its_frame_given_an_arena_header")
+  release
+
 rows_b1oa = text/concat rows_b1n [append_rendered arm_narrowed arms_apart]
 
 rows_b1o = text/concat rows_b1oa [dedup_key_owned fused_names_owned]
 
-rows_b1p = text/concat rows_b1o [list_test_first]
+rows_b1p = text/concat rows_b1o [list_test_first framed_view]
 
 rows_b = text/concat rows_b1p [compile_mem compile_mem_host]
 
