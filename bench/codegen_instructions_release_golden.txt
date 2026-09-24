@@ -268,4 +268,8 @@
 # `codegen_release_again` read 6,825,827,822, so kanso#1507's plugin pin and
 # kanso#1513's fixed-temp name are both holding on a tree that changes
 # runtime.c.
-codegen_instructions_release=1614704366
+#
+# 2026-09-24, kanso#1608 (numbers read in place), CI's row:
+# codegen_instructions_release 1,614,704,366 -> 1,614,729,561, a RISE of
+# 25,195 (+0.0016%).
+codegen_instructions_release=1614729561
