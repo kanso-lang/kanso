@@ -10898,3 +10898,75 @@ with `ld: unknown options: -plugin-opt=O3`. `-plugin-opt` is the gold plugin's
 spelling and Apple's ld64 has no such option, so the split is Linux-only and
 other hosts keep `-O3` for both steps, as they were. The rows above are
 Linux's and do not move.
+
+## 2026-09-24 — a short float is rendered by scaling and dividing back
+
+`render_ryu` was 4.33% of the run program: 82,180,980 instructions over
+191,070 calls, 430 a float. Every float in the encode corpus has seven or fewer
+significant digits, and for a decimal that short ryu's 125-bit multiplies and
+its digit removal do more work than the answer needs.
+
+`ryu_d2d` now tries the decimal places in order first. At place p it rounds
+f·10^p to an integer m and accepts m·10^-p when `(double)m / 10^p == f`. The
+division is one correctly rounded operation on two exact doubles, so a match
+proves the decimal reads back as f under strtod's round-half-even. It cannot
+miss one: while ulp(f)·10^p ≤ 1/4, at most one decimal with p places reads back
+as f, it lies within 1/8 of the exact product, and the rounded product is
+within 1/4 of that. So the first place that passes gives the shortest decimal,
+and the one ryu would choose. A decimal with fewer significant digits at a
+later place would have to sit across a power of ten from it, and that power of
+ten is a one-digit candidate at a place already tried. The path covers f in
+[2^-20, 2^50); outside that range, or when the bound runs out, ryu decides as
+before.
+
+The conversions are signed. Every product is below 2^51, and on x86-64 an
+unsigned double conversion is about a dozen instructions each way where a
+signed one is one. The unsigned first build saved 14,344,110; the signed one
+saves twice that.
+
+    render_ryu        82,180,980 -> 53,842,770    430 -> 282 a float
+    runbench       1,895,843,068 -> 1,867,504,858   -1.49%   (this container)
+
+**The harness came first.** A differential fuzzer takes `ryu_d2d` and
+`render_ryu` out of the runtime at HEAD and out of the working tree, compiles
+both, and compares digits, exponent and rendered text. It covers random doubles
+across the path's exponent range and past both ends, short decimals of one to
+seventeen digits at every scale to 10^22 with their neighbours on both sides,
+decimals ending in a 5, and both sides of every binary exponent and power of
+ten in range. 1,495,188,243 compared, 0 differ. Three mutations each went red:
+dropping the rounding step (7,088 differ in 1,286,385), loosening the bound
+sixty-four times (69,680) and not stripping an integer's trailing zeros
+(117,369).
+
+**The shipped spec gained the property this rests on.**
+`every_rendered_float_reads_back_as_itself` checked round trip and shortest,
+and both pass a renderer that picks the wrong neighbour of the right length.
+The loosened-bound mutation did exactly that. The spec now also checks
+closest: when the nearest k-digit decimal (glibc's `%.*e`, which is exact)
+reads back, the renderer must have chosen it. The condition matters. The
+first draft required the nearest decimal whether or not it read back, and it
+reported 93 failures, every one a power of two. There the doubles below are
+twice as dense, so the interval that reads back is half as wide on that side:
+2^-1017 prints as 7.120236347223045e-307 although ...044 is nearer, and Python's
+`repr` agrees. The spec also gained a million short decimals of every length,
+with their neighbours. Watched red: the loosened bound gives 208,683 not
+closest and 28,657 not shortest, and the dropped rounding gives 25,474 not
+shortest.
+
+**A presence counter, `ryu_short`,** counts the floats the short path settled.
+It sits after `ryu_renders` in every counter dump, so all twelve cost goldens,
+the .mem vein and the two book samples that print counters gained the line.
+It equals `ryu_renders` in every golden: 191,070 on the run program, 849,200 on
+encode and live, 8,000 on wide and 2,123 on oneshot. The trend gate reads it as
+higher-is-better beside `seek_resumes`. No allocation counter moves; rendering
+allocates nothing.
+
+**The general loop is now outside every benchmark.** Because no benchmark float
+reaches ryu's digit-removal loop, the ratchet row that guarded its two-a-trip
+shape through the work vein could not go red any more, and it is retired. Its
+replacement closes the short path, and `run_counters` goes red on
+`ryu_short=191070` -> `0`. The objective does not see floats of more than
+about fifteen significant digits, or outside [2^-20, 2^50), and those still
+cost what they did.
+
+CI's instruction rows go into the goldens.

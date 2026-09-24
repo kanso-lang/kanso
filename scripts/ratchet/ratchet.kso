@@ -666,16 +666,18 @@ remainder = row
   (breaking "the_remainder_calls_the_runtime_again")
   benchmarks
 
-# ryu_d2d's general digit-removal loop takes two digits a trip since
-# 2026-09-14; the mutation puts the hundred-step back to firing once and the
-# ten-loop back to averaging 9.41 trips a float. The digits out are identical
-# either way, so the work vein is the only thing that can see it.
-digit_pairs = row
-  "the digit removal taking one at a time again"
+# ryu_d2d settles a short float by scaling and dividing back since 2026-09-24,
+# and every float the benchmarks render takes that road. The row this replaced
+# guarded ryu's general digit-removal loop through the work vein, and with no
+# benchmark float reaching the loop that vein could no longer see it. The
+# mutation closes the short road; the digits are identical, so the presence
+# counter is what goes red.
+short_float = row
+  "a short float rendered by ryu's multiplies again"
   true
-  (gating "instructions")
+  (gating "run_counters")
   "cost goldens (deterministic ratchet, no clocks)"
-  (breaking "the_digit_removal_takes_one_at_a_time")
+  (breaking "a_short_float_takes_ryu_s_road")
   benchmarks
 
 # k_b_to_float skips leading zeros before its digit loops since 2026-09-15,
@@ -1768,7 +1770,7 @@ rows_b1 = text/concat rows_b1a (text/concat rows_b1z [live_counters clean_run])
 
 rows_b1r0 = text/concat rows_b1 [emitted_code emitted_others remainder]
 
-rows_b1r1 = text/concat rows_b1r0 [digit_pairs leading_zeros int_cold_tail]
+rows_b1r1 = text/concat rows_b1r0 [short_float leading_zeros int_cold_tail]
 
 rows_b1r2 = text/concat rows_b1r1 [cold_registers index_cold_arms]
 
