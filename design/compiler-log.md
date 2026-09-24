@@ -11068,6 +11068,85 @@ dispatchers it covers spend what that one saves. The gain belongs to one
 function's arm frequencies, which is profile data, so this is declined until
 the emitter has a profile to read.
 
+## 2026-09-24 — a short float's text is written from its scaled integer
+
+The short path finds a float's decimal as an integer m and a place count p,
+and handed ryu's digit buffer back to `render_ryu`. The plain branches then
+placed the decimal point by walking that buffer a byte at a time, copied the
+digits after it, and ran `ryu_declen`'s ladder a second time. For a value from
+10^-4 up to 10^15 the text is m / 10^p, then a point and m's last p digits with
+their leading zeros. `render_ryu` now writes that straight into the output,
+the integer part through `ryu_write` and the fraction two digits at a time.
+Values outside that range, and floats the short path leaves, go through the
+digit buffer and the branches as before.
+
+The search moved into its own `ryu_short`, so `render_ryu` runs it once and
+hands a miss to ryu's core, now `ryu_long`, without searching a second time.
+`ryu_d2d` is the pair of them and still answers the spec harness. `ryu_long` is
+`noinline, cold`: inlined, its registers set the frame every short render paid.
+
+    render_ryu     53,842,770 -> 44,289,000   the direct writer
+                   44,289,000 -> 42,463,170   ryu_long kept out of line
+                   282 -> 222 instructions a float
+    runbench    1,867,504,858 -> 1,856,125,258   -0.61%   (this container)
+
+The differential fuzzer compared this core against main's, before either
+short path, on the same classes as the first sitting: 1,495,188,243 compared, 0
+differ. Three mutations of the writer each went red: dropping the odd leading
+digit of the fraction (140,311 differ in 1,884,414), admitting values down to
+10^-5 (17,762) and admitting sixteen-digit integers (209). The float spec
+passes unchanged.
+
+**Two ratchet rows follow the path.** The row that walked the plain branches'
+digit copies a byte at a time guarded code no benchmark float reaches now: under
+that mutation runbench and encodebench read 1,856,125,258 and 3,516,909,606,
+identical to the unmutated tree. Its replacement closes the direct writer, and
+runbench reads 1,861,738,918, which the work vein sees. The short-path row's
+mutation now patches `ryu_short`'s range test, the line the restructure
+rewrote. No counter moves.
+
+**CI's rows**, taken into the goldens:
+
+    work_runbench         1,825,042,054 ->   1,813,491,634   -0.63%
+    work_encodebench      3,229,526,728 ->   3,178,191,528   -1.59%
+    work_livebench        2,697,330,434 ->   2,645,995,234   -1.90%
+    work_widebench           30,712,160 ->      30,153,189   -1.82%
+    work_oneshot             20,056,095 ->      19,927,757   -0.64%
+    startup_instructions        976,034 ->         975,983   -51
+    codegen_instructions_release 1,751,553,021 -> 1,750,938,263  -614,758
+    codegen_instructions_dev    473,952,844 ->   473,969,350   +16,506
+
+`text`, summed over the fourteen binaries, reads 3,260,988 against 3,244,860,
+1,152 bytes more in each: the direct writer beside the branches it skips.
+`codegen_instructions_dev` rises by the same code compiled at -O0. The
+objective rises, and the rise is banked.
+
+## 2026-09-24 — the dev tier's instruction selector falls back on the calling convention
+
+`llc -O0` on the codegen corpus's IR spends 137,115,835 of 326,668,822
+instructions, 41.97%, in SelectionDAG's per-block selection, against
+6,953,622 in FastISel. FastISel works through a block from its terminator, and
+a terminator it cannot select sends the whole block to SelectionDAG. Its
+remarks name 307 `br label` terminators into blocks with `%KValue` phis, 158
+`ret %KValue` and 66 calls.
+
+The aggregate looked like the cause, which would have made this an emitter
+ABI change. Before sizing that, the corpus IR was rewritten so that user
+functions return `void` and their callers read a stand-in runtime call. The
+rewrite is wrong as a program and fine as a codegen measurement. `llc` then
+read 323,782,838, -0.88%, and the misses moved rather than shrank: 265 calls
+and 78 returns, most of them `ret void` in `tailcc` functions. FastISel on
+x86-64 selects neither calls nor returns in the `tailcc` convention.
+
+`tailcc` is what guarantees the tail calls that let mutual recursion run in
+constant stack, and a dev build without it would overflow on the deep
+recursion a release build runs. So the fallback is the convention's, and
+taking the aggregate out of the returns would not remove it. The lead is
+closed until FastISel selects `tailcc`. GlobalISel was measured on the same
+IR at 1,070,967,706, three times the default. Running `instcombine` after the
+always-inliner cost 41,445,873 in `opt` and saved 19,550,143 in `llc`, a net
+loss of 21,895,730.
+
 ## 2026-09-24 — the scanners' ratchet row builds again
 
 The ratchet on kanso#1585 failed one row, marked UNBUILT: "the two byte

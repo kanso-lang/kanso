@@ -1290,12 +1290,17 @@ str_words = row
   (breaking "a_short_string_built_through_a_call")
   benches
 
+# render_ryu's plain branches copied ryu's digits with `k_copy_short`, and a
+# row guarded those copies until 2026-09-24, when every benchmark float began
+# taking the direct writer instead and the copies went unreached. This row
+# guards the direct writer: closing it sends the floats back through the
+# digit buffer, and the work vein is the only thing that can see that.
 ryu_words = row
-  "a rendered number's digits walked one at a time"
+  "a short float written through the digit buffer again"
   false
   "sh scripts/gates/instructions.sh"
   "cost goldens (deterministic ratchet, no clocks)"
-  (breaking "a_rendered_number_s_digits_walked_one_at_a_time")
+  (breaking "a_short_float_written_through_the_digit_buffer")
   benches
 
 size_walk = row
