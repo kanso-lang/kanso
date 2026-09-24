@@ -284,4 +284,8 @@
 # 2026-09-24 (kanso#1614): the ordered view, the in-place builder grow and the
 # mark walk. codegen_instructions_release 1,613,900,206 -> 1,614,602,673, a
 # RISE of 702,467 (+0.0435%).
-codegen_instructions_release=1614602673
+#
+# 2026-09-24 (kanso#1619, carrying kanso#1614, #1615, #1617 and #1618).
+# codegen_instructions_release 1,614,602,673 -> 1,614,559,051, a FALL of
+# 43,622 (-0.0027%).
+codegen_instructions_release=1614559051

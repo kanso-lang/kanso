@@ -12786,5 +12786,30 @@ the run program `arena_peak_bytes` falls 5,050,064 -> 4,194,304 and
 `held_peak_bytes`, which kanso#1614 took from 728,040 to 277,538, holds
 there, so `run_peak_bytes` reads 4,492,354 against main's 5,798,616.
 `allocs` falls 4,337,644 -> 4,147,652 and `alloc_bytes` 413,717,453 ->
-397,171,773. The instruction and compile-side rows are CI's.
+397,171,773.
+
+CI's reading of the combined tree. runbench falls 1,686,535,157 ->
+1,655,310,739 (-31,224,418, -1.85%) and scanbench 417,133,247 -> 296,418,691,
+the regexp's counted run. jsonbench, oneshot, basket, deepbench, indexbench,
+digestbench and livebench fall too. Five rows rise by what a runtime this
+size moves in layout: `escapebench` lands at 76,459,452 (+2,998),
+`pendbench` 209,069,804 (+4,181), `readbench` 4,631,756 (+809),
+`encodebench` 3,055,075,201 (+154) and `widebench` 29,833,954 (+97). Every
+program's `text` grows 2,432 bytes, the runtime's own growth, and runbench's
+`text` lands at 415,784 and scanbench's at 323,672, which also carry the
+regexp's larger helpers. `entry_instructions` lands at 86,461,385
+(+1,428,650, +1.68%) and `library_instructions` at 87,004,317 (+1,419,657,
++1.66%), which is kanso#1615's larger regexp library compiled on each of
+those routes; its own rows were never taken before the carry.
+`codegen_instructions_dev` lands at 287,912,357 (+66,860, +0.02%), and
+`codegen_instructions_release` falls to 1,614,559,051. The compile, emit,
+start-up and interpreter rows read as kanso#1618 left them.
+
+By the trend gate's keys: `work_escapebench` lands at 76,459,452,
+`work_pendbench` at 209,069,804 and `work_readbench` at 4,631,756, the layout
+rises above. `work_basket` reads 32,561,464 and `work_jsonbench`
+1,127,061,575, each below main's golden and above the history's reading from
+before kanso#1613, whose rise is priced in its own entry. `text` sums to
+3,486,864 against main's 3,420,592 (+66,272): 2,432 bytes of runtime in each
+of the fourteen programs and the regexp's helpers in the two that match.
 
