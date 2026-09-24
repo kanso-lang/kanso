@@ -40,11 +40,12 @@ sudo apt-get install -y -qq valgrind jq
 #
 # --no-install-recommends is required: a plain install pulls llvm-19-dev, whose
 # 32-bit dependencies (libc6-i386, libxml2-dev) 404 on this image.
-sudo apt-get install -y -qq --no-install-recommends clang-19
+sudo apt-get install -y -qq --no-install-recommends clang-19 lld-19 lld
 # /usr/bin/clang is a package-owned symlink to ../lib/llvm-18/bin/clang rather
 # than an update-alternatives path, so --install leaves it pointing at 18.
 # /usr/local/bin precedes /usr/bin, so this wins without touching the dpkg file.
 sudo ln -sf /usr/bin/clang-19 /usr/local/bin/clang
+sudo ln -sf /usr/bin/ld.lld-19 /usr/local/bin/ld.lld
 clang --version | head -1 | grep -q 'clang version 19' || {
   echo "clang 19 is installed but not selected: $(clang --version | head -1)" >&2
   exit 1
