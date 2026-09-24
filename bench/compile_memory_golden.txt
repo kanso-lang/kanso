@@ -266,4 +266,8 @@ front_end_visits=15131
 # inference set, the callback guard's seed table and the provenance walk
 # are held for the whole of inference, and the effect type is one more
 # declaration the front end holds; the front end's rounds and visits fall.
-compile_peak_bytes=787956
+#
+# 2026-09-24, kanso#1603 over main 68495456, CI's sitting. The lexer and nine
+# front-end places stop allocating what they drop. compile_peak_bytes 787,956
+# -> 777,072, a FALL of 10,884 (-1.3813%).
+compile_peak_bytes=777072

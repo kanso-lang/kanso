@@ -208,15 +208,17 @@ fn use_targets(expr: &Expr, name: &str, out: &mut Vec<(String, usize, usize)>) {
 
 /// For each (group name, arity), which argument positions have at least one
 /// arm that discards the parameter outright.
+// A group none of whose arms discards anything has no entry, which reads the
+// same as a row of `false` at the one place this is consulted. Building that
+// row for every group was a zeroed allocation per group, 410 on lib/json.
 fn discard_positions(program: &Program) -> HashMap<(&str, usize), Vec<bool>> {
     let mut positions: HashMap<(&str, usize), Vec<bool>> = HashMap::default();
     for f in &program.fns {
-        let slots = positions
-            .entry((f.name.as_str(), f.params.len()))
-            .or_insert_with(|| vec![false; f.params.len()]);
         for (i, param) in f.params.iter().enumerate() {
             if matches!(param, Pattern::Wildcard(_)) {
-                slots[i] = true;
+                positions
+                    .entry((f.name.as_str(), f.params.len()))
+                    .or_insert_with(|| vec![false; f.params.len()])[i] = true;
             }
         }
     }

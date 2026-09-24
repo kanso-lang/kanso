@@ -450,4 +450,7 @@
 # overlap up to 128 bytes, 128-byte AVX2 steps above that. Copies libc makes internally, a thousand-odd instructions a run, cannot
 # be reached by a preload and are still counted as libc does them.
 #
-startup_instructions=683920
+# 2026-09-24, kanso#1603 over main 68495456, CI's sitting. The lexer and nine
+# front-end places stop allocating what they drop. startup_instructions
+# 683,920 -> 672,962, a FALL of 10,958 (-1.6022%).
+startup_instructions=672962
