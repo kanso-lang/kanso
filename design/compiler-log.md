@@ -11620,3 +11620,16 @@ temporary `%KValue` to any of the three, that it calls each two-word form, and
 that the release module calls none of them. It went red with the dev tier
 asking the `%KValue` forms. The first draft of its program had a record arm
 beside a wildcard arm, which is how kanso#1597 was found.
+
+CI's rows, over kanso#1596's:
+
+    codegen_instructions_dev     326,056,595 ->   301,084,979   -7.66%
+    startup_instructions             776,882 ->       788,333   +11,451
+    emit_instructions             43,332,550 ->    45,838,870   +2,506,320
+
+Both dev readings agreed. The emit row rises by more than the rewrite's own
+frames: each predicate call now writes two or three lines where it wrote one,
+and every pass over the body text (the call scans, the reachability pass,
+the formatting and allocation behind each line) pays for the extra lines. The
+objective weighs the emit row lightly and dev codegen heavily, and welfare
+rises 0.03 on the three together.
