@@ -1,0 +1,36 @@
+# A greedy repetition of a single character, a literal, a dot or a class, is
+# counted in one pass and then offered to the rest of the pattern from the
+# longest run down to the shortest the repetition allows. The general walk
+# tries the same lengths in the same order, so every pattern here has to
+# match exactly what it matched before: runs that must give characters back,
+# floors and ceilings, runs that match nothing, a dot that stops at a newline,
+# a negated class, captures on either side of a run, a run the end anchor
+# decides, and lazy runs, which keep the general walk.
+import "std/regexp"
+
+fn shown none
+  "none"
+
+fn shown (err reason)
+  "err {reason}"
+
+fn shown found
+  "[{found}]"
+
+pub play =
+  print "a+ab on aaab: {shown (regexp/find "a+ab" "aaab")}"
+  print "[ab]*b on abab: {shown (regexp/find "[ab]*b" "ababc")}"
+  print "x\{2,3}x on xxxxx: {shown (regexp/find "x\{2,3}x" "xxxxx")}"
+  print "x\{2,3}x on xx: {shown (regexp/find "x\{2,3}x" "xx")}"
+  print "a\{0,2}a on aaaa: {shown (regexp/find "a\{0,2}a" "aaaa")}"
+  print ".*c on ab\\ncd: {shown (regexp/find ".*c" "ab\ncd")}"
+  print "[^c]+c on xyzc: {shown (regexp/find "[^c]+c" "xyzcc")}"
+  print "[a-z]+zzq on abc: {shown (regexp/find "[a-z]+zzq" "abcabc")}"
+  print "b* on aaa: {shown (regexp/find "b*" "aaa")}"
+  print "(a+)(a) on aaaa: {regexp/groups "(a+)(a)" "aaaa"}"
+  print "(a*)b(a*) on aab: {regexp/groups "(a*)b(a*)" "aab"}"
+  print "[0-9]+$ on a12b34: {shown (regexp/find "[0-9]+$" "a12b34")}"
+  print "a+? on aaa: {shown (regexp/find "a+?" "aaa")}"
+  print "a*?b on aab: {shown (regexp/find "a*?b" "aab")}"
+  print "(ab)+ on ababx: {shown (regexp/find "(ab)+" "ababx")}"
+  print "find_all [a-c]+ on abxbcya: {regexp/find_all "[a-c]+" "abxbcya"}"
