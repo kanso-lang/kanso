@@ -1908,7 +1908,9 @@ regrow = row
   (breaking "a_unique_builder_copied_to_grow")
   release
 
-rows_b1p = text/concat rows_b1o [list_test_first framed_view ordered_view regrow]
+rows_b1q = text/concat rows_b1o [list_test_first framed_view]
+
+rows_b1p = text/concat rows_b1q [ordered_view regrow]
 
 rows_b = text/concat rows_b1p [compile_mem compile_mem_host]
 
