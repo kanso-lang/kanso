@@ -11876,3 +11876,18 @@ Over main, the whole branch takes compile_allocs from 27,313 to 15,341,
 The allocation golden moves here and the instruction rows are CI's. Every
 spec in the suite passes except the wasm engine's, which needs a
 `docs/kanso.wasm` this container has no target to build; CI builds it.
+
+**CI's rows**, over main with kanso#1602, taken into the goldens:
+
+    compile_instructions     35,400,616 ->  33,315,822   -5.89%
+    entry_instructions      125,944,853 -> 118,942,141   -5.56%
+    library_instructions    126,522,328 -> 119,486,941   -5.56%
+    startup_instructions        683,920 ->     672,962   -1.60%
+    emit_instructions        45,259,445 ->  45,206,776   -0.12%
+    compile_peak_bytes          787,956 ->     777,072   -1.38%
+    interp_instructions     853,048,810 -> 852,977,487   -0.01%
+    interp_allocs             1,063,803 ->   1,049,281   -1.37%
+    interp_peak_bytes           846,367 ->     846,191   -0.02%
+
+The interpreted run moves because the interpreter lexes and parses its
+program before running it. Every row falls, and the rise is banked.
