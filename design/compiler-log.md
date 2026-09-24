@@ -11211,3 +11211,12 @@ first rule it printed 10. The two rules together still leave every vein this
 host can compare where it was. The first rule is still needed for a literal
 arm, since `fn total 5` beside a record arm lets an int reach the slot with no
 wildcard in sight.
+
+CI's rows. The two new checks run at every emit, for every carried position,
+and cost the one-line start-up program 47 instructions:
+
+    startup_instructions   870,779 ->    870,826   +47
+    emit_instructions   43,339,387 -> 43,339,434   +47
+
+Every other row agreed. The fix builds the differential law, which the
+language rests on, so the floor comes down by what it costs.
