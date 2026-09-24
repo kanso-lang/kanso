@@ -2043,7 +2043,19 @@ known_tag = row
 
 rows_b1kt = text/concat rows_b1nm [known_tag]
 
-rows_b = text/concat rows_b1kt [compile_mem compile_mem_host]
+# A function's checked integer ops share one overflow trap. The mutation gives
+# every op its own, and the spec's `spread` holds six.
+one_trap = row
+  "an overflow trap written at every op"
+  true
+  "cargo test --release --test an_overflow_trap_is_written_once_a_function"
+  "specs (unit, golden, differential)"
+  (breaking "an_overflow_trap_written_at_every_op")
+  release
+
+rows_b1ot = text/concat rows_b1kt [one_trap]
+
+rows_b = text/concat rows_b1ot [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 

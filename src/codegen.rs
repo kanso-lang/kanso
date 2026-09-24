@@ -2620,6 +2620,12 @@ struct FnEmit {
     /// read of its tag or payload used to take it back apart with an
     /// `extractvalue`; the tag is 0 and the payload is the argument itself.
     known_words: crate::hash::Map<String, (String, String)>,
+    /// The blocks a checked integer op in this function branches to when it
+    /// overflows, and the message they die with. The block is the same three
+    /// lines wherever the op is, so every op shares the first, and `body`
+    /// writes it once at the end rather than once an op.
+    overflow_traps: Vec<String>,
+    overflow_message: String,
 }
 /// Whether a line the emitters wrote is a stack slot, asked at the ONE place
 /// the needle can be.
@@ -2670,6 +2676,8 @@ impl FnEmit {
             raw_byte: crate::hash::Map::default(),
             words,
             known_words: crate::hash::Map::default(),
+            overflow_traps: Vec::new(),
+            overflow_message: String::new(),
         }
     }
 
@@ -2763,7 +2771,18 @@ impl FnEmit {
     /// the head of the entry block so each one dominates its uses.
     fn body(&self) -> String {
         let unboxed = self.without_unread_reboxes();
-        let out = unboxed.as_deref().unwrap_or(&self.out);
+        let mut out = unboxed.as_deref().unwrap_or(&self.out);
+        let trapped;
+        if !self.overflow_traps.is_empty() {
+            let mut text = out.to_string();
+            for label in &self.overflow_traps {
+                let message = &self.overflow_message;
+                let _ = write!(text, "{label}:\n  call void @k_die(ptr @{message})\n");
+                text.push_str("  unreachable\n");
+            }
+            trapped = text;
+            out = &trapped;
+        }
         if self.entry_allocas.is_empty() {
             return out.to_string();
         }
@@ -2856,6 +2875,17 @@ impl FnEmit {
     /// through here, so a fresh temp is never scanned against itself.
     fn raw(&mut self, text: &str) {
         self.write(text);
+    }
+
+    /// The label a checked integer op branches to on overflow.
+    fn overflow_trap(&mut self, message: String) -> String {
+        if let Some(trap) = self.overflow_traps.first() {
+            return trap.clone();
+        }
+        let trap = self.label();
+        self.overflow_traps.push(trap.clone());
+        self.overflow_message = message;
+        trap
     }
 
     fn start_block(&mut self, label: &str) {
@@ -7884,14 +7914,11 @@ impl<'a> Backend<'a> {
                     let overflow = f.tmp();
                     f.line(&format!("{overflow} = extractvalue {{ i64, i1 }} {pair}, 1"));
                     let ok = f.label();
-                    let trap = f.label();
-                    f.line(&format!("br i1 {overflow}, label %{trap}, label %{ok}"));
-                    f.start_block(&trap);
                     let (m, _) = self.intern(
                         "integer overflow (int64 native build; spec int is arbitrary precision)\0",
                     );
-                    f.line(&format!("call void @k_die(ptr @{m})"));
-                    f.line("unreachable");
+                    let trap = f.overflow_trap(m);
+                    f.line(&format!("br i1 {overflow}, label %{trap}, label %{ok}"));
                     f.start_block(&ok);
                     let v = f.tmp();
                     f.line(&format!(

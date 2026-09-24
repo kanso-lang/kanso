@@ -13059,3 +13059,47 @@ way. A dev build pays both, about 44 million of its 145.7 million. Running
 reads 95,768,077 on the corpus against 102,053,958, but it writes different
 unwind tables and relaxation, and Xcode's clang ships no `llc`, so the dev
 tier would carry two back ends for about 4% of one row. Declined.
+
+## 2026-09-24 — a function's overflow checks share one trap
+
+Every `+`, `-` and `*` the emitter proves to be between two integers is an
+`llvm.*.with.overflow` call and a branch on its flag, and the block that
+branch takes on overflow is three lines: a call to `k_die` with the overflow
+message, and `unreachable`. It was written once an op. `d_json/str_low_5`
+carried six copies of it, and runbench's module 131 in all. Each function now
+keeps one, made the first time an op asks for it and written by `body` after
+everything else, so every op in the function branches to the same label.
+
+The mixed path, where one side might not be an int, is unchanged. Its
+overflow falls to the slow call, which reports the overflow itself.
+
+The emitted veins fall: the decoder's calls 629 -> 582 and lines 5,063 ->
+4,922, runbench's calls 4,296 -> 4,171 and lines 24,854 -> 24,479, and every
+other row by the number of checked ops it holds. `compile_golden`'s recursion
+sample loses a call and three lines. Defines and branches are unchanged
+everywhere, since the op still branches and no function was added.
+
+On this container, against kanso#1621's tree: `codegen_instructions_dev`
+143,741,446 -> 143,725,457, `codegen_instructions_release` 713,139,845 ->
+712,729,450 and `emit_instructions` 30,468,658 -> 30,458,722. The codegen
+corpus holds few proven-int ops, so the rows move little. The run program
+reads 1,676,858,251 -> 1,676,080,238 (-0.0464%) and jsonbench 1,127,903,599
+-> 1,126,719,499 (-0.1050%), with the cold blocks at the end of each function
+rather than between its hot ones. scanbench reads +994. CI's rows follow.
+
+`tests/an_overflow_trap_is_written_once_a_function.rs` compiles a function
+with six checked ops and asserts it calls `k_die` with the overflow message
+once, and that no function in the module calls it twice. A second test runs
+the same function on numbers that do not fit: native dies with the overflow
+message and prints nothing, and the interpreter answers
+9214148664817920226007. Watched red with every op taking its own trap:
+`spread` held 6. The ratchet row `one_trap` breaks it the same way.
+
+Returning through one shared block was measured and declined. With every
+`ret %KValue` in the codegen corpus rewritten to branch to a block that joins
+the two words in `i64` phis and returns once, `clang -cc1 -O0` read
+104,633,266 -> 107,801,878. FastISel misses 110 instructions on the original
+module and 119 on the rewrite. A block whose terminator FastISel misses goes
+to SelectionDAG whole, and once the returns stop doing that, each call that
+returns a `%KValue` misses on its own and is selected alone, which costs
+more.
