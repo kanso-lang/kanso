@@ -287,4 +287,7 @@
 # CI measured the subtype fix at 061eaef6: k_unsub moves the layout the
 # compile reads. codegen_instructions_dev 124,017,062 -> 124,021,731, a RISE
 # of 4,669 (+0.0038%).
-codegen_instructions_dev=124021731
+#
+# CI measured kanso#1657 over the runtime without the token cache's dead copy:
+# codegen_instructions_dev 124,021,731 -> 124,021,739, a RISE of 8 (+0.0000%).
+codegen_instructions_dev=124021739
