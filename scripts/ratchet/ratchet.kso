@@ -2277,6 +2277,18 @@ literal_asked = row
 
 rows_b1rl = text/concat rows_b1pl [literal_run literal_asked]
 
+# A split whose scan finds nothing ends, rather than scanning again from the
+# next position; the mem fixture's scan count goes quadratic without it.
+split_stops = row
+  "a split that scans again after finding nothing"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_split_that_rescans_after_finding_nothing")
+  release
+
+rows_b1ss = text/concat rows_b1rl [split_stops]
+
 # Under clang 19 the emitter writes the preserve_none convention in front of
 # every declare of and call to a door, in one pass over the module. Matching a
 # door by prefix hands the ordinary `k_b_utf8_...` functions the door's
@@ -2289,7 +2301,7 @@ door_prefix = row
   (breaking "a_door_found_by_its_prefix")
   release
 
-rows_b1dp = text/concat rows_b1rl [door_prefix]
+rows_b1dp = text/concat rows_b1ss [door_prefix]
 
 rows_b = text/concat rows_b1dp [compile_mem compile_mem_host]
 

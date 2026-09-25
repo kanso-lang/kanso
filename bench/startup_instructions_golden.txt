@@ -493,4 +493,7 @@
 #
 # kanso#1633 at CI's sitting: a proven list is measured and indexed in place.
 # startup_instructions 605,252 -> 605,388, a RISE of 136 (+0.0225%).
-startup_instructions=605388
+#
+# CI measured the doors in one pass at aea2c904. startup_instructions 605,388
+# -> 605,389, a RISE of 1 (+0.0002%).
+startup_instructions=605389
