@@ -13525,6 +13525,18 @@ it is left as it is.
 
 ---
 
+## 2026-09-25 — CI's rows for kanso#1624
+
+Measured by CI on `0afacb5c`, against kanso#1623's goldens. The run program
+reads 1,535,239,320 -> 1,534,028,118 (-0.0789%), widebench 28,937,870 ->
+28,777,868 (-0.5529%), jsonbench -0.1843% and oneshot -0.0787%; encodebench
++0.0045% and livebench +0.0039%. Every binary's machine code is 368 bytes
+smaller, and `text` sums to 3,434,192. `codegen_instructions_release` reads 715,946,899 and
+`codegen_instructions_dev` 142,639,014, 5,303 and 5,429 below the branch's
+base. Welfare reads 87.99 and the rise is banked.
+
+---
+
 ## 2026-09-25 — the interpreter moves a winning argument into its binding
 
 Arm selection tries every candidate in a group, and `match_one` bound a
