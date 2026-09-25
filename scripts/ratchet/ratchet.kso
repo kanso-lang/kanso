@@ -2147,7 +2147,7 @@ rows_b1fp = text/concat rows_b1mb [fifth_push]
 
 # An accumulator out of the arena grows by realloc. The mutation mallocs,
 # copies and frees again, and the fixture's permanent peak holds two buffers.
-regrow = row
+perm_regrow = row
   "an accumulator grown by malloc and free"
   true
   "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
@@ -2155,7 +2155,7 @@ regrow = row
   (breaking "an_accumulator_grown_by_malloc_and_free")
   release
 
-rows_b1rg = text/concat rows_b1fp [regrow]
+rows_b1rg = text/concat rows_b1fp [perm_regrow]
 
 rows_b = text/concat rows_b1rg [compile_mem compile_mem_host]
 
