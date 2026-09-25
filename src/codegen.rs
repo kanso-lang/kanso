@@ -54,7 +54,7 @@ pub fn counters_wanted() -> bool {
 
 /// How many `k_stats_on` gates DECLARES carries. Pinned so that adding one
 /// without teaching `index_declares` about it fails the build.
-pub const STATS_GATE_SITES: usize = 8;
+pub const STATS_GATE_SITES: usize = 9;
 
 const DECLARES: &str = r#"%KValue = type { i64, i64 }
 %parsed = type { i64, i64 }
@@ -331,6 +331,51 @@ bwrite:
 slow:
   %f = call %KValue @k_b_append_mut(%KValue %acc, %KValue %x)
   ret %KValue %f
+}
+; Two bytes appended one after the other to a builder this function owns, the
+; second onto the first's result and nothing else reading that result between
+; them: `text/append (text/append acc 92) b`, which is every escape the json
+; encoder writes. The pair asks for room once and writes both bytes. Anything
+; the fast path refuses runs the two single appends in order, as written.
+define internal %KValue @k_b_append_mut_int2(%KValue %acc, %KValue %x, %KValue %y) alwaysinline {
+  %so = load i32, ptr @k_stats_on
+  %counting = icmp ne i32 %so, 0
+  br i1 %counting, label %slow, label %fast
+fast:
+  %bp = extractvalue %KValue %acc, 1
+  %b = inttoptr i64 %bp to ptr
+  %len = load i64, ptr %b
+  %datap = getelementptr i8, ptr %b, i64 8
+  %data = load ptr, ptr %datap
+  %capp = getelementptr i8, ptr %b, i64 16
+  %cap = load i64, ptr %capp
+  %capa = and i64 %cap, -2
+  %owned = icmp ne i64 %cap, 0
+  br i1 %owned, label %fr, label %slow
+fr:
+  %usedp = getelementptr i8, ptr %data, i64 -8
+  %used = load i64, ptr %usedp
+  %atfront = icmp eq i64 %used, %len
+  %len2 = add i64 %len, 2
+  %fits = icmp sle i64 %len2, %capa
+  %ok = and i1 %atfront, %fits
+  br i1 %ok, label %write, label %slow
+write:
+  %dst = getelementptr i8, ptr %data, i64 %len
+  %xv = extractvalue %KValue %x, 1
+  %xb = trunc i64 %xv to i8
+  store i8 %xb, ptr %dst
+  %dst1 = getelementptr i8, ptr %dst, i64 1
+  %yv = extractvalue %KValue %y, 1
+  %yb = trunc i64 %yv to i8
+  store i8 %yb, ptr %dst1
+  store i64 %len2, ptr %usedp
+  store i64 %len2, ptr %b
+  ret %KValue %acc
+slow:
+  %t = call %KValue @k_b_append_mut_int(%KValue %acc, %KValue %x)
+  %r = call %KValue @k_b_append_mut_int(%KValue %t, %KValue %y)
+  ret %KValue %r
 }
 ; `append acc (slice cs from to)` where the accumulator is unique, both sides
 ; are bytes and the range fits the spare capacity it already has. That is the
@@ -4425,6 +4470,64 @@ fn both_ints(f: &mut FnEmit, ta: &str, tb: &str) -> String {
     }
 }
 
+/// Two in-place byte appends in a row, the second onto the first's result and
+/// that result read nowhere else in the function, as one call to
+/// `k_b_append_mut_int2`. Both calls were already the proven-bytes,
+/// proven-int door, so the pair asks the same questions once; see the helper.
+fn paired_appends(body: &str) -> String {
+    const HEAD: &str = " = call %KValue @k_b_append_mut_int(%KValue ";
+    fn parse(line: &str) -> Option<(&str, &str, &str)> {
+        let rest = line.strip_prefix("  ")?;
+        let (name, rest) = rest.split_once(HEAD)?;
+        let args = rest.strip_suffix(')')?;
+        let (acc, x) = args.split_once(", %KValue ")?;
+        Some((name, acc, x))
+    }
+    let lines: Vec<&str> = body.lines().collect();
+    let mut out = String::with_capacity(body.len());
+    let mut start = 0;
+    while start < lines.len() {
+        // one function at a time, so a use count is the function's own
+        let mut end = start;
+        while end < lines.len() && lines[end] != "}" {
+            end += 1;
+        }
+        let end = (end + 1).min(lines.len());
+        let func = &lines[start..end];
+        let mut i = 0;
+        while i < func.len() {
+            if i + 1 < func.len() {
+                if let (Some((a, acc, x)), Some((b, acc2, y))) = (parse(func[i]), parse(func[i + 1])) {
+                    let used = func.iter().map(|l| count_operand(l, a)).sum::<usize>();
+                    if acc2 == a && used == 2 {
+                        out.push_str(&format!(
+                            "  {b} = call %KValue @k_b_append_mut_int2(%KValue {acc}, %KValue {x}, %KValue {y})\n"
+                        ));
+                        i += 2;
+                        continue;
+                    }
+                }
+            }
+            out.push_str(func[i]);
+            out.push('\n');
+            i += 1;
+        }
+        start = end;
+    }
+    out
+}
+
+/// How many times `name` appears in `line` as a whole operand.
+fn count_operand(line: &str, name: &str) -> usize {
+    let bytes = line.as_bytes();
+    line.match_indices(name)
+        .filter(|(at, _)| {
+            let after = bytes.get(at + name.len()).copied().unwrap_or(b' ');
+            !(after.is_ascii_alphanumeric() || after == b'_' || after == b'.')
+        })
+        .count()
+}
+
 /// One read of a byte run: `x[p + k] == c` or `x[p] == c`, non-strict, with
 /// `c` a byte literal and `k` a small literal. Answers `(x, p, k, c)`.
 fn byte_read(e: &Expr) -> Option<(&str, &str, i64, i64)> {
@@ -5231,6 +5334,7 @@ impl<'a> Backend<'a> {
             true => prune_unnamed(&self.body, &dsym(crate::ast::ENTRY, 0), &self.closure_consts),
             false => self.body.clone(),
         };
+        let body = paired_appends(&body);
         // One inline dispatcher per arity the program actually writes. An
         // unused `internal` definition costs nothing after optimization, but
         // it does cost a line, a define and a branch in the emitted golden —

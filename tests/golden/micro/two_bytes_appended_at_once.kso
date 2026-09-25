@@ -1,0 +1,8 @@
+# Two bytes appended one after the other to a builder the function owns are
+# one call that asks for room once and writes both, in order. The json
+# encoder's escapes are that shape -- a backslash, then the letter -- so a
+# pair written the wrong way round, or one byte short, shows in the text.
+import "std/io"
+import "std/json"
+
+pub play = io/write "{json/encode ["q\"uote" "new\nline" "tab\tand\\back"]}\n"
