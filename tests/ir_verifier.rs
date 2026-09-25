@@ -70,11 +70,28 @@ fn does_not_dominate() -> PathBuf {
     bad
 }
 
+/// The major version of the clang on PATH, which is the one `kanso build`
+/// runs.
+fn clang_major() -> Option<String> {
+    let out = Command::new("clang").arg("--version").output().ok()?;
+    let text = String::from_utf8_lossy(&out.stdout);
+    let after = text.split("version ").nth(1)?;
+    Some(after.split('.').next()?.to_string())
+}
+
 /// The first tool on this host that refuses invalid IR. Every test here needs
 /// one, and which one it is belongs in the failure message.
-fn verifier() -> Option<&'static str> {
+///
+/// The tools of clang's own release are asked first. An older `opt` does not
+/// know every keyword a newer clang takes: with clang 19 selected the emitter
+/// writes `preserve_nonecc`, and the bare `opt` on the linux image is 18's,
+/// which refused 76 of the corpus's programs at the parser.
+fn verifier() -> Option<String> {
     let bad = does_not_dominate();
-    CANDIDATES.into_iter().find(|tool| match read_ir(tool, &bad) {
+    let matching =
+        clang_major().map(|v| vec![format!("opt-{v}"), format!("llvm-as-{v}")]).unwrap_or_default();
+    let rest = CANDIDATES.iter().map(|t| t.to_string());
+    matching.into_iter().chain(rest).find(|tool| match read_ir(tool, &bad) {
         Some(answer) => {
             !answer.status.success()
                 && String::from_utf8_lossy(&answer.stderr).contains("does not dominate all uses")
@@ -154,7 +171,7 @@ fn the_ir_kanso_writes_passes_that_verifier() {
             }
 
             let written = dir.join(&built_stem).with_extension("ll");
-            let checked = read_ir(tool, &written).expect("the verifier runs");
+            let checked = read_ir(&tool, &written).expect("the verifier runs");
             match checked.status.success() {
                 true => None,
                 false => {

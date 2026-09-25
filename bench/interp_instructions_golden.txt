@@ -545,5 +545,22 @@
 # paths, reboxed words, the interpreter's argument loops and low byte.
 # interp_instructions 785,584,543 -> 733,050,032, a FALL of 52,534,511
 # (-6.6873%).
-interp_instructions=733050032
+#
+# kanso#1622 at CI's sitting: one overflow trap a function, blank lines by
+# binary search, entries in one block, the beat mark inline, empty literals
+# and ints rendered in place. interp_instructions 733,050,032 -> 732,994,592,
+# a FALL of 55,440 (-0.0076%).
+#
+# kanso#1625 at CI's sitting: a winning argument is moved into its binding.
+# interp_instructions 732,994,592 -> 709,556,834, a FALL of 23,437,758
+# (-3.1975%).
+#
+# kanso#1628 projected: a call finds its callee by the reference's address.
+# interp_instructions 709,556,834 -> 691,618,039, a FALL of 17,938,795
+# (-2.5282%).
+#
+# kanso#1628 at CI's sitting: a call finds its callee by the reference's
+# address. interp_instructions 691,618,039 -> 690,933,840, a FALL of 684,199
+# (-0.0989%).
+interp_instructions=690933840
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

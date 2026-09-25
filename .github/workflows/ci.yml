@@ -73,6 +73,24 @@ jobs:
         run: |
           rustup target add wasm32-unknown-unknown
           sh scripts/build_wasm.sh
+      # THE SUITE BUILDS WITH THE CLANG THE MEASURED BINARIES ARE BUILT WITH.
+      # The cost-goldens job selects clang 19, which takes preserve_nonecc,
+      # and on that clang a release build on x86-64 rewrites its tail cycles
+      # (`preserve_none_tails` in src/main.rs) and the closures change
+      # convention. This job ran the image's clang 18, where neither happens,
+      # so no spec here had ever run a binary the objective counts. llvm-19
+      # is for `opt-19`: tests/ir_verifier.rs reads the IR with the verifier
+      # of clang's own release, since 18's refuses the keyword.
+      - name: clang 19, as the measured binaries are built
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends clang-19 lld-19 lld llvm-19
+          sudo ln -sf /usr/bin/clang-19 /usr/local/bin/clang
+          sudo ln -sf /usr/bin/ld.lld-19 /usr/local/bin/ld.lld
+          clang --version | head -1 | grep -q 'clang version 19' || {
+            echo "::error::clang 19 is installed but not selected: $(clang --version | head -1)"
+            exit 1
+          }
       # --no-fail-fast because cargo stops at the first failing test
       # BINARY, not the first failing test, and the binaries run in
       # alphabetical order. With welfare red in its own spec (then

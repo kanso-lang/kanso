@@ -475,4 +475,22 @@
 # kanso#1621 at CI's sitting: dead cycles, unnamed strings, dead failure
 # paths, reboxed words, the interpreter's argument loops and low byte.
 # startup_instructions 639,966 -> 601,897, a FALL of 38,069 (-5.9486%).
-startup_instructions=601897
+#
+# kanso#1622 at CI's sitting: one overflow trap a function, blank lines by
+# binary search, entries in one block, the beat mark inline, empty literals
+# and ints rendered in place. startup_instructions 601,897 -> 601,491, a FALL
+# of 406 (-0.0675%).
+#
+# kanso#1623 at CI's sitting: tail cycles, direct calls and four runtime doors
+# on preserve_none. startup_instructions 601,491 -> 601,506, a RISE of 15
+# (+0.0025%).
+#
+# kanso#1629 at CI's sitting: a run of byte compares is read as one window.
+# startup_instructions 601,506 -> 601,513, a RISE of 7 (+0.0012%).
+#
+# kanso#1631 at CI's sitting: two byte appends in a row ask for room once.
+# startup_instructions 601,513 -> 605,252, a RISE of 3,739 (+0.6216%).
+#
+# kanso#1633 at CI's sitting: a proven list is measured and indexed in place.
+# startup_instructions 605,252 -> 605,388, a RISE of 136 (+0.0225%).
+startup_instructions=605388

@@ -297,4 +297,37 @@
 # paths, reboxed words, the interpreter's argument loops and low byte.
 # codegen_instructions_release 857,150,087 -> 713,520,095, a FALL of
 # 143,629,992 (-16.7567%).
-codegen_instructions_release=713520095
+#
+# kanso#1622 at CI's sitting: one overflow trap a function, blank lines by
+# binary search, entries in one block, the beat mark inline, empty literals
+# and ints rendered in place. codegen_instructions_release 713,520,095 ->
+# 715,952,319, a RISE of 2,432,224 (+0.3409%).
+#
+# kanso#1623 at CI's sitting: tail cycles, direct calls and four runtime doors
+# on preserve_none. codegen_instructions_release 715,952,319 -> 715,952,202, a
+# FALL of 117 (-0.0000%).
+#
+# kanso#1624 at CI's sitting: an append that must grow asks first.
+# codegen_instructions_release 715,952,202 -> 715,946,899, a FALL of 5,303
+# (-0.0007%).
+#
+# kanso#1626 at CI's sitting: a fifth push takes eight slots.
+# codegen_instructions_release 715,946,899 -> 715,946,959, a RISE of 60
+# (+0.0000%).
+#
+# kanso#1627 at CI's sitting: an accumulator's buffer grows where it is.
+# codegen_instructions_release 715,946,959 -> 715,866,504, a FALL of 80,455
+# (-0.0112%).
+#
+# kanso#1630 at CI's sitting: a rewind with nothing to take back asks only
+# whether the pointer moved. codegen_instructions_release 715,866,504 ->
+# 715,981,278, a RISE of 114,774 (+0.0160%).
+#
+# kanso#1631 at CI's sitting: two byte appends in a row ask for room once.
+# codegen_instructions_release 715,981,278 -> 715,986,547, a RISE of 5,269
+# (+0.0007%).
+#
+# kanso#1633 at CI's sitting: a proven list is measured and indexed in place.
+# codegen_instructions_release 715,986,547 -> 698,557,830, a FALL of
+# 17,428,717 (-2.4342%).
+codegen_instructions_release=698557830

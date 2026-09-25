@@ -188,7 +188,7 @@ pub fn parse_entry(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
     if let Some(start) = first_stmt {
         for line in &lexed.lines[start..] {
             if line.indent != 0
-                && lexed.blank_lines.contains(&(line.number - 1))
+                && lexed.blank_lines.binary_search(&(line.number - 1)).is_ok()
                 && matches!(
                     line.tokens.first(),
                     Some((Tok::SeqOp | Tok::Pipe | Tok::Fused(_), _, _))
@@ -501,6 +501,17 @@ fn head_span(line: &Line) -> Span {
     line.tokens.first().map(|(_, s, _)| *s).unwrap_or(Span::at(line.number, 1))
 }
 
+/// How many of `blanks` lie strictly between line `after` and line `before`.
+///
+/// The lexer records blank lines in the order it meets them, so the list is
+/// ascending and two binary searches bound the run. Counting them with a
+/// filter walked the whole list once for every pair of adjacent lines, which
+/// is quadratic in the length of a file.
+fn blanks_between(blanks: &[usize], after: usize, before: usize) -> usize {
+    debug_assert!(blanks.windows(2).all(|w| w[0] < w[1]), "blank lines out of order");
+    blanks.partition_point(|b| *b < before) - blanks.partition_point(|b| *b <= after)
+}
+
 fn check_blank_policy(lexed: &Lexed, diags: &mut Vec<Diagnostic>) {
     let Some(first) = lexed.lines.first() else { return };
     for blank in &lexed.blank_lines {
@@ -524,11 +535,7 @@ fn check_blank_policy(lexed: &Lexed, diags: &mut Vec<Diagnostic>) {
         }
     }
     for pair in lexed.lines.windows(2) {
-        let blanks = lexed
-            .blank_lines
-            .iter()
-            .filter(|b| **b > pair[0].number && **b < pair[1].number)
-            .count();
+        let blanks = blanks_between(&lexed.blank_lines, pair[0].number, pair[1].number);
         let both_imports = matches!(pair[0].tokens.first(), Some((Tok::KwImport, _, _)))
             && matches!(pair[1].tokens.first(), Some((Tok::KwImport, _, _)));
         let decl_start =

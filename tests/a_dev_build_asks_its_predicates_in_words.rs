@@ -13,6 +13,10 @@
 //!
 //! Watched red with the dev tier asking the `%KValue` forms: the dev module
 //! called `k_truthy`, `k_not_failure` and `k_check_rec_fast` again.
+//!
+//! Since 2026-09-25 the failure test asks no predicate in either tier: it is
+//! one compare of the tag, which is the strongest form of the same property,
+//! so the spec asserts neither module calls `k_not_failure` in any form.
 
 use std::process::Command;
 
@@ -66,7 +70,11 @@ fn the_dev_module_passes_words_and_prints_what_release_prints() {
     let _ = std::fs::remove_dir_all(&dir);
     assert_eq!(dev_out, "7 0 yes\n2 failed\n");
     assert_eq!(dev_out, release_out);
-    for name in ["k_not_failure", "k_truthy", "k_check_rec_fast"] {
+    for module in [&dev, &release] {
+        assert_eq!(calls(module, "k_not_failure"), 0, "a module calls k_not_failure");
+        assert_eq!(calls(module, "k_not_failure_w"), 0, "a module calls k_not_failure_w");
+    }
+    for name in ["k_truthy", "k_check_rec_fast"] {
         assert_eq!(by_value(&dev, name), 0, "the dev module passes a %KValue to {name}");
         assert!(calls(&dev, &format!("{name}_w")) > 0, "the dev module never calls {name}_w");
         assert_eq!(calls(&release, &format!("{name}_w")), 0, "the release module calls {name}_w");

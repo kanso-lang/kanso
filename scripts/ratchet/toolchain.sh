@@ -31,6 +31,9 @@ set -e
 sudo apt-get update -qq
 sudo apt-get install -y -qq valgrind jq
 
+# llvm-19: the specs job installs it for opt-19, which tests/ir_verifier.rs
+# needs once clang 19 is selected.
+#
 # clang-19: the emitter probes for the preserve_none calling convention and
 # writes the fallback when the probe fails, so a box with only clang 18 builds
 # DIFFERENT binaries from the ones the cost goldens pin. The cost-goldens job
@@ -40,7 +43,7 @@ sudo apt-get install -y -qq valgrind jq
 #
 # --no-install-recommends is required: a plain install pulls llvm-19-dev, whose
 # 32-bit dependencies (libc6-i386, libxml2-dev) 404 on this image.
-sudo apt-get install -y -qq --no-install-recommends clang-19 lld-19 lld
+sudo apt-get install -y -qq --no-install-recommends clang-19 lld-19 lld llvm-19
 # /usr/bin/clang is a package-owned symlink to ../lib/llvm-18/bin/clang rather
 # than an update-alternatives path, so --install leaves it pointing at 18.
 # /usr/local/bin precedes /usr/bin, so this wins without touching the dpkg file.

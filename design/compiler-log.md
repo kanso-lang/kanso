@@ -13059,3 +13059,1061 @@ way. A dev build pays both, about 44 million of its 145.7 million. Running
 reads 95,768,077 on the corpus against 102,053,958, but it writes different
 unwind tables and relaxation, and Xcode's clang ships no `llc`, so the dev
 tier would carry two back ends for about 4% of one row. Declined.
+
+## 2026-09-24 — a function's overflow checks share one trap
+
+Every `+`, `-` and `*` the emitter proves to be between two integers is an
+`llvm.*.with.overflow` call and a branch on its flag, and the block that
+branch takes on overflow is three lines: a call to `k_die` with the overflow
+message, and `unreachable`. It was written once an op. `d_json/str_low_5`
+carried six copies of it, and runbench's module 131 in all. Each function now
+keeps one, made the first time an op asks for it and written by `body` after
+everything else, so every op in the function branches to the same label.
+
+The mixed path, where one side might not be an int, is unchanged. Its
+overflow falls to the slow call, which reports the overflow itself.
+
+The emitted veins fall: the decoder's calls 629 -> 582 and lines 5,063 ->
+4,922, runbench's calls 4,296 -> 4,171 and lines 24,854 -> 24,479, and every
+other row by the number of checked ops it holds. `compile_golden`'s recursion
+sample loses a call and three lines. Defines and branches are unchanged
+everywhere, since the op still branches and no function was added.
+
+On this container, against kanso#1621's tree: `codegen_instructions_dev`
+143,741,446 -> 143,725,457, `codegen_instructions_release` 713,139,845 ->
+712,729,450 and `emit_instructions` 30,468,658 -> 30,458,722. The codegen
+corpus holds few proven-int ops, so the rows move little. The run program
+reads 1,676,858,251 -> 1,676,080,238 (-0.0464%) and jsonbench 1,127,903,599
+-> 1,126,719,499 (-0.1050%), with the cold blocks at the end of each function
+rather than between its hot ones. scanbench reads +994. CI's rows follow.
+
+`tests/an_overflow_trap_is_written_once_a_function.rs` compiles a function
+with six checked ops and asserts it calls `k_die` with the overflow message
+once, and that no function in the module calls it twice. A second test runs
+the same function on numbers that do not fit: native dies with the overflow
+message and prints nothing, and the interpreter answers
+9214148664817920226007. Watched red with every op taking its own trap:
+`spread` held 6. The ratchet row `one_trap` breaks it the same way.
+
+Returning through one shared block was measured and declined. With every
+`ret %KValue` in the codegen corpus rewritten to branch to a block that joins
+the two words in `i64` phis and returns once, `clang -cc1 -O0` read
+104,633,266 -> 107,801,878. FastISel misses 110 instructions on the original
+module and 119 on the rewrite. A block whose terminator FastISel misses goes
+to SelectionDAG whole, and once the returns stop doing that, each call that
+returns a `%KValue` misses on its own and is selected alone, which costs
+more.
+
+## 2026-09-25 — blank lines are counted by binary search
+
+`check_blank_policy` asks, for every pair of adjacent lines, how many blank
+lines lie between them, and it answered by filtering the file's whole list of
+blank lines each time. That is quadratic in the length of a file, and it was
+`parser::parse`'s own largest loop: 473,034 blank-line reads on the entry
+corpus, whose ten imports are parsed as modules first. The lexer records blank
+lines in the order it meets them, so the list is ascending, and two
+`partition_point` calls now bound the run. The continuation check's
+`contains` on the same list becomes a `binary_search`.
+
+On this container, with kanso#1621 and the overflow-trap change beneath it:
+`compile_instructions` 25,943,273 -> 25,526,442 (-1.61%),
+`entry_instructions` 88,243,804 -> 84,889,198 (-3.80%) and
+`library_instructions` 88,801,286 -> 85,446,623 (-3.78%).
+`startup_instructions` reads 611,469 -> 611,436. CI's rows follow.
+
+Nothing a program does changes, and the error corpus pins the diagnostics
+the count feeds: `blank_line_in_body`, `missing_blank_between_decls`,
+`partial_chain` and `a_dot_continuation_under_its_statement`. Watched red with
+the count off by one, which fails the error corpus and every corpus whose
+files have blank lines. The two boundaries are always non-blank lines, so
+moving either comparison between `<` and `<=` changes nothing, and a
+mutation that does only that stays green.
+
+## 2026-09-25 — `entries` takes one block for its records, buffer and list
+
+`k_b_entries` already put its n records in one arena block. The item buffer
+and the list header were two more bumps, each through `k_alloc`, and the
+buffer first asked the free list for a size class that a three-pair map never
+has. They now sit in the same block, after the records, unless the free list
+holds a buffer of exactly the size wanted, in which case that buffer is used
+as before. A buffer outgrown later goes to the free list at the capacity its
+header records, which stops short of the list header behind it.
+
+On this container: runbench 1,676,080,238 -> 1,674,340,808 (-0.1038%),
+encodebench and livebench -7,730,800 each, oneshot -19,327, every other
+benchmark unchanged. `allocs` falls by two a call and nothing else moves: the
+run program 4,147,652 -> 3,650,672, encode 3,344,272 -> 1,135,472, and the
+`.mem` rows for a map walk 3,004 -> 1,004. The bytes are the same bytes, so
+every peak row holds.
+
+## 2026-09-25 — a beat's mark is taken inline
+
+`k_beat_push` joins `k_beat_iter` in the release build's hot unit, the
+bitcode the LTO link inlines into the program, so a beat loop's entry takes
+its mark without a call. The over-deep case, a push past the stack's
+sixty-fourth mark, keeps a call of its own in `k_beat_push_deep`. To reach
+the hot unit, `k_carries` and `k_live_block_bytes` lose their `static`, and
+the push clears the carry's three fields itself rather than through
+`k_carry_clear`.
+
+On this container, over the `entries` change: runbench 1,674,340,808 ->
+1,673,252,318 (-0.0650%), encodebench and livebench about -4.92 million
+each, deepbench -1,059,144, widebench -79,955, and no benchmark rises. Every
+counter vein agrees. The hot unit's own test now names `k_beat_push`.
+
+Taking `k_beat_pop` inline the same way was measured and declined. With it,
+runbench read +101,881 and deepbench +747,447 against the push alone, and
+encodebench did not move.
+
+## 2026-09-25 — an empty literal is one call and one bump
+
+`[]` and `{}` went through `k_list_lit` and `k_map_lit` with a count of zero
+and an empty stack array. Each asked for its buffer's size class at run time,
+probed the free list, took the buffer and the header in two bumps, and ran a
+copy loop over nothing. The decoder opens 272,349 arrays and 273,339 objects
+a run on runbench, and the two functions were 27,465,349 instructions there,
+about 50 a literal. The emitter now calls `k_list_empty` or `k_map_empty` for
+an empty literal and writes no stack array for it. Each probes the free list
+for a constant class and otherwise takes header and buffer in one bump,
+header first.
+
+On this container, over the `k_beat_push` change: runbench 1,673,252,318 ->
+1,656,770,406 (-0.9850%), jsonbench 1,126,719,496 -> 1,103,823,346
+(-2.0321%), deepbench -1,612,003, encodebench -208,936, oneshot -152,245,
+livebench -152,641, escapebench -105,002. digestbench reads 5,891,153 ->
+5,939,233 (+0.8161%). The rise is in `d_sha256/digested_11`: with no stack
+array at its empty literal, LLVM stopped writing the `'2` clone it had
+inlined before, and the loop that remained runs 88,400 instructions more. The
+runtime helper is not in that difference. runbench's module falls 24,479 ->
+24,458 lines and the decoder's 4,922 -> 4,919.
+
+`allocs` falls by one a literal in every vein that makes one. The new `.mem`
+fixture `an_empty_literal_takes_one_bump` makes a thousand of each and reads
+2001, where the tree before the change reads 4001. Watched red with the two
+emitter arms switched off. Its neighbour `a_map_walk_builds_no_scratch_pair`
+quoted allocation figures from before the `entries` change and now quotes the
+current ones.
+
+## 2026-09-25 — an interpolated int is written where it stays
+
+`"{i}"` with an int went through `k_render`: the switch every value takes, the
+digits written into a stack buffer, and `k_str_n` copying them into a fresh
+string. That was about 109 instructions an int, and the run program's pend
+shape makes 200,000 of them in `churn`. `k_b_render_value` now answers an
+int itself. A single digit comes from the ascii cache through `k_str_n`, as it
+did before. Any other int's length is known before its first digit, so the
+string is allocated at that length and `k_itoa` writes into it.
+
+On this container, over the empty-literal change: runbench 1,656,770,406 ->
+1,650,960,035 (-0.3507%) and pendbench 209,746,680 -> 186,507,227
+(-11.0797%). basket reads -579, deepbench -14 and scanbench +5, which is
+layout. Every counter vein agrees. A first version allocated for single
+digits too and read two veins' `allocs` 10 and 1,836 higher, which is how
+the cache path was found. The render differential agrees on its 86 values,
+the numeric differential on its 2,163 programs, and the int extremes print
+the same on both engines.
+
+## 2026-09-25 — a failure check is one compare
+
+Every "is this value a failure" the emitter asked was a call to the
+alwaysinline `k_not_failure` and a compare of its answer with zero. The
+release pipeline paid its inliner to open each call, and the dev tier, which
+does no other optimising, kept the widening and the second compare as well
+as the two-word call it had been rewritten to. The emitter now extracts the
+tag, or takes it from `known_words`, and compares it with `K_ERR_TAG`, which
+is 5. A tag known at compile time answers `true` or `false` outright.
+runbench's module falls 4,171 -> 3,564 calls and 24,458 -> 24,330 lines, and
+loses a define, since nothing calls `k_not_failure` now and the prune drops
+it. The decoder's calls fall 582 -> 485.
+
+On this container, against the int-render head: `codegen_instructions_dev`
+143,592,238 -> 142,070,258 (-1.06%), `codegen_instructions_release`
+720,659,681 -> 715,347,931 (-0.74%) and `emit_instructions` 30,390,367 ->
+29,621,519 (-2.53%). runbench 1,650,960,035 -> 1,648,120,677 (-0.1720%) and
+jsonbench -5,695,350. scanbench reads +22. Every counter vein agrees.
+
+`tests/the_err_tag_is_the_runtime_s.rs` holds the number to the position of
+`K_ERR` in the runtime's tag enum, and to the compare in the declared
+`k_not_failure`, so the emitter cannot drift from either. Watched red with
+the constant set to 6.
+
+## 2026-09-25 — a nine-word arm keeps its tail calls on x86-64
+
+A release build narrows `tailcc` to the arms whose arguments fit arm64's
+eight argument registers, because past them arm64 miscompiles the convention.
+Every call into a wider arm became an ordinary call, and that was done on
+every architecture. The JSON decoder's `obj_key_end`, which skips whitespace
+before a key's colon, takes nine words. So each key of an object entered it
+through a call, the chain back to `obj_key_start` never returned until the
+object closed, and the stack held a frame per key. A release build decoding
+an object of 300,000 keys died on SIGSEGV. The musttail edges in the emitted
+text were all correct; `narrow_tailcc` in src/main.rs took them away after.
+
+The limit is now `TAILCC_WIDEST`: eight on arm64 as before, nine on x86-64,
+which lowers a spilling `tailcc` call correctly. Nine was measured, against
+the head before this change, on this container:
+
+    narrowed above   runbench           jsonbench          scanbench
+    8                1,648,120,677      1,098,127,996      310,445,976
+    9                1,643,981,958      1,094,365,546      310,445,975
+    10               1,645,003,836      1,094,365,546      316,479,002
+    none             1,645,903,453      1,094,365,546      316,941,464
+
+Ten and above let std/regexp's wider arms keep their tail calls too, and a
+tail call copies its stack arguments into the caller's area; past three of
+them that costs more than the frame it saves. runbench reads -0.2511% and
+jsonbench -0.3426% at nine, and nothing else moves.
+
+`tests/a_big_object_decodes_in_a_release_build.rs` builds a program that
+decodes a 300,000-key object in release and asserts it prints the count. It
+runs on x86-64 only, because arm64 keeps the narrow limit and the frame per
+key with it. Watched red with the limit at eight: SIGSEGV. The ratchet row
+`nine_words` breaks it the same way.
+
+## 2026-09-25 — the failure twins go, and the specs that read them move
+
+The compare-of-the-tag change left the IR twins `k_not_failure` and
+`k_not_failure_w` with no caller, and three specs still read them. The full
+suite on the branch's head found two, which CI would have found a round
+later: `a_dev_build_asks_its_predicates_in_words` wanted the dev module to
+call `k_not_failure_w`, and `perf_ratchet` read the twin's body out of a
+module that no longer carried it. Its recursive program also no longer
+called any hot predicate, since its failure checks now fold to constants.
+The twins, their `predicate` form and their entries in the declares list are
+gone. The dev spec now asserts that neither tier calls a failure predicate in
+any form. `perf_ratchet` gives its hot-predicate test a program whose `if`
+asks `k_truthy`. It replaces the twin test with one that finds the emitted
+compares against `K_ERR_TAG` and none against the none tag, watched red with
+the compare written against 4. The err-tag spec keeps its enum check. No
+emitted vein moves, since the release prune had already dropped the unused
+twins from every module.
+
+Letting a group with a single int-literal arm pass its byte raw, as groups
+with two already do, was measured and declined. It would have taken
+`obj_key_end` to eight words and so kept its tail calls on arm64 as well.
+On this container runbench read +0.4448% and jsonbench +0.8978%: a ladder
+dispatcher reboxes the raw byte at entry and compares the box, which costs
+more than passing the box did.
+
+## 2026-09-25 — CI's rows for kanso#1622
+
+Measured by CI on the branch's head, against main's goldens after kanso#1621.
+The run program reads 1,655,310,689 -> 1,623,308,009 (-1.9333%). jsonbench
+reads -2.7490%, pendbench -13.4194%, oneshot -1.4097%, digestbench -1.3805%,
+livebench -0.4958%, encodebench -0.3915% and widebench -0.3755%. readbench
+reads +4 and indexbench is unchanged. `codegen_instructions_dev` falls
+144,314,284 -> 142,644,443 (-1.16%), `emit_instructions` 30,190,261 ->
+29,340,940 (-2.81%), `compile_instructions` 25,460,259 -> 25,041,901
+(-1.64%), `entry_instructions` 86,678,016 -> 83,306,187 (-3.89%),
+`library_instructions` 87,221,497 -> 83,849,828 (-3.87%),
+`startup_instructions` 601,897 -> 601,491 and
+`interp_instructions` 733,050,032 -> 732,994,592.
+
+Three kinds of counter rose. `codegen_instructions_release` reads
+713,520,095 -> 715,952,319 (+0.34%). The hot unit that the LTO link
+optimises now carries `k_beat_push`, and the runtime gained `k_list_empty`,
+`k_map_empty` and the int path in `k_b_render_value`. The machine-code `text`
+row rose on thirteen of the fourteen benchmarks, by 1,152 to 5,072 bytes, for
+the same reason: runbench text 407,976 -> 413,048, jsonbench text 230,168 ->
+231,384, encodebench text 246,088 -> 249,048, oneshot text 244,104 ->
+246,008, basket text 227,736 -> 230,264, widebench text 248,664 -> 251,976,
+deepbench text 207,400 -> 208,808, escapebench text 202,296 -> 203,688,
+pendbench text 216,968 -> 218,120, indexbench text 202,072 -> 203,272,
+digestbench text 225,800 -> 228,328, readbench text 202,568 -> 203,768 and
+livebench text 244,984 -> 246,872. scanbench text fell by 400. Summed over
+the fourteen, `text` reads 3,420,864 -> 3,448,224. `work_readbench` reads
+4,631,756 -> 4,631,760, and those four instructions are layout. The runtime saving on run, which is the
+objective's heaviest term, is what these pay for.
+
+A lead measured and declined while the rows were taken: passing the JSON
+decoder's key to `obj_key_end` as its `parsed` record, which would have
+brought the function to eight words and so kept its tail calls on arm64 too,
+boxed the record at every key. runbench read 1,876,423,117 against
+1,643,981,958.
+
+---
+
+## 2026-09-25 — a tail cycle takes one flat signature under preserve_none
+
+The JSON decoder is a cycle of tail calls, and under `tailcc` every arm
+saved the callee-saved registers it used on entry and restored them before
+each jump out. The archive's entry on the entry block named `preserve_none`
+as the remedy and said it could not be swapped in, because a `musttail` may
+cross an arity or a type only under `tailcc`, and this cycle crosses both.
+LLVM holds every other convention to matching prototypes. So the cycle is
+given one: `preserve_none_tails` in src/main.rs joins every `tailcc` function
+to the ones it `musttail`s into, flattens each parameter to `i64` words (a
+`%KValue` or `%parsed` is two, an `i64`, `ptr` or `double` one), and pads
+every member to the widest with `poison`. The decoder's widest arm,
+`obj_key_end`, is nine words and the convention passes twelve in registers
+on x86-64. Entry rebuilds the two-word parameters with `insertvalue`, and
+each call takes its arguments apart with `extractvalue`.
+
+It runs on release builds on x86-64 when the clang on PATH takes
+`preserve_nonecc`, which is the probe the closure convention already asks.
+The arm64 limit in `narrow_tailcc` is a miscompile, and nobody has measured
+this convention there, so arm64 is left as it was. A set of functions is left
+alone when a member's address is taken, when a parameter has a type this does
+not flatten, or when the set is wider than twelve words.
+
+With the rewrite in place, `narrow_tailcc` narrows only arms wider than the
+register file, twelve words rather than nine, since an arm that fits passes
+nothing on the stack. The nine-word limit stood because a tail call copies
+stack arguments into its caller's frame, and that cost does not arise here.
+
+This container now measures with clang 19 and lld 19 selected the way the
+cost-goldens job selects them, and runbench on the branch's base read
+1,623,307,999 against CI's 1,623,308,009. The earlier rows in this log were
+taken under clang 18, which is why they drifted from CI's. Each benchmark was
+relinked by hand from its own `.ll` and the objects its build used, and every
+relink was byte-identical to the built binary before the rewrite was applied:
+
+    benchmark       before           flat, nine words   twelve words
+    runbench        1,623,307,985    1,556,827,897      1,556,366,722   -4.1237%
+    jsonbench       1,096,078,130    1,018,225,730      1,018,225,716   -7.1028%
+    livebench       2,358,727,241    2,282,241,016      2,282,241,002   -3.2427%
+    oneshot            16,425,179       15,716,251         15,716,251   -4.3161%
+    encodebench     3,030,067,322    2,977,257,216      2,977,257,216   -1.7429%
+    deepbench         366,627,999      360,447,991        360,447,977   -1.6856%
+    widebench          29,721,589       29,433,525         29,433,511   -0.9692%
+    scanbench         296,385,134      296,885,322        292,370,800   -1.3544%
+    basket             32,539,840       32,493,041         32,493,055   -0.1438%
+    pendbench         181,007,965      181,799,647        181,799,633   +0.4374%
+    digestbench         5,761,671        5,787,266          5,787,266   +0.4442%
+
+escapebench, indexbench and readbench do not move. Every binary printed what
+its base printed. pendbench and digestbench rise because a caller that keeps
+a value live across a call into the cycle now saves it itself, where the
+callee's prologue used to, and in those two programs the calls into the
+cycle outnumber the hops inside it.
+
+**And the rest of the program's functions take the convention too.** A
+function the program calls in the ordinary way saved the callee-saved
+registers it used whether or not its caller had anything in them.
+`preserve_none_calls` gives every function the module defines and calls only
+directly `preserve_nonecc`, so the caller saves what it keeps live across the
+call and nothing else is saved. What the runtime calls by name keeps the C
+convention: the pass reads every `extern` in src/runtime.c, which today is
+`d_thunk_eval`, `k_type_field_count`, `k_type_field_name` and `k_user_main`.
+`main`, the module's `k_` helpers and anything whose address is taken are
+kept as well. The first hand trial converted `d_thunk_eval` along with the
+rest, and runbench segfaulted in it when `k_force_slow` called it with C
+registers. Measured by building through the compiler, against the tail
+rewrite alone:
+
+    runbench       1,556,366,722 -> 1,547,521,959   -0.5683%
+    livebench      2,282,241,002 -> 2,209,970,830   -3.1666%
+    oneshot           15,716,251 ->    15,539,394   -1.1254%
+    scanbench        292,370,800 ->   291,352,654   -0.3482%
+    jsonbench      1,018,225,716 -> 1,018,801,116   +0.0565%
+    digestbench        5,787,266 ->     5,787,505   +0.0041%
+
+and the others within fourteen instructions, which is the path-length noise
+between two build directories. Against the base, runbench reads
+1,623,307,985 -> 1,547,521,959, -4.6687%, before the doors below. Unit tests pin the externs read
+from the runtime, the linkage order (`define internal preserve_nonecc`), and
+the kept address, watched red without the extern check and without the
+address check. Ratchet row `plain_calls`.
+
+**Four runtime doors take it as well.** With the program's functions on
+`preserve_none`, a C-convention runtime function the program calls still
+saves what it uses. Each hot door was marked on its own in a copy of the
+runtime and the run program relinked, against 1,547,521,959:
+
+    k_b_append_rendered   -4,998,510     k_b_at                +9,209,935
+    k_b_entries           -4,571,478     k_b_utf8_slice_raw    +4,306,698
+    k_b_utf8              -2,157,799     k_b_to_int_slice         +42,273
+    k_b_to_float_slice    -1,113,156     k_b_append_slice      segfault
+
+`at` and `utf8_slice_raw` get dearer because their callers keep more live
+across the call than the callee used to save. The `append_slice` trial
+segfaulted and was set aside with its cause unfound: the rewrite covered the
+module's declare and its one call, in the prelude's `k_b_append_slice_fast`,
+so the caller that still spoke C is somewhere this trial did not look. The
+four that pay are defined with
+`K_DOORCC` in src/runtime.c, which is `preserve_none` under the same probe as
+the closures, and `PRESERVE_NONE_DOORS` in src/codegen.rs writes the keyword
+on their declares and calls in every tier where the probe says yes. The run
+program reads 1,547,521,959 -> 1,535,239,270 (-0.7937%), widebench -1.6852%,
+jsonbench -0.4874%, encodebench -0.2694%, oneshot -0.2061%, basket -0.0369%
+and livebench +0.0180%. The spec `the_doors_the_program_calls_agree` holds
+the runtime's list and the emitter's equal, watched red with `k_b_utf8` off
+the emitter's.
+
+The emitted-code rows count the `.ll` a release build writes, which is the
+IR after this rewrite, and every flattened parameter and argument is one or
+two more lines of `insertvalue` or `extractvalue`. Calls, branches and
+defines do not move. `emitted_lines` reads 5,379, against 4,891 before the
+rewrite and 5,063 on main, `emitted_other_lines` reads 76,037 -> 82,781, and
+runbench's module 24,330 -> 27,176. LLVM folds these lines away before it selects
+instructions, and the codegen rows do not see them: the codegen gate runs
+under `/usr/bin`'s clang 18, which does not take the convention.
+
+The specs job now selects clang 19 as the cost-goldens job does, with
+llvm-19 for `opt-19`. It had run the image's clang 18, so no spec ran a
+release binary built the way the measured ones are, and the closures'
+`preserve_nonecc` had never met the suite either. Under clang 19 the whole
+suite passed on this container except `the_ir_kanso_writes_passes_that_verifier`,
+whose first choice of verifier was the bare `opt`, LLVM 18's, which refused
+the keyword at the parser in 76 of 214 programs. It now asks the tools of
+clang's own release first.
+
+The two specs: `a_tail_cycle_crosses_arities_in_a_release_build` runs a cycle
+of a five-word and a six-word arm, carrying an int, a float64 and a string,
+four million hops deep, and compares it with the interpreter. Watched red
+with a two-word parameter rebuilt in reverse order: the binary read a payload
+as a tag and stopped with `no overload of \`cycle/ping\` matches these
+arguments`. The unit tests in src/main.rs pin the signature, the padding, and
+the three cases that leave a set alone, and were watched red with the
+padding and the address check each removed. Ratchet rows `flat_tails`
+(the rewrite skipped, seen by the work vein) and `flat_order` (the
+parameter reversed, seen by the spec).
+
+---
+
+## 2026-09-25 — CI's rows for kanso#1623
+
+Measured by CI on `a80647e2`. The run program reads 1,623,308,009 ->
+1,535,239,320 (-5.4253%) against main's golden after kanso#1622's rows,
+which is within fifty instructions of what this container measured under
+clang 19. jsonbench reads 1,096,078,477 -> 1,013,835,727 (-7.5034%),
+livebench 2,358,727,588 -> 2,210,369,697 (-6.2897%), oneshot -5.5847%,
+widebench -2.6395%, encodebench -2.0078%, deepbench -1.6857% and scanbench
+-1.6979%. pendbench reads 181,008,423 -> 181,800,105 (+0.4374%) and
+digestbench 5,762,004 -> 5,787,838 (+0.4484%), the rise the first entry
+explains: their calls into a cycle outnumber the hops inside it.
+
+`codegen_instructions_release` reads 715,952,202, 117 below the branch's
+base, and `startup_instructions` 601,506 and `emit_instructions` 29,340,955,
+fifteen above each. None of the three gates takes the convention, since each
+runs under `/usr/bin`'s clang 18, so these are the compiler's own layout. The
+machine-code `text` row, summed over the fourteen, reads 3,448,224 ->
+3,439,344. encodebench's fell 6,368 bytes, runbench's 1,488 and widebench's
+1,296; scanbench's grew 640 and digestbench's 608, and six others moved by
+less than 550 either way.
+
+Welfare reads 87.98 against a floor of 87.69, production 74.49, and the rise
+is banked.
+
+---
+
+## 2026-09-25 — an append that must grow asks first
+
+With the program's frames gone, `k_b_append_range` was the runtime function
+spending the largest share of itself on its frame: 71.3% of 2,000,934
+instructions on the run program. Every one of its 142,731 calls arrived with a
+bytes value that had no buffer yet, the empty accumulator an encoder starts
+from, so every call pushed five registers, tested the capacity, popped them
+and jumped to `k_b_append_grow`. The test now sits in an always-inline
+wrapper at each caller, and the fitting path is `k_b_append_fit`, out of line
+as before. On this container under clang 19, against kanso#1623:
+
+    runbench       1,535,239,270 -> 1,534,028,068   -0.0789%
+    widebench         28,937,509 ->    28,777,507   -0.5529%
+    jsonbench      1,013,835,366 -> 1,011,966,666   -0.1843%
+    oneshot           15,507,370 ->    15,495,158   -0.0787%
+    encodebench    2,969,232,524 -> 2,969,366,924   +0.0045%
+    livebench      2,210,369,336 -> 2,210,455,278   +0.0039%
+
+and the other eight unchanged. The output is the same either way, so the work
+vein is what sees it: ratchet row `grow_first` drops the test.
+
+`k_b_append_slice`, its other caller, still pushes five registers on each of
+its 175,797 calls, 1,933,767 instructions of frame. It was one of the doors
+tried under `preserve_none` in the entry above and the trial segfaulted, so
+it is left as it is.
+
+---
+
+## 2026-09-25 — CI's rows for kanso#1624
+
+Measured by CI on `0afacb5c`, against kanso#1623's goldens. The run program
+reads 1,535,239,320 -> 1,534,028,118 (-0.0789%), widebench 28,937,870 ->
+28,777,868 (-0.5529%), jsonbench -0.1843% and oneshot -0.0787%; encodebench
++0.0045% and livebench +0.0039%. Every binary's machine code is 368 bytes
+smaller, and `text` sums to 3,434,192. `codegen_instructions_release` reads 715,946,899 and
+`codegen_instructions_dev` 142,639,014, 5,303 and 5,429 below the branch's
+base. Welfare reads 87.99 and the rise is banked.
+
+---
+
+## 2026-09-25 — the interpreter moves a winning argument into its binding
+
+Arm selection tries every candidate in a group, and `match_one` bound a
+parameter that is a name to a clone of its argument, so each candidate paid
+for the clone whether it won or not. On the interpreted corpus that was
+620,601 clones from `match_one`, 26,424,710 instructions of
+`Value::clone`, most of them a `BigInt` or a `String` that allocates, and as
+many drops after. A name parameter, bare or annotated, now holds `none` while
+the arms are tried, and once an arm has won `bind_moved` moves each argument
+into its place. The argument vector is cleared before the body runs and
+nothing reads it after, which the dispatcher already said.
+
+    interp_instructions (this container)   750,610,887 -> 728,721,835   -2.9161%
+
+The printed output is the same. The row is the only thing that can see this,
+so ratchet row `moved_binds` clones at every candidate again and gates on the
+interpreted run's instructions.
+
+---
+
+## 2026-09-25 — CI's rows for kanso#1625
+
+Measured by CI on `01d02dc6`. `interp_instructions` reads 732,994,592 ->
+709,556,834 (-3.1975%) and `interp_allocs` 983,321 -> 929,201 (-5.5038%).
+Every native row is kanso#1624's. Development welfare reads
+88.84 and the meta 88.00, and the rise is banked.
+
+---
+
+## 2026-09-25 — a list that outgrows four slots takes eight, and the run program's peak loses a block
+
+One decode of bench/large.json allocates 1,695,392 bytes for a 188,698-byte
+document, and a histogram of `k_alloc`'s sizes named the largest share:
+1,463 allocations of 272 bytes, 397,936 in all. Those are list buffers of
+sixteen slots. A list starts at four, and `k_b_push_grow` took the smallest
+power of two that held the new element and doubled it again, so the fifth
+push went to sixteen. The document's 2,752 lists average 3.5 elements and
+none of the ones that grow get far past five.
+
+The grow now doubles again only past sixteen: the steps are 4, 8, 16, 64, 256,
+where they were 4, 16, 64, 256. On this container under clang 19 the run
+program's `arena_peak_bytes` reads 4,194,304 -> 3,670,032, one block fewer,
+and `alloc_bytes` 397,171,773 -> 386,879,005, for +0.1925% of its
+instructions on the tree of kanso#1623. A block of the run's peak is worth
+more to the objective than a fifth of a per cent of its instructions, and
+CI's rows will say by how much.
+
+Three other shapes were measured and set aside. Holding the doubling back
+only to eight gave the same peak for +0.1520% of the run program, but it put
+every longer list on 8, 32, 128, 512, which overshoots a thousand elements by
+twice as much: the book's counters sample doubled its permanent peak, and
+pendbench rose 6.27%. Plain doubling from four read the same peak for
++0.8232%. Starting an empty map at two pairs rather than four read the same
+peak for +2.0088%.
+
+A list of nine to sixteen elements now takes one more grow than it did, and
+that is what most of the counters below record: a push that finds its buffer
+full goes to the slow path once more. The mem fixture
+`a_fifth_push_takes_eight_slots` builds 300 lists of five and pins
+`sh_buf=67200`, which read 105,600 on the old grow; ratchet row `fifth_push`
+restores the old doubling. The counters that rose, and where they landed:
+
+    run_beat_iters                                                  2,708,989 -> 2,708,992
+    run_bytes_malloc                                                   16,679 -> 20,551
+    run_evac_allocs                                                    62,993 -> 63,041
+    run_evac_bytes                                                 10,017,088 -> 10,018,720
+    run_push_mut_fast                                               1,098,392 -> 1,097,990
+    run_push_mut_slow                                               1,638,121 -> 1,638,523
+    push_mut_fast                                                   1,325,400 -> 1,325,250
+    push_mut_slow                                                     134,400 -> 134,550
+    encode_alloc_bytes                                            657,702,640 -> 657,770,480
+    encode_push_mut_fast                                               27,535 -> 25,634
+    encode_push_mut_slow                                                3,654 -> 5,555
+    encode_sh_buf                                                  73,267,200 -> 73,335,040
+    oneshot_push_mut_fast                                               8,836 -> 8,835
+    oneshot_push_mut_slow                                                 896 -> 897
+    basket_bytes_malloc                                                    30 -> 32
+    basket_push_mut_fast                                               12,310 -> 12,241
+    basket_push_mut_slow                                              104,190 -> 104,259
+    pend_alloc_bytes                                               45,529,344 -> 45,542,480
+    pend_push_mut_fast                                                799,997 -> 799,796
+    pend_push_mut_slow                                                  1,203 -> 1,404
+    pend_sh_buf                                                    15,826,144 -> 15,839,280
+    escape_alloc_bytes                                             65,760,112 -> 66,192,112
+    escape_bytes_malloc                                                12,000 -> 15,000
+    wide_alloc_bytes                                                5,590,848 -> 5,590,992
+    wide_push_mut_fast                                                 15,994 -> 15,993
+    wide_push_mut_slow                                                      6 -> 7
+    wide_sh_buf                                                       349,616 -> 349,760
+    digest_alloc_bytes                                                671,841 -> 690,561
+    digest_push_mut_fast                                               10,184 -> 10,053
+    digest_push_mut_slow                                                  200 -> 331
+    digest_sh_buf                                                     554,352 -> 573,072
+    live_push_mut_fast                                                  8,836 -> 8,835
+    live_push_mut_slow                                                    896 -> 897
+    a_cap_around_a_count_is_a_range_alloc_bytes                        87,792 -> 87,936
+    a_cap_around_a_count_is_a_range_push_mut_fast                       2,995 -> 2,994
+    a_cap_around_a_count_is_a_range_push_mut_slow                           5 -> 6
+    a_cap_around_a_count_is_a_range_sh_buf                             87,456 -> 87,600
+    a_carried_value_written_into_an_older_node_push_mut_fast           15,596 -> 15,195
+    a_carried_value_written_into_an_older_node_push_mut_slow            1,205 -> 1,606
+    a_class_asks_by_the_byte_alloc_bytes                              468,255 -> 468,399
+    a_class_asks_by_the_byte_push_mut_fast                                599 -> 598
+    a_class_asks_by_the_byte_push_mut_slow                                  4 -> 5
+    a_class_asks_by_the_byte_sh_buf                                   118,432 -> 118,576
+    a_digest_holds_every_block_it_walked_alloc_bytes                   15,953 -> 16,241
+    a_digest_holds_every_block_it_walked_push_mut_fast                    120 -> 117
+    a_digest_holds_every_block_it_walked_push_mut_slow                     24 -> 27
+    a_digest_holds_every_block_it_walked_sh_buf                         9,520 -> 9,808
+    a_loop_invariant_capture_is_copied_every_rewind_alloc_bytes        102,064 -> 102,208
+    a_loop_invariant_capture_is_copied_every_rewind_push_mut_fast            496 -> 495
+    a_loop_invariant_capture_is_copied_every_rewind_push_mut_slow              4 -> 5
+    a_loop_invariant_capture_is_copied_every_rewind_sh_buf             21,904 -> 22,048
+    a_pushed_call_keeps_the_sweep_alloc_bytes                      13,152,080 -> 13,238,480
+    a_pushed_call_keeps_the_sweep_bytes_malloc                          2,400 -> 3,000
+    a_repaired_node_below_the_mark_holds_tenure_alloc_bytes         2,450,128 -> 2,450,272
+    a_repaired_node_below_the_mark_holds_tenure_push_mut_fast          15,596 -> 15,195
+    a_repaired_node_below_the_mark_holds_tenure_push_mut_slow           1,204 -> 1,605
+    a_repaired_node_below_the_mark_holds_tenure_sh_buf                522,848 -> 523,088
+    an_escaped_list_gives_its_buffer_back_alloc_bytes                  73,680 -> 102,480
+    an_escaped_list_gives_its_buffer_back_bytes_malloc                    200 -> 400
+    an_escaped_list_gives_its_buffer_back_perm_peak_bytes                 272 -> 416
+    an_inner_beat_opens_its_tenure_in_the_block_outside_alloc_bytes     14,699,600 -> 14,707,040
+    an_inner_beat_opens_its_tenure_in_the_block_outside_push_mut_fast         77,980 -> 75,975
+    an_inner_beat_opens_its_tenure_in_the_block_outside_push_mut_slow          4,020 -> 6,025
+    an_inner_beat_opens_its_tenure_in_the_block_outside_sh_buf      4,843,184 -> 4,850,624
+    early_exit_alloc_bytes                                             88,064 -> 88,208
+    early_exit_bytes_malloc                                                 5 -> 6
+    fold_push_shape_alloc_bytes                                       175,104 -> 175,392
+    fold_push_shape_bytes_malloc                                            5 -> 6
+    fold_push_shape_push_mut_fast                                       3,995 -> 3,994
+    fold_push_shape_push_mut_slow                                       4,005 -> 4,006
+    fold_push_shape_sh_buf                                             87,536 -> 87,680
+    fused_map_shape_alloc_bytes                                       175,104 -> 175,392
+    fused_map_shape_bytes_malloc                                            5 -> 6
+    fused_map_shape_push_mut_fast                                       3,995 -> 3,994
+    fused_map_shape_push_mut_slow                                       4,005 -> 4,006
+    fused_map_shape_sh_buf                                             87,536 -> 87,680
+    fused_reducer_alloc_bytes                                          22,032 -> 22,176
+    fused_reducer_bytes_malloc                                              4 -> 5
+    fused_select_shape_alloc_bytes                                    175,136 -> 175,424
+    fused_select_shape_bytes_malloc                                         5 -> 6
+    fused_select_shape_push_mut_fast                                    2,995 -> 2,994
+    fused_select_shape_push_mut_slow                                    4,005 -> 4,006
+    fused_select_shape_sh_buf                                          87,536 -> 87,680
+    fused_tally_alloc_bytes                                            42,720 -> 42,864
+    fused_tally_bytes_malloc                                                4 -> 5
+    piped_reducer_alloc_bytes                                          22,032 -> 22,176
+    piped_reducer_bytes_malloc                                              4 -> 5
+    record_fields_alloc_bytes                                           4,688 -> 4,832
+    record_fields_push_mut_fast                                            48 -> 47
+    record_fields_push_mut_slow                                             2 -> 3
+    record_fields_sh_buf                                                1,392 -> 1,536
+    skip_shape_alloc_bytes                                             89,568 -> 89,856
+    skip_shape_bytes_malloc                                                 5 -> 6
+    skip_shape_push_mut_fast                                                9 -> 8
+    skip_shape_push_mut_slow                                            4,001 -> 4,002
+    skip_shape_sh_buf                                                     432 -> 576
+    sort_shape_bytes_malloc                                                 4 -> 5
+    sort_shape_push_mut_fast                                            4,818 -> 4,754
+    sort_shape_push_mut_slow                                              670 -> 734
+    string_headers_alloc_bytes                                          3,088 -> 3,232
+    string_headers_push_mut_fast                                           48 -> 47
+    string_headers_push_mut_slow                                            2 -> 3
+    string_headers_sh_buf                                               1,392 -> 1,536
+    take_shape_alloc_bytes                                            175,264 -> 175,552
+    take_shape_bytes_malloc                                                 5 -> 6
+    take_shape_push_mut_fast                                            2,995 -> 2,994
+    take_shape_push_mut_slow                                            4,005 -> 4,006
+    take_shape_sh_buf                                                  87,536 -> 87,680
+    tally_shape_alloc_bytes                                            93,536 -> 93,680
+    tally_shape_bytes_malloc                                                5 -> 6
+    the_same_capture_built_below_the_mark_is_shared_alloc_bytes        101,968 -> 102,112
+    the_same_capture_built_below_the_mark_is_shared_push_mut_fast            496 -> 495
+    the_same_capture_built_below_the_mark_is_shared_push_mut_slow              4 -> 5
+    the_same_capture_built_below_the_mark_is_shared_sh_buf             21,904 -> 22,048
+The book's counters sample in chapter 10, and the same sample quoted in
+chapter 12, read one allocation more (9) and 22,176 bytes where they read
+22,032, the extra grow step on a list of a dozen.
+
+## 2026-09-25 — CI's rows for kanso#1626
+
+The cost goldens job measured the list-growth change at its head. The run
+program reads `work_runbench` 1,534,028,118 -> 1,536,983,528, a rise of
+2,955,410 (+0.19%), the same share this box measured, and
+`arena_peak_bytes` holds at 3,670,032. The other work rows that rose are
+priced here: `work_deepbench` 360,448,338 -> 364,679,442 (+1.17%),
+`work_escapebench` 76,348,450 -> 77,668,593 (+1.73%), `work_jsonbench`
+1,011,967,027 -> 1,012,694,527, `work_encodebench` 2,969,367,257 ->
+2,969,691,811, `work_oneshot` 15,495,457 -> 15,497,912, `work_basket`
+32,481,362 -> 32,495,961, `work_widebench` 28,777,868 -> 28,778,052,
+`work_pendbench` 181,800,105 -> 181,845,174, `work_digestbench` 5,787,838 ->
+5,813,302 and `work_livebench` 2,210,455,639 -> 2,210,555,256. A list of
+five to sixteen items now grows twice where it grew once, and deep and
+escape build many lists of that size; the rises arrived with the change and
+nothing has isolated that as their cause. The objective weighs only the run
+program's row among these, and the meta score rose by 0.10 with the peak
+included.
+`codegen_instructions_dev` reads 142,639,084 and
+`codegen_instructions_release` 715,946,959, seventy and sixty
+instructions above the last sitting.
+
+
+What sets the run program's peak now, found by shrinking one phase at a time
+on this branch: the top-level `doc = json/decode raw` holds a full block for
+the whole run (a `doc` of `[1]` reads 2,621,456 and no held bytes), and the
+index shape adds 524,304 (with `index_chars = 1` the peak is 3,145,728). The
+decode loop, encode, deep, pend, escape, split and digest each move nothing
+when shrunk to one. The index shape's subject is a view into the last string
+its doubling built, so the slice is not a copy; the 524,304 is the join that
+builds a 1,572,864-byte string while the 786,432-byte one it doubles is still
+held.
+
+Measured and declined while the rows were taken: a direct-mapped cache of a
+thousand permanent four- to seven-byte strings in `k_b_utf8_slice_raw`, so
+the decoder's keys are shared rather than allocated. One decode of
+bench/large.json fell 1,581,088 -> 1,335,840 bytes, and the run program's
+`alloc_bytes` 386,879,005 -> 362,637,757, but `arena_peak_bytes` stayed at
+3,670,032: a decoded `doc` still needs more than one block. The same cache
+was declined on 2026-09-24 at +0.49% of the run program's instructions.
+
+Two block sizes were measured against this peak and declined. At 512 KiB
+the run program's `arena_peak_bytes` stays at 3,670,032 and its work row
+reads 1,537,988,243 against 1,537,075,881 on this box. At 256 KiB the peak
+falls to 3,407,888 and the work row rises to 1,561,986,738, +1.62%; by the
+objective's own curves the peak term gains about 0.0012 of production and
+the run term loses about 0.0018, so the smaller block is a net loss. A
+lower oversize threshold (256 KiB) moved nothing either: the 786,432-byte
+string the index shape doubles lands in a spare 1 MiB block, which the
+live count already includes.
+
+## 2026-09-25 — two ratchet rows pointed at k_list_empty and k_map_empty
+
+kanso#1622's ratchet found two rows blind. Both mutations patched the path
+an empty literal took before kanso#1622 routed `[]` and `{}` through
+`k_list_empty` and `k_map_empty`: one gave `k_mklist` a one-slot buffer for
+a count of zero, and the other sent `k_map_lit`'s copy of two pairs or fewer
+through memcpy. Empty literals reach neither now, so the work vein stayed
+green under both. The list row now gives the buffer `k_list_empty` carves a
+capacity of one, and jsonbench read 1,042,970,592 against 1,012,694,527
+with it applied. The map row is renamed "an empty map literal built as any
+other" and turns off the emitter's `{}` arm, so the literal goes back
+through `k_map_lit` with a count of zero; jsonbench read 1,025,447,142.
+`k_map_lit`'s short copy for one or two pairs stays in the source with no
+row, because no benchmark writes such a literal.
+
+## 2026-09-25 — an accumulator's buffer grows where it is
+
+A list that a beat loop builds from outside the loop keeps its buffer out of
+the arena, allocated by `k_buf_perm`. When it outgrew that buffer,
+`k_b_push_grow` allocated a larger one with malloc, copied the elements,
+freed the old buffer and called `k_permreg_add` again for the same field.
+The run program's escape shape grows each of its 3,872 lists five times
+this way, and those 19,360 grows cost 12,746,994 instructions, about 658
+each. A grow whose buffer is already out of the arena now calls
+`k_buf_perm_regrow`, a realloc, and leaves the field's first registration
+standing: `l->items` is the same field after the realloc, and
+`k_permreg_flush_held` already passes over a field it has freed.
+
+Measured on this box against the branch it sits on, every work row fell or
+held. `work_runbench` 1,536,983,069 -> 1,530,322,616 (-0.433%),
+`work_escapebench` -6.231%, `work_basket` -1.281%, and the rest by under
+0.02%. The golden takes CI's last reading plus this box's difference, since
+the two agreed to 459 instructions on the run program. The permanent peak
+counts one buffer where the malloc path held two for a moment:
+`perm_peak_bytes` 20,512 -> 16,400 on the run program, the escape
+benchmark and five mem fixtures, 81,952 -> 65,552 on seven more, 416 -> 272
+on one, and 5,308,464 -> 4,259,872 on basket. The book's counters sample
+in chapters 10 and 12 reads the same fall. The counters count the realloc
+as the malloc and the free it replaces, as `k_bytes_buf_regrow` does, so
+`bytes_malloc` and `bytes_freed` are unchanged everywhere. The new helper
+and its branch add 192 bytes of machine code to each benchmark, so `text`
+reads 3,434,192 -> 3,436,880 over the fourteen.
+
+The fixture `an_accumulator_regrows_where_it_is` pins it at 16,400 and read
+20,512 with the regrow turned off; the ratchet row `perm_regrow` makes that
+mutation. A map's pairs take the same grow in `k_b_put_mut`, and they were
+left alone: with that arm made to abort, the mem corpus and all fourteen
+benchmarks ran clean, and no fixture I could write put a map accumulator
+under a beat, so the arm would have had no golden. That path also frees a
+malloc'd predecessor without subtracting it from `k_perm_live`, so the
+permanent peak it reports runs high; nothing reaches it today.
+
+## 2026-09-25 — CI's rows for kanso#1627
+
+CI's work rows agreed with the projection in the golden, row for row, and
+its machine code agreed with this box. The two codegen rows moved:
+`codegen_instructions_dev` 142,639,084 -> 142,641,709, a rise of 2,625, and
+`codegen_instructions_release` 715,946,959 -> 715,866,504, a fall of 80,455.
+
+## 2026-09-25 — an interpreted call finds its callee by the reference's address
+
+Every call the interpreter makes through a function reference went through
+`call_named`, which looked the callee up in `callees`, a map keyed by the
+name's text. On the interpreted corpus that was 168,588 lookups at about a
+hundred instructions each: the name hashed, the bucket probed and the key
+compared with memcmp. The tail-call path asked the same map again through
+`calls_a_group`, 147,199 times, to learn whether the callee was a dispatch
+group.
+
+A `Value::FnRef` is made in one place, `resolve`, and `names` keeps what it
+made for the interpreter's life, so one name reaches a call through one
+`Rc<str>`. `call_ref` and `group_of` now look the callee up in
+`callees_by_ref`, keyed by that pointer. Each entry holds its own count on
+the name, so no other name can come to live at an address the table knows.
+`call_named` keeps the map by text for the operators and builtins that call
+by name, and `calls_a_group` had no caller left and is gone.
+
+On this box the interpreted row reads 728,723,173 -> 710,784,378, -2.46%,
+with the corpus's output byte-identical. That box does not compare with
+CI's golden, so `interp_instructions` carries CI's last reading less the
+same 17,938,795, 691,618,039, until CI measures it. The ratchet row
+`callee_by_ref` turns `call_ref` back to the lookup by text, and the row
+read 725,003,497 here with it applied.
+
+CI then read `interp_instructions` 709,556,834 -> 690,933,840, a fall of
+18,622,994 (-2.62%). The second table costs the interpreted run six
+allocations and 5,264 bytes of peak: `interp_allocs` 929,201 -> 929,207 and
+`interp_peak_bytes` 837,389 -> 842,653, +0.63%. The objective weighs the
+peak at 0.04 of the development side against 0.11 for the instructions.
+
+## 2026-09-25 — a run of byte compares is read as one window
+
+The json decoder matches `true`, `false` and `null` with chains such as
+`cs[p + 1] == 114 and cs[p + 2] == 117 and cs[p + 3] == 101`. Each read in
+the chain was compiled on its own: `p + k` with an overflow check, a test of
+each end of the bytes, a merge of the byte with the none an out-of-range
+read answers, and the compare. That is about fourteen instructions a byte,
+and the run program matches 612,500 literals.
+
+`emit_byte_run` recognises an `and` chain, at any grouping, in which every
+conjunct compares a non-strict read `x[p + k]` or `x[p]` with a byte
+literal, over the same two names, where the inference has proven `x` bytes
+and `p` an int. It emits one test that `p + kmin` is at least one and
+`p + kmax` at most the length, then plain loads and compares. Outside that
+window the chain is false, because some read is none. The general path is
+still emitted for that case rather than `false`, since a `p` near the top
+of the integer range makes one of the sums overflow, and that traps.
+
+On this box against kanso#1628's head: `work_jsonbench` -3.457%,
+`work_oneshot` -1.506%, `work_runbench` 1,530,322,616 -> 1,506,572,318
+(-1.552%), `work_livebench` -0.011%, and every other row byte-identical.
+The goldens carry CI's last reading plus that difference. The chain's
+general path is kept beside the fused one, so the code grows: `text` rises
+496 bytes on jsonbench, oneshot and livebench and 384 on runbench, and the
+emitted-code rows add fifteen branches and 102 lines to each program that
+decodes JSON: the decoder's `emitted_branches` 495 -> 510 and
+`emitted_lines` 5,379 -> 5,481, runbench's 2,752 -> 2,767 and 27,176 -> 27,278, oneshot's
+578 -> 593 and 6,421 -> 6,523, livebench's 598 -> 613 and 6,551 -> 6,653.
+Summed over the programs the gates read, `emitted_other_branches`
+7,908 -> 7,953, `emitted_other_lines` 82,781 -> 83,087, and `text`
+3,436,880 -> 3,438,752.
+
+The micro fixture `a_byte_run_reads_its_window_once` probes a two-read and
+a three-read run at every position of a six-byte string, both edges
+included, and agrees with the interpreter. With each fused read moved one
+byte late it disagreed; the ratchet row `byte_run_late` makes that
+mutation, and `byte_run_apart` turns the fusion off for the work vein.
+
+## 2026-09-25 — CI's rows for kanso#1629
+
+CI's work, machine-code and emitted-code rows agreed with the goldens row
+for row. Two compile-side rows rose with the change:
+`startup_instructions` 601,506 -> 601,513 and
+`emit_instructions` 29,340,955 -> 29,343,426, +0.0084%.
+
+## 2026-09-25 — a rewind with nothing to take back asks one question
+
+Every iteration of a beat loop ends in `k_beat_rewind`, and its fast path
+asked three things before returning: whether the shelf or a registry held
+anything, whether the chain's head was still the mark's block, and whether
+the arena pointer still stood at the mark. A loop that allocated nothing
+answered all three the same way every time, and the run program takes
+2,708,992 beat iterations. The pointer is now asked right after the
+shelf-and-registries test, and an unmoved pointer returns at once. Blocks
+never overlap, so a pointer equal to the mark's lies in the mark's block,
+and the head of the chain is no longer loaded to be told so. A tail split
+off an oversize block begins at its host's bump pointer, and its own bump
+region starts after its header, past any mark taken in that host, so its
+pointer cannot stand at a mark either. The path for
+a loop that did allocate is the one it was, after the same two tests.
+
+On this box against kanso#1629's head: `work_runbench` 1,506,572,318 ->
+1,499,116,075 (-0.495%), `work_escapebench` -4.931%, `work_basket`
+-1.041%, `work_livebench` -0.559%, `work_digestbench` -0.418%,
+`work_oneshot` -0.203% and `work_encodebench` -0.161%. Five rows rose:
+`work_deepbench` 364,679,442 -> 364,731,746 (+52,304, +0.014%),
+`work_scanbench` 291,353,015 -> 291,354,017 (+1,002), `work_pendbench`
+181,843,867 -> 181,843,966 (+99), `work_widebench` 28,778,045 -> 28,778,067
+(+22) and `work_indexbench` 2,855,794 -> 2,855,795 (+1). The goldens carry
+CI's last reading plus this box's difference. Every program's `.text`
+shrinks by 80 to 112 bytes; the run program's reads 411,768 -> 411,656.
+
+The ratchet row `unmoved_arena` skips the new exit, and escapebench read
+76,509,908 with it applied.
+
+## 2026-09-25 — CI's rows for kanso#1630
+
+CI agreed with every projected work row and with the text, emitted and
+compile veins. The two codegen rows moved, since `kanso build` compiles the
+runtime the rewind lives in: `codegen_instructions_release` 715,866,504 ->
+715,981,278 (+114,774, +0.0160%) and `codegen_instructions_dev` 142,641,709
+-> 142,641,575 (-134). The release rise is clang's work on the runtime and
+is the price of the change; the run program it buys is 7.46 million
+instructions cheaper.
+
+## 2026-09-25 — two byte appends in a row ask for room once
+
+The json encoder writes every escape as two appends: the backslash, then the
+letter. Each append of a proven int to a proven byte builder the function
+owns is already a call to `k_b_append_mut_int`, which checks that the
+builder is owned, that its bytes end at the buffer's front, and that one
+more byte fits. The second call asks all three again about the builder the
+first one just returned.
+
+After the body is emitted and pruned, `paired_appends` looks for two such
+calls where the second appends to the first's result and that result is
+read nowhere else in the function, and replaces them with one call to
+`k_b_append_mut_int2`. The new helper checks room for two bytes and stores
+both in order. When the fast path refuses, it runs the two single appends
+as written, so a builder that has to grow still grows the way it did.
+
+On this box against kanso#1630's head: `work_livebench` 2,197,955,843 ->
+2,182,311,843 (-15,644,000, -0.712%), `work_oneshot` 15,232,332 ->
+15,193,222 (-39,110, -0.257%) and `work_runbench` 1,499,116,075 ->
+1,495,596,175 (-3,519,900, -0.235%). Those three programs each carry one
+merged pair in their emitted IR and the other eleven carry none, so their
+rows are byte-identical. The goldens carry CI's last reading plus this
+box's difference.
+
+The helper's five comment lines stay in every program after the pruner
+drops an unused definition, as the comments of its neighbours do, so
+`emitted_lines` rises by five everywhere: jsonbench 5,481 -> 5,486, and in
+bench/compile_golden.txt recursion 263 -> 268, dispatch 281 -> 286, guards
+268 -> 273, records 332 -> 337, build_block 226 -> 231 and the module 1,051
+-> 1,056. The three programs that use the helper carry its definition too:
+runbench 27,278 -> 27,320 lines, 3,564 -> 3,565 calls, 2,767 -> 2,770
+branches, 493 -> 494 defines, and the same +42 lines, +1 call, +3
+branches and +1 define on livebench and oneshot. Their `.text` grows 224 bytes each (runbench 411,656 -> 411,880).
+That is the inlined two-byte fast path, and the work it saves is the three
+rows above.
+
+In the trend gate's totals: `lines` 1,370 -> 1,395 and `module_lines` 1,051
+-> 1,056 in the compile golden, `emitted_lines` 5,481 -> 5,486,
+`emitted_other_lines` 83,087 -> 83,263, `emitted_other_calls` 9,731 ->
+9,734, `emitted_other_branches` 7,953 -> 7,962, `emitted_other_defines`
+1,529 -> 1,532 (the helper's define in each of the three) and `text`
+3,437,632 -> 3,438,304.
+
+tests/golden/micro/two_bytes_appended_at_once encodes three strings that
+each need an escape. It went red with the helper's two stores swapped. The
+ratchet row `byte_pair_swapped` makes that swap and `byte_pair_apart` skips
+the merge, which the work vein sees.
+
+CI's first reading of this branch found the peephole itself costly:
+`emit_instructions` 29,343,426 -> 31,425,628 (+7.1%) and
+`startup_instructions` 601,513 -> 681,955. The first version split the
+whole emitted body into lines and copied every one of them back, on every
+build, whether or not the program held a pair. It now searches from one
+call of the single append to the next, counts uses only inside the function
+around a candidate, and returns the body untouched when nothing matches.
+On this box, the emit row against kanso#1630's head went from +2,117,616
+with the first version to +80,807.
+
+Three other leads were measured today and declined:
+
+- A width cache in `k_b_at`. The run program rose 1,499,116,075 ->
+  1,503,003,891 (+3,887,816) and indexbench 7.1%.
+- A summary word over the cohort stacks for `pop_any`. It fell 0.16% only
+  while the push cleared the word without looking, and `k_cohort_pop` can
+  leave a depth tenured. Made safe, the run program fell 0.026% and
+  deepbench rose 0.08%.
+- Alias tags on the byte-append helpers, separating the bytes header, the
+  buffer header and the data. The run program was byte-identical. The first
+  append's slow path joins the fast path before the second append starts,
+  so the second's loads cannot be forwarded from the first's stores.
+
+## 2026-09-25 — CI's rows for kanso#1631
+
+CI agreed with the three projected work rows and with the text and emitted
+veins. The compile-side rows moved with the peephole and with the layout of
+the compiler around it. Four rose: `startup_instructions` 601,513 -> 605,252
+(+3,739), `emit_instructions` 29,343,426 -> 29,390,013 (+46,587), the cost of
+searching each program's body for the pair, `codegen_instructions_dev`
+142,641,575 -> 142,645,204 (+3,629) and `codegen_instructions_release`
+715,981,278 -> 715,986,547 (+5,269). Three fell: `compile_instructions`
+25,041,901 -> 25,004,892, `entry_instructions` 83,306,187 -> 83,186,043 and
+`library_instructions` 83,849,828 -> 83,730,469, none of which reaches the
+emitter, so the fall is layout. The run program's 3,519,900 fewer
+instructions carry the score over the four rises.
+
+## 2026-09-25 — a proven list is measured and indexed in place
+
+The inference already knows, for many parameters, that every value reaching
+them is a list: `encode_pairs acc es i` in lib/json is handed `entries m` and
+then itself. The emitter used that fact for bytes and nowhere else. `length`
+of a proven list still called the length twin, which asks whether the tag is
+a list or bytes before loading the length, and `es[i]` still called the index
+twin, which asks the index's tag, the container's tag, and then whether it
+was a list or bytes a second time before it loads the slot.
+
+`length` of a value proven to be a list or bytes now reads the header's
+first word, which is the length for both. A plain index of a proven list
+with a proven int checks the bounds and loads the slot, and answers none
+outside them, the way the twin's list arm does. What comes out of a list is
+whatever the list holds, so that result carries no set and is forced where
+it is used, as before. The strict form, `xs[i]!`, answers a box around the
+element, which the runtime builds, so it keeps the general path; the first
+draft took it too and a_builtin_demands_its_string printed nothing.
+
+On this box against kanso#1631's head: `work_runbench` 1,495,596,175 ->
+1,479,090,614 (-16,505,561, -1.104%), `work_livebench` 2,182,311,843 ->
+2,120,705,451 (-2.823%), `work_encodebench` 2,964,897,120 -> 2,861,479,405
+(-3.488%), `work_digestbench` 5,788,416 -> 5,540,248 (-4.287%),
+`work_oneshot` -1.014%, `work_basket` -0.479%, `work_scanbench` -1,419 and
+`work_widebench` -1. The other six rows are byte-identical. The goldens carry
+CI's last reading plus this box's difference. Every program whose work moved
+is also smaller: runbench's `.text` 411,880 -> 406,776 and its module
+27,320 -> 26,838 lines and 3,565 -> 3,493 calls. The compile corpus's module
+reads 1,056 -> 1,047 lines, 102 -> 100 calls and 82 -> 81 branches.
+
+tests/golden/micro/a_proven_list_is_read_in_place walks a proven list, asks
+at and past both ends, and takes one strict index. It went red with each slot
+read one late. The ratchet row `list_read_late` makes that change;
+`list_index_twin` and `list_length_twin` send the index and the length back
+through the twins, and the work vein sees each.
+
+Several leads were measured against the branches below this one and
+declined. kanso#1632 marked every lambda's wrapper `alwaysinline` in a
+release module, so that a fold over a known lambda carries the lambda's body
+in its loop. encodebench fell 6.106% and no other work row moved, but CI read
+`codegen_instructions_release` 715,986,547 -> 774,984,002 (+8.24%), and
+welfare does not score encodebench, so the change came out behind by the
+objective and was closed. `inlinehint` in place of `alwaysinline` left every
+work row byte-identical. Non-trivial loop unswitching, meant to hoist
+`fold_flat`'s per-element list-or-bytes test, read byte-identical on all
+fourteen rows whether the flag went to the LTO link or to the pre-link `-O1`
+compile. A helper merging a byte append followed by a proven one raised
+encodebench 0.134% at the five escape sites in its frozen `esc_byte`. Writing a
+json key's quotes beside the key, so that `,"` and `":` would be adjacent
+pairs for that helper, raised livebench 5.507%, runbench 1.874% and oneshot
+1.978%, and the helper fired in none of the three.
+
+## 2026-09-25 — the nine-word row watches the limit the release path reads
+
+The ratchet run on kanso#1626 reported one row blind: "a nine-word arm
+narrowed on x86". Its mutation set `TAILCC_WIDEST`'s x86-64 value to eight,
+and a_big_object_decodes_in_a_release_build stayed green. On a clang with
+`preserve_none`, which the probe finds on CI and on this box, the release path
+narrows at `PRESERVE_NONE_REGISTERS`, twelve, and reads `TAILCC_WIDEST` only
+where the probe finds no `preserve_none`. So the mutation changed a value the
+spec's build never reads. It now narrows the `preserve_none` call site at
+eight, and the spec goes red the way its header says: the 300,000-key object
+kills the release binary with SIGSEGV. The x86-64 `TAILCC_WIDEST` value is
+left without a row; no build on a host with `preserve_none` reads it.
+
+This pull request carries the stack beneath it to main in one run, kanso#1622
+through kanso#1631, because the same blind row sat in every one of them and a
+fix pushed to each would have cost a ratchet run apiece.
+
+Across the whole carry, measured against main, two rows end higher and each
+was priced by the pull request that moved it. `work_readbench` lands at
+4,631,757, one instruction over main's 4,631,756. `emitted_other_lines` lands
+at 82,139 against 76,037, 6,102 more lines across the thirteen programs,
+the net of the moves each carried entry prices. The objective weighs no
+emitted-lines term.
+
+## 2026-09-25 — CI's rows for kanso#1633
+
+CI agreed with every projected work row and with the text and emitted veins.
+Shorter bodies are less for clang to compile: `codegen_instructions_release`
+715,986,547 -> 698,557,830 (-17,428,717, -2.43%), `codegen_instructions_dev`
+142,645,204 -> 142,050,065 and `emit_instructions` 29,390,013 -> 29,261,817.
+`startup_instructions` rose 605,252 -> 605,388 (+136).
+
+Measured on this branch and declined: building every zero-parameter
+definition, which runs once, for size. The release codegen child tree on
+this box read 697,137,164 -> 692,496,161 with `minsize` (-0.67%), 696,902,517
+with `optsize` and 697,644,423 with `cold`. At the release term's current
+ratio the best of the three is worth about 0.00005 of production welfare.

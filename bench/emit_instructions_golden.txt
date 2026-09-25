@@ -283,4 +283,22 @@
 # kanso#1621 at CI's sitting: dead cycles, unnamed strings, dead failure
 # paths, reboxed words, the interpreter's argument loops and low byte.
 # emit_instructions 35,545,509 -> 30,190,261, a FALL of 5,355,248 (-15.0659%).
-emit_instructions=30190261
+#
+# kanso#1622 at CI's sitting: one overflow trap a function, blank lines by
+# binary search, entries in one block, the beat mark inline, empty literals
+# and ints rendered in place. emit_instructions 30,190,261 -> 29,340,940, a
+# FALL of 849,321 (-2.8132%).
+#
+# kanso#1623 at CI's sitting: tail cycles, direct calls and four runtime doors
+# on preserve_none. emit_instructions 29,340,940 -> 29,340,955, a RISE of 15
+# (+0.0001%).
+#
+# kanso#1629 at CI's sitting: a run of byte compares is read as one window.
+# emit_instructions 29,340,955 -> 29,343,426, a RISE of 2,471 (+0.0084%).
+#
+# kanso#1631 at CI's sitting: two byte appends in a row ask for room once.
+# emit_instructions 29,343,426 -> 29,390,013, a RISE of 46,587 (+0.1588%).
+#
+# kanso#1633 at CI's sitting: a proven list is measured and indexed in place.
+# emit_instructions 29,390,013 -> 29,261,817, a FALL of 128,196 (-0.4362%).
+emit_instructions=29261817

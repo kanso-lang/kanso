@@ -1,0 +1,20 @@
+# A list the inference proves is a list is measured and indexed with no tag
+# test: `length` reads the header's first word and `xs[i]` checks the bounds
+# and loads the slot. `walked` is only ever handed a list, so its `xs` is
+# proven. The walk sums every slot, `edges` asks at and one past each end,
+# where a plain index answers none, and `picked` takes a strict index, which
+# answers a box and keeps the general path.
+fn walked xs i acc
+  return acc if i < 1 or length xs < i
+  walked xs (i + 1) (acc + xs[i])
+
+fn edges xs
+  "{xs[0]} {xs[-1]} {xs[length xs]} {xs[length xs + 1]}"
+
+fn picked xs
+  xs[2]! .> (v -> print "strict: {v}")
+
+pub play =
+  print "sum: {walked [3 5 7 11] 1 0}"
+  >> print "edges: {edges [3 5 7 11]}"
+  >> picked [3 5 7 11]

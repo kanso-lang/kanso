@@ -1289,6 +1289,9 @@ pub struct Interp<'a> {
     /// One entry per name this run has CALLED, filled on first sight for the
     /// reason `names` above is.
     callees: RefCell<Map<String, Callee<'a>>>,
+    /// `callees` again, keyed by the address of a `Value::FnRef`'s name; see
+    /// `call_ref`.
+    callees_by_ref: RefCell<Map<usize, (Rc<str>, Callee<'a>)>>,
     /// One entry per declaration this run has ENTERED, keyed by the
     /// declaration's address, which `&'a FnDecl` on `frame_for` is what makes
     /// safe: the compiler refuses a borrow that does not outlive this
@@ -1374,6 +1377,7 @@ impl<'a> Interp<'a> {
             slots: RefCell::new(Vec::new()),
             generation: next_generation(),
             callees: RefCell::new(Map::default()),
+            callees_by_ref: RefCell::new(Map::default()),
             frames: RefCell::new(Map::default()),
             program,
         }
@@ -1481,7 +1485,7 @@ impl<'a> Interp<'a> {
             // `if` is the one name the memory would answer Group for and this
             // may not: it is a declaration AND the conditional form, and the
             // form wins here.
-            (&**n != "if" && self.calls_a_group(n)).then(|| n.clone())
+            (&**n != "if" && matches!(self.callee_of_ref(n), Callee::Group(_))).then(|| n.clone())
         };
         if *piped && !args.is_empty() {
             let piped_value = self.eval(&args[0], env, frame)?;
@@ -2249,7 +2253,7 @@ impl<'a> Interp<'a> {
 
     fn call(&self, callee: Value, args: Vec<Value>, span: Span, frame: &Frame) -> EvalResult {
         match callee {
-            Value::FnRef(name) => self.call_named(&name, args, span, frame),
+            Value::FnRef(name) => self.call_ref(&name, args, span, frame),
             Value::Closure(closure) => self.call_closure(&closure, args, span),
             Value::TableFn(handle) => foreign_call(handle, args, span, false),
             Value::Partial(callee, supplied) => {
@@ -2368,17 +2372,58 @@ impl<'a> Interp<'a> {
     }
 
     fn call_named(&self, name: &str, args: Vec<Value>, span: Span, frame: &Frame) -> EvalResult {
-        // The borrow is dropped before the call runs, because the body it
-        // reaches calls back in here.
+        let callee = self.callee_named(name);
+        self.call_callee(callee, name, args, span, frame)
+    }
+
+    /// What a name calls, remembered by name. The borrow is dropped before
+    /// the call runs, because the body it reaches calls back in here.
+    fn callee_named(&self, name: &str) -> Callee<'a> {
         let known = self.callees.borrow().get(name).cloned();
-        let callee = match known {
+        match known {
             Some(callee) => callee,
             None => {
                 let callee = self.callee(name);
                 self.callees.borrow_mut().insert(name.to_string(), callee.clone());
                 callee
             }
-        };
+        }
+    }
+
+    /// A call through a function reference, remembered by the reference's
+    /// address rather than by hashing its text. Every `Value::FnRef` is made
+    /// in `resolve`, whose answer `names` keeps for the interpreter's life,
+    /// so one name reaches here through one address. The entry holds its own
+    /// count on the name as well, so no other name can come to live at an
+    /// address the table knows. Hashing the name was about a hundred
+    /// instructions of every interpreted call.
+    fn call_ref(&self, name: &Rc<str>, args: Vec<Value>, span: Span, frame: &Frame) -> EvalResult {
+        let callee = self.callee_of_ref(name);
+        self.call_callee(callee, name, args, span, frame)
+    }
+
+    /// What a function reference calls, by its address; see `call_ref`.
+    fn callee_of_ref(&self, name: &Rc<str>) -> Callee<'a> {
+        let key = Rc::as_ptr(name) as *const u8 as usize;
+        let known = self.callees_by_ref.borrow().get(&key).map(|(_, callee)| callee.clone());
+        match known {
+            Some(callee) => callee,
+            None => {
+                let callee = self.callee_named(name);
+                self.callees_by_ref.borrow_mut().insert(key, (name.clone(), callee.clone()));
+                callee
+            }
+        }
+    }
+
+    fn call_callee(
+        &self,
+        callee: Callee<'a>,
+        name: &str,
+        args: Vec<Value>,
+        span: Span,
+        frame: &Frame,
+    ) -> EvalResult {
         if let Callee::Err = callee {
             let [reason] = arity(args, name, span)?;
             let reason = self.force_thunk(reason)?;
@@ -2443,17 +2488,6 @@ impl<'a> Interp<'a> {
             Some(overloads) => Callee::Group(overloads.clone()),
             None => Callee::Builtin,
         }
-    }
-
-    /// Whether a name calls a dispatch group, read off the same memory.
-    fn calls_a_group(&self, name: &str) -> bool {
-        if let Some(known) = self.callees.borrow().get(name) {
-            return matches!(known, Callee::Group(_));
-        }
-        let callee = self.callee(name);
-        let group = matches!(callee, Callee::Group(_));
-        self.callees.borrow_mut().insert(name.to_string(), callee);
-        group
     }
 
     fn construct(&self, ty: &TypeDecl, args: Vec<Value>, span: Span) -> EvalResult {
@@ -2722,7 +2756,8 @@ impl<'a> Interp<'a> {
                 }
             }
             match best {
-                Some((won_score, decl, binds)) => {
+                Some((won_score, decl, mut binds)) => {
+                    bind_moved(&decl.params, &mut args, &mut binds);
                     // The winner's buffer comes back as the working one. The
                     // two have the same job and only one of them is needed
                     // next time round.
@@ -4261,12 +4296,70 @@ fn match_params_into(
             1 => 100,
             _ => 10,
         };
-        let Some(depth) = match_one(pattern, arg, binds) else {
+        let Some(depth) = match_top(pattern, arg, binds) else {
             return false;
         };
         score.push(base.saturating_sub(depth));
     }
     true
+}
+
+/// `match_one` for a whole parameter, which binds a name without cloning.
+///
+/// A parameter that is a name, bare or annotated, bound a clone of its
+/// argument, and arm selection tries every candidate, so each one paid for
+/// the clone whether it won or not: on the interpreted corpus that was 620,601
+/// clones from `match_one`, 26,424,710 instructions, with as many drops after.
+/// The binding now holds `none` until an arm has won, and `bind_moved` puts
+/// the argument itself there, since the argument vector is cleared before the
+/// body runs and nothing reads it after.
+fn match_top(pattern: &Pattern, arg: &Value, binds: &mut Bindings) -> Option<u8> {
+    match pattern {
+        Pattern::Var(name, _) => match is_failure(arg) {
+            true => None,
+            false => {
+                binds.push((name.clone(), Value::NoneV));
+                Some(0)
+            }
+        },
+        Pattern::Annotated { name, ty, .. } => {
+            let depth = type_match_depth(ty, arg)?;
+            binds.push((name.clone(), Value::NoneV));
+            Some(depth)
+        }
+        _ => match_one(pattern, arg, binds),
+    }
+}
+
+/// How many names a pattern binds when it matches, which is how many entries
+/// `match_one` pushes for it.
+fn binder_count(pattern: &Pattern) -> usize {
+    match pattern {
+        Pattern::Var(..) | Pattern::Annotated { .. } => 1,
+        Pattern::Ctor { fields, whole, .. } => {
+            fields.iter().map(binder_count).sum::<usize>() + usize::from(whole.is_some())
+        }
+        Pattern::IntLit(..)
+        | Pattern::StrLit(..)
+        | Pattern::Nullary(..)
+        | Pattern::Wildcard(..)
+        | Pattern::Keyed { .. } => 0,
+    }
+}
+
+/// The winning arm's name parameters take their arguments, moved out of the
+/// argument vector into the places `match_top` held for them.
+fn bind_moved(params: &[Pattern], args: &mut [Value], binds: &mut Bindings) {
+    let mut at = 0;
+    for (pattern, arg) in params.iter().zip(args.iter_mut()) {
+        match pattern {
+            Pattern::Var(..) | Pattern::Annotated { .. } => {
+                binds[at].1 = std::mem::replace(arg, Value::NoneV);
+                at += 1;
+            }
+            _ => at += binder_count(pattern),
+        }
+    }
 }
 
 /// The as-pattern's name takes the value the shape matched — the same value

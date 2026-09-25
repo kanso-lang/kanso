@@ -1067,7 +1067,15 @@
 # kanso#1621 at CI's sitting: dead cycles, unnamed strings, dead failure
 # paths, reboxed words, the interpreter's argument loops and low byte.
 # library_instructions 87,008,618 -> 87,221,497, a RISE of 212,879 (+0.2447%).
-library_instructions=87221497
+#
+# kanso#1622 at CI's sitting: one overflow trap a function, blank lines by
+# binary search, entries in one block, the beat mark inline, empty literals
+# and ints rendered in place. library_instructions 87,221,497 -> 83,849,828, a
+# FALL of 3,371,669 (-3.8656%).
+#
+# kanso#1631 at CI's sitting: two byte appends in a row ask for room once.
+# library_instructions 83,849,828 -> 83,730,469, a FALL of 119,359 (-0.1423%).
+library_instructions=83730469
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

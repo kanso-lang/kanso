@@ -227,7 +227,13 @@
 # kanso#1621 at CI's sitting: dead cycles, unnamed strings, dead failure
 # paths, reboxed words, the interpreter's argument loops and low byte.
 # interp_allocs 1,036,127 -> 983,321, a FALL of 52,806 (-5.0965%).
-interp_allocs=983321
+#
+# kanso#1625 at CI's sitting: a winning argument is moved into its binding.
+# interp_allocs 983,321 -> 929,201, a FALL of 54,120 (-5.5038%).
+#
+# kanso#1628 at CI's sitting: a call finds its callee by the reference's
+# address. interp_allocs 929,201 -> 929,207, a RISE of 6 (+0.0006%).
+interp_allocs=929207
 #
 # 2026-09-18, kanso#1518 against main at kanso#1517, CI's sitting.
 # 951,438 -> 961,165, a RISE of
@@ -290,5 +296,8 @@ interp_allocs=983321
 # 2026-09-24, kanso#1605 (number span, beat classified once, shipped std
 # modules skip their check), CI's row: interp_peak_bytes 846,191 -> 837,389, a
 # FALL of 8,802 (-1.0402%).
-interp_peak_bytes=837389
+#
+# kanso#1628 at CI's sitting: a call finds its callee by the reference's
+# address. interp_peak_bytes 837,389 -> 842,653, a RISE of 5,264 (+0.6286%).
+interp_peak_bytes=842653
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

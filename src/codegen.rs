@@ -54,7 +54,7 @@ pub fn counters_wanted() -> bool {
 
 /// How many `k_stats_on` gates DECLARES carries. Pinned so that adding one
 /// without teaching `index_declares` about it fails the build.
-pub const STATS_GATE_SITES: usize = 8;
+pub const STATS_GATE_SITES: usize = 9;
 
 const DECLARES: &str = r#"%KValue = type { i64, i64 }
 %parsed = type { i64, i64 }
@@ -331,6 +331,51 @@ bwrite:
 slow:
   %f = call %KValue @k_b_append_mut(%KValue %acc, %KValue %x)
   ret %KValue %f
+}
+; Two bytes appended one after the other to a builder this function owns, the
+; second onto the first's result and nothing else reading that result between
+; them: `text/append (text/append acc 92) b`, which is every escape the json
+; encoder writes. The pair asks for room once and writes both bytes. Anything
+; the fast path refuses runs the two single appends in order, as written.
+define internal %KValue @k_b_append_mut_int2(%KValue %acc, %KValue %x, %KValue %y) alwaysinline {
+  %so = load i32, ptr @k_stats_on
+  %counting = icmp ne i32 %so, 0
+  br i1 %counting, label %slow, label %fast
+fast:
+  %bp = extractvalue %KValue %acc, 1
+  %b = inttoptr i64 %bp to ptr
+  %len = load i64, ptr %b
+  %datap = getelementptr i8, ptr %b, i64 8
+  %data = load ptr, ptr %datap
+  %capp = getelementptr i8, ptr %b, i64 16
+  %cap = load i64, ptr %capp
+  %capa = and i64 %cap, -2
+  %owned = icmp ne i64 %cap, 0
+  br i1 %owned, label %fr, label %slow
+fr:
+  %usedp = getelementptr i8, ptr %data, i64 -8
+  %used = load i64, ptr %usedp
+  %atfront = icmp eq i64 %used, %len
+  %len2 = add i64 %len, 2
+  %fits = icmp sle i64 %len2, %capa
+  %ok = and i1 %atfront, %fits
+  br i1 %ok, label %write, label %slow
+write:
+  %dst = getelementptr i8, ptr %data, i64 %len
+  %xv = extractvalue %KValue %x, 1
+  %xb = trunc i64 %xv to i8
+  store i8 %xb, ptr %dst
+  %dst1 = getelementptr i8, ptr %dst, i64 1
+  %yv = extractvalue %KValue %y, 1
+  %yb = trunc i64 %yv to i8
+  store i8 %yb, ptr %dst1
+  store i64 %len2, ptr %usedp
+  store i64 %len2, ptr %b
+  ret %KValue %acc
+slow:
+  %t = call %KValue @k_b_append_mut_int(%KValue %acc, %KValue %x)
+  %r = call %KValue @k_b_append_mut_int(%KValue %t, %KValue %y)
+  ret %KValue %r
 }
 ; `append acc (slice cs from to)` where the accumulator is unique, both sides
 ; are bytes and the range fits the spare capacity it already has. That is the
@@ -695,12 +740,6 @@ define internal %KValue @k_bool(i64 %b) alwaysinline {
 }
 define internal %KValue @k_none() alwaysinline {
   ret %KValue { i64 4, i64 0 }
-}
-define internal i64 @k_not_failure(%KValue %v) alwaysinline {
-  %tag = extractvalue %KValue %v, 0
-  %ne = icmp ne i64 %tag, 5
-  %r = zext i1 %ne to i64
-  ret i64 %r
 }
 define internal i64 @k_truthy(%KValue %v) alwaysinline {
   %tag = extractvalue %KValue %v, 0
@@ -1094,11 +1133,6 @@ define internal i64 @k_check_bool(%KValue %v) alwaysinline {
   %r = zext i1 %c to i64
   ret i64 %r
 }
-define internal i64 @k_not_failure_w(i64 %tag) alwaysinline {
-  %ne = icmp ne i64 %tag, 5
-  %r = zext i1 %ne to i64
-  ret i64 %r
-}
 define internal i64 @k_truthy_w(i64 %tag, i64 %pay) alwaysinline {
   %t = icmp eq i64 %tag, 2
   br i1 %t, label %yes, label %chkf
@@ -1193,6 +1227,8 @@ declare { i64, i1 } @llvm.ssub.with.overflow.i64(i64, i64)
 declare { i64, i1 } @llvm.smul.with.overflow.i64(i64, i64)
 declare %KValue @k_list_lit(i64, ptr)
 declare %KValue @k_map_lit(i64, ptr)
+declare %KValue @k_list_empty()
+declare %KValue @k_map_empty()
 declare %KValue @k_closure(ptr, i64, i64, ptr)
 declare %KValue @k_closure_lit(ptr, i64, ptr)
 declare %KValue @k_fnref(ptr)
@@ -2465,7 +2501,36 @@ fn emit_ir_for(
         demand: crate::demand::analyze(program),
         thunk_sites: Vec::new(),
     };
-    backend.emit()
+    backend.emit().map(|ir| through_doors(ir, convention))
+}
+
+/// The runtime functions the program calls that take `preserve_nonecc`
+/// wherever closures do. src/runtime.c defines each with `K_DOORCC`, which is
+/// the same attribute under the same probe, and says why these four;
+/// `tests/the_doors_the_program_calls_agree.rs` holds the two lists equal,
+/// since a door on one convention called on the other passes its arguments
+/// in the wrong registers.
+pub const PRESERVE_NONE_DOORS: [&str; 4] =
+    ["k_b_append_rendered", "k_b_entries", "k_b_to_float_slice", "k_b_utf8"];
+
+/// Every declare of and call to a door, written with the convention.
+fn through_doors(ir: String, convention: ClosureConvention) -> String {
+    if convention != ClosureConvention::PreserveNone {
+        return ir;
+    }
+    let mut ir = ir;
+    for door in PRESERVE_NONE_DOORS {
+        ir = ir
+            .replace(
+                &format!("declare %KValue @{door}("),
+                &format!("declare preserve_nonecc %KValue @{door}("),
+            )
+            .replace(
+                &format!("call %KValue @{door}("),
+                &format!("call preserve_nonecc %KValue @{door}("),
+            );
+    }
+    ir
 }
 
 struct Backend<'a> {
@@ -2620,6 +2685,12 @@ struct FnEmit {
     /// read of its tag or payload used to take it back apart with an
     /// `extractvalue`; the tag is 0 and the payload is the argument itself.
     known_words: crate::hash::Map<String, (String, String)>,
+    /// The blocks a checked integer op in this function branches to when it
+    /// overflows, and the message they die with. The block is the same three
+    /// lines wherever the op is, so every op shares the first, and `body`
+    /// writes it once at the end rather than once an op.
+    overflow_traps: Vec<String>,
+    overflow_message: String,
 }
 /// Whether a line the emitters wrote is a stack slot, asked at the ONE place
 /// the needle can be.
@@ -2670,21 +2741,22 @@ impl FnEmit {
             raw_byte: crate::hash::Map::default(),
             words,
             known_words: crate::hash::Map::default(),
+            overflow_traps: Vec::new(),
+            overflow_message: String::new(),
         }
     }
 
     /// Writes `{r} = {call}`, where `call` asks one of the hot predicates about
     /// a `%KValue` in the form a release module inlines. The dev tier asks the
-    /// two-word form instead (`k_not_failure_w`, `k_truthy_w`,
-    /// `k_check_rec_fast_w` in DECLARES), with the value's words pulled out
+    /// two-word form instead (`k_truthy_w` and `k_check_rec_fast_w` in
+    /// DECLARES), with the value's words pulled out
     /// first and passed as scalars. At -O0 clang's fast instruction selector
     /// lowers a call only when every argument is a scalar, so each call passing
     /// a `%KValue` went to the slow selector on its own: 216 of them on the
     /// codegen corpus. A release module never calls the two-word forms, so it
     /// never carries them.
     fn predicate(&mut self, r: &str, call: String) {
-        const FORMS: [(&str, &str, bool); 3] = [
-            ("call i64 @k_not_failure(%KValue ", "k_not_failure_w", false),
+        const FORMS: [(&str, &str, bool); 2] = [
             ("call i64 @k_truthy(%KValue ", "k_truthy_w", true),
             ("call i64 @k_check_rec_fast(%KValue ", "k_check_rec_fast_w", true),
         ];
@@ -2763,7 +2835,18 @@ impl FnEmit {
     /// the head of the entry block so each one dominates its uses.
     fn body(&self) -> String {
         let unboxed = self.without_unread_reboxes();
-        let out = unboxed.as_deref().unwrap_or(&self.out);
+        let mut out = unboxed.as_deref().unwrap_or(&self.out);
+        let trapped;
+        if !self.overflow_traps.is_empty() {
+            let mut text = out.to_string();
+            for label in &self.overflow_traps {
+                let message = &self.overflow_message;
+                let _ = write!(text, "{label}:\n  call void @k_die(ptr @{message})\n");
+                text.push_str("  unreachable\n");
+            }
+            trapped = text;
+            out = &trapped;
+        }
         if self.entry_allocas.is_empty() {
             return out.to_string();
         }
@@ -2856,6 +2939,17 @@ impl FnEmit {
     /// through here, so a fresh temp is never scanned against itself.
     fn raw(&mut self, text: &str) {
         self.write(text);
+    }
+
+    /// The label a checked integer op branches to on overflow.
+    fn overflow_trap(&mut self, message: String) -> String {
+        if let Some(trap) = self.overflow_traps.first() {
+            return trap.clone();
+        }
+        let trap = self.label();
+        self.overflow_traps.push(trap.clone());
+        self.overflow_message = message;
+        trap
     }
 
     fn start_block(&mut self, label: &str) {
@@ -3732,6 +3826,7 @@ const DECLARES_CONTEXT_CALLS: &[&str] = &[
     "k_b_append_mut",
     "k_b_append_mut_byte",
     "k_b_append_mut_int",
+    "k_b_append_mut_int2",
     "k_b_append_slice",
     "k_b_append_slice_fast",
     "k_b_at",
@@ -3785,8 +3880,6 @@ const DECLARES_CONTEXT_CALLS: &[&str] = &[
     "k_index_fast",
     "k_int",
     "k_none",
-    "k_not_failure",
-    "k_not_failure_w",
     "k_str_lit",
     "k_str_lit_fast",
     "k_truthy",
@@ -4378,6 +4471,137 @@ fn both_ints(f: &mut FnEmit, ta: &str, tb: &str) -> String {
     }
 }
 
+/// Two in-place byte appends in a row, the second onto the first's result and
+/// that result read nowhere else in the function, as one call to
+/// `k_b_append_mut_int2`. Both calls were already the proven-bytes,
+/// proven-int door, so the pair asks the same questions once; see the helper.
+///
+/// The search goes from one call to the next rather than line by line, and a
+/// body with no pair comes back as it was, because this runs on every build
+/// and most programs have none.
+fn paired_appends(body: &str) -> std::borrow::Cow<'_, str> {
+    const CALL: &str = " = call %KValue @k_b_append_mut_int(%KValue ";
+    fn parse(line: &str) -> Option<(&str, &str, &str)> {
+        let rest = line.strip_prefix("  ")?;
+        let (name, rest) = rest.split_once(CALL)?;
+        let args = rest.strip_suffix(')')?;
+        let (acc, x) = args.split_once(", %KValue ")?;
+        Some((name, acc, x))
+    }
+    let line_end = |from: usize| body[from..].find('\n').map_or(body.len(), |n| from + n);
+    let mut edits: Vec<(usize, usize, String)> = Vec::new();
+    let mut from = 0;
+    while let Some(n) = body[from..].find(CALL) {
+        let at = from + n;
+        let start = body[..at].rfind('\n').map_or(0, |n| n + 1);
+        let end = line_end(at);
+        from = end;
+        if end >= body.len() {
+            break;
+        }
+        let next = line_end(end + 1);
+        let (Some((a, acc, x)), Some((b, acc2, y))) =
+            (parse(&body[start..end]), parse(&body[end + 1..next]))
+        else {
+            continue;
+        };
+        if acc2 != a {
+            continue;
+        }
+        // a use count is the function's own
+        let first = body[..start].rfind("\ndefine ").map_or(0, |n| n + 1);
+        let last = body[next..].find("\n}\n").map_or(body.len(), |n| next + n);
+        let used: usize = body[first..last].lines().map(|l| count_operand(l, a)).sum();
+        if used == 2 {
+            edits.push((
+                start,
+                next,
+                format!("  {b} = call %KValue @k_b_append_mut_int2(%KValue {acc}, %KValue {x}, %KValue {y})"),
+            ));
+            from = next;
+        }
+    }
+    if edits.is_empty() {
+        return std::borrow::Cow::Borrowed(body);
+    }
+    let mut out = String::with_capacity(body.len());
+    let mut kept = 0;
+    for (start, end, line) in edits {
+        out.push_str(&body[kept..start]);
+        out.push_str(&line);
+        kept = end;
+    }
+    out.push_str(&body[kept..]);
+    std::borrow::Cow::Owned(out)
+}
+
+/// How many times `name` appears in `line` as a whole operand.
+fn count_operand(line: &str, name: &str) -> usize {
+    let bytes = line.as_bytes();
+    line.match_indices(name)
+        .filter(|(at, _)| {
+            let after = bytes.get(at + name.len()).copied().unwrap_or(b' ');
+            !(after.is_ascii_alphanumeric() || after == b'_' || after == b'.')
+        })
+        .count()
+}
+
+/// One read of a byte run: `x[p + k] == c` or `x[p] == c`, non-strict, with
+/// `c` a byte literal and `k` a small literal. Answers `(x, p, k, c)`.
+fn byte_read(e: &Expr) -> Option<(&str, &str, i64, i64)> {
+    use num_traits::ToPrimitive;
+    let Expr::BinOp { op: "==", lhs, rhs, .. } = e else { return None };
+    let Expr::Index { base, index, strict: false, .. } = &**lhs else { return None };
+    let Expr::Ident(x, _, _) = &**base else { return None };
+    let Expr::Int(c, _) = &**rhs else { return None };
+    let c = c.to_i64().filter(|c| (0..=255).contains(c))?;
+    let (p, k) = match &**index {
+        Expr::Ident(p, _, _) => (p, 0),
+        Expr::BinOp { op: "+", lhs, rhs, .. } => {
+            let Expr::Ident(p, _, _) = &**lhs else { return None };
+            let Expr::Int(k, _) = &**rhs else { return None };
+            (p, k.to_i64().filter(|k| k.abs() < 1 << 20)?)
+        }
+        _ => return None,
+    };
+    Some((x.as_str(), p.as_str(), k, c))
+}
+
+/// The bytes and the position a run reads, and each read's offset and byte.
+type ByteRun<'e> = (&'e str, &'e str, Vec<(i64, i64)>);
+
+/// A conjunction of `byte_read`s of the same two names. `a and b` desugars to
+/// `if a b false`, and `and` groups to the left, so `r1 and r2 and r3` is
+/// `if (if r1 r2 false) r3 false`; either side of an `if` may be another. Two
+/// reads at least; one is an ordinary compare.
+fn byte_run(args: &[Expr]) -> Option<ByteRun<'_>> {
+    fn conj<'e>(e: &'e Expr, out: &mut Vec<(&'e str, &'e str, i64, i64)>) -> Option<()> {
+        if let Some(read) = byte_read(e) {
+            out.push(read);
+            return Some(());
+        }
+        let Expr::App { head, args, piped: false, .. } = e else { return None };
+        if !matches!(&**head, Expr::Ident(n, _, _) if n == "if") {
+            return None;
+        }
+        both(args, out)
+    }
+    fn both<'e>(args: &'e [Expr], out: &mut Vec<(&'e str, &'e str, i64, i64)>) -> Option<()> {
+        if args.len() != 3 || !matches!(&args[2], Expr::Ident(n, _, _) if n == "false") {
+            return None;
+        }
+        conj(&args[0], out)?;
+        conj(&args[1], out)
+    }
+    let mut reads = Vec::new();
+    both(args, &mut reads)?;
+    let (x, p, _, _) = *reads.first()?;
+    if reads.len() < 2 || reads.iter().any(|r| (r.0, r.1) != (x, p)) {
+        return None;
+    }
+    Some((x, p, reads.iter().map(|r| (r.2, r.3)).collect()))
+}
+
 fn inline_tag(f: &mut FnEmit, value: &str) -> String {
     if let Some(word) = literal_word(value, 0) {
         return word.to_string();
@@ -4402,8 +4626,8 @@ fn inline_payload(f: &mut FnEmit, value: &str) -> String {
     t
 }
 
-/// Calls the alwaysinline twin rather than restating its tag test, so the
-/// emitter cannot drift from the definition it inlines.
+/// Whether a value is not a failure, as one compare of its tag against the
+/// err tag.
 fn inline_not_failure(f: &mut FnEmit, value: &str) -> String {
     let set = f.set_of(value);
     // An EMPTY set is not a proof. `group_param_set` answers 0 for a parameter
@@ -4421,13 +4645,25 @@ fn inline_not_failure(f: &mut FnEmit, value: &str) -> String {
 
 /// The same test with no fold, for the one place a set cannot speak: a block
 /// reached BECAUSE a value is outside the set recorded for it.
+///
+/// It was a call to an alwaysinline `k_not_failure`, then a compare of what
+/// that returned. Every module paid for the inliner to open the call, and the
+/// dev tier, which does no other optimising, kept the widening and the second
+/// compare as well. The test is the one the runtime's `k_not_failure` makes,
+/// and `tests/the_err_tag_is_the_runtime_s.rs` holds the number to the
+/// runtime's.
 fn not_failure_test(f: &mut FnEmit, value: &str) -> String {
-    let r = f.tmp();
-    f.predicate(&r, format!("call i64 @k_not_failure(%KValue {value})"));
+    let tag = inline_tag(f, value);
+    if let Ok(known) = tag.parse::<i64>() {
+        return (known != K_ERR_TAG).to_string();
+    }
     let ok = f.tmp();
-    f.line(&format!("{ok} = icmp ne i64 {r}, 0"));
+    f.line(&format!("{ok} = icmp ne i64 {tag}, {K_ERR_TAG}"));
     ok
 }
+
+/// The runtime's `K_ERR`, the sixth tag in its enum.
+pub const K_ERR_TAG: i64 = 5;
 
 impl<'a> Backend<'a> {
     /// A group's declaration indices, read out of the index rather than
@@ -5116,6 +5352,7 @@ impl<'a> Backend<'a> {
             true => prune_unnamed(&self.body, &dsym(crate::ast::ENTRY, 0), &self.closure_consts),
             false => self.body.clone(),
         };
+        let body = paired_appends(&body);
         // One inline dispatcher per arity the program actually writes. An
         // unused `internal` definition costs nothing after optimization, but
         // it does cost a line, a define and a branch in the emitted golden —
@@ -7219,6 +7456,18 @@ impl<'a> Backend<'a> {
                 ));
                 Ok(t)
             }
+            Expr::List(items, _) if items.is_empty() => {
+                let t = f.tmp();
+                f.line(&format!("{t} = call %KValue @k_list_empty()"));
+                f.record(&t, LIST);
+                Ok(t)
+            }
+            Expr::MapLit(pairs, _) if pairs.is_empty() => {
+                let t = f.tmp();
+                f.line(&format!("{t} = call %KValue @k_map_empty()"));
+                f.record(&t, MAP);
+                Ok(t)
+            }
             Expr::List(items, _) => {
                 let mut emitted = Vec::new();
                 for item in items {
@@ -7354,6 +7603,10 @@ impl<'a> Backend<'a> {
             }
             if let Expr::Ident(name, _, _) = &**head {
                 if name == "if" && f.lookup(name).is_none() {
+                    if let Some(t) = self.emit_byte_run(f, args)? {
+                        self.emit_ret(f, &t);
+                        return Ok(());
+                    }
                     // In tail position a failing condition returns rather than
                     // joining a phi, which is the whole difference from the
                     // value form; `emit_cond` takes no merge label and emits
@@ -7528,6 +7781,118 @@ impl<'a> Backend<'a> {
         let value = self.emit_expr(f, expr)?;
         self.emit_ret(f, &value);
         Ok(())
+    }
+
+    /// `x[p + k] == c and x[p + k'] == c' ...` over one bytes value and one
+    /// int, read as one range test and plain byte compares.
+    ///
+    /// The json decoder matches `true`, `false` and `null` this way, and each
+    /// read in the chain paid for itself: an overflow check on `p + k`, a test
+    /// of each end of the range, a none-or-byte merge and the compare, about
+    /// fourteen instructions a byte and 612,500 literals a run on the run
+    /// program. Every read here sits between `p + kmin` and `p + kmax`, so
+    /// when that window lies inside the bytes no read can miss and no sum can
+    /// overflow, and the answer is the bytes compared. Outside the window at
+    /// least one read is none, which compares false, but the general path is
+    /// kept for it rather than written as `false`: it is also the path a sum
+    /// that would overflow takes, and that one traps.
+    fn emit_byte_run(&mut self, f: &mut FnEmit, args: &[Expr]) -> Result<Option<String>, String> {
+        let Some((x, p, reads)) = byte_run(args) else { return Ok(None) };
+        if f.lookup("false").is_some() || f.lookup("if").is_some() {
+            return Ok(None);
+        }
+        let (Some(xv), Some(pv)) = (f.lookup(x), f.lookup(p)) else { return Ok(None) };
+        if f.set_of(&xv) != BYTES || f.set_of(&pv) != INT {
+            return Ok(None);
+        }
+        let kmin = reads.iter().map(|r| r.0).min().unwrap_or(0);
+        let kmax = reads.iter().map(|r| r.0).max().unwrap_or(0);
+        let bp = inline_payload(f, &xv);
+        let bptr = f.tmp();
+        f.line(&format!("{bptr} = inttoptr i64 {bp} to ptr"));
+        let len_ptr = f.tmp();
+        f.line(&format!("{len_ptr} = getelementptr %KBytes, ptr {bptr}, i64 0, i32 0"));
+        let len = f.tmp();
+        f.line(&format!("{len} = load i64, ptr {len_ptr}"));
+        let idx = inline_payload(f, &pv);
+        let lo = f.tmp();
+        f.line(&format!("{lo} = icmp sge i64 {idx}, {}", 1 - kmin));
+        let top = f.tmp();
+        f.line(&format!("{top} = sub i64 {len}, {kmax}"));
+        let hi = f.tmp();
+        f.line(&format!("{hi} = icmp sle i64 {idx}, {top}"));
+        let inside = f.tmp();
+        f.line(&format!("{inside} = and i1 {lo}, {hi}"));
+        let fast = f.label();
+        let slow = f.label();
+        let merge = f.label();
+        f.line(&format!("br i1 {inside}, label %{fast}, label %{slow}"));
+        f.start_block(&fast);
+        let data_ptr = f.tmp();
+        f.line(&format!("{data_ptr} = getelementptr %KBytes, ptr {bptr}, i64 0, i32 1"));
+        let data = f.tmp();
+        f.line(&format!("{data} = load ptr, ptr {data_ptr}"));
+        let mut all = "true".to_string();
+        for (k, c) in &reads {
+            let off = f.tmp();
+            f.line(&format!("{off} = add i64 {idx}, {}", k - 1));
+            let at = f.tmp();
+            f.line(&format!("{at} = getelementptr i8, ptr {data}, i64 {off}"));
+            let byte = f.tmp();
+            f.line(&format!("{byte} = load i8, ptr {at}"));
+            let same = f.tmp();
+            f.line(&format!("{same} = icmp eq i8 {byte}, {}", *c as u8 as i8));
+            let both = f.tmp();
+            f.line(&format!("{both} = and i1 {all}, {same}"));
+            all = both;
+        }
+        let tag = f.tmp();
+        f.line(&format!("{tag} = select i1 {all}, i64 2, i64 3"));
+        let hit = f.tmp();
+        f.line(&format!("{hit} = insertvalue %KValue {{ i64 undef, i64 0 }}, i64 {tag}, 0"));
+        f.line(&format!("br label %{merge}"));
+        f.start_block(&slow);
+        let general = self.emit_if_value(f, args)?;
+        let general = self.as_value(f, &general);
+        let slow_from = f.cur_label.clone();
+        f.line(&format!("br label %{merge}"));
+        f.start_block(&merge);
+        let t = f.tmp();
+        f.line(&format!("{t} = phi %KValue [ {hit}, %{fast} ], [ {general}, %{slow_from} ]"));
+        f.record(&t, infer::BOOL | f.set_of(&general));
+        Ok(Some(t))
+    }
+
+    /// An `if` read for its value: the condition asked as a question, each arm
+    /// emitted as a value, and a phi over the arms and any failure the
+    /// condition carried out.
+    fn emit_if_value(&mut self, f: &mut FnEmit, args: &[Expr]) -> Result<String, String> {
+        let then_label = f.label();
+        let else_label = f.label();
+        let merge = f.label();
+        let cond = self.emit_cond(f, &args[0], &then_label, &else_label, Some(&merge))?;
+        f.start_block(&then_label);
+        let then_value = self.emit_expr(f, &args[1])?;
+        let then_from = f.cur_label.clone();
+        f.line(&format!("br label %{merge}"));
+        f.start_block(&else_label);
+        let else_value = self.emit_expr(f, &args[2])?;
+        let else_from = f.cur_label.clone();
+        f.line(&format!("br label %{merge}"));
+        f.start_block(&merge);
+        let mut arms = vec![
+            format!("[ {then_value}, %{then_from} ]"),
+            format!("[ {else_value}, %{else_from} ]"),
+        ];
+        let mut fail_set = 0;
+        for (v, from) in &cond.failed {
+            arms.push(format!("[ {v}, %{from} ]"));
+            fail_set |= f.set_of(v) & FAIL;
+        }
+        let t = f.tmp();
+        f.line(&format!("{t} = phi %KValue {}", arms.join(", ")));
+        f.record(&t, f.set_of(&then_value) | f.set_of(&else_value) | fail_set);
+        Ok(t)
     }
 
     /// A condition is asked a question, not read for a value, and a
@@ -7884,14 +8249,11 @@ impl<'a> Backend<'a> {
                     let overflow = f.tmp();
                     f.line(&format!("{overflow} = extractvalue {{ i64, i1 }} {pair}, 1"));
                     let ok = f.label();
-                    let trap = f.label();
-                    f.line(&format!("br i1 {overflow}, label %{trap}, label %{ok}"));
-                    f.start_block(&trap);
                     let (m, _) = self.intern(
                         "integer overflow (int64 native build; spec int is arbitrary precision)\0",
                     );
-                    f.line(&format!("call void @k_die(ptr @{m})"));
-                    f.line("unreachable");
+                    let trap = f.overflow_trap(m);
+                    f.line(&format!("br i1 {overflow}, label %{trap}, label %{ok}"));
                     f.start_block(&ok);
                     let v = f.tmp();
                     f.line(&format!(
@@ -8086,6 +8448,49 @@ impl<'a> Backend<'a> {
                 f.line(&format!("{raw} = phi i64 [ {wide}, %{load} ], [ 256, %{miss_from} ]"));
                 f.raw_byte.insert(t.clone(), raw);
             }
+            return t;
+        }
+        // A plain index of a container the sets prove is a list, read the way
+        // the twin's list arm reads it, with no tag test in front. What comes
+        // out is whatever the list holds, so the result carries no set. The
+        // strict form answers a box around the element, which is the runtime's
+        // to build, so it keeps the general path.
+        if !strict && f.set_of(container) == LIST && f.set_of(key) == INT {
+            let lp = inline_payload(f, container);
+            let lptr = f.tmp();
+            f.line(&format!("{lptr} = inttoptr i64 {lp} to ptr"));
+            let len = f.tmp();
+            f.line(&format!("{len} = load i64, ptr {lptr}"));
+            let idx = inline_payload(f, key);
+            let ge1 = f.tmp();
+            f.line(&format!("{ge1} = icmp sge i64 {idx}, 1"));
+            let le_len = f.tmp();
+            f.line(&format!("{le_len} = icmp sle i64 {idx}, {len}"));
+            let in_range = f.tmp();
+            f.line(&format!("{in_range} = and i1 {ge1}, {le_len}"));
+            let load = f.label();
+            let miss = f.label();
+            let merge = f.label();
+            f.line(&format!("br i1 {in_range}, label %{load}, label %{miss}"));
+            f.start_block(&load);
+            let items_ptr = f.tmp();
+            f.line(&format!("{items_ptr} = getelementptr i8, ptr {lptr}, i64 8"));
+            let items = f.tmp();
+            f.line(&format!("{items} = load ptr, ptr {items_ptr}"));
+            let off = f.tmp();
+            f.line(&format!("{off} = add i64 {idx}, -1"));
+            let slot = f.tmp();
+            f.line(&format!("{slot} = getelementptr %KValue, ptr {items}, i64 {off}"));
+            let hit = f.tmp();
+            f.line(&format!("{hit} = load %KValue, ptr {slot}"));
+            f.line(&format!("br label %{merge}"));
+            f.start_block(&miss);
+            f.line(&format!("br label %{merge}"));
+            f.start_block(&merge);
+            let t = f.tmp();
+            f.line(&format!(
+                "{t} = phi %KValue [ {hit}, %{load} ], [ {{ i64 4, i64 0 }}, %{miss} ]"
+            ));
             return t;
         }
         let ct = inline_tag(f, container);
@@ -8468,32 +8873,10 @@ impl<'a> Backend<'a> {
             unreachable!("non-ident heads take the computed path");
         };
         if name == "if" {
-            let then_label = f.label();
-            let else_label = f.label();
-            let merge = f.label();
-            let cond = self.emit_cond(f, &args[0], &then_label, &else_label, Some(&merge))?;
-            f.start_block(&then_label);
-            let then_value = self.emit_expr(f, &args[1])?;
-            let then_from = f.cur_label.clone();
-            f.line(&format!("br label %{merge}"));
-            f.start_block(&else_label);
-            let else_value = self.emit_expr(f, &args[2])?;
-            let else_from = f.cur_label.clone();
-            f.line(&format!("br label %{merge}"));
-            f.start_block(&merge);
-            let mut arms = vec![
-                format!("[ {then_value}, %{then_from} ]"),
-                format!("[ {else_value}, %{else_from} ]"),
-            ];
-            let mut fail_set = 0;
-            for (v, from) in &cond.failed {
-                arms.push(format!("[ {v}, %{from} ]"));
-                fail_set |= f.set_of(v) & FAIL;
+            if let Some(t) = self.emit_byte_run(f, args)? {
+                return Ok(t);
             }
-            let t = f.tmp();
-            f.line(&format!("{t} = phi %KValue {}", arms.join(", ")));
-            f.record(&t, f.set_of(&then_value) | f.set_of(&else_value) | fail_set);
-            return Ok(t);
+            return self.emit_if_value(f, args);
         }
         // utf8 of a slice reads a byte view for a pointer and a length and
         // drops it, three million times in a decode. The wrapper inlining
@@ -8965,7 +9348,8 @@ impl<'a> Backend<'a> {
             // later read of the same field cannot be forwarded across it, so
             // a loop that asks `length coll < i` and then indexes `coll[i]`
             // loads the length twice and compares it twice.
-            if name == "length" && f.set_of(&emitted[0]) == BYTES {
+            let held = f.set_of(&emitted[0]);
+            if name == "length" && held != 0 && held & !(BYTES | LIST) == 0 {
                 let bp = inline_payload(f, &emitted[0]);
                 let bptr = f.tmp();
                 f.line(&format!("{bptr} = inttoptr i64 {bp} to ptr"));
@@ -8975,7 +9359,7 @@ impl<'a> Backend<'a> {
                 f.line(&format!("{len} = load i64, ptr {len_ptr}"));
                 let t = f.tmp();
                 f.line(&format!("{t} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 {len}, 1"));
-                f.record(&t, infer::builtin_set("length", &[BYTES]));
+                f.record(&t, infer::builtin_set("length", &[held]));
                 return Ok(t);
             }
             let mut args_ir: Vec<String> = emitted.iter().map(|e| format!("%KValue {e}")).collect();

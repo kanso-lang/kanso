@@ -294,9 +294,7 @@ static KValue k_utf8_bad(const char* data, long long len, const char* origin,
                          long long* chars);
 static inline void k_str_seed_count(KStr* s, long long chars);
 static KValue k_render_at(KValue v, long long quote, int held);
-KValue k_b_render_value(KValue v) {
-    return k_render(v, 0);
-}
+KValue k_b_render_value(KValue v);
 
 /* A cell whose value was built inside the innermost beat cannot be memoized
    outright: the loop rewinds between iterations, and the memo would point at
@@ -414,6 +412,18 @@ typedef struct {
 #define K_CLOSCC
 #endif
 
+/* A few of the doors the program calls take the same convention, so they
+   save nothing the caller does not keep. Each was measured on its own on the
+   run program under clang 19, against the program's functions already on
+   preserve_none: `append_rendered` -4,998,510 instructions, `entries`
+   -4,571,478, `utf8` -2,157,799 and `to_float_slice` -1,113,156. The same
+   trial made `at` dearer by 9,209,935 and `utf8_slice_raw` by 4,306,698,
+   because their callers keep more live across the call than the callee used
+   to save, so they stay on the C convention. The emitter writes the keyword
+   on the declares and calls of exactly these, in `PRESERVE_NONE_DOORS`, and
+   `tests/the_doors_the_program_calls_agree.rs` holds the two lists equal. */
+#define K_DOORCC K_CLOSCC
+
 typedef struct { KValue (K_CLOSCC *fn)(void*, KValue); void* env; long long ncaps; long long arity; } KClosure;
 /* A named group handed out as a value. The emitter writes one of these per
    wrapper as a static, so the collector never sees it, and it carries the
@@ -477,7 +487,7 @@ KBlock* k_blocks = NULL;
 static KBlock* k_spare = NULL;
 /* bytes held by the live chain, and the most it ever held: the process's
    deterministic peak, the number the one-shot welfare term watches */
-static long long k_live_block_bytes = 0;
+long long k_live_block_bytes = 0;
 static long long k_stat_peak_block_bytes = 0;
 static long long k_stat_cohort_frees = 0;
 static long long k_stat_cohort_kept = 0;
@@ -1097,15 +1107,20 @@ static inline void k_beat_rewind(KMark* m) {
        where an `or` of two zero words is one. The bounds check the fast path
        used to carry went with the array: every caller derives `m` from a
        depth it has already ranged, and `k_beat_rewind_slow` keeps its own. */
-    if (__builtin_expect(!(k_buf_dirty | m->reg_any)
-                         && k_blocks == m->block, 1)) {
-        /* Nothing was allocated since the mark: the same block and the same
-           pointer mean the same room left, so the two stores below would
-           write back what is already there, and no string can lie above a
-           mark nothing was allocated past, so the cursor has nothing to
-           forget. A loop that only pushes into a list it owns takes this
-           exit every iteration; escapebench's 1.55 million did. */
-        if (k_arena == m->ptr) return;
+    if (__builtin_expect(!(k_buf_dirty | m->reg_any), 1)) {
+        /* Nothing was allocated since the mark: the same pointer means the
+           same room left, so the two stores below would write back what is
+           already there, and no string can lie above a mark nothing was
+           allocated past, so the cursor has nothing to forget. A loop that
+           only pushes into a list it owns takes this exit every iteration;
+           escapebench's 1.55 million did. The pointer is asked before the
+           block because it answers for both: blocks never overlap, so a
+           pointer equal to the mark's lies in the mark's block, and a loop
+           that allocated nothing no longer loads the chain's head to be
+           told so. */
+        if (__builtin_expect(k_arena == m->ptr, 1)) return;
+    }
+    if (__builtin_expect(!(k_buf_dirty | m->reg_any) && k_blocks == m->block, 1)) {
         /* The cursor names a string by its header's address, and the rewind
            hands back every address from the mark up. A string under this
            mark is not handed back, so a scan over a string that arrived from
@@ -1122,36 +1137,8 @@ static inline void k_beat_rewind(KMark* m) {
 }
 
 void k_carry_clear(int depth);
+void k_beat_push_deep(void);
 
-/* A mark whose pointer and remaining count no longer meet the end of its block
-   hands out memory past that end, and the damage surfaces later in an
-   unrelated allocation — as a glibc abort on linux, and as nothing at all on
-   macOS. The check used to sit in the rewind, where its comment called it one
-   comparison; on x86-64 it is eight instructions, and a beat loop pays them
-   once an iteration. It reads only the mark's own two words against its own
-   block, and a mark is written here and never again, so asking at the rewind
-   asks a question already answered: the same bad marks are caught, once per
-   loop entry instead of once per iteration, and a mark broken before the push
-   is now reported at the push. */
-void k_beat_push(void) {
-    if (k_beat_depth < K_BEAT_MAX) {
-        KMark* m = &k_beat_stack[k_beat_depth];
-        m->block = k_blocks;
-        m->ptr = k_arena;
-        m->left = k_arena_left;
-        m->bytes = k_live_block_bytes;
-        if (k_blocks && m->ptr + m->left != (char*)(k_blocks + 1) + k_blocks->cap) {
-            k_die("a beat mark and the arena disagree about the room that is left");
-        }
-        k_carry_clear(k_beat_depth);
-        /* In range by the test above, so the new top is the mark just written
-           and the general setter's range test would be dead code. */
-        k_beat_depth++;
-        k_beat_top = m;
-        return;
-    }
-    k_beat_set_depth(k_beat_depth + 1);
-}
 
 /* Inlined into every loop that rewinds, through LTO. It was a call before,
    because the loops that make it most -- the run program's tally is one --
@@ -1205,7 +1192,53 @@ typedef struct {
     KCarryBuf from; KCarryBuf to; int used_flag;
     const char* at_arena; const void* at_blocks;
 } KCarry;
-static KCarry k_carries[K_BEAT_MAX];
+KCarry k_carries[K_BEAT_MAX];
+
+/* A beat entered past the stack's last mark keeps count and nothing else. */
+void k_beat_push_deep(void) {
+    k_beat_set_depth(k_beat_depth + 1);
+}
+
+/* A mark whose pointer and remaining count no longer meet the end of its block
+   hands out memory past that end, and the damage surfaces later in an
+   unrelated allocation — as a glibc abort on linux, and as nothing at all on
+   macOS. The check used to sit in the rewind, where its comment called it one
+   comparison; on x86-64 it is eight instructions, and a beat loop pays them
+   once an iteration. It reads only the mark's own two words against its own
+   block, and a mark is written here and never again, so asking at the rewind
+   asks a question already answered: the same bad marks are caught, once per
+   loop entry instead of once per iteration, and a mark broken before the push
+   is now reported at the push.
+
+   K_HOT_ELSEWHERE: a release build defines this in the hot unit, beside
+   k_beat_iter, so the encoder's loops take their mark without a call. The
+   over-deep case stays here as a call of its own. */
+#ifndef K_HOT_ELSEWHERE
+__attribute__((always_inline)) void k_beat_push(void) {
+    if (k_beat_depth < K_BEAT_MAX) {
+        KMark* m = &k_beat_stack[k_beat_depth];
+        m->block = k_blocks;
+        m->ptr = k_arena;
+        m->left = k_arena_left;
+        m->bytes = k_live_block_bytes;
+        if (k_blocks && m->ptr + m->left != (char*)(k_blocks + 1) + k_blocks->cap) {
+            k_die("a beat mark and the arena disagree about the room that is left");
+        }
+        k_carries[k_beat_depth].used_flag = 0;
+        k_carries[k_beat_depth].from.used = 0;
+        k_carries[k_beat_depth].to.used = 0;
+        /* In range by the test above, so the new top is the mark just written
+           and the general setter's range test would be dead code. */
+        k_beat_depth++;
+        k_beat_top = m;
+        return;
+    }
+    k_beat_push_deep();
+}
+#else
+void k_beat_push(void);
+#endif
+
 static KValue k_carry_slots[K_CARRY_MAX];
 /* Slots the compiler proved hold a string builder this cycle owns. The copy
    below strips a positive cap on purpose — the copy owns no room — so an
@@ -2935,6 +2968,30 @@ static inline __attribute__((always_inline)) KStr* k_str_alloc(long long len) {
     s->data = (char*)(s + 1);
     s->cap = 0;
     return s;
+}
+
+/* An int interpolated on its own, `"{i}"`, is the common case: the run
+   program makes 200,000 of them. Through k_render it went into a stack buffer
+   by way of the switch every value takes, and k_str_n then copied the digits
+   into a fresh string, about 109 instructions an int. The length is known
+   before the first digit, so the string is allocated at that length and the
+   digits are written into it where they will stay. */
+KValue k_str_n(const char* data, long long len);
+KValue k_b_render_value(KValue v) {
+    if (v.tag == K_INT) {
+        long long x = v.payload;
+        /* One digit is a one-byte string, which k_str_n answers from the
+           ascii cache without allocating; so does this. */
+        if ((unsigned long long)x < 10) {
+            char c = (char)('0' + x);
+            return k_str_n(&c, 1);
+        }
+        uint64_t u = x < 0 ? (uint64_t)(-(x + 1)) + 1 : (uint64_t)x;
+        KStr* s = k_str_alloc((long long)ryu_declen(u) + (x < 0));
+        k_itoa(s->data, x);
+        KValue out; out.tag = K_STR; out.payload = k_ptr(s); return out;
+    }
+    return k_render(v, 0);
 }
 
 /* A slice of a long string shares the string's bytes: a header whose `data`
@@ -6581,6 +6638,35 @@ static __attribute__((noinline, cold, preserve_most)) KValue* k_buf_perm(long lo
     return (KValue*)(b + 1);
 }
 
+/* An accumulator's buffer that has already left the arena, grown again: one
+   realloc in place of k_buf_perm, a copy and k_buf_release, the step the byte
+   builder's k_bytes_buf_regrow takes. The escape shape of the run program
+   grows each of its 3,872 lists five times, and those grows cost 658
+   instructions apiece. The old and new buffers are never both held, so the
+   permanent peak counts the one. Counted as the malloc and the free it
+   replaces, so the counters keep their meaning.
+
+   A map's pairs could take the same step and do not. No program the beat
+   analysis brackets threads a map through a beat, so that arm would have no
+   golden to hold it. */
+static __attribute__((noinline, cold, preserve_most)) KBuf* k_buf_perm_regrow(KBuf* ob,
+                                                                             long long cap) {
+    long long was = (long long)(sizeof(KBuf) + sizeof(KValue) * (size_t)(-ob->cap));
+    long long now = (long long)(sizeof(KBuf) + sizeof(KValue) * (size_t)cap);
+    KBuf* b = realloc(ob, (size_t)now);
+    if (!b) { fputs("out of memory\n", stderr); exit(1); }
+    k_perm_live += now - was;
+    if (k_perm_live > k_perm_peak) k_perm_peak = k_perm_live;
+    if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) {
+        if (K_COUNTING) k_stat_allocs++;
+        k_stat_alloc_bytes += now;
+        if (K_COUNTING) k_stat_bytes_malloc++;
+        if (K_COUNTING) k_stat_bytes_freed++;
+    }
+    b->cap = -cap;
+    return b;
+}
+
 /* Does this header predate the beat it is being appended in? Then it is the
    loop's accumulator, not one of its transients. */
 static inline int k_outlives_beat(const void* p) {
@@ -6681,6 +6767,39 @@ static KValue k_mklist(long long n, KValue* items) {
 
 KValue k_list_lit(long long n, KValue* items) {
     return k_mklist(n, items);
+}
+
+/* The empty literals, which the emitter calls in place of k_list_lit and
+   k_map_lit when there is nothing to copy. The decoder opens 272,349 arrays
+   and 273,339 objects a run on runbench, and through the general path each
+   asked for its size class at run time, took its buffer and its header in
+   two bumps, and computed a copy of nothing. Here the class is a constant,
+   and a buffer the free list does not have comes out of the same bump as the
+   header, header first. A buffer outgrown later goes to the free list at the
+   capacity its own header records, which is the buffer's extent and nothing
+   more. */
+KValue k_list_empty(void) {
+    int c = k_buf_class(4);
+    KBuf* b = k_buf_free[c];
+    KList* l;
+    if (b) {
+        k_buf_free[c] = (KBuf*)(intptr_t)b->used;
+        if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) k_stat_buf_reuse++;
+        l = k_alloc(sizeof(KList));
+    } else {
+        size_t buf_bytes = (sizeof(KBuf) + sizeof(KValue) * 4 + 15) & ~(size_t)15;
+        if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0))
+            k_stat_sh_buf += (long long)buf_bytes;
+        size_t head_bytes = ((sizeof(KList) + 15) & ~(size_t)15);
+        unsigned char* whole = k_alloc(head_bytes + buf_bytes);
+        l = (KList*)whole;
+        b = (KBuf*)(whole + head_bytes);
+        b->cap = 4;
+    }
+    b->used = 0;
+    l->len = 0;
+    l->items = (KValue*)(b + 1);
+    KValue v; v.tag = K_LIST; v.payload = k_ptr(l); return v;
 }
 
 KValue k_closure(KValue (K_CLOSCC *fn)(void*, KValue), long long arity, long long ncaps, KValue* caps) {
@@ -7103,6 +7222,33 @@ KValue k_map_lit(long long n, KValue* flat_pairs) {
     KValue mv; mv.tag = K_MAP; mv.payload = k_ptr(m); return mv;
 }
 
+/* `{}`: k_list_empty says why this is not k_map_lit(0). */
+KValue k_map_empty(void) {
+    int c = k_buf_class(8);
+    KBuf* b = k_buf_free[c];
+    KMap* m;
+    if (b) {
+        k_buf_free[c] = (KBuf*)(intptr_t)b->used;
+        if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) k_stat_buf_reuse++;
+        m = k_alloc(sizeof(KMap));
+    } else {
+        size_t buf_bytes = (sizeof(KBuf) + sizeof(KValue) * 8 + 15) & ~(size_t)15;
+        if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0))
+            k_stat_sh_buf += (long long)buf_bytes;
+        size_t head_bytes = ((sizeof(KMap) + 15) & ~(size_t)15);
+        unsigned char* whole = k_alloc(head_bytes + buf_bytes);
+        m = (KMap*)whole;
+        b = (KBuf*)(whole + head_bytes);
+        b->cap = 8;
+    }
+    b->used = 0;
+    m->pairs = (KValue*)(b + 1);
+    m->len = 0;
+    m->sorted = NULL;
+    m->sorted_len = 0;
+    KValue mv; mv.tag = K_MAP; mv.payload = k_ptr(m); return mv;
+}
+
 /* Only an int or a string keys a map, which is what the interpreter has
    always said. Native used to take anything, so a float made a key that
    nothing could look up by equality — `1 == 1.0` is false — while sorting
@@ -7322,13 +7468,12 @@ static __attribute__((noinline, cold, preserve_most)) KValue k_rec_cold(long lon
     return k_rec(t, n, f);
 }
 
-KValue k_b_entries(KValue mv) {
+K_DOORCC KValue k_b_entries(KValue mv) {
     if (!k_not_failure(mv)) return mv;
     if (mv.tag != K_MAP) k_die("entries takes a map");
     KMap* m = k_as_map(mv);
     long long n;
     KValue* s = k_map_sorted(m, &n);
-    KValue* items = k_buf(n ? n : 1);
     /* One arena block for all n records rather than one bump apiece. They were
        already landing next to each other -- k_alloc only bumps a pointer -- so
        this changes where the arithmetic happens and not where the bytes go.
@@ -7336,9 +7481,38 @@ KValue k_b_entries(KValue mv) {
        two bumps in every three were bookkeeping for a block the one before it
        had already reserved. The pair goes on the stack either way: k_rec and
        the write below both copy into the storage that follows the header and
-       keep no reference to the arguments. */
+       keep no reference to the arguments.
+
+       The item buffer and the list header join the same block, after the
+       records, unless the free list holds a buffer of exactly this size. Each
+       is a bump the block could have made, and the run program calls this
+       248,490 times for three pairs apiece. A buffer outgrown later is handed
+       to the free list at its own capacity, which the header records, so the
+       records behind it are never handed out with it. */
+    long long cap = n ? n : 1;
     size_t slot = (sizeof(KRec) + sizeof(KValue) * 2 + 15) & ~(size_t)15;
-    unsigned char* block = n > 0 ? (unsigned char*)k_alloc(slot * (size_t)n) : NULL;
+    size_t records = slot * (size_t)n;
+    size_t buf_bytes = (sizeof(KBuf) + sizeof(KValue) * (size_t)cap + 15) & ~(size_t)15;
+    size_t list_bytes = (sizeof(KList) + 15) & ~(size_t)15;
+    int c = k_buf_class(cap);
+    KValue* items;
+    unsigned char* block;
+    KList* l;
+    if (c >= 0 && k_buf_free[c]) {
+        items = k_buf(cap);
+        block = (unsigned char*)k_alloc(records + list_bytes);
+        l = (KList*)(block + records);
+    } else {
+        if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0))
+            k_stat_sh_buf += (long long)buf_bytes;
+        unsigned char* whole = (unsigned char*)k_alloc(records + buf_bytes + list_bytes);
+        block = whole;
+        KBuf* b = (KBuf*)(whole + records);
+        b->cap = cap;
+        b->used = 0;
+        items = (KValue*)(b + 1);
+        l = (KList*)(whole + records + buf_bytes);
+    }
     for (long long i = 0; i < n; i++) {
         KValue key = s[i * 2];
         KValue val = s[i * 2 + 1];
@@ -7364,7 +7538,10 @@ KValue k_b_entries(KValue mv) {
         rv.payload = k_ptr(r);
         items[i] = rv;
     }
-    return k_list_own(items, n);
+    l->len = n;
+    l->items = items;
+    k_buf_of(items)->used = n;
+    KValue out; out.tag = K_LIST; out.payload = k_ptr(l); return out;
 }
 
 /* utf-8 helpers: kanso strings are opaque utf-8, positions are codepoints */
@@ -7624,7 +7801,7 @@ static KValue k_utf8_finish(KValue bv, const char* origin);
    exactly as they did. */
 KValue k_b_slice(KValue container, KValue fromv, KValue tov);
 static KValue k_b_slice_walk(KStr* s, long long from, long long to);
-KValue k_b_utf8(KValue lv, const char* origin);
+K_DOORCC KValue k_b_utf8(KValue lv, const char* origin);
 
 /* The bytes arm of `utf8` over a slice, with the KValue convention taken off
    its inputs. Three KValues and a pointer want seven of the six integer
@@ -7673,7 +7850,7 @@ KValue k_b_utf8_slice(KValue container, KValue fromv, KValue tov, const char* or
     return k_b_utf8(sliced, origin);
 }
 
-KValue k_b_utf8(KValue lv, const char* origin) {
+K_DOORCC KValue k_b_utf8(KValue lv, const char* origin) {
     if (!k_not_failure(lv)) return lv;
     if (lv.tag == K_BYTES) {
         return k_utf8_finish(lv, origin);
@@ -8264,14 +8441,37 @@ static __attribute__((noinline, cold, preserve_most)) void k_buf_release(KBuf* o
 }
 
 static KValue k_b_push_grow(KValue lv, KList* l, KValue item, int mutate) {
+    /* The smallest power of two that holds the new element, doubled again
+       past sixteen, so the steps run 4, 8, 16, 64, 256 and a long
+       accumulator still grows in few of them. A list of four that took a
+       fifth element went straight to sixteen slots, and most lists the JSON
+       decoder builds stop at five or six: 1,463 of them on one decode of
+       bench/large.json, each 272 bytes where 144 hold it. The run program's
+       arena peak fell 4,194,304 -> 3,670,032 bytes for +0.1925% of its
+       instructions. Holding the doubling back only to eight gave the same
+       peak but moved every longer list onto 8, 32, 128, which overshoots a
+       thousand elements by twice as much and doubled the book's counters
+       sample's permanent peak. */
     long long cap = 4;
     while (cap < (l->len + 1)) cap <<= 1;
-    cap <<= 1;
+    if (cap > 16) cap <<= 1;
     /* An accumulator's storage goes outside the arena, so the loop's rewind
        reclaims the iteration's garbage without reaching what the iteration
        was building. A transient's stays in the arena, where the rewind is
        exactly what should free it. */
     int perm = mutate && k_outlives_beat(l);
+    /* A buffer already out of the arena is grown where it is. The field it
+       sits in was registered when it first left, and `l->items` is the same
+       field after the realloc, so the registration still names it. */
+    if (perm && k_buf_of(l->items)->cap < 0) {
+        KBuf* nb = k_buf_perm_regrow(k_buf_of(l->items), cap);
+        KValue* grown = (KValue*)(nb + 1);
+        grown[l->len] = item;
+        nb->used = l->len + 1;
+        l->items = grown;
+        l->len++;
+        return lv;
+    }
     KValue* items = perm ? k_buf_perm(cap) : k_buf(cap);
     /* A list outgrows its literal's one slot far more often than it outgrows
        anything larger, and glibc's memcpy costs twenty-five instructions to
@@ -8682,8 +8882,9 @@ static __attribute__((noinline)) KValue k_b_append_grow(KValue acc, KBytes* a,
 
 static __attribute__((noinline)) KValue k_b_append_wide(KValue acc, KBytes* a,
                                                         KValue x, int mutate);
-static inline KValue k_b_append_range(KValue acc, KBytes* a, const unsigned char* src,
-                                      long long n, int mutate);
+static inline __attribute__((always_inline)) KValue k_b_append_range(KValue acc, KBytes* a,
+                                                                     const unsigned char* src,
+                                                                     long long n, int mutate);
 
 /* A comma, a colon, a brace: three quarters of the appends the encoder makes
    are one byte into spare capacity, and this is the whole of that case.
@@ -8751,8 +8952,24 @@ static __attribute__((noinline)) KValue k_b_append_wide(KValue acc, KBytes* a,
 /* The copy itself, once the source is a pointer and a length. `append_wide`
    reaches it after unpacking a value; `append_slice` reaches it with a range
    of a bytes value it never boxed. */
-static inline KValue k_b_append_range(KValue acc, KBytes* a, const unsigned char* src,
-                                      long long n, int mutate) {
+static KValue k_b_append_fit(KValue acc, KBytes* a, const unsigned char* src,
+                             long long n, int mutate);
+
+/* A bytes value with no buffer of its own -- the empty accumulator an
+   encoder starts from -- always grows, and asking that first, inline at each
+   caller, keeps the grow off `k_b_append_fit`'s frame. With the two in one
+   function, every such append pushed five registers, tested the capacity and
+   popped them again on its way to the grow: 142,731 of them a run, fourteen
+   instructions apiece, on the run program. */
+static inline __attribute__((always_inline)) KValue k_b_append_range(KValue acc, KBytes* a,
+                                                                     const unsigned char* src,
+                                                                     long long n, int mutate) {
+    if (!(a->cap & ~1LL)) return k_b_append_grow(acc, a, src, n, mutate);
+    return k_b_append_fit(acc, a, src, n, mutate);
+}
+
+static __attribute__((noinline)) KValue k_b_append_fit(KValue acc, KBytes* a, const unsigned char* src,
+                                                      long long n, int mutate) {
     long long acap = a->cap & ~1LL;
     if (acap) {
         KBuf* buf = ((KBuf*)a->data) - 1;
@@ -8944,7 +9161,7 @@ KValue k_b_append_slice(KValue acc, KValue cs, KValue fromv, KValue tov,
    pointer and the length, so nothing is allocated for them. Any other
    value takes the road it always took, through k_render, so the two
    spellings cannot disagree on a byte. */
-KValue k_b_append_rendered(KValue acc, KValue v, long long mutate) {
+K_DOORCC KValue k_b_append_rendered(KValue acc, KValue v, long long mutate) {
     if (!k_not_failure(acc)) return acc;
     if (v.tag != K_INT && v.tag != K_FLOAT) {
         return k_b_append_into(acc, k_render(v, 0), (int)mutate);
@@ -9454,7 +9671,7 @@ KValue k_b_to_int_slice(KValue cs, KValue fromv, KValue tov, const char* origin)
     return k_b_to_int(k_b_slice(cs, fromv, tov), origin);
 }
 
-KValue k_b_to_float_slice(KValue cs, KValue fromv, KValue tov, const char* origin) {
+K_DOORCC KValue k_b_to_float_slice(KValue cs, KValue fromv, KValue tov, const char* origin) {
     if (cs.tag == K_BYTES && fromv.tag == K_INT && tov.tag == K_INT) {
         KBytes* b = k_as_bytes(cs);
         long long from = fromv.payload, to = tov.payload;

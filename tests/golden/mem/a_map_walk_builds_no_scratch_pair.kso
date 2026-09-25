@@ -9,11 +9,11 @@
 # takes one block for all of them and carves it.
 #
 # A thousand walks of an eight-key map is eight thousand records in one
-# thousand blocks, and `allocs` below counts the blocks. Restore the per-record
-# bump and it reads 10010; restore the scratch pair on top of that and it reads
-# 18010. `alloc_bytes` and `sh_rec` are the same in all three, which is the
-# point: the records occupy the same arena at the same stride either way, and
-# only the arithmetic that reserved them moved.
+# thousand blocks, and `allocs` below counts the blocks. The item buffer and
+# the list header joined the records' block on 2026-09-25, which took it from
+# 3004 to 1004. `alloc_bytes` and `sh_rec` held through each of these, which is
+# the point: the records occupy the same arena at the same stride either way,
+# and only the arithmetic that reserved them moved.
 #
 # The encode benchmarks see this shape three million times a run, and a counter
 # that moves by one on a one-key map cannot tell anyone that.

@@ -1211,11 +1211,11 @@ render_words = row
   benches
 
 map_lit_copy = row
-  "an empty map literal's no pairs copied through a call"
+  "an empty map literal built as any other"
   false
   "sh scripts/gates/instructions.sh"
   "cost goldens (deterministic ratchet, no clocks)"
-  (breaking "an_empty_map_literal_copied_through_a_call")
+  (breaking "an_empty_map_literal_built_as_any_other")
   benches
 
 buf_class_loop = row
@@ -2043,7 +2043,219 @@ known_tag = row
 
 rows_b1kt = text/concat rows_b1nm [known_tag]
 
-rows_b = text/concat rows_b1kt [compile_mem compile_mem_host]
+# A function's checked integer ops share one overflow trap. The mutation gives
+# every op its own, and the spec's `spread` holds six.
+one_trap = row
+  "an overflow trap written at every op"
+  true
+  "cargo test --release --test an_overflow_trap_is_written_once_a_function"
+  "specs (unit, golden, differential)"
+  (breaking "an_overflow_trap_written_at_every_op")
+  release
+
+rows_b1ot = text/concat rows_b1kt [one_trap]
+
+# A nine-word arm keeps its tail calls on x86-64. The mutation narrows at
+# eight, and a release build decoding 300,000 keys overflows its stack.
+nine_words = row
+  "a nine-word arm narrowed on x86"
+  true
+  "cargo test --release --test a_big_object_decodes_in_a_release_build"
+  "specs (unit, golden, differential)"
+  (breaking "a_nine_word_arm_narrowed_on_x86")
+  release
+
+rows_b1nw = text/concat rows_b1ot [nine_words]
+
+# A tail cycle takes one flat signature under preserve_nonecc in a release
+# build on x86-64. The first mutation skips the rewrite, which only the work
+# vein can see; the second rebuilds a two-word parameter with its words
+# reversed, and a cycle four million hops deep stops on the wrong overload.
+flat_tails = row
+  "a tail cycle kept on tailcc"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_tail_cycle_kept_on_tailcc")
+  benchmarks
+
+flat_order = row
+  "a flat parameter put back reversed"
+  true
+  "cargo test --release --test a_tail_cycle_crosses_arities_in_a_release_build"
+  "specs (unit, golden, differential)"
+  (breaking "a_flat_parameter_put_back_reversed")
+  release
+
+# Every function the program calls only directly takes preserve_nonecc on
+# the same builds. The mutation keeps them all on the C convention.
+plain_calls = row
+  "a direct call kept on the C convention"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_direct_call_kept_on_c")
+  benchmarks
+
+# Four runtime doors take preserve_nonecc on both sides. The mutation takes
+# one off the emitter's list, and the spec comparing the lists goes red.
+doors = row
+  "a door called on the other convention"
+  true
+  "cargo test --release --test the_doors_the_program_calls_agree"
+  "specs (unit, golden, differential)"
+  (breaking "a_door_called_on_the_other_convention")
+  release
+
+rows_b1ft = text/concat rows_b1nw [flat_tails flat_order plain_calls doors]
+
+# An append onto a bufferless bytes value tests for the grow inline, before
+# the fitting path's frame. The mutation drops the test.
+grow_first = row
+  "a growing append paying the fitting path's frame"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_growing_append_pays_the_fit_s_frame")
+  benchmarks
+
+rows_b1gf = text/concat rows_b1ft [grow_first]
+
+# A parameter that is a name binds its argument by moving it once an arm has
+# won. The mutation clones it at every candidate again.
+moved_binds = row
+  "a bound name cloned for every candidate"
+  true
+  interp_gate
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_bound_name_cloned_for_every_candidate")
+  release
+
+rows_b1mb = text/concat rows_b1gf [moved_binds]
+
+# A list growing out of four slots takes eight before sixteen. The mutation
+# doubles every time again, and the fixture's buffers double with it.
+fifth_push = row
+  "a fifth push taking sixteen slots"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_fifth_push_takes_sixteen")
+  release
+
+rows_b1fp = text/concat rows_b1mb [fifth_push]
+
+# An accumulator out of the arena grows by realloc. The mutation mallocs,
+# copies and frees again, and the fixture's permanent peak holds two buffers.
+perm_regrow = row
+  "an accumulator grown by malloc and free"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "an_accumulator_grown_by_malloc_and_free")
+  release
+
+rows_b1rg = text/concat rows_b1fp [perm_regrow]
+
+# A call through a function reference finds its callee by the reference's
+# address. The mutation hashes the name again.
+callee_by_ref = row
+  "a call that hashes its callee's name"
+  true
+  interp_gate
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_call_hashes_its_callee_s_name")
+  release
+
+rows_b1cr = text/concat rows_b1rg [callee_by_ref]
+
+# A conjunction of byte compares is one range test and plain reads. One
+# mutation reads each byte one late and the micro fixture disagrees with the
+# interpreter; the other turns the fusion off and the work vein sees it.
+byte_run_late = row
+  "a byte run read one byte late"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_byte_run_read_one_byte_late")
+  release
+
+byte_run_apart = row
+  "a byte run read one byte at a time"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_byte_run_read_one_byte_at_a_time")
+  benchmarks
+
+rows_b1br = text/concat rows_b1cr [byte_run_late byte_run_apart]
+
+# A rewind whose arena pointer stands at the mark returns before asking for
+# the block. The mutation asks for the block first again.
+unmoved_arena = row
+  "an unmoved arena asked for its block"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_unmoved_arena_asked_for_its_block")
+  benchmarks
+
+rows_b1ua = text/concat rows_b1br [unmoved_arena]
+
+# Two byte appends in a row are one call that asks for room once. One
+# mutation stores the bytes back to front and the micro fixture disagrees with
+# the interpreter; the other skips the merge and the work vein sees it.
+byte_pair_swapped = row
+  "a byte pair written back to front"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_byte_pair_written_back_to_front")
+  release
+
+byte_pair_apart = row
+  "a byte pair appended one at a time"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_byte_pair_appended_one_at_a_time")
+  benchmarks
+
+rows_b1bp = text/concat rows_b1ua [byte_pair_swapped byte_pair_apart]
+
+# A proven list is measured and indexed in place. One mutation reads each
+# slot one late and the micro fixture disagrees with the interpreter; the
+# other two send the index and the length back through the twin, and the
+# work vein sees each.
+list_read_late = row
+  "a proven list read one slot late"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_proven_list_read_one_slot_late")
+  release
+
+list_index_twin = row
+  "a proven list indexed through the twin"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_proven_list_indexed_through_the_twin")
+  benchmarks
+
+list_length_twin = row
+  "a proven list measured through the twin"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_proven_list_measured_through_the_twin")
+  benchmarks
+
+rows_b1pr = text/concat rows_b1bp [list_read_late list_index_twin]
+
+rows_b1pl = text/concat rows_b1pr [list_length_twin]
+
+rows_b = text/concat rows_b1pl [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 
