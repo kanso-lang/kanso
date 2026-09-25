@@ -14246,6 +14246,16 @@ counters moved by one or a few with the layout: `run_beat_iters` 2,709,073,
 `run_push_mut_fast` 1,097,989, `run_push_mut_slow` 1,638,524, `run_str_scans`
 162 and `run_str_scan_bytes` 4,092,730. `work_jsonbench` fell 1,414,910.
 
+Every benchmark's machine code grew by the same 2,896 bytes, which is the
+runtime's own change and nothing the emitter wrote: `jsonbench` text=234536,
+`encodebench` text=243832, `oneshot` text=248728, `basket` text=230920,
+`widebench` text=251512, `deepbench` text=211320, `escapebench`
+text=206408, `pendbench` text=220248, `indexbench` text=205960, `scanbench`
+text=309464, `digestbench` text=228504, `readbench` text=206456,
+`livebench` text=249736 and `runbench` text=409672. The objective does not
+weigh machine code size. Summed, the vein's `text` row reads 3,416,752 ->
+3,457,296.
+
 ## 2026-09-25 — a regexp scan asks first for the literal every match holds
 
 The run program's split phase and scanbench search a subject built from
