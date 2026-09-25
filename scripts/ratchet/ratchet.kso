@@ -2331,7 +2331,19 @@ literal_asked = row
 
 rows_b1rl = text/concat rows_b1if [literal_run literal_asked]
 
-rows_b = text/concat rows_b1rl [compile_mem compile_mem_host]
+# A split whose scan finds nothing ends, rather than scanning again from the
+# next position; the mem fixture's scan count goes quadratic without it.
+split_stops = row
+  "a split that scans again after finding nothing"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_split_that_rescans_after_finding_nothing")
+  release
+
+rows_b1ss = text/concat rows_b1rl [split_stops]
+
+rows_b = text/concat rows_b1ss [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 

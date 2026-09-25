@@ -14313,3 +14313,30 @@ CI's reading of the tree merged with main after kanso#1637. The two compile
 rows that compile lib/regexp take both changes: `entry_instructions`
 84,619,753 and `library_instructions` 85,181,699, each within 2,700 of the
 two deltas summed. Every other row CI measured matched the goldens.
+
+## 2026-09-25 — a split whose scan finds nothing ends there
+
+`regexp/split` scanned for its separator from where the last piece ended, and
+when the scan found nothing it scanned again from the next position, as it
+does after an empty match. A scan that finds nothing has already looked at
+every start after it, so each of those scans found nothing too, and a
+separator that stopped occurring early made the split quadratic in what came
+after it. It now takes the rest of the subject as the last piece. An empty
+match is stepped past from the position it stood at rather than from the
+scan's start, which is the same continuation: the scan found the leftmost
+match, so no start between the two holds another.
+
+tests/golden/mem/a_split_stops_where_the_separator_does splits "a, b, "
+followed by 300 characters on ", ". It reads `beat_iters=303` and 682
+allocations; scanning again after finding nothing read 45,453 and 91,582.
+That is the ratchet row `split_stops`. tests/golden/micro/
+a_split_ends_where_its_separator_does pins the pieces for a separator that
+never matches, one that stops, one at the end, and three patterns that match
+the empty string, and read the same before and after the change on both
+engines. No benchmark splits, so no work row moves.
+
+CI's reading moved the two compile rows that compile lib/regexp:
+`entry_instructions` 84,496,376 -> 84,512,441 (+16,065) and
+`library_instructions` 85,059,188 -> 85,101,407 (+42,219). The split's new
+arm and its guard are code both routes compile. The objective weighs neither
+row, and every work row CI measured matched main.
