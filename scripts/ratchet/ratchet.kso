@@ -2369,6 +2369,19 @@ int_word = row
 
 rows_b1iw = text/concat rows_b1mg [int_word]
 
+# A trap unwinds nothing, so a program that runs out of stack in the page can
+# die holding one of wasm_rt's cells. Asking that cell for its borrow again at
+# the next `load` panics, and the program after the fall answers a trap.
+dead_borrow = row
+  "a program that dies holding a cell leaving it held"
+  true
+  "cargo test --release --test wasm_engine a_program_that_runs_out_of_stack"
+  "specs (unit, golden, differential)"
+  (breaking "a_dead_program_keeps_its_borrow")
+  with_blob
+
+rows_b1db = text/concat rows_b1iw [dead_borrow]
+
 # A walk by index steps its cursor one character on, and a join of counted
 # pieces writes the sum. Closing the step leaves every character right and
 # `seek_resumes` where it was, so `seek_steps` is what goes red; dropping the
@@ -2398,7 +2411,7 @@ join_sep = row
   (breaking "a_join_count_that_drops_its_separator")
   release
 
-rows_b1ix = text/concat rows_b1iw [seek_step join_seed join_sep]
+rows_b1ix = text/concat rows_b1db [seek_step join_seed join_sep]
 
 # Under clang 19 the emitter writes the preserve_none convention in front of
 # every declare of and call to a door, in one pass over the module. Matching a

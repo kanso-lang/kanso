@@ -14774,3 +14774,36 @@ landed on their projections: `compile_peak_bytes` 708,672 and
 The three front-end rows carry the argument stack's thread-local, which the
 argument-vector entry measured at 0.58% of a check on this container, and the
 emit row carries the literal word's helper, which every module is emitted with.
+
+## 2026-09-25 — a program that runs out of stack in the page lets go of its cells
+
+The small-int change turned `the_wasm_engine_agrees_with_the_golden_corpus`
+red on the specs job and on the other host, with `kanso_compile_wasm: wasm
+unreachable instruction executed` on the program after `deep_recursion.kso`.
+Skipping the recursion let the rest of the corpus pass, and the map-only
+commit before the ints passed whole.
+
+A panic hook that wrote into the output buffer named the panic:
+`src/wasm_rt.rs:82`, the `borrow_mut` of REG in `load`. The recursion runs
+out of stack in wasmi, and the trap lands wherever the deepest call of the
+leaf work happens to be. With the ints it lands inside `push`, in the
+growth of REG's vector, while the RefCell is borrowed. A trap unwinds
+nothing, so the flag stayed set for the life of the instance and the next
+program's `load` panicked on a cell no live code held. Where the trap lands
+is a property of the call depths of whatever the leaf work calls, so any
+change to the interpreter's arithmetic could move it into a borrow. The ints
+did. The bug was already there.
+
+The cells wasm_rt keeps are now `Held`: a RefCell inside an `UnsafeCell`,
+reached through `Deref` so every existing borrow site reads as before. At an
+entry point, `renew` takes the borrow when it can, and when a dead program
+still holds it, it writes a fresh RefCell over the cell. The old value is
+leaked, since a trap may have left it half-written. Writing a RefCell
+through a shared reference is refused by the `invalid_reference_casting`
+lint, which is why the outer `UnsafeCell` is there. `load`, `exec_main`'s
+transcript clear and `take_error` all renew.
+
+`a_program_that_runs_out_of_stack_leaves_the_engine_usable` runs the
+recursion and then `print "{1 + 2}"` on one instance. It went red with
+`renew` asking for the borrow, and green with the fix. The ratchet row
+`dead_borrow` makes that mutation.
