@@ -589,7 +589,6 @@
 #
 # CI measured the typed map key at 1ab7904e. interp_instructions 595,472,297
 # -> 595,493,632, a RISE of 21,335 (+0.0036%).
-interp_instructions=595493632
 #
 # Projected for the tail that carries its group, from this container's
 # reading: 13,651,102 below CI's reading of the typed key. interp_instructions
