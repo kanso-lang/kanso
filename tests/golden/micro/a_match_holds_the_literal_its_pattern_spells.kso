@@ -1,0 +1,17 @@
+# Before a subject is scanned, it is asked whether it holds the literal every
+# match must contain: the longest run of plain characters side by side in the
+# pattern's sequence. A subject without it has no match, and the scan is not
+# made. Each line below has a match only if the literal was chosen right. A
+# run that carried across the class in `ab.cd` would ask for "abcd", which
+# "abXcd" does not hold, and the first line would find nothing.
+import "std/regexp"
+
+pub play =
+  print "across:   {regexp/find "ab.cd" "xx abXcd"}"
+  >> print "longest:  {regexp/find "a[0-9]+xyz" "a12xyz"}"
+  >> print "grouped:  {regexp/find "(q+)rst" "qqrst"}"
+  >> print "at end:   {regexp/find_all "[a-z]+zzq" "abcabczzq"}"
+  >> print "absent:   {regexp/find_all "[a-z]+zzq" "abcabcabc"}"
+  >> print "twice:    {regexp/find_all "o+k" "ok, ook"}"
+  >> print "blind:    {regexp/find "(?i)zzq" "a ZZQ"}"
+  >> print "split:    {regexp/split "--" "a--b--c"}"

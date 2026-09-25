@@ -1,0 +1,8 @@
+across:   abXcd
+longest:  a12xyz
+grouped:  qqrst
+at end:   ["abcabczzq"]
+absent:   []
+twice:    ["ok" "ook"]
+blind:    ZZQ
+split:    ["a" "b" "c"]
