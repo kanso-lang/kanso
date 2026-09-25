@@ -3909,7 +3909,6 @@ const DECLARES_CONTEXT_CALLS: &[&str] = &[
     "k_b_bytes",
     "k_b_bytes_fast",
     "k_b_bytes_frame",
-    "k_b_bytes_seed",
     "k_b_find2",
     "k_b_find2_below",
     "k_b_find2_below_fast",
