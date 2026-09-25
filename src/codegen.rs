@@ -3826,6 +3826,7 @@ const DECLARES_CONTEXT_CALLS: &[&str] = &[
     "k_b_append_mut",
     "k_b_append_mut_byte",
     "k_b_append_mut_int",
+    "k_b_append_mut_int2",
     "k_b_append_slice",
     "k_b_append_slice_fast",
     "k_b_at",
