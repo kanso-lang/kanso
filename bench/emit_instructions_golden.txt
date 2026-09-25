@@ -288,4 +288,8 @@
 # binary search, entries in one block, the beat mark inline, empty literals
 # and ints rendered in place. emit_instructions 30,190,261 -> 29,340,940, a
 # FALL of 849,321 (-2.8132%).
-emit_instructions=29340940
+#
+# kanso#1623 at CI's sitting: tail cycles, direct calls and four runtime doors
+# on preserve_none. emit_instructions 29,340,940 -> 29,340,955, a RISE of 15
+# (+0.0001%).
+emit_instructions=29340955

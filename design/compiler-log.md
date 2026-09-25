@@ -13468,3 +13468,29 @@ the three cases that leave a set alone, and were watched red with the
 padding and the address check each removed. Ratchet rows `flat_tails`
 (the rewrite skipped, seen by the work vein) and `flat_order` (the
 parameter reversed, seen by the spec).
+
+---
+
+## 2026-09-25 — CI's rows for kanso#1623
+
+Measured by CI on `a80647e2`. The run program reads 1,623,308,009 ->
+1,535,239,320 (-5.4253%) against main's golden after kanso#1622's rows,
+which is within fifty instructions of what this container measured under
+clang 19. jsonbench reads 1,096,078,477 -> 1,013,835,727 (-7.5034%),
+livebench 2,358,727,588 -> 2,210,369,697 (-6.2897%), oneshot -5.5847%,
+widebench -2.6395%, encodebench -2.0078%, deepbench -1.6857% and scanbench
+-1.6979%. pendbench reads 181,008,423 -> 181,800,105 (+0.4374%) and
+digestbench 5,762,004 -> 5,787,838 (+0.4484%), the rise the first entry
+explains: their calls into a cycle outnumber the hops inside it.
+
+`codegen_instructions_release` reads 715,952,202, 117 below the branch's
+base, and `startup_instructions` 601,506 and `emit_instructions` 29,340,955,
+fifteen above each. None of the three gates takes the convention, since each
+runs under `/usr/bin`'s clang 18, so these are the compiler's own layout. The
+machine-code `text` row, summed over the fourteen, reads 3,448,224 ->
+3,439,344. encodebench's fell 6,368 bytes, runbench's 1,488 and widebench's
+1,296; scanbench's grew 640 and digestbench's 608, and six others moved by
+less than 550 either way.
+
+Welfare reads 87.98 against a floor of 87.69, production 74.49, and the rise
+is banked.

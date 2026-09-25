@@ -302,4 +302,8 @@
 # binary search, entries in one block, the beat mark inline, empty literals
 # and ints rendered in place. codegen_instructions_release 713,520,095 ->
 # 715,952,319, a RISE of 2,432,224 (+0.3409%).
-codegen_instructions_release=715952319
+#
+# kanso#1623 at CI's sitting: tail cycles, direct calls and four runtime doors
+# on preserve_none. codegen_instructions_release 715,952,319 -> 715,952,202, a
+# FALL of 117 (-0.0000%).
+codegen_instructions_release=715952202

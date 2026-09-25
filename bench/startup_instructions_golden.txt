@@ -480,4 +480,8 @@
 # binary search, entries in one block, the beat mark inline, empty literals
 # and ints rendered in place. startup_instructions 601,897 -> 601,491, a FALL
 # of 406 (-0.0675%).
-startup_instructions=601491
+#
+# kanso#1623 at CI's sitting: tail cycles, direct calls and four runtime doors
+# on preserve_none. startup_instructions 601,491 -> 601,506, a RISE of 15
+# (+0.0025%).
+startup_instructions=601506
