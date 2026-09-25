@@ -13542,3 +13542,156 @@ nothing reads it after, which the dispatcher already said.
 The printed output is the same. The row is the only thing that can see this,
 so ratchet row `moved_binds` clones at every candidate again and gates on the
 interpreted run's instructions.
+
+---
+
+## 2026-09-25 — a list that outgrows four slots takes eight, and the run program's peak loses a block
+
+One decode of bench/large.json allocates 1,695,392 bytes for a 188,698-byte
+document, and a histogram of `k_alloc`'s sizes named the largest share:
+1,463 allocations of 272 bytes, 397,936 in all. Those are list buffers of
+sixteen slots. A list starts at four, and `k_b_push_grow` took the smallest
+power of two that held the new element and doubled it again, so the fifth
+push went to sixteen. The document's 2,752 lists average 3.5 elements and
+none of the ones that grow get far past five.
+
+The grow now doubles again only past sixteen: the steps are 4, 8, 16, 64, 256,
+where they were 4, 16, 64, 256. On this container under clang 19 the run
+program's `arena_peak_bytes` reads 4,194,304 -> 3,670,032, one block fewer,
+and `alloc_bytes` 397,171,773 -> 386,879,005, for +0.1925% of its
+instructions on the tree of kanso#1623. A block of the run's peak is worth
+more to the objective than a fifth of a per cent of its instructions, and
+CI's rows will say by how much.
+
+Three other shapes were measured and set aside. Holding the doubling back
+only to eight gave the same peak for +0.1520% of the run program, but it put
+every longer list on 8, 32, 128, 512, which overshoots a thousand elements by
+twice as much: the book's counters sample doubled its permanent peak, and
+pendbench rose 6.27%. Plain doubling from four read the same peak for
++0.8232%. Starting an empty map at two pairs rather than four read the same
+peak for +2.0088%.
+
+A list of nine to sixteen elements now takes one more grow than it did, and
+that is what most of the counters below record: a push that finds its buffer
+full goes to the slow path once more. The mem fixture
+`a_fifth_push_takes_eight_slots` builds 300 lists of five and pins
+`sh_buf=67200`, which read 105,600 on the old grow; ratchet row `fifth_push`
+restores the old doubling. The counters that rose, and where they landed:
+
+    run_beat_iters                                                  2,708,989 -> 2,708,992
+    run_bytes_malloc                                                   16,679 -> 20,551
+    run_evac_allocs                                                    62,993 -> 63,041
+    run_evac_bytes                                                 10,017,088 -> 10,018,720
+    run_push_mut_fast                                               1,098,392 -> 1,097,990
+    run_push_mut_slow                                               1,638,121 -> 1,638,523
+    push_mut_fast                                                   1,325,400 -> 1,325,250
+    push_mut_slow                                                     134,400 -> 134,550
+    encode_alloc_bytes                                            657,702,640 -> 657,770,480
+    encode_push_mut_fast                                               27,535 -> 25,634
+    encode_push_mut_slow                                                3,654 -> 5,555
+    encode_sh_buf                                                  73,267,200 -> 73,335,040
+    oneshot_push_mut_fast                                               8,836 -> 8,835
+    oneshot_push_mut_slow                                                 896 -> 897
+    basket_bytes_malloc                                                    30 -> 32
+    basket_push_mut_fast                                               12,310 -> 12,241
+    basket_push_mut_slow                                              104,190 -> 104,259
+    pend_alloc_bytes                                               45,529,344 -> 45,542,480
+    pend_push_mut_fast                                                799,997 -> 799,796
+    pend_push_mut_slow                                                  1,203 -> 1,404
+    pend_sh_buf                                                    15,826,144 -> 15,839,280
+    escape_alloc_bytes                                             65,760,112 -> 66,192,112
+    escape_bytes_malloc                                                12,000 -> 15,000
+    wide_alloc_bytes                                                5,590,848 -> 5,590,992
+    wide_push_mut_fast                                                 15,994 -> 15,993
+    wide_push_mut_slow                                                      6 -> 7
+    wide_sh_buf                                                       349,616 -> 349,760
+    digest_alloc_bytes                                                671,841 -> 690,561
+    digest_push_mut_fast                                               10,184 -> 10,053
+    digest_push_mut_slow                                                  200 -> 331
+    digest_sh_buf                                                     554,352 -> 573,072
+    live_push_mut_fast                                                  8,836 -> 8,835
+    live_push_mut_slow                                                    896 -> 897
+    a_cap_around_a_count_is_a_range_alloc_bytes                        87,792 -> 87,936
+    a_cap_around_a_count_is_a_range_push_mut_fast                       2,995 -> 2,994
+    a_cap_around_a_count_is_a_range_push_mut_slow                           5 -> 6
+    a_cap_around_a_count_is_a_range_sh_buf                             87,456 -> 87,600
+    a_carried_value_written_into_an_older_node_push_mut_fast           15,596 -> 15,195
+    a_carried_value_written_into_an_older_node_push_mut_slow            1,205 -> 1,606
+    a_class_asks_by_the_byte_alloc_bytes                              468,255 -> 468,399
+    a_class_asks_by_the_byte_push_mut_fast                                599 -> 598
+    a_class_asks_by_the_byte_push_mut_slow                                  4 -> 5
+    a_class_asks_by_the_byte_sh_buf                                   118,432 -> 118,576
+    a_digest_holds_every_block_it_walked_alloc_bytes                   15,953 -> 16,241
+    a_digest_holds_every_block_it_walked_push_mut_fast                    120 -> 117
+    a_digest_holds_every_block_it_walked_push_mut_slow                     24 -> 27
+    a_digest_holds_every_block_it_walked_sh_buf                         9,520 -> 9,808
+    a_loop_invariant_capture_is_copied_every_rewind_alloc_bytes        102,064 -> 102,208
+    a_loop_invariant_capture_is_copied_every_rewind_push_mut_fast            496 -> 495
+    a_loop_invariant_capture_is_copied_every_rewind_push_mut_slow              4 -> 5
+    a_loop_invariant_capture_is_copied_every_rewind_sh_buf             21,904 -> 22,048
+    a_pushed_call_keeps_the_sweep_alloc_bytes                      13,152,080 -> 13,238,480
+    a_pushed_call_keeps_the_sweep_bytes_malloc                          2,400 -> 3,000
+    a_repaired_node_below_the_mark_holds_tenure_alloc_bytes         2,450,128 -> 2,450,272
+    a_repaired_node_below_the_mark_holds_tenure_push_mut_fast          15,596 -> 15,195
+    a_repaired_node_below_the_mark_holds_tenure_push_mut_slow           1,204 -> 1,605
+    a_repaired_node_below_the_mark_holds_tenure_sh_buf                522,848 -> 523,088
+    an_escaped_list_gives_its_buffer_back_alloc_bytes                  73,680 -> 102,480
+    an_escaped_list_gives_its_buffer_back_bytes_malloc                    200 -> 400
+    an_escaped_list_gives_its_buffer_back_perm_peak_bytes                 272 -> 416
+    an_inner_beat_opens_its_tenure_in_the_block_outside_alloc_bytes     14,699,600 -> 14,707,040
+    an_inner_beat_opens_its_tenure_in_the_block_outside_push_mut_fast         77,980 -> 75,975
+    an_inner_beat_opens_its_tenure_in_the_block_outside_push_mut_slow          4,020 -> 6,025
+    an_inner_beat_opens_its_tenure_in_the_block_outside_sh_buf      4,843,184 -> 4,850,624
+    early_exit_alloc_bytes                                             88,064 -> 88,208
+    early_exit_bytes_malloc                                                 5 -> 6
+    fold_push_shape_alloc_bytes                                       175,104 -> 175,392
+    fold_push_shape_bytes_malloc                                            5 -> 6
+    fold_push_shape_push_mut_fast                                       3,995 -> 3,994
+    fold_push_shape_push_mut_slow                                       4,005 -> 4,006
+    fold_push_shape_sh_buf                                             87,536 -> 87,680
+    fused_map_shape_alloc_bytes                                       175,104 -> 175,392
+    fused_map_shape_bytes_malloc                                            5 -> 6
+    fused_map_shape_push_mut_fast                                       3,995 -> 3,994
+    fused_map_shape_push_mut_slow                                       4,005 -> 4,006
+    fused_map_shape_sh_buf                                             87,536 -> 87,680
+    fused_reducer_alloc_bytes                                          22,032 -> 22,176
+    fused_reducer_bytes_malloc                                              4 -> 5
+    fused_select_shape_alloc_bytes                                    175,136 -> 175,424
+    fused_select_shape_bytes_malloc                                         5 -> 6
+    fused_select_shape_push_mut_fast                                    2,995 -> 2,994
+    fused_select_shape_push_mut_slow                                    4,005 -> 4,006
+    fused_select_shape_sh_buf                                          87,536 -> 87,680
+    fused_tally_alloc_bytes                                            42,720 -> 42,864
+    fused_tally_bytes_malloc                                                4 -> 5
+    piped_reducer_alloc_bytes                                          22,032 -> 22,176
+    piped_reducer_bytes_malloc                                              4 -> 5
+    record_fields_alloc_bytes                                           4,688 -> 4,832
+    record_fields_push_mut_fast                                            48 -> 47
+    record_fields_push_mut_slow                                             2 -> 3
+    record_fields_sh_buf                                                1,392 -> 1,536
+    skip_shape_alloc_bytes                                             89,568 -> 89,856
+    skip_shape_bytes_malloc                                                 5 -> 6
+    skip_shape_push_mut_fast                                                9 -> 8
+    skip_shape_push_mut_slow                                            4,001 -> 4,002
+    skip_shape_sh_buf                                                     432 -> 576
+    sort_shape_bytes_malloc                                                 4 -> 5
+    sort_shape_push_mut_fast                                            4,818 -> 4,754
+    sort_shape_push_mut_slow                                              670 -> 734
+    string_headers_alloc_bytes                                          3,088 -> 3,232
+    string_headers_push_mut_fast                                           48 -> 47
+    string_headers_push_mut_slow                                            2 -> 3
+    string_headers_sh_buf                                               1,392 -> 1,536
+    take_shape_alloc_bytes                                            175,264 -> 175,552
+    take_shape_bytes_malloc                                                 5 -> 6
+    take_shape_push_mut_fast                                            2,995 -> 2,994
+    take_shape_push_mut_slow                                            4,005 -> 4,006
+    take_shape_sh_buf                                                  87,536 -> 87,680
+    tally_shape_alloc_bytes                                            93,536 -> 93,680
+    tally_shape_bytes_malloc                                                5 -> 6
+    the_same_capture_built_below_the_mark_is_shared_alloc_bytes        101,968 -> 102,112
+    the_same_capture_built_below_the_mark_is_shared_push_mut_fast            496 -> 495
+    the_same_capture_built_below_the_mark_is_shared_push_mut_slow              4 -> 5
+    the_same_capture_built_below_the_mark_is_shared_sh_buf             21,904 -> 22,048
+The book's counters sample in chapter 10, and the same sample quoted in
+chapter 12, read one allocation more (9) and 22,176 bytes where they read
+22,032, the extra grow step on a list of a dozen.

@@ -2133,7 +2133,19 @@ moved_binds = row
 
 rows_b1mb = text/concat rows_b1gf [moved_binds]
 
-rows_b = text/concat rows_b1mb [compile_mem compile_mem_host]
+# A list growing out of four slots takes eight before sixteen. The mutation
+# doubles every time again, and the fixture's buffers double with it.
+fifth_push = row
+  "a fifth push taking sixteen slots"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_fifth_push_takes_sixteen")
+  release
+
+rows_b1fp = text/concat rows_b1mb [fifth_push]
+
+rows_b = text/concat rows_b1fp [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 

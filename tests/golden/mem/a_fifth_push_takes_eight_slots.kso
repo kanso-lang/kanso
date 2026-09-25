@@ -1,0 +1,14 @@
+# A list of four that takes a fifth element grows to eight slots. It went to
+# sixteen, so every short list past its literal's four held eleven slots it
+# never filled; the JSON decoder builds thousands of them. The byte counts pin
+# the size of the grown buffer.
+fn five n
+  push (push (push (push (push [] n) n) n) n) n
+
+fn many 0 acc
+  acc
+
+fn many k acc
+  many (k - 1) (acc + length (five k))
+
+pub play = print "{many 300 0}"

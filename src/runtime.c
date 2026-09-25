@@ -8407,9 +8407,20 @@ static __attribute__((noinline, cold, preserve_most)) void k_buf_release(KBuf* o
 }
 
 static KValue k_b_push_grow(KValue lv, KList* l, KValue item, int mutate) {
+    /* The smallest power of two that holds the new element, doubled again
+       past sixteen, so the steps run 4, 8, 16, 64, 256 and a long
+       accumulator still grows in few of them. A list of four that took a
+       fifth element went straight to sixteen slots, and most lists the JSON
+       decoder builds stop at five or six: 1,463 of them on one decode of
+       bench/large.json, each 272 bytes where 144 hold it. The run program's
+       arena peak fell 4,194,304 -> 3,670,032 bytes for +0.1925% of its
+       instructions. Holding the doubling back only to eight gave the same
+       peak but moved every longer list onto 8, 32, 128, which overshoots a
+       thousand elements by twice as much and doubled the book's counters
+       sample's permanent peak. */
     long long cap = 4;
     while (cap < (l->len + 1)) cap <<= 1;
-    cap <<= 1;
+    if (cap > 16) cap <<= 1;
     /* An accumulator's storage goes outside the arena, so the loop's rewind
        reclaims the iteration's garbage without reaching what the iteration
        was building. A transient's stays in the arena, where the rewind is

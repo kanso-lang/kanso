@@ -5,8 +5,8 @@
 # strictness change could erase the tier and nothing would turn red. The
 # evacuation walk's own pin is the micro golden
 # a_thunk_capture_survives_the_cohort, not these counters.
-allocs=805779
-alloc_bytes=45529344
+allocs=805880
+alloc_bytes=45542480
 arena_blocks=1
 arena_peak_bytes=1048576
 cohort_frees=1
@@ -18,8 +18,8 @@ evac_bytes=384944
 survive_slots=78611
 put_mut_fast=0
 put_mut_grow=0
-push_mut_fast=799997
-push_mut_slow=1203
+push_mut_fast=799796
+push_mut_slow=1404
 thunk_allocs=200
 thunk_forces=100
 thunk_evals=100
@@ -44,7 +44,7 @@ perm_peak_bytes=0
 str_scans=400
 str_scan_bytes=3781092
 seek_resumes=0
-buf_reuse=499
+buf_reuse=602
 held_peak_bytes=0
 view_allocs=0
 view_frees=0
@@ -53,6 +53,6 @@ ten_frees=0
 ten_handups=0
 sh_str=25632384
 sh_rec=54448
-sh_buf=15826144
+sh_buf=15839280
 sh_map=0
 sh_bytes=0
