@@ -224,4 +224,8 @@
 # kanso#1630 at CI's sitting: a rewind with nothing to take back asks only
 # whether the pointer moved. codegen_instructions_dev 142,641,709 ->
 # 142,641,575, a FALL of 134 (-0.0001%).
-codegen_instructions_dev=142641575
+#
+# kanso#1631 at CI's sitting: two byte appends in a row ask for room once.
+# codegen_instructions_dev 142,641,575 -> 142,645,204, a RISE of 3,629
+# (+0.0025%).
+codegen_instructions_dev=142645204

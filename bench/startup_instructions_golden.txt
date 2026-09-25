@@ -487,4 +487,7 @@
 #
 # kanso#1629 at CI's sitting: a run of byte compares is read as one window.
 # startup_instructions 601,506 -> 601,513, a RISE of 7 (+0.0012%).
-startup_instructions=601513
+#
+# kanso#1631 at CI's sitting: two byte appends in a row ask for room once.
+# startup_instructions 601,513 -> 605,252, a RISE of 3,739 (+0.6216%).
+startup_instructions=605252

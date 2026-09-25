@@ -2323,7 +2323,10 @@
 # binary search, entries in one block, the beat mark inline, empty literals
 # and ints rendered in place. compile_instructions 25,460,259 -> 25,041,901, a
 # FALL of 418,358 (-1.6432%).
-compile_instructions=25041901
+#
+# kanso#1631 at CI's sitting: two byte appends in a row ask for room once.
+# compile_instructions 25,041,901 -> 25,004,892, a FALL of 37,009 (-0.1478%).
+compile_instructions=25004892
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

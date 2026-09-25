@@ -322,4 +322,8 @@
 # kanso#1630 at CI's sitting: a rewind with nothing to take back asks only
 # whether the pointer moved. codegen_instructions_release 715,866,504 ->
 # 715,981,278, a RISE of 114,774 (+0.0160%).
-codegen_instructions_release=715981278
+#
+# kanso#1631 at CI's sitting: two byte appends in a row ask for room once.
+# codegen_instructions_release 715,981,278 -> 715,986,547, a RISE of 5,269
+# (+0.0007%).
+codegen_instructions_release=715986547

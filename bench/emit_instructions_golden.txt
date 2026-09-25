@@ -295,4 +295,7 @@
 #
 # kanso#1629 at CI's sitting: a run of byte compares is read as one window.
 # emit_instructions 29,340,955 -> 29,343,426, a RISE of 2,471 (+0.0084%).
-emit_instructions=29343426
+#
+# kanso#1631 at CI's sitting: two byte appends in a row ask for room once.
+# emit_instructions 29,343,426 -> 29,390,013, a RISE of 46,587 (+0.1588%).
+emit_instructions=29390013

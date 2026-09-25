@@ -14013,3 +14013,17 @@ Three other leads were measured today and declined:
   buffer header and the data. The run program was byte-identical. The first
   append's slow path joins the fast path before the second append starts,
   so the second's loads cannot be forwarded from the first's stores.
+
+## 2026-09-25 — CI's rows for kanso#1631
+
+CI agreed with the three projected work rows and with the text and emitted
+veins. The compile-side rows moved with the peephole and with the layout of
+the compiler around it. Four rose: `startup_instructions` 601,513 -> 605,252
+(+3,739), `emit_instructions` 29,343,426 -> 29,390,013 (+46,587), the cost of
+searching each program's body for the pair, `codegen_instructions_dev`
+142,641,575 -> 142,645,204 (+3,629) and `codegen_instructions_release`
+715,981,278 -> 715,986,547 (+5,269). Three fell: `compile_instructions`
+25,041,901 -> 25,004,892, `entry_instructions` 83,306,187 -> 83,186,043 and
+`library_instructions` 83,849,828 -> 83,730,469, none of which reaches the
+emitter, so the fall is layout. The run program's 3,519,900 fewer
+instructions carry the score over the four rises.
