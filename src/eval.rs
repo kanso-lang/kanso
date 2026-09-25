@@ -641,9 +641,9 @@ thread_local! {
 
 /// What a body's tail handed back: a finished value, or a named-group call
 /// for the dispatcher to loop on instead of growing the stack.
-enum Flow {
+enum Flow<'a> {
     Done(Value),
-    Tail(Rc<str>, Vec<Value>, Span),
+    Tail(Rc<str>, Rc<Vec<&'a FnDecl>>, Vec<Value>, Span),
 }
 
 thread_local! {
@@ -1536,7 +1536,11 @@ impl<'a> Interp<'a> {
     /// A body run whose final expression may hand back a tail call for the
     /// dispatcher's loop instead of recursing. Everything before the last
     /// statement evaluates exactly as eval_body_in does.
-    fn eval_body_flow(&self, decl: &'a FnDecl, env: Option<Rc<Env>>) -> Result<Flow, RuntimeError> {
+    fn eval_body_flow(
+        &self,
+        decl: &'a FnDecl,
+        env: Option<Rc<Env>>,
+    ) -> Result<Flow<'a>, RuntimeError> {
         let frame = self.frame_for(decl);
         let body = &decl.body;
         let Some((Stmt::Expr(last), lead)) = body.split_last() else {
@@ -1587,7 +1591,7 @@ impl<'a> Interp<'a> {
         expr: &Expr,
         env: &Option<Rc<Env>>,
         frame: &Frame,
-    ) -> Result<Flow, RuntimeError> {
+    ) -> Result<Flow<'a>, RuntimeError> {
         // a guard keeps the tail position of the lines under it: `return x
         // if c` followed by a self-call is the loop shape the library's
         // folds are written in, and a frame nested per iteration ran the
@@ -1613,12 +1617,20 @@ impl<'a> Interp<'a> {
         if matches!(head.as_ref(), Expr::Partial(..)) {
             return Ok(Flow::Done(self.eval(expr, env, frame)?));
         }
-        let group_of = |callee: &Value| -> Option<Rc<str>> {
+        let group_of = |callee: &Value| -> Option<(Rc<str>, Rc<Vec<&'a FnDecl>>)> {
             let Value::FnRef(n) = callee else { return None };
             // `if` is the one name the memory would answer Group for and this
             // may not: it is a declaration AND the conditional form, and the
-            // form wins here.
-            (&**n != "if" && matches!(self.callee_of_ref(n), Callee::Group(_))).then(|| n.clone())
+            // form wins here. The group rides along with the name, so the
+            // dispatcher that takes the tail has the overloads in hand and
+            // does not hash the name to find them a second time.
+            if &**n == "if" {
+                return None;
+            }
+            match self.callee_of_ref(n) {
+                Callee::Group(group) => Some((n.clone(), group)),
+                _ => None,
+            }
         };
         if *piped && !args.is_empty() {
             let piped_value = self.eval(&args[0], env, frame)?;
@@ -1651,7 +1663,7 @@ impl<'a> Interp<'a> {
                 values.push(self.eval(arg, env, frame)?);
             }
             return match group_of(&callee) {
-                Some(name) => Ok(Flow::Tail(name, values, *span)),
+                Some((name, group)) => Ok(Flow::Tail(name, group, values, *span)),
                 None => Ok(Flow::Done(self.call(callee, values, *span, frame)?)),
             };
         }
@@ -1676,7 +1688,7 @@ impl<'a> Interp<'a> {
             values.push(self.eval(arg, env, frame)?);
         }
         match group_of(&callee) {
-            Some(name) => Ok(Flow::Tail(name, values, *span)),
+            Some((name, group)) => Ok(Flow::Tail(name, group, values, *span)),
             None => Ok(Flow::Done(self.call(callee, values, *span, frame)?)),
         }
     }
@@ -1707,7 +1719,7 @@ impl<'a> Interp<'a> {
         stmts: &[Stmt],
         env: &Option<Rc<Env>>,
         frame: &Frame,
-    ) -> Result<Flow, RuntimeError> {
+    ) -> Result<Flow<'a>, RuntimeError> {
         let Some((Stmt::Expr(last), lead)) = stmts.split_last() else {
             return Ok(Flow::Done(self.eval_stmts(stmts, env, frame)?));
         };
@@ -2971,9 +2983,8 @@ impl<'a> Interp<'a> {
                     }
                     match flowed? {
                         Flow::Done(value) => return Ok(value),
-                        Flow::Tail(next, next_args, next_span) => {
-                            overloads =
-                                self.fns.get(&*next).expect("tails name real groups").clone();
+                        Flow::Tail(next, group, next_args, next_span) => {
+                            overloads = group;
                             // `Flow::Tail` already carries the name as an
                             // `Rc<str>`, and every use of it below this loop
                             // reads it as `&str`. Moving it costs a pointer

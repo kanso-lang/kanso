@@ -2623,7 +2623,19 @@ key_typed = row
 
 rows_b1ky = text/concat rows_b1tc [key_typed]
 
-rows_b = text/concat rows_b1ky [compile_mem compile_mem_host]
+# A tail call carries its callee's group to the dispatcher, which no longer
+# hashes the name to find it.
+tail_group = row
+  "a tail that hashes its group's name"
+  true
+  interp_gate
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_tail_that_hashes_its_group")
+  release
+
+rows_b1tg = text/concat rows_b1ky [tail_group]
+
+rows_b = text/concat rows_b1tg [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 
