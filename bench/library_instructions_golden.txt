@@ -1102,7 +1102,10 @@
 #
 # CI measured the carried tree at 913723b0. library_instructions 85,160,887 ->
 # 85,763,002, a RISE of 602,115 (+0.7070%).
-library_instructions=85763002
+#
+# CI measured the interpreter's small values at 6d35abb2. library_instructions
+# 85,763,002 -> 85,773,867, a RISE of 10,865 (+0.0127%).
+library_instructions=85773867
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

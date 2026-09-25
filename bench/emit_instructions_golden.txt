@@ -310,4 +310,7 @@
 #
 # CI measured the carried tree at 913723b0. emit_instructions 29,249,085 ->
 # 29,343,492, a RISE of 94,407 (+0.3228%).
-emit_instructions=29343492
+#
+# CI measured the interpreter's small values at 6d35abb2. emit_instructions
+# 29,343,492 -> 29,285,427, a FALL of 58,065 (-0.1979%).
+emit_instructions=29285427

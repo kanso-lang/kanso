@@ -14437,6 +14437,17 @@ memory rows and `interp_instructions` 659,398,270 -> 592,652,379, the
 container's fall subtracted. The figures above were taken against main before
 the carrier; these replace them as the pull request's claim.
 
+CI measured the branch at 6d35abb2. `interp_instructions` 659,398,270 ->
+614,239,448 (-45,158,822, -6.85%), less than this container's -9.82%;
+`interp_allocs` 925,912 and `interp_peak_bytes` 718,808, as projected. Four
+compile-side rows moved with the binary's layout, since `src/int.rs` and the
+map code are new text in the compiler: `compile_instructions` 25,195,466 ->
+25,204,253 (+8,787), `entry_instructions` 85,204,646 -> 85,215,074 (+10,428),
+`library_instructions` 85,763,002 -> 85,773,867 (+10,865), and
+`emit_instructions` 29,343,492 -> 29,285,427 (-58,065). The three rises are
+priced at under 0.0001 of welfare together; the interpreter's fall is worth
+about +0.024.
+
 ## 2026-09-25 — a walk by index steps from its cursor, and a join knows its count
 
 The run program's index phase reads a 690,000-character string of one- to

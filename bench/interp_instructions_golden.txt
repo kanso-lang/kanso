@@ -578,5 +578,8 @@
 # container's fall of 66,745,891. CI's reading replaces it.
 # interp_instructions 659,398,270 -> 592,652,379, a FALL of 66,745,891
 # (-10.1222%).
-interp_instructions=592652379
+#
+# CI measured the interpreter's small values at 6d35abb2. interp_instructions
+# 592,652,379 -> 614,239,448, a RISE of 21,587,069 (+3.6425%).
+interp_instructions=614239448
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
