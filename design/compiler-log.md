@@ -12873,3 +12873,189 @@ the second must, and both must print what the interpreter prints. Watched red
 with the pass returning nothing: the mapping program defined it. The ratchet
 carries the mutation.
 
+
+## 2026-09-24 — a cycle nothing reaches is not emitted, nor a string nothing names
+
+`prune_unnamed` struck a definition from the emitted module once no other
+surviving definition named it. That is reference counting, and a cycle names
+itself. std/list sorts by merging, and the merge is four functions calling
+round: `merge`, `merge_on`, `pick` and `advance`. A program that imported
+std/list and never sorted struck `sort`, `msort` and `span`, then kept the
+four, because each was still named by the one before it, along with `drain`,
+which only they call. The same shape kept std/list's window helpers
+`bounded_flat` and `bounded_more` once the arm prune had dropped the arms that
+call them, and std/text's two trimming walks, `from_front` through
+`past_the_end` and `step_in` back to itself, and `from_back` with
+`step_back`.
+
+The prune now marks. The roots are the entry, `d_thunk_eval`, and every block
+that is not a candidate. A block is kept when the mark reaches it by a name
+some live block writes, or by a closure cell a live block loads. The oracle in
+the unit tests is the same mark written the slow way, one `names_symbol`
+search per question, and a new unit test builds a two-block cycle nothing
+names and asserts both go.
+
+On the codegen corpus the IR falls 3,068 -> 2,073 lines. The child tree of a
+dev build on this box reads 200,891,196 -> 155,302,680 instructions (-22.7%)
+and of a release build 856,351,463 -> 718,270,625 (-16.1%). In the dev tier,
+`clang -cc1` takes 111,055,320 of that, and 35,541,211 of those are clang
+compiling an empty module, so the fixed floor is about a third of the
+compile. The compile golden's module row falls 2,181 -> 1,488 lines and 35
+-> 28 defines. The decoder's emitted lines fall 8,412 -> 6,849 and 118 -> 84
+defines. Every other benchmark emits less: encodebench 8,242 -> 7,330, oneshot
+8,347 -> 8,104, widebench 9,225 -> 7,781, deepbench 2,886 -> 2,159, pendbench
+4,260 -> 3,544, scanbench 17,524 -> 15,765, indexbench 986 -> 766,
+digestbench 6,688 -> 5,776, readbench 1,089 -> 847, livebench 8,486 ->
+8,243 and runbench 33,009 -> 31,460. The twelve cost veins and the lazy tier
+are unchanged.
+
+Spec: `tests/a_cycle_nothing_reaches_is_not_emitted` builds a program that
+sums a list and one that sorts it. The first must not define
+`d_list/merge_5`, the second must, and both must print what the interpreter
+prints. Watched red against the counting prune: the summing program defined
+the merge. The ratchet carries the mutation, which starts every block marked.
+
+The strings that pruned functions interned are left out too. A string is
+interned when the emitter reaches a literal or an err site, and the function
+that asked for it may be pruned afterwards. On the codegen corpus, after the
+mark, 198 of 270 strings and 264 of their literal cells were named by nothing:
+31,191 of the module's 85,984 bytes. Each is now emitted only when the body or
+a type table names it, read off by `unquoted_globals` in one pass. The corpus
+IR falls again, 2,073 -> 1,611 lines, the module row 1,488 -> 1,149, the
+decoder 6,849 -> 6,410, and runbench 31,460 -> 29,993. Every other benchmark
+falls with them. `tests/a_string_nothing_names_is_not_emitted` builds a
+program that sums a list and asserts every string and literal cell left in its
+module is named somewhere else. Watched red with every string emitted: 328
+were named by nothing. The ratchet carries the mutation.
+
+A dispatcher stops at the arm that leaves no way into the next. The emitter
+opens arm k's `fail` block before it knows whether any parameter check will
+branch to it, and when every check is proved away nothing does, so the arms
+after it and the whole failure path were blocks nothing reached. They were 7%
+of the corpus's IR, 9% of runbench's and 13% of the decoder's, and clang
+parsed each one only to delete it in its first pass. Dropping unreached blocks
+after the fact, a pass over every function body, took the corpus to 1,480
+lines but cost the emitter more than clang saved: `emit_ir_for` on this box
+rose 33,539,504 -> 37,473,772. That pass is declined. Almost every such block
+has the one shape, so the dispatcher now asks once per arm whether its text
+branches to `fail{k}` and stops writing when it does not. The corpus IR is the
+same 1,480 lines, and `emit_ir_for` falls to 30,538,357 (-8.9%). The decoder's
+emitted lines fall 6,410 -> 5,406 and runbench's 29,993 -> 26,033;
+encodebench, oneshot, widebench, livebench, scanbench, digestbench and the
+rest fall with them. The compile golden's module row falls 1,149 -> 1,079, and
+its five samples fall between 14 and 34 lines each, the string filter's share
+included; `guards` loses a define, a function whose one caller sat in a dead
+failure path. `tests/a_block_nothing_branches_to_is_not_emitted` builds a
+program with a dispatcher whose checks are proved away and asserts every block
+in its module is reached from its function's entry. Watched red with the early
+close taken out: 22 blocks nothing reached, the first of them
+`d_list/fold_3`'s `fail2`. The ratchet carries the mutation.
+
+An unboxed parameter is read as its word. An integer parameter the escape
+analysis unboxes crosses as `i64 %xNr` and is boxed on entry, and every read
+of its tag or payload took the box back apart with an `extractvalue`, though
+the tag is 0 and the payload is the argument. `FnEmit` now records the two
+words a boxed parameter was built from, `inline_tag` and `inline_payload`
+answer from the record, and a box that nothing else reads is left out of the
+body. The corpus IR falls 1,480 -> 1,453 lines, the decoder's 5,406 -> 5,211
+and runbench's 26,033 -> 25,224. On this box the dev child tree reads
+144,052,165 against 144,536,585 and the release tree 713,344,643 against
+713,946,965, and `emit_ir_for` rises 197,598 (+0.65%) for the scan that finds
+an unread box. The two development terms share a satiation, so at their
+current ratios a per cent of dev codegen is worth about eight of emitting, and
+the trade comes out ahead. `tests/an_unboxed_parameter_is_read_as_its_word`
+asserts that no function in a module extracts a word from a boxed unboxed
+parameter. Watched red with the words unrecorded: nine reads took a parameter
+back apart. The ratchet carries the mutation.
+
+A switch dispatcher writes its `nomatch` only when a case falls to it. A
+switch whose cases cover every value its discriminator can hold never does,
+and its failure path was the 13-line residue left in std/json's byte switches
+after the early close. The decoder's emitted lines fall 5,211 -> 5,104 and
+runbench's 25,224 -> 25,117. The block spec now decodes a string with an
+escape in it, which reaches those switches, and watched red with `nomatch`
+always written: 18 blocks nothing reached, the first of them
+`d_json/str_char_4`'s. The ratchet carries the mutation.
+
+A tag already known to be the int tag is not compared with it. Arithmetic on
+two values asks whether both tags are 0 before it takes the fast path, and a
+literal's tag is known, so `n + 1` wrote `icmp eq i64 0, 0` and an `and` on
+every addition; a byte index with a literal key did the same beside its bytes
+test. `both_ints` skips a known tag and answers `true` for two. The decoder's
+emitted lines fall 5,104 -> 5,063 and runbench's 25,117 -> 24,854.
+`tests/a_tag_known_to_be_int_is_not_compared` asserts that no line in a module
+compares two constants, and watched red with every tag compared: five lines
+compared 0 with 0. The ratchet carries the mutation.
+
+The string filter reads names by number. It collected every unquoted `@name`
+in the body and the type tables into a hash set and asked the set about `sN`
+and `sN_lit`, which are the only names it ever asks about, and `intern` names
+string N `sN`. `named_strings` reads each `@s` name as a number into a pair of
+flags. On `kanso play`'s start-up for a one-line program the set was 23,334
+instructions, and `Backend::emit` falls 339,769 -> 325,775 on this box with
+the module unchanged. The mutation for the string spec now marks every string
+named, and watched red again: 239 strings and cells that nothing named.
+
+Reading every box built from words as its words, rather than only the unboxed
+parameters, was measured and declined. `FnEmit::write` recorded each line of
+the boxing shape, and runbench's extracts from such boxes fell 1,130 -> 18,
+but the record is a test and an allocation on every line the emitter writes:
+on this box `emit_ir_for` rose 30,613,012 -> 31,136,898 (+1.7%) while the dev
+child tree fell 45,406 and the release tree rose 337,442. clang at `-O0` folds
+an extract of an `insertvalue` for nearly nothing, so the lines were cheap to
+keep.
+
+The interpreted row rose 4,189,569 between two sittings of this branch that
+changed only the emitter, and the whole rise was one collect in `call_named`:
+the arguments to a builtin were forced through a `Result` adapter, and rustc
+stopped inlining the adapter's fold into it, laying out as a call what had
+been inline. The argument forcing is now a loop that forces a thunk where it
+lies and leaves every other value alone, which is what `force_thunk` did with
+them anyway, so there is nothing left for the layout to decide. The same shape
+in `call_builtin`, a map through `sub_base` into a fresh collect, now rewrites
+only a subtype's slot. And `low_byte` read a number's first byte by writing
+out all of its bytes with `to_bytes_le`; it now reads the magnitude's lowest
+word, which allocates nothing and answers the same byte, the magnitude's, for
+a negative number as it did before. On this box the interpreted corpus reads
+846,937,172 -> 818,016,245 -> 802,836,171 -> 790,883,683 across the three.
+
+Moving a dispatch's arguments into the winner's bindings rather than cloning
+them was measured and declined. `match_one` clones 620,601 values on the
+interpreted corpus and the dispatcher drops its own copies once the winner is
+known, so binding a parameter matched whole to a placeholder and moving the
+argument in afterwards looked like most of `Value::clone`. It read 790,883,683
+-> 790,646,809 on this box: nearly every one of those clones is a field bound
+out of a record pattern, which the record still holds, and a parameter matched
+whole is a small share of them.
+
+CI's rows, over kanso#1620's. `codegen_instructions_dev` falls 201,466,586 ->
+144,314,284 (-28.37%) and `codegen_instructions_release` 857,150,087 ->
+713,520,095 (-16.76%). `emit_instructions` falls 35,545,509 -> 30,190,261
+(-15.07%) and `startup_instructions` 639,966 -> 601,897 (-5.95%), since `kanso
+play` emits the program to key its binary cache. `interp_instructions` lands
+at 733,050,032 (-6.69%): the two loops in `call_named` and `call_builtin` more
+than take back the 4,189,569 the collect's layout had cost.
+`compile_instructions` lands at 25,460,259 (+0.25%), `entry_instructions` at
+86,678,016 (+0.25%) and `library_instructions` at 87,221,497 (+0.24%), which
+is the layout of a compiler whose emitter and interpreter both changed; `kanso
+check` reaches neither. Every runtime row and every `text` row is unchanged,
+and so is every allocation counter but one: `interp_allocs` falls 1,036,127 ->
+983,321, by 52,806, which is `low_byte`'s call count, one vector each.
+
+Two dev-tier leads were measured and declined. At `-O0` FastISel selects
+none of the corpus: it refuses `insertvalue` on `%KValue`, the aggregate
+argument and the aggregate return, so every function falls back to
+SelectionDAG, which is 34,446,800 of `clang -cc1`'s 111,055,320. Passing a
+value as two words is a change to every signature the emitter writes and every
+runtime entry point, which is too big a change to take on here. GlobalISel
+(`-mllvm -global-isel`) segfaults on the module under LLVM 18.
+
+Most of each tool's fixed cost is the dynamic loader relocating LLVM's shared
+libraries. `clang -cc1` on an empty module reads 35,541,211 instructions,
+26,069,125 of them in `_dl_relocate_object` for libclang-cpp and libLLVM, and
+`ld.lld` linking an empty object reads 40,530,158, 17,699,276 of them the same
+way. A dev build pays both, about 44 million of its 145.7 million. Running
+`llc -O0 -disable-verify` in place of `clang -cc1` loads libLLVM alone and
+reads 95,768,077 on the corpus against 102,053,958, but it writes different
+unwind tables and relaxation, and Xcode's clang ships no `llc`, so the dev
+tier would carry two back ends for about 4% of one row. Declined.

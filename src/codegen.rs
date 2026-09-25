@@ -2615,6 +2615,11 @@ struct FnEmit {
     /// the dev tier's instruction selector can lower where it cannot lower a
     /// call passing a `%KValue`.
     words: bool,
+    /// Values whose two words are already in hand, tag then payload. An
+    /// unboxed parameter crosses as a raw i64 and is boxed on entry, and every
+    /// read of its tag or payload used to take it back apart with an
+    /// `extractvalue`; the tag is 0 and the payload is the argument itself.
+    known_words: crate::hash::Map<String, (String, String)>,
 }
 /// Whether a line the emitters wrote is a stack slot, asked at the ONE place
 /// the needle can be.
@@ -2664,6 +2669,7 @@ impl FnEmit {
             frame_held: false,
             raw_byte: crate::hash::Map::default(),
             words,
+            known_words: crate::hash::Map::default(),
         }
     }
 
@@ -2756,17 +2762,19 @@ impl FnEmit {
     /// The function's body: what the emitters wrote, with the stack slots at
     /// the head of the entry block so each one dominates its uses.
     fn body(&self) -> String {
+        let unboxed = self.without_unread_reboxes();
+        let out = unboxed.as_deref().unwrap_or(&self.out);
         if self.entry_allocas.is_empty() {
-            return self.out.clone();
+            return out.to_string();
         }
         let mut head = String::new();
-        let mut rest = self.out.as_str();
-        if let Some(end) = self.out.find('\n') {
-            let first = &self.out[..end];
+        let mut rest = out;
+        if let Some(end) = out.find('\n') {
+            let first = &out[..end];
             if first.ends_with(':') && !first.starts_with(' ') {
                 head.push_str(first);
                 head.push('\n');
-                rest = &self.out[end + 1..];
+                rest = &out[end + 1..];
             }
         }
         for slot in &self.entry_allocas {
@@ -2774,6 +2782,34 @@ impl FnEmit {
         }
         head.push_str(rest);
         head
+    }
+
+    /// The body without the boxing of an unboxed parameter nothing reads.
+    /// Every read of such a parameter's words is answered from
+    /// `known_words`, so in a function that only compares and passes it on,
+    /// the `insertvalue` on entry builds a value no line names.
+    fn without_unread_reboxes(&self) -> Option<String> {
+        let mut out: Option<String> = None;
+        for (value, (_, payload)) in &self.known_words {
+            let text = out.as_deref().unwrap_or(&self.out);
+            let line = format!(
+                "  {value} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 {payload}, 1\n"
+            );
+            let Some(at) = text.find(&line) else { continue };
+            let named = text.match_indices(value.as_str()).any(|(i, _)| {
+                i != at + 2
+                    && !text[i + value.len()..]
+                        .bytes()
+                        .next()
+                        .is_some_and(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'.')
+            });
+            if !named {
+                let mut kept = text[..at].to_string();
+                kept.push_str(&text[at + line.len()..]);
+                out = Some(kept);
+            }
+        }
+        out
     }
 
     fn boxing_any_parsed_operand(&mut self, text: &str) -> String {
@@ -2889,10 +2925,11 @@ impl FnEmit {
     }
 }
 
-/// Dispatchers, wrappers and lambda bodies nobody names. A dead caller still
-/// writes a call to its dead callee, so one sweep leaves the callee named by a
-/// caller that is itself about to go — hence the fixpoint. Only `d_`, `w_` and
-/// `klam` symbols are candidates: everything else is either the entry, a
+/// Dispatchers, wrappers and lambda bodies nothing live names. A block is kept
+/// when a chain of names reaches it from the entry or from a block that is not
+/// a candidate; a dead caller's call to its callee does not count, and neither
+/// does a cycle of dead blocks naming each other. Only `d_`, `w_` and `klam`
+/// symbols are candidates: everything else is either the entry, a
 /// builder the constant initialiser calls, or a switch the runtime calls by
 /// name. A lambda body is named by its wrapper or by the closure built over
 /// it, and one in a library function the program never reaches is named by
@@ -2903,7 +2940,7 @@ impl FnEmit {
 /// the cell is what keeps it.
 fn prune_unnamed(body: &str, entry: &str, cells: &[(String, String, usize)]) -> String {
     let blocks = ir_defines(body);
-    let mut alive = vec![true; blocks.len()];
+    let mut alive = vec![false; blocks.len()];
     {
         // Every name this prune will ever ask about: one per block, plus the
         // closure cells. The index is keyed on exactly these, so a name
@@ -2914,8 +2951,8 @@ fn prune_unnamed(body: &str, entry: &str, cells: &[(String, String, usize)]) -> 
             .chain(cells.iter().map(|(cell, _, _)| cell.as_str()))
             .filter(|sym| !sym.is_empty())
             .collect();
-        // Which of those names each block writes, read off once per block, and
-        // how many LIVE blocks write each name. The search this replaced asked
+        // Which of those names each block writes, read off once per block. The
+        // search this replaced asked
         // the question once per (block, name) pair and built a fresh two-way
         // searcher for each: 72.10% of `kanso build bench/runbench`, with
         // `names_symbol` 71.71% of the process on its own.
@@ -2934,47 +2971,52 @@ fn prune_unnamed(body: &str, entry: &str, cells: &[(String, String, usize)]) -> 
                 }
             }
         }
-        let mut mentions: crate::hash::Map<&str, usize> = crate::hash::Map::default();
-        for written in &names {
-            for name in written {
-                *mentions.entry(name).or_insert(0) += 1;
-            }
-        }
-        loop {
-            let elsewhere = |at: usize, name: &str| {
-                mentions.get(name).copied().unwrap_or(0) > usize::from(names[at].contains(name))
-            };
-            let named = |at: usize, sym: &str| {
-                elsewhere(at, sym)
-                    || cells.iter().any(|(cell, w, _)| w == sym && elsewhere(at, cell.as_str()))
-            };
-            let doomed = blocks.iter().enumerate().position(|(at, (sym, _))| {
+        // A mark from the roots rather than a count of mentions. Striking a
+        // block once nothing else named it was reference counting, and a
+        // cycle names itself: std/list's merge sort is merge, merge_on, pick
+        // and advance calling round, so a program that never sorts struck
+        // `sort`, `msort` and `span` and kept the four, which nothing could
+        // call.
+        let at_sym: crate::hash::Map<&str, usize> = blocks
+            .iter()
+            .enumerate()
+            .filter(|(_, (sym, _))| !sym.is_empty())
+            .map(|(at, (sym, _))| (sym.as_str(), at))
+            .collect();
+        let wrapped: crate::hash::Map<&str, &str> =
+            cells.iter().map(|(cell, w, _)| (cell.as_str(), w.as_str())).collect();
+        let mut work: Vec<usize> = blocks
+            .iter()
+            .enumerate()
+            .filter(|(_, (sym, _))| {
                 // The runtime calls the thunk dispatcher itself, from
-                // `k_force`, so no emitted line names it and it would go on
-                // the first sweep.
-                alive[at]
-                    && sym != entry
-                    && sym != "d_thunk_eval"
-                    && (sym.starts_with("d_")
+                // `k_force`, so no emitted line names it.
+                sym == entry
+                    || sym == "d_thunk_eval"
+                    || !(sym.starts_with("d_")
                         || sym.starts_with("w_")
                         || sym.starts_with("klam")
                         || sym.starts_with("\"d_")
                         || sym.starts_with("\"w_"))
-                    && !named(at, sym)
-            });
-            match doomed {
-                // The block is struck off rather than removed, so `names` and
-                // `mentions` keep their indices; the counts drop by what it
-                // wrote, which is what the search would have stopped finding.
-                Some(at) => {
-                    alive[at] = false;
-                    for name in &names[at] {
-                        if let Some(n) = mentions.get_mut(name) {
-                            *n -= 1;
+            })
+            .map(|(at, _)| at)
+            .collect();
+        for &at in &work {
+            alive[at] = true;
+        }
+        while let Some(at) = work.pop() {
+            for name in &names[at] {
+                // A cell is a module global, so the wrapper it points at is
+                // named by whoever loads the cell rather than by a call.
+                let target = wrapped.get(name).map_or(*name, |w| *w);
+                for sym in [*name, target] {
+                    if let Some(&next) = at_sym.get(sym) {
+                        if !alive[next] {
+                            alive[next] = true;
+                            work.push(next);
                         }
                     }
                 }
-                None => break,
             }
         }
     }
@@ -3561,6 +3603,56 @@ fn group_indices_in<'s>(
         .filter(move |at| program.fns[*at].params.len() == arity)
 }
 
+/// Whether `text` writes a branch to `label`: `label %name` with the name
+/// ending there, so `fail1` is not answered by `label %fail10`.
+fn branches_to(text: &str, label: &str) -> bool {
+    let probe = format!("label %{label}");
+    text.match_indices(&probe).any(|(at, _)| {
+        !text[at + probe.len()..]
+            .bytes()
+            .next()
+            .is_some_and(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'.')
+    })
+}
+
+/// Which interned strings the texts name, by index: whether `@sN` appears,
+/// and whether `@sN_lit` does. `intern` names string N `sN`, so a name is read
+/// as a number and nothing is hashed. A name ends where LLVM's unquoted names
+/// do, at the first byte that is not a letter, digit, `_`, `.` or `$`, so
+/// `@s12` never answers for `@s12_lit` or `@s120`.
+///
+/// Collecting every `@name` into a set and asking it was 23,334 instructions
+/// of `kanso play`'s start-up on a one-line program, most of it hashing names
+/// nothing would ask about.
+fn named_strings(texts: &[&str], count: usize) -> Vec<[bool; 2]> {
+    let name_byte = |b: u8| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.' | b'$');
+    let mut named = vec![[false; 2]; count];
+    for text in texts {
+        let bytes = text.as_bytes();
+        let mut at = 0;
+        while let Some(next) = text[at..].find("@s") {
+            let from = at + next + 2;
+            at = from;
+            let mut to = from;
+            let mut n = 0usize;
+            while to < bytes.len() && bytes[to].is_ascii_digit() {
+                n = n.saturating_mul(10).saturating_add(usize::from(bytes[to] - b'0'));
+                to += 1;
+            }
+            if to == from || n >= count {
+                continue;
+            }
+            let ends = |i: usize| !bytes.get(i).is_some_and(|b| name_byte(*b));
+            if ends(to) {
+                named[n][0] = true;
+            } else if bytes[to..].starts_with(b"_lit") && ends(to + 4) {
+                named[n][1] = true;
+            }
+        }
+    }
+    named
+}
+
 /// Every `sym` for which `text` writes `@sym(`, collected in one pass.
 ///
 /// This answers `text.contains(&format!("@{sym}("))` exactly, for any `sym`
@@ -3904,47 +3996,38 @@ fn names_symbol(text: &str, sym: &str) -> bool {
 mod the_prune_agrees_with_the_search {
     use super::*;
 
-    /// The fixpoint as it was written before the index, kept as the oracle.
+    /// The mark written the slow way, kept as the oracle.
     ///
     /// It asks `names_symbol` once per (block, name) pair, which is what made
-    /// it 72.10% of `kanso build bench/runbench`. It is the definition of the
-    /// right answer and nothing else, so it stays here rather than in the
-    /// commit message.
+    /// the search this replaced 72.10% of `kanso build bench/runbench`. It is
+    /// the definition of the right answer and nothing else, so it stays here
+    /// rather than in the commit message.
     fn by_search(body: &str, entry: &str, cells: &[(String, String, usize)]) -> String {
-        let mut blocks = ir_defines(body);
+        let blocks = ir_defines(body);
+        let candidate = |sym: &str| {
+            sym != entry
+                && sym != "d_thunk_eval"
+                && (sym.starts_with("d_")
+                    || sym.starts_with("w_")
+                    || sym.starts_with("klam")
+                    || sym.starts_with("\"d_")
+                    || sym.starts_with("\"w_"))
+        };
+        let mut alive: Vec<bool> = blocks.iter().map(|(sym, _)| !candidate(sym)).collect();
         loop {
-            let named = |at: usize, sym: &str| {
-                if blocks
-                    .iter()
-                    .enumerate()
-                    .any(|(k, (_, text))| k != at && names_symbol(text, sym))
-                {
-                    return true;
-                }
-                cells.iter().any(|(cell, w, _)| {
-                    w == sym
-                        && blocks
-                            .iter()
-                            .enumerate()
-                            .any(|(k, (_, text))| k != at && names_symbol(text, cell))
-                })
+            let named = |sym: &str| {
+                blocks.iter().zip(&alive).any(|((_, text), live)| *live && names_symbol(text, sym))
             };
-            let doomed = blocks.iter().enumerate().position(|(at, (sym, _))| {
-                sym != entry
-                    && sym != "d_thunk_eval"
-                    && (sym.starts_with("d_")
-                        || sym.starts_with("w_")
-                        || sym.starts_with("klam")
-                        || sym.starts_with("\"d_")
-                        || sym.starts_with("\"w_"))
-                    && !named(at, sym)
+            let woken = blocks.iter().enumerate().position(|(at, (sym, _))| {
+                !alive[at]
+                    && (named(sym) || cells.iter().any(|(cell, w, _)| w == sym && named(cell)))
             });
-            match doomed {
-                Some(at) => blocks.remove(at),
+            match woken {
+                Some(at) => alive[at] = true,
                 None => break,
             };
         }
-        blocks.into_iter().map(|(_, text)| text).collect()
+        blocks.into_iter().zip(alive).filter(|(_, live)| *live).map(|((_, text), _)| text).collect()
     }
 
     fn define(sym: &str, body: &str) -> String {
@@ -3971,6 +4054,25 @@ mod the_prune_agrees_with_the_search {
         ]
         .concat();
         assert!(!prune_unnamed(&body, "d_entry", &[]).contains("@d_c("));
+        agree_on(&body, "d_entry", &[]);
+    }
+
+    /// Blocks that name each other and nothing live names. std/list's merge
+    /// sort is four of them calling round, and counting mentions kept all
+    /// four in every program that imported the library and never sorted.
+    #[test]
+    fn a_cycle_nothing_reaches_goes_whole() {
+        let body = [
+            define("d_entry", "  %x = call %KValue @d_kept()\n  ret %KValue %x"),
+            define("d_kept", "  ret %KValue zeroinitializer"),
+            define("d_merge", "  %x = call %KValue @d_pick()\n  ret %KValue %x"),
+            define("d_pick", "  %x = call %KValue @d_merge()\n  ret %KValue %x"),
+        ]
+        .concat();
+        let kept = prune_unnamed(&body, "d_entry", &[]);
+        assert!(kept.contains("@d_kept("), "the named block was pruned");
+        assert!(!kept.contains("@d_merge("), "a cycle nothing reaches was kept");
+        assert!(!kept.contains("@d_pick("), "a cycle nothing reaches was kept");
         agree_on(&body, "d_entry", &[]);
     }
 
@@ -4251,9 +4353,37 @@ fn literal_word(value: &str, n: usize) -> Option<&str> {
     Some(if n == 0 { a } else { b })
 }
 
+/// An `i1` saying both tags are the int tag, 0. A tag already known to be 0,
+/// a literal's or an unboxed parameter's, needs no compare, and two such
+/// need no `and`: `n + 1` used to write `icmp eq i64 0, 0` and an `and` for
+/// the literal on every addition.
+fn both_ints(f: &mut FnEmit, ta: &str, tb: &str) -> String {
+    let mut tests: Vec<String> = Vec::new();
+    for tag in [ta, tb] {
+        if tag != "0" {
+            let t = f.tmp();
+            f.line(&format!("{t} = icmp eq i64 {tag}, 0"));
+            tests.push(t);
+        }
+    }
+    match tests.as_slice() {
+        [] => "true".to_string(),
+        [one] => one.clone(),
+        [a, b] => {
+            let both = f.tmp();
+            f.line(&format!("{both} = and i1 {a}, {b}"));
+            both
+        }
+        _ => unreachable!("two tags make at most two tests"),
+    }
+}
+
 fn inline_tag(f: &mut FnEmit, value: &str) -> String {
     if let Some(word) = literal_word(value, 0) {
         return word.to_string();
+    }
+    if let Some((tag, _)) = f.known_words.get(value) {
+        return tag.clone();
     }
     let t = f.tmp();
     f.line(&format!("{t} = extractvalue %KValue {value}, 0"));
@@ -4263,6 +4393,9 @@ fn inline_tag(f: &mut FnEmit, value: &str) -> String {
 fn inline_payload(f: &mut FnEmit, value: &str) -> String {
     if let Some(word) = literal_word(value, 1) {
         return word.to_string();
+    }
+    if let Some((_, payload)) = f.known_words.get(value) {
+        return payload.clone();
     }
     let t = f.tmp();
     f.line(&format!("{t} = extractvalue %KValue {value}, 1"));
@@ -4506,6 +4639,7 @@ impl<'a> Backend<'a> {
                 // saying so lets arithmetic on it skip the tag test and the
                 // boxed fallback it guards
                 f.record(&format!("%x{i}"), INT);
+                f.known_words.insert(format!("%x{i}"), ("0".to_string(), format!("%x{i}r")));
             }
         }
     }
@@ -5046,14 +5180,24 @@ impl<'a> Backend<'a> {
                 "@{cell} = internal constant %KValue                  {{ i64 11, i64 ptrtoint (ptr @{cell}_clo to i64) }}"
             );
         }
-        for (name, bytes) in &self.strings {
-            let _ = writeln!(
-                out,
-                "@{name} = private unnamed_addr constant [{} x i8] c\"{}\"",
-                bytes.len(),
-                ir_bytes(bytes)
-            );
-            let _ = writeln!(out, "@{name}_lit = internal global %KValue zeroinitializer");
+        // A string is interned when a function asks for it, and the function
+        // may since have been pruned: on the codegen corpus 198 of 270
+        // strings and 264 of their literal cells were named by nothing, 36% of
+        // the module's bytes, each parsed and laid out by clang all the same.
+        // Only the body and the type tables name a string.
+        let named = named_strings(&[&body, &self.globals], self.strings.len());
+        for ((name, bytes), [string, lit]) in self.strings.iter().zip(named) {
+            if string {
+                let _ = writeln!(
+                    out,
+                    "@{name} = private unnamed_addr constant [{} x i8] c\"{}\"",
+                    bytes.len(),
+                    ir_bytes(bytes)
+                );
+            }
+            if lit {
+                let _ = writeln!(out, "@{name}_lit = internal global %KValue zeroinitializer");
+            }
         }
         out.push_str(&self.globals);
         out.push('\n');
@@ -5621,29 +5765,34 @@ impl<'a> Backend<'a> {
             }
         }
 
-        f.start_block("nomatch");
-        // no arm matched: the discriminator is the only possible failure here
-        let disc_fail = f.tmp();
-        f.line(&format!("{disc_fail} = extractvalue %KValue {dv}, 0"));
-        let is_err = f.tmp();
-        f.line(&format!("{is_err} = icmp eq i64 {disc_fail}, 5"));
-        let is_none = f.tmp();
-        f.line(&format!("{is_none} = icmp eq i64 {disc_fail}, 4"));
-        let failing = f.tmp();
-        f.line(&format!("{failing} = or i1 {is_err}, {is_none}"));
-        let ret_disc = f.label();
-        let die = f.label();
-        f.line(&format!("br i1 {failing}, label %{ret_disc}, label %{die}"));
-        f.start_block(&ret_disc);
-        let hopped = f.tmp();
-        f.line(&format!("{hopped} = call %KValue @k_err_hop(%KValue {dv}, ptr @{hop_name})"));
-        self.emit_ret_failure(&mut f, name, arity, &hopped);
-        f.start_block(&die);
-        let msg =
-            format!("no overload of `{}` matches these arguments\0", crate::ast::spoken(name));
-        let (m, _len) = self.intern(&msg);
-        f.line(&format!("call void @k_die(ptr @{m})"));
-        f.line("unreachable");
+        // A switch whose cases cover every value the discriminator can hold
+        // never falls to `nomatch`, and then the failure path is blocks
+        // nothing reaches, the way a dispatcher's `fail` is.
+        if branches_to(&f.out, "nomatch") {
+            f.start_block("nomatch");
+            // no arm matched: the discriminator is the only possible failure here
+            let disc_fail = f.tmp();
+            f.line(&format!("{disc_fail} = extractvalue %KValue {dv}, 0"));
+            let is_err = f.tmp();
+            f.line(&format!("{is_err} = icmp eq i64 {disc_fail}, 5"));
+            let is_none = f.tmp();
+            f.line(&format!("{is_none} = icmp eq i64 {disc_fail}, 4"));
+            let failing = f.tmp();
+            f.line(&format!("{failing} = or i1 {is_err}, {is_none}"));
+            let ret_disc = f.label();
+            let die = f.label();
+            f.line(&format!("br i1 {failing}, label %{ret_disc}, label %{die}"));
+            f.start_block(&ret_disc);
+            let hopped = f.tmp();
+            f.line(&format!("{hopped} = call %KValue @k_err_hop(%KValue {dv}, ptr @{hop_name})"));
+            self.emit_ret_failure(&mut f, name, arity, &hopped);
+            f.start_block(&die);
+            let msg =
+                format!("no overload of `{}` matches these arguments\0", crate::ast::spoken(name));
+            let (m, _len) = self.intern(&msg);
+            f.line(&format!("call void @k_die(ptr @{m})"));
+            f.line("unreachable");
+        }
         // arm bodies: patterns are known matched, only bind generics
         for (k, decl) in decls.iter().enumerate() {
             f.start_block(&arm_labels[k]);
@@ -5904,8 +6053,15 @@ impl<'a> Backend<'a> {
         // releasing it there emits a use LLVM's verifier refuses. The cells
         // an arm registers are its own: each arm starts from this watermark.
         let cells_before = f.lazy_cells.len();
+        // Whether an arm left a way into the next one. An arm whose every
+        // parameter check was proved away never branches to its `fail`, and
+        // then the arms after it and the failure path below are blocks nothing
+        // reaches: 13% of the decoder's emitted lines were such blocks, each
+        // parsed by clang only to be deleted by its first pass.
+        let mut open = true;
         for (k, decl) in decls.iter().enumerate() {
             let fail = format!("fail{k}");
+            let arm_at = f.out.len();
             f.lazy_cells.truncate(cells_before);
             f.versions.clear();
             f.origin_prefix = format!("{} at {}", crate::ast::frame_name(&decl.name), decl.file);
@@ -5925,9 +6081,17 @@ impl<'a> Backend<'a> {
                 }
             }
             self.emit_fn_body(&mut f, &decl.body)?;
+            if !branches_to(&f.out[arm_at..], &fail) {
+                open = false;
+                break;
+            }
             f.start_block(&fail);
         }
         f.lazy_cells.truncate(cells_before);
+        if !open {
+            let _ = writeln!(self.body, "{header}\n{}}}\n", f.body());
+            return Ok(());
+        }
         for i in 0..arity {
             let val = match self.escape.carries_ty(name, arity, i).is_some() {
                 true => format!("%x{i}s"),
@@ -7546,12 +7710,7 @@ impl<'a> Backend<'a> {
         let _ = span;
         let ta = inline_tag(f, a);
         let tb = inline_tag(f, b);
-        let ia = f.tmp();
-        f.line(&format!("{ia} = icmp eq i64 {ta}, 0"));
-        let ib = f.tmp();
-        f.line(&format!("{ib} = icmp eq i64 {tb}, 0"));
-        let both = f.tmp();
-        f.line(&format!("{both} = and i1 {ia}, {ib}"));
+        let both = both_ints(f, &ta, &tb);
         let fast = f.label();
         let slow = f.label();
         f.line(&format!("br i1 {both}, label %{fast}, label %{slow}"));
@@ -7764,12 +7923,7 @@ impl<'a> Backend<'a> {
         }
         let ta = inline_tag(f, a);
         let tb = inline_tag(f, b);
-        let ia = f.tmp();
-        f.line(&format!("{ia} = icmp eq i64 {ta}, 0"));
-        let ib = f.tmp();
-        f.line(&format!("{ib} = icmp eq i64 {tb}, 0"));
-        let both = f.tmp();
-        f.line(&format!("{both} = and i1 {ia}, {ib}"));
+        let both = both_ints(f, &ta, &tb);
         let fast = f.label();
         let slow = f.label();
         let merge = f.label();
@@ -7938,10 +8092,17 @@ impl<'a> Backend<'a> {
         let is_bytes = f.tmp();
         f.line(&format!("{is_bytes} = icmp eq i64 {ct}, 13"));
         let kt = inline_tag(f, key);
-        let is_int = f.tmp();
-        f.line(&format!("{is_int} = icmp eq i64 {kt}, 0"));
-        let both = f.tmp();
-        f.line(&format!("{both} = and i1 {is_bytes}, {is_int}"));
+        // a literal index's tag is known, and then the bytes test is the test
+        let both = match kt.as_str() {
+            "0" => is_bytes,
+            _ => {
+                let is_int = f.tmp();
+                f.line(&format!("{is_int} = icmp eq i64 {kt}, 0"));
+                let both = f.tmp();
+                f.line(&format!("{both} = and i1 {is_bytes}, {is_int}"));
+                both
+            }
+        };
         let fast = f.label();
         let slow = f.label();
         let merge = f.label();
@@ -9056,6 +9217,19 @@ fn ir_bytes(bytes: &[u8]) -> String {
 /// constant among them, and a constant's bytes are the program's: a program
 /// printing `call tailcc` once lost the words from its constant, kept the
 /// declared length, and clang refused the module.
+/// Whether `line` holds `needle`, found from the byte `at` places into it.
+/// `str::contains` builds a substring searcher for every call, about a
+/// hundred instructions before it reads a byte, and `narrow_tailcc` asks two
+/// or three of these of every line it walks: 178 calls on a one-line
+/// program's start-up. The anchor byte is found by memchr, and the needle is
+/// compared where one lands. Pick `at` so the anchor is rare in the emitter's
+/// lines.
+fn holds(line: &str, needle: &str, at: usize) -> bool {
+    let anchor = needle.as_bytes()[at] as char;
+    line.match_indices(anchor)
+        .any(|(i, _)| i >= at && line.as_bytes()[i - at..].starts_with(needle.as_bytes()))
+}
+
 fn narrow_tailcc(ir: String) -> String {
     let code = |line: &str| !line.starts_with('@');
     // Split once and walk the lines three times. Splitting is a search for
@@ -9068,7 +9242,7 @@ fn narrow_tailcc(ir: String) -> String {
         if let Some(rest) = line.strip_prefix("define ") {
             current = symbol_of(rest);
         }
-        if line.contains("musttail call") {
+        if holds(line, "musttail call", 0) {
             // both ends of a musttail edge must agree on the convention
             if let Some(callee) = symbol_of(line) {
                 keep.insert(callee);
@@ -9123,13 +9297,13 @@ fn narrow_tailcc(ir: String) -> String {
     for &line in &lines {
         // Every rewrite below needs the word, so a line without it is copied
         // as it stands and its callee is never looked up.
-        if !code(line) || !line.contains("tailcc ") {
+        if !code(line) || !holds(line, "tailcc ", 4) {
             out.push_str(line);
             out.push('\n');
             continue;
         }
         let named = symbol_of(line);
-        let reroute = !line.contains("musttail call")
+        let reroute = !holds(line, "musttail call", 0)
             && line.contains("call tailcc ")
             && named.as_ref().is_some_and(|n| spilling.contains(n));
         if reroute {

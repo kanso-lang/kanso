@@ -292,4 +292,9 @@
 # 2026-09-24 (kanso#1620): an arm no value reaches is not emitted.
 # codegen_instructions_release 1,614,559,051 -> 857,150,087, a FALL of
 # 757,408,964 (-46.9112%).
-codegen_instructions_release=857150087
+#
+# kanso#1621 at CI's sitting: dead cycles, unnamed strings, dead failure
+# paths, reboxed words, the interpreter's argument loops and low byte.
+# codegen_instructions_release 857,150,087 -> 713,520,095, a FALL of
+# 143,629,992 (-16.7567%).
+codegen_instructions_release=713520095

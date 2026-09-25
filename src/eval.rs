@@ -197,9 +197,13 @@ fn bytes_to_str(raw: &[u8]) -> Option<String> {
 /// The low byte of a number, which is what the compiled engine reads where a
 /// byte is wanted: `payload & 0xff`. Every engine has to truncate the same
 /// way or the same program answers two things.
+///
+/// The byte is read off the magnitude's lowest word. `to_bytes_le` answered
+/// the same byte by writing out every byte of the number first, an
+/// allocation and a copy on each of 52,806 calls in the interpreted corpus,
+/// 1.2% of it.
 fn low_byte(n: &BigInt) -> u8 {
-    let (_, digits) = n.to_bytes_le();
-    digits.first().copied().unwrap_or(0)
+    n.magnitude().iter_u64_digits().next().map_or(0, |word| word as u8)
 }
 
 /// A dispatcher passing a failure through appends its name; none stays bare.
@@ -2406,7 +2410,19 @@ impl<'a> Interp<'a> {
         if let Callee::Group(overloads) = callee {
             return self.dispatch(name, &overloads, args, span);
         }
-        let args = args.into_iter().map(|a| self.force_thunk(a)).collect::<Result<Vec<_>, _>>()?;
+        // Forced where they lie, and only where a thunk is: `force_thunk`
+        // hands any other value back as it came. The collect this replaced
+        // moved every argument through a `Result` adapter, and whether rustc
+        // inlined the adapter's fold moved with edits nowhere near here:
+        // kanso#1621 changed only the emitter and the interpreted row rose
+        // 4,189,569, all of it this one collect laid out as a call.
+        let mut args = args;
+        for slot in args.iter_mut() {
+            if let Value::Thunk(cell) = slot {
+                let thunk = Value::Thunk(cell.clone());
+                *slot = self.force_thunk(thunk)?;
+            }
+        }
         self.call_builtin(name, args, span, frame)
     }
 
@@ -2938,7 +2954,16 @@ impl<'a> Interp<'a> {
         // std wrapper modules reach natives through the builtin_ prefix;
         // the checker gates those names to std-origin files
         let name = name.strip_prefix("builtin_").unwrap_or(name);
-        let args: Vec<Value> = args.into_iter().map(sub_base).collect();
+        // In place, and only where a subtype's value is: every other value is
+        // its own base. The in-place collect this replaced was 1.2% of the
+        // interpreted corpus.
+        let mut args = args;
+        for slot in args.iter_mut() {
+            if let Value::Sub { inner, .. } = slot {
+                let base = sub_base((**inner).clone());
+                *slot = base;
+            }
+        }
         if name == "if" {
             return self.builtin_if(args, span);
         }

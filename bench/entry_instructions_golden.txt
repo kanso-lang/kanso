@@ -1029,7 +1029,11 @@
 #
 # 2026-09-24 (kanso#1620): an arm no value reaches is not emitted.
 # entry_instructions 86,461,385 -> 86,465,684, a RISE of 4,299 (+0.0050%).
-entry_instructions=86465684
+#
+# kanso#1621 at CI's sitting: dead cycles, unnamed strings, dead failure
+# paths, reboxed words, the interpreter's argument loops and low byte.
+# entry_instructions 86,465,684 -> 86,678,016, a RISE of 212,332 (+0.2456%).
+entry_instructions=86678016
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

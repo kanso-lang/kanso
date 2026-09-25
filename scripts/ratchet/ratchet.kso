@@ -1971,7 +1971,79 @@ unbuilt_arm = row
 
 rows_b1u = text/concat rows_b1v [unbuilt_arm]
 
-rows_b = text/concat rows_b1u [compile_mem compile_mem_host]
+# A cycle nothing reaches is not emitted. The mutation starts every definition
+# marked, and the spec's summing program defines the merge again.
+dead_cycle = row
+  "a cycle nothing reaches emitted"
+  true
+  "cargo test --release --test a_cycle_nothing_reaches_is_not_emitted"
+  "specs (unit, golden, differential)"
+  (breaking "a_cycle_nothing_reaches_emitted")
+  release
+
+rows_b1cy = text/concat rows_b1u [dead_cycle]
+
+# A string nothing names is not emitted. The mutation wants every interned
+# string, and the spec's module carries strings nothing names again.
+dead_string = row
+  "a string nothing names emitted"
+  true
+  "cargo test --release --test a_string_nothing_names_is_not_emitted"
+  "specs (unit, golden, differential)"
+  (breaking "a_string_nothing_names_emitted")
+  release
+
+rows_b1st = text/concat rows_b1cy [dead_string]
+
+# A block nothing branches to is not emitted. The mutation keeps every block,
+# and the spec's module carries failure paths nothing reaches again.
+dead_block = row
+  "a block nothing branches to emitted"
+  true
+  "cargo test --release --test a_block_nothing_branches_to_is_not_emitted"
+  "specs (unit, golden, differential)"
+  (breaking "a_block_nothing_branches_to_emitted")
+  release
+
+rows_b1bk = text/concat rows_b1st [dead_block]
+
+# An unboxed parameter is read as its word. The mutation records nothing, and
+# the spec's module takes its parameters back apart again.
+unboxed_word = row
+  "an unboxed parameter taken apart"
+  true
+  "cargo test --release --test an_unboxed_parameter_is_read_as_its_word"
+  "specs (unit, golden, differential)"
+  (breaking "an_unboxed_parameter_taken_apart")
+  release
+
+rows_b1uw = text/concat rows_b1bk [unboxed_word]
+
+# A switch writes `nomatch` only when a case falls to it. The mutation always
+# writes it, and the spec's JSON decode carries failure paths nothing reaches.
+dead_nomatch = row
+  "a nomatch nothing falls to emitted"
+  true
+  "cargo test --release --test a_block_nothing_branches_to_is_not_emitted"
+  "specs (unit, golden, differential)"
+  (breaking "a_nomatch_nothing_falls_to_emitted")
+  release
+
+rows_b1nm = text/concat rows_b1uw [dead_nomatch]
+
+# A tag known to be the int tag is not compared. The mutation compares every
+# tag, and the spec's module compares 0 with 0 again.
+known_tag = row
+  "a known int tag compared"
+  true
+  "cargo test --release --test a_tag_known_to_be_int_is_not_compared"
+  "specs (unit, golden, differential)"
+  (breaking "a_known_int_tag_compared")
+  release
+
+rows_b1kt = text/concat rows_b1nm [known_tag]
+
+rows_b = text/concat rows_b1kt [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 
