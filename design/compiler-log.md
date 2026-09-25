@@ -13767,3 +13767,18 @@ the run term loses about 0.0018, so the smaller block is a net loss. A
 lower oversize threshold (256 KiB) moved nothing either: the 786,432-byte
 string the index shape doubles lands in a spare 1 MiB block, which the
 live count already includes.
+
+## 2026-09-25 — two ratchet rows pointed at k_list_empty and k_map_empty
+
+kanso#1622's ratchet found two rows blind. Both mutations patched the path
+an empty literal took before kanso#1622 routed `[]` and `{}` through
+`k_list_empty` and `k_map_empty`: one gave `k_mklist` a one-slot buffer for
+a count of zero, and the other sent `k_map_lit`'s copy of two pairs or fewer
+through memcpy. Empty literals reach neither now, so the work vein stayed
+green under both. The list row now gives the buffer `k_list_empty` carves a
+capacity of one, and jsonbench read 1,042,970,592 against 1,012,694,527
+with it applied. The map row is renamed "an empty map literal built as any
+other" and turns off the emitter's `{}` arm, so the literal goes back
+through `k_map_lit` with a count of zero; jsonbench read 1,025,447,142.
+`k_map_lit`'s short copy for one or two pairs stays in the source with no
+row, because no benchmark writes such a literal.
