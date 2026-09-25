@@ -3471,7 +3471,7 @@ welfare                      77.37         82.09</code></pre>
 
 <p>A compiled pattern now carries the longest run of plain characters that sits side by side in its top-level sequence, which every match must contain. For <code>[a-z]+zzq</code> that is <code>zzq</code>. A class, a repetition, an alternation or an anchor ends a run. The first scan of a subject looks for that literal with a byte search, and when the subject does not hold it, the answer is no match and no position is tried. Later scans start after a match, and a match holds the literal, so they skip the question. The run program runs 4.05% fewer instructions.</p>
 
-<p>Three measurements used that same pattern to watch the scan itself: whether a scan that keeps nothing holds a flat peak, and whether it keeps its place in the text. With the literal asked for first they stopped scanning, so they now search for <code>[a-z]+[x-z]</code>, which ends in a class the text never supplies.</p>
+<p>Two small memory tests used that same pattern to watch the scan itself: whether a scan that keeps nothing holds a flat peak, and whether it keeps its place in the text. With the literal asked for first they stopped scanning, so they now search for <code>[a-z]+[x-z]</code>, which ends in a class the text never supplies.</p>
 
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 

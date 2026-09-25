@@ -699,7 +699,7 @@ deepbench 366349812
 escapebench 69238511
 pendbench 181898609
 indexbench 2856474
-scanbench 311856920
+scanbench 285663
 digestbench 5540955
 readbench 4631905
 livebench 2121219022

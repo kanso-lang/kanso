@@ -14286,16 +14286,18 @@ literal is taken, so `(?i)zzq` asks for nothing and still finds "ZZQ".
 
 scanbench exists to show that a scan which keeps nothing holds a flat peak,
 and two mem fixtures, `a_scan_that_finds_nothing_keeps_nothing` and
-`a_scan_keeps_its_place_in_the_text`, pin the same scan at small sizes.
-All three used `[a-z]+zzq`, and with the literal asked for first none of them
+`a_scan_keeps_its_place_in_the_text`, pin the same scan at small sizes. All
+three used `[a-z]+zzq`, and with the literal asked for first none of them
 walked a single position: the fixtures' `beat_iters` read 0, and the second's
 `seek_resumes` fell to 0, which would have left the `seek_kept` ratchet row
-blind. They now search for `[a-z]+[x-z]`, which ends in a class the alphabet
-never supplies, so each start is still walked and backed off. That is a
-change of what the three measure, and it prices as one: `work_scanbench`
-291,353,249 -> 311,856,920 (+7.04%), because a class tried at each backed-off
-position costs more than a literal did; the fixture rows move the same way.
-Their arena peaks did not move.
+blind. The two fixtures now search for `[a-z]+[x-z]`, which ends in a class
+the alphabet never supplies, so each start is still walked and backed off;
+their arena peaks did not move and `seek_resumes` holds at 408. scanbench
+cannot follow them: `the_run_program_carries_the_shapes_unchanged` holds it
+to the run program's split phase character for character, so it keeps
+`[a-z]+zzq`, answers at once, and `work_scanbench` falls 291,353,249 ->
+285,663 (-99.90%). Its header now says so and names the fixture that keeps
+the flat-peak property.
 
 The run program's split phase still reads `[a-z]+zzq`, and with this change
 it measures a subject scanned for a literal once rather than a backtracking
@@ -14327,12 +14329,8 @@ the new layout, and the program record's fourth field moves
 `run_sh_rec` to 48,174,640, `run_sh_str` to 7,733,616 and `run_bytes_malloc`
 to 20,556.
 
-scanbench and the two scan fixtures now search for a class, which the scan
-tries at every backed-off position, and they re-base with it. scanbench:
-`scan_allocs` 3,006,147, `scan_alloc_bytes` 112,314,784, `scan_find2_calls`
-1,001,003, `scan_sh_bytes` 48,048,144, `scan_sh_buf` 81,008, `scan_sh_str`
-752, `scan_bytes_malloc` 38, `scan_push_mut_fast` 5 and `scan_str_scan_bytes`
-3,352. a_scan_that_finds_nothing_keeps_nothing:
+The two scan fixtures now search for a class, which the scan tries at every
+backed-off position, and they re-base with it. a_scan_that_finds_nothing_keeps_nothing:
 `a_scan_that_finds_nothing_keeps_nothing_allocs` 74,066,
 `a_scan_that_finds_nothing_keeps_nothing_alloc_bytes` 2,778,784,
 `a_scan_that_finds_nothing_keeps_nothing_find2_calls` 24,495,
