@@ -3415,7 +3415,13 @@ welfare                      77.37         82.09</code></pre>
 
 <p>Together these take runbench down 5.42%, jsonbench 7.50% and livebench 6.29%. pendbench and digestbench rise by less than half a per cent: their calls into the cycle outnumber the jumps inside it, and a caller now saves what it keeps live across such a call where the callee used to. arm64 is left as it was until the convention has been measured there.</p>
 
-<h2 id="fifthpush"><span class="sec-num">141</span>a list of five</h2>
+<h2 id="movedbinds"><span class="sec-num">141</span>the interpreter keeps what it was handed</h2>
+
+<p>When the interpreter calls a function with several arms, it tries each arm against the arguments and keeps the best match. Every arm that named a parameter bound it to a copy of the argument, and a copy of an integer or a string allocates, so the arms that lost paid for copies nobody used. A named parameter now holds nothing while the arms are compared, and the winning arm's arguments are moved into place once it is known. The argument list was already discarded before the body ran. The interpreted corpus runs 3.2% fewer instructions and makes 5.5% fewer allocations, and prints the same thing.</p>
+
+<p>A smaller change on the native side: appending to a byte buffer that has no storage yet always grows it, and the check for that case now comes before the function that fits bytes into existing room. That function used to save five registers on every call, including the calls that went straight on to grow.</p>
+
+<h2 id="fifthpush"><span class="sec-num">142</span>a list of five</h2>
 
 <p>One decode of the benchmark document allocates about nine bytes for every byte of JSON it reads. Sorting the allocations by size found the largest share in list buffers of sixteen slots. A list starts with four, and growing one took the smallest power of two that held the new element and then doubled it, so the fifth push went to sixteen slots. Most lists in a JSON document are short, and this one's average three and a half elements.</p>
 

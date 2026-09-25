@@ -208,4 +208,8 @@
 # binary search, entries in one block, the beat mark inline, empty literals
 # and ints rendered in place. codegen_instructions_dev 144,314,284 ->
 # 142,644,443, a FALL of 1,669,841 (-1.1571%).
-codegen_instructions_dev=142644443
+#
+# kanso#1624 at CI's sitting: an append that must grow asks first.
+# codegen_instructions_dev 142,644,443 -> 142,639,014, a FALL of 5,429
+# (-0.0038%).
+codegen_instructions_dev=142639014
