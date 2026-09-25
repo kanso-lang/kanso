@@ -2343,7 +2343,29 @@ split_stops = row
 
 rows_b1ss = text/concat rows_b1rl [split_stops]
 
-rows_b = text/concat rows_b1ss [compile_mem compile_mem_host]
+# A second `kanso play` of a file finds its binary by the file's text and does
+# not emit. Leaving the text out of that key runs an edited file's old binary;
+# a loader that stops saying a module came from disk keys a file whose module
+# changed under it by the file alone.
+play_text = row
+  "a play key that leaves out the file's text"
+  true
+  "cargo test --release --test a_play_file_is_keyed_by_its_text"
+  "specs (unit, golden, differential)"
+  (breaking "a_play_key_that_leaves_out_the_text")
+  release
+
+play_disk = row
+  "a play key that trusts a module read from disk"
+  true
+  "cargo test --release --test a_play_file_is_keyed_by_its_text"
+  "specs (unit, golden, differential)"
+  (breaking "a_play_key_that_trusts_a_module_from_disk")
+  release
+
+rows_b1pk = text/concat rows_b1ss [play_text play_disk]
+
+rows_b = text/concat rows_b1pk [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 

@@ -77,9 +77,17 @@ pub fn compile_play_file(file: &str, source: &str) -> Result<ast::Program, Strin
         }
     }
     ENTRY_COMPILE.with(|c| c.set(true));
+    LOADED_ELSEWHERE.with(|c| c.set(false));
     let built = compile_parsed_entry(program, file, source);
     ENTRY_COMPILE.with(|c| c.set(false));
     built
+}
+
+/// Whether the play file compiled last loaded every module it uses from the
+/// copies embedded in this binary. When it did, its text and this binary
+/// decide the program, and nothing on disk can change it.
+pub fn play_file_is_self_contained() -> bool {
+    !LOADED_ELSEWHERE.with(|c| c.get())
 }
 
 fn compile_entry_inner(file: &str, source: &str) -> Result<ast::Program, String> {
@@ -2684,6 +2692,7 @@ fn load_dependencies(
         let local = path.strip_prefix("./").unwrap_or(path);
         let handed = HANDED_SOURCES.with(|c| c.borrow().get(local).cloned());
         if let Some(files) = handed {
+            LOADED_ELSEWHERE.with(|c| c.set(true));
             let borrowed: Vec<(&str, &str)> =
                 files.iter().map(|(n, s)| (n.as_str(), s.as_str())).collect();
             let mut dep =
@@ -2726,6 +2735,7 @@ fn load_dependencies(
 "
             .to_string());
         }
+        LOADED_ELSEWHERE.with(|c| c.set(true));
         let dep_dir = resolve_import(base, path)?;
         // importing one's own module compiles a second copy of it, so every
         // type gets a twin and a constructor pattern stops matching values
@@ -3444,6 +3454,11 @@ thread_local! {
     static SHIPPED_STD: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     /// Set by `check_shipped`, which asks the check the loader skips.
     static CHECK_SHIPPED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// Whether a module of the program being compiled came from anywhere but
+    /// this binary: a directory on disk, or sources handed in. A play file
+    /// that loaded nothing else is fixed by its own text and this binary,
+    /// which is what lets `kanso play` key its build on the text.
+    static LOADED_ELSEWHERE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     /// Modules handed in as sources rather than read from disk, by import
     /// path. The browser compiles a program with no filesystem under it, and
     /// a program is a library plus the entry file that runs it.

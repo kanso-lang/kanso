@@ -14350,3 +14350,39 @@ CI read the merged tree at 755fb36d: `entry_instructions` 84,635,818 ->
 84,635,833 (+15) and `library_instructions` 85,223,918 -> 85,224,038 (+120).
 The projection added two deltas measured on different trees, and the
 remainder is layout. Neither row is weighed.
+
+---
+
+## 2026-09-25 — a second play of the same file does not emit
+
+`kanso play` keeps the native binary it builds, keyed by a hash of the
+program's IR, so an unchanged file runs again with no clang. Finding the
+binary meant emitting the IR on every run. On the start-up corpus, `print
+"x"`, `kanso::codegen::emit_ir_dev` was 404,031 of the 615,803 instructions
+under `kanso::main` on this container, and its output was hashed and dropped.
+
+A play file imports the standard library and nothing else, and the compiler
+embeds every std module except `std/expect`. The loader now notes when a
+program reads a module from disk or from handed-in sources. When a play file
+read nothing but embedded modules, its IR is decided by the file's name and
+text, the compiler, the runtime digest, the closure convention the installed
+clang takes, the counting flag and the `KANSO_` environment. `played_key`
+hashes those with `key_of`, naming the compiler by its path, length and
+modification time, which a rebuild always changes. The first play emits and
+builds through the IR's key as before and hard-links the binary under
+`kanso_play_<key>`; a later play finds that name and runs it without emitting.
+A file that reads `std/expect` goes through the IR's key every time.
+
+On this container the start-up row falls from 615,803 to 208,643, -407,160
+(-66.1%), and `emit_instructions` reads 29,578,328 on both trees, since that
+row builds the codegen corpus with `kanso build`. `startup_instructions` is
+projected at 605,441 -> 198,281 until CI reads it. The start-up row no longer
+reaches the emitter on its measured run; `emit_instructions` is the row that
+watches emitting.
+
+tests/a_play_file_is_keyed_by_its_text holds two cases. A file rewritten from
+`print "first"` to `print "second"` between plays prints `second`; with the
+text left out of the key it prints `first`. A play file importing a
+`std/expect` read through `KANSO_STD` prints `a?` after the module changes
+from `!` to `?`; with the loader's note removed it prints `a!`. The ratchet
+rows are `play_text` and `play_disk`.

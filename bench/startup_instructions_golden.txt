@@ -496,4 +496,9 @@
 #
 # kanso#1634: the interpreter's per-call questions stop hashing
 # startup_instructions 605,388 -> 605,441, a RISE of 53 (+0.0088%).
-startup_instructions=605441
+#
+# Projected from this container's fall of 407,160: a second play of an
+# unchanged file finds its binary by the file's text and does not emit. CI's
+# reading replaces it. startup_instructions 605,441 -> 198,281, a FALL of
+# 407,160 (-67.2502%).
+startup_instructions=198281
