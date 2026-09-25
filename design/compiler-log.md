@@ -14238,3 +14238,35 @@ pass and the scan's question: `entry_instructions` 83,186,043 -> 84,496,376
 work, text and emitted row CI measured matched the projection from this box,
 runbench 1,421,154,308 among them. The objective weighs neither compile row,
 so the welfare banked with this change is the runbench fall's.
+
+## 2026-09-25 — the doors take their convention in one pass
+
+With clang 19 the emitter chooses the preserve_none convention for closures,
+and four runtime functions, the doors, take it too. `through_doors` wrote the
+keyword into every declare of and call to them with eight `str::replace`
+calls, two per door, each of which built the whole module again. On `kanso
+play` of a one-line program that was 402,596 of the 1,067,649 instructions
+under `kanso::main`. It is now one pass that stops only where `%KValue @k_b_`
+appears and writes the keyword when a door's name and its `(` follow and a
+`declare ` or `call ` comes before.
+
+The module is byte-identical: `kanso build bench/runbench --release` writes
+the same `runbench.ll` from main and from this branch. The one-line `kanso
+play` falls from 2,132,907 instructions to 1,787,508 for the whole process on
+this container, -345,399.
+
+No gate sees either number. The gates run with `/usr/bin` first on PATH, where
+the image's clang is 18, the probe for preserve_none fails, and the function
+returns at its first line. `startup_instructions` and `emit_instructions`
+therefore stay where they were, and the objective cannot see a change that
+takes a sixth off the start-up of every `kanso play` and `kanso test` under
+the clang the benchmarks are built with.
+
+The specs job builds with clang 19, so the doors' convention is checked by
+every native program it runs. Matching a door by the prefix of its name hands
+`k_b_utf8`'s convention to the `k_b_utf8_...` functions: the run program then
+prints `runbench 31740465` where it should print `runbench 46013475` and exits
+0, and the golden suite goes red on the micro corpus, its release build and
+the runtime corpus. Dropping the `call ` case fails the run program with
+`utf8 takes a list of byte values`. The ratchet row `door_prefix` holds the
+first; the ratchet's box selects clang 19, so the mutation reaches the code.
