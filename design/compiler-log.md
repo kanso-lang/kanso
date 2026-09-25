@@ -14259,3 +14259,9 @@ a_split_ends_where_its_separator_does pins the pieces for a separator that
 never matches, one that stops, one at the end, and three patterns that match
 the empty string, and read the same before and after the change on both
 engines. No benchmark splits, so no work row moves.
+
+CI's reading moved the two compile rows that compile lib/regexp:
+`entry_instructions` 84,496,376 -> 84,512,441 (+16,065) and
+`library_instructions` 85,059,188 -> 85,101,407 (+42,219). The split's new
+arm and its guard are code both routes compile. The objective weighs neither
+row, and every work row CI measured matched main.
