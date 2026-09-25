@@ -9121,6 +9121,24 @@ KValue k_b_append(KValue acc, KValue x) { return k_b_append_into(acc, x, 0); }
 /* The same append at a site the linearity analysis proved unique. */
 KValue k_b_append_mut(KValue acc, KValue x) { return k_b_append_into(acc, x, 1); }
 
+/* The arm `k_b_append_mut_word` refuses: a counting build, or a builder
+   without eight bytes of room at its frontier. It builds the literal and
+   appends it in place, out of line so the word's fast path stays small where
+   it is inlined.
+
+   In place, and not through `k_b_append` as the string arm of
+   `k_b_append_mut_byte` does. That arm refuses only a builder with no room for
+   the literal, and `k_b_append` then grows it. This one also refuses a
+   builder with room for the literal but not for a whole word, and there
+   `k_b_append` claims the room and hands back a new header in the arena. A
+   builder a beat loop carries by identity keeps the old one, the loop's
+   rewind reclaims the new one, and the next append read a header the arena
+   had handed to something else: encodebench's counting build crashed on it. */
+__attribute__((noinline, cold)) KValue k_b_append_word_slow(KValue acc, const char* lit,
+                                                           long long n, KValue* cell) {
+    return k_b_append_mut(acc, k_str_lit(lit, n, cell));
+}
+
 /* `append acc (slice cs from to)` where both sides are bytes. The slice is
    built to be copied and dropped, and a view is a header the arena has to
    hand out; this reads the range straight out of `cs` and hands

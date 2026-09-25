@@ -1,0 +1,23 @@
+# The json encoder writes `true`, `false` and `null` into a builder it carries
+# through its loops, and a literal of up to eight bytes is stored as one word
+# when the builder has room for all eight. When it has room for the literal
+# and not for the word, the append takes the slow arm, and that arm must write
+# into the builder it was given. Appending through a call that claims the room
+# and hands back a new header left the loop holding the old header while its
+# rewind reclaimed the new one, and the next append read a header the arena
+# had given to something else: this program crashed in a counting build.
+import "std/json"
+
+nul = json/json_null
+
+inner = { "e":nul "f":[false true] }
+
+doc = [{ "a":true "b":nul "c":[true false nul] } { "d":inner } [nul nul true]]
+
+fn rounds _ 0 acc
+  acc
+
+fn rounds d n acc
+  rounds d (n - 1) (acc + length (json/encode d))
+
+pub play = print "{rounds doc 40 0}"

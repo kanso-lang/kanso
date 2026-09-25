@@ -54,7 +54,7 @@ pub fn counters_wanted() -> bool {
 
 /// How many `k_stats_on` gates DECLARES carries. Pinned so that adding one
 /// without teaching `index_declares` about it fails the build.
-pub const STATS_GATE_SITES: usize = 9;
+pub const STATS_GATE_SITES: usize = 10;
 
 const DECLARES: &str = r#"%KValue = type { i64, i64 }
 %parsed = type { i64, i64 }
@@ -376,6 +376,53 @@ slow:
   %t = call %KValue @k_b_append_mut_int(%KValue %acc, %KValue %x)
   %r = call %KValue @k_b_append_mut_int(%KValue %t, %KValue %y)
   ret %KValue %r
+}
+; A string literal of one to eight bytes appended to a builder this function
+; owns: `text/append acc "true"`, which is every `true`, `false` and `null` the
+; json encoder writes. The literal is one word known when the program was
+; compiled, so it is stored whole, where the string arm above loads the
+; literal's cell, reads its header and copies a variable length. The bytes the
+; word carries past the literal land in room the builder already owns and past
+; its length, where nothing reads them. Anything the fast path refuses builds
+; the literal and takes the string arm, so the counting build sees the append
+; it always saw.
+define internal %KValue @k_b_append_mut_word(%KValue %acc, i64 %word, i64 %n, ptr %lit, ptr %cell) alwaysinline {
+  %atag = extractvalue %KValue %acc, 0
+  %isb = icmp eq i64 %atag, 13
+  br i1 %isb, label %stat, label %slow
+stat:
+  %so = load i32, ptr @k_stats_on
+  %counting = icmp ne i32 %so, 0
+  br i1 %counting, label %slow, label %fast
+fast:
+  %bp = extractvalue %KValue %acc, 1
+  %b = inttoptr i64 %bp to ptr
+  %len = load i64, ptr %b
+  %datap = getelementptr i8, ptr %b, i64 8
+  %data = load ptr, ptr %datap
+  %capp = getelementptr i8, ptr %b, i64 16
+  %cap = load i64, ptr %capp
+  %capa = and i64 %cap, -2
+  %owned = icmp ne i64 %cap, 0
+  br i1 %owned, label %fr, label %slow
+fr:
+  %usedp = getelementptr i8, ptr %data, i64 -8
+  %used = load i64, ptr %usedp
+  %atfront = icmp eq i64 %used, %len
+  %len8 = add i64 %len, 8
+  %fits = icmp sle i64 %len8, %capa
+  %ok = and i1 %atfront, %fits
+  br i1 %ok, label %write, label %slow
+write:
+  %dst = getelementptr i8, ptr %data, i64 %len
+  store i64 %word, ptr %dst, align 1
+  %lenn = add i64 %len, %n
+  store i64 %lenn, ptr %usedp
+  store i64 %lenn, ptr %b
+  ret %KValue %acc
+slow:
+  %f = call %KValue @k_b_append_word_slow(%KValue %acc, ptr %lit, i64 %n, ptr %cell)
+  ret %KValue %f
 }
 ; `append acc (slice cs from to)` where the accumulator is unique, both sides
 ; are bytes and the range fits the spare capacity it already has. That is the
@@ -1301,6 +1348,7 @@ declare %KValue @k_b_push(%KValue, %KValue)
 declare %KValue @k_b_push_mut(%KValue, %KValue)
 declare void @llvm.memcpy.p0.p0.i64(ptr, ptr, i64, i1)
 declare %KValue @k_b_append_mut(%KValue, %KValue)
+declare %KValue @k_b_append_word_slow(%KValue, ptr, i64, ptr)
 declare %KValue @k_b_put(%KValue, %KValue, %KValue)
 declare %KValue @k_b_put_mut(%KValue, %KValue, %KValue)
 declare %KValue @k_b_slice(%KValue, %KValue, %KValue)
@@ -3827,6 +3875,8 @@ const DECLARES_CONTEXT_CALLS: &[&str] = &[
     "k_b_append_mut_byte",
     "k_b_append_mut_int",
     "k_b_append_mut_int2",
+    "k_b_append_mut_word",
+    "k_b_append_word_slow",
     "k_b_append_slice",
     "k_b_append_slice_fast",
     "k_b_at",
@@ -9015,6 +9065,39 @@ impl<'a> Backend<'a> {
         // have made, so a user arm is never skipped; every other tag the door
         // hands to k_render itself, the same call the template makes, so the
         // bytes cannot differ. Same wrapper-spelling rule as the pair above.
+        // `append acc "true"`: a literal of one to eight bytes into a builder
+        // the linearity analysis proved this site owns. `k_b_append_mut_word`
+        // says why the literal travels as a word.
+        if first.is_none() && args.len() == 2 && self.builtin_named(name, 2) == "append" {
+            if let Expr::Str(parts, _) = &args[1] {
+                let text: Option<String> = parts
+                    .iter()
+                    .map(|p| match p {
+                        TemplatePart::Lit(s) => Some(s.as_str()),
+                        _ => None,
+                    })
+                    .collect();
+                let mutate = self.in_place_pushes.contains(&(
+                    f.file.clone(),
+                    span.line as usize,
+                    span.col as usize,
+                ));
+                if let Some(text) = text.filter(|t| mutate && (1..=8).contains(&t.len())) {
+                    let acc = self.emit_expr(f, &args[0])?;
+                    let acc = self.maybe_force(f, acc);
+                    let mut bytes = [0u8; 8];
+                    bytes[..text.len()].copy_from_slice(text.as_bytes());
+                    let word = i64::from_le_bytes(bytes);
+                    let (lit, n) = self.intern(&text);
+                    let t = f.tmp();
+                    f.line(&format!(
+                        "{t} = call %KValue @k_b_append_mut_word(%KValue {acc}, i64 {word}, i64 {n}, ptr @{lit}, ptr @{lit}_lit)"
+                    ));
+                    f.record(&t, infer::builtin_set("append", &[f.set_of(&acc), STR]));
+                    return Ok(t);
+                }
+            }
+        }
         if first.is_none() && args.len() == 2 && self.builtin_named(name, 2) == "append" {
             if let Expr::Str(parts, _) = &args[1] {
                 if let [TemplatePart::Interp(inner)] = parts.as_slice() {

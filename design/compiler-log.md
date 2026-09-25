@@ -14265,3 +14265,68 @@ CI's reading moved the two compile rows that compile lib/regexp:
 `library_instructions` 85,059,188 -> 85,101,407 (+42,219). The split's new
 arm and its guard are code both routes compile. The objective weighs neither
 row, and every work row CI measured matched main.
+
+## 2026-09-25 — a short literal is appended as one word
+
+The json encoder writes every `true`, `false` and `null` with `text/append acc
+"true"` into a builder it owns. The emitter already took those appends past the
+runtime: the string arm of `k_b_append_mut_byte` loads the literal's cell,
+reads its header and copies its length in overlapping loads. A literal of one
+to eight bytes appended in place now goes through `k_b_append_mut_word`, which
+takes the literal as a word the compiler wrote into the call and its length as
+a constant. When the builder has eight bytes of room at its frontier the word
+is stored whole and the length moves by the literal's own length; the bytes
+past the literal land in room the builder owns and past its length, where
+nothing reads them. Otherwise a cold runtime function builds the literal and
+appends it in place.
+
+It has to be in place. The first slow arm went through `k_b_append`, the one
+the string arm falls back to, and encodebench's counting build crashed. That
+arm refuses only a builder with no room for the literal, and `k_b_append` then
+grows it. This one also refuses a builder with room for the literal but not
+the word, where `k_b_append` claims the room and hands back a new header in
+the arena. The encoder carries its builder through beat loops by identity, so
+the loop kept the old header, its rewind reclaimed the new one, and the next
+append read a header the arena had given to something else.
+
+The first cut also inlined the slow arm, and the larger encoder functions
+cost more than the word saved: encodebench fell 1.46% while runbench rose
+0.89% and livebench 1.74%. Out of line, on this container: encodebench
+2,861,479,405 -> 2,736,636,903 (-124,842,502, -4.36%), livebench -41,831,652
+(-1.97%), runbench 1,421,153,849 -> 1,414,525,181 (-6,628,668, -0.47%) with
+the same tally, and oneshot -105,172. `work_widebench` rose 303,982 to
+29,082,048 (+1.06%); widebench appends few literals and moved with where its
+code landed. No counter moved in any vein: the counting build takes the slow
+arm every time, and appending in place counts what the string arm's fallback
+counted. The emitted veins price the helper and its call sites:
+`emitted_lines` 5,496, `emitted_other_lines` 83,655,
+`emitted_other_defines` 1,553 and `emitted_other_branches` 8,015, with
+`emitted_other_calls` down 34 to 9,663.
+
+tests/golden/micro/a_short_literal_is_appended_whole builds text from
+literals of one, three, eight and nine bytes, multibyte ones among them, so
+the room runs out part-way through a word at different appends. A length moved
+by eight instead of the literal's length printed the bytes past it.
+tests/golden/mem/a_literal_appended_across_a_rewind encodes a small document
+forty times; with the slow arm through `k_b_append` its counting build
+segfaults, and `a_cycle_that_allocates_nothing_needs_no_bracket` drifts from
+30 allocations to 20,030. Ratchet rows `word_length`, `word_slow` and
+`word_used`.
+
+Built, measured and declined on the way:
+
+- A key's closing quote and its colon as one literal, tried a second time on
+  top of the word. `entry_onto` escaped the key itself and appended `"\":"`.
+  runbench rose 22,294,121 (+1.58%) and livebench 89,482,230 (+4.30%) against
+  the word alone: the key no longer went through `encode_onto`'s dispatch,
+  and the arm that replaced it was larger where it was inlined.
+- One word for a beat loop's rewind test. A global held the innermost mark's
+  pointer while the buffer shelf and that mark's registries were empty,
+  refreshed at every write to the top, the registry bits and the shelf flag,
+  so an iteration asked one comparison. escapebench fell 3.10%, but runbench
+  rose 3,597,581 (+0.25%), encodebench 42,471,101 (+1.48%) and livebench
+  29,109,596 (+1.37%): refreshing on every pop and every shelf write cost more
+  than the iteration saved.
+- `FnEmit::write` without `writeln!`. The emit row fell 677,411 (-2.29%) on
+  this container and start-up 2,274, worth a few hundredths of a point; left
+  for a change that takes the formatting out of the emitter as a whole.

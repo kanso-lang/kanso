@@ -691,10 +691,10 @@
 # entries; nothing here moves them.
 #
 jsonbench 977552823
-encodebench 2861479738
-oneshot 15039606
+encodebench 2736637236
+oneshot 14934434
 basket 31593354
-widebench 28778066
+widebench 29082048
 deepbench 364731746
 escapebench 69238422
 pendbench 181843966
@@ -702,7 +702,7 @@ indexbench 2855795
 scanbench 285012
 digestbench 5540581
 readbench 4631757
-livebench 2120705792
+livebench 2078874140
 # 2026-09-06 (the run program joins): `runbench 3043743748` is a NEW row and
 # nothing regressed to make it appear. It is the program Clay's gavel that day
 # made the objective's whole run-speed term, and the thirteen rows above it
@@ -760,4 +760,10 @@ livebench 2120705792
 #
 # The uniform -8 across six rows is one instruction on a path each program
 # takes eight times, and the four flat rows never take it at all.
-runbench 1421154308
+#
+# 2026-09-25, a literal of one to eight bytes appended as one word. Projected
+# from this container's two readings, CI's replace them: encodebench
+# -124,842,502 (-4.36%), livebench -41,831,652, runbench -6,628,668 (-0.47%),
+# oneshot -105,172, and widebench +303,982 (+1.06%), which appends few
+# literals and moved with where its code landed.
+runbench 1414525640
