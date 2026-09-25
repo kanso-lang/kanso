@@ -5,6 +5,8 @@
 # named, so every position walked the subject from the front. It forgets it
 # now only when the string sat above the mark, which the subject here does not.
 # `seek_resumes` counts the walks that started from the remembered place.
+# The pattern ends in a class because a literal the subject lacks is answered
+# before any scan; `[a-z]+zzq` stopped walking the text on 2026-09-25.
 import "std/regexp"
 import "std/text"
 
@@ -16,5 +18,5 @@ fn grow n acc
 
 pub play =
   subject = text/utf8 (grow 12 (text/bytes ""))
-  hits = regexp/find_all "[a-z]+zzq" subject
+  hits = regexp/find_all "[a-z]+[x-z]" subject
   print "found {length hits} in {length subject}"
