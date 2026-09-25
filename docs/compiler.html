@@ -3491,6 +3491,14 @@ welfare                      77.37         82.09</code></pre>
 
 <p>The start-up row counts exactly this case, a warm second play, and it fell from 615,803 instructions to 51,616 on the container that built it. The front end and the emitter keep rows of their own, which compile the benchmark corpora directly; neither moved.</p>
 
+<h2 id="smallvalues"><span class="sec-num">153</span>small values in the interpreter</h2>
+
+<p>The interpreter held every map as a B-tree and every int as an arbitrary-precision integer. Both are right for the large case, and both charge the small case for it. A B-tree leaf has room for eleven entries whatever it holds, and most maps a program builds are JSON records with a few keys. The interpreted corpus decodes 220 records of four keys, and their leaves made up 158,400 bytes of the interpreter's peak memory. A big integer keeps its digits in a heap vector even when the number is 1, and copying the value copies the vector.</p>
+
+<p>A map of up to eight entries is now a vector kept in key order, and a ninth key turns it into a B-tree, so a large map built one key at a time still inserts in logarithmic time. An int is a machine word while it fits one. Addition, subtraction, multiplication, division and remainder try the word first and move to the big integer when the word overflows. A result that fits a word always goes back into one, so each number has exactly one form. Equality, ordering and map keys rely on that, and a spec checks that <code>max + 1 - 1</code> equals <code>max</code>.</p>
+
+<p>Together the two changes cut the interpreted run's instructions by 9.8% and its peak memory by 10.1% on the container that built them. Putting the big integer behind a shared pointer and changing nothing else was tried first. It saved 4.5% of the instructions and allocated 27% more often, because every new int then took two allocations. It was not kept.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>
