@@ -4475,49 +4475,64 @@ fn both_ints(f: &mut FnEmit, ta: &str, tb: &str) -> String {
 /// that result read nowhere else in the function, as one call to
 /// `k_b_append_mut_int2`. Both calls were already the proven-bytes,
 /// proven-int door, so the pair asks the same questions once; see the helper.
-fn paired_appends(body: &str) -> String {
-    const HEAD: &str = " = call %KValue @k_b_append_mut_int(%KValue ";
+///
+/// The search goes from one call to the next rather than line by line, and a
+/// body with no pair comes back as it was, because this runs on every build
+/// and most programs have none.
+fn paired_appends(body: &str) -> std::borrow::Cow<'_, str> {
+    const CALL: &str = " = call %KValue @k_b_append_mut_int(%KValue ";
     fn parse(line: &str) -> Option<(&str, &str, &str)> {
         let rest = line.strip_prefix("  ")?;
-        let (name, rest) = rest.split_once(HEAD)?;
+        let (name, rest) = rest.split_once(CALL)?;
         let args = rest.strip_suffix(')')?;
         let (acc, x) = args.split_once(", %KValue ")?;
         Some((name, acc, x))
     }
-    let lines: Vec<&str> = body.lines().collect();
-    let mut out = String::with_capacity(body.len());
-    let mut start = 0;
-    while start < lines.len() {
-        // one function at a time, so a use count is the function's own
-        let mut end = start;
-        while end < lines.len() && lines[end] != "}" {
-            end += 1;
+    let line_end = |from: usize| body[from..].find('\n').map_or(body.len(), |n| from + n);
+    let mut edits: Vec<(usize, usize, String)> = Vec::new();
+    let mut from = 0;
+    while let Some(n) = body[from..].find(CALL) {
+        let at = from + n;
+        let start = body[..at].rfind('\n').map_or(0, |n| n + 1);
+        let end = line_end(at);
+        from = end;
+        if end >= body.len() {
+            break;
         }
-        let end = (end + 1).min(lines.len());
-        let func = &lines[start..end];
-        let mut i = 0;
-        while i < func.len() {
-            if i + 1 < func.len() {
-                if let (Some((a, acc, x)), Some((b, acc2, y))) =
-                    (parse(func[i]), parse(func[i + 1]))
-                {
-                    let used = func.iter().map(|l| count_operand(l, a)).sum::<usize>();
-                    if acc2 == a && used == 2 {
-                        out.push_str(&format!(
-                            "  {b} = call %KValue @k_b_append_mut_int2(%KValue {acc}, %KValue {x}, %KValue {y})\n"
-                        ));
-                        i += 2;
-                        continue;
-                    }
-                }
-            }
-            out.push_str(func[i]);
-            out.push('\n');
-            i += 1;
+        let next = line_end(end + 1);
+        let (Some((a, acc, x)), Some((b, acc2, y))) =
+            (parse(&body[start..end]), parse(&body[end + 1..next]))
+        else {
+            continue;
+        };
+        if acc2 != a {
+            continue;
         }
-        start = end;
+        // a use count is the function's own
+        let first = body[..start].rfind("\ndefine ").map_or(0, |n| n + 1);
+        let last = body[next..].find("\n}\n").map_or(body.len(), |n| next + n);
+        let used: usize = body[first..last].lines().map(|l| count_operand(l, a)).sum();
+        if used == 2 {
+            edits.push((
+                start,
+                next,
+                format!("  {b} = call %KValue @k_b_append_mut_int2(%KValue {acc}, %KValue {x}, %KValue {y})"),
+            ));
+            from = next;
+        }
     }
-    out
+    if edits.is_empty() {
+        return std::borrow::Cow::Borrowed(body);
+    }
+    let mut out = String::with_capacity(body.len());
+    let mut kept = 0;
+    for (start, end, line) in edits {
+        out.push_str(&body[kept..start]);
+        out.push_str(&line);
+        kept = end;
+    }
+    out.push_str(&body[kept..]);
+    std::borrow::Cow::Owned(out)
 }
 
 /// How many times `name` appears in `line` as a whole operand.
