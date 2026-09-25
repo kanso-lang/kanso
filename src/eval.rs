@@ -1205,6 +1205,14 @@ impl Executor for ScriptedExecutor {
 /// Two memories rather than one because the rows would not fit in one: a value
 /// needs the name as an `Rc<str>` and a call needs the group, and an arm
 /// carrying both would size every row of both tables by the pair.
+/// The slot an address takes in the recent tables. Allocations sit at
+/// regular strides, so the low bits of an address repeat; multiplying by the
+/// golden ratio and keeping the top bits spreads them.
+fn recent_slot(key: usize) -> usize {
+    ((key as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15) >> (64 - RECENT_CALLEES.trailing_zeros()))
+        as usize
+}
+
 /// Slots in `Interp::recent_callees` and `Interp::recent_frames`.
 const RECENT_CALLEES: usize = 256;
 
@@ -1407,7 +1415,7 @@ impl<'a> Interp<'a> {
     /// handed to another while a slot names it.
     fn frame_for(&self, decl: &'a FnDecl) -> Frame {
         let key = decl as *const FnDecl as usize;
-        let slot = (key >> 4) % RECENT_CALLEES;
+        let slot = recent_slot(key);
         if let (at, frame @ Some(_)) = &self.recent_frames.borrow()[slot] {
             if *at == key {
                 return frame.clone();
@@ -2441,7 +2449,7 @@ impl<'a> Interp<'a> {
     /// so an address in the table cannot have been handed to another name.
     fn callee_of_ref(&self, name: &Rc<str>) -> Callee<'a> {
         let key = Rc::as_ptr(name) as *const u8 as usize;
-        let slot = (key >> 4) % RECENT_CALLEES;
+        let slot = recent_slot(key);
         if let (k, Some(callee)) = &self.recent_callees.borrow()[slot] {
             if *k == key {
                 return callee.clone();
