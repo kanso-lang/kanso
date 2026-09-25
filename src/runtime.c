@@ -9141,6 +9141,15 @@ static __attribute__((noinline)) KValue k_b_append_grow(KValue acc, KBytes* a,
        an allocator that reclaims nothing pays for every intermediate size a
        builder passes through rather than the size it reached, where malloc
        plus a free on the owned path pays for one buffer at a time. */
+    /* A malloc'd builder past 16 kb grows by half rather than doubling. Its
+       buffer is what the run program's `held_peak_bytes` measures, and a
+       doubled buffer is on average a quarter empty when the builder
+       finishes: the 90 encodes of large.json each ended in a 277,522-byte
+       buffer. Below 16 kb the extra grows cost more than the room saves,
+       and the arena regime keeps doubling, since the arena reclaims none of
+       the sizes a builder passes through. The cap stays even, which is how
+       a malloc'd buffer is told from an arena one. */
+    if (!dies && a->len + n > 16384) cap = ((a->len + n) * 3 / 2) & ~1LL;
     if (mutate && !dies && k_bytes_malloced(a)) {
         KBuf* grown = k_bytes_buf_regrow(((KBuf*)a->data) - 1, cap);
         grown->cap = cap;

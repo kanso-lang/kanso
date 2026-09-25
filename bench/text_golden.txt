@@ -785,20 +785,20 @@
 #
 # 2026-09-25, the short float search starts where the last one ended: every
 # binary's .text grows 4,256 bytes, the search's two walks and its guess, CI's reading at a71892d9.
-jsonbench text=236232
-encodebench text=249272
-oneshot text=248504
-basket text=232776
-widebench text=250696
-deepbench text=213176
-escapebench text=208264
-pendbench text=222104
-indexbench text=207816
-scanbench text=315960
-digestbench text=230360
-readbench text=208312
-livebench text=249448
-runbench text=413112
+jsonbench text=236216
+encodebench text=249256
+oneshot text=248488
+basket text=232760
+widebench text=250680
+deepbench text=213160
+escapebench text=208248
+pendbench text=222088
+indexbench text=207800
+scanbench text=315944
+digestbench text=230344
+readbench text=208296
+livebench text=249432
+runbench text=413096
 # 2026-09-10 (kanso#1362): the backends build the partial over a value. Every
 # one of the fourteen rows RISES, by 2,096 bytes on eight of them and 2,432 on
 # the other six: k_partial0..4 and the branch each of k_call0..4 gains are in

@@ -2588,7 +2588,19 @@ bytes_seed = row
 
 rows_b1bs = text/concat rows_b1ls [bytes_seed]
 
-rows_b = text/concat rows_b1bs [compile_mem compile_mem_host]
+# A malloc'd builder past 16 kb grows by half, so it finishes with less
+# empty room than a doubled one.
+half_grow = row
+  "a large builder that doubles, so it finishes up to half empty"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_large_builder_that_doubles")
+  release
+
+rows_b1hg = text/concat rows_b1bs [half_grow]
+
+rows_b = text/concat rows_b1hg [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 
