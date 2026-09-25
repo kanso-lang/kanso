@@ -2169,7 +2169,28 @@ callee_by_ref = row
 
 rows_b1cr = text/concat rows_b1rg [callee_by_ref]
 
-rows_b = text/concat rows_b1cr [compile_mem compile_mem_host]
+# A conjunction of byte compares is one range test and plain reads. One
+# mutation reads each byte one late and the micro fixture disagrees with the
+# interpreter; the other turns the fusion off and the work vein sees it.
+byte_run_late = row
+  "a byte run read one byte late"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_byte_run_read_one_byte_late")
+  release
+
+byte_run_apart = row
+  "a byte run read one byte at a time"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_byte_run_read_one_byte_at_a_time")
+  benchmarks
+
+rows_b1br = text/concat rows_b1cr [byte_run_late byte_run_apart]
+
+rows_b = text/concat rows_b1br [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 

@@ -4425,6 +4425,59 @@ fn both_ints(f: &mut FnEmit, ta: &str, tb: &str) -> String {
     }
 }
 
+/// One read of a byte run: `x[p + k] == c` or `x[p] == c`, non-strict, with
+/// `c` a byte literal and `k` a small literal. Answers `(x, p, k, c)`.
+fn byte_read(e: &Expr) -> Option<(&str, &str, i64, i64)> {
+    use num_traits::ToPrimitive;
+    let Expr::BinOp { op: "==", lhs, rhs, .. } = e else { return None };
+    let Expr::Index { base, index, strict: false, .. } = &**lhs else { return None };
+    let Expr::Ident(x, _, _) = &**base else { return None };
+    let Expr::Int(c, _) = &**rhs else { return None };
+    let c = c.to_i64().filter(|c| (0..=255).contains(c))?;
+    let (p, k) = match &**index {
+        Expr::Ident(p, _, _) => (p, 0),
+        Expr::BinOp { op: "+", lhs, rhs, .. } => {
+            let Expr::Ident(p, _, _) = &**lhs else { return None };
+            let Expr::Int(k, _) = &**rhs else { return None };
+            (p, k.to_i64().filter(|k| k.abs() < 1 << 20)?)
+        }
+        _ => return None,
+    };
+    Some((x.as_str(), p.as_str(), k, c))
+}
+
+/// A conjunction of `byte_read`s of the same two names. `a and b` desugars to
+/// `if a b false`, and `and` groups to the left, so `r1 and r2 and r3` is
+/// `if (if r1 r2 false) r3 false`; either side of an `if` may be another. Two
+/// reads at least; one is an ordinary compare.
+fn byte_run(args: &[Expr]) -> Option<(&str, &str, Vec<(i64, i64)>)> {
+    fn conj<'e>(e: &'e Expr, out: &mut Vec<(&'e str, &'e str, i64, i64)>) -> Option<()> {
+        if let Some(read) = byte_read(e) {
+            out.push(read);
+            return Some(());
+        }
+        let Expr::App { head, args, piped: false, .. } = e else { return None };
+        if !matches!(&**head, Expr::Ident(n, _, _) if n == "if") {
+            return None;
+        }
+        both(args, out)
+    }
+    fn both<'e>(args: &'e [Expr], out: &mut Vec<(&'e str, &'e str, i64, i64)>) -> Option<()> {
+        if args.len() != 3 || !matches!(&args[2], Expr::Ident(n, _, _) if n == "false") {
+            return None;
+        }
+        conj(&args[0], out)?;
+        conj(&args[1], out)
+    }
+    let mut reads = Vec::new();
+    both(args, &mut reads)?;
+    let (x, p, _, _) = *reads.first()?;
+    if reads.len() < 2 || reads.iter().any(|r| (r.0, r.1) != (x, p)) {
+        return None;
+    }
+    Some((x, p, reads.iter().map(|r| (r.2, r.3)).collect()))
+}
+
 fn inline_tag(f: &mut FnEmit, value: &str) -> String {
     if let Some(word) = literal_word(value, 0) {
         return word.to_string();
@@ -7425,6 +7478,10 @@ impl<'a> Backend<'a> {
             }
             if let Expr::Ident(name, _, _) = &**head {
                 if name == "if" && f.lookup(name).is_none() {
+                    if let Some(t) = self.emit_byte_run(f, args)? {
+                        self.emit_ret(f, &t);
+                        return Ok(());
+                    }
                     // In tail position a failing condition returns rather than
                     // joining a phi, which is the whole difference from the
                     // value form; `emit_cond` takes no merge label and emits
@@ -7599,6 +7656,118 @@ impl<'a> Backend<'a> {
         let value = self.emit_expr(f, expr)?;
         self.emit_ret(f, &value);
         Ok(())
+    }
+
+    /// `x[p + k] == c and x[p + k'] == c' ...` over one bytes value and one
+    /// int, read as one range test and plain byte compares.
+    ///
+    /// The json decoder matches `true`, `false` and `null` this way, and each
+    /// read in the chain paid for itself: an overflow check on `p + k`, a test
+    /// of each end of the range, a none-or-byte merge and the compare, about
+    /// fourteen instructions a byte and 612,500 literals a run on the run
+    /// program. Every read here sits between `p + kmin` and `p + kmax`, so
+    /// when that window lies inside the bytes no read can miss and no sum can
+    /// overflow, and the answer is the bytes compared. Outside the window at
+    /// least one read is none, which compares false, but the general path is
+    /// kept for it rather than written as `false`: it is also the path a sum
+    /// that would overflow takes, and that one traps.
+    fn emit_byte_run(&mut self, f: &mut FnEmit, args: &[Expr]) -> Result<Option<String>, String> {
+        let Some((x, p, reads)) = byte_run(args) else { return Ok(None) };
+        if f.lookup("false").is_some() || f.lookup("if").is_some() {
+            return Ok(None);
+        }
+        let (Some(xv), Some(pv)) = (f.lookup(x), f.lookup(p)) else { return Ok(None) };
+        if f.set_of(&xv) != BYTES || f.set_of(&pv) != INT {
+            return Ok(None);
+        }
+        let kmin = reads.iter().map(|r| r.0).min().unwrap_or(0);
+        let kmax = reads.iter().map(|r| r.0).max().unwrap_or(0);
+        let bp = inline_payload(f, &xv);
+        let bptr = f.tmp();
+        f.line(&format!("{bptr} = inttoptr i64 {bp} to ptr"));
+        let len_ptr = f.tmp();
+        f.line(&format!("{len_ptr} = getelementptr %KBytes, ptr {bptr}, i64 0, i32 0"));
+        let len = f.tmp();
+        f.line(&format!("{len} = load i64, ptr {len_ptr}"));
+        let idx = inline_payload(f, &pv);
+        let lo = f.tmp();
+        f.line(&format!("{lo} = icmp sge i64 {idx}, {}", 1 - kmin));
+        let top = f.tmp();
+        f.line(&format!("{top} = sub i64 {len}, {kmax}"));
+        let hi = f.tmp();
+        f.line(&format!("{hi} = icmp sle i64 {idx}, {top}"));
+        let inside = f.tmp();
+        f.line(&format!("{inside} = and i1 {lo}, {hi}"));
+        let fast = f.label();
+        let slow = f.label();
+        let merge = f.label();
+        f.line(&format!("br i1 {inside}, label %{fast}, label %{slow}"));
+        f.start_block(&fast);
+        let data_ptr = f.tmp();
+        f.line(&format!("{data_ptr} = getelementptr %KBytes, ptr {bptr}, i64 0, i32 1"));
+        let data = f.tmp();
+        f.line(&format!("{data} = load ptr, ptr {data_ptr}"));
+        let mut all = "true".to_string();
+        for (k, c) in &reads {
+            let off = f.tmp();
+            f.line(&format!("{off} = add i64 {idx}, {}", k - 1));
+            let at = f.tmp();
+            f.line(&format!("{at} = getelementptr i8, ptr {data}, i64 {off}"));
+            let byte = f.tmp();
+            f.line(&format!("{byte} = load i8, ptr {at}"));
+            let same = f.tmp();
+            f.line(&format!("{same} = icmp eq i8 {byte}, {}", *c as u8 as i8));
+            let both = f.tmp();
+            f.line(&format!("{both} = and i1 {all}, {same}"));
+            all = both;
+        }
+        let tag = f.tmp();
+        f.line(&format!("{tag} = select i1 {all}, i64 2, i64 3"));
+        let hit = f.tmp();
+        f.line(&format!("{hit} = insertvalue %KValue {{ i64 undef, i64 0 }}, i64 {tag}, 0"));
+        f.line(&format!("br label %{merge}"));
+        f.start_block(&slow);
+        let general = self.emit_if_value(f, args)?;
+        let general = self.as_value(f, &general);
+        let slow_from = f.cur_label.clone();
+        f.line(&format!("br label %{merge}"));
+        f.start_block(&merge);
+        let t = f.tmp();
+        f.line(&format!("{t} = phi %KValue [ {hit}, %{fast} ], [ {general}, %{slow_from} ]"));
+        f.record(&t, infer::BOOL | f.set_of(&general));
+        Ok(Some(t))
+    }
+
+    /// An `if` read for its value: the condition asked as a question, each arm
+    /// emitted as a value, and a phi over the arms and any failure the
+    /// condition carried out.
+    fn emit_if_value(&mut self, f: &mut FnEmit, args: &[Expr]) -> Result<String, String> {
+        let then_label = f.label();
+        let else_label = f.label();
+        let merge = f.label();
+        let cond = self.emit_cond(f, &args[0], &then_label, &else_label, Some(&merge))?;
+        f.start_block(&then_label);
+        let then_value = self.emit_expr(f, &args[1])?;
+        let then_from = f.cur_label.clone();
+        f.line(&format!("br label %{merge}"));
+        f.start_block(&else_label);
+        let else_value = self.emit_expr(f, &args[2])?;
+        let else_from = f.cur_label.clone();
+        f.line(&format!("br label %{merge}"));
+        f.start_block(&merge);
+        let mut arms = vec![
+            format!("[ {then_value}, %{then_from} ]"),
+            format!("[ {else_value}, %{else_from} ]"),
+        ];
+        let mut fail_set = 0;
+        for (v, from) in &cond.failed {
+            arms.push(format!("[ {v}, %{from} ]"));
+            fail_set |= f.set_of(v) & FAIL;
+        }
+        let t = f.tmp();
+        f.line(&format!("{t} = phi %KValue {}", arms.join(", ")));
+        f.record(&t, f.set_of(&then_value) | f.set_of(&else_value) | fail_set);
+        Ok(t)
     }
 
     /// A condition is asked a question, not read for a value, and a
@@ -8536,32 +8705,10 @@ impl<'a> Backend<'a> {
             unreachable!("non-ident heads take the computed path");
         };
         if name == "if" {
-            let then_label = f.label();
-            let else_label = f.label();
-            let merge = f.label();
-            let cond = self.emit_cond(f, &args[0], &then_label, &else_label, Some(&merge))?;
-            f.start_block(&then_label);
-            let then_value = self.emit_expr(f, &args[1])?;
-            let then_from = f.cur_label.clone();
-            f.line(&format!("br label %{merge}"));
-            f.start_block(&else_label);
-            let else_value = self.emit_expr(f, &args[2])?;
-            let else_from = f.cur_label.clone();
-            f.line(&format!("br label %{merge}"));
-            f.start_block(&merge);
-            let mut arms = vec![
-                format!("[ {then_value}, %{then_from} ]"),
-                format!("[ {else_value}, %{else_from} ]"),
-            ];
-            let mut fail_set = 0;
-            for (v, from) in &cond.failed {
-                arms.push(format!("[ {v}, %{from} ]"));
-                fail_set |= f.set_of(v) & FAIL;
+            if let Some(t) = self.emit_byte_run(f, args)? {
+                return Ok(t);
             }
-            let t = f.tmp();
-            f.line(&format!("{t} = phi %KValue {}", arms.join(", ")));
-            f.record(&t, f.set_of(&then_value) | f.set_of(&else_value) | fail_set);
-            return Ok(t);
+            return self.emit_if_value(f, args);
         }
         // utf8 of a slice reads a byte view for a pointer and a length and
         // drops it, three million times in a decode. The wrapper inlining

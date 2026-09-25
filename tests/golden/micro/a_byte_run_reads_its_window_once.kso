@@ -1,0 +1,19 @@
+# `cs[p + 1] == 97 and cs[p + 2] == 98` over bytes and an int compiles to one
+# test that the window of reads lies inside the bytes, then plain compares.
+# Outside the window the answer is false, as each read past either end is
+# none. Every position here is probed, both edges included, for a run that
+# starts at `p` and one that starts past it. The walk is a recursion over an
+# int, as the json decoder's is, so the compiler knows what `cs` and `p` hold.
+import "std/io"
+import "std/text"
+
+fn ab? cs p
+  cs[p + 1] == 97 and cs[p + 2] == 98
+
+fn abc? cs p
+  cs[p] == 97 and cs[p + 1] == 98 and cs[p + 2] == 99
+
+fn lines cs p
+  if (p > 7) "" "{p}: {ab? cs p} {abc? cs p}\n{lines cs (p + 1)}"
+
+pub play = io/write (lines (text/bytes "abcabx") (0 - 2))

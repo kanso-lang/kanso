@@ -13844,3 +13844,41 @@ CI's golden, so `interp_instructions` carries CI's last reading less the
 same 17,938,795, 691,618,039, until CI measures it. The ratchet row
 `callee_by_ref` turns `call_ref` back to the lookup by text, and the row
 read 725,003,497 here with it applied.
+
+## 2026-09-25 — a run of byte compares is read as one window
+
+The json decoder matches `true`, `false` and `null` with chains such as
+`cs[p + 1] == 114 and cs[p + 2] == 117 and cs[p + 3] == 101`. Each read in
+the chain was compiled on its own: `p + k` with an overflow check, a test of
+each end of the bytes, a merge of the byte with the none an out-of-range
+read answers, and the compare. That is about fourteen instructions a byte,
+and the run program matches 612,500 literals.
+
+`emit_byte_run` recognises an `and` chain, at any grouping, in which every
+conjunct compares a non-strict read `x[p + k]` or `x[p]` with a byte
+literal, over the same two names, where the inference has proven `x` bytes
+and `p` an int. It emits one test that `p + kmin` is at least one and
+`p + kmax` at most the length, then plain loads and compares. Outside that
+window the chain is false, because some read is none. The general path is
+still emitted for that case rather than `false`, since a `p` near the top
+of the integer range makes one of the sums overflow, and that traps.
+
+On this box against kanso#1628's head: `work_jsonbench` -3.457%,
+`work_oneshot` -1.506%, `work_runbench` 1,530,322,616 -> 1,506,572,318
+(-1.552%), `work_livebench` -0.011%, and every other row byte-identical.
+The goldens carry CI's last reading plus that difference. The chain's
+general path is kept beside the fused one, so the code grows: `text` rises
+496 bytes on jsonbench, oneshot and livebench and 384 on runbench, and the
+emitted-code rows add fifteen branches and 102 lines to each program that
+decodes JSON: the decoder's `branches` 495 -> 510 and `lines`
+5,379 -> 5,481, runbench's 2,752 -> 2,767 and 27,176 -> 27,278, oneshot's
+578 -> 593 and 6,421 -> 6,523, livebench's 598 -> 613 and 6,551 -> 6,653.
+Summed over the programs the gates read, `emitted_other_branches`
+7,908 -> 7,953, `emitted_other_lines` 82,781 -> 83,087, and `text`
+3,436,880 -> 3,438,752.
+
+The micro fixture `a_byte_run_reads_its_window_once` probes a two-read and
+a three-read run at every position of a six-byte string, both edges
+included, and agrees with the interpreter. With each fused read moved one
+byte late it disagreed; the ratchet row `byte_run_late` makes that
+mutation, and `byte_run_apart` turns the fusion off for the work vein.

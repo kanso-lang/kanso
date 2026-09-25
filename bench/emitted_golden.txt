@@ -239,5 +239,5 @@
 # lines 8,570 -> 8,422; defines stay 119.
 defines=83
 calls=485
-branches=495
-lines=5379
+branches=510
+lines=5481

@@ -207,7 +207,7 @@
 # three that decode JSON also lose the byte-class arms of the number scan:
 # oneshot 8,505 -> 8,357, livebench 8,644 -> 8,496, runbench 33,372 -> 33,224.
 encodebench defines=108 calls=609 branches=483 lines=5858
-oneshot defines=110 calls=624 branches=578 lines=6421
+oneshot defines=110 calls=624 branches=593 lines=6523
 basket defines=96 calls=700 branches=560 lines=5493
 widebench defines=115 calls=662 branches=508 lines=6160
 deepbench defines=42 calls=168 branches=147 lines=1728
@@ -217,5 +217,5 @@ scanbench defines=225 calls=1691 branches=1490 lines=14093
 indexbench defines=17 calls=49 branches=25 lines=542
 digestbench defines=114 calls=528 branches=412 lines=4610
 readbench defines=19 calls=48 branches=23 lines=586
-livebench defines=111 calls=639 branches=598 lines=6551
-runbench defines=493 calls=3564 branches=2752 lines=27176
+livebench defines=111 calls=639 branches=613 lines=6653
+runbench defines=493 calls=3564 branches=2767 lines=27278
