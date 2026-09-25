@@ -14345,3 +14345,8 @@ Merged again after kanso#1638, whose split adds its own small cost to the two
 rows that compile lib/regexp. Projected by adding that delta to this branch's
 CI reading: `entry_instructions` 84,635,818 and `library_instructions`
 85,223,918. CI's readings will replace both.
+
+CI read the merged tree at 755fb36d: `entry_instructions` 84,635,818 ->
+84,635,833 (+15) and `library_instructions` 85,223,918 -> 85,224,038 (+120).
+The projection added two deltas measured on different trees, and the
+remainder is layout. Neither row is weighed.
