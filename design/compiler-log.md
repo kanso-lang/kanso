@@ -13942,3 +13942,64 @@ runtime the rewind lives in: `codegen_instructions_release` 715,866,504 ->
 -> 142,641,575 (-134). The release rise is clang's work on the runtime and
 is the price of the change; the run program it buys is 7.46 million
 instructions cheaper.
+
+## 2026-09-25 — two byte appends in a row ask for room once
+
+The json encoder writes every escape as two appends: the backslash, then the
+letter. Each append of a proven int to a proven byte builder the function
+owns is already a call to `k_b_append_mut_int`, which checks that the
+builder is owned, that its bytes end at the buffer's front, and that one
+more byte fits. The second call asks all three again about the builder the
+first one just returned.
+
+After the body is emitted and pruned, `paired_appends` looks for two such
+calls where the second appends to the first's result and that result is
+read nowhere else in the function, and replaces them with one call to
+`k_b_append_mut_int2`. The new helper checks room for two bytes and stores
+both in order. When the fast path refuses, it runs the two single appends
+as written, so a builder that has to grow still grows the way it did.
+
+On this box against kanso#1630's head: `work_livebench` 2,197,955,843 ->
+2,182,311,843 (-15,644,000, -0.712%), `work_oneshot` 15,232,332 ->
+15,193,222 (-39,110, -0.257%) and `work_runbench` 1,499,116,075 ->
+1,495,596,175 (-3,519,900, -0.235%). Those three programs each carry one
+merged pair in their emitted IR and the other eleven carry none, so their
+rows are byte-identical. The goldens carry CI's last reading plus this
+box's difference.
+
+The helper's five comment lines stay in every program after the pruner
+drops an unused definition, as the comments of its neighbours do, so
+`emitted_lines` rises by five everywhere: jsonbench 5,481 -> 5,486, and in
+bench/compile_golden.txt recursion 263 -> 268, dispatch 281 -> 286, guards
+268 -> 273, records 332 -> 337, build_block 226 -> 231 and the module 1,051
+-> 1,056. The three programs that use the helper carry its definition too:
+runbench 27,278 -> 27,320 lines, 3,564 -> 3,565 calls, 2,767 -> 2,770
+branches, 493 -> 494 defines, and the same +42 lines, +1 call, +3
+branches and +1 define on livebench and oneshot. Their `.text` grows 224 bytes each (runbench 411,656 -> 411,880).
+That is the inlined two-byte fast path, and the work it saves is the three
+rows above.
+
+In the trend gate's totals: `lines` 1,370 -> 1,395 and `module_lines` 1,051
+-> 1,056 in the compile golden, `emitted_lines` 5,481 -> 5,486,
+`emitted_other_lines` 83,087 -> 83,263, `emitted_other_calls` 9,731 ->
+9,734, `emitted_other_branches` 7,953 -> 7,962, `emitted_other_defines`
+1,529 -> 1,532 (the helper's define in each of the three) and `text`
+3,437,632 -> 3,438,304.
+
+tests/golden/micro/two_bytes_appended_at_once encodes three strings that
+each need an escape. It went red with the helper's two stores swapped. The
+ratchet row `byte_pair_swapped` makes that swap and `byte_pair_apart` skips
+the merge, which the work vein sees.
+
+Three other leads were measured today and declined:
+
+- A width cache in `k_b_at`. The run program rose 1,499,116,075 ->
+  1,503,003,891 (+3,887,816) and indexbench 7.1%.
+- A summary word over the cohort stacks for `pop_any`. It fell 0.16% only
+  while the push cleared the word without looking, and `k_cohort_pop` can
+  leave a depth tenured. Made safe, the run program fell 0.026% and
+  deepbench rose 0.08%.
+- Alias tags on the byte-append helpers, separating the bytes header, the
+  buffer header and the data. The run program was byte-identical. The first
+  append's slow path joins the fast path before the second append starts,
+  so the second's loads cannot be forwarded from the first's stores.

@@ -3445,6 +3445,12 @@ welfare                      77.37         82.09</code></pre>
 
 <p>The rewind now asks about the pointer second. Arena blocks never overlap, so a pointer equal to the mark's is already inside the mark's block, and the block no longer has to be loaded to say so. A loop that did allocate takes the same path as before. The run program runs 0.495% fewer instructions and the escape benchmark 4.93% fewer.</p>
 
+<h2 id="bytepair"><span class="sec-num">146</span>a backslash and a letter</h2>
+
+<p>The JSON encoder writes every escape as two appends to the same builder: a backslash, then the letter that names the character. Each append of a small integer to a builder the function owns is a call that checks the builder is still owned, that its bytes end at the front of the buffer, and that one more byte fits. The second call then asks the same three questions about the builder the first call just returned.</p>
+
+<p>After a function's body is emitted, the compiler looks for two such calls where the second appends to the first one's result and nothing else reads that result. It replaces them with one call that checks for room for two bytes and stores both in order. If that check fails, it makes the two single appends as written, so a builder that has to grow still grows the same way. The live-encode benchmark runs 0.712% fewer instructions and the run program 0.235% fewer.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>
