@@ -690,19 +690,19 @@
 # 9,830,203 still stand above it, priced in kanso#1432's and kanso#1430's
 # entries; nothing here moves them.
 #
-jsonbench 977552827
-encodebench 2969686250
-oneshot 15263634
-basket 32079580
-widebench 28778045
-deepbench 364679442
-escapebench 72829426
-pendbench 181843867
-indexbench 2855794
-scanbench 291353015
-digestbench 5813034
-readbench 4631760
-livebench 2210320978
+jsonbench 977552823
+encodebench 2964897453
+oneshot 15232724
+basket 31745566
+widebench 28778067
+deepbench 364731746
+escapebench 69238422
+pendbench 181843966
+indexbench 2855795
+scanbench 291354017
+digestbench 5788749
+readbench 4631757
+livebench 2197956184
 # 2026-09-06 (the run program joins): `runbench 3043743748` is a NEW row and
 # nothing regressed to make it appear. It is the program Clay's gavel that day
 # made the objective's whole run-speed term, and the thirteen rows above it
@@ -760,4 +760,4 @@ livebench 2210320978
 #
 # The uniform -8 across six rows is one instruction on a path each program
 # takes eight times, and the four flat rows never take it at all.
-runbench 1506572777
+runbench 1499116534

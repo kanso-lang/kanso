@@ -13895,3 +13895,33 @@ a three-read run at every position of a six-byte string, both edges
 included, and agrees with the interpreter. With each fused read moved one
 byte late it disagreed; the ratchet row `byte_run_late` makes that
 mutation, and `byte_run_apart` turns the fusion off for the work vein.
+
+## 2026-09-25 — a rewind with nothing to take back asks one question
+
+Every iteration of a beat loop ends in `k_beat_rewind`, and its fast path
+asked three things before returning: whether the shelf or a registry held
+anything, whether the chain's head was still the mark's block, and whether
+the arena pointer still stood at the mark. A loop that allocated nothing
+answered all three the same way every time, and the run program takes
+2,708,992 beat iterations. The pointer is now asked right after the
+shelf-and-registries test, and an unmoved pointer returns at once. Blocks
+never overlap, so a pointer equal to the mark's lies in the mark's block,
+and the head of the chain is no longer loaded to be told so. A tail split
+off an oversize block begins at its host's bump pointer, and its own bump
+region starts after its header, past any mark taken in that host, so its
+pointer cannot stand at a mark either. The path for
+a loop that did allocate is the one it was, after the same two tests.
+
+On this box against kanso#1629's head: `work_runbench` 1,506,572,318 ->
+1,499,116,075 (-0.495%), `work_escapebench` -4.931%, `work_basket`
+-1.041%, `work_livebench` -0.559%, `work_digestbench` -0.418%,
+`work_oneshot` -0.203% and `work_encodebench` -0.161%. Five rows rose:
+`work_deepbench` 364,679,442 -> 364,731,746 (+52,304, +0.014%),
+`work_scanbench` 291,353,015 -> 291,354,017 (+1,002), `work_pendbench`
+181,843,867 -> 181,843,966 (+99), `work_widebench` 28,778,045 -> 28,778,067
+(+22) and `work_indexbench` 2,855,794 -> 2,855,795 (+1). The goldens carry
+CI's last reading plus this box's difference. Every program's `.text`
+shrinks by 80 to 112 bytes; the run program's reads 411,768 -> 411,656.
+
+The ratchet row `unmoved_arena` skips the new exit, and escapebench read
+76,509,908 with it applied.

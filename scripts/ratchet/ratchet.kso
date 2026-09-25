@@ -2190,7 +2190,19 @@ byte_run_apart = row
 
 rows_b1br = text/concat rows_b1cr [byte_run_late byte_run_apart]
 
-rows_b = text/concat rows_b1br [compile_mem compile_mem_host]
+# A rewind whose arena pointer stands at the mark returns before asking for
+# the block. The mutation asks for the block first again.
+unmoved_arena = row
+  "an unmoved arena asked for its block"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_unmoved_arena_asked_for_its_block")
+  benchmarks
+
+rows_b1ua = text/concat rows_b1br [unmoved_arena]
+
+rows_b = text/concat rows_b1ua [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 
