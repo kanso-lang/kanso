@@ -13269,3 +13269,28 @@ decodes a 300,000-key object in release and asserts it prints the count. It
 runs on x86-64 only, because arm64 keeps the narrow limit and the frame per
 key with it. Watched red with the limit at eight: SIGSEGV. The ratchet row
 `nine_words` breaks it the same way.
+
+## 2026-09-25 — the failure twins go, and the specs that read them move
+
+The compare-of-the-tag change left the IR twins `k_not_failure` and
+`k_not_failure_w` with no caller, and three specs still read them. The full
+suite on the branch's head found two, which CI would have found a round
+later: `a_dev_build_asks_its_predicates_in_words` wanted the dev module to
+call `k_not_failure_w`, and `perf_ratchet` read the twin's body out of a
+module that no longer carried it. Its recursive program also no longer
+called any hot predicate, since its failure checks now fold to constants.
+The twins, their `predicate` form and their entries in the declares list are
+gone. The dev spec now asserts that neither tier calls a failure predicate in
+any form. `perf_ratchet` gives its hot-predicate test a program whose `if`
+asks `k_truthy`. It replaces the twin test with one that finds the emitted
+compares against `K_ERR_TAG` and none against the none tag, watched red with
+the compare written against 4. The err-tag spec keeps its enum check. No
+emitted vein moves, since the release prune had already dropped the unused
+twins from every module.
+
+Letting a group with a single int-literal arm pass its byte raw, as groups
+with two already do, was measured and declined. It would have taken
+`obj_key_end` to eight words and so kept its tail calls on arm64 as well.
+On this container runbench read +0.4448% and jsonbench +0.8978%: a ladder
+dispatcher reboxes the raw byte at entry and compares the box, which costs
+more than passing the box did.

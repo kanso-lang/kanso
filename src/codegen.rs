@@ -696,12 +696,6 @@ define internal %KValue @k_bool(i64 %b) alwaysinline {
 define internal %KValue @k_none() alwaysinline {
   ret %KValue { i64 4, i64 0 }
 }
-define internal i64 @k_not_failure(%KValue %v) alwaysinline {
-  %tag = extractvalue %KValue %v, 0
-  %ne = icmp ne i64 %tag, 5
-  %r = zext i1 %ne to i64
-  ret i64 %r
-}
 define internal i64 @k_truthy(%KValue %v) alwaysinline {
   %tag = extractvalue %KValue %v, 0
   %t = icmp eq i64 %tag, 2
@@ -1092,11 +1086,6 @@ define internal i64 @k_check_bool(%KValue %v) alwaysinline {
   %f = icmp eq i64 %tag, 3
   %c = or i1 %t, %f
   %r = zext i1 %c to i64
-  ret i64 %r
-}
-define internal i64 @k_not_failure_w(i64 %tag) alwaysinline {
-  %ne = icmp ne i64 %tag, 5
-  %r = zext i1 %ne to i64
   ret i64 %r
 }
 define internal i64 @k_truthy_w(i64 %tag, i64 %pay) alwaysinline {
@@ -2685,16 +2674,15 @@ impl FnEmit {
 
     /// Writes `{r} = {call}`, where `call` asks one of the hot predicates about
     /// a `%KValue` in the form a release module inlines. The dev tier asks the
-    /// two-word form instead (`k_not_failure_w`, `k_truthy_w`,
-    /// `k_check_rec_fast_w` in DECLARES), with the value's words pulled out
+    /// two-word form instead (`k_truthy_w` and `k_check_rec_fast_w` in
+    /// DECLARES), with the value's words pulled out
     /// first and passed as scalars. At -O0 clang's fast instruction selector
     /// lowers a call only when every argument is a scalar, so each call passing
     /// a `%KValue` went to the slow selector on its own: 216 of them on the
     /// codegen corpus. A release module never calls the two-word forms, so it
     /// never carries them.
     fn predicate(&mut self, r: &str, call: String) {
-        const FORMS: [(&str, &str, bool); 3] = [
-            ("call i64 @k_not_failure(%KValue ", "k_not_failure_w", false),
+        const FORMS: [(&str, &str, bool); 2] = [
             ("call i64 @k_truthy(%KValue ", "k_truthy_w", true),
             ("call i64 @k_check_rec_fast(%KValue ", "k_check_rec_fast_w", true),
         ];
@@ -3817,8 +3805,6 @@ const DECLARES_CONTEXT_CALLS: &[&str] = &[
     "k_index_fast",
     "k_int",
     "k_none",
-    "k_not_failure",
-    "k_not_failure_w",
     "k_str_lit",
     "k_str_lit_fast",
     "k_truthy",
@@ -4454,11 +4440,12 @@ fn inline_not_failure(f: &mut FnEmit, value: &str) -> String {
 /// The same test with no fold, for the one place a set cannot speak: a block
 /// reached BECAUSE a value is outside the set recorded for it.
 ///
-/// It was a call to the alwaysinline `k_not_failure`, then a compare of what
+/// It was a call to an alwaysinline `k_not_failure`, then a compare of what
 /// that returned. Every module paid for the inliner to open the call, and the
 /// dev tier, which does no other optimising, kept the widening and the second
-/// compare as well. The test is the one `k_not_failure` makes, and
-/// `tests/the_err_tag_is_the_runtime_s.rs` holds the number to the runtime's.
+/// compare as well. The test is the one the runtime's `k_not_failure` makes,
+/// and `tests/the_err_tag_is_the_runtime_s.rs` holds the number to the
+/// runtime's.
 fn not_failure_test(f: &mut FnEmit, value: &str) -> String {
     let tag = inline_tag(f, value);
     if let Ok(known) = tag.parse::<i64>() {

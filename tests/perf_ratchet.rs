@@ -19,9 +19,18 @@ fn build n acc
 main = print \"{length (build 5 [])}\"
 ";
 
+/// An `if` on a value that may not be a boolean asks `k_truthy`, which the
+/// recursive program no longer does: its failure checks became compares of
+/// the tag on 2026-09-25 and it asked nothing else.
+const PREDICATES: &str = "fn pick b
+  if b 1 2
+
+main = print \"{pick (length [1] == 1)} {pick 3}\"
+";
+
 #[test]
 fn hot_predicates_are_inline_definitions_not_declares() {
-    let ir = ir_for(RECURSIVE);
+    let ir = ir_for(PREDICATES);
 
     let define_line = |name: &str| {
         ir.lines()
@@ -94,23 +103,27 @@ fn linear_list_accumulator_pushes_in_place() {
     );
 }
 
-/// The failure predicate is written twice: once in C, once as the LLVM twin
-/// the emitter inlines. They must test the same tags, and nothing else in the
-/// suite notices when they drift — a program only sees the difference where a
-/// none meets a path that inlines. Pin the twin to err alone.
+/// The failure test is written twice: once in C, and once in what the emitter
+/// writes at every site that asks. They must test the same tag, and nothing
+/// else in the suite notices when they drift — a program only sees the
+/// difference where a none meets a path that inlines. It was an LLVM twin of
+/// the C predicate until 2026-09-25 and is a compare of the tag with the err
+/// tag since; pin that compare to err alone. The number itself is held to the
+/// runtime's enum by `tests/the_err_tag_is_the_runtime_s.rs`.
 #[test]
-fn the_failure_twin_tests_err_and_nothing_else() {
-    let ir = ir_for(RECURSIVE);
-    let body: String = ir
-        .lines()
-        .skip_while(|l| !l.contains("define internal i64 @k_not_failure("))
-        .take_while(|l| !l.starts_with('}'))
-        .collect::<Vec<_>>()
-        .join("\n");
-    assert!(body.contains("icmp ne i64 %tag, 5"), "the twin no longer tests the err tag: {body}");
+fn the_failure_test_asks_err_and_nothing_else() {
+    let ir = ir_for(PREDICATES);
+    let err = format!(", {}", kanso::codegen::K_ERR_TAG);
+    let tests: Vec<&str> =
+        ir.lines().filter(|l| l.contains(" = icmp ne i64 ") && l.ends_with(&err)).collect();
+    assert!(!tests.is_empty(), "the program asks no failure test, so this proves nothing");
     assert!(
-        !body.contains(", 4"),
-        "the twin tests the none tag again — a none is a value, not a failure: {body}"
+        !ir.contains("@k_not_failure("),
+        "a failure test calls the predicate again rather than comparing the tag"
+    );
+    assert!(
+        !ir.lines().any(|l| l.contains(" = icmp ne i64 ") && l.ends_with(", 4")),
+        "a failure test compares with the none tag — a none is a value, not a failure"
     );
 }
 
