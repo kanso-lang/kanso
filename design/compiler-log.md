@@ -15623,3 +15623,10 @@ compile rows are left for CI.
 The trend gate reads `text` as worse; it lands on 3,521,424 summed over the
 fourteen binaries, 672 bytes above the tag assume's, which is `k_unsub`
 forty-eight bytes at a time.
+
+CI read the change at 061eaef6. The work rows landed within 28 of the
+projection: runbench 1,223,633,797, 5,728 above the tag assume's. The
+compile rows moved by the function's presence and nothing else:
+`emit_instructions` 29,156,813 -> 29,158,246, `codegen_instructions_dev`
+124,017,062 -> 124,021,731 and `codegen_instructions_release` 406,427,590 ->
+406,403,837.

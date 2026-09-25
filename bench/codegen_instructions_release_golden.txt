@@ -371,4 +371,8 @@
 # optimiser runs, the release link has far less to simplify.
 # codegen_instructions_release 695,954,249 -> 406,427,590, a FALL of
 # 289,526,659 (-41.6014%).
-codegen_instructions_release=406427590
+#
+# CI measured the subtype fix at 061eaef6: k_unsub moves the layout the
+# compile reads. codegen_instructions_release 406,427,590 -> 406,403,837, a
+# FALL of 23,753 (-0.0058%).
+codegen_instructions_release=406403837
