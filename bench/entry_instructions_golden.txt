@@ -1064,7 +1064,10 @@
 #
 # CI measured the warm play at 12440a7d. entry_instructions 84,635,833 ->
 # 84,572,805, a FALL of 63,028 (-0.0745%).
-entry_instructions=84572805
+#
+# CI measured the carried tree at 913723b0. entry_instructions 84,572,805 ->
+# 85,204,646, a RISE of 631,841 (+0.7471%).
+entry_instructions=85204646
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

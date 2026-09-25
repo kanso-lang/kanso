@@ -307,4 +307,7 @@
 #
 # CI measured the warm play at 12440a7d. emit_instructions 29,274,393 ->
 # 29,249,085, a FALL of 25,308 (-0.0865%).
-emit_instructions=29249085
+#
+# CI measured the carried tree at 913723b0. emit_instructions 29,249,085 ->
+# 29,343,492, a RISE of 94,407 (+0.3228%).
+emit_instructions=29343492

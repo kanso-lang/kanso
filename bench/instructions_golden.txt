@@ -693,7 +693,7 @@
 jsonbench 977552823
 encodebench 2736637236
 oneshot 14934434
-basket 31593354
+basket 31593366
 widebench 29082048
 deepbench 364731746
 escapebench 69238422

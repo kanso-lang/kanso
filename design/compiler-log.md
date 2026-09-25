@@ -14659,3 +14659,21 @@ container read each of the four the usual 347 to 439 instructions below that.
 The development rows move with the compiler's layout and with the runtime
 every build compiles, and the five changes each moved them. They take CI's
 readings of this tree.
+
+CI read the carried tree at 913723b0. Every work row matched the projection
+but `work_basket`, 31,593,354 -> 31,593,366, twelve above. Both memory rows
+landed on their projections: `compile_peak_bytes` 708,672 and
+`interp_peak_bytes` 799,829. Against main, the development rows read:
+
+    compile_instructions         25,041,977 ->  25,195,466   +0.61%
+    entry_instructions           84,635,833 ->  85,204,646   +0.67%
+    library_instructions         85,224,038 ->  85,763,002   +0.63%
+    emit_instructions            29,274,393 ->  29,343,492   +0.24%
+    interp_instructions         661,830,756 -> 659,398,270   -0.37%
+    codegen_instructions_dev    142,050,065 -> 142,163,302   +0.08%
+    codegen_instructions_release 698,557,830 -> 698,405,052  -0.02%
+    startup_instructions            605,441 ->      52,375  -91.35%
+
+The three front-end rows carry the argument stack's thread-local, which the
+argument-vector entry measured at 0.58% of a check on this container, and the
+emit row carries the literal word's helper, which every module is emitted with.
