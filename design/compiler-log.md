@@ -14117,3 +14117,131 @@ definition, which runs once, for size. The release codegen child tree on
 this box read 697,137,164 -> 692,496,161 with `minsize` (-0.67%), 696,902,517
 with `optsize` and 697,644,423 with `cold`. At the release term's current
 ratio the best of the three is worth about 0.00005 of production welfare.
+
+## 2026-09-25 — a decoded key is interned, and an arena block is half a megabyte
+
+The run program's arena peak was 3,670,032 bytes: two one-megabyte blocks and
+a 1,572,880-byte block for the index phase's longest string. The two blocks
+belong to the base the whole program runs on, which is the text it reads
+(189,216 bytes in the arena) and the document decoded from it. One decode of
+large.json allocated 1,581,104 bytes, and a tally by allocating function put
+468,096 of them in `k_str_alloc`: 8,705 strings, and 8,361 of those were
+object keys. The document names 500 distinct keys.
+
+A slice of four to seven bytes, which is how the decoder reads a key, is now
+looked up in a table of 4,096 slots before a string is built. A hit hands
+back the interned string. A miss fills an empty slot from a static slab and
+never evicts, so the slab holds at most 4,096 tokens of twenty-four bytes,
+and their bytes count into `perm_peak_bytes`. The decode's string bytes fell
+from 468,096 to 200,256, and the base from 1.58 MB to 1.31 MB.
+
+That alone moves no block. The peak is counted in whole blocks because a
+block is mapped whole, and 1.31 MB still takes two one-megabyte blocks. At half
+a megabyte it takes three, and the arena peak falls from 3,670,032 to
+3,145,744. At a megabyte with interning the peak did not move and runbench
+read 1,478,582,631, 508,000 instructions under main.
+
+Half-megabyte blocks first cost 19.7 million instructions. 12.6 million of
+those were `memcpy` inside `realloc`: the encoder's byte builder grew in
+place to 138,774 bytes and then had to move, 990 times a run, because a
+262,144-byte tenure block sat just above it in the heap. Tenure blocks are
+malloc'd on the stated assumption that glibc maps anything that size, and it
+does until a mapped chunk is freed, at which point its threshold rises to that
+chunk's size. So where a tenure block landed depended on what the program had
+freed before it. Tenure blocks are now mapped with `mmap`, and taking them
+from malloc again costs 16.2 million instructions on runbench. Arena blocks
+were mapped the same way and measured: malloc'd, runbench read 15,752
+instructions fewer, so they stay on malloc. What remains is the carry's copy
+decisions moving with the block boundaries: `k_deep_copy` and `k_copy_size`
+read about 2.8 million more.
+
+Measured and declined on the way. Quarter-megabyte blocks: arena peak
+3,407,888 and runbench +24.4 million. 768 KB: peak 3,145,744 and +26 million,
+the same builder copies through a different neighbour. 640 KB: peak 3,538,960.
+896 KB: peak 3,407,888 with runbench 748,000 under main, worth 88.3663 where
+half a megabyte is worth more than 88.3983.
+
+The table's first key folded the length into the token's two words with an
+exclusive or, which is not exact: two tokens of different lengths can agree on
+it. The key is now the two words alone, which are the token exactly for a
+given length, and the length chooses the slot. Two lengths of four to seven
+change `key ^ len` in its low three bits, so the two products differ by the
+multiplier times one to seven, and none of those seven multiples lies within
+2^52 of zero modulo 2^64. So two tokens of different lengths never share a
+slot, a `_Static_assert` pins the seven, and no hit needs to read the length.
+A check of `hit->len` had cost 3.3 million instructions a run for a case that
+cannot occur.
+
+The interned strings sit outside every arena block, and `k_survives_x` read
+them as dying storage until it was told about the slab, so every carry of the
+document copied its keys back into the arena. A range check on the slab
+answers that before the tenure and frozen walks.
+
+On this box: runbench 1,479,091,073 -> 1,482,671,798 (+0.24%),
+`arena_peak_bytes` 3,670,032 -> 3,145,744 and `perm_peak_bytes` 16,400 ->
+30,896. `token_hits` is
+new and reads 828,026 on the run program; it goes into the trend gate's list
+of counters where a fall is the worse direction.
+
+tests/golden/micro/a_shared_key_reads_back_as_itself decodes "abab",
+"ababab" and "é_ab" as values and as keys. With the slot chosen from the two
+words alone, "ababab" read back as "abab 4" and the map held one key. The
+ratchet row `token_length` makes that change. tests/golden/mem/
+a_repeated_key_is_one_string decodes two hundred objects that name the same
+two keys, and reads `token_hits=398`; with the table never consulted it read
+nought and 400 more allocations, which is the row `token_table`. The rows
+`ten_mapped` and `block_half` put the tenure block back on malloc and the block
+back at a megabyte.
+
+Priced before choosing this lead, one per cent of each welfare row, on the
+banked goldens: runbench +0.0516, `interp_instructions` +0.0034,
+`codegen_instructions_release` +0.0032, `codegen_instructions_dev` +0.0026,
+`startup_instructions` +0.0024, `emit_instructions` and
+`compile_instructions` +0.0004 each. A megabyte off the arena peak is +0.22.
+Per instruction saved, runbench pays about seven times what the interpreter
+does. Two interpreter leads were measured and left: an environment lookup ends
+in the first frame 92% of the time and compares two names on average, so a
+slot hint would save under one per cent of `interp_instructions`; and the
+linearity fixpoint runs seven rounds, the last four re-checking about 180
+facts to remove one or two, which a worklist would cut by a few million
+instructions on rows weighted at 0.0004 a per cent.
+
+What else moved, against the branch below. Each block count rises because a
+block is half the size: `run_arena_blocks` 4 -> 7, `arena_blocks` 2 -> 3,
+`encode_arena_blocks` 4 -> 6, `oneshot_arena_blocks` 2 -> 3,
+`basket_arena_blocks` 2 -> 4, `pend_arena_blocks` 1 -> 2, `wide_arena_blocks`
+1 -> 3, `live_arena_blocks` 2 -> 3, and the oversize fixture's
+`an_oversize_string_leaves_its_neighbour_open_arena_blocks` 3 -> 4. Those
+count blocks taken over a run, not bytes held.
+
+One peak rose. widebench's `wide_arena_peak_bytes` went 1,048,576 ->
+1,572,864: its working set fit one megabyte block and does not fit two
+half-megabyte ones, because an allocation that finds too little room at the
+end of a block starts the next one and leaves the rest unused. widebench is a
+diagnostic the objective does not weigh, and the run program's arena peak
+falls by 524,288 bytes, so the trade stands.
+
+The intern slab is never freed, so every program that decodes reads its
+tokens as permanent bytes at exit: `perm_live_bytes` and `perm_peak_bytes`
+0 -> 14,496 on the decode vein, and the same 14,496 for
+`encode_perm_live_bytes`, `encode_perm_peak_bytes`,
+`oneshot_perm_live_bytes`, `oneshot_perm_peak_bytes`,
+`live_perm_live_bytes` and `live_perm_peak_bytes`. On the run program
+`run_perm_live_bytes` reads 14,496 and `run_perm_peak_bytes` 30,896.
+
+The carry copies more at the new block boundaries: `run_evac_allocs` 63,041
+-> 64,973, `run_evac_bytes` 10,018,720 -> 10,649,008, `run_sh_buf`
+97,895,600 -> 98,431,712 and `run_ten_blocks` 6 -> 7. The same walk is most of
+the work rows' rise: `work_oneshot` 15,039,606 -> 15,738,412 (+4.65%), of
+which `k_interior_survives` and `k_copy_size` are 655,300 as the carry walks
+the decoded document once more; `work_deepbench` 364,731,746 -> 366,349,812
+(+0.44%); `work_widebench` 28,778,066 -> 28,812,852; `work_pendbench`
+181,843,966 -> 181,898,609; `work_encodebench` 2,861,479,738 ->
+2,862,273,048; `work_livebench` 2,120,705,792 -> 2,121,273,702;
+`work_runbench` 1,479,091,073 -> 1,482,674,789. The rest are a few hundred
+instructions each: `work_basket` 31,594,475, `work_digestbench` 5,540,955,
+`work_escapebench` 69,238,511, `work_indexbench` 2,856,474,
+`work_readbench` 4,631,905 and `work_scanbench` 291,353,249. Five run
+counters moved by one or a few with the layout: `run_beat_iters` 2,709,073,
+`run_push_mut_fast` 1,097,989, `run_push_mut_slow` 1,638,524, `run_str_scans`
+162 and `run_str_scan_bytes` 4,092,730. `work_jsonbench` fell 1,414,910.

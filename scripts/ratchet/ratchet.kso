@@ -2255,7 +2255,49 @@ rows_b1pr = text/concat rows_b1bp [list_read_late list_index_twin]
 
 rows_b1pl = text/concat rows_b1pr [list_length_twin]
 
-rows_b = text/concat rows_b1pl [compile_mem compile_mem_host]
+# A decoded token of four to seven bytes comes back from the intern table, and
+# the table's slot is chosen by the token's length as well as its two words.
+# Never consulting the table moves the mem vein; choosing the slot without
+# the length makes "ababab" read back as "abab" in the micro fixture.
+token_table = row
+  "a token built fresh when the intern table holds it"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_token_built_fresh_when_the_table_holds_it")
+  release
+
+token_length = row
+  "an intern slot chosen without the token's length"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_token_slot_chosen_without_its_length")
+  release
+
+# An arena block is half a megabyte, and a tenure block is mapped rather than
+# malloc'd so that it cannot land above the encoder's byte builder.
+block_half = row
+  "an arena block of a megabyte"
+  true
+  (gating "run_counters")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_arena_block_of_a_megabyte")
+  benchmarks
+
+ten_mapped = row
+  "a tenure block taken from malloc"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_tenure_block_taken_from_malloc")
+  benchmarks
+
+rows_b1tk = text/concat rows_b1pl [token_table token_length]
+
+rows_b1ab = text/concat rows_b1tk [block_half ten_mapped]
+
+rows_b = text/concat rows_b1ab [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 

@@ -1,0 +1,21 @@
+# A document names the same keys over and over, and the decoder reads each
+# key as a slice of four to seven bytes. The first "name" is interned and
+# every later one is that string, so two hundred objects cost two key strings
+# rather than four hundred. `token_hits` counts the slices answered from the
+# table; without the table it reads nought and `alloc_bytes` rises by a
+# header and sixteen bytes of text for every key.
+import "std/json"
+import "std/text"
+
+fn rows 0 acc
+  acc
+
+fn rows n acc
+  rows (n - 1) (push acc "\{\"name\": {n}, \"kind\": {n % 3}}")
+
+fn counted xs
+  "decoded {length xs} objects"
+
+pub play =
+  source = "[{text/join (rows 200 []) ", "}]"
+  print (json/decode source .> counted)

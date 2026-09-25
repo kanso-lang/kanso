@@ -1,7 +1,7 @@
 allocs=3
 alloc_bytes=112
 arena_blocks=1
-arena_peak_bytes=1048576
+arena_peak_bytes=524288
 cohort_frees=0
 cohort_kept=0
 perm_allocs=3
@@ -37,6 +37,7 @@ perm_peak_bytes=0
 str_scans=0
 str_scan_bytes=0
 seek_resumes=0
+token_hits=0
 buf_reuse=0
 held_peak_bytes=0
 view_allocs=0

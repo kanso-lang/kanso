@@ -10,6 +10,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <sys/mman.h>
 
 /* Whether this runtime object carries its twenty-seven counter sites. The
    `-DKANSO_COUNTERS_BUILD` comes from the caller, so `cached_runtime_object`
@@ -163,6 +164,10 @@ static long long k_stat_str_scan_bytes = 0;
    loses the cursor if the rewind forgets it, and the walk then starts from
    the front at every position: nothing else moves, and this reads nought. */
 static long long k_stat_seek_resumes = 0;
+/* A token slice answered by the interned copy rather than a fresh string. See
+   k_token. Keep the table and lose the lookup, and the decoder's keys go back
+   to the arena one string each; this goes to nought. */
+static long long k_stat_token_hits = 0;
 static long long k_stat_carry_dedup = 0;
 static long long k_stat_bytes_malloc = 0;
 /* Where arena bytes go, by value shape. The totals above say how much was
@@ -614,6 +619,7 @@ static void k_stats_dump(void) {
         k_perm_live, k_perm_peak);
     fprintf(stderr, "str_scans=%lld\nstr_scan_bytes=%lld\nseek_resumes=%lld\n",
             k_stat_str_scans, k_stat_str_scan_bytes, k_stat_seek_resumes);
+    fprintf(stderr, "token_hits=%lld\n", k_stat_token_hits);
     fprintf(stderr, "buf_reuse=%lld\nheld_peak_bytes=%lld\n", k_stat_buf_reuse, k_stat_held_peak);
     fprintf(stderr, "view_allocs=%lld\nview_frees=%lld\n",
             k_stat_view_allocs, k_stat_view_frees);
@@ -739,9 +745,18 @@ static __attribute__((noinline)) void* k_alloc_oversize(size_t n) {
     return p;
 }
 
+/* Half a megabyte a block. The peak is counted in whole blocks, since a block
+   is allocated whole, and at a megabyte the run program's base -- the text it
+   reads and the document decoded from it, 1.31 MB with keys interned -- took
+   two blocks and left 740 KB of the second unused under every phase that ran
+   on top of it. At half a megabyte it takes three, and the arena's peak falls
+   from 3,670,032 bytes to 3,145,744. Smaller blocks cost refills and move the
+   carry's copy decisions: a quarter of a megabyte cost 24 million instructions
+   on runbench for a smaller saving. */
+#define K_BLOCK_BYTES ((size_t)1 << 19)
 static __attribute__((noinline, preserve_most)) void* k_alloc_refill(size_t n) {
-    if (n > (1 << 20)) return k_alloc_oversize(n);
-    k_arena_push((size_t)(1 << 20));
+    if (n > K_BLOCK_BYTES) return k_alloc_oversize(n);
+    k_arena_push(K_BLOCK_BYTES);
     void* p = k_arena;
     k_arena += n;
     k_arena_left -= n;
@@ -1381,6 +1396,49 @@ static int k_where(const void* p, KMark* m) {
    where the interpreter, holding one list, says `[<cycle>]`. Registered by
    k_caf_freeze; a handful of ranges, walked only for a pointer in no arena
    block and no tenure block. */
+/* The decoder's short tokens, interned. A JSON document names the same few
+   keys over and over: large.json has 8,361 keys and 500 distinct ones, and
+   each key cost a sixteen-byte header and sixteen bytes of text in the arena,
+   267,552 bytes of every decoded copy. A slice of four to seven bytes is now
+   looked up by its bytes in a direct-mapped table and, when found, shared.
+
+   The strings live in a static slab rather than the arena, because a rewind
+   would reclaim arena storage the table still points at, and the slab never
+   frees. A slot is filled once and never evicted, and a slot already holding
+   another token sends this one to the arena as before, so the slab is bounded
+   by the table's width whatever the input does: 4,096 tokens of twenty-four
+   bytes. Its bytes count into `perm_peak_bytes` as they are used.
+
+   An interned string is never a builder -- its `cap` is a cached count or
+   zero, never positive -- so nothing appends into it in place. */
+#define K_TOKEN_BITS 12
+#define K_TOKEN_BYTES (sizeof(KStr) + 8)
+static KStr* k_token[1 << K_TOKEN_BITS];
+static uint64_t k_token_key[1 << K_TOKEN_BITS];
+static _Alignas(16) char k_token_store[(1 << K_TOKEN_BITS) * K_TOKEN_BYTES];
+static size_t k_token_used = 0;
+
+/* The table stores a token's two words and not its length, which is safe
+   because tokens of different lengths never land in one slot. Two lengths
+   of four to seven change `key ^ len` in its low three bits only, so the two
+   products differ by the multiplier times one to seven, modulo 2^64. The
+   slot is the product's top twelve bits, and two products that far apart
+   can only share them if that multiple sits within 2^52 of zero, which none
+   of the seven does. */
+#define K_TOKEN_MUL 0x9E3779B97F4A7C15ull
+#define K_TOKEN_APART(d) ((K_TOKEN_MUL * (d)) >> 52 != 0 && (K_TOKEN_MUL * (d)) >> 52 != 0xfff)
+_Static_assert(K_TOKEN_BITS == 12, "the assertion below reads twelve slot bits");
+_Static_assert(K_TOKEN_APART(1ull) && K_TOKEN_APART(2ull) && K_TOKEN_APART(3ull)
+               && K_TOKEN_APART(4ull) && K_TOKEN_APART(5ull) && K_TOKEN_APART(6ull)
+               && K_TOKEN_APART(7ull),
+               "tokens of two lengths could share a slot");
+
+/* The slab is outside every arena block, so without this an evacuation would
+   read an interned key as dying storage and copy it back into the arena. */
+static inline int k_token_holds(const void* p) {
+    return (uintptr_t)p - (uintptr_t)k_token_store < sizeof k_token_store;
+}
+
 static const char** k_frozen_lo = NULL;
 static const char** k_frozen_hi = NULL;
 static int k_frozen_n = 0;
@@ -1406,11 +1464,12 @@ static __attribute__((noinline)) int k_frozen_holds(const void* p) {
 }
 
 static int k_survives_x(const void* p, KMark* m) {
-    if (!m) return k_survives(p, NULL) || (k_frozen_n && k_frozen_holds(p));
+    if (!m) return k_survives(p, NULL) || k_token_holds(p) || (k_frozen_n && k_frozen_holds(p));
     int w = k_where(p, m);
     if (w == K_WHERE_BELOW) return 1;
     if (w != K_WHERE_OUTSIDE) return 0;
-    return (k_ten_any && k_ten_holds_outside(p)) || (k_frozen_n && k_frozen_holds(p));
+    return k_token_holds(p) || (k_ten_any && k_ten_holds_outside(p))
+           || (k_frozen_n && k_frozen_holds(p));
 }
 
 /* Sorted-view caches filled during a beat point above the mark; a rewind
@@ -1495,8 +1554,8 @@ static size_t k_ten_bytes[K_BEAT_MAX];
    the wide-array benchmark needing a second block for 128 KiB of tenured
    storage, so every membership miss walked two; 256 KiB holds it in one and
    takes k_ten_holds from 37.7 instructions an ask to 30.4, with the call count
-   unchanged. What it costs is address space rather than pages — malloc mmaps
-   a block this size and untouched pages never become resident — and the
+   unchanged. What it costs is address space rather than pages, since the
+   block is mapped and untouched pages never become resident, and the
    measured peak is 80 KiB on widebench. */
 #define K_TEN_BLOCK (256u << 10)
 static int k_ten_on = 0;
@@ -1630,8 +1689,8 @@ static void k_from_window(int on) {
 /* Each block is twice the one before it. That is what keeps the list short
    enough for k_ten_holds to walk: K_TEN_CAP is 64 MiB, so doubling from 64
    KiB runs out of licence after eleven blocks. The tail of the last block is
-   address space rather than pages -- malloc mmaps anything this size and
-   untouched pages are never resident -- so the peak this costs is not memory.
+   address space rather than pages, since the block is mapped and untouched
+   pages are never resident, so the peak this costs is not memory.
    Opened out of line and preserve_most: a block opens fourteen times on the
    run program against 74,551 carves, and the carve's callers kept a frame
    for the two mallocs. */
@@ -1640,8 +1699,17 @@ static __attribute__((noinline, cold, preserve_most)) KTenBlock* k_ten_block_ope
     size_t cap = n > grow ? n : grow;
     KTenBlock* nb = malloc(sizeof(KTenBlock));
     if (!nb) { fputs("out of memory\n", stderr); exit(1); }
-    nb->data = malloc(cap);
-    if (!nb->data) { fputs("out of memory\n", stderr); exit(1); }
+    /* Mapped, not malloc'd. glibc maps a large malloc or serves it from the
+       heap by a threshold that rises each time a mapped chunk is freed, so
+       once the run program had freed a few this block came from the heap,
+       landed just above the encoder's byte builder, and stopped its realloc
+       growing in place: 990 copies and 16 million instructions a run with
+       half-megabyte arena blocks. The block is address space rather than
+       pages until it is written, which is what the malloc was assumed to
+       give. */
+    void* m = mmap(NULL, cap, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (m == MAP_FAILED) { fputs("out of memory\n", stderr); exit(1); }
+    nb->data = m;
     nb->cap = cap;
     nb->used = 0;
     nb->next = k_ten_blocks[d];
@@ -1756,7 +1824,7 @@ static void k_ten_release(long long d) {
     if (!head) return;
     for (KTenBlock* b = head; b; ) {
         KTenBlock* next = b->next;
-        free(b->data);
+        munmap(b->data, b->cap);
         free(b);
         b = next;
         if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) k_stat_ten_frees++;
@@ -7810,6 +7878,25 @@ K_DOORCC KValue k_b_utf8(KValue lv, const char* origin);
    emitter reaches this door through the `k_b_utf8_slice_fast` shim, which
    tests the three tags itself; `k_b_utf8_slice` below is the same call for
    anything the shim turns away. */
+/* A token the table has not seen takes the next place in the slab and the
+   slot it hashed to, if that slot is empty. Out of line: runbench misses 604
+   times against 818,478 hits. */
+static __attribute__((noinline, cold, preserve_most)) KValue k_token_miss(uint64_t key, long long len, unsigned slot) {
+    KStr* s = (KStr*)(k_token_store + k_token_used);
+    k_token_used += K_TOKEN_BYTES;
+    k_perm_live += (long long)K_TOKEN_BYTES;
+    if (k_perm_live > k_perm_peak) k_perm_peak = k_perm_live;
+    s->data = (char*)(s + 1);
+    s->len = (int)len;
+    uint32_t a = (uint32_t)key, b = (uint32_t)(key >> 32);
+    memcpy(s->data, &a, 4);
+    memcpy(s->data + len - 4, &b, 4);
+    s->data[len] = 0;
+    s->cap = (key & 0x8080808080808080ull) ? 0 : (int)(-len - 1);
+    k_token[slot] = s;
+    k_token_key[slot] = key;
+    KValue v; v.tag = K_STR; v.payload = k_ptr(s); return v;
+}
 KValue k_b_utf8_slice_raw(const unsigned char* bytes, long long blen,
                           long long from, long long to, const char* origin) {
     const char* data = (const char*)bytes;
@@ -7828,10 +7915,22 @@ KValue k_b_utf8_slice_raw(const unsigned char* bytes, long long blen,
         /* The decoder's tokens: 840,807 of runbench's 861,498 slices are
            four to seven bytes, and glibc's memcpy spends fifteen
            instructions choosing how to move them. Two overlapping words. */
-        KStr* s = k_str_alloc(len);
         uint32_t a, b;
         memcpy(&a, data, 4);
         memcpy(&b, data + len - 4, 4);
+        /* The first four bytes and the last four cover the token, so with
+           its length they are the token exactly. "abab" and "ababab" are the
+           same two words, and the length is what the slot is chosen by as
+           well: see K_TOKEN_MUL for why two lengths never share one. */
+        uint64_t key = (uint64_t)b << 32 | a;
+        unsigned slot = (unsigned)(((key ^ (uint64_t)len) * K_TOKEN_MUL) >> (64 - K_TOKEN_BITS));
+        KStr* hit = k_token[slot];
+        if (hit && k_token_key[slot] == key) {
+            if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) k_stat_token_hits++;
+            KValue v; v.tag = K_STR; v.payload = k_ptr(hit); return v;
+        }
+        if (!hit) return k_token_miss(key, len, slot);
+        KStr* s = k_str_alloc(len);
         memcpy(s->data, &a, 4);
         memcpy(s->data + len - 4, &b, 4);
         s->data[len] = 0;

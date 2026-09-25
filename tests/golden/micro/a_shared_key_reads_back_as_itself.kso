@@ -1,0 +1,29 @@
+# The decoder's tokens of four to seven bytes are interned: the second "abab"
+# a document names is the string the first one made. The lookup reads the
+# token's first four bytes and its last four, and "abab" and "ababab" have the
+# same two, so the length is what tells them apart. Without it the second key
+# reads back as the first, and the map below holds one entry where it should
+# hold two.
+#
+# "é_ab" is five bytes and four characters. An interned string caches its
+# character count only when every byte is ascii, so its length is counted
+# from the characters.
+import "std/json"
+
+fn word none
+  "missing"
+
+fn word w
+  "{w} {length w}"
+
+fn words xs
+  "{word xs[1]}, {word xs[2]}, {word xs[3]}, {word xs[4]}"
+
+fn keyed m
+  a = m["abab"]
+  b = m["ababab"]
+  "{length m} keys: {a} {b}"
+
+pub play =
+  print (json/decode "[\"abab\", \"ababab\", \"abab\", \"é_ab\"]" .> words)
+  >> print (json/decode "\{\"abab\": 1, \"ababab\": 2, \"abab\": 3}" .> keyed)

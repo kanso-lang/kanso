@@ -241,7 +241,10 @@ higher_c = ["push_mut_fast" "put_mut_fast" "bytes_freed" "carry_dedup"]
 # `ryu_short` is a float whose digits the short path found by scaling and
 # dividing back. Losing the path renders the same text through ryu's
 # multiplies, so no output or allocation moves and this counter goes to nought.
-higher_d = ["ten_handups" "seek_resumes" "ryu_short"]
+# `token_hits` is a decoded token handed back from the intern table. Fewer
+# hits is more keys built as fresh strings, which the allocation counters see
+# too, but only as a rise among other rises.
+higher_d = ["ten_handups" "seek_resumes" "ryu_short" "token_hits"]
 
 higher_cd = text/concat higher_c higher_d
 
