@@ -14118,6 +14118,76 @@ this box read 697,137,164 -> 692,496,161 with `minsize` (-0.67%), 696,902,517
 with `optsize` and 697,644,423 with `cold`. At the release term's current
 ratio the best of the three is worth about 0.00005 of production welfare.
 
+## 2026-09-25 — the interpreter's per-call questions stop hashing, and a plain value skips a call
+
+Three questions the interpreter asks on every call went through a hash map.
+Profiled on the interpreted corpus against kanso#1633's head, the three
+together cost about 39 million of its 710,784,361 instructions on this box.
+
+Whether a push writes in place was asked of a set keyed by (file path, line,
+column), so each of 44,006 container calls hashed the declaration's path, and
+the question averaged 141 instructions. Each frame now gathers its own file's
+sites once, as (line, column), and keeps them on the frame; a frame is built
+once per declaration, so the gathering happens once per declaration.
+
+A call through a function reference found its callee in a map keyed by the
+name's address, at about 67 instructions a call over 316,000 calls. Entering
+a declaration found its frame in a map keyed by the declaration's address,
+at about 71 over 163,000. Each map now has a direct-mapped table of 256 slots
+in front of it, holding the last key and answer per slot, and a hit is a
+compare and a clone. The callee table keeps a key only while the map pins
+the name, and a declaration borrows from the program for the interpreter's
+life, so neither table can hold an address that has been handed to another
+value. A slot is chosen by multiplying the address by the golden ratio and keeping
+the top eight bits, because allocations sit at regular strides and the low
+bits of an address repeat; the plain low bits read 689,433,103 against
+687,554,523. Sixty-four slots collided too often: 702,682,526 against
+697,580,223 at 256, on the tree before the inline test below.
+
+`force_thunk` was a call made on nearly every value the interpreter
+produces, to learn in most cases that the value is not a lazy cell: 10.6
+million instructions in its own frame. The test is now inline at each
+caller, and only a cell reaches the out-of-line loop that forces it.
+
+A hit in either table then still paid for the frame its miss path needed:
+fourteen instructions of saves and restores around a lookup of about thirty.
+Each miss is now a function of its own, out of line. The frame lookup is
+inlined at its callers; the callee lookup stays a call of its own, which
+measured 679,842,551 against 680,197,280 with it inlined.
+
+On this box, `interp_instructions` 710,784,361 -> 679,842,551 (-30,941,810,
+-4.35%) in six steps: 705,510,238 for the frame's own sites, 701,900,029
+with the callee table, 697,580,223 with the frame table, 689,433,103 with
+the inline test, 687,554,523 with the golden-ratio slots, and 679,842,551
+with the misses out of line.
+`interp_peak_bytes` rises 842,648 -> 860,472 (+17,824) and `interp_allocs`
+929,207 -> 929,249 (+42), for the two tables and the per-frame site sets.
+
+The ratchet rows `in_place_site`, `recent_callee`, `recent_frame`,
+`inline_force` and `frame_hit_inline` each undo one step without changing an
+answer, and `interp_instructions` sees each. Measured on the tree each was
+written against, the five read 712,672,223, 717,053,460, 708,325,182,
+697,580,223 and 680,327,242.
+
+## 2026-09-25 — CI's rows for kanso#1634
+
+CI read `interp_instructions` 690,933,840 -> 661,830,756 (-29,103,084,
+-4.21%), a little more than this box's -4.35% of its own baseline.
+`interp_peak_bytes` rose 842,653 -> 860,477 (+17,824, +2.12%) and
+`interp_allocs` 929,207 -> 929,249 (+42): the recent-callee and recent-frame
+tables are two vectors of 256 slots allocated on the first call, and each
+frame's in-place sites are a set of its own, built on the first question.
+Welfare weighs the peak at 0.04 of the development side against 0.11 for the
+instructions, so the trade is the one the objective asks for.
+
+The front-end rows moved with the compiler's layout, since eval.rs is linked
+into every `kanso check`: `compile_instructions` 25,004,892 -> 25,041,977
+(+37,085, +0.15%), `entry_instructions` 83,186,043 -> 83,306,754 (+120,711,
++0.15%), `library_instructions` 83,730,469 -> 83,850,394 (+119,925, +0.14%),
+`startup_instructions` 605,388 -> 605,441 (+53) and `emit_instructions`
+29,261,817 -> 29,274,393 (+12,576, +0.04%). None of these paths runs the
+interpreter's call machinery, and `compile_allocs` stayed at 14,276.
+
 ## 2026-09-25 — a regexp scan asks first for the literal every match holds
 
 The run program's split phase and scanbench search a subject built from
@@ -14239,6 +14309,11 @@ work, text and emitted row CI measured matched the projection from this box,
 runbench 1,421,154,308 among them. The objective weighs neither compile row,
 so the welfare banked with this change is the runbench fall's.
 
+CI's reading of the tree merged with main after kanso#1637. The two compile
+rows that compile lib/regexp take both changes: `entry_instructions`
+84,619,753 and `library_instructions` 85,181,699, each within 2,700 of the
+two deltas summed. Every other row CI measured matched the goldens.
+
 ## 2026-09-25 — a split whose scan finds nothing ends there
 
 `regexp/split` scanned for its separator from where the last piece ended, and
@@ -14265,3 +14340,13 @@ CI's reading moved the two compile rows that compile lib/regexp:
 `library_instructions` 85,059,188 -> 85,101,407 (+42,219). The split's new
 arm and its guard are code both routes compile. The objective weighs neither
 row, and every work row CI measured matched main.
+
+Merged again after kanso#1638, whose split adds its own small cost to the two
+rows that compile lib/regexp. Projected by adding that delta to this branch's
+CI reading: `entry_instructions` 84,635,818 and `library_instructions`
+85,223,918. CI's readings will replace both.
+
+CI read the merged tree at 755fb36d: `entry_instructions` 84,635,818 ->
+84,635,833 (+15) and `library_instructions` 85,223,918 -> 85,224,038 (+120).
+The projection added two deltas measured on different trees, and the
+remainder is layout. Neither row is weighed.
