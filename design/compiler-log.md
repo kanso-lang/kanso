@@ -14426,3 +14426,12 @@ Built, measured and declined on the way:
 Merged after kanso#1634. This change's page section is now 150. The floor is
 banked on the projected rows so the sentinel can read the branch; CI's rows
 replace them.
+
+CI's rows on the merged tree: every work row as projected but
+`work_livebench`, which reads 2,078,874,160, twenty above. The development
+rows price the helper, which every dev module carries and compiles:
+`emit_instructions` 29,274,393 -> 29,288,701 (+14,308),
+`startup_instructions` 605,441 -> 606,991 (+1,550) and
+`codegen_instructions_dev` 142,050,065 -> 142,160,577 (+110,512). The release
+tier prunes the helper where nothing calls it, and `codegen_instructions_release`
+falls 698,557,830 -> 698,399,695 (-158,135) with the smaller encoder.

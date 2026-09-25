@@ -232,4 +232,8 @@
 # kanso#1633 at CI's sitting: a proven list is measured and indexed in place.
 # codegen_instructions_dev 142,645,204 -> 142,050,065, a FALL of 595,139
 # (-0.4172%).
-codegen_instructions_dev=142050065
+#
+# CI measured the literal word on main after kanso#1634, at 964f41e9.
+# codegen_instructions_dev 142,050,065 -> 142,160,577, a RISE of 110,512
+# (+0.0778%).
+codegen_instructions_dev=142160577
