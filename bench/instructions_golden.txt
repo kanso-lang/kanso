@@ -702,20 +702,27 @@
 # +492,380, oneshot -71,532, basket -133,385, deepbench -1,344,000,
 # escapebench -2,451,022, pendbench -1,000, indexbench +14, digestbench -14,
 # livebench -27,388,087, runbench -9,744,067. CI's reading replaces them.
-jsonbench 890697789
-encodebench 2677016776
-oneshot 14486395
-basket 31432538
-widebench 28789056
-deepbench 364797730
-escapebench 65821660
-pendbench 181895213
-indexbench 2538571
-scanbench 282021
-digestbench 5542068
+#
+# 2026-09-25, a proven tag is assumed: projected from this container's
+# readings over the literal divisor's tree: jsonbench -76,795,501, encodebench
+# -146,237,823, oneshot -615,489, basket -260,382, widebench -224,004,
+# deepbench -64,000, escapebench -2,399,986, pendbench +998, indexbench
+# -40,097, scanbench -172, digestbench -91,203, livebench -42,089,654,
+# runbench -66,651,001. CI's reading replaces them.
+jsonbench 813902288
+encodebench 2530778953
+oneshot 13870906
+basket 31172156
+widebench 28565052
+deepbench 364733730
+escapebench 63421674
+pendbench 181896211
+indexbench 2498474
+scanbench 281849
+digestbench 5450865
 readbench 4631851
-livebench 1877825961
-runbench 1290279056
+livebench 1835736307
+runbench 1223628055
 # 2026-09-06 (the run program joins): `runbench 3043743748` is a NEW row and
 # nothing regressed to make it appear. It is the program Clay's gavel that day
 # made the objective's whole run-speed term, and the thirteen rows above it

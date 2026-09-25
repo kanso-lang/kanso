@@ -2657,7 +2657,18 @@ literal_divisor = row
 
 rows_b1ld = text/concat rows_b1wr [literal_divisor]
 
-rows_b = text/concat rows_b1ld [compile_mem compile_mem_host]
+# A boxed parameter proven to be one kind of heap value carries an assume.
+tag_assumed = row
+  "a proven tag left unsaid"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_proven_tag_left_unsaid")
+  benches
+
+rows_b1ta = text/concat rows_b1ld [tag_assumed]
+
+rows_b = text/concat rows_b1ta [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 
