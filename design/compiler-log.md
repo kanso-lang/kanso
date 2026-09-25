@@ -13522,3 +13522,15 @@ vein is what sees it: ratchet row `grow_first` drops the test.
 its 175,797 calls, 1,933,767 instructions of frame. It was one of the doors
 tried under `preserve_none` in the entry above and the trial segfaulted, so
 it is left as it is.
+
+---
+
+## 2026-09-25 — CI's rows for kanso#1624
+
+Measured by CI on `0afacb5c`, against kanso#1623's goldens. The run program
+reads 1,535,239,320 -> 1,534,028,118 (-0.0789%), widebench 28,937,870 ->
+28,777,868 (-0.5529%), jsonbench -0.1843% and oneshot -0.0787%; encodebench
++0.0045% and livebench +0.0039%. Every binary's machine code is 368 bytes
+smaller, and `text` sums to 3,434,192. `codegen_instructions_release` reads 715,946,899 and
+`codegen_instructions_dev` 142,639,014, 5,303 and 5,429 below the branch's
+base. Welfare reads 87.99 and the rise is banked.
