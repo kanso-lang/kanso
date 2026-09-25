@@ -117,6 +117,9 @@ pub struct Site {
     /// is cloned once per declaration, which is what this struct already
     /// costs: it is built by `frame_of` and memoized by pointer.
     pub file: std::sync::Arc<str>,
+    /// The (line, column) of every push in this file that writes in place,
+    /// gathered on the first question; see `Interp::writes_in_place`.
+    in_place: std::cell::OnceCell<Set<(usize, usize)>>,
 }
 
 pub type Frame = Option<Rc<Site>>;
@@ -126,6 +129,7 @@ fn frame_of(decl: &FnDecl) -> Frame {
         prefix: Rc::from(format!("{} at {}", crate::ast::frame_name(&decl.name), decl.file)),
         hako: Rc::from(crate::provenance::package_of(&decl.file)),
         file: decl.file.clone(),
+        in_place: std::cell::OnceCell::new(),
     }))
 }
 
@@ -2937,13 +2941,20 @@ impl<'a> Interp<'a> {
     /// The key is the declaration's file and the call's line and column, which
     /// is what `codegen.rs` uses at its own push arm. A frame the wasm host
     /// built carries no file and answers no, which is the safe direction.
+    ///
+    /// The analysis keys its set by the file's path, and hashing the path on
+    /// every container call was most of what the question cost. Each frame
+    /// gathers its own file's sites once, as (line, column), and asks those.
     fn writes_in_place(&self, span: Span, frame: &Frame) -> bool {
         let Some(site) = frame else { return false };
-        self.in_place.get_or_init(|| crate::linear::in_place_pushes(self.program)).contains(&(
-            site.file.clone(),
-            span.line as usize,
-            span.col as usize,
-        ))
+        let sites = site.in_place.get_or_init(|| {
+            let all = self.in_place.get_or_init(|| crate::linear::in_place_pushes(self.program));
+            all.iter()
+                .filter(|(file, _, _)| **file == *site.file)
+                .map(|(_, l, c)| (*l, *c))
+                .collect()
+        });
+        sites.contains(&(span.line as usize, span.col as usize))
     }
 
     /// Take a container's contents where the analysis proved nobody else will

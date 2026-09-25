@@ -2255,7 +2255,19 @@ rows_b1pr = text/concat rows_b1bp [list_read_late list_index_twin]
 
 rows_b1pl = text/concat rows_b1pr [list_length_twin]
 
-rows_b = text/concat rows_b1pl [compile_mem compile_mem_host]
+# The interpreter asks whether a push writes in place against its frame's
+# own sites. The mutation hashes the file's path on every call again.
+in_place_site = row
+  "an in-place site hashed by its path"
+  true
+  interp_gate
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_in_place_site_hashed_by_its_path")
+  release
+
+rows_b1is = text/concat rows_b1pl [in_place_site]
+
+rows_b = text/concat rows_b1is [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 
