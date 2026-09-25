@@ -15360,3 +15360,41 @@ worse, with the values they land on: `run_perm_live_bytes` 15,168,
 181,896,213, `work_readbench` 4,631,851, `work_scanbench` 282,021, `text`
 3,551,216, `live_alloc_bytes` 534,492,784, `live_perm_live_bytes` 15,168 and
 `live_perm_peak_bytes` 15,168.
+
+## 2026-09-25 — a map key is written as a key
+
+The json encoder wrote each map key through `encode_onto`, the same group that
+writes every value, so each key paid for a type test over eight arms before it
+reached `escape_onto`, and the colon after it was one more single-byte append.
+A key is always a string. `entry_onto` now hands it to `key_onto`, whose
+parameter is typed `k:string`, and `key_onto` appends the closing quote and
+the colon as the two-byte literal `":`. The opening quote is appended by the
+caller, straight after the brace or the comma.
+
+Five arrangements of the same bytes were measured on runbench against the tree
+before this one:
+
+    escape_onto on the untyped k, `":` as one literal       +22,332,650
+    key_onto typed, opening quote inside it                 -16,643,789
+    key_onto typed, `{"` and `,"` as two-byte literals      -25,555,650
+    as above with `{` and `,` apart from the quote          -26,042,668
+    as above with the closing quote apart from the colon    -15,858,366
+
+The first line is the reason for the typed parameter: the same call made on
+the bare `k` of the entry pattern costs more than the old dispatch did. Why
+the two-byte literal pays after a key and costs before one was not isolated.
+
+Runbench is projected at 1,300,023,482, 26,042,668 below (-1.96%), livebench
+at 1,905,214,048, 113,377,925 below (-5.6%), and oneshot at 14,558,151,
+284,410 below. No other program moves. The ratchet row `key_typed` sends the
+key back through the untyped escape, which leaves the output the same and put
+runbench at 1,337,789,395 when it was tried by hand.
+
+`append_fast` falls because there are fewer appends, and the checker visits
+one definition more. The keys the trend gate reads as worse, with the values
+they land on: `run_append_fast` 8,256,960, `run_perm_allocs` 93,
+`oneshot_append_fast` 90,477, `front_end_visits` 7,416,
+`emitted_other_branches` 8,024, `emitted_other_calls` 9,671,
+`emitted_other_defines` 1,556, `emitted_other_lines` 83,727, `text` 3,548,064,
+`live_alloc_bytes` 534,601,584, `live_append_fast` 31,135,470 and
+`a_literal_appended_across_a_rewind_append_fast` 2,080.
