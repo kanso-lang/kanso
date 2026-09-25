@@ -294,9 +294,7 @@ static KValue k_utf8_bad(const char* data, long long len, const char* origin,
                          long long* chars);
 static inline void k_str_seed_count(KStr* s, long long chars);
 static KValue k_render_at(KValue v, long long quote, int held);
-KValue k_b_render_value(KValue v) {
-    return k_render(v, 0);
-}
+KValue k_b_render_value(KValue v);
 
 /* A cell whose value was built inside the innermost beat cannot be memoized
    outright: the loop rewinds between iterations, and the memo would point at
@@ -2953,6 +2951,30 @@ static inline __attribute__((always_inline)) KStr* k_str_alloc(long long len) {
     s->data = (char*)(s + 1);
     s->cap = 0;
     return s;
+}
+
+/* An int interpolated on its own, `"{i}"`, is the common case: the run
+   program makes 200,000 of them. Through k_render it went into a stack buffer
+   by way of the switch every value takes, and k_str_n then copied the digits
+   into a fresh string, about 109 instructions an int. The length is known
+   before the first digit, so the string is allocated at that length and the
+   digits are written into it where they will stay. */
+KValue k_str_n(const char* data, long long len);
+KValue k_b_render_value(KValue v) {
+    if (v.tag == K_INT) {
+        long long x = v.payload;
+        /* One digit is a one-byte string, which k_str_n answers from the
+           ascii cache without allocating; so does this. */
+        if ((unsigned long long)x < 10) {
+            char c = (char)('0' + x);
+            return k_str_n(&c, 1);
+        }
+        uint64_t u = x < 0 ? (uint64_t)(-(x + 1)) + 1 : (uint64_t)x;
+        KStr* s = k_str_alloc((long long)ryu_declen(u) + (x < 0));
+        k_itoa(s->data, x);
+        KValue out; out.tag = K_STR; out.payload = k_ptr(s); return out;
+    }
+    return k_render(v, 0);
 }
 
 /* A slice of a long string shares the string's bytes: a header whose `data`

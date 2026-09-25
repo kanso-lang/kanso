@@ -13193,3 +13193,22 @@ fixture `an_empty_literal_takes_one_bump` makes a thousand of each and reads
 emitter arms switched off. Its neighbour `a_map_walk_builds_no_scratch_pair`
 quoted allocation figures from before the `entries` change and now quotes the
 current ones.
+
+## 2026-09-25 — an interpolated int is written where it stays
+
+`"{i}"` with an int went through `k_render`: the switch every value takes, the
+digits written into a stack buffer, and `k_str_n` copying them into a fresh
+string. That was about 109 instructions an int, and the run program's pend
+shape makes 200,000 of them in `churn`. `k_b_render_value` now answers an
+int itself. A single digit comes from the ascii cache through `k_str_n`, as it
+did before. Any other int's length is known before its first digit, so the
+string is allocated at that length and `k_itoa` writes into it.
+
+On this container, over the empty-literal change: runbench 1,656,770,406 ->
+1,650,960,035 (-0.3507%) and pendbench 209,746,680 -> 186,507,227
+(-11.0797%). basket reads -579, deepbench -14 and scanbench +5, which is
+layout. Every counter vein agrees. A first version allocated for single
+digits too and read two veins' `allocs` 10 and 1,836 higher, which is how
+the cache path was found. The render differential agrees on its 86 values,
+the numeric differential on its 2,163 programs, and the int extremes print
+the same on both engines.
