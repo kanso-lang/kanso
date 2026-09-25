@@ -2277,6 +2277,18 @@ literal_asked = row
 
 rows_b1rl = text/concat rows_b1pl [literal_run literal_asked]
 
+# A split whose scan finds nothing ends, rather than scanning again from the
+# next position; the mem fixture's scan count goes quadratic without it.
+split_stops = row
+  "a split that scans again after finding nothing"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_split_that_rescans_after_finding_nothing")
+  release
+
+rows_b1ss = text/concat rows_b1rl [split_stops]
+
 # A walk by index steps its cursor one character on, and a join of counted
 # pieces writes the sum. Closing the step leaves every character right and
 # `seek_resumes` where it was, so `seek_steps` is what goes red; dropping the
@@ -2306,7 +2318,7 @@ join_sep = row
   (breaking "a_join_count_that_drops_its_separator")
   release
 
-rows_b1ix = text/concat rows_b1rl [seek_step join_seed join_sep]
+rows_b1ix = text/concat rows_b1ss [seek_step join_seed join_sep]
 
 rows_b = text/concat rows_b1ix [compile_mem compile_mem_host]
 
