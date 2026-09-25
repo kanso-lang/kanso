@@ -13554,3 +13554,12 @@ nothing reads it after, which the dispatcher already said.
 The printed output is the same. The row is the only thing that can see this,
 so ratchet row `moved_binds` clones at every candidate again and gates on the
 interpreted run's instructions.
+
+---
+
+## 2026-09-25 — CI's rows for kanso#1625
+
+Measured by CI on `01d02dc6`. `interp_instructions` reads 732,994,592 ->
+709,556,834 (-3.1975%) and `interp_allocs` 983,321 -> 929,201 (-5.5038%).
+Every native row is kanso#1624's. Development welfare reads
+88.84 and the meta 88.00, and the rise is banked.

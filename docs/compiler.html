@@ -3415,6 +3415,12 @@ welfare                      77.37         82.09</code></pre>
 
 <p>Together these take runbench down 5.42%, jsonbench 7.50% and livebench 6.29%. pendbench and digestbench rise by less than half a per cent: their calls into the cycle outnumber the jumps inside it, and a caller now saves what it keeps live across such a call where the callee used to. arm64 is left as it was until the convention has been measured there.</p>
 
+<h2 id="movedbinds"><span class="sec-num">141</span>the interpreter keeps what it was handed</h2>
+
+<p>When the interpreter calls a function with several arms, it tries each arm against the arguments and keeps the best match. Every arm that named a parameter bound it to a copy of the argument, and a copy of an integer or a string allocates, so the arms that lost paid for copies nobody used. A named parameter now holds nothing while the arms are compared, and the winning arm's arguments are moved into place once it is known. The argument list was already discarded before the body ran. The interpreted corpus runs 3.2% fewer instructions and makes 5.5% fewer allocations, and prints the same thing.</p>
+
+<p>A smaller change on the native side: appending to a byte buffer that has no storage yet always grows it, and the check for that case now comes before the function that fits bytes into existing room. That function used to save five registers on every call, including the calls that went straight on to grow.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>
