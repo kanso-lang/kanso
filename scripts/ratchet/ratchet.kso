@@ -2097,7 +2097,17 @@ plain_calls = row
   (breaking "a_direct_call_kept_on_c")
   benchmarks
 
-rows_b1ft = text/concat rows_b1nw [flat_tails flat_order plain_calls]
+# Four runtime doors take preserve_nonecc on both sides. The mutation takes
+# one off the emitter's list, and the spec comparing the lists goes red.
+doors = row
+  "a door called on the other convention"
+  true
+  "cargo test --release --test the_doors_the_program_calls_agree"
+  "specs (unit, golden, differential)"
+  (breaking "a_door_called_on_the_other_convention")
+  release
+
+rows_b1ft = text/concat rows_b1nw [flat_tails flat_order plain_calls doors]
 
 rows_b = text/concat rows_b1ft [compile_mem compile_mem_host]
 

@@ -412,6 +412,18 @@ typedef struct {
 #define K_CLOSCC
 #endif
 
+/* A few of the doors the program calls take the same convention, so they
+   save nothing the caller does not keep. Each was measured on its own on the
+   run program under clang 19, against the program's functions already on
+   preserve_none: `append_rendered` -4,998,510 instructions, `entries`
+   -4,571,478, `utf8` -2,157,799 and `to_float_slice` -1,113,156. The same
+   trial made `at` dearer by 9,209,935 and `utf8_slice_raw` by 4,306,698,
+   because their callers keep more live across the call than the callee used
+   to save, so they stay on the C convention. The emitter writes the keyword
+   on the declares and calls of exactly these, in `PRESERVE_NONE_DOORS`, and
+   `tests/the_doors_the_program_calls_agree.rs` holds the two lists equal. */
+#define K_DOORCC K_CLOSCC
+
 typedef struct { KValue (K_CLOSCC *fn)(void*, KValue); void* env; long long ncaps; long long arity; } KClosure;
 /* A named group handed out as a value. The emitter writes one of these per
    wrapper as a static, so the collector never sees it, and it carries the
@@ -7422,7 +7434,7 @@ static __attribute__((noinline, cold, preserve_most)) KValue k_rec_cold(long lon
     return k_rec(t, n, f);
 }
 
-KValue k_b_entries(KValue mv) {
+K_DOORCC KValue k_b_entries(KValue mv) {
     if (!k_not_failure(mv)) return mv;
     if (mv.tag != K_MAP) k_die("entries takes a map");
     KMap* m = k_as_map(mv);
@@ -7755,7 +7767,7 @@ static KValue k_utf8_finish(KValue bv, const char* origin);
    exactly as they did. */
 KValue k_b_slice(KValue container, KValue fromv, KValue tov);
 static KValue k_b_slice_walk(KStr* s, long long from, long long to);
-KValue k_b_utf8(KValue lv, const char* origin);
+K_DOORCC KValue k_b_utf8(KValue lv, const char* origin);
 
 /* The bytes arm of `utf8` over a slice, with the KValue convention taken off
    its inputs. Three KValues and a pointer want seven of the six integer
@@ -7804,7 +7816,7 @@ KValue k_b_utf8_slice(KValue container, KValue fromv, KValue tov, const char* or
     return k_b_utf8(sliced, origin);
 }
 
-KValue k_b_utf8(KValue lv, const char* origin) {
+K_DOORCC KValue k_b_utf8(KValue lv, const char* origin) {
     if (!k_not_failure(lv)) return lv;
     if (lv.tag == K_BYTES) {
         return k_utf8_finish(lv, origin);
@@ -9075,7 +9087,7 @@ KValue k_b_append_slice(KValue acc, KValue cs, KValue fromv, KValue tov,
    pointer and the length, so nothing is allocated for them. Any other
    value takes the road it always took, through k_render, so the two
    spellings cannot disagree on a byte. */
-KValue k_b_append_rendered(KValue acc, KValue v, long long mutate) {
+K_DOORCC KValue k_b_append_rendered(KValue acc, KValue v, long long mutate) {
     if (!k_not_failure(acc)) return acc;
     if (v.tag != K_INT && v.tag != K_FLOAT) {
         return k_b_append_into(acc, k_render(v, 0), (int)mutate);
@@ -9585,7 +9597,7 @@ KValue k_b_to_int_slice(KValue cs, KValue fromv, KValue tov, const char* origin)
     return k_b_to_int(k_b_slice(cs, fromv, tov), origin);
 }
 
-KValue k_b_to_float_slice(KValue cs, KValue fromv, KValue tov, const char* origin) {
+K_DOORCC KValue k_b_to_float_slice(KValue cs, KValue fromv, KValue tov, const char* origin) {
     if (cs.tag == K_BYTES && fromv.tag == K_INT && tov.tag == K_INT) {
         KBytes* b = k_as_bytes(cs);
         long long from = fromv.payload, to = tov.payload;

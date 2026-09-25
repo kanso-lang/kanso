@@ -3411,7 +3411,9 @@ welfare                      77.37         82.09</code></pre>
 
 <p>The program's other functions take the same convention, so a function saves nothing and its caller saves only what it still needs after the call. The runtime calls a few program functions by name, such as the one that evaluates a deferred binding, and those keep the C convention; the build reads the list from the runtime's own <code>extern</code> declarations.</p>
 
-<p>Together these take runbench down 4.67%, jsonbench 7.05% and livebench 6.31%. pendbench and digestbench rise by less than half a per cent: their calls into the cycle outnumber the jumps inside it, and a caller now saves what it keeps live across such a call where the callee used to. arm64 is left as it was until the convention has been measured there.</p>
+<p>Four functions in the runtime that the program calls often take it too: the one that appends a rendered number, the one that lists a map's entries, the one that turns bytes into a string, and the one that reads a float out of a slice. Each was measured on its own, and two others that were tried, indexing and taking a string slice, cost more than they saved, because their callers keep more live across the call than the callee used to save. They stay as they were.</p>
+
+<p>Together these take runbench down 5.42%, jsonbench 7.50% and livebench 6.29%. pendbench and digestbench rise by less than half a per cent: their calls into the cycle outnumber the jumps inside it, and a caller now saves what it keeps live across such a call where the callee used to. arm64 is left as it was until the convention has been measured there.</p>
 
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 

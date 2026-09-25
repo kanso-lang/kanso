@@ -13410,10 +13410,35 @@ rewrite alone:
 
 and the others within fourteen instructions, which is the path-length noise
 between two build directories. Against the base, runbench reads
-1,623,307,985 -> 1,547,521,959, -4.6687%. Unit tests pin the externs read
+1,623,307,985 -> 1,547,521,959, -4.6687%, before the doors below. Unit tests pin the externs read
 from the runtime, the linkage order (`define internal preserve_nonecc`), and
 the kept address, watched red without the extern check and without the
 address check. Ratchet row `plain_calls`.
+
+**Four runtime doors take it as well.** With the program's functions on
+`preserve_none`, a C-convention runtime function the program calls still
+saves what it uses. Each hot door was marked on its own in a copy of the
+runtime and the run program relinked, against 1,547,521,959:
+
+    k_b_append_rendered   -4,998,510     k_b_at                +9,209,935
+    k_b_entries           -4,571,478     k_b_utf8_slice_raw    +4,306,698
+    k_b_utf8              -2,157,799     k_b_to_int_slice         +42,273
+    k_b_to_float_slice    -1,113,156     k_b_append_slice      segfault
+
+`at` and `utf8_slice_raw` get dearer because their callers keep more live
+across the call than the callee used to save. The `append_slice` trial
+segfaulted and was set aside with its cause unfound: the rewrite covered the
+module's declare and its one call, in the prelude's `k_b_append_slice_fast`,
+so the caller that still spoke C is somewhere this trial did not look. The
+four that pay are defined with
+`K_DOORCC` in src/runtime.c, which is `preserve_none` under the same probe as
+the closures, and `PRESERVE_NONE_DOORS` in src/codegen.rs writes the keyword
+on their declares and calls in every tier where the probe says yes. The run
+program reads 1,547,521,959 -> 1,535,239,270 (-0.7937%), widebench -1.6852%,
+jsonbench -0.4874%, encodebench -0.2694%, oneshot -0.2061%, basket -0.0369%
+and livebench +0.0180%. The spec `the_doors_the_program_calls_agree` holds
+the runtime's list and the emitter's equal, watched red with `k_b_utf8` off
+the emitter's.
 
 The emitted-code rows count the `.ll` a release build writes, which is the
 IR after this rewrite, and every flattened parameter and argument is one or
