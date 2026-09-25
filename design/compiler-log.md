@@ -14048,4 +14048,6 @@ The loop still asks each iteration whether the collection is a list or
 bytes, because `fold_flat` is generic over both and the tag is re-tested at
 `length` and at the index. Non-trivial loop unswitching at the LTO link,
 `-mllvm -enable-nontrivial-unswitch`, would hoist that test. All fourteen
-work rows read byte-identical with it, so it was declined.
+work rows read byte-identical with it, and byte-identical again with the
+flag given to the pre-link `-O1` compile instead, so it was declined in
+both places.
