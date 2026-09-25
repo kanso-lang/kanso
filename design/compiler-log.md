@@ -15624,6 +15624,13 @@ The trend gate reads `text` as worse; it lands on 3,521,424 summed over the
 fourteen binaries, 672 bytes above the tag assume's, which is `k_unsub`
 forty-eight bytes at a time.
 
+CI read the change at 061eaef6. The work rows landed within 28 of the
+projection: runbench 1,223,633,797, 5,728 above the tag assume's. The
+compile rows moved by the function's presence and nothing else:
+`emit_instructions` 29,156,813 -> 29,158,246, `codegen_instructions_dev`
+124,017,062 -> 124,021,731 and `codegen_instructions_release` 406,427,590 ->
+406,403,837.
+
 ## 2026-09-25 — a proven result is assumed
 
 The tag assume at a dispatcher's entry has a twin at the call site. Where a
@@ -15650,3 +15657,9 @@ on: `lines` 1,460 in the compile-cost micro rows and `emitted_other_calls`
 10,461 and `emitted_other_lines` 85,549, all assume lines; `text` 3,503,200
 summed, which is below the subtype fix's 3,521,424; and `work_pendbench`
 181,898,809, within 0.03% of main.
+
+CI read the change at 95f78ace: runbench 1,223,633,797 -> 1,221,877,776
+(-0.14%), livebench -5,362,245, basket -38,014. The compile side pays for
+the call-site lines: `emit_instructions` 29,158,246 -> 29,329,209 (+0.59%),
+`codegen_instructions_dev` 124,021,731 -> 124,061,133 and
+`codegen_instructions_release` 406,403,837 -> 406,462,416 (+0.01%).

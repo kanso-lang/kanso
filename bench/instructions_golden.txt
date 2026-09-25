@@ -720,26 +720,25 @@
 # oneshot +96, escapebench -14, digestbench -14, livebench +54,519, runbench
 # +5,742. Projected over CI's rows for the tag assume, and CI's reading
 # replaces them.
+# CI measured the subtype fix at 061eaef6; the rows below are CI's.
 #
-# 2026-09-25, a proven result is assumed: projected from this container's
-# readings over the subtype fix's tree: encodebench +14, oneshot -14,511,
-# basket -38,028, escapebench +14, pendbench +2,598, indexbench -16, scanbench
-# -74, digestbench +14, livebench -5,362,245, runbench -1,756,021. CI's
-# reading replaces them.
+# 2026-09-25, a proven result is assumed: CI measured it at 95f78ace;
+# runbench 1,223,633,797 -> 1,221,877,776, livebench 1,835,790,826 ->
+# 1,830,428,581, basket 31,172,142 -> 31,134,128. The rows below are CI's.
 jsonbench 813902288
 encodebench 2530928673
 oneshot 13856491
-basket 31134114
+basket 31134128
 widebench 28565052
 deepbench 364733730
 escapebench 63421674
 pendbench 181898809
-indexbench 2498444
+indexbench 2498458
 scanbench 281775
-digestbench 5450893
+digestbench 5450865
 readbench 4631851
-livebench 1830428609
-runbench 1221877790
+livebench 1830428581
+runbench 1221877776
 # 2026-09-06 (the run program joins): `runbench 3043743748` is a NEW row and
 # nothing regressed to make it appear. It is the program Clay's gavel that day
 # made the objective's whole run-speed term, and the thirteen rows above it
