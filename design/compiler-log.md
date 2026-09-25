@@ -13716,3 +13716,44 @@ restores the old doubling. The counters that rose, and where they landed:
 The book's counters sample in chapter 10, and the same sample quoted in
 chapter 12, read one allocation more (9) and 22,176 bytes where they read
 22,032, the extra grow step on a list of a dozen.
+
+## 2026-09-25 — CI's rows for kanso#1626
+
+The cost goldens job measured the list-growth change at its head. The run
+program reads `work_runbench` 1,534,028,118 -> 1,536,983,528, a rise of
+2,955,410 (+0.19%), the same share this box measured, and
+`arena_peak_bytes` holds at 3,670,032. The other work rows that rose are
+priced here: `work_deepbench` 360,448,338 -> 364,679,442 (+1.17%),
+`work_escapebench` 76,348,450 -> 77,668,593 (+1.73%), `work_jsonbench`
+1,011,967,027 -> 1,012,694,527, `work_encodebench` 2,969,367,257 ->
+2,969,691,811, `work_oneshot` 15,495,457 -> 15,497,912, `work_basket`
+32,481,362 -> 32,495,961, `work_widebench` 28,777,868 -> 28,778,052,
+`work_pendbench` 181,800,105 -> 181,845,174, `work_digestbench` 5,787,838 ->
+5,813,302 and `work_livebench` 2,210,455,639 -> 2,210,555,256. A list of
+five to sixteen items now grows twice where it grew once, and deep and
+escape build many lists of that size; the rises arrived with the change and
+nothing has isolated that as their cause. The objective weighs only the run
+program's row among these, and the meta score rose by 0.10 with the peak
+included.
+`codegen_instructions_dev` reads 142,639,084 and
+`codegen_instructions_release` 715,946,959, seventy and sixty
+instructions above the last sitting.
+
+
+What sets the run program's peak now, found by shrinking one phase at a time
+on this branch: the top-level `doc = json/decode raw` holds a full block for
+the whole run (a `doc` of `[1]` reads 2,621,456 and no held bytes), and the
+index shape adds 524,304 (with `index_chars = 1` the peak is 3,145,728). The
+decode loop, encode, deep, pend, escape, split and digest each move nothing
+when shrunk to one. The index shape's subject is a view into the last string
+its doubling built, so the slice is not a copy; the 524,304 is the join that
+builds a 1,572,864-byte string while the 786,432-byte one it doubles is still
+held.
+
+Measured and declined while the rows were taken: a direct-mapped cache of a
+thousand permanent four- to seven-byte strings in `k_b_utf8_slice_raw`, so
+the decoder's keys are shared rather than allocated. One decode of
+bench/large.json fell 1,581,088 -> 1,335,840 bytes, and the run program's
+`alloc_bytes` 386,879,005 -> 362,637,757, but `arena_peak_bytes` stayed at
+3,670,032: a decoded `doc` still needs more than one block. The same cache
+was declined on 2026-09-24 at +0.49% of the run program's instructions.

@@ -310,4 +310,8 @@
 # kanso#1624 at CI's sitting: an append that must grow asks first.
 # codegen_instructions_release 715,952,202 -> 715,946,899, a FALL of 5,303
 # (-0.0007%).
-codegen_instructions_release=715946899
+#
+# kanso#1626 at CI's sitting: a fifth push takes eight slots.
+# codegen_instructions_release 715,946,899 -> 715,946,959, a RISE of 60
+# (+0.0000%).
+codegen_instructions_release=715946959
