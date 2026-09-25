@@ -13387,6 +13387,24 @@ a value live across a call into the cycle now saves it itself, where the
 callee's prologue used to, and in those two programs the calls into the
 cycle outnumber the hops inside it.
 
+The emitted-code rows count the `.ll` a release build writes, which is the
+IR after this rewrite, and every flattened parameter and argument is one or
+two more lines of `insertvalue` or `extractvalue`. Calls, branches and
+defines do not move. `emitted_lines` reads 5,379, against 4,891 before the
+rewrite and 5,063 on main, `emitted_other_lines` reads 76,037 -> 82,781, and
+runbench's module 24,330 -> 27,176. LLVM folds these lines away before it selects
+instructions, and the codegen rows do not see them: the codegen gate runs
+under `/usr/bin`'s clang 18, which does not take the convention.
+
+The specs job now selects clang 19 as the cost-goldens job does, with
+llvm-19 for `opt-19`. It had run the image's clang 18, so no spec ran a
+release binary built the way the measured ones are, and the closures'
+`preserve_nonecc` had never met the suite either. Under clang 19 the whole
+suite passed on this container except `the_ir_kanso_writes_passes_that_verifier`,
+whose first choice of verifier was the bare `opt`, LLVM 18's, which refused
+the keyword at the parser in 76 of 214 programs. It now asks the tools of
+clang's own release first.
+
 The two specs: `a_tail_cycle_crosses_arities_in_a_release_build` runs a cycle
 of a five-word and a six-word arm, carrying an int, a float64 and a string,
 four million hops deep, and compares it with the interpreter. Watched red
