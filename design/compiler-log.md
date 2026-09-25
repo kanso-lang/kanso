@@ -15426,8 +15426,9 @@ group. The interpreted corpus makes 107,607 tail calls, and each paid a hash
 of the name and a compare of its bytes to find the same group again.
 
 `Flow::Tail` now carries the group beside the name, and the loop takes it. The
-interpreted run falls 13,651,102 instructions on the container, 2.3%, which
-projects `interp_instructions` at 581,842,530 over the typed key's projection.
+interpreted run falls 13,651,102 instructions on the container, 2.3%. CI read
+`interp_instructions` at 584,588,724 at e8870bbd, 10,904,908 below its reading
+of the typed key.
 
 The ratchet row `tail_group` puts the lookup back and leaves the carried group
 unused. The interpreted run read 595,873,686 with it, back where it started.
