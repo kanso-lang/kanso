@@ -14308,3 +14308,8 @@ pass and the scan's question: `entry_instructions` 83,186,043 -> 84,496,376
 work, text and emitted row CI measured matched the projection from this box,
 runbench 1,421,154,308 among them. The objective weighs neither compile row,
 so the welfare banked with this change is the runbench fall's.
+
+CI's reading of the tree merged with main after kanso#1637. The two compile
+rows that compile lib/regexp take both changes: `entry_instructions`
+84,619,753 and `library_instructions` 85,181,699, each within 2,700 of the
+two deltas summed. Every other row CI measured matched the goldens.
