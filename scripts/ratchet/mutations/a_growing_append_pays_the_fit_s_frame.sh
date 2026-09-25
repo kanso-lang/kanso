@@ -11,3 +11,4 @@ line='    if (!(a->cap & ~1LL)) return k_b_append_grow(acc, a, src, n, mutate);'
 }
 grep -vxF "$line" src/runtime.c > src/runtime.c.new
 mv src/runtime.c.new src/runtime.c
+if grep -qxF "$line" src/runtime.c; then exit 1; fi
