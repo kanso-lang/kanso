@@ -15350,6 +15350,12 @@ document a hundred times and pins 402 allocations and 120 permanent bytes.
 With the cache disabled it reads 1,002 allocations and 19,232 bytes of string
 headers; the ratchet row `token_cache` makes that mutation.
 
+CI read the tree at abc4015e: runbench 1,326,065,791 and oneshot
+14,842,337, 359 and 224 below the projections, `codegen_instructions_dev`
+125,569,980, 15,362 above #1650's reading, and
+`codegen_instructions_release` 698,322,865, 239,034 below it. Those rows are
+CI's.
+
 Every binary's text is 4,672 bytes larger. The keys the trend gate reads as
 worse, with the values they land on: `run_perm_live_bytes` 15,168,
 `run_perm_peak_bytes` 31,568, `perm_live_bytes` 15,168, `perm_peak_bytes`

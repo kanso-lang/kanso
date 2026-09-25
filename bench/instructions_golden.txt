@@ -698,7 +698,7 @@
 # CI measured the float search at a71892d9. runbench 1,390,193,490; the projection read 20 lower.
 jsonbench 891229689
 encodebench 2676524396
-oneshot 14842561
+oneshot 14842337
 basket 31565923
 widebench 28789056
 deepbench 366141730
@@ -709,7 +709,7 @@ scanbench 282021
 digestbench 5542082
 readbench 4631851
 livebench 2018591973
-runbench 1326066150
+runbench 1326065791
 # 2026-09-06 (the run program joins): `runbench 3043743748` is a NEW row and
 # nothing regressed to make it appear. It is the program Clay's gavel that day
 # made the objective's whole run-speed term, and the thirteen rows above it
