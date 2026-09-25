@@ -15674,3 +15674,68 @@ CI read the change at 95f78ace: runbench 1,223,633,797 -> 1,221,877,776
 the call-site lines: `emit_instructions` 29,158,246 -> 29,329,209 (+0.59%),
 `codegen_instructions_dev` 124,021,731 -> 124,061,133 and
 `codegen_instructions_release` 406,403,837 -> 406,462,416 (+0.01%).
+
+## 2026-09-25 — a descent into a map takes a mark of its own
+
+The JSON encoder's two loops, over a list's items and over a map's pairs,
+were beats. Each call pushed a mark, each iteration asked whether the arena
+had moved, and each exit popped: on runbench, 496,440 pushes and pops and
+1.13 million rewind tests a run. The only allocation any iteration made was
+the `entries` block a nested map builds as it descends, in
+`encode_map acc (entries m)`. Every list and every map paid the beat to
+reclaim what the nested maps alone allocate.
+
+That call now takes the mark instead. `beat::region_sites` finds a call in
+a recursive cluster that re-enters the cluster, whose arguments allocate,
+and whose callee answers only scalars or bytes. The emitter marks the
+frontier before the arguments and calls `k_region_pop` after the call. The
+pop rewinds when the result cannot reach the region, which for the encoder
+is the builder that was below the mark all along, and otherwise hands the
+region up the way a beat's pop does. The allocation analysis counts such a
+call as allocating nothing, so both encoder loops come out pure and take no
+beat at all. The analysis also learned that an in-place append of `"{n}"`,
+for a parameter annotated `int` or `float64`, is rendered into the builder
+and allocates nothing; without that, the number arms kept the loops beats.
+
+A region in tail position becomes a plain call, because its pop follows it.
+On a descent that is one frame per level of nesting. On a loop it is one
+frame per iteration, and the first version put a region on the edge of the
+four-function cycle in `a_cycle_of_four_rewinds_once_a_trip`, which ran out
+of stack on its 100,000 trips. An edge the tail-call graph cycles through is
+never a region now.
+
+In the benchmark corpus there is exactly one region, `std/json/json.kso`
+line 64. Its pop takes a fast path on every one of runbench's 248,490 calls:
+the region stayed in its mark's block and the result lies outside what it
+allocated, so the pop is two stores.
+
+A region stands only where it pays. After the allocation analysis runs with
+every candidate, a region is kept when every loop in its cluster comes out
+allocating nothing, and the analysis runs again with the survivors. The first
+build kept one in encodebench's frozen copy of the library, whose loops
+allocate for other reasons and stayed beats, and encodebench paid a mark and
+a pop per map on top of the beats: +154,061,163 instructions (+6.09%). With
+the pruning the frozen copy gets no region and reads -250,471 against the
+tree before.
+
+On the container, against the result assume's tree: runbench -26,171,367
+(-2.14%), livebench -109,748,580 (-6.00%), oneshot -274,397 (-1.98%), and
+every other benchmark within 14 instructions. Every program prints the same
+bytes and every peak row holds; the counters that move are `beat_iters`, run
+2,708,563 -> 1,576,363, live 5,032,401 -> 401 and oneshot 12,581 -> 1, and
+the mem fixture `a_literal_appended_across_a_rewind`, a `json/encode` loop,
+440 -> 40. The instruction rows are projected and the compile rows are left
+for CI.
+
+The mem fixture `a_nested_map_gives_back_its_entries` encodes 3,000 maps that
+each hold a map. Its arena peak is 2,097,152 bytes, and the ratchet row
+`region_given_back` makes the pop keep what the region made, which puts the
+peak at 4,194,304 and turns the mem corpus red.
+
+The trend gate reads three keys as worse that nothing earlier in the stack
+priced. `text` sums to 3,516,464: `k_region_pop` is exported by the runtime,
+so every program links it whether or not it has a region, 864 bytes of
+machine code apiece, and runbench's own grows by 1,312. `emitted_other_calls`
+10,452 and `emitted_other_lines` 85,522 are the stack's; this change takes
+three calls and nine lines out of livebench, three calls and eight lines out
+of runbench, and three calls and ten lines out of oneshot.

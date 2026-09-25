@@ -133,8 +133,7 @@ pub fn beat_loops(program: &Program, inference: &infer::Inference, mut_sites: &M
     // program by all three passes below and do not change between them. They
     // were computed five times and three times a build, which was seven per
     // cent of `kanso play` on a one-line program.
-    let regions = region_sites(program, inference, mut_sites);
-    let allocating = alloc_groups(program, mut_sites, &regions);
+    let (regions, allocating) = paying_regions(program, inference, mut_sites);
     let classes = classify_all(program, inference, mut_sites, &chains, &allocating);
     let mut ids = HashMap::default();
     let mut carried = HashMap::default();
@@ -898,8 +897,7 @@ pub fn report(
     mut_sites: &MutSites,
 ) -> Vec<String> {
     let chains = chain_groups(program, mut_sites);
-    let regions = region_sites(program, inference, mut_sites);
-    let allocating = alloc_groups(program, mut_sites, &regions);
+    let (regions, allocating) = paying_regions(program, inference, mut_sites);
     let classes = classify_all(program, inference, mut_sites, &chains, &allocating);
     let demoted: HashSet<Group> =
         demotable_entries(program, inference, mut_sites, &chains, &allocating, &classes)
@@ -1155,7 +1153,37 @@ fn classify(
 
 /// The calls that take a mark of their own, keyed by the call's file and
 /// position.
-pub type RegionSites = HashSet<(std::sync::Arc<str>, usize, usize)>;
+pub type RegionSites = HashSet<RegionKey>;
+
+type RegionKey = (std::sync::Arc<str>, usize, usize);
+
+/// The regions worth their mark, and the allocation analysis that holds with
+/// exactly those. A region pays by letting the loops of its cluster drop
+/// their beats; where a loop still allocates for some other reason it keeps
+/// its beat, and the region would be a second mark and pop on top of it. So
+/// a region stands only when every loop in its cluster comes out allocating
+/// nothing. The benchmark corpus has one of each: `std/json` loses its
+/// beats, and encodebench's frozen copy of the library, whose loops allocate
+/// elsewhere, keeps them and gets no region.
+fn paying_regions<'a>(
+    program: &'a Program,
+    inference: &infer::Inference,
+    mut_sites: &MutSites,
+) -> (RegionSites, HashSet<&'a str>) {
+    let candidates = region_sites(program, inference, mut_sites);
+    let all: RegionSites = candidates.iter().map(|(k, _)| k.clone()).collect();
+    let allocating = alloc_groups(program, mut_sites, &all);
+    let kept: RegionSites = candidates
+        .into_iter()
+        .filter(|(_, loops)| !loops.is_empty() && loops.iter().all(|l| !allocating.contains(l)))
+        .map(|(k, _)| k)
+        .collect();
+    if kept.len() == all.len() {
+        return (kept, allocating);
+    }
+    let allocating = alloc_groups(program, mut_sites, &kept);
+    (kept, allocating)
+}
 
 /// A recursive descent whose arguments allocate. A tree walk that writes into
 /// a builder -- the JSON encoder is the one that found this -- calls back into
@@ -1180,11 +1208,11 @@ pub type RegionSites = HashSet<(std::sync::Arc<str>, usize, usize)>;
 /// rather than free it. That last case is correct and merely keeps the
 /// garbage, so the condition is about when a region pays, not when it is
 /// sound.
-fn region_sites(
-    program: &Program,
+fn region_sites<'a>(
+    program: &'a Program,
     inference: &infer::Inference,
     mut_sites: &MutSites,
-) -> RegionSites {
+) -> Vec<(RegionKey, Vec<&'a str>)> {
     let mut index: HashMap<&str, usize> = HashMap::default();
     let mut names: Vec<&str> = Vec::new();
     for d in &program.fns {
@@ -1263,7 +1291,7 @@ fn region_sites(
     let fn_names: HashSet<&str> = names.iter().copied().collect();
     let none: HashSet<&str> = HashSet::default();
     let no_regions = RegionSites::default();
-    let mut sites = RegionSites::default();
+    let mut sites = Vec::new();
     for d in &program.fns {
         let own = cluster[index[d.name.as_str()]];
         if own == usize::MAX {
@@ -1293,7 +1321,11 @@ fn region_sites(
                 continue;
             }
             if args.iter().any(|a| expr_allocates(a, &fn_names, &none, true, &site)) {
-                sites.insert(key);
+                let loops = (0..names.len())
+                    .filter(|&v| cluster[v] == own && tail_cycle[v] != usize::MAX)
+                    .map(|v| names[v])
+                    .collect();
+                sites.push((key, loops));
             }
         }
     }
