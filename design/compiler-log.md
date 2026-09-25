@@ -15521,3 +15521,11 @@ and `work_encodebench` 2,677,016,790 (+0.04%) and `work_oneshot` 14,486,409
 (+1.49%). The two work rows arrived with the carried changes and no one of
 them has been isolated as their cause; runbench, the row the objective
 weighs, fell 7.4% across the same set.
+
+The ratchet found what the token cache left behind. Its row `slice_words`
+sends a four-to-seven-byte slice through `k_str_n` instead of the two-word
+copy, and the gate stayed green: the cache returns every slice of those
+lengths before the copy is reached, hits from the cache and misses from
+`k_token_miss`, so the copy was dead code and the mutation reached nothing.
+The branch, the row and its mutation are gone. Every benchmark reads within
+14 instructions of the tree that kept them, which is what dead code costs.
