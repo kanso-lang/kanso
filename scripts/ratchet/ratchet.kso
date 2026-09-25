@@ -2285,9 +2285,21 @@ recent_frame = row
   (breaking "a_declaration_s_frame_probed_in_the_map")
   release
 
+# Whether a value is a cell is asked inline. The mutation sends every value
+# through the out-of-line loop.
+inline_force = row
+  "a plain value forced through a call"
+  true
+  interp_gate
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_plain_value_forced_through_a_call")
+  release
+
 rows_b1is = text/concat rows_b1pl [in_place_site recent_callee recent_frame]
 
-rows_b = text/concat rows_b1is [compile_mem compile_mem_host]
+rows_b1if = text/concat rows_b1is [inline_force]
+
+rows_b = text/concat rows_b1if [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 

@@ -4176,7 +4176,20 @@ impl<'a> Interp<'a> {
         self.force_thunk(value.clone())
     }
 
+    /// Most values are not cells, and asking was a call of its own: 10.6
+    /// million instructions of the interpreted corpus in this function's own
+    /// frame. The question inlines at every caller and the loop stays out of
+    /// line.
+    #[inline]
     fn force_thunk(&self, value: Value) -> EvalResult {
+        match value {
+            Value::Thunk(_) => self.force_cell(value),
+            other => Ok(other),
+        }
+    }
+
+    #[inline(never)]
+    fn force_cell(&self, value: Value) -> EvalResult {
         let mut value = value;
         loop {
             let Value::Thunk(cell) = value else {
