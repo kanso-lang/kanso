@@ -290,4 +290,7 @@
 #
 # CI measured the result assume at 95f78ace: codegen_instructions_dev
 # 124,021,731 -> 124,061,133, a RISE of 39,402 (+0.0318%).
-codegen_instructions_dev=124061133
+#
+# CI measured kanso#1658 over the runtime without the token cache's dead copy:
+# codegen_instructions_dev 124,061,133 -> 124,061,141, a RISE of 8 (+0.0000%).
+codegen_instructions_dev=124061141
