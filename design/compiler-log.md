@@ -15057,3 +15057,18 @@ The mem vein pins the seed: with it put back to eight,
 `a_map_whose_keys_arrived_in_order_is_its_own_view` reads its old bytes and
 `mem_corpus_pins_native_allocator_counters` goes red. The ratchet row
 `map_seed` makes that mutation.
+
+## 2026-09-25 — four changes carried together
+
+kanso#1645, #1646, #1647 and #1648 are carried to main in one pull request
+over 058042db, so the ratchet runs once rather than four times: the dev link
+in gold with fixed-cost key names, the interpreter's small values with the
+wasm cell fix, the float search's starting guess, and the two container
+seeds. The ratchet chain runs through each change's rows in that order, and
+the log keeps every entry.
+
+The counter veins agree with the combined tree as each branch left them,
+since the four touch different parts of the runtime. The dev codegen row is
+projected as the gold link's CI reading plus the float search's rise of
+2,781, 125,551,909, and CI's reading of the combined tree replaces it. The
+same goes for every layout row.
