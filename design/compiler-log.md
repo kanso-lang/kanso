@@ -15529,7 +15529,6 @@ and `work_encodebench` 2,677,016,790 (+0.04%) and `work_oneshot` 14,486,409
 them has been isolated as their cause; runbench, the row the objective
 weighs, fell 7.4% across the same set.
 
-<<<<<<< HEAD
 ## 2026-09-25 — a proven tag is assumed
 
 Inference proves many parameters are exactly one kind of heap value: a list
