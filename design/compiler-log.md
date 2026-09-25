@@ -14149,15 +14149,22 @@ produces, to learn in most cases that the value is not a lazy cell: 10.6
 million instructions in its own frame. The test is now inline at each
 caller, and only a cell reaches the out-of-line loop that forces it.
 
-On this box, `interp_instructions` 710,784,361 -> 687,554,523 (-23,229,838,
--3.27%) in five steps: 705,510,238 for the frame's own sites, 701,900,029
+A hit in either table then still paid for the frame its miss path needed:
+fourteen instructions of saves and restores around a lookup of about thirty.
+Each miss is now a function of its own, out of line. The frame lookup is
+inlined at its callers; the callee lookup stays a call of its own, which
+measured 679,842,551 against 680,197,280 with it inlined.
+
+On this box, `interp_instructions` 710,784,361 -> 679,842,551 (-30,941,810,
+-4.35%) in six steps: 705,510,238 for the frame's own sites, 701,900,029
 with the callee table, 697,580,223 with the frame table, 689,433,103 with
-the inline test, and 687,554,523 with the golden-ratio slots.
+the inline test, 687,554,523 with the golden-ratio slots, and 679,842,551
+with the misses out of line.
 `interp_peak_bytes` rises 842,648 -> 860,472 (+17,824) and `interp_allocs`
 929,207 -> 929,249 (+42), for the two tables and the per-frame site sets.
 
-The ratchet rows `in_place_site`, `recent_callee`, `recent_frame` and
-`inline_force` each undo one step without changing an answer, and
-`interp_instructions` sees each. Measured on the tree each was written
-against, the four read 712,672,223, 717,053,460, 708,325,182 and
-697,580,223.
+The ratchet rows `in_place_site`, `recent_callee`, `recent_frame`,
+`inline_force` and `frame_hit_inline` each undo one step without changing an
+answer, and `interp_instructions` sees each. Measured on the tree each was
+written against, the five read 712,672,223, 717,053,460, 708,325,182,
+697,580,223 and 680,327,242.

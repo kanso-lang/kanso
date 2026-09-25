@@ -3461,7 +3461,7 @@ welfare                      77.37         82.09</code></pre>
 
 <p>The interpreter asks three things on every call: which function a function value names, which frame a declaration runs in, and whether a push at this spot may write into the list it was given. Each answer lived in a hash table. The first two were keyed by an address, and the third by the file's path together with a line and column, so a container call hashed the whole path. Together they cost about 39 million of the 711 million instructions the interpreted corpus takes.</p>
 
-<p>Each frame now keeps its own file's in-place sites, gathered once. The other two tables each have a small array in front of them, indexed by a few bits of the address and holding the last answer for that slot; a hit is one compare. The interpreter also asked, on nearly every value, whether it was a lazy cell waiting to be forced, and asking was a function call. That test is now inline, and only a cell makes the call. The interpreted corpus runs 3.3% fewer instructions, and its peak memory rises by 17,824 bytes for the arrays and the per-frame sets.</p>
+<p>Each frame now keeps its own file's in-place sites, gathered once. The other two tables each have a small array in front of them, indexed by a few bits of the address and holding the last answer for that slot; a hit is one compare. The interpreter also asked, on nearly every value, whether it was a lazy cell waiting to be forced, and asking was a function call. That test is now inline, and only a cell makes the call. The interpreted corpus runs 4.3% fewer instructions, and its peak memory rises by 17,824 bytes for the arrays and the per-frame sets.</p>
 
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 

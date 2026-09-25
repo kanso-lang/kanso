@@ -2297,7 +2297,17 @@ inline_force = row
 
 rows_b1is = text/concat rows_b1pl [in_place_site recent_callee recent_frame]
 
-rows_b1if = text/concat rows_b1is [inline_force]
+# A hit in the recent-frame table is answered at the caller. The mutation
+# keeps the lookup out of line.
+frame_hit_inline = row
+  "a recent frame hit paying for a call"
+  true
+  interp_gate
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_recent_frame_hit_paying_the_miss_s_frame")
+  release
+
+rows_b1if = text/concat rows_b1is [inline_force frame_hit_inline]
 
 rows_b = text/concat rows_b1if [compile_mem compile_mem_host]
 

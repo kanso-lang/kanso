@@ -1413,6 +1413,7 @@ impl<'a> Interp<'a> {
     /// map, the way `callee_of_ref` does. A declaration borrows from the
     /// program for as long as the interpreter lives, so its address cannot be
     /// handed to another while a slot names it.
+    #[inline]
     fn frame_for(&self, decl: &'a FnDecl) -> Frame {
         let key = decl as *const FnDecl as usize;
         let slot = recent_slot(key);
@@ -1421,6 +1422,12 @@ impl<'a> Interp<'a> {
                 return frame.clone();
             }
         }
+        self.frame_missed(decl, key, slot)
+    }
+
+    /// The table did not hold the declaration; out of line, as `callee_missed`.
+    #[inline(never)]
+    fn frame_missed(&self, decl: &'a FnDecl, key: usize, slot: usize) -> Frame {
         let known = self.frames.borrow().get(&key).cloned();
         let frame = match known {
             Some(frame) => frame,
@@ -2455,6 +2462,13 @@ impl<'a> Interp<'a> {
                 return callee.clone();
             }
         }
+        self.callee_missed(name, key, slot)
+    }
+
+    /// The table did not hold the reference; kept out of line so a hit pays
+    /// for no frame.
+    #[inline(never)]
+    fn callee_missed(&self, name: &Rc<str>, key: usize, slot: usize) -> Callee<'a> {
         let known = self.callees_by_ref.borrow().get(&key).map(|(_, callee)| callee.clone());
         if let Some(callee) = &known {
             self.recent_callees.borrow_mut()[slot] = (key, Some(callee.clone()));
