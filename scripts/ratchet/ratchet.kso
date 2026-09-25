@@ -2463,7 +2463,20 @@ args_exact = row
 
 rows_b1ae = text/concat rows_b1pk [args_exact]
 
-rows_b = text/concat rows_b1ae [compile_mem compile_mem_host]
+# The short-decimal search starts where the last float's ended. Starting it at
+# zero again renders the same digits and costs runbench the tries the guess
+# saves.
+ryu_guess = row
+  "a float search that starts at zero places every time"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_float_search_that_starts_at_zero")
+  benches
+
+rows_b1rg = text/concat rows_b1ae [ryu_guess]
+
+rows_b = text/concat rows_b1rg [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 

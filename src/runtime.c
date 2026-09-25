@@ -4330,6 +4330,21 @@ static const uint64_t RYU_POW10U[16] = {
    The range keeps every scaled product below 2^51 and every
    candidate a normal double: f in [2^-20, 2^50). `limit` is
    1/(4u), a power of two built from the exponent directly. */
+/* One place count tried: whether f * 10^p, rounded, divides back to f. */
+static inline int ryu_short_at(double f, int p, int64_t* mo) {
+    /* signed, because every product is below 2^51 and a signed
+       conversion is one instruction each way on x86-64, where an
+       unsigned one was a dozen */
+    double y = f * RYU_POW10D[p];
+    int64_t m = (int64_t)y;
+    m += y - (double)m >= 0.5;
+    *mo = m;
+    return (double)m / RYU_POW10D[p] == f;
+}
+
+/* The place count the last short decimal took. */
+static int k_ryu_places = 0;
+
 static inline int ryu_short(double f, int64_t* mo, int* po) {
     uint64_t bits;
     __builtin_memcpy(&bits, &f, 8);
@@ -4338,21 +4353,35 @@ static inline int ryu_short(double f, int64_t* mo, int* po) {
     uint64_t lbits = (uint64_t)(2096 - ieee_e) << 52;
     double limit;
     __builtin_memcpy(&limit, &lbits, 8);
-    for (int p = 0; p < 16 && RYU_POW10D[p] <= limit; p++) {
-        /* signed, because every product is below 2^51 and a signed
-           conversion is one instruction each way on x86-64, where an
-           unsigned one was a dozen */
-        double y = f * RYU_POW10D[p];
-        int64_t m = (int64_t)y;
-        m += y - (double)m >= 0.5;
-        if ((double)m / RYU_POW10D[p] == f) {
-            if (K_COUNTING) k_stat_ryu_short++;
-            *mo = m;
-            *po = p;
-            return 1;
+    /* THE SEARCH STARTS WHERE THE LAST ONE ENDED. Passing is monotone in p
+       while the bound holds: a decimal with p places is also one with p + 1,
+       it lies in the same interval, and rounding finds it there too. So a
+       pass at the guess means the answer is at or below it, and a failure
+       means it is above; either way the walk stops at the first place where
+       the answer changes, which is the fewest places, as before. Floats in
+       one document tend to share a precision: on runbench 170,820 of
+       191,070 take four places, and starting from zero tried five places
+       for each of them where starting from the last answer tries two. */
+    int p = k_ryu_places;
+    int64_t m;
+    if (RYU_POW10D[p] > limit) p = 0;
+    if (ryu_short_at(f, p, &m)) {
+        int64_t below;
+        while (p > 0 && ryu_short_at(f, p - 1, &below)) {
+            p--;
+            m = below;
+        }
+    } else {
+        for (p++; ; p++) {
+            if (p >= 16 || RYU_POW10D[p] > limit) return 0;
+            if (ryu_short_at(f, p, &m)) break;
         }
     }
-    return 0;
+    if (K_COUNTING) k_stat_ryu_short++;
+    k_ryu_places = p;
+    *mo = m;
+    *po = p;
+    return 1;
 }
 
 /* The short decimal m * 10^-p as ryu's digits: an integer's trailing zeros

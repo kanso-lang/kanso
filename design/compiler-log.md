@@ -14677,3 +14677,47 @@ landed on their projections: `compile_peak_bytes` 708,672 and
 The three front-end rows carry the argument stack's thread-local, which the
 argument-vector entry measured at 0.58% of a check on this container, and the
 emit row carries the literal word's helper, which every module is emitted with.
+
+---
+
+## 2026-09-25 — the short float search starts where the last one ended
+
+`render_ryu` finds most floats' text without ryu. `ryu_short` tries each place
+count p from zero: it scales the float by 10^p, rounds, and keeps the first p
+whose quotient divides back to the float. Every float runbench renders takes
+that path, 191,070 of them, and 170,820 take four places, so each of those
+paid five tries.
+
+Passing is monotone in p while the search's bound holds. A decimal with p
+places is also a decimal with p + 1 places, it lies in the same interval of
+decimals that read back as the float, and rounding the scaled float finds it
+there too. So a try at any p says which side of it the answer lies on. The
+search now starts at the place count the previous float took, walks down while
+the place below also passes, or walks up from a failure, and stops where the
+answer changes. The digits are the same; a float with the same precision as
+the one before it costs two tries.
+
+On this container, against the carried tree of #1644:
+
+| row | before | after | change |
+| --- | ---: | ---: | ---: |
+| runbench | 1,403,785,136 | 1,390,193,031 | -13,592,105 (-0.97%) |
+| encodebench | 2,736,636,903 | 2,676,227,371 | -60,409,532 (-2.21%) |
+| livebench | 2,078,873,799 | 2,018,464,267 | -60,409,532 (-2.91%) |
+| widebench | 29,081,687 | 28,835,810 | -245,877 |
+| oneshot | 14,934,042 | 14,783,086 | -150,956 |
+
+The other nine benchmarks moved five instructions or fewer. Every counter vein
+and the lazy tier agree with their goldens: the change alters how many tries a
+float takes and nothing a counter counts. The instruction golden carries the
+falls above subtracted from CI's rows, and CI's reading replaces them.
+
+The guess is one static int. A wrong guess costs tries and never changes the
+answer, and the bound check sends a guess the float's magnitude cannot use
+back to zero.
+
+tests/every_rendered_float_reads_back_as_itself.rs lifts the search out of
+`runtime.c` and sweeps 5,809,326 doubles in an order that moves the guess
+about. With the walk down from a passing guess removed it reports 975,871 not
+shortest. The ratchet row `ryu_guess` starts the search at zero again, and the
+work vein reads runbench back at its old count.
