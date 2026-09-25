@@ -2265,7 +2265,17 @@ in_place_site = row
   (breaking "an_in_place_site_hashed_by_its_path")
   release
 
-rows_b1is = text/concat rows_b1pl [in_place_site]
+# A call through a reference asks a direct-mapped table before the map. The
+# mutation never takes the table's answer.
+recent_callee = row
+  "a reference's callee probed in the map"
+  true
+  interp_gate
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_reference_s_callee_probed_in_the_map")
+  release
+
+rows_b1is = text/concat rows_b1pl [in_place_site recent_callee]
 
 rows_b = text/concat rows_b1is [compile_mem compile_mem_host]
 

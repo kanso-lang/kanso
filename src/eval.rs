@@ -1205,6 +1205,9 @@ impl Executor for ScriptedExecutor {
 /// Two memories rather than one because the rows would not fit in one: a value
 /// needs the name as an `Rc<str>` and a call needs the group, and an arm
 /// carrying both would size every row of both tables by the pair.
+/// Slots in `Interp::recent_callees`.
+const RECENT_CALLEES: usize = 256;
+
 #[derive(Clone)]
 enum Callee<'a> {
     Err,
@@ -1296,6 +1299,9 @@ pub struct Interp<'a> {
     /// `callees` again, keyed by the address of a `Value::FnRef`'s name; see
     /// `call_ref`.
     callees_by_ref: RefCell<Map<usize, (Rc<str>, Callee<'a>)>>,
+    /// The last callee each of a few hundred reference addresses asked for,
+    /// in front of `callees_by_ref`; see `callee_of_ref`.
+    recent_callees: RefCell<Vec<(usize, Option<Callee<'a>>)>>,
     /// One entry per declaration this run has ENTERED, keyed by the
     /// declaration's address, which `&'a FnDecl` on `frame_for` is what makes
     /// safe: the compiler refuses a borrow that does not outlive this
@@ -1382,6 +1388,7 @@ impl<'a> Interp<'a> {
             generation: next_generation(),
             callees: RefCell::new(Map::default()),
             callees_by_ref: RefCell::new(Map::default()),
+            recent_callees: RefCell::new(vec![(0, None); RECENT_CALLEES]),
             frames: RefCell::new(Map::default()),
             program,
         }
@@ -2407,14 +2414,29 @@ impl<'a> Interp<'a> {
     }
 
     /// What a function reference calls, by its address; see `call_ref`.
+    ///
+    /// The map's probe was most of what a call through a reference paid, so a
+    /// direct-mapped table of the last callee per address slot answers first.
+    /// A slot holds a key only while the map does, and the map pins the name,
+    /// so an address in the table cannot have been handed to another name.
     fn callee_of_ref(&self, name: &Rc<str>) -> Callee<'a> {
         let key = Rc::as_ptr(name) as *const u8 as usize;
+        let slot = (key >> 4) % RECENT_CALLEES;
+        if let (k, Some(callee)) = &self.recent_callees.borrow()[slot] {
+            if *k == key {
+                return callee.clone();
+            }
+        }
         let known = self.callees_by_ref.borrow().get(&key).map(|(_, callee)| callee.clone());
+        if let Some(callee) = &known {
+            self.recent_callees.borrow_mut()[slot] = (key, Some(callee.clone()));
+        }
         match known {
             Some(callee) => callee,
             None => {
                 let callee = self.callee_named(name);
                 self.callees_by_ref.borrow_mut().insert(key, (name.clone(), callee.clone()));
+                self.recent_callees.borrow_mut()[slot] = (key, Some(callee.clone()));
                 callee
             }
         }
