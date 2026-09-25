@@ -13812,7 +13812,7 @@ and its branch add 192 bytes of machine code to each benchmark, so `text`
 reads 3,434,192 -> 3,436,880 over the fourteen.
 
 The fixture `an_accumulator_regrows_where_it_is` pins it at 16,400 and read
-20,512 with the regrow turned off; the ratchet row `regrow` makes that
+20,512 with the regrow turned off; the ratchet row `perm_regrow` makes that
 mutation. A map's pairs take the same grow in `k_b_put_mut`, and they were
 left alone: with that arm made to abort, the mem corpus and all fourteen
 benchmarks ran clean, and no fixture I could write put a map accumulator
