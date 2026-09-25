@@ -14230,3 +14230,11 @@ a_scan_keeps_its_place_in_the_text:
 `a_scan_keeps_its_place_in_the_text_bytes_malloc` 41,
 `a_scan_keeps_its_place_in_the_text_push_mut_fast` 5 and
 `a_scan_keeps_its_place_in_the_text_str_scan_bytes` 37.
+
+CI's reading added two compile rows this box could not compare. The entry
+and library routes each compile lib/regexp, which now carries the literal
+pass and the scan's question: `entry_instructions` 83,186,043 -> 84,496,376
+(+1.58%) and `library_instructions` 83,730,469 -> 85,059,188 (+1.59%). Every
+work, text and emitted row CI measured matched the projection from this box,
+runbench 1,421,154,308 among them. The objective weighs neither compile row,
+so the welfare banked with this change is the runbench fall's.
