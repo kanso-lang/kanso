@@ -117,6 +117,9 @@ pub struct Site {
     /// is cloned once per declaration, which is what this struct already
     /// costs: it is built by `frame_of` and memoized by pointer.
     pub file: std::sync::Arc<str>,
+    /// The (line, column) of every push in this file that writes in place,
+    /// gathered on the first question; see `Interp::writes_in_place`.
+    in_place: std::cell::OnceCell<Set<(usize, usize)>>,
 }
 
 pub type Frame = Option<Rc<Site>>;
@@ -126,6 +129,7 @@ fn frame_of(decl: &FnDecl) -> Frame {
         prefix: Rc::from(format!("{} at {}", crate::ast::frame_name(&decl.name), decl.file)),
         hako: Rc::from(crate::provenance::package_of(&decl.file)),
         file: decl.file.clone(),
+        in_place: std::cell::OnceCell::new(),
     }))
 }
 
@@ -1201,6 +1205,17 @@ impl Executor for ScriptedExecutor {
 /// Two memories rather than one because the rows would not fit in one: a value
 /// needs the name as an `Rc<str>` and a call needs the group, and an arm
 /// carrying both would size every row of both tables by the pair.
+/// The slot an address takes in the recent tables. Allocations sit at
+/// regular strides, so the low bits of an address repeat; multiplying by the
+/// golden ratio and keeping the top bits spreads them.
+fn recent_slot(key: usize) -> usize {
+    ((key as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15) >> (64 - RECENT_CALLEES.trailing_zeros()))
+        as usize
+}
+
+/// Slots in `Interp::recent_callees` and `Interp::recent_frames`.
+const RECENT_CALLEES: usize = 256;
+
 #[derive(Clone)]
 enum Callee<'a> {
     Err,
@@ -1292,6 +1307,9 @@ pub struct Interp<'a> {
     /// `callees` again, keyed by the address of a `Value::FnRef`'s name; see
     /// `call_ref`.
     callees_by_ref: RefCell<Map<usize, (Rc<str>, Callee<'a>)>>,
+    /// The last callee each of a few hundred reference addresses asked for,
+    /// in front of `callees_by_ref`; see `callee_of_ref`.
+    recent_callees: RefCell<Vec<(usize, Option<Callee<'a>>)>>,
     /// One entry per declaration this run has ENTERED, keyed by the
     /// declaration's address, which `&'a FnDecl` on `frame_for` is what makes
     /// safe: the compiler refuses a borrow that does not outlive this
@@ -1302,6 +1320,9 @@ pub struct Interp<'a> {
     /// alone, and a declaration lives in the `Program` this interpreter
     /// borrows, so its address is stable for the whole run and unique to it.
     frames: RefCell<Map<usize, Frame>>,
+    /// The last frame each of a few hundred declaration slots asked for, in
+    /// front of `frames`; see `frame_for`.
+    recent_frames: RefCell<Vec<(usize, Frame)>>,
     program: &'a Program,
 }
 
@@ -1378,20 +1399,45 @@ impl<'a> Interp<'a> {
             generation: next_generation(),
             callees: RefCell::new(Map::default()),
             callees_by_ref: RefCell::new(Map::default()),
+            recent_callees: RefCell::new(vec![(0, None); RECENT_CALLEES]),
             frames: RefCell::new(Map::default()),
+            recent_frames: RefCell::new(vec![(0, None); RECENT_CALLEES]),
             program,
         }
     }
 
     /// `frame_of` for a declaration this run has entered before, which after
     /// the first entry is a clone of an `Rc` rather than two formatted strings.
+    ///
+    /// A direct-mapped table of the last frame per slot answers before the
+    /// map, the way `callee_of_ref` does. A declaration borrows from the
+    /// program for as long as the interpreter lives, so its address cannot be
+    /// handed to another while a slot names it.
+    #[inline]
     fn frame_for(&self, decl: &'a FnDecl) -> Frame {
         let key = decl as *const FnDecl as usize;
-        if let Some(known) = self.frames.borrow().get(&key) {
-            return known.clone();
+        let slot = recent_slot(key);
+        if let (at, frame @ Some(_)) = &self.recent_frames.borrow()[slot] {
+            if *at == key {
+                return frame.clone();
+            }
         }
-        let frame = frame_of(decl);
-        self.frames.borrow_mut().insert(key, frame.clone());
+        self.frame_missed(decl, key, slot)
+    }
+
+    /// The table did not hold the declaration; out of line, as `callee_missed`.
+    #[inline(never)]
+    fn frame_missed(&self, decl: &'a FnDecl, key: usize, slot: usize) -> Frame {
+        let known = self.frames.borrow().get(&key).cloned();
+        let frame = match known {
+            Some(frame) => frame,
+            None => {
+                let made = frame_of(decl);
+                self.frames.borrow_mut().insert(key, made.clone());
+                made
+            }
+        };
+        self.recent_frames.borrow_mut()[slot] = (key, frame.clone());
         frame
     }
 
@@ -2403,14 +2449,36 @@ impl<'a> Interp<'a> {
     }
 
     /// What a function reference calls, by its address; see `call_ref`.
+    ///
+    /// The map's probe was most of what a call through a reference paid, so a
+    /// direct-mapped table of the last callee per address slot answers first.
+    /// A slot holds a key only while the map does, and the map pins the name,
+    /// so an address in the table cannot have been handed to another name.
     fn callee_of_ref(&self, name: &Rc<str>) -> Callee<'a> {
         let key = Rc::as_ptr(name) as *const u8 as usize;
+        let slot = recent_slot(key);
+        if let (k, Some(callee)) = &self.recent_callees.borrow()[slot] {
+            if *k == key {
+                return callee.clone();
+            }
+        }
+        self.callee_missed(name, key, slot)
+    }
+
+    /// The table did not hold the reference; kept out of line so a hit pays
+    /// for no frame.
+    #[inline(never)]
+    fn callee_missed(&self, name: &Rc<str>, key: usize, slot: usize) -> Callee<'a> {
         let known = self.callees_by_ref.borrow().get(&key).map(|(_, callee)| callee.clone());
+        if let Some(callee) = &known {
+            self.recent_callees.borrow_mut()[slot] = (key, Some(callee.clone()));
+        }
         match known {
             Some(callee) => callee,
             None => {
                 let callee = self.callee_named(name);
                 self.callees_by_ref.borrow_mut().insert(key, (name.clone(), callee.clone()));
+                self.recent_callees.borrow_mut()[slot] = (key, Some(callee.clone()));
                 callee
             }
         }
@@ -2937,13 +3005,20 @@ impl<'a> Interp<'a> {
     /// The key is the declaration's file and the call's line and column, which
     /// is what `codegen.rs` uses at its own push arm. A frame the wasm host
     /// built carries no file and answers no, which is the safe direction.
+    ///
+    /// The analysis keys its set by the file's path, and hashing the path on
+    /// every container call was most of what the question cost. Each frame
+    /// gathers its own file's sites once, as (line, column), and asks those.
     fn writes_in_place(&self, span: Span, frame: &Frame) -> bool {
         let Some(site) = frame else { return false };
-        self.in_place.get_or_init(|| crate::linear::in_place_pushes(self.program)).contains(&(
-            site.file.clone(),
-            span.line as usize,
-            span.col as usize,
-        ))
+        let sites = site.in_place.get_or_init(|| {
+            let all = self.in_place.get_or_init(|| crate::linear::in_place_pushes(self.program));
+            all.iter()
+                .filter(|(file, _, _)| **file == *site.file)
+                .map(|(_, l, c)| (*l, *c))
+                .collect()
+        });
+        sites.contains(&(span.line as usize, span.col as usize))
     }
 
     /// Take a container's contents where the analysis proved nobody else will
@@ -4123,7 +4198,20 @@ impl<'a> Interp<'a> {
         self.force_thunk(value.clone())
     }
 
+    /// Most values are not cells, and asking was a call of its own: 10.6
+    /// million instructions of the interpreted corpus in this function's own
+    /// frame. The question inlines at every caller and the loop stays out of
+    /// line.
+    #[inline]
     fn force_thunk(&self, value: Value) -> EvalResult {
+        match value {
+            Value::Thunk(_) => self.force_cell(value),
+            other => Ok(other),
+        }
+    }
+
+    #[inline(never)]
+    fn force_cell(&self, value: Value) -> EvalResult {
         let mut value = value;
         loop {
             let Value::Thunk(cell) = value else {
