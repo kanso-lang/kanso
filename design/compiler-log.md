@@ -13164,3 +13164,32 @@ counter vein agrees. The hot unit's own test now names `k_beat_push`.
 Taking `k_beat_pop` inline the same way was measured and declined. With it,
 runbench read +101,881 and deepbench +747,447 against the push alone, and
 encodebench did not move.
+
+## 2026-09-25 — an empty literal is one call and one bump
+
+`[]` and `{}` went through `k_list_lit` and `k_map_lit` with a count of zero
+and an empty stack array. Each asked for its buffer's size class at run time,
+probed the free list, took the buffer and the header in two bumps, and ran a
+copy loop over nothing. The decoder opens 272,349 arrays and 273,339 objects
+a run on runbench, and the two functions were 27,465,349 instructions there,
+about 50 a literal. The emitter now calls `k_list_empty` or `k_map_empty` for
+an empty literal and writes no stack array for it. Each probes the free list
+for a constant class and otherwise takes header and buffer in one bump,
+header first.
+
+On this container, over the `k_beat_push` change: runbench 1,673,252,318 ->
+1,656,770,406 (-0.9850%), jsonbench 1,126,719,496 -> 1,103,823,346
+(-2.0321%), deepbench -1,612,003, encodebench -208,936, oneshot -152,245,
+livebench -152,641, escapebench -105,002. digestbench reads 5,891,153 ->
+5,939,233 (+0.8161%). The rise is in `d_sha256/digested_11`: with no stack
+array at its empty literal, LLVM stopped writing the `'2` clone it had
+inlined before, and the loop that remained runs 88,400 instructions more. The
+runtime helper is not in that difference. runbench's module falls 24,479 ->
+24,458 lines and the decoder's 4,922 -> 4,919.
+
+`allocs` falls by one a literal in every vein that makes one. The new `.mem`
+fixture `an_empty_literal_takes_one_bump` makes a thousand of each and reads
+2001, where the tree before the change reads 4001. Watched red with the two
+emitter arms switched off. Its neighbour `a_map_walk_builds_no_scratch_pair`
+quoted allocation figures from before the `entries` change and now quotes the
+current ones.

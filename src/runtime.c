@@ -6701,6 +6701,39 @@ KValue k_list_lit(long long n, KValue* items) {
     return k_mklist(n, items);
 }
 
+/* The empty literals, which the emitter calls in place of k_list_lit and
+   k_map_lit when there is nothing to copy. The decoder opens 272,349 arrays
+   and 273,339 objects a run on runbench, and through the general path each
+   asked for its size class at run time, took its buffer and its header in
+   two bumps, and computed a copy of nothing. Here the class is a constant,
+   and a buffer the free list does not have comes out of the same bump as the
+   header, header first. A buffer outgrown later goes to the free list at the
+   capacity its own header records, which is the buffer's extent and nothing
+   more. */
+KValue k_list_empty(void) {
+    int c = k_buf_class(4);
+    KBuf* b = k_buf_free[c];
+    KList* l;
+    if (b) {
+        k_buf_free[c] = (KBuf*)(intptr_t)b->used;
+        if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) k_stat_buf_reuse++;
+        l = k_alloc(sizeof(KList));
+    } else {
+        size_t buf_bytes = (sizeof(KBuf) + sizeof(KValue) * 4 + 15) & ~(size_t)15;
+        if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0))
+            k_stat_sh_buf += (long long)buf_bytes;
+        size_t head_bytes = ((sizeof(KList) + 15) & ~(size_t)15);
+        unsigned char* whole = k_alloc(head_bytes + buf_bytes);
+        l = (KList*)whole;
+        b = (KBuf*)(whole + head_bytes);
+        b->cap = 4;
+    }
+    b->used = 0;
+    l->len = 0;
+    l->items = (KValue*)(b + 1);
+    KValue v; v.tag = K_LIST; v.payload = k_ptr(l); return v;
+}
+
 KValue k_closure(KValue (K_CLOSCC *fn)(void*, KValue), long long arity, long long ncaps, KValue* caps) {
     KClosure* c = k_alloc(sizeof(KClosure));
     KValue* env = k_alloc(sizeof(KValue) * (ncaps ? ncaps : 1));
@@ -7116,6 +7149,33 @@ KValue k_map_lit(long long n, KValue* flat_pairs) {
     }
     k_buf_of(m->pairs)->used = 2 * n;
     m->len = n;
+    m->sorted = NULL;
+    m->sorted_len = 0;
+    KValue mv; mv.tag = K_MAP; mv.payload = k_ptr(m); return mv;
+}
+
+/* `{}`: k_list_empty says why this is not k_map_lit(0). */
+KValue k_map_empty(void) {
+    int c = k_buf_class(8);
+    KBuf* b = k_buf_free[c];
+    KMap* m;
+    if (b) {
+        k_buf_free[c] = (KBuf*)(intptr_t)b->used;
+        if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) k_stat_buf_reuse++;
+        m = k_alloc(sizeof(KMap));
+    } else {
+        size_t buf_bytes = (sizeof(KBuf) + sizeof(KValue) * 8 + 15) & ~(size_t)15;
+        if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0))
+            k_stat_sh_buf += (long long)buf_bytes;
+        size_t head_bytes = ((sizeof(KMap) + 15) & ~(size_t)15);
+        unsigned char* whole = k_alloc(head_bytes + buf_bytes);
+        m = (KMap*)whole;
+        b = (KBuf*)(whole + head_bytes);
+        b->cap = 8;
+    }
+    b->used = 0;
+    m->pairs = (KValue*)(b + 1);
+    m->len = 0;
     m->sorted = NULL;
     m->sorted_len = 0;
     KValue mv; mv.tag = K_MAP; mv.payload = k_ptr(m); return mv;

@@ -1,4 +1,4 @@
-allocs=21
+allocs=19
 alloc_bytes=175264
 arena_blocks=1
 arena_peak_bytes=1048576

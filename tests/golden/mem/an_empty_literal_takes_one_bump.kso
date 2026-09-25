@@ -1,0 +1,15 @@
+# `[]` and `{}` are the seeds a decoder pushes and puts into, and each took
+# two allocations: a header, and a buffer the free list did not have. They
+# now come out of one bump, buffer first, and the list's or map's header
+# behind it.
+#
+# A thousand rounds of one empty list and one empty map is two thousand
+# literals, and `allocs` below counts one each: 2001. With the two bumps back
+# it reads 4001.
+fn seeded 0 acc
+  acc
+
+fn seeded n acc
+  seeded (n - 1) (acc + length [] + length {})
+
+pub play = print (seeded 1000 7)

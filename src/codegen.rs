@@ -1193,6 +1193,8 @@ declare { i64, i1 } @llvm.ssub.with.overflow.i64(i64, i64)
 declare { i64, i1 } @llvm.smul.with.overflow.i64(i64, i64)
 declare %KValue @k_list_lit(i64, ptr)
 declare %KValue @k_map_lit(i64, ptr)
+declare %KValue @k_list_empty()
+declare %KValue @k_map_empty()
 declare %KValue @k_closure(ptr, i64, i64, ptr)
 declare %KValue @k_closure_lit(ptr, i64, ptr)
 declare %KValue @k_fnref(ptr)
@@ -7247,6 +7249,18 @@ impl<'a> Backend<'a> {
                     params.len(),
                     captures.len()
                 ));
+                Ok(t)
+            }
+            Expr::List(items, _) if items.is_empty() => {
+                let t = f.tmp();
+                f.line(&format!("{t} = call %KValue @k_list_empty()"));
+                f.record(&t, LIST);
+                Ok(t)
+            }
+            Expr::MapLit(pairs, _) if pairs.is_empty() => {
+                let t = f.tmp();
+                f.line(&format!("{t} = call %KValue @k_map_empty()"));
+                f.record(&t, MAP);
                 Ok(t)
             }
             Expr::List(items, _) => {
