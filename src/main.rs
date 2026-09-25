@@ -1529,6 +1529,7 @@ fn hot_source_of(runtime: &str) -> String {
         ("typedef struct KBlock {", "\n"),
         ("typedef struct { KBlock* block;", " KMark;\n"),
         ("#define K_BEAT_MAX ", "\n"),
+        ("typedef struct { char* data; size_t cap; size_t used; } KCarryBuf;", "} KCarry;\n"),
     ] {
         out.push_str(hot_text(runtime, start, end));
     }
@@ -1544,6 +1545,9 @@ fn hot_source_of(runtime: &str) -> String {
         "extern KMark* k_beat_top;\n",
         "extern KMark* k_seek_under;\n",
         "extern int k_buf_dirty;\n",
+        "extern KCarry k_carries[K_BEAT_MAX];\n",
+        "extern long long k_live_block_bytes;\n",
+        "void k_beat_push_deep(void);\n",
         "void k_beat_rewind_slow(KMark* m);\n",
         "__attribute__((noreturn, noinline)) void k_die(const char* msg);\n",
     ));
@@ -1557,6 +1561,7 @@ fn hot_source_of(runtime: &str) -> String {
         "static inline int k_tail_window(",
         "static inline void k_beat_rewind(KMark* m) {",
         "__attribute__((always_inline)) void k_beat_iter(void) {",
+        "__attribute__((always_inline)) void k_beat_push(void) {",
         "long long k_b_find2_raw(const unsigned char* d,",
         "long long k_b_find2_below_raw(const unsigned char* d,",
     ] {
@@ -1871,6 +1876,7 @@ mod the_hot_unit_is_taken_from_the_runtime {
             "k_tail_window",
             "k_beat_rewind",
             "k_beat_iter",
+            "k_beat_push",
             "k_b_find2_raw",
             "k_b_find2_below_raw",
         ] {

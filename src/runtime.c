@@ -477,7 +477,7 @@ KBlock* k_blocks = NULL;
 static KBlock* k_spare = NULL;
 /* bytes held by the live chain, and the most it ever held: the process's
    deterministic peak, the number the one-shot welfare term watches */
-static long long k_live_block_bytes = 0;
+long long k_live_block_bytes = 0;
 static long long k_stat_peak_block_bytes = 0;
 static long long k_stat_cohort_frees = 0;
 static long long k_stat_cohort_kept = 0;
@@ -1122,36 +1122,8 @@ static inline void k_beat_rewind(KMark* m) {
 }
 
 void k_carry_clear(int depth);
+void k_beat_push_deep(void);
 
-/* A mark whose pointer and remaining count no longer meet the end of its block
-   hands out memory past that end, and the damage surfaces later in an
-   unrelated allocation — as a glibc abort on linux, and as nothing at all on
-   macOS. The check used to sit in the rewind, where its comment called it one
-   comparison; on x86-64 it is eight instructions, and a beat loop pays them
-   once an iteration. It reads only the mark's own two words against its own
-   block, and a mark is written here and never again, so asking at the rewind
-   asks a question already answered: the same bad marks are caught, once per
-   loop entry instead of once per iteration, and a mark broken before the push
-   is now reported at the push. */
-void k_beat_push(void) {
-    if (k_beat_depth < K_BEAT_MAX) {
-        KMark* m = &k_beat_stack[k_beat_depth];
-        m->block = k_blocks;
-        m->ptr = k_arena;
-        m->left = k_arena_left;
-        m->bytes = k_live_block_bytes;
-        if (k_blocks && m->ptr + m->left != (char*)(k_blocks + 1) + k_blocks->cap) {
-            k_die("a beat mark and the arena disagree about the room that is left");
-        }
-        k_carry_clear(k_beat_depth);
-        /* In range by the test above, so the new top is the mark just written
-           and the general setter's range test would be dead code. */
-        k_beat_depth++;
-        k_beat_top = m;
-        return;
-    }
-    k_beat_set_depth(k_beat_depth + 1);
-}
 
 /* Inlined into every loop that rewinds, through LTO. It was a call before,
    because the loops that make it most -- the run program's tally is one --
@@ -1205,7 +1177,53 @@ typedef struct {
     KCarryBuf from; KCarryBuf to; int used_flag;
     const char* at_arena; const void* at_blocks;
 } KCarry;
-static KCarry k_carries[K_BEAT_MAX];
+KCarry k_carries[K_BEAT_MAX];
+
+/* A beat entered past the stack's last mark keeps count and nothing else. */
+void k_beat_push_deep(void) {
+    k_beat_set_depth(k_beat_depth + 1);
+}
+
+/* A mark whose pointer and remaining count no longer meet the end of its block
+   hands out memory past that end, and the damage surfaces later in an
+   unrelated allocation — as a glibc abort on linux, and as nothing at all on
+   macOS. The check used to sit in the rewind, where its comment called it one
+   comparison; on x86-64 it is eight instructions, and a beat loop pays them
+   once an iteration. It reads only the mark's own two words against its own
+   block, and a mark is written here and never again, so asking at the rewind
+   asks a question already answered: the same bad marks are caught, once per
+   loop entry instead of once per iteration, and a mark broken before the push
+   is now reported at the push.
+
+   K_HOT_ELSEWHERE: a release build defines this in the hot unit, beside
+   k_beat_iter, so the encoder's loops take their mark without a call. The
+   over-deep case stays here as a call of its own. */
+#ifndef K_HOT_ELSEWHERE
+__attribute__((always_inline)) void k_beat_push(void) {
+    if (k_beat_depth < K_BEAT_MAX) {
+        KMark* m = &k_beat_stack[k_beat_depth];
+        m->block = k_blocks;
+        m->ptr = k_arena;
+        m->left = k_arena_left;
+        m->bytes = k_live_block_bytes;
+        if (k_blocks && m->ptr + m->left != (char*)(k_blocks + 1) + k_blocks->cap) {
+            k_die("a beat mark and the arena disagree about the room that is left");
+        }
+        k_carries[k_beat_depth].used_flag = 0;
+        k_carries[k_beat_depth].from.used = 0;
+        k_carries[k_beat_depth].to.used = 0;
+        /* In range by the test above, so the new top is the mark just written
+           and the general setter's range test would be dead code. */
+        k_beat_depth++;
+        k_beat_top = m;
+        return;
+    }
+    k_beat_push_deep();
+}
+#else
+void k_beat_push(void);
+#endif
+
 static KValue k_carry_slots[K_CARRY_MAX];
 /* Slots the compiler proved hold a string builder this cycle owns. The copy
    below strips a positive cap on purpose — the copy owns no room — so an

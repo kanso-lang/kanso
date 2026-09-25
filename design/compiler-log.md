@@ -13145,3 +13145,22 @@ benchmark unchanged. `allocs` falls by two a call and nothing else moves: the
 run program 4,147,652 -> 3,650,672, encode 3,344,272 -> 1,135,472, and the
 `.mem` rows for a map walk 3,004 -> 1,004. The bytes are the same bytes, so
 every peak row holds.
+
+## 2026-09-25 — a beat's mark is taken inline
+
+`k_beat_push` joins `k_beat_iter` in the release build's hot unit, the
+bitcode the LTO link inlines into the program, so a beat loop's entry takes
+its mark without a call. The over-deep case, a push past the stack's
+sixty-fourth mark, keeps a call of its own in `k_beat_push_deep`. To reach
+the hot unit, `k_carries` and `k_live_block_bytes` lose their `static`, and
+the push clears the carry's three fields itself rather than through
+`k_carry_clear`.
+
+On this container, over the `entries` change: runbench 1,674,340,808 ->
+1,673,252,318 (-0.0650%), encodebench and livebench about -4.92 million
+each, deepbench -1,059,144, widebench -79,955, and no benchmark rises. Every
+counter vein agrees. The hot unit's own test now names `k_beat_push`.
+
+Taking `k_beat_pop` inline the same way was measured and declined. With it,
+runbench read +101,881 and deepbench +747,447 against the push alone, and
+encodebench did not move.
