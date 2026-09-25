@@ -1485,8 +1485,7 @@ impl<'a> Interp<'a> {
             // `if` is the one name the memory would answer Group for and this
             // may not: it is a declaration AND the conditional form, and the
             // form wins here.
-            (&**n != "if" && matches!(self.callee_of_ref(n), Callee::Group(_)))
-                .then(|| n.clone())
+            (&**n != "if" && matches!(self.callee_of_ref(n), Callee::Group(_))).then(|| n.clone())
         };
         if *piped && !args.is_empty() {
             let piped_value = self.eval(&args[0], env, frame)?;

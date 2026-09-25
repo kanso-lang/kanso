@@ -13820,6 +13820,13 @@ under a beat, so the arm would have had no golden. That path also frees a
 malloc'd predecessor without subtracting it from `k_perm_live`, so the
 permanent peak it reports runs high; nothing reaches it today.
 
+## 2026-09-25 — CI's rows for kanso#1627
+
+CI's work rows agreed with the projection in the golden, row for row, and
+its machine code agreed with this box. The two codegen rows moved:
+`codegen_instructions_dev` 142,639,084 -> 142,641,709, a rise of 2,625, and
+`codegen_instructions_release` 715,946,959 -> 715,866,504, a fall of 80,455.
+
 ## 2026-09-25 — an interpreted call finds its callee by the reference's address
 
 Every call the interpreter makes through a function reference went through
@@ -13844,6 +13851,12 @@ CI's golden, so `interp_instructions` carries CI's last reading less the
 same 17,938,795, 691,618,039, until CI measures it. The ratchet row
 `callee_by_ref` turns `call_ref` back to the lookup by text, and the row
 read 725,003,497 here with it applied.
+
+CI then read `interp_instructions` 709,556,834 -> 690,933,840, a fall of
+18,622,994 (-2.62%). The second table costs the interpreted run six
+allocations and 5,264 bytes of peak: `interp_allocs` 929,201 -> 929,207 and
+`interp_peak_bytes` 837,389 -> 842,653, +0.63%. The objective weighs the
+peak at 0.04 of the development side against 0.11 for the instructions.
 
 ## 2026-09-25 — a run of byte compares is read as one window
 
