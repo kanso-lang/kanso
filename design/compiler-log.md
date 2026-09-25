@@ -14117,3 +14117,47 @@ definition, which runs once, for size. The release codegen child tree on
 this box read 697,137,164 -> 692,496,161 with `minsize` (-0.67%), 696,902,517
 with `optsize` and 697,644,423 with `cold`. At the release term's current
 ratio the best of the three is worth about 0.00005 of production welfare.
+
+## 2026-09-25 — the interpreter's per-call questions stop hashing, and a plain value skips a call
+
+Three questions the interpreter asks on every call went through a hash map.
+Profiled on the interpreted corpus against kanso#1633's head, the three
+together cost about 39 million of its 710,784,361 instructions on this box.
+
+Whether a push writes in place was asked of a set keyed by (file path, line,
+column), so each of 44,006 container calls hashed the declaration's path, and
+the question averaged 141 instructions. Each frame now gathers its own file's
+sites once, as (line, column), and keeps them on the frame; a frame is built
+once per declaration, so the gathering happens once per declaration.
+
+A call through a function reference found its callee in a map keyed by the
+name's address, at about 67 instructions a call over 316,000 calls. Entering
+a declaration found its frame in a map keyed by the declaration's address,
+at about 71 over 163,000. Each map now has a direct-mapped table of 256 slots
+in front of it, holding the last key and answer per slot, and a hit is a
+compare and a clone. The callee table keeps a key only while the map pins
+the name, and a declaration borrows from the program for the interpreter's
+life, so neither table can hold an address that has been handed to another
+value. A slot is chosen by multiplying the address by the golden ratio and keeping
+the top eight bits, because allocations sit at regular strides and the low
+bits of an address repeat; the plain low bits read 689,433,103 against
+687,554,523. Sixty-four slots collided too often: 702,682,526 against
+697,580,223 at 256, on the tree before the inline test below.
+
+`force_thunk` was a call made on nearly every value the interpreter
+produces, to learn in most cases that the value is not a lazy cell: 10.6
+million instructions in its own frame. The test is now inline at each
+caller, and only a cell reaches the out-of-line loop that forces it.
+
+On this box, `interp_instructions` 710,784,361 -> 687,554,523 (-23,229,838,
+-3.27%) in five steps: 705,510,238 for the frame's own sites, 701,900,029
+with the callee table, 697,580,223 with the frame table, 689,433,103 with
+the inline test, and 687,554,523 with the golden-ratio slots.
+`interp_peak_bytes` rises 842,648 -> 860,472 (+17,824) and `interp_allocs`
+929,207 -> 929,249 (+42), for the two tables and the per-frame site sets.
+
+The ratchet rows `in_place_site`, `recent_callee`, `recent_frame` and
+`inline_force` each undo one step without changing an answer, and
+`interp_instructions` sees each. Measured on the tree each was written
+against, the four read 712,672,223, 717,053,460, 708,325,182 and
+697,580,223.
