@@ -703,32 +703,37 @@
 # escapebench -2,451,022, pendbench -1,000, indexbench +14, digestbench -14,
 # livebench -27,388,087, runbench -9,744,067. CI's reading replaces them.
 #
+# CI measured the carrier at e63ff428 and the rows above read within 14 of
+# its projection; they are CI's now.
+#
 # 2026-09-25, a proven tag is assumed: projected from this container's
 # readings over the literal divisor's tree: jsonbench -76,795,501, encodebench
 # -146,237,823, oneshot -615,489, basket -260,382, widebench -224,004,
 # deepbench -64,000, escapebench -2,399,986, pendbench +998, indexbench
 # -40,097, scanbench -172, digestbench -91,203, livebench -42,089,654,
 # runbench -66,651,001. CI's reading replaces them.
+# CI measured the tag assume at 2673fa68; the rows below are CI's.
 #
 # 2026-09-25, a subtype is its parent to a builtin: no benchmark declares a
 # subtype, so none emits a new call; adding k_unsub to the runtime the release
 # link optimises with the program moves the layout: encodebench +149,706,
 # oneshot +96, escapebench -14, digestbench -14, livebench +54,519, runbench
-# +5,742. Projected from this container, and CI's reading replaces them.
+# +5,742. Projected over CI's rows for the tag assume, and CI's reading
+# replaces them.
 jsonbench 813902288
 encodebench 2530928659
 oneshot 13871002
-basket 31172156
+basket 31172142
 widebench 28565052
 deepbench 364733730
 escapebench 63421660
 pendbench 181896211
-indexbench 2498474
+indexbench 2498460
 scanbench 281849
-digestbench 5450851
+digestbench 5450879
 readbench 4631851
-livebench 1835790826
-runbench 1223633797
+livebench 1835790854
+runbench 1223633811
 # 2026-09-06 (the run program joins): `runbench 3043743748` is a NEW row and
 # nothing regressed to make it appear. It is the program Clay's gavel that day
 # made the objective's whole run-speed term, and the thirteen rows above it

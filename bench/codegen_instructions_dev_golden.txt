@@ -275,4 +275,12 @@
 #
 # CI measured the short-token cache at abc4015e. codegen_instructions_dev
 # 125,554,618 -> 125,569,980, a RISE of 15,362 (+0.0122%).
-codegen_instructions_dev=125569980
+#
+# CI measured the carrier at e63ff428, the literal divisor's settled fixpoint
+# among what it carries: codegen_instructions_dev 125,569,980 -> 123,915,790,
+# a FALL of 1,654,190 (-1.3173%).
+#
+# CI measured the tag assume at 2673fa68: the dev tier compiles the assume
+# lines and folds nothing with them. codegen_instructions_dev 123,915,790 ->
+# 124,017,062, a RISE of 101,272 (+0.0817%).
+codegen_instructions_dev=124017062
