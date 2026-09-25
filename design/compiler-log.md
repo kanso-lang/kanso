@@ -14636,3 +14636,26 @@ Built and measured on the way:
 
 The ratchet row `args_exact` gives each argument vector four slots again and
 the compile-memory gate reads 782,140.
+
+---
+
+## 2026-09-25 — five changes carried together
+
+kanso#1639, kanso#1640, kanso#1641, kanso#1642 and kanso#1643 were each
+green but for the ratchet, which ran forty minutes to an hour and a half a
+round, and each merge would have sent the other four back through it. They
+land together from one branch. Each has its own entry above; this one records
+what the combination did to the rows.
+
+The veins were regenerated on the combined tree. The literal word's mem
+fixture gains the `seek_steps` line the index walk added. Summed over the
+fourteen binaries, `text` reads 3,427,984, between the index walk alone at
+3,429,776 and the literal word alone at 3,423,056: the walk's cursor arm adds
+code and the word's smaller encoder takes some away. The work rows the walk moved take its CI delta on top of the
+literal word's CI rows: `work_runbench` 1,403,785,575, `work_indexbench`
+2,538,302, `work_pendbench` 181,845,166 and `work_scanbench` 281,852. This
+container read each of the four the usual 347 to 439 instructions below that.
+
+The development rows move with the compiler's layout and with the runtime
+every build compiles, and the five changes each moved them. They take CI's
+readings of this tree.
