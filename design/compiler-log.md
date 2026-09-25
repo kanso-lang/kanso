@@ -14893,3 +14893,167 @@ CI read the fixed binary's start-up at 52,416, and `startup_instructions`
 takes that row: 41 above the 52,375 main carries, which is the fixed writers'
 cost against a key whose top nibble was not zero. It was measured at 9 on this
 container, where clang's key differs.
+
+---
+
+## 2026-09-25 — the short float search starts where the last one ended
+
+`render_ryu` finds most floats' text without ryu. `ryu_short` tries each place
+count p from zero: it scales the float by 10^p, rounds, and keeps the first p
+whose quotient divides back to the float. Every float runbench renders takes
+that path, 191,070 of them, and 170,820 take four places, so each of those
+paid five tries.
+
+Passing is monotone in p while the search's bound holds. A decimal with p
+places is also a decimal with p + 1 places, it lies in the same interval of
+decimals that read back as the float, and rounding the scaled float finds it
+there too. So a try at any p says which side of it the answer lies on. The
+search now starts at the place count the previous float took, walks down while
+the place below also passes, or walks up from a failure, and stops where the
+answer changes. The digits are the same; a float with the same precision as
+the one before it costs two tries.
+
+On this container, against the carried tree of #1644:
+
+| row | before | after | change |
+| --- | ---: | ---: | ---: |
+| runbench | 1,403,785,136 | 1,390,193,031 | -13,592,105 (-0.97%) |
+| encodebench | 2,736,636,903 | 2,676,227,371 | -60,409,532 (-2.21%) |
+| livebench | 2,078,873,799 | 2,018,464,267 | -60,409,532 (-2.91%) |
+| widebench | 29,081,687 | 28,835,810 | -245,877 |
+| oneshot | 14,934,042 | 14,783,086 | -150,956 |
+
+The other nine benchmarks moved five instructions or fewer. Every counter vein
+and the lazy tier agree with their goldens: the change alters how many tries a
+float takes and nothing a counter counts. The instruction golden carries the
+falls above subtracted from CI's rows, and CI's reading replaces them.
+
+The guess is one static int. A wrong guess costs tries and never changes the
+answer, and the bound check sends a guess the float's magnitude cannot use
+back to zero.
+
+tests/every_rendered_float_reads_back_as_itself.rs lifts the search out of
+`runtime.c` and sweeps 5,809,326 doubles in an order that moves the guess
+about. With the walk down from a passing guess removed it reports 975,871 not
+shortest. The ratchet row `ryu_guess` starts the search at zero again, and the
+work vein reads runbench back at its old count.
+
+CI measured the branch at a71892d9. The work rows are the projection's to
+within twenty instructions: runbench 1,403,785,575 -> 1,390,193,490
+(-13,592,085), encodebench 2,736,637,236 -> 2,676,227,704 and livebench
+2,078,874,160 -> 2,018,464,628 (-60,409,532 each). Three rows rose.
+Every benchmark's `.text` grew 4,256 bytes, runbench's to 413,496; machine code
+has no welfare term. `codegen_instructions_dev` went 142,163,302 -> 142,166,083
+(+2,781) and `codegen_instructions_release` 698,405,052 -> 698,560,720
+(+155,668, +0.02%). The mechanism of the two codegen rises was not isolated.
+Together they cost under 0.0001 of welfare, against about +0.05 for runbench.
+Six benchmarks that render no floats rose five instructions each with the
+layout, none of them weighed: `work_deepbench` 364,731,746 -> 364,731,751,
+`work_escapebench` 69,238,422 -> 69,238,427, `work_indexbench` 2,538,302 ->
+2,538,307, `work_pendbench` 181,845,166 -> 181,845,171, `work_readbench`
+4,631,757 -> 4,631,762 and `work_scanbench` 281,852 -> 281,857. The `text`
+vein's sum goes 3,427,984 -> 3,487,568, the 4,256 bytes in each of fourteen
+binaries.
+
+Two rows stand above main only because of what the carrier brought, and both
+fell from the carrier's readings on this branch: `work_basket` lands on
+31,593,364, two below the carrier's 31,593,366 and ten above main's
+31,593,354, and `work_widebench` on 28,836,171, 245,877 below the carrier's
+29,082,048 and 58,105 above main's 28,778,066. Both rises over main arrived
+with the carried changes and are priced in their entries.
+
+## 2026-09-25 — a list that leaves the arena starts at 256 slots
+
+An accumulator that outlives its beat keeps its buffer outside the arena, and
+each grow there is a `realloc`. The growth steps are 4, 8, 16, 64, 256 and
+1024, and a list first left the arena at eight slots, so runbench's escape
+phase took each of its 3,872 lists through a malloc and four reallocs on the
+way to a thousand elements: 15,488 reallocs at about 445 instructions each.
+A permanent list now starts at 256 slots, which leaves one realloc to 1024.
+
+Measured on this container against the float search's tree, one binary each
+way: runbench 1,390,193,031 -> 1,383,035,977 (-7,157,054, -0.515%) and
+escapebench -758,747. The run program's `bytes_malloc` falls 20,556 -> 8,940
+and `perm_peak_bytes` stays at 16,400, since the one list live at the peak
+already held 1,024 slots. Starting at 1,024 read 1,381,944,072, 1,091,891
+lower, and at 64 read 1,385,580,220. The 256 floor was chosen over 1,024
+because it bounds what a short permanent list costs at 4,112 bytes instead of
+16,400.
+
+That cost shows in one fixture. `an_escaped_list_gives_its_buffer_back` grows
+two hundred nine-element lists that each leave the arena:
+`an_escaped_list_gives_its_buffer_back_perm_peak_bytes` rises 272 -> 4,112
+and `an_escaped_list_gives_its_buffer_back_alloc_bytes` 102,480 -> 841,680,
+while its `bytes_malloc` halves, 400 -> 200. Fourteen other mem fixtures and
+the basket, escape and run veins allocate less and nothing else in them moved.
+
+Six benchmarks that grow few permanent lists paid for the larger first
+allocation. None is weighed. `work_jsonbench` rises 251,550 to 977,804,371,
+`work_encodebench` 4,641 to 2,676,232,345, `work_pendbench` 3,612 to
+181,848,783, `work_oneshot` 1,677 to 14,785,155, `work_livebench` 1,677 to
+2,018,466,305, `work_digestbench` 804 to 5,541,383 and `work_widebench` 21 to
+28,836,192. The rows are projected from this container's delta onto CI's
+readings and are replaced by CI's own.
+
+The mem vein pins the change: `an_accumulator_regrows_where_it_is` reads
+`bytes_malloc` 40 where it read 100. The ratchet row `perm_wide` removes the
+floor and the mem corpus spec goes red on `a_pushed_call_keeps_the_sweep`,
+`bytes_malloc` 3000 against 1200.
+
+Each `bytes_freed` falls with the grows it counted, since a realloc counts as
+the free it replaces: `run_bytes_freed` 8,824, `escape_bytes_freed` 6,000,
+`basket_bytes_freed` 7, `a_pushed_call_keeps_the_sweep_bytes_freed` 1,200,
+`an_accumulator_regrows_where_it_is_bytes_freed` 40,
+`an_escaped_list_gives_its_buffer_back_bytes_freed` 200,
+`early_exit_bytes_freed` 2, `fold_push_shape_bytes_freed` 2,
+`fused_map_shape_bytes_freed` 2, `fused_select_shape_bytes_freed` 2,
+`skip_shape_bytes_freed` 2, `take_shape_bytes_freed` 2,
+`tally_shape_bytes_freed` 2, `fused_reducer_bytes_freed` 1,
+`fused_tally_bytes_freed` 1, `piped_reducer_bytes_freed` 1 and
+`sort_shape_bytes_freed` 1. No buffer is freed later than it was.
+
+## 2026-09-25 — an empty map opens with room for five pairs
+
+`{}` seeded a map with eight slots, four pairs, and the decoder opens every
+object with it. bench/large.json's 2,761 objects hold one to five keys, 532
+to 570 of each size, so the 570 five-key objects each grew their map on the
+fifth key: 56,430 grows a run, every call `k_b_put_mut` received, at about
+190 instructions with the copy and the donation of the old buffer. The seed is
+ten slots now. Ten is not a class the shelf keeps, so `k_map_empty` takes its
+header and pairs from one allocation every time and no longer asks the shelf,
+and a map that outgrows the seed moves to sixteen slots, which is a class.
+
+Measured on this container on top of the list change, one binary each way:
+runbench 1,383,035,977 -> 1,371,385,604 (-11,650,373, -0.842%), jsonbench
+-17,589,150, encodebench -119,690, oneshot -112,902, livebench -98,727 and
+basket -23,616. No other benchmark moved. `arena_peak_bytes` stays
+3,670,032, `held_peak_bytes` 277,538 and `perm_peak_bytes` 16,400. The run
+program's `put_mut_grow` falls 56,430 -> 0.
+
+Every empty map is 32 bytes larger, which the byte counters show as rises
+with no peak behind them: `run_alloc_bytes` 367,965,182, `run_sh_buf`
+99,383,504, `decode_alloc_bytes` 211,278,848, `decode_sh_buf` 115,288,800,
+`encode_alloc_bytes` 657,785,584, `encode_sh_buf` 73,350,144,
+`live_alloc_bytes` 526,566,224, `live_sh_buf` 71,949,392,
+`oneshot_alloc_bytes` 2,908,952, `oneshot_sh_buf` 946,544,
+`basket_alloc_bytes` 7,495,057 and `basket_sh_buf` 662,736. The shelf serves
+fewer buffers, since an empty map no longer takes one from it:
+`run_buf_reuse` 88,758, `decode_buf_reuse` 134,250, `encode_buf_reuse`
+4,008, `live_buf_reuse` 895, `oneshot_buf_reuse` 895 and `basket_buf_reuse`
+250. `put_mut_fast` rises in five veins as the grows become fast puts:
+`run_put_mut_fast` 827,739, `decode_put_mut_fast` 1,254,150 and 8,361 in
+encode, live and oneshot. The mem fixtures that open a map rise 32 bytes a
+map: `an_empty_literal_takes_one_bump_alloc_bytes` 304,048 and
+`an_empty_literal_takes_one_bump_sh_buf` 256,000 for its thousand maps,
+`a_map_whose_keys_arrived_in_order_is_its_own_view_alloc_bytes` 65,696 and
+`a_map_whose_keys_arrived_in_order_is_its_own_view_sh_buf` 65,584,
+`growing_map_alloc_bytes` 181,952 and `growing_map_sh_buf` 65,584,
+`map_put_alloc_bytes` 9,120 and `map_put_sh_buf` 4,080,
+`readwrite_map_alloc_bytes` 11,056 and `readwrite_map_sh_buf` 448,
+`repeated_key_shape_alloc_bytes` 248,160 and `repeated_key_shape_sh_buf`
+4,080, `fused_tally_sh_buf` 9,728 and `tally_shape_sh_buf` 2,096.
+
+The mem vein pins the seed: with it put back to eight,
+`a_map_whose_keys_arrived_in_order_is_its_own_view` reads its old bytes and
+`mem_corpus_pins_native_allocator_counters` goes red. The ratchet row
+`map_seed` makes that mutation.

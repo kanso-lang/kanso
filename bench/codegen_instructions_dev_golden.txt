@@ -247,4 +247,10 @@
 #
 # CI measured the gold dev link at e3ccffb1. codegen_instructions_dev
 # 123,393,217 -> 125,549,128, a RISE of 2,155,911 (+1.7472%).
-codegen_instructions_dev=125549128
+#
+# CI measured the float search at a71892d9. codegen_instructions_dev
+# 142,163,302 -> 142,166,083, a RISE of 2,781 (+0.0020%).
+#
+# Carried together, projected as the gold link's reading plus the float
+# search's rise. CI's reading replaces it.
+codegen_instructions_dev=125551909

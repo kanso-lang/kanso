@@ -2527,7 +2527,44 @@ key_hex = row
 
 rows_b1hx = text/concat rows_b1dg [key_hex]
 
-rows_b = text/concat rows_b1hx [compile_mem compile_mem_host]
+# The short-decimal search starts where the last float's ended. Starting it at
+# zero again renders the same digits and costs runbench the tries the guess
+# saves.
+ryu_guess = row
+  "a float search that starts at zero places every time"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_float_search_that_starts_at_zero")
+  benches
+
+rows_b1fs = text/concat rows_b1hx [ryu_guess]
+
+# A list that leaves the arena takes 256 slots, so a thousand-element
+# accumulator grows by realloc twice rather than four times.
+perm_wide = row
+  "a permanent list that starts narrow and grows through every step"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_permanent_list_that_starts_narrow")
+  release
+
+rows_b1pw = text/concat rows_b1fs [perm_wide]
+
+# `{}` opens with room for five pairs, so a five-key object is built without
+# a grow.
+map_seed = row
+  "an empty map seeded with four pairs, so every fifth key grows it"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "an_empty_map_seeded_with_four_pairs")
+  release
+
+rows_b1ms = text/concat rows_b1pw [map_seed]
+
+rows_b = text/concat rows_b1ms [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 

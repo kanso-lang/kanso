@@ -4330,6 +4330,21 @@ static const uint64_t RYU_POW10U[16] = {
    The range keeps every scaled product below 2^51 and every
    candidate a normal double: f in [2^-20, 2^50). `limit` is
    1/(4u), a power of two built from the exponent directly. */
+/* One place count tried: whether f * 10^p, rounded, divides back to f. */
+static inline int ryu_short_at(double f, int p, int64_t* mo) {
+    /* signed, because every product is below 2^51 and a signed
+       conversion is one instruction each way on x86-64, where an
+       unsigned one was a dozen */
+    double y = f * RYU_POW10D[p];
+    int64_t m = (int64_t)y;
+    m += y - (double)m >= 0.5;
+    *mo = m;
+    return (double)m / RYU_POW10D[p] == f;
+}
+
+/* The place count the last short decimal took. */
+static int k_ryu_places = 0;
+
 static inline int ryu_short(double f, int64_t* mo, int* po) {
     uint64_t bits;
     __builtin_memcpy(&bits, &f, 8);
@@ -4338,21 +4353,35 @@ static inline int ryu_short(double f, int64_t* mo, int* po) {
     uint64_t lbits = (uint64_t)(2096 - ieee_e) << 52;
     double limit;
     __builtin_memcpy(&limit, &lbits, 8);
-    for (int p = 0; p < 16 && RYU_POW10D[p] <= limit; p++) {
-        /* signed, because every product is below 2^51 and a signed
-           conversion is one instruction each way on x86-64, where an
-           unsigned one was a dozen */
-        double y = f * RYU_POW10D[p];
-        int64_t m = (int64_t)y;
-        m += y - (double)m >= 0.5;
-        if ((double)m / RYU_POW10D[p] == f) {
-            if (K_COUNTING) k_stat_ryu_short++;
-            *mo = m;
-            *po = p;
-            return 1;
+    /* THE SEARCH STARTS WHERE THE LAST ONE ENDED. Passing is monotone in p
+       while the bound holds: a decimal with p places is also one with p + 1,
+       it lies in the same interval, and rounding finds it there too. So a
+       pass at the guess means the answer is at or below it, and a failure
+       means it is above; either way the walk stops at the first place where
+       the answer changes, which is the fewest places, as before. Floats in
+       one document tend to share a precision: on runbench 170,820 of
+       191,070 take four places, and starting from zero tried five places
+       for each of them where starting from the last answer tries two. */
+    int p = k_ryu_places;
+    int64_t m;
+    if (RYU_POW10D[p] > limit) p = 0;
+    if (ryu_short_at(f, p, &m)) {
+        int64_t below;
+        while (p > 0 && ryu_short_at(f, p - 1, &below)) {
+            p--;
+            m = below;
+        }
+    } else {
+        for (p++; ; p++) {
+            if (p >= 16 || RYU_POW10D[p] > limit) return 0;
+            if (ryu_short_at(f, p, &m)) break;
         }
     }
-    return 0;
+    if (K_COUNTING) k_stat_ryu_short++;
+    k_ryu_places = p;
+    *mo = m;
+    *po = p;
+    return 1;
 }
 
 /* The short decimal m * 10^-p as ryu's digits: an integer's trailing zeros
@@ -7226,25 +7255,24 @@ KValue k_map_lit(long long n, KValue* flat_pairs) {
     KValue mv; mv.tag = K_MAP; mv.payload = k_ptr(m); return mv;
 }
 
-/* `{}`: k_list_empty says why this is not k_map_lit(0). */
+/* `{}`: k_list_empty says why this is not k_map_lit(0).
+
+   It opens with room for five pairs. At four, every fifth key grew the map:
+   the decoder's objects run one to five keys, and each five-key object of
+   bench/large.json paid a grow, a copy and a donation, 56,430 times a run at
+   about 190 instructions each. Ten slots is not a class the shelf keeps, so
+   the header and the pairs come from one allocation every time; a map that
+   outgrows them moves to sixteen slots, which is. */
+#define K_MAP_SEED 10
 KValue k_map_empty(void) {
-    int c = k_buf_class(8);
-    KBuf* b = k_buf_free[c];
-    KMap* m;
-    if (b) {
-        k_buf_free[c] = (KBuf*)(intptr_t)b->used;
-        if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) k_stat_buf_reuse++;
-        m = k_alloc(sizeof(KMap));
-    } else {
-        size_t buf_bytes = (sizeof(KBuf) + sizeof(KValue) * 8 + 15) & ~(size_t)15;
-        if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0))
-            k_stat_sh_buf += (long long)buf_bytes;
-        size_t head_bytes = ((sizeof(KMap) + 15) & ~(size_t)15);
-        unsigned char* whole = k_alloc(head_bytes + buf_bytes);
-        m = (KMap*)whole;
-        b = (KBuf*)(whole + head_bytes);
-        b->cap = 8;
-    }
+    size_t buf_bytes = (sizeof(KBuf) + sizeof(KValue) * K_MAP_SEED + 15) & ~(size_t)15;
+    if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0))
+        k_stat_sh_buf += (long long)buf_bytes;
+    size_t head_bytes = ((sizeof(KMap) + 15) & ~(size_t)15);
+    unsigned char* whole = k_alloc(head_bytes + buf_bytes);
+    KMap* m = (KMap*)whole;
+    KBuf* b = (KBuf*)(whole + head_bytes);
+    b->cap = K_MAP_SEED;
     b->used = 0;
     m->pairs = (KValue*)(b + 1);
     m->len = 0;
@@ -8481,6 +8509,7 @@ static KValue k_b_push_grow(KValue lv, KList* l, KValue item, int mutate) {
        was building. A transient's stays in the arena, where the rewind is
        exactly what should free it. */
     int perm = mutate && k_outlives_beat(l);
+    if (perm && cap < 256) cap = 256;
     /* A buffer already out of the arena is grown where it is. The field it
        sits in was registered when it first left, and `l->items` is the same
        field after the realloc, so the registration still names it. */

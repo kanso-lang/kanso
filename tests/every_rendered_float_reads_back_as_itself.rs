@@ -26,6 +26,10 @@
 //!   `output = vr + (...)` -> `output = vr`   815,943 do not read back
 //!   the removal loop breaks after one step   581,913 are not shortest
 //!   `return (o - buf)` -> `+ 1`              2,809,321 lengths disagree
+//!
+//! And a fourth time on 2026-09-25, when the short search began starting from
+//! the place count the last float took: with the walk down from a passing
+//! guess removed, 975,871 of 5,809,326 were not shortest.
 
 use std::path::Path;
 use std::process::Command;
