@@ -13103,3 +13103,28 @@ module and 119 on the rewrite. A block whose terminator FastISel misses goes
 to SelectionDAG whole, and once the returns stop doing that, each call that
 returns a `%KValue` misses on its own and is selected alone, which costs
 more.
+
+## 2026-09-25 — blank lines are counted by binary search
+
+`check_blank_policy` asks, for every pair of adjacent lines, how many blank
+lines lie between them, and it answered by filtering the file's whole list of
+blank lines each time. That is quadratic in the length of a file, and it was
+`parser::parse`'s own largest loop: 473,034 blank-line reads on the entry
+corpus, whose ten imports are parsed as modules first. The lexer records blank
+lines in the order it meets them, so the list is ascending, and two
+`partition_point` calls now bound the run. The continuation check's
+`contains` on the same list becomes a `binary_search`.
+
+On this container, with kanso#1621 and the overflow-trap change beneath it:
+`compile_instructions` 25,943,273 -> 25,526,442 (-1.61%),
+`entry_instructions` 88,243,804 -> 84,889,198 (-3.80%) and
+`library_instructions` 88,801,286 -> 85,446,623 (-3.78%).
+`startup_instructions` reads 611,469 -> 611,436. CI's rows follow.
+
+Nothing a program does changes, and the error corpus pins the diagnostics
+the count feeds: `blank_line_in_body`, `missing_blank_between_decls`,
+`partial_chain` and `a_dot_continuation_under_its_statement`. Watched red with
+the count off by one, which fails the error corpus and every corpus whose
+files have blank lines. The two boundaries are always non-blank lines, so
+moving either comparison between `<` and `<=` changes nothing, and a
+mutation that does only that stays green.
