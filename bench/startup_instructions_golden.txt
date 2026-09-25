@@ -501,4 +501,7 @@
 # finds its binary by the file's text and runs it without compiling or
 # emitting. startup_instructions 605,441 -> 52,375, a FALL of 553,066
 # (-91.3493%).
-startup_instructions=52375
+#
+# CI measured the gold dev link at 9e45c486. startup_instructions 52,375 ->
+# 52,427, a RISE of 52 (+0.0993%).
+startup_instructions=52427

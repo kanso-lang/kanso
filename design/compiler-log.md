@@ -14722,3 +14722,7 @@ CI measured the branch at e3ccffb1: `codegen_instructions_dev` 142,163,302 ->
 125,549,128 (-16,614,174, -11.7%). The runner has gold, and its link is
 dearer than this container's by about two million instructions. No other vein
 moved.
+
+At 9e45c486 `startup_instructions` read 52,375 -> 52,427 (+52). The warm play
+it counts runs none of the new code; the rise arrived with the change and its
+mechanism was not isolated. It costs well under 0.0001 of welfare.
