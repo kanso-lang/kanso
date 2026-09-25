@@ -8450,6 +8450,49 @@ impl<'a> Backend<'a> {
             }
             return t;
         }
+        // A plain index of a container the sets prove is a list, read the way
+        // the twin's list arm reads it, with no tag test in front. What comes
+        // out is whatever the list holds, so the result carries no set. The
+        // strict form answers a box around the element, which is the runtime's
+        // to build, so it keeps the general path.
+        if !strict && f.set_of(container) == LIST && f.set_of(key) == INT {
+            let lp = inline_payload(f, container);
+            let lptr = f.tmp();
+            f.line(&format!("{lptr} = inttoptr i64 {lp} to ptr"));
+            let len = f.tmp();
+            f.line(&format!("{len} = load i64, ptr {lptr}"));
+            let idx = inline_payload(f, key);
+            let ge1 = f.tmp();
+            f.line(&format!("{ge1} = icmp sge i64 {idx}, 1"));
+            let le_len = f.tmp();
+            f.line(&format!("{le_len} = icmp sle i64 {idx}, {len}"));
+            let in_range = f.tmp();
+            f.line(&format!("{in_range} = and i1 {ge1}, {le_len}"));
+            let load = f.label();
+            let miss = f.label();
+            let merge = f.label();
+            f.line(&format!("br i1 {in_range}, label %{load}, label %{miss}"));
+            f.start_block(&load);
+            let items_ptr = f.tmp();
+            f.line(&format!("{items_ptr} = getelementptr i8, ptr {lptr}, i64 8"));
+            let items = f.tmp();
+            f.line(&format!("{items} = load ptr, ptr {items_ptr}"));
+            let off = f.tmp();
+            f.line(&format!("{off} = add i64 {idx}, -1"));
+            let slot = f.tmp();
+            f.line(&format!("{slot} = getelementptr %KValue, ptr {items}, i64 {off}"));
+            let hit = f.tmp();
+            f.line(&format!("{hit} = load %KValue, ptr {slot}"));
+            f.line(&format!("br label %{merge}"));
+            f.start_block(&miss);
+            f.line(&format!("br label %{merge}"));
+            f.start_block(&merge);
+            let t = f.tmp();
+            f.line(&format!(
+                "{t} = phi %KValue [ {hit}, %{load} ], [ {{ i64 4, i64 0 }}, %{miss} ]"
+            ));
+            return t;
+        }
         let ct = inline_tag(f, container);
         let is_bytes = f.tmp();
         f.line(&format!("{is_bytes} = icmp eq i64 {ct}, 13"));
@@ -9305,7 +9348,8 @@ impl<'a> Backend<'a> {
             // later read of the same field cannot be forwarded across it, so
             // a loop that asks `length coll < i` and then indexes `coll[i]`
             // loads the length twice and compares it twice.
-            if name == "length" && f.set_of(&emitted[0]) == BYTES {
+            let held = f.set_of(&emitted[0]);
+            if name == "length" && held != 0 && held & !(BYTES | LIST) == 0 {
                 let bp = inline_payload(f, &emitted[0]);
                 let bptr = f.tmp();
                 f.line(&format!("{bptr} = inttoptr i64 {bp} to ptr"));
@@ -9315,7 +9359,7 @@ impl<'a> Backend<'a> {
                 f.line(&format!("{len} = load i64, ptr {len_ptr}"));
                 let t = f.tmp();
                 f.line(&format!("{t} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 {len}, 1"));
-                f.record(&t, infer::builtin_set("length", &[BYTES]));
+                f.record(&t, infer::builtin_set("length", &[held]));
                 return Ok(t);
             }
             let mut args_ir: Vec<String> = emitted.iter().map(|e| format!("%KValue {e}")).collect();

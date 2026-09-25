@@ -2223,7 +2223,39 @@ byte_pair_apart = row
 
 rows_b1bp = text/concat rows_b1ua [byte_pair_swapped byte_pair_apart]
 
-rows_b = text/concat rows_b1bp [compile_mem compile_mem_host]
+# A proven list is measured and indexed in place. One mutation reads each
+# slot one late and the micro fixture disagrees with the interpreter; the
+# other two send the index and the length back through the twin, and the
+# work vein sees each.
+list_read_late = row
+  "a proven list read one slot late"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_proven_list_read_one_slot_late")
+  release
+
+list_index_twin = row
+  "a proven list indexed through the twin"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_proven_list_indexed_through_the_twin")
+  benchmarks
+
+list_length_twin = row
+  "a proven list measured through the twin"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_proven_list_measured_through_the_twin")
+  benchmarks
+
+rows_b1pr = text/concat rows_b1bp [list_read_late list_index_twin]
+
+rows_b1pl = text/concat rows_b1pr [list_length_twin]
+
+rows_b = text/concat rows_b1pl [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 
