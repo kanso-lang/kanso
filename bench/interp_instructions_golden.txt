@@ -594,9 +594,9 @@
 # reading: 13,651,102 below CI's reading of the typed key. interp_instructions
 # 595,493,632 -> 581,842,530, a FALL of 13,651,102 (-2.2924%).
 #
-# 2026-09-25, a length, an index and a literal become words without a BigInt
-# between (projected from this container's anchor, 582,395,697 to
-# 576,009,922): interp_instructions 581,842,530 -> 575,456,755, a FALL of
-# 6,385,775 (-1.0975%).
-interp_instructions=575456755
+# CI measured a length, an index and a literal becoming words directly, at
+# f774749e: interp_instructions 581,842,530 -> 578,807,674. The container
+# read the change as 6,385,775 lower; the tail's projection underneath it was
+# never read by CI.
+interp_instructions=578807674
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

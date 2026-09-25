@@ -15453,8 +15453,9 @@ because its rare path clones the `BigInt` into an `Rc`. With the clone moved
 into a cold function and the rest inlined into the literal's evaluation, a
 further 3,105,935 came off.
 
-The interpreted run falls 6,385,775 instructions on the container, 1.1%, which
-projects `interp_instructions` at 575,456,755 over the tail's projection. The
+The interpreted run falls 6,385,775 instructions on the container, 1.1%. CI
+read `interp_instructions` at 578,807,674 at f774749e, which carries the tail's
+change as well; that change had only been projected. The
 spec `the_ends_of_the_word_read_back_as_words` pins the two ends of the word:
 the largest positive literal, the first past it, and a sum that lands on the
 most negative word from outside it. Letting that sum stay a `BigInt` printed
