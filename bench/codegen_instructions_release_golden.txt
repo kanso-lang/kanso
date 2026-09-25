@@ -326,4 +326,8 @@
 # kanso#1631 at CI's sitting: two byte appends in a row ask for room once.
 # codegen_instructions_release 715,981,278 -> 715,986,547, a RISE of 5,269
 # (+0.0007%).
-codegen_instructions_release=715986547
+#
+# kanso#1633 at CI's sitting: a proven list is measured and indexed in place.
+# codegen_instructions_release 715,986,547 -> 698,557,830, a FALL of
+# 17,428,717 (-2.4342%).
+codegen_instructions_release=698557830

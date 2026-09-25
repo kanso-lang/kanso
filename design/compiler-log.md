@@ -14103,3 +14103,17 @@ was priced by the pull request that moved it. `work_readbench` lands at
 at 82,139 against 76,037, 6,102 more lines across the thirteen programs,
 the net of the moves each carried entry prices. The objective weighs no
 emitted-lines term.
+
+## 2026-09-25 — CI's rows for kanso#1633
+
+CI agreed with every projected work row and with the text and emitted veins.
+Shorter bodies are less for clang to compile: `codegen_instructions_release`
+715,986,547 -> 698,557,830 (-17,428,717, -2.43%), `codegen_instructions_dev`
+142,645,204 -> 142,050,065 and `emit_instructions` 29,390,013 -> 29,261,817.
+`startup_instructions` rose 605,252 -> 605,388 (+136).
+
+Measured on this branch and declined: building every zero-parameter
+definition, which runs once, for size. The release codegen child tree on
+this box read 697,137,164 -> 692,496,161 with `minsize` (-0.67%), 696,902,517
+with `optsize` and 697,644,423 with `cold`. At the release term's current
+ratio the best of the three is worth about 0.00005 of production welfare.

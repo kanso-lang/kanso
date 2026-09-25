@@ -298,4 +298,7 @@
 #
 # kanso#1631 at CI's sitting: two byte appends in a row ask for room once.
 # emit_instructions 29,343,426 -> 29,390,013, a RISE of 46,587 (+0.1588%).
-emit_instructions=29390013
+#
+# kanso#1633 at CI's sitting: a proven list is measured and indexed in place.
+# emit_instructions 29,390,013 -> 29,261,817, a FALL of 128,196 (-0.4362%).
+emit_instructions=29261817
