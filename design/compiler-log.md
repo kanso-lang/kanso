@@ -13320,8 +13320,9 @@ the same reason: runbench text 407,976 -> 413,048, jsonbench text 230,168 ->
 deepbench text 207,400 -> 208,808, escapebench text 202,296 -> 203,688,
 pendbench text 216,968 -> 218,120, indexbench text 202,072 -> 203,272,
 digestbench text 225,800 -> 228,328, readbench text 202,568 -> 203,768 and
-livebench text 244,984 -> 246,872. scanbench text fell by 400. readbench's
-four instructions are layout. The runtime saving on run, which is the
+livebench text 244,984 -> 246,872. scanbench text fell by 400. Summed over
+the fourteen, `text` reads 3,420,864 -> 3,448,224. `work_readbench` reads
+4,631,756 -> 4,631,760, and those four instructions are layout. The runtime saving on run, which is the
 objective's heaviest term, is what these pay for.
 
 A lead measured and declined while the rows were taken: passing the JSON
