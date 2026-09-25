@@ -14079,3 +14079,20 @@ encodebench 0.134% at the five escape sites in its frozen `esc_byte`. Writing a
 json key's quotes beside the key, so that `,"` and `":` would be adjacent
 pairs for that helper, raised livebench 5.507%, runbench 1.874% and oneshot
 1.978%, and the helper fired in none of the three.
+
+## 2026-09-25 — the nine-word row watches the limit the release path reads
+
+The ratchet run on kanso#1626 reported one row blind: "a nine-word arm
+narrowed on x86". Its mutation set `TAILCC_WIDEST`'s x86-64 value to eight,
+and a_big_object_decodes_in_a_release_build stayed green. On a clang with
+`preserve_none`, which the probe finds on CI and on this box, the release path
+narrows at `PRESERVE_NONE_REGISTERS`, twelve, and reads `TAILCC_WIDEST` only
+where the probe finds no `preserve_none`. So the mutation changed a value the
+spec's build never reads. It now narrows the `preserve_none` call site at
+eight, and the spec goes red the way its header says: the 300,000-key object
+kills the release binary with SIGSEGV. The x86-64 `TAILCC_WIDEST` value is
+left without a row; no build on a host with `preserve_none` reads it.
+
+This pull request carries the stack beneath it to main in one run, kanso#1622
+through kanso#1631, because the same blind row sat in every one of them and a
+fix pushed to each would have cost a ratchet run apiece.
