@@ -13329,3 +13329,70 @@ decoder's key to `obj_key_end` as its `parsed` record, which would have
 brought the function to eight words and so kept its tail calls on arm64 too,
 boxed the record at every key. runbench read 1,876,423,117 against
 1,643,981,958.
+
+---
+
+## 2026-09-25 — a tail cycle takes one flat signature under preserve_none
+
+The JSON decoder is a cycle of tail calls, and under `tailcc` every arm
+saved the callee-saved registers it used on entry and restored them before
+each jump out. The archive's entry on the entry block named `preserve_none`
+as the remedy and said it could not be swapped in, because a `musttail` may
+cross an arity or a type only under `tailcc`, and this cycle crosses both.
+LLVM holds every other convention to matching prototypes. So the cycle is
+given one: `preserve_none_tails` in src/main.rs joins every `tailcc` function
+to the ones it `musttail`s into, flattens each parameter to `i64` words (a
+`%KValue` or `%parsed` is two, an `i64`, `ptr` or `double` one), and pads
+every member to the widest with `poison`. The decoder's widest arm,
+`obj_key_end`, is nine words and the convention passes twelve in registers
+on x86-64. Entry rebuilds the two-word parameters with `insertvalue`, and
+each call takes its arguments apart with `extractvalue`.
+
+It runs on release builds on x86-64 when the clang on PATH takes
+`preserve_nonecc`, which is the probe the closure convention already asks.
+The arm64 limit in `narrow_tailcc` is a miscompile, and nobody has measured
+this convention there, so arm64 is left as it was. A set of functions is left
+alone when a member's address is taken, when a parameter has a type this does
+not flatten, or when the set is wider than twelve words.
+
+With the rewrite in place, `narrow_tailcc` narrows only arms wider than the
+register file, twelve words rather than nine, since an arm that fits passes
+nothing on the stack. The nine-word limit stood because a tail call copies
+stack arguments into its caller's frame, and that cost does not arise here.
+
+This container now measures with clang 19 and lld 19 selected the way the
+cost-goldens job selects them, and runbench on the branch's base read
+1,623,307,999 against CI's 1,623,308,009. The earlier rows in this log were
+taken under clang 18, which is why they drifted from CI's. Each benchmark was
+relinked by hand from its own `.ll` and the objects its build used, and every
+relink was byte-identical to the built binary before the rewrite was applied:
+
+    benchmark       before           flat, nine words   twelve words
+    runbench        1,623,307,985    1,556,827,897      1,556,366,722   -4.1237%
+    jsonbench       1,096,078,130    1,018,225,730      1,018,225,716   -7.1028%
+    livebench       2,358,727,241    2,282,241,016      2,282,241,002   -3.2427%
+    oneshot            16,425,179       15,716,251         15,716,251   -4.3161%
+    encodebench     3,030,067,322    2,977,257,216      2,977,257,216   -1.7429%
+    deepbench         366,627,999      360,447,991        360,447,977   -1.6856%
+    widebench          29,721,589       29,433,525         29,433,511   -0.9692%
+    scanbench         296,385,134      296,885,322        292,370,800   -1.3544%
+    basket             32,539,840       32,493,041         32,493,055   -0.1438%
+    pendbench         181,007,965      181,799,647        181,799,633   +0.4374%
+    digestbench         5,761,671        5,787,266          5,787,266   +0.4442%
+
+escapebench, indexbench and readbench do not move. Every binary printed what
+its base printed. pendbench and digestbench rise because a caller that keeps
+a value live across a call into the cycle now saves it itself, where the
+callee's prologue used to, and in those two programs the calls into the
+cycle outnumber the hops inside it.
+
+The two specs: `a_tail_cycle_crosses_arities_in_a_release_build` runs a cycle
+of a five-word and a six-word arm, carrying an int, a float64 and a string,
+four million hops deep, and compares it with the interpreter. Watched red
+with a two-word parameter rebuilt in reverse order: the binary read a payload
+as a tag and stopped with `no overload of \`cycle/ping\` matches these
+arguments`. The unit tests in src/main.rs pin the signature, the padding, and
+the three cases that leave a set alone, and were watched red with the
+padding and the address check each removed. Ratchet rows `flat_tails`
+(the rewrite skipped, seen by the work vein) and `flat_order` (the
+parameter reversed, seen by the spec).

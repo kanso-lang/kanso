@@ -2067,7 +2067,29 @@ nine_words = row
 
 rows_b1nw = text/concat rows_b1ot [nine_words]
 
-rows_b = text/concat rows_b1nw [compile_mem compile_mem_host]
+# A tail cycle takes one flat signature under preserve_nonecc in a release
+# build on x86-64. The first mutation skips the rewrite, which only the work
+# vein can see; the second rebuilds a two-word parameter with its words
+# reversed, and a cycle four million hops deep stops on the wrong overload.
+flat_tails = row
+  "a tail cycle kept on tailcc"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_tail_cycle_kept_on_tailcc")
+  benchmarks
+
+flat_order = row
+  "a flat parameter put back reversed"
+  true
+  "cargo test --release --test a_tail_cycle_crosses_arities_in_a_release_build"
+  "specs (unit, golden, differential)"
+  (breaking "a_flat_parameter_put_back_reversed")
+  release
+
+rows_b1ft = text/concat rows_b1nw [flat_tails flat_order]
+
+rows_b = text/concat rows_b1ft [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 
