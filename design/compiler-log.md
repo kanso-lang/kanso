@@ -15392,9 +15392,11 @@ the two-byte literal pays after a key and costs before one was not isolated.
 
 Runbench is projected at 1,300,023,123, 26,042,668 below (-1.96%), livebench
 at 1,905,214,048, 113,377,925 below (-5.6%), and oneshot at 14,557,927,
-284,410 below. No other program moves. The ratchet row `key_typed` sends the
-key back through the untyped escape, which leaves the output the same and put
-runbench at 1,337,789,395 when it was tried by hand.
+284,410 below. No other compiled program moves. The interpreter runs the same
+library, and the interpreted corpus falls 18,767,151 on the container, which
+projects `interp_instructions` at 595,472,297. The ratchet row `key_typed`
+sends the key back through the untyped escape, which leaves the output the
+same and put runbench at 1,337,789,395 when it was tried by hand.
 
 `append_fast` falls because there are fewer appends, and the checker visits
 one definition more. The keys the trend gate reads as worse, with the values

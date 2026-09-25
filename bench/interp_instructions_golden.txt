@@ -581,5 +581,10 @@
 #
 # CI measured the interpreter's small values at 6d35abb2. interp_instructions
 # 592,652,379 -> 614,239,448, a RISE of 21,587,069 (+3.6425%).
-interp_instructions=614239448
+#
+# Projected for the typed map key from this container's reading: the
+# interpreted corpus encodes json through the same library.
+# interp_instructions 614,239,448 -> 595,472,297, a FALL of 18,767,151
+# (-3.0553%).
+interp_instructions=595472297
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
