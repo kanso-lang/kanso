@@ -4,6 +4,10 @@
 # rewind, all of it stayed in the arena until the scan ended, so the peak grew
 # with the subject. The loop rewinds at each position now, and the peak this
 # golden pins is one block however long the subject is.
+#
+# The pattern ends in a class rather than a literal. A literal the subject
+# lacks is answered before any scan, so `[a-z]+zzq`, which this fixture used
+# until 2026-09-25, stopped walking a single position.
 import "std/regexp"
 import "std/text"
 
@@ -15,5 +19,5 @@ fn grow n acc
 
 pub play =
   subject = text/utf8 (grow 12 (text/bytes ""))
-  hits = regexp/find_all "[a-z]+zzq" subject
+  hits = regexp/find_all "[a-z]+[x-z]" subject
   print "found {length hits} in {length subject}"

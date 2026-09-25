@@ -94,6 +94,7 @@ type program
   node
   starters
   wanted
+  must
 
 type slotted
   node
@@ -316,8 +317,44 @@ fn begun prog s
 # the loop's position could be anything, a byte builder included, and the loop
 # would be refused its rewind. Without the rewind every position's scratch lived
 # until the scan finished, and the arena grew with the subject.
+#
+# The first scan of a subject asks first whether the subject holds the
+# literal every match must contain. `[a-z]+zzq` over text with no `zzq` in it
+# tried every start, took the whole run of letters at each, and gave the run
+# back a letter at a time: quadratic in the subject, to find nothing. The
+# question is asked only where a loop begins, at position 1, because every
+# later scan starts after a match, and a match holds the literal.
+fn scanned prog s 1
+  return no_hit if lacks? s prog.must
+  probing prog s 1
+
 fn scanned prog s at
   probing prog s (at | 0)
+
+fn lacks? _ ""
+  false
+
+fn lacks? s must
+  bs = text/bytes s
+  mb = text/bytes must
+  not occurs? bs mb mb[1] 1
+
+# Each place the literal's first byte stands, tried in turn. `find2` answers
+# one past the end when the byte is nowhere after `p`.
+fn occurs? _ _ none _
+  false
+
+fn occurs? bs mb b p
+  q = text/find2 bs p b b
+  return false if q > length bs
+  return true if spelled? bs mb q 2
+  occurs? bs mb b (q + 1)
+
+fn spelled? bs mb q i
+  return true if i > length mb
+  return false if q + i - 1 > length bs
+  return false if bs[q + i - 1] != mb[i]
+  spelled? bs mb q (i + 1)
 
 fn probing prog s at
   scanning prog s at (at > length s + 1)
@@ -411,7 +448,40 @@ fn refused _ _ true
   err "a lookbehind matches one fixed width"
 
 fn refused node wanted false
-  program node (starters node) wanted
+  program node (starters node) wanted (required node)
+
+# A literal every match of the node must contain, or "" when none is known.
+# Only a sequence's own literal parts count, and only side by side: each is
+# one character the match consumes where it stands, so a run of them is a
+# substring of every match. A class, a repetition, an alternation or an
+# anchor between two of them ends the run. The longest run is kept.
+fn required (seq parts)
+  literal_run parts 1 "" ""
+
+fn required (group node _)
+  required node
+
+fn required (lit c)
+  c
+
+fn required _
+  ""
+
+fn literal_run parts at run best
+  return longer run best if at > length parts
+  extended parts at run best parts[at]
+
+fn extended _ _ run best none
+  longer run best
+
+fn extended parts at run best (lit c)
+  literal_run parts (at + 1) "{run}{c}" best
+
+fn extended parts at run best _
+  literal_run parts (at + 1) "" (longer run best)
+
+fn longer a b
+  if (length a > length b) a b
 
 fn loose_behind? (behind _ _ wide)
   wide < 0

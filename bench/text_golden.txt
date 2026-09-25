@@ -791,7 +791,7 @@ deepbench text=208424
 escapebench text=203512
 pendbench text=217352
 indexbench text=203064
-scanbench text=306568
+scanbench text=311208
 digestbench text=225608
 readbench text=203560
 livebench text=246840
@@ -801,4 +801,4 @@ livebench text=246840
 # src/runtime.c, which is linked into every program. The 336-byte spread is the
 # arms a program's own dispatch makes reachable. Machine-code size carries no
 # welfare term (ruled 2026-09-05); this vein is exact and watched on its own.
-runbench text=406776
+runbench text=410232

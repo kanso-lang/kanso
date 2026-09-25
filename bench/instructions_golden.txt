@@ -699,7 +699,7 @@ deepbench 364731746
 escapebench 69238422
 pendbench 181843966
 indexbench 2855795
-scanbench 291352598
+scanbench 285012
 digestbench 5540581
 readbench 4631757
 livebench 2120705792
@@ -760,4 +760,4 @@ livebench 2120705792
 #
 # The uniform -8 across six rows is one instruction on a path each program
 # takes eight times, and the four flat rows never take it at all.
-runbench 1479091073
+runbench 1421154308

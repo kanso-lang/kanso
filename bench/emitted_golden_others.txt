@@ -213,9 +213,9 @@ widebench defines=115 calls=652 branches=504 lines=6137
 deepbench defines=42 calls=168 branches=147 lines=1733
 escapebench defines=18 calls=57 branches=44 lines=618
 pendbench defines=61 calls=392 branches=288 lines=2955
-scanbench defines=225 calls=1643 branches=1463 lines=13783
+scanbench defines=233 calls=1721 branches=1530 lines=14409
 indexbench defines=17 calls=49 branches=25 lines=547
 digestbench defines=114 calls=511 branches=402 lines=4488
 readbench defines=19 calls=48 branches=23 lines=591
 livebench defines=112 calls=632 branches=612 lines=6659
-runbench defines=494 calls=3493 branches=2729 lines=26838
+runbench defines=502 calls=3564 branches=2796 lines=27457
