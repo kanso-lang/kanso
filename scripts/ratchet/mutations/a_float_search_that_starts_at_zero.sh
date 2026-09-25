@@ -7,7 +7,7 @@
 # The work vein reads runbench about thirteen million instructions heavier.
 set -e
 line='    int p = k_ryu_places;'
-test "$(grep -cxF "$line" src/runtime.c)" = 1 || {
+grep -qxF "$line" src/runtime.c && test "$(grep -cxF "$line" src/runtime.c)" = 1 || {
   echo "the float search's starting guess changed shape; rewrite this" >&2
   exit 1
 }
