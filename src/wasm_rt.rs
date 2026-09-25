@@ -823,7 +823,7 @@ pub extern "C" fn rt_mkmap(n: u32) -> u32 {
             _ => value_of(*h),
         });
     }
-    let mut map = std::collections::BTreeMap::new();
+    let mut map = eval::Entries::new();
     for pair in values.chunks(2) {
         let key = match &pair[0] {
             Value::Int(n) => eval::MapKey::Int(n.clone()),

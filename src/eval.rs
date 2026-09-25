@@ -14,11 +14,88 @@ pub enum MapKey {
     Str(String),
 }
 
+/// A map's entries, in key order.
+///
+/// A B-tree leaf holds room for eleven entries whatever it is given, and most
+/// maps a program builds are records read from JSON with a handful of keys.
+/// The interpreted corpus decodes 220 maps of four keys each, and their leaves
+/// were 158,400 bytes of the interpreter's peak. A map of up to eight entries
+/// is a vector kept sorted, which holds what it holds; past eight it becomes a
+/// B-tree, so a large map built one key at a time still inserts in log time.
+/// Both walk in key order, which is all equality and rendering ask of them.
+#[derive(Clone, Debug)]
+pub enum Entries {
+    Few(Vec<(MapKey, Value)>),
+    Many(BTreeMap<MapKey, Value>),
+}
+
+/// The most entries a map keeps as a sorted vector.
+const FEW_ENTRIES: usize = 8;
+
+impl Default for Entries {
+    fn default() -> Self {
+        Entries::Few(Vec::new())
+    }
+}
+
+impl Entries {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn len(&self) -> usize {
+        match self {
+            Entries::Few(few) => few.len(),
+            Entries::Many(many) => many.len(),
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    pub fn get(&self, key: &MapKey) -> Option<&Value> {
+        match self {
+            Entries::Few(few) => {
+                few.binary_search_by(|(k, _)| k.cmp(key)).ok().map(|at| &few[at].1)
+            }
+            Entries::Many(many) => many.get(key),
+        }
+    }
+
+    /// Sets `key` to `value`, replacing what it held.
+    pub fn insert(&mut self, key: MapKey, value: Value) {
+        match self {
+            Entries::Few(few) => match few.binary_search_by(|(k, _)| k.cmp(&key)) {
+                Ok(at) => few[at].1 = value,
+                Err(at) if few.len() < FEW_ENTRIES => few.insert(at, (key, value)),
+                Err(_) => {
+                    let mut many: BTreeMap<MapKey, Value> =
+                        std::mem::take(few).into_iter().collect();
+                    many.insert(key, value);
+                    *self = Entries::Many(many);
+                }
+            },
+            Entries::Many(many) => {
+                many.insert(key, value);
+            }
+        }
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&MapKey, &Value)> {
+        let (few, many) = match self {
+            Entries::Few(few) => (Some(few.iter().map(|(k, v)| (k, v))), None),
+            Entries::Many(many) => (None, Some(many.iter())),
+        };
+        few.into_iter().flatten().chain(many.into_iter().flatten())
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum Value {
     Int(BigInt),
     Float(f64),
-    Map(Rc<BTreeMap<MapKey, Value>>),
+    Map(Rc<Entries>),
     Str(String),
     True,
     False,
@@ -1835,7 +1912,7 @@ impl<'a> Interp<'a> {
             Expr::Block(stmts, _) | Expr::Build(stmts, _) => self.eval_stmts(stmts, env, frame),
             Expr::Float(x, _) => Ok(Value::Float(*x)),
             Expr::MapLit(pairs, span) => {
-                let mut entries = BTreeMap::new();
+                let mut entries = Entries::new();
                 for (key_expr, value_expr) in pairs {
                     let key = self.eval(key_expr, env, frame)?;
                     let value = self.eval(value_expr, env, frame)?;

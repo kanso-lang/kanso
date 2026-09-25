@@ -2343,7 +2343,20 @@ split_stops = row
 
 rows_b1ss = text/concat rows_b1rl [split_stops]
 
-rows_b = text/concat rows_b1ss [compile_mem compile_mem_host]
+# A map of up to eight entries is a sorted vector and a larger one a B-tree.
+# Growing into the tree without the key that made it grow loses that key on
+# the interpreter, and the micro corpus sees the engines disagree.
+map_grow = row
+  "a map that loses its ninth key when it grows"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_ninth_key_lost_when_a_map_grows")
+  release
+
+rows_b1mg = text/concat rows_b1ss [map_grow]
+
+rows_b = text/concat rows_b1mg [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 

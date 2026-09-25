@@ -14350,3 +14350,33 @@ CI read the merged tree at 755fb36d: `entry_instructions` 84,635,818 ->
 84,635,833 (+15) and `library_instructions` 85,223,918 -> 85,224,038 (+120).
 The projection added two deltas measured on different trees, and the
 remainder is layout. Neither row is weighed.
+
+---
+
+## 2026-09-25 — a small map is a sorted vector
+
+The interpreter held every map as a `BTreeMap`. A B-tree leaf has room for
+eleven entries whatever it is given, and the maps a program builds are mostly
+JSON records with a few keys. The interpreted corpus decodes 220 maps of four
+keys each, and massif put their leaves at 158,400 bytes of the interpreter's
+peak.
+
+`Value::Map` now holds `Entries`: a vector kept sorted while a map has eight
+entries or fewer, and a `BTreeMap` once a ninth key is put. A map never goes
+back, so a large map built one key at a time still inserts in log time. Both
+forms walk in key order, which is all equality, rendering and `entries` ask of
+them, and the few uses of the map (the literal, `put`, `entries`, `length`,
+indexing, equality, rendering and the wasm runtime's literal) go through
+`new`, `insert`, `get`, `len` and `iter`.
+
+On this container `interp_peak_bytes` falls 860,475 -> 779,732 (-80,743,
+-9.4%) and the interpreter's own instructions fall 342,899, with
+`interp_allocs` unchanged. Projected against CI's goldens:
+`interp_peak_bytes` 860,477 -> 779,734 and `interp_instructions` 661,830,756
+-> 661,487,857.
+
+tests/golden/micro/a_map_crosses_eight_entries holds maps on both sides of
+eight: eight keys, a ninth put onto them, a key overwritten on each side, a
+nine-key literal, the same nine entries put in another order and compared,
+and int keys beside string keys. The ratchet row `map_grow` grows into the
+tree without the ninth key, and the interpreter prints nine as eight.

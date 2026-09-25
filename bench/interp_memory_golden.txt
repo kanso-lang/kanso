@@ -305,5 +305,9 @@ interp_allocs=929249
 #
 # kanso#1634: the interpreter's per-call questions stop hashing
 # interp_peak_bytes 842,653 -> 860,477, a RISE of 17,824 (+2.1152%).
-interp_peak_bytes=860477
+#
+# Projected from this container: a map of up to eight entries is a sorted
+# vector. CI's reading replaces it. interp_peak_bytes 860,477 -> 779,734, a
+# FALL of 80,743 (-9.3835%).
+interp_peak_bytes=779734
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
