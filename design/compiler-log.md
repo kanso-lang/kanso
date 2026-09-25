@@ -14027,3 +14027,55 @@ searching each program's body for the pair, `codegen_instructions_dev`
 `library_instructions` 83,849,828 -> 83,730,469, none of which reaches the
 emitter, so the fall is layout. The run program's 3,519,900 fewer
 instructions carry the score over the four rises.
+
+## 2026-09-25 — a proven list is measured and indexed in place
+
+The inference already knows, for many parameters, that every value reaching
+them is a list: `encode_pairs acc es i` in lib/json is handed `entries m` and
+then itself. The emitter used that fact for bytes and nowhere else. `length`
+of a proven list still called the length twin, which asks whether the tag is
+a list or bytes before loading the length, and `es[i]` still called the index
+twin, which asks the index's tag, the container's tag, and then whether it
+was a list or bytes a second time before it loads the slot.
+
+`length` of a value proven to be a list or bytes now reads the header's
+first word, which is the length for both. A plain index of a proven list
+with a proven int checks the bounds and loads the slot, and answers none
+outside them, the way the twin's list arm does. What comes out of a list is
+whatever the list holds, so that result carries no set and is forced where
+it is used, as before. The strict form, `xs[i]!`, answers a box around the
+element, which the runtime builds, so it keeps the general path; the first
+draft took it too and a_builtin_demands_its_string printed nothing.
+
+On this box against kanso#1631's head: `work_runbench` 1,495,596,175 ->
+1,479,090,614 (-16,505,561, -1.104%), `work_livebench` 2,182,311,843 ->
+2,120,705,451 (-2.823%), `work_encodebench` 2,964,897,120 -> 2,861,479,405
+(-3.488%), `work_digestbench` 5,788,416 -> 5,540,248 (-4.287%),
+`work_oneshot` -1.014%, `work_basket` -0.479%, `work_scanbench` -1,419 and
+`work_widebench` -1. The other six rows are byte-identical. The goldens carry
+CI's last reading plus this box's difference. Every program whose work moved
+is also smaller: runbench's `.text` 411,880 -> 406,776 and its module
+27,320 -> 26,838 lines and 3,565 -> 3,493 calls. The compile corpus's module
+reads 1,056 -> 1,047 lines, 102 -> 100 calls and 82 -> 81 branches.
+
+tests/golden/micro/a_proven_list_is_read_in_place walks a proven list, asks
+at and past both ends, and takes one strict index. It went red with each slot
+read one late. The ratchet row `list_read_late` makes that change;
+`list_index_twin` and `list_length_twin` send the index and the length back
+through the twins, and the work vein sees each.
+
+Several leads were measured against the branches below this one and
+declined. kanso#1632 marked every lambda's wrapper `alwaysinline` in a
+release module, so that a fold over a known lambda carries the lambda's body
+in its loop. encodebench fell 6.106% and no other work row moved, but CI read
+`codegen_instructions_release` 715,986,547 -> 774,984,002 (+8.24%), and
+welfare does not score encodebench, so the change came out behind by the
+objective and was closed. `inlinehint` in place of `alwaysinline` left every
+work row byte-identical. Non-trivial loop unswitching, meant to hoist
+`fold_flat`'s per-element list-or-bytes test, read byte-identical on all
+fourteen rows whether the flag went to the LTO link or to the pre-link `-O1`
+compile. A helper merging a byte append followed by a proven one raised
+encodebench 0.134% at the five escape sites in its frozen `esc_byte`. Writing a
+json key's quotes beside the key, so that `,"` and `":` would be adjacent
+pairs for that helper, raised livebench 5.507%, runbench 1.874% and oneshot
+1.978%, and the helper fired in none of the three.
