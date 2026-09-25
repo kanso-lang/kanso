@@ -13991,6 +13991,16 @@ each need an escape. It went red with the helper's two stores swapped. The
 ratchet row `byte_pair_swapped` makes that swap and `byte_pair_apart` skips
 the merge, which the work vein sees.
 
+CI's first reading of this branch found the peephole itself costly:
+`emit_instructions` 29,343,426 -> 31,425,628 (+7.1%) and
+`startup_instructions` 601,513 -> 681,955. The first version split the
+whole emitted body into lines and copied every one of them back, on every
+build, whether or not the program held a pair. It now searches from one
+call of the single append to the next, counts uses only inside the function
+around a candidate, and returns the body untouched when nothing matches.
+On this box, the emit row against kanso#1630's head went from +2,117,616
+with the first version to +80,807.
+
 Three other leads were measured today and declined:
 
 - A width cache in `k_b_at`. The run program rose 1,499,116,075 ->
