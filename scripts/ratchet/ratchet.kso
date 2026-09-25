@@ -2109,7 +2109,19 @@ doors = row
 
 rows_b1ft = text/concat rows_b1nw [flat_tails flat_order plain_calls doors]
 
-rows_b = text/concat rows_b1ft [compile_mem compile_mem_host]
+# An append onto a bufferless bytes value tests for the grow inline, before
+# the fitting path's frame. The mutation drops the test.
+grow_first = row
+  "a growing append paying the fitting path's frame"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_growing_append_pays_the_fit_s_frame")
+  benchmarks
+
+rows_b1gf = text/concat rows_b1ft [grow_first]
+
+rows_b = text/concat rows_b1gf [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 

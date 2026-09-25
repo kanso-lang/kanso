@@ -8825,8 +8825,9 @@ static __attribute__((noinline)) KValue k_b_append_grow(KValue acc, KBytes* a,
 
 static __attribute__((noinline)) KValue k_b_append_wide(KValue acc, KBytes* a,
                                                         KValue x, int mutate);
-static inline KValue k_b_append_range(KValue acc, KBytes* a, const unsigned char* src,
-                                      long long n, int mutate);
+static inline __attribute__((always_inline)) KValue k_b_append_range(KValue acc, KBytes* a,
+                                                                     const unsigned char* src,
+                                                                     long long n, int mutate);
 
 /* A comma, a colon, a brace: three quarters of the appends the encoder makes
    are one byte into spare capacity, and this is the whole of that case.
@@ -8894,8 +8895,24 @@ static __attribute__((noinline)) KValue k_b_append_wide(KValue acc, KBytes* a,
 /* The copy itself, once the source is a pointer and a length. `append_wide`
    reaches it after unpacking a value; `append_slice` reaches it with a range
    of a bytes value it never boxed. */
-static inline KValue k_b_append_range(KValue acc, KBytes* a, const unsigned char* src,
-                                      long long n, int mutate) {
+static KValue k_b_append_fit(KValue acc, KBytes* a, const unsigned char* src,
+                             long long n, int mutate);
+
+/* A bytes value with no buffer of its own -- the empty accumulator an
+   encoder starts from -- always grows, and asking that first, inline at each
+   caller, keeps the grow off `k_b_append_fit`'s frame. With the two in one
+   function, every such append pushed five registers, tested the capacity and
+   popped them again on its way to the grow: 142,731 of them a run, fourteen
+   instructions apiece, on the run program. */
+static inline __attribute__((always_inline)) KValue k_b_append_range(KValue acc, KBytes* a,
+                                                                     const unsigned char* src,
+                                                                     long long n, int mutate) {
+    if (!(a->cap & ~1LL)) return k_b_append_grow(acc, a, src, n, mutate);
+    return k_b_append_fit(acc, a, src, n, mutate);
+}
+
+static __attribute__((noinline)) KValue k_b_append_fit(KValue acc, KBytes* a, const unsigned char* src,
+                                                      long long n, int mutate) {
     long long acap = a->cap & ~1LL;
     if (acap) {
         KBuf* buf = ((KBuf*)a->data) - 1;

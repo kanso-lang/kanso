@@ -13494,3 +13494,31 @@ less than 550 either way.
 
 Welfare reads 87.98 against a floor of 87.69, production 74.49, and the rise
 is banked.
+
+---
+
+## 2026-09-25 — an append that must grow asks first
+
+With the program's frames gone, `k_b_append_range` was the runtime function
+spending the largest share of itself on its frame: 71.3% of 2,000,934
+instructions on the run program. Every one of its 142,731 calls arrived with a
+bytes value that had no buffer yet, the empty accumulator an encoder starts
+from, so every call pushed five registers, tested the capacity, popped them
+and jumped to `k_b_append_grow`. The test now sits in an always-inline
+wrapper at each caller, and the fitting path is `k_b_append_fit`, out of line
+as before. On this container under clang 19, against kanso#1623:
+
+    runbench       1,535,239,270 -> 1,534,028,068   -0.0789%
+    widebench         28,937,509 ->    28,777,507   -0.5529%
+    jsonbench      1,013,835,366 -> 1,011,966,666   -0.1843%
+    oneshot           15,507,370 ->    15,495,158   -0.0787%
+    encodebench    2,969,232,524 -> 2,969,366,924   +0.0045%
+    livebench      2,210,369,336 -> 2,210,455,278   +0.0039%
+
+and the other eight unchanged. The output is the same either way, so the work
+vein is what sees it: ratchet row `grow_first` drops the test.
+
+`k_b_append_slice`, its other caller, still pushes five registers on each of
+its 175,797 calls, 1,933,767 instructions of frame. It was one of the doors
+tried under `preserve_none` in the entry above and the trial segfaulted, so
+it is left as it is.
