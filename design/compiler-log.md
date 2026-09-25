@@ -14313,6 +14313,12 @@ segfaults, and `a_cycle_that_allocates_nothing_needs_no_bracket` drifts from
 30 allocations to 20,030. Ratchet rows `word_length`, `word_slow` and
 `word_used`.
 
+The helper is written into every module the way the other in-place appends
+are, and release builds prune it where nothing calls it. So each program in
+`bench/compile_golden.txt` gained its ten lines, recursion 268 -> 278 among
+them, and `bench/compile_golden_modules.txt` read module lines 1,047 ->
+1,057. Calls, branches, rounds and visits did not move.
+
 Built, measured and declined on the way:
 
 - A key's closing quote and its colon as one literal, tried a second time on
