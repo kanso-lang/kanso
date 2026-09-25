@@ -1,0 +1,16 @@
+# A string token of four to seven bytes comes back from the decoder as the same
+# permanent string every time those bytes appear. The document below holds
+# six such tokens and is decoded a hundred times, and each decode used to
+# build all six: 600 strings in the arena. Five distinct tokens fill five
+# slots, 120 bytes of permanent storage, and every other read is a hit.
+import "std/json"
+
+doc = "[\{\"name\":\"apple\",\"kind\":\"fruit\"},\{\"name\":\"pears\"}]"
+
+fn decoded 0 acc
+  acc
+
+fn decoded n acc
+  decoded (n - 1) (acc + length (json/decode doc))
+
+pub play = print "{decoded 100 0}"

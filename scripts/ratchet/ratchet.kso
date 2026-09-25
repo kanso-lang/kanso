@@ -2600,7 +2600,19 @@ half_grow = row
 
 rows_b1hg = text/concat rows_b1bs [half_grow]
 
-rows_b = text/concat rows_b1hg [compile_mem compile_mem_host]
+# A token of four to seven bytes comes back from a cache of permanent strings
+# instead of being built on every read.
+token_cache = row
+  "a short token built every time, so each read allocates and copies it"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_short_token_built_every_time")
+  release
+
+rows_b1tc = text/concat rows_b1hg [token_cache]
+
+rows_b = text/concat rows_b1tc [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 
