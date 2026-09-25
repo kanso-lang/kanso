@@ -318,4 +318,8 @@
 # kanso#1627 at CI's sitting: an accumulator's buffer grows where it is.
 # codegen_instructions_release 715,946,959 -> 715,866,504, a FALL of 80,455
 # (-0.0112%).
-codegen_instructions_release=715866504
+#
+# kanso#1630 at CI's sitting: a rewind with nothing to take back asks only
+# whether the pointer moved. codegen_instructions_release 715,866,504 ->
+# 715,981,278, a RISE of 114,774 (+0.0160%).
+codegen_instructions_release=715981278
