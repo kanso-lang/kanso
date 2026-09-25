@@ -2476,7 +2476,19 @@ ryu_guess = row
 
 rows_b1fs = text/concat rows_b1ae [ryu_guess]
 
-rows_b = text/concat rows_b1fs [compile_mem compile_mem_host]
+# A list that leaves the arena takes 256 slots, so a thousand-element
+# accumulator grows by realloc twice rather than four times.
+perm_wide = row
+  "a permanent list that starts narrow and grows through every step"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_permanent_list_that_starts_narrow")
+  release
+
+rows_b1pw = text/concat rows_b1fs [perm_wide]
+
+rows_b = text/concat rows_b1pw [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 

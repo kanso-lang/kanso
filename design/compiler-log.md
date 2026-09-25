@@ -14745,3 +14745,53 @@ fell from the carrier's readings on this branch: `work_basket` lands on
 31,593,354, and `work_widebench` on 28,836,171, 245,877 below the carrier's
 29,082,048 and 58,105 above main's 28,778,066. Both rises over main arrived
 with the carried changes and are priced in their entries.
+
+## 2026-09-25 — a list that leaves the arena starts at 256 slots
+
+An accumulator that outlives its beat keeps its buffer outside the arena, and
+each grow there is a `realloc`. The growth steps are 4, 8, 16, 64, 256 and
+1024, and a list first left the arena at eight slots, so runbench's escape
+phase took each of its 3,872 lists through a malloc and four reallocs on the
+way to a thousand elements: 15,488 reallocs at about 445 instructions each.
+A permanent list now starts at 256 slots, which leaves one realloc to 1024.
+
+Measured on this container against the float search's tree, one binary each
+way: runbench 1,390,193,031 -> 1,383,035,977 (-7,157,054, -0.515%) and
+escapebench -758,747. The run program's `bytes_malloc` falls 20,556 -> 8,940
+and `perm_peak_bytes` stays at 16,400, since the one list live at the peak
+already held 1,024 slots. Starting at 1,024 read 1,381,944,072, 1,091,891
+lower, and at 64 read 1,385,580,220. The 256 floor was chosen over 1,024
+because it bounds what a short permanent list costs at 4,112 bytes instead of
+16,400.
+
+That cost shows in one fixture. `an_escaped_list_gives_its_buffer_back` grows
+two hundred nine-element lists that each leave the arena:
+`an_escaped_list_gives_its_buffer_back_perm_peak_bytes` rises 272 -> 4,112
+and `an_escaped_list_gives_its_buffer_back_alloc_bytes` 102,480 -> 841,680,
+while its `bytes_malloc` halves, 400 -> 200. Fourteen other mem fixtures and
+the basket, escape and run veins allocate less and nothing else in them moved.
+
+Six benchmarks that grow few permanent lists paid for the larger first
+allocation. None is weighed. `work_jsonbench` rises 251,550 to 977,804,371,
+`work_encodebench` 4,641 to 2,676,232,345, `work_pendbench` 3,612 to
+181,848,783, `work_oneshot` 1,677 to 14,785,155, `work_livebench` 1,677 to
+2,018,466,305, `work_digestbench` 804 to 5,541,383 and `work_widebench` 21 to
+28,836,192. The rows are projected from this container's delta onto CI's
+readings and are replaced by CI's own.
+
+The mem vein pins the change: `an_accumulator_regrows_where_it_is` reads
+`bytes_malloc` 40 where it read 100. The ratchet row `perm_wide` removes the
+floor and the mem corpus spec goes red on `a_pushed_call_keeps_the_sweep`,
+`bytes_malloc` 3000 against 1200.
+
+Each `bytes_freed` falls with the grows it counted, since a realloc counts as
+the free it replaces: `run_bytes_freed` 8,824, `escape_bytes_freed` 6,000,
+`basket_bytes_freed` 7, `a_pushed_call_keeps_the_sweep_bytes_freed` 1,200,
+`an_accumulator_regrows_where_it_is_bytes_freed` 40,
+`an_escaped_list_gives_its_buffer_back_bytes_freed` 200,
+`early_exit_bytes_freed` 2, `fold_push_shape_bytes_freed` 2,
+`fused_map_shape_bytes_freed` 2, `fused_select_shape_bytes_freed` 2,
+`skip_shape_bytes_freed` 2, `take_shape_bytes_freed` 2,
+`tally_shape_bytes_freed` 2, `fused_reducer_bytes_freed` 1,
+`fused_tally_bytes_freed` 1, `piped_reducer_bytes_freed` 1 and
+`sort_shape_bytes_freed` 1. No buffer is freed later than it was.

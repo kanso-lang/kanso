@@ -8510,6 +8510,7 @@ static KValue k_b_push_grow(KValue lv, KList* l, KValue item, int mutate) {
        was building. A transient's stays in the arena, where the rewind is
        exactly what should free it. */
     int perm = mutate && k_outlives_beat(l);
+    if (perm && cap < 256) cap = 256;
     /* A buffer already out of the arena is grown where it is. The field it
        sits in was registered when it first left, and `l->items` is the same
        field after the realloc, so the registration still names it. */
