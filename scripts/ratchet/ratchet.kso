@@ -2255,6 +2255,60 @@ rows_b1pr = text/concat rows_b1bp [list_read_late list_index_twin]
 
 rows_b1pl = text/concat rows_b1pr [list_length_twin]
 
+# The interpreter asks whether a push writes in place against its frame's
+# own sites. The mutation hashes the file's path on every call again.
+in_place_site = row
+  "an in-place site hashed by its path"
+  true
+  interp_gate
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_in_place_site_hashed_by_its_path")
+  release
+
+# A call through a reference asks a direct-mapped table before the map. The
+# mutation never takes the table's answer.
+recent_callee = row
+  "a reference's callee probed in the map"
+  true
+  interp_gate
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_reference_s_callee_probed_in_the_map")
+  release
+
+# Entering a declaration asks a direct-mapped table before the map. The
+# mutation never takes the table's answer.
+recent_frame = row
+  "a declaration's frame probed in the map"
+  true
+  interp_gate
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_declaration_s_frame_probed_in_the_map")
+  release
+
+# Whether a value is a cell is asked inline. The mutation sends every value
+# through the out-of-line loop.
+inline_force = row
+  "a plain value forced through a call"
+  true
+  interp_gate
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_plain_value_forced_through_a_call")
+  release
+
+rows_b1is = text/concat rows_b1pl [in_place_site recent_callee recent_frame]
+
+# A hit in the recent-frame table is answered at the caller. The mutation
+# keeps the lookup out of line.
+frame_hit_inline = row
+  "a recent frame hit paying for a call"
+  true
+  interp_gate
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_recent_frame_hit_paying_the_miss_s_frame")
+  release
+
+rows_b1if = text/concat rows_b1is [inline_force frame_hit_inline]
+
 # A regexp scan first asks the subject for the literal every match must hold.
 # Carrying the literal run across a class asks for a literal the subject does
 # not hold, and the micro fixture finds nothing where it found a match; never
@@ -2275,7 +2329,7 @@ literal_asked = row
   (breaking "a_scan_made_without_asking_for_the_literal")
   benches
 
-rows_b1rl = text/concat rows_b1pl [literal_run literal_asked]
+rows_b1rl = text/concat rows_b1if [literal_run literal_asked]
 
 # A split whose scan finds nothing ends, rather than scanning again from the
 # next position; the mem fixture's scan count goes quadratic without it.

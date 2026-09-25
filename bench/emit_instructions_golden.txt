@@ -302,6 +302,6 @@
 # kanso#1633 at CI's sitting: a proven list is measured and indexed in place.
 # emit_instructions 29,390,013 -> 29,261,817, a FALL of 128,196 (-0.4362%).
 #
-# CI measured the doors in one pass at aea2c904. emit_instructions 29,261,817
-# -> 29,261,818, a RISE of 1 (+0.0000%).
-emit_instructions=29261818
+# kanso#1634: the interpreter's per-call questions stop hashing
+# emit_instructions 29,261,817 -> 29,274,393, a RISE of 12,576 (+0.0430%).
+emit_instructions=29274393
