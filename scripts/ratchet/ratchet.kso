@@ -2488,7 +2488,19 @@ perm_wide = row
 
 rows_b1pw = text/concat rows_b1fs [perm_wide]
 
-rows_b = text/concat rows_b1pw [compile_mem compile_mem_host]
+# `{}` opens with room for five pairs, so a five-key object is built without
+# a grow.
+map_seed = row
+  "an empty map seeded with four pairs, so every fifth key grows it"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "an_empty_map_seeded_with_four_pairs")
+  release
+
+rows_b1ms = text/concat rows_b1pw [map_seed]
+
+rows_b = text/concat rows_b1ms [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 

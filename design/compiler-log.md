@@ -14795,3 +14795,49 @@ the free it replaces: `run_bytes_freed` 8,824, `escape_bytes_freed` 6,000,
 `tally_shape_bytes_freed` 2, `fused_reducer_bytes_freed` 1,
 `fused_tally_bytes_freed` 1, `piped_reducer_bytes_freed` 1 and
 `sort_shape_bytes_freed` 1. No buffer is freed later than it was.
+
+## 2026-09-25 — an empty map opens with room for five pairs
+
+`{}` seeded a map with eight slots, four pairs, and the decoder opens every
+object with it. bench/large.json's 2,761 objects hold one to five keys, 532
+to 570 of each size, so the 570 five-key objects each grew their map on the
+fifth key: 56,430 grows a run, every call `k_b_put_mut` received, at about
+190 instructions with the copy and the donation of the old buffer. The seed is
+ten slots now. Ten is not a class the shelf keeps, so `k_map_empty` takes its
+header and pairs from one allocation every time and no longer asks the shelf,
+and a map that outgrows the seed moves to sixteen slots, which is a class.
+
+Measured on this container on top of the list change, one binary each way:
+runbench 1,383,035,977 -> 1,371,385,604 (-11,650,373, -0.842%), jsonbench
+-17,589,150, encodebench -119,690, oneshot -112,902, livebench -98,727 and
+basket -23,616. No other benchmark moved. `arena_peak_bytes` stays
+3,670,032, `held_peak_bytes` 277,538 and `perm_peak_bytes` 16,400. The run
+program's `put_mut_grow` falls 56,430 -> 0.
+
+Every empty map is 32 bytes larger, which the byte counters show as rises
+with no peak behind them: `run_alloc_bytes` 367,965,182, `run_sh_buf`
+99,383,504, `decode_alloc_bytes` 211,278,848, `decode_sh_buf` 115,288,800,
+`encode_alloc_bytes` 657,785,584, `encode_sh_buf` 73,350,144,
+`live_alloc_bytes` 526,566,224, `live_sh_buf` 71,949,392,
+`oneshot_alloc_bytes` 2,908,952, `oneshot_sh_buf` 946,544,
+`basket_alloc_bytes` 7,495,057 and `basket_sh_buf` 662,736. The shelf serves
+fewer buffers, since an empty map no longer takes one from it:
+`run_buf_reuse` 88,758, `decode_buf_reuse` 134,250, `encode_buf_reuse`
+4,008, `live_buf_reuse` 895, `oneshot_buf_reuse` 895 and `basket_buf_reuse`
+250. `put_mut_fast` rises in five veins as the grows become fast puts:
+`run_put_mut_fast` 827,739, `decode_put_mut_fast` 1,254,150 and 8,361 in
+encode, live and oneshot. The mem fixtures that open a map rise 32 bytes a
+map: `an_empty_literal_takes_one_bump_alloc_bytes` 304,048 and
+`an_empty_literal_takes_one_bump_sh_buf` 256,000 for its thousand maps,
+`a_map_whose_keys_arrived_in_order_is_its_own_view_alloc_bytes` 65,696 and
+`a_map_whose_keys_arrived_in_order_is_its_own_view_sh_buf` 65,584,
+`growing_map_alloc_bytes` 181,952 and `growing_map_sh_buf` 65,584,
+`map_put_alloc_bytes` 9,120 and `map_put_sh_buf` 4,080,
+`readwrite_map_alloc_bytes` 11,056 and `readwrite_map_sh_buf` 448,
+`repeated_key_shape_alloc_bytes` 248,160 and `repeated_key_shape_sh_buf`
+4,080, `fused_tally_sh_buf` 9,728 and `tally_shape_sh_buf` 2,096.
+
+The mem vein pins the seed: with it put back to eight,
+`a_map_whose_keys_arrived_in_order_is_its_own_view` reads its old bytes and
+`mem_corpus_pins_native_allocator_counters` goes red. The ratchet row
+`map_seed` makes that mutation.

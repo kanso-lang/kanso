@@ -7255,25 +7255,24 @@ KValue k_map_lit(long long n, KValue* flat_pairs) {
     KValue mv; mv.tag = K_MAP; mv.payload = k_ptr(m); return mv;
 }
 
-/* `{}`: k_list_empty says why this is not k_map_lit(0). */
+/* `{}`: k_list_empty says why this is not k_map_lit(0).
+
+   It opens with room for five pairs. At four, every fifth key grew the map:
+   the decoder's objects run one to five keys, and each five-key object of
+   bench/large.json paid a grow, a copy and a donation, 56,430 times a run at
+   about 190 instructions each. Ten slots is not a class the shelf keeps, so
+   the header and the pairs come from one allocation every time; a map that
+   outgrows them moves to sixteen slots, which is. */
+#define K_MAP_SEED 10
 KValue k_map_empty(void) {
-    int c = k_buf_class(8);
-    KBuf* b = k_buf_free[c];
-    KMap* m;
-    if (b) {
-        k_buf_free[c] = (KBuf*)(intptr_t)b->used;
-        if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) k_stat_buf_reuse++;
-        m = k_alloc(sizeof(KMap));
-    } else {
-        size_t buf_bytes = (sizeof(KBuf) + sizeof(KValue) * 8 + 15) & ~(size_t)15;
-        if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0))
-            k_stat_sh_buf += (long long)buf_bytes;
-        size_t head_bytes = ((sizeof(KMap) + 15) & ~(size_t)15);
-        unsigned char* whole = k_alloc(head_bytes + buf_bytes);
-        m = (KMap*)whole;
-        b = (KBuf*)(whole + head_bytes);
-        b->cap = 8;
-    }
+    size_t buf_bytes = (sizeof(KBuf) + sizeof(KValue) * K_MAP_SEED + 15) & ~(size_t)15;
+    if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0))
+        k_stat_sh_buf += (long long)buf_bytes;
+    size_t head_bytes = ((sizeof(KMap) + 15) & ~(size_t)15);
+    unsigned char* whole = k_alloc(head_bytes + buf_bytes);
+    KMap* m = (KMap*)whole;
+    KBuf* b = (KBuf*)(whole + head_bytes);
+    b->cap = K_MAP_SEED;
     b->used = 0;
     m->pairs = (KValue*)(b + 1);
     m->len = 0;
