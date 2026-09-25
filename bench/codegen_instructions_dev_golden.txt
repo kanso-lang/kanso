@@ -275,4 +275,8 @@
 #
 # CI measured the short-token cache at abc4015e. codegen_instructions_dev
 # 125,554,618 -> 125,569,980, a RISE of 15,362 (+0.0122%).
-codegen_instructions_dev=125569980
+#
+# CI measured the carrier at e63ff428, the literal divisor's settled fixpoint
+# among what it carries: codegen_instructions_dev 125,569,980 -> 123,915,790,
+# a FALL of 1,654,190 (-1.3173%).
+codegen_instructions_dev=123915790

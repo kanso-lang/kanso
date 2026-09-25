@@ -320,4 +320,8 @@
 # CI measured the builder seed at 947d34ad, with the declare no longer written
 # into programs that never call it. emit_instructions 29,311,721 ->
 # 29,311,866, a RISE of 145 (+0.0005%).
-emit_instructions=29311866
+#
+# CI measured the carrier at e63ff428, the literal divisor's settled fixpoint
+# among what it carries: emit_instructions 29,311,866 -> 28,882,533, a FALL of
+# 429,333 (-1.4647%).
+emit_instructions=28882533

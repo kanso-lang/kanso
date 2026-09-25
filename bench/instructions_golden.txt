@@ -702,17 +702,20 @@
 # +492,380, oneshot -71,532, basket -133,385, deepbench -1,344,000,
 # escapebench -2,451,022, pendbench -1,000, indexbench +14, digestbench -14,
 # livebench -27,388,087, runbench -9,744,067. CI's reading replaces them.
+#
+# CI measured the carrier at e63ff428 and the rows above read within 14 of
+# its projection; they are CI's now.
 jsonbench 890697789
-encodebench 2677016776
-oneshot 14486395
-basket 31432538
+encodebench 2677016790
+oneshot 14486409
+basket 31432524
 widebench 28789056
 deepbench 364797730
-escapebench 65821660
+escapebench 65821674
 pendbench 181895213
-indexbench 2538571
+indexbench 2538557
 scanbench 282021
-digestbench 5542068
+digestbench 5542082
 readbench 4631851
 livebench 1877825961
 runbench 1290279056
