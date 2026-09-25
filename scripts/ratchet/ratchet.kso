@@ -2363,7 +2363,16 @@ play_disk = row
   (breaking "a_play_key_that_trusts_a_module_from_disk")
   release
 
-rows_b1pk = text/concat rows_b1ss [play_text play_disk]
+# A warm play compiles the file only to word a death by signal.
+play_signal = row
+  "a warm play that dies in silence"
+  true
+  "cargo test --release --test a_play_file_is_keyed_by_its_text"
+  "specs (unit, golden, differential)"
+  (breaking "a_warm_play_that_dies_in_silence")
+  release
+
+rows_b1pk = text/concat rows_b1ss [play_text play_disk play_signal]
 
 rows_b = text/concat rows_b1pk [compile_mem compile_mem_host]
 

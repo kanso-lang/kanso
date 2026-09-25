@@ -277,6 +277,13 @@ fn driven() -> ExitCode {
                 return ExitCode::from(2);
             }
         };
+        if !interp {
+            if let Some(played) = played_before(&file, &source) {
+                return execute(&played, |code| {
+                    ended_by_signal(code, kanso::compile_play_file(&file, &source).ok().as_ref())
+                });
+            }
+        }
         let program = match kanso::compile_play_file(&file, &source) {
             Ok(program) => program,
             Err(rendered) => {
@@ -2134,7 +2141,7 @@ fn run(program: &ast::Program, file: &str, source: &str, plan: bool) -> ExitCode
         return run_plan(program, file, source);
     }
     match built_binary(program) {
-        Ok(binary) => execute(&binary, program),
+        Ok(binary) => execute(&binary, |code| ended_by_signal(code, Some(program))),
         Err(code) => code,
     }
 }
@@ -2151,22 +2158,46 @@ fn run(program: &ast::Program, file: &str, source: &str, plan: bool) -> ExitCode
 /// from disk has no text key, since that module can change under it, and goes
 /// through `run`.
 fn play(program: &ast::Program, file: &str, source: &str) -> ExitCode {
-    let Some(key) = played_key(file, source) else {
+    let played = match kanso::play_file_is_self_contained() {
+        true => played_path(file, source),
+        false => None,
+    };
+    let Some(played) = played else {
         return run(program, file, source, false);
     };
-    let played = std::env::temp_dir().join(format!("kanso_play_{key}"));
+    let explain = |code: &std::process::ExitStatus| ended_by_signal(code, Some(program));
     if played.exists() {
-        return execute(&played, program);
+        return execute(&played, explain);
     }
     match built_binary(program) {
         Ok(binary) => {
             // Two plays racing to name one binary both find the name taken or
             // take it, and either way the file under it is the same build.
             let _ = std::fs::hard_link(&binary, &played);
-            execute(&binary, program)
+            execute(&binary, explain)
         }
         Err(code) => code,
     }
+}
+
+/// The binary an earlier play of this same text left behind, if there is one.
+/// A name under the text's key exists only when a play compiled the file
+/// cleanly from embedded modules, and everything that compile read is in the
+/// key, so the file is run without being lexed, parsed or checked again: that
+/// was 172,583 of the 208,643 instructions left in a warm play. A `KANSO_`
+/// setting sends the file through the compiler anyway, because several of them
+/// ask it to report on its own work as it goes.
+fn played_before(file: &str, source: &str) -> Option<std::path::PathBuf> {
+    if std::env::vars_os().any(|(name, _)| name.as_encoded_bytes().starts_with(b"KANSO_")) {
+        return None;
+    }
+    let played = played_path(file, source)?;
+    played.exists().then_some(played)
+}
+
+fn played_path(file: &str, source: &str) -> Option<std::path::PathBuf> {
+    let key = played_key(file, source)?;
+    Some(std::env::temp_dir().join(format!("kanso_play_{key}")))
 }
 
 /// What decides a play file's binary, hashed. The IR is a function of the
@@ -2176,9 +2207,6 @@ fn play(program: &ast::Program, file: &str, source: &str) -> ExitCode {
 /// key. The compiler is named by its own file's path, length and modification
 /// time: a rebuild writes a new file, and the key moves with it.
 fn played_key(file: &str, source: &str) -> Option<String> {
-    if !kanso::play_file_is_self_contained() {
-        return None;
-    }
     let compiler = std::env::current_exe().ok()?;
     let meta = std::fs::metadata(&compiler).ok()?;
     let written = meta.modified().ok()?.duration_since(std::time::UNIX_EPOCH).ok()?;
@@ -2225,13 +2253,18 @@ fn built_binary(program: &ast::Program) -> Result<std::path::PathBuf, ExitCode> 
     }
 }
 
-fn execute(binary: &std::path::Path, program: &ast::Program) -> ExitCode {
+/// Runs a built binary. `explain` words a death by signal, and is asked only
+/// then, so a caller that has no checked program in hand compiles one there.
+fn execute(
+    binary: &std::path::Path,
+    explain: impl FnOnce(&std::process::ExitStatus) -> String,
+) -> ExitCode {
     let status = std::process::Command::new(binary).args(program_args()).status();
     match status {
         Ok(code) => match code.code() {
             Some(n) => ExitCode::from(n.clamp(0, 255) as u8),
             None => {
-                eprintln!("{}", ended_by_signal(&code, Some(program)));
+                eprintln!("{}", explain(&code));
                 ExitCode::FAILURE
             }
         },

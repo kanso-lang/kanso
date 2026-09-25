@@ -54,3 +54,27 @@ fn a_module_read_from_disk_changes_what_the_same_play_file_runs() {
     assert_eq!(play(&file, Some(&std_dir)), "a?\n");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// A warm play runs the binary without compiling the file, and a death by
+/// signal is worded from the compiled program. The second play of a file that
+/// runs out of stack compiles it then, and says what ended it as the first did.
+#[test]
+fn a_warm_play_that_runs_out_of_stack_still_says_so() {
+    let dir = fresh("out_of_stack");
+    let file = dir.join("main.kso");
+    std::fs::write(
+        &file,
+        "fn total n\n  return 0 if n < 1\n  n + total (n - 1)\n\nprint \"{total 2000000}\"\n",
+    )
+    .unwrap();
+    for round in ["first", "second"] {
+        let run = Command::new(env!("CARGO_BIN_EXE_kanso"))
+            .arg("play")
+            .arg(&file)
+            .output()
+            .expect("kanso runs");
+        let err = String::from_utf8_lossy(&run.stderr);
+        assert!(err.contains("ran out of stack"), "{round} play said: {err}");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}

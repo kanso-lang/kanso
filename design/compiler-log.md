@@ -14353,13 +14353,15 @@ remainder is layout. Neither row is weighed.
 
 ---
 
-## 2026-09-25 — a second play of the same file does not emit
+## 2026-09-25 — a second play of the same file does not compile
 
 `kanso play` keeps the native binary it builds, keyed by a hash of the
 program's IR, so an unchanged file runs again with no clang. Finding the
-binary meant emitting the IR on every run. On the start-up corpus, `print
-"x"`, `kanso::codegen::emit_ir_dev` was 404,031 of the 615,803 instructions
-under `kanso::main` on this container, and its output was hashed and dropped.
+binary meant compiling the file and emitting its IR on every run. On the
+start-up corpus, `print "x"`, this container counted 615,803 instructions under
+`kanso::main`: 172,583 in `compile_play_file` lexing, parsing and checking the
+file with the modules it loads, and 404,031 in `emit_ir_dev` writing IR that
+was hashed and dropped.
 
 A play file imports the standard library and nothing else, and the compiler
 embeds every std module except `std/expect`. The loader now notes when a
@@ -14368,21 +14370,28 @@ read nothing but embedded modules, its IR is decided by the file's name and
 text, the compiler, the runtime digest, the closure convention the installed
 clang takes, the counting flag and the `KANSO_` environment. `played_key`
 hashes those with `key_of`, naming the compiler by its path, length and
-modification time, which a rebuild always changes. The first play emits and
-builds through the IR's key as before and hard-links the binary under
-`kanso_play_<key>`; a later play finds that name and runs it without emitting.
-A file that reads `std/expect` goes through the IR's key every time.
+modification time, which a rebuild always changes. The first play compiles,
+emits and builds through the IR's key as before, and hard-links the binary as
+`kanso_play_<key>`. A later play of the same text reads the file, forms the
+key and runs that binary without lexing, parsing, checking or emitting: the
+name exists only if a play compiled the same inputs cleanly. A file that reads
+`std/expect` goes through the IR's key every time, and so does any play with a
+`KANSO_` variable set, since several of them ask the compiler to report on its
+own work. A warm play whose program dies by a signal compiles the file then,
+to word the message the way the compiled program would.
 
-On this container the start-up row falls from 615,803 to 208,643, -407,160
-(-66.1%), and `emit_instructions` reads 29,578,328 on both trees, since that
+On this container the start-up row falls from 615,803 to 51,616, -564,187
+(-91.6%), and `emit_instructions` reads 29,578,328 on both trees, since that
 row builds the codegen corpus with `kanso build`. `startup_instructions` is
-projected at 605,441 -> 198,281 until CI reads it. The start-up row no longer
-reaches the emitter on its measured run; `emit_instructions` is the row that
-watches emitting.
+projected at 605,441 -> 41,254 until CI reads it. The start-up row no longer
+reaches the front end or the emitter on its measured run; the compile rows and
+`emit_instructions` are the ones that watch them.
 
-tests/a_play_file_is_keyed_by_its_text holds two cases. A file rewritten from
-`print "first"` to `print "second"` between plays prints `second`; with the
-text left out of the key it prints `first`. A play file importing a
+tests/a_play_file_is_keyed_by_its_text holds three cases. A file rewritten
+from `print "first"` to `print "second"` between plays prints `second`; with
+the text left out of the key it prints `first`. A play file importing a
 `std/expect` read through `KANSO_STD` prints `a?` after the module changes
-from `!` to `?`; with the loader's note removed it prints `a!`. The ratchet
-rows are `play_text` and `play_disk`.
+from `!` to `?`; with the loader's note removed it prints `a!`. A file that
+runs out of stack says so on its second play as on its first; with the warm
+path's explanation dropped the second says nothing. The ratchet rows are
+`play_text`, `play_disk` and `play_signal`.
