@@ -220,7 +220,7 @@
 # calls 3,781 -> 3,835, lines 28,042 -> 28,204.
 #
 # The descent into a map takes a mark of its own and the encoder's two loops
-# take no beat. Every program links the region pop, 864 bytes of text, and the
+# take no beat. Every program links the region pop, 848 bytes of text, and the
 # programs that encode through std/json lose the loops' push, pop and rewind
 # test:
 encodebench defines=109 calls=655 branches=481 lines=6050

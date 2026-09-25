@@ -806,23 +806,23 @@
 # 399,736, scanbench's 320,936 -> 312,872.
 #
 # The descent into a map takes a mark of its own and the encoder's two loops
-# take no beat. Every program links the region pop, 864 bytes of text, and the
+# take no beat. Every program links the region pop, 848 bytes of text, and the
 # programs that encode through std/json lose the loops' push, pop and rewind
 # test:
-jsonbench text=239784
-encodebench text=249096
-oneshot text=250600
-basket text=236680
-widebench text=250312
-deepbench text=219304
-escapebench text=213576
-pendbench text=227112
-indexbench text=213400
-scanbench text=313736
-digestbench text=236392
-readbench text=213896
-livebench text=251528
-runbench text=401048
+jsonbench text=239768
+encodebench text=249080
+oneshot text=250584
+basket text=236664
+widebench text=250296
+deepbench text=219288
+escapebench text=213560
+pendbench text=227096
+indexbench text=213384
+scanbench text=313720
+digestbench text=236376
+readbench text=213880
+livebench text=251512
+runbench text=401032
 # 2026-09-10 (kanso#1362): the backends build the partial over a value. Every
 # one of the fourteen rows RISES, by 2,096 bytes on eight of them and 2,432 on
 # the other six: k_partial0..4 and the branch each of k_call0..4 gains are in

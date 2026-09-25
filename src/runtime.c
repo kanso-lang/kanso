@@ -2556,12 +2556,15 @@ KValue k_region_pop(KValue r) {
     int d = k_beat_depth - 1;
     if ((unsigned)d < (unsigned)K_BEAT_MAX) {
         KMark* m = &k_beat_stack[d];
-        if (!(k_buf_dirty | m->reg_any) && k_blocks == m->block && !k_ten_blocks[d]
-            && !k_carries[d].used_flag) {
-            int outside = (!k_is_heap(r.tag) && r.tag != K_THUNK)
-                || ((r.tag == K_BYTES || r.tag == K_STR)
-                    && (uintptr_t)r.payload - (uintptr_t)m->ptr
-                           >= (uintptr_t)k_arena - (uintptr_t)m->ptr);
+        if (!(k_buf_dirty | m->reg_any) && k_blocks == m->block && !k_ten_blocks[d]) {
+            /* No carry test: a carry is staged only at a carry beat's own
+               depth, and a loop inside the region pushes its mark above
+               this one. Bytes and strings are asked first, being what a
+               region's call answers. */
+            int outside = ((r.tag == K_BYTES || r.tag == K_STR)
+                           && (uintptr_t)r.payload - (uintptr_t)m->ptr
+                                  >= (uintptr_t)k_arena - (uintptr_t)m->ptr)
+                || (!k_is_heap(r.tag) && r.tag != K_THUNK);
             if (outside) {
                 if (m < k_seek_under) k_seek_str = NULL;
                 k_arena = m->ptr;

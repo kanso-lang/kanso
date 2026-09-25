@@ -15707,7 +15707,12 @@ never a region now.
 In the benchmark corpus there is exactly one region, `std/json/json.kso`
 line 64. Its pop takes a fast path on every one of runbench's 248,490 calls:
 the region stayed in its mark's block and the result lies outside what it
-allocated, so the pop is two stores.
+allocated, so the pop is two stores, 43 instructions with its tests. It asks
+about bytes and strings before the heap bitmask, and asks nothing about
+carries, since a carry is staged only at a carry beat's own depth; those two
+changes took it from 56. Moving it into the release build's hot unit, so LTO
+could inline it at the call, came out 458,360 worse: the call's result can
+also be an err, no assume folds its tag, and the tests came back inline.
 
 A region stands only where it pays. After the allocation analysis runs with
 every candidate, a region is kept when every loop in its cluster comes out
@@ -15715,11 +15720,11 @@ allocating nothing, and the analysis runs again with the survivors. The first
 build kept one in encodebench's frozen copy of the library, whose loops
 allocate for other reasons and stayed beats, and encodebench paid a mark and
 a pop per map on top of the beats: +154,061,163 instructions (+6.09%). With
-the pruning the frozen copy gets no region and reads -250,471 against the
-tree before.
+the pruning the frozen copy gets no region and reads +109,144 against the
+tree before, which is the runtime's layout.
 
-On the container, against the result assume's tree: runbench -26,171,367
-(-2.14%), livebench -109,748,580 (-6.00%), oneshot -274,397 (-1.98%), and
+On the container, against the result assume's tree: runbench -29,316,729
+(-2.40%), livebench -123,548,384 (-6.75%), oneshot -310,499 (-2.24%), and
 every other benchmark within 14 instructions. Every program prints the same
 bytes and every peak row holds; the counters that move are `beat_iters`, run
 2,708,563 -> 1,576,363, live 5,032,401 -> 401 and oneshot 12,581 -> 1, and
@@ -15733,9 +15738,9 @@ each hold a map. Its arena peak is 2,097,152 bytes, and the ratchet row
 peak at 4,194,304 and turns the mem corpus red.
 
 The trend gate reads three keys as worse that nothing earlier in the stack
-priced. `text` sums to 3,516,464: `k_region_pop` is exported by the runtime,
-so every program links it whether or not it has a region, 864 bytes of
-machine code apiece, and runbench's own grows by 1,312. `emitted_other_calls`
+priced. `text` sums to 3,516,240: `k_region_pop` is exported by the runtime,
+so every program links it whether or not it has a region, 848 bytes of
+machine code apiece, and runbench's own grows by 1,296. `emitted_other_calls`
 10,452 and `emitted_other_lines` 85,522 are the stack's; this change takes
 three calls and nine lines out of livebench, three calls and eight lines out
 of runbench, and three calls and ten lines out of oneshot.
