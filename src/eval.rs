@@ -1205,7 +1205,7 @@ impl Executor for ScriptedExecutor {
 /// Two memories rather than one because the rows would not fit in one: a value
 /// needs the name as an `Rc<str>` and a call needs the group, and an arm
 /// carrying both would size every row of both tables by the pair.
-/// Slots in `Interp::recent_callees`.
+/// Slots in `Interp::recent_callees` and `Interp::recent_frames`.
 const RECENT_CALLEES: usize = 256;
 
 #[derive(Clone)]
@@ -1312,6 +1312,9 @@ pub struct Interp<'a> {
     /// alone, and a declaration lives in the `Program` this interpreter
     /// borrows, so its address is stable for the whole run and unique to it.
     frames: RefCell<Map<usize, Frame>>,
+    /// The last frame each of a few hundred declaration slots asked for, in
+    /// front of `frames`; see `frame_for`.
+    recent_frames: RefCell<Vec<(usize, Frame)>>,
     program: &'a Program,
 }
 
@@ -1390,19 +1393,36 @@ impl<'a> Interp<'a> {
             callees_by_ref: RefCell::new(Map::default()),
             recent_callees: RefCell::new(vec![(0, None); RECENT_CALLEES]),
             frames: RefCell::new(Map::default()),
+            recent_frames: RefCell::new(vec![(0, None); RECENT_CALLEES]),
             program,
         }
     }
 
     /// `frame_of` for a declaration this run has entered before, which after
     /// the first entry is a clone of an `Rc` rather than two formatted strings.
+    ///
+    /// A direct-mapped table of the last frame per slot answers before the
+    /// map, the way `callee_of_ref` does. A declaration borrows from the
+    /// program for as long as the interpreter lives, so its address cannot be
+    /// handed to another while a slot names it.
     fn frame_for(&self, decl: &'a FnDecl) -> Frame {
         let key = decl as *const FnDecl as usize;
-        if let Some(known) = self.frames.borrow().get(&key) {
-            return known.clone();
+        let slot = (key >> 4) % RECENT_CALLEES;
+        if let (at, frame @ Some(_)) = &self.recent_frames.borrow()[slot] {
+            if *at == key {
+                return frame.clone();
+            }
         }
-        let frame = frame_of(decl);
-        self.frames.borrow_mut().insert(key, frame.clone());
+        let known = self.frames.borrow().get(&key).cloned();
+        let frame = match known {
+            Some(frame) => frame,
+            None => {
+                let made = frame_of(decl);
+                self.frames.borrow_mut().insert(key, made.clone());
+                made
+            }
+        };
+        self.recent_frames.borrow_mut()[slot] = (key, frame.clone());
         frame
     }
 

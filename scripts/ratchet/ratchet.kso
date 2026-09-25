@@ -2275,7 +2275,17 @@ recent_callee = row
   (breaking "a_reference_s_callee_probed_in_the_map")
   release
 
-rows_b1is = text/concat rows_b1pl [in_place_site recent_callee]
+# Entering a declaration asks a direct-mapped table before the map. The
+# mutation never takes the table's answer.
+recent_frame = row
+  "a declaration's frame probed in the map"
+  true
+  interp_gate
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_declaration_s_frame_probed_in_the_map")
+  release
+
+rows_b1is = text/concat rows_b1pl [in_place_site recent_callee recent_frame]
 
 rows_b = text/concat rows_b1is [compile_mem compile_mem_host]
 
