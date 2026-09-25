@@ -203,4 +203,9 @@
 # paths, reboxed words, the interpreter's argument loops and low byte.
 # codegen_instructions_dev 201,466,586 -> 144,314,284, a FALL of 57,152,302
 # (-28.3681%).
-codegen_instructions_dev=144314284
+#
+# kanso#1622 at CI's sitting: one overflow trap a function, blank lines by
+# binary search, entries in one block, the beat mark inline, empty literals
+# and ints rendered in place. codegen_instructions_dev 144,314,284 ->
+# 142,644,443, a FALL of 1,669,841 (-1.1571%).
+codegen_instructions_dev=142644443

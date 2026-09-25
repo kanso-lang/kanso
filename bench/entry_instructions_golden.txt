@@ -1033,7 +1033,12 @@
 # kanso#1621 at CI's sitting: dead cycles, unnamed strings, dead failure
 # paths, reboxed words, the interpreter's argument loops and low byte.
 # entry_instructions 86,465,684 -> 86,678,016, a RISE of 212,332 (+0.2456%).
-entry_instructions=86678016
+#
+# kanso#1622 at CI's sitting: one overflow trap a function, blank lines by
+# binary search, entries in one block, the beat mark inline, empty literals
+# and ints rendered in place. entry_instructions 86,678,016 -> 83,306,187, a
+# FALL of 3,371,829 (-3.8901%).
+entry_instructions=83306187
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

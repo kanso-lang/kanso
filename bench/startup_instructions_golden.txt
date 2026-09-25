@@ -475,4 +475,9 @@
 # kanso#1621 at CI's sitting: dead cycles, unnamed strings, dead failure
 # paths, reboxed words, the interpreter's argument loops and low byte.
 # startup_instructions 639,966 -> 601,897, a FALL of 38,069 (-5.9486%).
-startup_instructions=601897
+#
+# kanso#1622 at CI's sitting: one overflow trap a function, blank lines by
+# binary search, entries in one block, the beat mark inline, empty literals
+# and ints rendered in place. startup_instructions 601,897 -> 601,491, a FALL
+# of 406 (-0.0675%).
+startup_instructions=601491

@@ -13294,3 +13294,38 @@ with two already do, was measured and declined. It would have taken
 On this container runbench read +0.4448% and jsonbench +0.8978%: a ladder
 dispatcher reboxes the raw byte at entry and compares the box, which costs
 more than passing the box did.
+
+## 2026-09-25 — CI's rows for kanso#1622
+
+Measured by CI on the branch's head, against main's goldens after kanso#1621.
+The run program reads 1,655,310,689 -> 1,623,308,009 (-1.9333%). jsonbench
+reads -2.7490%, pendbench -13.4194%, oneshot -1.4097%, digestbench -1.3805%,
+livebench -0.4958%, encodebench -0.3915% and widebench -0.3755%. readbench
+reads +4 and indexbench is unchanged. `codegen_instructions_dev` falls
+144,314,284 -> 142,644,443 (-1.16%), `emit_instructions` 30,190,261 ->
+29,340,940 (-2.81%), `compile_instructions` 25,460,259 -> 25,041,901
+(-1.64%), `entry_instructions` 86,678,016 -> 83,306,187 (-3.89%),
+`library_instructions` 87,221,497 -> 83,849,828 (-3.87%),
+`startup_instructions` 601,897 -> 601,491 and
+`interp_instructions` 733,050,032 -> 732,994,592.
+
+Three kinds of counter rose. `codegen_instructions_release` reads
+713,520,095 -> 715,952,319 (+0.34%). The hot unit that the LTO link
+optimises now carries `k_beat_push`, and the runtime gained `k_list_empty`,
+`k_map_empty` and the int path in `k_b_render_value`. The machine-code `text`
+row rose on thirteen of the fourteen benchmarks, by 1,152 to 5,072 bytes, for
+the same reason: runbench text 407,976 -> 413,048, jsonbench text 230,168 ->
+231,384, encodebench text 246,088 -> 249,048, oneshot text 244,104 ->
+246,008, basket text 227,736 -> 230,264, widebench text 248,664 -> 251,976,
+deepbench text 207,400 -> 208,808, escapebench text 202,296 -> 203,688,
+pendbench text 216,968 -> 218,120, indexbench text 202,072 -> 203,272,
+digestbench text 225,800 -> 228,328, readbench text 202,568 -> 203,768 and
+livebench text 244,984 -> 246,872. scanbench text fell by 400. readbench's
+four instructions are layout. The runtime saving on run, which is the
+objective's heaviest term, is what these pay for.
+
+A lead measured and declined while the rows were taken: passing the JSON
+decoder's key to `obj_key_end` as its `parsed` record, which would have
+brought the function to eight words and so kept its tail calls on arm64 too,
+boxed the record at every key. runbench read 1,876,423,117 against
+1,643,981,958.

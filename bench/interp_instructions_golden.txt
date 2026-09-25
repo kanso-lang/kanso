@@ -545,5 +545,10 @@
 # paths, reboxed words, the interpreter's argument loops and low byte.
 # interp_instructions 785,584,543 -> 733,050,032, a FALL of 52,534,511
 # (-6.6873%).
-interp_instructions=733050032
+#
+# kanso#1622 at CI's sitting: one overflow trap a function, blank lines by
+# binary search, entries in one block, the beat mark inline, empty literals
+# and ints rendered in place. interp_instructions 733,050,032 -> 732,994,592,
+# a FALL of 55,440 (-0.0076%).
+interp_instructions=732994592
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

@@ -283,4 +283,9 @@
 # kanso#1621 at CI's sitting: dead cycles, unnamed strings, dead failure
 # paths, reboxed words, the interpreter's argument loops and low byte.
 # emit_instructions 35,545,509 -> 30,190,261, a FALL of 5,355,248 (-15.0659%).
-emit_instructions=30190261
+#
+# kanso#1622 at CI's sitting: one overflow trap a function, blank lines by
+# binary search, entries in one block, the beat mark inline, empty literals
+# and ints rendered in place. emit_instructions 30,190,261 -> 29,340,940, a
+# FALL of 849,321 (-2.8132%).
+emit_instructions=29340940
