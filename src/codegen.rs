@@ -2514,23 +2514,35 @@ pub const PRESERVE_NONE_DOORS: [&str; 4] =
     ["k_b_append_rendered", "k_b_entries", "k_b_to_float_slice", "k_b_utf8"];
 
 /// Every declare of and call to a door, written with the convention.
+///
+/// One pass over the module. Every door is spelled `k_b_...`, so the pass
+/// stops only where `%KValue @k_b_` appears, and writes the convention in
+/// front of it when a door's name and its `(` follow and a `declare ` or a
+/// `call ` comes before. This was eight `str::replace` calls, each building
+/// the whole module again: on a one-line `kanso play` under clang 19 they were
+/// 402,596 of the 1,067,649 instructions under `kanso::main`.
 fn through_doors(ir: String, convention: ClosureConvention) -> String {
     if convention != ClosureConvention::PreserveNone {
         return ir;
     }
-    let mut ir = ir;
-    for door in PRESERVE_NONE_DOORS {
-        ir = ir
-            .replace(
-                &format!("declare %KValue @{door}("),
-                &format!("declare preserve_nonecc %KValue @{door}("),
-            )
-            .replace(
-                &format!("call %KValue @{door}("),
-                &format!("call preserve_nonecc %KValue @{door}("),
-            );
+    const MARK: &str = "%KValue @k_b_";
+    let mut out = String::with_capacity(ir.len() + 4096);
+    let mut rest = ir.as_str();
+    while let Some(at) = rest.find(MARK) {
+        let (head, tail) = rest.split_at(at);
+        let name = &tail["%KValue @".len()..];
+        let door = PRESERVE_NONE_DOORS
+            .iter()
+            .any(|d| name.strip_prefix(d).is_some_and(|after| after.starts_with('(')));
+        out.push_str(head);
+        if door && (head.ends_with("declare ") || head.ends_with("call ")) {
+            out.push_str("preserve_nonecc ");
+        }
+        out.push_str(MARK);
+        rest = &tail[MARK.len()..];
     }
-    ir
+    out.push_str(rest);
+    out
 }
 
 struct Backend<'a> {

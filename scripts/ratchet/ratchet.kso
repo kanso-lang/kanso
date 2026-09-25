@@ -2374,7 +2374,21 @@ join_sep = row
 
 rows_b1ix = text/concat rows_b1ss [seek_step join_seed join_sep]
 
-rows_b = text/concat rows_b1ix [compile_mem compile_mem_host]
+# Under clang 19 the emitter writes the preserve_none convention in front of
+# every declare of and call to a door, in one pass over the module. Matching a
+# door by prefix hands the ordinary `k_b_utf8_...` functions the door's
+# convention, and a program reads its arguments from the wrong registers.
+door_prefix = row
+  "a door matched by the prefix of its name"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_door_found_by_its_prefix")
+  release
+
+rows_b1dp = text/concat rows_b1ix [door_prefix]
+
+rows_b = text/concat rows_b1dp [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 
