@@ -13851,3 +13851,9 @@ CI's golden, so `interp_instructions` carries CI's last reading less the
 same 17,938,795, 691,618,039, until CI measures it. The ratchet row
 `callee_by_ref` turns `call_ref` back to the lookup by text, and the row
 read 725,003,497 here with it applied.
+
+CI then read `interp_instructions` 709,556,834 -> 690,933,840, a fall of
+18,622,994 (-2.62%). The second table costs the interpreted run six
+allocations and 5,264 bytes of peak: `interp_allocs` 929,201 -> 929,207 and
+`interp_peak_bytes` 837,389 -> 842,653, +0.63%. The objective weighs the
+peak at 0.04 of the development side against 0.11 for the instructions.

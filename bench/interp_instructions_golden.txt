@@ -558,5 +558,9 @@
 # kanso#1628 projected: a call finds its callee by the reference's address.
 # interp_instructions 709,556,834 -> 691,618,039, a FALL of 17,938,795
 # (-2.5282%).
-interp_instructions=691618039
+#
+# kanso#1628 at CI's sitting: a call finds its callee by the reference's
+# address. interp_instructions 691,618,039 -> 690,933,840, a FALL of 684,199
+# (-0.0989%).
+interp_instructions=690933840
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
