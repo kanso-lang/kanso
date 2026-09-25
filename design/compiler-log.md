@@ -14051,3 +14051,15 @@ bytes, because `fold_flat` is generic over both and the tag is re-tested at
 work rows read byte-identical with it, and byte-identical again with the
 flag given to the pre-link `-O1` compile instead, so it was declined in
 both places.
+
+Two more leads were measured against this branch and declined. The first
+merged a byte append followed by a proven one, `k_b_append_mut_byte` then
+`k_b_append_mut_int`, into one helper that asks the builder's tag and the
+first value's tag before the two-byte path. On its own it raised
+encodebench 2,783,857,920 -> 2,787,595,520 (+0.134%) at the five escape
+sites in its frozen `esc_byte`, with every other row byte-identical. The
+second wrote a json key's quotes beside the key, so that `pair_onto` and
+`entry_onto` appended `,"` and `":` as adjacent pairs for that helper to
+merge. livebench rose 2,182,311,843 -> 2,302,495,444 (+5.507%), runbench
+1,495,596,175 -> 1,523,621,886 (+1.874%) and oneshot 1.978%, and the new
+helper fired in none of the three.
