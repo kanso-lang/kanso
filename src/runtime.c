@@ -2519,6 +2519,61 @@ KValue k_beat_pop(KValue r) {
     return r;
 }
 
+/* The pop of a region (beat::region_sites): a mark taken before a call's
+   arguments, so the call and everything its arguments built lie above it.
+   When the result cannot reach that storage -- a scalar, or a bytes or string
+   header from before the mark -- the region is garbage whole and goes back.
+   Anything else is the ordinary pop: a fresh structure lives in the region, so
+   the region is handed up to the enclosing frame rather than freed. */
+static __attribute__((noinline)) KValue k_region_pop_slow(KValue r) {
+    if (k_beat_depth > 0) {
+        k_beat_set_depth(k_beat_depth - 1);
+        long long d = k_beat_depth;
+        if (d < K_BEAT_MAX) {
+            int outside = (!k_is_heap(r.tag) && r.tag != K_THUNK)
+                || ((r.tag == K_BYTES || r.tag == K_STR)
+                    && !k_above_mark((const void*)(intptr_t)r.payload, &k_beat_stack[d]));
+            if (outside && !k_carries[d].used_flag) {
+                k_beat_rewind(&k_beat_stack[d]);
+                k_ten_release(d);
+                return r;
+            }
+            if (!outside && !k_carries[d].used_flag && !k_reg_any_at(d) && !k_ten_blocks[d]) {
+                return r;
+            }
+            return k_beat_pop_slow(r, d, outside);
+        }
+    }
+    return r;
+}
+
+/* The common case, and two stores: the region stayed in its mark's block,
+   touched no registry or tenure block, and the result lies outside the range
+   it allocated. Every other case is a tail call to the full pop, so this path
+   saves no registers. On the run program every one of 248,490 region pops
+   takes it. */
+KValue k_region_pop(KValue r) {
+    int d = k_beat_depth - 1;
+    if ((unsigned)d < (unsigned)K_BEAT_MAX) {
+        KMark* m = &k_beat_stack[d];
+        if (!(k_buf_dirty | m->reg_any) && k_blocks == m->block && !k_ten_blocks[d]
+            && !k_carries[d].used_flag) {
+            int outside = (!k_is_heap(r.tag) && r.tag != K_THUNK)
+                || ((r.tag == K_BYTES || r.tag == K_STR)
+                    && (uintptr_t)r.payload - (uintptr_t)m->ptr
+                           >= (uintptr_t)k_arena - (uintptr_t)m->ptr);
+            if (outside) {
+                if (m < k_seek_under) k_seek_str = NULL;
+                k_arena = m->ptr;
+                k_arena_left = m->left;
+                k_beat_set_depth(d);
+                return r;
+            }
+        }
+    }
+    return k_region_pop_slow(r);
+}
+
 void k_carry_reset(void);
 void k_carry_stage(KValue v);
 KValue k_carry_take(long long i);

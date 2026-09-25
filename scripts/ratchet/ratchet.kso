@@ -2682,7 +2682,18 @@ result_assumed = row
 
 rows_b1ra = text/concat rows_b1su [result_assumed]
 
-rows_b = text/concat rows_b1ra [compile_mem compile_mem_host]
+# A region gives back what it allocated when the call's result lies outside it.
+region_given_back = row
+  "a region that keeps what it made"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_region_that_keeps_what_it_made")
+  release
+
+rows_b1gb = text/concat rows_b1ra [region_given_back]
+
+rows_b = text/concat rows_b1gb [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 

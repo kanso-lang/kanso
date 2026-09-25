@@ -1330,6 +1330,7 @@ declare %KValue @k_carry_take(i64)
 declare void @k_beat_iter_carry()
 declare %KValue @k_beat_pop(%KValue)
 declare %KValue @k_cohort_pop(%KValue)
+declare %KValue @k_region_pop(%KValue)
 declare %KValue @k_call0(%KValue)
 declare %KValue @k_call1(%KValue, %KValue)
 declare %KValue @k_call2(%KValue, %KValue, %KValue)
@@ -7755,7 +7756,10 @@ impl<'a> Backend<'a> {
                 let target = (name.to_string(), args.len());
                 let outside_cluster = self.beat.ids.contains_key(&target)
                     && !self.beat.same_cluster(&target, &(f.group.clone(), f.arity));
+                let region = matches!(expr, Expr::App { span, .. }
+                    if self.beat.regions.contains(&(f.file.clone(), span.line as usize, span.col as usize)));
                 if outside_cluster
+                    || region
                     || self.beat.demoted.contains(&((f.group.clone(), f.arity), target))
                 {
                     let value = self.emit_expr(f, expr)?;
@@ -9232,6 +9236,16 @@ impl<'a> Backend<'a> {
                 }
             }
         }
+        // a region: the mark goes down before the arguments, so what they
+        // allocate is inside it (see beat::region_sites)
+        let region = first.is_none()
+            && self.beat.regions.contains(&(f.file.clone(), span.line as usize, span.col as usize))
+            && !name.starts_with("builtin_")
+            && !self.type_ids.contains_key(name.as_str())
+            && self.program.fns.iter().any(|d| d.name == *name && d.params.len() == args.len());
+        if region {
+            f.line("call void @k_beat_push()");
+        }
         let mut emitted = Vec::new();
         let mut iter = args.iter();
         if let Some(first_value) = first {
@@ -9447,13 +9461,14 @@ impl<'a> Backend<'a> {
                 .and_then(|at| at.first())
                 .is_some_and(|&i| *self.program.fns[i].file != *f.file);
             let cohort_entry = !beat_entry
+                && !region
                 && !register_returned
                 && crosses_down
                 && !self.cycle_reached.contains(f.group.as_str())
                 && !f.synthetic
                 && !caller_loops
                 && emitted.iter().all(|e| f.set_of(e) & arg_heapish == 0);
-            if beat_entry || cohort_entry {
+            if !region && (beat_entry || cohort_entry) {
                 // entering a beat loop or a cohort: mark the frontier; args
                 // are already evaluated, so they live below the mark
                 f.line("call void @k_beat_push()");
@@ -9465,7 +9480,11 @@ impl<'a> Backend<'a> {
                 args_ir.join(", ")
             ));
             let fails: Set = emitted.iter().fold(0, |acc, e| acc | (f.set_of(e) & FAIL));
-            let result = if beat_entry {
+            let result = if region {
+                let p = f.tmp();
+                f.line(&format!("{p} = call %KValue @k_region_pop(%KValue {t})"));
+                p
+            } else if beat_entry {
                 let p = f.tmp();
                 f.line(&format!("{p} = call %KValue @k_beat_pop(%KValue {t})"));
                 p
