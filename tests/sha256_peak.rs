@@ -84,14 +84,17 @@ fn peak_bytes(n: u64) -> u64 {
 /// All three fell by one block, to 6,291,488, 6,291,488 and 23,068,720, on
 /// 2026-09-24, when an oversize allocation stopped stranding the block before
 /// it: the allocations after the message's copy land in that block's tail
-/// instead of opening a fresh 1 MiB.
+/// instead of opening a fresh 1 MiB. All three fell by another 524,288 on
+/// 2026-09-25, to 5,767,200, 5,767,200 and 22,544,432, when a block became
+/// half a megabyte: the floor under the hash is one block, and the block is
+/// half the size.
 #[test]
 fn a_hash_holds_its_padded_message_and_nothing_per_block() {
     let short = peak_bytes(65_536);
     let long = peak_bytes(131_072);
     let longer = peak_bytes(262_144);
 
-    assert_eq!(short, 6_291_488, "the 65,536-byte peak moved");
-    assert_eq!(long, 6_291_488, "the 131,072-byte peak moved");
-    assert_eq!(longer, 23_068_720, "the 262,144-byte peak moved");
+    assert_eq!(short, 5_767_200, "the 65,536-byte peak moved");
+    assert_eq!(long, 5_767_200, "the 131,072-byte peak moved");
+    assert_eq!(longer, 22_544_432, "the 262,144-byte peak moved");
 }

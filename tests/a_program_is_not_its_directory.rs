@@ -37,7 +37,7 @@
 //! showing the defect. The defect had not moved. `churn` below is the shape
 //! the digest used to have and nothing else: a tail loop that builds a list
 //! it drops and hands the next turn a list it keeps. Under `lib/` it reads
-//! 5,242,880; anywhere else, one block.
+//! 4,718,592; anywhere else, one block.
 
 use std::process::Command;
 
@@ -75,14 +75,16 @@ fn peak_under(where_it_sits: &str) -> u64 {
 
 /// Both numbers are pinned exactly. The one under `lib/` is what the defect
 /// costs; the one beside it is what the same sources cost anywhere else. When
-/// the two agree, this assertion is the thing to delete.
+/// the two agree, this assertion is the thing to delete. Both fell by 524,288
+/// on 2026-09-25, from 5,242,880 and 1,048,576, when a block became half a
+/// megabyte.
 #[test]
 fn the_directory_a_package_sits_in_changes_its_memory() {
     let in_lib = peak_under("lib");
     let elsewhere = peak_under("elsewhere");
 
-    assert_eq!(in_lib, 5_242_880, "the peak under lib/ moved");
-    assert_eq!(elsewhere, 1_048_576, "the peak outside lib/ moved");
+    assert_eq!(in_lib, 4_718_592, "the peak under lib/ moved");
+    assert_eq!(elsewhere, 524_288, "the peak outside lib/ moved");
     assert_ne!(
         in_lib, elsewhere,
         "the directory stopped changing the program — delete this spec and say so"

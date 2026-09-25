@@ -23,7 +23,8 @@
 //! The peak read 3,145,744 until 2026-09-24 and 2,097,168 after, when an
 //! oversize allocation stopped stranding the block before it: a megabyte of
 //! doubled string is larger than a block, and what followed it opened a
-//! fresh one.
+//! fresh one. It reads 1,572,880 from 2026-09-25, when a block became half a
+//! megabyte and the half-used block under the string took half the room.
 
 use std::process::Command;
 
@@ -72,5 +73,5 @@ fn read(said: &str, key: &str) -> u64 {
 fn a_call_between_a_packages_modules_is_a_cohort() {
     let said = counters();
     assert_eq!(read(&said, "cohort_frees"), 2, "the call into phase was not bracketed");
-    assert_eq!(read(&said, "arena_peak_bytes"), 2_097_168, "the peak moved");
+    assert_eq!(read(&said, "arena_peak_bytes"), 1_572_880, "the peak moved");
 }
