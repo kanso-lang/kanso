@@ -13387,6 +13387,34 @@ a value live across a call into the cycle now saves it itself, where the
 callee's prologue used to, and in those two programs the calls into the
 cycle outnumber the hops inside it.
 
+**And the rest of the program's functions take the convention too.** A
+function the program calls in the ordinary way saved the callee-saved
+registers it used whether or not its caller had anything in them.
+`preserve_none_calls` gives every function the module defines and calls only
+directly `preserve_nonecc`, so the caller saves what it keeps live across the
+call and nothing else is saved. What the runtime calls by name keeps the C
+convention: the pass reads every `extern` in src/runtime.c, which today is
+`d_thunk_eval`, `k_type_field_count`, `k_type_field_name` and `k_user_main`.
+`main`, the module's `k_` helpers and anything whose address is taken are
+kept as well. The first hand trial converted `d_thunk_eval` along with the
+rest, and runbench segfaulted in it when `k_force_slow` called it with C
+registers. Measured by building through the compiler, against the tail
+rewrite alone:
+
+    runbench       1,556,366,722 -> 1,547,521,959   -0.5683%
+    livebench      2,282,241,002 -> 2,209,970,830   -3.1666%
+    oneshot           15,716,251 ->    15,539,394   -1.1254%
+    scanbench        292,370,800 ->   291,352,654   -0.3482%
+    jsonbench      1,018,225,716 -> 1,018,801,116   +0.0565%
+    digestbench        5,787,266 ->     5,787,505   +0.0041%
+
+and the others within fourteen instructions, which is the path-length noise
+between two build directories. Against the base, runbench reads
+1,623,307,985 -> 1,547,521,959, -4.6687%. Unit tests pin the externs read
+from the runtime, the linkage order (`define internal preserve_nonecc`), and
+the kept address, watched red without the extern check and without the
+address check. Ratchet row `plain_calls`.
+
 The emitted-code rows count the `.ll` a release build writes, which is the
 IR after this rewrite, and every flattened parameter and argument is one or
 two more lines of `insertvalue` or `extractvalue`. Calls, branches and

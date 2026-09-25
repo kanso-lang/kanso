@@ -743,7 +743,10 @@ fn build(program: &ast::Program, file: &str, release: bool, built_as: Option<Str
         && cfg!(target_arch = "x86_64")
         && closure_convention() == kanso::codegen::ClosureConvention::PreserveNone;
     let ir = match (release, flatten) {
-        (true, true) => preserve_none_tails(narrow_tailcc(ir, PRESERVE_NONE_REGISTERS)),
+        (true, true) => preserve_none_calls(
+            preserve_none_tails(narrow_tailcc(ir, PRESERVE_NONE_REGISTERS)),
+            include_str!("runtime.c"),
+        ),
         (true, false) => narrow_tailcc(ir, TAILCC_WIDEST),
         (false, _) => ir,
     };
@@ -1186,6 +1189,103 @@ fn preserve_none_tails(ir: String) -> String {
             }
         }
         out.push_str(line);
+        out.push('\n');
+    }
+    out
+}
+
+/// The functions the runtime calls by name, which keep the C convention its
+/// own calls use: every `extern` it declares.
+fn runtime_externs(runtime: &str) -> std::collections::HashSet<String> {
+    runtime
+        .lines()
+        .filter(|l| l.starts_with("extern ") && l.contains('('))
+        .filter_map(|l| {
+            let head = &l[..l.find('(')?];
+            let name = head.rsplit(|c: char| !(c.is_ascii_alphanumeric() || c == '_')).next()?;
+            (!name.is_empty()).then(|| name.to_string())
+        })
+        .collect()
+}
+
+/// Every other function the program defines and calls only directly takes
+/// `preserve_nonecc` too.
+///
+/// A function the program calls in the ordinary way saved the callee-saved
+/// registers it used, whether or not its caller had anything live in them.
+/// Under this convention the caller saves what it keeps live across the call
+/// and the callee saves nothing. Nothing outside the module can call these:
+/// what the runtime calls by name it declares `extern`, and those keep the C
+/// convention, as does `main`, anything whose address is taken, and the
+/// module's own copies of runtime helpers, whose names begin `k_`.
+fn preserve_none_calls(ir: String, runtime: &str) -> String {
+    let externs = runtime_externs(runtime);
+    let plain = |line: &str| -> Option<String> {
+        let rest = line.strip_prefix("define ")?;
+        if rest.contains("preserve_nonecc") || rest.contains("tailcc ") {
+            return None;
+        }
+        let at = line.find(" @")? + 1;
+        let name = symbol_at(line, at).0;
+        let kept = name == "main" || name.starts_with("k_") || externs.contains(&name);
+        (!kept).then_some(name)
+    };
+    let mut chosen: std::collections::HashSet<String> = ir.lines().filter_map(plain).collect();
+    if chosen.is_empty() {
+        return ir;
+    }
+    // A direct call reaches its callee through `call <type> @name(`; any other
+    // mention of a chosen name is its address, and it keeps its convention.
+    let callee_at = |line: &str| -> Option<usize> {
+        let call = line.find("call ")? + "call ".len();
+        let at = call + line[call..].find(" @")? + 1;
+        // one word between: the return type, and no convention before it
+        (line[call..at].trim().split(' ').count() == 1).then_some(at)
+    };
+    let mut taken = Vec::new();
+    for line in ir.lines() {
+        let header = match line.starts_with("define ") {
+            true => line.find(" @").map(|at| at + 1),
+            false => None,
+        };
+        let call = callee_at(line);
+        for (at, _) in line.match_indices('@') {
+            if Some(at) == header || Some(at) == call {
+                continue;
+            }
+            let name = symbol_at(line, at).0;
+            if chosen.contains(&name) {
+                taken.push(name);
+            }
+        }
+    }
+    for name in taken {
+        chosen.remove(&name);
+    }
+    let mut out = String::with_capacity(ir.len() + ir.len() / 64);
+    for line in ir.lines() {
+        if plain(line).is_some_and(|n| chosen.contains(&n)) {
+            // the convention follows the linkage, when there is one
+            let rest = &line["define ".len()..];
+            let linkage = ["internal ", "private "].into_iter().find(|l| rest.starts_with(l));
+            let (linkage, rest) = match linkage {
+                Some(l) => (l, &rest[l.len()..]),
+                None => ("", rest),
+            };
+            out.push_str("define ");
+            out.push_str(linkage);
+            out.push_str("preserve_nonecc ");
+            out.push_str(rest);
+        } else if let Some(at) =
+            callee_at(line).filter(|at| chosen.contains(&symbol_at(line, *at).0))
+        {
+            let call = line[..at].rfind("call ").unwrap() + "call ".len();
+            out.push_str(&line[..call]);
+            out.push_str("preserve_nonecc ");
+            out.push_str(&line[call..]);
+        } else {
+            out.push_str(line);
+        }
         out.push('\n');
     }
     out
@@ -2308,5 +2408,44 @@ mod a_tail_cycle_takes_one_flat_signature {
     fn a_cycle_wider_than_the_registers_keeps_tailcc() {
         let wide = "define tailcc %KValue @w(%KValue %a, %KValue %b, %KValue %c, %KValue %d, %KValue %e, %KValue %f, i64 %g) {\nentry:\n  %r = musttail call tailcc %KValue @w(%KValue %a, %KValue %b, %KValue %c, %KValue %d, %KValue %e, %KValue %f, i64 %g)\n  ret %KValue %r\n}\n";
         assert_eq!(preserve_none_tails(wide.to_string()), wide);
+    }
+}
+
+#[cfg(test)]
+mod a_direct_call_saves_what_its_caller_keeps {
+    use super::{preserve_none_calls, runtime_externs};
+
+    const RUNTIME: &str = "extern KValue d_thunk_eval(long long site, KValue* args);\n\
+                           extern const char* k_type_field_name(long long type_id, long long i);\n";
+
+    const MODULE: &str = "define %KValue @\"d_m/f_1\"(%KValue %x0) {\nentry:\n  %r = call %KValue @\"d_m/g_1\"(%KValue %x0)\n  ret %KValue %r\n}\ndefine internal %KValue @\"d_m/g_1\"(%KValue %x0) {\nentry:\n  ret %KValue %x0\n}\ndefine %KValue @d_thunk_eval(i64 %site, ptr %args) {\nentry:\n  %r = call %KValue @\"d_m/f_1\"(%KValue zeroinitializer)\n  ret %KValue %r\n}\ndefine %KValue @k_user_main() {\nentry:\n  %r = call %KValue @\"d_m/f_1\"(%KValue zeroinitializer)\n  ret %KValue %r\n}\n";
+
+    #[test]
+    fn the_runtime_s_externs_are_read_from_its_source() {
+        let names = runtime_externs(RUNTIME);
+        assert!(names.contains("d_thunk_eval") && names.contains("k_type_field_name"), "{names:?}");
+        assert_eq!(names.len(), 2);
+    }
+
+    #[test]
+    fn a_function_called_only_directly_takes_the_convention() {
+        let out = preserve_none_calls(MODULE.to_string(), RUNTIME);
+        assert!(out.contains("define preserve_nonecc %KValue @\"d_m/f_1\"("), "{out}");
+        // after the linkage, which is where the parser wants it
+        assert!(out.contains("define internal preserve_nonecc %KValue @\"d_m/g_1\"("), "{out}");
+        assert!(out.contains("%r = call preserve_nonecc %KValue @\"d_m/g_1\"("), "{out}");
+        assert_eq!(out.matches("call preserve_nonecc %KValue @\"d_m/f_1\"(").count(), 2, "{out}");
+        // what the runtime calls by name keeps the C convention
+        assert!(out.contains("define %KValue @d_thunk_eval("), "{out}");
+        assert!(out.contains("define %KValue @k_user_main("), "{out}");
+    }
+
+    #[test]
+    fn a_function_whose_address_is_taken_keeps_its_convention() {
+        let taken = format!("{MODULE}@table = constant ptr @\"d_m/g_1\"\n");
+        let out = preserve_none_calls(taken, RUNTIME);
+        assert!(out.contains("define internal %KValue @\"d_m/g_1\"("), "{out}");
+        assert!(out.contains("%r = call %KValue @\"d_m/g_1\"("), "{out}");
+        assert!(out.contains("define preserve_nonecc %KValue @\"d_m/f_1\"("), "{out}");
     }
 }

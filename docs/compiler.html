@@ -3409,7 +3409,9 @@ welfare                      77.37         82.09</code></pre>
 
 <p>LLVM has a calling convention with no callee-saved registers, <code>preserve_none</code>, and the closures already use it where clang 19 is installed. It could not be used here because LLVM lets a guaranteed tail call change arity or parameter types only under <code>tailcc</code>, and the decoder's functions take from two to nine words of arguments. A release build on x86-64 now gives each such cycle one signature. Every parameter is split into 64-bit words, every function in the cycle takes as many words as the widest one, and the narrower ones are padded. The widest decoder function takes nine words, and x86-64 passes twelve in registers under this convention. With the rewrite in place, a function keeps its tail calls up to twelve words rather than nine, because none of its arguments go on the stack.</p>
 
-<p>runbench runs 4.12% fewer instructions, jsonbench 7.10% and livebench 3.24%. pendbench and digestbench rise by less than half a per cent: their calls into the cycle outnumber the jumps inside it, and a caller now saves what it keeps live across such a call where the callee used to. arm64 is left as it was until the convention has been measured there.</p>
+<p>The program's other functions take the same convention, so a function saves nothing and its caller saves only what it still needs after the call. The runtime calls a few program functions by name, such as the one that evaluates a deferred binding, and those keep the C convention; the build reads the list from the runtime's own <code>extern</code> declarations.</p>
+
+<p>Together these take runbench down 4.67%, jsonbench 7.05% and livebench 6.31%. pendbench and digestbench rise by less than half a per cent: their calls into the cycle outnumber the jumps inside it, and a caller now saves what it keeps live across such a call where the callee used to. arm64 is left as it was until the convention has been measured there.</p>
 
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 

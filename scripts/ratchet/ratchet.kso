@@ -2087,7 +2087,17 @@ flat_order = row
   (breaking "a_flat_parameter_put_back_reversed")
   release
 
-rows_b1ft = text/concat rows_b1nw [flat_tails flat_order]
+# Every function the program calls only directly takes preserve_nonecc on
+# the same builds. The mutation keeps them all on the C convention.
+plain_calls = row
+  "a direct call kept on the C convention"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_direct_call_kept_on_c")
+  benchmarks
+
+rows_b1ft = text/concat rows_b1nw [flat_tails flat_order plain_calls]
 
 rows_b = text/concat rows_b1ft [compile_mem compile_mem_host]
 
