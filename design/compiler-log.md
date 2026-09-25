@@ -14677,3 +14677,89 @@ landed on their projections: `compile_peak_bytes` 708,672 and
 The three front-end rows carry the argument stack's thread-local, which the
 argument-vector entry measured at 0.58% of a check on this container, and the
 emit row carries the literal word's helper, which every module is emitted with.
+
+---
+
+## 2026-09-25 — a dev link in gold, without a build ID
+
+The dev codegen row counts three processes on the codegen corpus. On this
+container they are `clang -cc1` at 97,852,592 instructions, `ld.lld` at
+43,615,136 and kanso itself, which the row excludes. Nearly 18 million of
+lld's count is the dynamic loader resolving libLLVM's symbols before lld reads
+an input. `clang -cc1` pays the same kind of toll, about 25 million, and
+cannot be moved.
+
+The link can. A dev link has no LTO in it, so any linker takes it. The same
+link with the driver's arguments costs:
+
+| linker | instructions |
+| --- | ---: |
+| GNU ld | 82,492,510 |
+| lld | 43,557,070 |
+| gold | 29,108,334 |
+| gold, `--build-id=none` | 24,762,073 |
+
+Gold computes the build ID as a SHA-1 of the output, 4,346,261 instructions
+here. Nothing reads a dev binary's build ID; the binary is rebuilt whenever
+its source changes.
+
+So `dev_clang` asks `dev_link_args`, which returns `-fuse-ld=gold` and
+`-Wl,--build-id=none` where a probe links a one-line program with gold, and
+`lld_args` everywhere else. The answer is cached under clang's and gold's
+identities, the way lld's is, and the replayed jobs' cache key now names
+`ld.gold` beside `ld.lld`. The release link keeps lld, which does the LTO.
+
+On this container the dev row's children fall 141,467,728 -> 122,697,643
+(-18,770,085, -13.3%): the link is 24,845,051 and `clang -cc1` is unchanged.
+Projected against CI's golden: `codegen_instructions_dev` 142,163,302 ->
+123,393,217. CI's reading replaces it, and says whether its runner has gold;
+a runner without it keeps lld and reads the old row.
+
+The ratchet row `dev_gold` hands the dev link back to `lld_args`, and the row
+reads 141,467,728 here.
+
+CI measured the branch at e3ccffb1: `codegen_instructions_dev` 142,163,302 ->
+125,549,128 (-16,614,174, -11.7%). The runner has gold, and its link is
+dearer than this container's by about two million instructions. No other vein
+moved.
+
+At 9e45c486 `startup_instructions` read 52,375 -> 52,427 (+52). The warm play
+it counts runs none of the new code; the rise arrived with the change and its
+mechanism was not isolated. It costs well under 0.0001 of welfare.
+
+## 2026-09-25 — a key costs the same to name whatever its value
+
+The gold link's start-up row read 52,427 on one CI run and 52,375 on the
+next, with no source change between the two commits. The carrier had read
+52,375 too. Unpacking both runs' function tables and diffing them left four
+kanso lines: `pad_integral` +29, `String::write_char` +35, `usize` LowerHex
+−8 and `write_str` −6. The difference came to 52, all of it in formatting.
+
+A warm `kanso play` names the preserve_none answer's file
+`kanso_pn_answer_{key:016x}`, where the key is an FNV hash of clang's
+canonical path, size and modification time. `{:016x}` writes the digits the
+value has and then pads one `write_char` per missing digit, so a key whose top
+nibble is zero costs more to name. Clang's modification time differs between
+runner images, so the key does too, and one image in sixteen lands on a
+leading zero. The same is true of the lld and gold answers' keys, the replay
+identity's jobs file, the runtime object and the program key. Only the pn key
+is reached on a warm start-up, which is why only that row showed it.
+
+Measured here with a copy of clang whose modification time was set by hand,
+five mtimes on the padded binary read 47,199, 47,199, 47,248, 47,248 and
+47,302: one leading zero nibble costs 49 and two cost 103. The same five on
+the fixed binary all read 47,208. An ld.gold copy moved nothing on either
+binary, since a warm run links nothing.
+
+`hex16` writes sixteen digits from a fixed loop, and every `{:016x}` in
+src/main.rs goes through it. `pid_tag_of`'s `{pid:07}` had the same padding
+and now writes its digits the same way. A unit spec checks that `hex16`
+spells what `{:016x}` spelled, and
+`no_name_pads_a_number_through_format` in
+tests/every_temp_path_pads_its_pid.rs fails on any padded format left in
+main.rs. It went red with the gold answer's format put back.
+
+CI read the fixed binary's start-up at 52,416, and `startup_instructions`
+takes that row: 41 above the 52,375 main carries, which is the fixed writers'
+cost against a key whose top nibble was not zero. It was measured at 9 on this
+container, where clang's key differs.

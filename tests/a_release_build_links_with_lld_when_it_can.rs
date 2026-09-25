@@ -1,19 +1,26 @@
-//! A build links with lld when clang can hand it the LTO link.
+//! A release build links with lld when clang can hand it the LTO link, and a
+//! dev build links with gold when clang can link with gold.
 //!
 //! lld takes a release build for 4.26% fewer instructions than GNU ld with
 //! LLVM's plugin, and the program it links runs the same code. The dev link has
-//! no LTO in it, and lld halves that too. What a user can see of the choice is
-//! the stamp the linker leaves in the binary's `.comment` section: lld writes
-//! `Linker: ... LLD ...` and GNU ld writes nothing there.
+//! no LTO in it, and gold takes it for fewer instructions than lld, most of the
+//! difference being the dynamic loader's work on libLLVM before lld starts.
+//! What a user can see of the choice is the stamp the linker leaves in the
+//! binary: lld writes `Linker: ... LLD ...` into `.comment`, gold writes a
+//! `.note.gnu.gold-version` note, and GNU ld writes neither. A dev build linked
+//! by gold also carries no `.note.gnu.build-id`, because it asks for none.
 //!
-//! The spec asks the same question the build asks, independently: can this
-//! clang link a one-line LTO program with `-fuse-ld=lld`. Where it can, both
-//! tiers' binaries carry lld's stamp; where it cannot, neither does, because a
-//! build that forced lld on a toolchain without one would fail outright.
+//! The spec asks the same questions the build asks, independently: can this
+//! clang link a one-line LTO program with `-fuse-ld=lld`, and a plain one with
+//! `-fuse-ld=gold`. Each tier's binary carries the stamp of the linker its
+//! question picks, because a build that forced a linker the toolchain lacks
+//! would fail outright.
 //!
 //! Watched red twice, with `-fuse-ld=bfd` in the flag's place in
 //! `release_clang` and then in `dev_clang`: each time that tier's binary
-//! carried no stamp on a box whose clang links with lld.
+//! carried no stamp on a box whose clang links with lld. Watched red again on
+//! 2026-09-25 with the dev link handed back to lld: the dev binary carried
+//! lld's stamp and a build ID on a box whose clang links with gold.
 
 #![cfg(target_os = "linux")]
 
@@ -27,6 +34,19 @@ fn lld_can_link_lto(dir: &std::path::Path) -> bool {
         .arg(&ll)
         .arg("-o")
         .arg(dir.join("probe"))
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+fn gold_can_link(dir: &std::path::Path) -> bool {
+    let ll = dir.join("gold_probe.ll");
+    std::fs::write(&ll, "define i32 @main() {\n  ret i32 0\n}\n").expect("the probe writes");
+    Command::new("clang")
+        .args(["-O0", "-fuse-ld=gold", "-Wno-override-module"])
+        .arg(&ll)
+        .arg("-o")
+        .arg(dir.join("gold_probe"))
         .output()
         .map(|o| o.status.success())
         .unwrap_or(false)
@@ -53,6 +73,10 @@ fn stamped(binary: &[u8]) -> bool {
     binary.windows(8).any(|w| w == b"Linker: ") && binary.windows(3).any(|w| w == b"LLD")
 }
 
+fn has(binary: &[u8], name: &[u8]) -> bool {
+    binary.windows(name.len()).any(|w| w == name)
+}
+
 #[test]
 fn both_tiers_name_their_linker() {
     let dir = std::env::temp_dir().join(format!("kanso_lld_spec_{}", std::process::id()));
@@ -61,9 +85,21 @@ fn both_tiers_name_their_linker() {
     std::fs::write(dir.join("main.kso"), "print \"linked\"\n").expect("the program writes");
 
     let release = stamped(&built(&dir, true));
-    let dev = stamped(&built(&dir, false));
+    let dev_binary = built(&dir, false);
     let can = lld_can_link_lto(&dir);
+    let gold = gold_can_link(&dir);
     let _ = std::fs::remove_dir_all(&dir);
     assert_eq!(release, can, "lld can take the link: {can}; the release binary's stamp: {release}");
-    assert_eq!(dev, can, "lld can take the link: {can}; the dev binary's stamp: {dev}");
+    let dev_gold = has(&dev_binary, b".note.gnu.gold-version");
+    assert_eq!(dev_gold, gold, "gold can link: {gold}; the dev binary's gold note: {dev_gold}");
+    if gold {
+        assert!(!stamped(&dev_binary), "the dev binary carries lld's stamp where gold links");
+        assert!(
+            !has(&dev_binary, b".note.gnu.build-id"),
+            "the dev binary carries a build ID, which nothing reads"
+        );
+    } else {
+        let dev = stamped(&dev_binary);
+        assert_eq!(dev, can, "lld can take the link: {can}; the dev binary's stamp: {dev}");
+    }
 }

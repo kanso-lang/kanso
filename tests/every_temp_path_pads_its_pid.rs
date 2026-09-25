@@ -52,3 +52,33 @@ fn every_temp_path_that_wants_uniqueness_asks_pid_tag() {
          was written, and a path that stopped asking is the variance coming back"
     );
 }
+
+/// No name this compiler builds pads a number through `format!`.
+///
+/// `{:016x}` and `{:07}` write a value's own digits and then one `write_char`
+/// per missing digit, so the cost of naming a file moved with the number in
+/// it. Most of those numbers hash a tool's modification time and change from
+/// one runner image to the next, and on 2026-09-25 the start-up row read 52
+/// instructions apart on two runners for one binary. `hex16` and `pid_tag_of`
+/// write every digit the same way whatever the value.
+#[test]
+fn no_name_pads_a_number_through_format() {
+    let p = Path::new(env!("CARGO_MANIFEST_DIR")).join(SOURCE);
+    let text = std::fs::read_to_string(&p).expect("src/main.rs reads");
+
+    let padded: Vec<String> = text
+        .lines()
+        .enumerate()
+        .filter(|(_, line)| !line.trim_start().starts_with("//"))
+        .filter(|(_, line)| line.contains(":016x}") || line.contains(":07}"))
+        // the unit spec compares hex16 with the format it replaced
+        .filter(|(_, line)| !line.contains("super::hex16"))
+        .map(|(n, line)| format!("{}:{}: {}", SOURCE, n + 1, line.trim()))
+        .collect();
+    assert!(
+        padded.is_empty(),
+        "a name pads a number through format!, so what naming it costs moves \
+         with the number:\n{}",
+        padded.join("\n")
+    );
+}
