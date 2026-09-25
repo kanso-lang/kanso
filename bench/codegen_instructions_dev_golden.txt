@@ -239,4 +239,9 @@
 #
 # CI measured the carried tree at 913723b0. codegen_instructions_dev
 # 142,160,577 -> 142,163,302, a RISE of 2,725 (+0.0019%).
-codegen_instructions_dev=142163302
+#
+# 2026-09-25, a dev link in gold without a build ID: projected from this
+# container's fall of 18,770,085, all of it in the link. CI's reading replaces
+# it. codegen_instructions_dev 142,163,302 -> 123,393,217, a FALL of
+# 18,770,085 (-13.2032%).
+codegen_instructions_dev=123393217

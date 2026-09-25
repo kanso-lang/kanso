@@ -1445,6 +1445,77 @@ fn lld_probe() -> bool {
     ok
 }
 
+/// The arguments that link a dev build: gold where it links, and otherwise
+/// what `lld_args` says.
+///
+/// A dev link has no LTO in it, so any linker can take it, and the three on a
+/// Linux runner cost very different amounts to link the codegen corpus:
+/// GNU ld 82,492,510 instructions, lld 43,557,070 and gold 29,108,334. Most
+/// of lld's lead over gold goes before it reads an input. lld is linked
+/// against libLLVM, and the dynamic loader spends about 17.8 million
+/// instructions resolving libLLVM's symbols before lld reads anything.
+///
+/// Gold also drops the build ID. The driver asks for one on every link, gold
+/// computes it as a SHA-1 of the whole output, and that is 4,346,261 of its
+/// instructions. Nothing reads the ID of a dev binary, which is rebuilt
+/// whenever its source changes. Without it, gold links the corpus in
+/// 24,762,073.
+///
+/// Asked rather than assumed, like lld: a probe links a one-line program with
+/// gold, and anything short of success leaves the link to `lld_args`.
+fn dev_link_args() -> Vec<String> {
+    if cfg!(target_os = "linux") && gold_links() {
+        return vec!["-fuse-ld=gold".to_string(), "-Wl,--build-id=none".to_string()];
+    }
+    lld_args()
+}
+
+/// Whether clang can link a plain program with gold, asked once per pair of
+/// tools and remembered the way `lld_links_lto` remembers its answer.
+fn gold_links() -> bool {
+    let Some(clang) = tool_identity("clang") else {
+        return false;
+    };
+    let gold = tool_identity("ld.gold").unwrap_or_default();
+    let key = format!("{clang}|{gold}")
+        .bytes()
+        .fold(0xcbf29ce484222325u64, |h, b| (h ^ b as u64).wrapping_mul(0x100000001b3));
+    let path = std::env::temp_dir().join(format!("kanso_gold_answer_{key:016x}"));
+    match std::fs::read(&path).ok().as_deref() {
+        Some(b"1") => return true,
+        Some(b"0") => return false,
+        _ => {}
+    }
+    let answer = gold_probe();
+    let staged = std::env::temp_dir().join(format!("kanso_gold_answer_{key:016x}_{}", pid_tag()));
+    if std::fs::write(&staged, if answer { b"1" } else { b"0" }).is_ok() {
+        let _ = std::fs::rename(&staged, &path);
+    }
+    answer
+}
+
+fn gold_probe() -> bool {
+    let dir = std::env::temp_dir();
+    let ll = dir.join(format!("kanso_gold_probe_{}.ll", pid_tag()));
+    let out = dir.join(format!("kanso_gold_probe_{}", pid_tag()));
+    if std::fs::write(&ll, "define i32 @main() {\n  ret i32 0\n}\n").is_err() {
+        return false;
+    }
+    let ok = std::process::Command::new("clang")
+        .args(["-O0", "-fuse-ld=gold", "-Wl,--build-id=none", "-Wno-override-module"])
+        .arg(&ll)
+        .arg("-o")
+        .arg(&out)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    let _ = std::fs::remove_file(&ll);
+    let _ = std::fs::remove_file(&out);
+    ok
+}
+
 /// A tool on PATH, as a path followed through its links, with its size and
 /// modification time.
 fn tool_identity(name: &str) -> Option<String> {
@@ -1690,11 +1761,9 @@ fn dev_clang(stem: &str, ll_path: &str) -> std::io::Result<std::process::ExitSta
     let runtime_obj = cached_runtime_object("dev", &["-O2"])?;
     std::process::Command::new("clang")
         .arg("-O0")
-        // The dev link has no LTO in it, and lld still halves it: on the
-        // codegen corpus GNU ld spent 85,738,887 instructions and lld
-        // 45,154,514. The same probe decides, since an lld that can take an
-        // LTO link can take a plain one.
-        .args(lld_args())
+        // Gold where it links, lld where it does not: `dev_link_args` has
+        // the measurements.
+        .args(dev_link_args())
         .arg("-Wno-override-module")
         .arg("-o")
         .arg(stem)
@@ -1770,9 +1839,10 @@ fn replayed(args: &[String]) -> Option<std::io::Result<std::process::ExitStatus>
     shape[o + 2] = format!("{IN_MARK}.ll");
 
     let identity = format!(
-        "{}|{}|{}|{}|{}",
+        "{}|{}|{}|{}|{}|{}",
         tool_identity("clang")?,
         tool_identity("ld.lld").unwrap_or_default(),
+        tool_identity("ld.gold").unwrap_or_default(),
         shape.join("\u{0}"),
         std::env::var("LIBRARY_PATH").unwrap_or_default(),
         std::env::var("COMPILER_PATH").unwrap_or_default(),

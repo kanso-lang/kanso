@@ -14677,3 +14677,43 @@ landed on their projections: `compile_peak_bytes` 708,672 and
 The three front-end rows carry the argument stack's thread-local, which the
 argument-vector entry measured at 0.58% of a check on this container, and the
 emit row carries the literal word's helper, which every module is emitted with.
+
+---
+
+## 2026-09-25 — a dev link in gold, without a build ID
+
+The dev codegen row counts three processes on the codegen corpus. On this
+container they are `clang -cc1` at 97,852,592 instructions, `ld.lld` at
+43,615,136 and kanso itself, which the row excludes. Nearly 18 million of
+lld's count is the dynamic loader resolving libLLVM's symbols before lld reads
+an input. `clang -cc1` pays the same kind of toll, about 25 million, and
+cannot be moved.
+
+The link can. A dev link has no LTO in it, so any linker takes it. The same
+link with the driver's arguments costs:
+
+| linker | instructions |
+| --- | ---: |
+| GNU ld | 82,492,510 |
+| lld | 43,557,070 |
+| gold | 29,108,334 |
+| gold, `--build-id=none` | 24,762,073 |
+
+Gold computes the build ID as a SHA-1 of the output, 4,346,261 instructions
+here. Nothing reads a dev binary's build ID; the binary is rebuilt whenever
+its source changes.
+
+So `dev_clang` asks `dev_link_args`, which returns `-fuse-ld=gold` and
+`-Wl,--build-id=none` where a probe links a one-line program with gold, and
+`lld_args` everywhere else. The answer is cached under clang's and gold's
+identities, the way lld's is, and the replayed jobs' cache key now names
+`ld.gold` beside `ld.lld`. The release link keeps lld, which does the LTO.
+
+On this container the dev row's children fall 141,467,728 -> 122,697,643
+(-18,770,085, -13.3%): the link is 24,845,051 and `clang -cc1` is unchanged.
+Projected against CI's golden: `codegen_instructions_dev` 142,163,302 ->
+123,393,217. CI's reading replaces it, and says whether its runner has gold;
+a runner without it keeps lld and reads the old row.
+
+The ratchet row `dev_gold` hands the dev link back to `lld_args`, and the row
+reads 141,467,728 here.
