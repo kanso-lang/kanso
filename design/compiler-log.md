@@ -13820,6 +13820,13 @@ under a beat, so the arm would have had no golden. That path also frees a
 malloc'd predecessor without subtracting it from `k_perm_live`, so the
 permanent peak it reports runs high; nothing reaches it today.
 
+## 2026-09-25 — CI's rows for kanso#1627
+
+CI's work rows agreed with the projection in the golden, row for row, and
+its machine code agreed with this box. The two codegen rows moved:
+`codegen_instructions_dev` 142,639,084 -> 142,641,709, a rise of 2,625, and
+`codegen_instructions_release` 715,946,959 -> 715,866,504, a fall of 80,455.
+
 ## 2026-09-25 — an interpreted call finds its callee by the reference's address
 
 Every call the interpreter makes through a function reference went through

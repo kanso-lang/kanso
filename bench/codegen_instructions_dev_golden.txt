@@ -216,4 +216,8 @@
 # kanso#1626 at CI's sitting: a fifth push takes eight slots.
 # codegen_instructions_dev 142,639,014 -> 142,639,084, a RISE of 70
 # (+0.0000%).
-codegen_instructions_dev=142639084
+#
+# kanso#1627 at CI's sitting: an accumulator's buffer grows where it is.
+# codegen_instructions_dev 142,639,084 -> 142,641,709, a RISE of 2,625
+# (+0.0018%).
+codegen_instructions_dev=142641709
