@@ -198,7 +198,10 @@ front_end_rounds=15
 # the binary is built. front_end_visits 15,474 -> 7,576, a FALL of 7,898
 # (-51.0405%). Carried with kanso#1605's number scan, whose byte-class arms
 # the fixpoint no longer visits either: 7,400.
-front_end_visits=7400
+#
+# The json encoder's map keys go through key_onto, one definition more for the
+# checker to visit. front_end_visits 7,400 -> 7,416, a RISE of 16 (+0.2162%).
+front_end_visits=7416
 # 2026-08-31 (the AST's identifiers are inline names): 728,030 -> 713,606, a
 # fall of 14,424, or 1.98%. Banked. The peak falls with the traffic because a
 # short name's bytes now live inside the AST node the allocator already gave

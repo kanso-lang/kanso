@@ -2612,7 +2612,18 @@ token_cache = row
 
 rows_b1tc = text/concat rows_b1hg [token_cache]
 
-rows_b = text/concat rows_b1tc [compile_mem compile_mem_host]
+# A map key reaches escape_onto through a parameter typed as a string.
+key_typed = row
+  "a key written as any value, so every key pays the untyped escape"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_key_written_as_any_value")
+  benches
+
+rows_b1kt = text/concat rows_b1tc [key_typed]
+
+rows_b = text/concat rows_b1kt [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 
