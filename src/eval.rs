@@ -1,16 +1,16 @@
 use crate::ast::*;
 use crate::diag::{article, Span};
 use crate::hash::{Map, Set};
+use crate::int::Int;
 use crate::name::Name;
 use num_bigint::BigInt;
-use num_traits::{ToPrimitive, Zero};
 use std::cell::{Cell, RefCell};
 use std::collections::BTreeMap;
 use std::rc::Rc;
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum MapKey {
-    Int(BigInt),
+    Int(Int),
     Str(String),
 }
 
@@ -91,9 +91,16 @@ impl Entries {
     }
 }
 
+impl Value {
+    /// An integer value, kept in a machine word whenever it fits one.
+    pub fn int(n: impl Into<Int>) -> Value {
+        Value::Int(n.into())
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum Value {
-    Int(BigInt),
+    Int(Int),
     Float(f64),
     Map(Rc<Entries>),
     Str(String),
@@ -283,8 +290,11 @@ fn bytes_to_str(raw: &[u8]) -> Option<String> {
 /// the same byte by writing out every byte of the number first, an
 /// allocation and a copy on each of 52,806 calls in the interpreted corpus,
 /// 1.2% of it.
-fn low_byte(n: &BigInt) -> u8 {
-    n.magnitude().iter_u64_digits().next().map_or(0, |word| word as u8)
+fn low_byte(n: &Int) -> u8 {
+    match n {
+        Int::Small(n) => n.unsigned_abs() as u8,
+        Int::Big(n) => n.magnitude().iter_u64_digits().next().map_or(0, |word| word as u8),
+    }
 }
 
 /// A dispatcher passing a failure through appends its name; none stays bare.
@@ -329,7 +339,7 @@ pub fn deliberate_exit(reason: &Value) -> Option<u8> {
         return None;
     }
     match fields.borrow().first() {
-        Some(Value::Int(code)) => Some(u8::try_from(code.clone()).unwrap_or(1)),
+        Some(Value::Int(code)) => Some(u8::try_from(code).unwrap_or(1)),
         // an exit_status carrying something that is not a status is not a
         // program saying what it meant — it is one that went wrong computing
         // the code, and the reader is owed that rather than a silent 1
@@ -446,7 +456,7 @@ fn read_value(found: Option<String>) -> Value {
 /// What a finished process answers: its status and the two streams.
 fn ran_value(done: (i64, String, String)) -> Value {
     let (status, out, errs) = done;
-    Value::List(Rc::new(vec![Value::Int(status.into()), Value::Str(out), Value::Str(errs)]))
+    Value::List(Rc::new(vec![Value::int(status), Value::Str(out), Value::Str(errs)]))
 }
 
 /// SplitMix64: a deterministic, seedable generator. A real run draws its
@@ -1881,7 +1891,7 @@ impl<'a> Interp<'a> {
 
     fn eval(&self, expr: &Expr, env: &Option<Rc<Env>>, frame: &Frame) -> EvalResult {
         match expr {
-            Expr::Int(n, _) => Ok(Value::Int(n.clone())),
+            Expr::Int(n, _) => Ok(Value::int(n)),
             // A hole is a none until the block fills it, on every engine; the
             // checker holds that the fill comes exactly once before the freeze.
             Expr::Hole(_) => Ok(Value::NoneV),
@@ -3506,7 +3516,7 @@ impl<'a> Interp<'a> {
                     .iter()
                     .map(|(key, value)| {
                         let key = match key {
-                            MapKey::Int(n) => Value::Int(n.clone()),
+                            MapKey::Int(n) => Value::int(n.clone()),
                             MapKey::Str(s) => Value::Str(s.clone()),
                         };
                         Value::Record {
@@ -3542,7 +3552,7 @@ impl<'a> Interp<'a> {
                 let mut raw = Vec::with_capacity(items.len());
                 for item in items.iter() {
                     match item {
-                        Value::Int(n) => match u8::try_from(n.clone()) {
+                        Value::Int(n) => match u8::try_from(n) {
                             Ok(b) => raw.push(b),
                             Err(_) => {
                                 return Ok(err_value(
@@ -3590,7 +3600,7 @@ impl<'a> Interp<'a> {
                         let mut raw = Vec::with_capacity(items.len());
                         for item in items.iter() {
                             match item {
-                                Value::Int(n) => match u8::try_from(n.clone()) {
+                                Value::Int(n) => match u8::try_from(n) {
                                     Ok(b) => raw.push(b),
                                     Err(_) => {
                                         return Ok(err_value(
@@ -3666,7 +3676,7 @@ impl<'a> Interp<'a> {
                         })
                     }
                 };
-                Ok(Value::Int(BigInt::from(code)))
+                Ok(Value::int(BigInt::from(code)))
             }
             b"from_code" => {
                 let [code] = arity(args, name, span)?;
@@ -3676,7 +3686,7 @@ impl<'a> Interp<'a> {
                         span,
                     });
                 };
-                let scalar = u32::try_from(n.clone()).ok().and_then(char::from_u32);
+                let scalar = u32::try_from(n).ok().and_then(char::from_u32);
                 match scalar {
                     Some(c) => Ok(Value::Str(c.to_string())),
                     None => Ok(err_value(
@@ -3774,15 +3784,15 @@ impl<'a> Interp<'a> {
                 };
                 let (a, b, lim) = (low_byte(a), low_byte(b), lim.clone());
                 let len = items.len();
-                let start = usize::try_from(from.clone()).unwrap_or(1).max(1);
+                let start = usize::try_from(from).unwrap_or(1).max(1);
                 let mut at = len + 1;
                 for (i, byte) in items.iter().enumerate().skip(start - 1) {
-                    if *byte == a || *byte == b || BigInt::from(*byte) < lim {
+                    if *byte == a || *byte == b || Int::from(*byte) < lim {
                         at = i + 1;
                         break;
                     }
                 }
-                Ok(Value::Int(BigInt::from(at)))
+                Ok(Value::int(BigInt::from(at)))
             }
             b"number_span" => {
                 let [cs, from] = arity(args, name, span)?;
@@ -3801,7 +3811,7 @@ impl<'a> Interp<'a> {
                 // part of a number, negated when a `.`, `e` or `E` went past.
                 // A position outside the bytes is its own answer.
                 let len = items.len();
-                let start = match usize::try_from(from.clone()) {
+                let start = match usize::try_from(from) {
                     Ok(p) if p >= 1 && p <= len => p,
                     _ => return Ok(Value::Int(from.clone())),
                 };
@@ -3814,7 +3824,7 @@ impl<'a> Interp<'a> {
                     at += 1;
                 }
                 let end = BigInt::from(at + 1);
-                Ok(Value::Int(if float { -end } else { end }))
+                Ok(Value::int(if float { -end } else { end }))
             }
             b"find2" => {
                 let [cs, from, a, b] = arity(args, name, span)?;
@@ -3830,7 +3840,7 @@ impl<'a> Interp<'a> {
                 };
                 let (a, b) = (low_byte(a), low_byte(b));
                 let len = items.len();
-                let start = usize::try_from(from.clone()).unwrap_or(1).max(1);
+                let start = usize::try_from(from).unwrap_or(1).max(1);
                 let mut at = len + 1;
                 for (i, byte) in items.iter().enumerate().skip(start - 1) {
                     if *byte == a || *byte == b {
@@ -3838,7 +3848,7 @@ impl<'a> Interp<'a> {
                         break;
                     }
                 }
-                Ok(Value::Int(BigInt::from(at)))
+                Ok(Value::int(BigInt::from(at)))
             }
             b"slice" => {
                 let [container, from, to] = arity(args, name, span)?;
@@ -3848,8 +3858,8 @@ impl<'a> Interp<'a> {
                         span,
                     });
                 };
-                let from = usize::try_from(from.clone()).unwrap_or(0);
-                let to = usize::try_from(to.clone()).unwrap_or(0);
+                let from = usize::try_from(from).unwrap_or(0);
+                let to = usize::try_from(to).unwrap_or(0);
                 match &container {
                     Value::List(items) => {
                         let sliced = slice_range(items.len(), from, to)
@@ -3887,12 +3897,12 @@ impl<'a> Interp<'a> {
                     "bit_or" => x | y,
                     _ => x ^ y,
                 };
-                Ok(Value::Int(bits.into()))
+                Ok(Value::int(bits))
             }
             b"bit_not" => {
                 let [a] = arity(args, name, span)?;
                 match whole(a, name, span)? {
-                    Ok(x) => Ok(Value::Int((!x).into())),
+                    Ok(x) => Ok(Value::int(!x)),
                     Err(bad) => Ok(bad),
                 }
             }
@@ -3912,7 +3922,7 @@ impl<'a> Interp<'a> {
                     "bit_shl" => ((bits as u64) << by) as i64,
                     _ => bits >> by,
                 };
-                Ok(Value::Int(out.into()))
+                Ok(Value::int(out))
             }
             b"sqrt" => {
                 let [x] = arity(args, name, span)?;
@@ -3933,7 +3943,7 @@ impl<'a> Interp<'a> {
                 let [x] = arity(args, name, span)?;
                 match x {
                     Value::Int(n) => Ok(Value::Int(n)),
-                    Value::Float(v) => Ok(Value::Int(BigInt::from(v.round() as i64))),
+                    Value::Float(v) => Ok(Value::int(BigInt::from(v.round() as i64))),
                     other if is_failure(&other) => Ok(other),
                     other => Err(RuntimeError {
                         message: format!(
@@ -3976,7 +3986,7 @@ impl<'a> Interp<'a> {
                     false => text.parse::<BigInt>().ok(),
                 };
                 Ok(match parsed {
-                    Some(n) => Value::Int(n),
+                    Some(n) => Value::int(n),
                     None => err_value(
                         Value::Str(format!("\"{text}\" is not an integer")),
                         origin_at(frame, span),
@@ -4033,10 +4043,10 @@ impl<'a> Interp<'a> {
             b"length" => {
                 let [list] = arity(args, name, span)?;
                 match list {
-                    Value::List(items) => Ok(Value::Int(BigInt::from(items.len()))),
-                    Value::Bytes(items) => Ok(Value::Int(BigInt::from(items.len()))),
-                    Value::Str(s) => Ok(Value::Int(BigInt::from(s.chars().count()))),
-                    Value::Map(entries) => Ok(Value::Int(BigInt::from(entries.len()))),
+                    Value::List(items) => Ok(Value::int(BigInt::from(items.len()))),
+                    Value::Bytes(items) => Ok(Value::int(BigInt::from(items.len()))),
+                    Value::Str(s) => Ok(Value::int(BigInt::from(s.chars().count()))),
+                    Value::Map(entries) => Ok(Value::int(BigInt::from(entries.len()))),
                     other => Err(RuntimeError {
                         message: format!(
                             "length takes a list, string, or map, not {}{}",
@@ -4108,10 +4118,10 @@ impl<'a> Interp<'a> {
                 let Value::List(items) = list else {
                     return Err(RuntimeError { message: "sum takes a list".to_string(), span });
                 };
-                let mut total = BigInt::zero();
+                let mut total = Int::Small(0);
                 for item in items.iter() {
                     match item {
-                        Value::Int(n) => total += n,
+                        Value::Int(n) => total = total.add(n),
                         bad if is_failure(bad) => return Ok(bad.clone()),
                         _ => {
                             return Err(RuntimeError {
@@ -4121,7 +4131,7 @@ impl<'a> Interp<'a> {
                         }
                     }
                 }
-                Ok(Value::Int(total))
+                Ok(Value::int(total))
             }
             _ => Err(RuntimeError { message: format!("unknown builtin `{name}`"), span }),
         }
@@ -4537,7 +4547,7 @@ fn bind_whole(whole: &Option<Box<(Name, crate::diag::Span)>>, arg: &Value, binds
 
 fn match_one(pattern: &Pattern, arg: &Value, binds: &mut Bindings) -> Option<u8> {
     match (pattern, arg) {
-        (Pattern::IntLit(n, _), Value::Int(v)) if n == v => Some(0),
+        (Pattern::IntLit(n, _), Value::Int(v)) if v == n => Some(0),
         (Pattern::StrLit(s, _), Value::Str(v)) if s == v => Some(0),
         (Pattern::Nullary(name, _), Value::True) if name == "true" => Some(0),
         (Pattern::Nullary(name, _), Value::False) if name == "false" => Some(0),
@@ -4637,21 +4647,21 @@ pub fn index_value(container: Value, index: Value, span: Span) -> EvalResult {
     }
     match (&container, &index) {
         (Value::List(items), Value::Int(i)) => {
-            let idx = usize::try_from(i.clone()).ok();
+            let idx = usize::try_from(i).ok();
             Ok(match idx.filter(|i| *i >= 1 && *i <= items.len()) {
                 Some(i) => items[i - 1].clone(),
                 None => Value::NoneV,
             })
         }
         (Value::Bytes(items), Value::Int(i)) => {
-            let idx = usize::try_from(i.clone()).ok();
+            let idx = usize::try_from(i).ok();
             Ok(match idx.filter(|i| *i >= 1 && *i <= items.len()) {
-                Some(i) => Value::Int(BigInt::from(items[i - 1])),
+                Some(i) => Value::int(BigInt::from(items[i - 1])),
                 None => Value::NoneV,
             })
         }
         (Value::Str(text), Value::Int(i)) => {
-            let idx = usize::try_from(i.clone()).ok();
+            let idx = usize::try_from(i).ok();
             Ok(match idx.and_then(|i| i.checked_sub(1)).and_then(|i| text.chars().nth(i)) {
                 Some(c) => Value::Str(c.to_string()),
                 None => Value::NoneV,
@@ -4795,8 +4805,8 @@ fn compare(a: &Value, b: &Value) -> Option<std::cmp::Ordering> {
 }
 
 /// A BigInt widened to f64 — the `x:float` cast at the value level.
-fn int_f(n: &BigInt) -> f64 {
-    n.to_f64().unwrap_or(f64::INFINITY)
+fn int_f(n: &Int) -> f64 {
+    n.to_f64()
 }
 
 /// A whole number against a fractional one, decided exactly. Widening the
@@ -4804,14 +4814,14 @@ fn int_f(n: &BigInt) -> f64 {
 /// report two different numbers as equal — 9007199254740993 is the smallest
 /// integer where that happens. Comparing against the float's floor keeps the
 /// integer whole, and the fraction breaks the tie.
-fn cmp_int_float(x: &BigInt, y: f64) -> std::cmp::Ordering {
+fn cmp_int_float(x: &Int, y: f64) -> std::cmp::Ordering {
     let floor = y.floor();
     // Only a NaN or an infinity has no floor to compare against, and the
     // total order over the widened value is what ranks those.
     let Some(whole) = <BigInt as num_traits::FromPrimitive>::from_f64(floor) else {
-        return int_f(x).total_cmp(&y);
+        return x.to_f64().total_cmp(&y);
     };
-    match x.cmp(&whole) {
+    match x.big().as_ref().cmp(&whole) {
         std::cmp::Ordering::Equal if y > floor => std::cmp::Ordering::Less,
         settled => settled,
     }
@@ -4907,7 +4917,7 @@ fn spelled_op(op: &str) -> &str {
 
 /// The three bitwise operators share a shape: both sides must fit the machine
 /// word the compiled engines use, and the answer is an int.
-fn bitwise(op: &str, a: &BigInt, b: &BigInt, span: Span) -> EvalResult {
+fn bitwise(op: &str, a: &Int, b: &Int, span: Span) -> EvalResult {
     let (Some(x), Some(y)) = (a.to_i64(), b.to_i64()) else {
         return Err(RuntimeError {
             message: format!("`{op}` takes whole numbers that fit 64 bits"),
@@ -4919,7 +4929,7 @@ fn bitwise(op: &str, a: &BigInt, b: &BigInt, span: Span) -> EvalResult {
         "|" => x | y,
         _ => x ^ y,
     };
-    Ok(Value::Int(bits.into()))
+    Ok(Value::int(bits))
 }
 
 /// `force` is how the comparison reaches a cell. Equality does not evaluate
@@ -4966,16 +4976,16 @@ pub fn eval_binop(
         }));
     }
     match (op, &left, &right) {
-        ("+", Value::Int(a), Value::Int(b)) => Ok(Value::Int(a + b)),
-        ("-", Value::Int(a), Value::Int(b)) => Ok(Value::Int(a - b)),
-        ("*", Value::Int(a), Value::Int(b)) => Ok(Value::Int(a * b)),
+        ("+", Value::Int(a), Value::Int(b)) => Ok(Value::Int(a.add(b))),
+        ("-", Value::Int(a), Value::Int(b)) => Ok(Value::Int(a.sub(b))),
+        ("*", Value::Int(a), Value::Int(b)) => Ok(Value::Int(a.mul(b))),
         ("/", Value::Int(a), Value::Int(b)) => match b.is_zero() {
             true => Ok(math_failure("division by zero")),
-            false => Ok(Value::Int(a / b)),
+            false => Ok(Value::Int(a.div(b))),
         },
         ("%", Value::Int(a), Value::Int(b)) => match b.is_zero() {
             true => Ok(math_failure("modulo by zero")),
-            false => Ok(Value::Int(a % b)),
+            false => Ok(Value::Int(a.rem(b))),
         },
         // Bitwise, over whole numbers only. Native's ints are 64 bits wide by
         // construction, so a value too wide to be one is a case only the
@@ -5166,7 +5176,7 @@ fn values_equal_seen(
         (Value::Bytes(x), Value::List(y)) | (Value::List(y), Value::Bytes(x)) => {
             x.len() == y.len()
                 && x.iter().zip(y.iter()).all(|(a, b)| match b {
-                    Value::Int(n) => BigInt::from(*a) == *n,
+                    Value::Int(n) => *n == Int::from(*a),
                     _ => false,
                 })
         }
@@ -5406,7 +5416,7 @@ impl<'a> Interp<'a> {
                 executor.sleep(*ms);
                 Ok(Value::Done)
             }
-            Desc::Random(n) => Ok(Value::Int(executor.random(*n).into())),
+            Desc::Random(n) => Ok(Value::int(executor.random(*n))),
             Desc::Nil => Ok(Value::Done),
             Desc::Settled(v) => Ok(v.clone()),
             Desc::Args => {
@@ -5453,7 +5463,7 @@ impl<'a> Interp<'a> {
                 Some(value) => Value::Str(value),
                 None => Value::NoneV,
             }),
-            Desc::Now => Ok(Value::Int(BigInt::from(executor.now()))),
+            Desc::Now => Ok(Value::int(BigInt::from(executor.now()))),
             Desc::Exists(path) => Ok(match executor.exists(path) {
                 true => Value::True,
                 false => Value::False,
@@ -5479,7 +5489,7 @@ impl<'a> Interp<'a> {
                 Err(reason) => err_value(Value::Str(reason), Raised::default()),
             }),
             Desc::Start(cmd, argv) => Ok(match executor.start(cmd, argv) {
-                Ok(handle) => Value::Int(handle.into()),
+                Ok(handle) => Value::int(handle),
                 Err(reason) => err_value(Value::Str(reason), Raised::default()),
             }),
             Desc::Kill(handle) => Ok(match executor.kill(*handle) {
@@ -5487,15 +5497,15 @@ impl<'a> Interp<'a> {
                 Err(reason) => err_value(Value::Str(reason), Raised::default()),
             }),
             Desc::Listen(port) => Ok(match executor.listen(*port) {
-                Ok(handle) => Value::Int(handle.into()),
+                Ok(handle) => Value::int(handle),
                 Err(reason) => err_value(Value::Str(reason), Raised::default()),
             }),
             Desc::SocketPort(listener) => Ok(match executor.socket_port(*listener) {
-                Ok(port) => Value::Int(port.into()),
+                Ok(port) => Value::int(port),
                 Err(reason) => err_value(Value::Str(reason), Raised::default()),
             }),
             Desc::Accept(listener) => Ok(match executor.accept(*listener) {
-                Ok(Some(handle)) => Value::Int(handle.into()),
+                Ok(Some(handle)) => Value::int(handle),
                 // Reached only outside a parallel group, where no other fiber
                 // could ever connect; step() yields instead of arriving here.
                 Ok(None) => {
@@ -5647,7 +5657,7 @@ impl<'a> Interp<'a> {
             // it goes back in the queue and the group's other statements run,
             // which is how anything ever connects to it.
             Desc::Accept(listener) => match executor.accept(*listener) {
-                Ok(Some(handle)) => Ok(Step::Done(Value::Int(handle.into()))),
+                Ok(Some(handle)) => Ok(Step::Done(Value::int(handle))),
                 Ok(None) => Ok(Step::Blocked(1, desc.clone())),
                 Err(reason) => Ok(Step::Done(err_value(Value::Str(reason), Raised::default()))),
             },

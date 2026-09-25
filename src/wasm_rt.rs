@@ -83,7 +83,7 @@ pub fn load(program: Program, lits: &[Lit], types: Vec<(String, Vec<String>)>) {
         reg.clear();
         for lit in lits {
             let value = match lit {
-                Lit::Int(n) => Value::Int(n.clone()),
+                Lit::Int(n) => Value::int(n),
                 Lit::Float(x) => Value::Float(*x),
                 Lit::Str(s) => Value::Str(s.clone()),
                 Lit::True => Value::True,

@@ -11,6 +11,7 @@ pub mod escape;
 pub mod eval;
 pub mod hako;
 pub mod hash;
+pub mod int;
 pub mod infer;
 pub mod inline;
 pub mod lexer;

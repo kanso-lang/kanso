@@ -570,5 +570,9 @@
 # Projected from this container: a map of up to eight entries is a sorted
 # vector. CI's reading replaces it. interp_instructions 661,830,756 ->
 # 661,487,857, a FALL of 342,899 (-0.0518%).
-interp_instructions=661487857
+#
+# 2026-09-25, an interpreted int in a machine word: projected from this
+# container's fall of 66,619,194 against main. interp_instructions 661,487,857
+# -> 595,211,562, a FALL of 66,276,295 (-10.0193%).
+interp_instructions=595211562
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

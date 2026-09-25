@@ -2356,7 +2356,20 @@ map_grow = row
 
 rows_b1mg = text/concat rows_b1ss [map_grow]
 
-rows_b = text/concat rows_b1mg [compile_mem compile_mem_host]
+# An interpreted int that overflows a machine word takes a BigInt, and one that
+# comes back into range must come back into the word: equality compares the
+# two forms as different values otherwise, and `max + 1 - 1` is not `max`.
+int_word = row
+  "a number that stays big when it fits a word"
+  true
+  "cargo test --release --test an_interpreted_int_crosses_the_word"
+  "specs (unit, golden, differential)"
+  (breaking "a_number_that_stays_big_when_it_fits")
+  release
+
+rows_b1iw = text/concat rows_b1mg [int_word]
+
+rows_b = text/concat rows_b1iw [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 

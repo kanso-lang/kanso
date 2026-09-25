@@ -236,7 +236,10 @@
 #
 # kanso#1634: the interpreter's per-call questions stop hashing interp_allocs
 # 929,207 -> 929,249, a RISE of 42 (+0.0045%).
-interp_allocs=929249
+#
+# 2026-09-25, an interpreted int in a machine word: interp_allocs 929,249 ->
+# 925,948, a FALL of 3,301 (-0.3552%).
+interp_allocs=925948
 #
 # 2026-09-18, kanso#1518 against main at kanso#1517, CI's sitting.
 # 951,438 -> 961,165, a RISE of
@@ -309,5 +312,8 @@ interp_allocs=929249
 # Projected from this container: a map of up to eight entries is a sorted
 # vector. CI's reading replaces it. interp_peak_bytes 860,477 -> 779,734, a
 # FALL of 80,743 (-9.3835%).
-interp_peak_bytes=779734
+#
+# 2026-09-25, an interpreted int in a machine word: interp_peak_bytes 779,734
+# -> 779,736, a RISE of 2 (+0.0003%).
+interp_peak_bytes=779736
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
