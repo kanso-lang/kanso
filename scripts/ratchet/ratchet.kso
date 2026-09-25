@@ -2388,7 +2388,38 @@ door_prefix = row
 
 rows_b1dp = text/concat rows_b1ix [door_prefix]
 
-rows_b = text/concat rows_b1dp [compile_mem compile_mem_host]
+# A literal of one to eight bytes appended in place is stored as one word.
+# A length moved by the word's eight bytes prints the bytes past the literal;
+# a slow arm that claims a new header leaves a carried builder holding one a
+# rewind reclaims; and without the word the json encoder's literals go back
+# through their cells, which the work vein prices.
+word_length = row
+  "a literal word that moves the length by eight"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_literal_word_that_moves_the_length_by_eight")
+  release
+
+word_slow = row
+  "a literal word's slow arm that claims a new header"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_literal_word_slow_arm_that_claims_a_new_header")
+  release
+
+word_used = row
+  "a short literal appended through its cell"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_literal_appended_through_its_cell")
+  benches
+
+rows_b1lw = text/concat rows_b1dp [word_length word_slow word_used]
+
+rows_b = text/concat rows_b1lw [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 

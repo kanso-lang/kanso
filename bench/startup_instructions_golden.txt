@@ -497,6 +497,6 @@
 # kanso#1634: the interpreter's per-call questions stop hashing
 # startup_instructions 605,388 -> 605,441, a RISE of 53 (+0.0088%).
 #
-# CI measured the doors in one pass on main after kanso#1634, at a2a416cd.
-# startup_instructions 605,441 -> 605,442, a RISE of 1 (+0.0002%).
-startup_instructions=605442
+# CI measured the literal word on main after kanso#1634, at 964f41e9.
+# startup_instructions 605,441 -> 606,991, a RISE of 1,550 (+0.2560%).
+startup_instructions=606991
