@@ -13757,3 +13757,13 @@ bench/large.json fell 1,581,088 -> 1,335,840 bytes, and the run program's
 `alloc_bytes` 386,879,005 -> 362,637,757, but `arena_peak_bytes` stayed at
 3,670,032: a decoded `doc` still needs more than one block. The same cache
 was declined on 2026-09-24 at +0.49% of the run program's instructions.
+
+Two block sizes were measured against this peak and declined. At 512 KiB
+the run program's `arena_peak_bytes` stays at 3,670,032 and its work row
+reads 1,537,988,243 against 1,537,075,881 on this box. At 256 KiB the peak
+falls to 3,407,888 and the work row rises to 1,561,986,738, +1.62%; by the
+objective's own curves the peak term gains about 0.0012 of production and
+the run term loses about 0.0018, so the smaller block is a net loss. A
+lower oversize threshold (256 KiB) moved nothing either: the 786,432-byte
+string the index shape doubles lands in a spare 1 MiB block, which the
+live count already includes.
