@@ -1041,7 +1041,11 @@
 #
 # kanso#1631 at CI's sitting: two byte appends in a row ask for room once.
 # entry_instructions 83,306,187 -> 83,186,043, a FALL of 120,144 (-0.1442%).
-entry_instructions=83186043
+#
+# 2026-09-25, kanso#1637, CI's reading: lib/regexp gained the required-literal
+# pass and the scan prefilter, and the entry compiles the library it imports.
+# entry_instructions 83,186,043 -> 84,496,376, a RISE of 1,310,333 (+1.5752%).
+entry_instructions=84496376
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.
