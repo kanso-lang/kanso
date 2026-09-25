@@ -14726,3 +14726,35 @@ moved.
 At 9e45c486 `startup_instructions` read 52,375 -> 52,427 (+52). The warm play
 it counts runs none of the new code; the rise arrived with the change and its
 mechanism was not isolated. It costs well under 0.0001 of welfare.
+
+## 2026-09-25 — a key costs the same to name whatever its value
+
+The gold link's start-up row read 52,427 on one CI run and 52,375 on the
+next, with no source change between the two commits. The carrier had read
+52,375 too. Unpacking both runs' function tables and diffing them left four
+kanso lines: `pad_integral` +29, `String::write_char` +35, `usize` LowerHex
+−8 and `write_str` −6. The difference came to 52, all of it in formatting.
+
+A warm `kanso play` names the preserve_none answer's file
+`kanso_pn_answer_{key:016x}`, where the key is an FNV hash of clang's
+canonical path, size and modification time. `{:016x}` writes the digits the
+value has and then pads one `write_char` per missing digit, so a key whose top
+nibble is zero costs more to name. Clang's modification time differs between
+runner images, so the key does too, and one image in sixteen lands on a
+leading zero. The same is true of the lld and gold answers' keys, the replay
+identity's jobs file, the runtime object and the program key. Only the pn key
+is reached on a warm start-up, which is why only that row showed it.
+
+Measured here with a copy of clang whose modification time was set by hand,
+five mtimes on the padded binary read 47,199, 47,199, 47,248, 47,248 and
+47,302: one leading zero nibble costs 49 and two cost 103. The same five on
+the fixed binary all read 47,208. An ld.gold copy moved nothing on either
+binary, since a warm run links nothing.
+
+`hex16` writes sixteen digits from a fixed loop, and every `{:016x}` in
+src/main.rs goes through it. `pid_tag_of`'s `{pid:07}` had the same padding
+and now writes its digits the same way. A unit spec checks that `hex16`
+spells what `{:016x}` spelled, and
+`no_name_pads_a_number_through_format` in
+tests/every_temp_path_pads_its_pid.rs fails on any padded format left in
+main.rs. It went red with the gold answer's format put back.

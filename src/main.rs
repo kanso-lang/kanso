@@ -1336,7 +1336,8 @@ fn remembered_probe() -> bool {
     let key = identity
         .bytes()
         .fold(0xcbf29ce484222325u64, |h, b| (h ^ b as u64).wrapping_mul(0x100000001b3));
-    let path = std::env::temp_dir().join(format!("kanso_pn_answer_{key:016x}"));
+    let key = hex16(key);
+    let path = std::env::temp_dir().join(format!("kanso_pn_answer_{key}"));
     match std::fs::read(&path).ok().as_deref() {
         Some(b"1") => return true,
         Some(b"0") => return false,
@@ -1345,7 +1346,7 @@ fn remembered_probe() -> bool {
     let answer = preserve_none_probe();
     // Written under a name of its own and renamed into place, so a build
     // running beside this one reads the whole byte or nothing.
-    let staged = std::env::temp_dir().join(format!("kanso_pn_answer_{key:016x}_{}", pid_tag()));
+    let staged = std::env::temp_dir().join(format!("kanso_pn_answer_{key}_{}", pid_tag()));
     if std::fs::write(&staged, if answer { b"1" } else { b"0" }).is_ok() {
         let _ = std::fs::rename(&staged, &path);
     }
@@ -1384,14 +1385,15 @@ fn lld_links_lto() -> bool {
     let key = format!("{clang}|{lld}")
         .bytes()
         .fold(0xcbf29ce484222325u64, |h, b| (h ^ b as u64).wrapping_mul(0x100000001b3));
-    let path = std::env::temp_dir().join(format!("kanso_lld_answer_{key:016x}"));
+    let key = hex16(key);
+    let path = std::env::temp_dir().join(format!("kanso_lld_answer_{key}"));
     match std::fs::read(&path).ok().as_deref() {
         Some(b"1") => return true,
         Some(b"0") => return false,
         _ => {}
     }
     let answer = lld_probe();
-    let staged = std::env::temp_dir().join(format!("kanso_lld_answer_{key:016x}_{}", pid_tag()));
+    let staged = std::env::temp_dir().join(format!("kanso_lld_answer_{key}_{}", pid_tag()));
     if std::fs::write(&staged, if answer { b"1" } else { b"0" }).is_ok() {
         let _ = std::fs::rename(&staged, &path);
     }
@@ -1480,14 +1482,15 @@ fn gold_links() -> bool {
     let key = format!("{clang}|{gold}")
         .bytes()
         .fold(0xcbf29ce484222325u64, |h, b| (h ^ b as u64).wrapping_mul(0x100000001b3));
-    let path = std::env::temp_dir().join(format!("kanso_gold_answer_{key:016x}"));
+    let key = hex16(key);
+    let path = std::env::temp_dir().join(format!("kanso_gold_answer_{key}"));
     match std::fs::read(&path).ok().as_deref() {
         Some(b"1") => return true,
         Some(b"0") => return false,
         _ => {}
     }
     let answer = gold_probe();
-    let staged = std::env::temp_dir().join(format!("kanso_gold_answer_{key:016x}_{}", pid_tag()));
+    let staged = std::env::temp_dir().join(format!("kanso_gold_answer_{key}_{}", pid_tag()));
     if std::fs::write(&staged, if answer { b"1" } else { b"0" }).is_ok() {
         let _ = std::fs::rename(&staged, &path);
     }
@@ -1550,7 +1553,29 @@ fn pid_tag() -> String {
 /// Split out from `pid_tag` so the width can be asked about a pid this process
 /// does not have.
 fn pid_tag_of(pid: u32) -> String {
-    format!("{pid:07}")
+    let width = (pid.checked_ilog10().unwrap_or(0) as usize + 1).max(7);
+    let mut digits = vec![b'0'; width];
+    let mut rest = pid;
+    for slot in digits.iter_mut().rev() {
+        *slot = b'0' + (rest % 10) as u8;
+        rest /= 10;
+    }
+    String::from_utf8(digits).expect("decimal digits are ascii")
+}
+
+/// Sixteen hex digits, with the same work for every value.
+///
+/// A key's COST was a function of its value. `{:016x}` writes the digits a
+/// value has and pads the rest one `write_char` at a time, and most keys here
+/// hash a tool's identity, which carries the file's modification time, so the
+/// value changes from one runner image to the next. On 2026-09-25 the start-up
+/// row read 52,427 on one runner and 52,375 on another for one binary, and the
+/// 52 were `pad_integral` and `write_char` naming the gold answer's file.
+/// `pid_tag_of` writes its seven digits the same way, for the same reason.
+fn hex16(n: u64) -> String {
+    let digits: Vec<u8> =
+        (0..16).map(|i| b"0123456789abcdef"[(n >> (60 - 4 * i)) as usize & 15]).collect();
+    String::from_utf8(digits).expect("hex digits are ascii")
 }
 
 /// Compile a two-define module: one carrying the convention, one calling
@@ -1848,7 +1873,7 @@ fn replayed(args: &[String]) -> Option<std::io::Result<std::process::ExitStatus>
         std::env::var("COMPILER_PATH").unwrap_or_default(),
     );
     let key = kanso::hash::digest_of(identity.as_bytes());
-    let cache = std::env::temp_dir().join(format!("kanso_jobs_{:016x}{:016x}", key.0, key.1));
+    let cache = std::env::temp_dir().join(format!("kanso_jobs_{}{}", hex16(key.0), hex16(key.1)));
 
     // Named for the output rather than the process. The jobs run inside it,
     // and lld's LTO reads the directory it runs in into what it hashes: with a
@@ -1856,7 +1881,7 @@ fn replayed(args: &[String]) -> Option<std::io::Result<std::process::ExitStatus>
     // 1,644,357,816 and 1,644,922,716 apart. Two builds writing the same
     // output were already racing for it, so sharing a stage costs nothing new.
     let named = kanso::hash::digest_of(out_abs.to_string_lossy().as_bytes());
-    let stage = std::env::temp_dir().join(format!("kanso_stage_{:016x}", named.0));
+    let stage = std::env::temp_dir().join(format!("kanso_stage_{}", hex16(named.0)));
     let _ = std::fs::remove_dir_all(&stage);
     std::fs::create_dir_all(&stage).ok()?;
     let stage_str = stage.to_str()?.to_string();
@@ -1865,9 +1890,9 @@ fn replayed(args: &[String]) -> Option<std::io::Result<std::process::ExitStatus>
         None => {
             let jobs = asked(&shape, &stage, &stage_str)?;
             let staged = std::env::temp_dir().join(format!(
-                "kanso_jobs_{:016x}{:016x}_{}",
-                key.0,
-                key.1,
+                "kanso_jobs_{}{}_{}",
+                hex16(key.0),
+                hex16(key.1),
                 pid_tag()
             ));
             let text: Vec<String> = jobs.iter().map(|j| j.join("\u{0}")).collect();
@@ -2120,15 +2145,15 @@ fn hot_text<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
 fn cached_object(profile: &str, source: &str, opt: &[&str]) -> std::io::Result<std::path::PathBuf> {
     let preserve = closure_convention() == kanso::codegen::ClosureConvention::PreserveNone;
     let counting = kanso::codegen::counters_wanted();
-    let key = runtime_key(profile, opt, preserve, counting);
-    let object = std::env::temp_dir().join(format!("kanso_runtime_{profile}_{key:016x}.o"));
+    let key = hex16(runtime_key(profile, opt, preserve, counting));
+    let object = std::env::temp_dir().join(format!("kanso_runtime_{profile}_{key}.o"));
     if object.exists() {
         return Ok(object);
     }
-    let c_path = std::env::temp_dir().join(format!("kanso_runtime_{profile}_{key:016x}.c"));
+    let c_path = std::env::temp_dir().join(format!("kanso_runtime_{profile}_{key}.c"));
     std::fs::write(&c_path, source)?;
     let staging =
-        std::env::temp_dir().join(format!("kanso_runtime_{profile}_{key:016x}_{}.o", pid_tag()));
+        std::env::temp_dir().join(format!("kanso_runtime_{profile}_{key}_{}.o", pid_tag()));
     // `-Werror=unknown-attributes` is the belt to the probe's braces: clang 18
     // only WARNS about `preserve_none` and would silently compile the runtime
     // on the C convention while the emitted IR used the other one.
@@ -2301,7 +2326,7 @@ fn played_key(file: &str, source: &str) -> Option<String> {
     let (ka, kb) = kanso::hash::key_of(&text);
     let (ra, rb) = kanso::hash::RUNTIME_DIGEST;
     let counting = if kanso::codegen::counters_wanted() { "c" } else { "" };
-    Some(format!("{:016x}{:016x}{counting}", ka ^ ra, kb ^ rb.rotate_left(17)))
+    Some(format!("{}{}{counting}", hex16(ka ^ ra), hex16(kb ^ rb.rotate_left(17))))
 }
 
 /// The dev binary for a program: its IR emitted and looked up by the IR's key,
@@ -2373,7 +2398,7 @@ fn cached_program_binary(ir: &str) -> std::io::Result<std::path::PathBuf> {
     let (ka, kb) = kanso::hash::key_of(ir.as_bytes());
     let (ra, rb) = kanso::hash::RUNTIME_DIGEST;
     let counting = if kanso::codegen::counters_wanted() { "c" } else { "" };
-    let key = format!("{:016x}{:016x}{counting}", ka ^ ra, kb ^ rb.rotate_left(17));
+    let key = format!("{}{}{counting}", hex16(ka ^ ra), hex16(kb ^ rb.rotate_left(17)));
     let binary = std::env::temp_dir().join(format!("kanso_run_{key}"));
     if binary.exists() {
         return Ok(binary);
@@ -2451,6 +2476,14 @@ mod a_temp_path_is_the_same_length_every_run {
                  instructions for the same work.",
                 tag.len()
             );
+        }
+    }
+
+    /// The hex writer spells what `{:016x}` spells, leading zeros included.
+    #[test]
+    fn a_key_reads_as_the_padded_hex_it_replaced() {
+        for n in [0u64, 1, 0xf, 0x0123_4567_89ab_cdef, 0x0fff_ffff_ffff_ffff, u64::MAX] {
+            assert_eq!(super::hex16(n), format!("{n:016x}"));
         }
     }
 
