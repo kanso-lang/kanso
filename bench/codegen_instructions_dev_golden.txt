@@ -253,4 +253,9 @@
 #
 # Carried together, projected as the gold link's reading plus the float
 # search's rise. CI's reading replaces it.
-codegen_instructions_dev=125551909
+#
+# CI measured the four carried changes at cf18309e. codegen_instructions_dev
+# 125,551,909 -> 125,551,388, 521 below the projection.
+# codegen_instructions_dev 125,551,909 -> 125,551,388, a FALL of 521
+# (-0.0004%).
+codegen_instructions_dev=125551388

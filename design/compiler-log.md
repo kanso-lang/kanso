@@ -15158,3 +15158,16 @@ any of them.
 The mem vein pins the seed: with it put back to four, the empty literal's
 fixtures read their old bytes and `mem_corpus_pins_native_allocator_counters`
 goes red. The ratchet row `list_seed` makes that mutation.
+
+CI read the four carried changes at cf18309e before the list seed joined
+them. Its rows were taken as read: runbench 1,371,384,302, 1,761 below the
+projection, oneshot 14,671,933, `codegen_instructions_dev` 125,551,388 and
+`codegen_instructions_release` 698,557,632. Every binary's `text` read 48
+bytes below the float search's reading, and this container's reading of the
+same tree agreed with CI to the byte. The list seed's rows are CI's carried
+readings plus this container's deltas, and its `text` rows, 80 bytes below
+the carried ones in every binary, are this container's reading, which the
+carried tree showed to match CI's.
+Summed over the fourteen binaries, `text` lands on 3,485,776: the float
+search's 4,256 bytes a binary, less 48 from the carried seeds and 80 from the
+list seed.

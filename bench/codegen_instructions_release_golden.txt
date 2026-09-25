@@ -340,4 +340,9 @@
 #
 # CI measured the float search at a71892d9. codegen_instructions_release
 # 698,405,052 -> 698,560,720, a RISE of 155,668 (+0.0223%).
-codegen_instructions_release=698560720
+#
+# CI measured the four carried changes at cf18309e.
+# codegen_instructions_release 698,560,720 -> 698,557,632, a fall of 3,088.
+# codegen_instructions_release 698,560,720 -> 698,557,632, a FALL of 3,088
+# (-0.0004%).
+codegen_instructions_release=698557632
