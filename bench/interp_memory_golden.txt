@@ -236,7 +236,11 @@
 #
 # kanso#1634: the interpreter's per-call questions stop hashing interp_allocs
 # 929,207 -> 929,249, a RISE of 42 (+0.0045%).
-interp_allocs=929249
+#
+# Projected from this container: an application's arguments go on one shared
+# stack and each application takes a vector of exactly its own. CI's reading
+# replaces it. interp_allocs 929,249 -> 929,213, a FALL of 36 (-0.0039%).
+interp_allocs=929213
 #
 # 2026-09-18, kanso#1518 against main at kanso#1517, CI's sitting.
 # 951,438 -> 961,165, a RISE of
@@ -305,5 +309,10 @@ interp_allocs=929249
 #
 # kanso#1634: the interpreter's per-call questions stop hashing
 # interp_peak_bytes 842,653 -> 860,477, a RISE of 17,824 (+2.1152%).
-interp_peak_bytes=860477
+#
+# Projected from this container: an application's arguments go on one shared
+# stack and each application takes a vector of exactly its own. CI's reading
+# replaces it. interp_peak_bytes 860,477 -> 799,829, a FALL of 60,648
+# (-7.0482%).
+interp_peak_bytes=799829
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

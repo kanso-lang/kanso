@@ -37,6 +37,7 @@ perm_peak_bytes=0
 str_scans=5
 str_scan_bytes=310
 seek_resumes=0
+seek_steps=0
 buf_reuse=0
 held_peak_bytes=562
 view_allocs=0

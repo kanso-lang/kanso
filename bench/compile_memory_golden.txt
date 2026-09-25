@@ -284,4 +284,9 @@ front_end_visits=7400
 # 2026-09-24, kanso#1605 (number span, beat classified once, shipped std
 # modules skip their check), CI's row: compile_peak_bytes 777,072 -> 768,704,
 # a FALL of 8,368 (-1.0769%).
-compile_peak_bytes=768704
+#
+# Projected from this container: an application's arguments go on one shared
+# stack and each application takes a vector of exactly its own. CI's reading
+# replaces it. compile_peak_bytes 768,704 -> 708,672, a FALL of 60,032
+# (-7.8095%).
+compile_peak_bytes=708672

@@ -14350,3 +14350,330 @@ CI read the merged tree at 755fb36d: `entry_instructions` 84,635,818 ->
 84,635,833 (+15) and `library_instructions` 85,223,918 -> 85,224,038 (+120).
 The projection added two deltas measured on different trees, and the
 remainder is layout. Neither row is weighed.
+
+## 2026-09-25 — a walk by index steps from its cursor, and a join knows its count
+
+The run program's index phase reads a 690,000-character string of one- to
+four-byte characters one index at a time. The runtime keeps a cursor, the
+last character an index found and its byte, so each index resumed from it,
+but `k_b_at` reached the cursor through `k_str_seek`, which first asks
+whether the string is all ascii and then whether the cursor's own character
+was wanted. An index of the character after the cursor's now steps from it
+directly: the cursor's byte plus its character's width. It cost 71
+instructions an index and costs 59.
+
+The same phase builds its subject by joining it to itself until it is long
+enough, and asks `length` after every doubling. A string memoises its
+character count the first time something asks for it, but a join produced a
+string with no count, so every doubled subject was scanned from the front. A
+join whose pieces and separator each carry a count now writes the sum. The
+pieces are asked in a pass of their own that stops at the first piece without
+a count. Asking inside the copying loop cost pendbench 4,803,400 instructions,
+because pend joins four thousand rendered numbers that nothing has counted.
+
+runbench 1,421,154,308 -> 1,410,414,243 (-10,740,065, -0.76%), with the same
+printed tally: 8,280,000 from the step and 2,458,767 from the count, less what
+the join spends asking. indexbench fell 317,493 and scanbench 3,160. The rest
+is priced here. `work_basket` rose 12 to 31,593,366 and `work_pendbench` 1,200
+to 181,845,166: each join now asks its first piece, and its separator when
+there is one, whether they carry a count. The runtime is larger by the step,
+the count and their comments, and the text vein's summed `text` row rose
+4,928 to 3,429,776, 352 bytes a benchmark.
+
+`seek_steps` is new, a presence counter for the step, and joins the trend
+gate's list of counters where a fall is the worse direction. The step still
+counts as a resume, so `seek_resumes` holds whether the step is taken or not;
+only `seek_steps` says which. It reads 689,999 on the run program and 3,999 on
+`the_length_of_an_indexed_character_needs_no_scan`, and 0 everywhere else. The
+count takes `str_scan_bytes` from 4,092,666 to 945,324 on the run program.
+
+tests/golden/micro/a_walk_by_index_steps_from_its_cursor joins counted,
+uncounted and multibyte pieces and walks the result by index past its end. A
+seed without the separator's count read `spaced: 9` for eleven characters, a
+seed that took an uncounted piece read `mixed: 3` for five, and a step taken
+from another string's cursor read the walk one character late. Three ratchet
+rows: `seek_step` and `join_seed` on the run counters, `join_sep` on the micro
+corpus.
+
+Found on the way and left for its own change. With clang 19 the emitter
+chooses the preserve_none convention and `through_doors` rewrites four runtime
+calls by running `str::replace` eight times over the whole module. On `kanso
+play` of a one-line program that is 402,596 of the 1,067,649 instructions
+under `kanso::main`. No gate sees it: the gates run with `/usr/bin` first on
+PATH, where the image's clang is 18 and takes the other convention, so the
+rewrite never runs under measurement.
+
+CI read every work, text and emitted row as projected. The two codegen rows
+moved with the runtime's size: `codegen_instructions_dev` 142,050,065 ->
+142,053,001 (+2,936) and `codegen_instructions_release` 698,557,830 ->
+698,563,613 (+5,783), the cost of compiling the new counter and the cursor
+arm into every program.
+
+Merged again after kanso#1634. The page section this change adds is now 150,
+after kanso#1634's 149, and the floor is banked on the merged tree's rows,
+which CI has not read yet.
+
+## 2026-09-25 — the doors take their convention in one pass
+
+With clang 19 the emitter chooses the preserve_none convention for closures,
+and four runtime functions, the doors, take it too. `through_doors` wrote the
+keyword into every declare of and call to them with eight `str::replace`
+calls, two per door, each of which built the whole module again. On `kanso
+play` of a one-line program that was 402,596 of the 1,067,649 instructions
+under `kanso::main`. It is now one pass that stops only where `%KValue @k_b_`
+appears and writes the keyword when a door's name and its `(` follow and a
+`declare ` or `call ` comes before.
+
+The module is byte-identical: `kanso build bench/runbench --release` writes
+the same `runbench.ll` from main and from this branch. The one-line `kanso
+play` falls from 2,132,907 instructions to 1,787,508 for the whole process on
+this container, -345,399.
+
+No gate sees either number. The gates run with `/usr/bin` first on PATH, where
+the image's clang is 18, the probe for preserve_none fails, and the function
+returns at its first line. `startup_instructions` and `emit_instructions`
+therefore stay where they were, and the objective cannot see a change that
+takes a sixth off the start-up of every `kanso play` and `kanso test` under
+the clang the benchmarks are built with.
+
+The specs job builds with clang 19, so the doors' convention is checked by
+every native program it runs. Matching a door by the prefix of its name hands
+`k_b_utf8`'s convention to the `k_b_utf8_...` functions: the run program then
+prints `runbench 31740465` where it should print `runbench 46013475` and exits
+0, and the golden suite goes red on the micro corpus, its release build and
+the runtime corpus. Dropping the `call ` case fails the run program with
+`utf8 takes a list of byte values`. The ratchet row `door_prefix` holds the
+first; the ratchet's box selects clang 19, so the mutation reaches the code.
+
+CI read two rows one instruction higher than main: `emit_instructions`
+29,261,817 -> 29,261,818 and `startup_instructions` 605,388 -> 605,389. Under
+clang 18 the new pass never runs, so this is the layout of a function that
+returns at its first line.
+
+Merged again after kanso#1634, which moved both rows further. CI read the
+merged tree one instruction above main on each again: `emit_instructions`
+29,274,393 -> 29,274,394 and `startup_instructions` 605,441 -> 605,442.
+
+## 2026-09-25 — a short literal is appended as one word
+
+The json encoder writes every `true`, `false` and `null` with `text/append acc
+"true"` into a builder it owns. The emitter already took those appends past the
+runtime: the string arm of `k_b_append_mut_byte` loads the literal's cell,
+reads its header and copies its length in overlapping loads. A literal of one
+to eight bytes appended in place now goes through `k_b_append_mut_word`, which
+takes the literal as a word the compiler wrote into the call and its length as
+a constant. When the builder has eight bytes of room at its frontier the word
+is stored whole and the length moves by the literal's own length; the bytes
+past the literal land in room the builder owns and past its length, where
+nothing reads them. Otherwise a cold runtime function builds the literal and
+appends it in place.
+
+It has to be in place. The first slow arm went through `k_b_append`, the one
+the string arm falls back to, and encodebench's counting build crashed. That
+arm refuses only a builder with no room for the literal, and `k_b_append` then
+grows it. This one also refuses a builder with room for the literal but not
+the word, where `k_b_append` claims the room and hands back a new header in
+the arena. The encoder carries its builder through beat loops by identity, so
+the loop kept the old header, its rewind reclaimed the new one, and the next
+append read a header the arena had given to something else.
+
+The first cut also inlined the slow arm, and the larger encoder functions
+cost more than the word saved: encodebench fell 1.46% while runbench rose
+0.89% and livebench 1.74%. Out of line, on this container: encodebench
+2,861,479,405 -> 2,736,636,903 (-124,842,502, -4.36%), livebench -41,831,652
+(-1.97%), runbench 1,421,153,849 -> 1,414,525,181 (-6,628,668, -0.47%) with
+the same tally, and oneshot -105,172. `work_widebench` rose 303,982 to
+29,082,048 (+1.06%); widebench appends few literals and moved with where its
+code landed. No counter moved in any vein: the counting build takes the slow
+arm every time, and appending in place counts what the string arm's fallback
+counted. The emitted veins price the helper and its call sites:
+`emitted_lines` 5,496, `emitted_other_lines` 83,655,
+`emitted_other_defines` 1,553 and `emitted_other_branches` 8,015, with
+`emitted_other_calls` down 34 to 9,663.
+
+tests/golden/micro/a_short_literal_is_appended_whole builds text from
+literals of one, three, eight and nine bytes, multibyte ones among them, so
+the room runs out part-way through a word at different appends. A length moved
+by eight instead of the literal's length printed the bytes past it.
+tests/golden/mem/a_literal_appended_across_a_rewind encodes a small document
+forty times; with the slow arm through `k_b_append` its counting build
+segfaults, and `a_cycle_that_allocates_nothing_needs_no_bracket` drifts from
+30 allocations to 20,030. Ratchet rows `word_length`, `word_slow` and
+`word_used`.
+
+The helper is written into every module the way the other in-place appends
+are, and release builds prune it where nothing calls it. So each program in
+`bench/compile_golden.txt` gained its ten lines, recursion 268 -> 278 among
+them, for `lines` 1,395 -> 1,445 over the five, and
+`bench/compile_golden_modules.txt` read `module_lines` 1,047 -> 1,057. Calls,
+branches, rounds and visits did not move.
+
+Built, measured and declined on the way:
+
+- A key's closing quote and its colon as one literal, tried a second time on
+  top of the word. `entry_onto` escaped the key itself and appended `"\":"`.
+  runbench rose 22,294,121 (+1.58%) and livebench 89,482,230 (+4.30%) against
+  the word alone: the key no longer went through `encode_onto`'s dispatch,
+  and the arm that replaced it was larger where it was inlined.
+- One word for a beat loop's rewind test. A global held the innermost mark's
+  pointer while the buffer shelf and that mark's registries were empty,
+  refreshed at every write to the top, the registry bits and the shelf flag,
+  so an iteration asked one comparison. escapebench fell 3.10%, but runbench
+  rose 3,597,581 (+0.25%), encodebench 42,471,101 (+1.48%) and livebench
+  29,109,596 (+1.37%): refreshing on every pop and every shelf write cost more
+  than the iteration saved.
+- `FnEmit::write` without `writeln!`. The emit row fell 677,411 (-2.29%) on
+  this container and start-up 2,274, worth a few hundredths of a point; left
+  for a change that takes the formatting out of the emitter as a whole.
+
+Merged after kanso#1634. This change's page section is now 150. The floor is
+banked on the projected rows so the sentinel can read the branch; CI's rows
+replace them.
+
+CI's rows on the merged tree: every work row as projected but
+`work_livebench`, which reads 2,078,874,160, twenty above. The development
+rows price the helper, which every dev module carries and compiles:
+`emit_instructions` 29,274,393 -> 29,288,701 (+14,308),
+`startup_instructions` 605,441 -> 606,991 (+1,550) and
+`codegen_instructions_dev` 142,050,065 -> 142,160,577 (+110,512). The release
+tier prunes the helper where nothing calls it, and `codegen_instructions_release`
+falls 698,557,830 -> 698,399,695 (-158,135) with the smaller encoder.
+
+---
+
+## 2026-09-25 — a second play of the same file does not compile
+
+`kanso play` keeps the native binary it builds, keyed by a hash of the
+program's IR, so an unchanged file runs again with no clang. Finding the
+binary meant compiling the file and emitting its IR on every run. On the
+start-up corpus, `print "x"`, this container counted 615,803 instructions under
+`kanso::main`: 172,583 in `compile_play_file` lexing, parsing and checking the
+file with the modules it loads, and 404,031 in `emit_ir_dev` writing IR that
+was hashed and dropped.
+
+A play file imports the standard library and nothing else, and the compiler
+embeds every std module except `std/expect`. The loader now notes when a
+program reads a module from disk or from handed-in sources. When a play file
+read nothing but embedded modules, its IR is decided by the file's name and
+text, the compiler, the runtime digest, the closure convention the installed
+clang takes, the counting flag and the `KANSO_` environment. `played_key`
+hashes those with `key_of`, naming the compiler by its path, length and
+modification time, which a rebuild always changes. The first play compiles,
+emits and builds through the IR's key as before, and hard-links the binary as
+`kanso_play_<key>`. A later play of the same text reads the file, forms the
+key and runs that binary without lexing, parsing, checking or emitting: the
+name exists only if a play compiled the same inputs cleanly. A file that reads
+`std/expect` goes through the IR's key every time, and so does any play with a
+`KANSO_` variable set, since several of them ask the compiler to report on its
+own work. A warm play whose program dies by a signal compiles the file then,
+to word the message the way the compiled program would.
+
+On this container the start-up row falls from 615,803 to 51,616, -564,187
+(-91.6%), and `emit_instructions` reads 29,578,328 on both trees, since that
+row builds the codegen corpus with `kanso build`. `startup_instructions` is
+605,441 -> 52,375 on CI (-553,066, -91.3%). The projection was 41,254: what
+is left of a warm play is reading the file, forming the key and starting the
+binary, which costs about the same on both hosts, so it does not scale with
+the part that went. The start-up row no longer
+reaches the front end or the emitter on its measured run; the compile rows and
+`emit_instructions` are the ones that watch them.
+
+tests/a_play_file_is_keyed_by_its_text holds three cases. A file rewritten
+from `print "first"` to `print "second"` between plays prints `second`; with
+the text left out of the key it prints `first`. A play file importing a
+`std/expect` read through `KANSO_STD` prints `a?` after the module changes
+from `!` to `?`; with the loader's note removed it prints `a!`. A file that
+runs out of stack says so on its second play as on its first; with the warm
+path's explanation dropped the second says nothing. The ratchet rows are
+`play_text`, `play_disk` and `play_signal`.
+
+CI's other rows moved with the compiler's layout, each down:
+`compile_instructions` 25,041,977 -> 25,027,159, `entry_instructions`
+84,635,833 -> 84,572,805, `library_instructions` 85,224,038 -> 85,160,887,
+`emit_instructions` 29,274,393 -> 29,249,085 and `interp_instructions`
+661,830,756 -> 659,854,491.
+
+---
+
+## 2026-09-25 — an application takes exactly its arguments
+
+`parse_app` built each application's arguments in a vector grown from
+nothing, so the first push gave it room for four. An `Expr` is 56 bytes, most
+applications take one or two arguments, and those vectors live as long as the
+syntax tree. On the compile corpus they held 122,752 bytes at the front end's
+peak, most of it empty slots.
+
+The arguments now go on one stack shared by every application being parsed,
+held in a thread-local, and each application takes its own off the top with
+`split_off`, which allocates exactly their number. A parse error truncates the
+stack back to where that application began. The parser never recovers from an
+error part-way through an expression, so this only keeps the stack from
+holding arguments nobody will take.
+
+The interpreter parses the same way, so both memory rows move. On this
+container `compile_peak_bytes` falls 768,700 -> 708,668 (-60,032, -7.8%) and
+`interp_peak_bytes` 860,475 -> 799,827 (-60,648, -7.0%); `compile_allocs`
+falls 36 and `interp_allocs` 36, the regrowths of applications with more than
+four arguments. Projected against CI's goldens: `compile_peak_bytes` 768,704
+-> 708,672, `interp_peak_bytes` 860,477 -> 799,829, `compile_allocs` 14,276 ->
+14,240 and `interp_allocs` 929,249 -> 929,213. The thread-local costs 149,522
+instructions on `kanso check` of the corpus, 0.58%, which CI's compile rows
+will price.
+
+Built and measured on the way:
+
+- `shrink_to_fit` on each argument vector reaches the same peak but adds 1,090
+  allocations, one reallocation per application.
+- A stack held in the parser instead of a thread-local, taken at `P::new` and
+  handed back at drop, adds 356 allocations: parsers nest, and an inner one
+  starts with an empty stack.
+- `shrink_to_fit` on a module's function vector at the end of `parse` raised
+  the peak to 723,640: later passes push generated functions onto it, and an
+  exact vector doubles on the first push.
+- Sizing `canonicalize_bare_aliases`'s two tables to the declarations each
+  holds, and reserving the merged module's functions exactly, left the peak
+  where it was; neither is live at the counted peak.
+
+The ratchet row `args_exact` gives each argument vector four slots again and
+the compile-memory gate reads 782,140.
+
+---
+
+## 2026-09-25 — five changes carried together
+
+kanso#1639, kanso#1640, kanso#1641, kanso#1642 and kanso#1643 were each
+green but for the ratchet, which ran forty minutes to an hour and a half a
+round, and each merge would have sent the other four back through it. They
+land together from one branch. Each has its own entry above; this one records
+what the combination did to the rows.
+
+The veins were regenerated on the combined tree. The literal word's mem
+fixture gains the `seek_steps` line the index walk added. Summed over the
+fourteen binaries, `text` reads 3,427,984, between the index walk alone at
+3,429,776 and the literal word alone at 3,423,056: the walk's cursor arm adds
+code and the word's smaller encoder takes some away. The work rows the walk moved take its CI delta on top of the
+literal word's CI rows: `work_runbench` 1,403,785,575, `work_indexbench`
+2,538,302, `work_pendbench` 181,845,166 and `work_scanbench` 281,852. This
+container read each of the four the usual 347 to 439 instructions below that.
+
+The development rows move with the compiler's layout and with the runtime
+every build compiles, and the five changes each moved them. They take CI's
+readings of this tree.
+
+CI read the carried tree at 913723b0. Every work row matched the projection
+but `work_basket`, 31,593,354 -> 31,593,366, twelve above. Both memory rows
+landed on their projections: `compile_peak_bytes` 708,672 and
+`interp_peak_bytes` 799,829. Against main, the development rows read:
+
+    compile_instructions         25,041,977 ->  25,195,466   +0.61%
+    entry_instructions           84,635,833 ->  85,204,646   +0.67%
+    library_instructions         85,224,038 ->  85,763,002   +0.63%
+    emit_instructions            29,274,393 ->  29,343,492   +0.24%
+    interp_instructions         661,830,756 -> 659,398,270   -0.37%
+    codegen_instructions_dev    142,050,065 -> 142,163,302   +0.08%
+    codegen_instructions_release 698,557,830 -> 698,405,052  -0.02%
+    startup_instructions            605,441 ->      52,375  -91.35%
+
+The three front-end rows carry the argument stack's thread-local, which the
+argument-vector entry measured at 0.58% of a check on this container, and the
+emit row carries the literal word's helper, which every module is emitted with.

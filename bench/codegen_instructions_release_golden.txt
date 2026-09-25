@@ -330,4 +330,11 @@
 # kanso#1633 at CI's sitting: a proven list is measured and indexed in place.
 # codegen_instructions_release 715,986,547 -> 698,557,830, a FALL of
 # 17,428,717 (-2.4342%).
-codegen_instructions_release=698557830
+#
+# CI measured the literal word on main after kanso#1634, at 964f41e9.
+# codegen_instructions_release 698,557,830 -> 698,399,695, a FALL of 158,135
+# (-0.0226%).
+#
+# CI measured the carried tree at 913723b0. codegen_instructions_release
+# 698,399,695 -> 698,405,052, a RISE of 5,357 (+0.0008%).
+codegen_instructions_release=698405052
