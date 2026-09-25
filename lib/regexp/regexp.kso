@@ -287,12 +287,19 @@ fn cut prog s from at acc
 fn cutting _ s from _ acc true
   push acc (rest_of s from)
 
+# A scan that finds nothing has looked at every start from `at` on, so the
+# rest of the subject is the last piece. It used to be treated like an empty
+# match and scanned again from the next position, which made splitting on a
+# separator the rest of the subject lacks quadratic in that rest. An empty
+# match is stepped past from where it stood: the scan from `at` found the
+# leftmost match, so no start between the two holds another.
 fn cutting prog s from at acc false
   m = scanned prog s at
-  divided prog s from at acc m (m.from == 0 or m.to == m.from)
+  return push acc (rest_of s from) if m.from == 0
+  divided prog s from at acc m (m.to == m.from)
 
-fn divided prog s from at acc _ true
-  cut prog s from (at + 1) acc
+fn divided prog s from _ acc m true
+  cut prog s from (m.from + 1) acc
 
 fn divided prog s from _ acc m false
   piece = text/slice s from (m.from - 1)

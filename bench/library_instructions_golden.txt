@@ -1080,7 +1080,11 @@
 # pass and the scan prefilter, which the library route compiles.
 # library_instructions 83,730,469 -> 85,059,188, a RISE of 1,328,719
 # (+1.5869%).
-library_instructions=85059188
+#
+# 2026-09-25, kanso#1638, CI's reading: regexp/split ends at a scan that found
+# nothing, which the library route compiles. library_instructions 85,059,188
+# -> 85,101,407, a RISE of 42,219 (+0.0496%).
+library_instructions=85101407
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

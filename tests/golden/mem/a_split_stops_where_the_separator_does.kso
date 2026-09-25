@@ -1,0 +1,19 @@
+# Splitting scans for the separator from where the last piece ended, and a
+# scan that finds nothing has looked at every start after it. The rest of the
+# subject is then the last piece. It used to be scanned again from each next
+# position in turn, so a separator that stops occurring early made the split
+# quadratic in what followed: 300 characters after the last ", " cost 300
+# scans of the tail. `beat_iters` and `find2_calls` count the scans.
+import "std/regexp"
+import "std/text"
+
+fn grow 0 acc
+  acc
+
+fn grow n acc
+  grow (n - 1) (text/append acc "xyz")
+
+pub play =
+  tail = text/utf8 (grow 100 (text/bytes ""))
+  pieces = regexp/split ", " "a, b, {tail}"
+  print "{length pieces} pieces, the last {length pieces[3]} long"

@@ -1,0 +1,7 @@
+none:     ["abc"]
+stops:    ["a" "b" "cdef"]
+at end:   ["a" "b" ""]
+star:     ["abc"]
+star mid: ["a" "bc"]
+optional: ["a" "b"]
+empty in: ["ab"]

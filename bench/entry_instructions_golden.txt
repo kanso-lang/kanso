@@ -1045,7 +1045,11 @@
 # 2026-09-25, kanso#1637, CI's reading: lib/regexp gained the required-literal
 # pass and the scan prefilter, and the entry compiles the library it imports.
 # entry_instructions 83,186,043 -> 84,496,376, a RISE of 1,310,333 (+1.5752%).
-entry_instructions=84496376
+#
+# 2026-09-25, kanso#1638, CI's reading: regexp/split ends at a scan that found
+# nothing, and the entry compiles the library it imports. entry_instructions
+# 84,496,376 -> 84,512,441, a RISE of 16,065 (+0.0190%).
+entry_instructions=84512441
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.
