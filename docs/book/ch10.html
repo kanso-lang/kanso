@@ -224,8 +224,8 @@ verdict <span class="o">=</span> <span class="f">even?</span> <span class="n">10
 <span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"sum <span class="i">{list/sum (build 1000 [])}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">KANSO_COUNTERS=1 kanso run counters.kso</div>
-    <pre><code>allocs=9
-alloc_bytes=22176
+    <pre><code>allocs=6
+alloc_bytes=20752
 arena_blocks=1
 arena_peak_bytes=1048576
 cohort_frees=0
@@ -256,8 +256,8 @@ append_grow=0
 append_rendered=0
 utf8_zerocopy=0
 carry_dedup=0
-bytes_malloc=5
-bytes_freed=4
+bytes_malloc=2
+bytes_freed=1
 perm_live_bytes=16400
 perm_peak_bytes=16400
 str_scans=0
@@ -273,7 +273,7 @@ ten_frees=0
 ten_handups=0
 sh_str=64
 sh_rec=0
-sh_buf=80
+sh_buf=112
 sh_map=0
 sh_bytes=0
 sum 500500</code></pre>
