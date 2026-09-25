@@ -7597,6 +7597,27 @@ KValue k_b_bytes(KValue sv) {
     return k_bytes_view((const unsigned char*)s->data, s->len);
 }
 
+/* `bytes ""` as the emitter writes it: an empty builder with 64 bytes of
+   room, header and buffer in one bump. The codegen arm that calls this says
+   why. The buffer is arena storage, marked so by bit 0 of `cap`, the regime
+   `k_b_append_grow` gives a buffer whose header a rewind reclaims; a builder
+   that outgrows it takes a buffer by the same rule any grow does. */
+#define K_BYTES_SEED 64
+KValue k_b_bytes_seed(void) {
+    size_t head = (sizeof(KBytes) + 15) & ~(size_t)15;
+    unsigned char* whole = k_alloc(head + sizeof(KBuf) + K_BYTES_SEED);
+    if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0))
+        k_stat_sh_bytes += (long long)sizeof(KBytes);
+    KBytes* b = (KBytes*)whole;
+    KBuf* buf = (KBuf*)(whole + head);
+    buf->cap = K_BYTES_SEED;
+    buf->used = 0;
+    b->len = 0;
+    b->data = (const unsigned char*)(buf + 1);
+    b->cap = K_BYTES_SEED | 1;
+    KValue v; v.tag = K_BYTES; v.payload = k_ptr(b); return v;
+}
+
 /* `bytes` covers strings; this covers numbers, and it is what keeps byte data
    writable now that a list is never ambiently bytes. Loud outside 0-255 rather
    than truncating, which is the one place this differs from `append`'s single

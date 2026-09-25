@@ -1284,6 +1284,7 @@ declare %KValue @k_b_at(%KValue, %KValue)
 declare %KValue @k_b_is_desc(%KValue)
 declare %KValue @k_index(%KValue, %KValue, ptr)
 declare %KValue @k_b_bytes(%KValue)
+declare %KValue @k_b_bytes_seed()
 declare %KValue @k_b_chars(%KValue)
 declare %KValue @k_b_split(%KValue, %KValue)
 declare %KValue @k_b_concat(%KValue, %KValue)
@@ -3908,6 +3909,7 @@ const DECLARES_CONTEXT_CALLS: &[&str] = &[
     "k_b_bytes",
     "k_b_bytes_fast",
     "k_b_bytes_frame",
+    "k_b_bytes_seed",
     "k_b_find2",
     "k_b_find2_below",
     "k_b_find2_below_fast",
@@ -9077,6 +9079,26 @@ impl<'a> Backend<'a> {
         // have made, so a user arm is never skipped; every other tag the door
         // hands to k_render itself, the same call the template makes, so the
         // bytes cannot differ. Same wrapper-spelling rule as the pair above.
+        // `bytes ""` starts a builder, and the next thing that happens to it
+        // is an append. As a view of the empty string it owned no storage, so
+        // that append grew it from nothing: 175,527 grows a run on runbench,
+        // one for each escaped string the decoder unescapes, at about 88
+        // instructions each. The literal takes a builder with 64 bytes of room
+        // instead, which is the capacity that first grow chose, so every later
+        // grow is the one it was. Only the literal: a view of any other string
+        // is what `bytes` has always built, and testing for an empty string at
+        // run time cost encodebench two instructions on every string it
+        // escapes.
+        if first.is_none() && args.len() == 1 && self.builtin_named(name, 1) == "bytes" {
+            if let Expr::Str(parts, _) = &args[0] {
+                if parts.iter().all(|p| matches!(p, TemplatePart::Lit(s) if s.is_empty())) {
+                    let t = f.tmp();
+                    f.line(&format!("{t} = call %KValue @k_b_bytes_seed()"));
+                    f.record(&t, infer::builtin_set("bytes", &[STR]));
+                    return Ok(t);
+                }
+            }
+        }
         // `append acc "true"`: a literal of one to eight bytes into a builder
         // the linearity analysis proved this site owns. `k_b_append_mut_word`
         // says why the literal travels as a word.

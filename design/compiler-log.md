@@ -15171,3 +15171,56 @@ carried tree showed to match CI's.
 Summed over the fourteen binaries, `text` lands on 3,485,776: the float
 search's 4,256 bytes a binary, less 48 from the carried seeds and 80 from the
 list seed.
+
+## 2026-09-25 — an empty builder has room for its first append
+
+`bytes ""` built a view of the empty string, which owns no storage, and the
+next thing that happens to it is always an append. The decoder unescapes a
+string by appending its runs to `text/bytes ""`, so each of runbench's
+175,527 escaped strings grew its builder from nothing in `k_b_append_grow`:
+15.4M instructions a run, about 88 a grow. The emitter now writes the literal
+`bytes ""` as a call to `k_b_bytes_seed`, which returns an empty builder with
+64 bytes of room, header and buffer in one bump. Sixty-four is the capacity
+that first grow chose, so every later grow is the one it was.
+
+The first cut tested for an empty string at run time, in the inlined view,
+and was measured and dropped: it saved 19,167,257 instructions on runbench
+but cost encodebench 12,531,202, two instructions on every string it escapes.
+A 48-byte seed was measured before that and dropped too. It lowered the run
+program's `held_peak_bytes` from 277,538 to 206,458, but it shifted every
+later grow's size, and one mem fixture's held peak rose 47%.
+
+Measured on this container against the carried list seed, one binary each
+way: runbench 1,355,766,990 -> 1,332,912,068 (-22,854,922, -1.686%),
+jsonbench -34,925,054, livebench -280,686, oneshot -233,137 and encodebench
+-47,854. No other benchmark moved. `arena_peak_bytes` stays 3,670,032,
+`held_peak_bytes` 277,538 and `perm_peak_bytes` 16,400. Two mem fixtures'
+held peaks fall, `builder_transient` 80 -> 0 and `stream_write` 23,920 ->
+16,000, and none rises. Every module's IR carries one more line, the seed's
+declaration, so the compile golden's `lines` rise by one in each shape. The
+rows are CI's reading of daac530d plus this container's deltas, and CI's own
+replace them: at daac530d CI read runbench 1,355,770,463, deepbench
+364,523,751, pendbench 181,849,069, oneshot 14,506,645,
+`codegen_instructions_dev` 125,548,064 and `codegen_instructions_release`
+698,554,515.
+
+The mem vein pins the seed: with the emitter's arm disabled,
+`mem_corpus_pins_native_allocator_counters` goes red. The ratchet row
+`bytes_seed` makes that mutation.
+
+A builder whose first buffer is the seed never frees it, since arena storage
+goes with its rewind, so each `bytes_freed` that counted that buffer falls by
+one: `a_builder_that_outgrows_its_buffer_is_never_held_twice_bytes_freed` 10,
+`a_class_asks_by_the_byte_bytes_freed` 4,
+`a_cycle_of_four_rewinds_once_a_trip_bytes_freed` 11,
+`a_cycle_that_allocates_nothing_needs_no_bracket_bytes_freed` 21,
+`a_local_bound_under_a_guard_keeps_the_beat_bytes_freed` 8,
+`a_scan_keeps_its_place_in_the_text_bytes_freed` 1,
+`a_scan_that_finds_nothing_keeps_nothing_bytes_freed` 1,
+`a_split_stops_where_the_separator_does_bytes_freed` 2,
+`append_in_place_bytes_freed` 0, `append_of_a_slice_boxes_nothing_bytes_freed`
+0, `beat_builder_bytes_freed` 4, `beat_cycle_bytes_freed` 4,
+`builder_reclaim_bytes_freed` 200, `builder_transient_bytes_freed` 0 and
+`stream_write_bytes_freed` 100. The declaration lands the compile corpus's `lines` on 1,450 and
+`module_lines` on 1,058, and summed over the fourteen
+binaries `text` lands on 3,486,032.

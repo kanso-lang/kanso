@@ -345,4 +345,8 @@
 # codegen_instructions_release 698,560,720 -> 698,557,632, a fall of 3,088.
 # codegen_instructions_release 698,560,720 -> 698,557,632, a FALL of 3,088
 # (-0.0004%).
-codegen_instructions_release=698557632
+#
+# CI measured the carried list seed at daac530d. codegen_instructions_release
+# 698,557,632 -> 698,554,515. codegen_instructions_release 698,557,632 ->
+# 698,554,515, a FALL of 3,117 (-0.0004%).
+codegen_instructions_release=698554515

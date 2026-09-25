@@ -2576,7 +2576,19 @@ list_seed = row
 
 rows_b1ls = text/concat rows_b1ms [list_seed]
 
-rows_b = text/concat rows_b1ls [compile_mem compile_mem_host]
+# `bytes ""` is a builder with 64 bytes of room, so the append after it lands
+# in place instead of growing from nothing.
+bytes_seed = row
+  "an empty builder with no room, so its first append grows from nothing"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "an_empty_builder_with_no_room")
+  release
+
+rows_b1bs = text/concat rows_b1ls [bytes_seed]
+
+rows_b = text/concat rows_b1bs [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 

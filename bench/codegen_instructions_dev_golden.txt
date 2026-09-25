@@ -258,4 +258,8 @@
 # 125,551,909 -> 125,551,388, 521 below the projection.
 # codegen_instructions_dev 125,551,909 -> 125,551,388, a FALL of 521
 # (-0.0004%).
-codegen_instructions_dev=125551388
+#
+# CI measured the carried list seed at daac530d. codegen_instructions_dev
+# 125,551,388 -> 125,548,064. codegen_instructions_dev 125,551,388 ->
+# 125,548,064, a FALL of 3,324 (-0.0026%).
+codegen_instructions_dev=125548064

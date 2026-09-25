@@ -696,20 +696,20 @@
 # instructions or fewer and keep their rows. CI's reading replaces them.
 #
 # CI measured the float search at a71892d9. runbench 1,390,193,490; the projection read 20 lower.
-jsonbench 937099771
-encodebench 2675920053
-oneshot 14506169
+jsonbench 902174717
+encodebench 2675872199
+oneshot 14273508
 basket 31565926
 widebench 28836195
-deepbench 364535147
+deepbench 364523751
 escapebench 68272680
-pendbench 181848955
+pendbench 181849069
 indexbench 2538307
 scanbench 281837
 digestbench 5541785
 readbench 4631762
-livebench 2018210208
-runbench 1355765688
+livebench 2017929522
+runbench 1332915555
 # 2026-09-06 (the run program joins): `runbench 3043743748` is a NEW row and
 # nothing regressed to make it appear. It is the program Clay's gavel that day
 # made the objective's whole run-speed term, and the thirteen rows above it

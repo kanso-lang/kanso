@@ -1,4 +1,4 @@
-allocs=2723527
+allocs=2547910
 alloc_bytes=371411838
 arena_blocks=4
 arena_peak_bytes=3670032
@@ -25,8 +25,8 @@ ryu_short=191070
 utf8_bytes=24415348
 find2_calls=3017526
 number_spans=417483
-append_fast=8834013
-append_grow=176697
+append_fast=9009630
+append_grow=1080
 append_rendered=379530
 utf8_zerocopy=175617
 carry_dedup=71
