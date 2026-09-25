@@ -2419,7 +2419,38 @@ word_used = row
 
 rows_b1lw = text/concat rows_b1dp [word_length word_slow word_used]
 
-rows_b = text/concat rows_b1lw [compile_mem compile_mem_host]
+# A second `kanso play` of a file finds its binary by the file's text and does
+# not emit. Leaving the text out of that key runs an edited file's old binary;
+# a loader that stops saying a module came from disk keys a file whose module
+# changed under it by the file alone.
+play_text = row
+  "a play key that leaves out the file's text"
+  true
+  "cargo test --release --test a_play_file_is_keyed_by_its_text"
+  "specs (unit, golden, differential)"
+  (breaking "a_play_key_that_leaves_out_the_text")
+  release
+
+play_disk = row
+  "a play key that trusts a module read from disk"
+  true
+  "cargo test --release --test a_play_file_is_keyed_by_its_text"
+  "specs (unit, golden, differential)"
+  (breaking "a_play_key_that_trusts_a_module_from_disk")
+  release
+
+# A warm play compiles the file only to word a death by signal.
+play_signal = row
+  "a warm play that dies in silence"
+  true
+  "cargo test --release --test a_play_file_is_keyed_by_its_text"
+  "specs (unit, golden, differential)"
+  (breaking "a_warm_play_that_dies_in_silence")
+  release
+
+rows_b1pk = text/concat rows_b1lw [play_text play_disk play_signal]
+
+rows_b = text/concat rows_b1pk [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 

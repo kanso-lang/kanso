@@ -566,5 +566,8 @@
 # kanso#1634: the interpreter's per-call questions stop hashing
 # interp_instructions 690,933,840 -> 661,830,756, a FALL of 29,103,084
 # (-4.2121%).
-interp_instructions=661830756
+#
+# CI measured the warm play at 12440a7d. interp_instructions 661,830,756 ->
+# 659,854,491, a FALL of 1,976,265 (-0.2986%).
+interp_instructions=659854491
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

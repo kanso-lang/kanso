@@ -305,6 +305,6 @@
 # kanso#1634: the interpreter's per-call questions stop hashing
 # emit_instructions 29,261,817 -> 29,274,393, a RISE of 12,576 (+0.0430%).
 #
-# CI measured the literal word on main after kanso#1634, at 964f41e9.
-# emit_instructions 29,274,393 -> 29,288,701, a RISE of 14,308 (+0.0489%).
-emit_instructions=29288701
+# CI measured the warm play at 12440a7d. emit_instructions 29,274,393 ->
+# 29,249,085, a FALL of 25,308 (-0.0865%).
+emit_instructions=29249085
