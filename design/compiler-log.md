@@ -14592,3 +14592,47 @@ CI's other rows moved with the compiler's layout, each down:
 84,635,833 -> 84,572,805, `library_instructions` 85,224,038 -> 85,160,887,
 `emit_instructions` 29,274,393 -> 29,249,085 and `interp_instructions`
 661,830,756 -> 659,854,491.
+
+---
+
+## 2026-09-25 — an application takes exactly its arguments
+
+`parse_app` built each application's arguments in a vector grown from
+nothing, so the first push gave it room for four. An `Expr` is 56 bytes, most
+applications take one or two arguments, and those vectors live as long as the
+syntax tree. On the compile corpus they held 122,752 bytes at the front end's
+peak, most of it empty slots.
+
+The arguments now go on one stack shared by every application being parsed,
+held in a thread-local, and each application takes its own off the top with
+`split_off`, which allocates exactly their number. A parse error truncates the
+stack back to where that application began. The parser never recovers from an
+error part-way through an expression, so this only keeps the stack from
+holding arguments nobody will take.
+
+The interpreter parses the same way, so both memory rows move. On this
+container `compile_peak_bytes` falls 768,700 -> 708,668 (-60,032, -7.8%) and
+`interp_peak_bytes` 860,475 -> 799,827 (-60,648, -7.0%); `compile_allocs`
+falls 36 and `interp_allocs` 36, the regrowths of applications with more than
+four arguments. Projected against CI's goldens: `compile_peak_bytes` 768,704
+-> 708,672, `interp_peak_bytes` 860,477 -> 799,829, `compile_allocs` 14,276 ->
+14,240 and `interp_allocs` 929,249 -> 929,213. The thread-local costs 149,522
+instructions on `kanso check` of the corpus, 0.58%, which CI's compile rows
+will price.
+
+Built and measured on the way:
+
+- `shrink_to_fit` on each argument vector reaches the same peak but adds 1,090
+  allocations, one reallocation per application.
+- A stack held in the parser instead of a thread-local, taken at `P::new` and
+  handed back at drop, adds 356 allocations: parsers nest, and an inner one
+  starts with an empty stack.
+- `shrink_to_fit` on a module's function vector at the end of `parse` raised
+  the peak to 723,640: later passes push generated functions onto it, and an
+  exact vector doubles on the first push.
+- Sizing `canonicalize_bare_aliases`'s two tables to the declarations each
+  holds, and reserving the merged module's functions exactly, left the peak
+  where it was; neither is live at the counted peak.
+
+The ratchet row `args_exact` gives each argument vector four slots again and
+the compile-memory gate reads 782,140.
