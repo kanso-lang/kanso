@@ -783,10 +783,10 @@
 # kanso#1433's inlining and kanso#1435's masked tail less kanso#1436 and this.
 #
 jsonbench text=231640
-encodebench text=242440
+encodebench text=249288
 oneshot text=246392
 basket text=229464
-widebench text=250408
+widebench text=257288
 deepbench text=208424
 escapebench text=203512
 pendbench text=217352

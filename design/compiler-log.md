@@ -14003,3 +14003,39 @@ Three other leads were measured today and declined:
   buffer header and the data. The run program was byte-identical. The first
   append's slow path joins the fast path before the second append starts,
   so the second's loads cannot be forwarded from the first's stores.
+
+## 2026-09-25 — a lambda's wrapper is always inlined
+
+Every lambda is lifted into a function and given a wrapper, `w_<name>`,
+which is what a closure pointer names. encodebench escapes a string with
+`list/fold bs acc (a b -> esc_byte a b)` whenever the string holds a byte
+that needs escaping. After LTO has inlined the fold into `escape_onto`, the
+closure is a constant, and the call to its wrapper is direct. The inliner
+still left the wrapper out of line, so each of the 11,658,800 bytes those
+strings hold paid for a call to `w_klam17`: 475,002,000 instructions in the
+wrapper and about 26 a byte in the loop around it.
+
+A release module now marks the wrapper `alwaysinline`. A call through a
+closure pointer still reaches it. Where the callee is known, its body lands
+in the loop. The dev module leaves the attribute off, since the dev tier
+inlines nothing it does not have to, and
+tests/a_dev_build_calls_the_runtime_helpers went red when both tiers
+carried it.
+
+On this box against kanso#1631's head: `work_encodebench` 2,964,897,120 ->
+2,783,857,920 (-181,039,200, -6.106%). The other thirteen rows are
+byte-identical. The golden carries CI's last reading plus this box's
+difference. The emitted vein does not move, since the attribute sits on a
+line that was already there. `.text` grows in the two programs whose
+wrappers now inline into larger callers: encodebench 242,440 -> 249,288
+(+6,848) and widebench 250,408 -> 257,288 (+6,880), so `text` rises by
+13,728 bytes, 3,438,304 -> 3,452,032. widebench's work row is unchanged.
+
+The ratchet row `lambda_inlined` drops the attribute, and the work vein
+sees it.
+
+The loop still asks each iteration whether the collection is a list or
+bytes, because `fold_flat` is generic over both and the tag is re-tested at
+`length` and at the index. Non-trivial loop unswitching at the LTO link,
+`-mllvm -enable-nontrivial-unswitch`, would hoist that test. All fourteen
+work rows read byte-identical with it, so it was declined.

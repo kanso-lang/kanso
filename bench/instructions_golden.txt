@@ -691,7 +691,7 @@
 # entries; nothing here moves them.
 #
 jsonbench 977552823
-encodebench 2964897453
+encodebench 2783858253
 oneshot 15193614
 basket 31745566
 widebench 28778067
