@@ -2646,7 +2646,18 @@ word_read = row
 
 rows_b1wr = text/concat rows_b1tg [word_read]
 
-rows_b = text/concat rows_b1wr [compile_mem compile_mem_host]
+# A division by a nonzero literal adds no err to what inference knows.
+literal_divisor = row
+  "a literal divisor that might fail"
+  true
+  (gating "emitted_code")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_literal_divisor_that_might_fail")
+  benchmarks
+
+rows_b1ld = text/concat rows_b1wr [literal_divisor]
+
+rows_b = text/concat rows_b1ld [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 

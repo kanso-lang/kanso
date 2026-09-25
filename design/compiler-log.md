@@ -15465,3 +15465,40 @@ literal past the word as a wrapped `i64` sent it to the wrong clause. The
 ratchet row `word_read` sends a literal through `to_i64` first; the
 interpreted run read 577,707,831 with it. No compiled program moves, and the
 compile rows are left for CI to read.
+
+## 2026-09-25 — a literal divisor cannot fail
+
+Inference gave every `/` and `%` a possible err, because division by zero is a
+failure. The runtime fails only on a zero divisor, and the checker already
+refuses a divisor written as the integer zero where it is reached unguarded.
+So a divisor written as any other literal cannot fail, and the err was noise.
+It was not harmless: it flowed through `push` into escape's accumulator, whose
+parameter set then carried an err. The dispatcher tests every parameter that
+may hold a failure on entry, so escape's builder, 1.55 million iterations, paid
+that test on each one.
+
+`/` and `%` now add an err only when the divisor is not a nonzero literal. On
+the container, over the carried group's tree: runbench -9,744,067 (-0.75%),
+livebench -27,388,087 (-1.44%), escapebench -2,451,022 (-3.59%), deepbench
+-1,344,000, jsonbench -531,900, basket -133,385, oneshot -71,532 and
+pendbench -1,000. encodebench rises 492,380 (+0.018%), which is layout.
+indexbench and digestbench move 14 each way. The rows are projected from those
+readings and CI's reading replaces them.
+
+Every binary that carries such a remainder gets shorter: the decoder's calls
+484 -> 482, branches 510 -> 508, lines 5,495 -> 5,479, and runbench's .text
+416,760 -> 415,736. The front end's visits on the compile corpus fall 7,416
+-> 7,411. The allocation counters do not move. The compile rows this host
+refuses are left for CI.
+
+The ratchet row `literal_divisor` puts the err back on a literal divisor. The
+emitted-code gate reads the decoder's old counts with it. A zero written as a
+literal divisor was also tried as nonzero, to find a program that would show
+it; with the checker refusing the unguarded integer zero, none of the shapes
+tried printed differently on the native engine and the interpreter.
+
+The trend gate reads six keys as worse against its baseline, which predates
+the stack under this change; this change lowers or holds each of them. They
+land on `work_deepbench` 364,797,730, `work_digestbench` 5,542,068,
+`work_indexbench` 2,538,571, `work_pendbench` 181,895,213,
+`emitted_other_defines` 1,555 and `text` 3,544,496.

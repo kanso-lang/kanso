@@ -696,20 +696,26 @@
 # instructions or fewer and keep their rows. CI's reading replaces them.
 #
 # CI measured the float search at a71892d9. runbench 1,390,193,490; the projection read 20 lower.
-jsonbench 891229689
-encodebench 2676524396
-oneshot 14557927
-basket 31565923
+#
+# 2026-09-25, a literal divisor cannot fail: projected from this container's
+# readings over the carried group's tree: jsonbench -531,900, encodebench
+# +492,380, oneshot -71,532, basket -133,385, deepbench -1,344,000,
+# escapebench -2,451,022, pendbench -1,000, indexbench +14, digestbench -14,
+# livebench -27,388,087, runbench -9,744,067. CI's reading replaces them.
+jsonbench 890697789
+encodebench 2677016776
+oneshot 14486395
+basket 31432538
 widebench 28789056
-deepbench 366141730
-escapebench 68272682
-pendbench 181896213
-indexbench 2538557
+deepbench 364797730
+escapebench 65821660
+pendbench 181895213
+indexbench 2538571
 scanbench 282021
-digestbench 5542082
+digestbench 5542068
 readbench 4631851
-livebench 1905214048
-runbench 1300023123
+livebench 1877825961
+runbench 1290279056
 # 2026-09-06 (the run program joins): `runbench 3043743748` is a NEW row and
 # nothing regressed to make it appear. It is the program Clay's gavel that day
 # made the objective's whole run-speed term, and the thirteen rows above it

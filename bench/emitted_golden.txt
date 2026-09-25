@@ -237,7 +237,11 @@
 # 2026-09-24: the number scan is one call to text/number_span where it was a
 # dispatch arm per byte class. calls 1,182 -> 1,165, branches 764 -> 747,
 # lines 8,570 -> 8,422; defines stay 119.
+# 2026-09-25, a literal divisor cannot fail: the decoder's `%` by a literal no
+# longer leaves a possible err in the parameter it reaches, and that
+# parameter's entry test goes. calls 484 -> 482, branches 510 -> 508, lines
+# 5,495 -> 5,479; defines stay 83.
 defines=83
-calls=484
-branches=510
-lines=5495
+calls=482
+branches=508
+lines=5479

@@ -201,7 +201,11 @@ front_end_rounds=15
 #
 # The json encoder's map keys go through key_onto, one definition more for the
 # checker to visit. front_end_visits 7,400 -> 7,416, a RISE of 16 (+0.2162%).
-front_end_visits=7416
+#
+# 2026-09-25, a literal divisor cannot fail: the fixpoint settles a parameter
+# that no longer carries a possible err a little sooner. front_end_visits
+# 7,416 -> 7,411, a FALL of 5 (-0.0674%).
+front_end_visits=7411
 # 2026-08-31 (the AST's identifiers are inline names): 728,030 -> 713,606, a
 # fall of 14,424, or 1.98%. Banked. The peak falls with the traffic because a
 # short name's bytes now live inside the AST node the allocator already gave
