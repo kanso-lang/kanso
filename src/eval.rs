@@ -1289,6 +1289,9 @@ pub struct Interp<'a> {
     /// One entry per name this run has CALLED, filled on first sight for the
     /// reason `names` above is.
     callees: RefCell<Map<String, Callee<'a>>>,
+    /// `callees` again, keyed by the address of a `Value::FnRef`'s name; see
+    /// `call_ref`.
+    callees_by_ref: RefCell<Map<usize, (Rc<str>, Callee<'a>)>>,
     /// One entry per declaration this run has ENTERED, keyed by the
     /// declaration's address, which `&'a FnDecl` on `frame_for` is what makes
     /// safe: the compiler refuses a borrow that does not outlive this
@@ -1374,6 +1377,7 @@ impl<'a> Interp<'a> {
             slots: RefCell::new(Vec::new()),
             generation: next_generation(),
             callees: RefCell::new(Map::default()),
+            callees_by_ref: RefCell::new(Map::default()),
             frames: RefCell::new(Map::default()),
             program,
         }
@@ -1481,7 +1485,8 @@ impl<'a> Interp<'a> {
             // `if` is the one name the memory would answer Group for and this
             // may not: it is a declaration AND the conditional form, and the
             // form wins here.
-            (&**n != "if" && self.calls_a_group(n)).then(|| n.clone())
+            (&**n != "if" && matches!(self.callee_of_ref(n), Callee::Group(_)))
+                .then(|| n.clone())
         };
         if *piped && !args.is_empty() {
             let piped_value = self.eval(&args[0], env, frame)?;
@@ -2249,7 +2254,7 @@ impl<'a> Interp<'a> {
 
     fn call(&self, callee: Value, args: Vec<Value>, span: Span, frame: &Frame) -> EvalResult {
         match callee {
-            Value::FnRef(name) => self.call_named(&name, args, span, frame),
+            Value::FnRef(name) => self.call_ref(&name, args, span, frame),
             Value::Closure(closure) => self.call_closure(&closure, args, span),
             Value::TableFn(handle) => foreign_call(handle, args, span, false),
             Value::Partial(callee, supplied) => {
@@ -2368,17 +2373,58 @@ impl<'a> Interp<'a> {
     }
 
     fn call_named(&self, name: &str, args: Vec<Value>, span: Span, frame: &Frame) -> EvalResult {
-        // The borrow is dropped before the call runs, because the body it
-        // reaches calls back in here.
+        let callee = self.callee_named(name);
+        self.call_callee(callee, name, args, span, frame)
+    }
+
+    /// What a name calls, remembered by name. The borrow is dropped before
+    /// the call runs, because the body it reaches calls back in here.
+    fn callee_named(&self, name: &str) -> Callee<'a> {
         let known = self.callees.borrow().get(name).cloned();
-        let callee = match known {
+        match known {
             Some(callee) => callee,
             None => {
                 let callee = self.callee(name);
                 self.callees.borrow_mut().insert(name.to_string(), callee.clone());
                 callee
             }
-        };
+        }
+    }
+
+    /// A call through a function reference, remembered by the reference's
+    /// address rather than by hashing its text. Every `Value::FnRef` is made
+    /// in `resolve`, whose answer `names` keeps for the interpreter's life,
+    /// so one name reaches here through one address. The entry holds its own
+    /// count on the name as well, so no other name can come to live at an
+    /// address the table knows. Hashing the name was about a hundred
+    /// instructions of every interpreted call.
+    fn call_ref(&self, name: &Rc<str>, args: Vec<Value>, span: Span, frame: &Frame) -> EvalResult {
+        let callee = self.callee_of_ref(name);
+        self.call_callee(callee, name, args, span, frame)
+    }
+
+    /// What a function reference calls, by its address; see `call_ref`.
+    fn callee_of_ref(&self, name: &Rc<str>) -> Callee<'a> {
+        let key = Rc::as_ptr(name) as *const u8 as usize;
+        let known = self.callees_by_ref.borrow().get(&key).map(|(_, callee)| callee.clone());
+        match known {
+            Some(callee) => callee,
+            None => {
+                let callee = self.callee_named(name);
+                self.callees_by_ref.borrow_mut().insert(key, (name.clone(), callee.clone()));
+                callee
+            }
+        }
+    }
+
+    fn call_callee(
+        &self,
+        callee: Callee<'a>,
+        name: &str,
+        args: Vec<Value>,
+        span: Span,
+        frame: &Frame,
+    ) -> EvalResult {
         if let Callee::Err = callee {
             let [reason] = arity(args, name, span)?;
             let reason = self.force_thunk(reason)?;
@@ -2443,17 +2489,6 @@ impl<'a> Interp<'a> {
             Some(overloads) => Callee::Group(overloads.clone()),
             None => Callee::Builtin,
         }
-    }
-
-    /// Whether a name calls a dispatch group, read off the same memory.
-    fn calls_a_group(&self, name: &str) -> bool {
-        if let Some(known) = self.callees.borrow().get(name) {
-            return matches!(known, Callee::Group(_));
-        }
-        let callee = self.callee(name);
-        let group = matches!(callee, Callee::Group(_));
-        self.callees.borrow_mut().insert(name.to_string(), callee);
-        group
     }
 
     fn construct(&self, ty: &TypeDecl, args: Vec<Value>, span: Span) -> EvalResult {

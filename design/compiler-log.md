@@ -13804,3 +13804,28 @@ benchmarks ran clean, and no fixture I could write put a map accumulator
 under a beat, so the arm would have had no golden. That path also frees a
 malloc'd predecessor without subtracting it from `k_perm_live`, so the
 permanent peak it reports runs high; nothing reaches it today.
+
+## 2026-09-25 — an interpreted call finds its callee by the reference's address
+
+Every call the interpreter makes through a function reference went through
+`call_named`, which looked the callee up in `callees`, a map keyed by the
+name's text. On the interpreted corpus that was 168,588 lookups at about a
+hundred instructions each: the name hashed, the bucket probed and the key
+compared with memcmp. The tail-call path asked the same map again through
+`calls_a_group`, 147,199 times, to learn whether the callee was a dispatch
+group.
+
+A `Value::FnRef` is made in one place, `resolve`, and `names` keeps what it
+made for the interpreter's life, so one name reaches a call through one
+`Rc<str>`. `call_ref` and `group_of` now look the callee up in
+`callees_by_ref`, keyed by that pointer. Each entry holds its own count on
+the name, so no other name can come to live at an address the table knows.
+`call_named` keeps the map by text for the operators and builtins that call
+by name, and `calls_a_group` had no caller left and is gone.
+
+On this box the interpreted row reads 728,723,173 -> 710,784,378, -2.46%,
+with the corpus's output byte-identical. That box does not compare with
+CI's golden, so `interp_instructions` carries CI's last reading less the
+same 17,938,795, 691,618,039, until CI measures it. The ratchet row
+`callee_by_ref` turns `call_ref` back to the lookup by text, and the row
+read 725,003,497 here with it applied.

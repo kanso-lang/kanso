@@ -554,5 +554,9 @@
 # kanso#1625 at CI's sitting: a winning argument is moved into its binding.
 # interp_instructions 732,994,592 -> 709,556,834, a FALL of 23,437,758
 # (-3.1975%).
-interp_instructions=709556834
+#
+# kanso#1628 projected: a call finds its callee by the reference's address.
+# interp_instructions 709,556,834 -> 691,618,039, a FALL of 17,938,795
+# (-2.5282%).
+interp_instructions=691618039
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

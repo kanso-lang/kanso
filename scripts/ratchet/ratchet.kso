@@ -2157,7 +2157,19 @@ regrow = row
 
 rows_b1rg = text/concat rows_b1fp [regrow]
 
-rows_b = text/concat rows_b1rg [compile_mem compile_mem_host]
+# A call through a function reference finds its callee by the reference's
+# address. The mutation hashes the name again.
+callee_by_ref = row
+  "a call that hashes its callee's name"
+  true
+  interp_gate
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_call_hashes_its_callee_s_name")
+  release
+
+rows_b1cr = text/concat rows_b1rg [callee_by_ref]
+
+rows_b = text/concat rows_b1cr [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 
