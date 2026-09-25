@@ -1211,11 +1211,11 @@ render_words = row
   benches
 
 map_lit_copy = row
-  "an empty map literal's no pairs copied through a call"
+  "an empty map literal built as any other"
   false
   "sh scripts/gates/instructions.sh"
   "cost goldens (deterministic ratchet, no clocks)"
-  (breaking "an_empty_map_literal_copied_through_a_call")
+  (breaking "an_empty_map_literal_built_as_any_other")
   benches
 
 buf_class_loop = row
