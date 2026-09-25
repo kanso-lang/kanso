@@ -15245,3 +15245,65 @@ CI read the tree at 947d34ad and its rows were taken:
 `codegen_instructions_release` 698,561,887, 38,073 below it, and
 `emit_instructions` 29,311,866, 145 above. Both rises arrived with the
 declare leaving the preamble; which line moved each was not isolated.
+
+## 2026-09-25 — a large builder grows by half
+
+The run program's `held_peak_bytes` was one buffer. Each of the 90 encodes of
+large.json grows a malloc'd builder by doubling, 130 bytes up to 277,522, and
+the last doubling set the peak. How full that buffer ends up depends on where
+the output length falls between two powers of two, and a doubled buffer is on
+average roughly a quarter empty when its builder finishes.
+
+A malloc'd builder past 16 kb now grows to one and a half times what it holds.
+Below 16 kb it still doubles: growing by half from the first byte cost 4.26
+million instructions on runbench for a peak of 193,834. The arena regime keeps
+doubling too, since the arena reclaims none of the sizes a builder passes
+through. Five settings were measured on runbench against the tree before it:
+
+    past 16 kb, x1.5    held 197,616   instructions -58,990
+    past 32 kb, x1.25   held 206,802   instructions +21,979
+    past 64 kb, x1.25   held 211,742   instructions -36,145
+    past 64 kb, x1.5    held 234,190   instructions -99,886
+    everywhere, x1.5    held 193,834   instructions +4,260,748
+
+The run program's held peak falls from 277,538 to 197,616 bytes, which takes
+`run_peak_bytes` from 3,963,970 to 3,884,048, 2.0% down. Runbench is projected
+at 1,332,852,600, 59,004 below. The other programs that build large text pay
+for the extra grows, since a buffer under glibc's mmap threshold is copied
+when it moves: encodebench is projected at 2,677,033,890 (+1,161,691),
+livebench at 2,018,350,615 (+421,093) and oneshot at 14,274,642 (+1,134).
+Welfare weighs none of those three.
+
+A buffer's final size now depends on where its length falls between two steps
+of one and a half, so one fixture comes out behind:
+`a_cycle_of_four_rewinds_once_a_trip` holds 298,940 bytes at its peak, up from
+279,906. The others that cross 16 kb fall: the builder that outgrows its
+buffer 135,182 to 128,318, the cycle that allocates nothing 426,000 to 338,274
+and the guarded local 33,806 to 25,358. The mem vein pins those peaks, and the
+ratchet row `half_grow` restores the doubling and turns
+`mem_corpus_pins_native_allocator_counters` red, as it did by hand before this
+was committed.
+
+Every binary's text is 16 bytes smaller. The keys the trend gate reads as
+worse, with the values they land on: `run_alloc_bytes` 373,249,458,
+`run_bytes_freed` 9,004, `encode_alloc_bytes` 665,835,936,
+`encode_append_fast` 42,312,400, `encode_append_grow` 5,600,
+`encode_bytes_malloc` 5,600, `oneshot_alloc_bytes` 2,960,506,
+`oneshot_bytes_malloc` 14, `text` 3,485,808, `live_alloc_bytes` 534,764,560,
+`live_bytes_malloc` 5,600,
+`a_builder_that_outgrows_its_buffer_is_never_held_twice_alloc_bytes` 368,258,
+`a_builder_that_outgrows_its_buffer_is_never_held_twice_allocs` 16,
+`a_builder_that_outgrows_its_buffer_is_never_held_twice_append_fast` 99,987,
+`a_builder_that_outgrows_its_buffer_is_never_held_twice_append_grow` 13,
+`a_builder_that_outgrows_its_buffer_is_never_held_twice_bytes_malloc` 13,
+`a_cycle_of_four_rewinds_once_a_trip_alloc_bytes` 5,397,104,
+`a_cycle_of_four_rewinds_once_a_trip_allocs` 141,193,
+`a_cycle_of_four_rewinds_once_a_trip_append_fast` 99,985,
+`a_cycle_of_four_rewinds_once_a_trip_append_grow` 15,
+`a_cycle_of_four_rewinds_once_a_trip_bytes_malloc` 15,
+`a_cycle_of_four_rewinds_once_a_trip_held_peak_bytes` 298,940,
+`a_cycle_that_allocates_nothing_needs_no_bracket_alloc_bytes` 979,198,
+`a_cycle_that_allocates_nothing_needs_no_bracket_allocs` 32,
+`a_cycle_that_allocates_nothing_needs_no_bracket_append_fast` 139,974,
+`a_cycle_that_allocates_nothing_needs_no_bracket_append_grow` 27 and
+`a_cycle_that_allocates_nothing_needs_no_bracket_bytes_malloc` 27.
