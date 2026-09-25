@@ -495,4 +495,8 @@
 # 2026-09-24, kanso#1605 carrying kanso#1606 and kanso#1607: the number scan's
 # lib/json change on top of the shipped-module skip. compile_allocs 14,354 ->
 # 14,276, a FALL of 78 (-0.5434%).
-compile_allocs=14276
+#
+# Projected from this container: an application's arguments go on one shared
+# stack and each application takes a vector of exactly its own. CI's reading
+# replaces it. compile_allocs 14,276 -> 14,240, a FALL of 36 (-0.2522%).
+compile_allocs=14240

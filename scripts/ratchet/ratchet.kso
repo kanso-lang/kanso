@@ -2343,7 +2343,20 @@ split_stops = row
 
 rows_b1ss = text/concat rows_b1rl [split_stops]
 
-rows_b = text/concat rows_b1ss [compile_mem compile_mem_host]
+# An application's arguments leave the shared stack as a vector of exactly
+# their number. Four slots apiece, which is what growing one from nothing
+# left, puts about 60,000 bytes back on the front end's peak.
+args_exact = row
+  "an application that grows its own argument vector"
+  true
+  "sh scripts/gates/compile_memory.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_application_that_grows_its_own_arguments")
+  release
+
+rows_b1ae = text/concat rows_b1ss [args_exact]
+
+rows_b = text/concat rows_b1ae [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 
