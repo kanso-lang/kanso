@@ -15221,9 +15221,8 @@ one: `a_builder_that_outgrows_its_buffer_is_never_held_twice_bytes_freed` 10,
 `append_in_place_bytes_freed` 0, `append_of_a_slice_boxes_nothing_bytes_freed`
 0, `beat_builder_bytes_freed` 4, `beat_cycle_bytes_freed` 4,
 `builder_reclaim_bytes_freed` 200, `builder_transient_bytes_freed` 0 and
-`stream_write_bytes_freed` 100. The declaration lands the compile corpus's `lines` on 1,450 and
-`module_lines` on 1,058, and summed over the fourteen
-binaries `text` lands on 3,486,032.
+`stream_write_bytes_freed` 100. Summed over the fourteen binaries `text`
+lands on 3,486,032.
 
 CI read the builder seed at 42d0b138 and its rows were taken: runbench
 1,332,911,604, 3,951 below the projection, `codegen_instructions_dev`
@@ -15239,7 +15238,9 @@ Taking the seed off that list also took its `declare` out of the nine
 programs that never write `bytes ""`, so their emitted rows went back to
 main's: basket 5,436 lines, widebench 6,168, deepbench 1,743, escapebench
 628, pendbench 2,965, scanbench 14,419, indexbench 557, digestbench 4,498
-and readbench 601. CI read the tree at 947d34ad and its rows were taken:
+and readbench 601. The compile corpus's five programs and its module fall by
+the same line and match main's again, so `compile_cost` holds main's golden.
+CI read the tree at 947d34ad and its rows were taken:
 `codegen_instructions_dev` 125,554,679, 13,495 above the 42d0b138 reading,
 `codegen_instructions_release` 698,561,887, 38,073 below it, and
 `emit_instructions` 29,311,866, 145 above. Both rises arrived with the
