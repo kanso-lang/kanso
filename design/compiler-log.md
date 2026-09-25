@@ -14317,3 +14317,9 @@ play` of a one-line program that is 402,596 of the 1,067,649 instructions
 under `kanso::main`. No gate sees it: the gates run with `/usr/bin` first on
 PATH, where the image's clang is 18 and takes the other convention, so the
 rewrite never runs under measurement.
+
+CI read every work, text and emitted row as projected. The two codegen rows
+moved with the runtime's size: `codegen_instructions_dev` 142,050,065 ->
+142,053,001 (+2,936) and `codegen_instructions_release` 698,557,830 ->
+698,563,613 (+5,783), the cost of compiling the new counter and the cursor
+arm into every program.
