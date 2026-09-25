@@ -700,7 +700,7 @@ jsonbench 902174717
 encodebench 2677033890
 oneshot 14274642
 basket 31565926
-widebench 28836195
+widebench 28756197
 deepbench 364523751
 escapebench 68272680
 pendbench 181849069

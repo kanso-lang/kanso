@@ -15284,6 +15284,12 @@ ratchet row `half_grow` restores the doubling and turns
 `mem_corpus_pins_native_allocator_counters` red, as it did by hand before this
 was committed.
 
+CI read the tree at 78bf6606 and matched the four projections to the
+instruction. It also found widebench at 28,756,197, 79,998 below, which the
+projection had not measured, `codegen_instructions_dev` at 125,554,618, 61
+below, and `codegen_instructions_release` at 698,561,899, 12 above. Those rows
+are CI's.
+
 Every binary's text is 16 bytes smaller. The keys the trend gate reads as
 worse, with the values they land on: `run_alloc_bytes` 373,249,458,
 `run_bytes_freed` 9,004, `encode_alloc_bytes` 665,835,936,

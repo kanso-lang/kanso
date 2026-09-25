@@ -269,4 +269,7 @@
 # CI measured the builder seed at 947d34ad, with the declare no longer written
 # into programs that never call it. codegen_instructions_dev 125,541,184 ->
 # 125,554,679, a RISE of 13,495 (+0.0107%).
-codegen_instructions_dev=125554679
+#
+# CI measured the half-step grow at 78bf6606. codegen_instructions_dev
+# 125,554,679 -> 125,554,618, a FALL of 61 (-0.0000%).
+codegen_instructions_dev=125554618
