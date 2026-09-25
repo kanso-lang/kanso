@@ -15350,6 +15350,12 @@ document a hundred times and pins 402 allocations and 120 permanent bytes.
 With the cache disabled it reads 1,002 allocations and 19,232 bytes of string
 headers; the ratchet row `token_cache` makes that mutation.
 
+CI read the tree at abc4015e: runbench 1,326,065,791 and oneshot
+14,842,337, 359 and 224 below the projections, `codegen_instructions_dev`
+125,569,980, 15,362 above #1650's reading, and
+`codegen_instructions_release` 698,322,865, 239,034 below it. Those rows are
+CI's.
+
 Every binary's text is 4,672 bytes larger. The keys the trend gate reads as
 worse, with the values they land on: `run_perm_live_bytes` 15,168,
 `run_perm_peak_bytes` 31,568, `perm_live_bytes` 15,168, `perm_peak_bytes`
@@ -15384,8 +15390,8 @@ The first line is the reason for the typed parameter: the same call made on
 the bare `k` of the entry pattern costs more than the old dispatch did. Why
 the two-byte literal pays after a key and costs before one was not isolated.
 
-Runbench is projected at 1,300,023,482, 26,042,668 below (-1.96%), livebench
-at 1,905,214,048, 113,377,925 below (-5.6%), and oneshot at 14,558,151,
+Runbench is projected at 1,300,023,123, 26,042,668 below (-1.96%), livebench
+at 1,905,214,048, 113,377,925 below (-5.6%), and oneshot at 14,557,927,
 284,410 below. No other program moves. The ratchet row `key_typed` sends the
 key back through the untyped escape, which leaves the output the same and put
 runbench at 1,337,789,395 when it was tried by hand.

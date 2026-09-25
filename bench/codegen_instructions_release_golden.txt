@@ -359,4 +359,7 @@
 #
 # CI measured the half-step grow at 78bf6606. codegen_instructions_release
 # 698,561,887 -> 698,561,899, a RISE of 12 (+0.0000%).
-codegen_instructions_release=698561899
+#
+# CI measured the short-token cache at abc4015e. codegen_instructions_release
+# 698,561,899 -> 698,322,865, a FALL of 239,034 (-0.0342%).
+codegen_instructions_release=698322865
