@@ -709,20 +709,26 @@
 # deepbench -64,000, escapebench -2,399,986, pendbench +998, indexbench
 # -40,097, scanbench -172, digestbench -91,203, livebench -42,089,654,
 # runbench -66,651,001. CI's reading replaces them.
+#
+# 2026-09-25, a subtype is its parent to a builtin: no benchmark declares a
+# subtype, so none emits a new call; adding k_unsub to the runtime the release
+# link optimises with the program moves the layout: encodebench +149,706,
+# oneshot +96, escapebench -14, digestbench -14, livebench +54,519, runbench
+# +5,742. Projected from this container, and CI's reading replaces them.
 jsonbench 813902288
-encodebench 2530778953
-oneshot 13870906
+encodebench 2530928659
+oneshot 13871002
 basket 31172156
 widebench 28565052
 deepbench 364733730
-escapebench 63421674
+escapebench 63421660
 pendbench 181896211
 indexbench 2498474
 scanbench 281849
-digestbench 5450865
+digestbench 5450851
 readbench 4631851
-livebench 1835736307
-runbench 1223628055
+livebench 1835790826
+runbench 1223633797
 # 2026-09-06 (the run program joins): `runbench 3043743748` is a NEW row and
 # nothing regressed to make it appear. It is the program Clay's gavel that day
 # made the objective's whole run-speed term, and the thirteen rows above it

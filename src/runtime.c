@@ -4677,6 +4677,14 @@ static KValue k_sub_base(KValue v) {
     return v;
 }
 
+/* A builtin sees a subtype's value as its parent's, as the oracle's
+   call_builtin does: `length` of a `type name string` counts the string. The
+   emitter routes a builtin's arguments through this only in a program that
+   declares a subtype, so no other program pays for it. */
+KValue k_unsub(KValue v) {
+    return v.tag == K_SUB ? k_sub_base(v) : v;
+}
+
 /* Whether an operand sends an operator to its user arms. A record does, and
    so does a subtype of one, which is the same value wearing a narrower name. */
 long long k_routes_to_arms(KValue v) {

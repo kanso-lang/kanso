@@ -1233,6 +1233,7 @@ declare %KValue @k_b_wrap_err(%KValue, %KValue, ptr)
 declare %KValue @k_b_effect(%KValue)
 declare %KValue @k_err_hop(%KValue, ptr)
 declare void @llvm.assume(i1 noundef)
+declare %KValue @k_unsub(%KValue)
 declare %KValue @k_rec(i64, i64, ptr)
 declare %KValue @k_pair_failure(%KValue, %KValue)
 declare %KValue @k_rec_reuse(i64, i64, ptr, %KValue)
@@ -4814,9 +4815,19 @@ impl<'a> Backend<'a> {
         let seeded;
         let e = match entering {
             true => {
+                // A builder seeded with a subtype of string builds from the
+                // string, which only a program declaring a subtype can hand it.
+                let e = match self.sub_parents.is_empty() {
+                    true => e.to_string(),
+                    false => {
+                        let u = f.tmp();
+                        f.line(&format!("{u} = call %KValue @k_unsub(%KValue {e})"));
+                        u
+                    }
+                };
                 let t = f.tmp();
                 f.line(&format!("{t} = call %KValue @k_b_str_builder(%KValue {e})"));
-                f.record(&t, f.set_of(e));
+                f.record(&t, f.set_of(&e));
                 seeded = t;
                 seeded.as_str()
             }
@@ -9250,6 +9261,18 @@ impl<'a> Backend<'a> {
             }
         }
 
+        // A builtin sees a subtype's value as its parent's, which is what the
+        // oracle's call_builtin does before anything else. Only a program that
+        // declares a subtype can hand one over, so only that program pays.
+        // A type's constructor comes through here too and must see the value
+        // it wraps, so only a real builtin's arguments are unwrapped.
+        if !shadows && !self.sub_parents.is_empty() && crate::check::builtin_arity(name).is_some() {
+            for e in emitted.iter_mut() {
+                let t = f.tmp();
+                f.line(&format!("{t} = call %KValue @k_unsub(%KValue {e})"));
+                *e = t;
+            }
+        }
         if name == "err" {
             let origin = self.origin_arg(f, span);
             let t = f.tmp();
