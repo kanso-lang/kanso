@@ -304,4 +304,7 @@
 #
 # kanso#1634: the interpreter's per-call questions stop hashing
 # emit_instructions 29,261,817 -> 29,274,393, a RISE of 12,576 (+0.0430%).
-emit_instructions=29274393
+#
+# CI measured the doors in one pass on main after kanso#1634, at a2a416cd.
+# emit_instructions 29,274,393 -> 29,274,394, a RISE of 1 (+0.0000%).
+emit_instructions=29274394

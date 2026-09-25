@@ -14388,6 +14388,6 @@ CI read two rows one instruction higher than main: `emit_instructions`
 clang 18 the new pass never runs, so this is the layout of a function that
 returns at its first line.
 
-Merged again after kanso#1634, which moved both rows further. They take
-main's values, `emit_instructions` 29,274,393 and `startup_instructions`
-605,441, until CI reads the merged tree.
+Merged again after kanso#1634, which moved both rows further. CI read the
+merged tree one instruction above main on each again: `emit_instructions`
+29,274,393 -> 29,274,394 and `startup_instructions` 605,441 -> 605,442.
