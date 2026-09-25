@@ -4434,8 +4434,8 @@ fn inline_payload(f: &mut FnEmit, value: &str) -> String {
     t
 }
 
-/// Calls the alwaysinline twin rather than restating its tag test, so the
-/// emitter cannot drift from the definition it inlines.
+/// Whether a value is not a failure, as one compare of its tag against the
+/// err tag.
 fn inline_not_failure(f: &mut FnEmit, value: &str) -> String {
     let set = f.set_of(value);
     // An EMPTY set is not a proof. `group_param_set` answers 0 for a parameter
@@ -4453,13 +4453,24 @@ fn inline_not_failure(f: &mut FnEmit, value: &str) -> String {
 
 /// The same test with no fold, for the one place a set cannot speak: a block
 /// reached BECAUSE a value is outside the set recorded for it.
+///
+/// It was a call to the alwaysinline `k_not_failure`, then a compare of what
+/// that returned. Every module paid for the inliner to open the call, and the
+/// dev tier, which does no other optimising, kept the widening and the second
+/// compare as well. The test is the one `k_not_failure` makes, and
+/// `tests/the_err_tag_is_the_runtime_s.rs` holds the number to the runtime's.
 fn not_failure_test(f: &mut FnEmit, value: &str) -> String {
-    let r = f.tmp();
-    f.predicate(&r, format!("call i64 @k_not_failure(%KValue {value})"));
+    let tag = inline_tag(f, value);
+    if let Ok(known) = tag.parse::<i64>() {
+        return (known != K_ERR_TAG).to_string();
+    }
     let ok = f.tmp();
-    f.line(&format!("{ok} = icmp ne i64 {r}, 0"));
+    f.line(&format!("{ok} = icmp ne i64 {tag}, {K_ERR_TAG}"));
     ok
 }
+
+/// The runtime's `K_ERR`, the sixth tag in its enum.
+pub const K_ERR_TAG: i64 = 5;
 
 impl<'a> Backend<'a> {
     /// A group's declaration indices, read out of the index rather than

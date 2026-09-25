@@ -13212,3 +13212,27 @@ digits too and read two veins' `allocs` 10 and 1,836 higher, which is how
 the cache path was found. The render differential agrees on its 86 values,
 the numeric differential on its 2,163 programs, and the int extremes print
 the same on both engines.
+
+## 2026-09-25 — a failure check is one compare
+
+Every "is this value a failure" the emitter asked was a call to the
+alwaysinline `k_not_failure` and a compare of its answer with zero. The
+release pipeline paid its inliner to open each call, and the dev tier, which
+does no other optimising, kept the widening and the second compare as well
+as the two-word call it had been rewritten to. The emitter now extracts the
+tag, or takes it from `known_words`, and compares it with `K_ERR_TAG`, which
+is 5. A tag known at compile time answers `true` or `false` outright.
+runbench's module falls 4,171 -> 3,564 calls and 24,458 -> 24,330 lines, and
+loses a define, since nothing calls `k_not_failure` now and the prune drops
+it. The decoder's calls fall 582 -> 485.
+
+On this container, against the int-render head: `codegen_instructions_dev`
+143,592,238 -> 142,070,258 (-1.06%), `codegen_instructions_release`
+720,659,681 -> 715,347,931 (-0.74%) and `emit_instructions` 30,390,367 ->
+29,621,519 (-2.53%). runbench 1,650,960,035 -> 1,648,120,677 (-0.1720%) and
+jsonbench -5,695,350. scanbench reads +22. Every counter vein agrees.
+
+`tests/the_err_tag_is_the_runtime_s.rs` holds the number to the position of
+`K_ERR` in the runtime's tag enum, and to the compare in the declared
+`k_not_failure`, so the emitter cannot drift from either. Watched red with
+the constant set to 6.
