@@ -2635,7 +2635,18 @@ tail_group = row
 
 rows_b1tg = text/concat rows_b1ky [tail_group]
 
-rows_b = text/concat rows_b1tg [compile_mem compile_mem_host]
+# A literal is read out of its BigInt by a direct digit read, inlined.
+word_read = row
+  "a literal read through the digit walk"
+  true
+  interp_gate
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_literal_read_through_the_digit_walk")
+  release
+
+rows_b1wr = text/concat rows_b1tg [word_read]
+
+rows_b = text/concat rows_b1wr [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 

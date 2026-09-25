@@ -3687,7 +3687,7 @@ impl<'a> Interp<'a> {
                         })
                     }
                 };
-                Ok(Value::int(BigInt::from(code)))
+                Ok(Value::int(code))
             }
             b"from_code" => {
                 let [code] = arity(args, name, span)?;
@@ -3803,7 +3803,7 @@ impl<'a> Interp<'a> {
                         break;
                     }
                 }
-                Ok(Value::int(BigInt::from(at)))
+                Ok(Value::int(at))
             }
             b"number_span" => {
                 let [cs, from] = arity(args, name, span)?;
@@ -3834,7 +3834,7 @@ impl<'a> Interp<'a> {
                     float |= matches!(items[at], b'.' | b'e' | b'E');
                     at += 1;
                 }
-                let end = BigInt::from(at + 1);
+                let end = (at + 1) as i64;
                 Ok(Value::int(if float { -end } else { end }))
             }
             b"find2" => {
@@ -3859,7 +3859,7 @@ impl<'a> Interp<'a> {
                         break;
                     }
                 }
-                Ok(Value::int(BigInt::from(at)))
+                Ok(Value::int(at))
             }
             b"slice" => {
                 let [container, from, to] = arity(args, name, span)?;
@@ -3954,7 +3954,7 @@ impl<'a> Interp<'a> {
                 let [x] = arity(args, name, span)?;
                 match x {
                     Value::Int(n) => Ok(Value::Int(n)),
-                    Value::Float(v) => Ok(Value::int(BigInt::from(v.round() as i64))),
+                    Value::Float(v) => Ok(Value::int(v.round() as i64)),
                     other if is_failure(&other) => Ok(other),
                     other => Err(RuntimeError {
                         message: format!(
@@ -4054,10 +4054,10 @@ impl<'a> Interp<'a> {
             b"length" => {
                 let [list] = arity(args, name, span)?;
                 match list {
-                    Value::List(items) => Ok(Value::int(BigInt::from(items.len()))),
-                    Value::Bytes(items) => Ok(Value::int(BigInt::from(items.len()))),
-                    Value::Str(s) => Ok(Value::int(BigInt::from(s.chars().count()))),
-                    Value::Map(entries) => Ok(Value::int(BigInt::from(entries.len()))),
+                    Value::List(items) => Ok(Value::int(items.len())),
+                    Value::Bytes(items) => Ok(Value::int(items.len())),
+                    Value::Str(s) => Ok(Value::int(s.chars().count())),
+                    Value::Map(entries) => Ok(Value::int(entries.len())),
                     other => Err(RuntimeError {
                         message: format!(
                             "length takes a list, string, or map, not {}{}",
@@ -4667,7 +4667,7 @@ pub fn index_value(container: Value, index: Value, span: Span) -> EvalResult {
         (Value::Bytes(items), Value::Int(i)) => {
             let idx = usize::try_from(i).ok();
             Ok(match idx.filter(|i| *i >= 1 && *i <= items.len()) {
-                Some(i) => Value::int(BigInt::from(items[i - 1])),
+                Some(i) => Value::int(items[i - 1]),
                 None => Value::NoneV,
             })
         }
@@ -5474,7 +5474,7 @@ impl<'a> Interp<'a> {
                 Some(value) => Value::Str(value),
                 None => Value::NoneV,
             }),
-            Desc::Now => Ok(Value::int(BigInt::from(executor.now()))),
+            Desc::Now => Ok(Value::int(executor.now())),
             Desc::Exists(path) => Ok(match executor.exists(path) {
                 true => Value::True,
                 false => Value::False,

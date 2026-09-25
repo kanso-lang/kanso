@@ -8,7 +8,7 @@
 //! `Small`. Equality, ordering and hashing rely on that, since two equal
 //! numbers are then always the same variant.
 
-use num_bigint::BigInt;
+use num_bigint::{BigInt, Sign};
 use num_traits::{ToPrimitive, Zero};
 use std::borrow::Cow;
 use std::cmp::Ordering;
@@ -105,10 +105,28 @@ impl Int {
     }
 }
 
+/// The number as a word, if it fits one. `BigInt::to_i64` gets there through
+/// a general digit walk; a number that fits has at most one digit, so this
+/// reads it directly.
+#[inline]
+fn word_of(n: &BigInt) -> Option<i64> {
+    let mut digits = n.iter_u64_digits();
+    let magnitude = match digits.len() {
+        0 => return Some(0),
+        1 => digits.next()?,
+        _ => return None,
+    };
+    match n.sign() {
+        Sign::Minus if magnitude <= 1 << 63 => Some((magnitude as i64).wrapping_neg()),
+        Sign::Minus => None,
+        _ => i64::try_from(magnitude).ok(),
+    }
+}
+
 impl From<BigInt> for Int {
     fn from(n: BigInt) -> Int {
         // An arithmetic result that fits a word goes back into one.
-        match n.to_i64() {
+        match word_of(&n) {
             Some(small) => Int::Small(small),
             None => Int::Big(Rc::new(n)),
         }
@@ -116,12 +134,22 @@ impl From<BigInt> for Int {
 }
 
 impl From<&BigInt> for Int {
+    // Inlined into the literal's evaluation, which almost never takes the
+    // clone; kept out of line, the clone's register saves were paid by every
+    // literal.
+    #[inline]
     fn from(n: &BigInt) -> Int {
-        match n.to_i64() {
+        match word_of(n) {
             Some(small) => Int::Small(small),
-            None => Int::Big(Rc::new(n.clone())),
+            None => wide(n),
         }
     }
+}
+
+#[cold]
+#[inline(never)]
+fn wide(n: &BigInt) -> Int {
+    Int::Big(Rc::new(n.clone()))
 }
 
 macro_rules! from_word {
@@ -182,7 +210,7 @@ impl PartialOrd for Int {
 impl PartialEq<BigInt> for Int {
     fn eq(&self, other: &BigInt) -> bool {
         match self {
-            Int::Small(n) => other.to_i64() == Some(*n),
+            Int::Small(n) => word_of(other) == Some(*n),
             Int::Big(n) => n.as_ref() == other,
         }
     }

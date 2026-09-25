@@ -15433,3 +15433,33 @@ The ratchet row `tail_group` puts the lookup back and leaves the carried group
 unused. The interpreted run read 595,873,686 with it, back where it started.
 No compiled program moves. The compile rows are a layout vein and can move
 with any edit to the compiler's Rust, so they are left for CI to read.
+
+## 2026-09-25 — a length, an index and a literal become words directly
+
+The interpreter keeps an int in a machine word when it fits, but three kinds
+of site still reached it through a `BigInt`. `length`, `char_code`, `find`,
+`number_span`, `now` and a byte index built a `BigInt` from a `usize` or an
+`i64`, which allocates its digits, and handed it to `Int::from` to be shrunk
+back into a word. The interpreted corpus does that 68,891 times, 33,239 from
+builtins and 35,652 from byte indexing. Those sites now build the word
+directly, which takes 2,095,679 instructions off the interpreted run.
+
+The other two read a literal the parser stores as a `BigInt`: evaluating an int
+literal, 125,002 times, and matching an int pattern, 85,873 times. Both went
+through `BigInt::to_i64`, which walks the digits in general. A number that fits
+a word has at most one digit, so `word_of` reads it and its sign directly; that
+took 1,184,161 off. The conversion also saved six registers on every call
+because its rare path clones the `BigInt` into an `Rc`. With the clone moved
+into a cold function and the rest inlined into the literal's evaluation, a
+further 3,105,935 came off.
+
+The interpreted run falls 6,385,775 instructions on the container, 1.1%, which
+projects `interp_instructions` at 575,456,755 over the tail's projection. The
+spec `the_ends_of_the_word_read_back_as_words` pins the two ends of the word:
+the largest positive literal, the first past it, and a sum that lands on the
+most negative word from outside it. Letting that sum stay a `BigInt` printed
+`false` where `under + 1 == least` should be true, and reading the first
+literal past the word as a wrapped `i64` sent it to the wrong clause. The
+ratchet row `word_read` sends a literal through `to_i64` first; the
+interpreted run read 577,707,831 with it. No compiled program moves, and the
+compile rows are left for CI to read.
