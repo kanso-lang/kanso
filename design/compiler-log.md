@@ -15406,3 +15406,20 @@ they land on: `run_append_fast` 8,256,960, `run_perm_allocs` 93,
 `emitted_other_defines` 1,556, `emitted_other_lines` 83,727, `text` 3,548,064,
 `live_alloc_bytes` 534,601,584, `live_append_fast` 31,135,470 and
 `a_literal_appended_across_a_rewind_append_fast` 2,080.
+
+## 2026-09-25 — a tail call carries its group
+
+The interpreter runs a tail call through the dispatcher's loop: `eval_tail`
+hands back the callee's name and arguments, and the loop looks the name up in
+`fns` to find the overloads it dispatches over. `eval_tail` had already asked
+`callee_of_ref` whether the callee is a group, and that answer holds the
+group. The interpreted corpus makes 107,607 tail calls, and each paid a hash
+of the name and a compare of its bytes to find the same group again.
+
+`Flow::Tail` now carries the group beside the name, and the loop takes it. The
+interpreted run falls 13,651,102 instructions on the container, 2.3%, which
+projects `interp_instructions` at 581,821,195 over the typed key's projection.
+
+The ratchet row `tail_group` puts the lookup back and leaves the carried group
+unused. The interpreted run read 595,873,686 with it, back where it started.
+No compiled program and no counter moves.
