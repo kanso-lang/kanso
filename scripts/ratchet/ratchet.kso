@@ -2121,7 +2121,19 @@ grow_first = row
 
 rows_b1gf = text/concat rows_b1ft [grow_first]
 
-rows_b = text/concat rows_b1gf [compile_mem compile_mem_host]
+# A parameter that is a name binds its argument by moving it once an arm has
+# won. The mutation clones it at every candidate again.
+moved_binds = row
+  "a bound name cloned for every candidate"
+  true
+  interp_gate
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_bound_name_cloned_for_every_candidate")
+  release
+
+rows_b1mb = text/concat rows_b1gf [moved_binds]
+
+rows_b = text/concat rows_b1mb [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 

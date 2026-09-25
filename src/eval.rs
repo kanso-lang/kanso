@@ -2722,7 +2722,8 @@ impl<'a> Interp<'a> {
                 }
             }
             match best {
-                Some((won_score, decl, binds)) => {
+                Some((won_score, decl, mut binds)) => {
+                    bind_moved(&decl.params, &mut args, &mut binds);
                     // The winner's buffer comes back as the working one. The
                     // two have the same job and only one of them is needed
                     // next time round.
@@ -4261,12 +4262,70 @@ fn match_params_into(
             1 => 100,
             _ => 10,
         };
-        let Some(depth) = match_one(pattern, arg, binds) else {
+        let Some(depth) = match_top(pattern, arg, binds) else {
             return false;
         };
         score.push(base.saturating_sub(depth));
     }
     true
+}
+
+/// `match_one` for a whole parameter, which binds a name without cloning.
+///
+/// A parameter that is a name, bare or annotated, bound a clone of its
+/// argument, and arm selection tries every candidate, so each one paid for
+/// the clone whether it won or not: on the interpreted corpus that was 620,601
+/// clones from `match_one`, 26,424,710 instructions, with as many drops after.
+/// The binding now holds `none` until an arm has won, and `bind_moved` puts
+/// the argument itself there, since the argument vector is cleared before the
+/// body runs and nothing reads it after.
+fn match_top(pattern: &Pattern, arg: &Value, binds: &mut Bindings) -> Option<u8> {
+    match pattern {
+        Pattern::Var(name, _) => match is_failure(arg) {
+            true => None,
+            false => {
+                binds.push((name.clone(), Value::NoneV));
+                Some(0)
+            }
+        },
+        Pattern::Annotated { name, ty, .. } => {
+            let depth = type_match_depth(ty, arg)?;
+            binds.push((name.clone(), Value::NoneV));
+            Some(depth)
+        }
+        _ => match_one(pattern, arg, binds),
+    }
+}
+
+/// How many names a pattern binds when it matches, which is how many entries
+/// `match_one` pushes for it.
+fn binder_count(pattern: &Pattern) -> usize {
+    match pattern {
+        Pattern::Var(..) | Pattern::Annotated { .. } => 1,
+        Pattern::Ctor { fields, whole, .. } => {
+            fields.iter().map(binder_count).sum::<usize>() + usize::from(whole.is_some())
+        }
+        Pattern::IntLit(..)
+        | Pattern::StrLit(..)
+        | Pattern::Nullary(..)
+        | Pattern::Wildcard(..)
+        | Pattern::Keyed { .. } => 0,
+    }
+}
+
+/// The winning arm's name parameters take their arguments, moved out of the
+/// argument vector into the places `match_top` held for them.
+fn bind_moved(params: &[Pattern], args: &mut [Value], binds: &mut Bindings) {
+    let mut at = 0;
+    for (pattern, arg) in params.iter().zip(args.iter_mut()) {
+        match pattern {
+            Pattern::Var(..) | Pattern::Annotated { .. } => {
+                binds[at].1 = std::mem::replace(arg, Value::NoneV);
+                at += 1;
+            }
+            _ => at += binder_count(pattern),
+        }
+    }
 }
 
 /// The as-pattern's name takes the value the shape matched — the same value

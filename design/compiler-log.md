@@ -13522,3 +13522,23 @@ vein is what sees it: ratchet row `grow_first` drops the test.
 its 175,797 calls, 1,933,767 instructions of frame. It was one of the doors
 tried under `preserve_none` in the entry above and the trial segfaulted, so
 it is left as it is.
+
+---
+
+## 2026-09-25 — the interpreter moves a winning argument into its binding
+
+Arm selection tries every candidate in a group, and `match_one` bound a
+parameter that is a name to a clone of its argument, so each candidate paid
+for the clone whether it won or not. On the interpreted corpus that was
+620,601 clones from `match_one`, 26,424,710 instructions of
+`Value::clone`, most of them a `BigInt` or a `String` that allocates, and as
+many drops after. A name parameter, bare or annotated, now holds `none` while
+the arms are tried, and once an arm has won `bind_moved` moves each argument
+into its place. The argument vector is cleared before the body runs and
+nothing reads it after, which the dispatcher already said.
+
+    interp_instructions (this container)   750,610,887 -> 728,721,835   -2.9161%
+
+The printed output is the same. The row is the only thing that can see this,
+so ratchet row `moved_binds` clones at every candidate again and gates on the
+interpreted run's instructions.
