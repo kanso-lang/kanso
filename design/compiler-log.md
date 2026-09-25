@@ -2599,7 +2599,14 @@ One did not, and what it cost is the point.
 
 The HTML was left unmerged. A script then rewrote the file for an unrelated
 reason — renumbering a section — which wrote the working tree's contents back
-out, markers included, and the commit went in with `<<<<<<< HEAD`, `=======`
+out, markers included, and the commit went in with `The ratchet found what the token cache left behind. Its row `slice_words`
+sends a four-to-seven-byte slice through `k_str_n` instead of the two-word
+copy, and the gate stayed green: the cache returns every slice of those
+lengths before the copy is reached, hits from the cache and misses from
+`k_token_miss`, so the copy was dead code and the mutation reached nothing.
+The branch, the row and its mutation are gone. Every benchmark reads within
+14 instructions of the tree that kept them, which is what dead code costs.
+
 and `>>>>>>> origin/main` sitting in the published page.
 
 **All three page gates then ran on that tree and all three passed.**
@@ -15522,6 +15529,7 @@ and `work_encodebench` 2,677,016,790 (+0.04%) and `work_oneshot` 14,486,409
 them has been isolated as their cause; runbench, the row the objective
 weighs, fell 7.4% across the same set.
 
+<<<<<<< HEAD
 ## 2026-09-25 — a proven tag is assumed
 
 Inference proves many parameters are exactly one kind of heap value: a list
