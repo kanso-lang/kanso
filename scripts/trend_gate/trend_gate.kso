@@ -241,7 +241,10 @@ higher_c = ["push_mut_fast" "put_mut_fast" "bytes_freed" "carry_dedup"]
 # `ryu_short` is a float whose digits the short path found by scaling and
 # dividing back. Losing the path renders the same text through ryu's
 # multiplies, so no output or allocation moves and this counter goes to nought.
-higher_d = ["ten_handups" "seek_resumes" "ryu_short"]
+# `seek_steps` is an index answered by stepping the cursor one character on.
+# Losing the step sends each index through the general seek, which still
+# resumes from the cursor, so `seek_resumes` holds and only this goes to nought.
+higher_d = ["ten_handups" "seek_resumes" "ryu_short" "seek_steps"]
 
 higher_cd = text/concat higher_c higher_d
 

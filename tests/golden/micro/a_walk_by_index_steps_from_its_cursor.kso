@@ -1,0 +1,28 @@
+# A joined string knows its character count when every piece and the
+# separator already know theirs, and a walk by index steps from the character
+# it last read. Each line below is right only if both are: a seed that
+# dropped the separator's count, or took a piece nobody had counted, gives a
+# wrong length; a step that moved from another string's cursor, or stepped
+# past the end, gives a wrong character.
+import "std/text"
+
+word = "aé😀"
+
+sep = "–"
+
+fn walked s i n acc
+  if (i > n) acc (walked s (i + 1) n "{acc}[{s[i]}]")
+
+pub play =
+  counted = length word + length sep
+  both = text/join [word word] ""
+  spaced = text/join [word word word] sep
+  mixed = text/join [word "ü"] sep
+  other = "xyzü"
+  print "counted:  {counted}"
+  >> print "both:     {length both}"
+  >> print "spaced:   {length spaced}"
+  >> print "mixed:    {length mixed}"
+  >> print "none:     {length (text/join [] sep)}"
+  >> print "walked:   {walked spaced 1 12 ""}"
+  >> print "two:      {spaced[2]} then {other[3]} then {spaced[3]}"

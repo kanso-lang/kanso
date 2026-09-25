@@ -2329,7 +2329,13 @@
 #
 # kanso#1634: the interpreter's per-call questions stop hashing
 # compile_instructions 25,004,892 -> 25,041,977, a RISE of 37,085 (+0.1483%).
-compile_instructions=25041977
+#
+# CI measured the warm play at 12440a7d. compile_instructions 25,041,977 ->
+# 25,027,159, a FALL of 14,818 (-0.0592%).
+#
+# CI measured the carried tree at 913723b0. compile_instructions 25,027,159 ->
+# 25,195,466, a RISE of 168,307 (+0.6725%).
+compile_instructions=25195466
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

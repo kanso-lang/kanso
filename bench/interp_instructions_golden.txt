@@ -567,12 +567,16 @@
 # interp_instructions 690,933,840 -> 661,830,756, a FALL of 29,103,084
 # (-4.2121%).
 #
-# Projected from this container: a map of up to eight entries is a sorted
-# vector. CI's reading replaces it. interp_instructions 661,830,756 ->
-# 661,487,857, a FALL of 342,899 (-0.0518%).
+# CI measured the warm play at 12440a7d. interp_instructions 661,830,756 ->
+# 659,854,491, a FALL of 1,976,265 (-0.2986%).
 #
-# 2026-09-25, an interpreted int in a machine word: projected from this
-# container's fall of 66,619,194 against main. interp_instructions 661,487,857
-# -> 595,211,562, a FALL of 66,276,295 (-10.0193%).
-interp_instructions=595211562
+# CI measured the carried tree at 913723b0. interp_instructions 659,854,491 ->
+# 659,398,270, a FALL of 456,221 (-0.0691%).
+#
+# 2026-09-25, a small map as a sorted vector and an interpreted int in a
+# machine word, over the carried tree of #1644: projected from this
+# container's fall of 66,745,891. CI's reading replaces it.
+# interp_instructions 659,398,270 -> 592,652,379, a FALL of 66,745,891
+# (-10.1222%).
+interp_instructions=592652379
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

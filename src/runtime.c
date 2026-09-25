@@ -163,6 +163,10 @@ static long long k_stat_str_scan_bytes = 0;
    loses the cursor if the rewind forgets it, and the walk then starts from
    the front at every position: nothing else moves, and this reads nought. */
 static long long k_stat_seek_resumes = 0;
+/* Indexes answered by stepping the cursor one character on, without the
+   general seek: a walk by index takes this path at every character after its
+   first. A merge that loses the step reads zero here. */
+static long long k_stat_seek_steps = 0;
 static long long k_stat_carry_dedup = 0;
 static long long k_stat_bytes_malloc = 0;
 /* Where arena bytes go, by value shape. The totals above say how much was
@@ -612,8 +616,8 @@ static void k_stats_dump(void) {
         k_stat_utf8_zerocopy,
         k_stat_carry_dedup, k_stat_bytes_malloc, k_stat_bytes_freed,
         k_perm_live, k_perm_peak);
-    fprintf(stderr, "str_scans=%lld\nstr_scan_bytes=%lld\nseek_resumes=%lld\n",
-            k_stat_str_scans, k_stat_str_scan_bytes, k_stat_seek_resumes);
+    fprintf(stderr, "str_scans=%lld\nstr_scan_bytes=%lld\nseek_resumes=%lld\nseek_steps=%lld\n",
+            k_stat_str_scans, k_stat_str_scan_bytes, k_stat_seek_resumes, k_stat_seek_steps);
     fprintf(stderr, "buf_reuse=%lld\nheld_peak_bytes=%lld\n", k_stat_buf_reuse, k_stat_held_peak);
     fprintf(stderr, "view_allocs=%lld\nview_frees=%lld\n",
             k_stat_view_allocs, k_stat_view_frees);
@@ -8302,9 +8306,26 @@ KValue k_b_at(KValue container, KValue index) {
     if (container.tag == K_STR && index.tag == K_INT) {
         KStr* s = k_as_str(container);
         long long want = index.payload;
-        if (want < 1) return k_none();
-        long at = k_str_seek(s, want);
-        if (at < 0) return k_none();
+        long at;
+        /* The step. A walk by index asks for the character after the one it
+           just read, and the cursor stands on that one: the answer is the
+           cursor's byte plus its character's width, which `k_str_seek` also
+           finds, but only after asking whether the string is all ascii and
+           whether the cursor's own character was wanted. On the run program's
+           index phase, 690,000 indexes of a multibyte string, those questions
+           cost 8,280,000 instructions. */
+        if (s == k_seek_str && want == k_seek_char + 1 && s->cap != 0 && k_seek_byte < s->len) {
+            if (K_COUNTING) k_stat_seek_resumes++;
+            if (K_COUNTING) k_stat_seek_steps++;
+            at = k_seek_byte + k_cp_len((unsigned char)s->data[k_seek_byte]);
+            if (at >= s->len) return k_none();
+            k_seek_char = want;
+            k_seek_byte = at;
+        } else {
+            if (want < 1) return k_none();
+            at = k_str_seek(s, want);
+            if (at < 0) return k_none();
+        }
         long w = k_cp_len((unsigned char)s->data[at]);
         if (w == 1) {
             /* an ascii character comes from the cache through k_str_n */
@@ -9121,6 +9142,24 @@ KValue k_b_append(KValue acc, KValue x) { return k_b_append_into(acc, x, 0); }
 /* The same append at a site the linearity analysis proved unique. */
 KValue k_b_append_mut(KValue acc, KValue x) { return k_b_append_into(acc, x, 1); }
 
+/* The arm `k_b_append_mut_word` refuses: a counting build, or a builder
+   without eight bytes of room at its frontier. It builds the literal and
+   appends it in place, out of line so the word's fast path stays small where
+   it is inlined.
+
+   In place, and not through `k_b_append` as the string arm of
+   `k_b_append_mut_byte` does. That arm refuses only a builder with no room for
+   the literal, and `k_b_append` then grows it. This one also refuses a
+   builder with room for the literal but not for a whole word, and there
+   `k_b_append` claims the room and hands back a new header in the arena. A
+   builder a beat loop carries by identity keeps the old one, the loop's
+   rewind reclaims the new one, and the next append read a header the arena
+   had handed to something else: encodebench's counting build crashed on it. */
+__attribute__((noinline, cold)) KValue k_b_append_word_slow(KValue acc, const char* lit,
+                                                           long long n, KValue* cell) {
+    return k_b_append_mut(acc, k_str_lit(lit, n, cell));
+}
+
 /* `append acc (slice cs from to)` where both sides are bytes. The slice is
    built to be copied and dropped, and a view is a header the arena has to
    hand out; this reads the range straight out of `cs` and hands
@@ -9427,6 +9466,24 @@ static __attribute__((noinline)) KValue k_b_slice_walk(KStr* s, long long from, 
     }
 }
 
+/* The pieces are asked in their own pass, which stops at the first piece
+   without a count: pend joins four thousand rendered numbers, none of which
+   has been counted, and asking each of them inside the copying loop cost that
+   benchmark 4,803,400 instructions. */
+static void k_join_seed_count(KStr* os, KList* l, KStr* ss) {
+    long long chars = 0;
+    if (ss->len != 0) {
+        if (ss->cap >= 0) return;
+        chars = (-(long long)ss->cap - 1) * (l->len ? l->len - 1 : 0);
+    }
+    for (long long i = 0; i < l->len; i++) {
+        KStr* part = k_as_str(l->items[i]);
+        if (part->cap >= 0) return;
+        chars += -(long long)part->cap - 1;
+    }
+    k_str_seed_count(os, chars);
+}
+
 KValue k_b_join(KValue lv, KValue sep) {
     if (!k_not_failure(lv)) return lv;
     if (!k_not_failure(sep)) return sep;
@@ -9473,6 +9530,13 @@ KValue k_b_join(KValue lv, KValue sep) {
     os->len = total;
     os->data = data;
     os->cap = 0;
+    /* A string's character count is memoised in `cap` the first time
+       `length` or an index asks for it, and a join of pieces that each
+       carry one knows the sum without reading a byte. The run program's
+       index phase doubles its subject by joining it to itself, asking
+       `length` after every doubling, and each ask scanned the whole new
+       string: 2,458,767 instructions a run, for counts the pieces held. */
+    k_join_seed_count(os, l, ss);
     data[total] = 0;
     KValue out; out.tag = K_STR; out.payload = k_ptr(os);
     return out;

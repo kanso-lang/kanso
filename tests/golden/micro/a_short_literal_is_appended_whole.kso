@@ -1,0 +1,51 @@
+# A literal of one to eight bytes appended to a builder the site owns is
+# stored as one word, and the builder's length moves by the literal's own
+# length. Each line builds its text by appending one literal over and over,
+# so the builder's room runs out part-way through a word at some append and
+# the ordinary append takes over there. A length moved by the word's eight
+# bytes, or bytes stored in the wrong order, shows here.
+import "std/text"
+
+fn built acc _ 0
+  acc
+
+fn built acc lit n
+  built (text/append acc lit) lit (n - 1)
+
+fn one 0 acc
+  acc
+
+fn one n acc
+  one (n - 1) (text/append acc "é")
+
+fn three 0 acc
+  acc
+
+fn three n acc
+  three (n - 1) (text/append acc "tru")
+
+fn eight 0 acc
+  acc
+
+fn eight n acc
+  eight (n - 1) (text/append acc "12345678")
+
+fn nine 0 acc
+  acc
+
+fn nine n acc
+  nine (n - 1) (text/append acc "123456789")
+
+fn mixed 0 acc
+  acc
+
+fn mixed n acc
+  mixed (n - 1) (text/append (text/append (text/append acc "null") ",") "€")
+
+pub play =
+  print "one:   {text/utf8 (one 23 (text/bytes ""))}"
+  >> print "three: {text/utf8 (three 23 (text/bytes ""))}"
+  >> print "eight: {length (text/utf8 (eight 23 (text/bytes "")))}"
+  >> print "nine:  {length (text/utf8 (nine 23 (text/bytes "")))}"
+  >> print "mixed: {text/utf8 (mixed 11 (text/bytes ""))}"
+  >> print "ends:  {text/slice (text/utf8 (eight 23 (text/bytes ""))) 177 184}"

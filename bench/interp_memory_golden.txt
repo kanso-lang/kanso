@@ -237,9 +237,14 @@
 # kanso#1634: the interpreter's per-call questions stop hashing interp_allocs
 # 929,207 -> 929,249, a RISE of 42 (+0.0045%).
 #
-# 2026-09-25, an interpreted int in a machine word: interp_allocs 929,249 ->
-# 925,948, a FALL of 3,301 (-0.3552%).
-interp_allocs=925948
+# Projected from this container: an application's arguments go on one shared
+# stack and each application takes a vector of exactly its own. CI's reading
+# replaces it. interp_allocs 929,249 -> 929,213, a FALL of 36 (-0.0039%).
+#
+# 2026-09-25, a small map as a sorted vector and an interpreted int in a
+# machine word, over the carried tree of #1644: interp_allocs 929,213 ->
+# 925,912, a FALL of 3,301 (-0.3552%).
+interp_allocs=925912
 #
 # 2026-09-18, kanso#1518 against main at kanso#1517, CI's sitting.
 # 951,438 -> 961,165, a RISE of
@@ -309,11 +314,13 @@ interp_allocs=925948
 # kanso#1634: the interpreter's per-call questions stop hashing
 # interp_peak_bytes 842,653 -> 860,477, a RISE of 17,824 (+2.1152%).
 #
-# Projected from this container: a map of up to eight entries is a sorted
-# vector. CI's reading replaces it. interp_peak_bytes 860,477 -> 779,734, a
-# FALL of 80,743 (-9.3835%).
+# Projected from this container: an application's arguments go on one shared
+# stack and each application takes a vector of exactly its own. CI's reading
+# replaces it. interp_peak_bytes 860,477 -> 799,829, a FALL of 60,648
+# (-7.0482%).
 #
-# 2026-09-25, an interpreted int in a machine word: interp_peak_bytes 779,734
-# -> 779,736, a RISE of 2 (+0.0003%).
-interp_peak_bytes=779736
+# 2026-09-25, a small map as a sorted vector and an interpreted int in a
+# machine word, over the carried tree of #1644: interp_peak_bytes 799,829 ->
+# 718,808, a FALL of 81,021 (-10.1298%).
+interp_peak_bytes=718808
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

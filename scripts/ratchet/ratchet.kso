@@ -2369,7 +2369,127 @@ int_word = row
 
 rows_b1iw = text/concat rows_b1mg [int_word]
 
-rows_b = text/concat rows_b1iw [compile_mem compile_mem_host]
+# A walk by index steps its cursor one character on, and a join of counted
+# pieces writes the sum. Closing the step leaves every character right and
+# `seek_resumes` where it was, so `seek_steps` is what goes red; dropping the
+# seed makes the index phase scan every doubled subject again; and a seed
+# without its separator gives the micro fixture a length two short.
+seek_step = row
+  "an index that seeks where it could step"
+  true
+  (gating "run_counters")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_walk_by_index_that_seeks_every_character")
+  benchmarks
+
+join_seed = row
+  "a join of counted pieces that leaves its count unknown"
+  true
+  (gating "run_counters")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_join_that_leaves_its_count_unknown")
+  benchmarks
+
+join_sep = row
+  "a join count that leaves its separator out"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_join_count_that_drops_its_separator")
+  release
+
+rows_b1ix = text/concat rows_b1iw [seek_step join_seed join_sep]
+
+# Under clang 19 the emitter writes the preserve_none convention in front of
+# every declare of and call to a door, in one pass over the module. Matching a
+# door by prefix hands the ordinary `k_b_utf8_...` functions the door's
+# convention, and a program reads its arguments from the wrong registers.
+door_prefix = row
+  "a door matched by the prefix of its name"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_door_found_by_its_prefix")
+  release
+
+rows_b1dp = text/concat rows_b1ix [door_prefix]
+
+# A literal of one to eight bytes appended in place is stored as one word.
+# A length moved by the word's eight bytes prints the bytes past the literal;
+# a slow arm that claims a new header leaves a carried builder holding one a
+# rewind reclaims; and without the word the json encoder's literals go back
+# through their cells, which the work vein prices.
+word_length = row
+  "a literal word that moves the length by eight"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_literal_word_that_moves_the_length_by_eight")
+  release
+
+word_slow = row
+  "a literal word's slow arm that claims a new header"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_literal_word_slow_arm_that_claims_a_new_header")
+  release
+
+word_used = row
+  "a short literal appended through its cell"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_literal_appended_through_its_cell")
+  benches
+
+rows_b1lw = text/concat rows_b1dp [word_length word_slow word_used]
+
+# A second `kanso play` of a file finds its binary by the file's text and does
+# not emit. Leaving the text out of that key runs an edited file's old binary;
+# a loader that stops saying a module came from disk keys a file whose module
+# changed under it by the file alone.
+play_text = row
+  "a play key that leaves out the file's text"
+  true
+  "cargo test --release --test a_play_file_is_keyed_by_its_text"
+  "specs (unit, golden, differential)"
+  (breaking "a_play_key_that_leaves_out_the_text")
+  release
+
+play_disk = row
+  "a play key that trusts a module read from disk"
+  true
+  "cargo test --release --test a_play_file_is_keyed_by_its_text"
+  "specs (unit, golden, differential)"
+  (breaking "a_play_key_that_trusts_a_module_from_disk")
+  release
+
+# A warm play compiles the file only to word a death by signal.
+play_signal = row
+  "a warm play that dies in silence"
+  true
+  "cargo test --release --test a_play_file_is_keyed_by_its_text"
+  "specs (unit, golden, differential)"
+  (breaking "a_warm_play_that_dies_in_silence")
+  release
+
+rows_b1pk = text/concat rows_b1lw [play_text play_disk play_signal]
+
+# An application's arguments leave the shared stack as a vector of exactly
+# their number. Four slots apiece, which is what growing one from nothing
+# left, puts about 60,000 bytes back on the front end's peak.
+args_exact = row
+  "an application that grows its own argument vector"
+  true
+  "sh scripts/gates/compile_memory.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "an_application_that_grows_its_own_arguments")
+  release
+
+rows_b1ae = text/concat rows_b1pk [args_exact]
+
+rows_b = text/concat rows_b1ae [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 

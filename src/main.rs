@@ -277,6 +277,13 @@ fn driven() -> ExitCode {
                 return ExitCode::from(2);
             }
         };
+        if !interp {
+            if let Some(played) = played_before(&file, &source) {
+                return execute(&played, |code| {
+                    ended_by_signal(code, kanso::compile_play_file(&file, &source).ok().as_ref())
+                });
+            }
+        }
         let program = match kanso::compile_play_file(&file, &source) {
             Ok(program) => program,
             Err(rendered) => {
@@ -287,7 +294,7 @@ fn driven() -> ExitCode {
         if interp {
             return run_interpreted(&program, program_args());
         }
-        return run(&program, &file, &source, false);
+        return play(&program, &file, &source);
     }
     let require_entry = command == "run";
     // Targeting a directory means its entry: `kanso run foo` is
@@ -2133,26 +2140,131 @@ fn run(program: &ast::Program, file: &str, source: &str, plan: bool) -> ExitCode
     if plan {
         return run_plan(program, file, source);
     }
+    match built_binary(program) {
+        Ok(binary) => execute(&binary, |code| ended_by_signal(code, Some(program))),
+        Err(code) => code,
+    }
+}
+
+/// `kanso play` of a file whose modules all came from this binary. The file's
+/// text decides its program once the compiler that read it is fixed, so a
+/// second play of the same text looks its binary up by that text and does not
+/// emit at all. Emitting was two thirds of a warm `kanso play print "x"`:
+/// 404,031 of the 615,803 instructions under `kanso::main`, spent writing IR
+/// whose only use was to be hashed into the name of a binary already built.
+///
+/// The first play emits, builds through the IR's key as `run` does, and gives
+/// the binary a second name under the text's key. A file that loaded a module
+/// from disk has no text key, since that module can change under it, and goes
+/// through `run`.
+fn play(program: &ast::Program, file: &str, source: &str) -> ExitCode {
+    let played = match kanso::play_file_is_self_contained() {
+        true => played_path(file, source),
+        false => None,
+    };
+    let Some(played) = played else {
+        return run(program, file, source, false);
+    };
+    let explain = |code: &std::process::ExitStatus| ended_by_signal(code, Some(program));
+    if played.exists() {
+        return execute(&played, explain);
+    }
+    match built_binary(program) {
+        Ok(binary) => {
+            // Two plays racing to name one binary both find the name taken or
+            // take it, and either way the file under it is the same build.
+            let _ = std::fs::hard_link(&binary, &played);
+            execute(&binary, explain)
+        }
+        Err(code) => code,
+    }
+}
+
+/// The binary an earlier play of this same text left behind, if there is one.
+/// A name under the text's key exists only when a play compiled the file
+/// cleanly from embedded modules, and everything that compile read is in the
+/// key, so the file is run without being lexed, parsed or checked again: that
+/// was 172,583 of the 208,643 instructions left in a warm play. A `KANSO_`
+/// setting sends the file through the compiler anyway, because several of them
+/// ask it to report on its own work as it goes.
+fn played_before(file: &str, source: &str) -> Option<std::path::PathBuf> {
+    if std::env::vars_os().any(|(name, _)| name.as_encoded_bytes().starts_with(b"KANSO_")) {
+        return None;
+    }
+    let played = played_path(file, source)?;
+    played.exists().then_some(played)
+}
+
+fn played_path(file: &str, source: &str) -> Option<std::path::PathBuf> {
+    let key = played_key(file, source)?;
+    Some(std::env::temp_dir().join(format!("kanso_play_{key}")))
+}
+
+/// What decides a play file's binary, hashed. The IR is a function of the
+/// file's name and text, the compiler, the runtime it links, the closure
+/// convention the installed clang takes, whether counters are compiled in, and
+/// the `KANSO_` settings the compiler reads, so each of those goes into the
+/// key. The compiler is named by its own file's path, length and modification
+/// time: a rebuild writes a new file, and the key moves with it.
+fn played_key(file: &str, source: &str) -> Option<String> {
+    let compiler = std::env::current_exe().ok()?;
+    let meta = std::fs::metadata(&compiler).ok()?;
+    let written = meta.modified().ok()?.duration_since(std::time::UNIX_EPOCH).ok()?;
+    let mut text: Vec<u8> = Vec::with_capacity(file.len() + source.len() + 256);
+    let mut part = |bytes: &[u8]| {
+        text.extend_from_slice(&(bytes.len() as u64).to_le_bytes());
+        text.extend_from_slice(bytes);
+    };
+    part(file.as_bytes());
+    part(source.as_bytes());
+    part(compiler.as_os_str().as_encoded_bytes());
+    part(&meta.len().to_le_bytes());
+    part(&written.as_nanos().to_le_bytes());
+    let convention = closure_convention();
+    part(&[matches!(convention, kanso::codegen::ClosureConvention::PreserveNone) as u8]);
+    for (name, value) in std::env::vars_os() {
+        if name.as_encoded_bytes().starts_with(b"KANSO_") {
+            part(name.as_encoded_bytes());
+            part(value.as_encoded_bytes());
+        }
+    }
+    let (ka, kb) = kanso::hash::key_of(&text);
+    let (ra, rb) = kanso::hash::RUNTIME_DIGEST;
+    let counting = if kanso::codegen::counters_wanted() { "c" } else { "" };
+    Some(format!("{:016x}{:016x}{counting}", ka ^ ra, kb ^ rb.rotate_left(17)))
+}
+
+/// The dev binary for a program: its IR emitted and looked up by the IR's key,
+/// built on a miss.
+fn built_binary(program: &ast::Program) -> Result<std::path::PathBuf, ExitCode> {
     let ir = match kanso::codegen::emit_ir_dev(program, closure_convention()) {
         Ok(ir) => ir,
         Err(unsupported) => {
             eprintln!("error: {unsupported}");
-            return ExitCode::from(2);
+            return Err(ExitCode::from(2));
         }
     };
-    let binary = match cached_program_binary(&ir) {
-        Ok(binary) => binary,
+    match cached_program_binary(&ir) {
+        Ok(binary) => Ok(binary),
         Err(io) => {
             eprintln!("error: cannot build: {io}");
-            return ExitCode::FAILURE;
+            Err(ExitCode::FAILURE)
         }
-    };
-    let status = std::process::Command::new(&binary).args(program_args()).status();
+    }
+}
+
+/// Runs a built binary. `explain` words a death by signal, and is asked only
+/// then, so a caller that has no checked program in hand compiles one there.
+fn execute(
+    binary: &std::path::Path,
+    explain: impl FnOnce(&std::process::ExitStatus) -> String,
+) -> ExitCode {
+    let status = std::process::Command::new(binary).args(program_args()).status();
     match status {
         Ok(code) => match code.code() {
             Some(n) => ExitCode::from(n.clamp(0, 255) as u8),
             None => {
-                eprintln!("{}", ended_by_signal(&code, Some(program)));
+                eprintln!("{}", explain(&code));
                 ExitCode::FAILURE
             }
         },
