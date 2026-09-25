@@ -292,4 +292,7 @@ front_end_visits=7416
 # stack and each application takes a vector of exactly its own. CI's reading
 # replaces it. compile_peak_bytes 768,704 -> 708,672, a FALL of 60,032
 # (-7.8095%).
-compile_peak_bytes=708672
+#
+# CI measured the typed map key at 1ab7904e. compile_peak_bytes 708,672 ->
+# 710,281, a RISE of 1,609 (+0.2270%).
+compile_peak_bytes=710281

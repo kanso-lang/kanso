@@ -586,5 +586,8 @@
 # interpreted corpus encodes json through the same library.
 # interp_instructions 614,239,448 -> 595,472,297, a FALL of 18,767,151
 # (-3.0553%).
-interp_instructions=595472297
+#
+# CI measured the typed map key at 1ab7904e. interp_instructions 595,472,297
+# -> 595,493,632, a RISE of 21,335 (+0.0036%).
+interp_instructions=595493632
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

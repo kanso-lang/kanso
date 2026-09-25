@@ -15406,3 +15406,12 @@ they land on: `run_append_fast` 8,256,960, `run_perm_allocs` 93,
 `emitted_other_defines` 1,556, `emitted_other_lines` 83,727, `text` 3,548,064,
 `live_alloc_bytes` 534,601,584, `live_append_fast` 31,135,470 and
 `a_literal_appended_across_a_rewind_append_fast` 2,080.
+
+CI read the tree at 1ab7904e and matched the work rows to the instruction. The
+library carries one definition more, and the compile side paid for it:
+`compile_instructions` 25,269,300 (+65,047), `entry_instructions` 85,326,396
+(+111,322), `library_instructions` 85,855,270 (+81,403), `compile_allocs`
+14,272 (+32) and `compile_peak_bytes` 710,281 (+1,609). The interpreted run
+reads 595,493,632, 21,335 above the projection, with `interp_allocs` at
+899,769 (-26,143) and `interp_peak_bytes` at 720,417 (+1,609). Those rows are
+CI's.
