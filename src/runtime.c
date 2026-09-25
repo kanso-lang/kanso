@@ -6811,24 +6811,21 @@ KValue k_list_lit(long long n, KValue* items) {
    header, header first. A buffer outgrown later goes to the free list at the
    capacity its own header records, which is the buffer's extent and nothing
    more. */
+/* An empty list opens with room for six. At four, the decoder's arrays of
+   five and six elements each grew on the fifth: bench/large.json holds 893
+   of them among its 2,752 arrays, which run one to six elements and one of
+   160. Six is not a class the shelf keeps, so the header and the items come
+   from one allocation every time, as an empty map's do. */
+#define K_LIST_SEED 6
 KValue k_list_empty(void) {
-    int c = k_buf_class(4);
-    KBuf* b = k_buf_free[c];
-    KList* l;
-    if (b) {
-        k_buf_free[c] = (KBuf*)(intptr_t)b->used;
-        if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) k_stat_buf_reuse++;
-        l = k_alloc(sizeof(KList));
-    } else {
-        size_t buf_bytes = (sizeof(KBuf) + sizeof(KValue) * 4 + 15) & ~(size_t)15;
-        if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0))
-            k_stat_sh_buf += (long long)buf_bytes;
-        size_t head_bytes = ((sizeof(KList) + 15) & ~(size_t)15);
-        unsigned char* whole = k_alloc(head_bytes + buf_bytes);
-        l = (KList*)whole;
-        b = (KBuf*)(whole + head_bytes);
-        b->cap = 4;
-    }
+    size_t buf_bytes = (sizeof(KBuf) + sizeof(KValue) * K_LIST_SEED + 15) & ~(size_t)15;
+    if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0))
+        k_stat_sh_buf += (long long)buf_bytes;
+    size_t head_bytes = ((sizeof(KList) + 15) & ~(size_t)15);
+    unsigned char* whole = k_alloc(head_bytes + buf_bytes);
+    KList* l = (KList*)whole;
+    KBuf* b = (KBuf*)(whole + head_bytes);
+    b->cap = K_LIST_SEED;
     b->used = 0;
     l->len = 0;
     l->items = (KValue*)(b + 1);

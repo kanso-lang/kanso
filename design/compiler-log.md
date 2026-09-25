@@ -15072,3 +15072,89 @@ since the four touch different parts of the runtime. The dev codegen row is
 projected as the gold link's CI reading plus the float search's rise of
 2,781, 125,551,909, and CI's reading of the combined tree replaces it. The
 same goes for every layout row.
+
+## 2026-09-25 — an empty list opens with room for six
+
+`[]` seeded a list with four slots, and the decoder opens every array with
+it. bench/large.json's 2,752 arrays hold one to six elements, 417 to 478 of
+each size, and one of 160, so the 893 arrays of five or six each grew on the
+fifth push. The seed is six now. Like the map's, six is not a class the
+shelf keeps, so `k_list_empty` takes the header and items from one
+allocation every time. An array that outgrows six moves to eight.
+
+Measured on this container on top of the four carried changes, one binary
+each way: runbench 1,371,385,604 -> 1,355,766,990 (-15,618,614, -1.139%),
+jsonbench -23,115,450, escapebench -207,000, deepbench -196,604,
+encodebench -192,602, oneshot -165,764, livebench -157,370, basket -1,134
+and scanbench -20. `arena_peak_bytes` stays 3,670,032, `held_peak_bytes`
+277,538 and `perm_peak_bytes` 16,400, and no peak moved in any vein or mem
+fixture. Three rows rose and none is weighed: `work_digestbench` 402 to
+5,541,785, `work_pendbench` 172 to 181,848,955 and `work_widebench` 3 to
+28,836,195. The rows are projected onto CI's and CI's own replace them.
+
+Every empty list is 32 bytes larger. The byte counters that rise with it, and
+the shelf reuses and allocations that move with them, land on these values:
+`run_buf_reuse` 127, `run_sh_buf` 102,830,160, `alloc_bytes` 215,949,248,
+`sh_buf` 119,959,200, `encode_alloc_bytes` 657,873,536, `encode_buf_reuse`
+3,112, `encode_sh_buf` 73,438,096, `oneshot_alloc_bytes` 2,940,088,
+`oneshot_sh_buf` 977,680, `basket_alloc_bytes` 7,522,273, `basket_sh_buf`
+689,952, `pend_alloc_bytes` 45,563,344, `pend_allocs` 805,979,
+`pend_buf_reuse` 502, `pend_sh_buf` 15,860,144, `escape_sh_buf` 336,000,
+`scan_alloc_bytes` 11,069, `scan_sh_buf` 1,056, `wide_alloc_bytes` 5,591,024,
+`wide_sh_buf` 349,792, `digest_alloc_bytes` 694,833, `digest_allocs` 7,199,
+`digest_buf_reuse` 1, `digest_sh_buf` 577,344, `live_alloc_bytes` 526,597,360,
+`live_sh_buf` 71,980,528, `a_cap_around_a_count_is_a_range_alloc_bytes`
+87,968, `a_cap_around_a_count_is_a_range_sh_buf` 87,632,
+`a_carried_value_written_into_an_older_node_alloc_bytes` 2,595,040,
+`a_carried_value_written_into_an_older_node_allocs` 33,667,
+`a_carried_value_written_into_an_older_node_buf_reuse` 781,
+`a_carried_value_written_into_an_older_node_sh_buf` 682,096,
+`a_class_asks_by_the_byte_alloc_bytes` 507,105,
+`a_class_asks_by_the_byte_sh_buf` 157,168,
+`a_demanded_knot_allocates_one_cell_alloc_bytes` 256,
+`a_demanded_knot_allocates_one_cell_sh_buf` 144,
+`a_digest_holds_every_block_it_walked_alloc_bytes` 16,417,
+`a_digest_holds_every_block_it_walked_allocs` 270,
+`a_digest_holds_every_block_it_walked_buf_reuse` 1,
+`a_digest_holds_every_block_it_walked_sh_buf` 9,984,
+`a_loop_invariant_capture_is_copied_every_rewind_alloc_bytes` 102,240,
+`a_loop_invariant_capture_is_copied_every_rewind_sh_buf` 22,080,
+`a_pushed_call_keeps_the_sweep_sh_buf` 67,200,
+`a_repaired_node_below_the_mark_holds_tenure_alloc_bytes` 2,493,952,
+`a_repaired_node_below_the_mark_holds_tenure_allocs` 34,047,
+`a_repaired_node_below_the_mark_holds_tenure_buf_reuse` 783,
+`a_repaired_node_below_the_mark_holds_tenure_carry_dedup` 46,
+`a_repaired_node_below_the_mark_holds_tenure_sh_buf` 567,232,
+`a_scan_keeps_its_place_in_the_text_alloc_bytes` 108,704,
+`a_scan_keeps_its_place_in_the_text_sh_buf` 52,896,
+`a_scan_that_finds_nothing_keeps_nothing_alloc_bytes` 2,783,968,
+`a_scan_that_finds_nothing_keeps_nothing_sh_buf` 18,336,
+`a_split_stops_where_the_separator_does_alloc_bytes` 24,671,
+`a_split_stops_where_the_separator_does_sh_buf` 1,168,
+`an_accumulator_regrows_where_it_is_sh_buf` 2,240,
+`an_empty_literal_takes_one_bump_alloc_bytes` 336,048,
+`an_empty_literal_takes_one_bump_sh_buf` 288,000,
+`an_escaped_list_gives_its_buffer_back_alloc_bytes` 848,080,
+`an_escaped_list_gives_its_buffer_back_sh_buf` 22,400,
+`an_inner_beat_opens_its_tenure_in_the_block_outside_alloc_bytes` 14,926,832,
+`an_inner_beat_opens_its_tenure_in_the_block_outside_buf_reuse` 3,895,
+`an_inner_beat_opens_its_tenure_in_the_block_outside_carry_dedup` 209,
+`an_inner_beat_opens_its_tenure_in_the_block_outside_sh_buf` 5,070,416,
+`early_exit_sh_buf` 112, `effect_push_shape_alloc_bytes` 3,328,
+`effect_push_shape_sh_buf` 768, `fold_push_shape_sh_buf` 87,744,
+`fused_map_shape_sh_buf` 87,744, `fused_reducer_sh_buf` 112,
+`fused_select_shape_sh_buf` 87,744, `fused_tally_sh_buf` 9,952,
+`piped_reducer_sh_buf` 112, `record_fields_alloc_bytes` 4,864,
+`record_fields_sh_buf` 1,568, `skip_shape_sh_buf` 640,
+`sort_shape_alloc_bytes` 214,672, `sort_shape_buf_reuse` 102,
+`sort_shape_sh_buf` 178,032, `string_headers_alloc_bytes` 3,264,
+`string_headers_sh_buf` 1,568, `take_shape_sh_buf` 87,744,
+`tally_shape_sh_buf` 2,128,
+`the_same_capture_built_below_the_mark_is_shared_alloc_bytes` 102,144,
+`the_same_capture_built_below_the_mark_is_shared_sh_buf` 22,080,
+`unsafe_wrap_alloc_bytes` 208 and `unsafe_wrap_sh_buf` 112. No peak rose with
+any of them.
+
+The mem vein pins the seed: with it put back to four, the empty literal's
+fixtures read their old bytes and `mem_corpus_pins_native_allocator_counters`
+goes red. The ratchet row `list_seed` makes that mutation.

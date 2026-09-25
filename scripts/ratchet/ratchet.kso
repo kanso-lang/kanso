@@ -2564,7 +2564,19 @@ map_seed = row
 
 rows_b1ms = text/concat rows_b1pw [map_seed]
 
-rows_b = text/concat rows_b1ms [compile_mem compile_mem_host]
+# `[]` opens with room for six, so an array of five or six is built without
+# a grow.
+list_seed = row
+  "an empty list seeded with four slots, so every fifth push grows it"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "an_empty_list_seeded_with_four")
+  release
+
+rows_b1ls = text/concat rows_b1ms [list_seed]
+
+rows_b = text/concat rows_b1ls [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 
