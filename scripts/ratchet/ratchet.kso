@@ -2476,7 +2476,19 @@ dev_gold = row
 
 rows_b1dg = text/concat rows_b1ae [dev_gold]
 
-rows_b = text/concat rows_b1dg [compile_mem compile_mem_host]
+# A key named through `{:016x}` costs more when its value has a leading zero
+# nibble, and the values hash tools' modification times.
+key_hex = row
+  "a key whose name costs what its value makes it cost"
+  true
+  "cargo test --release --test every_temp_path_pads_its_pid"
+  "specs (unit, golden, differential)"
+  (breaking "a_key_named_through_padding")
+  release
+
+rows_b1hx = text/concat rows_b1dg [key_hex]
+
+rows_b = text/concat rows_b1hx [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 
