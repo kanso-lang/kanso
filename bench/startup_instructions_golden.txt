@@ -493,4 +493,7 @@
 #
 # kanso#1633 at CI's sitting: a proven list is measured and indexed in place.
 # startup_instructions 605,252 -> 605,388, a RISE of 136 (+0.0225%).
-startup_instructions=605388
+#
+# kanso#1634: the interpreter's per-call questions stop hashing
+# startup_instructions 605,388 -> 605,441, a RISE of 53 (+0.0088%).
+startup_instructions=605441

@@ -1084,7 +1084,19 @@
 # 2026-09-25, kanso#1638, CI's reading: regexp/split ends at a scan that found
 # nothing, which the library route compiles. library_instructions 85,059,188
 # -> 85,101,407, a RISE of 42,219 (+0.0496%).
-library_instructions=85101407
+#
+# kanso#1634: the interpreter's per-call questions stop hashing
+# library_instructions 83,730,469 -> 83,850,394, a RISE of 119,925 (+0.1432%).
+#
+# 2026-09-25, kanso#1634 merged with main after kanso#1637. Both deltas
+# above, summed and projected: 85,179,113. CI read 85,181,699.
+#
+# 2026-09-25, kanso#1634 merged with main after kanso#1638. The two
+# readings above, the split's delta added: 85,223,918, projected. CI's replaces it.
+#
+# CI measured the merged tree at 755fb36d. library_instructions 85,223,918 ->
+# 85,224,038, a RISE of 120 (+0.0001%).
+library_instructions=85224038
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.
