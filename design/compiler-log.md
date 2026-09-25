@@ -15313,3 +15313,50 @@ worse, with the values they land on: `run_alloc_bytes` 373,249,458,
 `a_cycle_that_allocates_nothing_needs_no_bracket_append_fast` 139,974,
 `a_cycle_that_allocates_nothing_needs_no_bracket_append_grow` 27 and
 `a_cycle_that_allocates_nothing_needs_no_bracket_bytes_malloc` 27.
+
+## 2026-09-25 — a short token is shared
+
+The decoder turns every string token into a fresh string: an allocation, a
+utf-8 validation and a copy. Runbench reads 861,498 tokens a run, 840,807 of
+them four to seven bytes long, and large.json holds 898 distinct ones. The
+same few hundred keys and short values come back on every document.
+
+A token of four to seven bytes is now looked up first. Its bytes and length
+make a 64-bit key, and a two-way, direct-mapped cache of 4,096 slots hands
+back a permanent string for a key it has seen. A miss validates the token and
+fills the slot if either way is free; a full pair sends the token down the
+ordinary path, so the cache never evicts and its storage is bounded by its
+width. A hit needs no validation, since the bytes it matched were validated
+when the slot was filled. The strings live in a static store that the survival
+test recognises by address, so a rewind neither frees nor copies them. On
+runbench the cache takes 840,175 hits and 632 misses, and every miss fills a
+slot. A one-way cache of the same width missed 20,302 times.
+
+The first version kept the strings in `malloc` storage, which the survival
+test treats as dying at a rewind, and the carry copied them out: runbench rose
+3.1 million instructions. The second tested the store at the top of every
+survival check and cost deepbench 6.9 million. The test now runs only for
+pointers outside the arena.
+
+Runbench is projected at 1,326,066,150, 6,786,450 below (-0.51%), and
+jsonbench at 891,229,689, 10,945,028 below. A program that decodes once pays
+for the fills and gets few hits: oneshot is projected at 14,842,561, 567,919
+above. Deepbench rises 1,617,979 and livebench 241,358; both arrived with the
+change and neither was isolated. `perm_peak_bytes` on the run program rises
+from 16,400 to 31,568, the 632 filled slots at 24 bytes each.
+
+The mem vein's new fixture, `a_short_token_is_shared`, decodes a six-token
+document a hundred times and pins 402 allocations and 120 permanent bytes.
+With the cache disabled it reads 1,002 allocations and 19,232 bytes of string
+headers; the ratchet row `token_cache` makes that mutation.
+
+Every binary's text is 4,672 bytes larger. The keys the trend gate reads as
+worse, with the values they land on: `run_perm_live_bytes` 15,168,
+`run_perm_peak_bytes` 31,568, `perm_live_bytes` 15,168, `perm_peak_bytes`
+15,168, `encode_alloc_bytes` 665,564,160, `encode_perm_live_bytes` 15,168,
+`encode_perm_peak_bytes` 15,168, `oneshot_perm_live_bytes` 15,168,
+`oneshot_perm_peak_bytes` 15,168, `work_deepbench` 366,141,730,
+`work_digestbench` 5,542,082, `work_indexbench` 2,538,557, `work_pendbench`
+181,896,213, `work_readbench` 4,631,851, `work_scanbench` 282,021, `text`
+3,551,216, `live_alloc_bytes` 534,492,784, `live_perm_live_bytes` 15,168 and
+`live_perm_peak_bytes` 15,168.
