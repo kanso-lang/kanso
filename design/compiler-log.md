@@ -15224,3 +15224,13 @@ one: `a_builder_that_outgrows_its_buffer_is_never_held_twice_bytes_freed` 10,
 `stream_write_bytes_freed` 100. The declaration lands the compile corpus's `lines` on 1,450 and
 `module_lines` on 1,058, and summed over the fourteen
 binaries `text` lands on 3,486,032.
+
+CI read the builder seed at 42d0b138 and its rows were taken: runbench
+1,332,911,604, 3,951 below the projection, `codegen_instructions_dev`
+125,541,184, `codegen_instructions_release` 698,599,960, 45,445 above the
+list seed's, and `emit_instructions` 29,311,721, 26,294 above. Both rises
+arrived with the seed's emitter arm and its runtime function; which part of
+the change moved each was not isolated. Both are small against runbench.
+A spec that holds DECLARES_CONTEXT_CALLS to the calls DECLARES makes caught
+the seed named there, where it does not belong: the seed is called from
+emitted code only.

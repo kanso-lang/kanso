@@ -349,4 +349,7 @@
 # CI measured the carried list seed at daac530d. codegen_instructions_release
 # 698,557,632 -> 698,554,515. codegen_instructions_release 698,557,632 ->
 # 698,554,515, a FALL of 3,117 (-0.0004%).
-codegen_instructions_release=698554515
+#
+# CI measured the builder seed at 42d0b138. codegen_instructions_release
+# 698,554,515 -> 698,599,960, a RISE of 45,445 (+0.0065%).
+codegen_instructions_release=698599960

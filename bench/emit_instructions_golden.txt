@@ -313,4 +313,7 @@
 #
 # CI measured the interpreter's small values at 6d35abb2. emit_instructions
 # 29,343,492 -> 29,285,427, a FALL of 58,065 (-0.1979%).
-emit_instructions=29285427
+#
+# CI measured the builder seed at 42d0b138: the emitter's literal arm.
+# emit_instructions 29,285,427 -> 29,311,721, a RISE of 26,294 (+0.0898%).
+emit_instructions=29311721

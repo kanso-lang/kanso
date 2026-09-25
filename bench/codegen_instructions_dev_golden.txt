@@ -262,4 +262,7 @@
 # CI measured the carried list seed at daac530d. codegen_instructions_dev
 # 125,551,388 -> 125,548,064. codegen_instructions_dev 125,551,388 ->
 # 125,548,064, a FALL of 3,324 (-0.0026%).
-codegen_instructions_dev=125548064
+#
+# CI measured the builder seed at 42d0b138. codegen_instructions_dev
+# 125,548,064 -> 125,541,184, a FALL of 6,880 (-0.0055%).
+codegen_instructions_dev=125541184
