@@ -7328,7 +7328,6 @@ KValue k_b_entries(KValue mv) {
     KMap* m = k_as_map(mv);
     long long n;
     KValue* s = k_map_sorted(m, &n);
-    KValue* items = k_buf(n ? n : 1);
     /* One arena block for all n records rather than one bump apiece. They were
        already landing next to each other -- k_alloc only bumps a pointer -- so
        this changes where the arithmetic happens and not where the bytes go.
@@ -7336,9 +7335,38 @@ KValue k_b_entries(KValue mv) {
        two bumps in every three were bookkeeping for a block the one before it
        had already reserved. The pair goes on the stack either way: k_rec and
        the write below both copy into the storage that follows the header and
-       keep no reference to the arguments. */
+       keep no reference to the arguments.
+
+       The item buffer and the list header join the same block, after the
+       records, unless the free list holds a buffer of exactly this size. Each
+       is a bump the block could have made, and the run program calls this
+       248,490 times for three pairs apiece. A buffer outgrown later is handed
+       to the free list at its own capacity, which the header records, so the
+       records behind it are never handed out with it. */
+    long long cap = n ? n : 1;
     size_t slot = (sizeof(KRec) + sizeof(KValue) * 2 + 15) & ~(size_t)15;
-    unsigned char* block = n > 0 ? (unsigned char*)k_alloc(slot * (size_t)n) : NULL;
+    size_t records = slot * (size_t)n;
+    size_t buf_bytes = (sizeof(KBuf) + sizeof(KValue) * (size_t)cap + 15) & ~(size_t)15;
+    size_t list_bytes = (sizeof(KList) + 15) & ~(size_t)15;
+    int c = k_buf_class(cap);
+    KValue* items;
+    unsigned char* block;
+    KList* l;
+    if (c >= 0 && k_buf_free[c]) {
+        items = k_buf(cap);
+        block = (unsigned char*)k_alloc(records + list_bytes);
+        l = (KList*)(block + records);
+    } else {
+        if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0))
+            k_stat_sh_buf += (long long)buf_bytes;
+        unsigned char* whole = (unsigned char*)k_alloc(records + buf_bytes + list_bytes);
+        block = whole;
+        KBuf* b = (KBuf*)(whole + records);
+        b->cap = cap;
+        b->used = 0;
+        items = (KValue*)(b + 1);
+        l = (KList*)(whole + records + buf_bytes);
+    }
     for (long long i = 0; i < n; i++) {
         KValue key = s[i * 2];
         KValue val = s[i * 2 + 1];
@@ -7364,7 +7392,10 @@ KValue k_b_entries(KValue mv) {
         rv.payload = k_ptr(r);
         items[i] = rv;
     }
-    return k_list_own(items, n);
+    l->len = n;
+    l->items = items;
+    k_buf_of(items)->used = n;
+    KValue out; out.tag = K_LIST; out.payload = k_ptr(l); return out;
 }
 
 /* utf-8 helpers: kanso strings are opaque utf-8, positions are codepoints */

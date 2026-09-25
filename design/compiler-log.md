@@ -13128,3 +13128,20 @@ the count off by one, which fails the error corpus and every corpus whose
 files have blank lines. The two boundaries are always non-blank lines, so
 moving either comparison between `<` and `<=` changes nothing, and a
 mutation that does only that stays green.
+
+## 2026-09-25 — `entries` takes one block for its records, buffer and list
+
+`k_b_entries` already put its n records in one arena block. The item buffer
+and the list header were two more bumps, each through `k_alloc`, and the
+buffer first asked the free list for a size class that a three-pair map never
+has. They now sit in the same block, after the records, unless the free list
+holds a buffer of exactly the size wanted, in which case that buffer is used
+as before. A buffer outgrown later goes to the free list at the capacity its
+header records, which stops short of the list header behind it.
+
+On this container: runbench 1,676,080,238 -> 1,674,340,808 (-0.1038%),
+encodebench and livebench -7,730,800 each, oneshot -19,327, every other
+benchmark unchanged. `allocs` falls by two a call and nothing else moves: the
+run program 4,147,652 -> 3,650,672, encode 3,344,272 -> 1,135,472, and the
+`.mem` rows for a map walk 3,004 -> 1,004. The bytes are the same bytes, so
+every peak row holds.
