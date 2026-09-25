@@ -2055,7 +2055,19 @@ one_trap = row
 
 rows_b1ot = text/concat rows_b1kt [one_trap]
 
-rows_b = text/concat rows_b1ot [compile_mem compile_mem_host]
+# A nine-word arm keeps its tail calls on x86-64. The mutation narrows at
+# eight, and a release build decoding 300,000 keys overflows its stack.
+nine_words = row
+  "a nine-word arm narrowed on x86"
+  true
+  "cargo test --release --test a_big_object_decodes_in_a_release_build"
+  "specs (unit, golden, differential)"
+  (breaking "a_nine_word_arm_narrowed_on_x86")
+  release
+
+rows_b1nw = text/concat rows_b1ot [nine_words]
+
+rows_b = text/concat rows_b1nw [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 

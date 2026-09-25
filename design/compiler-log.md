@@ -13236,3 +13236,36 @@ jsonbench -5,695,350. scanbench reads +22. Every counter vein agrees.
 `K_ERR` in the runtime's tag enum, and to the compare in the declared
 `k_not_failure`, so the emitter cannot drift from either. Watched red with
 the constant set to 6.
+
+## 2026-09-25 — a nine-word arm keeps its tail calls on x86-64
+
+A release build narrows `tailcc` to the arms whose arguments fit arm64's
+eight argument registers, because past them arm64 miscompiles the convention.
+Every call into a wider arm became an ordinary call, and that was done on
+every architecture. The JSON decoder's `obj_key_end`, which skips whitespace
+before a key's colon, takes nine words. So each key of an object entered it
+through a call, the chain back to `obj_key_start` never returned until the
+object closed, and the stack held a frame per key. A release build decoding
+an object of 300,000 keys died on SIGSEGV. The musttail edges in the emitted
+text were all correct; `narrow_tailcc` in src/main.rs took them away after.
+
+The limit is now `TAILCC_WIDEST`: eight on arm64 as before, nine on x86-64,
+which lowers a spilling `tailcc` call correctly. Nine was measured, against
+the head before this change, on this container:
+
+    narrowed above   runbench           jsonbench          scanbench
+    8                1,648,120,677      1,098,127,996      310,445,976
+    9                1,643,981,958      1,094,365,546      310,445,975
+    10               1,645,003,836      1,094,365,546      316,479,002
+    none             1,645,903,453      1,094,365,546      316,941,464
+
+Ten and above let std/regexp's wider arms keep their tail calls too, and a
+tail call copies its stack arguments into the caller's area; past three of
+them that costs more than the frame it saves. runbench reads -0.2511% and
+jsonbench -0.3426% at nine, and nothing else moves.
+
+`tests/a_big_object_decodes_in_a_release_build.rs` builds a program that
+decodes a 300,000-key object in release and asserts it prints the count. It
+runs on x86-64 only, because arm64 keeps the narrow limit and the frame per
+key with it. Watched red with the limit at eight: SIGSEGV. The ratchet row
+`nine_words` breaks it the same way.
