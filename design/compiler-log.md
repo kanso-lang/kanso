@@ -14758,3 +14758,8 @@ spells what `{:016x}` spelled, and
 `no_name_pads_a_number_through_format` in
 tests/every_temp_path_pads_its_pid.rs fails on any padded format left in
 main.rs. It went red with the gold answer's format put back.
+
+CI read the fixed binary's start-up at 52,416, and `startup_instructions`
+takes that row: 41 above the 52,375 main carries, which is the fixed writers'
+cost against a key whose top nibble was not zero. It was measured at 9 on this
+container, where clang's key differs.

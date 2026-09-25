@@ -504,4 +504,4 @@
 #
 # CI measured the gold dev link at 9e45c486. startup_instructions 52,375 ->
 # 52,427, a RISE of 52 (+0.0993%).
-startup_instructions=52427
+startup_instructions=52416
