@@ -2343,6 +2343,45 @@ split_stops = row
 
 rows_b1ss = text/concat rows_b1rl [split_stops]
 
+# A map of up to eight entries is a sorted vector and a larger one a B-tree.
+# Growing into the tree without the key that made it grow loses that key on
+# the interpreter, and the micro corpus sees the engines disagree.
+map_grow = row
+  "a map that loses its ninth key when it grows"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_ninth_key_lost_when_a_map_grows")
+  release
+
+rows_b1mg = text/concat rows_b1ss [map_grow]
+
+# An interpreted int that overflows a machine word takes a BigInt, and one that
+# comes back into range must come back into the word: equality compares the
+# two forms as different values otherwise, and `max + 1 - 1` is not `max`.
+int_word = row
+  "a number that stays big when it fits a word"
+  true
+  "cargo test --release --test an_interpreted_int_crosses_the_word"
+  "specs (unit, golden, differential)"
+  (breaking "a_number_that_stays_big_when_it_fits")
+  release
+
+rows_b1iw = text/concat rows_b1mg [int_word]
+
+# A trap unwinds nothing, so a program that runs out of stack in the page can
+# die holding one of wasm_rt's cells. Asking that cell for its borrow again at
+# the next `load` panics, and the program after the fall answers a trap.
+dead_borrow = row
+  "a program that dies holding a cell leaving it held"
+  true
+  "cargo test --release --test wasm_engine a_program_that_runs_out_of_stack"
+  "specs (unit, golden, differential)"
+  (breaking "a_dead_program_keeps_its_borrow")
+  with_blob
+
+rows_b1db = text/concat rows_b1iw [dead_borrow]
+
 # A walk by index steps its cursor one character on, and a join of counted
 # pieces writes the sum. Closing the step leaves every character right and
 # `seek_resumes` where it was, so `seek_steps` is what goes red; dropping the
@@ -2372,7 +2411,7 @@ join_sep = row
   (breaking "a_join_count_that_drops_its_separator")
   release
 
-rows_b1ix = text/concat rows_b1ss [seek_step join_seed join_sep]
+rows_b1ix = text/concat rows_b1db [seek_step join_seed join_sep]
 
 # Under clang 19 the emitter writes the preserve_none convention in front of
 # every declare of and call to a door, in one pass over the module. Matching a

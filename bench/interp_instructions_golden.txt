@@ -572,5 +572,14 @@
 #
 # CI measured the carried tree at 913723b0. interp_instructions 659,854,491 ->
 # 659,398,270, a FALL of 456,221 (-0.0691%).
-interp_instructions=659398270
+#
+# 2026-09-25, a small map as a sorted vector and an interpreted int in a
+# machine word, over the carried tree of #1644: projected from this
+# container's fall of 66,745,891. CI's reading replaces it.
+# interp_instructions 659,398,270 -> 592,652,379, a FALL of 66,745,891
+# (-10.1222%).
+#
+# CI measured the interpreter's small values at 6d35abb2. interp_instructions
+# 592,652,379 -> 614,239,448, a RISE of 21,587,069 (+3.6425%).
+interp_instructions=614239448
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

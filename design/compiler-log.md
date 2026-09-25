@@ -14351,6 +14351,103 @@ CI read the merged tree at 755fb36d: `entry_instructions` 84,635,818 ->
 The projection added two deltas measured on different trees, and the
 remainder is layout. Neither row is weighed.
 
+---
+
+## 2026-09-25 — a small map is a sorted vector
+
+The interpreter held every map as a `BTreeMap`. A B-tree leaf has room for
+eleven entries whatever it is given, and the maps a program builds are mostly
+JSON records with a few keys. The interpreted corpus decodes 220 maps of four
+keys each, and massif put their leaves at 158,400 bytes of the interpreter's
+peak.
+
+`Value::Map` now holds `Entries`: a vector kept sorted while a map has eight
+entries or fewer, and a `BTreeMap` once a ninth key is put. A map never goes
+back, so a large map built one key at a time still inserts in log time. Both
+forms walk in key order, which is all equality, rendering and `entries` ask of
+them, and the few uses of the map (the literal, `put`, `entries`, `length`,
+indexing, equality, rendering and the wasm runtime's literal) go through
+`new`, `insert`, `get`, `len` and `iter`.
+
+On this container `interp_peak_bytes` falls 860,475 -> 779,732 (-80,743,
+-9.4%) and the interpreter's own instructions fall 342,899, with
+`interp_allocs` unchanged. Projected against CI's goldens:
+`interp_peak_bytes` 860,477 -> 779,734 and `interp_instructions` 661,830,756
+-> 661,487,857.
+
+tests/golden/micro/a_map_crosses_eight_entries holds maps on both sides of
+eight: eight keys, a ninth put onto them, a key overwritten on each side, a
+nine-key literal, the same nine entries put in another order and compared,
+and int keys beside string keys. The ratchet row `map_grow` grows into the
+tree without the ninth key, and the interpreter prints nine as eight.
+
+---
+
+## 2026-09-25 — an interpreted int in a machine word
+
+The interpreter's `Value::Int` was a `BigInt`. Kanso's ints are unbounded, so
+the interpreter needs one, but a `BigInt` keeps its digits in a heap vector
+even when it holds 1, and copying a value copies the vector. The interpreted
+corpus makes about a quarter of a million ints, nearly all of them small.
+
+`Value::Int` now holds `Int` (src/int.rs): `Small(i64)` while a number fits a
+word and `Big(Rc<BigInt>)` once it does not. Addition, subtraction,
+multiplication, division and remainder try the word first with checked
+arithmetic and fall back to the `BigInt` on overflow. Division and remainder
+truncate, as `BigInt`'s do, and the one word division that overflows, the least
+integer over -1, falls back like the others and answers 9223372036854775808. A
+result that fits a word always goes back into one, so each number has a single
+form; equality, ordering and map keys rely on that.
+
+Measured on this container against main, with the sorted-vector maps of the
+entry above in both trees:
+
+| row | main | this tree | change |
+| --- | ---: | ---: | ---: |
+| interpreter instructions (container) | 679,841,199 | 613,222,005 | -9.80% |
+| `interp_allocs` | 929,249 | 925,948 | -3,301 |
+| `interp_peak_bytes` | 860,477 | 779,736 | -80,741 |
+
+Small ints alone read 614,059,488 instructions and a peak of 841,117. With the
+maps the peak is set elsewhere in the run, and against the map change alone it
+rises 2 bytes, 779,734 -> 779,736. That `interp_allocs` falls only 3,301
+while a quarter of a million ints stop allocating digits was not looked into
+further; the row reads what the gate reads.
+
+Projected against CI's goldens: `interp_instructions` 661,487,857 ->
+595,211,562, the container's fall of 66,619,194 subtracted; `interp_allocs`
+929,249 -> 925,948; `interp_peak_bytes` 779,734 -> 779,736. CI's reading
+replaces the instruction row.
+
+An earlier try put the `BigInt` behind an `Rc` and nothing else. It cut the
+instructions 4.5% and raised `interp_allocs` 27%, since every new int then
+allocated twice, and it scored about +0.011. It was not kept.
+
+tests/an_interpreted_int_crosses_the_word.rs crosses the word with each
+operator and with `list/sum`, then brings numbers back into range and compares
+them with `==`, `<` and `>`, as a map key, and against a float. The ratchet
+row `int_word` keeps every overflowed result in the `BigInt` form, and the
+interpreter then says `max + 1 - 1 == max` is false.
+
+Both changes were then merged over the carried tree of #1644 and measured
+again against it. On this container `interp_allocs` goes 929,213 -> 925,912,
+`interp_peak_bytes` 799,829 -> 718,808 and the interpreter's instructions
+679,404,788 -> 612,658,897 (-66,745,891, -9.82%). The goldens carry those
+memory rows and `interp_instructions` 659,398,270 -> 592,652,379, the
+container's fall subtracted. The figures above were taken against main before
+the carrier; these replace them as the pull request's claim.
+
+CI measured the branch at 6d35abb2. `interp_instructions` 659,398,270 ->
+614,239,448 (-45,158,822, -6.85%), less than this container's -9.82%;
+`interp_allocs` 925,912 and `interp_peak_bytes` 718,808, as projected. Four
+compile-side rows moved with the binary's layout, since `src/int.rs` and the
+map code are new text in the compiler: `compile_instructions` 25,195,466 ->
+25,204,253 (+8,787), `entry_instructions` 85,204,646 -> 85,215,074 (+10,428),
+`library_instructions` 85,763,002 -> 85,773,867 (+10,865), and
+`emit_instructions` 29,343,492 -> 29,285,427 (-58,065). The three rises are
+priced at under 0.0001 of welfare together; the interpreter's fall is worth
+about +0.024.
+
 ## 2026-09-25 — a walk by index steps from its cursor, and a join knows its count
 
 The run program's index phase reads a 690,000-character string of one- to
@@ -14677,3 +14774,36 @@ landed on their projections: `compile_peak_bytes` 708,672 and
 The three front-end rows carry the argument stack's thread-local, which the
 argument-vector entry measured at 0.58% of a check on this container, and the
 emit row carries the literal word's helper, which every module is emitted with.
+
+## 2026-09-25 — a program that runs out of stack in the page lets go of its cells
+
+The small-int change turned `the_wasm_engine_agrees_with_the_golden_corpus`
+red on the specs job and on the other host, with `kanso_compile_wasm: wasm
+unreachable instruction executed` on the program after `deep_recursion.kso`.
+Skipping the recursion let the rest of the corpus pass, and the map-only
+commit before the ints passed whole.
+
+A panic hook that wrote into the output buffer named the panic:
+`src/wasm_rt.rs:82`, the `borrow_mut` of REG in `load`. The recursion runs
+out of stack in wasmi, and the trap lands wherever the deepest call of the
+leaf work happens to be. With the ints it lands inside `push`, in the
+growth of REG's vector, while the RefCell is borrowed. A trap unwinds
+nothing, so the flag stayed set for the life of the instance and the next
+program's `load` panicked on a cell no live code held. Where the trap lands
+is a property of the call depths of whatever the leaf work calls, so any
+change to the interpreter's arithmetic could move it into a borrow. The ints
+did. The bug was already there.
+
+The cells wasm_rt keeps are now `Held`: a RefCell inside an `UnsafeCell`,
+reached through `Deref` so every existing borrow site reads as before. At an
+entry point, `renew` takes the borrow when it can, and when a dead program
+still holds it, it writes a fresh RefCell over the cell. The old value is
+leaked, since a trap may have left it half-written. Writing a RefCell
+through a shared reference is refused by the `invalid_reference_casting`
+lint, which is why the outer `UnsafeCell` is there. `load`, `exec_main`'s
+transcript clear and `take_error` all renew.
+
+`a_program_that_runs_out_of_stack_leaves_the_engine_usable` runs the
+recursion and then `print "{1 + 2}"` on one instance. It went red with
+`renew` asking for the borrow, and green with the fix. The ratchet row
+`dead_borrow` makes that mutation.
