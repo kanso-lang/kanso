@@ -13896,6 +13896,13 @@ included, and agrees with the interpreter. With each fused read moved one
 byte late it disagreed; the ratchet row `byte_run_late` makes that
 mutation, and `byte_run_apart` turns the fusion off for the work vein.
 
+## 2026-09-25 — CI's rows for kanso#1629
+
+CI's work, machine-code and emitted-code rows agreed with the goldens row
+for row. Two compile-side rows rose with the change:
+`startup_instructions` 601,506 -> 601,513 and
+`emit_instructions` 29,340,955 -> 29,343,426, +0.0084%.
+
 ## 2026-09-25 — a rewind with nothing to take back asks one question
 
 Every iteration of a beat loop ends in `k_beat_rewind`, and its fast path

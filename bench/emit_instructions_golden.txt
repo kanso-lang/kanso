@@ -292,4 +292,7 @@
 # kanso#1623 at CI's sitting: tail cycles, direct calls and four runtime doors
 # on preserve_none. emit_instructions 29,340,940 -> 29,340,955, a RISE of 15
 # (+0.0001%).
-emit_instructions=29340955
+#
+# kanso#1629 at CI's sitting: a run of byte compares is read as one window.
+# emit_instructions 29,340,955 -> 29,343,426, a RISE of 2,471 (+0.0084%).
+emit_instructions=29343426

@@ -484,4 +484,7 @@
 # kanso#1623 at CI's sitting: tail cycles, direct calls and four runtime doors
 # on preserve_none. startup_instructions 601,491 -> 601,506, a RISE of 15
 # (+0.0025%).
-startup_instructions=601506
+#
+# kanso#1629 at CI's sitting: a run of byte compares is read as one window.
+# startup_instructions 601,506 -> 601,513, a RISE of 7 (+0.0012%).
+startup_instructions=601513
