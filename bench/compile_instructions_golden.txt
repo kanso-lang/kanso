@@ -2326,7 +2326,10 @@
 #
 # kanso#1631 at CI's sitting: two byte appends in a row ask for room once.
 # compile_instructions 25,041,901 -> 25,004,892, a FALL of 37,009 (-0.1478%).
-compile_instructions=25004892
+#
+# kanso#1634: the interpreter's per-call questions stop hashing
+# compile_instructions 25,004,892 -> 25,041,977, a RISE of 37,085 (+0.1483%).
+compile_instructions=25041977
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

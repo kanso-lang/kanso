@@ -14168,3 +14168,22 @@ The ratchet rows `in_place_site`, `recent_callee`, `recent_frame`,
 answer, and `interp_instructions` sees each. Measured on the tree each was
 written against, the five read 712,672,223, 717,053,460, 708,325,182,
 697,580,223 and 680,327,242.
+
+## 2026-09-25 — CI's rows for kanso#1634
+
+CI read `interp_instructions` 690,933,840 -> 661,830,756 (-29,103,084,
+-4.21%), a little more than this box's -4.35% of its own baseline.
+`interp_peak_bytes` rose 842,653 -> 860,477 (+17,824, +2.12%) and
+`interp_allocs` 929,207 -> 929,249 (+42): the recent-callee and recent-frame
+tables are two vectors of 256 slots allocated on the first call, and each
+frame's in-place sites are a set of its own, built on the first question.
+Welfare weighs the peak at 0.04 of the development side against 0.11 for the
+instructions, so the trade is the one the objective asks for.
+
+The front-end rows moved with the compiler's layout, since eval.rs is linked
+into every `kanso check`: `compile_instructions` 25,004,892 -> 25,041,977
+(+37,085, +0.15%), `entry_instructions` 83,186,043 -> 83,306,754 (+120,711,
++0.15%), `library_instructions` 83,730,469 -> 83,850,394 (+119,925, +0.14%),
+`startup_instructions` 605,388 -> 605,441 (+53) and `emit_instructions`
+29,261,817 -> 29,274,393 (+12,576, +0.04%). None of these paths runs the
+interpreter's call machinery, and `compile_allocs` stayed at 14,276.
