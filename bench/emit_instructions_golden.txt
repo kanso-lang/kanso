@@ -304,4 +304,7 @@
 #
 # kanso#1634: the interpreter's per-call questions stop hashing
 # emit_instructions 29,261,817 -> 29,274,393, a RISE of 12,576 (+0.0430%).
-emit_instructions=29274393
+#
+# CI measured the warm play at 12440a7d. emit_instructions 29,274,393 ->
+# 29,249,085, a FALL of 25,308 (-0.0865%).
+emit_instructions=29249085

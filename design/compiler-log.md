@@ -14383,7 +14383,10 @@ to word the message the way the compiled program would.
 On this container the start-up row falls from 615,803 to 51,616, -564,187
 (-91.6%), and `emit_instructions` reads 29,578,328 on both trees, since that
 row builds the codegen corpus with `kanso build`. `startup_instructions` is
-projected at 605,441 -> 41,254 until CI reads it. The start-up row no longer
+605,441 -> 52,375 on CI (-553,066, -91.3%). The projection was 41,254: what
+is left of a warm play is reading the file, forming the key and starting the
+binary, which costs about the same on both hosts, so it does not scale with
+the part that went. The start-up row no longer
 reaches the front end or the emitter on its measured run; the compile rows and
 `emit_instructions` are the ones that watch them.
 
@@ -14395,3 +14398,9 @@ from `!` to `?`; with the loader's note removed it prints `a!`. A file that
 runs out of stack says so on its second play as on its first; with the warm
 path's explanation dropped the second says nothing. The ratchet rows are
 `play_text`, `play_disk` and `play_signal`.
+
+CI's other rows moved with the compiler's layout, each down:
+`compile_instructions` 25,041,977 -> 25,027,159, `entry_instructions`
+84,635,833 -> 84,572,805, `library_instructions` 85,224,038 -> 85,160,887,
+`emit_instructions` 29,274,393 -> 29,249,085 and `interp_instructions`
+661,830,756 -> 659,854,491.

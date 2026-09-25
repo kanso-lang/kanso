@@ -497,8 +497,8 @@
 # kanso#1634: the interpreter's per-call questions stop hashing
 # startup_instructions 605,388 -> 605,441, a RISE of 53 (+0.0088%).
 #
-# Projected from this container's fall of 564,187: a second play of an
-# unchanged file finds its binary by the file's text and runs it without
-# compiling or emitting. CI's reading replaces it. startup_instructions
-# 605,441 -> 41,254, a FALL of 564,187 (-93.1861%).
-startup_instructions=41254
+# CI measured the warm play at 12440a7d: a second play of an unchanged file
+# finds its binary by the file's text and runs it without compiling or
+# emitting. startup_instructions 605,441 -> 52,375, a FALL of 553,066
+# (-91.3493%).
+startup_instructions=52375

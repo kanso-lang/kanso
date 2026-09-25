@@ -1096,7 +1096,10 @@
 #
 # CI measured the merged tree at 755fb36d. library_instructions 85,223,918 ->
 # 85,224,038, a RISE of 120 (+0.0001%).
-library_instructions=85224038
+#
+# CI measured the warm play at 12440a7d. library_instructions 85,224,038 ->
+# 85,160,887, a FALL of 63,151 (-0.0741%).
+library_instructions=85160887
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.
