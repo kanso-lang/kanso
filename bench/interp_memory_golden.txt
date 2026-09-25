@@ -244,7 +244,10 @@
 # 2026-09-25, a small map as a sorted vector and an interpreted int in a
 # machine word, over the carried tree of #1644: interp_allocs 929,213 ->
 # 925,912, a FALL of 3,301 (-0.3552%).
-interp_allocs=925912
+#
+# CI measured the typed map key at 1ab7904e. interp_allocs 925,912 -> 899,769,
+# a FALL of 26,143 (-2.8235%).
+interp_allocs=899769
 #
 # 2026-09-18, kanso#1518 against main at kanso#1517, CI's sitting.
 # 951,438 -> 961,165, a RISE of
@@ -322,5 +325,8 @@ interp_allocs=925912
 # 2026-09-25, a small map as a sorted vector and an interpreted int in a
 # machine word, over the carried tree of #1644: interp_peak_bytes 799,829 ->
 # 718,808, a FALL of 81,021 (-10.1298%).
-interp_peak_bytes=718808
+#
+# CI measured the typed map key at 1ab7904e. interp_peak_bytes 718,808 ->
+# 720,417, a RISE of 1,609 (+0.2238%).
+interp_peak_bytes=720417
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

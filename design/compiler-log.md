@@ -15407,6 +15407,15 @@ they land on: `run_append_fast` 8,256,960, `run_perm_allocs` 93,
 `live_alloc_bytes` 534,601,584, `live_append_fast` 31,135,470 and
 `a_literal_appended_across_a_rewind_append_fast` 2,080.
 
+CI read the tree at 1ab7904e and matched the work rows to the instruction. The
+library carries one definition more, and the compile side paid for it:
+`compile_instructions` 25,269,300 (+65,047), `entry_instructions` 85,326,396
+(+111,322), `library_instructions` 85,855,270 (+81,403), `compile_allocs`
+14,272 (+32) and `compile_peak_bytes` 710,281 (+1,609). The interpreted run
+reads 595,493,632, 21,335 above the projection, with `interp_allocs` at
+899,769 (-26,143) and `interp_peak_bytes` at 720,417 (+1,609). Those rows are
+CI's.
+
 ## 2026-09-25 — a tail call carries its group
 
 The interpreter runs a tail call through the dispatcher's loop: `eval_tail`
@@ -15418,7 +15427,7 @@ of the name and a compare of its bytes to find the same group again.
 
 `Flow::Tail` now carries the group beside the name, and the loop takes it. The
 interpreted run falls 13,651,102 instructions on the container, 2.3%, which
-projects `interp_instructions` at 581,821,195 over the typed key's projection.
+projects `interp_instructions` at 581,842,530 over the typed key's projection.
 
 The ratchet row `tail_group` puts the lookup back and leaves the carried group
 unused. The interpreted run read 595,873,686 with it, back where it started.

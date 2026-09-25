@@ -587,8 +587,12 @@
 # interp_instructions 614,239,448 -> 595,472,297, a FALL of 18,767,151
 # (-3.0553%).
 #
+# CI measured the typed map key at 1ab7904e. interp_instructions 595,472,297
+# -> 595,493,632, a RISE of 21,335 (+0.0036%).
+interp_instructions=595493632
+#
 # Projected for the tail that carries its group, from this container's
-# reading: 13,651,102 below the typed key's projection. interp_instructions
-# 595,472,297 -> 581,821,195, a FALL of 13,651,102 (-2.2925%).
-interp_instructions=581821195
+# reading: 13,651,102 below CI's reading of the typed key. interp_instructions
+# 595,493,632 -> 581,842,530, a FALL of 13,651,102 (-2.2924%).
+interp_instructions=581842530
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1
