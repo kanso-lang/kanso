@@ -14340,3 +14340,8 @@ CI's reading moved the two compile rows that compile lib/regexp:
 `library_instructions` 85,059,188 -> 85,101,407 (+42,219). The split's new
 arm and its guard are code both routes compile. The objective weighs neither
 row, and every work row CI measured matched main.
+
+Merged again after kanso#1638, whose split adds its own small cost to the two
+rows that compile lib/regexp. Projected by adding that delta to this branch's
+CI reading: `entry_instructions` 84,635,818 and `library_instructions`
+85,223,918. CI's readings will replace both.
