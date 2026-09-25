@@ -4498,7 +4498,9 @@ fn paired_appends(body: &str) -> String {
         let mut i = 0;
         while i < func.len() {
             if i + 1 < func.len() {
-                if let (Some((a, acc, x)), Some((b, acc2, y))) = (parse(func[i]), parse(func[i + 1])) {
+                if let (Some((a, acc, x)), Some((b, acc2, y))) =
+                    (parse(func[i]), parse(func[i + 1]))
+                {
                     let used = func.iter().map(|l| count_operand(l, a)).sum::<usize>();
                     if acc2 == a && used == 2 {
                         out.push_str(&format!(
