@@ -14738,3 +14738,10 @@ layout, none of them weighed: `work_deepbench` 364,731,746 -> 364,731,751,
 4,631,757 -> 4,631,762 and `work_scanbench` 281,852 -> 281,857. The `text`
 vein's sum goes 3,427,984 -> 3,487,568, the 4,256 bytes in each of fourteen
 binaries.
+
+Two rows stand above main only because of what the carrier brought, and both
+fell from the carrier's readings on this branch: `work_basket` lands on
+31,593,364, two below the carrier's 31,593,366 and ten above main's
+31,593,354, and `work_widebench` on 28,836,171, 245,877 below the carrier's
+29,082,048 and 58,105 above main's 28,778,066. Both rises over main arrived
+with the carried changes and are priced in their entries.
