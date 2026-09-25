@@ -648,9 +648,13 @@ static void k_spare_release(int keep) {
     }
 }
 
+/* A spare block is taken back only at the size asked for. Taking the first
+   one large enough handed a half-megabyte request the 786,448-byte block the
+   run program's index phase had freed, and the chain counts a block whole, so
+   the peak rose by the difference for bytes nobody used. */
 static void k_arena_push(size_t need) {
     KBlock** link = &k_spare;
-    while (*link && (*link)->cap < need) link = &(*link)->next;
+    while (*link && (*link)->cap != need) link = &(*link)->next;
     KBlock* b = *link;
     if (b) {
         *link = b->next;

@@ -2297,7 +2297,39 @@ rows_b1tk = text/concat rows_b1pl [token_table token_length]
 
 rows_b1ab = text/concat rows_b1tk [block_half ten_mapped]
 
-rows_b = text/concat rows_b1ab [compile_mem compile_mem_host]
+# A regexp scan first asks the subject for the literal every match must hold.
+# Carrying the literal run across a class asks for a literal the subject does
+# not hold, and the micro fixture finds nothing where it found a match; never
+# asking costs the run program's split phase its quadratic scan again.
+literal_run = row
+  "a regexp literal run carried across a class"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_literal_run_carried_across_a_class")
+  release
+
+literal_asked = row
+  "a regexp scan made without asking for its literal"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_scan_made_without_asking_for_the_literal")
+  benches
+
+# A spare block is reused only at the size asked for, so a regular request is
+# never handed an oversize block the chain then counts whole.
+spare_exact = row
+  "a spare block taken larger than the size asked for"
+  true
+  (gating "run_counters")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_spare_block_taken_larger_than_asked")
+  benchmarks
+
+rows_b1rl = text/concat rows_b1ab [literal_run literal_asked spare_exact]
+
+rows_b = text/concat rows_b1rl [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 

@@ -14245,3 +14245,115 @@ instructions each: `work_basket` 31,594,475, `work_digestbench` 5,540,955,
 counters moved by one or a few with the layout: `run_beat_iters` 2,709,073,
 `run_push_mut_fast` 1,097,989, `run_push_mut_slow` 1,638,524, `run_str_scans`
 162 and `run_str_scan_bytes` 4,092,730. `work_jsonbench` fell 1,414,910.
+
+## 2026-09-25 — a regexp scan asks first for the literal every match holds
+
+The run program's split phase and scanbench search a subject built from
+"abcdefghijklm" for `[a-z]+zzq`. There is no match, and finding that out was
+quadratic: at every start the letter run was taken to the end of the subject
+and given back one letter at a time, each step asking the `zzq` after it.
+The phase cost about 60 million instructions of the run program's 1,482
+million.
+
+A regexp program now carries the literal every match must contain: the
+longest run of plain characters side by side in the pattern's top-level
+sequence, "zzq" here, or "" when there is none. A class, repetition,
+alternation or anchor ends a run, and a group is looked through. The first
+scan of a subject, the one at position 1, asks whether the subject holds that
+literal and answers no match without scanning when it does not. Later scans
+start after a match, and a match holds the literal, so they do not ask. The
+search is `text/find2` for the literal's first byte and a comparison of the
+rest at each place it stands.
+
+runbench 1,482,674,789 -> 1,422,687,642 (-59,987,147, -4.05%), with the same
+printed tally.
+
+The arena peak rose with it, from 3,145,744 to 3,932,192 at first. The split
+phase no longer allocates a scan's worth at every position, so the index
+phase that runs after it met the arena at another place, and a block trace
+showed two things at the peak. Its 1.57 MB string took a block of its own
+with no tail left in the block beneath, so the next small allocation opened a
+fresh half-megabyte block. And that block came off the spare list as the
+786,448-byte block the index phase had freed a moment before, because the
+list handed back the first block at least as large as the request, and the
+chain counts a block whole. A block is now taken back only at the size asked
+for, which leaves the peak at 3,670,032: 524,288 over the branch below, one
+block, where the scan's removal is worth 59,987,147 instructions. Welfare
+reads 88.5073 against 88.4070. Giving an oversize block 16 or 64 KB of room
+of its own, for the small allocations after it, did not move the peak, so the
+missing tail is not on that path; that is open. A case-insensitive pattern is rewritten into classes before the
+literal is taken, so `(?i)zzq` asks for nothing and still finds "ZZQ".
+
+scanbench exists to show that a scan which keeps nothing holds a flat peak,
+and two mem fixtures, `a_scan_that_finds_nothing_keeps_nothing` and
+`a_scan_keeps_its_place_in_the_text`, pin the same scan at small sizes.
+All three used `[a-z]+zzq`, and with the literal asked for first none of them
+walked a single position: the fixtures' `beat_iters` read 0, and the second's
+`seek_resumes` fell to 0, which would have left the `seek_kept` ratchet row
+blind. They now search for `[a-z]+[x-z]`, which ends in a class the alphabet
+never supplies, so each start is still walked and backed off. That is a
+change of what the three measure, and it prices as one: `work_scanbench`
+291,353,249 -> 311,856,920 (+7.04%), because a class tried at each backed-off
+position costs more than a literal did; the fixture rows move the same way.
+Their arena peaks did not move.
+
+The run program's split phase still reads `[a-z]+zzq`, and with this change
+it measures a subject scanned for a literal once rather than a backtracking
+walk. The program is ruled content, so its pattern is left as it was. Whether
+the phase should be given a pattern that still backtracks is a question about
+the objective, which is Clay's to answer, and it does not hold up this change.
+
+tests/golden/micro/a_match_holds_the_literal_its_pattern_spells finds
+matches whose literal sits after a class, inside a group, at the end of the
+subject and twice in it, one that is absent, and one under `(?i)`. With the
+literal run carried across a class, `ab.cd` asked for "abcd" and found
+nothing in "xx abXcd". That is the ratchet row `literal_run`; `literal_asked`
+removes the question and the work vein sees the scan come back.
+`spare_exact` takes the first spare block large enough again, and the run
+vein reads 3,932,192.
+
+Found on the way and left for its own change: `regexp/split` treats a scan
+that found nothing like an empty match and scans again from the next
+position, so splitting on a separator that does not occur in the rest of the
+subject is quadratic in that rest.
+
+The rest of what moved, against the branch below. The literal question is
+code the regexp module now carries, and the two programs that import it
+emit it: `emitted_other_defines` 1,548, `emitted_other_calls` 9,697,
+`emitted_other_branches` 7,995 and `emitted_other_lines` 83,384, and the
+text vein's summed `text` row 3,465,392. On the run program the peak is
+`run_arena_peak_bytes` 3,670,032 as above; `run_ten_handups` went 4 -> 3 with
+the new layout, and the program record's fourth field moves
+`run_sh_rec` to 48,174,640, `run_sh_str` to 7,733,616 and `run_bytes_malloc`
+to 20,556.
+
+scanbench and the two scan fixtures now search for a class, which the scan
+tries at every backed-off position, and they re-base with it. scanbench:
+`scan_allocs` 3,006,147, `scan_alloc_bytes` 112,314,784, `scan_find2_calls`
+1,001,003, `scan_sh_bytes` 48,048,144, `scan_sh_buf` 81,008, `scan_sh_str`
+752, `scan_bytes_malloc` 38, `scan_push_mut_fast` 5 and `scan_str_scan_bytes`
+3,352. a_scan_that_finds_nothing_keeps_nothing:
+`a_scan_that_finds_nothing_keeps_nothing_allocs` 74,066,
+`a_scan_that_finds_nothing_keeps_nothing_alloc_bytes` 2,778,784,
+`a_scan_that_finds_nothing_keeps_nothing_find2_calls` 24,495,
+`a_scan_that_finds_nothing_keeps_nothing_sh_bytes` 1,175,784,
+`a_scan_that_finds_nothing_keeps_nothing_sh_buf` 13,152,
+`a_scan_that_finds_nothing_keeps_nothing_sh_str` 768,
+`a_scan_that_finds_nothing_keeps_nothing_bytes_malloc` 41,
+`a_scan_that_finds_nothing_keeps_nothing_push_mut_fast` 5 and
+`a_scan_that_finds_nothing_keeps_nothing_str_scan_bytes` 37.
+a_scan_keeps_its_place_in_the_text:
+`a_scan_keeps_its_place_in_the_text_allocs` 1,802,
+`a_scan_keeps_its_place_in_the_text_alloc_bytes` 106,592,
+`a_scan_keeps_its_place_in_the_text_find2_calls` 255,
+`a_scan_keeps_its_place_in_the_text_sh_bytes` 19,752,
+`a_scan_keeps_its_place_in_the_text_sh_buf` 50,784,
+`a_scan_keeps_its_place_in_the_text_sh_str` 5,760,
+`a_scan_keeps_its_place_in_the_text_bytes_malloc` 41,
+`a_scan_keeps_its_place_in_the_text_push_mut_fast` 5 and
+`a_scan_keeps_its_place_in_the_text_str_scan_bytes` 37; its `seek_resumes`
+holds at 408. a_class_asks_by_the_byte moves only by the program record's
+field and the literal it asks for: `a_class_asks_by_the_byte_allocs` 9,268,
+`a_class_asks_by_the_byte_alloc_bytes` 468,513,
+`a_class_asks_by_the_byte_sh_rec` 87,440, `a_class_asks_by_the_byte_sh_str`
+352 and `a_class_asks_by_the_byte_bytes_malloc` 15.

@@ -22,8 +22,13 @@ import "std/text"
 # The pattern retains nothing on purpose. A pattern that matched would make
 # peak grow for an honest reason — the matches are real data — and the row
 # would then move whenever the generator changed rather than when the compiler
-# did. `zzq` never appears in the alphabet the subject is built from.
-pattern = "[a-z]+zzq"
+# did. No letter from x to z appears in the alphabet the subject is built from.
+#
+# The pattern ends in a class. Until 2026-09-25 it ended in `zzq`, and
+# std/regexp now answers a pattern whose literal the subject lacks before
+# scanning it, so that pattern stopped walking the subject and the row stopped
+# measuring a scan.
+pattern = "[a-z]+[x-z]"
 
 alphabet = "abcdefghijklm"
 
