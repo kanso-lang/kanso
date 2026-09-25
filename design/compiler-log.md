@@ -13932,3 +13932,13 @@ shrinks by 80 to 112 bytes; the run program's reads 411,768 -> 411,656.
 
 The ratchet row `unmoved_arena` skips the new exit, and escapebench read
 76,509,908 with it applied.
+
+## 2026-09-25 — CI's rows for kanso#1630
+
+CI agreed with every projected work row and with the text, emitted and
+compile veins. The two codegen rows moved, since `kanso build` compiles the
+runtime the rewind lives in: `codegen_instructions_release` 715,866,504 ->
+715,981,278 (+114,774, +0.0160%) and `codegen_instructions_dev` 142,641,709
+-> 142,641,575 (-134). The release rise is clang's work on the runtime and
+is the price of the change; the run program it buys is 7.46 million
+instructions cheaper.
