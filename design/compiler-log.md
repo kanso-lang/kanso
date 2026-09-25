@@ -15234,3 +15234,13 @@ the change moved each was not isolated. Both are small against runbench.
 A spec that holds DECLARES_CONTEXT_CALLS to the calls DECLARES makes caught
 the seed named there, where it does not belong: the seed is called from
 emitted code only.
+
+Taking the seed off that list also took its `declare` out of the nine
+programs that never write `bytes ""`, so their emitted rows went back to
+main's: basket 5,436 lines, widebench 6,168, deepbench 1,743, escapebench
+628, pendbench 2,965, scanbench 14,419, indexbench 557, digestbench 4,498
+and readbench 601. CI read the tree at 947d34ad and its rows were taken:
+`codegen_instructions_dev` 125,554,679, 13,495 above the 42d0b138 reading,
+`codegen_instructions_release` 698,561,887, 38,073 below it, and
+`emit_instructions` 29,311,866, 145 above. Both rises arrived with the
+declare leaving the preamble; which line moved each was not isolated.

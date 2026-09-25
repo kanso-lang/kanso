@@ -265,4 +265,8 @@
 #
 # CI measured the builder seed at 42d0b138. codegen_instructions_dev
 # 125,548,064 -> 125,541,184, a FALL of 6,880 (-0.0055%).
-codegen_instructions_dev=125541184
+#
+# CI measured the builder seed at 947d34ad, with the declare no longer written
+# into programs that never call it. codegen_instructions_dev 125,541,184 ->
+# 125,554,679, a RISE of 13,495 (+0.0107%).
+codegen_instructions_dev=125554679
