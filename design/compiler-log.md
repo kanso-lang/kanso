@@ -14721,3 +14721,20 @@ tests/every_rendered_float_reads_back_as_itself.rs lifts the search out of
 about. With the walk down from a passing guess removed it reports 975,871 not
 shortest. The ratchet row `ryu_guess` starts the search at zero again, and the
 work vein reads runbench back at its old count.
+
+CI measured the branch at a71892d9. The work rows are the projection's to
+within twenty instructions: runbench 1,403,785,575 -> 1,390,193,490
+(-13,592,085), encodebench 2,736,637,236 -> 2,676,227,704 and livebench
+2,078,874,160 -> 2,018,464,628 (-60,409,532 each). Three rows rose.
+Every benchmark's `.text` grew 4,256 bytes, runbench's to 413,496; machine code
+has no welfare term. `codegen_instructions_dev` went 142,163,302 -> 142,166,083
+(+2,781) and `codegen_instructions_release` 698,405,052 -> 698,560,720
+(+155,668, +0.02%). The mechanism of the two codegen rises was not isolated.
+Together they cost under 0.0001 of welfare, against about +0.05 for runbench.
+Six benchmarks that render no floats rose five instructions each with the
+layout, none of them weighed: `work_deepbench` 364,731,746 -> 364,731,751,
+`work_escapebench` 69,238,422 -> 69,238,427, `work_indexbench` 2,538,302 ->
+2,538,307, `work_pendbench` 181,845,166 -> 181,845,171, `work_readbench`
+4,631,757 -> 4,631,762 and `work_scanbench` 281,852 -> 281,857. The `text`
+vein's sum goes 3,427,984 -> 3,487,568, the 4,256 bytes in each of fourteen
+binaries.

@@ -694,19 +694,22 @@
 # from this container's falls, runbench -13,592,105, encodebench and livebench
 # -60,409,532 each, widebench -245,877, oneshot -150,956; the rest moved five
 # instructions or fewer and keep their rows. CI's reading replaces them.
-jsonbench 977552823
+#
+# CI measured the float search at a71892d9. runbench 1,390,193,490; the projection read 20 lower.
+jsonbench 977552821
 encodebench 2676227704
 oneshot 14783478
-basket 31593366
+basket 31593364
 widebench 28836171
-deepbench 364731746
-escapebench 69238422
-pendbench 181845166
-indexbench 2538302
-scanbench 281852
-digestbench 5540581
-readbench 4631757
+deepbench 364731751
+escapebench 69238427
+pendbench 181845171
+indexbench 2538307
+scanbench 281857
+digestbench 5540579
+readbench 4631762
 livebench 2018464628
+runbench 1390193490
 # 2026-09-06 (the run program joins): `runbench 3043743748` is a NEW row and
 # nothing regressed to make it appear. It is the program Clay's gavel that day
 # made the objective's whole run-speed term, and the thirteen rows above it
@@ -770,4 +773,3 @@ livebench 2018464628
 # -124,842,502 (-4.36%), livebench -41,831,652, runbench -6,628,668 (-0.47%),
 # oneshot -105,172, and widebench +303,982 (+1.06%), which appends few
 # literals and moved with where its code landed.
-runbench 1390193470

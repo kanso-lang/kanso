@@ -239,4 +239,7 @@
 #
 # CI measured the carried tree at 913723b0. codegen_instructions_dev
 # 142,160,577 -> 142,163,302, a RISE of 2,725 (+0.0019%).
-codegen_instructions_dev=142163302
+#
+# CI measured the float search at a71892d9. codegen_instructions_dev
+# 142,163,302 -> 142,166,083, a RISE of 2,781 (+0.0020%).
+codegen_instructions_dev=142166083
