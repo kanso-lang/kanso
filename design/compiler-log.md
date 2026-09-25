@@ -13767,3 +13767,40 @@ the run term loses about 0.0018, so the smaller block is a net loss. A
 lower oversize threshold (256 KiB) moved nothing either: the 786,432-byte
 string the index shape doubles lands in a spare 1 MiB block, which the
 live count already includes.
+
+## 2026-09-25 — an accumulator's buffer grows where it is
+
+A list that a beat loop builds from outside the loop keeps its buffer out of
+the arena, allocated by `k_buf_perm`. When it outgrew that buffer,
+`k_b_push_grow` allocated a larger one with malloc, copied the elements,
+freed the old buffer and called `k_permreg_add` again for the same field.
+The run program's escape shape grows each of its 3,872 lists five times
+this way, and those 19,360 grows cost 12,746,994 instructions, about 658
+each. A grow whose buffer is already out of the arena now calls
+`k_buf_perm_regrow`, a realloc, and leaves the field's first registration
+standing: `l->items` is the same field after the realloc, and
+`k_permreg_flush_held` already passes over a field it has freed.
+
+Measured on this box against the branch it sits on, every work row fell or
+held. `work_runbench` 1,536,983,069 -> 1,530,322,616 (-0.433%),
+`work_escapebench` -6.231%, `work_basket` -1.281%, and the rest by under
+0.02%. The golden takes CI's last reading plus this box's difference, since
+the two agreed to 459 instructions on the run program. The permanent peak
+counts one buffer where the malloc path held two for a moment:
+`perm_peak_bytes` 20,512 -> 16,400 on the run program, the escape
+benchmark and five mem fixtures, 81,952 -> 65,552 on seven more, 416 -> 272
+on one, and 5,308,464 -> 4,259,872 on basket. The book's counters sample
+in chapters 10 and 12 reads the same fall. The counters count the realloc
+as the malloc and the free it replaces, as `k_bytes_buf_regrow` does, so
+`bytes_malloc` and `bytes_freed` are unchanged everywhere. The new helper
+and its branch add 192 bytes of machine code to each benchmark, so `text`
+reads 3,434,192 -> 3,436,880 over the fourteen.
+
+The fixture `an_accumulator_regrows_where_it_is` pins it at 16,400 and read
+20,512 with the regrow turned off; the ratchet row `regrow` makes that
+mutation. A map's pairs take the same grow in `k_b_put_mut`, and they were
+left alone: with that arm made to abort, the mem corpus and all fourteen
+benchmarks ran clean, and no fixture I could write put a map accumulator
+under a beat, so the arm would have had no golden. That path also frees a
+malloc'd predecessor without subtracting it from `k_perm_live`, so the
+permanent peak it reports runs high; nothing reaches it today.

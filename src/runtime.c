@@ -6633,6 +6633,35 @@ static __attribute__((noinline, cold, preserve_most)) KValue* k_buf_perm(long lo
     return (KValue*)(b + 1);
 }
 
+/* An accumulator's buffer that has already left the arena, grown again: one
+   realloc in place of k_buf_perm, a copy and k_buf_release, the step the byte
+   builder's k_bytes_buf_regrow takes. The escape shape of the run program
+   grows each of its 3,872 lists five times, and those grows cost 658
+   instructions apiece. The old and new buffers are never both held, so the
+   permanent peak counts the one. Counted as the malloc and the free it
+   replaces, so the counters keep their meaning.
+
+   A map's pairs could take the same step and do not. No program the beat
+   analysis brackets threads a map through a beat, so that arm would have no
+   golden to hold it. */
+static __attribute__((noinline, cold, preserve_most)) KBuf* k_buf_perm_regrow(KBuf* ob,
+                                                                             long long cap) {
+    long long was = (long long)(sizeof(KBuf) + sizeof(KValue) * (size_t)(-ob->cap));
+    long long now = (long long)(sizeof(KBuf) + sizeof(KValue) * (size_t)cap);
+    KBuf* b = realloc(ob, (size_t)now);
+    if (!b) { fputs("out of memory\n", stderr); exit(1); }
+    k_perm_live += now - was;
+    if (k_perm_live > k_perm_peak) k_perm_peak = k_perm_live;
+    if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) {
+        if (K_COUNTING) k_stat_allocs++;
+        k_stat_alloc_bytes += now;
+        if (K_COUNTING) k_stat_bytes_malloc++;
+        if (K_COUNTING) k_stat_bytes_freed++;
+    }
+    b->cap = -cap;
+    return b;
+}
+
 /* Does this header predate the beat it is being appended in? Then it is the
    loop's accumulator, not one of its transients. */
 static inline int k_outlives_beat(const void* p) {
@@ -8426,6 +8455,18 @@ static KValue k_b_push_grow(KValue lv, KList* l, KValue item, int mutate) {
        was building. A transient's stays in the arena, where the rewind is
        exactly what should free it. */
     int perm = mutate && k_outlives_beat(l);
+    /* A buffer already out of the arena is grown where it is. The field it
+       sits in was registered when it first left, and `l->items` is the same
+       field after the realloc, so the registration still names it. */
+    if (perm && k_buf_of(l->items)->cap < 0) {
+        KBuf* nb = k_buf_perm_regrow(k_buf_of(l->items), cap);
+        KValue* grown = (KValue*)(nb + 1);
+        grown[l->len] = item;
+        nb->used = l->len + 1;
+        l->items = grown;
+        l->len++;
+        return lv;
+    }
     KValue* items = perm ? k_buf_perm(cap) : k_buf(cap);
     /* A list outgrows its literal's one slot far more often than it outgrows
        anything larger, and glibc's memcpy costs twenty-five instructions to

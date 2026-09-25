@@ -1,0 +1,26 @@
+# An accumulator seeded one frame out of a beat keeps its buffer outside the
+# arena, and each time it outgrows that buffer the grow is a realloc: the old
+# and new buffers are never both held, so the permanent peak is the last
+# buffer alone. Grown by malloc, copy and free, it read the last two together.
+span = 1000
+
+fn filled acc _ 0
+  acc
+
+fn filled acc k n
+  filled (push acc ((k * 31 + n * 7 + 3) % 997)) k (n - 1)
+
+fn one_list k
+  base = push [] 1
+  length (filled base k span)
+
+fn many at stop tally
+  more at stop tally (at > stop)
+
+fn more _ _ tally true
+  tally
+
+fn more at stop tally false
+  many (at + 1) stop (tally + one_list at)
+
+pub play = print "total {many 1 20 0}"
