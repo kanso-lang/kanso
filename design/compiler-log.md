@@ -14306,8 +14306,8 @@ their arena peaks did not move and `seek_resumes` holds at 408. scanbench
 cannot follow them: `the_run_program_carries_the_shapes_unchanged` holds it
 to the run program's split phase character for character, so it keeps
 `[a-z]+zzq`, answers at once, and `work_scanbench` falls 291,353,249 ->
-285,663 (-99.90%). Its header now says so and names the fixture that keeps
-the flat-peak property.
+285,663 (-99.90%). The flat-peak property it was written to show is now
+pinned by the mem fixture alone.
 
 The run program's split phase still reads `[a-z]+zzq`, and with this change
 it measures a subject scanned for a literal once rather than a backtracking
@@ -14333,7 +14333,9 @@ The rest of what moved, against the branch below. The literal question is
 code the regexp module now carries, and the two programs that import it
 emit it: `emitted_other_defines` 1,548, `emitted_other_calls` 9,697,
 `emitted_other_branches` 7,995 and `emitted_other_lines` 83,384, and the
-text vein's summed `text` row 3,465,392. On the run program the peak is
+text vein's summed `text` row 3,465,168. scanbench asks its question once and
+reads the literal as a small string: `scan_sh_str` 672, `scan_sh_rec` 1,632
+and `scan_bytes_malloc` 35. On the run program the peak is
 `run_arena_peak_bytes` 3,670,032 as above; `run_ten_handups` went 4 -> 3 with
 the new layout, and the program record's fourth field moves
 `run_sh_rec` to 48,174,640, `run_sh_str` to 7,733,616 and `run_bytes_malloc`

@@ -23,13 +23,6 @@ import "std/text"
 # peak grow for an honest reason — the matches are real data — and the row
 # would then move whenever the generator changed rather than when the compiler
 # did. `zzq` never appears in the alphabet the subject is built from.
-#
-# Since 2026-09-25 std/regexp asks a subject for the literal every match must
-# hold before it scans, and this subject lacks `zzq`, so the scan below answers
-# at once. This program is the run program's split phase, character for
-# character, so it keeps the pattern that phase has. The flat peak it was
-# written to show is pinned at small size by the mem fixture named above, which
-# searches for `[a-z]+[x-z]` and still walks every position.
 pattern = "[a-z]+zzq"
 
 alphabet = "abcdefghijklm"
