@@ -13883,8 +13883,8 @@ The goldens carry CI's last reading plus that difference. The chain's
 general path is kept beside the fused one, so the code grows: `text` rises
 496 bytes on jsonbench, oneshot and livebench and 384 on runbench, and the
 emitted-code rows add fifteen branches and 102 lines to each program that
-decodes JSON: the decoder's `branches` 495 -> 510 and `lines`
-5,379 -> 5,481, runbench's 2,752 -> 2,767 and 27,176 -> 27,278, oneshot's
+decodes JSON: the decoder's `emitted_branches` 495 -> 510 and
+`emitted_lines` 5,379 -> 5,481, runbench's 2,752 -> 2,767 and 27,176 -> 27,278, oneshot's
 578 -> 593 and 6,421 -> 6,523, livebench's 598 -> 613 and 6,551 -> 6,653.
 Summed over the programs the gates read, `emitted_other_branches`
 7,908 -> 7,953, `emitted_other_lines` 82,781 -> 83,087, and `text`

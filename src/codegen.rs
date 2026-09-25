@@ -4446,11 +4446,14 @@ fn byte_read(e: &Expr) -> Option<(&str, &str, i64, i64)> {
     Some((x.as_str(), p.as_str(), k, c))
 }
 
+/// The bytes and the position a run reads, and each read's offset and byte.
+type ByteRun<'e> = (&'e str, &'e str, Vec<(i64, i64)>);
+
 /// A conjunction of `byte_read`s of the same two names. `a and b` desugars to
 /// `if a b false`, and `and` groups to the left, so `r1 and r2 and r3` is
 /// `if (if r1 r2 false) r3 false`; either side of an `if` may be another. Two
 /// reads at least; one is an ordinary compare.
-fn byte_run(args: &[Expr]) -> Option<(&str, &str, Vec<(i64, i64)>)> {
+fn byte_run(args: &[Expr]) -> Option<ByteRun<'_>> {
     fn conj<'e>(e: &'e Expr, out: &mut Vec<(&'e str, &'e str, i64, i64)>) -> Option<()> {
         if let Some(read) = byte_read(e) {
             out.push(read);
