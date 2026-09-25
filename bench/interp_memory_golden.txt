@@ -240,7 +240,11 @@
 # Projected from this container: an application's arguments go on one shared
 # stack and each application takes a vector of exactly its own. CI's reading
 # replaces it. interp_allocs 929,249 -> 929,213, a FALL of 36 (-0.0039%).
-interp_allocs=929213
+#
+# 2026-09-25, a small map as a sorted vector and an interpreted int in a
+# machine word, over the carried tree of #1644: interp_allocs 929,213 ->
+# 925,912, a FALL of 3,301 (-0.3552%).
+interp_allocs=925912
 #
 # 2026-09-18, kanso#1518 against main at kanso#1517, CI's sitting.
 # 951,438 -> 961,165, a RISE of
@@ -314,5 +318,9 @@ interp_allocs=929213
 # stack and each application takes a vector of exactly its own. CI's reading
 # replaces it. interp_peak_bytes 860,477 -> 799,829, a FALL of 60,648
 # (-7.0482%).
-interp_peak_bytes=799829
+#
+# 2026-09-25, a small map as a sorted vector and an interpreted int in a
+# machine word, over the carried tree of #1644: interp_peak_bytes 799,829 ->
+# 718,808, a FALL of 81,021 (-10.1298%).
+interp_peak_bytes=718808
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

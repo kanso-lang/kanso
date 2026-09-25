@@ -238,6 +238,6 @@
 # dispatch arm per byte class. calls 1,182 -> 1,165, branches 764 -> 747,
 # lines 8,570 -> 8,422; defines stay 119.
 defines=83
-calls=485
+calls=484
 branches=510
-lines=5496
+lines=5494

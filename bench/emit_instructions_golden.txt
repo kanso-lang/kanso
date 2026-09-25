@@ -310,4 +310,14 @@
 #
 # CI measured the carried tree at 913723b0. emit_instructions 29,249,085 ->
 # 29,343,492, a RISE of 94,407 (+0.3228%).
-emit_instructions=29343492
+#
+# CI measured the interpreter's small values at 6d35abb2. emit_instructions
+# 29,343,492 -> 29,285,427, a FALL of 58,065 (-0.1979%).
+#
+# CI measured the builder seed at 42d0b138: the emitter's literal arm.
+# emit_instructions 29,285,427 -> 29,311,721, a RISE of 26,294 (+0.0898%).
+#
+# CI measured the builder seed at 947d34ad, with the declare no longer written
+# into programs that never call it. emit_instructions 29,311,721 ->
+# 29,311,866, a RISE of 145 (+0.0005%).
+emit_instructions=29311866

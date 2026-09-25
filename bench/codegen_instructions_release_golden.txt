@@ -337,4 +337,23 @@
 #
 # CI measured the carried tree at 913723b0. codegen_instructions_release
 # 698,399,695 -> 698,405,052, a RISE of 5,357 (+0.0008%).
-codegen_instructions_release=698405052
+#
+# CI measured the float search at a71892d9. codegen_instructions_release
+# 698,405,052 -> 698,560,720, a RISE of 155,668 (+0.0223%).
+#
+# CI measured the four carried changes at cf18309e.
+# codegen_instructions_release 698,560,720 -> 698,557,632, a fall of 3,088.
+# codegen_instructions_release 698,560,720 -> 698,557,632, a FALL of 3,088
+# (-0.0004%).
+#
+# CI measured the carried list seed at daac530d. codegen_instructions_release
+# 698,557,632 -> 698,554,515. codegen_instructions_release 698,557,632 ->
+# 698,554,515, a FALL of 3,117 (-0.0004%).
+#
+# CI measured the builder seed at 42d0b138. codegen_instructions_release
+# 698,554,515 -> 698,599,960, a RISE of 45,445 (+0.0065%).
+#
+# CI measured the builder seed at 947d34ad, with the declare no longer written
+# into programs that never call it. codegen_instructions_release 698,599,960
+# -> 698,561,887, a FALL of 38,073 (-0.0054%).
+codegen_instructions_release=698561887

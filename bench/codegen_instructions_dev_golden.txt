@@ -247,4 +247,26 @@
 #
 # CI measured the gold dev link at e3ccffb1. codegen_instructions_dev
 # 123,393,217 -> 125,549,128, a RISE of 2,155,911 (+1.7472%).
-codegen_instructions_dev=125549128
+#
+# CI measured the float search at a71892d9. codegen_instructions_dev
+# 142,163,302 -> 142,166,083, a RISE of 2,781 (+0.0020%).
+#
+# Carried together, projected as the gold link's reading plus the float
+# search's rise. CI's reading replaces it.
+#
+# CI measured the four carried changes at cf18309e. codegen_instructions_dev
+# 125,551,909 -> 125,551,388, 521 below the projection.
+# codegen_instructions_dev 125,551,909 -> 125,551,388, a FALL of 521
+# (-0.0004%).
+#
+# CI measured the carried list seed at daac530d. codegen_instructions_dev
+# 125,551,388 -> 125,548,064. codegen_instructions_dev 125,551,388 ->
+# 125,548,064, a FALL of 3,324 (-0.0026%).
+#
+# CI measured the builder seed at 42d0b138. codegen_instructions_dev
+# 125,548,064 -> 125,541,184, a FALL of 6,880 (-0.0055%).
+#
+# CI measured the builder seed at 947d34ad, with the declare no longer written
+# into programs that never call it. codegen_instructions_dev 125,541,184 ->
+# 125,554,679, a RISE of 13,495 (+0.0107%).
+codegen_instructions_dev=125554679

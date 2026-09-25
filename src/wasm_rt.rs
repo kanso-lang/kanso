@@ -11,7 +11,7 @@ use crate::eval::{
     render, render_demanded, trace_lines, Cells, Desc, ErrInfo, Executor, Interp, Value,
 };
 use crate::wasm_backend::Lit;
-use std::cell::RefCell;
+use std::cell::{RefCell, UnsafeCell};
 use std::rc::Rc;
 
 #[link(wasm_import_module = "env")]
@@ -44,23 +44,56 @@ enum Slot {
     Annotate(u32, u32, u32),
 }
 
+/// A cell a dead program cannot keep. A trap unwinds nothing: a program that
+/// runs out of stack inside `push` dies with REG borrowed, and a RefCell's
+/// flag stays set for the life of the instance, so the next program's `load`
+/// panicked on a cell no live code holds. `renew` runs only at an entry
+/// point, before anything in this module takes a borrow, so a cell that reads
+/// as borrowed there is a dead program's and is replaced whole. The old value
+/// is leaked rather than dropped, since a trap may have left it half-written.
+struct Held<T>(UnsafeCell<RefCell<T>>);
+
+impl<T> Held<T> {
+    const fn new(value: T) -> Held<T> {
+        Held(UnsafeCell::new(RefCell::new(value)))
+    }
+
+    fn renew(&self, fresh: T) {
+        if let Ok(mut held) = self.try_borrow_mut() {
+            *held = fresh;
+            return;
+        }
+        // SAFETY: no reference into the cell is live (see above).
+        unsafe { std::ptr::write(self.0.get(), RefCell::new(fresh)) }
+    }
+}
+
+impl<T> std::ops::Deref for Held<T> {
+    type Target = RefCell<T>;
+    fn deref(&self) -> &RefCell<T> {
+        // SAFETY: the one write through this pointer is `renew`'s, made
+        // when no borrow is live.
+        unsafe { &*self.0.get() }
+    }
+}
+
 thread_local! {
-    static REG: RefCell<Vec<Slot>> = const { RefCell::new(Vec::new()) };
+    static REG: Held<Vec<Slot>> = const { Held::new(Vec::new()) };
     /// Table index to the one cell that constant is reached through.
-    static CONSTS: RefCell<std::collections::HashMap<u32, u32>> =
-        RefCell::new(std::collections::HashMap::new());
-    static ARGS: RefCell<Vec<u32>> = const { RefCell::new(Vec::new()) };
-    static TYPES: RefCell<Vec<(String, Vec<String>)>> = const { RefCell::new(Vec::new()) };
-    static ERROR: RefCell<String> = const { RefCell::new(String::new()) };
-    static PRINTS: RefCell<String> = const { RefCell::new(String::new()) };
+    static CONSTS: Held<std::collections::HashMap<u32, u32>> =
+        Held::new(std::collections::HashMap::new());
+    static ARGS: Held<Vec<u32>> = const { Held::new(Vec::new()) };
+    static TYPES: Held<Vec<(String, Vec<String>)>> = const { Held::new(Vec::new()) };
+    static ERROR: Held<String> = const { Held::new(String::new()) };
+    static PRINTS: Held<String> = const { Held::new(String::new()) };
     /// Kept apart from stdout and appended after it, the way a shell captures
     /// the two streams â so this engine and the native binary agree byte for
     /// byte on a program that writes to both.
-    static ERRS: RefCell<String> = const { RefCell::new(String::new()) };
+    static ERRS: Held<String> = const { Held::new(String::new()) };
     /// Held by reference, not by value: `with_interp` hands the reference out
     /// and the cell's borrow ends immediately, so evaluation â which reaches
     /// arbitrary guest code and can abort â never runs inside it.
-    static INTERP: RefCell<Option<&'static Interp<'static>>> = const { RefCell::new(None) };
+    static INTERP: Held<Option<&'static Interp<'static>>> = const { Held::new(None) };
 }
 
 const SPAN0: Span = Span::at(0, 0);
@@ -73,17 +106,17 @@ pub fn load(program: Program, lits: &[Lit], types: Vec<(String, Vec<String>)>) {
         .collect();
     let leaked: &'static Program = Box::leak(Box::new(program));
     let interp: &'static Interp<'static> = Box::leak(Box::new(Interp::new(leaked)));
-    INTERP.with(|i| *i.borrow_mut() = Some(interp));
+    INTERP.with(|i| i.renew(Some(interp)));
     eval::set_foreign_call(call_from_interp);
     eval::set_deferral_resolver(settled);
-    TYPES.with(|t| *t.borrow_mut() = types);
-    SUB_PARENTS.with(|t| *t.borrow_mut() = parents);
+    TYPES.with(|t| t.renew(types));
+    SUB_PARENTS.with(|t| t.renew(parents));
     REG.with(|r| {
+        r.renew(Vec::with_capacity(lits.len()));
         let mut reg = r.borrow_mut();
-        reg.clear();
         for lit in lits {
             let value = match lit {
-                Lit::Int(n) => Value::Int(n.clone()),
+                Lit::Int(n) => Value::int(n),
                 Lit::Float(x) => Value::Float(*x),
                 Lit::Str(s) => Value::Str(s.clone()),
                 Lit::True => Value::True,
@@ -94,12 +127,18 @@ pub fn load(program: Program, lits: &[Lit], types: Vec<(String, Vec<String>)>) {
             reg.push(Slot::V(value));
         }
     });
-    ARGS.with(|a| a.borrow_mut().clear());
-    CONSTS.with(|c| c.borrow_mut().clear());
+    ARGS.with(|a| a.renew(Vec::new()));
+    CONSTS.with(|c| c.renew(std::collections::HashMap::new()));
 }
 
 pub fn take_error() -> String {
-    ERROR.with(|e| std::mem::take(&mut *e.borrow_mut()))
+    ERROR.with(|e| match e.try_borrow_mut() {
+        Ok(mut held) => std::mem::take(&mut *held),
+        Err(_) => {
+            e.renew(String::new());
+            String::new()
+        }
+    })
 }
 
 fn die(msg: String) -> ! {
@@ -294,8 +333,7 @@ fn sub_parent(name: &str) -> Option<String> {
 }
 
 thread_local! {
-    static SUB_PARENTS: std::cell::RefCell<Vec<(String, String)>> =
-        const { std::cell::RefCell::new(Vec::new()) };
+    static SUB_PARENTS: Held<Vec<(String, String)>> = const { Held::new(Vec::new()) };
 }
 
 /// A closure reached through a record field or list arrives as a value naming
@@ -823,7 +861,7 @@ pub extern "C" fn rt_mkmap(n: u32) -> u32 {
             _ => value_of(*h),
         });
     }
-    let mut map = std::collections::BTreeMap::new();
+    let mut map = eval::Entries::new();
     for pair in values.chunks(2) {
         let key = match &pair[0] {
             Value::Int(n) => eval::MapKey::Int(n.clone()),
@@ -1533,8 +1571,8 @@ fn exec_slot(h: u32) -> Result<u32, String> {
 /// Runs the value `main` returned. Fills the print transcript and returns
 /// (status, text) mirroring the native binary's endpoint behavior.
 pub fn exec_main(h: u32) -> (i32, String) {
-    PRINTS.with(|p| p.borrow_mut().clear());
-    ERRS.with(|e| e.borrow_mut().clear());
+    PRINTS.with(|p| p.renew(String::new()));
+    ERRS.with(|e| e.renew(String::new()));
     let outcome = match slot(h) {
         ref s if descish(s) => match exec_slot(h) {
             Ok(y) => match slot(y) {

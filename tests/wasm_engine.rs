@@ -711,6 +711,30 @@ fn a_program_that_dies_leaves_the_engine_usable() {
     );
 }
 
+/// A program that runs out of stack leaves the instance usable too. A trap
+/// unwinds nothing, and the one this recursion takes lands inside `push`
+/// while REG is borrowed; the RefCell's flag stayed set for the life of the
+/// instance, so the next program's `load` panicked and a fine program
+/// answered a compiler trap.
+#[test]
+fn a_program_that_runs_out_of_stack_leaves_the_engine_usable() {
+    let deep = std::fs::read_to_string(root().join("tests/golden/runtime/deep_recursion.kso"))
+        .expect("the deep recursion fixture reads");
+    let mut toolchain = Toolchain::load();
+
+    let fell = toolchain.run("deep_recursion.kso", &deep);
+    let after = toolchain.run("after.kso", "print \"{1 + 2}\"\n");
+
+    assert!(
+        matches!(&fell, Answer::Ran(1, text) if text.contains("ran out of stack")),
+        "the recursion answered {fell:?}"
+    );
+    assert!(
+        matches!(&after, Answer::Ran(0, text) if text == "3\n"),
+        "a program run after one that ran out of stack answered {after:?}"
+    );
+}
+
 /// A deliberate exit is the one err an endpoint reads rather than reports:
 /// `os/exit 3` yields an err carrying `os/exit_status 3`, and the program
 /// said what it meant. Three of the four endpoints already knew this —

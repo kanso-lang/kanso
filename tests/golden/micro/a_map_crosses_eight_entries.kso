@@ -1,0 +1,27 @@
+# A map of up to eight entries is held one way and a larger one another, and
+# nothing a program can see may tell them apart. These maps sit on either side
+# of the change: eight keys, a ninth put onto them, a key overwritten on each
+# side, a literal of nine keys, the same nine entries put in a different
+# order, and int keys beside string keys.
+fn filled m 0
+  m
+
+fn filled m n
+  filled (put m (n * 5 % 11) "v{n}") (n - 1)
+
+pub play =
+  eight = filled {} 8
+  nine = put eight 99 "last"
+  kept = put eight 5 "kept"
+  moved = put nine 5 "moved"
+  again = put (put (filled {} 7) 99 "last") (8 * 5 % 11) "v8"
+  literal = { 1:"b" 2:"g" 3:"a" 4:"c" 5:"i" 6:"h" 7:"k" 8:"j" 9:"f" }
+  mixed = { 1:4 2:2 3:6 4:8 "a":3 "b":1 "c":5 "d":9 "e":7 }
+  print "eight: {length eight} {eight}"
+  print "nine: {length nine} {nine}"
+  print "reads: {eight[7]} {nine[7]} {nine[99]} {nine[100]}"
+  print "kept: {kept} {eight[5]}"
+  print "moved: {moved} {nine[5]}"
+  print "same: {nine == again} {eight == nine}"
+  print "literal: {length literal} {literal} {literal[9]}"
+  print "mixed: {length mixed} {mixed} {mixed["a"]} {mixed[4]}"

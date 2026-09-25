@@ -17,7 +17,7 @@
 # refusing the dance and keeping the region instead — so a fixture above that
 # line exercises none of it. This one sits below.
 allocs=128026
-alloc_bytes=5590992
+alloc_bytes=5591024
 arena_blocks=1
 arena_peak_bytes=1048576
 cohort_frees=1
@@ -65,6 +65,6 @@ ten_frees=1
 ten_handups=0
 sh_str=120624
 sh_rec=0
-sh_buf=349760
+sh_buf=349792
 sh_map=0
 sh_bytes=768024
