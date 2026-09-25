@@ -2223,7 +2223,19 @@ byte_pair_apart = row
 
 rows_b1bp = text/concat rows_b1ua [byte_pair_swapped byte_pair_apart]
 
-rows_b = text/concat rows_b1bp [compile_mem compile_mem_host]
+# A lambda's wrapper is always inlined, so a fold over a known lambda carries
+# its body in the loop. The mutation leaves the wrapper to the inliner.
+lambda_inlined = row
+  "a lambda's wrapper left to the inliner"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_lambda_s_wrapper_left_to_the_inliner")
+  benchmarks
+
+rows_b1li = text/concat rows_b1bp [lambda_inlined]
+
+rows_b = text/concat rows_b1li [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 

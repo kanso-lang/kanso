@@ -9428,10 +9428,15 @@ impl<'a> Backend<'a> {
         // convention while this carries preserve_none made encodebench print
         // `error[runtime]: bytes takes a string` where its answer is
         // `done: 74072800`.
+        // The wrapper is always inlined. A call through a closure pointer
+        // still reaches it, and where the callee is a known constant, as in
+        // `list/fold bs acc (a b -> esc_byte a b)` once LTO has inlined the
+        // fold, the lambda's body lands in the loop that calls it instead of
+        // costing a call per element.
         let cc = self.convention.keyword();
         let _ = writeln!(
             self.body,
-            "define {cc}%KValue @w_{lifted}(ptr %env{sig}) {{\nentry:\n  %r = call \
+            "define {cc}%KValue @w_{lifted}(ptr %env{sig}) alwaysinline {{\nentry:\n  %r = call \
              tailcc %KValue @{lifted}(ptr %env{sig})\n  ret %KValue %r\n}}\n"
         );
         Ok(())
