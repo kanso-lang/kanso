@@ -362,4 +362,13 @@
 #
 # CI measured the short-token cache at abc4015e. codegen_instructions_release
 # 698,561,899 -> 698,322,865, a FALL of 239,034 (-0.0342%).
-codegen_instructions_release=698322865
+#
+# CI measured the carrier at e63ff428, the literal divisor's settled fixpoint
+# among what it carries: codegen_instructions_release 698,322,865 ->
+# 695,954,249, a FALL of 2,368,616 (-0.3392%).
+#
+# CI measured the tag assume at 2673fa68: with the tag tests folded before the
+# optimiser runs, the release link has far less to simplify.
+# codegen_instructions_release 695,954,249 -> 406,427,590, a FALL of
+# 289,526,659 (-41.6014%).
+codegen_instructions_release=406427590

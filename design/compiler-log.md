@@ -15503,6 +15503,25 @@ land on `work_deepbench` 364,797,730, `work_digestbench` 5,542,068,
 `work_indexbench` 2,538,571, `work_pendbench` 181,895,213,
 `emitted_other_defines` 1,555 and `text` 3,544,496.
 
+CI read the carrier at e63ff428. The work rows landed within 14 instructions
+of the projection, and the compile side moved where the container could not
+see it, every row down: `codegen_instructions_dev` 125,569,980 -> 123,915,790,
+`codegen_instructions_release` 698,322,865 -> 695,954,249, `emit_instructions`
+29,311,866 -> 28,882,533, `compile_instructions` 25,269,300 -> 25,267,312,
+`entry_instructions` 85,326,396 -> 85,321,306 and `library_instructions`
+85,855,270 -> 85,850,050. Fewer entry tests is less IR for clang to compile
+and less for the emitter to write.
+
+Against main, the trend gate reads nine keys as worse across the six carried
+changes, and they land here: `run_append_grow` 1,260, `run_bytes_malloc`
+9,120, `oneshot_append_grow` 14, `oneshot_perm_allocs` 9, `live_append_grow`
+5,600, `live_perm_allocs` 8 and `a_literal_appended_across_a_rewind_perm_allocs`
+16, which are the half-step grow's and the token cache's allocation shapes;
+and `work_encodebench` 2,677,016,790 (+0.04%) and `work_oneshot` 14,486,409
+(+1.49%). The two work rows arrived with the carried changes and no one of
+them has been isolated as their cause; runbench, the row the objective
+weighs, fell 7.4% across the same set.
+
 ## 2026-09-25 — a proven tag is assumed
 
 Inference proves many parameters are exactly one kind of heap value: a list
@@ -15559,3 +15578,13 @@ and `module_lines` 1,067. `text` lands on 3,520,752 summed over the fourteen
 binaries, which the token cache's store raised and the assume lowered. The
 work rows `work_deepbench` 364,733,730, `work_pendbench` 181,896,211 and
 `work_scanbench` 281,849 sit within 0.06% of main's.
+
+CI read the change at 2673fa68, and the work rows landed within 350 of the
+projection. The release build is what moved furthest:
+`codegen_instructions_release` 695,954,249 -> 406,427,590, 41.6% less. With
+the tag tests folded as soon as the assume is seen, the release link's
+optimiser has far fewer branches, blocks and inlining candidates to work
+through, and the objective prices that as production cost. The dev tier
+compiles the assume lines without folding anything with them,
+`codegen_instructions_dev` 123,915,790 -> 124,017,062 (+0.08%), and the
+emitter writes them, `emit_instructions` 28,882,533 -> 29,156,813 (+0.95%).
