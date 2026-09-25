@@ -14717,3 +14717,8 @@ a runner without it keeps lld and reads the old row.
 
 The ratchet row `dev_gold` hands the dev link back to `lld_args`, and the row
 reads 141,467,728 here.
+
+CI measured the branch at e3ccffb1: `codegen_instructions_dev` 142,163,302 ->
+125,549,128 (-16,614,174, -11.7%). The runner has gold, and its link is
+dearer than this container's by about two million instructions. No other vein
+moved.
