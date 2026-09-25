@@ -697,9 +697,9 @@ basket 31593354
 widebench 29082048
 deepbench 364731746
 escapebench 69238422
-pendbench 181843966
-indexbench 2855795
-scanbench 285012
+pendbench 181845166
+indexbench 2538302
+scanbench 281852
 digestbench 5540581
 readbench 4631757
 livebench 2078874160
@@ -766,4 +766,4 @@ livebench 2078874160
 # -124,842,502 (-4.36%), livebench -41,831,652, runbench -6,628,668 (-0.47%),
 # oneshot -105,172, and widebench +303,982 (+1.06%), which appends few
 # literals and moved with where its code landed.
-runbench 1414525640
+runbench 1403785575
