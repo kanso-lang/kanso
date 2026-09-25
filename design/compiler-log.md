@@ -14096,3 +14096,10 @@ left without a row; no build on a host with `preserve_none` reads it.
 This pull request carries the stack beneath it to main in one run, kanso#1622
 through kanso#1631, because the same blind row sat in every one of them and a
 fix pushed to each would have cost a ratchet run apiece.
+
+Across the whole carry, measured against main, two rows end higher and each
+was priced by the pull request that moved it. `work_readbench` lands at
+4,631,757, one instruction over main's 4,631,756. `emitted_other_lines` lands
+at 82,139 against 76,037, 6,102 more lines across the thirteen programs,
+the net of the moves each carried entry prices. The objective weighs no
+emitted-lines term.
