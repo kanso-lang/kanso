@@ -7,6 +7,7 @@
 # and the interpreted run's instruction row moves.
 set -e
 f=src/eval.rs
+grep -q 'Flow::Tail(next, group' src/eval.rs
 line='                            overloads = group;'
 [ "$(grep -cxF "$line" "$f")" -eq 1 ] || {
   echo "the tail's group moved; this mutation needs rewriting" >&2

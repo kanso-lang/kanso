@@ -15422,4 +15422,5 @@ projects `interp_instructions` at 581,821,195 over the typed key's projection.
 
 The ratchet row `tail_group` puts the lookup back and leaves the carried group
 unused. The interpreted run read 595,873,686 with it, back where it started.
-No compiled program and no counter moves.
+No compiled program moves. The compile rows are a layout vein and can move
+with any edit to the compiler's Rust, so they are left for CI to read.
