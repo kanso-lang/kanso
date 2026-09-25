@@ -15529,3 +15529,6 @@ lengths before the copy is reached, hits from the cache and misses from
 `k_token_miss`, so the copy was dead code and the mutation reached nothing.
 The branch, the row and its mutation are gone. Every benchmark reads within
 14 instructions of the tree that kept them, which is what dead code costs.
+The two codegen rows moved on CI because clang compiles a runtime with one
+branch fewer: `codegen_instructions_dev` 123,915,881 (+91) and
+`codegen_instructions_release` 695,954,277 (+28). Welfare holds at its floor.
