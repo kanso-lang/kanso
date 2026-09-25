@@ -693,13 +693,13 @@
 jsonbench 977552823
 encodebench 2861479738
 oneshot 15039606
-basket 31593354
+basket 31593366
 widebench 28778066
 deepbench 364731746
 escapebench 69238422
-pendbench 181843966
-indexbench 2855795
-scanbench 285012
+pendbench 181845166
+indexbench 2538302
+scanbench 281852
 digestbench 5540581
 readbench 4631757
 livebench 2120705792
@@ -760,4 +760,10 @@ livebench 2120705792
 #
 # The uniform -8 across six rows is one instruction on a path each program
 # takes eight times, and the four flat rows never take it at all.
-runbench 1421154308
+#
+# 2026-09-25, a walk by index steps from its cursor, and a join of counted
+# pieces knows its count. Projected from this container's two readings, CI's
+# replace them: runbench 1,421,154,308 -> 1,410,414,243 (-10,740,065, -0.76%),
+# indexbench -317,493, scanbench -3,160, basket +12 and pendbench +1,200. The
+# last two are the join asking its first piece whether it carries a count.
+runbench 1410414243

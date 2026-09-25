@@ -14238,3 +14238,55 @@ pass and the scan's question: `entry_instructions` 83,186,043 -> 84,496,376
 work, text and emitted row CI measured matched the projection from this box,
 runbench 1,421,154,308 among them. The objective weighs neither compile row,
 so the welfare banked with this change is the runbench fall's.
+
+## 2026-09-25 — a walk by index steps from its cursor, and a join knows its count
+
+The run program's index phase reads a 690,000-character string of one- to
+four-byte characters one index at a time. The runtime keeps a cursor, the
+last character an index found and its byte, so each index resumed from it,
+but `k_b_at` reached the cursor through `k_str_seek`, which first asks
+whether the string is all ascii and then whether the cursor's own character
+was wanted. An index of the character after the cursor's now steps from it
+directly: the cursor's byte plus its character's width. It cost 71
+instructions an index and costs 59.
+
+The same phase builds its subject by joining it to itself until it is long
+enough, and asks `length` after every doubling. A string memoises its
+character count the first time something asks for it, but a join produced a
+string with no count, so every doubled subject was scanned from the front. A
+join whose pieces and separator each carry a count now writes the sum. The
+pieces are asked in a pass of their own that stops at the first piece without
+a count. Asking inside the copying loop cost pendbench 4,803,400 instructions,
+because pend joins four thousand rendered numbers that nothing has counted.
+
+runbench 1,421,154,308 -> 1,410,414,243 (-10,740,065, -0.76%), with the same
+printed tally: 8,280,000 from the step and 2,458,767 from the count, less what
+the join spends asking. indexbench fell 317,493 and scanbench 3,160. The rest
+is priced here. `work_basket` rose 12 to 31,593,366 and `work_pendbench` 1,200
+to 181,845,166: each join now asks its first piece, and its separator when
+there is one, whether they carry a count. The runtime is larger by the step,
+the count and their comments, and the text vein's summed `text` row rose
+4,928 to 3,429,776, 352 bytes a benchmark.
+
+`seek_steps` is new, a presence counter for the step, and joins the trend
+gate's list of counters where a fall is the worse direction. The step still
+counts as a resume, so `seek_resumes` holds whether the step is taken or not;
+only `seek_steps` says which. It reads 689,999 on the run program and 3,999 on
+`the_length_of_an_indexed_character_needs_no_scan`, and 0 everywhere else. The
+count takes `str_scan_bytes` from 4,092,666 to 945,324 on the run program.
+
+tests/golden/micro/a_walk_by_index_steps_from_its_cursor joins counted,
+uncounted and multibyte pieces and walks the result by index past its end. A
+seed without the separator's count read `spaced: 9` for eleven characters, a
+seed that took an uncounted piece read `mixed: 3` for five, and a step taken
+from another string's cursor read the walk one character late. Three ratchet
+rows: `seek_step` and `join_seed` on the run counters, `join_sep` on the micro
+corpus.
+
+Found on the way and left for its own change. With clang 19 the emitter
+chooses the preserve_none convention and `through_doors` rewrites four runtime
+calls by running `str::replace` eight times over the whole module. On `kanso
+play` of a one-line program that is 402,596 of the 1,067,649 instructions
+under `kanso::main`. No gate sees it: the gates run with `/usr/bin` first on
+PATH, where the image's clang is 18 and takes the other convention, so the
+rewrite never runs under measurement.
