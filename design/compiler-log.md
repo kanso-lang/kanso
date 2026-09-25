@@ -15594,3 +15594,30 @@ compile rows are left for CI.
 The trend gate reads `text` as worse; it lands on 3,521,424 summed over the
 fourteen binaries, 672 bytes above the tag assume's, which is `k_unsub`
 forty-eight bytes at a time.
+
+## 2026-09-25 — a proven result is assumed
+
+The tag assume at a dispatcher's entry has a twin at the call site. Where a
+group's inferred result, with any failure its arguments carry, is exactly
+one kind of value, the caller now tells LLVM the result's tag, and the
+caller's own inlined helpers stop testing it. The kinds widen to floats and
+records as well as strings, lists, maps and bytes, for results and
+parameters both; programs that declare a subtype still get none.
+
+On the container, over the subtype fix's tree: runbench -1,756,021 (-0.14%),
+livebench -5,362,245 (-0.29%), basket -38,028 (-0.12%), oneshot -14,511, and
+nothing else by more than 2,598, pendbench's rise. Every benchmark prints the
+same bytes. Most of the machine code gets shorter again, runbench's .text
+408,488 -> 399,736 and scanbench's 320,936 -> 312,872, while the emitted IR
+gains a call line per assume, runbench's calls 3,781 -> 3,835 and the
+compile-cost module's lines 1,067 -> 1,073. The instruction rows are
+projected and the compile rows are left for CI.
+
+The ratchet row `result_assumed` takes the call site's assume away; runbench
+read 1,223,680,334 with it, 1,801,721 above the change.
+
+The trend gate reads five keys as worse against its baseline, and they land
+on: `lines` 1,460 in the compile-cost micro rows and `emitted_other_calls`
+10,461 and `emitted_other_lines` 85,549, all assume lines; `text` 3,503,200
+summed, which is below the subtype fix's 3,521,424; and `work_pendbench`
+181,898,809, within 0.03% of main.

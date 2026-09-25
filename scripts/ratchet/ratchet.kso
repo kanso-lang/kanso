@@ -2679,7 +2679,18 @@ subtype_unwrapped = row
 
 rows_b1su = text/concat rows_b1ta [subtype_unwrapped]
 
-rows_b = text/concat rows_b1su [compile_mem compile_mem_host]
+# A call whose result is proven one kind of value carries an assume.
+result_assumed = row
+  "a proven result left unsaid"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_proven_result_left_unsaid")
+  benches
+
+rows_b1ra = text/concat rows_b1su [result_assumed]
+
+rows_b = text/concat rows_b1ra [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 

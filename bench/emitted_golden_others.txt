@@ -215,16 +215,19 @@
 # 2026-09-25, a proven tag is assumed: each assume is a call line, so calls
 # and lines rise while branches hold; runbench calls 3,531 -> 3,781, lines
 # 27,291 -> 28,042.
+#
+# 2026-09-25, a proven result is assumed: each assume is a call line; runbench
+# calls 3,781 -> 3,835, lines 28,042 -> 28,204.
 encodebench defines=109 calls=655 branches=481 lines=6050
-oneshot defines=113 calls=689 branches=580 lines=6732
-basket defines=96 calls=700 branches=530 lines=5333
-widebench defines=116 calls=699 branches=506 lines=6342
+oneshot defines=113 calls=696 branches=580 lines=6753
+basket defines=96 calls=718 branches=530 lines=5387
+widebench defines=116 calls=703 branches=506 lines=6354
 deepbench defines=42 calls=168 branches=144 lines=1732
-escapebench defines=17 calls=48 branches=29 lines=531
-pendbench defines=61 calls=396 branches=288 lines=2970
-scanbench defines=233 calls=1849 branches=1530 lines=14804
-indexbench defines=17 calls=52 branches=25 lines=567
-digestbench defines=114 calls=531 branches=402 lines=4559
+escapebench defines=17 calls=49 branches=29 lines=534
+pendbench defines=61 calls=400 branches=288 lines=2982
+scanbench defines=233 calls=1889 branches=1530 lines=14924
+indexbench defines=17 calls=53 branches=25 lines=570
+digestbench defines=114 calls=533 branches=402 lines=4565
 readbench defines=19 calls=51 branches=23 lines=611
-livebench defines=114 calls=704 branches=600 lines=6862
-runbench defines=504 calls=3781 branches=2771 lines=28042
+livebench defines=114 calls=711 branches=600 lines=6883
+runbench defines=504 calls=3835 branches=2771 lines=28204

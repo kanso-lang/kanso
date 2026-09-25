@@ -715,20 +715,26 @@
 # link optimises with the program moves the layout: encodebench +149,706,
 # oneshot +96, escapebench -14, digestbench -14, livebench +54,519, runbench
 # +5,742. Projected from this container, and CI's reading replaces them.
+#
+# 2026-09-25, a proven result is assumed: projected from this container's
+# readings over the subtype fix's tree: encodebench +14, oneshot -14,511,
+# basket -38,028, escapebench +14, pendbench +2,598, indexbench -16, scanbench
+# -74, digestbench +14, livebench -5,362,245, runbench -1,756,021. CI's
+# reading replaces them.
 jsonbench 813902288
-encodebench 2530928659
-oneshot 13871002
-basket 31172156
+encodebench 2530928673
+oneshot 13856491
+basket 31134128
 widebench 28565052
 deepbench 364733730
-escapebench 63421660
-pendbench 181896211
-indexbench 2498474
-scanbench 281849
-digestbench 5450851
+escapebench 63421674
+pendbench 181898809
+indexbench 2498458
+scanbench 281775
+digestbench 5450865
 readbench 4631851
-livebench 1835790826
-runbench 1223633797
+livebench 1830428581
+runbench 1221877776
 # 2026-09-06 (the run program joins): `runbench 3043743748` is a NEW row and
 # nothing regressed to make it appear. It is the program Clay's gavel that day
 # made the objective's whole run-speed term, and the thirteen rows above it

@@ -799,20 +799,25 @@
 # 2026-09-25, a subtype is its parent to a builtin: every binary grows 48
 # bytes, the runtime's k_unsub, which the release link keeps although no
 # benchmark declares a subtype and none calls it.
+#
+# 2026-09-25, a proven result is assumed: a call whose inferred result is one
+# kind of heap value, a float or a record tells LLVM its tag, and so do
+# parameters proven to be a float or a record; runbench's .text 408,488 ->
+# 399,736, scanbench's 320,936 -> 312,872.
 jsonbench text=238920
 encodebench text=248232
-oneshot text=249368
-basket text=236456
-widebench text=249672
+oneshot text=249400
+basket text=235816
+widebench text=249448
 deepbench text=218440
 escapebench text=212712
-pendbench text=226824
-indexbench text=212568
-scanbench text=320936
+pendbench text=226248
+indexbench text=212536
+scanbench text=312872
 digestbench text=235528
 readbench text=213032
-livebench text=250248
-runbench text=408488
+livebench text=250280
+runbench text=399736
 # 2026-09-10 (kanso#1362): the backends build the partial over a value. Every
 # one of the fourteen rows RISES, by 2,096 bytes on eight of them and 2,432 on
 # the other six: k_partial0..4 and the branch each of k_call0..4 gains are in
