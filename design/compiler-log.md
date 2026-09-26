@@ -16261,3 +16261,38 @@ rises 30,556,304 -> 30,569,820 and `work_pendbench` 179,493,114 ->
 401,504,467 -> 402,466,293 and `emit_instructions` 29,723,818 -> 29,802,018,
 while `codegen_instructions_dev` falls 123,359,084 -> 123,358,369. Welfare
 rises from 89.96 to 89.97 and the floor banks there.
+
+## 2026-09-26 — a span is asked in two unsigned compares
+
+A slice from `from` to `to` of a container of `len` elements is inside it
+when `1 <= from <= to <= len`. The runtime asked that as three signed
+compares at seven sites and the emitted append of a slice asked it the same
+way, and clang compiled each into `setcc` flags joined by `or` and `and`.
+With the length never negative the same test is `from - 1 <u to` and
+`to <=u len`. A `from` below one wraps past every `to`, and a negative `to`
+wraps past every length. The runtime spells it once, `k_span_in`, and does
+the subtraction unsigned so that a `from` of `LLONG_MIN` wraps rather than
+overflowing.
+
+On the container, against main at 7ff6508a: runbench 1,176,309,961 ->
+1,173,995,603 (-0.20%), jsonbench 805,759,321 -> 801,168,421 (-0.57%) and
+oneshot -0.18%. livebench rises 3,152,889 (+0.19%) to 1,701,178,316,
+encodebench 157,064 to 2,436,105,759 and widebench 16,000 to 27,695,911.
+On runbench the fall is in `str_char` (-1,354,914), `k_b_to_float_slice`
+(-733,887), `string_scan` (-526,581) and `k_b_to_int_slice` (-414,612);
+`escape_onto` rises 716,670. `k_b_utf8_slice_raw`, the most-called of the
+seven sites, did not move: its entry lost two instructions and the
+branch-free choice of pointer and length after it stayed. Why livebench rose
+is not isolated.
+
+Emitted code falls two lines in the four programs that append a slice,
+runbench 27,840 -> 27,838. Machine code rises 32 bytes in every program but
+jsonbench, which rises 16 to 239,240; runbench 398,968 -> 399,000.
+
+The spec is tests/a_span_is_asked_in_two_unsigned_compares.rs. It cuts
+`k_span_in` out of src/runtime.c, compiles it, and checks it against the
+signed definition over every pair drawn from sixteen edge values, including
+`LLONG_MIN` and `LLONG_MAX`, at eight lengths. It also reads the emitted
+compares by their lines. It fails on main, which has neither. The ratchet
+row `span_unsigned` drops the minus one, and the sweep then names
+`from 0 to 1 len 1`.

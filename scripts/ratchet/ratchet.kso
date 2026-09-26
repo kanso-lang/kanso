@@ -2780,7 +2780,6 @@ carried_spec = "a_carried_record_is_asked_about_failure_once"
 
 rows_b1co = text/concat rows_b1bn [carried_once]
 
-
 # An index read tells LLVM its container's length is not negative.
 length_assumed = row
   "an index that assumes nothing of its length"
@@ -2794,7 +2793,20 @@ length_spec = "an_index_assumes_its_length_is_not_negative"
 
 rows_b1la = text/concat rows_b1co [length_assumed]
 
-rows_b = text/concat rows_b1la [compile_mem compile_mem_host]
+# A span is asked in two unsigned compares.
+span_unsigned = row
+  "a span that lets from equal to past the end"
+  true
+  "cargo test --release --test {span_spec}"
+  "specs (unit, golden, differential)"
+  (breaking "a_span_that_lets_from_equal_to_past_the_end")
+  release
+
+span_spec = "a_span_is_asked_in_two_unsigned_compares"
+
+rows_b1sp = text/concat rows_b1la [span_unsigned]
+
+rows_b = text/concat rows_b1sp [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 
