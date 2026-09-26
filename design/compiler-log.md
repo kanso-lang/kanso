@@ -16523,6 +16523,48 @@ and no nightly finished in that time to say so. The mutation now raises
 runbench instead; welfare falls to 80.32 and the gate goes red. `kanso run
 scripts/ratchet -- prove welfare` proves both of the welfare job's rows red.
 
+## 2026-09-26 — the wall's merge went on purpose, the day it was measured
+
+The ledger entry "Was the wall's simultaneous-failure merge meant to go?" asked
+cloud to find the commit that removed it. It is kanso#783, squashed onto main
+as 28b46e3c on 2026-08-06, and the removal is recorded in the archive's entry
+"The wall was never supposed to merge", the entry directly after the one that
+measured the merge. The ledger dates that measurement 2026-08-24; both entries
+are from 2026-08-06, in the same pull request.
+
+The measuring entry, "Two failures in one operation", recorded `print "left
+{boom a}" >> print "right {boom b}"` answering `[a b]`. Later in the same pull
+request Clay asked what `>>` does with a function that answers either a
+description or an err, and the answer was that the sweep giving every paired
+guard the merge had given it to `k_seq` as well. The entry that fixed it says:
+"the wall is ordered, so the first failure is the answer and what follows
+never speaks", and that chapter four's rule is to short-circuit where there is
+order and accumulate where there is none. The native runtime had merged while
+the interpreter short-circuited, and the book's own sample caught the
+disagreement. The interpreter's `Expr::Seq` arm carried the same sentence as a
+comment from that commit until the wall left the language.
+
+Measured on a build of 28b46e3c:
+
+    print "both: {shown (boom "a" + boom "b")}"                           both: ["a" "b"]
+    print "wall: {shown (print "left {boom "a"}" >> print "right {boom "b"}")}"   wall: a
+
+So the merge on `+` shipped and the merge on `>>` never reached main. The
+2026-09-17 entry's reading, that the one semantic which earned `>>` its own
+operator "went away unrecorded", is corrected by this: it went away on
+purpose, with a sentence, before the pull request landed. The wall has since
+left the language, so nothing in the tree moves.
+
+## 2026-09-26 — an early return for a span out of range, declined
+
+`k_b_utf8_slice_raw` answers a span outside its string with pointer and
+length selects, so the token path the decoder takes on every string runs the
+selects too. Returning early for the out-of-range span, and letting the
+in-range path go without them, was measured against the kanso#1670 carrier on
+the container: runbench rose 849,348 (+0.07%) and jsonbench rose 0.17%. The
+selects cost less than the branch that replaced them. What made the branch
+dearer was not isolated.
+
 ## 2026-09-26 — a branch proves its ratchet rows in shards
 
 The ratchet job on a pull request proves the rows whose mutations patch a
