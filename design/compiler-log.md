@@ -16018,4 +16018,13 @@ calls, and the compile golden's `guards` fixture 287 -> 258 lines.
 
 The spec is `an_or_under_a_guard_is_asked_in_pieces` in tests/perf_ratchet.rs,
 which fails on main's arm, and the ratchet row `guard_asked` puts that arm
-back. The instruction rows and the compile rows are left for CI.
+back.
+
+CI's rows were taken from its first run. `work_runbench` 1,192,666,206 ->
+1,190,403,668, `work_encodebench` 2,530,928,650 -> 2,445,045,509 and
+`work_livebench` 1,706,144,752 -> 1,697,540,070. `work_deepbench` rises
+365,117,731 -> 365,549,731, the extra jump in `fold_flat`. The builds and the
+emitter fall with the smaller IR: `codegen_instructions_dev` 124,060,873 ->
+123,304,313, `codegen_instructions_release` 406,518,907 -> 400,860,282 and
+`emit_instructions` 29,830,829 -> 29,723,904.
+Welfare rises from 89.8886 to 89.9020 and the floor banks there.
