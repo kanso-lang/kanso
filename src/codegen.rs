@@ -6546,7 +6546,7 @@ impl<'a> Backend<'a> {
                 f.line(&format!("{poskv} = insertvalue %KValue {posa}, i64 {posp}, 1"));
                 // The position is an int whatever the word held, so its
                 // pattern has no failure to refuse.
-                self.emit_pattern_known(f, &poskv, &fields[0], fail, INT)?;
+                self.emit_pattern_known(f, &poskv, &fields[0], fail, TOP & !FAIL)?;
                 // field 1: the value, its tag masked back out of the low byte.
                 let vtag = f.tmp();
                 f.line(&format!("{vtag} = and i64 {w0}, 255"));
