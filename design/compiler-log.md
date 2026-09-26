@@ -16203,3 +16203,11 @@ program. Machine code falls in all twelve that moved, runbench 398,968 ->
 398,856 bytes and digestbench 234,712 -> 234,520. The compile golden's
 fixtures grow with the assumes: `recursion` 278 -> 279 lines, `build_block`
 241 -> 242, and `module` 1,062 -> 1,068 lines and 104 -> 107 calls.
+
+CI's rows were taken from its first run. `work_runbench` 1,176,309,124 ->
+1,172,604,466 and `work_jsonbench` 805,759,682 -> 800,145,782. `work_basket`
+rises 30,556,304 -> 30,569,820 and `work_pendbench` 179,493,114 ->
+179,493,314. The builds pay for the extra lines: `codegen_instructions_release`
+401,504,467 -> 402,466,293 and `emit_instructions` 29,723,818 -> 29,802,018,
+while `codegen_instructions_dev` falls 123,359,084 -> 123,358,369. Welfare
+rises from 89.96 to 89.97 and the floor banks there.
