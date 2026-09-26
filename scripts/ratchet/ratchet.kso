@@ -2767,6 +2767,20 @@ beat_none = row
 
 rows_b1bn = text/concat rows_b1cd [beat_none]
 
+# A carried record is asked about failure once, on its value field.
+carried_once = row
+  "a carried record asked about failure twice"
+  true
+  "cargo test --release --test perf_ratchet {carried_spec}"
+  "specs (unit, golden, differential)"
+  (breaking "a_carried_record_asked_about_failure_twice")
+  release
+
+carried_spec = "a_carried_record_is_asked_about_failure_once"
+
+rows_b1co = text/concat rows_b1bn [carried_once]
+
+
 # An index read tells LLVM its container's length is not negative.
 length_assumed = row
   "an index that assumes nothing of its length"
@@ -2778,7 +2792,7 @@ length_assumed = row
 
 length_spec = "an_index_assumes_its_length_is_not_negative"
 
-rows_b1la = text/concat rows_b1bn [length_assumed]
+rows_b1la = text/concat rows_b1co [length_assumed]
 
 rows_b = text/concat rows_b1la [compile_mem compile_mem_host]
 

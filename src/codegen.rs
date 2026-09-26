@@ -6526,10 +6526,27 @@ impl<'a> Backend<'a> {
     ) -> Result<(), String> {
         if let Pattern::Ctor { ty: pty, fields, whole } = pattern {
             if pty == ty {
-                let ok = inline_not_failure(f, status);
-                let cont = f.label();
-                f.line(&format!("br i1 {ok}, label %{cont}, label %{fail}"));
-                f.start_block(&cont);
+                // A failure in the status word is the error's own tag with
+                // nothing above it, so its low byte, which is the value
+                // field's tag, reads as a failure too. When that field's
+                // pattern already refuses a failure and sends it to the same
+                // label, asking the whole word first is a second test of one
+                // fact, made once for every record a parser returns.
+                let value_refuses = matches!(
+                    fields.get(1),
+                    Some(
+                        Pattern::Var(..)
+                            | Pattern::Wildcard(_)
+                            | Pattern::IntLit(..)
+                            | Pattern::Nullary(..)
+                    )
+                );
+                if !value_refuses {
+                    let ok = inline_not_failure(f, status);
+                    let cont = f.label();
+                    f.line(&format!("br i1 {ok}, label %{cont}, label %{fail}"));
+                    f.start_block(&cont);
+                }
                 let w0 = f.tmp();
                 f.line(&format!("{w0} = extractvalue %KValue {status}, 0"));
                 let w1 = f.tmp();
@@ -6541,7 +6558,9 @@ impl<'a> Backend<'a> {
                 f.line(&format!("{posa} = insertvalue %KValue undef, i64 0, 0"));
                 let poskv = f.tmp();
                 f.line(&format!("{poskv} = insertvalue %KValue {posa}, i64 {posp}, 1"));
-                self.emit_pattern(f, &poskv, &fields[0], fail)?;
+                // The position is an int whatever the word held, so its
+                // pattern has no failure to refuse.
+                self.emit_pattern_known(f, &poskv, &fields[0], fail, TOP & !FAIL)?;
                 // field 1: the value, its tag masked back out of the low byte.
                 let vtag = f.tmp();
                 f.line(&format!("{vtag} = and i64 {w0}, 255"));
