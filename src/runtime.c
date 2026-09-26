@@ -8147,7 +8147,7 @@ static KValue k_utf8_bad_wide(const char* data, long long len, const char* origi
     __m128i prev = _mm_setzero_si128();
     __m128i error = _mm_setzero_si128();
     long long i = 0;
-    long long conts = 0;
+    __m128i counted = _mm_setzero_si128();
     long long nblocks = (len + 15) / 16 + 1;
     for (long long blk = 0; blk < nblocks; blk++) {
         unsigned char tail[16];
@@ -8197,14 +8197,20 @@ static KValue k_utf8_bad_wide(const char* data, long long len, const char* origi
         error = _mm_or_si128(error, _mm_xor_si128(sc, must23_80));
         /* a continuation byte is 10xxxxxx; only a block that reached the
            classification can hold one, so the ascii blocks above cost
-           nothing here */
-        __m128i cont = _mm_cmpeq_epi8(
-            _mm_and_si128(cur, _mm_set1_epi8((char)0xC0)), _mm_set1_epi8((char)0x80));
-        conts += __builtin_popcount((unsigned)_mm_movemask_epi8(cont));
+           nothing here. As a signed byte it is -128 to -65, one compare.
+           The count stays in the register: psadbw sums the sixteen ones
+           into two 64-bit lanes. The runtime is built for ssse3, which has
+           no popcnt, and the movemask and bit-twiddled popcount this
+           replaces were 22 of the block's 51 instructions. */
+        __m128i cont = _mm_cmpgt_epi8(_mm_set1_epi8((char)-64), cur);
+        __m128i ones = _mm_sub_epi8(_mm_setzero_si128(), cont);
+        counted = _mm_add_epi64(counted, _mm_sad_epu8(ones, _mm_setzero_si128()));
         prev = cur;
     }
     if (_mm_movemask_epi8(_mm_cmpeq_epi8(error, _mm_setzero_si128())) != 0xFFFF)
         return k_err(k_str("invalid utf-8"), origin);
+    long long conts = _mm_cvtsi128_si64(counted)
+                    + _mm_cvtsi128_si64(_mm_unpackhi_epi64(counted, counted));
     if (chars) *chars = len - conts;
     return k_none();
 #else
