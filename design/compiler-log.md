@@ -16486,3 +16486,39 @@ the eighth shard from the matrix.
 
 Whether eight shards fit is a projection from the per-branch runs, not a
 measurement. The first scheduled run after this lands is the measurement.
+
+## 2026-09-26 — the ratchet names each row as it starts
+
+`prove` writes its report once, after the last row. A run that stopped before
+then printed the baseline's line and nothing else. That was every nightly from
+2026-09-14 to 2026-09-26, cancelled at the timeout with no row named, and it
+was kanso#1670's ratchet step on 2026-09-26, which ran two and a half hours
+with nothing to tell a slow row from a stuck one. Each row now writes
+`ratchet: row K of N, <job> — <claim>` to stderr as it starts, so the last
+line in a stopped log names the row that was running. The report at the end
+is unchanged.
+
+`a_clean_head_still_proves_its_row` in tests/a_gate_red_before_the_mutation.rs
+now also requires the line for its one row, and emptying the announcement
+turned it red on the missing line. The change carries no ratchet row. The spec
+runs `prove` itself, in the same fixed /tmp directories the ratchet proves in,
+so the ratchet cannot run it as a gate: on kanso#1675 the baseline read the
+gate red before any mutation, because the inner run removed the outer run's
+worktree. The other specs that run `prove` have no row for the same reason.
+
+## 2026-09-26 — the sharded nightly's first run, and the row it found blind
+
+The nightly ratchet was dispatched on main at 6c9d5fe5 once the shards landed.
+All eight jobs finished: the proving step took 38, 23, 35, 30, 33, 36, 35 and
+35 minutes for shards 1 through 8, against a timeout of 90. Seven were
+green. Shard 8 proved 30 of its 31 rows and reported one BLIND: the welfare
+row "a run-speed term falling below the ratcheted floor".
+
+That row's mutation raised jsonbench in bench/instructions_golden.txt to
+9,999,999,999. The run-speed term has read the one consolidated run program
+since the 2026-09-06 gavel, so jsonbench stopped moving the index that day.
+With the mutation applied, `kanso run scripts/welfare` reads 90.09 against a
+floor of 90.09 and passes. The row was blind from the consolidation to now,
+and no nightly finished in that time to say so. The mutation now raises
+runbench instead; welfare falls to 80.32 and the gate goes red. `kanso run
+scripts/ratchet -- prove welfare` proves both of the welfare job's rows red.

@@ -3081,6 +3081,13 @@ nightly_shards = row
 
 rows_c1ze = text/concat rows_c1zd [nightly_shards]
 
+# The ratchet naming each row as it starts has no row here. The spec that
+# watches it, a_clean_head_still_proves_its_row, runs `prove` itself, and
+# `prove` works in fixed directories -- /tmp/kanso-ratchet-base, one
+# /tmp/kanso-ratchet-N per row, the shared target -- so the ratchet running
+# that spec as a gate removes its own baseline worktree from under itself. On
+# kanso#1675 the baseline read the gate red before any mutation. The other
+# specs in tests/ that run `prove` carry no row for the same reason.
 rows_c = text/concat rows_c1ze [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
@@ -3608,8 +3615,19 @@ fn proving list at acc
 fn proven list _ acc true
   reported list acc
 
+# Each row is announced on stderr as it starts, because the report below is
+# written once, after the last row. A run that stops before then printed
+# nothing about any row: the nightly was cancelled at its timeout every night
+# from 2026-09-14 to 2026-09-26 and its logs said only how many gates the
+# baseline read, and kanso#1670's step ran two and a half hours with no way to
+# tell a slow row from a stuck one. The line names the row, so the last one
+# printed is the one that was running.
 fn proven list at acc false
   r = list[at]
+  said = "ratchet: row {at} of {length list}, {r.job} — {r.claim}\n"
+  io/write_err said .> (_ -> started list at acc r)
+
+fn started list at acc r
   dir = "/tmp/kanso-ratchet-{at}"
   made = ["worktree" "add" "--detach" "--force" dir "HEAD"]
   os/run "git" made .> (_ -> after_worktree list at acc r dir)
