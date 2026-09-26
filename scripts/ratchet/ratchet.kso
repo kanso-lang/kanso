@@ -3787,9 +3787,10 @@ fn chosen "touched" given
   mode = touched_mode (third given "prove") given
   touched (second given "origin/main") mode
 
-# A branch that touches src/runtime.c selects over a hundred rows, and one job
-# proving them took two and a half hours on kanso#1676. So a pull request
-# proves its handful in parts, the way the nightly proves the table:
+# A branch that touches src/runtime.c selected 78 rows on that file alone on
+# 2026-09-26, and one job proving such a handful ran two and a half hours on
+# kanso#1670. So a pull request proves its handful in parts, the way the
+# nightly proves the table:
 #
 #   kanso run scripts/ratchet -- touched origin/main shard 2 4
 #   kanso run scripts/ratchet -- touched origin/main shard 2 4 list

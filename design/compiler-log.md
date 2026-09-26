@@ -16527,9 +16527,10 @@ scripts/ratchet -- prove welfare` proves both of the welfare job's rows red.
 
 The ratchet job on a pull request proves the rows whose mutations patch a
 file the branch changed. For most branches that is none or one. A branch that
-touches `src/runtime.c` selects 78 of them on the file alone, and kanso#1676,
-which also moved goldens and the utf-8 harness, waited about two and a half
-hours on that one step after every other job had passed.
+touches `src/runtime.c` selects 78 of them on the file alone. kanso#1670's
+step ran two and a half hours. On kanso#1673 every other job had finished by
+17:36, and the ratchet job ran from 17:23 until it was cancelled unfinished at
+19:10, when the branch moved.
 
 `touched <base> shard K N` now proves every Nth of the branch's rows starting
 at K, the rule the nightly's `shard` applies to the whole table. ci.yml runs

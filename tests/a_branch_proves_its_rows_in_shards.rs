@@ -1,9 +1,9 @@
 //! A pull request proves the rows its diff could have made blind in shards,
 //! and together the shards prove each of those rows exactly once.
 //!
-//! A branch touching src/runtime.c selects over a hundred rows, and one job
-//! proving them held kanso#1676 for two and a half hours after every other
-//! job was green. So ci.yml runs a matrix of jobs, each calling
+//! A branch touching src/runtime.c selected 78 rows on that file alone on
+//! 2026-09-26, and one job proving such a handful held kanso#1670 for two and
+//! a half hours after every other job was green. So ci.yml runs a matrix of jobs, each calling
 //! `scripts/ratchet -- touched origin/main shard K N`, and two things can
 //! quietly undo that. A shard dropped from the matrix leaves part of the
 //! handful unproved while every job that ran is green. And a change to how a

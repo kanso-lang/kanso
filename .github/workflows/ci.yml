@@ -1013,8 +1013,8 @@ jobs:
   #
   # A branch touching src/runtime.c is the other end. It selected thirteen rows
   # when this step was written and twenty-three on 2026-09-03, in about twelve
-  # minutes; by 2026-09-26 it selected over a hundred, and kanso#1676 waited two
-  # and a half hours on this one step with every other job green. So the
+  # minutes; by 2026-09-26 it selected 78 on that file alone, and kanso#1670's
+  # step ran two and a half hours with every other job green. So the
   # handful is proved in shards, every Nth row from K, the way the nightly
   # proves the whole table. The shard count is read by
   # tests/a_branch_proves_its_rows_in_shards.rs against the run line.
