@@ -996,6 +996,8 @@ bounds:
   %l = inttoptr i64 %pc to ptr
   %len = load i64, ptr %l
   %i = extractvalue %KValue %k, 1
+  %lenok = icmp sge i64 %len, 0
+  call void @llvm.assume(i1 %lenok)
   %lo = icmp sgt i64 %i, 0
   %hi = icmp sle i64 %i, %len
   %inr = and i1 %lo, %hi
@@ -1146,6 +1148,8 @@ bounds:
   %p = inttoptr i64 %pc to ptr
   %len = load i64, ptr %p
   %i = extractvalue %KValue %k, 1
+  %lenok = icmp sge i64 %len, 0
+  call void @llvm.assume(i1 %lenok)
   %lo = icmp sgt i64 %i, 0
   %hi = icmp sle i64 %i, %len
   %inr = and i1 %lo, %hi
@@ -4684,6 +4688,15 @@ fn inline_payload(f: &mut FnEmit, value: &str) -> String {
     let t = f.tmp();
     f.line(&format!("{t} = extractvalue %KValue {value}, 1"));
     t
+}
+
+/// A length read out of a container is never negative, and saying so lets
+/// LLVM merge a `1 <= i <= len` test into one unsigned compare where the
+/// signed pair also stays visible to whatever proved it true upstream.
+fn assume_length(f: &mut FnEmit, len: &str) {
+    let ok = f.tmp();
+    f.line(&format!("{ok} = icmp sge i64 {len}, 0"));
+    f.line(&format!("call void @llvm.assume(i1 {ok})"));
 }
 
 /// Whether a value is not a failure, as one compare of its tag against the
@@ -8484,6 +8497,7 @@ impl<'a> Backend<'a> {
             let len = f.tmp();
             f.line(&format!("{len} = load i64, ptr {len_ptr}"));
             let idx = inline_payload(f, key);
+            assume_length(f, &len);
             let ge1 = f.tmp();
             f.line(&format!("{ge1} = icmp sge i64 {idx}, 1"));
             let le_len = f.tmp();
@@ -8551,6 +8565,7 @@ impl<'a> Backend<'a> {
             let len = f.tmp();
             f.line(&format!("{len} = load i64, ptr {lptr}"));
             let idx = inline_payload(f, key);
+            assume_length(f, &len);
             let ge1 = f.tmp();
             f.line(&format!("{ge1} = icmp sge i64 {idx}, 1"));
             let le_len = f.tmp();
@@ -8610,6 +8625,7 @@ impl<'a> Backend<'a> {
         let len = f.tmp();
         f.line(&format!("{len} = load i64, ptr {len_ptr}"));
         let idx = inline_payload(f, key);
+        assume_length(f, &len);
         let ge1 = f.tmp();
         f.line(&format!("{ge1} = icmp sge i64 {idx}, 1"));
         let le_len = f.tmp();

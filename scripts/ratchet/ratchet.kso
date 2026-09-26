@@ -2767,7 +2767,20 @@ beat_none = row
 
 rows_b1bn = text/concat rows_b1cd [beat_none]
 
-rows_b = text/concat rows_b1bn [compile_mem compile_mem_host]
+# An index read tells LLVM its container's length is not negative.
+length_assumed = row
+  "an index that assumes nothing of its length"
+  true
+  "cargo test --release --test perf_ratchet {length_spec}"
+  "specs (unit, golden, differential)"
+  (breaking "an_index_that_assumes_nothing_of_its_length")
+  release
+
+length_spec = "an_index_assumes_its_length_is_not_negative"
+
+rows_b1la = text/concat rows_b1bn [length_assumed]
+
+rows_b = text/concat rows_b1la [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 

@@ -280,3 +280,55 @@ fn an_or_under_a_guard_is_asked_in_pieces() {
         "both comparisons should reach a branch as their own i1: {body}"
     );
 }
+
+/// An index tells LLVM its container's length is not negative.
+///
+/// A read at `i` is tested `1 <= i <= len`, two signed compares, and the
+/// length is a load LLVM knows nothing about. Assuming it non-negative lets
+/// the pair fold into one unsigned compare where nothing upstream already
+/// settled it, and leaves the signed pair for whatever did: a parser's
+/// `return acc if n < 1 or length bs < n` proves the read that follows in
+/// range only while the read is spelled the way the guard is.
+const PROVEN_READ: &str = "fn at xs n
+  xs[n]
+
+main = print \"{at [4 5 6] 2}\"
+";
+
+const UNPROVEN_READ: &str = "word = \"abc\"
+
+fn at xs n
+  xs[n]
+
+main = print \"{at [4 5 6] 2} {at word 2}\"
+";
+
+#[test]
+fn an_index_assumes_its_length_is_not_negative() {
+    let ir = ir_for(PROVEN_READ);
+    let body: String = ir
+        .lines()
+        .skip_while(|l| !(l.starts_with("define") && l.contains("at_2")))
+        .take_while(|l| !l.starts_with('}'))
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(!body.is_empty(), "at was not emitted: {ir}");
+    let lengths: Vec<&str> = body
+        .lines()
+        .filter(|l| l.contains(" = load i64, ptr "))
+        .filter_map(|l| l.trim().split(" = ").next())
+        .collect();
+    let assumed: Vec<&&str> = lengths
+        .iter()
+        .filter(|len| body.lines().any(|l| l.trim().ends_with(&format!("icmp sge i64 {len}, 0"))))
+        .collect();
+    assert_eq!(assumed.len(), 1, "one length read here should be assumed non-negative: {body}");
+    // A read the sets do not prove goes through an index helper, and the
+    // helper makes the same promise.
+    let ir = ir_for(UNPROVEN_READ);
+    assert_eq!(
+        ir.matches("  %lenok = icmp sge i64 %len, 0\n  call void @llvm.assume(i1 %lenok)").count(),
+        1,
+        "the index helper no longer assumes its length non-negative: {ir}"
+    );
+}
