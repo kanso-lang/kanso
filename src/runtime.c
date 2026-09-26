@@ -796,14 +796,23 @@ typedef struct { KBlock* block; char* ptr; size_t left; long long bytes;
 #define K_BEAT_MAX 64
 KMark k_beat_stack[K_BEAT_MAX];
 int k_beat_depth = 0;
-/* The innermost mark, or NULL at depth zero. It is what `k_beat_depth` says
-   and is kept beside it because the rewind's fast path wants the pointer and
-   never the number: deriving it took a load, a decrement, a range test and
-   three address instructions, once an iteration, to arrive at a value that
-   does not change for the life of the loop. Every write to the depth goes
-   through `k_beat_set_depth`, and the counting build checks the two agree at
-   every iteration -- see `tests/the_cached_beat_top_tracks_the_depth.rs`. */
-KMark* k_beat_top = NULL;
+/* The innermost mark, or `k_beat_none` where there is no mark to rewind to:
+   at depth zero, and past the deepest mark the stack holds. It is what
+   `k_beat_depth` says and is kept beside it because the rewind's fast path
+   wants the pointer and never the number: deriving it took a load, a
+   decrement, a range test and three address instructions, once an iteration,
+   to arrive at a value that does not change for the life of the loop. Every
+   write to the depth goes through `k_beat_set_depth`, and the counting build
+   checks the two agree at every iteration -- see
+   `tests/the_cached_beat_top_tracks_the_depth.rs`.
+
+   `k_beat_none` stands where NULL used to, so the rewind asks no null
+   question at every iteration. Its `reg_any` is set, which sends it past the
+   fast path to `k_beat_rewind_slow`, and the slow path returns at once for
+   it: a beat past the deepest mark keeps count and rewinds nothing, as it
+   always did. */
+KMark k_beat_none = { .reg_any = 1 };
+KMark* k_beat_top = &k_beat_none;
 
 /* The innermost mark the seek cursor's string lies under: allocated before
    that mark was pushed, so a rewind to it or to any mark pushed later cannot
@@ -824,7 +833,7 @@ static inline void k_seek_note(KStr* s) {
     k_seek_str = s;
     KMark* top = k_beat_top;
     if (k_beat_depth == 0) { k_seek_under = k_beat_stack; return; }
-    if (!top) { k_seek_under = k_beat_stack + K_BEAT_MAX; return; }
+    if (top == &k_beat_none) { k_seek_under = k_beat_stack + K_BEAT_MAX; return; }
     int above = k_blocks != top->block
         || (uintptr_t)s - (uintptr_t)top->ptr < (uintptr_t)k_arena - (uintptr_t)top->ptr;
     k_seek_under = above ? top + 1 : top;
@@ -836,7 +845,7 @@ static inline void k_beat_set_depth(int d) {
        wraps to a huge index and fails the same test a depth past the top
        does. Two compares and two branches become one compare and a cmov. */
     k_beat_top = ((unsigned)(d - 1) < (unsigned)K_BEAT_MAX)
-               ? &k_beat_stack[d - 1] : NULL;
+               ? &k_beat_stack[d - 1] : &k_beat_none;
 }
 
 /* Whether anything is on the buffer shelf. The shelf is twelve pointers and
@@ -1043,6 +1052,7 @@ static void k_chunkreg_migrate(int d) {
 }
 
 void k_beat_rewind_slow(KMark* m) {
+    if (m == &k_beat_none) return;
     k_buf_flush();
     long long d = m - k_beat_stack;
     if (d >= 0 && d < K_BEAT_MAX) {
@@ -1161,10 +1171,10 @@ __attribute__((always_inline)) void k_beat_iter(void) {
     if (K_COUNTING) k_stat_beat_iters++;
     KMark* m = k_beat_top;
     if (K_COUNTING && m != ((k_beat_depth > 0 && k_beat_depth <= K_BEAT_MAX)
-                            ? &k_beat_stack[k_beat_depth - 1] : NULL)) {
+                            ? &k_beat_stack[k_beat_depth - 1] : &k_beat_none)) {
         k_die("the cached beat top and the beat depth disagree");
     }
-    if (m) k_beat_rewind(m);
+    k_beat_rewind(m);
 }
 #else
 void k_beat_iter(void);

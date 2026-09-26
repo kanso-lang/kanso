@@ -2730,7 +2730,18 @@ region_given_back = row
 
 rows_b1gb = text/concat rows_b1ra [region_given_back]
 
-rows_b = text/concat rows_b1gb [compile_mem compile_mem_host]
+# Past the beat stack the cached top is a mark that stands in for none.
+beat_none = row
+  "a beat past the stack rewound to a mark that stands for none"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_beat_past_the_stack_rewound_to_nothing")
+  release
+
+rows_b1bn = text/concat rows_b1gb [beat_none]
+
+rows_b = text/concat rows_b1bn [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 
