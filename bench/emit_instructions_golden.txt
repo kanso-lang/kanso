@@ -320,4 +320,4 @@
 # CI measured the builder seed at 947d34ad, with the declare no longer written
 # into programs that never call it. emit_instructions 29,311,721 ->
 # 29,311,866, a RISE of 145 (+0.0005%).
-emit_instructions=29311866
+emit_instructions=29337244

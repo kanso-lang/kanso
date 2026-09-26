@@ -1070,7 +1070,7 @@
 #
 # CI measured the interpreter's small values at 6d35abb2. entry_instructions
 # 85,204,646 -> 85,215,074, a RISE of 10,428 (+0.0122%).
-entry_instructions=85215074
+entry_instructions=84735189
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

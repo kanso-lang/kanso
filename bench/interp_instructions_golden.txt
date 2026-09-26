@@ -581,5 +581,5 @@
 #
 # CI measured the interpreter's small values at 6d35abb2. interp_instructions
 # 592,652,379 -> 614,239,448, a RISE of 21,587,069 (+3.6425%).
-interp_instructions=614239448
+interp_instructions=614114983
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

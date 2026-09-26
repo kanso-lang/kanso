@@ -356,4 +356,4 @@
 # CI measured the builder seed at 947d34ad, with the declare no longer written
 # into programs that never call it. codegen_instructions_release 698,599,960
 # -> 698,561,887, a FALL of 38,073 (-0.0054%).
-codegen_instructions_release=698561887
+codegen_instructions_release=698511987

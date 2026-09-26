@@ -2338,7 +2338,7 @@
 #
 # CI measured the interpreter's small values at 6d35abb2. compile_instructions
 # 25,195,466 -> 25,204,253, a RISE of 8,787 (+0.0349%).
-compile_instructions=25204253
+compile_instructions=25055383
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

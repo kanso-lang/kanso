@@ -15331,3 +15331,20 @@ from 3,486,032 to 3,474,160: `k_seq`, its helper and its two executor arms
 left the runtime. The compile rows this container cannot compare are left
 for CI.
 
+CI read the tree at 3860fbdd and its rows were taken. The front end lost the
+parser's wall lines and the checker's wall operand test, and every compile row
+fell: `compile_instructions` 25,204,253 -> 25,055,383, `entry_instructions`
+85,215,074 -> 84,735,189, `library_instructions` 85,773,867 -> 85,292,289,
+`startup_instructions` 52,416 -> 52,405, `codegen_instructions_dev`
+125,554,679 -> 125,534,193 and `codegen_instructions_release` 698,561,887 ->
+698,511,987. `interp_instructions` fell 614,239,448 -> 614,114,983.
+`emit_instructions` rose 29,311,866 -> 29,337,244, and seven runtime rows rose
+with every allocation counter unchanged: `work_runbench` 1,332,911,604 ->
+1,332,963,952, `work_deepbench` 364,523,751 -> 364,907,752, `work_widebench`
+28,836,195 -> 28,852,174, `work_pendbench` 181,849,069 -> 181,849,270,
+`work_escapebench` 68,272,680 -> 68,272,681, `work_indexbench` 2,538,307 ->
+2,538,308 and `work_scanbench` 281,837 -> 281,838. The runtime lost `k_seq`
+and two executor arms, and these moves arrived with that; which part of the
+change moved each was not isolated. Welfare banks at 89.17, the development
+side up from 90.86 to 90.87.
+

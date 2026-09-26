@@ -1105,7 +1105,7 @@
 #
 # CI measured the interpreter's small values at 6d35abb2. library_instructions
 # 85,763,002 -> 85,773,867, a RISE of 10,865 (+0.0127%).
-library_instructions=85773867
+library_instructions=85292289
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.
