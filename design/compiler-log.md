@@ -16655,3 +16655,28 @@ oneshot rise the multiply showed alone is gone in the sum. `codegen_instructions
 rises 402,524,008 -> 402,705,244 (+0.045%) and `codegen_instructions_dev`
 falls 123,328,940 -> 123,328,168. Welfare rises from 90.11 to 90.12 and the
 floor banks there.
+
+## 2026-09-26 — a branch proves its ratchet rows in shards
+
+The ratchet job on a pull request proves the rows whose mutations patch a
+file the branch changed. For most branches that is none or one. A branch that
+touches `src/runtime.c` selects 78 of them on the file alone. kanso#1670's
+step ran two and a half hours. On kanso#1673 every other job had finished by
+17:36, and the ratchet job ran from 17:23 until it was cancelled unfinished at
+19:10, when the branch moved.
+
+`touched <base> shard K N` now proves every Nth of the branch's rows starting
+at K, the rule the nightly's `shard` applies to the whole table. ci.yml runs
+four such jobs in a matrix. The job branch protection requires keeps its name:
+it runs the cover step, which checks the table against ci.yml and applies
+every mutation, and then fails if any shard ended other than in success. A
+shard that draws no row says so and passes. The shard job carries a stated
+reason in the table rather than a row, because its gate is the ratchet's own
+`prove`, which cannot run as one of its own gates.
+
+`tests/a_branch_proves_its_rows_in_shards.rs` reads the matrix against the
+run line, makes a branch that touches the runtime, and lists what each shard
+would prove: together, every selected row exactly once. It went red with the
+fourth shard removed from the matrix, and with the stride changed to N+1,
+which leaves 15 of the 78 rows to no shard. The row that holds it is "a branch
+shard that skips a row in every stretch".
