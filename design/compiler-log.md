@@ -16486,3 +16486,34 @@ the eighth shard from the matrix.
 
 Whether eight shards fit is a projection from the per-branch runs, not a
 measurement. The first scheduled run after this lands is the measurement.
+
+## 2026-09-26 — the slice walk counts character starts by multiply
+
+`k_slice_skip` walks a string eight bytes at a time to find where a slice
+starts, and counts each word's character starts as eight less its
+continuation bytes, which it counted with `__builtin_popcountll`. The runtime
+is built with `-mssse3`, which has no `popcnt`, so the builtin became a dozen
+shifts, masks and adds. The mask it counts has only the byte-high bits set, so
+shifting each to its byte's low bit and multiplying by `0x0101010101010101`
+sums the eight bytes into the top one, in three instructions.
+
+The same multiply in `k_utf8_chars` was measured first and kept out.
+pendbench rose 1,642,235 instructions (+0.91%), all of it in
+`k_str_chars_scan`, which inlines that function. Why the multiply is dearer
+there was not isolated. `k_utf8_chars` keeps the builtin.
+
+On the container, against main at 6c9d5fe5: runbench 1,144,623,289 ->
+1,142,183,305 (-0.21%), indexbench 2,498,178 -> 2,428,163 (-2.80%), livebench
+-434,738 (-0.03%) and encodebench -187,333 (-0.01%). oneshot rises 2,212
+(+0.017%), and what moved it was not isolated. The other nine programs are
+byte-identical, and no allocation counter moves. Every benchmark's `.text`
+shrinks by 160 bytes. The ratchet row `skip_by_multiply` puts the builtin
+back, and indexbench reads 2,498,178, main's figure exactly.
+
+CI's rows were taken from its first run. `work_runbench` 1,144,622,452 ->
+1,142,182,468, `work_indexbench` 2,498,525 -> 2,428,510, `work_livebench`
+1,688,141,594 -> 1,687,706,856 and `work_encodebench` 2,438,572,025 ->
+2,438,384,692. `work_oneshot` rises 13,129,205 -> 13,131,417, the rise the
+container showed. `codegen_instructions_dev` rises 71 to 123,329,011 and
+`codegen_instructions_release` falls 274 to 402,523,734. Welfare rises from
+90.09 to 90.10 and the floor banks there.

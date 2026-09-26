@@ -3081,7 +3081,19 @@ nightly_shards = row
 
 rows_c1ze = text/concat rows_c1zd [nightly_shards]
 
-rows_c = text/concat rows_c1ze [itself]
+# The slice walk counts a word's character starts by multiply rather than by a
+# popcount the ssse3 build writes out longhand.
+skip_by_multiply = row
+  "a slice skip that pays a popcount"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_slice_skip_that_pays_a_popcount")
+  benches
+
+rows_c1zh = text/concat rows_c1ze [skip_by_multiply]
+
+rows_c = text/concat rows_c1zh [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
