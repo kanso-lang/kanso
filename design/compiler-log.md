@@ -16726,14 +16726,16 @@ which parses no numbers, was not isolated. Every benchmark's `.text` grew by
 3,497,680 -> 3,511,120 across the fourteen, on the tree merged with
 kanso#1676.
 
-CI's rows were taken from its first run. `work_runbench` 1,144,622,452 ->
-1,127,701,003 (-1.48%), `work_jsonbench` 758,146,232 -> 732,503,582,
-`work_oneshot` 13,129,205 -> 12,960,323 and `work_livebench` 1,688,141,594 ->
-1,687,657,983, and `codegen_instructions_release` 402,524,008 -> 402,455,877.
-Four rise. `work_encodebench` 2,438,572,025 -> 2,438,797,924 (+225,899),
-`work_widebench` 27,327,107 -> 27,375,107 (+48,000), `work_deepbench`
-364,866,369 -> 364,866,397 (+28), and `codegen_instructions_dev` 123,328,940 ->
-123,343,788 (+14,848), the dev build compiling the larger parse.
+CI's rows were taken from its run on the tree merged with kanso#1676.
+`work_runbench` 1,137,417,541 -> 1,120,420,351 (-1.49%), `work_jsonbench`
+758,092,888 -> 732,450,238, `work_oneshot` 13,022,813 -> 12,852,666,
+`work_livebench` 1,666,846,330 -> 1,666,507,317 and `work_encodebench`
+2,417,785,419 -> 2,417,003,976, and `codegen_instructions_release` 402,705,244
+-> 402,610,256. Two rise. `work_widebench` 27,327,107 -> 27,375,107 (+48,000),
+and `codegen_instructions_dev` 123,328,168 -> 123,345,350 (+17,182), the dev
+build compiling the larger parse. The encodebench rise measured on the first
+run, against main before kanso#1676, is a fall on this one; neither was
+isolated.
 
 One more was built and declined. A short decimal whose digits and dot fit
 in the last word, `i + f <= 7`, can drop the dot by shifting the bytes below
