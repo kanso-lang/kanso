@@ -1105,7 +1105,14 @@
 #
 # CI measured the interpreter's small values at 6d35abb2. library_instructions
 # 85,763,002 -> 85,773,867, a RISE of 10,865 (+0.0127%).
-library_instructions=85773867
+#
+# CI measured the typed map key at 1ab7904e. library_instructions 85,773,867
+# -> 85,855,270, a RISE of 81,403 (+0.0949%).
+#
+# CI measured the carrier at e63ff428, the literal divisor's settled fixpoint
+# among what it carries: library_instructions 85,855,270 -> 85,850,050, a FALL
+# of 5,220 (-0.0061%).
+library_instructions=85850050
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.
