@@ -16750,3 +16750,22 @@ byte value at every position of a short run. Watched red: with the digit
 test's constant one lower, `':'` reads as ten, 44 of 48,018,418 strings; and
 with the dot test gone, `"1e1"` reads as 1.1. The rows are "a digit word that
 reads a colon as ten" and "a float word that never looks for its dot".
+
+## 2026-09-26 — the encoder writes a map through a record per pair, examined and not built
+
+`encode_onto` writes a map as `encode_map acc (entries m)`, and `entries` is
+the only way the language offers to walk a map. On main at a9b9925c it builds
+a 64-byte `entry` record and a list item for every pair: 752,490 of them on a
+run of runbench, 30,446,283 instructions in `k_b_entries`, about 40 a pair.
+`encode_map` then spends about 100 more a pair reading them back, spread over
+some twenty blocks of three to eight instructions each. No block in it is
+large enough to be worth rewriting alone.
+
+The tests left in that loop are the language's. Each value is asked whether
+it is an err, which a map may hold and the encoder must hand on, and it is
+dispatched on its type. What would remove the records is a way to walk a map
+without building them. One is a pair of builtins, `keys` and `values`, which
+would be new standard-library surface and is a question for Clay rather than
+something to build here. The other is a pass that keeps a record out of memory
+when its only use is to be taken apart by the callee, which is a large piece
+of work and was not started.
