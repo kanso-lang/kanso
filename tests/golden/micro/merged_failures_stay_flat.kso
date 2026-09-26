@@ -3,10 +3,10 @@
 # were born merged, and then the same three reasons print three ways depending
 # on where the parentheses fell.
 #
-# The wall is the other half: it is ordered, so the first failure is the answer
-# and what follows never speaks. Both rules are here because the sweep that
-# gave every operator the merge gave it to `>>` too, on one engine only, and
-# nothing said so.
+# The bind is the other half: it is ordered, so the first failure is the
+# answer and what follows never speaks. Both rules are here because the sweep
+# that gave every operator the merge once gave it to sequencing too, on one
+# engine only, and nothing said so.
 #
 # The reasons are read through `std/testing`'s `when_failed`: foreign to this
 # module, so it is licensed to separate a reason from a failure this module

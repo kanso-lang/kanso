@@ -15268,6 +15268,293 @@ simultaneous-failure merge meant to go?", stays: its own text says the wall
 question is answered the same way whichever way it goes, and that if the
 merge comes back it comes back as a property of bind. That is still open.
 
+## 2026-09-25 — a large builder grows by half
+
+The run program's `held_peak_bytes` was one buffer. Each of the 90 encodes of
+large.json grows a malloc'd builder by doubling, 130 bytes up to 277,522, and
+the last doubling set the peak. How full that buffer ends up depends on where
+the output length falls between two powers of two, and a doubled buffer is on
+average roughly a quarter empty when its builder finishes.
+
+A malloc'd builder past 16 kb now grows to one and a half times what it holds.
+Below 16 kb it still doubles: growing by half from the first byte cost 4.26
+million instructions on runbench for a peak of 193,834. The arena regime keeps
+doubling too, since the arena reclaims none of the sizes a builder passes
+through. Five settings were measured on runbench against the tree before it:
+
+    past 16 kb, x1.5    held 197,616   instructions -58,990
+    past 32 kb, x1.25   held 206,802   instructions +21,979
+    past 64 kb, x1.25   held 211,742   instructions -36,145
+    past 64 kb, x1.5    held 234,190   instructions -99,886
+    everywhere, x1.5    held 193,834   instructions +4,260,748
+
+The run program's held peak falls from 277,538 to 197,616 bytes, which takes
+`run_peak_bytes` from 3,963,970 to 3,884,048, 2.0% down. Runbench is projected
+at 1,332,852,600, 59,004 below. The other programs that build large text pay
+for the extra grows, since a buffer under glibc's mmap threshold is copied
+when it moves: encodebench is projected at 2,677,033,890 (+1,161,691),
+livebench at 2,018,350,615 (+421,093) and oneshot at 14,274,642 (+1,134).
+Welfare weighs none of those three.
+
+A buffer's final size now depends on where its length falls between two steps
+of one and a half, so one fixture comes out behind:
+`a_cycle_of_four_rewinds_once_a_trip` holds 298,940 bytes at its peak, up from
+279,906. The others that cross 16 kb fall: the builder that outgrows its
+buffer 135,182 to 128,318, the cycle that allocates nothing 426,000 to 338,274
+and the guarded local 33,806 to 25,358. The mem vein pins those peaks, and the
+ratchet row `half_grow` restores the doubling and turns
+`mem_corpus_pins_native_allocator_counters` red, as it did by hand before this
+was committed.
+
+CI read the tree at 78bf6606 and matched the four projections to the
+instruction. It also found widebench at 28,756,197, 79,998 below, which the
+projection had not measured, `codegen_instructions_dev` at 125,554,618, 61
+below, and `codegen_instructions_release` at 698,561,899, 12 above. Those rows
+are CI's.
+
+Every binary's text is 16 bytes smaller. The keys the trend gate reads as
+worse, with the values they land on: `run_alloc_bytes` 373,249,458,
+`run_bytes_freed` 9,004, `encode_alloc_bytes` 665,835,936,
+`encode_append_fast` 42,312,400, `encode_append_grow` 5,600,
+`encode_bytes_malloc` 5,600, `oneshot_alloc_bytes` 2,960,506,
+`oneshot_bytes_malloc` 14, `text` 3,485,808, `live_alloc_bytes` 534,764,560,
+`live_bytes_malloc` 5,600,
+`a_builder_that_outgrows_its_buffer_is_never_held_twice_alloc_bytes` 368,258,
+`a_builder_that_outgrows_its_buffer_is_never_held_twice_allocs` 16,
+`a_builder_that_outgrows_its_buffer_is_never_held_twice_append_fast` 99,987,
+`a_builder_that_outgrows_its_buffer_is_never_held_twice_append_grow` 13,
+`a_builder_that_outgrows_its_buffer_is_never_held_twice_bytes_malloc` 13,
+`a_cycle_of_four_rewinds_once_a_trip_alloc_bytes` 5,397,104,
+`a_cycle_of_four_rewinds_once_a_trip_allocs` 141,193,
+`a_cycle_of_four_rewinds_once_a_trip_append_fast` 99,985,
+`a_cycle_of_four_rewinds_once_a_trip_append_grow` 15,
+`a_cycle_of_four_rewinds_once_a_trip_bytes_malloc` 15,
+`a_cycle_of_four_rewinds_once_a_trip_held_peak_bytes` 298,940,
+`a_cycle_that_allocates_nothing_needs_no_bracket_alloc_bytes` 979,198,
+`a_cycle_that_allocates_nothing_needs_no_bracket_allocs` 32,
+`a_cycle_that_allocates_nothing_needs_no_bracket_append_fast` 139,974,
+`a_cycle_that_allocates_nothing_needs_no_bracket_append_grow` 27 and
+`a_cycle_that_allocates_nothing_needs_no_bracket_bytes_malloc` 27.
+
+## 2026-09-25 — a short token is shared
+
+The decoder turns every string token into a fresh string: an allocation, a
+utf-8 validation and a copy. Runbench reads 861,498 tokens a run, 840,807 of
+them four to seven bytes long, and large.json holds 898 distinct ones. The
+same few hundred keys and short values come back on every document.
+
+A token of four to seven bytes is now looked up first. Its bytes and length
+make a 64-bit key, and a two-way, direct-mapped cache of 4,096 slots hands
+back a permanent string for a key it has seen. A miss validates the token and
+fills the slot if either way is free; a full pair sends the token down the
+ordinary path, so the cache never evicts and its storage is bounded by its
+width. A hit needs no validation, since the bytes it matched were validated
+when the slot was filled. The strings live in a static store that the survival
+test recognises by address, so a rewind neither frees nor copies them. On
+runbench the cache takes 840,175 hits and 632 misses, and every miss fills a
+slot. A one-way cache of the same width missed 20,302 times.
+
+The first version kept the strings in `malloc` storage, which the survival
+test treats as dying at a rewind, and the carry copied them out: runbench rose
+3.1 million instructions. The second tested the store at the top of every
+survival check and cost deepbench 6.9 million. The test now runs only for
+pointers outside the arena.
+
+Runbench is projected at 1,326,066,150, 6,786,450 below (-0.51%), and
+jsonbench at 891,229,689, 10,945,028 below. A program that decodes once pays
+for the fills and gets few hits: oneshot is projected at 14,842,561, 567,919
+above. Deepbench rises 1,617,979 and livebench 241,358; both arrived with the
+change and neither was isolated. `perm_peak_bytes` on the run program rises
+from 16,400 to 31,568, the 632 filled slots at 24 bytes each.
+
+The mem vein's new fixture, `a_short_token_is_shared`, decodes a six-token
+document a hundred times and pins 402 allocations and 120 permanent bytes.
+With the cache disabled it reads 1,002 allocations and 19,232 bytes of string
+headers; the ratchet row `token_cache` makes that mutation.
+
+CI read the tree at abc4015e: runbench 1,326,065,791 and oneshot
+14,842,337, 359 and 224 below the projections, `codegen_instructions_dev`
+125,569,980, 15,362 above #1650's reading, and
+`codegen_instructions_release` 698,322,865, 239,034 below it. Those rows are
+CI's.
+
+Every binary's text is 4,672 bytes larger. The keys the trend gate reads as
+worse, with the values they land on: `run_perm_live_bytes` 15,168,
+`run_perm_peak_bytes` 31,568, `perm_live_bytes` 15,168, `perm_peak_bytes`
+15,168, `encode_alloc_bytes` 665,564,160, `encode_perm_live_bytes` 15,168,
+`encode_perm_peak_bytes` 15,168, `oneshot_perm_live_bytes` 15,168,
+`oneshot_perm_peak_bytes` 15,168, `work_deepbench` 366,141,730,
+`work_digestbench` 5,542,082, `work_indexbench` 2,538,557, `work_pendbench`
+181,896,213, `work_readbench` 4,631,851, `work_scanbench` 282,021, `text`
+3,551,216, `live_alloc_bytes` 534,492,784, `live_perm_live_bytes` 15,168 and
+`live_perm_peak_bytes` 15,168.
+
+## 2026-09-25 — a map key is written as a key
+
+The json encoder wrote each map key through `encode_onto`, the same group that
+writes every value, so each key paid for a type test over eight arms before it
+reached `escape_onto`, and the colon after it was one more single-byte append.
+A key is always a string. `entry_onto` now hands it to `key_onto`, whose
+parameter is typed `k:string`, and `key_onto` appends the closing quote and
+the colon as the two-byte literal `":`. The opening quote is appended by the
+caller, straight after the brace or the comma.
+
+Five arrangements of the same bytes were measured on runbench against the tree
+before this one:
+
+    escape_onto on the untyped k, `":` as one literal       +22,332,650
+    key_onto typed, opening quote inside it                 -16,643,789
+    key_onto typed, `{"` and `,"` as two-byte literals      -25,555,650
+    as above with `{` and `,` apart from the quote          -26,042,668
+    as above with the closing quote apart from the colon    -15,858,366
+
+The first line is the reason for the typed parameter: the same call made on
+the bare `k` of the entry pattern costs more than the old dispatch did. Why
+the two-byte literal pays after a key and costs before one was not isolated.
+
+Runbench is projected at 1,300,023,123, 26,042,668 below (-1.96%), livebench
+at 1,905,214,048, 113,377,925 below (-5.6%), and oneshot at 14,557,927,
+284,410 below. No other compiled program moves. The interpreter runs the same
+library, and the interpreted corpus falls 18,767,151 on the container, which
+projects `interp_instructions` at 595,472,297. The ratchet row `key_typed`
+sends the key back through the untyped escape, which leaves the output the
+same and put runbench at 1,337,789,395 when it was tried by hand.
+
+`append_fast` falls because there are fewer appends, and the checker visits
+one definition more. The keys the trend gate reads as worse, with the values
+they land on: `run_append_fast` 8,256,960, `run_perm_allocs` 93,
+`oneshot_append_fast` 90,477, `front_end_visits` 7,416,
+`emitted_other_branches` 8,024, `emitted_other_calls` 9,671,
+`emitted_other_defines` 1,556, `emitted_other_lines` 83,727, `text` 3,548,064,
+`live_alloc_bytes` 534,601,584, `live_append_fast` 31,135,470 and
+`a_literal_appended_across_a_rewind_append_fast` 2,080.
+
+CI read the tree at 1ab7904e and matched the work rows to the instruction. The
+library carries one definition more, and the compile side paid for it:
+`compile_instructions` 25,269,300 (+65,047), `entry_instructions` 85,326,396
+(+111,322), `library_instructions` 85,855,270 (+81,403), `compile_allocs`
+14,272 (+32) and `compile_peak_bytes` 710,281 (+1,609). The interpreted run
+reads 595,493,632, 21,335 above the projection, with `interp_allocs` at
+899,769 (-26,143) and `interp_peak_bytes` at 720,417 (+1,609). Those rows are
+CI's.
+
+## 2026-09-25 — a tail call carries its group
+
+The interpreter runs a tail call through the dispatcher's loop: `eval_tail`
+hands back the callee's name and arguments, and the loop looks the name up in
+`fns` to find the overloads it dispatches over. `eval_tail` had already asked
+`callee_of_ref` whether the callee is a group, and that answer holds the
+group. The interpreted corpus makes 107,607 tail calls, and each paid a hash
+of the name and a compare of its bytes to find the same group again.
+
+`Flow::Tail` now carries the group beside the name, and the loop takes it. The
+interpreted run falls 13,651,102 instructions on the container, 2.3%. CI read
+`interp_instructions` at 584,588,724 at e8870bbd, 10,904,908 below its reading
+of the typed key.
+
+The ratchet row `tail_group` puts the lookup back and leaves the carried group
+unused. The interpreted run read 595,873,686 with it, back where it started.
+No compiled program moves. The compile rows are a layout vein and can move
+with any edit to the compiler's Rust, so they are left for CI to read.
+
+## 2026-09-25 — a length, an index and a literal become words directly
+
+The interpreter keeps an int in a machine word when it fits, but three kinds
+of site still reached it through a `BigInt`. `length`, `char_code`, `find`,
+`number_span`, `now` and a byte index built a `BigInt` from a `usize` or an
+`i64`, which allocates its digits, and handed it to `Int::from` to be shrunk
+back into a word. The interpreted corpus does that 68,891 times, 33,239 from
+builtins and 35,652 from byte indexing. Those sites now build the word
+directly, which takes 2,095,679 instructions off the interpreted run.
+
+The other two read a literal the parser stores as a `BigInt`: evaluating an int
+literal, 125,002 times, and matching an int pattern, 85,873 times. Both went
+through `BigInt::to_i64`, which walks the digits in general. A number that fits
+a word has at most one digit, so `word_of` reads it and its sign directly; that
+took 1,184,161 off. The conversion also saved six registers on every call
+because its rare path clones the `BigInt` into an `Rc`. With the clone moved
+into a cold function and the rest inlined into the literal's evaluation, a
+further 3,105,935 came off.
+
+The interpreted run falls 6,385,775 instructions on the container, 1.1%. CI
+read `interp_instructions` at 578,807,674 at f774749e, 5,781,050 below its
+reading of the tail. The
+spec `the_ends_of_the_word_read_back_as_words` pins the two ends of the word:
+the largest positive literal, the first past it, and a sum that lands on the
+most negative word from outside it. Letting that sum stay a `BigInt` printed
+`false` where `under + 1 == least` should be true, and reading the first
+literal past the word as a wrapped `i64` sent it to the wrong clause. The
+ratchet row `word_read` sends a literal through `to_i64` first; the
+interpreted run read 577,707,831 with it. No compiled program moves, and the
+compile rows are left for CI to read.
+
+## 2026-09-25 — a literal divisor cannot fail
+
+Inference gave every `/` and `%` a possible err, because division by zero is a
+failure. The runtime fails only on a zero divisor, and the checker already
+refuses a divisor written as the integer zero where it is reached unguarded.
+So a divisor written as any other literal cannot fail, and the err was noise.
+It was not harmless: it flowed through `push` into escape's accumulator, whose
+parameter set then carried an err. The dispatcher tests every parameter that
+may hold a failure on entry, so escape's builder, 1.55 million iterations, paid
+that test on each one.
+
+`/` and `%` now add an err only when the divisor is not a nonzero literal. On
+the container, over the carried group's tree: runbench -9,744,067 (-0.75%),
+livebench -27,388,087 (-1.44%), escapebench -2,451,022 (-3.59%), deepbench
+-1,344,000, jsonbench -531,900, basket -133,385, oneshot -71,532 and
+pendbench -1,000. encodebench rises 492,380 (+0.018%), which is layout.
+indexbench and digestbench move 14 each way. The rows are projected from those
+readings and CI's reading replaces them.
+
+Every binary that carries such a remainder gets shorter: the decoder's calls
+484 -> 482, branches 510 -> 508, lines 5,495 -> 5,479, and runbench's .text
+416,760 -> 415,736. The front end's visits on the compile corpus fall 7,416
+-> 7,411. The allocation counters do not move. The compile rows this host
+refuses are left for CI.
+
+The ratchet row `literal_divisor` puts the err back on a literal divisor. The
+emitted-code gate reads the decoder's old counts with it. A zero written as a
+literal divisor was also tried as nonzero, to find a program that would show
+it; with the checker refusing the unguarded integer zero, none of the shapes
+tried printed differently on the native engine and the interpreter.
+
+The trend gate reads six keys as worse against its baseline, which predates
+the stack under this change; this change lowers or holds each of them. They
+land on `work_deepbench` 364,797,730, `work_digestbench` 5,542,068,
+`work_indexbench` 2,538,571, `work_pendbench` 181,895,213,
+`emitted_other_defines` 1,555 and `text` 3,544,496.
+
+CI read the carrier at e63ff428. The work rows landed within 14 instructions
+of the projection, and the compile side moved where the container could not
+see it, every row down: `codegen_instructions_dev` 125,569,980 -> 123,915,790,
+`codegen_instructions_release` 698,322,865 -> 695,954,249, `emit_instructions`
+29,311,866 -> 28,882,533, `compile_instructions` 25,269,300 -> 25,267,312,
+`entry_instructions` 85,326,396 -> 85,321,306 and `library_instructions`
+85,855,270 -> 85,850,050. Fewer entry tests is less IR for clang to compile
+and less for the emitter to write.
+
+Against main, the trend gate reads nine keys as worse across the six carried
+changes, and they land here: `run_append_grow` 1,260, `run_bytes_malloc`
+9,120, `oneshot_append_grow` 14, `oneshot_perm_allocs` 9, `live_append_grow`
+5,600, `live_perm_allocs` 8 and `a_literal_appended_across_a_rewind_perm_allocs`
+16, which are the half-step grow's and the token cache's allocation shapes;
+and `work_encodebench` 2,677,016,790 (+0.04%) and `work_oneshot` 14,486,409
+(+1.49%). The two work rows arrived with the carried changes and no one of
+them has been isolated as their cause; runbench, the row the objective
+weighs, fell 7.4% across the same set.
+
+The ratchet found what the token cache left behind. Its row `slice_words`
+sends a four-to-seven-byte slice through `k_str_n` instead of the two-word
+copy, and the gate stayed green: the cache returns every slice of those
+lengths before the copy is reached, hits from the cache and misses from
+`k_token_miss`, so the copy was dead code and the mutation reached nothing.
+The branch, the row and its mutation are gone. Every benchmark reads within
+14 instructions of the tree that kept them, which is what dead code costs.
+The two codegen rows moved on CI because clang compiles a runtime with one
+branch fewer: `codegen_instructions_dev` 123,915,881 (+91) and
+`codegen_instructions_release` 695,954,277 (+28). Welfare holds at its floor.
+
 ## 2026-09-26 — the wall goes
 
 The build of the gavel of the same name. `>>` is refused in the lexer with the

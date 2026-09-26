@@ -35,7 +35,7 @@ fn encode_list acc xs
 
 fn encode_map acc es
   return text/append acc "\{}" if length es == 0
-  opened = entry_onto (text/append acc 123) es[1]
+  opened = entry_onto (text/append (text/append acc 123) 34) es[1]
   text/append (encode_pairs opened es 2) 125
 
 fn encode_onto acc true
@@ -68,8 +68,14 @@ fn encode_pairs acc es i
   encode_pairs (pair_onto acc es[i]) es (i + 1)
 
 fn entry_onto acc (entry k v)
-  keyed = encode_onto acc k
-  encode_onto (text/append keyed 58) v
+  encode_onto (key_onto acc k) v
+
+# A key is always a string, and saying so is what lets the emitter reach
+# escape_onto without the type test encode_onto makes on every value. The
+# quote that opens it is appended by the caller, straight after the brace or
+# the comma, and the quote that closes it goes out with the colon as one word.
+fn key_onto acc k:string
+  text/append (escape_onto acc k) "\":"
 
 fn finish _ none
   err (parse_failure 0 "unexpected end of input")
@@ -85,4 +91,4 @@ fn finish _ e@(err _)
   e
 
 fn pair_onto acc e
-  entry_onto (text/append acc 44) e
+  entry_onto (text/append (text/append acc 44) 34) e

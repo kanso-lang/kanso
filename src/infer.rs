@@ -1131,6 +1131,9 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut Env<'a>) -> Set {
                 // int op int stays int; any float operand widens the other,
                 // so the result is float
                 "+" | "-" | "*" => fails | numeric_result(a, b),
+                // Division fails only on a zero divisor, so one written as a
+                // nonzero literal adds no err of its own.
+                "/" | "%" if nonzero_literal(rhs) => fails | numeric_result(a, b),
                 "/" | "%" => fails | ERR | numeric_result(a, b),
                 // the bitwise three answer a whole number; every remaining
                 // operator compares, and a comparison answers true or false
@@ -1682,6 +1685,15 @@ fn desc_yield<'a>(ctx: &mut Ctx<'a>, e: &'a Expr) -> Set {
             desc_yield_of(ctx, early) | rest_yield
         }
         _ => TOP & !FAIL,
+    }
+}
+
+/// A divisor the source spells as a number other than zero.
+fn nonzero_literal(e: &Expr) -> bool {
+    match e {
+        Expr::Int(n, _) => !num_traits::Zero::is_zero(n),
+        Expr::Float(x, _) => *x != 0.0,
+        _ => false,
     }
 }
 

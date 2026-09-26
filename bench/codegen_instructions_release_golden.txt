@@ -356,4 +356,18 @@
 # CI measured the builder seed at 947d34ad, with the declare no longer written
 # into programs that never call it. codegen_instructions_release 698,599,960
 # -> 698,561,887, a FALL of 38,073 (-0.0054%).
-codegen_instructions_release=698511987
+#
+# CI measured the half-step grow at 78bf6606. codegen_instructions_release
+# 698,561,887 -> 698,561,899, a RISE of 12 (+0.0000%).
+#
+# CI measured the short-token cache at abc4015e. codegen_instructions_release
+# 698,561,899 -> 698,322,865, a FALL of 239,034 (-0.0342%).
+#
+# CI measured the carrier at e63ff428, the literal divisor's settled fixpoint
+# among what it carries: codegen_instructions_release 698,322,865 ->
+# 695,954,249, a FALL of 2,368,616 (-0.3392%).
+#
+# CI measured the carrier at 25499899, with the token cache's dead word copy
+# removed from the runtime: codegen_instructions_release 695,954,249 ->
+# 695,954,277, a RISE of 28 (+0.0000%).
+codegen_instructions_release=695954277
