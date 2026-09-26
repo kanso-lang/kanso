@@ -3081,7 +3081,19 @@ nightly_shards = row
 
 rows_c1ze = text/concat rows_c1zd [nightly_shards]
 
-rows_c = text/concat rows_c1ze [itself]
+# The ratchet names each row as it starts, so a run that stops partway says
+# which row was running.
+row_named = row
+  "a ratchet that names no row until the end"
+  true
+  "cargo test --release --test a_gate_red_before_the_mutation"
+  "specs (unit, golden, differential)"
+  (breaking "a_ratchet_that_names_no_row_until_the_end")
+  no_setup
+
+rows_c1zr = text/concat rows_c1ze [row_named]
+
+rows_c = text/concat rows_c1zr [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
@@ -3608,8 +3620,19 @@ fn proving list at acc
 fn proven list _ acc true
   reported list acc
 
+# Each row is announced on stderr as it starts, because the report below is
+# written once, after the last row. A run that stops before then printed
+# nothing about any row: the nightly was cancelled at its timeout every night
+# from 2026-09-14 to 2026-09-26 and its logs said only how many gates the
+# baseline read, and kanso#1670's step ran two and a half hours with no way to
+# tell a slow row from a stuck one. The line names the row, so the last one
+# printed is the one that was running.
 fn proven list at acc false
   r = list[at]
+  said = "ratchet: row {at} of {length list}, {r.job} — {r.claim}\n"
+  io/write_err said .> (_ -> started list at acc r)
+
+fn started list at acc r
   dir = "/tmp/kanso-ratchet-{at}"
   made = ["worktree" "add" "--detach" "--force" dir "HEAD"]
   os/run "git" made .> (_ -> after_worktree list at acc r dir)

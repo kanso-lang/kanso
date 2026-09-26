@@ -136,6 +136,13 @@ fn a_clean_head_still_proves_its_row() {
         said.contains("every row turned its gate red"),
         "the mutation still reddens the gate it claims:\n{said}"
     );
+    // And the row was named as it started. The report above is written once,
+    // after the last row, so a run cancelled partway printed nothing about any
+    // row: the nightly's logs said that for twelve nights running.
+    assert!(
+        said.contains("ratchet: row 1 of 1, python-free"),
+        "the row is announced when it starts:\n{said}"
+    );
 }
 
 #[test]
