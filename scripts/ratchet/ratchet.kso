@@ -2781,7 +2781,72 @@ carried_spec = "a_carried_record_is_asked_about_failure_once"
 
 rows_b1co = text/concat rows_b1bn [carried_once]
 
-rows_b = text/concat rows_b1co [compile_mem compile_mem_host]
+# An index read tells LLVM its container's length is not negative.
+length_assumed = row
+  "an index that assumes nothing of its length"
+  true
+  "cargo test --release --test perf_ratchet {length_spec}"
+  "specs (unit, golden, differential)"
+  (breaking "an_index_that_assumes_nothing_of_its_length")
+  release
+
+length_spec = "an_index_assumes_its_length_is_not_negative"
+
+rows_b1la = text/concat rows_b1co [length_assumed]
+
+# A span is asked in two unsigned compares.
+span_unsigned = row
+  "a span that lets from equal to past the end"
+  true
+  "cargo test --release --test {span_spec}"
+  "specs (unit, golden, differential)"
+  (breaking "a_span_that_lets_from_equal_to_past_the_end")
+  release
+
+span_spec = "a_span_is_asked_in_two_unsigned_compares"
+
+rows_b1sp = text/concat rows_b1la [span_unsigned]
+
+# A room test asks its two questions with two branches.
+room_split = row
+  "a push that joins its room questions"
+  true
+  "cargo test --release --test {room_spec}"
+  "specs (unit, golden, differential)"
+  (breaking "a_push_that_joins_its_room_questions")
+  release
+
+room_spec = "a_room_test_branches_on_each_question"
+
+rows_b1rs = text/concat rows_b1sp [room_split]
+
+# An index loads its length between its two bounds.
+index_split = row
+  "an index that loads its length first"
+  true
+  "cargo test --release --test perf_ratchet {index_split_spec}"
+  "specs (unit, golden, differential)"
+  (breaking "an_index_that_loads_its_length_first")
+  release
+
+index_split_spec = "an_index_loads_its_length_after_its_lower_bound"
+
+rows_b1ib = text/concat rows_b1rs [index_split]
+
+# An empty run returns the builder between its two bounds tests.
+empty_run = row
+  "an empty run that loads its length first"
+  true
+  "cargo test --release --test {empty_run_spec}"
+  "specs (unit, golden, differential)"
+  (breaking "an_empty_run_that_loads_its_length_first")
+  release
+
+empty_run_spec = "an_empty_run_appends_nothing"
+
+rows_b1er = text/concat rows_b1ib [empty_run]
+
+rows_b = text/concat rows_b1er [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 
