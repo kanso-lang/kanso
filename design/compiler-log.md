@@ -16260,7 +16260,8 @@ rises 30,556,304 -> 30,569,820 and `work_pendbench` 179,493,114 ->
 179,493,314. The builds pay for the extra lines: `codegen_instructions_release`
 401,504,467 -> 402,466,293 and `emit_instructions` 29,723,818 -> 29,802,018,
 while `codegen_instructions_dev` falls 123,359,084 -> 123,358,369. Welfare
-rises from 89.96 to 89.97 and the floor banks there.
+rose from 89.96 to 89.97 on that run; the rows that land are the carrier's,
+below.
 
 ## 2026-09-26 — a span is asked in two unsigned compares
 
@@ -16296,3 +16297,56 @@ signed definition over every pair drawn from sixteen edge values, including
 compares by their lines. It fails on main, which has neither. The ratchet
 row `span_unsigned` drops the minus one, and the sweep then names
 `from 0 to 1 len 1`.
+
+## 2026-09-26 — a room test asks its two questions with two branches
+
+Every in-place push, put and append fast path in the prelude asks two things
+of the buffer: whether its used mark is at the frontier, and whether the new
+length fits its capacity. Eight of the nine joined the answers with `and i1`
+and branched once. At `-O3` LLVM computes a joined condition as flags,
+`cmp`, `setne`, `cmp`, `setg`, `or`, `jne`, and splits such a branch into two
+only under fast instruction selection. Each of the eight now branches on the
+frontier first and computes the room it needs in the block that follows, so
+the pair is two compares and two jumps. The ninth, the byte append, already
+branched twice.
+
+On the container, against main at 7ff6508a: runbench 1,176,309,961 ->
+1,173,675,133 (-0.22%), livebench -0.55%, escapebench 56,203,355 ->
+55,021,356 (-2.10%), basket -0.38%, oneshot -0.21%, digestbench -0.15% and
+jsonbench -0.09%. encodebench rises 3,243,186 (+0.13%) to 2,439,191,881 and
+pendbench 2,614 to 179,495,253. The list push and the map put alone, before
+the six append paths, gave runbench -0.14% and left livebench where it was.
+
+The spec is tests/a_room_test_branches_on_each_question.rs, which reads the
+emitter's text: no room test joins its questions with `and`, and nine branch
+on the frontier. It fails on main, which has one. The ratchet row
+`room_split` joins the list push's two tests again.
+
+## 2026-09-26 — the length, span and room changes, carried together
+
+kanso#1670 carries the three entries above over main at b6994fa4, which
+already held kanso#1669; kanso#1671 and the room branch are merged into it.
+The three had been measured one at a time against 7ff6508a. Together, on the
+container against b6994fa4: runbench 1,168,440,514 -> 1,159,169,338
+(-0.79%), jsonbench 794,449,471 -> 782,719,021 (-1.48%), oneshot -0.71%,
+livebench -0.39%, basket -0.34%, escapebench -2.10%, digestbench -0.15% and
+widebench -0.06%. encodebench rises 2,187,306 (+0.09%) to 2,438,649,686 and
+pendbench 2,814 to 179,495,453.
+
+Against main the emitted code gains the assumes and the split branches:
+runbench 3,797 -> 3,908 calls, 2,692 -> 2,699 branches and 27,808 -> 28,035
+lines; the decoder 539 -> 574 calls, 500 -> 505 branches and 5,616 -> 5,689
+lines; livebench 703 -> 744 calls, 584 -> 591 branches, 6,795 -> 6,882 lines;
+encodebench 649 -> 674 calls, 463 -> 468 branches, 5,961 -> 6,016 lines;
+oneshot 688 -> 729, 564 -> 571, 6,664 -> 6,751; basket 715 -> 732, 524 -> 526,
+5,354 -> 5,390; widebench 696 -> 722, 486 -> 491, 6,255 -> 6,312; deepbench
+167 -> 170 calls and 1,722 -> 1,728 lines; escapebench 29 -> 30 branches and
+533 -> 534 lines; pendbench 398 -> 403, 284 -> 285, 2,961 -> 2,972;
+scanbench 1,863 -> 1,912, 1,478 -> 1,479, 14,665 -> 14,764; indexbench 53 ->
+54 calls and 570 -> 572 lines; digestbench 529 -> 551, 391 -> 392, 4,513 ->
+4,558. Machine code falls in nine programs, runbench 399,048 -> 398,760
+bytes, and rises in four: jsonbench 238,888 -> 238,936, escapebench 213,000
+-> 213,048, indexbench 212,872 -> 212,904 and readbench 213,304 -> 213,336.
+The compile golden's `module` fixture reads 1,062 -> 1,069 lines, 104 -> 107
+calls and 80 -> 81 branches, `recursion` 278 -> 279 lines and `build_block`
+241 -> 242.
