@@ -7,11 +7,12 @@ is stale — say so.
 ## Waiting on Clay
 
 The decisions live in design/pending-gavels.md — the single ledger; this file
-only indexes it. **Blocking right now: three** — whether the wall `>>` survives the fused
-operators and whether its simultaneous-failure merge was meant to go, both
-filed 2026-09-17, and whether kanso#1513's fixed-temporary pin covers both
-codegen tiers or the release tier alone, filed 2026-09-18 after sitting four
-hours in a session task list, which Clay does not read, instead of here. The compile-term question before them was ruled the day it
+only indexes it. **Blocking right now: one** — whether the wall's simultaneous-failure merge
+was meant to go, filed 2026-09-17. Its sibling, whether the wall survives the
+fused operators, was ruled on 2026-09-26: the wall goes. A third, whether
+kanso#1513's fixed-temporary pin covers both codegen tiers or the release tier
+alone, was filed 2026-09-18 after sitting four hours in a session task list,
+which Clay does not read, instead of here, and was withdrawn the next day. The compile-term question before them was ruled the day it
 was filed: two welfares and a meta-welfare over them, with the floor
 re-ratcheted. The `!` question before it was ruled 2026-09-16 and
 reversed the same day: the bang is the channel that bubbles, so `xs[i]!` and
@@ -44,9 +45,10 @@ kanso — sat here and was bounced on 2026-08-29: a performance question with no
 surface area is the implementer's, per the ledger's own charter, and the log
 carries the research mandate it left with.
 
-**Nine questions are waiting** — two blocking. Both were filed 2026-09-17 out
-of one reading of a book sample: whether the wall `>>` survives the fused
-operators, and whether its simultaneous-failure merge was meant to go. A third
+**Eight questions are waiting** — one blocking. It was filed 2026-09-17 out
+of one reading of a book sample, beside a second that was ruled on
+2026-09-26: whether its simultaneous-failure merge was meant to go. The ruled
+one asked whether the wall `>>` survives the fused operators, and it does not. A third
 was filed 2026-09-18 and withdrawn on 2026-09-19 without being ruled: whether
 kanso#1513's fixed-temporary pin covers both codegen tiers or the release tier
 alone. It went on the ground this file's own ledger states in its opening — an
@@ -217,6 +219,15 @@ as a standing row and as one that had come off, in the same breath, and did not
 name the two welfares at all. This paragraph is the first thing cloud reads
 before choosing work, so a row miscounted here is a row chosen or skipped
 wrongly.
+
+### The wall goes (2026-09-26)
+
+The log entry "gavel: the wall goes", Clay: "we said the wall goes. we've been
+over this." `>>` leaves the language and `a .> (_ -> b)` is its one spelling.
+The surface is in src/lexer.rs, src/parser.rs, src/ast.rs, src/check.rs, the
+three engines' `Seq` descriptions, and the book's chapters 04 to 06 and
+appendices A to C. Cloud is building it on `claude/the-wall-goes`; the row
+comes off the day that lands on main.
 
 ### The cohort gavel's data-sized cycle (2026-08-29, narrowed 2026-09-16)
 
@@ -570,7 +581,7 @@ else. Chains that tested for `none` after an effect migrate.
     checked from here on two days and both refused by the tooling
   - whether an err gains readers a lambda callback can use
 
-**Nine questions wait in `design/pending-gavels.md`** — two blocking, seven
+**Eight questions wait in `design/pending-gavels.md`** — one blocking, seven
 open — each with a recommendation. Recounted four times on 2026-09-16: the
 binding-position question joined Open with its measurement, the escape
 path's byte-position scan joined it, measured on 2026-09-15 and filed to
@@ -595,7 +606,8 @@ four of the six it named had been ruled or shipped since. A count maintained
 by hand goes stale by default, so `tests/the_status_index_counts_the_ledger.rs`
 now reads both files and fails when this sentence and the ledger disagree.
 
-The two blocking are the wall's two questions, filed 2026-09-17. The five
+The one blocking is the wall's merge question, filed 2026-09-17; the wall's
+other question was ruled on 2026-09-26. The five
 open are the box constructor's spelling,
 recommended `effect`, which cloud builds against unless Clay names another;
 how far a binding
