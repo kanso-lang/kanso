@@ -977,14 +977,65 @@ jobs:
 
   ratchet:
     name: the ratchet (every gate has a mutation that turns it red)
+    # The name branch protection requires, kept on the job that answers for the
+    # whole ratchet: the cover step below, and the shards' verdict after it.
+    # `!cancelled()` so that a red shard still reaches the verdict step and
+    # turns this job red, rather than skipping it, which reads as green.
+    needs: ratchet-shard
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
-      # fetch-depth: 0 because the `touched` step below diffs this branch
-      # against its merge base with main, and a shallow checkout has no merge
-      # base to find. On the first run of that step the diff failed outright
-      # and the job was red for a reason that had nothing to do with a
-      # mutation — the selection spec passes in a full worktree and could not
-      # see the runner's clone.
+      # fetch-depth: 0 for origin/main, which one mutation resets the goldens
+      # from before it applies. Without it the cover reads that mutation as
+      # stale: the first run of this job did exactly that.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --release
+      # Costs one compile and no builds: it reads this file against the table,
+      # then applies every mutation in a throwaway worktree to check it still
+      # matches the source it patches — a sed each, about seven seconds for the
+      # lot. Proving a mutation actually REDDENS its gate costs a build apiece
+      # and stays in the nightly workflow. Splitting the two put the half that
+      # caught #1015 where a pull request has to answer it.
+      - name: every ci job carries a mutation, and every mutation still applies
+        run: ./target/release/kanso run scripts/ratchet
+      - name: every shard proved its part of this branch's rows
+        run: |
+          result="${{ needs.ratchet-shard.result }}"
+          if [ "$result" != success ]; then
+            echo "::error::a shard of the rows this branch could have made blind"
+            echo "::error::ended $result. Its own job log names the row."
+            exit 1
+          fi
+
+  # PROVE the handful this branch could have made blind. Applying is not
+  # proving: both rows that went blind on 2026-08-30 still applied, and the
+  # nightly said so the next morning, twice, to nobody. A mutation names the
+  # source files its seds patch and a branch names the files it changes; the
+  # intersection is empty for most branches.
+  #
+  # A branch touching src/runtime.c is the other end. It selected thirteen rows
+  # when this step was written and twenty-three on 2026-09-03, in about twelve
+  # minutes; by 2026-09-26 it selected 78 on that file alone, and kanso#1670's
+  # step ran two and a half hours with every other job green. So the
+  # handful is proved in shards, every Nth row from K, the way the nightly
+  # proves the whole table. The shard count is read by
+  # tests/a_branch_proves_its_rows_in_shards.rs against the run line.
+  #
+  # `fetch-depth: 0` because `touched` diffs this branch against its merge base
+  # with main, and a shallow checkout has no merge base to find. `git fetch`
+  # because checkout leaves no local main branch to diff against even at full
+  # depth — it lands on a detached head.
+  ratchet-shard:
+    name: the ratchet's rows for this branch, one shard
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -995,40 +1046,10 @@ jobs:
       # applied — which the ratchet reads as proof. See the script's header.
       - run: sh scripts/ratchet/toolchain.sh
       - run: cargo build --release
-      # Costs one compile and no builds: it reads this file against the table,
-      # then applies every mutation in a throwaway worktree to check it still
-      # matches the source it patches — a sed each, about seven seconds for the
-      # lot. Proving a mutation actually REDDENS its gate costs a build apiece
-      # and stays in the nightly workflow. Splitting the two put the half that
-      # caught #1015 where a pull request has to answer it.
-      - name: every ci job carries a mutation, and every mutation still applies
-        run: ./target/release/kanso run scripts/ratchet
-      # And PROVE the handful this branch could have made blind. Applying is
-      # not proving: both rows that went blind on 2026-08-30 still applied, and
-      # the nightly said so the next morning, twice, to nobody. A mutation
-      # names the source files its seds patch and a branch names the files it
-      # changes; the intersection is empty for most branches and was one to
-      # three rows for the three merges that did the damage.
-      #
-      # The worst realistic case is a branch touching src/runtime.c. It selected
-      # thirteen rows and ran in six minutes when this comment was first
-      # written; on 2026-09-03 it selects TWENTY-THREE and took 11m51s and
-      # 12m05s on two runs of one branch, and nothing was watching that grow.
-      # Those runs could not execute the callgrind gates at all — see the
-      # toolchain step above — so they undercount a runtime branch by two
-      # callgrind passes on the baseline and two more under mutation.
-      # `prove` now also reads each selected row's gate once before mutating
-      # it, which is 22 gate runs on top of those 23 rows — the added cost is
-      # the gate half of what the step already pays, since the baseline shares
-      # one worktree and one build. The next runtime-touching branch's job log
-      # is where that lands.
-      #
-      # `git fetch` because checkout leaves no local main branch to diff
-      # against even at full depth — it lands on a detached head.
-      - name: prove the rows this branch could have made blind
+      - name: prove this shard of the rows this branch could have made blind
         run: |
           git fetch origin main
-          ./target/release/kanso run scripts/ratchet -- touched origin/main
+          ./target/release/kanso run scripts/ratchet -- touched origin/main shard ${{ matrix.shard }} 4
 
   perf-history:
     name: perf history (appended to the history branch)
