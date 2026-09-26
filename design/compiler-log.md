@@ -15886,3 +15886,17 @@ CI read the change at 95f78ace: runbench 1,223,633,797 -> 1,221,877,776
 the call-site lines: `emit_instructions` 29,158,246 -> 29,329,209 (+0.59%),
 `codegen_instructions_dev` 124,021,731 -> 124,061,133 and
 `codegen_instructions_release` 406,403,837 -> 406,462,416 (+0.01%).
+
+The branch then took the subtype fix stacked on the wall, box and tag
+carrier (kanso#1657 over kanso#1663), and CI read the three together at
+4d83de1a. Against the subtype fix's rows `work_runbench` falls 1,223,756,154
+-> 1,221,916,115, `work_livebench` 1,836,034,749 -> 1,830,313,464 and
+`work_basket` 31,172,142 -> 31,134,128, and `text` falls 3,509,552 ->
+3,491,328 summed. The call-site assumes cost the compile side as before:
+`emit_instructions` 29,169,298 -> 29,340,261, `codegen_instructions_dev`
+123,998,259 -> 124,037,661 and `codegen_instructions_release` 406,309,906 ->
+406,473,701. The module corpus emits the same assume lines, `module_calls`
+103 -> 105 and `module_lines` 1,067 -> 1,073. `work_pendbench` rises
+181,896,412 -> 181,899,010 with no allocation counter moving, which was not
+isolated.
+Welfare rises from 89.7627 to 89.7698 and the floor banks there.
