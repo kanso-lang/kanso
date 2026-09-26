@@ -183,24 +183,6 @@ pub fn parse_entry(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
             Span::at(1, 1),
         ));
     }
-    // a continuation line may not restart after a blank: the chain it would
-    // splice into has already closed
-    if let Some(start) = first_stmt {
-        for line in &lexed.lines[start..] {
-            if line.indent != 0
-                && lexed.blank_lines.binary_search(&(line.number - 1)).is_ok()
-                && matches!(line.tokens.first(), Some((Tok::Pipe | Tok::Fused(_), _, _)))
-            {
-                diags.push(Diagnostic::new(
-                    "formatting",
-                    "a continuation may not follow a blank line — the statement \
-                     it would splice into has closed"
-                        .to_string(),
-                    head_span(line),
-                ));
-            }
-        }
-    }
     let body = match parse_body(stmt_lines) {
         Ok(body) => body,
         Err(d) => {

@@ -1652,7 +1652,7 @@ numeric = row
   release
 
 effects = row
-  "two effects running in the wrong order on one engine"
+  "the first step of a bind skipped on one engine"
   true
   "./target/release/kanso run scripts/effects_differential"
   "diagnostics differential (both engines say the same thing)"
@@ -2478,7 +2478,7 @@ play_disk = row
   (breaking "a_play_key_that_trusts_a_module_from_disk")
   release
 
-# A warm play compiles the file only to word a death by signal.
+# A warm play words a death by signal without compiling the file.
 play_signal = row
   "a warm play that dies in silence"
   true
