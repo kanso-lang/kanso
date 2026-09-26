@@ -16493,3 +16493,10 @@ Two ratchet rows. `lane_count` moves the compare's bound to -65 and the utf-8
 differential goes red. `lane_count_cost` puts the movemask and popcount back,
 which keeps every count right and costs the instructions, for the instruction
 golden to catch.
+
+CI's rows were taken from its first run. `work_runbench` 1,144,622,452 ->
+1,139,771,152, `work_livebench` 1,688,141,594 -> 1,666,315,916 and
+`work_encodebench` 2,438,572,025 -> 2,416,993,748. `codegen_instructions_release`
+rises 402,524,008 -> 402,705,483 (+0.045%), the release build compiling the
+new intrinsics, and `codegen_instructions_dev` falls 123,328,940 ->
+123,328,492. Welfare rises from 90.09 to 90.11 and the floor banks there.
