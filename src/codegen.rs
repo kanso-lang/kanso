@@ -462,23 +462,28 @@ qstat:
 ; An out-of-range or inverted range is the empty slice, which appends nothing —
 ; k_b_slice_raw's rule, and the reason it is answered here rather than sent to
 ; the C: a fifth of the runs between two escapes are empty, because two escapes
-; sitting next to each other leave no bytes between them.
+; sitting next to each other leave no bytes between them. Such a run returns
+; the accumulator as it stands, from between the two bounds tests, rather than
+; carrying a zero length through the claim and the copy.
 qrange:
   %qfrom = extractvalue %KValue %fv, 1
   %qto = extractvalue %KValue %tv, 1
   %qcp = extractvalue %KValue %cs, 1
   %qc = inttoptr i64 %qcp to ptr
-  %qclen = load i64, ptr %qc
   %qoff = add i64 %qfrom, -1
   %qorder = icmp ult i64 %qoff, %qto
+  br i1 %qorder, label %qspanhi, label %qempty
+qempty:
+  ret %KValue %acc
+qspanhi:
+  %qclen = load i64, ptr %qc
   %qhi = icmp ule i64 %qto, %qclen
-  %qgood = and i1 %qorder, %qhi
+  br i1 %qhi, label %qspan, label %qempty
+qspan:
   %qcdp = getelementptr i8, ptr %qc, i64 8
   %qcdata = load ptr, ptr %qcdp
-  %qoffs = select i1 %qgood, i64 %qoff, i64 0
-  %qsrc = getelementptr i8, ptr %qcdata, i64 %qoffs
-  %qspan = sub i64 %qto, %qoff
-  %qn = select i1 %qgood, i64 %qspan, i64 0
+  %qsrc = getelementptr i8, ptr %qcdata, i64 %qoff
+  %qn = sub i64 %qto, %qoff
   %qbp = extractvalue %KValue %acc, 1
   %qb = inttoptr i64 %qbp to ptr
   %qlen = load i64, ptr %qb

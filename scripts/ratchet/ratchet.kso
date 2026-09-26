@@ -2832,7 +2832,20 @@ index_split_spec = "an_index_loads_its_length_after_its_lower_bound"
 
 rows_b1ib = text/concat rows_b1rs [index_split]
 
-rows_b = text/concat rows_b1ib [compile_mem compile_mem_host]
+# An empty run returns the builder between its two bounds tests.
+empty_run = row
+  "an empty run that loads its length first"
+  true
+  "cargo test --release --test {empty_run_spec}"
+  "specs (unit, golden, differential)"
+  (breaking "an_empty_run_that_loads_its_length_first")
+  release
+
+empty_run_spec = "an_empty_run_appends_nothing"
+
+rows_b1er = text/concat rows_b1ib [empty_run]
+
+rows_b = text/concat rows_b1er [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 
