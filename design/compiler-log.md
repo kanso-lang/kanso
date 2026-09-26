@@ -16603,3 +16603,13 @@ CI's rows were taken from its first run. `work_runbench` 1,144,622,452 ->
 container showed. `codegen_instructions_dev` rises 71 to 123,329,011 and
 `codegen_instructions_release` falls 274 to 402,523,734. Welfare rises from
 90.09 to 90.10 and the floor banks there.
+
+The two landed together in kanso#1676, and CI's rows for the combined tree,
+against main at 4444d699, are these. `work_runbench` 1,144,622,452 ->
+1,137,417,541 (-0.63%), `work_livebench` 1,688,141,594 -> 1,666,846,330,
+`work_encodebench` 2,438,572,025 -> 2,417,785,419, `work_indexbench`
+2,498,525 -> 2,428,510 and `work_oneshot` 13,129,205 -> 13,022,813; the
+oneshot rise the multiply showed alone is gone in the sum. `codegen_instructions_release`
+rises 402,524,008 -> 402,705,244 (+0.045%) and `codegen_instructions_dev`
+falls 123,328,940 -> 123,328,168. Welfare rises from 90.11 to 90.12 and the
+floor banks there.
