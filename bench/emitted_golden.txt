@@ -245,6 +245,6 @@
 # one kind of heap value each carry an `llvm.assume` on their tag, a call line
 # apiece. calls 482 -> 539, lines 5,479 -> 5,651; branches and defines hold.
 defines=83
-calls=539
-branches=500
-lines=5616
+calls=574
+branches=541
+lines=5728

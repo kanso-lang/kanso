@@ -106,10 +106,11 @@ fr:
   %usedp = getelementptr i8, ptr %data, i64 -8
   %used = load i64, ptr %usedp
   %atfront = icmp eq i64 %used, %len
+  br i1 %atfront, label %roomat, label %slow
+roomat:
   %len1 = add i64 %len, 1
   %fits = icmp sle i64 %len1, %capa
-  %ok = and i1 %atfront, %fits
-  br i1 %ok, label %claim, label %slow
+  br i1 %fits, label %claim, label %slow
 claim:
   %left = load i64, ptr @k_arena_left
   %has = icmp uge i64 %left, 32
@@ -219,10 +220,11 @@ sfr:
   %susedp = getelementptr i8, ptr %sadata, i64 -8
   %sused = load i64, ptr %susedp
   %satfront = icmp eq i64 %sused, %slen
+  br i1 %satfront, label %sroomat, label %slow
+sroomat:
   %slenn = add i64 %slen, %n
   %sfits = icmp sle i64 %slenn, %scapa
-  %sok = and i1 %satfront, %sfits
-  br i1 %sok, label %swrite, label %slow
+  br i1 %sfits, label %swrite, label %slow
 ; The copy. A key, a `true` or a `null` is a handful of bytes, and a call into
 ; glibc's memcpy spends most of its instructions deciding how wide a move to
 ; make before it makes one. Sixteen bytes or fewer are copied here as a pair of
@@ -316,10 +318,11 @@ bfr:
   %usedp = getelementptr i8, ptr %data, i64 -8
   %used = load i64, ptr %usedp
   %atfront = icmp eq i64 %used, %len
+  br i1 %atfront, label %roomat, label %slow
+roomat:
   %len1 = add i64 %len, 1
   %fits = icmp sle i64 %len1, %capa
-  %ok = and i1 %atfront, %fits
-  br i1 %ok, label %bwrite, label %slow
+  br i1 %fits, label %bwrite, label %slow
 bwrite:
   %dst = getelementptr i8, ptr %data, i64 %len
   %xv = extractvalue %KValue %x, 1
@@ -356,10 +359,11 @@ fr:
   %usedp = getelementptr i8, ptr %data, i64 -8
   %used = load i64, ptr %usedp
   %atfront = icmp eq i64 %used, %len
+  br i1 %atfront, label %roomat, label %slow
+roomat:
   %len2 = add i64 %len, 2
   %fits = icmp sle i64 %len2, %capa
-  %ok = and i1 %atfront, %fits
-  br i1 %ok, label %write, label %slow
+  br i1 %fits, label %write, label %slow
 write:
   %dst = getelementptr i8, ptr %data, i64 %len
   %xv = extractvalue %KValue %x, 1
@@ -409,10 +413,11 @@ fr:
   %usedp = getelementptr i8, ptr %data, i64 -8
   %used = load i64, ptr %usedp
   %atfront = icmp eq i64 %used, %len
+  br i1 %atfront, label %roomat, label %slow
+roomat:
   %len8 = add i64 %len, 8
   %fits = icmp sle i64 %len8, %capa
-  %ok = and i1 %atfront, %fits
-  br i1 %ok, label %write, label %slow
+  br i1 %fits, label %write, label %slow
 write:
   %dst = getelementptr i8, ptr %data, i64 %len
   store i64 %word, ptr %dst, align 1
@@ -457,25 +462,28 @@ qstat:
 ; An out-of-range or inverted range is the empty slice, which appends nothing —
 ; k_b_slice_raw's rule, and the reason it is answered here rather than sent to
 ; the C: a fifth of the runs between two escapes are empty, because two escapes
-; sitting next to each other leave no bytes between them.
+; sitting next to each other leave no bytes between them. Such a run returns
+; the accumulator as it stands, from between the two bounds tests, rather than
+; carrying a zero length through the claim and the copy.
 qrange:
   %qfrom = extractvalue %KValue %fv, 1
   %qto = extractvalue %KValue %tv, 1
   %qcp = extractvalue %KValue %cs, 1
   %qc = inttoptr i64 %qcp to ptr
+  %qoff = add i64 %qfrom, -1
+  %qorder = icmp ult i64 %qoff, %qto
+  br i1 %qorder, label %qspanhi, label %qempty
+qempty:
+  ret %KValue %acc
+qspanhi:
   %qclen = load i64, ptr %qc
-  %qlo = icmp sge i64 %qfrom, 1
-  %qorder = icmp sle i64 %qfrom, %qto
-  %qhi = icmp sle i64 %qto, %qclen
-  %qr1 = and i1 %qlo, %qorder
-  %qgood = and i1 %qr1, %qhi
+  %qhi = icmp ule i64 %qto, %qclen
+  br i1 %qhi, label %qspan, label %qempty
+qspan:
   %qcdp = getelementptr i8, ptr %qc, i64 8
   %qcdata = load ptr, ptr %qcdp
-  %qoff = add i64 %qfrom, -1
-  %qoffs = select i1 %qgood, i64 %qoff, i64 0
-  %qsrc = getelementptr i8, ptr %qcdata, i64 %qoffs
-  %qspan = sub i64 %qto, %qoff
-  %qn = select i1 %qgood, i64 %qspan, i64 0
+  %qsrc = getelementptr i8, ptr %qcdata, i64 %qoff
+  %qn = sub i64 %qto, %qoff
   %qbp = extractvalue %KValue %acc, 1
   %qb = inttoptr i64 %qbp to ptr
   %qlen = load i64, ptr %qb
@@ -490,10 +498,11 @@ qfr:
   %qusedp = getelementptr i8, ptr %qadata, i64 -8
   %qused = load i64, ptr %qusedp
   %qatfront = icmp eq i64 %qused, %qlen
+  br i1 %qatfront, label %qroomat, label %qslow
+qroomat:
   %qlenn = add i64 %qlen, %qn
   %qfits = icmp sle i64 %qlenn, %qcapa
-  %qok = and i1 %qatfront, %qfits
-  br i1 %qok, label %qwrite, label %qslow
+  br i1 %qfits, label %qwrite, label %qslow
 ; The same ladder the string arm uses, for the same reason: a run between two
 ; escapes is a median of three bytes, and a call into glibc's memcpy spends
 ; most of its instructions deciding how wide a move to make.
@@ -996,6 +1005,8 @@ bounds:
   %l = inttoptr i64 %pc to ptr
   %len = load i64, ptr %l
   %i = extractvalue %KValue %k, 1
+  %lenok = icmp sge i64 %len, 0
+  call void @llvm.assume(i1 %lenok)
   %lo = icmp sgt i64 %i, 0
   %hi = icmp sle i64 %i, %len
   %inr = and i1 %lo, %hi
@@ -1043,11 +1054,12 @@ lshape:
   %lusedp = getelementptr i8, ptr %lbuf, i64 8
   %lused = load i64, ptr %lusedp
   %lfront = icmp eq i64 %lused, %llen
+  br i1 %lfront, label %lroom, label %lslow
+lroom:
   %llen2 = shl i64 %llen, 1
   %lneed = add i64 %llen2, 2
   %lfits = icmp sle i64 %lneed, %lcap
-  %lok = and i1 %lfront, %lfits
-  br i1 %lok, label %lwrite, label %lslow
+  br i1 %lfits, label %lwrite, label %lslow
 lwrite:
   %lslot = getelementptr %KValue, ptr %items, i64 %llen
   store %KValue %item, ptr %lslot
@@ -1104,11 +1116,12 @@ proom:
   %pused = load i64, ptr %pusedp
   %mlen2 = shl i64 %mlen, 1
   %pfront = icmp eq i64 %pused, %mlen2
+  br i1 %pfront, label %pfit, label %pslow
+pfit:
   %pneed = add i64 %mlen2, 2
   %pneed2 = shl i64 %pneed, 1
   %pfits = icmp sle i64 %pneed2, %pcap
-  %pok = and i1 %pfront, %pfits
-  br i1 %pok, label %pwrite, label %pslow
+  br i1 %pfits, label %pwrite, label %pslow
 pwrite:
   %kslot = getelementptr %KValue, ptr %pairs, i64 %mlen2
   store %KValue %k, ptr %kslot
@@ -1146,6 +1159,8 @@ bounds:
   %p = inttoptr i64 %pc to ptr
   %len = load i64, ptr %p
   %i = extractvalue %KValue %k, 1
+  %lenok = icmp sge i64 %len, 0
+  call void @llvm.assume(i1 %lenok)
   %lo = icmp sgt i64 %i, 0
   %hi = icmp sle i64 %i, %len
   %inr = and i1 %lo, %hi
@@ -3945,6 +3960,7 @@ const DECLARES_CONTEXT_CALLS: &[&str] = &[
     "k_truthy",
     "k_truthy_bad",
     "k_truthy_w",
+    "llvm.assume",
     "llvm.memcpy.p0.p0.i64",
 ];
 
@@ -4684,6 +4700,35 @@ fn inline_payload(f: &mut FnEmit, value: &str) -> String {
     let t = f.tmp();
     f.line(&format!("{t} = extractvalue %KValue {value}, 1"));
     t
+}
+
+/// Branch to `hit` when a 1-based index lands inside the container whose
+/// length `len_ptr` points at, and to `miss` when it does not, one signed
+/// compare at a time. The length is loaded between the two, which keeps LLVM
+/// from folding the pair back into flags and an `and`. The signed spelling
+/// is the one a guard such as `return acc if n < 1 or length bs < n` proves,
+/// so LLVM can drop both where one ran upstream.
+fn index_in_range(f: &mut FnEmit, idx: &str, len_ptr: &str, hit: &str, miss: &str) {
+    let ge1 = f.tmp();
+    f.line(&format!("{ge1} = icmp sge i64 {idx}, 1"));
+    let above = f.label();
+    f.line(&format!("br i1 {ge1}, label %{above}, label %{miss}"));
+    f.start_block(&above);
+    let len = f.tmp();
+    f.line(&format!("{len} = load i64, ptr {len_ptr}"));
+    assume_length(f, &len);
+    let le_len = f.tmp();
+    f.line(&format!("{le_len} = icmp sle i64 {idx}, {len}"));
+    f.line(&format!("br i1 {le_len}, label %{hit}, label %{miss}"));
+}
+
+/// A length read out of a container is never negative, and saying so lets
+/// LLVM merge a `1 <= i <= len` test into one unsigned compare where the
+/// signed pair also stays visible to whatever proved it true upstream.
+fn assume_length(f: &mut FnEmit, len: &str) {
+    let ok = f.tmp();
+    f.line(&format!("{ok} = icmp sge i64 {len}, 0"));
+    f.line(&format!("call void @llvm.assume(i1 {ok})"));
 }
 
 /// Whether a value is not a failure, as one compare of its tag against the
@@ -8500,19 +8545,13 @@ impl<'a> Backend<'a> {
             f.line(&format!("{bptr} = inttoptr i64 {bp} to ptr"));
             let len_ptr = f.tmp();
             f.line(&format!("{len_ptr} = getelementptr %KBytes, ptr {bptr}, i64 0, i32 0"));
-            let len = f.tmp();
-            f.line(&format!("{len} = load i64, ptr {len_ptr}"));
             let idx = inline_payload(f, key);
-            let ge1 = f.tmp();
-            f.line(&format!("{ge1} = icmp sge i64 {idx}, 1"));
-            let le_len = f.tmp();
-            f.line(&format!("{le_len} = icmp sle i64 {idx}, {len}"));
-            let in_range = f.tmp();
-            f.line(&format!("{in_range} = and i1 {ge1}, {le_len}"));
             let load = f.label();
             let miss = f.label();
             let merge = f.label();
-            f.line(&format!("br i1 {in_range}, label %{load}, label %{miss}"));
+            // Two branches, the way the room tests ask: joined with `and`, the
+            // pair became flags and an `or` wherever nothing upstream settled it.
+            index_in_range(f, &idx, &len_ptr, &load, &miss);
             f.start_block(&load);
             let data_ptr = f.tmp();
             f.line(&format!("{data_ptr} = getelementptr %KBytes, ptr {bptr}, i64 0, i32 1"));
@@ -8567,19 +8606,13 @@ impl<'a> Backend<'a> {
             let lp = inline_payload(f, container);
             let lptr = f.tmp();
             f.line(&format!("{lptr} = inttoptr i64 {lp} to ptr"));
-            let len = f.tmp();
-            f.line(&format!("{len} = load i64, ptr {lptr}"));
             let idx = inline_payload(f, key);
-            let ge1 = f.tmp();
-            f.line(&format!("{ge1} = icmp sge i64 {idx}, 1"));
-            let le_len = f.tmp();
-            f.line(&format!("{le_len} = icmp sle i64 {idx}, {len}"));
-            let in_range = f.tmp();
-            f.line(&format!("{in_range} = and i1 {ge1}, {le_len}"));
             let load = f.label();
             let miss = f.label();
             let merge = f.label();
-            f.line(&format!("br i1 {in_range}, label %{load}, label %{miss}"));
+            // Two branches, the way the room tests ask: joined with `and`, the
+            // pair became flags and an `or` wherever nothing upstream settled it.
+            index_in_range(f, &idx, &lptr, &load, &miss);
             f.start_block(&load);
             let items_ptr = f.tmp();
             f.line(&format!("{items_ptr} = getelementptr i8, ptr {lptr}, i64 8"));
@@ -8626,17 +8659,11 @@ impl<'a> Backend<'a> {
         f.line(&format!("{bptr} = inttoptr i64 {bp} to ptr"));
         let len_ptr = f.tmp();
         f.line(&format!("{len_ptr} = getelementptr %KBytes, ptr {bptr}, i64 0, i32 0"));
-        let len = f.tmp();
-        f.line(&format!("{len} = load i64, ptr {len_ptr}"));
         let idx = inline_payload(f, key);
-        let ge1 = f.tmp();
-        f.line(&format!("{ge1} = icmp sge i64 {idx}, 1"));
-        let le_len = f.tmp();
-        f.line(&format!("{le_len} = icmp sle i64 {idx}, {len}"));
-        let in_range = f.tmp();
-        f.line(&format!("{in_range} = and i1 {ge1}, {le_len}"));
         let load = f.label();
-        f.line(&format!("br i1 {in_range}, label %{load}, label %{slow}"));
+        // Two branches, the way the room tests ask: joined with `and`, the
+        // pair became flags and an `or` wherever nothing upstream settled it.
+        index_in_range(f, &idx, &len_ptr, &load, &slow);
         f.start_block(&load);
         let data_ptr = f.tmp();
         f.line(&format!("{data_ptr} = getelementptr %KBytes, ptr {bptr}, i64 0, i32 1"));

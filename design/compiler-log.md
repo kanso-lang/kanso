@@ -16201,3 +16201,252 @@ CI's rows were taken from its first run. `work_runbench` 1,176,309,124 ->
 `work_encodebench` 2,435,949,028 -> 2,436,462,713, the rise the container
 showed. `emit_instructions` 29,723,818 -> 29,723,017. Welfare rises from
 89.96 to 89.99 and the floor banks there.
+
+## 2026-09-26 — an index read assumes its length is not negative
+
+A read at `i` from a list or a byte string is tested `1 <= i <= len`: two
+signed compares against a length loaded from the container, joined by an
+`and`. In the decoder that is seven instructions at every byte it reads,
+`test`, `setg`, `cmp`, `setge`, `test` and a branch. One unsigned compare,
+`i - 1 <u len`, says the same thing whenever the length is not negative, and
+LLVM knows nothing about a loaded length.
+
+Rewriting the tests into the unsigned form was built first and declined. All
+five sites together took runbench -0.77% and jsonbench -2.46% against main
+at 7ff6508a, and encodebench +7.33% (+178,657,985) and livebench +1.52%.
+The rise in encodebench was in `escape_onto`, +144 million. That function's
+`escape_at` guards with `return acc if n < 1 or length bs < n` before it
+reads `bs[n]`. Why the unsigned form cost there is not isolated; the
+signed test of the read has the same shape as the guard, and the unsigned one
+does not. The two halves did not add up either. The three emitter sites alone
+gave runbench -0.28% with the same encodebench rise, and the two prelude
+helpers alone gave runbench +0.73%.
+
+What landed keeps the signed tests and adds `llvm.assume(len >= 0)` after
+each length load, three sites in the emitter (`assume_length`) and the two
+index helpers in the prelude. LLVM can then fold the pair where it pays and
+leave it where a guard already settled it. On the container, against
+7ff6508a: runbench 1,176,309,961 -> 1,172,605,303 (-0.31%), jsonbench
+805,759,321 -> 800,145,421 (-0.70%), oneshot -0.28%, widebench -0.06%,
+encodebench -89,205 and livebench -37,888. basket rises 13,516 (+0.04%) to
+30,569,473 and pendbench 200 to 179,492,839.
+
+A third shape, the assume at the emitter sites with the unsigned test in the
+prelude, took runbench +0.42% and was dropped.
+
+The spec is `an_index_assumes_its_length_is_not_negative` in
+tests/perf_ratchet.rs. It reads a list at a proven index and at an index the
+sets do not prove, and asks that each length load is assumed non-negative.
+It fails on main's codegen, and the ratchet row `length_assumed` takes the
+promise back.
+
+Each assume is two emitted lines and counts as a call, so the emitted vein
+rises everywhere it reads: runbench 3,797 -> 3,908 calls and 27,840 ->
+28,062 lines, the decoder 539 -> 574 calls and 5,648 -> 5,718 lines,
+encodebench 649 -> 674 calls and 5,993 -> 6,043 lines, oneshot 688 -> 729 and
+6,696 -> 6,778, basket 715 -> 732 and 5,354 -> 5,388, widebench 696 -> 722
+and 6,287 -> 6,339, deepbench 167 -> 170 and 1,722 -> 1,728, pendbench 398 ->
+403 and 2,961 -> 2,971, scanbench 1,863 -> 1,912 and 14,665 -> 14,763,
+indexbench 53 -> 54 and 570 -> 572, digestbench 529 -> 551 and 4,513 ->
+4,557, livebench 703 -> 744 and 6,827 -> 6,909. Branches hold in every
+program. Machine code falls in all twelve that moved, runbench 398,968 ->
+398,856 bytes and digestbench 234,712 -> 234,520. The compile golden's
+fixtures grow with the assumes: `recursion` 278 -> 279 lines, `build_block`
+241 -> 242, and `module` 1,062 -> 1,068 lines and 104 -> 107 calls.
+
+CI's rows were taken from its first run. `work_runbench` 1,176,309,124 ->
+1,172,604,466 and `work_jsonbench` 805,759,682 -> 800,145,782. `work_basket`
+rises 30,556,304 -> 30,569,820 and `work_pendbench` 179,493,114 ->
+179,493,314. The builds pay for the extra lines: `codegen_instructions_release`
+401,504,467 -> 402,466,293 and `emit_instructions` 29,723,818 -> 29,802,018,
+while `codegen_instructions_dev` falls 123,359,084 -> 123,358,369. Welfare
+rose from 89.96 to 89.97 on that run; the rows that land are the carrier's,
+below.
+
+## 2026-09-26 — a span is asked in two unsigned compares
+
+A slice from `from` to `to` of a container of `len` elements is inside it
+when `1 <= from <= to <= len`. The runtime asked that as three signed
+compares at seven sites and the emitted append of a slice asked it the same
+way, and clang compiled each into `setcc` flags joined by `or` and `and`.
+With the length never negative the same test is `from - 1 <u to` and
+`to <=u len`. A `from` below one wraps past every `to`, and a negative `to`
+wraps past every length. The runtime spells it once, `k_span_in`, and does
+the subtraction unsigned so that a `from` of `LLONG_MIN` wraps rather than
+overflowing.
+
+On the container, against main at 7ff6508a: runbench 1,176,309,961 ->
+1,173,995,603 (-0.20%), jsonbench 805,759,321 -> 801,168,421 (-0.57%) and
+oneshot -0.18%. livebench rises 3,152,889 (+0.19%) to 1,701,178,316,
+encodebench 157,064 to 2,436,105,759 and widebench 16,000 to 27,695,911.
+On runbench the fall is in `str_char` (-1,354,914), `k_b_to_float_slice`
+(-733,887), `string_scan` (-526,581) and `k_b_to_int_slice` (-414,612);
+`escape_onto` rises 716,670. `k_b_utf8_slice_raw`, the most-called of the
+seven sites, did not move: its entry lost two instructions and the
+branch-free choice of pointer and length after it stayed. Why livebench rose
+is not isolated.
+
+Emitted code falls two lines in the four programs that append a slice,
+runbench 27,840 -> 27,838. Machine code rises 32 bytes in every program but
+jsonbench, which rises 16 to 239,240; runbench 398,968 -> 399,000.
+
+The spec is tests/a_span_is_asked_in_two_unsigned_compares.rs. It cuts
+`k_span_in` out of src/runtime.c, compiles it, and checks it against the
+signed definition over every pair drawn from sixteen edge values, including
+`LLONG_MIN` and `LLONG_MAX`, at eight lengths. It also reads the emitted
+compares by their lines. It fails on main, which has neither. The ratchet
+row `span_unsigned` drops the minus one, and the sweep then names
+`from 0 to 1 len 1`.
+
+## 2026-09-26 — a room test asks its two questions with two branches
+
+Every in-place push, put and append fast path in the prelude asks two things
+of the buffer: whether its used mark is at the frontier, and whether the new
+length fits its capacity. Eight of the nine joined the answers with `and i1`
+and branched once. At `-O3` LLVM computes a joined condition as flags,
+`cmp`, `setne`, `cmp`, `setg`, `or`, `jne`, and splits such a branch into two
+only under fast instruction selection. Each of the eight now branches on the
+frontier first and computes the room it needs in the block that follows, so
+the pair is two compares and two jumps. The ninth, the byte append, already
+branched twice.
+
+On the container, against main at 7ff6508a: runbench 1,176,309,961 ->
+1,173,675,133 (-0.22%), livebench -0.55%, escapebench 56,203,355 ->
+55,021,356 (-2.10%), basket -0.38%, oneshot -0.21%, digestbench -0.15% and
+jsonbench -0.09%. encodebench rises 3,243,186 (+0.13%) to 2,439,191,881 and
+pendbench 2,614 to 179,495,253. The list push and the map put alone, before
+the six append paths, gave runbench -0.14% and left livebench where it was.
+
+The spec is tests/a_room_test_branches_on_each_question.rs, which reads the
+emitter's text: no room test joins its questions with `and`, and nine branch
+on the frontier. It fails on main, which has one. The ratchet row
+`room_split` joins the list push's two tests again.
+
+## 2026-09-26 — the length, span and room changes, carried together
+
+kanso#1670 carries the three entries above over main at b6994fa4, which
+already held kanso#1669; kanso#1671 and the room branch are merged into it.
+The three had been measured one at a time against 7ff6508a. Together, on the
+container against b6994fa4: runbench 1,168,440,514 -> 1,159,169,338
+(-0.79%), jsonbench 794,449,471 -> 782,719,021 (-1.48%), oneshot -0.71%,
+livebench -0.39%, basket -0.34%, escapebench -2.10%, digestbench -0.15% and
+widebench -0.06%. encodebench rises 2,187,306 (+0.09%) to 2,438,649,686 and
+pendbench 2,814 to 179,495,453.
+
+Against main the emitted code gains the assumes and the split branches:
+runbench 3,797 -> 3,908 calls, 2,692 -> 2,699 branches and 27,808 -> 28,035
+lines; the decoder 539 -> 574 calls, 500 -> 505 branches and 5,616 -> 5,689
+lines; livebench 703 -> 744 calls, 584 -> 591 branches, 6,795 -> 6,882 lines;
+encodebench 649 -> 674 calls, 463 -> 468 branches, 5,961 -> 6,016 lines;
+oneshot 688 -> 729, 564 -> 571, 6,664 -> 6,751; basket 715 -> 732, 524 -> 526,
+5,354 -> 5,390; widebench 696 -> 722, 486 -> 491, 6,255 -> 6,312; deepbench
+167 -> 170 calls and 1,722 -> 1,728 lines; escapebench 29 -> 30 branches and
+533 -> 534 lines; pendbench 398 -> 403, 284 -> 285, 2,961 -> 2,972;
+scanbench 1,863 -> 1,912, 1,478 -> 1,479, 14,665 -> 14,764; indexbench 53 ->
+54 calls and 570 -> 572 lines; digestbench 529 -> 551, 391 -> 392, 4,513 ->
+4,558. Machine code falls in nine programs, runbench 399,048 -> 398,760
+bytes, and rises in four: jsonbench 238,888 -> 238,936, escapebench 213,000
+-> 213,048, indexbench 212,872 -> 212,904 and readbench 213,304 -> 213,336.
+The compile golden's `module` fixture reads 1,062 -> 1,069 lines, 104 -> 107
+calls and 80 -> 81 branches, `recursion` 278 -> 279 lines and `build_block`
+241 -> 242.
+
+## 2026-09-26 — an index asks its bounds with two branches
+
+The length assumption above left the decoder's own reads alone. In
+`parse_value` and `array_open` the read `cs[p]` still compiled to `test`,
+`setg`, `cmp`, `setge`, `test` and a branch, 1,100,286 and 691,020 times a
+run, because nothing about `p` settled either bound and the assumption gave
+LLVM no fold to make there. The three emitter sites now branch on `1 <= i`
+first and on `i <= len` second, through `index_in_range`. Emitted with both
+compares ahead of the first branch, the pair came out of LLVM byte for byte
+as it went in: SimplifyCFG folds a second block holding only a compare back
+into the first. The length load now sits between the two branches, which
+leaves nothing cheap to hoist, and the pair stays two compares and two jumps.
+
+Against the carrier above, on the container: runbench 1,159,169,338 ->
+1,155,830,444 (-0.29%), jsonbench 782,719,021 -> 773,942,671 (-1.12%),
+widebench -1.10%, digestbench -0.47% and oneshot -0.44%. livebench rises
+216,600 (+0.01%) to 1,691,479,598 and basket 3,456 to 30,455,989.
+
+The same split in the prelude's two index helpers was measured on top and
+dropped: jsonbench fell further, to -1.47%, but runbench kept only -0.11%.
+
+Emitted branches rise where the reads are: runbench 2,699 -> 2,809 and
+28,035 -> 28,145 lines, the decoder 505 -> 539 branches and 5,689 -> 5,723
+lines, livebench 591 -> 631 and 6,882 -> 6,922, oneshot 571 -> 611 and 6,751
+-> 6,791, scanbench 1,479 -> 1,527 and 14,764 -> 14,812, encodebench 468 ->
+492 and 6,016 -> 6,040, widebench 491 -> 516 and 6,312 -> 6,337, digestbench
+392 -> 413 and 4,558 -> 4,579, basket 526 -> 542 and 5,390 -> 5,406,
+pendbench 285 -> 289 and 2,972 -> 2,976, deepbench 142 -> 144 and 1,728 ->
+1,730, indexbench 25 -> 26 and 572 -> 573. Machine code grows in runbench
+398,760 -> 399,640 bytes, jsonbench 238,936 -> 239,560, oneshot 249,432 ->
+250,056 and livebench 250,344 -> 250,968, and shrinks in six others. The
+compile golden's `module` fixture reads 1,069 -> 1,071 lines and 81 -> 83
+branches.
+
+The spec is `an_index_loads_its_length_after_its_lower_bound` in
+tests/perf_ratchet.rs: in a proven read, the lower bound's compare is
+followed at once by a branch, and the length is loaded after it. It fails on
+the carrier's codegen, and the ratchet row `index_split` moves the load back
+ahead of the branch.
+
+CI's rows for the whole carrier, the four changes above over b6994fa4, were
+taken from its first run at b1b03001. `work_runbench` 1,168,439,677 ->
+1,155,829,607 and `work_jsonbench` 794,449,832 -> 773,943,032, with
+`work_widebench` 27,648,270 -> 27,327,107, `work_escapebench` 56,203,688 ->
+55,021,689, `work_livebench` 1,697,950,257 -> 1,691,479,959 and
+`work_digestbench` 5,302,277 -> 5,269,690. `work_encodebench` rises
+2,436,462,713 -> 2,438,572,025 and `work_pendbench` 179,493,114 ->
+179,495,828. The release build pays for the longer IR,
+`codegen_instructions_release` 402,466,293 -> 402,524,008, and the emitter
+for writing it, `emit_instructions` 29,723,017 -> 29,815,094;
+`codegen_instructions_dev` falls 123,358,369 -> 123,328,940. Welfare rises
+from 89.99 to 90.05 and the floor banks there.
+
+## 2026-09-26 — an empty run hands back the builder between its bounds
+
+The emitted append of a slice, `append acc (slice cs from to)` on a unique
+byte builder, is the decoder's copy of every run between two escapes. It
+tested the span as one joined condition and carried an empty or
+out-of-range span through the claim and the copy as a zero length chosen by
+`select`. A fifth of those runs are empty. The span's two bounds are now two
+branches, with the container's length loaded between them as the index's
+are, and both lead to a return of the accumulator as it stands.
+
+Against the carrier with the index split, on the container: runbench
+1,155,830,444 -> 1,144,623,289 (-0.97%), jsonbench 773,942,671 ->
+758,145,871 (-2.04%), oneshot -0.86% and livebench -0.20%. No other
+benchmark moves. On runbench the fall is in `string_scan` (-6,016,131),
+`str_char` (-4,409,757) and `escape_onto` (-780,840), all three of which
+reach this path; that `string_scan` falls further than the one arm of it
+that appends a slice would explain is not isolated. The five benchmarks'
+outputs are byte-identical to the carrier's.
+
+Emitted code gains two branches and five lines in the four programs that
+append a slice, runbench 2,809 -> 2,811 and 28,145 -> 28,150; machine code
+shrinks by 16 bytes in runbench, oneshot and livebench and by 48 in
+jsonbench. The span spec pinned the `and` this removes and reads the three
+compares that remain.
+
+The spec is tests/an_empty_run_appends_nothing.rs, which reads the
+emitter's text: the length is loaded between the span's two branches, the
+empty exit returns the accumulator, and no `select` on the span remains. It
+fails on the carrier's codegen, and the ratchet row `empty_run` moves the
+load back ahead of the first branch.
+
+The trend gate reads the carrier's code veins as totals against main, and
+they all rise with the assumes and the split branches. The decoder's
+`emitted_branches` lands on 541, `emitted_calls` on 574 and `emitted_lines`
+on 5,728; the other thirteen programs' `emitted_other_branches` on 8,059,
+`emitted_other_calls` on 10,699 and `emitted_other_lines` on 85,471. Machine
+code in all fourteen, `text`, lands on 3,502,384 bytes. The compile golden's
+`lines` total lands on 1,433, and its module fixture's `module_branches` on
+83, `module_calls` on 107 and `module_lines` on 1,071.
+
+CI's rows for the empty run were taken from its first run at cb500c36:
+`work_runbench` 1,155,829,607 -> 1,144,622,452, `work_jsonbench`
+773,943,032 -> 758,146,232, `work_oneshot` 13,243,616 -> 13,129,205 and
+`work_livebench` 1,691,479,959 -> 1,688,141,594. `emit_instructions` rises
+29,815,094 -> 29,819,237 with the five extra lines. Welfare rises from 90.05
+to 90.09 and the floor banks there.
