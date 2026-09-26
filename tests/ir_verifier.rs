@@ -209,6 +209,7 @@ const CARRIED: &[&str] = &[
     "a_closure_captures_a_record",
     "a_field_read_of_a_carried_record",
     "a_carried_record_answered_by_name",
+    "a_carried_record_refuses_a_failure_in_its_value",
 ];
 
 #[test]
