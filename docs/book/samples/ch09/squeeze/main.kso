@@ -1,8 +1,8 @@
 import "./squeeze"
 
 print "plurality: {label (plurality_winner electorate)}"
->> print "irv:       {label (irv_winner electorate)}"
->> print "approval:  {label (approval_winner electorate)}"
->> print "score:     {label (score_winner electorate)}"
->> print "star:      {label (star_winner electorate)}"
->> print "minimax:   {label (minimax_winner electorate)}"
+  .> (_ -> print "irv:       {label (irv_winner electorate)}")
+  .> (_ -> print "approval:  {label (approval_winner electorate)}")
+  .> (_ -> print "score:     {label (score_winner electorate)}")
+  .> (_ -> print "star:      {label (star_winner electorate)}")
+  .> (_ -> print "minimax:   {label (minimax_winner electorate)}")

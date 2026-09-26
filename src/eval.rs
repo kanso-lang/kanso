@@ -382,9 +382,6 @@ pub struct ClosureData {
 #[derive(Clone, Debug)]
 pub enum Desc {
     Print(String, Span),
-    /// GAVEL 15: the wall defers its right side, so what follows is held as a
-    /// cell and forced where the executor reaches it.
-    Seq(Rc<Desc>, Value, Span),
     Join(Rc<Desc>, Rc<Desc>),
     Args,
     Stdin,
@@ -518,7 +515,7 @@ fn entropy_seed() -> u64 {
 
 /// One step of a fiber: it either finished with a value, or blocked on a
 /// `sleep` for `ms` with the rest of its work as the continuation. Blocking
-/// propagates up through `Seq` and `Bind`, so `sleep` may sit anywhere in a
+/// propagates up through `Bind`, so `sleep` may sit anywhere in a
 /// description and suspension needs no coroutine — the continuation is the
 /// remaining Desc tree, made explicit.
 enum Step {
@@ -713,8 +710,8 @@ fn foreign_call(handle: u32, args: Vec<Value>, span: Span, decided: bool) -> Eva
 }
 
 pub trait Executor {
-    /// How this engine reaches a cell. The wall defers its right side, and the
-    /// engines keep their cells in different places: the oracle in a reference
+    /// How this engine reaches a cell. A lazy binding holds its value as a
+    /// cell, and the engines keep their cells in different places: the oracle in a reference
     /// counted state the interpreter forces, the browser in a slot table. An
     /// engine whose cells the interpreter already forces needs nothing here.
     fn demand(&mut self, value: Value) -> Value {
@@ -1350,9 +1347,6 @@ pub struct Interp<'a> {
     demand: crate::demand::DemandInfo<'a>,
     pub thunk_stats: ThunkStats,
     depth: Cell<usize>,
-    /// Computed once, because a stack exhaustion is reported where the cause
-    /// is no longer visible: the interpreter sees only that it is deep.
-    stack_hint: String,
     /// One cell per self-referential constant. A mention that arrives while
     /// the constant is still being computed gets the unforced cell, which is
     /// how a value that names itself gets a value at all.
@@ -1477,7 +1471,6 @@ impl<'a> Interp<'a> {
             demand,
             thunk_stats: ThunkStats::default(),
             depth: Cell::new(0),
-            stack_hint: crate::stack_hint(program),
             knots: RefCell::new(Map::default()),
             cycles: std::cell::OnceCell::new(),
             in_place: std::cell::OnceCell::new(),
@@ -2092,33 +2085,6 @@ impl<'a> Interp<'a> {
                 }
                 self.call(callee, values, *span, frame)
             }
-            Expr::Seq(lhs, rhs, span) => {
-                let left = self.force_thunk(self.eval(lhs, env, frame)?)?;
-                // The wall is ordered, so the first failure is the answer and
-                // what follows it never speaks. A parallel group accumulates
-                // because nothing there is first. Dependence decides, which is
-                // the rule chapter four states.
-                if is_failure(&left) {
-                    return Ok(left);
-                }
-                let Value::Desc(a) = left else {
-                    return Err(RuntimeError {
-                        message: "`>>` sequences two effect descriptions".to_string(),
-                        span: *span,
-                    });
-                };
-                // GAVEL 15: what follows the wall is held rather than built,
-                // and the executor builds it once the left side has run. A
-                // name mentioned there is stored rather than demanded, which
-                // is what lets a description name itself.
-                self.thunk_stats.allocs.set(self.thunk_stats.allocs.get() + 1);
-                let b = Value::Thunk(Rc::new(RefCell::new(ThunkState::Pending {
-                    expr: (**rhs).clone(),
-                    env: env.clone(),
-                    frame: frame.clone(),
-                })));
-                Ok(Value::Desc(Rc::new(Desc::Seq(a, b, *span))))
-            }
             Expr::Lambda { params, body, .. } => Ok(Value::Closure(Rc::new(ClosureData {
                 params: params.iter().map(|(n, _)| Name::new(n)).collect(),
                 body: (**body).clone(),
@@ -2732,10 +2698,8 @@ impl<'a> Interp<'a> {
         if self.depth.get() > 10_000 {
             self.depth.set(self.depth.get() - 1);
             return Err(RuntimeError {
-                message: format!(
-                    "the program ran out of stack: recursion went deeper than the stack holds{}",
-                    self.stack_hint
-                ),
+                message: "the program ran out of stack: recursion went deeper than the stack holds"
+                    .to_string(),
                 span,
             });
         }
@@ -4279,10 +4243,32 @@ impl<'a> Interp<'a> {
         Ok(value)
     }
 
-    /// Force from outside the evaluator — what `--plan` uses to build the
-    /// side of a wall the program has not reached yet.
+    /// Force a cell from outside the evaluator.
     pub fn demand(&self, value: &Value) -> EvalResult {
         self.force_thunk(value.clone())
+    }
+
+    /// The description a bind's callback builds when it ignores what it is
+    /// handed, for the plan. Only `_ -> step` qualifies: any other callback
+    /// reads its argument, and the plan has no value to give it.
+    pub fn ignoring_step(&self, callee: &Value) -> Option<Rc<Desc>> {
+        let Value::Closure(c) = callee else { return None };
+        // `a .> (_ -> step)` arrives as a closure over `__piped` whose body
+        // applies the written lambda to it, so the lambda is one level in.
+        let ignores = |params: &[(String, Span)]| params.len() == 1 && params[0].0 == "_";
+        let ignored = match &c.body {
+            Expr::App { head, args, .. } if args.len() == 1 => {
+                matches!(head.as_ref(), Expr::Lambda { params, .. } if ignores(params))
+            }
+            _ => false,
+        };
+        if !ignored {
+            return None;
+        }
+        match self.call_decided(callee, Value::Done, Span::at(0, 0)).and_then(|v| self.demand(&v)) {
+            Ok(Value::Desc(d)) => Some(d),
+            _ => None,
+        }
     }
 
     /// Most values are not cells, and asking was a call of its own: 10.6
@@ -5408,7 +5394,7 @@ impl<'a> Interp<'a> {
                 executor.print(text);
                 Ok(Value::Done)
             }
-            Desc::Seq(..) | Desc::Bind(..) | Desc::Rescue(..) | Desc::Annotate(..) => {
+            Desc::Bind(..) | Desc::Rescue(..) | Desc::Annotate(..) => {
                 self.execute_chain(Rc::new(desc.clone()), executor)
             }
             Desc::Join(_, _) => self.schedule(desc, executor),
@@ -5537,32 +5523,11 @@ impl<'a> Interp<'a> {
     /// program that sequences a million effects holds one frame. Only the
     /// continuation is flattened: a link's own left side is a step to run
     /// before the chain advances, and nests as deep as it is written.
-    /// What follows the wall, built where the wall reaches it. This is also
-    /// where its failure and its type are checked: a failure to the right of a
-    /// wall that never ran is a failure nobody asked for.
-    fn seq_right(&self, b: &Value, span: Span, executor: &mut dyn Executor) -> EvalResult {
-        let v = self.force_thunk(executor.demand(b.clone()))?;
-        if is_failure(&v) || matches!(v, Value::Desc(_)) {
-            return Ok(v);
-        }
-        Err(RuntimeError { message: "`>>` sequences two effect descriptions".to_string(), span })
-    }
-
     fn execute_chain(&self, start: Rc<Desc>, executor: &mut dyn Executor) -> EvalResult {
         let origin = Span::at(0, 0);
         let mut current = start;
         loop {
             let next = match &*current {
-                Desc::Seq(a, b, span) => {
-                    let left = self.execute(a, executor)?;
-                    if is_failure(&left) && matches!(left, Value::ErrV(_)) {
-                        return Ok(left);
-                    }
-                    match self.seq_right(b, *span, executor)? {
-                        Value::Desc(d) => d,
-                        failure => return Ok(failure),
-                    }
-                }
                 Desc::Bind(inner, callee) => {
                     let yielded = self.execute(inner, executor)?;
                     match self.worded_step(
@@ -5647,7 +5612,7 @@ impl<'a> Interp<'a> {
 
     /// Advance one fiber until it finishes (`Done`) or hits a `sleep`
     /// (`Blocked`, carrying the rest of its work). Blocking threads back up
-    /// through `Seq` and `Bind`, so the continuation is always the remaining
+    /// through `Bind`, so the continuation is always the remaining
     /// description — no saved stack, no coroutine.
     fn step(&self, desc: &Rc<Desc>, executor: &mut dyn Executor) -> Result<Step, RuntimeError> {
         let origin = Span::at(0, 0);
@@ -5671,16 +5636,6 @@ impl<'a> Interp<'a> {
                 Ok(Some(done)) => Ok(Step::Done(ran_value(done))),
                 Ok(None) => Ok(Step::Blocked(1, desc.clone())),
                 Err(reason) => Ok(Step::Done(err_value(Value::Str(reason), Raised::default()))),
-            },
-            Desc::Seq(a, b, span) => match self.step(a, executor)? {
-                Step::Blocked(ms, cont) => {
-                    Ok(Step::Blocked(ms, Rc::new(Desc::Seq(cont, b.clone(), *span))))
-                }
-                Step::Done(left) if matches!(left, Value::ErrV(_)) => Ok(Step::Done(left)),
-                Step::Done(_) => match self.seq_right(b, *span, executor)? {
-                    Value::Desc(d) => self.step(&d, executor),
-                    failure => Ok(Step::Done(failure)),
-                },
             },
             Desc::Bind(inner, callee) => match self.step(inner, executor)? {
                 Step::Blocked(ms, cont) => {
@@ -5739,25 +5694,19 @@ fn flatten_join(desc: &Desc, out: &mut Vec<Rc<Desc>>) {
     }
 }
 
-/// A plan describes without running, so it builds what the wall holds rather
-/// than executing it — `force` is how it reaches a cell. A plan that names
-/// itself has no end, and the caller stops it the way any demand stops.
-pub fn render_plan(desc: &Desc, out: &mut String, force: &dyn Fn(&Value) -> Option<Rc<Desc>>) {
+/// A plan describes without running. A bind's callback cannot be called
+/// without the value it is handed, except when it ignores that value:
+/// `_ -> step` builds the same description whatever arrives, and `step` is
+/// how the plan reaches it. Any other callback is shown as a continuation.
+pub fn render_plan(desc: &Desc, out: &mut String, step: &dyn Fn(&Value) -> Option<Rc<Desc>>) {
     match desc {
         Desc::Print(text, span) => {
             out.push_str(&format!("  print {text:?}    # from line {}\n", span.line));
         }
-        Desc::Seq(a, b, _) => {
-            render_plan(a, out, force);
-            match force(b) {
-                Some(d) => render_plan(&d, out, force),
-                None => out.push_str("  <not an io>\n"),
-            }
-        }
         Desc::Join(a, b) => {
             out.push_str("  join {\n");
-            render_plan(a, out, force);
-            render_plan(b, out, force);
+            render_plan(a, out, step);
+            render_plan(b, out, step);
             out.push_str("  } # unordered; both run\n");
         }
         Desc::Args => out.push_str("  args\n"),
@@ -5785,16 +5734,19 @@ pub fn render_plan(desc: &Desc, out: &mut String, force: &dyn Fn(&Value) -> Opti
         Desc::Send(conn, _) => out.push_str(&format!("  send {conn}\n")),
         Desc::SendBytes(conn, _) => out.push_str(&format!("  send {conn}\n")),
         Desc::CloseSocket(handle) => out.push_str(&format!("  close_socket {handle}\n")),
-        Desc::Bind(inner, _) => {
-            render_plan(inner, out, force);
-            out.push_str("  . <continuation>\n");
+        Desc::Bind(inner, callee) => {
+            render_plan(inner, out, step);
+            match step(callee) {
+                Some(next) => render_plan(&next, out, step),
+                None => out.push_str("  . <continuation>\n"),
+            }
         }
         Desc::Rescue(inner, ..) => {
-            render_plan(inner, out, force);
+            render_plan(inner, out, step);
             out.push_str("  rescue <continuation>\n");
         }
         Desc::Annotate(inner, ..) => {
-            render_plan(inner, out, force);
+            render_plan(inner, out, step);
             out.push_str("  annotate <continuation>\n");
         }
         Desc::Sleep(ms) => out.push_str(&format!("  sleep {ms}\n")),
@@ -5838,10 +5790,10 @@ mod tests {
 
     #[test]
     fn scripted_executor_records_the_transcript() {
-        let value = run_main("main = print \"a\" >> print \"b\"\n");
+        let value = run_main("main = print \"a\" .> (_ -> print \"b\")\n");
 
         let Value::Desc(desc) = value else { panic!("main yields a description") };
-        let lexed = crate::lexer::lex("main = print \"a\" >> print \"b\"\n").expect("lexes");
+        let lexed = crate::lexer::lex("main = print \"a\" .> (_ -> print \"b\")\n").expect("lexes");
         let program = crate::parser::parse(&lexed).expect("parses");
         let interp = Interp::new(&program);
         let mut executor = ScriptedExecutor::default();

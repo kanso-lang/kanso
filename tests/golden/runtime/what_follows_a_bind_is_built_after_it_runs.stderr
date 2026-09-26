@@ -1,0 +1,2 @@
+error[endpoint]: unhandled err reached the executor: "missing index 5"
+  born in what_follows_a_bind_is_built_after_it_runs/play at what_follows_a_bind_is_built_after_it_runs.kso:4

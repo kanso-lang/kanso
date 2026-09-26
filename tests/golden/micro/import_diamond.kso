@@ -8,5 +8,5 @@ import "std/text"
 decoded = json/decode "[1, 2]"
 
 print "{text/slice "abcdef" 2 4}"
->> print "{decoded}"
->> print "{json/encode decoded}"
+  .> (_ -> print "{decoded}")
+  .> (_ -> print "{json/encode decoded}")

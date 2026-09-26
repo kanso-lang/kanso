@@ -7,17 +7,16 @@ import "std/text"
 # not. Until 2026-09-06 nothing in the corpus had one: the multi-byte cases
 # above put the first byte only where the whole separator was, so a scan that
 # took a matching first byte for a match passed all ten.
-pub play =
-  print "{text/split "a,b,c" ","}"
-  >> print "{text/split "a,,b" ","}"
-  >> print "{text/split "abc" ","}"
-  >> print "{text/split "a::b" "::"}"
-  >> print "{text/split "" ","}"
-  >> print "{text/split ",a," ","}"
-  >> print "{text/join (text/split "a/b/c" "/") "/"}"
-  >> print "{text/split (text/join ["a" "b"] "-") "-"}"
-  >> print "{text/split "héllo→wörld" "→"}"
-  >> print "{text/split "a→→b→→c" "→→"}"
-  >> print "{text/split "a:b::c" "::"}"
-  >> print "{text/split "→x→→y" "→→"}"
-  >> print "{text/split "a→→" "→→"}"
+pub play = print "{text/split "a,b,c" ","}"
+  .> (_ -> print "{text/split "a,,b" ","}")
+  .> (_ -> print "{text/split "abc" ","}")
+  .> (_ -> print "{text/split "a::b" "::"}")
+  .> (_ -> print "{text/split "" ","}")
+  .> (_ -> print "{text/split ",a," ","}")
+  .> (_ -> print "{text/join (text/split "a/b/c" "/") "/"}")
+  .> (_ -> print "{text/split (text/join ["a" "b"] "-") "-"}")
+  .> (_ -> print "{text/split "héllo→wörld" "→"}")
+  .> (_ -> print "{text/split "a→→b→→c" "→→"}")
+  .> (_ -> print "{text/split "a:b::c" "::"}")
+  .> (_ -> print "{text/split "→x→→y" "→→"}")
+  .> (_ -> print "{text/split "a→→" "→→"}")

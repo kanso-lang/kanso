@@ -33,7 +33,6 @@ enum Slot {
         /// and says `no overload` for the counts none of them take.
         arity: i32,
     },
-    Seq(u32, u32),
     /// The three worded chain steps of the 2026-08-26 gavel, as one slot with
     /// the word that says which channel the callback sees. `Rescue` and
     /// `Annotate` carry the origin literal beside them: the first for its
@@ -249,9 +248,8 @@ fn forced(v: Value) -> Value {
             }
             REG.with(|r| r.borrow_mut()[h as usize] = Slot::C { tidx, env, arity: RUNNING });
             let handle = call_closure(h, Vec::new());
-            // A cell whose body is a wall or a bind answers a slot shape
-            // rather than a value, so it is materialized rather than read as
-            // data â GAVEL 15 put such a cell to the right of every `>>`.
+            // A cell whose body is a bind answers a slot shape rather than a
+            // value, so it is materialized rather than read as data.
             let answered = match slot(handle) {
                 Slot::V(value) => value,
                 _ => match as_desc(handle) {
@@ -312,7 +310,6 @@ fn descish(s: &Slot) -> bool {
     matches!(
         s,
         Slot::V(Value::Desc(_))
-            | Slot::Seq(..)
             | Slot::Bind(..)
             | Slot::Rescue(..)
             | Slot::Annotate(..)
@@ -1157,31 +1154,10 @@ fn map_or_filter(name: &str, list_h: u32, closure_h: u32) -> u32 {
     push(Slot::V(Value::List(Rc::new(out))))
 }
 
-#[no_mangle]
-pub extern "C" fn rt_seq(a: u32, b: u32) -> u32 {
-    // Only the left side is examined: what follows a wall is not built until
-    // the wall reaches it, and that includes not being asked whether it failed.
-    if let Slot::V(v) = slot(a) {
-        if is_failure(&v) {
-            return a;
-        }
-    }
-    match (slot(a), slot(b)) {
-        (Slot::V(Value::Desc(da)), Slot::V(Value::Desc(db))) => {
-            push(Slot::V(Value::Desc(Rc::new(Desc::Seq(da, Value::Desc(db), SPAN0)))))
-        }
-        // GAVEL 15: the wall defers its right side, so `b` arrives as a cell
-        // and is not asked what it is until the wall reaches it.
-        (sa, Slot::C { arity: DEFERRED, .. }) if descish(&sa) => push(Slot::Seq(a, b)),
-        (sa, sb) if descish(&sa) && descish(&sb) => push(Slot::Seq(a, b)),
-        _ => die("`>>` sequences two effect descriptions".to_string()),
-    }
-}
-
-/// Demands a cell at the HANDLE level. `forced` answers a Value, and the
-/// browser's `>>` and `.` build slot shapes that are not Values, so a cell
-/// whose body is a wall could not come back through it. The answer is written
-/// back over the handle, so a cell read twice costs one call.
+/// Demands a cell at the HANDLE level. `forced` answers a Value, and a bind
+/// builds a slot shape that is not a Value, so a cell whose body is a bind
+/// could not come back through it. The answer is written back over the
+/// handle, so a cell read twice costs one call.
 fn demanded(h: u32) -> u32 {
     match slot(h) {
         Slot::C { tidx, env, arity: DEFERRED } => {
@@ -1203,10 +1179,6 @@ fn demanded(h: u32) -> u32 {
 fn as_desc(h: u32) -> Option<Rc<Desc>> {
     match slot(h) {
         Slot::V(Value::Desc(d)) => Some(d),
-        Slot::Seq(a, b) => {
-            let (da, db) = (as_desc(a)?, as_desc(demanded(b))?);
-            Some(Rc::new(Desc::Seq(da, Value::Desc(db), SPAN0)))
-        }
         Slot::Bind(inner, closure) => {
             Some(Rc::new(Desc::Bind(as_desc(inner)?, Value::TableFn(closure))))
         }
@@ -1435,7 +1407,7 @@ impl Executor for RtExecutor {
         let settled = demanded(h);
         match slot(settled) {
             Slot::V(v) => v,
-            // A cell whose body is itself a wall or a bind answers a slot
+            // A cell whose body is itself a bind answers a slot
             // shape rather than a value, so it is materialized here the way
             // the scheduler already materializes one.
             _ => match as_desc(settled) {
@@ -1525,28 +1497,6 @@ fn exec_slot(h: u32) -> Result<u32, String> {
                 Err(rt) => Err(rt.message),
             }
         }
-        Slot::Seq(a, b) => {
-            let left = exec_slot(a)?;
-            if matches!(slot(left), Slot::V(Value::ErrV(_))) {
-                return Ok(left);
-            }
-            let right = demanded(b);
-            if let Slot::V(v) = slot(right) {
-                if is_failure(&v) {
-                    return Ok(right);
-                }
-            }
-            // GAVEL 15 defers the right side, so what it answers is not known
-            // until here â and `never_describes` in check.rs only refuses a
-            // literal or a direct call, which leaves a bare name to reach the
-            // run. `rt_seq` says this when both sides arrive as values; the
-            // deferred side has to say the same thing or the page names a
-            // different fault from the one the other two engines name.
-            if !descish(&slot(right)) {
-                return Err("`>>` sequences two effect descriptions".to_string());
-            }
-            exec_slot(right)
-        }
         ref word @ (Slot::Bind(inner, closure)
         | Slot::Rescue(inner, closure, _)
         | Slot::Annotate(inner, closure, _)) => {
@@ -1559,11 +1509,9 @@ fn exec_slot(h: u32) -> Result<u32, String> {
         }
         // Unreachable, and the argument is construction rather than a reading
         // of what looks unlikely. Every handle this function is handed is
-        // descish: `exec_main` tests before it calls, `rt_seq` builds a
-        // `Slot::Seq` only when its left side is descish, `rt_maybe_bind`
-        // builds a `Slot::Bind` only when what is piped in is, and the one
-        // side that was not decided at construction â a deferred right â is
-        // tested above. The arm stays because the match must be exhaustive.
+        // descish: `exec_main` tests before it calls, and `rt_maybe_bind`
+        // builds a `Slot::Bind` only when what is piped in is. The arm stays
+        // because the match must be exhaustive.
         _ => Err("main is not an io".to_string()),
     }
 }

@@ -54,12 +54,11 @@ keyed = held { "k":(boom "g") } 3
 
 buried = [(held [(boom "h")] 1)]
 
-pub play =
-  print "length: {length listed}"
-  >> print "listed: {listed}"
-  >> print "mapped: {mapped}"
-  >> print "nested: {nested}"
-  >> print "fielded: {fielded}"
-  >> print "keyed: {keyed}"
-  >> print "buried: {buried}"
-  >> print "read back: {fielded.what}"
+pub play = print "length: {length listed}"
+  .> (_ -> print "listed: {listed}")
+  .> (_ -> print "mapped: {mapped}")
+  .> (_ -> print "nested: {nested}")
+  .> (_ -> print "fielded: {fielded}")
+  .> (_ -> print "keyed: {keyed}")
+  .> (_ -> print "buried: {buried}")
+  .> (_ -> print "read back: {fielded.what}")

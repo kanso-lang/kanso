@@ -7,7 +7,7 @@ fn foo i:num
   "{i} is a num"
 
 print (foo 3)
->> print (foo (num 3))
->> print (foo (num 3):int)
->> print "{num 3 + 1}"
->> print "{num 3 == 3}"
+  .> (_ -> print (foo (num 3)))
+  .> (_ -> print (foo (num 3):int))
+  .> (_ -> print "{num 3 + 1}")
+  .> (_ -> print "{num 3 == 3}")

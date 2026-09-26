@@ -41,7 +41,7 @@ chapters = "docs/book"
 
 keywords = ["fn" "pub" "type" "import"]
 
-ops = [">>" "->" "==" "!=" "<=" ">=" "=" "<" ">" "+" "-" "*" "/" "."]
+ops = ["->" "==" "!=" "<=" ">=" "=" "<" ">" "+" "-" "*" "/" "."]
 
 # The chain dot pressed against its channel: bind, annotate, rescue.
 fused = [".>" ".!" ".?"]
@@ -52,7 +52,7 @@ ident_tok = "[a-z_][a-zA-Z0-9_/]*[?!]?"
 
 num_tok = "[0-9]+\\.[0-9]+|[0-9]+"
 
-op_tok = ">>|->|==|!=|<=|>=|\\.[>!?]|[=<>+\\-*/.]"
+op_tok = "->|==|!=|<=|>=|\\.[>!?]|[=<>+\\-*/.]"
 
 token_pattern = "{str_tok}|#[^\n]*|{ident_tok}|{num_tok}|{op_tok}|."
 
@@ -661,7 +661,7 @@ fn head_spot? ""
   true
 
 fn head_spot? b
-  word? ["=" ">>" "." ".>" ".!" ".?" "(" "->"] b
+  word? ["=" "." ".>" ".!" ".?" "(" "->"] b
 
 fn heads t _ _ false
   t
@@ -688,7 +688,7 @@ fn applied t _ true
   "<span class=\"f\">{t}</span>"
 
 fn applied t after false
-  trailing t (word? [">>" "." ".>" ".!" ".?"] after)
+  trailing t (word? ["." ".>" ".!" ".?"] after)
 
 fn trailing t true
   "<span class=\"f\">{t}</span>"

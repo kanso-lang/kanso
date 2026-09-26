@@ -15245,3 +15245,50 @@ CI read the tree at 947d34ad and its rows were taken:
 `codegen_instructions_release` 698,561,887, 38,073 below it, and
 `emit_instructions` 29,311,866, 145 above. Both rises arrived with the
 declare leaving the preamble; which line moved each was not isolated.
+
+## 2026-09-26 — the wall goes
+
+The build of the gavel of the same name. `>>` is refused in the lexer with the
+spelling that replaced it, `kanso has no \`>>\`: a step that ignores what
+came before is written \`.> (_ -> step)\``, and the error corpus pins it as
+`the_wall_is_gone`. Everything the operator needed went with it: `Tok::SeqOp`
+and the continuation rules written for it, the parser's wall lines,
+`Expr::Seq`, the checker's refusal of a wall operand that could never be an
+effect, the stack-exhaustion hint for a function recursing on a wall's right
+side, `Desc::Seq` in the interpreter, `Slot::Seq` and the `rt_seq` import in
+the browser engine, and `k_seq` with its two executor arms in the C runtime.
+
+Every sequence in the tree was respelled: 237 files by a script that turns a
+line-leading `>> step` into a `.> (_ -> step)` continuation and an inline one
+into the same step in place, then the cases it flagged by hand. A group of
+bare lines followed by a wall has no direct respelling, because a `.>` binds
+to one expression. Those sites now name the group, either as a constant with
+an indented body in a library or as a function in a play file, and bind after
+the name. The effects differential lost the five shapes that were `>>`
+duplicates of a bind shape it already had, and reads 26 combinations, none
+wrong.
+
+Nine error fixtures and three runtime and micro fixtures pinned the wall
+itself, its refusals and its runtime message, and they went with it. Three
+more were respelled to say what they meant: `binding_after_effect`,
+`orphan_continuation` and `what_follows_a_bind_is_built_after_it_runs`. Two
+error goldens changed order, `a_box_where_a_value_is_expected` and
+`a_strict_index_where_a_value_is_expected`, and the new order is the order
+the lines are written in; the wall's nesting had reversed it. The build body's
+hint now reads "sequence effects with \`.>\`".
+
+`--plan` needed rebuilding rather than removing. A wall held its right side as
+a description, so the plan could list every step. A bind holds a function, and
+the plan has no value to hand it. A callback written `_ -> step` ignores its
+argument, so `Interp::ignoring_step` calls it with `done` and the plan renders
+the step; `examples/effects.plan` holds unchanged. The ratchet row
+`plan_ignoring` makes every bind a continuation again and turns that golden
+red, and `wall_refused` lets `>>` lex as two comparisons and turns the error
+corpus red. Both were watched red.
+
+Open, and not built here: the wall carried a formatting rule the fused chain
+words never had. A chain that wrapped had to wrap every step, and a
+half-wrapped `a >> b` followed by `  >> c` was refused. Main already accepts
+a half-wrapped `.>` chain and a half-wrapped pipe, so extending the rule would
+be a new rule, and appendix C no longer claims it.
+

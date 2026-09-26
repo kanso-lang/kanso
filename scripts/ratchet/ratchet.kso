@@ -2588,7 +2588,31 @@ bytes_seed = row
 
 rows_b1bs = text/concat rows_b1ls [bytes_seed]
 
-rows_b = text/concat rows_b1bs [compile_mem compile_mem_host]
+# `>>` is refused where it is written, with the spelling that replaced it.
+wall_refused = row
+  "a `>>` that lexes as two comparisons instead of being refused"
+  true
+  "cargo test --release --test golden {error_golden}"
+  "specs (unit, golden, differential)"
+  (breaking "the_wall_lexes_again")
+  release
+
+# `--plan` renders the step after `_ ->`, which ignores the value it is handed.
+plan_ignoring = row
+  "a plan that stops at every bind, even one whose callback ignores its value"
+  true
+  "cargo test --release --test golden {plan_golden}"
+  "specs (unit, golden, differential)"
+  (breaking "a_plan_that_stops_at_every_bind")
+  release
+
+plan_golden = "plan_prints_the_description_without_executing_it"
+
+error_golden = "error_corpus_reports_each_golden_diagnostic"
+
+rows_b1wg = text/concat rows_b1bs [wall_refused plan_ignoring]
+
+rows_b = text/concat rows_b1wg [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 

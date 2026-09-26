@@ -191,7 +191,7 @@ pub fn parse_entry(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
                 && lexed.blank_lines.binary_search(&(line.number - 1)).is_ok()
                 && matches!(
                     line.tokens.first(),
-                    Some((Tok::SeqOp | Tok::Pipe | Tok::Fused(_), _, _))
+                    Some((Tok::Pipe | Tok::Fused(_), _, _))
                 )
             {
                 diags.push(Diagnostic::new(
@@ -796,11 +796,10 @@ fn parse_field(line: &Line) -> Result<(String, Vec<String>, Span), Diagnostic> {
 }
 
 /// Parse a body's lines into statements, desugaring the concurrency surface:
-/// bare description lines form unordered groups (joined with the internal `&`
-/// node, failures accumulating) and a lone `>>` line is a wall sequencing the
-/// groups. Bindings keep their places; the folded chain becomes the body's
-/// final expression. A body with no bare lines and no walls passes through
-/// untouched.
+/// bare description lines form one unordered group (joined with the internal
+/// `&` node, failures accumulating). Bindings keep their places; the group
+/// becomes the body's final expression. A body with no bare lines passes
+/// through untouched.
 /// The guard section: leading bindings and `return X if C` lines. A return
 /// folds everything after it into the untaken branch of a compiler-built
 /// conditional — the body below a fired guard is unreachable, not skipped.
@@ -941,7 +940,7 @@ fn parse_lead_stmts(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
             );
         if !head_is_block
             && children.iter().all(|c| {
-                matches!(c.tokens.first(), Some((Tok::SeqOp | Tok::Pipe | Tok::Fused(_), _, _)))
+                matches!(c.tokens.first(), Some((Tok::Pipe | Tok::Fused(_), _, _)))
             })
         {
             out.push(parse_stmt(&body[idx])?);
@@ -966,16 +965,11 @@ fn parse_lead_stmts(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
 }
 
 fn parse_effect_tail(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
-    let is_wall = |line: &Line| matches!(line.tokens.as_slice(), [(Tok::SeqOp, _, _)]);
     let is_else =
         |line: &Line| matches!(line.tokens.as_slice(), [(Tok::Ident(w), _, _)] if w == "else");
-    // group lines into units: a wall line, or a statement that may own the
-    // deeper lines under it (an if/else block construct)
-    enum Unit<'a> {
-        Wall(&'a Line),
-        Parsed(Stmt),
-    }
-    let mut units: Vec<Unit> = Vec::new();
+    // a statement may own the deeper lines under it (an if/else block
+    // construct); every other line is a statement of its own
+    let mut units: Vec<Stmt> = Vec::new();
     let mut idx = 0;
     while idx < body.len() {
         let line = &body[idx];
@@ -992,10 +986,7 @@ fn parse_effect_tail(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
             ));
         }
         if j == idx + 1 {
-            match is_wall(line) || matches!(line.tokens.first(), Some((Tok::SeqOp, _, _))) {
-                true => units.push(Unit::Wall(line)),
-                false => units.push(Unit::Parsed(parse_stmt(line)?)),
-            }
+            units.push(parse_stmt(line)?);
             idx = j;
             continue;
         }
@@ -1010,10 +1001,10 @@ fn parse_effect_tail(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
             );
         if !head_is_if
             && children.iter().all(|c| {
-                matches!(c.tokens.first(), Some((Tok::SeqOp | Tok::Pipe | Tok::Fused(_), _, _)))
+                matches!(c.tokens.first(), Some((Tok::Pipe | Tok::Fused(_), _, _)))
             })
         {
-            units.push(Unit::Parsed(parse_stmt(line)?));
+            units.push(parse_stmt(line)?);
             idx += 1;
             continue;
         }
@@ -1035,164 +1026,81 @@ fn parse_effect_tail(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
                 }
                 false => (None, j),
             };
-        units.push(Unit::Parsed(parse_block_construct(line, children, else_children)?));
+        units.push(parse_block_construct(line, children, else_children)?);
         idx = end;
     }
     let has_surface = units.iter().enumerate().any(|(i, u)| match u {
-        Unit::Wall(_) => true,
         // a `build` is a construction site, not a line of the effect surface:
         // it binds names for what follows rather than joining a group
-        Unit::Parsed(Stmt::Expr(Expr::Build(..))) => false,
-        Unit::Parsed(Stmt::Expr(_)) => i + 1 < units.len(),
-        Unit::Parsed(_) => false,
+        Stmt::Expr(Expr::Build(..)) => false,
+        Stmt::Expr(_) => i + 1 < units.len(),
+        _ => false,
     });
     if !has_surface {
-        return Ok(units
-            .into_iter()
-            .map(|u| match u {
-                Unit::Parsed(stmt) => stmt,
-                Unit::Wall(_) => unreachable!("walls imply surface"),
-            })
-            .collect());
+        return Ok(units);
     }
+    // bindings first, then the effect lines, which run as one group
     let mut binds: Vec<Stmt> = Vec::new();
-    let mut segments: Vec<Vec<Expr>> = vec![Vec::new()];
-    let mut wall_spans: Vec<Span> = Vec::new();
-    let mut wall_fused: Vec<bool> = Vec::new();
-    let mut closed_by_fuse = false;
-    let unit_count = units.len();
-    let mut unit_index = 0usize;
-    for unit in units {
-        unit_index += 1;
-        let is_final_unit = unit_index == unit_count;
-        let line = match unit {
-            Unit::Wall(line) => line,
-            Unit::Parsed(stmt) => {
-                match stmt {
-                    Stmt::Bind { pattern, expr } => {
-                        // every binding runs before every bare effect line, wherever
-                        // it appears — so the surface may not show it interleaved
-                        if !segments[0].is_empty() || segments.len() > 1 {
-                            return Err(Diagnostic::new(
-                                "formatting",
-                                "bindings precede the effects in a body: every binding runs \
-                                 before every bare effect line, so move it above the chain"
-                                    .to_string(),
-                                expr_span(&expr),
-                            ));
-                        }
-                        binds.push(Stmt::Bind { pattern, expr });
-                    }
-                    // a `build` binds names for the rest of the body, so it
-                    // keeps its place among the bindings rather than joining a
-                    // group of effects — where it would be an expression again
-                    // and the names it gave would go with it
-                    Stmt::Expr(e @ Expr::Build(..)) => {
-                        if !segments[0].is_empty() || segments.len() > 1 {
-                            return Err(Diagnostic::new(
-                                "formatting",
-                                "a `build` binds, and bindings precede the effects in a \
-                                 body: move it above the chain"
-                                    .to_string(),
-                                expr_span(&e),
-                            ));
-                        }
-                        binds.push(Stmt::Expr(e));
-                    }
-                    Stmt::Expr(e) => {
-                        if closed_by_fuse {
-                            return Err(Diagnostic::new(
-                                "formatting",
-                                "a fused `>> step` is a single sequential step — a line \
-                                 cannot silently join it. for a group, put the wall alone \
-                                 and list the members below it"
-                                    .to_string(),
-                                expr_span(&e),
-                            ));
-                        }
-                        reject_never_effect(&e, is_final_unit)?;
-                        segments.last_mut().expect("segment").push(e);
-                    }
-                    // the same refusal check_merged's walk gives a set in a fn
-                    // body — this path reaches the statement first, and a panic
-                    // is not a diagnostic
-                    Stmt::Set { target, field, span, .. } => {
-                        return Err(Diagnostic::new(
-                            "build",
-                            format!(
-                                "`{target}.{field} = ...` writes a field, and only a `build` block may do that"
-                            ),
-                            span,
-                        ));
-                    }
+    let mut effects: Vec<Expr> = Vec::new();
+    let count = units.len();
+    for (i, stmt) in units.into_iter().enumerate() {
+        let is_final = i + 1 == count;
+        match stmt {
+            Stmt::Bind { pattern, expr } => {
+                // every binding runs before every bare effect line, wherever
+                // it appears — so the surface may not show it interleaved
+                if !effects.is_empty() {
+                    return Err(Diagnostic::new(
+                        "formatting",
+                        "bindings precede the effects in a body: every binding runs \
+                         before every bare effect line, so move it above them"
+                            .to_string(),
+                        expr_span(&expr),
+                    ));
                 }
-                continue;
+                binds.push(Stmt::Bind { pattern, expr });
             }
-        };
-        let fused =
-            matches!(line.tokens.first(), Some((Tok::SeqOp, _, _))) && line.tokens.len() > 1;
-        let span = line.tokens[0].1;
-        if segments.last().is_some_and(Vec::is_empty) {
-            return Err(Diagnostic::new(
-                "syntax",
-                "nothing to sequence: a `>>` wall needs statements above it".to_string(),
-                span,
-            ));
-        }
-        wall_spans.push(span);
-        wall_fused.push(fused);
-        segments.push(Vec::new());
-        match fused {
-            true => {
-                // `>> expr` is a COMPLETE sequential step: wall plus its one
-                // member, closed — nothing may silently join it
-                let mut p = P::new(&line.tokens[1..], line.number);
-                let expr = p.parse_expr()?;
-                p.expect_done()?;
-                reject_never_effect(&expr, is_final_unit)?;
-                segments.last_mut().expect("segment").push(expr);
-                closed_by_fuse = true;
+            // a `build` binds names for the rest of the body, so it keeps its
+            // place among the bindings rather than joining a group of effects
+            // — where it would be an expression again and the names it gave
+            // would go with it
+            Stmt::Expr(e @ Expr::Build(..)) => {
+                if !effects.is_empty() {
+                    return Err(Diagnostic::new(
+                        "formatting",
+                        "a `build` binds, and bindings precede the effects in a \
+                         body: move it above them"
+                            .to_string(),
+                        expr_span(&e),
+                    ));
+                }
+                binds.push(Stmt::Expr(e));
             }
-            false => closed_by_fuse = false,
+            Stmt::Expr(e) => {
+                reject_never_effect(&e, is_final)?;
+                effects.push(e);
+            }
+            // the same refusal check_merged's walk gives a set in a fn body —
+            // this path reaches the statement first, and a panic is not a
+            // diagnostic
+            Stmt::Set { target, field, span, .. } => {
+                return Err(Diagnostic::new(
+                    "build",
+                    format!(
+                        "`{target}.{field} = ...` writes a field, and only a `build` block may do that"
+                    ),
+                    span,
+                ));
+            }
         }
     }
-    let Some(last) = segments.last() else { unreachable!() };
-    if last.is_empty() {
-        return Err(Diagnostic::new(
-            "syntax",
-            "nothing follows the final `>>` wall".to_string(),
-            *wall_spans.last().expect("a trailing wall exists"),
-        ));
-    }
-    // one right way: a lone wall exists for multi-member groups. a stage of
-    // one step is a single statement and fuses with its wall
-    for (i, fused) in wall_fused.iter().enumerate() {
-        if !fused && segments[i + 1].len() == 1 {
-            return Err(Diagnostic::new(
-                "formatting",
-                "a one-step stage fuses with its wall: write `>> step` on one line".to_string(),
-                wall_spans[i],
-            ));
-        }
-    }
-    let joined: Vec<Expr> = segments
-        .into_iter()
-        .map(|seg| {
-            let mut it = seg.into_iter();
-            let first = it.next().expect("segments are non-empty");
-            it.fold(first, |acc, e| {
-                let span = expr_span(&e);
-                Expr::Join { lhs: Box::new(acc), rhs: Box::new(e), span }
-            })
-        })
-        .collect();
-    let mut it = joined.into_iter().rev();
-    let tail = it.next().expect("at least one segment");
-    let chain = it.fold(tail, |acc, seg| {
-        let span = expr_span(&seg);
-        Expr::Seq(Box::new(seg), Box::new(acc), span)
+    let mut it = effects.into_iter();
+    let first = it.next().expect("a surface holds an effect");
+    let group = it.fold(first, |acc, e| {
+        let span = expr_span(&e);
+        Expr::Join { lhs: Box::new(acc), rhs: Box::new(e), span }
     });
-    binds.push(Stmt::Expr(chain));
+    binds.push(Stmt::Expr(group));
     Ok(binds)
 }
 
@@ -1349,15 +1257,6 @@ fn parse_build_body(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
     let mut idx = 0;
     while idx < body.len() {
         let line = &body[idx];
-        if matches!(line.tokens.first(), Some((Tok::SeqOp, _, _))) {
-            return Err(Diagnostic::new(
-                "syntax",
-                "a `build` body already runs top to bottom; `>>` walls have \
-                 no place here"
-                    .to_string(),
-                head_span(line),
-            ));
-        }
         let base = line.indent;
         let mut j = idx + 1;
         while j < body.len() && body[j].indent > base {
@@ -1443,7 +1342,6 @@ fn expr_span(e: &Expr) -> Span {
         | Expr::Str(_, s)
         | Expr::Ident(_, s, _)
         | Expr::List(_, s)
-        | Expr::Seq(_, _, s)
         | Expr::Join { span: s, .. }
         | Expr::Block(_, s)
         | Expr::Guard { span: s, .. }
@@ -1543,7 +1441,7 @@ fn tolerated_before(tok: Option<&Tok>) -> u8 {
     match tok {
         Some(Tok::Op(op)) => level(op) + 1,
         Some(tok) if ends_an_atom(tok) => ATOM,
-        Some(Tok::SeqOp | Tok::Pipe | Tok::Fused(_)) => OR,
+        Some(Tok::Pipe | Tok::Fused(_)) => OR,
         // A container element and a map's value are each exactly one atom —
         // `[one 1]` is two elements and `{ "k":one 1 }` does not parse — so
         // parentheses there are the only way to write anything else, and
@@ -2086,12 +1984,6 @@ impl<'a> P<'a> {
                             Expr::App { head, args: vec![expr, callee], span, piped: false }
                         }
                     };
-                }
-                Some(Tok::SeqOp) => {
-                    let span = self.span_here();
-                    self.pos += 1;
-                    let rhs = self.parse_join()?;
-                    expr = Expr::Seq(Box::new(expr), Box::new(rhs), span);
                 }
                 _ => return Ok(expr),
             }

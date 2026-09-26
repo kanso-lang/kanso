@@ -1,1 +1,1 @@
-print "brewing" >> print "steeping" >> print "pouring"
+print "brewing" .> (_ -> print "steeping") .> (_ -> print "pouring")

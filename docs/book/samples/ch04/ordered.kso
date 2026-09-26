@@ -1,0 +1,7 @@
+import "std/os"
+
+fn show p
+  print "read: [{p.stdout}]"
+
+pub play = os/run "sh" ["-c" "sleep 1; printf written > slow.txt"]
+  .> (_ -> os/run "cat" ["slow.txt"] .> show)

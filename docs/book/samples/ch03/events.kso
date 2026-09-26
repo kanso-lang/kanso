@@ -9,8 +9,8 @@ type renamed
   before
 
 print (render (joined "clay"))
->> print (render (renamed "kanso" "kai"))
->> print (render (left "mugi"))
+  .> (_ -> print (render (renamed "kanso" "kai")))
+  .> (_ -> print (render (left "mugi")))
 
 fn render (joined who)
   "{who} joined"

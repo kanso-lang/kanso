@@ -4,6 +4,6 @@ fn add a b
 pub play =
   inc = &add 1
   print "sigil still hugs: {inc 5}"
-  >> print "tighter than ==: {12 & 10 == 8}"
-  >> print "looser than +:   {1 | 2 + 4}"
-  >> print "chained:         {1 | 2 | 4 ^ 1}"
+    .> (_ -> print "tighter than ==: {12 & 10 == 8}")
+    .> (_ -> print "looser than +:   {1 | 2 + 4}")
+    .> (_ -> print "chained:         {1 | 2 | 4 ^ 1}")

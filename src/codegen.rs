@@ -1264,7 +1264,6 @@ declare %KValue @k_div(%KValue, %KValue, ptr)
 declare %KValue @k_mod(%KValue, %KValue, ptr)
 declare %KValue @k_cmp(%KValue, %KValue, i64)
 declare %KValue @k_desc_print(%KValue)
-declare %KValue @k_seq(%KValue, %KValue)
 declare void @k_die(ptr) noreturn
 declare void @k_die_arity(i64, i64) noreturn
 declare void @k_die_overload(ptr) noreturn
@@ -2319,8 +2318,7 @@ fn without_unbuilt_arms(program: &Program) -> Option<Program> {
                 names_in(base, out);
                 names_in(index, out);
             }
-            Expr::Seq(a, b, _)
-            | Expr::BinOp { lhs: a, rhs: b, .. }
+            Expr::BinOp { lhs: a, rhs: b, .. }
             | Expr::Join { lhs: a, rhs: b, .. } => {
                 names_in(a, out);
                 names_in(b, out);
@@ -3423,8 +3421,8 @@ fn kept_out(program: &Program) -> crate::hash::Set<&str> {
 ///   - an argument to a function whose parameter there is itself read only
 ///     this way, in every clause, found as the largest such set.
 ///
-/// Anything else fails it: a return, a record or list, a closure or `>>`
-/// that could run after the frame is gone, a binding (which the demand pass
+/// Anything else fails it: a return, a record or list, a closure that
+/// could run after the frame is gone, a binding (which the demand pass
 /// may make lazy), an argument to a name the body binds itself. A function
 /// holding such a view makes its tail calls as plain calls, because a tail
 /// call gives the frame back before the callee reads the header.
@@ -3518,7 +3516,7 @@ fn framed_views(
     fn reads_only(expr: &Expr, x: &str, cx: &Cx) -> bool {
         match expr {
             Expr::Ident(n, _, _) => n.as_str() != x,
-            Expr::Lambda { .. } | Expr::Seq(..) | Expr::Build(..) => !mentions(expr, x),
+            Expr::Lambda { .. } | Expr::Build(..) => !mentions(expr, x),
             Expr::Index { base, index, .. } if is_x(base, x) => reads_only(index, x, cx),
             Expr::Block(stmts, _) => stmts_read_only(stmts, x, cx),
             Expr::Guard { cond, early, rest, .. } => {
@@ -7426,26 +7424,6 @@ impl<'a> Backend<'a> {
                 f.record(&boxed, DESC);
                 Ok(boxed)
             }
-            Expr::Seq(lhs, rhs, span) => {
-                let a = self.emit_expr(f, lhs)?;
-                let a = self.maybe_force(f, a);
-                // GAVEL 15: the wall defers its right side, so the right
-                // operand is a cell the executor forces once the left has
-                // run. A name mentioned there is stored rather than demanded,
-                // which is what lets a description name itself.
-                if !self.thunkable(f, rhs) {
-                    let _ = span;
-                    return Err("native backend: `>>` defers its right side, and this one \
-                                reads more than eight names — bind some of them before the \
-                                wall"
-                        .to_string());
-                }
-                let b = self.emit_cell(f, rhs)?;
-                let t = f.tmp();
-                f.line(&format!("{t} = call %KValue @k_seq(%KValue {a}, %KValue {b})"));
-                f.record(&t, DESC | (f.set_of(&a) & FAIL));
-                Ok(t)
-            }
             Expr::Join { lhs, rhs, .. } => {
                 let a = self.emit_expr(f, lhs)?;
                 let a = self.maybe_force(f, a);
@@ -9657,10 +9635,6 @@ fn collect_idents(expr: &Expr, out: &mut Vec<String>) {
         Expr::Index { base, index, .. } => {
             collect_idents(base, out);
             collect_idents(index, out);
-        }
-        Expr::Seq(lhs, rhs, _) => {
-            collect_idents(lhs, out);
-            collect_idents(rhs, out);
         }
         Expr::Lambda { body, .. } => collect_idents(body, out),
         Expr::BinOp { lhs, rhs, .. } | Expr::Join { lhs, rhs, .. } => {

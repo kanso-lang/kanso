@@ -23,7 +23,6 @@ fn build acc n
 fn ticked n acc
   if (n < 1) acc (ticked (n - 1) (acc + 1))
 
-pub play =
-  print "{count 30000 0}"
-  >> print "{ticked 30000 0}"
-  >> print "{total (build [] 12000) 1 0}"
+pub play = print "{count 30000 0}"
+  .> (_ -> print "{ticked 30000 0}")
+  .> (_ -> print "{total (build [] 12000) 1 0}")

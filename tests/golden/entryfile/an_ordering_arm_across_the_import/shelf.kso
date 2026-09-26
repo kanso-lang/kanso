@@ -15,6 +15,5 @@ short = book 100
 
 long = book 300
 
-pub play =
-  print "own: {short < long} {short > long}"
-  >> print "ints: {1 < 2} {2 < 1}"
+pub play = print "own: {short < long} {short > long}"
+  .> (_ -> print "ints: {1 < 2} {2 < 1}")

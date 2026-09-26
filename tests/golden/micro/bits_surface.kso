@@ -1,9 +1,8 @@
 import "std/bits"
 
-pub play =
-  print "xor:  {bits/xor 12 10}"
-  >> print "comp: {bits/complement 12}"
-  >> print "shl:  {bits/shl 1 10}"
-  >> print "shr:  {bits/shr 1024 3}"
-  >> print "sign: {bits/shr (0 - 16) 2}"
-  >> print "high: {bits/shl 1 63}"
+pub play = print "xor:  {bits/xor 12 10}"
+  .> (_ -> print "comp: {bits/complement 12}")
+  .> (_ -> print "shl:  {bits/shl 1 10}")
+  .> (_ -> print "shr:  {bits/shr 1024 3}")
+  .> (_ -> print "sign: {bits/shr (0 - 16) 2}")
+  .> (_ -> print "high: {bits/shl 1 63}")

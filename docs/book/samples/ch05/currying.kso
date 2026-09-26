@@ -5,5 +5,4 @@ fn quote pricer amount
   "{amount} becomes {pricer amount}"
 
 local = &tax 8
-print "{quote local 250}"
->> print "and again: {local 100}"
+print "{quote local 250}" .> (_ -> print "and again: {local 100}")

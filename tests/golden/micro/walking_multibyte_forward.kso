@@ -10,8 +10,8 @@ pub play =
   third = text/slice page 3 3
   ninth = text/slice page 9 9
   print "forward {walked page 1 ""}"
-  >> print "back {backward page (length page) ""}"
-  >> print "jump {seventh}{third}{ninth}"
+    .> (_ -> print "back {backward page (length page) ""}")
+    .> (_ -> print "jump {seventh}{third}{ninth}")
 
 fn walked s at acc
   walking s at acc (at > length s)

@@ -1,8 +1,9 @@
 import "std/regexp"
 
-pub play =
-  print "after colon:  {regexp/find "(?<=:)[a-z]+" "x:abc"}"
-  >> print "not after:    {regexp/find "(?<!:)[a-z]+" "x:abc"}"
-  >> print "at the front: {regexp/find "(?<=:)[a-z]+" "abc"}"
-  >> print "class back:   {regexp/find "(?<=[ (])[0-9]+" "a1 (2"}"
-  >> print "with ahead:   {regexp/find "(?<=:)[a-z]+(?=!)" "x:abc! y:de"}"
+pub play = print "after colon:  {regexp/find "(?<=:)[a-z]+" "x:abc"}"
+  .> (_ -> print "not after:    {regexp/find "(?<!:)[a-z]+" "x:abc"}")
+  .> (_ -> print "at the front: {regexp/find "(?<=:)[a-z]+" "abc"}")
+  .> (_ -> print "class back:   {regexp/find "(?<=[ (])[0-9]+" "a1 (2"}")
+  .> (_ -> print "with ahead:   {regexp/find both_sides "x:abc! y:de"}")
+
+both_sides = "(?<=:)[a-z]+(?=!)"

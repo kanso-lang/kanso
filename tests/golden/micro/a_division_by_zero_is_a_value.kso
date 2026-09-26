@@ -15,7 +15,6 @@ fn told f:math_failure
 fn told n
   "a number: {n}"
 
-pub play =
-  print (told (over 10 0))
-  >> print (told (over 10 5))
-  >> print "the reason reads as text: {over 7 0}"
+pub play = print (told (over 10 0))
+  .> (_ -> print (told (over 10 5)))
+  .> (_ -> print "the reason reads as text: {over 7 0}")

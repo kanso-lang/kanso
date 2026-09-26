@@ -205,10 +205,6 @@
           "name": "keyword.operator.arrow.kanso"
         },
         {
-          "match": ">>",
-          "name": "keyword.control.sequence.kanso"
-        },
-        {
           "match": "(?<= )\\.(?= )",
           "name": "keyword.operator.pipe.kanso"
         },

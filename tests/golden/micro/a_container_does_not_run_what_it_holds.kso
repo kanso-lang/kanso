@@ -13,9 +13,8 @@ fn opaque v
 
 lazy = io/write "second\n"
 
-d = io/write "first\n" >> lazy
+d = io/write "first\n" .> (_ -> lazy)
 
 pub play =
   xs = [(opaque d)]
-  print "built"
-  >> xs[1]
+  print "built" .> (_ -> xs[1])

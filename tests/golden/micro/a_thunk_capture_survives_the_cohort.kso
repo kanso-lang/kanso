@@ -162,10 +162,10 @@ fn listed _ true
 fn listed quiet false
   keys = list/to_list (list/map quiet key_line)
   io/write "\nUNPRICED n={length quiet} k={length keys}\n"
-  >> io/write (text/join keys "")
-  >> io/write "compiler-log delta of this branch:\n"
-  >> io/write (text/join (list/to_list (list/map quiet key_line)) "")
-  >> io/write "{advice}\n"
+    .> (_ -> io/write (text/join keys ""))
+    .> (_ -> io/write "compiler-log delta of this branch:\n")
+    .> (_ -> io/write (text/join (list/to_list (list/map quiet key_line)) ""))
+    .> (_ -> io/write "{advice}\n")
 
 fn key_line m
   "  {m.key}\n"

@@ -1028,23 +1028,33 @@ fn re_based _ true
   io/write ""
 
 fn re_based shifted false
-  io/write "\nRE-BASED — welfare's baseline for these moved in the same\n"
-  >> io/write "diff as the golden, so the two readings are of different\n"
-  >> io/write "quantities and neither side of the pure-regression rule can\n"
-  >> io/write "have them:\n"
-  >> io/write (text/join (list/to_list (list/map shifted key_line)) "")
+  io/write "\n{re_basing}"
+    .> (_ -> io/write (text/join (list/to_list (list/map shifted key_line)) ""))
+
+re_basing = """
+  RE-BASED — welfare's baseline for these moved in the same
+  diff as the golden, so the two readings are of different
+  quantities and neither side of the pure-regression rule can
+  have them:
+"""
 
 fn unattributed _ true
   io/write ""
 
 fn unattributed orphans false
-  io/write "\nRE-BASED, unclaimed — these welfare baselines moved and not\n"
-  >> io/write "one of the golden rows they are made of did, so a ratio\n"
-  >> io/write "moved with no measurement behind it. That wants a sentence:\n"
-  >> io/write (text/join (list/to_list (list/map orphans name_line)) "")
+  io/write "\n{unclaimed}" .> (_ -> io/write (each_line orphans name_line))
+
+unclaimed = """
+  RE-BASED, unclaimed — these welfare baselines moved and not
+  one of the golden rows they are made of did, so a ratio
+  moved with no measurement behind it. That wants a sentence:
+"""
 
 fn name_line k
   "  {k}\n"
+
+fn each_line keys shape
+  text/join (list/to_list (list/map keys shape)) ""
 
 fn unstated mute
   silenced mute (length mute == 0)
@@ -1053,13 +1063,17 @@ fn silenced _ true
   io/write ""
 
 fn silenced mute false
-  io/write "\nUNSTATED — welfare's baseline moved for these and this\n"
-  >> io/write "branch's log delta does not name them. Re-basing a measurement\n"
-  >> io/write "is a decision, and a decision nobody wrote down is the one\n"
-  >> io/write "thing this gate exists to refuse:\n"
-  >> io/write (text/join (list/to_list (list/map mute name_line)) "")
-  >> io/write "{advice}\n"
-  >> os/exit 1
+  io/write "\n{unstated_text}"
+    .> (_ -> io/write (text/join (list/to_list (list/map mute name_line)) ""))
+    .> (_ -> io/write "{advice}\n")
+    .> (_ -> os/exit 1)
+
+unstated_text = """
+  UNSTATED — welfare's baseline moved for these and this
+  branch's log delta does not name them. Re-basing a measurement
+  is a decision, and a decision nobody wrote down is the one
+  thing this gate exists to refuse:
+"""
 
 fn newly new_ones
   minting new_ones (length new_ones == 0)
@@ -1069,8 +1083,8 @@ fn minting _ true
 
 fn minting new_ones false
   io/write "\nMINTED — the baseline carries no reading for these at all, so\n"
-  >> io/write "the first one is a measurement rather than a move:\n"
-  >> io/write (text/join (list/to_list (list/map new_ones key_line)) "")
+    .> (_ -> io/write "the first one is a measurement rather than a move:\n")
+    .> (_ -> io/write (each_line new_ones key_line))
 
 fn unclassified adrift
   drifting adrift (length adrift == 0)
@@ -1080,8 +1094,8 @@ fn drifting _ true
 
 fn drifting adrift false
   io/write "\nUNCLASSIFIED — no direction table names these, so they count\n"
-  >> io/write "toward neither side of the pure-regression rule:\n"
-  >> io/write (text/join (list/to_list (list/map adrift key_line)) "")
+    .> (_ -> io/write "toward neither side of the pure-regression rule:\n")
+    .> (_ -> io/write (text/join (list/to_list (list/map adrift key_line)) ""))
 
 # The summary only speaks when nothing went unpriced; a listing already said
 # more than it would.
@@ -1142,11 +1156,11 @@ fn any_moved true
 
 fn listed quiet false
   io/write "\nUNPRICED — these worsened or were re-based with no sentence\n"
-  >> io/write "naming them, and the value they landed on, in the\n"
-  >> io/write "compiler-log delta of this branch:\n"
-  >> io/write (text/join (list/to_list (list/map quiet key_line)) "")
-  >> io/write "{advice}\n"
-  >> os/exit 1
+    .> (_ -> io/write "naming them, and the value they landed on, in the\n")
+    .> (_ -> io/write "compiler-log delta of this branch:\n")
+    .> (_ -> io/write (text/join (list/to_list (list/map quiet key_line)) ""))
+    .> (_ -> io/write "{advice}\n")
+    .> (_ -> os/exit 1)
 
 fn key_line m
   "  {m.key}\n"
@@ -1164,14 +1178,22 @@ fn settled false _
   io/write ""
 
 fn banked _
-  io/write "\nA pure regression, attributed: welfare_floor.json gained a\n"
-  >> io/write "history entry, so the fall is recorded against the change that\n"
-  >> io/write "spent it. The floor is permeable to the language.\n"
+  io/write "\n{attributed}"
+
+attributed = """
+  A pure regression, attributed: welfare_floor.json gained a
+  history entry, so the fall is recorded against the change that
+  spent it. The floor is permeable to the language.
+"""
 
 fn refused _
-  io/write "\nFAIL  a pure regression: something got worse and nothing got\n"
-  >> io/write "better. that trade has no other side, and it is the one move\n"
-  >> io/write "the gate refuses outright. A language change that must spend\n"
-  >> io/write "the score says so in bench/welfare_floor.json's history.\n"
+  io/write "\n{pure_regression}"
+
+pure_regression = """
+  FAIL  a pure regression: something got worse and nothing got
+  better. that trade has no other side, and it is the one move
+  the gate refuses outright. A language change that must spend
+  the score says so in bench/welfare_floor.json's history.
+"""
 
 pub play = os/args .> (a -> started (base_of a))

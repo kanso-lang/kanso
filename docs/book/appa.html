@@ -197,17 +197,17 @@ extra_css: /book/book.css
 
 <h2>error[formatting]—chains and sequencing</h2>
 
-<p>a chain of steps has two legal shapes and nothing between them: it fits on one line, or every step gets its own continuation line. this protects the diff again—there is no "reflow" a reviewer has to squint past—and it keeps the eye from having to guess where a statement really ends. the simplest violation is wrapping a chain that would have fit. the compiler measures it and tells you it fits in forty-two characters:</p>
+<p>a chain that fits on one line is written on one line. this protects the diff again—there is no "reflow" a reviewer has to squint past—and it keeps the eye from having to guess where a statement really ends. the simplest violation is wrapping a bind that would have fit. the compiler measures it and tells you it fits in forty-two characters:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">seq_wrap_check.kso</div>
   <pre><code><span class="f">print</span> <span class="s">"steeping"</span>
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"serving"</span></code></pre>
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"serving"</span>)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check seq_wrap_check.kso</div>
-    <pre><code><span class="k">error[formatting]</span>: needless continuation: this statement fits on one line (35 characters)
+    <pre><code><span class="k">error[formatting]</span>: needless continuation: this statement fits on one line (42 characters)
 <span class="c">  --&gt; seq_wrap_check.kso:2:3</span>
-   2 |   &gt;&gt; print "serving"
+   2 |   .&gt; (_ -&gt; print "serving")
          <span class="k">^</span></code></pre>
   </div>
 </div>
@@ -228,64 +228,16 @@ extra_css: /book/book.css
   </div>
 </div>
 
-<p>the reverse is also a rule: once a chain earns a continuation line, <em>every</em> step gets one. no half-and-half, where the first two steps share a line and the third wraps:</p>
-
-<div class="code-panel">
-  <div class="code-panel-title">partial_chain_check.kso</div>
-  <pre><code><span class="f">print</span> <span class="s">"steeping the finest uji sencha"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"pouring the hot water"</span>
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"serving it in the warmed cups with seasonal wagashi"</span></code></pre>
-  <div class="code-output">
-    <div class="code-panel-title">kanso check partial_chain_check.kso</div>
-    <pre><code><span class="k">error[formatting]</span>: no partial chaining: a chain fits on one line, or each step gets its own `&gt;&gt;` continuation line
-<span class="c">  --&gt; partial_chain_check.kso:1:40</span>
-   1 | print "steeping the finest uji sencha" &gt;&gt; print "pouring the hot water"
-                                              <span class="k">^</span></code></pre>
-  </div>
-</div>
-
-<p>a lone <code>&gt;&gt;</code> is a wall that introduces a group of steps. when the group has only one step, the wall and the step belong on the same line, fused as <code>&gt;&gt; step</code>:</p>
-
-<div class="code-panel">
-  <div class="code-panel-title">unfused_wall_check.kso</div>
-  <pre><code><span class="f">print</span> <span class="s">"steeping"</span>
-<span class="f">print</span> <span class="s">"warming"</span>
-<span class="o">&gt;&gt;</span>
-<span class="f">print</span> <span class="s">"serving"</span></code></pre>
-  <div class="code-output">
-    <div class="code-panel-title">kanso check unfused_wall_check.kso</div>
-    <pre><code><span class="k">error[formatting]</span>: a one-step stage fuses with its wall: write `&gt;&gt; step` on one line
-<span class="c">  --&gt; unfused_wall_check.kso:3:1</span>
-   3 | &gt;&gt;
-       <span class="k">^</span></code></pre>
-  </div>
-</div>
-
-<p>and the fused form is a single step, sealed. a bare line beneath it cannot quietly become part of the stage; if you want a group, put the wall alone and list its members below:</p>
-
-<div class="code-panel">
-  <div class="code-panel-title">bare_after_fused_check.kso</div>
-  <pre><code><span class="f">print</span> <span class="s">"x"</span>
-<span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"c"</span>
-<span class="f">print</span> <span class="s">"d"</span></code></pre>
-  <div class="code-output">
-    <div class="code-panel-title">kanso check bare_after_fused_check.kso</div>
-    <pre><code><span class="k">error[formatting]</span>: a fused `&gt;&gt; step` is a single sequential step — a line cannot silently join it. for a group, put the wall alone and list the members below it
-<span class="c">  --&gt; bare_after_fused_check.kso:3:1</span>
-   3 | print "d"
-       <span class="k">^</span></code></pre>
-  </div>
-</div>
-
 <p>a body separates its two phases: bindings first, then the effects. a binding wedged between effect lines is flagged and told to move up, so a body always reads as "compute these values, then do these things":</p>
 
 <div class="code-panel">
   <div class="code-panel-title">binding_after_effect_check.kso</div>
   <pre><code><span class="f">print</span> <span class="s">"steeping"</span>
 cups <span class="o">=</span> <span class="n">4</span>
-<span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"serving <span class="i">{cups}</span>"</span></code></pre>
+<span class="f">print</span> <span class="s">"serving <span class="i">{cups}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check binding_after_effect_check.kso</div>
-    <pre><code><span class="k">error[formatting]</span>: bindings precede the effects in a body: every binding runs before every bare effect line, so move it above the chain
+    <pre><code><span class="k">error[formatting]</span>: bindings precede the effects in a body: every binding runs before every bare effect line, so move it above them
 <span class="c">  --&gt; binding_after_effect_check.kso:2:8</span>
    2 | cups = 4
               <span class="k">^</span></code></pre>

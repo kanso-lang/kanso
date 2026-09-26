@@ -1012,17 +1012,27 @@ fn nothing _
   io/write ""
 
 fn fell gap
-  io/write "\nFAIL  welfare fell {fixed gap 2} below the floor.\n"
-  >> io/write "The sum is the objective, so this change is worse by\n"
-  >> io/write "the weights as written. Either it goes, or the argument\n"
-  >> io/write "is that the weights are wrong — make that argument, then\n"
-  >> io/write "welfare --set \"the reason\".\n"
+  io/write "\n{fell_text gap}"
+
+fn fell_text gap
+  """
+    FAIL  welfare fell {fixed gap 2} below the floor.
+    The sum is the objective, so this change is worse by
+    the weights as written. Either it goes, or the argument
+    is that the weights are wrong — make that argument, then
+    welfare --set "the reason".
+  """
 
 fn rose gap
-  io/write "\nFAIL  welfare is {fixed gap 2} above the floor and the\n"
-  >> io/write "gain is not held. A rise nobody ratchets is a rise the\n"
-  >> io/write "next change is free to spend. Bank it in this same PR:\n"
-  >> io/write "welfare --set \"what improved and why\".\n"
+  io/write "\n{rose_text gap}"
+
+fn rose_text gap
+  """
+    FAIL  welfare is {fixed gap 2} above the floor and the
+    gain is not held. A rise nobody ratchets is a rise the
+    next change is free to spend. Bank it in this same PR:
+    welfare --set "what improved and why".
+  """
 
 # SIX GOLDENS, where there were eleven. The run program's cost golden and its
 # row in the instruction golden are the whole runtime side now; the three

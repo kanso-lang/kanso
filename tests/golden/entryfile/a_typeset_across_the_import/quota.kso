@@ -32,7 +32,6 @@ fn named q:quota_torn
 fn named e:lane_err
   "lane trouble: {e}"
 
-pub play =
-  print (testing/when_failed (fetch 1) named)
-  >> print (testing/when_failed (fetch 2) named)
-  >> print "ok: {fetch 3}"
+pub play = print (testing/when_failed (fetch 1) named)
+  .> (_ -> print (testing/when_failed (fetch 2) named))
+  .> (_ -> print "ok: {fetch 3}")

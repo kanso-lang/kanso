@@ -22,6 +22,4 @@ fn shown m:money
 fn sized r@(money c)
   "{c} {r.width}"
 
-pub play =
-  print (shown (money 350))
-  >> print (sized (money 1))
+pub play = print (shown (money 350)) .> (_ -> print (sized (money 1)))

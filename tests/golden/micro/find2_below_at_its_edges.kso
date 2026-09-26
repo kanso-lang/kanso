@@ -16,16 +16,15 @@ s = text/bytes "abcd\tefgh"
 # rest. The `x` at 20 is past the vector step; the `q` at 3 is inside it.
 long = text/bytes "abqdefghijklmnopqrstxyz0"
 
-pub play =
-  print "the a byte: {text/find2_below s 1 98 122 1}"
-  >> print "the b byte: {text/find2_below s 1 122 99 1}"
-  >> print "under the limit: {text/find2_below s 1 122 121 32}"
-  >> print "no match at all: {text/find2_below s 1 122 121 1}"
-  >> print "from below one: {text/find2_below s 0 98 122 1}"
-  >> print "from past the end: {text/find2_below s 99 98 122 1}"
-  >> print "from at the first hit: {text/find2_below s 2 98 122 1}"
-  >> print "inside the vector step: {text/find2_below long 1 113 122 1}"
-  >> print "past the vector step: {text/find2_below long 1 120 121 1}"
-  >> print "the last byte of all: {text/find2_below long 1 48 48 1}"
-  >> print "a zero limit is no limit: {text/find2_below s 1 122 121 0}"
-  >> print "a limit past a byte: {text/find2_below s 1 122 121 257}"
+pub play = print "the a byte: {text/find2_below s 1 98 122 1}"
+  .> (_ -> print "the b byte: {text/find2_below s 1 122 99 1}")
+  .> (_ -> print "under the limit: {text/find2_below s 1 122 121 32}")
+  .> (_ -> print "no match at all: {text/find2_below s 1 122 121 1}")
+  .> (_ -> print "from below one: {text/find2_below s 0 98 122 1}")
+  .> (_ -> print "from past the end: {text/find2_below s 99 98 122 1}")
+  .> (_ -> print "from at the first hit: {text/find2_below s 2 98 122 1}")
+  .> (_ -> print "inside the vector step: {text/find2_below long 1 113 122 1}")
+  .> (_ -> print "past the vector step: {text/find2_below long 1 120 121 1}")
+  .> (_ -> print "the last byte of all: {text/find2_below long 1 48 48 1}")
+  .> (_ -> print "a zero limit is no limit: {text/find2_below s 1 122 121 0}")
+  .> (_ -> print "a limit past a byte: {text/find2_below s 1 122 121 257}")

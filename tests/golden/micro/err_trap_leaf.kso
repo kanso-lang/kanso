@@ -20,6 +20,5 @@ fn fetch n
 fn named q:quota_torn
   "quota: limit {q.limit}"
 
-pub play =
-  print (testing/when_failed (fetch 1) named)
-  >> print "ok: {fetch 3}"
+pub play = print (testing/when_failed (fetch 1) named)
+  .> (_ -> print "ok: {fetch 3}")

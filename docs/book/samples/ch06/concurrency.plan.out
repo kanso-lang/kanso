@@ -2,7 +2,7 @@ plan:
   join {
   print "brew: steeping"    # from line 4
   sleep 60
-  print "brew: poured"    # from line 4
+  print "brew: poured"    # from line 6
   random 6
   . <continuation>
   random 6
