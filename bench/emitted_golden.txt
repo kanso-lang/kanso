@@ -246,5 +246,5 @@
 # apiece. calls 482 -> 539, lines 5,479 -> 5,651; branches and defines hold.
 defines=83
 calls=574
-branches=539
-lines=5723
+branches=541
+lines=5728
