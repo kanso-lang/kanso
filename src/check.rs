@@ -1443,6 +1443,48 @@ fn check_after_infer<'p>(
             all
         }
     }
+    /// Every place `param` is handed to something that takes a value: an
+    /// operator, an index, a field read, an `if`'s condition or a builtin that
+    /// reads its argument. A lambda inside that binds the same name hides it.
+    fn read_as_value(
+        e: &Expr,
+        param: &str,
+        reads_value: &dyn Fn(&str) -> bool,
+        found: &mut dyn FnMut(&str, Span),
+    ) {
+        let is_param = |x: &Expr| matches!(x, Expr::Ident(n, _, _) if n == param);
+        match e {
+            Expr::Lambda { params, .. } if params.iter().any(|(n, _)| n == param) => return,
+            Expr::BinOp { op, lhs, rhs, .. } => {
+                for side in [lhs, rhs] {
+                    if is_param(side) {
+                        found(&format!("`{op}`"), side.span());
+                    }
+                }
+            }
+            Expr::Index { base, index, .. } => {
+                for part in [base, index] {
+                    if is_param(part) {
+                        found("an index", part.span());
+                    }
+                }
+            }
+            Expr::Field { base, name, .. } if is_param(base) => {
+                found(&format!("`.{name}`"), base.span());
+            }
+            Expr::App { head, args, piped: false, .. } => {
+                if let Expr::Ident(name, _, _) = head.as_ref() {
+                    let reading = name == "if" || reads_value(name.as_str());
+                    let args = if name == "if" { &args[..args.len().min(1)] } else { &args[..] };
+                    for arg in args.iter().filter(|a| reading && is_param(a)) {
+                        found(&format!("`{name}`"), arg.span());
+                    }
+                }
+            }
+            _ => {}
+        }
+        crate::for_each_child(e, |c| read_as_value(c, param, reads_value, found));
+    }
     fn binds_name(decl: &FnDecl, name: &str) -> bool {
         fn lambda_binds(e: &Expr, name: &str) -> bool {
             if let Expr::Lambda { params, .. } = e {
@@ -1562,6 +1604,23 @@ fn check_after_infer<'p>(
             Expr::Field { base, name, .. } => {
                 if is_box(base) {
                     refuse(diags, &format!("`.{name}`"), base.span());
+                }
+            }
+            // `box . (n -> n - 1)` is the lambda applied to the box, and the
+            // dot opens nothing, so `n` IS the box. The operand the checker
+            // would refuse is a parameter rather than a call, which the test
+            // above cannot see, so the lambda's body is read for the places
+            // that parameter meets something that takes a value.
+            Expr::App { head, args, piped: false, .. }
+                if matches!(head.as_ref(), Expr::Lambda { .. }) =>
+            {
+                let Expr::Lambda { params, body, .. } = head.as_ref() else { return };
+                for ((param, _), arg) in params.iter().zip(args) {
+                    if param != "_" && is_box(arg) {
+                        read_as_value(body, param, &reads_value, &mut |who, at| {
+                            refuse(diags, who, at)
+                        });
+                    }
                 }
             }
             Expr::App { head, args, piped: false, .. } => {

@@ -15554,3 +15554,43 @@ The branch, the row and its mutation are gone. Every benchmark reads within
 The two codegen rows moved on CI because clang compiles a runtime with one
 branch fewer: `codegen_instructions_dev` 123,915,881 (+91) and
 `codegen_instructions_release` 695,954,277 (+28). Welfare holds at its floor.
+
+## 2026-09-26 — a box handed to a lambda that reads it
+
+`math/random 6 . (n -> print "{n - 1}")` checked clean and died at run time
+with "`-` is not defined for these values". The plain dot has been ordinary
+application since the 2026-09-10 ruling, so the lambda is handed the box
+itself, and `n - 1` is a box where a value is expected, which the box ruling
+refuses. The checker could not see it, because it asks whether an operand is
+a box by looking at the operand, and this operand is a parameter.
+
+Where a lambda is applied to an argument that is a box, the checker now reads
+the lambda's body for the places the matching parameter meets an operator, an
+index, a field read, an `if` condition or a builtin that reads its argument,
+and refuses each with the message the direct case already gets. A lambda
+inside that binds the same name hides it, and `_` is never read. Holding the
+box is untouched: `box . held` names a group rather than a lambda, and storing
+the parameter with `push` or handing it to `print` reads nothing.
+
+Found by running vse against kanso main, where it fails the same way. vse's
+own case is not caught by this: its box is pushed into a list and read out
+two calls later as `p[d] - q[d]`, which is flow through data rather than a
+parameter read in place. The postcard program is the error golden
+`a_box_a_lambda_reads`, which main's compiler checks clean. The ratchet row
+`box_param` turns the new arm off and the error corpus goes red.
+
+CI read the tree at eec06dd9 and its rows were taken. The new arm is asked at
+every application site, so the front end pays for it: `compile_instructions`
+25,204,253 -> 25,216,319, `entry_instructions` 85,215,074 -> 85,247,109 and
+`library_instructions` 85,773,867 -> 85,805,873. No runtime row moved. The
+trend gate reads that as a pure regression, and it is the language's to
+spend: the refusal is the box ruling's, so the floor's history records the
+fall against this change and the score holds at 89.17 to two places.
+
+The branch then took the six-change carrier (kanso#1655) and CI read the two
+together at 79d4abb4. The arm costs the same over the new base: against the
+carrier's rows `compile_instructions` goes 25,267,312 -> 25,279,417 (+12,105),
+`entry_instructions` 85,321,306 -> 85,353,380 (+32,074) and
+`library_instructions` 85,850,050 -> 85,882,095 (+32,045). Nothing else moved.
+The floor's history records the fall again, over the carrier's 89.37, which
+the score still rounds to.

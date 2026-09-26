@@ -1,0 +1,4 @@
+error[effect]: this is an effect — a box the words open — and `-` takes a value; open it with `.>`
+  --> a_box_a_lambda_reads.kso:5:31
+   5 | math/random 6 . (n -> print "{n - 1}")
+                                     ^
