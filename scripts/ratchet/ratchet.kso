@@ -3101,6 +3101,18 @@ lane_count_cost = row
 
 rows_c1zl = text/concat rows_c1ze [lane_count lane_count_cost]
 
+# The slice walk counts a word's character starts by multiply rather than by a
+# popcount the ssse3 build writes out longhand.
+skip_by_multiply = row
+  "a slice skip that pays a popcount"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_slice_skip_that_pays_a_popcount")
+  benches
+
+rows_c1zh = text/concat rows_c1zl [skip_by_multiply]
+
 # The ratchet naming each row as it starts has no row here. The spec that
 # watches it, a_clean_head_still_proves_its_row, runs `prove` itself, and
 # `prove` works in fixed directories -- /tmp/kanso-ratchet-base, one
@@ -3108,7 +3120,7 @@ rows_c1zl = text/concat rows_c1ze [lane_count lane_count_cost]
 # that spec as a gate removes its own baseline worktree from under itself. On
 # kanso#1675 the baseline read the gate red before any mutation. The other
 # specs in tests/ that run `prove` carry no row for the same reason.
-rows_c = text/concat rows_c1zl [itself]
+rows_c = text/concat rows_c1zh [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
