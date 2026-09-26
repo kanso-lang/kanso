@@ -8,10 +8,10 @@
 # same values either way, so nothing but the work vein can see it, which is
 # what the row asserts.
 set -e
-line='    b->cap = K_LIST_SEED;'
+line='    k_buf_set_cap(b, K_LIST_SEED, 0);'
 [ "$(grep -cxF "$line" src/runtime.c)" -eq 1 ] || {
   echo "the empty literal's buffer changed shape; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's/^    b->cap = K_LIST_SEED;$/    b->cap = 1;/' src/runtime.c
+sed -i 's/^    k_buf_set_cap(b, K_LIST_SEED, 0);$/    k_buf_set_cap(b, 1, 0);/' src/runtime.c
 if grep -qxF "$line" src/runtime.c; then exit 1; fi

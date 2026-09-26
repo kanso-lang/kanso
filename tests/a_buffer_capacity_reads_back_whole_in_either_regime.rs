@@ -62,11 +62,7 @@ fn the_emitted_room_tests_are_the_doubled_ones() {
 #[test]
 fn every_capacity_reads_back_whole_and_asks_for_room_exactly() {
     let src = read("src/runtime.c");
-    let helpers = cut(
-        &src,
-        "typedef struct { long long capw; long long used; } KBuf;",
-        "\n}",
-    );
+    let helpers = cut(&src, "typedef struct { long long capw; long long used; } KBuf;", "\n}");
     assert!(helpers.contains("k_buf_set_cap"), "the cut ended before the setter:\n{helpers}");
 
     let program = format!(
