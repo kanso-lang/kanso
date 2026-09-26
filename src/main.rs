@@ -279,9 +279,7 @@ fn driven() -> ExitCode {
         };
         if !interp {
             if let Some(played) = played_before(&file, &source) {
-                return execute(&played, |code| {
-                    ended_by_signal(code, kanso::compile_play_file(&file, &source).ok().as_ref())
-                });
+                return execute(&played, ended_by_signal);
             }
         }
         let program = match kanso::compile_play_file(&file, &source) {
@@ -2236,7 +2234,7 @@ fn run(program: &ast::Program, file: &str, source: &str, plan: bool) -> ExitCode
         return run_plan(program, file, source);
     }
     match built_binary(program) {
-        Ok(binary) => execute(&binary, |code| ended_by_signal(code, Some(program))),
+        Ok(binary) => execute(&binary, ended_by_signal),
         Err(code) => code,
     }
 }
@@ -2260,7 +2258,7 @@ fn play(program: &ast::Program, file: &str, source: &str) -> ExitCode {
     let Some(played) = played else {
         return run(program, file, source, false);
     };
-    let explain = |code: &std::process::ExitStatus| ended_by_signal(code, Some(program));
+    let explain = ended_by_signal;
     if played.exists() {
         return execute(&played, explain);
     }
@@ -2373,18 +2371,18 @@ fn execute(
 /// A program the operating system killed has no exit code to report, and
 /// saying nothing leaves the reader with a bare failure and no cause.
 #[cfg(unix)]
-fn ended_by_signal(status: &std::process::ExitStatus, program: Option<&ast::Program>) -> String {
+fn ended_by_signal(status: &std::process::ExitStatus) -> String {
     use std::os::unix::process::ExitStatusExt;
     const SIGSEGV: i32 = 11;
     match status.signal() {
-        Some(SIGSEGV) => kanso::stack_exhausted(program),
+        Some(SIGSEGV) => kanso::stack_exhausted(),
         Some(other) => format!("error[runtime]: the program was ended by signal {other}"),
         None => "error[runtime]: the program ended without an exit code".to_string(),
     }
 }
 
 #[cfg(not(unix))]
-fn ended_by_signal(_status: &std::process::ExitStatus, _program: Option<&ast::Program>) -> String {
+fn ended_by_signal(_status: &std::process::ExitStatus) -> String {
     "error[runtime]: the program ended without an exit code".to_string()
 }
 
@@ -2440,11 +2438,8 @@ fn run_plan(program: &ast::Program, file: &str, source: &str) -> ExitCode {
     match result {
         eval::Value::Desc(desc) => {
             let mut out = String::from("plan:\n");
-            let force = |v: &eval::Value| match interp.demand(v) {
-                Ok(eval::Value::Desc(d)) => Some(d),
-                _ => None,
-            };
-            eval::render_plan(&desc, &mut out, &force);
+            let step = |callee: &eval::Value| interp.ignoring_step(callee);
+            eval::render_plan(&desc, &mut out, &step);
             print!("{out}");
             ExitCode::SUCCESS
         }

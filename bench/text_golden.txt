@@ -809,20 +809,20 @@
 # take no beat. Every program links the region pop, 848 bytes of text, and the
 # programs that encode through std/json lose the loops' push, pop and rewind
 # test:
-jsonbench text=239768
-encodebench text=249080
-oneshot text=250584
-basket text=236664
-widebench text=250296
-deepbench text=219288
-escapebench text=213560
-pendbench text=227096
-indexbench text=213384
-scanbench text=313720
-digestbench text=236376
-readbench text=213880
-livebench text=251512
-runbench text=401032
+jsonbench text=238072
+encodebench text=247384
+oneshot text=248520
+basket text=235608
+widebench text=248824
+deepbench text=217592
+escapebench text=211864
+pendbench text=225976
+indexbench text=211720
+scanbench text=320088
+digestbench text=234680
+readbench text=212184
+livebench text=249400
+runbench text=407640
 # 2026-09-10 (kanso#1362): the backends build the partial over a value. Every
 # one of the fourteen rows RISES, by 2,096 bytes on eight of them and 2,432 on
 # the other six: k_partial0..4 and the branch each of k_call0..4 gains are in

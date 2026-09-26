@@ -14,7 +14,6 @@ fn edges xs
 fn picked xs
   xs[2]! .> (v -> print "strict: {v}")
 
-pub play =
-  print "sum: {walked [3 5 7 11] 1 0}"
-  >> print "edges: {edges [3 5 7 11]}"
-  >> picked [3 5 7 11]
+pub play = print "sum: {walked [3 5 7 11] 1 0}"
+  .> (_ -> print "edges: {edges [3 5 7 11]}")
+  .> (_ -> picked [3 5 7 11])

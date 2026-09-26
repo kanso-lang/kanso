@@ -1,0 +1,4 @@
+error[syntax]: kanso has no `>>`: a step that ignores what came before is written `.> (_ -> step)`
+  --> the_wall_is_gone.kso:1:18
+   1 | print "steeping" >> print "serving"
+                        ^

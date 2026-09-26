@@ -1,3 +1,5 @@
-print "steeping the sencha"   # two bare lines: no order between them,
-print "warming the cups"      # each runs as if on its own thread
->> print "serving"            # the wall: runs after both settle
+pub play = prepare .> (_ -> print "serving")  # runs after both settle
+
+prepare =
+  print "steeping the sencha"   # two bare lines: no order between them,
+  print "warming the cups"      # each runs as if on its own thread

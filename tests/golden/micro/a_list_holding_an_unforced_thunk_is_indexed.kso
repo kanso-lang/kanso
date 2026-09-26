@@ -35,7 +35,6 @@ plain = [x 7]
 
 past = plain[2]
 
-pub play =
-  x[1]! .> (strict -> print "strict: {length strict}")
-  >> print "loose: {length loose}"
-  >> print "past: {past}"
+pub play = x[1]! .> (strict -> print "strict: {length strict}")
+  .> (_ -> print "loose: {length loose}")
+  .> (_ -> print "past: {past}")

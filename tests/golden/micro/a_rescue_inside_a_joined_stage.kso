@@ -21,8 +21,8 @@ fn told (err _)
 fn told v
   "{v}"
 
-pub play =
-  print "start"
-  >>
+pub play = print "start" .> (_ -> stage)
+
+stage =
   rescue (os/read_file! "no-such-file.txt") told .> print
   print "beside it"

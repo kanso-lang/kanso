@@ -13,16 +13,15 @@ b = text/bytes "hi there"
 
 l = [10 20 30 40]
 
-pub play =
-  print "two bytes: {text/slice b 1 2}"
-  >> print "one byte: {text/slice b 3 3}"
-  >> print "the whole of it: {text/slice b 1 8}"
-  >> print "the last byte: {text/slice b 8 8}"
-  >> print "from below one: {text/slice b 0 2}"
-  >> print "backwards: {text/slice b 4 2}"
-  >> print "past the end: {text/slice b 7 9}"
-  >> print "wholly past the end: {text/slice b 12 14}"
-  >> print "a list falls through: {text/slice l 2 3}"
-  >> print "a list past the end: {text/slice l 3 9}"
-  >> print "a string falls through: {text/slice "hi there" 1 2}"
-  >> print "a string past the end: {text/slice "hi there" 7 9}"
+pub play = print "two bytes: {text/slice b 1 2}"
+  .> (_ -> print "one byte: {text/slice b 3 3}")
+  .> (_ -> print "the whole of it: {text/slice b 1 8}")
+  .> (_ -> print "the last byte: {text/slice b 8 8}")
+  .> (_ -> print "from below one: {text/slice b 0 2}")
+  .> (_ -> print "backwards: {text/slice b 4 2}")
+  .> (_ -> print "past the end: {text/slice b 7 9}")
+  .> (_ -> print "wholly past the end: {text/slice b 12 14}")
+  .> (_ -> print "a list falls through: {text/slice l 2 3}")
+  .> (_ -> print "a list past the end: {text/slice l 3 9}")
+  .> (_ -> print "a string falls through: {text/slice "hi there" 1 2}")
+  .> (_ -> print "a string past the end: {text/slice "hi there" 7 9}")

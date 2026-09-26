@@ -50,11 +50,11 @@ description: "where kanso's taste comes from, how its two engines work, what it 
 
 <p>what does <code>print "one"</code> do when it is evaluated?</p>
 
-<p>nothing. it returns a value—a <em>description</em> of printing. every kanso function is pure; <code>&gt;&gt;</code> glues descriptions into bigger descriptions; and nothing in the entire program executes until the runtime receives <code>main</code>'s description and walks it. the same program, run two ways:</p>
+<p>nothing. it returns a value—a <em>description</em> of printing. every kanso function is pure; <code>.&gt;</code> glues descriptions into bigger descriptions; and nothing in the entire program executes until the runtime receives <code>main</code>'s description and walks it. the same program, run two ways:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">examples/effects.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"one"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"two"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"three"</span></code></pre>
+  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"one"</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"two"</span>) <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"three"</span>)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run examples/effects.kso</div>
     <pre><code>one
@@ -117,7 +117,7 @@ three</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">tests/golden/errors/unused_expression.stderr</div>
-  <pre><code><span class="k">error[unused]</span>: unused expression: every non-final line binds a name (sequence effects with `&gt;&gt;`)
+  <pre><code><span class="k">error[unused]</span>: unused expression: every non-final line binds a name (sequence effects with `.&gt;`)
 <span class="c">  --&gt; unused_expression.kso:2:5</span>
    2 |   1 + 1
            <span class="k">^</span></code></pre>

@@ -2,11 +2,10 @@
 # through it — every operator, not the three that happened to unwrap
 type money int
 
-pub play =
-  print "plus: {money 350 + 1}"
-  >> print "minus: {money 350 - 1}"
-  >> print "times: {money 350 * 2}"
-  >> print "over: {money 350 / 2}"
-  >> print "mod: {money 350 % 3}"
-  >> print "less: {money 350 < 400}"
-  >> print "both sides: {money 350 - money 50}"
+pub play = print "plus: {money 350 + 1}"
+  .> (_ -> print "minus: {money 350 - 1}")
+  .> (_ -> print "times: {money 350 * 2}")
+  .> (_ -> print "over: {money 350 / 2}")
+  .> (_ -> print "mod: {money 350 % 3}")
+  .> (_ -> print "less: {money 350 < 400}")
+  .> (_ -> print "both sides: {money 350 - money 50}")

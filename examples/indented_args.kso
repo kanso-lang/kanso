@@ -13,6 +13,4 @@ card = brochure
   "the long-name matcha parfait of the west garden annex"
   1200
   "a dessert whose description would never have fit inline"
-print card
->> print (judge 4)
->> print (judge 40)
+print card .> (_ -> print (judge 4)) .> (_ -> print (judge 40))

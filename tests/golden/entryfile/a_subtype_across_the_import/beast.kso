@@ -12,6 +12,5 @@ fn speak _:dog
 fn speak _:animal
   "some animal"
 
-pub play =
-  print (speak (dog (animal "rex")))
-  >> print (speak (animal "stray"))
+pub play = print (speak (dog (animal "rex")))
+  .> (_ -> print (speak (animal "stray")))

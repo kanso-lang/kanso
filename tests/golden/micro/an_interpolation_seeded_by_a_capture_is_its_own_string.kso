@@ -45,8 +45,7 @@ fn nested p
 fn shown p
   print "{go p}"
 
-pub play =
-  shown ""
-  >> shown "-"
-  >> io/write "" .> (_ -> nested "+")
-  >> print "{length (built 4 [])}"
+pub play = shown ""
+  .> (_ -> shown "-")
+  .> (_ -> io/write "" .> (_ -> nested "+"))
+  .> (_ -> print "{length (built 4 [])}")

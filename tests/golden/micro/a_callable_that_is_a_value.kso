@@ -134,25 +134,28 @@ one_both = dead_and_bad1 "callee" "arg"
 
 two_both = dead_and_bad2 "callee" "a" "b"
 
-pub play =
-  print "one lam: {one_lam}"
-  >> print "one ref: {one_ref}"
-  >> print "one kept: {one_kept}"
-  >> print "one closed: {one_closed}"
-  >> print "two lam: {two_lam}"
-  >> print "two ref: {two_ref}"
-  >> print "two closed: {two_closed}"
-  >> print "one lam bad: {testing/when_failed one_lam_bad as_text}"
-  >> print "one drop bad: {testing/when_failed one_drop_bad as_text}"
-  >> print "one kept bad: {testing/when_failed one_kept_bad as_text}"
-  >> print "one ref bad: {testing/when_failed one_ref_bad as_text}"
-  >> print "one closed bad: {testing/when_failed one_closed_bad as_text}"
-  >> print "two drop bad a: {testing/when_failed two_drop_bad_a as_text}"
-  >> print "two drop bad b: {testing/when_failed two_drop_bad_b as_text}"
-  >> print "two drop bad ab: {testing/when_failed two_drop_bad_ab as_text}"
-  >> print "two ref bad b: {testing/when_failed two_ref_bad_b as_text}"
-  >> print "two closed bad b: {testing/when_failed two_closed_bad_b as_text}"
-  >> print "one dead: {testing/when_failed one_dead as_text}"
-  >> print "two dead: {testing/when_failed two_dead as_text}"
-  >> print "one both: {testing/when_failed one_both as_text}"
-  >> print "two both: {testing/when_failed two_both as_text}"
+pub play = print "one lam: {one_lam}"
+  .> (_ -> print "one ref: {one_ref}")
+  .> (_ -> print "one kept: {one_kept}")
+  .> (_ -> print "one closed: {one_closed}")
+  .> (_ -> print "two lam: {two_lam}")
+  .> (_ -> print "two ref: {two_ref}")
+  .> (_ -> print "two closed: {two_closed}")
+  .> (_ -> print "one lam bad: {testing/when_failed one_lam_bad as_text}")
+  .> (_ -> print "one drop bad: {testing/when_failed one_drop_bad as_text}")
+  .> (_ -> print "one kept bad: {testing/when_failed one_kept_bad as_text}")
+  .> (_ -> print "one ref bad: {testing/when_failed one_ref_bad as_text}")
+  .> (_ -> print "one closed bad: {testing/when_failed one_closed_bad as_text}")
+  .> (_ -> print "two drop bad a: {testing/when_failed two_drop_bad_a as_text}")
+  .> (_ -> print "two drop bad b: {testing/when_failed two_drop_bad_b as_text}")
+  .> (_ -> print "two drop bad ab: {drop_bad_ab}")
+  .> (_ -> print "two ref bad b: {testing/when_failed two_ref_bad_b as_text}")
+  .> (_ -> print "two closed bad b: {closed_bad_b}")
+  .> (_ -> print "one dead: {testing/when_failed one_dead as_text}")
+  .> (_ -> print "two dead: {testing/when_failed two_dead as_text}")
+  .> (_ -> print "one both: {testing/when_failed one_both as_text}")
+  .> (_ -> print "two both: {testing/when_failed two_both as_text}")
+
+drop_bad_ab = testing/when_failed two_drop_bad_ab as_text
+
+closed_bad_b = testing/when_failed two_closed_bad_b as_text

@@ -206,7 +206,7 @@ fn for_each_child_mut(expr: &mut Expr, f: &mut dyn FnMut(&mut Expr)) {
                 f(a);
             }
         }
-        Expr::BinOp { lhs, rhs, .. } | Expr::Seq(lhs, rhs, _) | Expr::Join { lhs, rhs, .. } => {
+        Expr::BinOp { lhs, rhs, .. } | Expr::Join { lhs, rhs, .. } => {
             f(lhs.as_mut());
             f(rhs.as_mut());
         }

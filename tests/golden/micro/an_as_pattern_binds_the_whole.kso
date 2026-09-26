@@ -17,5 +17,4 @@ fn grown (rect w h) n
 
 pub play =
   r = grown (rect 3 9) 200000
-  print "{r.w} by {r.h}"
-  >> print "{(landscape r).w}"
+  print "{r.w} by {r.h}" .> (_ -> print "{(landscape r).w}")

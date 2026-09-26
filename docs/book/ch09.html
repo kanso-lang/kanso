@@ -87,7 +87,7 @@ extra_css: /book/book.css
 <span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
   voter <span class="o">=</span> [<span class="n">3</span> <span class="n">4</span>]
   <span class="f">print</span> <span class="s">"candidate at the origin: <span class="i">{util voter [0 0]}</span>"</span>
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"candidate next door: <span class="i">{util voter [3 3]}</span>"</span>
+    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"candidate next door: <span class="i">{util voter [3 3]}</span>"</span>)
 
 <span class="k">fn</span> <span class="f">sq</span> x
   x <span class="o">*</span> x
@@ -607,11 +607,11 @@ candidate next door: -1.0</code></pre>
   <pre><code><span class="k">import</span> <span class="s">"./squeeze"</span>
 
 <span class="f">print</span> <span class="s">"plurality: <span class="i">{label (plurality_winner electorate)}</span>"</span>
-<span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"irv:       <span class="i">{label (irv_winner electorate)}</span>"</span>
-<span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"approval:  <span class="i">{label (approval_winner electorate)}</span>"</span>
-<span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"score:     <span class="i">{label (score_winner electorate)}</span>"</span>
-<span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"star:      <span class="i">{label (star_winner electorate)}</span>"</span>
-<span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"minimax:   <span class="i">{label (minimax_winner electorate)}</span>"</span></code></pre>
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"irv:       <span class="i">{label (irv_winner electorate)}</span>"</span>)
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"approval:  <span class="i">{label (approval_winner electorate)}</span>"</span>)
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"score:     <span class="i">{label (score_winner electorate)}</span>"</span>)
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"star:      <span class="i">{label (star_winner electorate)}</span>"</span>)
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"minimax:   <span class="i">{label (minimax_winner electorate)}</span>"</span>)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run squeeze</div>
     <pre><code>plurality: lopez
@@ -693,7 +693,7 @@ minimax   VSE 0.9696873187267149</code></pre>
 
 <h2>what you can do now</h2>
 
-<p>you have read a complete kanso program—not a curated fragment, every declaration—and the parts were all familiar: literal-clause dispatch for base cases, folds for aggregation, bind for randomness, <code>&gt;&gt;</code> for the report, a directory for the module. more usefully, you have seen the shape of a simulation study: model the world as data, define the projection each method sees, implement the rules faithfully, fix the yardstick before running, and let the answer be whatever the run says. the ordering in the table is the program's output, and the program is yours to interrogate—which is what the exercises are about.</p>
+<p>you have read a complete kanso program—not a curated fragment, every declaration—and the parts were all familiar: literal-clause dispatch for base cases, folds for aggregation, bind for randomness and for the report, a directory for the module. more usefully, you have seen the shape of a simulation study: model the world as data, define the projection each method sees, implement the rules faithfully, fix the yardstick before running, and let the answer be whatever the run says. the ordering in the table is the program's output, and the program is yours to interrogate—which is what the exercises are about.</p>
 
 <h2>exercises</h2>
 

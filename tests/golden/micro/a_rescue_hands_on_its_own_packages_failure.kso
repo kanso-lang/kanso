@@ -36,7 +36,6 @@ far = json/decode "[1, 2" .? (e -> "claimed {e.reason}")
 # boxed failure enters the callback at all.
 far_boxed = os/read_file! "no_such_file" .? (_ -> "claimed")
 
-pub play =
-  print "own: {testing/when_failed own still}"
-  >> print "far: {far}"
-  >> far_boxed .> (v -> print "far boxed: {v}")
+pub play = print "own: {testing/when_failed own still}"
+  .> (_ -> print "far: {far}")
+  .> (_ -> far_boxed .> (v -> print "far boxed: {v}"))

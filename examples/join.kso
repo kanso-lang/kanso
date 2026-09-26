@@ -1,6 +1,9 @@
 # two effects with no order between them -- parallel is the default, so
-# plain lines say it. the >> is the wall: serving happens only after both.
+# plain lines say it. `prepare` is the group, and the `.>` after it serves
+# only once both have settled.
 # failures accumulate: if both sides err you get both reasons.
-print "steeping the sencha"
-print "warming the cups"
->> print "serving"
+fn prepare tea
+  print "steeping the {tea}"
+  print "warming the cups"
+
+prepare "sencha" .> (_ -> print "serving")

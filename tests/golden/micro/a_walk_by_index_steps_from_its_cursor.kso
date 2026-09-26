@@ -20,9 +20,9 @@ pub play =
   mixed = text/join [word "ü"] sep
   other = "xyzü"
   print "counted:  {counted}"
-  >> print "both:     {length both}"
-  >> print "spaced:   {length spaced}"
-  >> print "mixed:    {length mixed}"
-  >> print "none:     {length (text/join [] sep)}"
-  >> print "walked:   {walked spaced 1 12 ""}"
-  >> print "two:      {spaced[2]} then {other[3]} then {spaced[3]}"
+    .> (_ -> print "both:     {length both}")
+    .> (_ -> print "spaced:   {length spaced}")
+    .> (_ -> print "mixed:    {length mixed}")
+    .> (_ -> print "none:     {length (text/join [] sep)}")
+    .> (_ -> print "walked:   {walked spaced 1 12 ""}")
+    .> (_ -> print "two:      {spaced[2]} then {other[3]} then {spaced[3]}")

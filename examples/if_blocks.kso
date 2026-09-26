@@ -16,6 +16,4 @@ quote = if (1 < 2)
   "sale price {discounted}"
 else
   "list price"
-print quote
->> print (shipping 6000)
->> print (shipping 4400)
+print quote .> (_ -> print (shipping 6000)) .> (_ -> print (shipping 4400))

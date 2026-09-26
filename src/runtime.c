@@ -441,7 +441,7 @@ typedef struct { long long type_id; long long nfields; KValue* fields; } KRec;
 typedef struct { long long type_id; KValue inner; } KSub;
 typedef struct KDesc KDesc;
 struct KDesc { long long dtag; KValue x; KValue y; };
-/* dtag: 0 print, 1 seq, 2 args, 3 stdin, 4 read_file, 5 write_file, 6 bind,
+/* dtag: 0 print, 2 args, 3 stdin, 4 read_file, 5 write_file, 6 bind,
    7 join, 8 sleep, 9 random, 10 nil, 11 write (stdout, no newline),
    12 write_err, 13 env, 14 exists, 15 list_dir, 16 now, 17 run,
    18 is_dir, 26 start, 27 kill, 29 rescue, 30 read_bytes,
@@ -5406,26 +5406,6 @@ KValue k_desc_print(KValue text) {
     return k_mkdesc(0, text, k_none());
 }
 
-/* GAVEL 15: the wall defers its right side, so `b` arrives as a cell. It is
-   forced where the wall reaches it, which is also where its failure and its
-   type are checked — the wall is ordered, so what follows a failure never
-   speaks, and that includes never being built. */
-static KValue k_seq_right(KValue y) {
-    KValue v = k_force(y);
-    if (k_not_failure(v) && v.tag != K_DESC)
-        k_die("`>>` sequences two effect descriptions");
-    return v;
-}
-
-KValue k_seq(KValue a, KValue b) {
-    /* The one pair that does not merge: the wall is ordered, so the first
-       failure is the answer. Accumulation belongs to the parallel group,
-       where nothing is first. */
-    if (!k_not_failure(a)) return a;
-    if (a.tag != K_DESC) k_die("`>>` sequences two effect descriptions");
-    return k_mkdesc(1, a, b);
-}
-
 KValue k_desc_args(void) { return k_mkdesc(2, k_none(), k_none()); }
 /* The box built by hand (ruled 2026-09-15). Nothing about it is deferred, so
    it is built holding what it was handed, value or err, and running it hands
@@ -5848,7 +5828,7 @@ static long long k_rng_below(long long n) {
 
 /* One step of a fiber: it finished (blocked=0, value set) or blocked on a
    `sleep` (blocked=1, ms + cont). Blocking threads the continuation up through
-   Seq and Bind, so `sleep` may sit anywhere and suspension needs no coroutine.
+   Bind, so `sleep` may sit anywhere and suspension needs no coroutine.
    Mirrors eval.rs's Step exactly. */
 typedef struct { int blocked; unsigned long long ms; KValue cont; KValue value; } KStep;
 
@@ -5866,28 +5846,6 @@ static KValue k_exec(KDesc* d) {
             fwrite(s->data, 1, s->len, stdout);
             fputc('\n', stdout);
             return k_done();
-        }
-        case 1: {
-            /* a >> step is a beat: the left side's yield is discarded by
-               contract, so everything it allocated dies here — unless it
-               failed, in which case the err (and its region) survives. */
-            /* The right spine is walked rather than recursed into, so a loop
-               written with `>>` costs one C frame however many links it runs.
-               The oracle's execute_chain has always been a loop; this is the
-               same shape, and it is what deferral makes reachable — the chain
-               no longer exists all at once to be built. */
-            KDesc* cur = d;
-            for (;;) {
-                k_beat_push();
-                KValue left = k_exec(k_as_desc(cur->x));
-                if (left.tag == K_ERR) return k_beat_pop(left);
-                k_beat_pop(k_none());
-                KValue right = k_seq_right(cur->y);
-                if (!k_not_failure(right)) return right;
-                KDesc* next = k_as_desc(right);
-                if (next->dtag != 1) return k_exec(next);
-                cur = next;
-            }
         }
         case 2: {
             long long n = k_argc_global > 1 ? k_argc_global - 1 : 0;
@@ -6531,23 +6489,6 @@ static KStep k_step(KDesc* d) {
             long long ms = d->x.tag == K_INT ? d->x.payload : 0;
             KStep s = {1, (unsigned long long)(ms < 0 ? 0 : ms), k_desc_nil(), k_none()};
             return s;
-        }
-        case 1: {
-            KStep l = k_step(k_as_desc(d->x));
-            if (l.blocked) {
-                KStep s = {1, l.ms, k_mkdesc(1, l.cont, d->y), k_none()};
-                return s;
-            }
-            if (l.value.tag == K_ERR) {
-                KStep s = {0, 0, k_none(), l.value};
-                return s;
-            }
-            KValue right = k_seq_right(d->y);
-            if (!k_not_failure(right)) {
-                KStep s = {0, 0, k_none(), right};
-                return s;
-            }
-            return k_step(k_as_desc(right));
         }
         case 6:
         case 29: {

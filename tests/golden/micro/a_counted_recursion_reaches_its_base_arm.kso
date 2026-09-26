@@ -32,11 +32,10 @@ fn total acc 0
 fn total acc n
   total (acc + n) (n - 1)
 
-pub play =
-  print (step 0)
-  >> print (step 3)
-  >> print (step (0 - 1))
-  >> print (step "x")
-  >> print (step none)
-  >> print (rescue (step (json/decode "[1, 2")) said)
-  >> print "{total 0 10}"
+pub play = print (step 0)
+  .> (_ -> print (step 3))
+  .> (_ -> print (step (0 - 1)))
+  .> (_ -> print (step "x"))
+  .> (_ -> print (step none))
+  .> (_ -> print (rescue (step (json/decode "[1, 2")) said))
+  .> (_ -> print "{total 0 10}")

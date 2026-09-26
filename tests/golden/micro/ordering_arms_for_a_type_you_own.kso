@@ -23,5 +23,5 @@ long = book 300
 pub play = said
 
 said = print "{short < long} {short > long} {short <= long} {short >= long}"
-  >> print "{long < short} {short <= short} {short >= short}"
-  >> print "{1 < 2} {2 < 1}"
+  .> (_ -> print "{long < short} {short <= short} {short >= short}")
+  .> (_ -> print "{1 < 2} {2 < 1}")

@@ -1,3 +1,5 @@
-err "the steep went cold"
-err "the cups cracked"
->> print "serving"
+pub play = prepare .> (_ -> print "serving")
+
+prepare =
+  err "the steep went cold"
+  err "the cups cracked"

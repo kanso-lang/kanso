@@ -101,7 +101,6 @@ pub enum Expr {
         strict: bool,
         span: Span,
     },
-    Seq(Box<Expr>, Box<Expr>, Span),
     Lambda {
         params: Vec<(String, Span)>,
         body: Box<Expr>,
@@ -164,7 +163,6 @@ impl Expr {
             | Expr::List(_, s)
             | Expr::App { span: s, .. }
             | Expr::Index { span: s, .. }
-            | Expr::Seq(_, _, s)
             | Expr::Lambda { span: s, .. }
             | Expr::BinOp { span: s, .. }
             | Expr::Join { span: s, .. }

@@ -19,5 +19,4 @@ pub play =
     down = a.up
     down.up = c
     c.up = a
-  print "{a.id} {b.id} {c.id}"
-  >> print "{a.up.id} {b.up.id} {c.up.id}"
+  print "{a.id} {b.id} {c.id}" .> (_ -> print "{a.up.id} {b.up.id} {c.up.id}")

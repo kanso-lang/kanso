@@ -3,10 +3,10 @@
 # were born merged, and then the same three reasons print three ways depending
 # on where the parentheses fell.
 #
-# The wall is the other half: it is ordered, so the first failure is the answer
-# and what follows never speaks. Both rules are here because the sweep that
-# gave every operator the merge gave it to `>>` too, on one engine only, and
-# nothing said so.
+# The bind is the other half: it is ordered, so the first failure is the
+# answer and what follows never speaks. Both rules are here because the sweep
+# that gave every operator the merge once gave it to sequencing too, on one
+# engine only, and nothing said so.
 #
 # The reasons are read through `std/testing`'s `when_failed`: foreign to this
 # module, so it is licensed to separate a reason from a failure this module
@@ -44,10 +44,9 @@ right = a + (b + c)
 
 nested = ab + c
 
-walled = a >> b
+walled = a .> (_ -> b)
 
-pub play =
-  print "left first: {testing/when_failed left as_text}"
-  >> print "right first: {testing/when_failed right as_text}"
-  >> print "list reason: {testing/when_failed nested as_text}"
-  >> print "the wall: {testing/when_failed walled as_text}"
+pub play = print "left first: {testing/when_failed left as_text}"
+  .> (_ -> print "right first: {testing/when_failed right as_text}")
+  .> (_ -> print "list reason: {testing/when_failed nested as_text}")
+  .> (_ -> print "the wall: {testing/when_failed walled as_text}")
