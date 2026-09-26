@@ -20,9 +20,10 @@
 //! C+1 — one byte more than the buffer holds, stored past the frontier. Every
 //! spec in the suite passed with it in; what said so was the cost-golden sweep,
 //! four veins' `alloc_bytes` moving with every allocation COUNT identical. So
-//! the scan below is the guard: after this change exactly one sign-stripping
-//! capacity expression may remain in the file, and it belongs to KBuf, a
-//! different struct with a different convention.
+//! the scan below is the guard: no sign-stripping capacity expression may
+//! remain in the file. KBuf, the one struct that kept the sign after this
+//! change, gave it up on 2026-09-26 for a doubled capacity with the regime in
+//! bit 0; `a_buffer_capacity_reads_back_whole_in_either_regime.rs` covers it.
 //!
 //! THE TEXT IS LIFTED, NOT COPIED. The growth formula and `k_bytes_malloced`
 //! are cut out of `src/runtime.c` and compiled here, so the sweep runs the
@@ -49,11 +50,9 @@ fn cut<'a>(src: &'a str, open: &str, shut: &str) -> &'a str {
 }
 
 #[test]
-fn one_struct_still_strips_a_sign_off_its_capacity_and_it_is_not_bytes() {
-    // KBuf keeps the sign convention: a negative cap marks a permanent buffer,
-    // and k_buf_cap is where that is stripped. KStr keeps its own, where a
-    // negative cap is a cached character count. Neither is KBytes, and after
-    // the regime bit no KBytes read may look like this.
+fn no_struct_strips_a_sign_off_its_capacity() {
+    // KBytes carries its regime in bit 0 and KBuf in bit 0 of a doubled
+    // capacity, so no capacity read strips a sign.
     let src = runtime();
     let offenders: Vec<(usize, &str)> = src
         .lines()
@@ -61,17 +60,11 @@ fn one_struct_still_strips_a_sign_off_its_capacity_and_it_is_not_bytes() {
         .filter(|(_, line)| line.contains("< 0 ? -"))
         .map(|(i, line)| (i + 1, line.trim()))
         .collect();
-    assert_eq!(
-        offenders.len(),
-        1,
-        "a capacity is still read by stripping its sign. KBytes.cap carries the \
-         regime in bit 0 now, so the room is `cap & ~1LL`; only k_buf_cap may \
-         strip a sign. Found:\n{offenders:#?}"
-    );
-    let (line, text) = offenders[0];
     assert!(
-        text.starts_with("static long long k_buf_cap(const KBuf* b)"),
-        "src/runtime.c:{line} strips a sign off a capacity and is not k_buf_cap: {text}"
+        offenders.is_empty(),
+        "a capacity is still read by stripping its sign. KBytes.cap carries the \
+         regime in bit 0, so the room is `cap & ~1LL`, and KBuf's goes through \
+         k_buf_cap. Found:\n{offenders:#?}"
     );
 }
 
