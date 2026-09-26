@@ -16501,3 +16501,20 @@ is unchanged.
 `a_clean_head_still_proves_its_row` in tests/a_gate_red_before_the_mutation.rs
 now also requires the line for its one row. The ratchet row `row_named` empties
 the announcement, and the spec goes red on the missing line.
+
+## 2026-09-26 — the sharded nightly's first run, and the row it found blind
+
+The nightly ratchet was dispatched on main at 6c9d5fe5 once the shards landed.
+All eight jobs finished: the proving step took 23, 38, 35, 30, 33, 36, 35 and
+35 minutes for shards 1 through 8, against a timeout of 90. Seven were
+green. Shard 8 proved 30 of its 31 rows and reported one BLIND: the welfare
+row "a run-speed term falling below the ratcheted floor".
+
+That row's mutation raised jsonbench in bench/instructions_golden.txt to
+9,999,999,999. The run-speed term has read the one consolidated run program
+since the 2026-09-06 gavel, so jsonbench stopped moving the index that day.
+With the mutation applied, `kanso run scripts/welfare` reads 90.09 against a
+floor of 90.09 and passes. The row was blind from the consolidation to now,
+and no nightly finished in that time to say so. The mutation now raises
+runbench instead; welfare falls to 80.32 and the gate goes red. `kanso run
+scripts/ratchet -- prove welfare` proves both of the welfare job's rows red.
