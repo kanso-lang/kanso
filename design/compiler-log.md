@@ -16486,3 +16486,26 @@ the eighth shard from the matrix.
 
 Whether eight shards fit is a projection from the per-branch runs, not a
 measurement. The first scheduled run after this lands is the measurement.
+
+## 2026-09-26 — the slice walk counts character starts by multiply
+
+`k_slice_skip` walks a string eight bytes at a time to find where a slice
+starts, and counts each word's character starts as eight less its
+continuation bytes, which it counted with `__builtin_popcountll`. The runtime
+is built with `-mssse3`, which has no `popcnt`, so the builtin became a dozen
+shifts, masks and adds. The mask it counts has only the byte-high bits set, so
+shifting each to its byte's low bit and multiplying by `0x0101010101010101`
+sums the eight bytes into the top one, in three instructions.
+
+The same multiply in `k_utf8_chars` was measured first and kept out.
+pendbench rose 1,642,235 instructions (+0.91%), all of it in
+`k_str_chars_scan`, which inlines that function. Why the multiply is dearer
+there was not isolated. `k_utf8_chars` keeps the builtin.
+
+On the container, against main at 6c9d5fe5: runbench 1,144,623,289 ->
+1,142,183,305 (-0.21%), indexbench 2,498,178 -> 2,428,163 (-2.80%), livebench
+-434,738 (-0.03%) and encodebench -187,333 (-0.01%). oneshot rises 2,212
+(+0.017%), and what moved it was not isolated. The other nine programs are
+byte-identical, and no allocation counter moves. Every benchmark's `.text`
+shrinks by 160 bytes. The ratchet row `skip_by_multiply` puts the builtin
+back, and indexbench reads 2,498,178, main's figure exactly.

@@ -9480,7 +9480,15 @@ static void k_slice_skip(KStr* s, long* at, long long* seen, long long next) {
     while (*at + 8 <= s->len) {
         unsigned long long w;
         memcpy(&w, s->data + *at, sizeof w);
-        long long leads = 8 - __builtin_popcountll(w & ~(w << 1) & 0x8080808080808080ULL);
+        unsigned long long cont = w & ~(w << 1) & 0x8080808080808080ULL;
+        /* Only the byte-high bits can be set, so moving each to its byte's
+           low bit and multiplying by 0x0101...01 sums the eight bytes into
+           the top one: a shift, a multiply and a shift. The runtime is built
+           for ssse3, which has no popcnt, and `__builtin_popcountll` became
+           a dozen shifts, masks and adds. k_utf8_chars keeps the builtin:
+           the same multiply there cost pendbench 1,642,235 instructions,
+           for a reason not isolated. */
+        long long leads = 8 - (long long)(((cont >> 7) * 0x0101010101010101ULL) >> 56);
         if (*seen + leads >= next) break;
         long nat = *at + 8;
         while (((unsigned char)s->data[nat] & 0xC0) == 0x80) nat--;
