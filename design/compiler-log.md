@@ -16095,3 +16095,19 @@ its level back out of the string afterwards. With the slow path's return for
 the sentinel removed, the rewind hands back every block and the program
 prints 6306 where every engine prints 6370; the ratchet row `beat_none` makes
 that mutation. The instruction and compile rows are left for CI.
+
+The doubled capacity and the sentinel landed together, carried over the
+guard, and CI's rows were taken from the carrier's run. Against the guard's
+rows: `work_runbench` 1,190,403,668 -> 1,176,309,124, `work_escapebench`
+63,421,675 -> 56,203,688, `work_jsonbench` 813,902,265 -> 805,759,682,
+`work_encodebench` 2,445,045,509 -> 2,435,949,028, `work_pendbench`
+181,899,010 -> 179,493,114 and `work_basket` 31,128,128 -> 30,556,304.
+`work_livebench` rises 1,697,540,070 -> 1,698,025,788 over the guard and
+falls against main. `work_indexbench` rises 2,498,459 -> 2,498,525, 66
+instructions, the one row that ends above main; the index walk makes no push
+and reaches no beat, and the difference is the runtime's layout. The builds
+move with the runtime: `codegen_instructions_dev` 123,304,313 -> 123,359,084
+and `codegen_instructions_release` 400,860,282 -> 401,504,467, both below
+main, and `emit_instructions` 29,723,904 -> 29,723,818. `text` sums to
+3,502,176.
+Welfare rises from 89.9020 to 89.9599 and the floor banks there.
