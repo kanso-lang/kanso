@@ -15292,3 +15292,10 @@ parameter read in place. The postcard program is the error golden
 `a_box_a_lambda_reads`, which main's compiler checks clean. The ratchet row
 `box_param` turns the new arm off and the error corpus goes red.
 
+CI read the tree at eec06dd9 and its rows were taken. The new arm is asked at
+every application site, so the front end pays for it: `compile_instructions`
+25,204,253 -> 25,216,319, `entry_instructions` 85,215,074 -> 85,247,109 and
+`library_instructions` 85,773,867 -> 85,805,873. No runtime row moved. The
+trend gate reads that as a pure regression, and it is the language's to
+spend: the refusal is the box ruling's, so the floor's history records the
+fall against this change and the score holds at 89.17 to two places.
