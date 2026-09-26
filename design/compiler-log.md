@@ -15651,7 +15651,9 @@ rise with every allocation counter unchanged: `work_deepbench` 364,797,730 ->
 365,181,731, `work_widebench` 28,789,056 -> 28,805,035, `work_oneshot`
 14,486,409 -> 14,487,226, `work_pendbench` 181,895,213 -> 181,895,414,
 `work_escapebench` 65,821,674 -> 65,821,675, `work_indexbench` 2,538,557 ->
-2,538,558 and `work_scanbench` 282,021 -> 282,022. As before, these arrived
+2,538,558 and `work_scanbench` 282,021 -> 282,022. Two fall slightly against the carrier:
+`work_digestbench` 5,542,082 -> 5,542,059 and `work_readbench` 4,631,851 ->
+4,631,829. As before, these arrived
 with the runtime losing `k_seq` and its executor arms, and no part of the
 change was isolated as the cause of any one of them.
 The development side rises from 90.99 to 91.00 and welfare banks at 89.37.
