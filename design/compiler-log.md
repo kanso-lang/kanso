@@ -16522,3 +16522,27 @@ floor of 90.09 and passes. The row was blind from the consolidation to now,
 and no nightly finished in that time to say so. The mutation now raises
 runbench instead; welfare falls to 80.32 and the gate goes red. `kanso run
 scripts/ratchet -- prove welfare` proves both of the welfare job's rows red.
+
+## 2026-09-26 — a branch proves its ratchet rows in shards
+
+The ratchet job on a pull request proves the rows whose mutations patch a
+file the branch changed. For most branches that is none or one. A branch that
+touches `src/runtime.c` selects 78 of them on the file alone, and kanso#1676,
+which also moved goldens and the utf-8 harness, waited about two and a half
+hours on that one step after every other job had passed.
+
+`touched <base> shard K N` now proves every Nth of the branch's rows starting
+at K, the rule the nightly's `shard` applies to the whole table. ci.yml runs
+four such jobs in a matrix. The job branch protection requires keeps its name:
+it runs the cover step, which checks the table against ci.yml and applies
+every mutation, and then fails if any shard ended other than in success. A
+shard that draws no row says so and passes. The shard job carries a stated
+reason in the table rather than a row, because its gate is the ratchet's own
+`prove`, which cannot run as one of its own gates.
+
+`tests/a_branch_proves_its_rows_in_shards.rs` reads the matrix against the
+run line, makes a branch that touches the runtime, and lists what each shard
+would prove: together, every selected row exactly once. It went red with the
+fourth shard removed from the matrix, and with the stride changed to N+1,
+which leaves 15 of the 78 rows to no shard. The row that holds it is "a branch
+shard that skips a row in every stretch".
