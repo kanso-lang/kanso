@@ -16111,3 +16111,43 @@ and `codegen_instructions_release` 400,860,282 -> 401,504,467, both below
 main, and `emit_instructions` 29,723,904 -> 29,723,818. `text` sums to
 3,502,176.
 Welfare rises from 89.9020 to 89.9599 and the floor banks there.
+
+## 2026-09-26 — four digits at once and a clean mark in one word, declined
+
+Two runtime changes were built, measured on the container against main at
+7ff6508a, and declined. Neither is on main.
+
+Four digits at once. `k_to_int_text` and both digit loops of
+`k_to_float_text` read four ascii digits as one word when four remained, test
+them in one mask and combine them with two multiply-adds. runbench rose
+1,176,309,961 -> 1,180,566,902 (+0.36%) and jsonbench 805,759,321 ->
+812,010,721 (+0.78%). The corpus's floats are three integer digits and four
+fraction digits, so the integer step reads `466.` and fails on every float,
+and its ten instructions outweigh what the fraction step saves. The ints are
+six digits, one four-step and two byte trips, which does not pay either.
+
+A clean mark in one word. `KMark` gained `hot`, equal to `ptr` while no
+registry or shelf flush is owed and 1 otherwise, so the rewind's common case
+became one compare of the arena against one word in place of a flag load, an
+`or` and a branch before the compare. escapebench fell by 6.2% in every
+variant, and runbench by at most 0.28%, because keeping the word costs every
+beat something and the encoder's beats are short:
+
+    variant                                 runbench   encodebench  livebench
+    recomputed at every pop                  -0.07%      +1.66%      +0.85%
+    recomputed at push only                  -0.19%      +1.05%      +0.52%
+    lowered at push, raised by the rewind    -0.27%      +0.91%      +0.26%
+    as above, one compare folded away        -0.28%      +1.37%      +0.29%
+
+The objective weighs runbench alone and would have scored the third variant
+a rise. The trade pays about a percent of encoding for a quarter of a percent
+of the run program, and it was declined on that.
+
+Two host terms were also ruled out for the compile row's cross-job residue
+(STATUS.md, "A welfare counter reads three parts per billion"). The gate's
+own command on one binary read `kanso::main` at 25,513,935 under stack limits
+of 1 MiB, 8 MiB, 16 MiB and unlimited, and under one, two and four CPUs. A
+build of the same tree at a second path produced a binary with a different
+sha, so the path reaches the binary; CI builds at one path, which leaves the
+runner image's linker and C runtime as the candidates this container cannot
+vary.
