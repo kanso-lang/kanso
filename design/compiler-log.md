@@ -16554,3 +16554,13 @@ So the merge on `+` shipped and the merge on `>>` never reached main. The
 operator "went away unrecorded", is corrected by this: it went away on
 purpose, with a sentence, before the pull request landed. The wall has since
 left the language, so nothing in the tree moves.
+
+## 2026-09-26 — an early return for a span out of range, declined
+
+`k_b_utf8_slice_raw` answers a span outside its string with pointer and
+length selects, so the token path the decoder takes on every string runs the
+selects too. Returning early for the out-of-range span, and letting the
+in-range path go without them, was measured against the kanso#1670 carrier on
+the container: runbench rose 849,348 (+0.07%) and jsonbench rose 0.17%. The
+selects cost less than the branch that replaced them. What made the branch
+dearer was not isolated.
