@@ -2806,7 +2806,20 @@ span_spec = "a_span_is_asked_in_two_unsigned_compares"
 
 rows_b1sp = text/concat rows_b1la [span_unsigned]
 
-rows_b = text/concat rows_b1sp [compile_mem compile_mem_host]
+# A room test asks its two questions with two branches.
+room_split = row
+  "a push that joins its room questions"
+  true
+  "cargo test --release --test {room_spec}"
+  "specs (unit, golden, differential)"
+  (breaking "a_push_that_joins_its_room_questions")
+  release
+
+room_spec = "a_room_test_branches_on_each_question"
+
+rows_b1rs = text/concat rows_b1sp [room_split]
+
+rows_b = text/concat rows_b1rs [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 
