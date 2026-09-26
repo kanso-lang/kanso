@@ -16450,3 +16450,39 @@ CI's rows for the empty run were taken from its first run at cb500c36:
 `work_livebench` 1,691,479,959 -> 1,688,141,594. `emit_instructions` rises
 29,815,094 -> 29,819,237 with the five extra lines. Welfare rises from 90.05
 to 90.09 and the floor banks there.
+
+## 2026-09-26 — the nightly ratchet proves its table in eight shards
+
+The nightly ratchet had not proved a row since 2026-09-04. It failed outright
+from 09-05 to 09-13, on a baseline that could not read `docs/kanso.wasm` for
+the site gate, and from 09-14 onward the baseline was green and the job was
+cancelled at its ninety-minute timeout every night. The 09-26 run shows the
+shape: `ratchet: 92 gates green before any mutation` after eleven and a half
+minutes, then seventy-eight minutes of rows, then the cancellation. The report
+is written once when every row is done, so a cancelled run printed nothing
+about any row. Thirteen nights ran that way and nobody read them.
+
+The table has grown from the 62 rows the workflow's header described to 245.
+Successful runs at 62 rows took 24 to 29 minutes. The per-branch ratchet in
+ci.yml proves the rows a branch could have blinded, and kanso#1667's 123 took
+96 minutes on 2026-09-26, so the whole table is several hours in one job.
+
+`kanso run scripts/ratchet -- shard K N` proves every Nth row starting at row
+K, and `shard K N list` names them and stops. The nightly is now a matrix of
+eight jobs, `shard 1 8` to `shard 8 8`, each with its own ninety minutes and
+about thirty rows. Rows are dealt out by stride rather than in blocks because
+new rows are appended at the end of the chain, and a block split would hand
+every future row to the last shard. Each shard's baseline reads only the gates
+its own rows share.
+
+The spec is tests/the_nightly_proves_every_row_once.rs. It reads the matrix
+and the run line out of ratchet.yml and requires the matrix to be exactly 1
+through N. It lists each shard through the harness and requires the shards
+together to name every row in the table once. It also requires that a shard
+outside 1..N is refused. Each assertion was watched red: a seven-shard matrix,
+a stride of N+1, which left rows out, and the range check removed, which let
+`shard 0 8` through to a runtime error. The ratchet row `nightly_shards` drops
+the eighth shard from the matrix.
+
+Whether eight shards fit is a projection from the per-branch runs, not a
+measurement. The first scheduled run after this lands is the measurement.
