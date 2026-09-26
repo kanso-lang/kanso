@@ -30,6 +30,5 @@ own = look (boom "a")
 
 fine = look 7
 
-pub play =
-  print "own: {testing/when_failed own as_text}"
-  >> print "value: {fine}"
+pub play = print "own: {testing/when_failed own as_text}"
+  .> (_ -> print "value: {fine}")

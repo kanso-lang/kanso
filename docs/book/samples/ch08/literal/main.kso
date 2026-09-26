@@ -2,6 +2,6 @@ import "./lit"
 import "./report"
 
 print (show (decode_literal "true"))
->> print (show (decode_literal "null"))
->> print (show (decode_literal "nope"))
->> print (show (decode_literal "?"))
+  .> (_ -> print (show (decode_literal "null")))
+  .> (_ -> print (show (decode_literal "nope")))
+  .> (_ -> print (show (decode_literal "?")))

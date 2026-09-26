@@ -1,7 +1,9 @@
 import "std/math"
 import "std/time"
 
-brew = print "brew: steeping" >> time/sleep 60 >> print "brew: poured"
+brew = print "brew: steeping"
+  .> (_ -> time/sleep 60)
+  .> (_ -> print "brew: poured")
 
 pub play =
   brew
@@ -10,4 +12,8 @@ pub play =
 fn roll i
   math/random 6 .> (n -> print "roll {i}: a {n + 1}")
 
-rolls = roll 1 >> roll 2 >> roll 3 >> roll 4 >> roll 5
+rolls = roll 1
+  .> (_ -> roll 2)
+  .> (_ -> roll 3)
+  .> (_ -> roll 4)
+  .> (_ -> roll 5)

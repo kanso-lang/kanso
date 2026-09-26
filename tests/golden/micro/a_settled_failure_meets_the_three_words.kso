@@ -14,7 +14,6 @@ fn told (err r)
 fn told v
   "decoded {length v} values"
 
-pub play =
-  print (rescue (json/decode "[1, 2") told)
-  >> print (bind (json/decode "[1, 2]") told)
-  >> print (rescue (json/decode "[1, 2]") told)
+pub play = print (rescue (json/decode "[1, 2") told)
+  .> (_ -> print (bind (json/decode "[1, 2]") told))
+  .> (_ -> print (rescue (json/decode "[1, 2]") told))

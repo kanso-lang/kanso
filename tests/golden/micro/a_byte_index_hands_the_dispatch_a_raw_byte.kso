@@ -31,9 +31,8 @@ fn at_byte c p
 
 cs = text/bytes "AB0"
 
-pub play =
-  print "{kind cs 1}"
-  >> print "{kind cs 2}"
-  >> print "{kind cs 3}"
-  >> print "{kind cs 4}"
-  >> print "{kind cs 0}"
+pub play = print "{kind cs 1}"
+  .> (_ -> print "{kind cs 2}")
+  .> (_ -> print "{kind cs 3}")
+  .> (_ -> print "{kind cs 4}")
+  .> (_ -> print "{kind cs 0}")

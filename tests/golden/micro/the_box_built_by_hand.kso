@@ -14,9 +14,8 @@ fn shown e
 
 broken = text/split "a" ""
 
-pub play =
-  effect 5 .> (n -> print "{n + 1}")
-  >> effect broken .? (e -> "rescued {e.reason}") .> print
-  >> print "{shown (effect 5)} {shown (held (effect 5))}"
-  >> effect broken .> (v -> print "never {v}")
-    .? (e -> "skipped, {e.reason}") .> print
+pub play = effect 5 .> (n -> print "{n + 1}")
+  .> (_ -> effect broken .? (e -> "rescued {e.reason}") .> print)
+  .> (_ -> print "{shown (effect 5)} {shown (held (effect 5))}")
+  .> (_ -> effect broken .> (v -> print "never {v}"))
+  .? (e -> "skipped, {e.reason}") .> print

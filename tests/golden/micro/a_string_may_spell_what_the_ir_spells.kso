@@ -5,7 +5,6 @@
 # the interpreter printed this sample and the compiler could not build it. The
 # pass now leaves every global's line alone, and the strings below spell each
 # word it looks for.
-pub play =
-  print "call tailcc here"
-  >> print "musttail call tailcc @f(i64 1)"
-  >> print "define tailcc %KValue @g("
+pub play = print "call tailcc here"
+  .> (_ -> print "musttail call tailcc @f(i64 1)")
+  .> (_ -> print "define tailcc %KValue @g(")

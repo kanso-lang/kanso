@@ -50,6 +50,6 @@ fn number_end cs p
   if (is_number_char cs[p]) (number_end cs (p + 1)) p
 
 print (classify "42")
->> print (classify "-17")
->> print (classify "3.25")
->> print (classify "6e3")
+  .> (_ -> print (classify "-17"))
+  .> (_ -> print (classify "3.25"))
+  .> (_ -> print (classify "6e3"))

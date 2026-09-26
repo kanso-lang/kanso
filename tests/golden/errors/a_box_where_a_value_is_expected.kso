@@ -21,15 +21,14 @@ fn load path
 
 loaded = load "flavors.txt"
 
-pub play =
-  print (length os/args)
-  >> print (math/random 6 + 1)
-  >> print (told (math/random 2))
-  >> print (if os/args 1 2)
-  >> print os/args[1]
-  >> print (math/random 6 == 3)
-  >> print (held os/args)
-  >> print "{os/args}"
-  >> print (length (os/read_file "flavors.txt"))
-  >> print (length (load "flavors.txt"))
-  >> print (length loaded)
+pub play = print (length os/args)
+  .> (_ -> print (math/random 6 + 1))
+  .> (_ -> print (told (math/random 2)))
+  .> (_ -> print (if os/args 1 2))
+  .> (_ -> print os/args[1])
+  .> (_ -> print (math/random 6 == 3))
+  .> (_ -> print (held os/args))
+  .> (_ -> print "{os/args}")
+  .> (_ -> print (length (os/read_file "flavors.txt")))
+  .> (_ -> print (length (load "flavors.txt")))
+  .> (_ -> print (length loaded))

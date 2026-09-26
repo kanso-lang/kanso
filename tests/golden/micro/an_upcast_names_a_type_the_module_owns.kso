@@ -18,5 +18,5 @@ fn speak x:animal
 pub play =
   d = dog (animal "rex")
   print (speak d)
-  >> print (speak (d):animal)
-  >> print "{(d):animal}"
+    .> (_ -> print (speak (d):animal))
+    .> (_ -> print "{(d):animal}")

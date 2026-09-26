@@ -18,7 +18,7 @@ fn describe n
 main =
   good = safe_ratio 10 2
   bad = safe_ratio 10 0
-  print (describe good) >> print (describe bad)
+  print (describe good) .> (_ -> print (describe bad))
 
 fn safe_ratio a b
   a / b
@@ -47,7 +47,7 @@ cargo build --release
 
 This began as the **phase-1 reference interpreter** ([spec](https://clayshentrup.github.io/kanso/spec.html)) and now ships three engines—the tree-walking interpreter (the semantics oracle), an LLVM-backed native compiler, and a direct-to-wasm browser backend—held byte-identical by differential CI. What runs today:
 
-- purity and effects-as-descriptions: `print`, `>>` sequencing, `--plan` to inspect the description, a scripted executor for transcript-based tests
+- purity and effects-as-descriptions: `print`, sequencing with `.> (_ -> ...)`, `--plan` to inspect the description, a scripted executor for transcript-based tests
 - failure as values: `err reason` and `none` propagate; division by zero and out-of-range `at` are values, not crashes
 - overload dispatch on literals, concrete types (annotation or constructor destructuring), and generics, most-specific first
 - single-constructor record types: typed fields, alphabetical order enforced, positional construction, destructuring both ways (positional patterns and keyed subset reads with rename-on-bind)

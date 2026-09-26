@@ -11,6 +11,6 @@ fn show _
   "something else"
 
 print (show 3)
->> print (show 2.5)
->> print (show "hi")
->> print (show true)
+  .> (_ -> print (show 2.5))
+  .> (_ -> print (show "hi"))
+  .> (_ -> print (show true))

@@ -17,7 +17,6 @@ List	many
 App	many
 Field	many
 Index	many
-Seq	many
 Lambda	many
 BinOp	many
 Join	many

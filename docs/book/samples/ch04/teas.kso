@@ -5,4 +5,3 @@ hojicha = text/trim " two "
 
 print "sencha: {text/to_int sencha} steeps left"
 print "hojicha: {text/to_int hojicha} steeps left"
->> print "serving"

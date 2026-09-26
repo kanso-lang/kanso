@@ -8,7 +8,7 @@ type cell
 pub fn opaque v
   v
 
-d = io/write "a\n" >> io/write "b\n"
+d = io/write "a\n" .> (_ -> io/write "b\n")
 
 fn seen v:cell
   "a cell holding {v.n}"

@@ -18,6 +18,5 @@ fn told (err _)
 fn told _
   "ok"
 
-pub play =
-  print "{told (text/utf8 [104 105])}"
-  >> print "{told (text/utf8 [255])}"
+pub play = print "{told (text/utf8 [104 105])}"
+  .> (_ -> print "{told (text/utf8 [255])}")

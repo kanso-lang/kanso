@@ -161,7 +161,6 @@ fn children(e: &Expr) -> Vec<&Expr> {
             }));
             v
         }
-        Expr::Seq(a, b, _) => vec![a.as_ref(), b.as_ref()],
         Expr::Lambda { body, .. } => vec![body.as_ref()],
         Expr::List(items, _) => items.iter().collect(),
         Expr::MapLit(pairs, _) => pairs.iter().flat_map(|(k, v)| [k, v]).collect(),

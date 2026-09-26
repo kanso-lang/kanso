@@ -8,6 +8,6 @@ type box
 pub fn show _
   print "y"
 
-d = print "x" >> show (box d)
+d = print "x" .> (_ -> show (box d))
 
 pub play = d

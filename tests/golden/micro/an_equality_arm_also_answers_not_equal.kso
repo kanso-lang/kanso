@@ -16,5 +16,5 @@ different = money 700
 pub play = said
 
 said = print "{same == alike} {same != alike}"
-  >> print "{same == different} {same != different}"
-  >> print "{1 == 1} {1 != 1} {"a" != "b"}"
+  .> (_ -> print "{same == different} {same != different}")
+  .> (_ -> print "{1 == 1} {1 != 1} {"a" != "b"}")

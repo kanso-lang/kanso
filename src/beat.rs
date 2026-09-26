@@ -1318,10 +1318,6 @@ fn expr_allocates(
                     expr_allocates(guard_stmt_expr(s), fn_names, allocating, seed_pass, site)
                 })
         }
-        Expr::Seq(a, b, _) => {
-            expr_allocates(a, fn_names, allocating, seed_pass, site)
-                || expr_allocates(b, fn_names, allocating, seed_pass, site)
-        }
         Expr::Ident(..) | Expr::Int(..) | Expr::Float(..) | Expr::Hole(..) => false,
     }
 }
@@ -1729,7 +1725,7 @@ fn collect_names(e: &Expr, out: &mut HashSet<String>) {
             collect_names(base, out);
             collect_names(index, out);
         }
-        Expr::BinOp { lhs, rhs, .. } | Expr::Join { lhs, rhs, .. } | Expr::Seq(lhs, rhs, _) => {
+        Expr::BinOp { lhs, rhs, .. } | Expr::Join { lhs, rhs, .. } => {
             collect_names(lhs, out);
             collect_names(rhs, out);
         }
@@ -1838,10 +1834,6 @@ fn collect_value_uses<'a>(e: &'a Expr, out: &mut crate::hash::Set<&'a str>) {
                 collect_value_uses(guard_stmt_expr(s), out);
             }
         }
-        Expr::Seq(a, b, _) => {
-            collect_value_uses(a, out);
-            collect_value_uses(b, out);
-        }
         Expr::Lambda { body, .. } => collect_value_uses(body, out),
         Expr::List(items, _) => {
             for i in items {
@@ -1895,7 +1887,6 @@ fn value_use(e: &Expr, name: &str) -> bool {
                 || value_use(early, name)
                 || rest.iter().any(|s| value_use(guard_stmt_expr(s), name))
         }
-        Expr::Seq(a, b, _) => value_use(a, name) || value_use(b, name),
         Expr::Lambda { body, .. } => value_use(body, name),
         Expr::List(items, _) => items.iter().any(|i| value_use(i, name)),
         Expr::MapLit(pairs, _) => {

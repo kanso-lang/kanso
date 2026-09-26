@@ -377,11 +377,6 @@ impl<'a> Analysis<'a> {
                     && self.expr_safe_calls(ty, lhs)
                     && self.expr_safe_calls(ty, rhs)
             }
-            Expr::Seq(a, b, _) => {
-                !self.produces_ty(ty, a)
-                    && self.expr_safe_calls(ty, a)
-                    && self.expr_safe_calls(ty, b)
-            }
             Expr::Lambda { body, .. } => {
                 !self.produces_ty(ty, body) && self.expr_safe_calls(ty, body)
             }
@@ -494,7 +489,6 @@ impl<'a> Analysis<'a> {
                         self.expr_mentions_ty(ty, e)
                     })
             }
-            Expr::Seq(a, b, _) => self.expr_mentions_ty(ty, a) || self.expr_mentions_ty(ty, b),
             Expr::Lambda { body, .. } => self.expr_mentions_ty(ty, body),
             Expr::List(items, _) => items.iter().any(|x| self.expr_mentions_ty(ty, x)),
             Expr::MapLit(pairs, _) => pairs

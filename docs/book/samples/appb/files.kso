@@ -1,3 +1,5 @@
 import "std/os"
 
-os/write_file "note.txt" "one taiyaki" >> os/read_file! "note.txt" .> print
+os/write_file "note.txt" "one taiyaki"
+  .> (_ -> os/read_file! "note.txt")
+  .> print

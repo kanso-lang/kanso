@@ -11,6 +11,6 @@ pub play =
   xs = [(spot 1 2) (spot 3 4)]
   ns = [10 20 30]
   print "{ns[1]! + 1}"
-  >> print "{xs[2]!.from}"
-  >> print "{ns[2]! == 20}"
-  >> print "{length ns[1]!}"
+    .> (_ -> print "{xs[2]!.from}")
+    .> (_ -> print "{ns[2]! == 20}")
+    .> (_ -> print "{length ns[1]!}")

@@ -1,3 +1,0 @@
-import "std/io"
-
-pub play = io/write "a" >> 5
