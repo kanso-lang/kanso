@@ -2767,7 +2767,20 @@ beat_none = row
 
 rows_b1bn = text/concat rows_b1cd [beat_none]
 
-rows_b = text/concat rows_b1bn [compile_mem compile_mem_host]
+# A room test asks its two questions with two branches.
+room_split = row
+  "a push that joins its room questions"
+  true
+  "cargo test --release --test {room_spec}"
+  "specs (unit, golden, differential)"
+  (breaking "a_push_that_joins_its_room_questions")
+  release
+
+room_spec = "a_room_test_branches_on_each_question"
+
+rows_b1rs = text/concat rows_b1bn [room_split]
+
+rows_b = text/concat rows_b1rs [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 

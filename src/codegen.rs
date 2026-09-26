@@ -106,10 +106,11 @@ fr:
   %usedp = getelementptr i8, ptr %data, i64 -8
   %used = load i64, ptr %usedp
   %atfront = icmp eq i64 %used, %len
+  br i1 %atfront, label %roomat, label %slow
+roomat:
   %len1 = add i64 %len, 1
   %fits = icmp sle i64 %len1, %capa
-  %ok = and i1 %atfront, %fits
-  br i1 %ok, label %claim, label %slow
+  br i1 %fits, label %claim, label %slow
 claim:
   %left = load i64, ptr @k_arena_left
   %has = icmp uge i64 %left, 32
@@ -219,10 +220,11 @@ sfr:
   %susedp = getelementptr i8, ptr %sadata, i64 -8
   %sused = load i64, ptr %susedp
   %satfront = icmp eq i64 %sused, %slen
+  br i1 %satfront, label %sroomat, label %slow
+sroomat:
   %slenn = add i64 %slen, %n
   %sfits = icmp sle i64 %slenn, %scapa
-  %sok = and i1 %satfront, %sfits
-  br i1 %sok, label %swrite, label %slow
+  br i1 %sfits, label %swrite, label %slow
 ; The copy. A key, a `true` or a `null` is a handful of bytes, and a call into
 ; glibc's memcpy spends most of its instructions deciding how wide a move to
 ; make before it makes one. Sixteen bytes or fewer are copied here as a pair of
@@ -316,10 +318,11 @@ bfr:
   %usedp = getelementptr i8, ptr %data, i64 -8
   %used = load i64, ptr %usedp
   %atfront = icmp eq i64 %used, %len
+  br i1 %atfront, label %roomat, label %slow
+roomat:
   %len1 = add i64 %len, 1
   %fits = icmp sle i64 %len1, %capa
-  %ok = and i1 %atfront, %fits
-  br i1 %ok, label %bwrite, label %slow
+  br i1 %fits, label %bwrite, label %slow
 bwrite:
   %dst = getelementptr i8, ptr %data, i64 %len
   %xv = extractvalue %KValue %x, 1
@@ -356,10 +359,11 @@ fr:
   %usedp = getelementptr i8, ptr %data, i64 -8
   %used = load i64, ptr %usedp
   %atfront = icmp eq i64 %used, %len
+  br i1 %atfront, label %roomat, label %slow
+roomat:
   %len2 = add i64 %len, 2
   %fits = icmp sle i64 %len2, %capa
-  %ok = and i1 %atfront, %fits
-  br i1 %ok, label %write, label %slow
+  br i1 %fits, label %write, label %slow
 write:
   %dst = getelementptr i8, ptr %data, i64 %len
   %xv = extractvalue %KValue %x, 1
@@ -409,10 +413,11 @@ fr:
   %usedp = getelementptr i8, ptr %data, i64 -8
   %used = load i64, ptr %usedp
   %atfront = icmp eq i64 %used, %len
+  br i1 %atfront, label %roomat, label %slow
+roomat:
   %len8 = add i64 %len, 8
   %fits = icmp sle i64 %len8, %capa
-  %ok = and i1 %atfront, %fits
-  br i1 %ok, label %write, label %slow
+  br i1 %fits, label %write, label %slow
 write:
   %dst = getelementptr i8, ptr %data, i64 %len
   store i64 %word, ptr %dst, align 1
@@ -490,10 +495,11 @@ qfr:
   %qusedp = getelementptr i8, ptr %qadata, i64 -8
   %qused = load i64, ptr %qusedp
   %qatfront = icmp eq i64 %qused, %qlen
+  br i1 %qatfront, label %qroomat, label %qslow
+qroomat:
   %qlenn = add i64 %qlen, %qn
   %qfits = icmp sle i64 %qlenn, %qcapa
-  %qok = and i1 %qatfront, %qfits
-  br i1 %qok, label %qwrite, label %qslow
+  br i1 %qfits, label %qwrite, label %qslow
 ; The same ladder the string arm uses, for the same reason: a run between two
 ; escapes is a median of three bytes, and a call into glibc's memcpy spends
 ; most of its instructions deciding how wide a move to make.
@@ -1043,11 +1049,12 @@ lshape:
   %lusedp = getelementptr i8, ptr %lbuf, i64 8
   %lused = load i64, ptr %lusedp
   %lfront = icmp eq i64 %lused, %llen
+  br i1 %lfront, label %lroom, label %lslow
+lroom:
   %llen2 = shl i64 %llen, 1
   %lneed = add i64 %llen2, 2
   %lfits = icmp sle i64 %lneed, %lcap
-  %lok = and i1 %lfront, %lfits
-  br i1 %lok, label %lwrite, label %lslow
+  br i1 %lfits, label %lwrite, label %lslow
 lwrite:
   %lslot = getelementptr %KValue, ptr %items, i64 %llen
   store %KValue %item, ptr %lslot
@@ -1104,11 +1111,12 @@ proom:
   %pused = load i64, ptr %pusedp
   %mlen2 = shl i64 %mlen, 1
   %pfront = icmp eq i64 %pused, %mlen2
+  br i1 %pfront, label %pfit, label %pslow
+pfit:
   %pneed = add i64 %mlen2, 2
   %pneed2 = shl i64 %pneed, 1
   %pfits = icmp sle i64 %pneed2, %pcap
-  %pok = and i1 %pfront, %pfits
-  br i1 %pok, label %pwrite, label %pslow
+  br i1 %pfits, label %pwrite, label %pslow
 pwrite:
   %kslot = getelementptr %KValue, ptr %pairs, i64 %mlen2
   store %KValue %k, ptr %kslot
