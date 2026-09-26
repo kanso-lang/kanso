@@ -220,15 +220,6 @@ name the two welfares at all. This paragraph is the first thing cloud reads
 before choosing work, so a row miscounted here is a row chosen or skipped
 wrongly.
 
-### The wall goes (2026-09-26)
-
-The log entry "gavel: the wall goes", Clay: "we said the wall goes. we've been
-over this." `>>` leaves the language and `a .> (_ -> b)` is its one spelling.
-The surface is in src/lexer.rs, src/parser.rs, src/ast.rs, src/check.rs, the
-three engines' `Seq` descriptions, and the book's chapters 04 to 06 and
-appendices A to C. Cloud is building it on `claude/the-wall-goes`; the row
-comes off the day that lands on main.
-
 ### The cohort gavel's data-sized cycle (2026-08-29, narrowed 2026-09-16)
 
 The archive entry "block-born is the whole cohort", Clay: "okay whole cohort

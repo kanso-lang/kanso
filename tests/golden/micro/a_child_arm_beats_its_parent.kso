@@ -14,7 +14,6 @@ fn scale (money c) n
 fn scale (sale_price m) n
   "nearer {m} {n}"
 
-pub play =
-  print "{scale (sale_price (money 350)) 2}"
-  >> print "{scale (money 350) 2}"
-  >> print "{scale (clearance (sale_price (money 1))) 2}"
+pub play = print "{scale (sale_price (money 350)) 2}"
+  .> (_ -> print "{scale (money 350) 2}")
+  .> (_ -> print "{scale (clearance (sale_price (money 1))) 2}")

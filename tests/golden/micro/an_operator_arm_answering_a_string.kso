@@ -11,6 +11,5 @@ fn * _:money n
 fn + n _:money
   "{n} on the right"
 
-pub play =
-  print "left: {money 350 * 3}"
-  >> print "right: {3 + money 350}"
+pub play = print "left: {money 350 * 3}"
+  .> (_ -> print "right: {3 + money 350}")

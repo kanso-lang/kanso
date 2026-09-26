@@ -1,4 +1,3 @@
 import "./kitchen"
 
-print (kitchen/served "go")
->> print (kitchen/mine "go")
+print (kitchen/served "go") .> (_ -> print (kitchen/mine "go"))

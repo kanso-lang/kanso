@@ -695,15 +695,15 @@ fn the_playground_prompt_can_start_over() {
 /// to hold the INTERP borrow across evaluation, so an abort inside it left the
 /// cell borrowed forever and the NEXT program's `load` could not take it — the
 /// failure surfaced as a compiler trap on a program that is fine by itself.
-/// Both mention the same knotted description, which is what reaches the abort.
+/// Both mention the same knotted binding, which is what reaches the abort.
 #[test]
 fn a_program_that_dies_leaves_the_engine_usable() {
-    let knot = "type box\n  v\n\nfn use b\n  print \"y {b}\"\n\nd = print \"x\" >> use (box d)\n\n";
+    let knot = "type box\n  v\n\nd = (box d).v\n\n";
     let blackhole = "error[runtime]: a lazy binding demands its own value\n";
     let mut toolchain = Toolchain::load();
 
-    toolchain.run("dies.kso", &format!("{knot}fn go x\n  x\n\npub play = go d\n"));
-    let after = toolchain.run("after.kso", &format!("{knot}pub play = d\n"));
+    toolchain.run("dies.kso", &format!("{knot}fn go x\n  x\n\npub play = print \"{{go d}}\"\n"));
+    let after = toolchain.run("after.kso", &format!("{knot}pub play = print \"{{d}}\"\n"));
 
     assert!(
         matches!(&after, Answer::Ran(1, text) if text == blackhole),
@@ -753,7 +753,7 @@ fn a_program_that_runs_out_of_stack_leaves_the_engine_usable() {
 fn a_deliberate_exit_carries_its_code_out_of_the_page() {
     let mut toolchain = Toolchain::load();
     let source = "import \"std/io\"\nimport \"std/os\"\n\n\
-                  pub play = io/write \"before\" >> os/exit 3\n";
+                  pub play = io/write \"before\" .> (_ -> os/exit 3)\n";
 
     let answer = toolchain.run("a_deliberate_exit.kso", source);
 
@@ -863,7 +863,6 @@ fn shape(e: &kanso::ast::Expr) -> &'static str {
         App { .. } => "App",
         Field { .. } => "Field",
         Index { .. } => "Index",
-        Seq(..) => "Seq",
         Lambda { .. } => "Lambda",
         BinOp { .. } => "BinOp",
         Join { .. } => "Join",
@@ -1026,7 +1025,6 @@ fn every_construct_is_carried_by_a_program_the_page_runs() {
         "App",
         "Field",
         "Index",
-        "Seq",
         "Lambda",
         "BinOp",
         "Join",

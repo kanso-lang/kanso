@@ -1,0 +1,4 @@
+# What follows a bind is built when the bind reaches it, so a failure in the
+# callback's body arrives after the left side has run and printed. The left
+# side runs, then the callback is called, and the index inside it fails.
+pub play = print "a" .> (_ -> [1][5]! .> (v -> print "{v}"))

@@ -20,8 +20,7 @@ extra_css: /book/book.css
 xs <span class="o">=</span> [<span class="n">1</span> <span class="n">2</span> <span class="n">3</span>]
 recipe <span class="o">=</span> <span class="f">list/map</span> xs (n <span class="o">-&gt;</span> n <span class="o">*</span> <span class="n">10</span>)
 
-<span class="f">print</span> <span class="s">"the recipe: <span class="i">{recipe}</span>"</span>
-<span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"the result: <span class="i">{list/to_list recipe}</span>"</span></code></pre>
+<span class="f">print</span> <span class="s">"the recipe: <span class="i">{recipe}</span>"</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"the result: <span class="i">{list/to_list recipe}</span>"</span>)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso play recipe.kso</div>
     <pre><code>the recipe: list/mapped &lt;fn&gt; list/cursor 1 [1 2 3]
@@ -44,8 +43,7 @@ the result: [10 20 30]</code></pre>
 <span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
   firsts <span class="o">=</span> <span class="f">list/to_list</span> (<span class="f">list/take</span> list/naturals <span class="n">5</span>)
   squares <span class="o">=</span> <span class="f">list/map</span> list/naturals (n <span class="o">-&gt;</span> n <span class="o">*</span> n)
-  <span class="f">print</span> <span class="s">"<span class="i">{firsts}</span>"</span>
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"<span class="i">{list/to_list (list/take squares 4)}</span>"</span></code></pre>
+  <span class="f">print</span> <span class="s">"<span class="i">{firsts}</span>"</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"<span class="i">{list/to_list (list/take squares 4)}</span>"</span>)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run bounded.kso</div>
     <pre><code>[1 2 3 4 5]
@@ -93,9 +91,8 @@ the result: [10 20 30]</code></pre>
 
 orders <span class="o">=</span> [<span class="s">"oat"</span> <span class="s">"soy"</span> <span class="s">"oat"</span> <span class="s">"whole"</span> <span class="s">"oat"</span>]
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
-  <span class="f">print</span> <span class="s">"tally <span class="i">{list/tally orders}</span>"</span>
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"letters <span class="i">{list/group_by orders (s -&gt; s[1])}</span>"</span></code></pre>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"tally <span class="i">{list/tally orders}</span>"</span>
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"letters <span class="i">{list/group_by orders (s -&gt; s[1])}</span>"</span>)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run buckets.kso</div>
     <pre><code>tally { "oat":3 "soy":1 "whole":1 }

@@ -1,7 +1,4 @@
 # write puts bytes on stdout with no newline; print ends the line
 import "std/io"
 
-pub play =
-  io/write "a"
-  >> io/write "b"
-  >> print "c"
+pub play = io/write "a" .> (_ -> io/write "b") .> (_ -> print "c")

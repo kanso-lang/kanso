@@ -1,0 +1,5 @@
+import "std/math"
+
+# The plain dot is application and opens nothing, so `n` is the box itself
+# and the subtraction meets an effect. `.>` is the step that opens it.
+math/random 6 . (n -> print "{n - 1}")

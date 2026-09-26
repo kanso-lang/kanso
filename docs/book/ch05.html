@@ -1,7 +1,7 @@
 ---
 layout: book
 title: "chapter 05—effects are io"
-description: "print that doesn't print, sequencing with >>, pipes that bind, real i/o with read_file and args, and testing effects with transcripts instead of mocks."
+description: "print that doesn't print, sequencing with a bind that ignores its value, pipes that bind, real i/o with read_file and args, and testing effects with transcripts instead of mocks."
 extra_css: /book/book.css
 ---
 <span class="eyebrow">chapter 05</span>
@@ -9,11 +9,11 @@ extra_css: /book/book.css
 
 <p><code>print</code> has been doing nothing all book. every kanso function is pure—evaluating <code>print "hi"</code> performs no i/o. it returns an <code>io</code>, a value like any other, describing the printing it intends. your entire program is one big pure computation whose final answer is <code>main</code>: one <code>io</code> describing everything the program means to do. the runtime receives that value and walks it. evaluation decides; the runtime performs.</p>
 
-<p>you can see the seam directly, because an <code>io</code> is data, and data can be rendered instead of executed. <code>&gt;&gt;</code>—the wall—glues io values into bigger ones, "this, then that", and the <code>--plan</code> flag from chapter 01 shows the glued-up value without running it:</p>
+<p>you can see the seam directly, because an <code>io</code> is data, and data can be rendered instead of executed. a bind whose callback ignores its argument, <code>.&gt; (_ -&gt; next)</code>, glues io values into bigger ones, "this, then that", and the <code>--plan</code> flag from chapter 01 shows the glued-up value without running it:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">brew.kso</div>
-  <pre><code><span class="f">print</span> <span class="s">"brewing"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"steeping"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"pouring"</span></code></pre>
+  <pre><code><span class="f">print</span> <span class="s">"brewing"</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"steeping"</span>) <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"pouring"</span>)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run brew.kso --plan</div>
     <pre><code>brewing
@@ -51,7 +51,7 @@ pouring</code></pre>
   <div class="code-panel-title">knock.kso</div>
   <pre><code>knock <span class="o">=</span> <span class="f">print</span> <span class="s">"kon kon"</span>
 
-<span class="f">knock</span> <span class="o">&gt;&gt;</span> <span class="f">knock</span> <span class="o">&gt;&gt;</span> <span class="f">knock</span></code></pre>
+<span class="f">knock</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> knock) <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> knock)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run knock.kso --plan</div>
     <pre><code>kon kon
@@ -123,8 +123,7 @@ kon kon</code></pre>
   <span class="f">return</span> hi if hi <span class="o">&lt;</span> n
   <span class="f">n</span>
 
-<span class="f">print</span> <span class="s">"<span class="i">{12 . clamp 0 10}</span>"</span>
-<span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"<span class="i">{4 . clamp 0 10}</span>"</span></code></pre>
+<span class="f">print</span> <span class="s">"<span class="i">{12 . clamp 0 10}</span>"</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"<span class="i">{4 . clamp 0 10}</span>"</span>)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
     <pre><code>10
@@ -164,7 +163,7 @@ hojicha</code></pre>
   </div>
 </div>
 
-<p>look at that plan. the runtime can name the first step, but the rest is <code>&lt;continuation&gt;</code>—honest notation for "what happens next depends on a value i don't have yet." that's the difference between the wall and the bind dot in one screenshot: <code>&gt;&gt;</code> sequences io values that don't pass data (the plan lists every step up front), while <code>.&gt;</code> threads a value through, so later steps are functions waiting for input. together they are the complete vocabulary of "before" in kanso—everywhere else, order belongs to the runtime, which is chapter 06's whole subject.</p>
+<p>look at that plan. the runtime can name the first step, but the rest is <code>&lt;continuation&gt;</code>—honest notation for "what happens next depends on a value i don't have yet." compare the plan for <code>brew.kso</code>, which listed every step. each of its callbacks was <code>_ -&gt; next</code>, which ignores what it is handed, so the plan could call it without a value. <code>count_lines</code> reads the file's contents, so its step cannot be shown until the read has happened. that one operator is the complete vocabulary of "before" in kanso—everywhere else, order belongs to the runtime, which is chapter 06's whole subject.</p>
 
 <p>note what <code>count_lines</code> is: an ordinary pure function that takes a string. it doesn't know files exist, and nothing in its signature says "i get used near i/o." there's no <code>async</code> keyword to sprinkle through every caller—effectfulness travels in the value itself. a function that returns an io is effectful; a function that returns a string is not; and the same function can be piped from a file today and called on a literal in a test tomorrow.</p>
 
@@ -243,8 +242,7 @@ hojicha</code></pre>
   <span class="s">"<span class="i">{amount}</span> becomes <span class="i">{pricer amount}</span>"</span>
 
 local <span class="o">=</span> &amp;tax <span class="n">8</span>
-<span class="f">print</span> <span class="s">"<span class="i">{quote local 250}</span>"</span>
-<span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"and again: <span class="i">{local 100}</span>"</span></code></pre>
+<span class="f">print</span> <span class="s">"<span class="i">{quote local 250}</span>"</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"and again: <span class="i">{local 100}</span>"</span>)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run currying.kso</div>
     <pre><code>250 becomes 270
@@ -264,8 +262,7 @@ and again: 108</code></pre>
   price <span class="o">+</span> price <span class="o">*</span> rate <span class="o">/</span> <span class="n">100</span>
 
 on_250 <span class="o">=</span> &amp;tax <span class="n">8</span> <span class="n">250</span>
-<span class="f">print</span> <span class="s">"still waiting: <span class="i">{on_250}</span>"</span>
-<span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"called: <span class="i">{on_250()}</span>"</span></code></pre>
+<span class="f">print</span> <span class="s">"still waiting: <span class="i">{on_250}</span>"</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"called: <span class="i">{on_250()}</span>"</span>)</code></pre>
 </div>
 
 <div class="code-panel">
@@ -278,14 +275,14 @@ called: 270</code></pre>
 
 <h2>the rest of the i/o vocabulary</h2>
 
-<p>writing is an io too. <code>write_file path content</code> describes putting a string at a path, and it composes with everything you've seen—here a wall sequences a write before a read of the same file, and a dot hands the read's contents onward:</p>
+<p>writing is an io too. <code>write_file path content</code> describes putting a string at a path, and it composes with everything you've seen—here one bind puts a write before a read of the same file, and a second hands the read's contents onward:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">save.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"std/os"</span>
 
 order <span class="o">=</span> <span class="s">"one taiyaki, extra custard"</span>
-<span class="f">os/write_file</span> <span class="s">"order.txt"</span> order <span class="o">&gt;&gt;</span> <span class="f">os/read_file!</span> <span class="s">"order.txt"</span> <span class="o">.&gt;</span> <span class="f">print</span></code></pre>
+<span class="f">os/write_file</span> <span class="s">"order.txt"</span> order <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">os/read_file!</span> <span class="s">"order.txt"</span>) <span class="o">.&gt;</span> <span class="f">print</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run save.kso --plan</div>
     <pre><code>one taiyaki, extra custard</code></pre>
@@ -296,26 +293,26 @@ order <span class="o">=</span> <span class="s">"one taiyaki, extra custard"</spa
   </div>
 </div>
 
-<p>the round trip proves the sequencing: the read found the file because the wall put the write before it. one line of source holds both operators doing their one job each—<code>&gt;&gt;</code> orders two effects that share no data, <code>.&gt;</code> moves the read's result into <code>print</code>.</p>
+<p>the round trip proves the sequencing: the read found the file because the first bind put the write before it. the two binds do different jobs: the first ignores what the write yields and only orders the two effects, and the second moves the read's result into <code>print</code>.</p>
 
-<p>every effect that succeeds yields a value, including the ones with nothing to report. a write yields <code>done</code>, the fourth nullary alongside <code>true</code>, <code>false</code> and <code>none</code>. the wall throws that yield away, which is why <code>&gt;&gt;</code> is the right operator between a write and a read. bind it with <code>.&gt;</code> and you can look at it:</p>
+<p>every effect that succeeds yields a value, including the ones with nothing to report. a write yields <code>done</code>, the fourth nullary alongside <code>true</code>, <code>false</code> and <code>none</code>. the <code>_</code> in <code>save.kso</code> throws that yield away. give the callback a parameter it reads and you can look at it:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">yielded.kso</div>
-  <pre><code>import "std/os"
+  <pre><code><span class="k">import</span> <span class="s">"std/os"</span>
 
-fn name done
-  "done"
+<span class="k">fn</span> <span class="f">name</span> done
+  <span class="s">"done"</span>
 
-fn name none
-  "none"
+<span class="k">fn</span> <span class="f">name</span> none
+  <span class="s">"none"</span>
 
-fn report yield
-  print "the write yielded {yield}"
-    &gt;&gt; print "an arm named {name yield} caught it"
-    &gt;&gt; print "yield == none is {yield == none}"
+<span class="k">fn</span> <span class="f">report</span> yield
+  <span class="f">print</span> <span class="s">"the write yielded <span class="i">{yield}</span>"</span>
+    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"an arm named <span class="i">{name yield}</span> caught it"</span>)
+    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"yield == none is <span class="i">{yield == none}</span>"</span>)
 
-pub play = os/write_file "receipt.txt" "one taiyaki" .&gt; report</code></pre>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">os/write_file</span> <span class="s">"receipt.txt"</span> <span class="s">"one taiyaki"</span> <span class="o">.&gt;</span> <span class="f">report</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run yielded.kso</div>
     <pre><code>the write yielded &lt;done&gt;
@@ -574,7 +571,7 @@ test eval::tests::scripted_executor_records_the_transcript ... ok</code></pre>
 </div>
 </div>
 
-<p>you can now split any program into the part that decides and the part that touches the world, and say precisely where the boundary sits: io values on one side, one executor on the other. you can read <code>&gt;&gt;</code> as pure sequence and <code>.&gt;</code> as a value crossing into the future, and predict a <code>--plan</code> from the source before you run it. you can trace an execution-time failure to the endpoint and explain why no arm caught it. and you can test the logic of an effectful program without faking a single i/o call. chapter 06 takes the one thing this chapter kept quiet—what happens when two io values <em>don't</em> need an order—and turns it into concurrency for free.</p>
+<p>you can now split any program into the part that decides and the part that touches the world, and say precisely where the boundary sits: io values on one side, one executor on the other. you can read <code>.&gt; (_ -&gt; ...)</code> as pure sequence and a bind into a named parameter as a value crossing into the future, and predict a <code>--plan</code> from the source before you run it. you can trace an execution-time failure to the endpoint and explain why no arm caught it. and you can test the logic of an effectful program without faking a single i/o call. chapter 06 takes the one thing this chapter kept quiet—what happens when two io values <em>don't</em> need an order—and turns it into concurrency for free.</p>
 
 <h2>exercises</h2>
 

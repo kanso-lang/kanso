@@ -83,7 +83,7 @@ fn param_stays_local(body: &[Stmt], name: &str) -> bool {
             }
             Expr::Field { base, .. } => expr_safe(base, name, false),
             Expr::Upcast { expr, .. } => expr_safe(expr, name, false),
-            Expr::Seq(a, b, _) | Expr::Join { lhs: a, rhs: b, .. } => {
+            Expr::Join { lhs: a, rhs: b, .. } => {
                 expr_safe(a, name, false) && expr_safe(b, name, false)
             }
             Expr::Lambda { body, .. } => expr_safe(body, name, false),
@@ -193,7 +193,7 @@ fn use_targets(expr: &Expr, name: &str, out: &mut Vec<(String, usize, usize)>) {
             use_targets(base, name, out);
             use_targets(index, name, out);
         }
-        Expr::Seq(a, b, _) | Expr::Join { lhs: a, rhs: b, .. } => {
+        Expr::Join { lhs: a, rhs: b, .. } => {
             use_targets(a, name, out);
             use_targets(b, name, out);
         }
@@ -309,7 +309,7 @@ fn collect_uses(
             collect_uses(base, name, discard, uses);
             collect_uses(index, name, discard, uses);
         }
-        Expr::Seq(a, b, _) | Expr::Join { lhs: a, rhs: b, .. } => {
+        Expr::Join { lhs: a, rhs: b, .. } => {
             collect_uses(a, name, discard, uses);
             collect_uses(b, name, discard, uses);
         }
@@ -357,9 +357,7 @@ fn expensive(expr: &Expr, fns: &HashSet<&str>) -> bool {
         Expr::BinOp { op, lhs, rhs, .. } => {
             *op == "==" || *op == "!=" || expensive(lhs, fns) || expensive(rhs, fns)
         }
-        Expr::Seq(lhs, rhs, _) | Expr::Join { lhs, rhs, .. } => {
-            expensive(lhs, fns) || expensive(rhs, fns)
-        }
+        Expr::Join { lhs, rhs, .. } => expensive(lhs, fns) || expensive(rhs, fns),
         Expr::List(items, _) => items.iter().any(|a| expensive(a, fns)),
         Expr::MapLit(entries, _) => {
             entries.iter().any(|(k, v)| expensive(k, fns) || expensive(v, fns))

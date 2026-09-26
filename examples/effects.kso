@@ -1,1 +1,1 @@
-print "one" >> print "two" >> print "three"
+print "one" .> (_ -> print "two") .> (_ -> print "three")

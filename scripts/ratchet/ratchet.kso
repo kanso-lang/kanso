@@ -1644,7 +1644,7 @@ numeric = row
   release
 
 effects = row
-  "two effects running in the wrong order on one engine"
+  "the first step of a bind skipped on one engine"
   true
   "./target/release/kanso run scripts/effects_differential"
   "diagnostics differential (both engines say the same thing)"
@@ -2470,7 +2470,7 @@ play_disk = row
   (breaking "a_play_key_that_trusts_a_module_from_disk")
   release
 
-# A warm play compiles the file only to word a death by signal.
+# A warm play words a death by signal without compiling the file.
 play_signal = row
   "a warm play that dies in silence"
   true
@@ -2649,6 +2649,19 @@ literal_divisor = row
 
 rows_b1ld = text/concat rows_b1wr [literal_divisor]
 
+# A lambda applied to a box may not read the box as a value.
+box_param = row
+  "a lambda handed a box through the plain dot reads it as a value unrefused"
+  true
+  "cargo test --release --test golden {box_error_golden}"
+  "specs (unit, golden, differential)"
+  (breaking "a_box_a_lambda_may_read")
+  release
+
+box_error_golden = "error_corpus_reports_each_golden_diagnostic"
+
+rows_b1bx = text/concat rows_b1ld [box_param]
+
 # A boxed parameter proven to be one kind of heap value carries an assume.
 tag_assumed = row
   "a proven tag left unsaid"
@@ -2658,9 +2671,33 @@ tag_assumed = row
   (breaking "a_proven_tag_left_unsaid")
   benches
 
-rows_b1ta = text/concat rows_b1ld [tag_assumed]
+rows_b1ta = text/concat rows_b1bx [tag_assumed]
 
-rows_b = text/concat rows_b1ta [compile_mem compile_mem_host]
+# `>>` is refused where it is written, with the spelling that replaced it.
+wall_refused = row
+  "a `>>` that lexes as two comparisons instead of being refused"
+  true
+  "cargo test --release --test golden {error_golden}"
+  "specs (unit, golden, differential)"
+  (breaking "the_wall_lexes_again")
+  release
+
+# `--plan` renders the step after `_ ->`, which ignores the value it is handed.
+plan_ignoring = row
+  "a plan that stops at every bind, even one whose callback ignores its value"
+  true
+  "cargo test --release --test golden {plan_golden}"
+  "specs (unit, golden, differential)"
+  (breaking "a_plan_that_stops_at_every_bind")
+  release
+
+plan_golden = "plan_prints_the_description_without_executing_it"
+
+error_golden = "error_corpus_reports_each_golden_diagnostic"
+
+rows_b1wg = text/concat rows_b1ta [wall_refused plan_ignoring]
+
+rows_b = text/concat rows_b1wg [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 

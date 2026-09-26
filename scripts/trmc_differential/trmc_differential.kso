@@ -189,10 +189,10 @@ fn told _ _ _ _ true
 
 fn told n i bad live false
   io/write_err "trmc differential: the rewrite changed an answer\n"
-  >> reported bad (length bad == 0)
-  >> engines n i (n.stdout == i.stdout)
-  >> liveness live (alive? live)
-  >> os/exit 1
+    .> (_ -> reported bad (length bad == 0))
+    .> (_ -> engines n i (n.stdout == i.stdout))
+    .> (_ -> liveness live (alive? live))
+    .> (_ -> os/exit 1)
 
 fn reported _ true
   io/write_err ""
@@ -200,23 +200,28 @@ fn reported _ true
 fn reported bad false
   shown = list/to_list (list/map bad (l -> "    {l}\n"))
   io/write_err "  lines where the rewritten and plain forms differ:\n"
-  >> io/write_err (text/join shown "")
+    .> (_ -> io/write_err (text/join shown ""))
 
 fn engines _ _ true
   io/write_err ""
 
 fn engines n i false
   io/write_err "  the engines disagree:\n"
-  >> io/write_err "    native: {n.stdout}{n.stderr}\n"
-  >> io/write_err "    interp: {i.stdout}{i.stderr}\n"
+    .> (_ -> io/write_err "    native: {n.stdout}{n.stderr}\n")
+    .> (_ -> io/write_err "    interp: {i.stdout}{i.stderr}\n")
 
 fn liveness _ true
   io/write_err ""
 
 fn liveness said false
-  io/write_err "  the deep sum reads `{said}`, not `deep {deep_answer}` —\n"
-  >> io/write_err "  a recursion twenty thousand deep only answers while the\n"
-  >> io/write_err "  rewrite is live, so this gate compares two unrewritten\n"
-  >> io/write_err "  programs and proves nothing.\n"
+  io/write_err (unrewritten said)
+
+fn unrewritten said
+  """
+      the deep sum reads `{said}`, not `deep {deep_answer}` —
+      a recursion twenty thousand deep only answers while the
+      rewrite is live, so this gate compares two unrewritten
+      programs and proves nothing.
+  """
 
 pub play = ran source

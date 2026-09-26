@@ -17,5 +17,4 @@ pub play =
   build
     q = node "a" _
     q.peers = [q]
-  print "{k == q}"
-  >> print "{k.peers == q.peers}"
+  print "{k == q}" .> (_ -> print "{k.peers == q.peers}")

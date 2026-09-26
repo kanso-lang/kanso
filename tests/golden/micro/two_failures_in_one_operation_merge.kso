@@ -31,8 +31,7 @@ right = 1 + b
 
 compared? = a < b
 
-pub play =
-  print "both: {testing/when_failed both as_text}"
-  >> print "left: {testing/when_failed left as_text}"
-  >> print "right: {testing/when_failed right as_text}"
-  >> print "compared: {testing/when_failed compared? as_text}"
+pub play = print "both: {testing/when_failed both as_text}"
+  .> (_ -> print "left: {testing/when_failed left as_text}")
+  .> (_ -> print "right: {testing/when_failed right as_text}")
+  .> (_ -> print "compared: {testing/when_failed compared? as_text}")

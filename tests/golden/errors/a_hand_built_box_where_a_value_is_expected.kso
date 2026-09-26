@@ -4,7 +4,6 @@
 fn boxed x
   effect x
 
-pub play =
-  print (effect 5 + 1)
-  >> print (length (effect [1 2]))
-  >> print (boxed 3 + 1)
+pub play = print (effect 5 + 1)
+  .> (_ -> print (length (effect [1 2])))
+  .> (_ -> print (boxed 3 + 1))

@@ -143,10 +143,6 @@ fn walk(expr: &Expr, visit: &mut dyn FnMut(&Expr)) {
             walk(base, visit);
             walk(index, visit);
         }
-        Expr::Seq(a, b, _) => {
-            walk(a, visit);
-            walk(b, visit);
-        }
         _ => {}
     }
 }

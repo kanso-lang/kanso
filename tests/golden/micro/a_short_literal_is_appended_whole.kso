@@ -42,10 +42,11 @@ fn mixed 0 acc
 fn mixed n acc
   mixed (n - 1) (text/append (text/append (text/append acc "null") ",") "€")
 
-pub play =
-  print "one:   {text/utf8 (one 23 (text/bytes ""))}"
-  >> print "three: {text/utf8 (three 23 (text/bytes ""))}"
-  >> print "eight: {length (text/utf8 (eight 23 (text/bytes "")))}"
-  >> print "nine:  {length (text/utf8 (nine 23 (text/bytes "")))}"
-  >> print "mixed: {text/utf8 (mixed 11 (text/bytes ""))}"
-  >> print "ends:  {text/slice (text/utf8 (eight 23 (text/bytes ""))) 177 184}"
+pub play = print "one:   {text/utf8 (one 23 (text/bytes ""))}"
+  .> (_ -> print "three: {text/utf8 (three 23 (text/bytes ""))}")
+  .> (_ -> print "eight: {length (text/utf8 (eight 23 (text/bytes "")))}")
+  .> (_ -> print "nine:  {length (text/utf8 (nine 23 (text/bytes "")))}")
+  .> (_ -> print "mixed: {text/utf8 (mixed 11 (text/bytes ""))}")
+  .> (_ -> print "ends:  {text/slice eights 177 184}")
+
+eights = text/utf8 (eight 23 (text/bytes ""))

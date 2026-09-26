@@ -12,5 +12,5 @@ fn quote n:int
   "{n} plain"
 
 print (quote (cents 350))
->> print (quote 350)
->> print "a body reads through: {post_body "hello"}"
+  .> (_ -> print (quote 350))
+  .> (_ -> print "a body reads through: {post_body "hello"}")

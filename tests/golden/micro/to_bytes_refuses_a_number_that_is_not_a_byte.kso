@@ -21,8 +21,7 @@ under = text/to_bytes [-1]
 
 wrong = text/to_bytes ["a"]
 
-pub play =
-  print "in range: {shown (text/to_bytes [104 105])}"
-  >> print "out of range: {testing/when_failed over as_text}"
-  >> print "negative: {testing/when_failed under as_text}"
-  >> print "not a number: {testing/when_failed wrong as_text}"
+pub play = print "in range: {shown (text/to_bytes [104 105])}"
+  .> (_ -> print "out of range: {testing/when_failed over as_text}")
+  .> (_ -> print "negative: {testing/when_failed under as_text}")
+  .> (_ -> print "not a number: {testing/when_failed wrong as_text}")

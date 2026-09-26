@@ -44,7 +44,6 @@ fn shadowed x
   other = x + 8
   "{round} {other}"
 
-pub play =
-  print (ladder 10)
-  >> print (after_guard 1)
-  >> print (shadowed 1)
+pub play = print (ladder 10)
+  .> (_ -> print (after_guard 1))
+  .> (_ -> print (shadowed 1))

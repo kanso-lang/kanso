@@ -43,7 +43,6 @@ built = couple ea eb
 
 called = joined ea eb
 
-pub play =
-  print "operated: {testing/when_failed operated as_text}"
-  >> print "built: {testing/when_failed built as_text}"
-  >> print "called: {testing/when_failed called as_text}"
+pub play = print "operated: {testing/when_failed operated as_text}"
+  .> (_ -> print "built: {testing/when_failed built as_text}")
+  .> (_ -> print "called: {testing/when_failed called as_text}")

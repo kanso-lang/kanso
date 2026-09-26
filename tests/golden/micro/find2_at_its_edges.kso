@@ -15,16 +15,15 @@ short = text/bytes "abcd"
 
 long = text/bytes "0123456789abcdefghijklmn"
 
-pub play =
-  print "middle: {text/find2 short 1 99 100}"
-  >> print "first byte: {text/find2 short 1 97 97}"
-  >> print "last byte: {text/find2 short 4 100 100}"
-  >> print "earlier of the two wins: {text/find2 short 1 100 97}"
-  >> print "no match: {text/find2 short 1 122 122}"
-  >> print "from past the end: {text/find2 short 9 97 98}"
-  >> print "from below one: {text/find2 short 0 97 97}"
-  >> print "from at zero on a hit: {text/find2 short 0 99 100}"
-  >> print "inside the vector step: {text/find2 long 1 53 53}"
-  >> print "past it, walked: {text/find2 long 1 109 109}"
-  >> print "the last byte of all: {text/find2 long 20 110 110}"
-  >> print "no match at all: {text/find2 long 1 122 122}"
+pub play = print "middle: {text/find2 short 1 99 100}"
+  .> (_ -> print "first byte: {text/find2 short 1 97 97}")
+  .> (_ -> print "last byte: {text/find2 short 4 100 100}")
+  .> (_ -> print "earlier of the two wins: {text/find2 short 1 100 97}")
+  .> (_ -> print "no match: {text/find2 short 1 122 122}")
+  .> (_ -> print "from past the end: {text/find2 short 9 97 98}")
+  .> (_ -> print "from below one: {text/find2 short 0 97 97}")
+  .> (_ -> print "from at zero on a hit: {text/find2 short 0 99 100}")
+  .> (_ -> print "inside the vector step: {text/find2 long 1 53 53}")
+  .> (_ -> print "past it, walked: {text/find2 long 1 109 109}")
+  .> (_ -> print "the last byte of all: {text/find2 long 20 110 110}")
+  .> (_ -> print "no match at all: {text/find2 long 1 122 122}")

@@ -126,7 +126,7 @@ function highlightLine(line) {
       i += number[0].length;
       continue;
     }
-    const op = rest.match(/^(->|>>|==|!=|<=|>=|[=+\-*\/<>.\[\]():])/);
+    const op = rest.match(/^(->|==|!=|<=|>=|[=+\-*\/<>.\[\]():])/);
     if (op) {
       html += span('o', op[0]);
       i += op[0].length;

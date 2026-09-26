@@ -67,9 +67,9 @@ fn look cs p
 bs = text/bytes "[\"a"
 
 print (look bs 1)
->> print (look bs 2)
->> print (look bs 3)
->> print (look bs 4)
+  .> (_ -> print (look bs 2))
+  .> (_ -> print (look bs 3))
+  .> (_ -> print (look bs 4))
 "#;
 
 #[test]
@@ -109,9 +109,7 @@ fn look cs p
 
 bs = text/bytes "[\"a"
 
-print (look bs 1)
->> print (look bs 3)
->> print (look bs 4)
+print (look bs 1) .> (_ -> print (look bs 3)) .> (_ -> print (look bs 4))
 "#;
 
 #[test]

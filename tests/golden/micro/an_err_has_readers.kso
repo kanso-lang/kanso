@@ -46,12 +46,11 @@ fn caused e:err
 fn origin_of e:err
   raised_in e.origin
 
-pub play =
-  print (reason_of (boom 1))
-  >> print (reason_of (wrapped 2))
-  >> print (cause_reason_of (wrapped 3))
-  >> print (cause_of (boom 4))
-  >> print (caused (cause_of (wrapped 5)))
-  >> print (origin_of (boom 6))
-  >> print (origin_of (wrapped 7))
-  >> print (rescue (json/decode "[1, 2") (e -> e.reason.reason))
+pub play = print (reason_of (boom 1))
+  .> (_ -> print (reason_of (wrapped 2)))
+  .> (_ -> print (cause_reason_of (wrapped 3)))
+  .> (_ -> print (cause_of (boom 4)))
+  .> (_ -> print (caused (cause_of (wrapped 5))))
+  .> (_ -> print (origin_of (boom 6)))
+  .> (_ -> print (origin_of (wrapped 7)))
+  .> (_ -> print (rescue (json/decode "[1, 2") (e -> e.reason.reason)))

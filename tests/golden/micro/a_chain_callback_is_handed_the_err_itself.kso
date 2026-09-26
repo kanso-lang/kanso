@@ -25,6 +25,7 @@ fn outcome false
 fn outcome v
   v
 
-pub play =
-  print (outcome (testing/when_failed (mine 1 .? (e -> lam e)) passed))
-  >> print (outcome (testing/when_failed (mine 1 .! (e -> lam e)) passed))
+pub play = print (outcome (testing/when_failed (mine 1 .? (e -> lam e)) passed))
+  .> (_ -> print (outcome (testing/when_failed annotated passed)))
+
+annotated = mine 1 .! (e -> lam e)

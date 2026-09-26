@@ -8,5 +8,4 @@ type plain_tag int
 fn to_string _:money
   "$3.50"
 
-print "custom: {money 350}"
->> print "default: {plain_tag 7}"
+print "custom: {money 350}" .> (_ -> print "default: {plain_tag 7}")

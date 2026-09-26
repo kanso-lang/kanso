@@ -3,11 +3,10 @@
 # string, which split steps past one position at a time.
 import "std/regexp"
 
-pub play =
-  print "none:     {regexp/split ",," "abc"}"
-  >> print "stops:    {regexp/split "," "a,b,cdef"}"
-  >> print "at end:   {regexp/split "," "a,b,"}"
-  >> print "star:     {regexp/split "x*" "abc"}"
-  >> print "star mid: {regexp/split "x*" "axxbc"}"
-  >> print "optional: {regexp/split "-?" "a-b"}"
-  >> print "empty in: {regexp/split "" "ab"}"
+pub play = print "none:     {regexp/split ",," "abc"}"
+  .> (_ -> print "stops:    {regexp/split "," "a,b,cdef"}")
+  .> (_ -> print "at end:   {regexp/split "," "a,b,"}")
+  .> (_ -> print "star:     {regexp/split "x*" "abc"}")
+  .> (_ -> print "star mid: {regexp/split "x*" "axxbc"}")
+  .> (_ -> print "optional: {regexp/split "-?" "a-b"}")
+  .> (_ -> print "empty in: {regexp/split "" "ab"}")

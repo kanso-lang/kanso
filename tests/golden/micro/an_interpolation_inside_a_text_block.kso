@@ -15,4 +15,6 @@ block = pick "é" """
   three
 """
 
-pub play = print label >> print block >> print "nested {pick "a{n}" "b"}"
+pub play = print label
+  .> (_ -> print block)
+  .> (_ -> print "nested {pick "a{n}" "b"}")

@@ -15555,6 +15555,46 @@ The two codegen rows moved on CI because clang compiles a runtime with one
 branch fewer: `codegen_instructions_dev` 123,915,881 (+91) and
 `codegen_instructions_release` 695,954,277 (+28). Welfare holds at its floor.
 
+## 2026-09-26 — a box handed to a lambda that reads it
+
+`math/random 6 . (n -> print "{n - 1}")` checked clean and died at run time
+with "`-` is not defined for these values". The plain dot has been ordinary
+application since the 2026-09-10 ruling, so the lambda is handed the box
+itself, and `n - 1` is a box where a value is expected, which the box ruling
+refuses. The checker could not see it, because it asks whether an operand is
+a box by looking at the operand, and this operand is a parameter.
+
+Where a lambda is applied to an argument that is a box, the checker now reads
+the lambda's body for the places the matching parameter meets an operator, an
+index, a field read, an `if` condition or a builtin that reads its argument,
+and refuses each with the message the direct case already gets. A lambda
+inside that binds the same name hides it, and `_` is never read. Holding the
+box is untouched: `box . held` names a group rather than a lambda, and storing
+the parameter with `push` or handing it to `print` reads nothing.
+
+Found by running vse against kanso main, where it fails the same way. vse's
+own case is not caught by this: its box is pushed into a list and read out
+two calls later as `p[d] - q[d]`, which is flow through data rather than a
+parameter read in place. The postcard program is the error golden
+`a_box_a_lambda_reads`, which main's compiler checks clean. The ratchet row
+`box_param` turns the new arm off and the error corpus goes red.
+
+CI read the tree at eec06dd9 and its rows were taken. The new arm is asked at
+every application site, so the front end pays for it: `compile_instructions`
+25,204,253 -> 25,216,319, `entry_instructions` 85,215,074 -> 85,247,109 and
+`library_instructions` 85,773,867 -> 85,805,873. No runtime row moved. The
+trend gate reads that as a pure regression, and it is the language's to
+spend: the refusal is the box ruling's, so the floor's history records the
+fall against this change and the score holds at 89.17 to two places.
+
+The branch then took the six-change carrier (kanso#1655) and CI read the two
+together at 79d4abb4. The arm costs the same over the new base: against the
+carrier's rows `compile_instructions` goes 25,267,312 -> 25,279,417 (+12,105),
+`entry_instructions` 85,321,306 -> 85,353,380 (+32,074) and
+`library_instructions` 85,850,050 -> 85,882,095 (+32,045). Nothing else moved.
+The floor's history records the fall again, over the carrier's 89.37, which
+the score still rounds to.
+
 ## 2026-09-25 — a proven tag is assumed
 
 Inference proves many parameters are exactly one kind of heap value: a list
@@ -15621,3 +15661,139 @@ through, and the objective prices that as production cost. The dev tier
 compiles the assume lines without folding anything with them,
 `codegen_instructions_dev` 123,915,790 -> 124,017,062 (+0.08%), and the
 emitter writes them, `emit_instructions` 28,882,533 -> 29,156,813 (+0.95%).
+
+## 2026-09-26 — the wall goes
+
+The build of the gavel of the same name. `>>` is refused in the lexer with the
+spelling that replaced it, `kanso has no \`>>\`: a step that ignores what
+came before is written \`.> (_ -> step)\``, and the error corpus pins it as
+`the_wall_is_gone`. Everything the operator needed went with it: `Tok::SeqOp`
+and the continuation rules written for it, the parser's wall lines,
+`Expr::Seq`, the checker's refusal of a wall operand that could never be an
+effect, the stack-exhaustion hint for a function recursing on a wall's right
+side, `Desc::Seq` in the interpreter, `Slot::Seq` and the `rt_seq` import in
+the browser engine, and `k_seq` with its two executor arms in the C runtime.
+
+Every sequence in the tree was respelled: 237 files by a script that turns a
+line-leading `>> step` into a `.> (_ -> step)` continuation and an inline one
+into the same step in place, then the cases it flagged by hand. A group of
+bare lines followed by a wall has no direct respelling, because a `.>` binds
+to one expression. Those sites now name the group, either as a constant with
+an indented body in a library or as a function in a play file, and bind after
+the name. The effects differential lost the five shapes that were `>>`
+duplicates of a bind shape it already had, and reads 26 combinations, none
+wrong.
+
+Nine error fixtures and three runtime and micro fixtures pinned the wall
+itself, its refusals and its runtime message, and they went with it. Three
+more were respelled to say what they meant: `binding_after_effect`,
+`orphan_continuation` and `what_follows_a_bind_is_built_after_it_runs`. Two
+error goldens changed order, `a_box_where_a_value_is_expected` and
+`a_strict_index_where_a_value_is_expected`, and the new order is the order
+the lines are written in; the wall's nesting had reversed it. The build body's
+hint now reads "sequence effects with \`.>\`".
+
+`--plan` needed rebuilding rather than removing. A wall held its right side as
+a description, so the plan could list every step. A bind holds a function, and
+the plan has no value to hand it. A callback written `_ -> step` ignores its
+argument, so `Interp::ignoring_step` calls it with `done` and the plan renders
+the step; `examples/effects.plan` holds unchanged. The ratchet row
+`plan_ignoring` makes every bind a continuation again and turns that golden
+red, and `wall_refused` lets `>>` lex as two comparisons and turns the error
+corpus red. Both were watched red.
+
+Open, and not built here: the wall carried a formatting rule the fused chain
+words never had. A chain that wrapped had to wrap every step, and a
+half-wrapped `a >> b` followed by `  >> c` was refused. Main already accepts
+a half-wrapped `.>` chain and a half-wrapped pipe, so extending the rule would
+be a new rule, and appendix C no longer claims it.
+
+The runtime counters did not move: the twelve cost veins and the lazy tier
+agree, apart from one mem fixture whose program was respelled. In
+`build_cycle` the wall's right side was a deferred cell and is now a lambda's
+body, so the second print is built inside a callback rather than forced from a
+thunk. The fixture allocates two more times, `build_cycle_allocs` 66 -> 68 and
+`build_cycle_alloc_bytes` 3,072 -> 3,120, and the callback's frame is a beat
+that evacuates what it keeps: `build_cycle_beat_iters` 0 -> 1,
+`build_cycle_evac_allocs` 10 -> 15 and `build_cycle_evac_bytes` 368 -> 528.
+The thunk it no longer makes takes `thunk_allocs`, `thunk_evals`,
+`thunk_forces` and `thunk_live_exit` from 1 to 0 and `survive_slots` from 12
+to 4. The program the fixture runs changed, and these are its new baseline.
+
+Every binary's machine code fell 848 bytes, `text` summed over the fourteen
+from 3,486,032 to 3,474,160: `k_seq`, its helper and its two executor arms
+left the runtime. The compile rows this container cannot compare are left
+for CI.
+
+CI read the tree at 3860fbdd and its rows were taken. The front end lost the
+parser's wall lines and the checker's wall operand test, and every compile row
+fell: `compile_instructions` 25,204,253 -> 25,055,383, `entry_instructions`
+85,215,074 -> 84,735,189, `library_instructions` 85,773,867 -> 85,292,289,
+`startup_instructions` 52,416 -> 52,405, `codegen_instructions_dev`
+125,554,679 -> 125,534,193 and `codegen_instructions_release` 698,561,887 ->
+698,511,987. `interp_instructions` fell 614,239,448 -> 614,114,983.
+`emit_instructions` rose 29,311,866 -> 29,337,244, and seven runtime rows rose
+with every allocation counter unchanged: `work_runbench` 1,332,911,604 ->
+1,332,963,952, `work_deepbench` 364,523,751 -> 364,907,752, `work_widebench`
+28,836,195 -> 28,852,174, `work_pendbench` 181,849,069 -> 181,849,270,
+`work_escapebench` 68,272,680 -> 68,272,681, `work_indexbench` 2,538,307 ->
+2,538,308 and `work_scanbench` 281,837 -> 281,838. The runtime lost `k_seq`
+and two executor arms, and these moves arrived with that; which part of the
+change moved each was not isolated. Welfare banks at 89.17, the development
+side up from 90.86 to 90.87.
+
+
+The branch then took the six-change carrier (kanso#1655) and CI read the two
+together at 64bacde8. Against the carrier's rows the wall's removal moves the
+same way it did over the old base. The front end falls:
+`compile_instructions` 25,267,312 -> 25,080,902, `entry_instructions`
+85,321,306 -> 84,718,064, `library_instructions` 85,850,050 -> 85,245,877,
+`codegen_instructions_dev` 123,915,881 -> 123,894,024 and
+`interp_instructions` 578,807,674 -> 578,682,708. `text` falls 848 bytes in
+every binary again, summed 3,544,496 -> 3,532,624. `codegen_instructions_release`
+rises 695,954,277 -> 696,080,355 and `emit_instructions` 28,882,533 ->
+28,893,585. Of the work rows, `work_runbench` falls 1,290,279,056 ->
+1,290,275,085 and `work_encodebench` 2,677,016,790 -> 2,676,513,833, and seven
+rise with every allocation counter unchanged: `work_deepbench` 364,797,730 ->
+365,181,731, `work_widebench` 28,789,056 -> 28,805,035, `work_oneshot`
+14,486,409 -> 14,487,226, `work_pendbench` 181,895,213 -> 181,895,414,
+`work_escapebench` 65,821,674 -> 65,821,675, `work_indexbench` 2,538,557 ->
+2,538,558 and `work_scanbench` 282,021 -> 282,022. Two fall slightly against the carrier:
+`work_digestbench` 5,542,082 -> 5,542,059 and `work_readbench` 4,631,851 ->
+4,631,829. As before, these arrived
+with the runtime losing `k_seq` and its executor arms, and no part of the
+change was isolated as the cause of any one of them.
+The development side rises from 90.99 to 91.00 and welfare banks at 89.37.
+
+## 2026-09-26 — the wall, the box check and the proven tag, carried
+
+kanso#1663 carries three changes whose goldens conflict pairwise: the wall
+goes (kanso#1661), a box handed to a lambda that reads it (kanso#1662), and
+a proven tag is assumed (kanso#1656). The tag change landed on main while the
+carrier was being measured, so what this entry prices is the other two over
+it. CI read the tree at da3aaa11.
+
+The front end falls: `compile_instructions` 25,279,417 -> 25,079,671,
+`entry_instructions` 85,353,380 -> 84,714,058 and `library_instructions`
+85,882,095 -> 85,241,857, against main's 25,267,312, 85,321,306 and
+85,850,050. `codegen_instructions_dev` falls 124,017,153 -> 123,995,296 and
+`codegen_instructions_release` 406,427,618 -> 406,311,344. `text` falls 848
+bytes in every binary, as it did over the carrier before. `emit_instructions`
+rises 29,156,813 -> 29,167,865.
+
+Of the work rows, `work_jsonbench`, `work_oneshot`, `work_digestbench`,
+`work_readbench` and `work_livebench` fall by under a thousand each, and
+eight rise with no allocation counter moving: `work_encodebench`
+2,530,778,953 -> 2,531,124,390, `work_runbench` 1,223,628,069 ->
+1,223,796,725, `work_deepbench` 364,733,730 -> 365,117,731, `work_widebench`
+28,565,052 -> 28,581,031, `work_pendbench` 181,896,211 -> 181,896,412,
+`work_escapebench` 63,421,674 -> 63,421,675, `work_indexbench` 2,498,460 ->
+2,498,461 and `work_scanbench` 281,849 -> 281,850. Over the six-change
+carrier alone the wall moved `work_runbench` down 3,971 and `work_encodebench`
+down 502,957; over the tag assume both rows rise instead. The runtime lost
+`k_seq` and its executor arms, and the assumes change what LLVM folds around
+the callers that remain, so the two changes interact in the release build.
+Which part of either moved these rows was not isolated.
+
+The front end's fall outweighs the runtime rows, and welfare rises from
+89.7618 to 89.7626. The floor banks there.

@@ -160,7 +160,7 @@ fn native_and_the_interpreter_agree_on_a_partial() {
 /// several live arms are not an ambiguity.
 #[test]
 fn a_partial_dispatches_on_the_total_count_not_at_the_ampersand() {
-    let source = "fn roll n\n  n + 1\n\nfn roll n sides\n  n * sides\n\nfn roll n sides bonus\n  n * sides + bonus\n\nprint \"{(&roll 4) 5}\" >> print \"{(&roll 4) 5 6}\"\n";
+    let source = "fn roll n\n  n + 1\n\nfn roll n sides\n  n * sides\n\nfn roll n sides bonus\n  n * sides + bonus\n\nprint \"{(&roll 4) 5}\" .> (_ -> print \"{(&roll 4) 5 6}\")\n";
     let program = written("total_count", source);
 
     let native = Command::new(env!("CARGO_BIN_EXE_kanso"))

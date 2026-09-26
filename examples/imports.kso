@@ -19,7 +19,8 @@ fn select (invoice _) _
 inv = invoice 900
 evens = to_list (select [1 2 3 4] (x -> x % 2 == 0))
 narrowed = list/to_list (list/select [5 6 7] (x -> 5 < x))
+renamed = "{cut "kanso" 1 2} then {t/cut "kanso" 4 5}"
 print "bare, union-dispatched: {select inv paid?} / {evens}"
->> print "narrowed to the module: {narrowed}"
->> print "renamed on the way in: {cut "kanso" 1 2} then {t/cut "kanso" 4 5}"
->> print "aliased qualifier: {t/join ["ka" "nso"] ""}"
+  .> (_ -> print "narrowed to the module: {narrowed}")
+  .> (_ -> print "renamed on the way in: {renamed}")
+  .> (_ -> print "aliased qualifier: {t/join ["ka" "nso"] ""}")

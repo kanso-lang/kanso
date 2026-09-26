@@ -194,7 +194,7 @@ description: "kanso (簡素): a pure language where effects are values, failure 
 <span class="f">main</span> <span class="o">=</span>
   good <span class="o">=</span> <span class="f">safe_ratio</span> <span class="n">10</span> <span class="n">2</span>
   bad <span class="o">=</span> <span class="f">safe_ratio</span> <span class="n">10</span> <span class="n">0</span>
-  <span class="f">print</span> (<span class="f">describe</span> good) <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">describe</span> bad)
+  <span class="f">print</span> (<span class="f">describe</span> good) <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">describe</span> bad))
 
 <span class="k">fn</span> <span class="f">safe_ratio</span> a b
   a <span class="o">/</span> b</code></pre>
@@ -251,7 +251,7 @@ failed: division by zero</code></pre>
       <div class="showcase-cell">
         <div class="code-panel">
           <div class="code-panel-title">examples/effects.kso</div>
-          <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"one"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"two"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"three"</span></code></pre>
+          <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"one"</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"two"</span>) <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"three"</span>)</code></pre>
           <div class="code-output">
             <div class="code-panel-title">output</div>
             <pre><code>one
@@ -259,7 +259,7 @@ two
 three</code></pre>
           </div>
         </div>
-        <p><code>&gt;&gt;</code> sequences descriptions without passing data. together with <code>.&gt;</code>, it is the complete vocabulary of "before"—everywhere else, the runtime owns order.</p>
+        <p><code>.&gt;</code> hands a description's value to the next step, and <code>_ -&gt;</code> ignores it when the step only needs to come after. that is the complete vocabulary of "before"—everywhere else, the runtime owns order.</p>
       </div>
 
       <div class="showcase-cell">
@@ -277,7 +277,9 @@ three</code></pre>
   prices <span class="o">=</span> [<span class="n">30</span> <span class="n">10</span> <span class="n">20</span>]
   doubled <span class="o">=</span> <span class="f">map</span> prices (x <span class="o">-&gt;</span> x <span class="o">*</span> <span class="n">2</span>)
   ninth <span class="o">=</span> prices[<span class="n">9</span>]
-  <span class="f">print</span> <span class="s">"sorted: <span class="i">{sort prices}</span>"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"doubled: <span class="i">{doubled}</span>"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">describe</span> ninth)</code></pre>
+  <span class="f">print</span> <span class="s">"sorted: <span class="i">{sort prices}</span>"</span>
+    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"doubled: <span class="i">{doubled}</span>"</span>)
+    <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">describe</span> ninth))</code></pre>
         </div>
         <p>one import enrolls <code>std/list</code>'s names into the file's overload space—<code>map</code> and <code>sort</code> arrive bare, and dispatch resolves shared names by specificity, the same mechanism as everything else. no panicking access anywhere: <code>prices[9]</code> returns <code>none</code>, which propagates until a <code>describe</code> overload dispatches on it (insist with <code>prices[9]!</code> and the read answers an effect whose failure is the miss). indexing is 1-based, everywhere, no exceptions.</p>
       </div>

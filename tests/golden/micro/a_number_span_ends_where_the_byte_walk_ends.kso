@@ -19,11 +19,18 @@ closing = text/from_code 125
 fn ran n tail
   span "{digits n}{tail}" 1
 
-pub play =
-  print "{span "12,3" 1} {span "12,3" 4} {span "-1.5e+3]" 1} {span "x" 1}"
-  >> print "{span "12" 0} {span "12" (0 - 3)} {span "12" 3} {span "12" 9}"
-  >> print "{ran 15 ","} {ran 16 ","} {ran 17 ","} {ran 31 closing}"
-  >> print "{ran 32 " "} {ran 33 "/"} {ran 15 ""} {ran 16 ""} {ran 17 ""}"
-  >> print "{ran 15 ".5,"} {ran 16 "e9,"} {ran 17 "E-2 "} {ran 31 ".0"}"
-  >> print "{span "{digits 14}.{digits 20}:" 1} {span "1+-+-eEe..," 1}"
-  >> print "{ran 3 ",1.5e5 past the end"} {ran 20 ":2.5, and more to scan"}"
+pub play = print "{span "12,3" 1} {span "12,3" 4} {signed} {span "x" 1}"
+  .> (_ -> print "{span "12" 0} {span "12" (0 - 3)} {short_ends}")
+  .> (_ -> print "{ran 15 ","} {ran 16 ","} {ran 17 ","} {ran 31 closing}")
+  .> (_ -> print "{ran 32 " "} {ran 33 "/"} {bare_ends}")
+  .> (_ -> print "{ran 15 ".5,"} {ran 16 "e9,"} {ran 17 "E-2 "} {ran 31 ".0"}")
+  .> (_ -> print "{span "{digits 14}.{digits 20}:" 1} {span "1+-+-eEe..," 1}")
+  .> (_ -> print "{ran 3 ",1.5e5 past the end"} {scanned}")
+
+signed = span "-1.5e+3]" 1
+
+short_ends = "{span "12" 3} {span "12" 9}"
+
+bare_ends = "{ran 15 ""} {ran 16 ""} {ran 17 ""}"
+
+scanned = ran 20 ":2.5, and more to scan"

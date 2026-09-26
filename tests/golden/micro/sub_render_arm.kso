@@ -7,7 +7,6 @@ type plain_tag int
 fn to_string _:money
   "$3.50"
 
-pub play =
-  print "custom: {money 350}"
-  >> print "default: {plain_tag 7}"
-  >> print "primitive: {350}"
+pub play = print "custom: {money 350}"
+  .> (_ -> print "default: {plain_tag 7}")
+  .> (_ -> print "primitive: {350}")

@@ -33,7 +33,7 @@ fn first thing
 pub play =
   bs = text/bytes "abc.de"
   print "stops at a byte: {scan bs bs[1] 1 0}"
-  >> print "stops at the other one: {scan (text/bytes "ab;c") 97 1 0}"
-  >> print "runs off the end: {scan (text/bytes "xy") 120 1 0}"
-  >> print "ladder: {ladder bs 1} {ladder bs 4}"
-  >> print "union: {first bs} {first [7 8 9]} {first "hi"}"
+    .> (_ -> print "stops at the other one: {scan (text/bytes "ab;c") 97 1 0}")
+    .> (_ -> print "runs off the end: {scan (text/bytes "xy") 120 1 0}")
+    .> (_ -> print "ladder: {ladder bs 1} {ladder bs 4}")
+    .> (_ -> print "union: {first bs} {first [7 8 9]} {first "hi"}")

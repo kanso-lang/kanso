@@ -10,6 +10,6 @@ import "std/io"
 pub fn opaque v
   (push [] v)[1]
 
-d = io/write "a\n" >> io/write "b\n"
+d = io/write "a\n" .> (_ -> io/write "b\n")
 
 pub play = (opaque d)[1]! .> (v -> print "{v}")

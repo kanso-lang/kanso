@@ -12,7 +12,6 @@ fn shape n:int
 fn opened e:<int>effect
   e .> (n -> print "yields {n < 6}")
 
-pub play =
-  print (shape (math/random 6))
-  >> print (shape 4)
-  >> opened (math/random 6)
+pub play = print (shape (math/random 6))
+  .> (_ -> print (shape 4))
+  .> (_ -> opened (math/random 6))

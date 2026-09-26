@@ -17,8 +17,8 @@ extra_css: /book/book.css
 ok <span class="o">=</span> <span class="f">decode</span> <span class="s">"\<span class="i">{\"name\": \"kanso\", \"tags\": [\"fast\", \"simple\"]}</span>"</span>
 bad <span class="o">=</span> <span class="f">decode</span> <span class="s">"\<span class="i">{\"name\": nope}</span>"</span>
 <span class="f">print</span> (<span class="f">describe</span> ok)
-<span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"recoded: <span class="i">{encode ok}</span>"</span>
-<span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">testing/when_failed</span> bad told)</code></pre>
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"recoded: <span class="i">{encode ok}</span>"</span>)
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">testing/when_failed</span> bad told))</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run using</div>
     <pre><code>decoded: { "name": "kanso" "tags": ["fast" "simple"] }
@@ -175,9 +175,9 @@ parse failed at byte 10: invalid literal</code></pre>
   <span class="s">"ok: <span class="i">{v}</span>"</span>
 
 <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_literal</span> <span class="s">"true"</span>))
-<span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_literal</span> <span class="s">"null"</span>))
-<span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_literal</span> <span class="s">"nope"</span>))
-<span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_literal</span> <span class="s">"?"</span>))</code></pre>
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_literal</span> <span class="s">"null"</span>)))
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_literal</span> <span class="s">"nope"</span>)))
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_literal</span> <span class="s">"?"</span>)))</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run literal.kso</div>
     <pre><code>ok: true
@@ -267,10 +267,9 @@ err at 1: unexpected character `?`</code></pre>
 <span class="k">fn</span> <span class="f">hex_upper</span> c
   <span class="f">if</span> (<span class="n">64</span> <span class="o">&lt;</span> c and c <span class="o">&lt;</span> <span class="n">71</span>) (c <span class="o">-</span> <span class="n">55</span>) (<span class="f">err</span> <span class="s">"invalid hex digit"</span>)
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
-  <span class="f">print</span> (<span class="f">decode_u</span> <span class="s">"00e9"</span>)
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">decode_u</span> <span class="s">"305f"</span>)
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">decode_u</span> <span class="s">"7b80"</span>)</code></pre>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> (<span class="f">decode_u</span> <span class="s">"00e9"</span>)
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">decode_u</span> <span class="s">"305f"</span>))
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">decode_u</span> <span class="s">"7b80"</span>))</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run unicode.kso</div>
     <pre><code>é
@@ -364,9 +363,9 @@ err at 1: unexpected character `?`</code></pre>
   <span class="f">if</span> (<span class="f">is_number_char</span> cs[p]) (<span class="f">number_end</span> cs (p <span class="o">+</span> <span class="n">1</span>)) p
 
 <span class="f">print</span> (<span class="f">classify</span> <span class="s">"42"</span>)
-<span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">classify</span> <span class="s">"-17"</span>)
-<span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">classify</span> <span class="s">"3.25"</span>)
-<span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">classify</span> <span class="s">"6e3"</span>)</code></pre>
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">classify</span> <span class="s">"-17"</span>))
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">classify</span> <span class="s">"3.25"</span>))
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">classify</span> <span class="s">"6e3"</span>))</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso play numbers.kso</div>
     <pre><code><span class="k">error[naming]</span>: `is_number_char` answers only true or false: name it `is_number_char?`
@@ -481,8 +480,8 @@ err at 1: unexpected character `?`</code></pre>
   <span class="f">if</span> (p <span class="o">&gt;</span> length cs) v (<span class="f">fail</span> p <span class="s">"unexpected trailing characters"</span>)
 
 <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_int</span> <span class="s">"  42  "</span>))
-<span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_int</span> <span class="s">"1 x"</span>))
-<span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_int</span> <span class="s">"  7 ;"</span>))</code></pre>
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_int</span> <span class="s">"1 x"</span>)))
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_int</span> <span class="s">"  7 ;"</span>)))</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run positions.kso</div>
     <pre><code>ok: 42
@@ -631,8 +630,7 @@ hex_byte_table <span class="o">=</span> <span class="f">text/bytes</span> <span 
 
 <span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
   bell <span class="o">=</span> <span class="f">text/from_code</span> <span class="n">7</span>
-  <span class="f">print</span> (<span class="f">quote_str</span> <span class="s">"a\"b\nc"</span>)
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">quote_str</span> <span class="s">"ring<span class="i">{bell}</span>ring"</span>)
+  <span class="f">print</span> (<span class="f">quote_str</span> <span class="s">"a\"b\nc"</span>) <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">quote_str</span> <span class="s">"ring<span class="i">{bell}</span>ring"</span>))
 
 <span class="k">fn</span> <span class="f">quote_str</span> s
   <span class="s">"\"<span class="i">{escape_str s}</span>\""</span>
