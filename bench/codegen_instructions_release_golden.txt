@@ -372,7 +372,11 @@
 # codegen_instructions_release 695,954,249 -> 406,427,590, a FALL of
 # 289,526,659 (-41.6014%).
 #
-# CI measured kanso#1656 over the runtime without the token cache's dead copy:
-# codegen_instructions_release 406,427,590 -> 406,427,618, a RISE of 28
+# CI measured the subtype fix at 061eaef6: k_unsub moves the layout the
+# compile reads. codegen_instructions_release 406,427,590 -> 406,403,837, a
+# FALL of 23,753 (-0.0058%).
+#
+# CI measured kanso#1657 over the runtime without the token cache's dead copy:
+# codegen_instructions_release 406,403,837 -> 406,403,863, a RISE of 26
 # (+0.0000%).
-codegen_instructions_release=406311344
+codegen_instructions_release=406309906

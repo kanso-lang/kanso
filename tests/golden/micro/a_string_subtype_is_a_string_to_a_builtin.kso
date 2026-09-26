@@ -1,0 +1,21 @@
+# A subtype of string is a string to every builtin that takes one, the way the
+# oracle's call_builtin unwraps each argument before it looks at any. The
+# native engines used to hand the wrapper itself to the runtime, so `length`
+# refused a `name` and a template that opened with one could not start its
+# builder.
+import "std/text"
+
+type name string
+
+type digits string
+
+fn loud s
+  "{s}!"
+
+n = name "kanso"
+
+first = "{length n} {loud n} {text/slice n 2 3} {text/trim (name " a ")}"
+
+pub play = print first
+  .> (_ -> print "{length (text/split n "n")} {length (text/chars n)}")
+  .> (_ -> print "{text/to_int (digits "42")} {text/char_code (name "a")}")

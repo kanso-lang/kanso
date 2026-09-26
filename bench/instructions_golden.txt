@@ -713,9 +713,17 @@
 # -40,097, scanbench -172, digestbench -91,203, livebench -42,089,654,
 # runbench -66,651,001. CI's reading replaces them.
 # CI measured the tag assume at 2673fa68; the rows below are CI's.
+#
+# 2026-09-25, a subtype is its parent to a builtin: no benchmark declares a
+# subtype, so none emits a new call; adding k_unsub to the runtime the release
+# link optimises with the program moves the layout: encodebench +149,706,
+# oneshot +96, escapebench -14, digestbench -14, livebench +54,519, runbench
+# +5,742. Projected over CI's rows for the tag assume, and CI's reading
+# replaces them.
+# CI measured the subtype fix at 061eaef6; the rows below are CI's.
 jsonbench 813902265
-encodebench 2531124390
-oneshot 13870029
+encodebench 2530779441
+oneshot 13869686
 basket 31172142
 widebench 28581031
 deepbench 365117731
@@ -725,8 +733,8 @@ indexbench 2498461
 scanbench 281850
 digestbench 5450842
 readbench 4631829
-livebench 1835736291
-runbench 1223796725
+livebench 1836034749
+runbench 1223756154
 # 2026-09-06 (the run program joins): `runbench 3043743748` is a NEW row and
 # nothing regressed to make it appear. It is the program Clay's gavel that day
 # made the objective's whole run-speed term, and the thirteen rows above it

@@ -15797,3 +15797,59 @@ Which part of either moved these rows was not isolated.
 
 The front end's fall outweighs the runtime rows, and welfare rises from
 89.7618 to 89.7626. The floor banks there.
+
+## 2026-09-25 — a subtype is its parent to a builtin
+
+A value of `type name string` is a string to every builtin on the
+interpreter, whose `call_builtin` unwraps each argument before it reads any.
+The native engines handed the builtin the wrapper itself, tag 15, and the
+runtime refused it: `length`, `text/slice`, `text/trim`, `text/split`,
+`text/chars`, `text/to_int` and `text/char_code` all died on a `name` where
+the interpreter answered, and a template that opened with one could not seed
+its builder. Operators, comparison and rendering already looked through the
+wrapper, which is why `==` and `"{n}"` agreed. The divergence predates the
+tag assume and turned up while writing that change's fixture.
+
+In a program that declares a subtype, the emitter now routes every real
+builtin's arguments through `k_unsub`, and a builder's seed as well. A type's
+constructor comes through the same emitter and is left alone, since it must
+see the value it wraps: routing it too lost a line of
+`a_child_arm_beats_its_parent`. A program with no subtype emits nothing new.
+The micro fixture `a_string_subtype_is_a_string_to_a_builtin` runs the seven
+builtins and a template on both engines and a release build; without the
+routing the native engines printed nothing. The ratchet row
+`subtype_unwrapped` turns the routing off.
+
+Seeding the builder was first done in `k_b_str_builder`, and that cost
+runbench 100,538 instructions: the release link optimises the runtime with
+the program and inlines the builder into `escape_onto`, where one more test
+changed what it made. Done at the call site instead it costs nothing there.
+What remains is the function's own presence: `k_unsub` makes every binary 48
+bytes longer and moves the layout the link sees, projected at runbench
++5,742, encodebench +149,706 and livebench +54,519 on the container. The
+compile rows are left for CI.
+
+The trend gate reads `text` as worse; it lands on 3,521,424 summed over the
+fourteen binaries, 672 bytes above the tag assume's, which is `k_unsub`
+forty-eight bytes at a time.
+
+CI read the change at 061eaef6. The work rows landed within 28 of the
+projection: runbench 1,223,633,797, 5,728 above the tag assume's. The
+compile rows moved by the function's presence and nothing else:
+`emit_instructions` 29,156,813 -> 29,158,246, `codegen_instructions_dev`
+124,017,062 -> 124,021,731 and `codegen_instructions_release` 406,427,590 ->
+406,403,837.
+
+The branch then took the wall, box and tag carrier (kanso#1663), and CI read
+the two together at 82f53cf5. Against the carrier's rows, `k_unsub`'s 48
+bytes land in every binary again, `text` summed
+3,508,880 -> 3,509,552.
+`work_livebench` rises 1,835,736,291 -> 1,836,034,749, `emit_instructions`
+29,167,865 -> 29,169,298 and `codegen_instructions_dev` 123,995,296 ->
+123,998,259. `work_runbench` falls 1,223,796,725 -> 1,223,756,154,
+`work_encodebench` 2,531,124,390 -> 2,530,779,441, `work_oneshot` 13,870,029
+-> 13,869,686 and `codegen_instructions_release` 406,311,344 -> 406,309,906.
+No allocation counter moved and no compile row moved. As over the tag
+assume, the runtime rows move with where the new function puts everything
+after it, which was not isolated.
+Welfare rises from 89.76255 to 89.76271 and the floor banks there.

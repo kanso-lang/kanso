@@ -2697,7 +2697,18 @@ error_golden = "error_corpus_reports_each_golden_diagnostic"
 
 rows_b1wg = text/concat rows_b1ta [wall_refused plan_ignoring]
 
-rows_b = text/concat rows_b1wg [compile_mem compile_mem_host]
+# A builtin sees a subtype's value as its parent's on every engine.
+subtype_unwrapped = row
+  "a subtype handed to a builtin whole"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_subtype_handed_to_a_builtin_whole")
+  release
+
+rows_b1su = text/concat rows_b1wg [subtype_unwrapped]
+
+rows_b = text/concat rows_b1su [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 
