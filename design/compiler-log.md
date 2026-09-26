@@ -16151,3 +16151,55 @@ build of the same tree at a second path produced a binary with a different
 sha, so the path reaches the binary; CI builds at one path, which leaves the
 runner image's linker and C runtime as the candidates this container cannot
 vary.
+
+## 2026-09-26 — an index read assumes its length is not negative
+
+A read at `i` from a list or a byte string is tested `1 <= i <= len`: two
+signed compares against a length loaded from the container, joined by an
+`and`. In the decoder that is seven instructions at every byte it reads,
+`test`, `setg`, `cmp`, `setge`, `test` and a branch. One unsigned compare,
+`i - 1 <u len`, says the same thing whenever the length is not negative, and
+LLVM knows nothing about a loaded length.
+
+Rewriting the tests into the unsigned form was built first and declined. All
+five sites together took runbench -0.77% and jsonbench -2.46% against main
+at 7ff6508a, and encodebench +7.33% (+178,657,985) and livebench +1.52%.
+The rise in encodebench was in `escape_onto`, +144 million. That function's
+`escape_at` guards with `return acc if n < 1 or length bs < n` before it
+reads `bs[n]`. Why the unsigned form cost there is not isolated; the
+signed test of the read has the same shape as the guard, and the unsigned one
+does not. The two halves did not add up either. The three emitter sites alone
+gave runbench -0.28% with the same encodebench rise, and the two prelude
+helpers alone gave runbench +0.73%.
+
+What landed keeps the signed tests and adds `llvm.assume(len >= 0)` after
+each length load, three sites in the emitter (`assume_length`) and the two
+index helpers in the prelude. LLVM can then fold the pair where it pays and
+leave it where a guard already settled it. On the container, against
+7ff6508a: runbench 1,176,309,961 -> 1,172,605,303 (-0.31%), jsonbench
+805,759,321 -> 800,145,421 (-0.70%), oneshot -0.28%, widebench -0.06%,
+encodebench -89,205 and livebench -37,888. basket rises 13,516 (+0.04%) to
+30,569,473 and pendbench 200 to 179,492,839.
+
+A third shape, the assume at the emitter sites with the unsigned test in the
+prelude, took runbench +0.42% and was dropped.
+
+The spec is `an_index_assumes_its_length_is_not_negative` in
+tests/perf_ratchet.rs. It reads a list at a proven index and at an index the
+sets do not prove, and asks that each length load is assumed non-negative.
+It fails on main's codegen, and the ratchet row `length_assumed` takes the
+promise back.
+
+Each assume is two emitted lines and counts as a call, so the emitted vein
+rises everywhere it reads: runbench 3,797 -> 3,908 calls and 27,840 ->
+28,062 lines, the decoder 539 -> 574 calls and 5,648 -> 5,718 lines,
+encodebench 649 -> 674 calls and 5,993 -> 6,043 lines, oneshot 688 -> 729 and
+6,696 -> 6,778, basket 715 -> 732 and 5,354 -> 5,388, widebench 696 -> 722
+and 6,287 -> 6,339, deepbench 167 -> 170 and 1,722 -> 1,728, pendbench 398 ->
+403 and 2,961 -> 2,971, scanbench 1,863 -> 1,912 and 14,665 -> 14,763,
+indexbench 53 -> 54 and 570 -> 572, digestbench 529 -> 551 and 4,513 ->
+4,557, livebench 703 -> 744 and 6,827 -> 6,909. Branches hold in every
+program. Machine code falls in all twelve that moved, runbench 398,968 ->
+398,856 bytes and digestbench 234,712 -> 234,520. The compile golden's
+fixtures grow with the assumes: `recursion` 278 -> 279 lines, `build_block`
+241 -> 242, and `module` 1,062 -> 1,068 lines and 104 -> 107 calls.

@@ -815,17 +815,17 @@
 # src/runtime.c, which is linked into every program. The 336-byte spread is the
 # arms a program's own dispatch makes reachable. Machine-code size carries no
 # welfare term (ruled 2026-09-05); this vein is exact and watched on its own.
-jsonbench text=239224
-encodebench text=248088
-oneshot text=249896
-basket text=235928
-widebench text=249336
-deepbench text=218728
+jsonbench text=239176
+encodebench text=248072
+oneshot text=249848
+basket text=235768
+widebench text=249320
+deepbench text=218584
 escapebench text=213000
-pendbench text=226472
+pendbench text=226424
 indexbench text=212872
 scanbench text=310824
-digestbench text=234712
+digestbench text=234520
 readbench text=213304
-livebench text=250824
-runbench text=398968
+livebench text=250776
+runbench text=398856
