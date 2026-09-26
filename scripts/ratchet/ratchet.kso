@@ -20,6 +20,7 @@ import "std/text"
 #   kanso run scripts/ratchet -- prove        every row turns its gate red
 #   kanso run scripts/ratchet -- prove cheap  the rows that need no build
 #   kanso run scripts/ratchet -- prove utf-8  the rows whose job name says so
+#   kanso run scripts/ratchet -- shard 3 8    every eighth row, from the third
 #
 # `prove` is authoritative on linux, where every gate can run. A gate needing
 # a tool the host lacks says so and exits non-zero, which reads here as red
@@ -3003,7 +3004,19 @@ rows_c1zc = text/concat rows_c1zb [purge_delay_option]
 
 rows_c1zd = text/concat rows_c1zc [codegen_one_process]
 
-rows_c = text/concat rows_c1zd [itself]
+# The nightly proves the table in eight shards, and its matrix has to run every
+# shard its run line divides by.
+nightly_shards = row
+  "a nightly that drops its last shard"
+  true
+  "cargo test --release --test the_nightly_proves_every_row_once"
+  "specs (unit, golden, differential)"
+  (breaking "a_nightly_that_drops_its_last_shard")
+  no_setup
+
+rows_c1ze = text/concat rows_c1zd [nightly_shards]
+
+rows_c = text/concat rows_c1ze [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
@@ -3645,6 +3658,46 @@ fn chosen "touched" given
 fn chosen "select" given
   winnowing "list" (list/to_list (list/drop given 1)) rows 1 []
 
+# The nightly proves the table in parts:
+#
+#   kanso run scripts/ratchet -- shard 3 8        prove rows 3, 11, 19, ...
+#   kanso run scripts/ratchet -- shard 3 8 list   name them and stop
+#
+# One job proving every row stopped fitting in its ninety minutes on
+# 2026-09-14. The baseline took eleven and a half minutes, the rows ran for the
+# other seventy-eight, and the job was cancelled, every night from then until
+# this was written. A cancelled run prints nothing, because the report is
+# written once at the end, so twelve nights proved no row and said so to
+# nobody. Before that, from 2026-09-05, it had failed nine nights running.
+#
+# A shard takes every Nth row from K rather than a contiguous block. Rows are
+# appended as they are written, so a block would give the last shard every row
+# added since the split and leave it to outgrow its job again on its own.
+fn chosen "shard" given
+  k = text/to_int (second given "0")
+  n = text/to_int (third given "0")
+  sharding k n (fourth given "prove") (k < 1 or n < k)
+
+fn sharding k n _ true
+  said = "ratchet: a shard is `shard K N` with 1 <= K <= N, not {k} of {n}\n"
+  io/write_err said .> (_ -> os/exit 1)
+
+fn sharding k n mode false
+  picked = every_nth rows k n []
+  said = "ratchet: shard {k} of {n}, {length picked} rows\n"
+  listed = list/to_list (list/map picked (r -> "  {r.job} — {r.claim}\n"))
+  body = text/join listed ""
+  io/write "{said}{body}" .> (_ -> onto mode picked)
+
+fn every_nth list at n acc
+  nth_seen list at n acc (at > length list)
+
+fn nth_seen _ _ _ acc true
+  acc
+
+fn nth_seen list at n acc false
+  every_nth list (at + n) n (push acc list[at])
+
 fn chosen _ _
   cover
 
@@ -3664,6 +3717,15 @@ fn past given _ true
   given[3]
 
 fn past _ fallback false
+  fallback
+
+fn fourth given fallback
+  further given fallback (length given > 3)
+
+fn further given _ true
+  given[4]
+
+fn further _ fallback false
   fallback
 
 pub play = os/args .> (given -> asked given)
