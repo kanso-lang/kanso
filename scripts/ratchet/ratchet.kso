@@ -3081,6 +3081,19 @@ nightly_shards = row
 
 rows_c1ze = text/concat rows_c1zd [nightly_shards]
 
+# The per-PR ratchet proves a branch's handful in shards, and the spec asks
+# each shard what it would prove. It lists rather than proves, so it runs in
+# a worktree of its own and none of `prove`'s fixed directories.
+branch_shards = row
+  "a branch shard that skips a row in every stretch"
+  true
+  "cargo test --release --test a_branch_proves_its_rows_in_shards"
+  "specs (unit, golden, differential)"
+  (breaking "a_branch_shard_that_skips_rows")
+  no_setup
+
+rows_c1zf = text/concat rows_c1ze [branch_shards]
+
 # The ratchet naming each row as it starts has no row here. The spec that
 # watches it, a_clean_head_still_proves_its_row, runs `prove` itself, and
 # `prove` works in fixed directories -- /tmp/kanso-ratchet-base, one
@@ -3088,7 +3101,7 @@ rows_c1ze = text/concat rows_c1zd [nightly_shards]
 # that spec as a gate removes its own baseline worktree from under itself. On
 # kanso#1675 the baseline read the gate red before any mutation. The other
 # specs in tests/ that run `prove` carry no row for the same reason.
-rows_c = text/concat rows_c1ze [itself]
+rows_c = text/concat rows_c1zf [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
@@ -3113,7 +3126,18 @@ no_row_a = unproven
   "the other host (macos, arm)"
   "prove runs on linux and cannot reach a second machine's gate at all"
 
-unproven_jobs = [no_row_a]
+# The shards of a branch's handful run `touched`, whose rows ARE this table, so
+# the mutation that would prove the job is a row that proves the ratchet from
+# inside the ratchet. `prove` works in fixed directories, and a gate that runs
+# it removes its own baseline worktree; the note above `rows_c` says how that
+# went on kanso#1675. What a shard can drop is held by a spec instead:
+# tests/a_branch_proves_its_rows_in_shards.rs reads the matrix against the run
+# line and asks the harness which rows each shard would prove.
+no_row_b = unproven
+  "the ratchet's rows for this branch, one shard"
+  "its gate is the ratchet's own `prove`, which cannot run inside itself"
+
+unproven_jobs = [no_row_a no_row_b]
 
 workflow = ".github/workflows/ci.yml"
 
@@ -3374,10 +3398,45 @@ fn chose _ _ true
   io/write "ratchet: this branch touches no file any mutation patches\n"
 
 fn chose mode acc false
+  words = text/split mode " "
+  cut words acc (words[1] == "shard")
+
+fn cut words acc false
+  return onto "prove" acc if length words < 1
   said = "ratchet: {length acc} rows patch a file this branch changed\n"
   listed = list/to_list (list/map acc (r -> "  {r.job} — {r.claim}\n"))
   body = text/join listed ""
-  io/write "{said}{body}" .> (_ -> onto mode acc)
+  io/write "{said}{body}" .> (_ -> onto words[1] acc)
+
+# `touched_mode` writes all four words, so the guard is for the reader.
+fn cut words acc true
+  return cutting 0 0 "prove" acc true if length words < 4
+  k = text/to_int words[2]
+  n = text/to_int words[3]
+  cutting k n words[4] acc (k < 1 or n < k)
+
+fn cutting k n _ _ true
+  said = "ratchet: a shard is `shard K N` with 1 <= K <= N, not {k} of {n}\n"
+  io/write_err said .> (_ -> os/exit 1)
+
+# Every Nth row from K, as the nightly takes them, so the shards of one branch
+# prove its handful once between them.
+fn cutting k n mode acc false
+  picked = every_nth acc k n []
+  all = "ratchet: {length acc} rows patch a file this branch changed"
+  said = "{all}; shard {k} of {n} proves {length picked}\n"
+  listed = list/to_list (list/map picked (r -> "  {r.job} — {r.claim}\n"))
+  body = text/join listed ""
+  io/write "{said}{body}" .> (_ -> share mode picked (length picked == 0))
+
+# A branch whose handful is smaller than the shard count leaves some shards
+# nothing. That shard has proved nothing and claims nothing, and it is not a
+# failure, since the rows went to the others.
+fn share _ _ true
+  io/write "ratchet: no row falls to this shard\n"
+
+fn share mode picked false
+  onto mode picked
 
 # `list` names the handful and stops, the way somebody about to spend six
 # minutes of runner wants to know what they are spending it on. Anything else
@@ -3725,7 +3784,23 @@ fn chosen "prove" given
   prove_all (second given "all")
 
 fn chosen "touched" given
-  touched (second given "origin/main") (third given "prove")
+  mode = touched_mode (third given "prove") given
+  touched (second given "origin/main") mode
+
+# A branch that touches src/runtime.c selects over a hundred rows, and one job
+# proving them took two and a half hours on kanso#1676. So a pull request
+# proves its handful in parts, the way the nightly proves the table:
+#
+#   kanso run scripts/ratchet -- touched origin/main shard 2 4
+#   kanso run scripts/ratchet -- touched origin/main shard 2 4 list
+#
+# The mode travels as one word list so that the functions between here and
+# `chose` carry it without learning about shards.
+fn touched_mode "shard" given
+  "shard {fourth given "0"} {nth_arg given 5 "0"} {nth_arg given 6 "prove"}"
+
+fn touched_mode mode _
+  mode
 
 # The selection rule, driven by a file list written on the command line rather
 # than asked of git:
@@ -3809,6 +3884,15 @@ fn further given _ true
   given[4]
 
 fn further _ fallback false
+  fallback
+
+fn nth_arg given at fallback
+  arg_at given at fallback (length given >= at)
+
+fn arg_at given at _ true
+  given[at]
+
+fn arg_at _ _ fallback false
   fallback
 
 pub play = os/args .> (given -> asked given)
