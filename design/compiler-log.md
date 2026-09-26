@@ -16631,7 +16631,8 @@ Measured on the container against main's tree:
 widebench parses whole short strings, which never have sixteen bytes of room,
 so its rise is the added tests on the way to the scan. What moved encodebench,
 which parses no numbers, was not isolated. Every benchmark's `.text` grew by
-960 bytes, the second copy of the float parse and the two words.
+960 bytes, the second copy of the float parse and the two words: `text`
+3,502,384 -> 3,515,824 across the fourteen.
 
 CI's rows were taken from its first run. `work_runbench` 1,144,622,452 ->
 1,127,701,003 (-1.48%), `work_jsonbench` 758,146,232 -> 732,503,582,
