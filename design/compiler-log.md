@@ -15985,3 +15985,44 @@ the emitter and the builds: `emit_instructions` 29,340,261 -> 29,830,829,
 `codegen_instructions_dev` 124,037,661 -> 124,060,873 and
 `codegen_instructions_release` 406,473,701 -> 406,518,907.
 Welfare rises from 89.7698 to 89.8886 and the floor banks there.
+
+## 2026-09-26 — a buffer's capacity is doubled, with its regime in bit 0
+
+A list or map buffer's `KBuf.cap` carried two facts: how many slots it holds,
+and, in its sign, whether the storage came from malloc. Every inlined push
+and map insert therefore took the magnitude with a `neg` and a `cmovs` before
+it could compare. On the run program that pair executed 4,032,318 times, most
+of them in runbench's escape loop, json's `array_open` and `obj_key_start`.
+
+The field is now `capw`, the capacity doubled plus one for malloc. Room for
+`need` slots is `2 * need <= capw` in either regime, since the bit cannot lift
+an even number past the next even one, so the push asks `2 * len + 2 <=
+capw` and the insert `2 * need <= capw`, one shifted add each. The runtime
+reads the capacity through `k_buf_cap`, a shift, and the regime through
+`k_buf_malloced`; `k_buf_set_cap` is the only writer. The field was renamed
+so that clang would name every site that read it, and there were 26, six of
+them the byte builder's buffer, which keeps a plain count and now goes
+through the same helpers.
+
+On the container, against main at ada9afa9: runbench -9,340,578 (-0.78%),
+jsonbench -8,143,050 (-1.00%), escapebench -3,621,000 (-5.71%), pendbench
+-2,406,215 (-1.32%), deepbench -687,378, basket -363,826 (-1.17%), oneshot
+-51,954, digestbench -43,777 and widebench -32,012. Three rise: livebench
++1,464,109 (+0.09%), encodebench +739,449 (+0.03%) and indexbench +12. On
+runbench the escape loop inlined into `tally` falls 98,639,160 -> 93,965,656
+and `array_open` and `obj_key_start` 1.6 and 2.1 million each. No allocation
+counter moves.
+
+Machine code grows in every binary by 112 to 288 bytes, `text` summed
+3,504,368 -> 3,507,488: the runtime's own reads of the capacity, a shift
+where a positive read used to be free. Emitted lines fall by one to three per
+program, runbench 28,196 -> 28,193.
+
+`tests/a_bytes_capacity_leaves_bit_zero_free.rs` allowed exactly one
+sign-stripping capacity read, `k_buf_cap`'s, and now allows none. The new
+spec `a_buffer_capacity_reads_back_whole_in_either_regime` lifts the helpers
+out of runtime.c, sweeps capacities in both regimes, and checks that the two
+emitted room tests answer what `len < cap` and `need <= cap` answer. It was
+watched red with the setter subtracting the bit, and the ratchet row
+`capacity_doubled` makes that mutation. The instruction and compile rows are
+left for CI.
