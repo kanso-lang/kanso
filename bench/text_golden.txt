@@ -799,20 +799,20 @@
 # 2026-09-25, a subtype is its parent to a builtin: every binary grows 48
 # bytes, the runtime's k_unsub, which the release link keeps although no
 # benchmark declares a subtype and none calls it.
-jsonbench text=238024
-encodebench text=247336
-oneshot text=248472
-basket text=235560
-widebench text=248776
-deepbench text=217544
-escapebench text=211816
-pendbench text=225928
-indexbench text=211672
-scanbench text=320040
-digestbench text=234632
-readbench text=212136
-livebench text=249352
-runbench text=407592
+jsonbench text=238072
+encodebench text=247384
+oneshot text=248520
+basket text=235608
+widebench text=248824
+deepbench text=217592
+escapebench text=211864
+pendbench text=225976
+indexbench text=211720
+scanbench text=320088
+digestbench text=234680
+readbench text=212184
+livebench text=249400
+runbench text=407640
 # 2026-09-10 (kanso#1362): the backends build the partial over a value. Every
 # one of the fourteen rows RISES, by 2,096 bytes on eight of them and 2,432 on
 # the other six: k_partial0..4 and the branch each of k_call0..4 gains are in
