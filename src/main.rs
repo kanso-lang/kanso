@@ -2095,6 +2095,7 @@ fn hot_source_of(runtime: &str) -> String {
         "extern KMark k_beat_stack[K_BEAT_MAX];\n",
         "extern int k_beat_depth;\n",
         "extern KMark* k_beat_top;\n",
+        "extern KMark k_beat_none;\n",
         "extern KMark* k_seek_under;\n",
         "extern int k_buf_dirty;\n",
         "extern KCarry k_carries[K_BEAT_MAX];\n",

@@ -16069,3 +16069,29 @@ emitted room tests answer what `len < cap` and `need <= cap` answer. It was
 watched red with the setter subtracting the bit, and the ratchet row
 `capacity_doubled` makes that mutation. The instruction and compile rows are
 left for CI.
+
+## 2026-09-26 — past the beat stack, the top is a mark that stands for none
+
+`k_beat_top` caches the innermost beat mark, and it was NULL at depth zero
+and past the stack's sixty-four marks, so every beat iteration asked whether
+it was NULL before it rewound. It now names `k_beat_none` there instead, a
+mark whose `reg_any` is set. That bit sends the rewind past its fast path to
+`k_beat_rewind_slow`, which returns at once for it, so a beat past the stack
+keeps count and rewinds nothing, as it did. The iteration loses a load's
+test and a branch. `k_seek_note`, the counting build's agreement check and
+the hot unit's declarations name the sentinel where they named NULL.
+
+On the container, against main at ada9afa9: runbench -4,753,977 (-0.40%),
+escapebench -3,596,987 (-5.67%), encodebench -5,074,204 (-0.20%), basket
+-207,998 (-0.67%) and digestbench -16,419. livebench rises 587,093 (+0.03%)
+and the rest move by fewer than 5,000 instructions, jsonbench +467, oneshot
++587, deepbench +4,016, pendbench +319, indexbench +54, scanbench +37,
+widebench +19. Machine code grows by up to 112 bytes a binary, `text` summed
+3,504,368 -> 3,505,296.
+
+No fixture reached past the stack. `a_beat_past_the_deepest_mark_rewinds_nothing`
+nests seventy two-lap beats, and each lap builds a string, descends, and reads
+its level back out of the string afterwards. With the slow path's return for
+the sentinel removed, the rewind hands back every block and the program
+prints 6306 where every engine prints 6370; the ratchet row `beat_none` makes
+that mutation. The instruction and compile rows are left for CI.
