@@ -2767,7 +2767,20 @@ beat_none = row
 
 rows_b1bn = text/concat rows_b1cd [beat_none]
 
-rows_b = text/concat rows_b1bn [compile_mem compile_mem_host]
+# A span is asked in two unsigned compares.
+span_unsigned = row
+  "a span that lets from equal to past the end"
+  true
+  "cargo test --release --test {span_spec}"
+  "specs (unit, golden, differential)"
+  (breaking "a_span_that_lets_from_equal_to_past_the_end")
+  release
+
+span_spec = "a_span_is_asked_in_two_unsigned_compares"
+
+rows_b1sp = text/concat rows_b1bn [span_unsigned]
+
+rows_b = text/concat rows_b1sp [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 
