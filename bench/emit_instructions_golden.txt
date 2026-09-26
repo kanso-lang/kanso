@@ -335,4 +335,4 @@
 #
 # CI measured the result assume at 95f78ace: emit_instructions 29,158,246 ->
 # 29,329,209, a RISE of 170,963 (+0.5863%).
-emit_instructions=29723017
+emit_instructions=29815094

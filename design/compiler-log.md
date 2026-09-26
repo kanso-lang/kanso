@@ -16390,3 +16390,16 @@ tests/perf_ratchet.rs: in a proven read, the lower bound's compare is
 followed at once by a branch, and the length is loaded after it. It fails on
 the carrier's codegen, and the ratchet row `index_split` moves the load back
 ahead of the branch.
+
+CI's rows for the whole carrier, the four changes above over b6994fa4, were
+taken from its first run at b1b03001. `work_runbench` 1,168,439,677 ->
+1,155,829,607 and `work_jsonbench` 794,449,832 -> 773,943,032, with
+`work_widebench` 27,648,270 -> 27,327,107, `work_escapebench` 56,203,688 ->
+55,021,689, `work_livebench` 1,697,950,257 -> 1,691,479,959 and
+`work_digestbench` 5,302,277 -> 5,269,690. `work_encodebench` rises
+2,436,462,713 -> 2,438,572,025 and `work_pendbench` 179,493,114 ->
+179,495,828. The release build pays for the longer IR,
+`codegen_instructions_release` 402,466,293 -> 402,524,008, and the emitter
+for writing it, `emit_instructions` 29,723,017 -> 29,815,094;
+`codegen_instructions_dev` falls 123,358,369 -> 123,328,940. Welfare rises
+from 89.99 to 90.05 and the floor banks there.
