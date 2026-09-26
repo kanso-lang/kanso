@@ -16486,3 +16486,18 @@ the eighth shard from the matrix.
 
 Whether eight shards fit is a projection from the per-branch runs, not a
 measurement. The first scheduled run after this lands is the measurement.
+
+## 2026-09-26 — the ratchet names each row as it starts
+
+`prove` writes its report once, after the last row. A run that stopped before
+then printed the baseline's line and nothing else. That was every nightly from
+2026-09-14 to 2026-09-26, cancelled at the timeout with no row named, and it
+was kanso#1670's ratchet step on 2026-09-26, which ran two and a half hours
+with nothing to tell a slow row from a stuck one. Each row now writes
+`ratchet: row K of N, <job> — <claim>` to stderr as it starts, so the last
+line in a stopped log names the row that was running. The report at the end
+is unchanged.
+
+`a_clean_head_still_proves_its_row` in tests/a_gate_red_before_the_mutation.rs
+now also requires the line for its one row. The ratchet row `row_named` empties
+the announcement, and the spec goes red on the missing line.
