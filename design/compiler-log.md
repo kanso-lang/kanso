@@ -15970,3 +15970,18 @@ machine code apiece, and runbench's own grows by 1,296. `emitted_other_calls`
 10,452 and `emitted_other_lines` 85,522 are the stack's; this change takes
 three calls and nine lines out of livebench, three calls and eight lines out
 of runbench, and three calls and ten lines out of oneshot.
+
+CI read the change over the result assume, the subtype fix and the carrier
+at 9ec6a3ef, and its rows were taken. The work rows landed near the
+projection: `work_runbench` 1,221,916,115 -> 1,192,666,206 (-2.39%),
+`work_livebench` 1,830,313,464 -> 1,706,144,752 (-6.78%) and `work_oneshot`
+13,856,990 -> 13,546,522. `work_encodebench` rises 2,530,779,441 ->
+2,530,928,650, the frozen copy's layout. `k_region_pop` puts code in every
+binary, `text` 3,491,328 -> 3,504,368 summed. The front end falls,
+`compile_instructions` 25,079,671 -> 25,028,747, `entry_instructions`
+84,714,058 -> 84,572,325, `library_instructions` 85,241,857 -> 85,099,435 and
+`interp_instructions` 578,682,708 -> 578,623,311, and the region sites cost
+the emitter and the builds: `emit_instructions` 29,340,261 -> 29,830,829,
+`codegen_instructions_dev` 124,037,661 -> 124,060,873 and
+`codegen_instructions_release` 406,473,701 -> 406,518,907.
+Welfare rises from 89.7698 to 89.8886 and the floor banks there.

@@ -2345,7 +2345,7 @@
 # CI measured the carrier at e63ff428, the literal divisor's settled fixpoint
 # among what it carries: compile_instructions 25,269,300 -> 25,267,312, a FALL
 # of 1,988 (-0.0079%).
-compile_instructions=25079671
+compile_instructions=25028747
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.
