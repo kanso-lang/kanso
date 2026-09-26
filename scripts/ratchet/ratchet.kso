@@ -2767,7 +2767,20 @@ beat_none = row
 
 rows_b1bn = text/concat rows_b1cd [beat_none]
 
-rows_b = text/concat rows_b1bn [compile_mem compile_mem_host]
+# A carried record is asked about failure once, on its value field.
+carried_once = row
+  "a carried record asked about failure twice"
+  true
+  "cargo test --release --test perf_ratchet {carried_spec}"
+  "specs (unit, golden, differential)"
+  (breaking "a_carried_record_asked_about_failure_twice")
+  release
+
+carried_spec = "a_carried_record_is_asked_about_failure_once"
+
+rows_b1co = text/concat rows_b1bn [carried_once]
+
+rows_b = text/concat rows_b1co [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 

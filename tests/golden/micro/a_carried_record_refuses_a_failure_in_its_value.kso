@@ -1,0 +1,36 @@
+# A record small enough to travel in two registers still refuses a failure.
+#
+# When a group returns a record by value, a failure travels in the same two
+# words: the err's tag in the first, where the record would keep its position
+# above a byte holding its value field's tag. That low byte then reads as a
+# failure too, so a pattern that takes the record apart refuses the failure
+# when it tests the value field, and the compiler asks that one question
+# rather than testing the whole word first and the field again.
+#
+# `take` ignores the value, so nothing after the pattern would notice a
+# failure let through: it would print a position read out of the err's own
+# word. `read 0` fails, and `take` has no arm for that, so the failure leaves
+# as itself and `when_failed` names it.
+import "std/testing"
+
+type step
+  at
+  got
+
+fn read 0
+  err "nothing to read"
+
+fn read n
+  step n (n * 2)
+
+fn take (step p _)
+  "read up to {p}"
+
+fn go n
+  r = read n
+  take r
+
+fn as_text reason
+  "refused: {reason}"
+
+pub play = print "{go 3}" .> (_ -> print (testing/when_failed (go 0) as_text))

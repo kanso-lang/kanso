@@ -280,3 +280,50 @@ fn an_or_under_a_guard_is_asked_in_pieces() {
         "both comparisons should reach a branch as their own i1: {body}"
     );
 }
+
+/// A record carried in two words is taken apart with one failure test.
+///
+/// A failure in a `%parsed` is the err's own tag word, so its low byte reads
+/// as a failure when the value field is unpacked, and the value field's
+/// pattern refuses it there. The whole word used to be asked first, which is
+/// the same question twice for every record a parser hands on; and the
+/// position, which is an int whatever the word held, was asked a third time.
+const CARRIED_PATTERN: &str = "type step
+  at
+  got
+
+fn read n
+  step (n + 1) (n * 2)
+
+fn take (step p v)
+  p + v
+
+main = print \"{take (read 3)}\"
+";
+
+#[test]
+fn a_carried_record_is_asked_about_failure_once() {
+    let ir = ir_for(CARRIED_PATTERN);
+    let body: String = ir
+        .lines()
+        .skip_while(|l| !(l.starts_with("define") && l.contains("take_1")))
+        .take_while(|l| !l.starts_with('}'))
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(
+        body.contains("(%parsed %x0)"),
+        "take no longer receives its record in registers: {body}"
+    );
+    let fail_tests: Vec<&str> = body
+        .split("\nfail0:")
+        .next()
+        .unwrap_or_default()
+        .lines()
+        .filter(|l| l.contains("icmp ne i64") && l.ends_with(", 5"))
+        .collect();
+    assert_eq!(
+        fail_tests.len(),
+        1,
+        "taking the record apart should test for a failure once, on the value field: {body}"
+    );
+}
