@@ -811,18 +811,18 @@
 # test:
 jsonbench text=238072
 encodebench text=247384
-oneshot text=248520
-basket text=235608
-widebench text=248824
+oneshot text=248552
+basket text=234968
+widebench text=248600
 deepbench text=217592
 escapebench text=211864
-pendbench text=225976
-indexbench text=211720
-scanbench text=320088
+pendbench text=225400
+indexbench text=211688
+scanbench text=312024
 digestbench text=234680
 readbench text=212184
-livebench text=249400
-runbench text=407640
+livebench text=249432
+runbench text=398888
 # 2026-09-10 (kanso#1362): the backends build the partial over a value. Every
 # one of the fourteen rows RISES, by 2,096 bytes on eight of them and 2,432 on
 # the other six: k_partial0..4 and the branch each of k_call0..4 gains are in
