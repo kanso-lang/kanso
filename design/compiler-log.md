@@ -16403,3 +16403,34 @@ taken from its first run at b1b03001. `work_runbench` 1,168,439,677 ->
 for writing it, `emit_instructions` 29,723,017 -> 29,815,094;
 `codegen_instructions_dev` falls 123,358,369 -> 123,328,940. Welfare rises
 from 89.99 to 90.05 and the floor banks there.
+
+## 2026-09-26 — an empty run hands back the builder between its bounds
+
+The emitted append of a slice, `append acc (slice cs from to)` on a unique
+byte builder, is the decoder's copy of every run between two escapes. It
+tested the span as one joined condition and carried an empty or
+out-of-range span through the claim and the copy as a zero length chosen by
+`select`. A fifth of those runs are empty. The span's two bounds are now two
+branches, with the container's length loaded between them as the index's
+are, and both lead to a return of the accumulator as it stands.
+
+Against the carrier with the index split, on the container: runbench
+1,155,830,444 -> 1,144,623,289 (-0.97%), jsonbench 773,942,671 ->
+758,145,871 (-2.04%), oneshot -0.86% and livebench -0.20%. No other
+benchmark moves. On runbench the fall is in `string_scan` (-6,016,131),
+`str_char` (-4,409,757) and `escape_onto` (-780,840), all three of which
+reach this path; that `string_scan` falls further than the one arm of it
+that appends a slice would explain is not isolated. The five benchmarks'
+outputs are byte-identical to the carrier's.
+
+Emitted code gains two branches and five lines in the four programs that
+append a slice, runbench 2,809 -> 2,811 and 28,145 -> 28,150; machine code
+shrinks by 16 bytes in runbench, oneshot and livebench and by 48 in
+jsonbench. The span spec pinned the `and` this removes and reads the three
+compares that remain.
+
+The spec is tests/an_empty_run_appends_nothing.rs, which reads the
+emitter's text: the length is loaded between the span's two branches, the
+empty exit returns the accumulator, and no `select` on the span remains. It
+fails on the carrier's codegen, and the ratchet row `empty_run` moves the
+load back ahead of the first branch.
