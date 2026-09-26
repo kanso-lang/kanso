@@ -16443,3 +16443,10 @@ on 5,728; the other thirteen programs' `emitted_other_branches` on 8,059,
 code in all fourteen, `text`, lands on 3,502,384 bytes. The compile golden's
 `lines` total lands on 1,433, and its module fixture's `module_branches` on
 83, `module_calls` on 107 and `module_lines` on 1,071.
+
+CI's rows for the empty run were taken from its first run at cb500c36:
+`work_runbench` 1,155,829,607 -> 1,144,622,452, `work_jsonbench`
+773,943,032 -> 758,146,232, `work_oneshot` 13,243,616 -> 13,129,205 and
+`work_livebench` 1,691,479,959 -> 1,688,141,594. `emit_instructions` rises
+29,815,094 -> 29,819,237 with the five extra lines. Welfare rises from 90.05
+to 90.09 and the floor banks there.
