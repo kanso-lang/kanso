@@ -14,7 +14,8 @@ fn loud s
 
 n = name "kanso"
 
-pub play =
-  print "{length n} {loud n} {text/slice n 2 3} {text/trim (name " a ")}"
-  >> print "{length (text/split n "n")} {length (text/chars n)}"
-  >> print "{text/to_int (digits "42")} {text/char_code (name "a")}"
+first = "{length n} {loud n} {text/slice n 2 3} {text/trim (name " a ")}"
+
+pub play = print first
+  .> (_ -> print "{length (text/split n "n")} {length (text/chars n)}")
+  .> (_ -> print "{text/to_int (digits "42")} {text/char_code (name "a")}")
