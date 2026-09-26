@@ -15586,3 +15586,11 @@ every application site, so the front end pays for it: `compile_instructions`
 trend gate reads that as a pure regression, and it is the language's to
 spend: the refusal is the box ruling's, so the floor's history records the
 fall against this change and the score holds at 89.17 to two places.
+
+The branch then took the six-change carrier (kanso#1655) and CI read the two
+together at 79d4abb4. The arm costs the same over the new base: against the
+carrier's rows `compile_instructions` goes 25,267,312 -> 25,279,417 (+12,105),
+`entry_instructions` 85,321,306 -> 85,353,380 (+32,074) and
+`library_instructions` 85,850,050 -> 85,882,095 (+32,045). Nothing else moved.
+The floor's history records the fall again, over the carrier's 89.37, which
+the score still rounds to.
