@@ -15594,3 +15594,70 @@ carrier's rows `compile_instructions` goes 25,267,312 -> 25,279,417 (+12,105),
 `library_instructions` 85,850,050 -> 85,882,095 (+32,045). Nothing else moved.
 The floor's history records the fall again, over the carrier's 89.37, which
 the score still rounds to.
+
+## 2026-09-25 — a proven tag is assumed
+
+Inference proves many parameters are exactly one kind of heap value: a list
+the builder threads through, a string a scanner walks, a map the encoder
+fills. The emitter already records that set, and its own folds read it. The
+helpers it inlines do not: `k_b_push_mut_fast` asks whether its list is a
+list, and the string and map helpers ask the same of theirs, by testing the
+tag word they were handed. LLVM cannot answer those tests, because the tag
+word arrives as a function parameter.
+
+The dispatcher's entry now tells it. A boxed parameter whose set is exactly
+a string, a list, a map or bytes gets an `llvm.assume` that its tag is that
+kind's, and LLVM folds every dominated test of it. A program that declares a
+subtype gets none, because a subtype's value carries tag 15 whatever it
+wraps; `tag_switch_shape` refuses the same programs for the same reason. No
+program here shows that the gate is needed: inference does not give a
+subtype-wrapped string the plain string set in any shape tried.
+
+On the container, over the literal divisor's tree: runbench -66,651,001
+(-5.17%), jsonbench -76,795,501 (-8.62%), encodebench -146,237,823 (-5.46%),
+livebench -42,089,654 (-2.24%), oneshot -615,489 (-4.25%), escapebench
+-2,399,986 (-3.65%), digestbench -91,203, indexbench -40,097, basket
+-260,382, widebench -224,004, deepbench -64,000, scanbench -172 and
+pendbench +998. Every benchmark prints the same bytes. The instruction rows
+are projected and CI's reading replaces them. The allocation counters do not
+move.
+
+Machine code shrinks: runbench's .text 415,736 -> 408,440, encodebench's
+253,976 -> 248,184. The emitted IR grows by a call line per assume: the
+decoder's calls 482 -> 539 and lines 5,479 -> 5,651, runbench's calls 3,531
+-> 3,781 and lines 27,291 -> 28,042, and the compile-cost module's lines
+1,057 -> 1,067. The codegen and compile rows are refused on this host and
+left for CI.
+
+The ratchet row `tag_assumed` inverts the subtype test, so no program without
+a subtype gets an assume; runbench read 1,290,279,893 with it, the tree
+before this change.
+
+While building a fixture for the gate, a divergence turned up that predates
+this change and does not depend on it. A value of `type name string` is a
+string to the interpreter, which prints `length (name "kanso")` as 5 and
+`"{s}!"` as `hi!`. Natively, on both tiers, `length` refuses it and the
+string builder refuses to start from it. That needs its own fix.
+
+Against main, the trend gate reads seventeen keys as worse across the changes
+this branch carries, and they are named here with where they land. The
+half-step grow and the short-token cache moved the allocation shapes:
+`run_append_grow` 1,260, `run_bytes_malloc` 9,120, `oneshot_append_grow` 14,
+`oneshot_perm_allocs` 9, `live_append_grow` 5,600, `live_perm_allocs` 8 and
+`a_literal_appended_across_a_rewind_perm_allocs` 16. The assume lines are the
+emitted rows: `emitted_calls` 539, `emitted_lines` 5,651,
+`emitted_other_calls` 10,323, `emitted_other_lines` 85,135, `module_calls` 103
+and `module_lines` 1,067. `text` lands on 3,520,752 summed over the fourteen
+binaries, which the token cache's store raised and the assume lowered. The
+work rows `work_deepbench` 364,733,730, `work_pendbench` 181,896,211 and
+`work_scanbench` 281,849 sit within 0.06% of main's.
+
+CI read the change at 2673fa68, and the work rows landed within 350 of the
+projection. The release build is what moved furthest:
+`codegen_instructions_release` 695,954,249 -> 406,427,590, 41.6% less. With
+the tag tests folded as soon as the assume is seen, the release link's
+optimiser has far fewer branches, blocks and inlining candidates to work
+through, and the objective prices that as production cost. The dev tier
+compiles the assume lines without folding anything with them,
+`codegen_instructions_dev` 123,915,790 -> 124,017,062 (+0.08%), and the
+emitter writes them, `emit_instructions` 28,882,533 -> 29,156,813 (+0.95%).

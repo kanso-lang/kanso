@@ -790,20 +790,25 @@
 # ever held a remainder by a literal loses its entry test for a failure, and
 # every binary that carries one gets shorter. Measured on this container,
 # which matches CI's clang.
-jsonbench text=240680
-encodebench text=253976
-oneshot text=251400
-basket text=236776
-widebench text=255400
-deepbench text=217800
+#
+# 2026-09-25, a proven tag is assumed: a parameter inference proves is one
+# kind of heap value tells LLVM so at entry, and the tag tests it folds away
+# shorten most binaries; runbench's .text 415,736 -> 408,440. Measured on this
+# container, which matches CI's clang.
+jsonbench text=238872
+encodebench text=248184
+oneshot text=249320
+basket text=236408
+widebench text=249624
+deepbench text=218392
 escapebench text=212664
-pendbench text=226664
-indexbench text=212472
-scanbench text=320616
-digestbench text=235016
-readbench text=212968
-livebench text=252328
-runbench text=415736
+pendbench text=226776
+indexbench text=212520
+scanbench text=320888
+digestbench text=235480
+readbench text=212984
+livebench text=250200
+runbench text=408440
 # 2026-09-10 (kanso#1362): the backends build the partial over a value. Every
 # one of the fourteen rows RISES, by 2,096 bytes on eight of them and 2,432 on
 # the other six: k_partial0..4 and the branch each of k_call0..4 gains are in

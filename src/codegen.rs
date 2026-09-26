@@ -1232,6 +1232,7 @@ declare %KValue @k_err(%KValue, ptr)
 declare %KValue @k_b_wrap_err(%KValue, %KValue, ptr)
 declare %KValue @k_b_effect(%KValue)
 declare %KValue @k_err_hop(%KValue, ptr)
+declare void @llvm.assume(i1 noundef)
 declare %KValue @k_rec(i64, i64, ptr)
 declare %KValue @k_pair_failure(%KValue, %KValue)
 declare %KValue @k_rec_reuse(i64, i64, ptr, %KValue)
@@ -4912,8 +4913,41 @@ impl<'a> Backend<'a> {
     /// dispatchers tell a body the same things.
     fn record_param_sets(&self, f: &mut FnEmit, name: &str, arity: usize) {
         for i in 0..arity {
-            f.record(&format!("%x{i}"), self.group_param_set(name, arity, i));
+            let set = self.group_param_set(name, arity, i);
+            f.record(&format!("%x{i}"), set);
+            self.assume_param_tag(f, name, arity, i, set);
         }
+    }
+
+    /// A boxed parameter inference proves is one kind of heap value says so
+    /// to LLVM, which then folds every test of that parameter's tag in the
+    /// body. `record` tells this emitter the same thing, but the helpers it
+    /// inlines -- `k_b_push_mut_fast` asking whether its list is a list --
+    /// test the tag word themselves, and only LLVM sees into them.
+    ///
+    /// Not in a program that declares a subtype: a subtype's value carries tag
+    /// 15 whatever it holds, which is why `tag_switch_shape` refuses the same
+    /// programs.
+    fn assume_param_tag(&self, f: &mut FnEmit, name: &str, arity: usize, i: usize, set: Set) {
+        if !self.sub_parents.is_empty()
+            || self.is_byte_disc(name, arity, i)
+            || self.escape.carries_ty(name, arity, i).is_some()
+            || self.unboxed_param(name, arity, i)
+        {
+            return;
+        }
+        let tag = match set {
+            infer::STR => 6,
+            infer::LIST => 9,
+            infer::MAP => 10,
+            infer::BYTES => 13,
+            _ => return,
+        };
+        let t = f.tmp();
+        f.line(&format!("{t} = extractvalue %KValue %x{i}, 0"));
+        let is = f.tmp();
+        f.line(&format!("{is} = icmp eq i64 {t}, {tag}"));
+        f.line(&format!("call void @llvm.assume(i1 {is})"));
     }
 
     fn rebox_params(&self, f: &mut FnEmit, name: &str, arity: usize) {
