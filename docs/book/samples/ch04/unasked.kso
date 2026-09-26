@@ -1,6 +1,5 @@
 seasonal = price "flan"
-print (label "soup" (price "soup"))
->> print (label "flan" seasonal)
+print (label "soup" (price "soup")) .> (_ -> print (label "flan" seasonal))
 
 fn price "flan"
   err "flan is seasonal"

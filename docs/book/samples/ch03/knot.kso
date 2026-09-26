@@ -8,4 +8,4 @@ build
   ada.partner = bob
 
 print "{ada.name} and {ada.partner.name}"
->> print "back where we started: {ada.partner.partner.name}"
+  .> (_ -> print "back where we started: {ada.partner.partner.name}")

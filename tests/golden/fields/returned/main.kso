@@ -3,8 +3,8 @@ import "./lib"
 made = lib/make 6
 other = lib/make 6
 print "{made}"
->> print "{made.pos}"
->> print (lib/joined made)
->> print "{length [made other]}"
->> print "{made == other}"
->> print "{length { "k":made }}"
+  .> (_ -> print "{made.pos}")
+  .> (_ -> print (lib/joined made))
+  .> (_ -> print "{length [made other]}")
+  .> (_ -> print "{made == other}")
+  .> (_ -> print "{length { "k":made }}")

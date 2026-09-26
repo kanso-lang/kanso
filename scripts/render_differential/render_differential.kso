@@ -218,7 +218,7 @@ fn reported found
 fn said found
   count = length values + length shaped
   io/write "{count} values rendered, {length found} disagree\n"
-  >> io/write (text/join found "")
+    .> (_ -> io/write (text/join found ""))
 
 fn sound 0
   0

@@ -16,4 +16,4 @@ fn parse_flag _
   malformed
 
 print (describe (parse_flag "on"))
->> print (describe (parse_flag "banana"))
+  .> (_ -> print (describe (parse_flag "banana")))

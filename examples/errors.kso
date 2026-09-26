@@ -15,4 +15,4 @@ fn safe_ratio a b
 
 good = safe_ratio 10 2
 bad = safe_ratio 10 0
-print (describe good) >> print (describe bad)
+print (describe good) .> (_ -> print (describe bad))

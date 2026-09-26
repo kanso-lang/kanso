@@ -14,5 +14,5 @@ fn label pending
   "coming soon"
 
 print (label active)
->> print (label archived)
->> print (label pending)
+  .> (_ -> print (label archived))
+  .> (_ -> print (label pending))

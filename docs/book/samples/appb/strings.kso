@@ -2,9 +2,9 @@ import "std/text"
 
 cs = text/chars "café"
 print "chars {cs}"
-  >> print "length {length "café"}"
-  >> print "char_code {text/char_code "A"}"
-  >> print "from_code {text/from_code 233}"
-  >> print "join {text/join ["a" "b" "c"] "-"}"
-  >> print "slice {text/slice "kanso" 2 4}"
-  >> print "concat {text/concat [1 2] [3 4]}"
+  .> (_ -> print "length {length "café"}")
+  .> (_ -> print "char_code {text/char_code "A"}")
+  .> (_ -> print "from_code {text/from_code 233}")
+  .> (_ -> print "join {text/join ["a" "b" "c"] "-"}")
+  .> (_ -> print "slice {text/slice "kanso" 2 4}")
+  .> (_ -> print "concat {text/concat [1 2] [3 4]}")

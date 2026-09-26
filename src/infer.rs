@@ -1112,11 +1112,6 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut Env<'a>) -> Set {
             }
             out
         }
-        Expr::Seq(l, r, _) => {
-            let a = eval_expr(ctx, l, env);
-            let b = eval_expr(ctx, r, env);
-            DESC | (a & FAIL) | (b & FAIL)
-        }
         Expr::Lambda { body, params, .. } => {
             let mut inner = env.child(params.len());
             for (p, _) in params {
@@ -1680,7 +1675,6 @@ fn desc_yield<'a>(ctx: &mut Ctx<'a>, e: &'a Expr) -> Set {
             }
         }
         // `a >> b` yields what its right side yields
-        Expr::Seq(_, b, _) => desc_yield_of(ctx, b),
         // a join yields nothing a continuation would see
         Expr::Join { .. } => 0,
         Expr::Guard { early, rest, .. } => {

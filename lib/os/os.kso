@@ -44,9 +44,9 @@ pub args = builtin_args
 pub fn env name
   builtin_env name
 
-# Reach it by binding, not by sequencing: `write "…" . (_ -> exit 2)` runs the
-# write and then exits, where `write "…" >> exit 2` builds both descriptions
-# before either runs, and the err takes the whole chain with it.
+# Reach it by binding: `write "…" .> (_ -> exit 2)` runs the write and then
+# exits, because the exit is built only when the bind calls its callback, and
+# the write has finished by then.
 pub fn exit code
   err (exit_status code)
 

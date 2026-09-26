@@ -13,6 +13,4 @@ fn shown _
 fn tell r
   print "{r} {r == done} {r == none} {shown r} {shown 3}"
 
-pub play =
-  print "first" .> tell
-  >> io/write "" .> tell
+pub play = print "first" .> tell .> (_ -> io/write "" .> tell)

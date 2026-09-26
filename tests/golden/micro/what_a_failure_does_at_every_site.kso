@@ -55,7 +55,7 @@ called = joined ea eb
 
 woven = "{ea} and {eb}"
 
-sequenced = ea >> eb
+sequenced = ea .> (_ -> eb)
 
 # holds: a container is not its contents
 listed = [ea 2]
@@ -69,16 +69,15 @@ indexed = [1 2 3][ea]
 
 sized = length ea
 
-pub play =
-  print "operated:  {testing/when_failed operated as_text}"
-  >> print "compared:  {testing/when_failed compared? as_text}"
-  >> print "built:     {testing/when_failed built as_text}"
-  >> print "grouped:   {testing/when_failed grouped as_text}"
-  >> print "called:    {testing/when_failed called as_text}"
-  >> print "woven:     {testing/when_failed woven as_text}"
-  >> print "sequenced: {testing/when_failed sequenced as_text}"
-  >> print "listed:    {listed}"
-  >> print "mapped:    {mapped}"
-  >> print "reached:   {testing/when_failed reached as_text}"
-  >> print "indexed:   {testing/when_failed indexed as_text}"
-  >> print "sized:     {testing/when_failed sized as_text}"
+pub play = print "operated:  {testing/when_failed operated as_text}"
+  .> (_ -> print "compared:  {testing/when_failed compared? as_text}")
+  .> (_ -> print "built:     {testing/when_failed built as_text}")
+  .> (_ -> print "grouped:   {testing/when_failed grouped as_text}")
+  .> (_ -> print "called:    {testing/when_failed called as_text}")
+  .> (_ -> print "woven:     {testing/when_failed woven as_text}")
+  .> (_ -> print "sequenced: {testing/when_failed sequenced as_text}")
+  .> (_ -> print "listed:    {listed}")
+  .> (_ -> print "mapped:    {mapped}")
+  .> (_ -> print "reached:   {testing/when_failed reached as_text}")
+  .> (_ -> print "indexed:   {testing/when_failed indexed as_text}")
+  .> (_ -> print "sized:     {testing/when_failed sized as_text}")

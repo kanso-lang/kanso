@@ -5,5 +5,5 @@ pub play =
   later = regexp/match_at "[a-z]+" "abc def" 4
   next = regexp/match_at "[a-z]+" "abc def" 5
   print "at 1: {here.to}"
-  >> print "at 4 (a space): {later}"
-  >> print "at 5: {next.to} groups {next.groups}"
+    .> (_ -> print "at 4 (a space): {later}")
+    .> (_ -> print "at 5: {next.to} groups {next.groups}")

@@ -2,5 +2,5 @@ import "./pos"
 import "./report"
 
 print (show (decode_int "  42  "))
->> print (show (decode_int "1 x"))
->> print (show (decode_int "  7 ;"))
+  .> (_ -> print (show (decode_int "1 x")))
+  .> (_ -> print (show (decode_int "  7 ;")))

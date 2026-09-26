@@ -29,7 +29,6 @@ pub enum Tok {
     /// `.!` is `annotate`, `.?` is `rescue`. The token carries the word it
     /// desugars to, so the parser learns three operators and no meanings.
     Fused(&'static str),
-    SeqOp,
     Op(&'static str),
     Underscore,
     /// The as-pattern's sigil: `r@(rect w h)` binds the whole while its
@@ -156,29 +155,21 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
             }
             continue;
         }
-        // A continuation line starts with a chain operator (`.`, a fused
-        // `.>` `.!` `.?`, or `>>`) at
-        // the parent statement's indent plus two; its tokens splice into the
-        // parent so the parser sees one wrapped statement. Spans keep the
-        // source line, so diagnostics still point home. Wrapping never changes
-        // how many statements there are — width only breaks a statement's
-        // line. A `>>`-led line at the parent's own indent is not a wrap; it
-        // flows to the parser as a wall or a fused sequential step. Headers
-        // (`fn`, `type`, a bare `name =`) hold no statement to wrap.
+        // A continuation line starts with a chain operator (`.` or a fused
+        // `.>` `.!` `.?`) at the parent statement's indent plus two; its
+        // tokens splice into the parent so the parser sees one wrapped
+        // statement. Spans keep the source line, so diagnostics still point
+        // home. Wrapping never changes how many statements there are — width
+        // only breaks a statement's line.
         let cont_indent_ok = lines.last().is_some_and(|p: &Line| indent == p.indent + 2)
             && blank_lines.last() != Some(&(number - 1));
-        let parent_wrappable = lines.last().is_some_and(|p: &Line| {
-            !matches!(p.tokens.first(), Some((Tok::KwFn | Tok::KwType | Tok::KwPub, _, _)))
-                && !matches!(p.tokens.last(), Some((Tok::Bind, _, _)))
-        });
         // a fused chain operator leads a continuation line the way the bare
         // dot does: `.> f`, `.! f`, `.? f`
         let fused_cont = content.starts_with('.')
             && content.chars().nth(1).is_some_and(|c| fused_word(c).is_some())
             && content.chars().nth(2) == Some(' ');
         let dot_cont = content.starts_with(". ") || fused_cont;
-        let seq_cont = content.starts_with(">> ") && cont_indent_ok && parent_wrappable;
-        if dot_cont || seq_cont {
+        if dot_cont {
             if !cont_indent_ok {
                 diags.push(Diagnostic::new(
                     "formatting",
@@ -283,7 +274,6 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
     let mut pieces = Vec::new();
     for line in &lines {
         check_needless_continuation(line, &mut pieces, &mut diags);
-        check_partial_chain(line, &mut diags);
     }
     if diags.is_empty() {
         Ok(Lexed { lines, blank_lines })
@@ -404,42 +394,6 @@ fn gather_block(
     );
     diags.push(Diagnostic::new("syntax", said, Span::at(open_line, indent + 1)));
     (body, at)
-}
-
-/// A statement wrapped across `>>` continuation lines gives every step its
-/// own line: no step shares a line with another (partial chaining).
-fn check_partial_chain(line: &Line, diags: &mut Vec<Diagnostic>) {
-    let leads_line = |i: usize, span: &Span| {
-        i > 0 && line.tokens[i - 1].1.line != span.line && span.line as usize != line.number
-    };
-    let wrapped = line
-        .tokens
-        .iter()
-        .enumerate()
-        .any(|(i, (tok, span, _))| matches!(tok, Tok::SeqOp) && leads_line(i, span));
-    if !wrapped {
-        return;
-    }
-    let mut depth = 0usize;
-    for (i, (tok, span, _)) in line.tokens.iter().enumerate() {
-        match tok {
-            Tok::LParen | Tok::LGroup | Tok::LBracket | Tok::LBrace => depth += 1,
-            Tok::RParen | Tok::RGroup | Tok::RBracket | Tok::RBrace => {
-                depth = depth.saturating_sub(1)
-            }
-            Tok::SeqOp if depth == 0 && !leads_line(i, span) => {
-                diags.push(Diagnostic::new(
-                    "formatting",
-                    "no partial chaining: a chain fits on one line, or each step \
-                     gets its own `>>` continuation line"
-                        .to_string(),
-                    *span,
-                ));
-                return;
-            }
-            _ => {}
-        }
-    }
 }
 
 /// One meaning, one rendering: a statement split across `.` continuation
@@ -749,10 +703,17 @@ fn lex_line(content: &str, line: usize, col_offset: usize) -> Result<LexedLine, 
             tokens.push((Tok::Arrow, span, s.span().col));
             continue;
         }
+        // The wall is gone (ruled 2026-09-26): `a >> b` and
+        // `a .> (_ -> b)` were the same program, and the language keeps one
+        // spelling of it.
         if c == '>' && s.peek(1) == Some('>') {
-            s.pos += 2;
-            tokens.push((Tok::SeqOp, span, s.span().col));
-            continue;
+            return Err(Diagnostic::new(
+                "syntax",
+                "kanso has no `>>`: a step that ignores what came before is written \
+                 `.> (_ -> step)`"
+                    .to_string(),
+                span,
+            ));
         }
         if c == '=' && s.peek(1) != Some('=') {
             s.pos += 1;

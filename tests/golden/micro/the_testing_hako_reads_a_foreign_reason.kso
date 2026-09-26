@@ -11,8 +11,7 @@ import "std/testing"
 
 bad = json/decode "[1, nope]"
 
-pub play =
-  print "{testing/failed? 42}"
-  >> print "{testing/failed? bad}"
-  >> print "{testing/when_failed bad (r -> r.position)}"
-  >> print "{testing/when_failed 42 (_ -> true)}"
+pub play = print "{testing/failed? 42}"
+  .> (_ -> print "{testing/failed? bad}")
+  .> (_ -> print "{testing/when_failed bad (r -> r.position)}")
+  .> (_ -> print "{testing/when_failed 42 (_ -> true)}")

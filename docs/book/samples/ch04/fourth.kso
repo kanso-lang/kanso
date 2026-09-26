@@ -7,4 +7,4 @@ fn describe x
 flavors = ["matcha" "ube" "hojicha"]
 first = flavors[1]
 fourth = flavors[4]
-print "first: {first}" >> print (describe fourth)
+print "first: {first}" .> (_ -> print (describe fourth))

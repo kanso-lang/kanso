@@ -26,14 +26,15 @@ fn apply g v
 fn twice_through g v
   g v + g v
 
-pub play =
-  print "two lambdas in one body: {pair_of 5}"
-  >> print "the same body again: {pair_of 5}"
-  >> print "and with another value: {pair_of 7}"
-  >> print "a free one through a call: {apply (x -> x * 3) 4}"
-  >> print "the same one twice: {twice_through (x -> x * 3) 4}"
-  >> print "a capture of five: {apply (adder 5) 1}"
-  >> print "a capture of nine: {apply (adder 9) 1}"
-  >> print "five again, after nine: {apply (adder 5) 1}"
-  >> print "folded with a free step: {list/fold [1 2 3] 0 (a b -> a + b)}"
-  >> print "folded again: {list/fold [4 5 6] 0 (a b -> a + b)}"
+pub play = print "two lambdas in one body: {pair_of 5}"
+  .> (_ -> print "the same body again: {pair_of 5}")
+  .> (_ -> print "and with another value: {pair_of 7}")
+  .> (_ -> print "a free one through a call: {apply (x -> x * 3) 4}")
+  .> (_ -> print "the same one twice: {twice_through (x -> x * 3) 4}")
+  .> (_ -> print "a capture of five: {apply (adder 5) 1}")
+  .> (_ -> print "a capture of nine: {apply (adder 9) 1}")
+  .> (_ -> print "five again, after nine: {apply (adder 5) 1}")
+  .> (_ -> print "folded with a free step: {folded}")
+  .> (_ -> print "folded again: {list/fold [4 5 6] 0 (a b -> a + b)}")
+
+folded = list/fold [1 2 3] 0 (a b -> a + b)

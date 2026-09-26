@@ -28,10 +28,11 @@ fn count_of xs
 fn settled text
   json/decode text .> count_of .! (e -> "settled: {e.reason.reason}")
 
-pub play =
-  print (json/decode "[1, 2" .? told)
-  >> print (json/decode "[1, 2]" .> told)
-  >> print (json/decode "[1, 2]" .? told)
-  >> print (3 .> add_one .> (x -> x * 2))
-  >> print (settled "[1, 2, 3]")
-  >> print (testing/when_failed (settled "[1, 2") (r -> "annotated: {r}"))
+pub play = print (json/decode "[1, 2" .? told)
+  .> (_ -> print (json/decode "[1, 2]" .> told))
+  .> (_ -> print (json/decode "[1, 2]" .? told))
+  .> (_ -> print (3 .> add_one .> (x -> x * 2)))
+  .> (_ -> print (settled "[1, 2, 3]"))
+  .> (_ -> print (testing/when_failed unclosed (r -> "annotated: {r}")))
+
+unclosed = settled "[1, 2"

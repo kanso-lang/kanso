@@ -33,6 +33,5 @@ broken = taken decoded
 
 fine = taken 7
 
-pub play =
-  print "failure: {testing/when_failed broken as_text}"
-  >> print "value: {fine}"
+pub play = print "failure: {testing/when_failed broken as_text}"
+  .> (_ -> print "value: {fine}")

@@ -9,5 +9,4 @@ fn twice f
 
 pub play =
   inc = &add 1
-  print "{inc 5}"
-  >> print "{twice (&add 10)}"
+  print "{inc 5}" .> (_ -> print "{twice (&add 10)}")

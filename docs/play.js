@@ -97,8 +97,7 @@ fn report doc
 good = "\\{\\"title\\": \\"kanso\\", \\"stars\\": 3}"
 
 torn = "\\{\\"title\\": \\"kanso\\", \\"stars\\": }"
-print (report (json/decode good))
->> print (report (json/decode torn))
+print (report (json/decode good)) .> (_ -> print (report (json/decode torn)))
 `,
   railway: `fn describe n
   "half is {n}"
@@ -197,8 +196,8 @@ fn spin n acc
 
 knot = tie "ping"
 print "one hop: {knot.peer.name}"
->> print "back home: {round_trip knot}"
->> print "two thousand more, all discarded: {spin 2000 0}"
+  .> (_ -> print "back home: {round_trip knot}")
+  .> (_ -> print "two thousand more, all discarded: {spin 2000 0}")
 `,
   currying: `# & holds a function's first arguments and waits for the rest.
 # tax is a two-argument function; &tax 8 fixes the rate and hands back
@@ -214,8 +213,8 @@ local = &tax 8
 
 luxury = &tax 20
 print "one rate:  {quote local 250}"
->> print "the other: {quote luxury 250}"
->> print "and the same partial again: {local 100}"
+  .> (_ -> print "the other: {quote luxury 250}")
+  .> (_ -> print "and the same partial again: {local 100}")
 `,
   running: `# & supplies arguments; it never runs anything. supply every argument an
 # arm takes and you still have a value -- one that is waiting to be called.
@@ -228,22 +227,24 @@ local = &tax 8
 
 on_250 = &tax 8 250
 print "still waiting: {on_250}"
->> print "supplied one, called with the other: {local 250}"
->> print "supplied both, then called: {on_250()}"
+  .> (_ -> print "supplied one, called with the other: {local 250}")
+  .> (_ -> print "supplied both, then called: {on_250()}")
 `,
   join: `# two effects with no order between them -- parallel is the default, so
-# plain lines say it. the >> is the wall: serving happens only after both.
+# plain lines say it. prepare is the group, and the .> after it serves
+# only once both have settled.
 # failures accumulate: if both sides err you get both reasons.
-print "steeping the sencha"
-print "warming the cups"
->> print "serving"
+fn prepare tea
+  print "steeping the {tea}"
+  print "warming the cups"
+
+prepare "sencha" .> (_ -> print "serving")
 `,
   concurrency: `# in go, two things at once + waiting for both is a goroutine, a
 # channel or WaitGroup, and a select. in kanso bare lines already run as
-# cooperative green threads: the scheduler overlaps them, >> chains
-# within a thread, and a lone >> line is a wall the whole group settles
-# behind. brew blocks on a slow steep while rolls chains the dice
-# beside it, so every roll lands during the steep. (in the browser
+# cooperative green threads: the scheduler overlaps them, and .> chains
+# steps within a thread. brew blocks on a slow steep while rolls chains
+# the dice beside it, so every roll lands during the steep. (in the browser
 # sleep is instant, but the interleaved ORDER matches a live run.)
 import "std/math"
 import "std/time"
@@ -251,8 +252,14 @@ import "std/time"
 fn roll i
   math/random 6 .> (n -> print "roll {i}: a {n + 1}")
 
-brew = print "brew: steeping" >> time/sleep 60 >> print "brew: poured"
-rolls = roll 1 >> roll 2 >> roll 3 >> roll 4 >> roll 5
+brew = print "brew: steeping"
+  .> (_ -> time/sleep 60)
+  .> (_ -> print "brew: poured")
+rolls = roll 1
+  .> (_ -> roll 2)
+  .> (_ -> roll 3)
+  .> (_ -> roll 4)
+  .> (_ -> roll 5)
 brew
 rolls
 `,
@@ -279,11 +286,11 @@ moves = [(deposit 100) (withdraw 30) (withdraw 60) (deposit 5)]
 drive 0 moves 1 logger (print "the till opens at 0 yen")
 
 fn step _ _ _ _ out none
-  out >> print "the till closes"
+  out .> (_ -> print "the till closes")
 
 fn step store actions i sub out action
   next = update store action
-  told = out >> notify sub action next >> time/sleep 350
+  told = out .> (_ -> notify sub action next) .> (_ -> time/sleep 350)
   drive next actions (i + 1) sub told
 
 fn update balance (deposit n)

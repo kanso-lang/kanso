@@ -5,4 +5,4 @@ doubled = list/to_list (list/map xs (x -> x * 2))
 small = list/to_list (list/select xs (x -> x < 3))
 first = xs[1]
 print "sorted {list/sort xs} doubled {doubled} small {small}"
-  >> print "sum {list/sum xs} len {length xs} first {first}"
+  .> (_ -> print "sum {list/sum xs} len {length xs} first {first}")

@@ -24,4 +24,4 @@ The bundle doubles as a VS Code extension (`package.json` declares the language 
 
 ## what highlights
 
-Declarations (`fn`/`type` plus their names), fields, builtins (`print`, `map`, `err`, ...), primitive types, `true`/`false`/`none`, `_`, integers, strings with `{interpolation}` highlighted as embedded kanso, comments, and the operators — including ` . ` pipes and `>>` sequencing.
+Declarations (`fn`/`type` plus their names), fields, builtins (`print`, `map`, `err`, ...), primitive types, `true`/`false`/`none`, `_`, integers, strings with `{interpolation}` highlighted as embedded kanso, comments, and the operators — including ` . ` pipes and the `.>`, `.!` and `.?` chain words.

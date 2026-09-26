@@ -6,6 +6,6 @@ import "std/io"
 fn opaque v
   v
 
-d = io/write "a\n" >> io/write "b\n"
+d = io/write "a\n" .> (_ -> io/write "b\n")
 
 pub play = print "{opaque d}"

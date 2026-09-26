@@ -1,9 +1,10 @@
 import "std/math"
 
-pub play =
+pub play = rolls .> (_ -> print "both dice have landed")
+
+rolls =
   roll 1
   roll 2
-  >> print "both dice have landed"
 
 fn roll i
   math/random 6 .> (n -> print "roll {i}: a {n + 1}")

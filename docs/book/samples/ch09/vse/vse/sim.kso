@@ -14,11 +14,11 @@ fn dist2 p q
 
 pub fn means sums
   print "plurality VSE {sums[1] / runs}"
-  >> print "approval  VSE {sums[2] / runs}"
-  >> print "score     VSE {sums[3] / runs}"
-  >> print "star      VSE {sums[4] / runs}"
-  >> print "irv       VSE {sums[5] / runs}"
-  >> print "minimax   VSE {sums[6] / runs}"
+    .> (_ -> print "approval  VSE {sums[2] / runs}")
+    .> (_ -> print "score     VSE {sums[3] / runs}")
+    .> (_ -> print "star      VSE {sums[4] / runs}")
+    .> (_ -> print "irv       VSE {sums[5] / runs}")
+    .> (_ -> print "minimax   VSE {sums[6] / runs}")
 
 ncand = 5
 

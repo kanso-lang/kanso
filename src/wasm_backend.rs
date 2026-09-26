@@ -55,44 +55,40 @@ const RT_BINOP: u32 = 15;
 const RT_INDEX: u32 = 16;
 const RT_TRUTHY: u32 = 17;
 const RT_BUILTIN: u32 = 18;
-const RT_SEQ: u32 = 19;
-const RT_MAYBE_BIND: u32 = 20;
-const RT_MKCLOSURE: u32 = 21;
-/// The arity that marks a cell rather than a function. Paired with `DEFERRED`
-/// in wasm_rt, which is what reads it.
-const DEFERRED_ARITY: i64 = -2;
-const RT_CALL: u32 = 22;
-const RT_ENVGET: u32 = 23;
-const RT_DIE: u32 = 24;
-const RT_LIST_LEN: u32 = 25;
-const RT_ERR_HOP: u32 = 26;
-const RT_ERR_STAMP: u32 = 27;
-const RT_AT: u32 = 28;
-const RT_MKSUB: u32 = 29;
-const RT_UPCAST: u32 = 30;
-const RT_SETFIELD: u32 = 31;
-const RT_FIELD_BY_NAME: u32 = 32;
-const RT_ROUTES_TO_ARMS: u32 = 33;
-const RT_JOIN: u32 = 34;
-const RT_NO_FIELD: u32 = 35;
-const RT_DEFER: u32 = 36;
-const RT_CONST: u32 = 37;
-const RT_FORCE: u32 = 38;
+const RT_MAYBE_BIND: u32 = 19;
+const RT_MKCLOSURE: u32 = 20;
+const RT_CALL: u32 = 21;
+const RT_ENVGET: u32 = 22;
+const RT_DIE: u32 = 23;
+const RT_LIST_LEN: u32 = 24;
+const RT_ERR_HOP: u32 = 25;
+const RT_ERR_STAMP: u32 = 26;
+const RT_AT: u32 = 27;
+const RT_MKSUB: u32 = 28;
+const RT_UPCAST: u32 = 29;
+const RT_SETFIELD: u32 = 30;
+const RT_FIELD_BY_NAME: u32 = 31;
+const RT_ROUTES_TO_ARMS: u32 = 32;
+const RT_JOIN: u32 = 33;
+const RT_NO_FIELD: u32 = 34;
+const RT_DEFER: u32 = 35;
+const RT_CONST: u32 = 36;
+const RT_FORCE: u32 = 37;
 /// A positional destructuring bind whose value is the wrong shape. It takes
 /// the VALUE as well as the type name, because the sentence names what the
 /// reader bound and only the runtime knows it.
-const RT_DIE_DESTRUCTURE: u32 = 39;
+const RT_DIE_DESTRUCTURE: u32 = 38;
 /// The three worded chain steps. `rescue` and `annotate` take the site they
 /// were written at: the first for its foreign-only licence, the second
 /// because the err it builds is a raise.
-const RT_BIND: u32 = 40;
-const RT_RESCUE: u32 = 41;
-const RT_ANNOTATE: u32 = 42;
+const RT_BIND: u32 = 39;
+const RT_RESCUE: u32 = 40;
+const RT_ANNOTATE: u32 = 41;
 /// An err's three readers, at a reader getter's entry.
-const RT_ERR_READ: u32 = 43;
+const RT_ERR_READ: u32 = 42;
 /// `&f 2` over a VALUE: the callee and the held arguments go to the host,
 /// which settles the count when the rest arrive.
-const RT_PARTIAL: u32 = 44;
+const RT_PARTIAL: u32 = 43;
 /// A group handed out as a value carries every count its arms take, as bits
 /// below this base: `MASKED - mask`. Paired with `MASKED` in wasm_rt.
 const MASKED_ARITY: i64 = -1000;
@@ -118,7 +114,6 @@ fn imports() -> Vec<Import> {
         Import { name: "rt_index", params: 2, returns: true },
         Import { name: "rt_truthy", params: 1, returns: true },
         Import { name: "rt_builtin", params: 2, returns: true },
-        Import { name: "rt_seq", params: 2, returns: true },
         Import { name: "rt_maybe_bind", params: 2, returns: true },
         Import { name: "rt_mkclosure", params: 3, returns: true },
         Import { name: "rt_call", params: 2, returns: true },
@@ -822,14 +817,6 @@ impl<'a> WasmBackend<'a> {
                     false => ctx.body.call(RT_AT),
                 }
             }
-            Expr::Seq(l, r, _) => {
-                self.emit_expr(ctx, l, false)?;
-                // GAVEL 15: the wall defers its right side, so what follows
-                // becomes a cell over the names it reads and the executor
-                // builds it once the left has run.
-                self.emit_cell(ctx, r)?;
-                ctx.body.call(RT_SEQ);
-            }
             Expr::Lambda { .. } => self.emit_lambda(ctx, expr)?,
             Expr::Join { lhs, rhs, .. } => {
                 self.emit_expr(ctx, lhs, false)?;
@@ -1235,47 +1222,6 @@ impl<'a> WasmBackend<'a> {
             true => mentions(expr, &|n: &str| self.knotted.contains(n)),
             false => mentions(expr, &|n: &str| n == ctx.group),
         }
-    }
-
-    /// A cell over the names it reads: the same closure `emit_lambda` builds,
-    /// with no parameters and an arity no call site can ask for, which is what
-    /// tells the runtime to demand it rather than call it.
-    fn emit_cell(&mut self, ctx: &mut Ctx, body: &Expr) -> Result<(), String> {
-        let mut captures: Vec<String> = Vec::new();
-        free_idents(body, &mut |name| {
-            if ctx.scope.contains_key(name) && !captures.iter().any(|c| c == name) {
-                captures.push(name.to_string());
-            }
-        });
-        let fn_idx = self.module.declare(2);
-        self.module.table.push(fn_idx);
-        let tidx = (self.module.table.len() - 1) as u32;
-        let mut inner = Ctx {
-            body: Body::new(2),
-            scope: HashMap::default(),
-            prefix: ctx.prefix.clone(),
-            hako: ctx.hako.clone(),
-            group: ctx.group.clone(),
-        };
-        for (i, c) in captures.iter().enumerate() {
-            let local = inner.body.local();
-            inner.body.local_get(0);
-            inner.body.i32_const(i as i64);
-            inner.body.call(RT_ENVGET);
-            inner.body.local_set(local);
-            inner.scope.insert(c.clone(), local);
-        }
-        self.emit_expr(&mut inner, body, true)?;
-        self.module.define(fn_idx, inner.body);
-        for c in &captures {
-            ctx.body.local_get(ctx.scope[c]);
-            ctx.body.call(RT_ARG);
-        }
-        ctx.body.i32_const(tidx as i64);
-        ctx.body.i32_const(captures.len() as i64);
-        ctx.body.i32_const(DEFERRED_ARITY);
-        ctx.body.call(RT_MKCLOSURE);
-        Ok(())
     }
 
     fn emit_lambda(&mut self, ctx: &mut Ctx, expr: &Expr) -> Result<(), String> {
@@ -1707,10 +1653,6 @@ fn free_idents(expr: &Expr, visit: &mut dyn FnMut(&str)) {
         Expr::Index { base, index, .. } => {
             free_idents(base, visit);
             free_idents(index, visit);
-        }
-        Expr::Seq(l, r, _) => {
-            free_idents(l, visit);
-            free_idents(r, visit);
         }
         Expr::Lambda { params, body, .. } => {
             let mask: Vec<&str> = params.iter().map(|(p, _)| p.as_str()).collect();

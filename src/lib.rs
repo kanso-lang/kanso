@@ -1007,7 +1007,7 @@ fn bound_in_expr<'a>(e: &'a ast::Expr, out: &mut crate::hash::Set<&'a str>) {
             bound_in_expr(base, out);
             bound_in_expr(index, out);
         }
-        ast::Expr::Seq(a, b, _) | ast::Expr::Join { lhs: a, rhs: b, .. } => {
+        ast::Expr::Join { lhs: a, rhs: b, .. } => {
             bound_in_expr(a, out);
             bound_in_expr(b, out);
         }
@@ -1221,7 +1221,7 @@ fn alias_expr(e: &mut ast::Expr, aliases: &crate::hash::Map<String, String>, wro
             alias_expr(base, aliases, wrote);
             alias_expr(index, aliases, wrote);
         }
-        ast::Expr::Seq(a, b, _) | ast::Expr::Join { lhs: a, rhs: b, .. } => {
+        ast::Expr::Join { lhs: a, rhs: b, .. } => {
             alias_expr(a, aliases, wrote);
             alias_expr(b, aliases, wrote);
         }
@@ -1476,7 +1476,7 @@ fn substitute_ident(e: &mut ast::Expr, name: &str, replacement: &ast::Expr) {
                 }
             }
         }
-        Expr::Seq(a, b, _) | Expr::Join { lhs: a, rhs: b, .. } => {
+        Expr::Join { lhs: a, rhs: b, .. } => {
             substitute_ident(a, name, replacement);
             substitute_ident(b, name, replacement);
         }
@@ -1539,7 +1539,7 @@ fn fuse_expr(
                 }
             }
         }
-        Expr::Seq(a, b, _) | Expr::Join { lhs: a, rhs: b, .. } => {
+        Expr::Join { lhs: a, rhs: b, .. } => {
             fuse_expr(a, shorts, fold_name, helpers, counter);
             fuse_expr(b, shorts, fold_name, helpers, counter);
         }
@@ -2421,10 +2421,6 @@ fn rewrite_expr(e: &mut ast::Expr, owned: &crate::hash::Map<Name, Owned>, bound:
             rewrite_expr(lhs, owned, bound);
             rewrite_expr(rhs, owned, bound);
         }
-        ast::Expr::Seq(a, b, _) => {
-            rewrite_expr(a, owned, bound);
-            rewrite_expr(b, owned, bound);
-        }
         ast::Expr::Lambda { params, body, .. } => {
             let mut inner = bound.to_vec();
             inner.extend(params.iter().map(|(n, _)| Name::new(n)));
@@ -3154,7 +3150,6 @@ fn expr_span(e: &ast::Expr) -> &diag::Span {
         | ast::Expr::BinOp { span: s, .. }
         | ast::Expr::Join { span: s, .. }
         | ast::Expr::Block(_, s)
-        | ast::Expr::Seq(_, _, s)
         | ast::Expr::Lambda { span: s, .. }
         | ast::Expr::List(_, s)
         | ast::Expr::MapLit(_, s)
@@ -3197,73 +3192,10 @@ fn private_uses(
     }
 }
 
-/// The stack-exhaustion message, with a hint when the program holds the one
-/// shape that reliably causes it.
-///
-/// `a . f` hands the continuation over as a closure, so nothing past the
-/// current link exists until the link runs. `a >> b` takes `b` as an already
-/// evaluated description, so building the first link requires evaluating the
-/// second, which requires the third — the whole chain is constructed before any
-/// of it runs, and the construction is what exhausts the stack. A reader told
-/// only "recursion went deeper than the stack holds" is pointed at the loop,
-/// which is the one part of the program that is fine.
-///
-/// It has to be static to exist at all. The interpreter has a frame guard and
-/// can see the recursion; native only sees a SIGSEGV in a child and translates
-/// it in the parent; wasm sees a trap nothing recorded. None of the three can
-/// work out the cause where it reports, and a function calling itself in the
-/// right operand of `>>` is plain in the source, so all three say one sentence.
-pub fn stack_exhausted(program: Option<&ast::Program>) -> String {
-    let said =
-        "error[runtime]: the program ran out of stack: recursion went deeper than the stack holds";
-    format!("{said}{}", program.map(stack_hint).unwrap_or_default())
-}
-
-/// The hint alone, so the interpreter can append it to the message its own
-/// frame guard raises and the two engines say one sentence.
-pub fn stack_hint(program: &ast::Program) -> String {
-    match seq_recursive_fn(program) {
-        Some(name) => format!(
-            "\n  `{name}` calls itself in the right side of `>>`, which builds \
-             the whole chain before running any of it. `.` hands each step over \
-             as it goes."
-        ),
-        None => String::new(),
-    }
-}
-
-/// The first function that calls itself inside the right operand of a `>>`.
-fn seq_recursive_fn(program: &ast::Program) -> Option<String> {
-    for decl in &program.fns {
-        for stmt in &decl.body {
-            let expr = match stmt {
-                ast::Stmt::Bind { expr, .. } | ast::Stmt::Expr(expr) => expr,
-                ast::Stmt::Set { value, .. } => value,
-            };
-            if seq_calls_self(expr, &decl.name) {
-                return Some(decl.name.clone());
-            }
-        }
-    }
-    None
-}
-
-fn seq_calls_self(e: &ast::Expr, own: &str) -> bool {
-    if let ast::Expr::Seq(_, rhs, _) = e {
-        if mentions_call(rhs, own) {
-            return true;
-        }
-    }
-    any_child(e, |c| seq_calls_self(c, own))
-}
-
-fn mentions_call(e: &ast::Expr, own: &str) -> bool {
-    if let ast::Expr::App { head, .. } = e {
-        if matches!(head.as_ref(), ast::Expr::Ident(n, _, _) if n == own) {
-            return true;
-        }
-    }
-    any_child(e, |c| mentions_call(c, own))
+/// The stack-exhaustion message, one sentence on every engine.
+pub fn stack_exhausted() -> String {
+    "error[runtime]: the program ran out of stack: recursion went deeper than the stack holds"
+        .to_string()
 }
 
 /// Every direct sub-expression, handed to `f` as it is found.
@@ -3349,11 +3281,6 @@ fn walk_children<'a, F: FnMut(&'a ast::Expr) -> bool>(e: &'a ast::Expr, f: &mut 
         ast::Expr::BinOp { lhs, rhs, .. } | ast::Expr::Join { lhs, rhs, .. } => {
             if f(lhs) {
                 f(rhs);
-            }
-        }
-        ast::Expr::Seq(a, b, _) => {
-            if f(a) {
-                f(b);
             }
         }
         ast::Expr::Lambda { body, .. } => {
@@ -4147,10 +4074,6 @@ fn walk_children_mut(e: &mut ast::Expr, f: &mut dyn FnMut(&mut ast::Expr)) {
         Expr::BinOp { lhs, rhs, .. } | Expr::Join { lhs, rhs, .. } => {
             f(lhs);
             f(rhs);
-        }
-        Expr::Seq(a, b, _) => {
-            f(a);
-            f(b);
         }
         Expr::Str(parts, _) => {
             for p in parts {

@@ -17,5 +17,5 @@ twin = ring_of 1 2
 other = ring_of 1 99
 
 print "{ring1 == twin}"
->> print "{ring1 == other}"
->> print "{ring1 == ring1}"
+  .> (_ -> print "{ring1 == other}")
+  .> (_ -> print "{ring1 == ring1}")

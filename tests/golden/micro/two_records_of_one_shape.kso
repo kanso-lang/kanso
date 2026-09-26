@@ -12,6 +12,4 @@ fn seen (alpha a b)
 fn seen (beta a b)
   "beta {a} {b}"
 
-pub play =
-  print "{seen (alpha 1 2)}"
-  >> print "{seen (beta 3 4)}"
+pub play = print "{seen (alpha 1 2)}" .> (_ -> print "{seen (beta 3 4)}")

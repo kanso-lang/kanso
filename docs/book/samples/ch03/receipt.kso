@@ -1,5 +1,4 @@
-print (total_line 12000)
->> print (total_line 800)
+print (total_line 12000) .> (_ -> print (total_line 800))
 
 fn total_line spent
   if (10000 < spent)
