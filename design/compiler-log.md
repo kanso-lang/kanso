@@ -15900,3 +15900,88 @@ carrier (kanso#1657 over kanso#1663), and CI read the three together at
 181,896,412 -> 181,899,010 with no allocation counter moving, which was not
 isolated.
 Welfare rises from 89.7627 to 89.7698 and the floor banks there.
+
+## 2026-09-25 — a descent into a map takes a mark of its own
+
+The JSON encoder's two loops, over a list's items and over a map's pairs,
+were beats. Each call pushed a mark, each iteration asked whether the arena
+had moved, and each exit popped: on runbench, 496,440 pushes and pops and
+1.13 million rewind tests a run. The only allocation any iteration made was
+the `entries` block a nested map builds as it descends, in
+`encode_map acc (entries m)`. Every list and every map paid the beat to
+reclaim what the nested maps alone allocate.
+
+That call now takes the mark instead. `beat::region_sites` finds a call in
+a recursive cluster that re-enters the cluster, whose arguments allocate,
+and whose callee answers only scalars or bytes. The emitter marks the
+frontier before the arguments and calls `k_region_pop` after the call. The
+pop rewinds when the result cannot reach the region, which for the encoder
+is the builder that was below the mark all along, and otherwise hands the
+region up the way a beat's pop does. The allocation analysis counts such a
+call as allocating nothing, so both encoder loops come out pure and take no
+beat at all. The analysis also learned that an in-place append of `"{n}"`,
+for a parameter annotated `int` or `float64`, is rendered into the builder
+and allocates nothing; without that, the number arms kept the loops beats.
+
+A region in tail position becomes a plain call, because its pop follows it.
+On a descent that is one frame per level of nesting. On a loop it is one
+frame per iteration, and the first version put a region on the edge of the
+four-function cycle in `a_cycle_of_four_rewinds_once_a_trip`, which ran out
+of stack on its 100,000 trips. An edge the tail-call graph cycles through is
+never a region now.
+
+In the benchmark corpus there is exactly one region, `std/json/json.kso`
+line 64. Its pop takes a fast path on every one of runbench's 248,490 calls:
+the region stayed in its mark's block and the result lies outside what it
+allocated, so the pop is two stores, 43 instructions with its tests. It asks
+about bytes and strings before the heap bitmask, and asks nothing about
+carries, since a carry is staged only at a carry beat's own depth; those two
+changes took it from 56. Moving it into the release build's hot unit, so LTO
+could inline it at the call, came out 458,360 worse: the call's result can
+also be an err, no assume folds its tag, and the tests came back inline.
+
+A region stands only where it pays. After the allocation analysis runs with
+every candidate, a region is kept when every loop in its cluster comes out
+allocating nothing, and the analysis runs again with the survivors. The first
+build kept one in encodebench's frozen copy of the library, whose loops
+allocate for other reasons and stayed beats, and encodebench paid a mark and
+a pop per map on top of the beats: +154,061,163 instructions (+6.09%). With
+the pruning the frozen copy gets no region and reads +109,144 against the
+tree before, which is the runtime's layout.
+
+On the container, against the result assume's tree: runbench -29,316,729
+(-2.40%), livebench -123,548,384 (-6.75%), oneshot -310,499 (-2.24%), and
+every other benchmark within 14 instructions. Every program prints the same
+bytes and every peak row holds; the counters that move are `beat_iters`, run
+2,708,563 -> 1,576,363, live 5,032,401 -> 401 and oneshot 12,581 -> 1, and
+the mem fixture `a_literal_appended_across_a_rewind`, a `json/encode` loop,
+440 -> 40. The instruction rows are projected and the compile rows are left
+for CI.
+
+The mem fixture `a_nested_map_gives_back_its_entries` encodes 3,000 maps that
+each hold a map. Its arena peak is 2,097,152 bytes, and the ratchet row
+`region_given_back` makes the pop keep what the region made, which puts the
+peak at 4,194,304 and turns the mem corpus red.
+
+The trend gate reads three keys as worse that nothing earlier in the stack
+priced. `text` sums to 3,516,240: `k_region_pop` is exported by the runtime,
+so every program links it whether or not it has a region, 848 bytes of
+machine code apiece, and runbench's own grows by 1,296. `emitted_other_calls`
+10,452 and `emitted_other_lines` 85,522 are the stack's; this change takes
+three calls and nine lines out of livebench, three calls and eight lines out
+of runbench, and three calls and ten lines out of oneshot.
+
+CI read the change over the result assume, the subtype fix and the carrier
+at 9ec6a3ef, and its rows were taken. The work rows landed near the
+projection: `work_runbench` 1,221,916,115 -> 1,192,666,206 (-2.39%),
+`work_livebench` 1,830,313,464 -> 1,706,144,752 (-6.78%) and `work_oneshot`
+13,856,990 -> 13,546,522. `work_encodebench` rises 2,530,779,441 ->
+2,530,928,650, the frozen copy's layout. `k_region_pop` puts code in every
+binary, `text` 3,491,328 -> 3,504,368 summed. The front end falls,
+`compile_instructions` 25,079,671 -> 25,028,747, `entry_instructions`
+84,714,058 -> 84,572,325, `library_instructions` 85,241,857 -> 85,099,435 and
+`interp_instructions` 578,682,708 -> 578,623,311, and the region sites cost
+the emitter and the builds: `emit_instructions` 29,340,261 -> 29,830,829,
+`codegen_instructions_dev` 124,037,661 -> 124,060,873 and
+`codegen_instructions_release` 406,473,701 -> 406,518,907.
+Welfare rises from 89.7698 to 89.8886 and the floor banks there.

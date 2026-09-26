@@ -114,6 +114,8 @@ pub struct Beats {
     /// times. Measured on runbench, whose escape cycle has four members:
     /// rewinding on every internal edge cost 1.06% of the program.
     pub rewind: HashSet<(Group, Group)>,
+    /// The calls that take a mark of their own: see `region_sites`.
+    pub regions: RegionSites,
 }
 
 impl Beats {
@@ -131,7 +133,7 @@ pub fn beat_loops(program: &Program, inference: &infer::Inference, mut_sites: &M
     // program by all three passes below and do not change between them. They
     // were computed five times and three times a build, which was seven per
     // cent of `kanso play` on a one-line program.
-    let allocating = alloc_groups(program, mut_sites);
+    let (regions, allocating) = paying_regions(program, inference, mut_sites);
     let classes = classify_all(program, inference, mut_sites, &chains, &allocating);
     let mut ids = HashMap::default();
     let mut carried = HashMap::default();
@@ -232,7 +234,7 @@ pub fn beat_loops(program: &Program, inference: &infer::Inference, mut_sites: &M
             rewind.insert(e);
         }
     }
-    Beats { ids, demoted, carried, rewind }
+    Beats { ids, demoted, carried, rewind, regions }
 }
 
 /// Self-loops whose only defect is a tail entry, where every entering group
@@ -895,7 +897,7 @@ pub fn report(
     mut_sites: &MutSites,
 ) -> Vec<String> {
     let chains = chain_groups(program, mut_sites);
-    let allocating = alloc_groups(program, mut_sites);
+    let (regions, allocating) = paying_regions(program, inference, mut_sites);
     let classes = classify_all(program, inference, mut_sites, &chains, &allocating);
     let demoted: HashSet<Group> =
         demotable_entries(program, inference, mut_sites, &chains, &allocating, &classes)
@@ -972,6 +974,11 @@ pub fn report(
                 true => format!("{name}/{arity}: {fate}"),
                 false => format!("{name}/{arity}: {fate} ({})", also.join("; ")),
             }
+        })
+        .chain({
+            let mut at: Vec<_> = regions.iter().collect();
+            at.sort();
+            at.into_iter().map(|(file, line, col)| format!("region at {file}:{line}:{col}"))
         })
         .collect()
 }
@@ -1144,15 +1151,213 @@ fn classify(
     Some(crate::beat::Verdict::Beat)
 }
 
+/// The calls that take a mark of their own, keyed by the call's file and
+/// position.
+pub type RegionSites = HashSet<RegionKey>;
+
+type RegionKey = (std::sync::Arc<str>, usize, usize);
+
+/// The regions worth their mark, and the allocation analysis that holds with
+/// exactly those. A region pays by letting the loops of its cluster drop
+/// their beats; where a loop still allocates for some other reason it keeps
+/// its beat, and the region would be a second mark and pop on top of it. So
+/// a region stands only when every loop in its cluster comes out allocating
+/// nothing. The benchmark corpus has one of each: `std/json` loses its
+/// beats, and encodebench's frozen copy of the library, whose loops allocate
+/// elsewhere, keeps them and gets no region.
+fn paying_regions<'a>(
+    program: &'a Program,
+    inference: &infer::Inference,
+    mut_sites: &MutSites,
+) -> (RegionSites, HashSet<&'a str>) {
+    let candidates = region_sites(program, inference, mut_sites);
+    let all: RegionSites = candidates.iter().map(|(k, _)| k.clone()).collect();
+    let allocating = alloc_groups(program, mut_sites, &all);
+    let kept: RegionSites = candidates
+        .into_iter()
+        .filter(|(_, loops)| !loops.is_empty() && loops.iter().all(|l| !allocating.contains(l)))
+        .map(|(k, _)| k)
+        .collect();
+    if kept.len() == all.len() {
+        return (kept, allocating);
+    }
+    let allocating = alloc_groups(program, mut_sites, &kept);
+    (kept, allocating)
+}
+
+/// A recursive descent whose arguments allocate. A tree walk that writes into
+/// a builder -- the JSON encoder is the one that found this -- calls back into
+/// its own cluster once per nested value, and the call for a map builds that
+/// map's `entries` as its argument. Each loop in the cluster used to take a
+/// beat for that allocation alone: a mark on entry, a pop on exit, and a
+/// rewind test every iteration, paid by every list and every map in the tree
+/// to reclaim what only the nested maps allocate.
+///
+/// Such a call takes the mark instead. The emitter marks the frontier before
+/// the arguments are evaluated and pops after the call, and the pop rewinds
+/// whenever the result cannot reach the region: a scalar, or a bytes or
+/// string header that was there before the mark. Every loop in the cluster
+/// then allocates nothing an iteration outlives, and takes no beat.
+///
+/// Three conditions make a site. The call re-enters its caller's cluster, so
+/// the mark is paid once per descent into a nested structure, which is never
+/// more often than the loops it relieves were entered. An argument allocates,
+/// or there is nothing for the region to reclaim. And the callee answers only
+/// scalars or bytes, which is what lets the pop rewind: a result that is a
+/// fresh structure lives in the region, and the pop hands the region up
+/// rather than free it. That last case is correct and merely keeps the
+/// garbage, so the condition is about when a region pays, not when it is
+/// sound.
+fn region_sites<'a>(
+    program: &'a Program,
+    inference: &infer::Inference,
+    mut_sites: &MutSites,
+) -> Vec<(RegionKey, Vec<&'a str>)> {
+    let mut index: HashMap<&str, usize> = HashMap::default();
+    let mut names: Vec<&str> = Vec::new();
+    for d in &program.fns {
+        index.entry(d.name.as_str()).or_insert_with(|| {
+            names.push(d.name.as_str());
+            names.len() - 1
+        });
+    }
+    fn heads<'e>(e: &'e Expr, out: &mut Vec<&'e str>) {
+        if let Expr::App { head, .. } = e {
+            if let Expr::Ident(n, _, _) = head.as_ref() {
+                out.push(n.as_str());
+            }
+        }
+        crate::for_each_child(e, |c| heads(c, out));
+    }
+    let mut adj: Vec<Vec<usize>> = vec![Vec::new(); names.len()];
+    for d in &program.fns {
+        let from = index[d.name.as_str()];
+        let mut called = Vec::new();
+        for st in &d.body {
+            heads(guard_stmt_expr(st), &mut called);
+        }
+        adj[from].extend(called.iter().filter_map(|n| index.get(n).copied()));
+    }
+    let mut cluster = vec![usize::MAX; names.len()];
+    for (id, scc) in sccs_of(&adj).into_iter().enumerate() {
+        if scc.len() >= 2 {
+            for v in scc {
+                cluster[v] = id;
+            }
+        }
+    }
+    // A region's pop follows its call, so a region in tail position turns
+    // the tail call into a plain one and keeps a frame. That is one frame per
+    // level of nesting on a descent, and one per ITERATION on a loop: the
+    // tail edges that close a cycle are the loop, and a loop of a hundred
+    // thousand trips then runs out of stack. So an edge the tail graph cycles
+    // through is never a region, whatever its arguments allocate.
+    let mut tail_adj: Vec<Vec<usize>> = vec![Vec::new(); names.len()];
+    let mut tail_spans: HashSet<(std::sync::Arc<str>, usize, usize)> = HashSet::default();
+    for d in &program.fns {
+        let from = index[d.name.as_str()];
+        for e in tail_exprs(d.body.last()) {
+            if let Expr::App { head, span, .. } = e {
+                if let Expr::Ident(n, _, _) = head.as_ref() {
+                    if let Some(&to) = index.get(n.as_str()) {
+                        tail_adj[from].push(to);
+                        tail_spans.insert((
+                            std::sync::Arc::clone(&d.file),
+                            span.line as usize,
+                            span.col as usize,
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    let mut tail_cycle = vec![usize::MAX; names.len()];
+    for (id, scc) in sccs_of(&tail_adj).into_iter().enumerate() {
+        let looped = scc.len() >= 2 || tail_adj[scc[0]].contains(&scc[0]);
+        if looped {
+            for v in scc {
+                tail_cycle[v] = id;
+            }
+        }
+    }
+    let answers = |name: &str, arity: usize| -> Set {
+        program
+            .fns
+            .iter()
+            .enumerate()
+            .filter(|(_, d)| d.name == name && d.params.len() == arity)
+            .fold(0, |acc, (i, _)| acc | inference.returns[i])
+    };
+    let fn_names: HashSet<&str> = names.iter().copied().collect();
+    let none: HashSet<&str> = HashSet::default();
+    let no_regions = RegionSites::default();
+    let mut sites = Vec::new();
+    for d in &program.fns {
+        let own = cluster[index[d.name.as_str()]];
+        if own == usize::MAX {
+            continue;
+        }
+        let numbers = numeric_params(d);
+        let site = Site { file: &d.file, mut_sites, regions: &no_regions, numbers: &numbers };
+        let mut calls = Vec::new();
+        for st in &d.body {
+            descents(guard_stmt_expr(st), &mut calls);
+        }
+        let own_tail = tail_cycle[index[d.name.as_str()]];
+        for (callee, args, span) in calls {
+            if index.get(callee).map(|&i| cluster[i]) != Some(own) {
+                continue;
+            }
+            let key = (std::sync::Arc::clone(&d.file), span.line as usize, span.col as usize);
+            if own_tail != usize::MAX
+                && tail_spans.contains(&key)
+                && index.get(callee).map(|&i| tail_cycle[i]) == Some(own_tail)
+            {
+                continue;
+            }
+            let set = answers(callee, args.len());
+            let plain = SCALAR | NONE | BYTES;
+            if set == 0 || set & !(plain | FAIL) != 0 || set & plain == 0 {
+                continue;
+            }
+            if args.iter().any(|a| expr_allocates(a, &fn_names, &none, true, &site)) {
+                let loops = (0..names.len())
+                    .filter(|&v| cluster[v] == own && tail_cycle[v] != usize::MAX)
+                    .map(|v| names[v])
+                    .collect();
+                sites.push((key, loops));
+            }
+        }
+    }
+    sites
+}
+
+/// Every call to a named function in `e`, with its arguments and position.
+fn descents<'e>(e: &'e Expr, out: &mut Vec<(&'e str, &'e [Expr], crate::diag::Span)>) {
+    if let Expr::App { head, args, span, piped, .. } = e {
+        if let Expr::Ident(n, _, _) = head.as_ref() {
+            if !piped {
+                out.push((n.as_str(), args.as_slice(), *span));
+            }
+        }
+    }
+    crate::for_each_child(e, |c| descents(c, out));
+}
+
 /// Names of groups whose evaluation may allocate, transitively: seeded by
 /// arms containing a primitive allocation, propagated across calls to a least
 /// fixpoint. Purity through helpers is thus visible — a scanner that only
 /// compares, adds, and recurses through pure predicates stays out.
-fn alloc_groups<'a>(program: &'a Program, mut_sites: &MutSites) -> HashSet<&'a str> {
+fn alloc_groups<'a>(
+    program: &'a Program,
+    mut_sites: &MutSites,
+    regions: &RegionSites,
+) -> HashSet<&'a str> {
     let fn_names: HashSet<&str> = program.fns.iter().map(|d| d.name.as_str()).collect();
     let mut allocating: HashSet<&str> = HashSet::default();
     for d in &program.fns {
-        let site = Site { file: &d.file, mut_sites };
+        let numbers = numeric_params(d);
+        let site = Site { file: &d.file, mut_sites, regions, numbers: &numbers };
         if d.body.iter().any(|s| stmt_allocates(s, &fn_names, &allocating, true, &site)) {
             allocating.insert(d.name.as_str());
         }
@@ -1160,7 +1365,8 @@ fn alloc_groups<'a>(program: &'a Program, mut_sites: &MutSites) -> HashSet<&'a s
     loop {
         let mut changed = false;
         for d in &program.fns {
-            let site = Site { file: &d.file, mut_sites };
+            let numbers = numeric_params(d);
+            let site = Site { file: &d.file, mut_sites, regions, numbers: &numbers };
             if !allocating.contains(d.name.as_str())
                 && d.body.iter().any(|s| stmt_allocates(s, &fn_names, &allocating, false, &site))
             {
@@ -1180,9 +1386,35 @@ fn alloc_groups<'a>(program: &'a Program, mut_sites: &MutSites) -> HashSet<&'a s
 struct Site<'a> {
     file: &'a std::sync::Arc<str>,
     mut_sites: &'a MutSites,
+    regions: &'a RegionSites,
+    /// The arm's parameters a type annotation makes a number.
+    numbers: &'a [&'a str],
+}
+
+/// The parameters an arm's patterns annotate `int` or `float64`. An in-place
+/// append of `"{n}"` for one of these is rendered straight into the builder
+/// by the emitter, which is the one interpolation that allocates nothing.
+fn numeric_params(d: &crate::ast::FnDecl) -> Vec<&str> {
+    d.params
+        .iter()
+        .filter_map(|p| match p {
+            Pattern::Annotated { name, ty, .. } if matches!(ty.as_str(), "int" | "float64") => {
+                Some(name.as_str())
+            }
+            _ => None,
+        })
+        .collect()
 }
 
 impl Site<'_> {
+    fn region(&self, span: &crate::diag::Span) -> bool {
+        self.regions.contains(&(
+            std::sync::Arc::clone(self.file),
+            span.line as usize,
+            span.col as usize,
+        ))
+    }
+
     /// An append at a site linearity proved unique writes into a builder whose
     /// storage is malloc'd: nothing lands in the arena, and the rewind has
     /// nothing to free. A slice nested as its argument is fused into the same
@@ -1269,8 +1501,20 @@ fn expr_allocates(
             }
         }),
         Expr::Str(parts, _) => parts.iter().any(|p| matches!(p, TemplatePart::Interp(_))),
+        Expr::App { span, .. } if site.region(span) => false,
         Expr::App { head, args, span, .. } => {
             if site.in_place_append(head, args, span) {
+                // `"{n}"` for a number the arm's pattern annotated is
+                // rendered into the builder by the emitter, so the template
+                // is no allocation of its own
+                if let Expr::Str(parts, _) = &args[1] {
+                    if let [TemplatePart::Interp(inner)] = parts.as_slice() {
+                        if matches!(inner, Expr::Ident(n, _, _) if site.numbers.contains(&n.as_str()))
+                        {
+                            return expr_allocates(&args[0], fn_names, allocating, seed_pass, site);
+                        }
+                    }
+                }
                 // the target is a parameter or a local the analysis proved
                 // unique; a slice under the append is the emitter's fused
                 // copy, so only what the slice itself reads is asked about
@@ -2411,12 +2655,23 @@ mod tests {
         // append grows outside it, the slice under one is the fused copy,
         // find2_below answers an integer — and the classifier sees that now,
         // so the cycle is not a beat: no bracket, no rewind, nothing to free.
+        //
+        // The two encoders were beats until 2026-09-25, for one allocation:
+        // the `entries` a nested map builds as it descends. That call is a
+        // region now, which reclaims it once per nested map, and the loops
+        // allocate nothing else an iteration outlives.
         assert_eq!(
             licensed,
-            vec![("encode_items".to_string(), 3), ("encode_pairs".to_string(), 3)],
-            "only the byte-builder encoders may rewind; the escaper allocates \
-             nothing, and scanners threading records or lists stay on the \
-             grow-only arena"
+            Vec::<(String, usize)>::new(),
+            "no loop in the library rewinds: the escaper and the encoders \
+             allocate nothing an iteration outlives, and scanners threading \
+             records or lists stay on the grow-only arena"
+        );
+        let regions: Vec<usize> = loops.regions.iter().map(|(_, line, _)| *line).collect();
+        assert_eq!(
+            regions,
+            vec![64],
+            "the one region is the descent into a map, `encode_map acc (entries m)`"
         );
     }
 

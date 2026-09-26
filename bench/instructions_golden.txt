@@ -725,9 +725,20 @@
 # 2026-09-25, a proven result is assumed: CI measured it at 95f78ace;
 # runbench 1,223,633,797 -> 1,221,877,776, livebench 1,835,790,826 ->
 # 1,830,428,581, basket 31,172,142 -> 31,134,128. The rows below are CI's.
+#
+# The descent into a map takes a mark of its own and std/json's encoder loops
+# take no beat; projected as CI's rows plus this container's deltas:
+#   encodebench 2,530,928,673 -> 2,531,037,817 (+109,144)
+#   oneshot 13,856,491 -> 13,545,992 (-310,499)
+#   basket 31,134,128 -> 31,134,142 (+14)
+#   escapebench 63,421,674 -> 63,421,660 (-14)
+#   indexbench 2,498,458 -> 2,498,472 (+14)
+#   digestbench 5,450,865 -> 5,450,851 (-14)
+#   livebench 1,830,428,581 -> 1,706,880,197 (-123,548,384)
+#   runbench 1,221,877,776 -> 1,192,561,047 (-29,316,729)
 jsonbench 813902265
-encodebench 2530779441
-oneshot 13856990
+encodebench 2530928650
+oneshot 13546522
 basket 31134128
 widebench 28581031
 deepbench 365117731
@@ -737,8 +748,8 @@ indexbench 2498459
 scanbench 281776
 digestbench 5450842
 readbench 4631829
-livebench 1830313464
-runbench 1221916115
+livebench 1706144752
+runbench 1192666206
 # 2026-09-06 (the run program joins): `runbench 3043743748` is a NEW row and
 # nothing regressed to make it appear. It is the program Clay's gavel that day
 # made the objective's whole run-speed term, and the thirteen rows above it

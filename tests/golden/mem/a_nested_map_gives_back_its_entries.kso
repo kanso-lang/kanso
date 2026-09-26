@@ -1,0 +1,19 @@
+# Each map the encoder meets builds its `entries` as it descends, and nothing
+# needs them once the map is written. The descent into a map is a region: the
+# mark goes down before `entries` is built and comes back up when the map is
+# done, so a document of many maps holds one map's entries at a time.
+#
+# Without the region the encoder's two loops would still take no beat, since
+# they allocate nothing else, and all 3,000 maps' entries would stay in the
+# arena until the next rewind outside the encode. The arena peak pins the
+# difference: 2,097,152 bytes with the region, 4,194,304 with a pop that keeps
+# what the region made.
+import "std/json"
+import "std/list"
+
+fn row i
+  { "id":i "tags":{ "a":i "b":i "c":i "d":i "e":i "f":i "g":i "h":i } }
+
+doc = list/to_list (list/map (list/take list/naturals 3000) (i -> row i))
+
+pub play = print "{length (json/encode doc)}"
