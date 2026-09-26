@@ -15292,3 +15292,20 @@ half-wrapped `a >> b` followed by `  >> c` was refused. Main already accepts
 a half-wrapped `.>` chain and a half-wrapped pipe, so extending the rule would
 be a new rule, and appendix C no longer claims it.
 
+The runtime counters did not move: the twelve cost veins and the lazy tier
+agree, apart from one mem fixture whose program was respelled. In
+`build_cycle` the wall's right side was a deferred cell and is now a lambda's
+body, so the second print is built inside a callback rather than forced from a
+thunk. The fixture allocates two more times, `build_cycle_allocs` 66 -> 68 and
+`build_cycle_alloc_bytes` 3,072 -> 3,120, and the callback's frame is a beat
+that evacuates what it keeps: `build_cycle_beat_iters` 0 -> 1,
+`build_cycle_evac_allocs` 10 -> 15 and `build_cycle_evac_bytes` 368 -> 528.
+The thunk it no longer makes takes `thunk_allocs`, `thunk_evals`,
+`thunk_forces` and `thunk_live_exit` from 1 to 0 and `survive_slots` from 12
+to 4. The program the fixture runs changed, and these are its new baseline.
+
+Every binary's machine code fell 848 bytes, `text` summed over the fourteen
+from 3,486,032 to 3,474,160: `k_seq`, its helper and its two executor arms
+left the runtime. The compile rows this container cannot compare are left
+for CI.
+

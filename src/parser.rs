@@ -189,10 +189,7 @@ pub fn parse_entry(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
         for line in &lexed.lines[start..] {
             if line.indent != 0
                 && lexed.blank_lines.binary_search(&(line.number - 1)).is_ok()
-                && matches!(
-                    line.tokens.first(),
-                    Some((Tok::Pipe | Tok::Fused(_), _, _))
-                )
+                && matches!(line.tokens.first(), Some((Tok::Pipe | Tok::Fused(_), _, _)))
             {
                 diags.push(Diagnostic::new(
                     "formatting",
@@ -939,9 +936,9 @@ fn parse_lead_stmts(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
                 [(Tok::Ident(_), _, _), (Tok::Bind, _, _), (Tok::Ident(w), _, _), ..] if w == "if" || w == "build"
             );
         if !head_is_block
-            && children.iter().all(|c| {
-                matches!(c.tokens.first(), Some((Tok::Pipe | Tok::Fused(_), _, _)))
-            })
+            && children
+                .iter()
+                .all(|c| matches!(c.tokens.first(), Some((Tok::Pipe | Tok::Fused(_), _, _))))
         {
             out.push(parse_stmt(&body[idx])?);
             idx += 1;
@@ -1000,9 +997,9 @@ fn parse_effect_tail(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
                 [(Tok::Ident(_), _, _), (Tok::Bind, _, _), (Tok::Ident(w), _, _), ..] if w == "if"
             );
         if !head_is_if
-            && children.iter().all(|c| {
-                matches!(c.tokens.first(), Some((Tok::Pipe | Tok::Fused(_), _, _)))
-            })
+            && children
+                .iter()
+                .all(|c| matches!(c.tokens.first(), Some((Tok::Pipe | Tok::Fused(_), _, _))))
         {
             units.push(parse_stmt(line)?);
             idx += 1;

@@ -357,9 +357,7 @@ fn expensive(expr: &Expr, fns: &HashSet<&str>) -> bool {
         Expr::BinOp { op, lhs, rhs, .. } => {
             *op == "==" || *op == "!=" || expensive(lhs, fns) || expensive(rhs, fns)
         }
-        Expr::Join { lhs, rhs, .. } => {
-            expensive(lhs, fns) || expensive(rhs, fns)
-        }
+        Expr::Join { lhs, rhs, .. } => expensive(lhs, fns) || expensive(rhs, fns),
         Expr::List(items, _) => items.iter().any(|a| expensive(a, fns)),
         Expr::MapLit(entries, _) => {
             entries.iter().any(|(k, v)| expensive(k, fns) || expensive(v, fns))

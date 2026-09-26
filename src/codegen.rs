@@ -2318,8 +2318,7 @@ fn without_unbuilt_arms(program: &Program) -> Option<Program> {
                 names_in(base, out);
                 names_in(index, out);
             }
-            Expr::BinOp { lhs: a, rhs: b, .. }
-            | Expr::Join { lhs: a, rhs: b, .. } => {
+            Expr::BinOp { lhs: a, rhs: b, .. } | Expr::Join { lhs: a, rhs: b, .. } => {
                 names_in(a, out);
                 names_in(b, out);
             }

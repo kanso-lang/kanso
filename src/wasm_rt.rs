@@ -307,13 +307,7 @@ fn pop_args(n: u32) -> Vec<u32> {
 }
 
 fn descish(s: &Slot) -> bool {
-    matches!(
-        s,
-        Slot::V(Value::Desc(_))
-            | Slot::Bind(..)
-            | Slot::Rescue(..)
-            | Slot::Annotate(..)
-    )
+    matches!(s, Slot::V(Value::Desc(_)) | Slot::Bind(..) | Slot::Rescue(..) | Slot::Annotate(..))
 }
 
 fn type_index(name: &str) -> Option<usize> {

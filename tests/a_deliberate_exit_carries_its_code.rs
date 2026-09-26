@@ -21,7 +21,8 @@ fn exits(name: &str, engine: &[&str]) -> (Option<i32>, String) {
     let dir = std::env::temp_dir().join(format!("kanso-deliberate-exit-{name}"));
     let _ = std::fs::create_dir_all(&dir);
     let file = dir.join("main.kso");
-    let program = "import \"std/io\"\nimport \"std/os\"\n\nio/write \"before\" .> (_ -> os/exit 3)\n";
+    let program =
+        "import \"std/io\"\nimport \"std/os\"\n\nio/write \"before\" .> (_ -> os/exit 3)\n";
     std::fs::write(&file, program).expect("fixture writes");
     let out = Command::new(env!("CARGO_BIN_EXE_kanso"))
         .arg("run")
