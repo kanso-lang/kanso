@@ -16183,7 +16183,8 @@ branches; what moved it is not isolated. The other eight programs are unchanged.
 code falls by eight branches and 32 lines in every program that decodes
 JSON, runbench 2,700 -> 2,692 branches and 27,840 -> 27,808 lines. Machine
 code falls in jsonbench (239,224 -> 238,888 bytes), oneshot and livebench,
-and rises in runbench (398,968 -> 399,048), encodebench and widebench.
+and rises in runbench (398,968 -> 399,048), encodebench (248,088 ->
+248,136) and widebench (249,336 -> 249,384).
 
 The spec is `a_carried_record_is_asked_about_failure_once` in
 tests/perf_ratchet.rs. It counts the failure tests before `take`'s fail
@@ -16194,3 +16195,9 @@ block, reads 3 on main's codegen and 1 now, and the ratchet row
 well, it printed `false` where it should print the refusal, so the one test
 that remains is watched. The fixture joins `CARRIED` in tests/ir_verifier.rs
 so it keeps exercising the register convention.
+
+CI's rows were taken from its first run. `work_runbench` 1,176,309,124 ->
+1,168,439,677, `work_jsonbench` 805,759,682 -> 794,449,832 and
+`work_encodebench` 2,435,949,028 -> 2,436,462,713, the rise the container
+showed. `emit_instructions` 29,723,818 -> 29,723,017. Welfare rises from
+89.96 to 89.99 and the floor banks there.
