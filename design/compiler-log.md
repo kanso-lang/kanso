@@ -16565,6 +16565,97 @@ the container: runbench rose 849,348 (+0.07%) and jsonbench rose 0.17%. The
 selects cost less than the branch that replaced them. What made the branch
 dearer was not isolated.
 
+## 2026-09-26 — the wide utf-8 pass counts continuations in a register
+
+The x86 wide pass of the utf-8 validator counts continuation bytes as it
+classifies each block, because the count it returns becomes the string's
+length and `length` never scans the string again. It counted them with a
+movemask and `__builtin_popcount`. The runtime is built with `-mssse3`, which
+has no `popcnt`, so clang wrote the popcount out as shifts, masks and adds: 22
+of the 51 instructions in a block that holds a non-ascii byte. On runbench that
+block ran 282,420 times, all of it in `k_b_utf8`.
+
+The count now stays in a vector register. A continuation byte is -128 to -65
+as a signed byte, so one signed compare against -64 marks them. Subtracting the
+mask from zero gives a one in each marked lane, `psadbw` sums the sixteen lanes
+into two 64-bit halves, and a `paddq` adds those to a running total. The two
+halves are added once, after the last block. That is four instructions a block
+in place of about twenty-four. The neon path already counts with `vaddvq` and
+is unchanged.
+
+On the container, against main at 9d57763b: runbench 1,144,623,289 ->
+1,139,771,989 (-0.42%), livebench 1,688,141,233 -> 1,666,315,555 (-1.29%),
+encodebench 2,438,571,692 -> 2,416,993,415 (-0.88%), oneshot -104,476
+(-0.80%), readbench -53,344 (-1.15%) and jsonbench -53,344. The other eight
+programs are byte-identical and no allocation counter moves. Every
+benchmark's `.text` shrinks by 176 bytes; runbench 399,624 -> 399,448. On
+the earlier base b6994fa4 the change read 1,168,440,514 -> 1,163,586,651,
+and with the popcount put back and nothing else changed, 1,168,858,226.
+
+The utf-8 differential never checked this count. The door it extracts runs
+with `chars` null, and its count section tests `k_utf8_chars`, a different
+function. So a wide pass that stopped counting 0xBF as a continuation passed
+the harness with 53 million cases and no mismatch. That was the first
+mutation tried for this change, and it is how the gap was found. The harness
+now has a section that builds 400,000 valid strings of 1 to 300 bytes,
+mixing ascii runs of up to 80 bytes with characters of every width and random
+code points, and requires both the wide pass and the scalar pass to return
+the count `ref_chars` gives. The same mutation fails it with 45,136
+mismatches. Main's popcount version passes it.
+
+Two ratchet rows. `lane_count` moves the compare's bound to -65 and the utf-8
+differential goes red. `lane_count_cost` puts the movemask and popcount back,
+which keeps every count right and costs the instructions, for the instruction
+golden to catch.
+
+CI's rows were taken from its first run. `work_runbench` 1,144,622,452 ->
+1,139,771,152, `work_livebench` 1,688,141,594 -> 1,666,315,916 and
+`work_encodebench` 2,438,572,025 -> 2,416,993,748. `codegen_instructions_release`
+rises 402,524,008 -> 402,705,483 (+0.045%), the release build compiling the
+new intrinsics, and `codegen_instructions_dev` falls 123,328,940 ->
+123,328,492. Welfare rises from 90.09 to 90.11 and the floor banks there.
+
+## 2026-09-26 — the slice walk counts character starts by multiply
+
+`k_slice_skip` walks a string eight bytes at a time to find where a slice
+starts, and counts each word's character starts as eight less its
+continuation bytes, which it counted with `__builtin_popcountll`. The runtime
+is built with `-mssse3`, which has no `popcnt`, so the builtin became a dozen
+shifts, masks and adds. The mask it counts has only the byte-high bits set, so
+shifting each to its byte's low bit and multiplying by `0x0101010101010101`
+sums the eight bytes into the top one, in three instructions.
+
+The same multiply in `k_utf8_chars` was measured first and kept out.
+pendbench rose 1,642,235 instructions (+0.91%), all of it in
+`k_str_chars_scan`, which inlines that function. Why the multiply is dearer
+there was not isolated. `k_utf8_chars` keeps the builtin.
+
+On the container, against main at 6c9d5fe5: runbench 1,144,623,289 ->
+1,142,183,305 (-0.21%), indexbench 2,498,178 -> 2,428,163 (-2.80%), livebench
+-434,738 (-0.03%) and encodebench -187,333 (-0.01%). oneshot rises 2,212
+(+0.017%), and what moved it was not isolated. The other nine programs are
+byte-identical, and no allocation counter moves. Every benchmark's `.text`
+shrinks by 160 bytes. The ratchet row `skip_by_multiply` puts the builtin
+back, and indexbench reads 2,498,178, main's figure exactly.
+
+CI's rows were taken from its first run. `work_runbench` 1,144,622,452 ->
+1,142,182,468, `work_indexbench` 2,498,525 -> 2,428,510, `work_livebench`
+1,688,141,594 -> 1,687,706,856 and `work_encodebench` 2,438,572,025 ->
+2,438,384,692. `work_oneshot` rises 13,129,205 -> 13,131,417, the rise the
+container showed. `codegen_instructions_dev` rises 71 to 123,329,011 and
+`codegen_instructions_release` falls 274 to 402,523,734. Welfare rises from
+90.09 to 90.10 and the floor banks there.
+
+The two landed together in kanso#1676, and CI's rows for the combined tree,
+against main at 4444d699, are these. `work_runbench` 1,144,622,452 ->
+1,137,417,541 (-0.63%), `work_livebench` 1,688,141,594 -> 1,666,846,330,
+`work_encodebench` 2,438,572,025 -> 2,417,785,419, `work_indexbench`
+2,498,525 -> 2,428,510 and `work_oneshot` 13,129,205 -> 13,022,813; the
+oneshot rise the multiply showed alone is gone in the sum. `codegen_instructions_release`
+rises 402,524,008 -> 402,705,244 (+0.045%) and `codegen_instructions_dev`
+falls 123,328,940 -> 123,328,168. Welfare rises from 90.11 to 90.12 and the
+floor banks there.
+
 ## 2026-09-26 — a branch proves its ratchet rows in shards
 
 The ratchet job on a pull request proves the rows whose mutations patch a
