@@ -16201,3 +16201,45 @@ CI's rows were taken from its first run. `work_runbench` 1,176,309,124 ->
 `work_encodebench` 2,435,949,028 -> 2,436,462,713, the rise the container
 showed. `emit_instructions` 29,723,818 -> 29,723,017. Welfare rises from
 89.96 to 89.99 and the floor banks there.
+
+## 2026-09-26 — the wide utf-8 pass counts continuations in a register
+
+The x86 wide pass of the utf-8 validator counts continuation bytes as it
+classifies each block, because the count it returns becomes the string's
+length and `length` never scans the string again. It counted them with a
+movemask and `__builtin_popcount`. The runtime is built with `-mssse3`, which
+has no `popcnt`, so clang wrote the popcount out as shifts, masks and adds: 22
+of the 51 instructions in a block that holds a non-ascii byte. On runbench that
+block ran 282,420 times, all of it in `k_b_utf8`.
+
+The count now stays in a vector register. A continuation byte is -128 to -65
+as a signed byte, so one signed compare against -64 marks them. Subtracting the
+mask from zero gives a one in each marked lane, `psadbw` sums the sixteen lanes
+into two 64-bit halves, and a `paddq` adds those to a running total. The two
+halves are added once, after the last block. That is four instructions a block
+in place of about twenty-four. The neon path already counts with `vaddvq` and
+is unchanged.
+
+On the container, against main at b6994fa4: runbench 1,168,440,514 ->
+1,163,586,651 (-0.42%), livebench 1,697,949,896 -> 1,676,708,661 (-1.25%),
+encodebench 2,436,462,380 -> 2,414,941,899 (-0.88%), oneshot -106,632
+(-0.80%), readbench -53,344 (-1.15%) and jsonbench -53,344. The other eight
+programs are byte-identical and no allocation counter moves. Every
+benchmark's `.text` shrinks by 176 bytes; runbench 399,048 -> 398,872. With
+the popcount put back and nothing else changed, runbench reads 1,168,858,226.
+
+The utf-8 differential never checked this count. The door it extracts runs
+with `chars` null, and its count section tests `k_utf8_chars`, a different
+function. So a wide pass that stopped counting 0xBF as a continuation passed
+the harness with 53 million cases and no mismatch. That was the first
+mutation tried for this change, and it is how the gap was found. The harness
+now has a section that builds 400,000 valid strings of 1 to 300 bytes,
+mixing ascii runs of up to 80 bytes with characters of every width and random
+code points, and requires both the wide pass and the scalar pass to return
+the count `ref_chars` gives. The same mutation fails it with 45,136
+mismatches. Main's popcount version passes it.
+
+Two ratchet rows. `lane_count` moves the compare's bound to -65 and the utf-8
+differential goes red. `lane_count_cost` puts the movemask and popcount back,
+which keeps every count right and costs the instructions, for the instruction
+golden to catch.

@@ -202,6 +202,75 @@ int main(void) {
         bad += cbad;
         checked += cchecked;
     }
+    /* The count each validator hands back. A string the validator accepts is
+       given its character count from the same pass, and `length` reads that
+       count without scanning again, so a wrong one is a wrong `length`. The
+       door above runs with `chars` null and the counter above is a different
+       function, so until this section the count the two passes return was
+       read by nothing: a wide pass that stopped counting 0xBF as a
+       continuation passed 53 million cases with no mismatch.
+
+       Valid text only, from one byte to three hundred, so the wide pass runs
+       across many sixteen-byte blocks and its four-block ascii skip. Half the
+       characters are ascii runs of up to eighty bytes; the rest take every
+       width with a random code point, so every continuation value from 0x80
+       to 0xBF turns up. */
+    {
+        unsigned char text[320];
+        long long vchecked = 0, vbad = 0;
+        uint64_t vs = 0xD1B54A32D192ED03ull;
+        for (long long t = 0; t < 400000; t++) {
+            vs ^= vs << 13; vs ^= vs >> 7; vs ^= vs << 17;
+            int room = 1 + (int)(vs % 300);
+            long long at = 0;
+            while (room > 0) {
+                vs ^= vs << 13; vs ^= vs >> 7; vs ^= vs << 17;
+                if (vs & 1) {
+                    int run = 1 + (int)((vs >> 1) % 80);
+                    if (run > room) run = room;
+                    for (int k = 0; k < run; k++) text[at++] = (unsigned char)(0x20 + (k % 90));
+                    room -= run;
+                    continue;
+                }
+                int w = 2 + (int)((vs >> 1) % 3);
+                if (w > room) { text[at++] = 0x61; room--; continue; }
+                unsigned cp;
+                if (w == 2) cp = 0x80 + (unsigned)((vs >> 3) % (0x800 - 0x80));
+                else if (w == 3) {
+                    cp = 0x800 + (unsigned)((vs >> 3) % (0x10000 - 0x800));
+                    if (cp >= 0xD800 && cp <= 0xDFFF) cp = 0xE000;
+                } else cp = 0x10000 + (unsigned)((vs >> 3) % (0x110000 - 0x10000));
+                if (w == 2) {
+                    text[at++] = (unsigned char)(0xC0 | (cp >> 6));
+                    text[at++] = (unsigned char)(0x80 | (cp & 0x3F));
+                } else if (w == 3) {
+                    text[at++] = (unsigned char)(0xE0 | (cp >> 12));
+                    text[at++] = (unsigned char)(0x80 | ((cp >> 6) & 0x3F));
+                    text[at++] = (unsigned char)(0x80 | (cp & 0x3F));
+                } else {
+                    text[at++] = (unsigned char)(0xF0 | (cp >> 18));
+                    text[at++] = (unsigned char)(0x80 | ((cp >> 12) & 0x3F));
+                    text[at++] = (unsigned char)(0x80 | ((cp >> 6) & 0x3F));
+                    text[at++] = (unsigned char)(0x80 | (cp & 0x3F));
+                }
+                room -= w;
+            }
+            long long want = ref_chars(text, at);
+            long long wide_count = -1, scalar_count = -1;
+            int wide_ok = harness_utf8_wide((const char*)text, at, &wide_count);
+            int scalar_ok = harness_utf8_scalar((const char*)text, at, &scalar_count);
+            vchecked++;
+            if (!wide_ok || !scalar_ok || wide_count != want || scalar_count != want) {
+                if (vbad < 5)
+                    printf("VALIDATOR COUNT MISMATCH len=%lld want=%lld wide=%d/%lld scalar=%d/%lld\n",
+                           at, want, wide_ok, wide_count, scalar_ok, scalar_count);
+                vbad++;
+            }
+        }
+        printf("%lld validator counts checked, %lld mismatches\n", vchecked, vbad);
+        bad += vbad;
+        checked += vchecked;
+    }
     printf("%lld checked, %lld mismatches\n", checked, bad);
     return bad != 0;
 }

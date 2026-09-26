@@ -3003,7 +3003,27 @@ rows_c1zc = text/concat rows_c1zb [purge_delay_option]
 
 rows_c1zd = text/concat rows_c1zc [codegen_one_process]
 
-rows_c = text/concat rows_c1zd [itself]
+# The utf-8 wide pass counts continuation bytes in a register, and the count is
+# the string's length. One row for the count, one for what it costs.
+lane_count = row
+  "a continuation counted from the wrong byte"
+  true
+  "./target/release/kanso run scripts/utf8_differential"
+  "utf-8 validator (differential vs an independent reference)"
+  (breaking "a_continuation_counted_from_the_wrong_byte")
+  release
+
+lane_count_cost = row
+  "a continuation count that pays a popcount"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_continuation_count_that_pays_a_popcount")
+  benches
+
+rows_c1zl = text/concat rows_c1zd [lane_count lane_count_cost]
+
+rows_c = text/concat rows_c1zl [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
