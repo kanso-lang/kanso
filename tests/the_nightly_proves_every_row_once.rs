@@ -33,7 +33,11 @@ fn ratchet(args: &[&str]) -> std::process::Output {
 
 fn listed(k: usize, n: usize) -> Vec<String> {
     let out = ratchet(&["shard", &k.to_string(), &n.to_string(), "list"]);
-    assert!(out.status.success(), "shard {k} of {n} would not list: {}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "shard {k} of {n} would not list: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     String::from_utf8_lossy(&out.stdout)
         .lines()
         .filter(|l| l.starts_with("  "))
@@ -65,7 +69,10 @@ fn matrix() -> (Vec<usize>, usize) {
 fn the_matrix_runs_every_shard_the_count_divides_into() {
     let (shards, n) = matrix();
     let every: Vec<usize> = (1..=n).collect();
-    assert_eq!(shards, every, "the matrix runs {shards:?} and the run line divides the table by {n}");
+    assert_eq!(
+        shards, every,
+        "the matrix runs {shards:?} and the run line divides the table by {n}"
+    );
 }
 
 #[test]
@@ -74,7 +81,11 @@ fn the_shards_prove_every_row_and_none_twice() {
     let whole = listed(1, 1);
     assert!(whole.len() > 1, "the table listed as {} rows", whole.len());
     let table: BTreeSet<&String> = whole.iter().collect();
-    assert_eq!(table.len(), whole.len(), "two rows print the same line, so this spec cannot tell them apart");
+    assert_eq!(
+        table.len(),
+        whole.len(),
+        "two rows print the same line, so this spec cannot tell them apart"
+    );
 
     let mut seen: Vec<String> = Vec::new();
     for k in 1..=n {
@@ -83,7 +94,13 @@ fn the_shards_prove_every_row_and_none_twice() {
     let proved: BTreeSet<&String> = seen.iter().collect();
     let missing: Vec<&&String> = table.difference(&proved).collect();
     assert!(missing.is_empty(), "no shard proves {missing:#?}");
-    assert_eq!(seen.len(), whole.len(), "{} rows proved across the shards, {} in the table", seen.len(), whole.len());
+    assert_eq!(
+        seen.len(),
+        whole.len(),
+        "{} rows proved across the shards, {} in the table",
+        seen.len(),
+        whole.len()
+    );
 }
 
 /// A shard outside 1..=N would prove nothing, or rows another shard already
