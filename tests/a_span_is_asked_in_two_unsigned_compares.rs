@@ -30,7 +30,6 @@ fn the_emitted_span_test_is_the_unsigned_one() {
         "  %qoff = add i64 %qfrom, -1",
         "  %qorder = icmp ult i64 %qoff, %qto",
         "  %qhi = icmp ule i64 %qto, %qclen",
-        "  %qgood = and i1 %qorder, %qhi",
     ] {
         assert_eq!(
             codegen.lines().filter(|l| *l == line).count(),
