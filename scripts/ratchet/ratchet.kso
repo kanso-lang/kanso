@@ -2730,7 +2730,18 @@ region_given_back = row
 
 rows_b1gb = text/concat rows_b1ra [region_given_back]
 
-rows_b = text/concat rows_b1gb [compile_mem compile_mem_host]
+# A guard's condition branches on its comparisons instead of being asked.
+guard_asked = row
+  "a guard that asks its condition for a value"
+  true
+  "cargo test --release --test perf_ratchet an_or_under_a_guard_is_asked_in_pieces"
+  "specs (unit, golden, differential)"
+  (breaking "a_guard_that_asks_its_condition_for_a_value")
+  release
+
+rows_b1ga = text/concat rows_b1gb [guard_asked]
+
+rows_b = text/concat rows_b1ga [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 

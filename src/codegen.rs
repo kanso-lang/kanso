@@ -7617,22 +7617,16 @@ impl<'a> Backend<'a> {
     /// become guaranteed tail calls, and an if's branches stay tails.
     fn emit_tail(&mut self, f: &mut FnEmit, expr: &Expr) -> Result<(), String> {
         if let Expr::Guard { cond, early, rest, .. } = expr {
-            let c = self.emit_expr(f, cond)?;
-            let c = self.maybe_force(f, c);
-            let ok = inline_not_failure(f, &c);
-            let check = f.label();
-            let bail = f.label();
-            f.line(&format!("br i1 {ok}, label %{check}, label %{bail}"));
-            f.start_block(&bail);
-            self.emit_ret(f, &c);
-            f.start_block(&check);
-            let tv = f.tmp();
-            f.predicate(&tv, format!("call i64 @k_truthy(%KValue {c})"));
-            let tb = f.tmp();
-            f.line(&format!("{tb} = icmp ne i64 {tv}, 0"));
+            // A guard is a tail `if` whose else is the rest of the body, so
+            // its condition is asked as a question the same way: a
+            // comparison branches on its own icmp and an `or` branches arm by
+            // arm. Read for a value, `length xs == 0` in json's encode_list
+            // became a tagged boolean that `k_truthy` was then asked about.
+            // A failing condition still returns itself: with no merge label
+            // `emit_cond` emits the return.
             let early_label = f.label();
             let rest_label = f.label();
-            f.line(&format!("br i1 {tb}, label %{early_label}, label %{rest_label}"));
+            self.emit_cond(f, cond, &early_label, &rest_label, None)?;
             f.start_block(&early_label);
             self.emit_tail(f, early)?;
             f.start_block(&rest_label);

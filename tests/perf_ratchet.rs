@@ -248,3 +248,35 @@ fn an_and_under_an_if_is_asked_in_pieces() {
         "both comparisons should reach a branch as their own i1: {body}"
     );
 }
+
+const GUARDED_OR: &str = "fn pick a b
+  return \"y\" if a < b or b < 10
+  \"n\"
+
+main = print \"{pick 1 2}\"
+";
+
+/// A guard is a tail `if` whose else is the rest of the body, and its
+/// condition is asked the same way an `if`'s is. Read for a value, the `or`
+/// built a tagged boolean through a phi and the guard handed it to
+/// `k_truthy` to take apart again.
+#[test]
+fn an_or_under_a_guard_is_asked_in_pieces() {
+    let ir = ir_for(GUARDED_OR);
+    let body: String = ir
+        .lines()
+        .skip_while(|l| !(l.starts_with("define") && l.contains("@d_pick_2")))
+        .take_while(|l| !l.starts_with('}'))
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(!body.is_empty(), "pick was not emitted");
+    assert!(
+        !body.contains("@k_truthy"),
+        "a guard's `or` went back to building a boolean and asking it: {body}"
+    );
+    assert_eq!(
+        body.matches("icmp slt i64").count(),
+        2,
+        "both comparisons should reach a branch as their own i1: {body}"
+    );
+}
