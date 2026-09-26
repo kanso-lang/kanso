@@ -16509,3 +16509,11 @@ On the container, against main at 6c9d5fe5: runbench 1,144,623,289 ->
 byte-identical, and no allocation counter moves. Every benchmark's `.text`
 shrinks by 160 bytes. The ratchet row `skip_by_multiply` puts the builtin
 back, and indexbench reads 2,498,178, main's figure exactly.
+
+CI's rows were taken from its first run. `work_runbench` 1,144,622,452 ->
+1,142,182,468, `work_indexbench` 2,498,525 -> 2,428,510, `work_livebench`
+1,688,141,594 -> 1,687,706,856 and `work_encodebench` 2,438,572,025 ->
+2,438,384,692. `work_oneshot` rises 13,129,205 -> 13,131,417, the rise the
+container showed. `codegen_instructions_dev` rises 71 to 123,329,011 and
+`codegen_instructions_release` falls 274 to 402,523,734. Welfare rises from
+90.09 to 90.10 and the floor banks there.
