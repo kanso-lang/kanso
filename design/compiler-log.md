@@ -15635,3 +15635,23 @@ and two executor arms, and these moves arrived with that; which part of the
 change moved each was not isolated. Welfare banks at 89.17, the development
 side up from 90.86 to 90.87.
 
+
+The branch then took the six-change carrier (kanso#1655) and CI read the two
+together at 64bacde8. Against the carrier's rows the wall's removal moves the
+same way it did over the old base. The front end falls:
+`compile_instructions` 25,267,312 -> 25,080,902, `entry_instructions`
+85,321,306 -> 84,718,064, `library_instructions` 85,850,050 -> 85,245,877,
+`codegen_instructions_dev` 123,915,881 -> 123,894,024 and
+`interp_instructions` 578,807,674 -> 578,682,708. `text` falls 848 bytes in
+every binary again, summed 3,544,496 -> 3,532,624. `codegen_instructions_release`
+rises 695,954,277 -> 696,080,355 and `emit_instructions` 28,882,533 ->
+28,893,585. Of the work rows, `work_runbench` falls 1,290,279,056 ->
+1,290,275,085 and `work_encodebench` 2,677,016,790 -> 2,676,513,833, and seven
+rise with every allocation counter unchanged: `work_deepbench` 364,797,730 ->
+365,181,731, `work_widebench` 28,789,056 -> 28,805,035, `work_oneshot`
+14,486,409 -> 14,487,226, `work_pendbench` 181,895,213 -> 181,895,414,
+`work_escapebench` 65,821,674 -> 65,821,675, `work_indexbench` 2,538,557 ->
+2,538,558 and `work_scanbench` 282,021 -> 282,022. As before, these arrived
+with the runtime losing `k_seq` and its executor arms, and no part of the
+change was isolated as the cause of any one of them.
+The development side rises from 90.99 to 91.00 and welfare banks at 89.37.

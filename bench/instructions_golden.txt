@@ -705,20 +705,20 @@
 #
 # CI measured the carrier at e63ff428 and the rows above read within 14 of
 # its projection; they are CI's now.
-jsonbench 890697789
-encodebench 2677016790
-oneshot 14486409
+jsonbench 890697766
+encodebench 2676513833
+oneshot 14487226
 basket 31432524
-widebench 28789056
-deepbench 364797730
-escapebench 65821674
-pendbench 181895213
-indexbench 2538557
-scanbench 282021
-digestbench 5542082
-readbench 4631851
-livebench 1877825961
-runbench 1290279056
+widebench 28805035
+deepbench 365181731
+escapebench 65821675
+pendbench 181895414
+indexbench 2538558
+scanbench 282022
+digestbench 5542059
+readbench 4631829
+livebench 1877825504
+runbench 1290275085
 # 2026-09-06 (the run program joins): `runbench 3043743748` is a NEW row and
 # nothing regressed to make it appear. It is the program Clay's gavel that day
 # made the objective's whole run-speed term, and the thirteen rows above it

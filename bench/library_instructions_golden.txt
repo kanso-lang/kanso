@@ -1112,7 +1112,7 @@
 # CI measured the carrier at e63ff428, the literal divisor's settled fixpoint
 # among what it carries: library_instructions 85,855,270 -> 85,850,050, a FALL
 # of 5,220 (-0.0061%).
-library_instructions=85850050
+library_instructions=85245877
 
 # 2026-09-17, kanso#1466. Thirteen lower, on a binary whose only change is that
 # the allocator stops picking a random base address for its OS allocations.

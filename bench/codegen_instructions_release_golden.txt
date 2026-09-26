@@ -370,4 +370,4 @@
 # CI measured the carrier at 25499899, with the token cache's dead word copy
 # removed from the runtime: codegen_instructions_release 695,954,249 ->
 # 695,954,277, a RISE of 28 (+0.0000%).
-codegen_instructions_release=695954277
+codegen_instructions_release=696080355
