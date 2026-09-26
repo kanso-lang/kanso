@@ -4697,6 +4697,26 @@ fn inline_payload(f: &mut FnEmit, value: &str) -> String {
     t
 }
 
+/// Branch to `hit` when a 1-based index lands inside the container whose
+/// length `len_ptr` points at, and to `miss` when it does not, one signed
+/// compare at a time. The length is loaded between the two, which keeps LLVM
+/// from folding the pair back into flags and an `and`. The signed spelling
+/// is the one a guard such as `return acc if n < 1 or length bs < n` proves,
+/// so LLVM can drop both where one ran upstream.
+fn index_in_range(f: &mut FnEmit, idx: &str, len_ptr: &str, hit: &str, miss: &str) {
+    let ge1 = f.tmp();
+    f.line(&format!("{ge1} = icmp sge i64 {idx}, 1"));
+    let above = f.label();
+    f.line(&format!("br i1 {ge1}, label %{above}, label %{miss}"));
+    f.start_block(&above);
+    let len = f.tmp();
+    f.line(&format!("{len} = load i64, ptr {len_ptr}"));
+    assume_length(f, &len);
+    let le_len = f.tmp();
+    f.line(&format!("{le_len} = icmp sle i64 {idx}, {len}"));
+    f.line(&format!("br i1 {le_len}, label %{hit}, label %{miss}"));
+}
+
 /// A length read out of a container is never negative, and saying so lets
 /// LLVM merge a `1 <= i <= len` test into one unsigned compare where the
 /// signed pair also stays visible to whatever proved it true upstream.
@@ -8520,20 +8540,13 @@ impl<'a> Backend<'a> {
             f.line(&format!("{bptr} = inttoptr i64 {bp} to ptr"));
             let len_ptr = f.tmp();
             f.line(&format!("{len_ptr} = getelementptr %KBytes, ptr {bptr}, i64 0, i32 0"));
-            let len = f.tmp();
-            f.line(&format!("{len} = load i64, ptr {len_ptr}"));
             let idx = inline_payload(f, key);
-            assume_length(f, &len);
-            let ge1 = f.tmp();
-            f.line(&format!("{ge1} = icmp sge i64 {idx}, 1"));
-            let le_len = f.tmp();
-            f.line(&format!("{le_len} = icmp sle i64 {idx}, {len}"));
-            let in_range = f.tmp();
-            f.line(&format!("{in_range} = and i1 {ge1}, {le_len}"));
             let load = f.label();
             let miss = f.label();
             let merge = f.label();
-            f.line(&format!("br i1 {in_range}, label %{load}, label %{miss}"));
+            // Two branches, the way the room tests ask: joined with `and`, the
+            // pair became flags and an `or` wherever nothing upstream settled it.
+            index_in_range(f, &idx, &len_ptr, &load, &miss);
             f.start_block(&load);
             let data_ptr = f.tmp();
             f.line(&format!("{data_ptr} = getelementptr %KBytes, ptr {bptr}, i64 0, i32 1"));
@@ -8588,20 +8601,13 @@ impl<'a> Backend<'a> {
             let lp = inline_payload(f, container);
             let lptr = f.tmp();
             f.line(&format!("{lptr} = inttoptr i64 {lp} to ptr"));
-            let len = f.tmp();
-            f.line(&format!("{len} = load i64, ptr {lptr}"));
             let idx = inline_payload(f, key);
-            assume_length(f, &len);
-            let ge1 = f.tmp();
-            f.line(&format!("{ge1} = icmp sge i64 {idx}, 1"));
-            let le_len = f.tmp();
-            f.line(&format!("{le_len} = icmp sle i64 {idx}, {len}"));
-            let in_range = f.tmp();
-            f.line(&format!("{in_range} = and i1 {ge1}, {le_len}"));
             let load = f.label();
             let miss = f.label();
             let merge = f.label();
-            f.line(&format!("br i1 {in_range}, label %{load}, label %{miss}"));
+            // Two branches, the way the room tests ask: joined with `and`, the
+            // pair became flags and an `or` wherever nothing upstream settled it.
+            index_in_range(f, &idx, &lptr, &load, &miss);
             f.start_block(&load);
             let items_ptr = f.tmp();
             f.line(&format!("{items_ptr} = getelementptr i8, ptr {lptr}, i64 8"));
@@ -8648,18 +8654,11 @@ impl<'a> Backend<'a> {
         f.line(&format!("{bptr} = inttoptr i64 {bp} to ptr"));
         let len_ptr = f.tmp();
         f.line(&format!("{len_ptr} = getelementptr %KBytes, ptr {bptr}, i64 0, i32 0"));
-        let len = f.tmp();
-        f.line(&format!("{len} = load i64, ptr {len_ptr}"));
         let idx = inline_payload(f, key);
-        assume_length(f, &len);
-        let ge1 = f.tmp();
-        f.line(&format!("{ge1} = icmp sge i64 {idx}, 1"));
-        let le_len = f.tmp();
-        f.line(&format!("{le_len} = icmp sle i64 {idx}, {len}"));
-        let in_range = f.tmp();
-        f.line(&format!("{in_range} = and i1 {ge1}, {le_len}"));
         let load = f.label();
-        f.line(&format!("br i1 {in_range}, label %{load}, label %{slow}"));
+        // Two branches, the way the room tests ask: joined with `and`, the
+        // pair became flags and an `or` wherever nothing upstream settled it.
+        index_in_range(f, &idx, &len_ptr, &load, &slow);
         f.start_block(&load);
         let data_ptr = f.tmp();
         f.line(&format!("{data_ptr} = getelementptr %KBytes, ptr {bptr}, i64 0, i32 1"));

@@ -379,3 +379,42 @@ fn a_carried_record_is_asked_about_failure_once() {
         "taking the record apart should test for a failure once, on the value field: {body}"
     );
 }
+
+/// An index asks its two bounds with two branches, and loads the length
+/// between them.
+///
+/// Joined with `and`, `1 <= i` and `i <= len` became flags and an `or`
+/// wherever nothing upstream had settled them. Emitted as two branches with
+/// the compares side by side, LLVM folded them straight back into one; with
+/// the length loaded after the first branch there is nothing cheap to
+/// speculate and the pair stays two compares. Measured against the joined
+/// form, runbench fell 0.29% and the decoder 1.1%.
+#[test]
+fn an_index_loads_its_length_after_its_lower_bound() {
+    let ir = ir_for(PROVEN_READ);
+    let body: Vec<&str> = ir
+        .lines()
+        .skip_while(|l| !(l.starts_with("define") && l.contains("at_2")))
+        .take_while(|l| !l.starts_with('}'))
+        .collect();
+    assert!(!body.is_empty(), "at was not emitted: {ir}");
+    let lower = body
+        .iter()
+        .position(|l| l.contains(" = icmp sge i64 ") && l.trim_end().ends_with(", 1"))
+        .unwrap_or_else(|| panic!("no lower-bound test: {}", body.join("\n")));
+    assert!(
+        body[lower + 1].trim_start().starts_with("br i1 "),
+        "the lower bound should branch at once rather than join the upper one: {}",
+        body.join("\n")
+    );
+    let length = body
+        .iter()
+        .position(|l| l.contains(" = load i64, ptr "))
+        .unwrap_or_else(|| panic!("no length load: {}", body.join("\n")));
+    assert!(
+        length > lower + 1,
+        "the length is loaded before the lower bound's branch, where LLVM folds the pair back \
+         into one: {}",
+        body.join("\n")
+    );
+}

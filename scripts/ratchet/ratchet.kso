@@ -2819,7 +2819,20 @@ room_spec = "a_room_test_branches_on_each_question"
 
 rows_b1rs = text/concat rows_b1sp [room_split]
 
-rows_b = text/concat rows_b1rs [compile_mem compile_mem_host]
+# An index loads its length between its two bounds.
+index_split = row
+  "an index that loads its length first"
+  true
+  "cargo test --release --test perf_ratchet {index_split_spec}"
+  "specs (unit, golden, differential)"
+  (breaking "an_index_that_loads_its_length_first")
+  release
+
+index_split_spec = "an_index_loads_its_length_after_its_lower_bound"
+
+rows_b1is = text/concat rows_b1rs [index_split]
+
+rows_b = text/concat rows_b1is [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 
