@@ -5,19 +5,25 @@ name: ratchet
 # already applies to specs ("never trust a test you have not seen fail"),
 # lifted to the gates themselves.
 #
-# Nightly rather than per-PR because a row costs a build and there are 62 of
-# them, plus the 50 distinct gates the baseline reads on an unmutated worktree
+# Nightly rather than per-PR because a row costs a build and there are 244 of
+# them, plus the distinct gates the baseline reads on an unmutated worktree
 # first — without which a gate already red on HEAD is credited to every
 # mutation that shares it. What runs on every change is the cheap half,
 # `scripts/ratchet` with no argument, which only checks that every job has a
 # row, and `touched`, which proves the handful the branch could have blinded.
 #
-# Successful runs have taken 24 to 29 minutes against the 90-minute timeout,
-# measured over the six that finished between 2026-08-26 and 2026-09-02. The
-# baseline adds gate runs and no builds. Those runs were also the ones where
-# the two callgrind gates could not run at all; with valgrind on the box they
-# cost a callgrind pass each on the baseline and each again under their
-# mutation, so the figure above is a floor until a run lands beside it.
+# The table is proved in eight shards, one job each, every eighth row from a
+# different start. It was one job until 2026-09-26. Runs took 24 to 29 minutes
+# at 62 rows, measured over the six that finished between 2026-08-26 and
+# 2026-09-02. By 2026-09-14 the job no longer fit its ninety minutes: that
+# night's run, and every one after it, read its baseline in eleven and a half
+# minutes and was cancelled with the rows still running. The report is written
+# once at the end, so a cancelled run said nothing about any row. The nine
+# nights before that had failed outright.
+#
+# tests/the_nightly_proves_every_row_once.rs holds the matrix below to the
+# count the run line passes, so a shard dropped from the list is a red spec
+# rather than a row nobody proves.
 on:
   schedule:
     - cron: '0 9 * * *'
@@ -25,9 +31,13 @@ on:
 
 jobs:
   prove:
-    name: every mutation turns its gate red
+    name: every mutation turns its gate red (shard ${{ matrix.shard }} of 8)
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -45,4 +55,4 @@ jobs:
       - run: sh scripts/ratchet/toolchain.sh
       - run: cargo build --release
       - name: apply each mutation and read the gate
-        run: ./target/release/kanso run scripts/ratchet -- prove
+        run: ./target/release/kanso run scripts/ratchet -- shard ${{ matrix.shard }} 8
