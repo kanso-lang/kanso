@@ -3949,6 +3949,7 @@ const DECLARES_CONTEXT_CALLS: &[&str] = &[
     "k_truthy",
     "k_truthy_bad",
     "k_truthy_w",
+    "llvm.assume",
     "llvm.memcpy.p0.p0.i64",
 ];
 
