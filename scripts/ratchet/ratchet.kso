@@ -3081,19 +3081,14 @@ nightly_shards = row
 
 rows_c1ze = text/concat rows_c1zd [nightly_shards]
 
-# The ratchet names each row as it starts, so a run that stops partway says
-# which row was running.
-row_named = row
-  "a ratchet that names no row until the end"
-  true
-  "cargo test --release --test a_gate_red_before_the_mutation"
-  "specs (unit, golden, differential)"
-  (breaking "a_ratchet_that_names_no_row_until_the_end")
-  no_setup
-
-rows_c1zr = text/concat rows_c1ze [row_named]
-
-rows_c = text/concat rows_c1zr [itself]
+# The ratchet naming each row as it starts has no row here. The spec that
+# watches it, a_clean_head_still_proves_its_row, runs `prove` itself, and
+# `prove` works in fixed directories -- /tmp/kanso-ratchet-base, one
+# /tmp/kanso-ratchet-N per row, the shared target -- so the ratchet running
+# that spec as a gate removes its own baseline worktree from under itself. On
+# kanso#1675 the baseline read the gate red before any mutation. The other
+# specs in tests/ that run `prove` carry no row for the same reason.
+rows_c = text/concat rows_c1ze [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

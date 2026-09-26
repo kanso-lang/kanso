@@ -16499,8 +16499,12 @@ line in a stopped log names the row that was running. The report at the end
 is unchanged.
 
 `a_clean_head_still_proves_its_row` in tests/a_gate_red_before_the_mutation.rs
-now also requires the line for its one row. The ratchet row `row_named` empties
-the announcement, and the spec goes red on the missing line.
+now also requires the line for its one row, and emptying the announcement
+turned it red on the missing line. The change carries no ratchet row. The spec
+runs `prove` itself, in the same fixed /tmp directories the ratchet proves in,
+so the ratchet cannot run it as a gate: on kanso#1675 the baseline read the
+gate red before any mutation, because the inner run removed the outer run's
+worktree. The other specs that run `prove` have no row for the same reason.
 
 ## 2026-09-26 — the sharded nightly's first run, and the row it found blind
 
