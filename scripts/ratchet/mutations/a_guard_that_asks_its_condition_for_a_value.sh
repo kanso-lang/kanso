@@ -7,6 +7,7 @@
 # tagged boolean through a phi and asks the runtime whether it is true.
 set -e
 f=src/codegen.rs
+grep -q 'fn emit_tail(&mut self' src/codegen.rs
 line='            self.emit_cond(f, cond, &early_label, &rest_label, None)?;'
 [ "$(grep -cxF "$line" "$f")" -eq 1 ] || {
   echo "the guard's condition moved; this mutation needs rewriting" >&2
