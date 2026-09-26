@@ -15764,3 +15764,36 @@ rise with every allocation counter unchanged: `work_deepbench` 364,797,730 ->
 with the runtime losing `k_seq` and its executor arms, and no part of the
 change was isolated as the cause of any one of them.
 The development side rises from 90.99 to 91.00 and welfare banks at 89.37.
+
+## 2026-09-26 — the wall, the box check and the proven tag, carried
+
+kanso#1663 carries three changes whose goldens conflict pairwise: the wall
+goes (kanso#1661), a box handed to a lambda that reads it (kanso#1662), and
+a proven tag is assumed (kanso#1656). The tag change landed on main while the
+carrier was being measured, so what this entry prices is the other two over
+it. CI read the tree at da3aaa11.
+
+The front end falls: `compile_instructions` 25,279,417 -> 25,079,671,
+`entry_instructions` 85,353,380 -> 84,714,058 and `library_instructions`
+85,882,095 -> 85,241,857, against main's 25,267,312, 85,321,306 and
+85,850,050. `codegen_instructions_dev` falls 124,017,153 -> 123,995,296 and
+`codegen_instructions_release` 406,427,618 -> 406,311,344. `text` falls 848
+bytes in every binary, as it did over the carrier before. `emit_instructions`
+rises 29,156,813 -> 29,167,865.
+
+Of the work rows, `work_jsonbench`, `work_oneshot`, `work_digestbench`,
+`work_readbench` and `work_livebench` fall by under a thousand each, and
+eight rise with no allocation counter moving: `work_encodebench`
+2,530,778,953 -> 2,531,124,390, `work_runbench` 1,223,628,069 ->
+1,223,796,725, `work_deepbench` 364,733,730 -> 365,117,731, `work_widebench`
+28,565,052 -> 28,581,031, `work_pendbench` 181,896,211 -> 181,896,412,
+`work_escapebench` 63,421,674 -> 63,421,675, `work_indexbench` 2,498,460 ->
+2,498,461 and `work_scanbench` 281,849 -> 281,850. Over the six-change
+carrier alone the wall moved `work_runbench` down 3,971 and `work_encodebench`
+down 502,957; over the tag assume both rows rise instead. The runtime lost
+`k_seq` and its executor arms, and the assumes change what LLVM folds around
+the callers that remain, so the two changes interact in the release build.
+Which part of either moved these rows was not isolated.
+
+The front end's fall outweighs the runtime rows, and welfare rises from
+89.7618 to 89.7626. The floor banks there.

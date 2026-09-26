@@ -328,4 +328,4 @@
 # CI measured the tag assume at 2673fa68: the emitter writes an assume per
 # proven parameter. emit_instructions 28,882,533 -> 29,156,813, a RISE of
 # 274,280 (+0.9496%).
-emit_instructions=29156813
+emit_instructions=29167865
