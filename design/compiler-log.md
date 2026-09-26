@@ -15985,3 +15985,46 @@ the emitter and the builds: `emit_instructions` 29,340,261 -> 29,830,829,
 `codegen_instructions_dev` 124,037,661 -> 124,060,873 and
 `codegen_instructions_release` 406,473,701 -> 406,518,907.
 Welfare rises from 89.7698 to 89.8886 and the floor banks there.
+
+## 2026-09-26 — a guard asks its condition the way an `if` does
+
+A guard, `return x if c`, compiled its condition as a value. `emit_expr` built
+it, a failure returned it, and a call to `k_truthy` said whether it was true.
+A tail `if` has gone through `emit_cond` since the comparison fusion, so a
+comparison there branches on its own `icmp` and an `and` or `or` branches arm
+by arm. A guard is a tail `if` whose else is the rest of the body, and it now
+takes the same path. A failing condition still returns itself, because with
+no merge label `emit_cond` emits the return, which is what the old arm did by
+hand.
+
+The site that prompted it was json's `escape_at`, `return acc if n < 1 or
+length bs < n` and then `bs[n]`, where the `or` became a phi of two tagged
+booleans and the index after the call checked its bounds again. That site did
+not pay: `escape_onto`, which inlines it, rose 116,554,320 -> 116,729,550. The
+gain is in the encoder, whose `encode_list` and `encode_map` open with `return
+... if length xs == 0`: on runbench they fall 1,227,780 and 854,280, and their
+non-recursive entries 28,620 and 153,720. `sha256/hex` falls 173,752.
+
+On the container, against main at ada9afa9: encodebench -85,883,141 (-3.39%),
+livebench -8,604,682 (-0.50%), runbench -2,262,558 (-0.19%), widebench
+-868,766 (-3.04%), digestbench -88,369 (-1.62%), oneshot -22,665, basket
+-6,000 and scanbench -84. jsonbench, escapebench, pendbench, indexbench and
+readbench are unchanged. deepbench rises 432,000 (+0.12%): `list/fold_flat`
+has the same guard shape, and in the new layout it reaches its index through
+one shared block, one more jump per element. Machine code shrinks in ten
+binaries and holds in four, runbench 400,184 -> 398,712 bytes. Emitted code
+falls in the same programs, runbench 28,196 -> 27,843 lines and 3,832 -> 3,797
+calls, and the compile golden's `guards` fixture 287 -> 258 lines.
+
+The spec is `an_or_under_a_guard_is_asked_in_pieces` in tests/perf_ratchet.rs,
+which fails on main's arm, and the ratchet row `guard_asked` puts that arm
+back.
+
+CI's rows were taken from its first run. `work_runbench` 1,192,666,206 ->
+1,190,403,668, `work_encodebench` 2,530,928,650 -> 2,445,045,509 and
+`work_livebench` 1,706,144,752 -> 1,697,540,070. `work_deepbench` rises
+365,117,731 -> 365,549,731, the extra jump in `fold_flat`. The builds and the
+emitter fall with the smaller IR: `codegen_instructions_dev` 124,060,873 ->
+123,304,313, `codegen_instructions_release` 406,518,907 -> 400,860,282 and
+`emit_instructions` 29,830,829 -> 29,723,904.
+Welfare rises from 89.8886 to 89.9020 and the floor banks there.
