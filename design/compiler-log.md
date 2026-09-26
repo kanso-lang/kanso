@@ -16633,6 +16633,15 @@ so its rise is the added tests on the way to the scan. What moved encodebench,
 which parses no numbers, was not isolated. Every benchmark's `.text` grew by
 960 bytes, the second copy of the float parse and the two words.
 
+CI's rows were taken from its first run. `work_runbench` 1,144,622,452 ->
+1,127,701,003 (-1.48%), `work_jsonbench` 758,146,232 -> 732,503,582,
+`work_oneshot` 13,129,205 -> 12,960,323 and `work_livebench` 1,688,141,594 ->
+1,687,657,983, and `codegen_instructions_release` 402,524,008 -> 402,455,877.
+Four rise. `work_encodebench` 2,438,572,025 -> 2,438,797,924 (+225,899),
+`work_widebench` 27,327,107 -> 27,375,107 (+48,000), `work_deepbench`
+364,866,369 -> 364,866,397 (+28), and `codegen_instructions_dev` 123,328,940 ->
+123,343,788 (+14,848), the dev build compiling the larger parse.
+
 Both lifted parse specs carry the word helpers now and ask every string a
 second time at the end of a buffer with sixteen random bytes in front, so the
 word is read and what precedes the number must not count. Each sweeps every
