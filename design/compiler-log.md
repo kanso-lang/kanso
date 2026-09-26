@@ -16151,3 +16151,46 @@ build of the same tree at a second path produced a binary with a different
 sha, so the path reaches the binary; CI builds at one path, which leaves the
 runner image's linker and C runtime as the candidates this container cannot
 vary.
+
+## 2026-09-26 — a carried record is asked about failure once
+
+A group that returns a small record returns it in two words, a `%parsed`:
+the position shifted above a byte that holds the value field's tag, and the
+value's payload. A failure travels in the same two words, as the err's own
+tag word and its payload, so the low byte of a failure is the err tag. When a
+clause takes such a record apart with `(step p v)`, the value field is
+unpacked into a KValue whose tag is that byte, and a name or wildcard pattern
+on it tests for a failure and sends one to the arm's `fail` label. Before
+that, `emit_parsed_pattern` tested the whole word for a failure and sent it
+to the same label. The two tests ask one question. The whole-word test now
+goes when the value field's pattern is a name, a wildcard, an int literal or
+a nullary, each of which refuses a failure itself. The position field's own
+failure test goes too: it is built from a shift with a constant tag of zero,
+so it could never fail and LLVM had been folding it.
+
+A variant that also recorded the position as known to be an int was built
+and measured. It moved jsonbench further, -1.520% against -1.404%, and gave
+back runbench, -0.505% against -0.669%, with the difference in
+`obj_key_start` (+1,655,478) and `array_open` (+250,569). Only runbench is
+weighed, so the variant that skips the test and records nothing landed. Why
+the extra knowledge cost instructions in those two functions is not isolated.
+
+On the container, against main at 7ff6508a: jsonbench 805,759,321 ->
+794,449,471 (-1.40%), runbench 1,176,309,961 -> 1,168,440,514 (-0.67%),
+oneshot -74,652 (-0.55%), widebench -32,002 (-0.12%), livebench -75,531.
+encodebench rises 513,685 (+0.02%) although its emitted IR lost eight
+branches; what moved it is not isolated. The other eight programs are unchanged. Emitted
+code falls by eight branches and 32 lines in every program that decodes
+JSON, runbench 2,700 -> 2,692 branches and 27,840 -> 27,808 lines. Machine
+code falls in jsonbench (239,224 -> 238,888 bytes), oneshot and livebench,
+and rises in runbench (398,968 -> 399,048), encodebench and widebench.
+
+The spec is `a_carried_record_is_asked_about_failure_once` in
+tests/perf_ratchet.rs. It counts the failure tests before `take`'s fail
+block, reads 3 on main's codegen and 1 now, and the ratchet row
+`carried_once` puts the whole-word test back. The micro fixture
+`a_carried_record_refuses_a_failure_in_its_value` hands a carried
+`take (step p _)` a failure. With the value field's failure test dropped as
+well, it printed `false` where it should print the refusal, so the one test
+that remains is watched. The fixture joins `CARRIED` in tests/ir_verifier.rs
+so it keeps exercising the register convention.

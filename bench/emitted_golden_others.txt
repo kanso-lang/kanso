@@ -223,10 +223,10 @@
 # take no beat. Every program links the region pop, 848 bytes of text, and the
 # programs that encode through std/json lose the loops' push, pop and rewind
 # test:
-encodebench defines=109 calls=649 branches=471 lines=5993
-oneshot defines=113 calls=688 branches=572 lines=6696
+encodebench defines=109 calls=649 branches=463 lines=5961
+oneshot defines=113 calls=688 branches=564 lines=6664
 basket defines=96 calls=715 branches=524 lines=5354
-widebench defines=116 calls=696 branches=494 lines=6287
+widebench defines=116 calls=696 branches=486 lines=6255
 deepbench defines=42 calls=167 branches=142 lines=1722
 escapebench defines=17 calls=49 branches=29 lines=533
 pendbench defines=61 calls=398 branches=284 lines=2961
@@ -234,5 +234,5 @@ scanbench defines=233 calls=1863 branches=1478 lines=14665
 indexbench defines=17 calls=53 branches=25 lines=570
 digestbench defines=114 calls=529 branches=391 lines=4513
 readbench defines=19 calls=51 branches=23 lines=611
-livebench defines=114 calls=703 branches=592 lines=6827
-runbench defines=504 calls=3797 branches=2700 lines=27840
+livebench defines=114 calls=703 branches=584 lines=6795
+runbench defines=504 calls=3797 branches=2692 lines=27808
