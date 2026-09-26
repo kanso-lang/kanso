@@ -1043,10 +1043,9 @@ lshape:
   %lusedp = getelementptr i8, ptr %lbuf, i64 8
   %lused = load i64, ptr %lusedp
   %lfront = icmp eq i64 %lused, %llen
-  %lneg = icmp slt i64 %lcap, 0
-  %lncap = sub i64 0, %lcap
-  %lcapa = select i1 %lneg, i64 %lncap, i64 %lcap
-  %lfits = icmp slt i64 %llen, %lcapa
+  %llen2 = shl i64 %llen, 1
+  %lneed = add i64 %llen2, 2
+  %lfits = icmp sle i64 %lneed, %lcap
   %lok = and i1 %lfront, %lfits
   br i1 %lok, label %lwrite, label %lslow
 lwrite:
@@ -1106,10 +1105,8 @@ proom:
   %mlen2 = shl i64 %mlen, 1
   %pfront = icmp eq i64 %pused, %mlen2
   %pneed = add i64 %mlen2, 2
-  %pneg = icmp slt i64 %pcap, 0
-  %pncap = sub i64 0, %pcap
-  %pcapa = select i1 %pneg, i64 %pncap, i64 %pcap
-  %pfits = icmp sle i64 %pneed, %pcapa
+  %pneed2 = shl i64 %pneed, 1
+  %pfits = icmp sle i64 %pneed2, %pcap
   %pok = and i1 %pfront, %pfits
   br i1 %pok, label %pwrite, label %pslow
 pwrite:

@@ -16028,3 +16028,86 @@ emitter fall with the smaller IR: `codegen_instructions_dev` 124,060,873 ->
 123,304,313, `codegen_instructions_release` 406,518,907 -> 400,860,282 and
 `emit_instructions` 29,830,829 -> 29,723,904.
 Welfare rises from 89.8886 to 89.9020 and the floor banks there.
+
+## 2026-09-26 — a buffer's capacity is doubled, with its regime in bit 0
+
+A list or map buffer's `KBuf.cap` carried two facts: how many slots it holds,
+and, in its sign, whether the storage came from malloc. Every inlined push
+and map insert therefore took the magnitude with a `neg` and a `cmovs` before
+it could compare. On the run program that pair executed 4,032,318 times, most
+of them in runbench's escape loop, json's `array_open` and `obj_key_start`.
+
+The field is now `capw`, the capacity doubled plus one for malloc. Room for
+`need` slots is `2 * need <= capw` in either regime, since the bit cannot lift
+an even number past the next even one, so the push asks `2 * len + 2 <=
+capw` and the insert `2 * need <= capw`, one shifted add each. The runtime
+reads the capacity through `k_buf_cap`, a shift, and the regime through
+`k_buf_malloced`; `k_buf_set_cap` is the only writer. The field was renamed
+so that clang would name every site that read it, and there were 26, six of
+them the byte builder's buffer, which keeps a plain count and now goes
+through the same helpers.
+
+On the container, against main at ada9afa9: runbench -9,340,578 (-0.78%),
+jsonbench -8,143,050 (-1.00%), escapebench -3,621,000 (-5.71%), pendbench
+-2,406,215 (-1.32%), deepbench -687,378, basket -363,826 (-1.17%), oneshot
+-51,954, digestbench -43,777 and widebench -32,012. Three rise: livebench
++1,464,109 (+0.09%), encodebench +739,449 (+0.03%) and indexbench +12. On
+runbench the escape loop inlined into `tally` falls 98,639,160 -> 93,965,656
+and `array_open` and `obj_key_start` 1.6 and 2.1 million each. No allocation
+counter moves.
+
+Machine code grows in every binary by 112 to 288 bytes, `text` summed
+3,504,368 -> 3,507,488: the runtime's own reads of the capacity, a shift
+where a positive read used to be free. Emitted lines fall by one to three per
+program, runbench 28,196 -> 28,193.
+
+`tests/a_bytes_capacity_leaves_bit_zero_free.rs` allowed exactly one
+sign-stripping capacity read, `k_buf_cap`'s, and now allows none. The new
+spec `a_buffer_capacity_reads_back_whole_in_either_regime` lifts the helpers
+out of runtime.c, sweeps capacities in both regimes, and checks that the two
+emitted room tests answer what `len < cap` and `need <= cap` answer. It was
+watched red with the setter subtracting the bit, and the ratchet row
+`capacity_doubled` makes that mutation. The instruction and compile rows are
+left for CI.
+
+## 2026-09-26 — past the beat stack, the top is a mark that stands for none
+
+`k_beat_top` caches the innermost beat mark, and it was NULL at depth zero
+and past the stack's sixty-four marks, so every beat iteration asked whether
+it was NULL before it rewound. It now names `k_beat_none` there instead, a
+mark whose `reg_any` is set. That bit sends the rewind past its fast path to
+`k_beat_rewind_slow`, which returns at once for it, so a beat past the stack
+keeps count and rewinds nothing, as it did. The iteration loses a load's
+test and a branch. `k_seek_note`, the counting build's agreement check and
+the hot unit's declarations name the sentinel where they named NULL.
+
+On the container, against main at ada9afa9: runbench -4,753,977 (-0.40%),
+escapebench -3,596,987 (-5.67%), encodebench -5,074,204 (-0.20%), basket
+-207,998 (-0.67%) and digestbench -16,419. livebench rises 587,093 (+0.03%)
+and the rest move by fewer than 5,000 instructions, jsonbench +467, oneshot
++587, deepbench +4,016, pendbench +319, indexbench +54, scanbench +37,
+widebench +19. Machine code grows by up to 112 bytes a binary, `text` summed
+3,504,368 -> 3,505,296.
+
+No fixture reached past the stack. `a_beat_past_the_deepest_mark_rewinds_nothing`
+nests seventy two-lap beats, and each lap builds a string, descends, and reads
+its level back out of the string afterwards. With the slow path's return for
+the sentinel removed, the rewind hands back every block and the program
+prints 6306 where every engine prints 6370; the ratchet row `beat_none` makes
+that mutation. The instruction and compile rows are left for CI.
+
+The doubled capacity and the sentinel landed together, carried over the
+guard, and CI's rows were taken from the carrier's run. Against the guard's
+rows: `work_runbench` 1,190,403,668 -> 1,176,309,124, `work_escapebench`
+63,421,675 -> 56,203,688, `work_jsonbench` 813,902,265 -> 805,759,682,
+`work_encodebench` 2,445,045,509 -> 2,435,949,028, `work_pendbench`
+181,899,010 -> 179,493,114 and `work_basket` 31,128,128 -> 30,556,304.
+`work_livebench` rises 1,697,540,070 -> 1,698,025,788 over the guard and
+falls against main. `work_indexbench` rises 2,498,459 -> 2,498,525, 66
+instructions, the one row that ends above main; the index walk makes no push
+and reaches no beat, and the difference is the runtime's layout. The builds
+move with the runtime: `codegen_instructions_dev` 123,304,313 -> 123,359,084
+and `codegen_instructions_release` 400,860,282 -> 401,504,467, both below
+main, and `emit_instructions` 29,723,904 -> 29,723,818. `text` sums to
+3,502,176.
+Welfare rises from 89.9020 to 89.9599 and the floor banks there.

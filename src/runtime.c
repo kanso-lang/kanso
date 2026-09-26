@@ -72,7 +72,18 @@ typedef struct { char* data; int len; int cap; } KStr;
 #define k_str_count(s) (((long long*)(void*)(s)->data)[-1])
 static long long k_str_chars(KStr* s);
 static long k_str_seek(KStr* s, long long from);
-typedef struct { long long cap; long long used; } KBuf;
+/* `capw` is the capacity doubled, plus one when the storage came from malloc
+   rather than the arena. The regime used to be the sign, and every push asked
+   for the magnitude with a negate and a conditional move before it could
+   compare; doubled, the question "is there room for `need`" is `2 * need <=
+   capw` in either regime, one shifted add. Nothing else reads the word: the
+   capacity goes through k_buf_cap and the regime through k_buf_malloced. */
+typedef struct { long long capw; long long used; } KBuf;
+static inline long long k_buf_cap(const KBuf* b) { return b->capw >> 1; }
+static inline int k_buf_malloced(const KBuf* b) { return (int)(b->capw & 1); }
+static inline void k_buf_set_cap(KBuf* b, long long cap, int malloced) {
+    b->capw = 2 * cap + (malloced ? 1 : 0);
+}
 /* cap == 0 is a borrowed view; cap != 0 marks data as the body of a
    KBuf-headed buffer this value may extend at its frontier. */
 typedef struct { long long len; const unsigned char* data; long long cap; } KBytes;
@@ -796,14 +807,23 @@ typedef struct { KBlock* block; char* ptr; size_t left; long long bytes;
 #define K_BEAT_MAX 64
 KMark k_beat_stack[K_BEAT_MAX];
 int k_beat_depth = 0;
-/* The innermost mark, or NULL at depth zero. It is what `k_beat_depth` says
-   and is kept beside it because the rewind's fast path wants the pointer and
-   never the number: deriving it took a load, a decrement, a range test and
-   three address instructions, once an iteration, to arrive at a value that
-   does not change for the life of the loop. Every write to the depth goes
-   through `k_beat_set_depth`, and the counting build checks the two agree at
-   every iteration -- see `tests/the_cached_beat_top_tracks_the_depth.rs`. */
-KMark* k_beat_top = NULL;
+/* The innermost mark, or `k_beat_none` where there is no mark to rewind to:
+   at depth zero, and past the deepest mark the stack holds. It is what
+   `k_beat_depth` says and is kept beside it because the rewind's fast path
+   wants the pointer and never the number: deriving it took a load, a
+   decrement, a range test and three address instructions, once an iteration,
+   to arrive at a value that does not change for the life of the loop. Every
+   write to the depth goes through `k_beat_set_depth`, and the counting build
+   checks the two agree at every iteration -- see
+   `tests/the_cached_beat_top_tracks_the_depth.rs`.
+
+   `k_beat_none` stands where NULL used to, so the rewind asks no null
+   question at every iteration. Its `reg_any` is set, which sends it past the
+   fast path to `k_beat_rewind_slow`, and the slow path returns at once for
+   it: a beat past the deepest mark keeps count and rewinds nothing, as it
+   always did. */
+KMark k_beat_none = { .reg_any = 1 };
+KMark* k_beat_top = &k_beat_none;
 
 /* The innermost mark the seek cursor's string lies under: allocated before
    that mark was pushed, so a rewind to it or to any mark pushed later cannot
@@ -824,7 +844,7 @@ static inline void k_seek_note(KStr* s) {
     k_seek_str = s;
     KMark* top = k_beat_top;
     if (k_beat_depth == 0) { k_seek_under = k_beat_stack; return; }
-    if (!top) { k_seek_under = k_beat_stack + K_BEAT_MAX; return; }
+    if (top == &k_beat_none) { k_seek_under = k_beat_stack + K_BEAT_MAX; return; }
     int above = k_blocks != top->block
         || (uintptr_t)s - (uintptr_t)top->ptr < (uintptr_t)k_arena - (uintptr_t)top->ptr;
     k_seek_under = above ? top + 1 : top;
@@ -836,7 +856,7 @@ static inline void k_beat_set_depth(int d) {
        wraps to a huge index and fails the same test a depth past the top
        does. Two compares and two branches become one compare and a cmov. */
     k_beat_top = ((unsigned)(d - 1) < (unsigned)K_BEAT_MAX)
-               ? &k_beat_stack[d - 1] : NULL;
+               ? &k_beat_stack[d - 1] : &k_beat_none;
 }
 
 /* Whether anything is on the buffer shelf. The shelf is twelve pointers and
@@ -1012,7 +1032,7 @@ static void k_chunkreg_flush(int d) {
     for (int i = 0; i < k_chunkreg_n[d]; i++) {
         if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) {
             if (K_COUNTING) k_stat_bytes_freed++;
-            k_stat_held_live -= (long long)sizeof(KBuf) + k_chunkreg[d][i]->cap;
+            k_stat_held_live -= (long long)sizeof(KBuf) + k_buf_cap(k_chunkreg[d][i]);
         }
         free(k_chunkreg[d][i]);
     }
@@ -1043,6 +1063,7 @@ static void k_chunkreg_migrate(int d) {
 }
 
 void k_beat_rewind_slow(KMark* m) {
+    if (m == &k_beat_none) return;
     k_buf_flush();
     long long d = m - k_beat_stack;
     if (d >= 0 && d < K_BEAT_MAX) {
@@ -1161,10 +1182,10 @@ __attribute__((always_inline)) void k_beat_iter(void) {
     if (K_COUNTING) k_stat_beat_iters++;
     KMark* m = k_beat_top;
     if (K_COUNTING && m != ((k_beat_depth > 0 && k_beat_depth <= K_BEAT_MAX)
-                            ? &k_beat_stack[k_beat_depth - 1] : NULL)) {
+                            ? &k_beat_stack[k_beat_depth - 1] : &k_beat_none)) {
         k_die("the cached beat top and the beat depth disagree");
     }
-    if (m) k_beat_rewind(m);
+    k_beat_rewind(m);
 }
 #else
 void k_beat_iter(void);
@@ -2236,7 +2257,7 @@ static KValue k_deep_copy(KValue v, KCopy* cp) {
             KList* nl = k_copy_alloc(cp, sizeof(KList));
             k_copy_map_put(p, nl);
             KBuf* buf = k_copy_alloc(cp, sizeof(KBuf) + sizeof(KValue) * (size_t)(l->len ? l->len : 1));
-            buf->cap = l->len ? l->len : 1;
+            k_buf_set_cap(buf, l->len ? l->len : 1, 0);
             buf->used = l->len;
             KValue* items = (KValue*)(buf + 1);
             for (long long i = 0; i < l->len; i++) items[i] = k_deep_copy(l->items[i], cp);
@@ -2250,7 +2271,7 @@ static KValue k_deep_copy(KValue v, KCopy* cp) {
             KMap* nm = k_copy_alloc(cp, sizeof(KMap));
             k_copy_map_put(p, nm);
             KBuf* buf = k_copy_alloc(cp, sizeof(KBuf) + sizeof(KValue) * (size_t)(2 * (mp->len ? mp->len : 1)));
-            buf->cap = 2 * (mp->len ? mp->len : 1);
+            k_buf_set_cap(buf, 2 * (mp->len ? mp->len : 1), 0);
             buf->used = 2 * mp->len;
             KValue* pairs = (KValue*)(buf + 1);
             for (long long i = 0; i < 2 * mp->len; i++) pairs[i] = k_deep_copy(mp->pairs[i], cp);
@@ -2364,7 +2385,7 @@ static void k_repair_interior(KValue v, void* p, KCopy* cp) {
             if (!k_survives_x(l->items, cp->mark)) {
                 long long cap = l->len ? l->len : 1;
                 KBuf* nb = k_copy_alloc(cp, sizeof(KBuf) + sizeof(KValue) * (size_t)cap);
-                nb->cap = cap;
+                k_buf_set_cap(nb, cap, 0);
                 nb->used = l->len;
                 memcpy(nb + 1, l->items, sizeof(KValue) * (size_t)l->len);
                 l->items = (KValue*)(nb + 1);
@@ -2377,7 +2398,7 @@ static void k_repair_interior(KValue v, void* p, KCopy* cp) {
             if (!k_survives_x(mp->pairs, cp->mark)) {
                 long long cap = 2 * (mp->len ? mp->len : 1);
                 KBuf* nb = k_copy_alloc(cp, sizeof(KBuf) + sizeof(KValue) * (size_t)cap);
-                nb->cap = cap;
+                k_buf_set_cap(nb, cap, 0);
                 nb->used = 2 * mp->len;
                 memcpy(nb + 1, mp->pairs, sizeof(KValue) * (size_t)(2 * mp->len));
                 int aliased = mp->sorted == mp->pairs;
@@ -6631,19 +6652,11 @@ static int k_buf_class(long long cap) {
     return __builtin_ctzll((unsigned long long)cap) - 2;
 }
 
-/* How many slots a buffer holds, whatever regime it was allocated in.
-   `cap` is about to carry two facts — the size, and whether the storage came
-   from the arena or from malloc, the way KBytes already encodes its regime in
-   the sign of its own cap. Every capacity question goes through here so the
-   marker lands in one place instead of at each comparison, and so a site that
-   forgets to normalise cannot silently read a negative size as "no room". */
-static long long k_buf_cap(const KBuf* b) { return b->cap < 0 ? -b->cap : b->cap; }
-
 static void k_buf_donate(KValue* items) {
     KBuf* b = k_buf_of(items);
     /* a malloc'd buffer has no business on the arena's shelf */
-    if (b->cap < 0) return;
-    int c = k_buf_class(b->cap);
+    if (k_buf_malloced(b)) return;
+    int c = k_buf_class(k_buf_cap(b));
     if (c < 0) return;
     b->used = (long long)(intptr_t)k_buf_free[c];
     k_buf_free[c] = b;
@@ -6684,7 +6697,7 @@ static __attribute__((noinline, cold, preserve_most)) KValue* k_buf_perm(long lo
         k_stat_alloc_bytes += (long long)(sizeof(KBuf) + sizeof(KValue) * (size_t)cap);
         if (K_COUNTING) k_stat_bytes_malloc++;
     }
-    b->cap = -cap;
+    k_buf_set_cap(b, cap, 1);
     b->used = 0;
     return (KValue*)(b + 1);
 }
@@ -6702,7 +6715,7 @@ static __attribute__((noinline, cold, preserve_most)) KValue* k_buf_perm(long lo
    golden to hold it. */
 static __attribute__((noinline, cold, preserve_most)) KBuf* k_buf_perm_regrow(KBuf* ob,
                                                                              long long cap) {
-    long long was = (long long)(sizeof(KBuf) + sizeof(KValue) * (size_t)(-ob->cap));
+    long long was = (long long)(sizeof(KBuf) + sizeof(KValue) * (size_t)k_buf_cap(ob));
     long long now = (long long)(sizeof(KBuf) + sizeof(KValue) * (size_t)cap);
     KBuf* b = realloc(ob, (size_t)now);
     if (!b) { fputs("out of memory\n", stderr); exit(1); }
@@ -6714,7 +6727,7 @@ static __attribute__((noinline, cold, preserve_most)) KBuf* k_buf_perm_regrow(KB
         if (K_COUNTING) k_stat_bytes_malloc++;
         if (K_COUNTING) k_stat_bytes_freed++;
     }
-    b->cap = -cap;
+    k_buf_set_cap(b, cap, 1);
     return b;
 }
 
@@ -6750,7 +6763,7 @@ static KValue* k_buf(long long cap) {
     if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0))
         k_stat_sh_buf += (long long)((sizeof(KBuf) + sizeof(KValue) * (size_t)cap + 15) & ~(size_t)15);
     KBuf* b = k_alloc(sizeof(KBuf) + sizeof(KValue) * cap);
-    b->cap = cap;
+    k_buf_set_cap(b, cap, 0);
     b->used = 0;
     return (KValue*)(b + 1);
 }
@@ -6766,9 +6779,9 @@ static void k_permreg_flush_held(int d) {
         KValue** slot = k_permreg[d][i];
         if (!*slot) continue;
         KBuf* b = k_buf_of(*slot);
-        if (b->cap >= 0) continue;
+        if (!k_buf_malloced(b)) continue;
         if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) k_stat_bytes_freed++;
-        k_perm_live -= (long long)(sizeof(KBuf) + sizeof(KValue) * (size_t)(-b->cap));
+        k_perm_live -= (long long)(sizeof(KBuf) + sizeof(KValue) * (size_t)k_buf_cap(b));
         free(b);
         *slot = NULL;
     }
@@ -6843,7 +6856,7 @@ KValue k_list_empty(void) {
     unsigned char* whole = k_alloc(head_bytes + buf_bytes);
     KList* l = (KList*)whole;
     KBuf* b = (KBuf*)(whole + head_bytes);
-    b->cap = K_LIST_SEED;
+    k_buf_set_cap(b, K_LIST_SEED, 0);
     b->used = 0;
     l->len = 0;
     l->items = (KValue*)(b + 1);
@@ -7287,7 +7300,7 @@ KValue k_map_empty(void) {
     unsigned char* whole = k_alloc(head_bytes + buf_bytes);
     KMap* m = (KMap*)whole;
     KBuf* b = (KBuf*)(whole + head_bytes);
-    b->cap = K_MAP_SEED;
+    k_buf_set_cap(b, K_MAP_SEED, 0);
     b->used = 0;
     m->pairs = (KValue*)(b + 1);
     m->len = 0;
@@ -7458,7 +7471,7 @@ KValue k_b_put_mut(KValue mv, KValue key, KValue val) {
         np[m->len * 2 + 1] = val;
         k_buf_of(np)->used = m->len * 2 + 2;
         if (m->sorted == m->pairs) m->sorted = np;
-        if (k_buf_of(m->pairs)->cap < 0) {
+        if (k_buf_malloced(k_buf_of(m->pairs))) {
             free(k_buf_of(m->pairs));
         } else {
             k_buf_donate(m->pairs);
@@ -7555,7 +7568,7 @@ K_DOORCC KValue k_b_entries(KValue mv) {
         unsigned char* whole = (unsigned char*)k_alloc(records + buf_bytes + list_bytes);
         block = whole;
         KBuf* b = (KBuf*)(whole + records);
-        b->cap = cap;
+        k_buf_set_cap(b, cap, 0);
         b->used = 0;
         items = (KValue*)(b + 1);
         l = (KList*)(whole + records + buf_bytes);
@@ -7628,7 +7641,7 @@ KValue k_b_bytes_seed(void) {
         k_stat_sh_bytes += (long long)sizeof(KBytes);
     KBytes* b = (KBytes*)whole;
     KBuf* buf = (KBuf*)(whole + head);
-    buf->cap = K_BYTES_SEED;
+    k_buf_set_cap(buf, K_BYTES_SEED, 0);
     buf->used = 0;
     b->len = 0;
     b->data = (const unsigned char*)(buf + 1);
@@ -8559,7 +8572,7 @@ static KValue k_b_push_into_proven(KValue lv, KValue item, int mutate, int prove
    is the rare arm of a grow: one call in sixteen on the run program. */
 static __attribute__((noinline, cold, preserve_most)) void k_buf_release(KBuf* ob) {
     if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) k_stat_bytes_freed++;
-    k_perm_live -= (long long)(sizeof(KBuf) + sizeof(KValue) * (size_t)(-ob->cap));
+    k_perm_live -= (long long)(sizeof(KBuf) + sizeof(KValue) * (size_t)k_buf_cap(ob));
     free(ob);
 }
 
@@ -8587,7 +8600,7 @@ static KValue k_b_push_grow(KValue lv, KList* l, KValue item, int mutate) {
     /* A buffer already out of the arena is grown where it is. The field it
        sits in was registered when it first left, and `l->items` is the same
        field after the realloc, so the registration still names it. */
-    if (perm && k_buf_of(l->items)->cap < 0) {
+    if (perm && k_buf_malloced(k_buf_of(l->items))) {
         KBuf* nb = k_buf_perm_regrow(k_buf_of(l->items), cap);
         KValue* grown = (KValue*)(nb + 1);
         grown[l->len] = item;
@@ -8611,7 +8624,7 @@ static KValue k_b_push_grow(KValue lv, KList* l, KValue item, int mutate) {
         /* uniqueness is proven at mut sites, so the outgrown buffer has no
            other holder: an arena buffer goes to the shelf for the next
            collection, and one of ours is released outright. */
-        if (k_buf_of(l->items)->cap < 0) k_buf_release(k_buf_of(l->items));
+        if (k_buf_malloced(k_buf_of(l->items))) k_buf_release(k_buf_of(l->items));
         else k_buf_donate(l->items);
         l->items = items;
         l->len++;
@@ -9150,7 +9163,7 @@ static __attribute__((noinline, cold, preserve_most)) KBuf* k_bytes_buf_malloc(l
    malloc and the free it replaces, so the counters keep their meaning. */
 static __attribute__((noinline, cold, preserve_most)) KBuf* k_bytes_buf_regrow(KBuf* old,
                                                                               long long cap) {
-    long long was = (long long)sizeof(KBuf) + old->cap;
+    long long was = (long long)sizeof(KBuf) + k_buf_cap(old);
     KBuf* buf = realloc(old, sizeof(KBuf) + (size_t)cap);
     if (!buf) { fputs("out of memory\n", stderr); exit(1); }
     if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) {
@@ -9166,7 +9179,7 @@ static __attribute__((noinline, cold, preserve_most)) KBuf* k_bytes_buf_regrow(K
 static __attribute__((noinline, cold, preserve_most)) void k_bytes_buf_release(KBuf* old) {
     if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0)) {
         if (K_COUNTING) k_stat_bytes_freed++;
-        k_stat_held_live -= (long long)sizeof(KBuf) + old->cap;
+        k_stat_held_live -= (long long)sizeof(KBuf) + k_buf_cap(old);
     }
     free(old);
 }
@@ -9208,7 +9221,7 @@ static __attribute__((noinline)) KValue k_b_append_grow(KValue acc, KBytes* a,
     if (!dies && a->len + n > 16384) cap = ((a->len + n) * 3 / 2) & ~1LL;
     if (mutate && !dies && k_bytes_malloced(a)) {
         KBuf* grown = k_bytes_buf_regrow(((KBuf*)a->data) - 1, cap);
-        grown->cap = cap;
+        k_buf_set_cap(grown, cap, 0);
         grown->used = a->len + n;
         unsigned char* at = (unsigned char*)(grown + 1);
         k_copy_short((char*)at + a->len, (const char*)src, n);
@@ -9226,7 +9239,7 @@ static __attribute__((noinline)) KValue k_b_append_grow(KValue acc, KBytes* a,
         buf = k_bytes_buf_malloc(cap);
         marked = cap;
     }
-    buf->cap = cap;
+    k_buf_set_cap(buf, cap, 0);
     buf->used = a->len + n;
     unsigned char* data = (unsigned char*)(buf + 1);
     /* The first append into `text/bytes ""` grows from nothing: 176,697 of

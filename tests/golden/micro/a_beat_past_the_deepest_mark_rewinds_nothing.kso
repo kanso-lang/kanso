@@ -1,0 +1,31 @@
+import "std/text"
+
+# Beats nested past the deepest mark the stack holds.
+#
+# Each level runs a two-lap loop, which is a plain beat because what it
+# carries is a number. A lap builds a string that names its level, descends
+# a level on its first lap, and only then reads the level back out of the
+# string. Seventy levels put the innermost six loops past the stack's
+# sixty-four marks, where a beat keeps count and rewinds nothing. The rewind
+# finds its mark through a cached pointer, and past the stack that pointer
+# names a mark that stands in for none. A rewind that treated it as a real
+# one would hand back every block the arena holds, the strings still waiting
+# to be read among them, and the levels above would read whatever was built
+# there next.
+pad = "................................................................"
+
+fn level 0
+  0
+
+fn level d
+  laps 0 2 d
+
+fn laps acc 0 _
+  acc
+
+fn laps acc k d
+  s = "{d + 10}{pad}"
+  below = if (k == 2) (level (d - 1)) 0
+  laps (acc + below + text/to_int (text/slice s 1 2)) (k - 1) d
+
+pub play = print (level 70)
