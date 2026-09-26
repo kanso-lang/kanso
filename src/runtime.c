@@ -1402,6 +1402,16 @@ static void k_frozen_note(const char* lo, size_t n) {
     k_frozen_n++;
 }
 
+/* The short tokens `k_b_utf8_slice_raw` shares, stored where no rewind
+   reaches and asked about by address: a walk that meets one has nothing to
+   copy. See `k_token_miss`. */
+#define K_TOKEN_BITS 12
+typedef struct { KStr s; char data[8]; } KToken;
+static KToken k_token_store[1 << K_TOKEN_BITS];
+static inline int k_token_holds(const void* p) {
+    return (uintptr_t)((const char*)p - (const char*)k_token_store) < sizeof(k_token_store);
+}
+
 static __attribute__((noinline)) int k_frozen_holds(const void* p) {
     const char* q = (const char*)p;
     for (int i = 0; i < k_frozen_n; i++)
@@ -1410,11 +1420,12 @@ static __attribute__((noinline)) int k_frozen_holds(const void* p) {
 }
 
 static int k_survives_x(const void* p, KMark* m) {
-    if (!m) return k_survives(p, NULL) || (k_frozen_n && k_frozen_holds(p));
+    if (!m) return k_survives(p, NULL) || k_token_holds(p) || (k_frozen_n && k_frozen_holds(p));
     int w = k_where(p, m);
     if (w == K_WHERE_BELOW) return 1;
     if (w != K_WHERE_OUTSIDE) return 0;
-    return (k_ten_any && k_ten_holds_outside(p)) || (k_frozen_n && k_frozen_holds(p));
+    return k_token_holds(p) || (k_ten_any && k_ten_holds_outside(p)) ||
+           (k_frozen_n && k_frozen_holds(p));
 }
 
 /* Sorted-view caches filled during a beat point above the mark; a rewind
@@ -7860,6 +7871,47 @@ K_DOORCC KValue k_b_utf8(KValue lv, const char* origin);
    emitter reaches this door through the `k_b_utf8_slice_fast` shim, which
    tests the three tags itself; `k_b_utf8_slice` below is the same call for
    anything the shim turns away. */
+/* A token of four to seven bytes comes back as the same permanent string the
+   last one with those bytes did. The decoder reads the same few hundred keys
+   and short values on every document, and building each one again was an
+   allocation, a validation and a copy. The cache is direct-mapped over the
+   token's own bytes and its length, and it never evicts: a slot that holds
+   another token sends this one down the ordinary path, so the permanent
+   storage it can take is bounded by its width, whatever the input does. A
+   hit is valid utf-8 because the bytes it matched were validated when the
+   slot was filled. A zero key never matches, since every key carries its
+   length in the top byte. */
+static uint64_t k_token_key[1 << K_TOKEN_BITS];
+static KValue k_token_cache[1 << K_TOKEN_BITS];
+
+static __attribute__((noinline, cold, preserve_most)) KValue k_token_miss(const char* data, long long len,
+                                                                          const char* origin,
+                                                                          uint64_t key, unsigned slot) {
+    long long chars;
+    KValue bad = k_utf8_bad(data, len, origin, &chars);
+    if (bad.tag == K_ERR) return bad;
+    if (k_token_key[slot] != 0) slot ^= 1;
+    if (k_token_key[slot] == 0) {
+        /* Its bytes count as permanent the moment the slot is filled. */
+        k_perm_live += (long long)sizeof(KToken);
+        if (k_perm_live > k_perm_peak) k_perm_peak = k_perm_live;
+        KStr* ps = &k_token_store[slot].s;
+        ps->len = (int)len;
+        ps->data = k_token_store[slot].data;
+        memcpy(ps->data, data, (size_t)len);
+        ps->data[len] = 0;
+        ps->cap = (int)(-chars - 1);
+        KValue pv; pv.tag = K_STR; pv.payload = k_ptr(ps);
+        k_token_cache[slot] = pv;
+        k_token_key[slot] = key;
+        return pv;
+    }
+    KStr* s = k_str_alloc(len);
+    memcpy(s->data, data, (size_t)len);
+    s->data[len] = 0;
+    KValue v; v.tag = K_STR; v.payload = k_ptr(s); return v;
+}
+
 KValue k_b_utf8_slice_raw(const unsigned char* bytes, long long blen,
                           long long from, long long to, const char* origin) {
     const char* data = (const char*)bytes;
@@ -7872,21 +7924,18 @@ KValue k_b_utf8_slice_raw(const unsigned char* bytes, long long blen,
        861,498 of them on runbench, and none of them is asked its length.
        Seeding each one cost 7,728,237 instructions there against 13,280,580
        the whole-string doors below save. */
-    KValue bad = k_utf8_bad_rare(data, len, origin, NULL);
-    if (bad.tag == K_ERR) return bad;
-    if (len >= 4 && len < 8) {
-        /* The decoder's tokens: 840,807 of runbench's 861,498 slices are
-           four to seven bytes, and glibc's memcpy spends fifteen
-           instructions choosing how to move them. Two overlapping words. */
-        KStr* s = k_str_alloc(len);
+    if (len >= 4 && len <= 7) {
         uint32_t a, b;
         memcpy(&a, data, 4);
         memcpy(&b, data + len - 4, 4);
-        memcpy(s->data, &a, 4);
-        memcpy(s->data + len - 4, &b, 4);
-        s->data[len] = 0;
-        KValue v; v.tag = K_STR; v.payload = k_ptr(s); return v;
+        uint64_t key = (uint64_t)a | ((uint64_t)b << (8 * (len - 4))) | ((uint64_t)len << 56);
+        unsigned slot = (unsigned)((key * 0x9E3779B97F4A7C15ull) >> (64 - K_TOKEN_BITS));
+        if (k_token_key[slot] == key) return k_token_cache[slot];
+        if (k_token_key[slot ^ 1] == key) return k_token_cache[slot ^ 1];
+        return k_token_miss(data, len, origin, key, slot);
     }
+    KValue bad = k_utf8_bad_rare(data, len, origin, NULL);
+    if (bad.tag == K_ERR) return bad;
     return k_str_n(data, len);
 }
 
@@ -9141,6 +9190,15 @@ static __attribute__((noinline)) KValue k_b_append_grow(KValue acc, KBytes* a,
        an allocator that reclaims nothing pays for every intermediate size a
        builder passes through rather than the size it reached, where malloc
        plus a free on the owned path pays for one buffer at a time. */
+    /* A malloc'd builder past 16 kb grows by half rather than doubling. Its
+       buffer is what the run program's `held_peak_bytes` measures, and a
+       doubled buffer is on average a quarter empty when the builder
+       finishes: the 90 encodes of large.json each ended in a 277,522-byte
+       buffer. Below 16 kb the extra grows cost more than the room saves,
+       and the arena regime keeps doubling, since the arena reclaims none of
+       the sizes a builder passes through. The cap stays even, which is how
+       a malloc'd buffer is told from an arena one. */
+    if (!dies && a->len + n > 16384) cap = ((a->len + n) * 3 / 2) & ~1LL;
     if (mutate && !dies && k_bytes_malloced(a)) {
         KBuf* grown = k_bytes_buf_regrow(((KBuf*)a->data) - 1, cap);
         grown->cap = cap;

@@ -499,4 +499,7 @@
 # Projected from this container: an application's arguments go on one shared
 # stack and each application takes a vector of exactly its own. CI's reading
 # replaces it. compile_allocs 14,276 -> 14,240, a FALL of 36 (-0.2522%).
-compile_allocs=14240
+#
+# CI measured the typed map key at 1ab7904e. compile_allocs 14,240 -> 14,272,
+# a RISE of 32 (+0.2247%).
+compile_allocs=14272

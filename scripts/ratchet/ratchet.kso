@@ -1194,14 +1194,6 @@ scalar_words = row
   (breaking "a_short_run_validated_a_byte_at_a_time")
   benches
 
-slice_words = row
-  "a token slice of four to seven bytes copied through a call"
-  false
-  "sh scripts/gates/instructions.sh"
-  "cost goldens (deterministic ratchet, no clocks)"
-  (breaking "a_token_slice_copied_through_a_call")
-  benches
-
 render_words = row
   "a rendered number's digits copied through a call"
   false
@@ -1821,7 +1813,7 @@ rows_b1e4 = text/concat rows_b1e3 [length_fold ten_open ten_where seek_kept]
 
 rows_b1e = text/concat rows_b1e4 [pop_fast push_walk]
 
-rows_b1f = text/concat rows_b1e [scalar_words slice_words render_words]
+rows_b1f = text/concat rows_b1e [scalar_words render_words]
 
 rows_b1f2 = text/concat rows_b1f [render_trip int_bound]
 
@@ -2588,6 +2580,75 @@ bytes_seed = row
 
 rows_b1bs = text/concat rows_b1ls [bytes_seed]
 
+# A malloc'd builder past 16 kb grows by half, so it finishes with less
+# empty room than a doubled one.
+half_grow = row
+  "a large builder that doubles, so it finishes up to half empty"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_large_builder_that_doubles")
+  release
+
+rows_b1hg = text/concat rows_b1bs [half_grow]
+
+# A token of four to seven bytes comes back from a cache of permanent strings
+# instead of being built on every read.
+token_cache = row
+  "a short token built every time, so each read allocates and copies it"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_short_token_built_every_time")
+  release
+
+rows_b1tc = text/concat rows_b1hg [token_cache]
+
+# A map key reaches escape_onto through a parameter typed as a string.
+key_typed = row
+  "a key written as any value, so every key pays the untyped escape"
+  true
+  (gating "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_key_written_as_any_value")
+  benches
+
+rows_b1ky = text/concat rows_b1tc [key_typed]
+
+# A tail call carries its callee's group to the dispatcher, which no longer
+# hashes the name to find it.
+tail_group = row
+  "a tail that hashes its group's name"
+  true
+  interp_gate
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_tail_that_hashes_its_group")
+  release
+
+rows_b1tg = text/concat rows_b1ky [tail_group]
+
+# A literal is read out of its BigInt by a direct digit read, inlined.
+word_read = row
+  "a literal read through the digit walk"
+  true
+  interp_gate
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_literal_read_through_the_digit_walk")
+  release
+
+rows_b1wr = text/concat rows_b1tg [word_read]
+
+# A division by a nonzero literal adds no err to what inference knows.
+literal_divisor = row
+  "a literal divisor that might fail"
+  true
+  (gating "emitted_code")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_literal_divisor_that_might_fail")
+  benchmarks
+
+rows_b1ld = text/concat rows_b1wr [literal_divisor]
+
 # A lambda applied to a box may not read the box as a value.
 box_param = row
   "a lambda handed a box through the plain dot reads it as a value unrefused"
@@ -2599,7 +2660,7 @@ box_param = row
 
 box_error_golden = "error_corpus_reports_each_golden_diagnostic"
 
-rows_b1bx = text/concat rows_b1bs [box_param]
+rows_b1bx = text/concat rows_b1ld [box_param]
 
 rows_b = text/concat rows_b1bx [compile_mem compile_mem_host]
 
