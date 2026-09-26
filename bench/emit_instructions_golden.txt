@@ -332,4 +332,7 @@
 # CI measured the subtype fix at 061eaef6: k_unsub moves the layout the
 # compile reads. emit_instructions 29,156,813 -> 29,158,246, a RISE of 1,433
 # (+0.0049%).
-emit_instructions=29169298
+#
+# CI measured the result assume at 95f78ace: emit_instructions 29,158,246 ->
+# 29,329,209, a RISE of 170,963 (+0.5863%).
+emit_instructions=29340261

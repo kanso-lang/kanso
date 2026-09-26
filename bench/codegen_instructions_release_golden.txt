@@ -376,7 +376,10 @@
 # compile reads. codegen_instructions_release 406,427,590 -> 406,403,837, a
 # FALL of 23,753 (-0.0058%).
 #
-# CI measured kanso#1657 over the runtime without the token cache's dead copy:
-# codegen_instructions_release 406,403,837 -> 406,403,863, a RISE of 26
+# CI measured the result assume at 95f78ace: codegen_instructions_release
+# 406,403,837 -> 406,462,416, a RISE of 58,579 (+0.0144%).
+#
+# CI measured kanso#1658 over the runtime without the token cache's dead copy:
+# codegen_instructions_release 406,462,416 -> 406,462,442, a RISE of 26
 # (+0.0000%).
-codegen_instructions_release=406309906
+codegen_instructions_release=406473701

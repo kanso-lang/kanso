@@ -15853,3 +15853,50 @@ No allocation counter moved and no compile row moved. As over the tag
 assume, the runtime rows move with where the new function puts everything
 after it, which was not isolated.
 Welfare rises from 89.76255 to 89.76271 and the floor banks there.
+
+## 2026-09-25 — a proven result is assumed
+
+The tag assume at a dispatcher's entry has a twin at the call site. Where a
+group's inferred result, with any failure its arguments carry, is exactly
+one kind of value, the caller now tells LLVM the result's tag, and the
+caller's own inlined helpers stop testing it. The kinds widen to floats and
+records as well as strings, lists, maps and bytes, for results and
+parameters both; programs that declare a subtype still get none.
+
+On the container, over the subtype fix's tree: runbench -1,756,021 (-0.14%),
+livebench -5,362,245 (-0.29%), basket -38,028 (-0.12%), oneshot -14,511, and
+nothing else by more than 2,598, pendbench's rise. Every benchmark prints the
+same bytes. Most of the machine code gets shorter again, runbench's .text
+408,488 -> 399,736 and scanbench's 320,936 -> 312,872, while the emitted IR
+gains a call line per assume, runbench's calls 3,781 -> 3,835 and the
+compile-cost module's lines 1,067 -> 1,073. The instruction rows are
+projected and the compile rows are left for CI.
+
+The ratchet row `result_assumed` takes the call site's assume away; runbench
+read 1,223,680,334 with it, 1,801,721 above the change.
+
+The trend gate reads five keys as worse against its baseline, and they land
+on: `lines` 1,460 in the compile-cost micro rows and `emitted_other_calls`
+10,461 and `emitted_other_lines` 85,549, all assume lines; `text` 3,503,200
+summed, which is below the subtype fix's 3,521,424; and `work_pendbench`
+181,898,809, within 0.03% of main.
+
+CI read the change at 95f78ace: runbench 1,223,633,797 -> 1,221,877,776
+(-0.14%), livebench -5,362,245, basket -38,014. The compile side pays for
+the call-site lines: `emit_instructions` 29,158,246 -> 29,329,209 (+0.59%),
+`codegen_instructions_dev` 124,021,731 -> 124,061,133 and
+`codegen_instructions_release` 406,403,837 -> 406,462,416 (+0.01%).
+
+The branch then took the subtype fix stacked on the wall, box and tag
+carrier (kanso#1657 over kanso#1663), and CI read the three together at
+4d83de1a. Against the subtype fix's rows `work_runbench` falls 1,223,756,154
+-> 1,221,916,115, `work_livebench` 1,836,034,749 -> 1,830,313,464 and
+`work_basket` 31,172,142 -> 31,134,128, and `text` falls 3,509,552 ->
+3,491,328 summed. The call-site assumes cost the compile side as before:
+`emit_instructions` 29,169,298 -> 29,340,261, `codegen_instructions_dev`
+123,998,259 -> 124,037,661 and `codegen_instructions_release` 406,309,906 ->
+406,473,701. The module corpus emits the same assume lines, `module_calls`
+103 -> 105 and `module_lines` 1,067 -> 1,073. `work_pendbench` rises
+181,896,412 -> 181,899,010 with no allocation counter moving, which was not
+isolated.
+Welfare rises from 89.7627 to 89.7698 and the floor banks there.

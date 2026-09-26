@@ -4944,15 +4944,24 @@ impl<'a> Backend<'a> {
         {
             return;
         }
+        self.assume_tag(f, &format!("%x{i}"), set);
+    }
+
+    /// `llvm.assume` that a boxed value's tag is the one kind its set allows,
+    /// for the kinds whose set bit names exactly one runtime tag. The caller
+    /// has already refused programs that declare a subtype.
+    fn assume_tag(&self, f: &mut FnEmit, value: &str, set: Set) {
         let tag = match set {
+            infer::FLOAT => 1,
             infer::STR => 6,
+            infer::REC => 7,
             infer::LIST => 9,
             infer::MAP => 10,
             infer::BYTES => 13,
             _ => return,
         };
         let t = f.tmp();
-        f.line(&format!("{t} = extractvalue %KValue %x{i}, 0"));
+        f.line(&format!("{t} = extractvalue %KValue {value}, 0"));
         let is = f.tmp();
         f.line(&format!("{is} = icmp eq i64 {t}, {tag}"));
         f.line(&format!("call void @llvm.assume(i1 {is})"));
@@ -9449,7 +9458,11 @@ impl<'a> Backend<'a> {
                     f.record_parsed(&result, ty, self.type_ids[ty]);
                 }
             }
-            f.record(&result, self.group_return_set(name, n) | fails);
+            let returned = self.group_return_set(name, n) | fails;
+            f.record(&result, returned);
+            if callee_ret == "%KValue" && self.sub_parents.is_empty() {
+                self.assume_tag(f, &result, returned);
+            }
             return Ok(result);
         }
         // Declared, but at no arity this call can reach. The interpreter
