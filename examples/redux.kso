@@ -19,11 +19,11 @@ fn notify logger (withdraw n) balance
 
 
 fn step _ _ _ _ out none
-  out >> print "the till closes"
+  out .> (_ -> print "the till closes")
 
 fn step store actions i sub out action
   next = update store action
-  paced = out >> notify sub action next >> time/sleep 350
+  paced = out .> (_ -> notify sub action next) .> (_ -> time/sleep 350)
   drive next actions (i + 1) sub paced
 
 fn update balance (deposit n)

@@ -11,5 +11,5 @@ fn utf8_ok _
   "accepted"
 
 print "{check_bad [192 175]}"
->> print "{check_bad [237 160 128]}"
->> print "{check_bad [244 143 191 191]}"
+  .> (_ -> print "{check_bad [237 160 128]}")
+  .> (_ -> print "{check_bad [244 143 191 191]}")

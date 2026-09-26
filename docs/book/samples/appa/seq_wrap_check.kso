@@ -1,2 +1,2 @@
 print "steeping"
-  >> print "serving"
+  .> (_ -> print "serving")

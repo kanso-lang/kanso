@@ -1,9 +1,8 @@
 import "std/regexp"
 
-pub play =
-  print "plain:     {regexp/find "cat" "a CAT sat"}"
-  >> print "blind:     {regexp/find "(?i)cat" "a CAT sat"}"
-  >> print "blind cls: {regexp/find "(?i)[a-z]+" "XY z"}"
-  >> print "dot stops: {regexp/find "a.b" "a\nb"}"
-  >> print "dot goes:  {regexp/find "(?s)a.b" "a\nb"}"
-  >> print "both:      {regexp/find "(?i)(?s)A.B" "a\nb"}"
+pub play = print "plain:     {regexp/find "cat" "a CAT sat"}"
+  .> (_ -> print "blind:     {regexp/find "(?i)cat" "a CAT sat"}")
+  .> (_ -> print "blind cls: {regexp/find "(?i)[a-z]+" "XY z"}")
+  .> (_ -> print "dot stops: {regexp/find "a.b" "a\nb"}")
+  .> (_ -> print "dot goes:  {regexp/find "(?s)a.b" "a\nb"}")
+  .> (_ -> print "both:      {regexp/find "(?i)(?s)A.B" "a\nb"}")

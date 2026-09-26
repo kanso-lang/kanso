@@ -194,7 +194,7 @@ extra_css: /book/book.css
   </div>
 </div>
 
-<p>inside a body, blank lines are banned entirely. a body is one uninterrupted run of statements; the moment you want to group some of them apart with a blank line, you are describing structure the grammar already has words for—<code>&gt;&gt;</code> walls and bindings—and it wants those words, not a gap:</p>
+<p>inside a body, blank lines are banned entirely. a body is one uninterrupted run of statements; the moment you want to group some of them apart with a blank line, you are describing structure the grammar already has words for—bindings, and the chain words—and it wants those words, not a gap:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">blank_body_check.kso</div>
@@ -229,18 +229,18 @@ extra_css: /book/book.css
   </div>
 </div>
 
-<p>width is rendering only—it never changes how many statements a body has. an over-wide statement stays one statement, wrapped across continuation lines. the continuation forms are the tokens that express ordering everywhere else: <code>.</code> for a data-flow pipe, <code>.&gt;</code>, <code>.!</code> and <code>.?</code> for the three chain words, and <code>&gt;&gt;</code> for a pure sequence. each step lands on its own line, indented two past the statement, one step per line.</p>
+<p>width is rendering only—it never changes how many statements a body has. an over-wide statement stays one statement, wrapped across continuation lines. the continuation forms are the tokens that express ordering everywhere else: <code>.</code> for a data-flow pipe, and <code>.&gt;</code>, <code>.!</code> and <code>.?</code> for the three chain words. each step lands on its own line, indented two past the statement, one step per line.</p>
 
-<p>here is a sequence too wide for one line. its first step stays on the <code>main =</code> line; each further <code>&gt;&gt;</code> step drops to a continuation line at indent plus two:</p>
+<p>here is a sequence too wide for one line. its first step stays on the statement's own line, and the <code>.&gt;</code> step that follows drops to a continuation line at indent plus two:</p>
 
 <div class="code-panel">
-  <div class="code-panel-title">wrap_wall.kso</div>
+  <div class="code-panel-title">wrap_bind.kso</div>
   <pre><code><span class="f">print</span> <span class="s">"steeping the sencha in the small clay pot for exactly ninety seconds"</span>
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"pouring the water in a thin stream from well above the first cup"</span></code></pre>
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"pouring the water in a thin stream from above the first cup"</span>)</code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run wrap_wall.kso</div>
+    <div class="code-panel-title">kanso run wrap_bind.kso</div>
     <pre><code>steeping the sencha in the small clay pot for exactly ninety seconds
-pouring the water in a thin stream from well above the first cup</code></pre>
+pouring the water in a thin stream from above the first cup</code></pre>
   </div>
 </div>
 
@@ -273,21 +273,6 @@ ranked <span class="o">=</span> [<span class="n">40</span> <span class="n">15</s
 <span class="c">  --&gt; needless_wrap_check.kso:2:3</span>
    2 |   . sum
          <span class="k">^</span></code></pre>
-  </div>
-</div>
-
-<p>and the wrap is all-or-nothing. once a statement wraps, <em>every</em> step gets its own continuation line—you cannot leave two steps sharing the first line and drop the rest. partial chaining has no canonical form, so it has none at all:</p>
-
-<div class="code-panel">
-  <div class="code-panel-title">partial_chain_check.kso</div>
-  <pre><code><span class="f">print</span> <span class="s">"steeping the finest uji sencha"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"pouring the hot water"</span>
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"serving it in the warmed cups with seasonal wagashi"</span></code></pre>
-  <div class="code-output">
-    <div class="code-panel-title">kanso check partial_chain_check.kso</div>
-    <pre><code><span class="k">error[formatting]</span>: no partial chaining: a chain fits on one line, or each step gets its own `&gt;&gt;` continuation line
-<span class="c">  --&gt; partial_chain_check.kso:1:40</span>
-   1 | print "steeping the finest uji sencha" &gt;&gt; print "pouring the hot water"
-                                              <span class="k">^</span></code></pre>
   </div>
 </div>
 
@@ -340,7 +325,7 @@ ranked <span class="o">=</span> [<span class="n">40</span> <span class="n">15</s
 </div>
 </div>
 
-<p>that is the whole law. you can now read any diagnostic in the <code>error[formatting]</code> family and know it names a rule with exactly one legal answer, and you can write a file that <code>kanso check</code> passes on the first try: two-space indents, one space around every <code>=</code> and operator, no commas and no call parentheses, types before functions and both alphabetical, one blank line between declarations and none inside a body, eighty columns with <code>.</code>, <code>.&gt;</code>, <code>.!</code>, <code>.?</code> and <code>&gt;&gt;</code> continuation lines when a statement runs long, snake_case names, and double-quoted strings. nothing here is a preference. it is the grammar, and the grammar is the reason every kanso diff you read contains only decisions.</p>
+<p>that is the whole law. you can now read any diagnostic in the <code>error[formatting]</code> family and know it names a rule with exactly one legal answer, and you can write a file that <code>kanso check</code> passes on the first try: two-space indents, one space around every <code>=</code> and operator, no commas and no call parentheses, types before functions and both alphabetical, one blank line between declarations and none inside a body, eighty columns with <code>.</code>, <code>.&gt;</code>, <code>.!</code> and <code>.?</code> continuation lines when a statement runs long, snake_case names, and double-quoted strings. nothing here is a preference. it is the grammar, and the grammar is the reason every kanso diff you read contains only decisions.</p>
 
 <h2>exercises</h2>
 

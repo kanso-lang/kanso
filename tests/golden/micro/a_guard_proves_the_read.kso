@@ -26,9 +26,9 @@ fn tail_of xs k
 pub play =
   ns = [10 20 30]
   print (at ns 2)
-  >> print (at ns 9)
-  >> print "{summed ns 3 0}"
-  >> print (last_of ns)
-  >> print (tail_of ns 2)
-  >> print (shown ns[3])
-  >> print (shown [4 5 6][1])
+    .> (_ -> print (at ns 9))
+    .> (_ -> print "{summed ns 3 0}")
+    .> (_ -> print (last_of ns))
+    .> (_ -> print (tail_of ns 2))
+    .> (_ -> print (shown ns[3]))
+    .> (_ -> print (shown [4 5 6][1]))

@@ -1,6 +1,4 @@
-print (sign (0 - 4))
->> print (sign 0)
->> print (sign 9)
+print (sign (0 - 4)) .> (_ -> print (sign 0)) .> (_ -> print (sign 9))
 
 fn sign n
   if (n < 0) "negative" (if (n > 0) "positive" "zero")

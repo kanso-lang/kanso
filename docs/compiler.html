@@ -1088,7 +1088,7 @@ pub play = print "{graph["a"].peers[1].name}"</code></pre>
 
 <p>a failure in an operation propagates: hand an err to anything and you get the err back. when both sides fail, the answer carries both — the reason becomes the list of reasons, and neither failure is billed above the other, because neither caused the other. that merge is a fold rather than a pairing, so three failures answer three reasons however they were grouped, and the shape of the expression that produced them is not recoverable from the result. an err whose reason is <em>itself</em> a list stays one reason; the mark saying which is which is structural, because it cannot be read off the shape.</p>
 
-<p>the wall is the other rule. <code>&gt;&gt;</code> is ordered, so the first failure is the answer and what follows it never speaks. adjacency accumulates because nothing there is first. short-circuit where there is order, accumulate where there is none — you never choose between the two, because each is the only behaviour its structure permits.</p>
+<p>the bind is the other rule. <code>.&gt;</code> is ordered, so the first failure is the answer and what follows it never speaks. adjacency accumulates because nothing there is first. short-circuit where there is order, accumulate where there is none — you never choose between the two, because each is the only behaviour its structure permits.</p>
 
 <p>the two rules make the same pair of algebraic objects, over one carrier: adjacency associative and commutative, the wall associative with the first failure absorbing. that is what makes the grouping invisible, and it is also what a user-supplied version of either would have to obey.</p>
 
@@ -1180,7 +1180,7 @@ text/to_bytes [104 300]               # err "to_bytes takes byte values (0-255)"
 
 <p>none of them was hard to find. what was missing was the question being asked site by site, and somewhere to write the answer down. both sentences are tables now, and both tables are fixtures that run on every engine.</p>
 
-<p>the first says what an operation does with a failure that arrives at it, and the answer is not the same everywhere. an operator, a comparison, a constructor and a <code>&amp;</code> join MERGE—neither operand caused the other, so both reasons survive. a call with no matching arm, an interpolation and a <code>&gt;&gt;</code> sequence take the FIRST, because those are ordered. a list literal and a map literal HOLD it, because a container is not its contents: the list has a length, it can be indexed, and printing it shows the failure sitting inside. a field read, an index and a builtin pass it THROUGH, because the operation does not happen at all.</p>
+<p>the first says what an operation does with a failure that arrives at it, and the answer is not the same everywhere. an operator, a comparison, a constructor and a <code>&amp;</code> join MERGE—neither operand caused the other, so both reasons survive. a call with no matching arm, an interpolation and a <code>.&gt;</code> bind take the FIRST, because those are ordered. a list literal and a map literal HOLD it, because a container is not its contents: the list has a length, it can be indexed, and printing it shows the failure sitting inside. a field read, an index and a builtin pass it THROUGH, because the operation does not happen at all.</p>
 
 <pre><code>operated:  ["a" "b"]      compared:  ["a" "b"]
 built:     ["a" "b"]      grouped:   ["a" "b"]
@@ -1217,7 +1217,7 @@ v:none    past  past
 
 <p>the second: at a boundary, handling is dispatch. a foreign failure is a value that arrives at your arms, and an arm that names it&#8212;<code>fn verdict (err e)</code>&#8212;receives it the way any arm receives anything. a value arm converts; an err arm annotates. <code>rescue</code> did later become a word, and the arm is still what does the handling &#8212; the word routes a failure to a group and the group's arms decide, so what arrived was a way to say which channel you meant rather than a second way to handle. it is a library function and not a keyword.</p>
 
-<p><strong>the third decision was reversed on 2026-08-29, and section 32 has the ruling that replaced it.</strong> what it said: elaboration is signature-directed. the compiler tracks which values are plans, and the receiving position decides what happens&#8212;a position that demands a value gets the bind inserted, and a position that takes a plan receives the plan itself. <code>retry (fetch url)</code> hands retry the plan with no mark, because retry's signature says it takes one; <code>parse (fetch url)</code> becomes a plan whose parse step runs on the fetched body, because parse's signature says it takes the value. nothing runs at either call: plans only collapse when demand reaches them from io. the two classic objections dissolve under the rest of the language rather than under this feature. a plan you forgot to run is an unused value, and an unused value is a compile error. a plan that runs later than you intended cannot happen, because where order matters you wrote <code>&gt;&gt;</code>, and where you did not, there was no order to violate.</p>
+<p><strong>the third decision was reversed on 2026-08-29, and section 32 has the ruling that replaced it.</strong> what it said: elaboration is signature-directed. the compiler tracks which values are plans, and the receiving position decides what happens&#8212;a position that demands a value gets the bind inserted, and a position that takes a plan receives the plan itself. <code>retry (fetch url)</code> hands retry the plan with no mark, because retry's signature says it takes one; <code>parse (fetch url)</code> becomes a plan whose parse step runs on the fetched body, because parse's signature says it takes the value. nothing runs at either call: plans only collapse when demand reaches them from io. the two classic objections dissolve under the rest of the language rather than under this feature. a plan you forgot to run is an unused value, and an unused value is a compile error. a plan that runs later than you intended cannot happen, because where order matters you wrote <code>.&gt;</code>, and where you did not, there was no order to violate.</p>
 
 <p>put together, that was a language in which the compiler wrote most of the plumbing: propagation threaded, effects elaborated by signature, and a surface of functions, arms, <code>&gt;&gt;</code>, adjacency and skip. three words were the exception, and they were the failure channel. <code>bind</code>, <code>rescue</code> and <code>annotate</code> became ordinary two-argument functions on 2026-08-26, for a reason this section did not anticipate: a program that can handle a failure two ways needs the explicit rescue either way, and once one of the three is spelled the other two may as well be. section 28 has the ruling and what building it turned up. the question of which machinery serves the failure half &#8212; the pattern matcher asking about provenance at every match, or the elaborator inserting the same calls it already inserts for effects &#8212; was overtaken: after section 32 there is no elaborator inserting anything, and the words are what a program writes. the book teaches the call-site half of this story in chapter 4, &#8220;nothing is asked of the signature&#8221;: the failing argument that never forces anything onto the function it was passed to. chapter 5 teaches the type, in &#8220;a box has a type&#8221;: <code>&lt;t&gt;effect</code> names a parameter that holds a box, and a box handed to something that reads the value inside is refused at check.</p>
 
@@ -1291,7 +1291,7 @@ plus intra-library calls                         0 uncovered</code></pre>
 
 <p>then the sharper case. a description put into a list, a map, a builtin call or a record field is data on native and on the interpreter, and the page refused it:</p>
 
-<pre><code>d = io/write "a\n" &gt;&gt; io/write "b\n"
+<pre><code>d = io/write "a\n" .&gt; (_ -&gt; io/write "b\n")
 xs = [(opaque d)]
 pub play = xs[1]
 
@@ -1314,7 +1314,7 @@ the page               error[runtime]: a bound description cannot be
 
 <p>then the one that was not a sentence at all:</p>
 
-<pre><code>d = io/write "a\n" &gt;&gt; io/write "b\n"
+<pre><code>d = io/write "a\n" .&gt; (_ -&gt; io/write "b\n")
 pub play = print "{1 + opaque d}"
 
 native, interpreter    error[runtime]: `+` is not defined
@@ -1417,7 +1417,7 @@ rescue when_failed</code></pre>
 
 <p>the derivation clay gave for allowing the box to be passed at all is the part worth keeping. with the combinators alone &#8220;we&#8217;d have Effect types that are basically indistinguishable. to get anything you can match/branch on, you&#8217;d need to call bind/annotate/rescue to get a <em>type</em>&#8230; but one might argue you <em>should</em> be able to match on something like <code>&lt;int&gt;effect</code>.&#8221; a language that has the type and refuses to let you name it is hiding a thing it already has. so the parameter spelling is admitted, and it opens no unmarked door, because it is an explicit statement that the author is holding the channel.</p>
 
-<p>two boundaries stop the type acquiring a second meaning. the box answers &#8220;did it work&#8221;; the <code>&gt;&gt;</code> wall&#8217;s deferred description answers &#8220;has it run&#8221;. keeping those apart is what makes holding a result safe &#8212; a held box never delays work that was going to happen. and no arm may match a failed <code>&lt;int&gt;effect</code> against a succeeded one. an arm that could tell them apart would be a third eliminator with none of the ceremony the other three carry, arriving by the back door of the pattern matcher.</p>
+<p>two boundaries stop the type acquiring a second meaning. the box answers &#8220;did it work&#8221;; a deferred description answers &#8220;has it run&#8221;. keeping those apart is what makes holding a result safe &#8212; a held box never delays work that was going to happen. and no arm may match a failed <code>&lt;int&gt;effect</code> against a succeeded one. an arm that could tell them apart would be a third eliminator with none of the ceremony the other three carry, arriving by the back door of the pattern matcher.</p>
 
 <p>none of this reaches a signature. clay&#8217;s rider: &#8220;effect arguments should work just like any other type. no superfluous type annotations on functions. if you pass an effect to foo, and it does rescue or whatever, and it passes the value to a matching arm, then it Just Works.&#8221; a parameter that receives an effect is typed by inference like any parameter, and dispatch matches an effect-typed value like any value. the <code>e:&lt;config&gt;effect</code> spelling is there for an author who wants to state the shape, never as a toll.</p>
 
@@ -3514,6 +3514,14 @@ welfare                      77.37         82.09</code></pre>
 <p>The decoder unescapes a string by appending its pieces to <code>text/bytes ""</code>, a view of the empty string that owns no storage, so each of runbench's 175,527 escaped strings began by growing its builder from nothing. The emitter now writes that literal as an empty builder with 64 bytes of room, which is the capacity the first grow used to choose, so every later grow is the one it was. Runbench fell another 1.69%. A first version tested for an empty string wherever <code>bytes</code> ran, and it cost encodebench two instructions on every string it escaped, so the test moved to the one place the answer is known in advance, the literal.</p>
 
 <p>One fix came out of testing these. The browser engine runs compiled programs inside a WebAssembly interpreter, and a program that recursed too deeply ran out of that interpreter's stack in the middle of a runtime call. A trap in WebAssembly unwinds nothing, so a Rust <code>RefCell</code> borrowed at that moment stayed borrowed, and the next program's setup panicked on it. The runtime's cells are now rebuilt at each entry point when a dead program still holds them, and a spec runs the deep recursion followed by an ordinary program on one engine.</p>
+
+<h2 id="nowall"><span class="sec-num">156</span>one spelling for a step that comes after</h2>
+
+<p>The wall is gone. <code>a &gt;&gt; b</code> and <code>a .&gt; (_ -&gt; b)</code> were the same program, and Clay ruled on 2026-09-26 that the language keeps the second. The lexer now refuses <code>&gt;&gt;</code> where it is written and names the spelling to use. Every sequence in the tree was rewritten, in the library, the scripts, the tests, the examples and the book, and the sections of this page that describe the wall describe the language before that date.</p>
+
+<p>The operator took a good deal of machinery with it. The parser's handling of wall lines, the checker's refusal of a wall operand that could never be an effect, the stack-exhaustion hint for a function that recursed on a wall's right side, and a description node in each of the three engines are all removed. The failure rule the wall carried belongs to the bind, which already short-circuits on the first err. A group of bare lines still accumulates its members' failures, and a step after a group is written by naming the group and binding after the name.</p>
+
+<p>One feature had to be rebuilt rather than removed. <code>--plan</code> listed every step of a wall chain because a wall held its right side as a description. A bind holds a function, and the plan has no value to hand it. A callback written <code>_ -&gt; step</code> ignores its argument, though, so the plan now calls it and renders the step, and <code>examples/effects.kso</code> plans exactly as it did. A callback that reads its argument is still shown as a continuation.</p>
 
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 

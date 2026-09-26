@@ -5,4 +5,4 @@ pub play =
   one = found[1]
   two = found[2]
   print "{length found} matches"
-  >> print "first {one.from}-{one.to} second {two.from}-{two.to}"
+    .> (_ -> print "first {one.from}-{one.to} second {two.from}-{two.to}")

@@ -12,7 +12,6 @@ fn held e
 fn shown e
   "held {e}"
 
-pub play =
-  print (shown (math/random 6 . held))
-  >> math/random 6 . held .> (n -> print "{n < 6}")
-  >> os/read_file! "missing.txt" . held .? (_ -> "no file") .> print
+pub play = print (shown (math/random 6 . held))
+  .> (_ -> math/random 6 . held .> (n -> print "{n < 6}"))
+  .> (_ -> os/read_file! "missing.txt" . held .? (_ -> "no file") .> print)

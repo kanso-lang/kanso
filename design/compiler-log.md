@@ -15661,3 +15661,106 @@ through, and the objective prices that as production cost. The dev tier
 compiles the assume lines without folding anything with them,
 `codegen_instructions_dev` 123,915,790 -> 124,017,062 (+0.08%), and the
 emitter writes them, `emit_instructions` 28,882,533 -> 29,156,813 (+0.95%).
+
+## 2026-09-26 — the wall goes
+
+The build of the gavel of the same name. `>>` is refused in the lexer with the
+spelling that replaced it, `kanso has no \`>>\`: a step that ignores what
+came before is written \`.> (_ -> step)\``, and the error corpus pins it as
+`the_wall_is_gone`. Everything the operator needed went with it: `Tok::SeqOp`
+and the continuation rules written for it, the parser's wall lines,
+`Expr::Seq`, the checker's refusal of a wall operand that could never be an
+effect, the stack-exhaustion hint for a function recursing on a wall's right
+side, `Desc::Seq` in the interpreter, `Slot::Seq` and the `rt_seq` import in
+the browser engine, and `k_seq` with its two executor arms in the C runtime.
+
+Every sequence in the tree was respelled: 237 files by a script that turns a
+line-leading `>> step` into a `.> (_ -> step)` continuation and an inline one
+into the same step in place, then the cases it flagged by hand. A group of
+bare lines followed by a wall has no direct respelling, because a `.>` binds
+to one expression. Those sites now name the group, either as a constant with
+an indented body in a library or as a function in a play file, and bind after
+the name. The effects differential lost the five shapes that were `>>`
+duplicates of a bind shape it already had, and reads 26 combinations, none
+wrong.
+
+Nine error fixtures and three runtime and micro fixtures pinned the wall
+itself, its refusals and its runtime message, and they went with it. Three
+more were respelled to say what they meant: `binding_after_effect`,
+`orphan_continuation` and `what_follows_a_bind_is_built_after_it_runs`. Two
+error goldens changed order, `a_box_where_a_value_is_expected` and
+`a_strict_index_where_a_value_is_expected`, and the new order is the order
+the lines are written in; the wall's nesting had reversed it. The build body's
+hint now reads "sequence effects with \`.>\`".
+
+`--plan` needed rebuilding rather than removing. A wall held its right side as
+a description, so the plan could list every step. A bind holds a function, and
+the plan has no value to hand it. A callback written `_ -> step` ignores its
+argument, so `Interp::ignoring_step` calls it with `done` and the plan renders
+the step; `examples/effects.plan` holds unchanged. The ratchet row
+`plan_ignoring` makes every bind a continuation again and turns that golden
+red, and `wall_refused` lets `>>` lex as two comparisons and turns the error
+corpus red. Both were watched red.
+
+Open, and not built here: the wall carried a formatting rule the fused chain
+words never had. A chain that wrapped had to wrap every step, and a
+half-wrapped `a >> b` followed by `  >> c` was refused. Main already accepts
+a half-wrapped `.>` chain and a half-wrapped pipe, so extending the rule would
+be a new rule, and appendix C no longer claims it.
+
+The runtime counters did not move: the twelve cost veins and the lazy tier
+agree, apart from one mem fixture whose program was respelled. In
+`build_cycle` the wall's right side was a deferred cell and is now a lambda's
+body, so the second print is built inside a callback rather than forced from a
+thunk. The fixture allocates two more times, `build_cycle_allocs` 66 -> 68 and
+`build_cycle_alloc_bytes` 3,072 -> 3,120, and the callback's frame is a beat
+that evacuates what it keeps: `build_cycle_beat_iters` 0 -> 1,
+`build_cycle_evac_allocs` 10 -> 15 and `build_cycle_evac_bytes` 368 -> 528.
+The thunk it no longer makes takes `thunk_allocs`, `thunk_evals`,
+`thunk_forces` and `thunk_live_exit` from 1 to 0 and `survive_slots` from 12
+to 4. The program the fixture runs changed, and these are its new baseline.
+
+Every binary's machine code fell 848 bytes, `text` summed over the fourteen
+from 3,486,032 to 3,474,160: `k_seq`, its helper and its two executor arms
+left the runtime. The compile rows this container cannot compare are left
+for CI.
+
+CI read the tree at 3860fbdd and its rows were taken. The front end lost the
+parser's wall lines and the checker's wall operand test, and every compile row
+fell: `compile_instructions` 25,204,253 -> 25,055,383, `entry_instructions`
+85,215,074 -> 84,735,189, `library_instructions` 85,773,867 -> 85,292,289,
+`startup_instructions` 52,416 -> 52,405, `codegen_instructions_dev`
+125,554,679 -> 125,534,193 and `codegen_instructions_release` 698,561,887 ->
+698,511,987. `interp_instructions` fell 614,239,448 -> 614,114,983.
+`emit_instructions` rose 29,311,866 -> 29,337,244, and seven runtime rows rose
+with every allocation counter unchanged: `work_runbench` 1,332,911,604 ->
+1,332,963,952, `work_deepbench` 364,523,751 -> 364,907,752, `work_widebench`
+28,836,195 -> 28,852,174, `work_pendbench` 181,849,069 -> 181,849,270,
+`work_escapebench` 68,272,680 -> 68,272,681, `work_indexbench` 2,538,307 ->
+2,538,308 and `work_scanbench` 281,837 -> 281,838. The runtime lost `k_seq`
+and two executor arms, and these moves arrived with that; which part of the
+change moved each was not isolated. Welfare banks at 89.17, the development
+side up from 90.86 to 90.87.
+
+
+The branch then took the six-change carrier (kanso#1655) and CI read the two
+together at 64bacde8. Against the carrier's rows the wall's removal moves the
+same way it did over the old base. The front end falls:
+`compile_instructions` 25,267,312 -> 25,080,902, `entry_instructions`
+85,321,306 -> 84,718,064, `library_instructions` 85,850,050 -> 85,245,877,
+`codegen_instructions_dev` 123,915,881 -> 123,894,024 and
+`interp_instructions` 578,807,674 -> 578,682,708. `text` falls 848 bytes in
+every binary again, summed 3,544,496 -> 3,532,624. `codegen_instructions_release`
+rises 695,954,277 -> 696,080,355 and `emit_instructions` 28,882,533 ->
+28,893,585. Of the work rows, `work_runbench` falls 1,290,279,056 ->
+1,290,275,085 and `work_encodebench` 2,677,016,790 -> 2,676,513,833, and seven
+rise with every allocation counter unchanged: `work_deepbench` 364,797,730 ->
+365,181,731, `work_widebench` 28,789,056 -> 28,805,035, `work_oneshot`
+14,486,409 -> 14,487,226, `work_pendbench` 181,895,213 -> 181,895,414,
+`work_escapebench` 65,821,674 -> 65,821,675, `work_indexbench` 2,538,557 ->
+2,538,558 and `work_scanbench` 282,021 -> 282,022. Two fall slightly against the carrier:
+`work_digestbench` 5,542,082 -> 5,542,059 and `work_readbench` 4,631,851 ->
+4,631,829. As before, these arrived
+with the runtime losing `k_seq` and its executor arms, and no part of the
+change was isolated as the cause of any one of them.
+The development side rises from 90.99 to 91.00 and welfare banks at 89.37.

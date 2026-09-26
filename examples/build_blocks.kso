@@ -19,5 +19,4 @@ graph = pair_of "a" "b"
 
 ring = ring_of "seed"
 
-print "{graph}"
->> print "{ring}"
+print "{graph}" .> (_ -> print "{ring}")

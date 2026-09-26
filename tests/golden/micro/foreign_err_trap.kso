@@ -8,6 +8,5 @@ fn door (err _:json/parse_failure)
 fn door doc
   "read {length doc} values"
 
-pub play =
-  print (door (json/decode "[1, 2"))
-  >> print (door (json/decode "[1, 2]"))
+pub play = print (door (json/decode "[1, 2"))
+  .> (_ -> print (door (json/decode "[1, 2]")))

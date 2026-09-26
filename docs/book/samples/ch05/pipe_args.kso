@@ -3,5 +3,4 @@ fn clamp n lo hi
   return hi if hi < n
   n
 
-print "{12 . clamp 0 10}"
->> print "{4 . clamp 0 10}"
+print "{12 . clamp 0 10}" .> (_ -> print "{4 . clamp 0 10}")

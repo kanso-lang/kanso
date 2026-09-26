@@ -9,5 +9,5 @@ near = 9007199254740992.0
 pub play = said
 
 said = print "{big == near} {big != near} {big < near} {big > near}"
-  >> print "{near < big} {near > big} {big <= near} {big >= near}"
-  >> print "{9007199254740992 == near} {1 == 1.0} {1 < 1.5}"
+  .> (_ -> print "{near < big} {near > big} {big <= near} {big >= near}")
+  .> (_ -> print "{9007199254740992 == near} {1 == 1.0} {1 < 1.5}")

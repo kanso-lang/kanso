@@ -1,15 +1,17 @@
 import "std/time"
 
-gyoza =
-  print "gyoza: in the pan"
-  >> time/sleep 20 >> print "gyoza: flip"
-  >> time/sleep 20 >> print "gyoza: plated"
+gyoza = print "gyoza: in the pan"
+  .> (_ -> time/sleep 20)
+  .> (_ -> print "gyoza: flip")
+  .> (_ -> time/sleep 20)
+  .> (_ -> print "gyoza: plated")
 
 pub play =
   gyoza
   ramen
 
-ramen =
-  print "ramen: boiling"
-  >> time/sleep 30 >> print "ramen: noodles in"
-  >> time/sleep 30 >> print "ramen: bowled"
+ramen = print "ramen: boiling"
+  .> (_ -> time/sleep 30)
+  .> (_ -> print "ramen: noodles in")
+  .> (_ -> time/sleep 30)
+  .> (_ -> print "ramen: bowled")

@@ -116,15 +116,14 @@ exact_own = outcome (testing/when_failed (exact own) slipped)
 
 exact_far = outcome (testing/when_failed (exact far) slipped)
 
-pub play =
-  print "pattern   own   foreign"
-  >> print "_         {wildcard_own}  {wildcard_far}"
-  >> print "v         {variable_own}  {variable_far}"
-  >> print "v:err     {annotated_own}  {annotated_far}"
-  >> print "(err r)   {reason_own}  {reason_far}"
-  >> print "v:maybe   {member_own}  {member_far}"
-  >> print "v:some    {anything_own}  {anything_far}"
-  >> print "v:int     {whole_own}  {whole_far}"
-  >> print "v:string  {text_own}  {text_far}"
-  >> print "v:none    {absent_own}  {absent_far}"
-  >> print "1         {exact_own}  {exact_far}"
+pub play = print "pattern   own   foreign"
+  .> (_ -> print "_         {wildcard_own}  {wildcard_far}")
+  .> (_ -> print "v         {variable_own}  {variable_far}")
+  .> (_ -> print "v:err     {annotated_own}  {annotated_far}")
+  .> (_ -> print "(err r)   {reason_own}  {reason_far}")
+  .> (_ -> print "v:maybe   {member_own}  {member_far}")
+  .> (_ -> print "v:some    {anything_own}  {anything_far}")
+  .> (_ -> print "v:int     {whole_own}  {whole_far}")
+  .> (_ -> print "v:string  {text_own}  {text_far}")
+  .> (_ -> print "v:none    {absent_own}  {absent_far}")
+  .> (_ -> print "1         {exact_own}  {exact_far}")

@@ -2,5 +2,4 @@ fn tax rate price
   price + price * rate / 100
 
 on_250 = &tax 8 250
-print "still waiting: {on_250}"
->> print "called: {on_250()}"
+print "still waiting: {on_250}" .> (_ -> print "called: {on_250()}")

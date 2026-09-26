@@ -1,7 +1,8 @@
-pub play =
+pub play = tries .> (_ -> print "never served")
+
+tries =
   risky 1
   risky 2
-  >> print "never served"
 
 fn risky 1
   err "kettle is cold"

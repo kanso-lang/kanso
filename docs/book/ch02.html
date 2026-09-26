@@ -121,7 +121,7 @@ doubled <span class="o">=</span> <span class="f">list/to_list</span> (<span clas
 small <span class="o">=</span> <span class="f">list/to_list</span> (<span class="f">list/select</span> xs (x <span class="o">-&gt;</span> x <span class="o">&lt;</span> <span class="n">3</span>))
 first <span class="o">=</span> xs[<span class="n">1</span>]
 <span class="f">print</span> <span class="s">"sorted <span class="i">{list/sort xs}</span> doubled <span class="i">{doubled}</span> small <span class="i">{small}</span>"</span>
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"sum <span class="i">{list/sum xs}</span> len <span class="i">{length xs}</span> first <span class="i">{first}</span>"</span></code></pre>
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"sum <span class="i">{list/sum xs}</span> len <span class="i">{length xs}</span> first <span class="i">{first}</span>"</span>)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
     <pre><code>sorted [1 2 3] doubled [6 2 4] small [1 2]
@@ -151,7 +151,7 @@ sum 6 len 3 first 3</code></pre>
   <div class="code-panel-title">maps.kso</div>
   <pre><code>ages <span class="o">=</span> { <span class="s">"clay"</span>:<span class="n">47</span> <span class="s">"sam"</span>:<span class="n">30</span> }
 ages <span class="o">=</span> <span class="f">put</span> ages <span class="s">"mai"</span> <span class="n">8</span>
-<span class="f">print</span> <span class="s">"clay is <span class="i">{ages[</span>"</span>clay<span class="s">"]}"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"all: <span class="i">{entries ages}</span>"</span></code></pre>
+<span class="f">print</span> <span class="s">"clay is <span class="i">{ages[</span>"</span>clay<span class="s">"]}"</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"all: <span class="i">{entries ages}</span>"</span>)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
     <pre><code>clay is 47

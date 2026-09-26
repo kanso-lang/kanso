@@ -3,7 +3,7 @@
 # the view when every later mention of the view only reads it while that
 # frame stands. Each function below lets its view outlive the frame some other
 # way: returned, kept in a list, captured by a function, handed through a
-# parameter that returns it, rebound to another name, deferred past `>>`.
+# parameter that returns it, rebound to another name, deferred past a bind.
 # Each makes two views, one after the other, at the same depth of the stack,
 # and reads both only afterwards, so a header left in a dead frame reads the
 # second string where the first belongs. The last function only reads its

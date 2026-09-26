@@ -31,15 +31,8 @@ kanso = "target/release/kanso"
 
 probe = "target/effects_probe.kso"
 
-# sequencing and binding at their simplest, so a difference here is not hidden
-# inside a harder case
-seq_two = shape "io/write \"a\" >> io/write \"b\"" "write then write" "ab"
-
-seq_three = shape
-  "io/write \"a\" >> io/write \"b\" >> io/write \"c\""
-  "three writes"
-  "abc"
-
+# binding at its simplest, so a difference here is not hidden inside a harder
+# case
 bind_drop = shape
   "io/write \"a\" .> (_ -> io/write \"b\")"
   "bind ignores its value"
@@ -71,27 +64,12 @@ nested_bind = shape
   "bind returns a bind"
   "abc"
 
-seq_in_bind = shape
-  "io/write \"a\" .> (_ -> io/write \"b\" >> io/write \"c\")"
-  "seq inside a bind"
-  "abc"
-
-bind_after_seq = shape
-  "io/write \"a\" >> io/write \"b\" .> (_ -> io/write \"c\")"
-  "bind after a seq"
-  "abc"
-
 # a parallel group: adjacent statements in a block
 two_lines = shape "io/write \"a\"\n  io/write \"b\"" "two lines" "ab"
 
 three_lines = shape
   "io/write \"a\"\n  io/write \"b\"\n  io/write \"c\""
   "three lines"
-  "abc"
-
-wall = shape
-  "io/write \"a\"\n  io/write \"b\" >> io/write \"c\""
-  "a wall between groups"
   "abc"
 
 bind_beside = shape
@@ -165,41 +143,41 @@ read_beside = shape
 
 # a description held in a local, and one used twice
 in_a_local = shape
-  "w = io/write \"a\"\n  w >> io/write \"b\""
+  "w = io/write \"a\"\n  w .> (_ -> io/write \"b\")"
   "a description in a local"
   "ab"
 
 twice_over = shape
-  "w = io/write \"a\"\n  w >> w"
+  "w = io/write \"a\"\n  w .> (_ -> w)"
   "the same description twice"
   "aa"
 
 from_a_list = shape
-  "ws = [(io/write \"a\") (io/write \"b\")]\n  ws[1] >> ws[2]"
+  "ws = [(io/write \"a\") (io/write \"b\")]\n  ws[1] .> (_ -> ws[2])"
   "a description from a list"
   "ab"
 
 to_stderr = shape
-  "io/write \"a\" >> io/write_err \"e\""
+  "io/write \"a\" .> (_ -> io/write_err \"e\")"
   "a description built by a fn"
   "a"
 
 # descriptions and the ordinary value world
 compares = shape
-  "w = io/write \"a\"\n  io/write \"\{w == w}\" >> w"
+  "w = io/write \"a\"\n  io/write \"\{w == w}\" .> (_ -> w)"
   "a description compares"
   "?"
 
 renders = shape
-  "w = io/write \"a\"\n  io/write \"\{w}\" >> w"
+  "w = io/write \"a\"\n  io/write \"\{w}\" .> (_ -> w)"
   "a description renders"
   "<io>a"
 
-simple = [seq_two seq_three bind_drop bind_value bind_twice re_enter computed]
+simple = [bind_drop bind_value bind_twice re_enter computed]
 
-nests = [nested_bind seq_in_bind bind_after_seq]
+nests = [nested_bind]
 
-groups = [two_lines three_lines wall bind_beside group_of_binds]
+groups = [two_lines three_lines bind_beside group_of_binds]
 
 world = [unset absent no_args no_dir]
 

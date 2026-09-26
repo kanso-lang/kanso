@@ -1,5 +1,0 @@
-pub play =
-  build
-    x = 1
-    >> x
-  print "{x}"

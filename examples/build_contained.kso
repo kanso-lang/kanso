@@ -21,5 +21,5 @@ fn spin n acc
 
 knot = tie "ping"
 print "one hop: {knot.peer.name}"
->> print "back home: {round_trip knot}"
->> print "two thousand more, all discarded: {spin 2000 0}"
+  .> (_ -> print "back home: {round_trip knot}")
+  .> (_ -> print "two thousand more, all discarded: {spin 2000 0}")

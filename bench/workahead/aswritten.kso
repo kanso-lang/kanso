@@ -6,7 +6,7 @@ crunch = os/args .> (_ -> print "report: {grind 150000000}")
 fn grind n
   spin n 0
 
-sleep 2000 >> print "delivery: made" >> crunch
+sleep 2000 .> (_ -> print "delivery: made") .> (_ -> crunch)
 
 fn spin 0 acc
   acc

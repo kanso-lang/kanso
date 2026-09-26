@@ -11,6 +11,6 @@ fn describe x
   "something else: {x}"
 
 print (describe 0)
->> print (describe 7)
->> print (describe "seven")
->> print (describe 1.5)
+  .> (_ -> print (describe 7))
+  .> (_ -> print (describe "seven"))
+  .> (_ -> print (describe 1.5))

@@ -27,11 +27,10 @@ fn shown none
 fn shown x
   apply print x
 
-pub play =
-  shown 7
-  >> shown 1.5
-  >> shown true
-  >> shown none
-  >> shown [7 8]
-  >> shown "ab"
-  >> shown (point 1 2)
+pub play = shown 7
+  .> (_ -> shown 1.5)
+  .> (_ -> shown true)
+  .> (_ -> shown none)
+  .> (_ -> shown [7 8])
+  .> (_ -> shown "ab")
+  .> (_ -> shown (point 1 2))

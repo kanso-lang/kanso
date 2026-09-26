@@ -2,6 +2,5 @@ import "std/list"
 
 orders = ["oat" "soy" "oat" "whole" "oat"]
 
-pub play =
-  print "tally {list/tally orders}"
-  >> print "letters {list/group_by orders (s -> s[1])}"
+pub play = print "tally {list/tally orders}"
+  .> (_ -> print "letters {list/group_by orders (s -> s[1])}")

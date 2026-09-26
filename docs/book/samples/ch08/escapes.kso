@@ -39,8 +39,7 @@ fn hex_code n
 
 pub play =
   bell = text/from_code 7
-  print (quote_str "a\"b\nc")
-  >> print (quote_str "ring{bell}ring")
+  print (quote_str "a\"b\nc") .> (_ -> print (quote_str "ring{bell}ring"))
 
 fn quote_str s
   "\"{escape_str s}\""

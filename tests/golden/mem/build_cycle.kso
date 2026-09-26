@@ -34,5 +34,4 @@ pub play =
   build
     base = node "seed" _
     base.peers = [base]
-  print "{graph}"
-  >> print "{base}"
+  print "{graph}" .> (_ -> print "{base}")

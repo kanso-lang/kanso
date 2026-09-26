@@ -5,5 +5,4 @@ fn describe x:int
   "the int {x}"
 
 xs = [1 2]
-print (describe xs[9])
->> print (describe 7)
+print (describe xs[9]) .> (_ -> print (describe 7))

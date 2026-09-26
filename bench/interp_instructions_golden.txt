@@ -596,5 +596,5 @@
 # CI measured a length, an index and a literal becoming words directly, at
 # f774749e: interp_instructions 584,588,724 -> 578,807,674, a FALL of
 # 5,781,050.
-interp_instructions=578807674
+interp_instructions=578682708
 # measured-on glibc=2.39-0ubuntu8.9 rustc=1.98.1

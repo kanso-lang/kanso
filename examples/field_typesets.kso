@@ -10,5 +10,5 @@ type wallet
   amount
 
 print "{slot none} {slot 7} {slot "text"}"
->> print "{count 3} {count 2.5}"
->> print "{wallet (money 350)} {wallet none}"
+  .> (_ -> print "{count 3} {count 2.5}")
+  .> (_ -> print "{wallet (money 350)} {wallet none}")

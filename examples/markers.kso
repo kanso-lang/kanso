@@ -7,4 +7,4 @@ fn describe n:int
   "the number {n}"
 
 missing = null
-print "{missing}" >> print (describe null) >> print (describe 7)
+print "{missing}" .> (_ -> print (describe null)) .> (_ -> print (describe 7))

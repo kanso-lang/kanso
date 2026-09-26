@@ -211,7 +211,6 @@ fn expr_types<'a>(
             }
             HashSet::default()
         }
-        Expr::Seq(_, b, _) => expr_types(b, type_names, groups, returns, env, reads),
         _ => HashSet::default(),
     }
 }

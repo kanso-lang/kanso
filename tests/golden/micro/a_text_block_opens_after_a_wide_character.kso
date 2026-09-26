@@ -25,4 +25,4 @@ four = pick "🎯" """
   f
 """
 
-pub play = print two >> print three >> print four
+pub play = print two .> (_ -> print three) .> (_ -> print four)

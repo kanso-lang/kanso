@@ -6,12 +6,11 @@
 # "abXcd" does not hold, and the first line would find nothing.
 import "std/regexp"
 
-pub play =
-  print "across:   {regexp/find "ab.cd" "xx abXcd"}"
-  >> print "longest:  {regexp/find "a[0-9]+xyz" "a12xyz"}"
-  >> print "grouped:  {regexp/find "(q+)rst" "qqrst"}"
-  >> print "at end:   {regexp/find_all "[a-z]+zzq" "abcabczzq"}"
-  >> print "absent:   {regexp/find_all "[a-z]+zzq" "abcabcabc"}"
-  >> print "twice:    {regexp/find_all "o+k" "ok, ook"}"
-  >> print "blind:    {regexp/find "(?i)zzq" "a ZZQ"}"
-  >> print "split:    {regexp/split "--" "a--b--c"}"
+pub play = print "across:   {regexp/find "ab.cd" "xx abXcd"}"
+  .> (_ -> print "longest:  {regexp/find "a[0-9]+xyz" "a12xyz"}")
+  .> (_ -> print "grouped:  {regexp/find "(q+)rst" "qqrst"}")
+  .> (_ -> print "at end:   {regexp/find_all "[a-z]+zzq" "abcabczzq"}")
+  .> (_ -> print "absent:   {regexp/find_all "[a-z]+zzq" "abcabcabc"}")
+  .> (_ -> print "twice:    {regexp/find_all "o+k" "ok, ook"}")
+  .> (_ -> print "blind:    {regexp/find "(?i)zzq" "a ZZQ"}")
+  .> (_ -> print "split:    {regexp/split "--" "a--b--c"}")

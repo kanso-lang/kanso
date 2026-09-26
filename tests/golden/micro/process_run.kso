@@ -6,6 +6,5 @@ import "std/os"
 fn report a
   "status {a.status} said {a.stdout}"
 
-pub play =
-  os/run "printf" ["ready"] .> (a -> print (report a))
-  >> os/run "false" [] .> (b -> print (report b))
+pub play = os/run "printf" ["ready"] .> (a -> print (report a))
+  .> (_ -> os/run "false" [] .> (b -> print (report b)))

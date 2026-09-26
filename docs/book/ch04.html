@@ -72,8 +72,7 @@ ratio <span class="o">=</span> <span class="f">text/to_int</span> word
 <div class="code-panel">
   <div class="code-panel-title">unasked.kso</div>
   <pre><code>seasonal <span class="o">=</span> <span class="f">price</span> <span class="s">"flan"</span>
-<span class="f">print</span> (<span class="f">label</span> <span class="s">"soup"</span> (<span class="f">price</span> <span class="s">"soup"</span>))
-<span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">label</span> <span class="s">"flan"</span> seasonal)
+<span class="f">print</span> (<span class="f">label</span> <span class="s">"soup"</span> (<span class="f">price</span> <span class="s">"soup"</span>)) <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">label</span> <span class="s">"flan"</span> seasonal))
 
 <span class="k">fn</span> <span class="f">price</span> <span class="s">"flan"</span>
   <span class="f">err</span> <span class="s">"flan is seasonal"</span>
@@ -88,7 +87,7 @@ ratio <span class="o">=</span> <span class="f">text/to_int</span> word
 <div class="code-panel">
   <div class="code-panel-title">kanso play unasked.kso</div>
   <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the executor: "flan is seasonal"
-  born in price at unasked.kso:6
+  born in price at unasked.kso:5
   passed through label
 soup: 450 cents</code></pre>
 </div>
@@ -150,8 +149,7 @@ bad <span class="o">=</span> <span class="f">steeped</span> <span class="n">0</s
   <div class="code-panel-title">boundary.kso</div>
 <pre><code><span class="k">import</span> <span class="s">"./kitchen"</span>
 
-<span class="f">print</span> (<span class="f">kitchen/served</span> <span class="s">"go"</span>)
-<span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">kitchen/mine</span> <span class="s">"go"</span>)</code></pre>
+<span class="f">print</span> (<span class="f">kitchen/served</span> <span class="s">"go"</span>) <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">kitchen/mine</span> <span class="s">"go"</span>))</code></pre>
 </div>
 
 <p><code>served</code> answers <code>sorry, no tea</code>. <code>mine</code> reaches the endpoint, and the report never mentions the callback:</p>
@@ -197,7 +195,7 @@ flavors[<span class="n">9</span>]! <span class="o">.&gt;</span> (f <span class="
 flavors <span class="o">=</span> [<span class="s">"matcha"</span> <span class="s">"ube"</span> <span class="s">"hojicha"</span>]
 first <span class="o">=</span> flavors[<span class="n">1</span>]
 fourth <span class="o">=</span> flavors[<span class="n">4</span>]
-<span class="f">print</span> <span class="s">"first: <span class="i">{first}</span>"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">describe</span> fourth)</code></pre>
+<span class="f">print</span> <span class="s">"first: <span class="i">{first}</span>"</span> <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">describe</span> fourth))</code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
     <pre><code>first: matcha
@@ -283,7 +281,7 @@ menu[<span class="s">"pocky"</span>]! <span class="o">.&gt;</span> (yen <span cl
   <span class="f">malformed</span>
 
 <span class="f">print</span> (<span class="f">describe</span> (<span class="f">parse_flag</span> <span class="s">"on"</span>))
-<span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">describe</span> (<span class="f">parse_flag</span> <span class="s">"banana"</span>))</code></pre>
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> (<span class="f">describe</span> (<span class="f">parse_flag</span> <span class="s">"banana"</span>)))</code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
     <pre><code>flag: true
@@ -390,7 +388,7 @@ not a flag</code></pre>
 
 <h2>failures in company</h2>
 
-<p>one question remains: what happens when two failures happen at once? chapter 01 established that plain consecutive statements are unordered—parallel by default—and <code>&gt;&gt;</code> is the wall that sequences. an err arriving at a wall kills everything after it, exactly as the railway predicts. but between statements with no order there is no "after," so neither failure can preempt the other. both sides run, and both failures arrive:</p>
+<p>one question remains: what happens when two failures happen at once? chapter 01 established that plain consecutive statements are unordered—parallel by default—and that a bind, <code>.&gt;</code>, is what puts one step after another. an err arriving at a bind skips everything after it, exactly as the railway predicts. but between statements with no order there is no "after," so neither failure can preempt the other. both sides run, and both failures arrive:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">teas.kso</div>
@@ -400,8 +398,7 @@ sencha <span class="o">=</span> <span class="f">text/trim</span> <span class="s"
 hojicha <span class="o">=</span> <span class="f">text/trim</span> <span class="s">" two "</span>
 
 <span class="f">print</span> <span class="s">"sencha: <span class="i">{text/to_int sencha}</span> steeps left"</span>
-<span class="f">print</span> <span class="s">"hojicha: <span class="i">{text/to_int hojicha}</span> steeps left"</span>
-<span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"serving"</span></code></pre>
+<span class="f">print</span> <span class="s">"hojicha: <span class="i">{text/to_int hojicha}</span> steeps left"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run teas.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: [""one" is not an integer" ""two" is not an integer"]</code></pre>
@@ -418,7 +415,7 @@ sencha <span class="o">=</span> <span class="f">text/trim</span> <span class="s"
 hojicha <span class="o">=</span> <span class="f">text/trim</span> <span class="s">" two "</span>
 
 <span class="f">print</span> <span class="s">"sencha: <span class="i">{text/to_int sencha}</span> steeps left"</span>
-<span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"hojicha: <span class="i">{text/to_int hojicha}</span> steeps left"</span></code></pre>
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"hojicha: <span class="i">{text/to_int hojicha}</span> steeps left"</span>)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run seq.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: ""one" is not an integer"
@@ -431,7 +428,7 @@ hojicha <span class="o">=</span> <span class="f">text/trim</span> <span class="s
 <p>the compiler cannot always see the dependence. these two statements are adjacent, so they are a group, so they run together:</p>
 
 <div class="code-panel">
-  <div class="code-panel-title">unwalled.kso</div>
+  <div class="code-panel-title">grouped.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"std/os"</span>
 
 <span class="k">fn</span> <span class="f">show</span> p
@@ -441,27 +438,26 @@ hojicha <span class="o">=</span> <span class="f">text/trim</span> <span class="s
   <span class="f">os/run</span> <span class="s">"sh"</span> [<span class="s">"-c"</span> <span class="s">"sleep 1; printf written &gt; slow.txt"</span>]
   <span class="f">os/run</span> <span class="s">"cat"</span> [<span class="s">"slow.txt"</span>] <span class="o">.&gt;</span> <span class="f">show</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run unwalled.kso</div>
+    <div class="code-panel-title">kanso run grouped.kso</div>
     <pre><code>read: []</code></pre>
   </div>
 </div>
 
 <p>the write takes a second. the read does not wait for it, because nothing tells it to—no value passes from the first statement to the second. the dependency between them runs through the filesystem, which is outside the program, and no analysis can follow it there. the read finishes first and finds nothing.</p>
 
-<p>the wall says what the compiler could not work out:</p>
+<p>a bind says what the compiler could not work out:</p>
 
 <div class="code-panel">
-  <div class="code-panel-title">walled.kso</div>
+  <div class="code-panel-title">ordered.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"std/os"</span>
 
 <span class="k">fn</span> <span class="f">show</span> p
   <span class="f">print</span> <span class="s">"read: [<span class="i">{p.stdout}</span>]"</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
-  <span class="f">os/run</span> <span class="s">"sh"</span> [<span class="s">"-c"</span> <span class="s">"sleep 1; printf written &gt; slow.txt"</span>]
-  <span class="o">&gt;&gt;</span> <span class="f">os/run</span> <span class="s">"cat"</span> [<span class="s">"slow.txt"</span>] <span class="o">.&gt;</span> <span class="f">show</span></code></pre>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">os/run</span> <span class="s">"sh"</span> [<span class="s">"-c"</span> <span class="s">"sleep 1; printf written &gt; slow.txt"</span>]
+  <span class="o">.&gt;</span> (_ <span class="o">-&gt;</span> <span class="f">os/run</span> <span class="s">"cat"</span> [<span class="s">"slow.txt"</span>] <span class="o">.&gt;</span> show)</code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run walled.kso</div>
+    <div class="code-panel-title">kanso run ordered.kso</div>
     <pre><code>read: [written]</code></pre>
   </div>
 </div>
