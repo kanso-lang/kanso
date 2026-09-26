@@ -16350,3 +16350,43 @@ bytes, and rises in four: jsonbench 238,888 -> 238,936, escapebench 213,000
 The compile golden's `module` fixture reads 1,062 -> 1,069 lines, 104 -> 107
 calls and 80 -> 81 branches, `recursion` 278 -> 279 lines and `build_block`
 241 -> 242.
+
+## 2026-09-26 — an index asks its bounds with two branches
+
+The length assumption above left the decoder's own reads alone. In
+`parse_value` and `array_open` the read `cs[p]` still compiled to `test`,
+`setg`, `cmp`, `setge`, `test` and a branch, 1,100,286 and 691,020 times a
+run, because nothing about `p` settled either bound and the assumption gave
+LLVM no fold to make there. The three emitter sites now branch on `1 <= i`
+first and on `i <= len` second, through `index_in_range`. Emitted with both
+compares ahead of the first branch, the pair came out of LLVM byte for byte
+as it went in: SimplifyCFG folds a second block holding only a compare back
+into the first. The length load now sits between the two branches, which
+leaves nothing cheap to hoist, and the pair stays two compares and two jumps.
+
+Against the carrier above, on the container: runbench 1,159,169,338 ->
+1,155,830,444 (-0.29%), jsonbench 782,719,021 -> 773,942,671 (-1.12%),
+widebench -1.10%, digestbench -0.47% and oneshot -0.44%. livebench rises
+216,600 (+0.01%) to 1,691,479,598 and basket 3,456 to 30,455,989.
+
+The same split in the prelude's two index helpers was measured on top and
+dropped: jsonbench fell further, to -1.47%, but runbench kept only -0.11%.
+
+Emitted branches rise where the reads are: runbench 2,699 -> 2,809 and
+28,035 -> 28,145 lines, the decoder 505 -> 539 branches and 5,689 -> 5,723
+lines, livebench 591 -> 631 and 6,882 -> 6,922, oneshot 571 -> 611 and 6,751
+-> 6,791, scanbench 1,479 -> 1,527 and 14,764 -> 14,812, encodebench 468 ->
+492 and 6,016 -> 6,040, widebench 491 -> 516 and 6,312 -> 6,337, digestbench
+392 -> 413 and 4,558 -> 4,579, basket 526 -> 542 and 5,390 -> 5,406,
+pendbench 285 -> 289 and 2,972 -> 2,976, deepbench 142 -> 144 and 1,728 ->
+1,730, indexbench 25 -> 26 and 572 -> 573. Machine code grows in runbench
+398,760 -> 399,640 bytes, jsonbench 238,936 -> 239,560, oneshot 249,432 ->
+250,056 and livebench 250,344 -> 250,968, and shrinks in six others. The
+compile golden's `module` fixture reads 1,069 -> 1,071 lines and 81 -> 83
+branches.
+
+The spec is `an_index_loads_its_length_after_its_lower_bound` in
+tests/perf_ratchet.rs: in a proven read, the lower bound's compare is
+followed at once by a branch, and the length is loaded after it. It fails on
+the carrier's codegen, and the ratchet row `index_split` moves the load back
+ahead of the branch.
