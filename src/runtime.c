@@ -9821,8 +9821,10 @@ static __attribute__((noinline, cold, preserve_most)) KValue k_b_to_int_slow(con
     return k_int(n);
 }
 
-static KValue k_to_int_text(const char* data, long long len, const char* origin);
-static KValue k_to_float_text(const char* data, long long len, const char* origin);
+static KValue k_to_int_text(const char* data, long long len, long long room,
+                            const char* origin);
+static KValue k_to_float_text(const char* data, long long len, long long room,
+                              const char* origin);
 KValue k_b_to_float(KValue v, const char* origin);
 
 KValue k_b_to_int(KValue sv, const char* origin) {
@@ -9833,14 +9835,55 @@ KValue k_b_to_int(KValue sv, const char* origin) {
     long long len;
     if (sv.tag == K_STR) { KStr* s = k_as_str(sv); data = s->data; len = s->len; }
     else { KBytes* b = k_as_bytes(sv); data = (const char*)b->data; len = b->len; }
-    return k_to_int_text(data, len, origin);
+    return k_to_int_text(data, len, len, origin);
 }
 
-static KValue k_to_int_text(const char* data, long long len, const char* origin) {
+/* A word's bytes that are not ascii digits, as 0x80 in each such byte. Each
+   byte is xored with '0', so a digit becomes 0 to 9, and a byte is flagged
+   when it is above 9: its low seven bits plus 0x76 reach 0x80 from 0x0A up,
+   and its own top bit covers the rest. The add stays under 0x100 in every
+   byte, so no byte's answer carries into its neighbour's. */
+static inline uint64_t k_nondigits8(uint64_t x) {
+    uint64_t t = x ^ 0x3030303030303030ULL;
+    return (((t & 0x7F7F7F7F7F7F7F7FULL) + 0x7676767676767676ULL) | t) & 0x8080808080808080ULL;
+}
+
+/* The top `n` bytes of `w` read as decimal digits, 1 <= n <= 8, most
+   significant first in memory, with the bytes below them read as leading
+   zeros. The caller has checked they are digits. The combine is three
+   multiply-shifts: digits into pairs, pairs into quads, quads into eight. */
+static inline long long k_digits8_value(uint64_t w, long long n) {
+    uint64_t keep = ~0ULL << (8 * (8 - n));
+    uint64_t v = ((w & keep & 0x0F0F0F0F0F0F0F0FULL) * 2561) >> 8;
+    v = ((v & 0x00FF00FF00FF00FFULL) * 6553601) >> 16;
+    return (long long)(uint32_t)(((v & 0x0000FFFF0000FFFFULL) * 42949672960001ULL) >> 32);
+}
+
+/* The last `n` of the eight bytes that end at `end` as a number, when all n
+   are digits, 1 <= n <= 8. The caller guarantees the eight bytes are inside
+   the buffer. */
+static inline int k_digits_back8(const char* end, long long n, long long* out) {
+    uint64_t w;
+    memcpy(&w, end - 8, 8);
+    if (k_nondigits8(w) & (~0ULL << (8 * (8 - n)))) return 0;
+    *out = k_digits8_value(w, n);
+    return 1;
+}
+
+/* `room` is how many bytes of the buffer end at data + len, so a run of up to
+   eight digits is read as one word when there are eight to read. A json
+   number's slice ends inside the document, so it nearly always has room; a
+   short string on its own does not, and takes the loop. */
+static KValue k_to_int_text(const char* data, long long len, long long room,
+                            const char* origin) {
     /* Strict [-]?digits{1,18} parses in a bare loop (18 digits cannot
        overflow i64); every other shape — longer runs, leading space or '+',
        junk — falls through to strtoll so behavior stays exactly libc's. */
     long long start = (len > 0 && data[0] == '-') ? 1 : 0;
+    if (start < len && len - start <= 8 && room >= 8) {
+        long long v;
+        if (k_digits_back8(data + len, len - start, &v)) return k_int(start ? -v : v);
+    }
     if (start < len && len - start <= 18) {
         long long acc = 0, j = start;
         for (; j < len; j++) {
@@ -9866,7 +9909,8 @@ KValue k_b_to_int_slice(KValue cs, KValue fromv, KValue tov, const char* origin)
         KBytes* b = k_as_bytes(cs);
         long long from = fromv.payload, to = tov.payload;
         if (k_span_in(from, to, b->len)) {
-            return k_to_int_text((const char*)b->data + (from - 1), to - from + 1, origin);
+            return k_to_int_text((const char*)b->data + (from - 1), to - from + 1, to,
+                                 origin);
         }
     }
     return k_b_to_int(k_b_slice(cs, fromv, tov), origin);
@@ -9877,7 +9921,8 @@ K_DOORCC KValue k_b_to_float_slice(KValue cs, KValue fromv, KValue tov, const ch
         KBytes* b = k_as_bytes(cs);
         long long from = fromv.payload, to = tov.payload;
         if (k_span_in(from, to, b->len)) {
-            return k_to_float_text((const char*)b->data + (from - 1), to - from + 1, origin);
+            return k_to_float_text((const char*)b->data + (from - 1), to - from + 1, to,
+                                   origin);
         }
     }
     return k_b_to_float(k_b_slice(cs, fromv, tov), origin);
@@ -10693,10 +10738,53 @@ KValue k_b_to_float(KValue v, const char* origin) {
     long long len;
     if (v.tag == K_STR) { KStr* s = k_as_str(v); data = s->data; len = s->len; }
     else { KBytes* b = k_as_bytes(v); data = (const char*)b->data; len = b->len; }
-    return k_to_float_text(data, len, origin);
+    return k_to_float_text(data, len, len, origin);
 }
 
-static KValue k_to_float_text(const char* data, long long len, const char* origin) {
+static const unsigned long long k_pow10_small[8] = {
+    1, 10, 100, 1000, 10000, 100000, 1000000, 10000000,
+};
+
+/* `[-]I.F` with one to eight digits of I and one to seven of F, read as two
+   words that end at the dot and at the last byte. The fraction's length is
+   the run of digits at the top of the last word, so the dot is found without
+   a scan, and the integer part must fill exactly the bytes between the sign
+   and the dot. What comes out is the (w, q) the scan below would build from
+   the same digits, and it goes to the same eisel-lemire. `room` is how many
+   bytes of the buffer end at data + len; both words must lie inside it. */
+static inline int k_float_shape8(const char* data, long long len, long long room,
+                                 double* out) {
+    if (room < 16 || len < 3 || len > 17) return 0;
+    const char* stop = data + len;
+    uint64_t fw;
+    memcpy(&fw, stop - 8, 8);
+    uint64_t fbad = k_nondigits8(fw);
+    long long f = fbad ? (long long)(__builtin_clzll(fbad) >> 3) : 8;
+    if (f < 1 || f > 7 || stop[-f - 1] != '.') return 0;
+    const char* dot = stop - f - 1;
+    long long s = data[0] == '-' ? 1 : 0;
+    long long i = (long long)(dot - data) - s;
+    if (i < 1 || i > 8) return 0;
+    uint64_t iw;
+    memcpy(&iw, dot - 8, 8);
+    if (k_nondigits8(iw) & (~0ULL << (8 * (8 - i)))) return 0;
+    unsigned long long w = (unsigned long long)k_digits8_value(iw, i) * k_pow10_small[f]
+                         + (unsigned long long)k_digits8_value(fw, f);
+    double d;
+    if (!k_el_parse(w, -f, &d)) return 0;
+    *out = s ? -d : d;
+    return 1;
+}
+
+/* Inlined into both doors by name. With the shape above in it, clang stopped
+   inlining it into k_b_to_float, and widebench's 72,000 parses paid the
+   call: 272,000 instructions. */
+static inline __attribute__((always_inline)) KValue
+k_to_float_text(const char* data, long long len, long long room, const char* origin) {
+    {
+        double shaped;
+        if (k_float_shape8(data, len, room, &shaped)) return k_float(shaped);
+    }
     /* the fast path: a plain decimal scanned into (w, q) and parsed by
        eisel-lemire; anything it can't be certain about — overlong digits,
        exotic forms, halfway cases — falls through to strtod, which stays

@@ -3081,6 +3081,25 @@ nightly_shards = row
 
 rows_c1ze = text/concat rows_c1zd [nightly_shards]
 
+# A run of up to eight digits is read as one word, and a short decimal as two,
+# each loaded from the eight bytes that end at its last digit. Both specs lift
+# the word helpers out of the runtime and sweep every byte at every position.
+digit_word = row
+  "a digit word that reads a colon as ten"
+  false
+  "cargo test --release --test the_int_fast_path_agrees_with_libc"
+  "specs (unit, golden, differential)"
+  (breaking "a_digit_word_that_reads_a_colon_as_ten")
+  release
+
+float_word = row
+  "a float word that never looks for its dot"
+  false
+  "cargo test --release --test every_float_literal_parses_like_strtod"
+  "specs (unit, golden, differential)"
+  (breaking "a_float_word_that_never_looks_for_its_dot")
+  release
+
 # The ratchet naming each row as it starts has no row here. The spec that
 # watches it, a_clean_head_still_proves_its_row, runs `prove` itself, and
 # `prove` works in fixed directories -- /tmp/kanso-ratchet-base, one
@@ -3088,7 +3107,9 @@ rows_c1ze = text/concat rows_c1zd [nightly_shards]
 # that spec as a gate removes its own baseline worktree from under itself. On
 # kanso#1675 the baseline read the gate red before any mutation. The other
 # specs in tests/ that run `prove` carry no row for the same reason.
-rows_c = text/concat rows_c1ze [itself]
+rows_c1zg = text/concat rows_c1ze [digit_word float_word]
+
+rows_c = text/concat rows_c1zg [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
