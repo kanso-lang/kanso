@@ -32,6 +32,12 @@
 //! WATCHED RED by dropping `!cut` from the fast path's condition — the
 //! exact edit kanso#1423 made in reverse, and the mutation
 //! `a_truncated_significand_taken_as_certain.sh` already applies.
+//!
+//! A THIRD SPAN, the word shape. `[-]I.F` with up to eight digits of I and
+//! seven of F is read as two words that end at the dot and at the last byte,
+//! when the buffer holds sixteen bytes there. It is lifted with its helpers
+//! and asked about every string twice, at the end of a buffer whose sixteen
+//! bytes in front are random, so what precedes the number has to be ignored.
 
 use std::path::Path;
 use std::process::Command;
@@ -61,6 +67,20 @@ fn every_float_literal_parses_like_strtod() {
     )
     .replace("k_stat_el_parses++;", "");
 
+    // The word shape and the three helpers it reads with. The helpers are
+    // declared before the pow5 tables in the runtime and the shape after
+    // k_el_parse, so they are lifted in that order.
+    let words = format!(
+        "{}\n\n{}",
+        cut(&src, "static inline uint64_t k_nondigits8(uint64_t x) {", "\n}"),
+        cut(&src, "static inline long long k_digits8_value(uint64_t w, long long n) {", "\n}"),
+    );
+    let shape = cut(
+        &src,
+        "static const unsigned long long k_pow10_small[8] = {",
+        "    *out = s ? -d : d;\n    return 1;\n}",
+    );
+
     // The scan: from the `if (len > 0)` that opens it to the strtod
     // fallthrough that follows the block, which is then trimmed back off.
     //
@@ -82,10 +102,15 @@ fn every_float_literal_parses_like_strtod() {
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <stdint.h>
 /* the lifted text guards its counters; a harness counts nothing */
 #define K_COUNTING 0
 
+{words}
+
 {el}
+
+{shape}
 
 /* the shipped scan, lifted: 1 and *res when the fast path is certain,
    0 when it defers to strtod */
@@ -100,17 +125,39 @@ static unsigned long long bits_of(double d) {{
     return u;
 }}
 
-static long long seen = 0, took = 0, bad = 0;
+static long long seen = 0, took = 0, bad = 0, shaped = 0;
+static unsigned long long junk = 0x2545F4914F6CDD1DULL;
 
 static void one(const char* s) {{
     seen++;
-    double got;
-    if (!fast(s, (long long)strlen(s), &got)) return;  /* deferred: strtod's */
-    took++;
+    long long len = (long long)strlen(s);
     double want = strtod(s, NULL);
-    if (bits_of(got) != bits_of(want)) {{
-        if (bad < 8) fprintf(stderr, "  %s -> %.17g want %.17g\n", s, got, want);
-        bad++;
+    double got;
+    if (fast(s, len, &got)) {{
+        took++;
+        if (bits_of(got) != bits_of(want)) {{
+            if (bad < 8) fprintf(stderr, "  %s -> %.17g want %.17g\n", s, got, want);
+            bad++;
+        }}
+    }}
+    /* the word shape, at the end of a buffer with sixteen random bytes in
+       front: when it answers, it answers what strtod does for the whole
+       string, which rules out a shape taken by a string it does not fit */
+    char buf[600];
+    if (len > 500) return;
+    for (int i = 0; i < 16; i++) {{
+        junk ^= junk << 13; junk ^= junk >> 7; junk ^= junk << 17;
+        buf[i] = (char)junk;
+    }}
+    memcpy(buf + 16, s, (size_t)len);
+    char* end = NULL;
+    strtod(s, &end);
+    if (k_float_shape8(buf + 16, len, 16 + len, &got)) {{
+        shaped++;
+        if (end != s + len || bits_of(got) != bits_of(want)) {{
+            if (bad < 8) fprintf(stderr, "  shape %s -> %.17g want %.17g\n", s, got, want);
+            bad++;
+        }}
     }}
 }}
 
@@ -191,8 +238,34 @@ int main(void) {{
         one(buf);
     }}
 
-    printf("%lld parsed, %lld took the fast path, %lld disagree with strtod\n",
-           seen, took, bad);
+    /* 7. the word shape's own edges: every byte value at every position of
+       a short decimal, so a sign, a second dot, a letter or a space where a
+       digit should be is refused rather than read */
+    for (int ilen = 1; ilen <= 9; ilen++) {{
+        for (int flen = 0; flen <= 8; flen++) {{
+            int n = ilen + 1 + flen;
+            for (int at = 0; at < n; at++) {{
+                for (int c = 1; c < 256; c++) {{
+                    for (int k = 0; k < ilen; k++) buf[k] = (char)('1' + (k * 3 + flen) % 9);
+                    buf[ilen] = '.';
+                    for (int k = 0; k < flen; k++) buf[ilen + 1 + k] = (char)('0' + (k * 7 + ilen) % 10);
+                    buf[at] = (char)c;
+                    buf[n] = 0;
+                    one(buf);
+
+                }}
+            }}
+            for (int k = 0; k < ilen; k++) buf[k + 1] = (char)('1' + (k * 3 + flen) % 9);
+            buf[0] = '-';
+            buf[ilen + 1] = '.';
+            for (int k = 0; k < flen; k++) buf[ilen + 2 + k] = (char)('0' + (k * 7 + ilen) % 10);
+            buf[n + 1] = 0;
+            one(buf);
+        }}
+    }}
+
+    printf("%lld parsed, %lld took the fast path, %lld took the word shape, %lld disagree with strtod\n",
+           seen, took, shaped, bad);
     return bad != 0;
 }}
 "#

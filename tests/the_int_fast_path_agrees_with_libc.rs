@@ -18,6 +18,12 @@
 //! optimising this would reach for: 50,249 of 23,600,018 fast-path takes
 //! disagree with strtoll, the first at "9223372036854775808" — 2^63 exactly,
 //! where the loop wraps to the negative and libc saturates.
+//!
+//! A run of up to eight digits is read as one word, loaded from the eight
+//! bytes that end at its last digit, when the buffer holds eight bytes there.
+//! The word's three helpers are lifted with the decision, and every string is
+//! asked twice: once with junk in front of it, so the word is read and what
+//! precedes the number has to be ignored, and once alone, so it is not.
 
 use std::path::Path;
 use std::process::Command;
@@ -44,17 +50,32 @@ fn the_int_fast_path_agrees_with_libc() {
         "    long long start = (len > 0 && data[0] == '-') ? 1 : 0;",
         "        if (j == len) return k_int(start ? -acc : acc);",
     )
-    .replace("return k_int(start ? -acc : acc);", "{ *out = start ? -acc : acc; return 1; }");
+    .replace("return k_int(start ? -acc : acc);", "{ *out = start ? -acc : acc; return 1; }")
+    .replace("return k_int(start ? -v : v);", "{ *out = start ? -v : v; return 1; }");
+    let word = format!(
+        "{}\n\n{}\n\n{}",
+        cut(&src, "static inline uint64_t k_nondigits8(uint64_t x) {", "\n}"),
+        cut(&src, "static inline long long k_digits8_value(uint64_t w, long long n) {", "\n}"),
+        cut(
+            &src,
+            "static inline int k_digits_back8(const char* end, long long n, long long* out) {",
+            "\n}"
+        ),
+    );
 
     let harness = format!(
         r#"#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <stdint.h>
+
+{word}
 
 /* the shipped decision, lifted: 1 and *out when the fast path takes it,
-   0 when it falls through to strtoll */
-static int fast(const char* data, long long len, long long* out) {{
+   0 when it falls through to strtoll. `room` is how many bytes of the buffer
+   end at data + len. */
+static int fast(const char* data, long long len, long long room, long long* out) {{
 {decision}
     }}
     return 0;
@@ -62,11 +83,28 @@ static int fast(const char* data, long long len, long long* out) {{
 
 static long long seen, took, bad;
 static char first[64]; static int have_first;
+static void check(const char* s, const char* data, long long len, long long room);
 
+static unsigned long long junk = 0x2545F4914F6CDD1DULL;
+
+/* Asked twice: alone, where the room is the string, and at the end of a
+   buffer whose sixteen bytes in front are random, where the word is read. */
 static void one(const char* s) {{
-    long long len = (long long)strlen(s), got;
+    long long len = (long long)strlen(s);
+    char buf[96];
+    for (int i = 0; i < 16; i++) {{
+        junk ^= junk << 13; junk ^= junk >> 7; junk ^= junk << 17;
+        buf[i] = (char)junk;
+    }}
+    memcpy(buf + 16, s, (size_t)len);
+    check(s, s, len, len);
+    check(s, buf + 16, len, 16 + len);
+}}
+
+static void check(const char* s, const char* data, long long len, long long room) {{
+    long long got;
     seen++;
-    if (!fast(s, len, &got)) return;
+    if (!fast(data, len, room, &got)) return;
     took++;
     char* end = NULL; errno = 0;
     long long want = strtoll(s, &end, 10);
@@ -95,6 +133,19 @@ int main(void) {{
         "18446744073709551615","99999999999999999999",
     }};
     for (unsigned i = 0; i < sizeof edge / sizeof *edge; i++) one(edge[i]);
+
+    /* every byte value at every position of a run of one to eight, where the
+       word decides: a digit, or a byte either side of the digits, or a sign */
+    for (int n = 1; n <= 8; n++) {{
+        for (int at = 0; at < n; at++) {{
+            for (int c = 1; c < 256; c++) {{
+                for (int k = 0; k < n; k++) b[k] = (char)('0' + (k * 7 + n) % 10);
+                b[at] = (char)c;
+                b[n] = 0;
+                one(b);
+            }}
+        }}
+    }}
 
     /* every digit width from one to twenty, plain, negative and zero-padded */
     unsigned long long x = 0x9E3779B97F4A7C15ULL;
