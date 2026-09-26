@@ -16564,3 +16564,54 @@ in-range path go without them, was measured against the kanso#1670 carrier on
 the container: runbench rose 849,348 (+0.07%) and jsonbench rose 0.17%. The
 selects cost less than the branch that replaced them. What made the branch
 dearer was not isolated.
+
+## 2026-09-26 — up to eight digits are read as one word, from the end
+
+The json decoder reads each number out of the document with `to_int` or
+`to_float` on a slice, and both parsed a digit at a time: ten instructions a
+digit for an integer, and the same for the integer and fraction digits of a
+float. runbench's integers are about six digits and its floats are three and
+four, `466.1234`.
+
+A slice ends inside the document, so the eight bytes that end at its last
+digit are in the buffer. `k_to_int_text` now reads a run of one to eight
+digits as that one word when the buffer has eight bytes there: the bytes in
+front of the run are filled with `'0'`, a digit test runs on the whole word,
+and three multiply-shifts combine the digits. `k_float_shape8` reads `[-]I.F`
+with up to eight digits of I and seven of F the same way. The fraction's
+length is the run of digits at the top of the last word, which puts the dot
+without a scan. The integer part is read from the word that ends at the dot,
+and must fill the bytes between the sign and the dot exactly. The result is
+the `(w, q)` the digit scan would have built from the same digits, and it goes
+to the same eisel-lemire, so the two paths cannot round differently. Anything
+that does not fit falls through to the scan as before.
+
+The four-digit version declined earlier today failed on every float because
+it did not know where the digits ended. Here the length of the run is known
+before anything is read, so no probe is paid by a number that does not fit.
+
+With the shape inside it, clang stopped inlining `k_to_float_text` into
+`k_b_to_float`, and widebench paid 272,000 instructions of calls on its 72,000
+parses. It is inlined by name now, into both doors.
+
+Measured on the container against main's tree:
+
+    runbench     1,144,623,289 -> 1,127,701,840   -16,921,449   -1.48%
+    jsonbench      758,145,871 ->   732,503,221   -25,642,650   -3.38%
+    oneshot         13,128,881 ->    12,959,999      -168,882   -1.29%
+    livebench    1,688,141,233 -> 1,687,657,622      -483,611   -0.03%
+    widebench       27,326,746 ->    27,374,746       +48,000   +0.18%
+    encodebench  2,438,571,692 -> 2,438,797,591      +225,899   +0.009%
+
+widebench parses whole short strings, which never have sixteen bytes of room,
+so its rise is the added tests on the way to the scan. What moved encodebench,
+which parses no numbers, was not isolated. Every benchmark's `.text` grew by
+960 bytes, the second copy of the float parse and the two words.
+
+Both lifted parse specs carry the word helpers now and ask every string a
+second time at the end of a buffer with sixteen random bytes in front, so the
+word is read and what precedes the number must not count. Each sweeps every
+byte value at every position of a short run. Watched red: with the digit
+test's constant one lower, `':'` reads as ten, 44 of 48,018,418 strings; and
+with the dot test gone, `"1e1"` reads as 1.1. The rows are "a digit word that
+reads a colon as ten" and "a float word that never looks for its dot".
