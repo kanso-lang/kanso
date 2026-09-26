@@ -305,6 +305,18 @@ KValue k_thunk_release_unless(KValue cell, KValue result) {
 
 KValue k_render(KValue v, long long quote);
 static KValue k_bytes_view(const unsigned char* data, long long len);
+/* Whether `from..to`, 1-based and inclusive, lies inside `len` elements:
+   1 <= from <= to <= len. A length is never negative, so as unsigned
+   compares this is `from - 1 < to` and `to <= len`: a `from` below one wraps
+   to the top of the range and fails the first, a negative `to` fails the
+   second. The signed spelling was three compares folded through `setcc` and
+   `or`, 861,498 times a run at the head of the decoder's token path. */
+static inline __attribute__((always_inline)) int k_span_in(long long from, long long to,
+                                                           long long len) {
+    return (unsigned long long)from - 1 < (unsigned long long)to &&
+           (unsigned long long)to <= (unsigned long long)len;
+}
+
 static KValue k_utf8_bad(const char* data, long long len, const char* origin,
                          long long* chars);
 static inline void k_str_seed_count(KStr* s, long long chars);
@@ -7936,7 +7948,7 @@ KValue k_b_utf8_slice_raw(const unsigned char* bytes, long long blen,
                           long long from, long long to, const char* origin) {
     const char* data = (const char*)bytes;
     long long len = 0;
-    if (!(from < 1 || from > to || to > blen)) {
+    if (k_span_in(from, to, blen)) {
         data += from - 1;
         len = to - from + 1;
     }
@@ -9316,7 +9328,7 @@ KValue k_b_append_slice(KValue acc, KValue cs, KValue fromv, KValue tov,
     /* The empty slice appends nothing, and the view it would have been is not
        built: a fifth of the runs between two escapes are empty, and a header
        allocated to carry zero bytes is 204,450 allocations a decode. */
-    if (from < 1 || from > to || to > src->len) {
+    if (!k_span_in(from, to, src->len)) {
         return k_b_append_range(acc, a, src->data, 0, (int)mutate);
     }
     return k_b_append_range(acc, a, src->data + (from - 1), to - from + 1,
@@ -9460,7 +9472,7 @@ KValue k_b_find2_below(KValue cs, KValue from, KValue a, KValue b, KValue lim) {
    away, and for the list and string containers, which do not come here. */
 KValue k_b_slice_raw(const unsigned char* data, long long len, long long from,
                      long long to) {
-    if (from < 1 || from > to || to > len) return k_bytes_view(data, 0);
+    if (!k_span_in(from, to, len)) return k_bytes_view(data, 0);
     return k_bytes_view(data + (from - 1), to - from + 1);
 }
 
@@ -9497,7 +9509,7 @@ KValue k_b_slice(KValue container, KValue fromv, KValue tov) {
     }
     if (container.tag == K_LIST) {
         KList* l = k_as_list(container);
-        if (from < 1 || from > to || to > l->len) return k_mklist(0, NULL);
+        if (!k_span_in(from, to, l->len)) return k_mklist(0, NULL);
         return k_mklist(to - from + 1, l->items + (from - 1));
     }
     if (container.tag == K_STR) {
@@ -9506,7 +9518,7 @@ KValue k_b_slice(KValue container, KValue fromv, KValue tov) {
            that finds it is unnecessary. This is the case for html, source and
            anything else a gate reads. */
         if (k_str_chars(s) == (long long)s->len) {
-            if (from < 1 || from > to || to > (long long)s->len) return k_str_n("", 0);
+            if (!k_span_in(from, to, (long long)s->len)) return k_str_n("", 0);
             /* One character first: a matcher slices one at a time, a million
                times a run on scanbench, and the ascii cache answers it. The
                length test below cost those four instructions apiece when it
@@ -9859,7 +9871,7 @@ KValue k_b_to_int_slice(KValue cs, KValue fromv, KValue tov, const char* origin)
     if (cs.tag == K_BYTES && fromv.tag == K_INT && tov.tag == K_INT) {
         KBytes* b = k_as_bytes(cs);
         long long from = fromv.payload, to = tov.payload;
-        if (from >= 1 && from <= to && to <= b->len) {
+        if (k_span_in(from, to, b->len)) {
             return k_to_int_text((const char*)b->data + (from - 1), to - from + 1, origin);
         }
     }
@@ -9870,7 +9882,7 @@ K_DOORCC KValue k_b_to_float_slice(KValue cs, KValue fromv, KValue tov, const ch
     if (cs.tag == K_BYTES && fromv.tag == K_INT && tov.tag == K_INT) {
         KBytes* b = k_as_bytes(cs);
         long long from = fromv.payload, to = tov.payload;
-        if (from >= 1 && from <= to && to <= b->len) {
+        if (k_span_in(from, to, b->len)) {
             return k_to_float_text((const char*)b->data + (from - 1), to - from + 1, origin);
         }
     }
