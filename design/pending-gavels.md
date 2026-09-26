@@ -50,39 +50,6 @@ went to the log rather than here.
 
 ## Blocking — a fixture, gate, or merge is waiting
 
-### Does the wall survive the fused operators?
-
-**Cited:** the live log's "the wall is bind with a discarded value" (2026-09-17),
-which measures the equivalence; the archive's "gavel: the fused chain
-operators" (2026-08-31), which says the fused form is the only spelling in
-chain position; "gavel: the July letters close" (2026-08-26), letter D, which
-minted `done` and removed the wall's premise; and this file's Parked line
-"dot-absorbs-`>>`: argued no", which is about the plain dot and does not reach
-this question.
-
-**The question.** `a >> b` and `a .> (_ -> b)` are the same program. 570 sites
-spell it one way and 184 the other. Which spelling does the language keep?
-
-1. **The wall goes.** `.> (_ -> ...)` is the spelling. About 570 sites are
-   respelt, the book's prose moves in ch02 through ch09, and the wall's
-   surface leaves src/ast.rs, check.rs, codegen.rs, eval.rs, lexer.rs and
-   lib.rs. Every effect sequence a learner reads gets four characters longer
-   at each step.
-2. **The wall stays as the only discard spelling.** An inline
-   `.> (_ -> ...)` is refused where it is written, with "write the wall". 184
-   sites shorten, the book is untouched, the compiler keeps the wall and gains
-   a refusal. The gap: `a .> shown` where `shown` ignores its argument stays
-   legal, because a group arm cannot be refused for what it does with a
-   parameter — so the rule catches every discard visible at the site and
-   leaves those that are not.
-3. **The wall is renamed into the family**, a fourth fused form. Costs what 1
-   costs and buys only that four operators look like four operators.
-
-**Recommendation: 2.** It keeps the short spelling for the most common effect
-operation and still makes the grammar decide, which is the principle at stake;
-it costs 184 sites against 570 and eight chapters. 3 pays 1's price for
-appearance.
-
 ### Was the wall's simultaneous-failure merge meant to go?
 
 **Cited:** the archive's 2026-08-24 entry measuring the wall, which records

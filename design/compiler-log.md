@@ -15246,6 +15246,28 @@ CI read the tree at 947d34ad and its rows were taken:
 `emit_instructions` 29,311,866, 145 above. Both rises arrived with the
 declare leaving the preamble; which line moved each was not isolated.
 
+## 2026-09-26 — gavel: the wall goes
+
+Ruled by Clay, answering the ledger's "Does the wall survive the fused
+operators?", which recommended keeping the wall and refusing an inline
+`.> (_ -> ...)`. His words, first on seeing `>>` still in the tree: "ack, i
+still see the use of >> in the codebase", and then, asked the ledger's
+question again: "i have voluminously weighed in on this. we said the wall
+goes. we've been over this." The question had been answered in conversation
+and never written here, which is why the ledger still carried it and why it
+was asked a second time. It is written here now so it is not asked a third.
+
+The ruling is option 1 of the entry. `>>` leaves the language, and
+`a .> (_ -> b)` is the one spelling of a step that ignores what came before.
+The surface leaves the lexer, the parser, the checker, the three engines and
+the book, and a program that still writes `>>` is refused at the token with
+the spelling to use instead.
+
+The entry leaves the ledger in this commit. Its sibling, "Was the wall's
+simultaneous-failure merge meant to go?", stays: its own text says the wall
+question is answered the same way whichever way it goes, and that if the
+merge comes back it comes back as a property of bind. That is still open.
+
 ## 2026-09-25 — a large builder grows by half
 
 The run program's `held_peak_bytes` was one buffer. Each of the 90 encodes of
