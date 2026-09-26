@@ -16505,7 +16505,7 @@ the announcement, and the spec goes red on the missing line.
 ## 2026-09-26 — the sharded nightly's first run, and the row it found blind
 
 The nightly ratchet was dispatched on main at 6c9d5fe5 once the shards landed.
-All eight jobs finished: the proving step took 23, 38, 35, 30, 33, 36, 35 and
+All eight jobs finished: the proving step took 38, 23, 35, 30, 33, 36, 35 and
 35 minutes for shards 1 through 8, against a timeout of 90. Seven were
 green. Shard 8 proved 30 of its 31 rows and reported one BLIND: the welfare
 row "a run-speed term falling below the ratcheted floor".
