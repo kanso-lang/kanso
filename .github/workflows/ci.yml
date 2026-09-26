@@ -985,7 +985,12 @@ jobs:
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
+      # fetch-depth: 0 for origin/main, which one mutation resets the goldens
+      # from before it applies. Without it the cover reads that mutation as
+      # stale: the first run of this job did exactly that.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo build --release
       # Costs one compile and no builds: it reads this file against the table,
