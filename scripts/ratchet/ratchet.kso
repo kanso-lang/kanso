@@ -2588,7 +2588,20 @@ bytes_seed = row
 
 rows_b1bs = text/concat rows_b1ls [bytes_seed]
 
-rows_b = text/concat rows_b1bs [compile_mem compile_mem_host]
+# A lambda applied to a box may not read the box as a value.
+box_param = row
+  "a lambda handed a box through the plain dot reads it as a value unrefused"
+  true
+  "cargo test --release --test golden {box_error_golden}"
+  "specs (unit, golden, differential)"
+  (breaking "a_box_a_lambda_may_read")
+  release
+
+box_error_golden = "error_corpus_reports_each_golden_diagnostic"
+
+rows_b1bx = text/concat rows_b1bs [box_param]
+
+rows_b = text/concat rows_b1bx [compile_mem compile_mem_host]
 
 rows_c1 = [welfare_floor grammar book_outputs book_quotes error_corpus trend]
 

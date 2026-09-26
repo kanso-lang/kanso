@@ -15268,3 +15268,27 @@ simultaneous-failure merge meant to go?", stays: its own text says the wall
 question is answered the same way whichever way it goes, and that if the
 merge comes back it comes back as a property of bind. That is still open.
 
+## 2026-09-26 — a box handed to a lambda that reads it
+
+`math/random 6 . (n -> print "{n - 1}")` checked clean and died at run time
+with "`-` is not defined for these values". The plain dot has been ordinary
+application since the 2026-09-10 ruling, so the lambda is handed the box
+itself, and `n - 1` is a box where a value is expected, which the box ruling
+refuses. The checker could not see it, because it asks whether an operand is
+a box by looking at the operand, and this operand is a parameter.
+
+Where a lambda is applied to an argument that is a box, the checker now reads
+the lambda's body for the places the matching parameter meets an operator, an
+index, a field read, an `if` condition or a builtin that reads its argument,
+and refuses each with the message the direct case already gets. A lambda
+inside that binds the same name hides it, and `_` is never read. Holding the
+box is untouched: `box . held` names a group rather than a lambda, and storing
+the parameter with `push` or handing it to `print` reads nothing.
+
+Found by running vse against kanso main, where it fails the same way. vse's
+own case is not caught by this: its box is pushed into a list and read out
+two calls later as `p[d] - q[d]`, which is flow through data rather than a
+parameter read in place. The postcard program is the error golden
+`a_box_a_lambda_reads`, which main's compiler checks clean. The ratchet row
+`box_param` turns the new arm off and the error corpus goes red.
+
