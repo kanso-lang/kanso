@@ -16434,3 +16434,12 @@ emitter's text: the length is loaded between the span's two branches, the
 empty exit returns the accumulator, and no `select` on the span remains. It
 fails on the carrier's codegen, and the ratchet row `empty_run` moves the
 load back ahead of the first branch.
+
+The trend gate reads the carrier's code veins as totals against main, and
+they all rise with the assumes and the split branches. The decoder's
+`emitted_branches` lands on 541, `emitted_calls` on 574 and `emitted_lines`
+on 5,728; the other thirteen programs' `emitted_other_branches` on 8,059,
+`emitted_other_calls` on 10,699 and `emitted_other_lines` on 85,471. Machine
+code in all fourteen, `text`, lands on 3,502,384 bytes. The compile golden's
+`lines` total lands on 1,433, and its module fixture's `module_branches` on
+83, `module_calls` on 107 and `module_lines` on 1,071.
