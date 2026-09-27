@@ -16817,5 +16817,5 @@ The ratchet row is "a pushing loop that rewinds every lap".
 
 The book's two counter samples are the same shape, a thousand pushes onto an
 accumulator. `beat_iters` falls from 1,000 to 0 in ch10's `counters` and
-ch12's `fused`, and nothing else in either moves. The prose around them quotes
-the allocation count, which holds at twelve.
+ch12's `fused`, and nothing else in either moves. The prose around the two
+panels quotes no rewind count.
