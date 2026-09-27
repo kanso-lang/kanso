@@ -3147,6 +3147,18 @@ float_word = row
 
 rows_c1zg = text/concat rows_c1zh [digit_word float_word]
 
+# A loop that only grows the list it was handed keeps its bracket and drops the
+# rewind, which found the arena where the mark left it on every lap.
+grows_itself = row
+  "a pushing loop that rewinds every lap"
+  false
+  "sh scripts/gates/instructions.sh"
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_pushing_loop_that_rewinds_every_lap")
+  benches
+
+rows_c1zm = text/concat rows_c1zg [grows_itself]
+
 # The ratchet naming each row as it starts has no row here. The spec that
 # watches it, a_clean_head_still_proves_its_row, runs `prove` itself, and
 # `prove` works in fixed directories -- /tmp/kanso-ratchet-base, one
@@ -3154,7 +3166,7 @@ rows_c1zg = text/concat rows_c1zh [digit_word float_word]
 # that spec as a gate removes its own baseline worktree from under itself. On
 # kanso#1675 the baseline read the gate red before any mutation. The other
 # specs in tests/ that run `prove` carry no row for the same reason.
-rows_c = text/concat rows_c1zg [itself]
+rows_c = text/concat rows_c1zm [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
