@@ -1,0 +1,29 @@
+# A loop whose every lap pushes one number onto a list it was handed. The list
+# arrived from outside the loop, so the loop's bracket sends its growth outside
+# the arena, and a lap allocates nothing there. The rewind each lap used to take
+# found the arena where the mark left it, so the loop takes none: beat_iters
+# below counts the outer loop's laps and none of the inner loop's 240,000.
+#
+# The size is the one that turned down dropping the bracket altogether: at
+# sixty thousand pushes the superseded buffers of an arena-grown list outrun a
+# block. The bracket stays, so the arena holds at one block here.
+fn filled acc _ 0
+  acc
+
+fn filled acc k n
+  filled (push acc ((k * 31 + n * 7 + 3) % 997)) k (n - 1)
+
+fn one_list k
+  base = push [] 1
+  length (filled base k 60000)
+
+fn many at stop tally
+  more at stop tally (at > stop)
+
+fn more _ _ tally true
+  tally
+
+fn more at stop tally false
+  many (at + 1) stop (tally + one_list at)
+
+pub play = print "{many 1 4 0}"

@@ -225,14 +225,14 @@
 # test:
 encodebench defines=109 calls=674 branches=492 lines=6040
 oneshot defines=113 calls=729 branches=613 lines=6796
-basket defines=96 calls=732 branches=542 lines=5406
+basket defines=96 calls=730 branches=542 lines=5404
 widebench defines=116 calls=722 branches=516 lines=6337
 deepbench defines=42 calls=170 branches=144 lines=1730
-escapebench defines=17 calls=49 branches=30 lines=534
+escapebench defines=17 calls=48 branches=30 lines=533
 pendbench defines=61 calls=403 branches=289 lines=2976
 scanbench defines=233 calls=1912 branches=1527 lines=14812
 indexbench defines=17 calls=54 branches=26 lines=573
 digestbench defines=114 calls=551 branches=413 lines=4579
 readbench defines=19 calls=51 branches=23 lines=611
 livebench defines=114 calls=744 branches=633 lines=6927
-runbench defines=504 calls=3908 branches=2811 lines=28150
+runbench defines=504 calls=3907 branches=2811 lines=28149

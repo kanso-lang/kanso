@@ -234,7 +234,47 @@ pub fn beat_loops(program: &Program, inference: &infer::Inference, mut_sites: &M
             rewind.insert(e);
         }
     }
+    // A self-loop that only grows its own accumulator keeps its bracket and
+    // drops the rewind. Every heap value a bracketed loop hands itself was
+    // threaded from its entry, so the list predates the mark, and a push onto
+    // a list that predates the mark grows outside the arena. An iteration of
+    // such a loop allocates nothing there, and the test every iteration made
+    // found the arena where the mark left it.
+    rewind.retain(|(from, to)| {
+        from != to
+            || carried.contains_key(from)
+            || !grows_only_itself(program, mut_sites, &regions, &allocating, from)
+    });
     Beats { ids, demoted, carried, rewind, regions }
+}
+
+/// Whether a loop's arms allocate nothing but the growth of lists its
+/// parameters hold. A proven in-place push onto a parameter is not counted,
+/// and neither is the loop's call to itself; everything else is read as
+/// `alloc_groups` reads it. Asked only of a loop that rewinds without a carry,
+/// whose heap parameters all arrived from below the mark.
+fn grows_only_itself(
+    program: &Program,
+    mut_sites: &MutSites,
+    regions: &RegionSites,
+    allocating: &HashSet<&str>,
+    group: &Group,
+) -> bool {
+    let fn_names: HashSet<&str> = program.fns.iter().map(|d| d.name.as_str()).collect();
+    let arms: Vec<_> =
+        program.fns.iter().filter(|d| d.name == group.0 && d.params.len() == group.1).collect();
+    !arms.is_empty()
+        && arms.iter().all(|d| {
+            let numbers = numeric_params(d);
+            let site = Site {
+                file: &d.file,
+                mut_sites,
+                regions,
+                numbers: &numbers,
+                grower: Some((group.0.as_str(), group.1, &d.params)),
+            };
+            !d.body.iter().any(|st| stmt_allocates(st, &fn_names, allocating, false, &site))
+        })
 }
 
 /// Self-loops whose only defect is a tail entry, where every entering group
@@ -1298,7 +1338,13 @@ fn region_sites<'a>(
             continue;
         }
         let numbers = numeric_params(d);
-        let site = Site { file: &d.file, mut_sites, regions: &no_regions, numbers: &numbers };
+        let site = Site {
+            file: &d.file,
+            mut_sites,
+            regions: &no_regions,
+            numbers: &numbers,
+            grower: None,
+        };
         let mut calls = Vec::new();
         for st in &d.body {
             descents(guard_stmt_expr(st), &mut calls);
@@ -1357,7 +1403,7 @@ fn alloc_groups<'a>(
     let mut allocating: HashSet<&str> = HashSet::default();
     for d in &program.fns {
         let numbers = numeric_params(d);
-        let site = Site { file: &d.file, mut_sites, regions, numbers: &numbers };
+        let site = Site { file: &d.file, mut_sites, regions, numbers: &numbers, grower: None };
         if d.body.iter().any(|s| stmt_allocates(s, &fn_names, &allocating, true, &site)) {
             allocating.insert(d.name.as_str());
         }
@@ -1366,7 +1412,8 @@ fn alloc_groups<'a>(
         let mut changed = false;
         for d in &program.fns {
             let numbers = numeric_params(d);
-            let site = Site { file: &d.file, mut_sites, regions, numbers: &numbers };
+            let site =
+                Site { file: &d.file, mut_sites, regions, numbers: &numbers, grower: None };
             if !allocating.contains(d.name.as_str())
                 && d.body.iter().any(|s| stmt_allocates(s, &fn_names, &allocating, false, &site))
             {
@@ -1389,6 +1436,9 @@ struct Site<'a> {
     regions: &'a RegionSites,
     /// The arm's parameters a type annotation makes a number.
     numbers: &'a [&'a str],
+    /// The loop being asked about by `grows_only_itself`, as its group and
+    /// the arm's parameters; `None` everywhere else.
+    grower: Option<(&'a str, usize, &'a [Pattern])>,
 }
 
 /// The parameters an arm's patterns annotate `int` or `float64`. An in-place
@@ -1407,6 +1457,26 @@ fn numeric_params(d: &crate::ast::FnDecl) -> Vec<&str> {
 }
 
 impl Site<'_> {
+    /// A proven in-place push onto one of the arm's own parameters, asked
+    /// only while `grows_only_itself` reads the loop.
+    fn grows_itself(&self, head: &Expr, args: &[Expr], span: &crate::diag::Span) -> bool {
+        let Some((_, _, params)) = self.grower else { return false };
+        let [Expr::Ident(target, _, _), _] = args else { return false };
+        matches!(head, Expr::Ident(n, _, _) if bare_builtin(n) == "push")
+            && params.iter().any(|p| matches!(p, Pattern::Var(own, _) if own == target))
+            && self.mut_sites.contains(&(
+                std::sync::Arc::clone(self.file),
+                span.line as usize,
+                span.col as usize,
+            ))
+    }
+
+    /// The loop calling itself, asked only while `grows_only_itself` reads it.
+    fn calls_itself(&self, head: &Expr, args: &[Expr]) -> bool {
+        let Some((name, arity, _)) = self.grower else { return false };
+        matches!(head, Expr::Ident(n, _, _) if n.as_str() == name) && args.len() == arity
+    }
+
     fn region(&self, span: &crate::diag::Span) -> bool {
         self.regions.contains(&(
             std::sync::Arc::clone(self.file),
@@ -1502,6 +1572,12 @@ fn expr_allocates(
         }),
         Expr::Str(parts, _) => parts.iter().any(|p| matches!(p, TemplatePart::Interp(_))),
         Expr::App { span, .. } if site.region(span) => false,
+        Expr::App { head, args, span, .. } if site.grows_itself(head, args, span) => {
+            expr_allocates(&args[1], fn_names, allocating, seed_pass, site)
+        }
+        Expr::App { head, args, .. } if site.calls_itself(head, args) => {
+            args.iter().any(|a| expr_allocates(a, fn_names, allocating, seed_pass, site))
+        }
         Expr::App { head, args, span, .. } => {
             if site.in_place_append(head, args, span) {
                 // `"{n}"` for a number the arm's pattern annotated is

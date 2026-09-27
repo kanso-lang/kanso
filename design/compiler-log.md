@@ -16769,3 +16769,48 @@ would be new standard-library surface and is a question for Clay rather than
 something to build here. The other is a pass that keeps a record out of memory
 when its only use is to be taken apart by the callee, which is a large piece
 of work and was not started.
+
+## 2026-09-27 — a loop that only grows its list takes no rewind
+
+A beat loop rewinds the arena before each lap, and the test that decides
+whether there is anything to rewind costs eight instructions. The run
+program's escape phase has a loop that pays it 1,548,800 times a run and never
+finds anything: `filled` pushes a number onto the list it was handed and calls
+itself.
+
+The list arrived from outside the loop, below the loop's mark, and
+`k_b_push_grow` gives a list that outlives the beat a malloc'd buffer. So a lap
+of that loop allocates nothing in the arena, and the rewind always finds the
+arena where the mark left it.
+
+`beat_loops` now drops the rewind edge of a self-loop whose arms allocate
+nothing except in-place pushes onto their own parameters, and keeps the
+bracket. Every heap value a bracketed loop without a carry hands itself was
+threaded from its entry, so it predates the mark, and the bracket is what
+makes a push onto it grow outside the arena. Dropping the bracket as well was
+measured on 2026-09-05 and declined: at sixty thousand pushes the superseded
+buffers of an arena-grown list outran a block. With the bracket kept, no
+memory counter in the escape or run goldens moves.
+
+Measured on the container against main's tree, one sitting:
+
+    runbench     1,120,421,188 -> 1,108,021,083   -12,400,105   -1.11%
+    escapebench     55,021,356 ->    45,421,356    -9,600,000  -17.45%
+    basket          30,455,989 ->    29,623,872      -832,117   -2.73%
+
+The other eleven benchmarks are byte-identical. `beat_iters` falls in three
+cost goldens: run 1,576,363 -> 27,563, escape 1,203,000 -> 3,000 and basket
+114,007 -> 10,007. It is the only counter that moves in the run and escape
+goldens and in the fourteen files of the mem vein that move. Basket also
+allocates less: `allocs` 27,264 -> 27,259, `alloc_bytes` and `sh_buf` both
+22,352 lower, `buf_reuse` 119 -> 124. That fits a shelf of outgrown buffers
+that a lap's rewind no longer clears, but the mechanism was not isolated. The
+emitter writes one call fewer in each of the three programs, and `.text` falls
+by 272 bytes on basket, 128 on escapebench and 112 on runbench.
+
+The fixture `a_loop_that_only_grows_its_list_takes_no_rewind` is the escape
+shape at the size that declined the earlier attempt: four lists of sixty
+thousand pushes. It reads `beat_iters=4`, one arena block and a permanent peak
+of 1,048,592 bytes. With the exemption removed it reads `beat_iters=240004`
+and every other counter is unchanged, which is the red it was watched to go.
+The ratchet row is "a pushing loop that rewinds every lap".
