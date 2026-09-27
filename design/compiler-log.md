@@ -16819,3 +16819,14 @@ The book's two counter samples are the same shape, a thousand pushes onto an
 accumulator. `beat_iters` falls from 1,000 to 0 in ch10's `counters` and
 ch12's `fused`, and nothing else in either moves. The prose around the two
 panels quotes no rewind count.
+
+CI's rows. `work_runbench` 1,120,420,351 -> 1,108,020,246 (-1.11%),
+`work_escapebench` 55,021,689 -> 45,421,689 and `work_basket` 30,456,336 ->
+29,624,219. Five compile-side rows rise, all from the analysis that asks each
+self-loop's arms again: `compile_instructions` 25,028,747 -> 25,065,813
+(+0.15%), `entry_instructions` 84,572,325 -> 84,695,206 (+0.15%),
+`library_instructions` 85,099,435 -> 85,221,557 (+0.14%) and
+`emit_instructions` 29,819,237 -> 29,835,995 (+0.06%). `interp_instructions`
+578,623,311 -> 578,623,312 moved by one instruction, which is the row the
+"three parts per billion" entry in STATUS.md is about, and nothing in this
+change reaches the interpreter.
