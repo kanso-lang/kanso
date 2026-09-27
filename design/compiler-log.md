@@ -16814,3 +16814,8 @@ thousand pushes. It reads `beat_iters=4`, one arena block and a permanent peak
 of 1,048,592 bytes. With the exemption removed it reads `beat_iters=240004`
 and every other counter is unchanged, which is the red it was watched to go.
 The ratchet row is "a pushing loop that rewinds every lap".
+
+The book's two counter samples are the same shape, a thousand pushes onto an
+accumulator. `beat_iters` falls from 1,000 to 0 in ch10's `counters` and
+ch12's `fused`, and nothing else in either moves. The prose around them quotes
+the allocation count, which holds at twelve.
