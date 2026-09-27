@@ -16850,15 +16850,18 @@ shared map appends into spare room that only the new map's length covers,
 which is the argument that already admits lists. An in-place put needs the map
 to be unique, and a map handed onward has a second use.
 
-`THREADED` now includes `MAP`. Measured on the container against main at
-95b5551d, one sitting:
+`THREADED` now includes `MAP`. Measured by CI against main's goldens:
 
-    livebench    1,666,506,956 -> 1,661,695,584    -4,811,372   -0.289%
-    encodebench  2,417,003,643 -> 2,412,230,532    -4,773,111   -0.197%
-    widebench       27,374,746 ->    27,310,745       -64,001   -0.234%
-    runbench     1,108,021,083 -> 1,108,002,637       -18,446   -0.0017%
+    livebench    1,666,507,317 -> 1,661,695,945    -4,811,372   -0.289%
+    encodebench  2,417,003,976 -> 2,412,230,865    -4,773,111   -0.197%
+    widebench       27,375,107 ->    27,311,106       -64,001   -0.234%
+    runbench     1,108,020,246 -> 1,108,001,800       -18,446   -0.0017%
 
-The other ten benchmarks are byte-identical. A program built to show the shape
+The container's sitting agreed to the instruction on all four deltas, and the
+other ten benchmarks are byte-identical. The emitter writes three calls fewer
+in each of the four programs, the carry calls a map slot no longer needs, and
+the `.text` total moves 3,510,608 -> 3,510,656: encodebench and livebench 16
+bytes larger, runbench 48 larger, widebench 32 smaller. A program built to show the shape
 walks a 64-key map through `entries` for twenty thousand laps and reads
 209,505,643 instructions on main and 95,905,706 threaded: half of it was
 `k_interior_survives` asking the same 128 slots the same question.
