@@ -16876,19 +16876,19 @@ ceiling, and walking two lists costs something of its own: the walk guards
 both lists where it guarded one and carries three arguments where it carried
 two, and each map now makes two builtin calls where it made one.
 
-Measured on the container against main's tree, one sitting:
+Measured by CI on the pull request's tree against main's goldens:
 
-    runbench     1,108,021,083 -> 1,102,980,253    -5,040,830   -0.455%
-    livebench    1,666,506,956 -> 1,671,746,482    +5,239,526   +0.314%
-    oneshot         12,852,342 ->    12,865,904       +13,562   +0.106%
-    encodebench  2,417,003,643 -> 2,417,406,626      +402,983   +0.017%
+    runbench     1,108,020,246 -> 1,102,979,416    -5,040,830   -0.455%
+    livebench    1,666,507,317 -> 1,671,746,843    +5,239,526   +0.314%
+    oneshot         12,852,666 ->    12,866,228       +13,562   +0.106%
+    encodebench  2,417,003,976 -> 2,417,406,959      +402,983   +0.017%
 
-The other ten benchmarks are byte-identical. On runbench the two builtins cost
-136 instructions a map where `entries` cost 124, and the walk is about 7.5
-million cheaper. livebench encodes many small maps, where the second call is a
-larger share of the work, and it comes out behind. encodebench carries its own
-frozen copy of the library, so its move is the runtime's layout, not the
-encoder.
+The container's sitting agreed to the instruction on all four deltas. The
+other ten benchmarks are byte-identical. On runbench the two builtins cost 136
+instructions a map where `entries` cost 124, and the walk is about 7.5 million
+cheaper. livebench encodes many small maps, where the second call is a larger
+share of the work, and it comes out behind. encodebench carries its own frozen
+copy of the library, so its move is the runtime's layout, not the encoder.
 
 Two shapes of the builtins were measured before this one. The first allocated
 the list header and the buffer separately and read runbench 1,105,810,963.
@@ -16899,10 +16899,33 @@ calls than they save as doors, the way `at` measured when the doors were
 chosen.
 
 The cost goldens move where maps are written. Allocations rise, because each
-map takes two where it took one, and the bytes fall: run `allocs` 1,707,283 ->
-1,955,773 and `alloc_bytes` 346,368,114 -> 318,200,274, live 1,120,094 ->
-2,224,494 and 534,601,584 -> 409,411,184, oneshot 12,066 -> 14,827 and
-2,689,002 -> 2,376,026. `sh_rec` falls to what the decoder builds and `sh_buf`
-rises by the two lists. No arena peak moves. Two mem fixtures that encode maps
-move the same way. `front_end_visits` on the compile corpus rises 7,411 ->
-7,505 for the longer walk.
+map takes two where it took one, and the bytes fall: run_allocs 1,707,283 ->
+1,955,773 and `alloc_bytes` 346,368,114 -> 318,200,274, live_allocs 1,120,094
+-> 2,224,494 and 534,601,584 -> 409,411,184, oneshot_allocs 12,066 -> 14,827
+and 2,689,002 -> 2,376,026. `sh_rec` falls to what the decoder builds and
+`sh_buf` rises by the two lists: run_sh_buf 102,830,160 -> 118,845,840,
+live_sh_buf 71,980,528 -> 143,161,328, oneshot_sh_buf 977,680 -> 1,155,632. No
+arena peak moves. Two mem fixtures that encode maps move the same way:
+a_literal_appended_across_a_rewind_allocs 256 -> 376,
+a_literal_appended_across_a_rewind_sh_buf 6,240 -> 12,000,
+a_nested_map_gives_back_its_entries_allocs 18,028 -> 24,028 and
+a_nested_map_gives_back_its_entries_sh_buf 1,719,216 -> 2,295,216.
+
+The interpreter pays most. interp_instructions reads 578,623,312 ->
+589,693,399, +1.91%: `keys` and `values` each copy the map's column into a
+fresh list, and the walk's two index reads go through the interpreter's
+dispatch where one record pattern did. The compiler carries the new builtins
+and the longer walk: front_end_visits 7,411 -> 7,505, compile_instructions
+25,065,813 -> 25,156,469, entry_instructions 84,695,206 -> 84,771,442,
+library_instructions 85,221,557 -> 85,303,737, emit_instructions 29,835,995 ->
+29,838,551, codegen_instructions_dev 123,345,350 -> 123,362,462 and
+codegen_instructions_release 402,610,256 -> 402,739,766. compile_allocs
+14,272 -> 14,288 and compile_peak_bytes 710,281 -> 710,484; interp_allocs
+falls 899,769 -> 895,156 and interp_peak_bytes rises 720,417 -> 720,620. The
+emitter writes
+more for the runtime's two new functions and the walk: emitted_other_branches
+8,059 -> 8,078, emitted_other_lines 85,467 -> 85,534, text 3,510,608 ->
+3,523,088. The work rows are the four benchmarks above: work_livebench
+1,671,746,843, work_oneshot 12,866,228, work_encodebench 2,417,406,959.
+
+Welfare scores the trade 0.02 above the floor, and the floor moves to 90.26.
