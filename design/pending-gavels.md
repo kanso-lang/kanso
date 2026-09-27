@@ -50,37 +50,6 @@ went to the log rather than here.
 
 ## Blocking — a fixture, gate, or merge is waiting
 
-### Was the wall's simultaneous-failure merge meant to go?
-
-**Cited:** the archive's 2026-08-24 entry measuring the wall, which records
-that `>>` built both operands before running either, so two failures raised
-during construction merged — `print "left {boom a}" >> print "right {boom b}"`
-answering `[a b]` — "the same reasoning the parallel group uses", and which
-names the collision as open: "Whether that is the rule to keep is #141, and it
-collides with #105 wanting the right side lazy for an unrelated reason:
-laziness would buy back Haskell's answer and lose the merge. That is the
-trade, and it is Clay's."
-
-**The finding.** It never reached this ledger, and the behaviour changed while
-it sat unasked. On the binary at `cc180f2f` the third case answers `boom 1`
-alone and `left ok` prints, where the entry says nothing printed in any of the
-three. The chat could not find the entry that moved it.
-
-**The question.** Two halves, and the first may answer the second.
-
-1. Was the merge removed deliberately? If some change ruled it out and said so,
-   this entry closes on a citation and the archive's #141 is settled.
-2. If it went unrecorded, the trade is live and unchanged: keep eager
-   construction and the merge, which tells a reader about both failures; or
-   make the right side lazy, which buys Haskell's answer and loses the merge.
-
-**Recommendation:** find the commit before ruling. This is cloud's to bisect
-and it does not block the wall question, which is answered the same way
-whichever way this goes: if the merge is gone, the wall is pure sugar, and if
-it comes back, it comes back as a property of bind rather than of a fourth
-operator, since `.>` can be made eager in its right side and a lambda's body
-is the only thing deferring it.
-
 ## Open, not blocking
 
 ### Where does a golden live that pins ONE engine's answer where another refuses?
