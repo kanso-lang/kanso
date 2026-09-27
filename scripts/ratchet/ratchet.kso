@@ -3159,6 +3159,19 @@ grows_itself = row
 
 rows_c1zm = text/concat rows_c1zg [grows_itself]
 
+# `keys` and `values` are the two columns of `entries`, in its order; the JSON
+# encoder indexes both, so a column read in another order writes a wrong
+# document with nothing failing.
+columns_line_up = row
+  "a values column read in insertion order"
+  false
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_values_column_read_in_insertion_order")
+  release
+
+rows_c1zn = text/concat rows_c1zm [columns_line_up]
+
 # The ratchet naming each row as it starts has no row here. The spec that
 # watches it, a_clean_head_still_proves_its_row, runs `prove` itself, and
 # `prove` works in fixed directories -- /tmp/kanso-ratchet-base, one
@@ -3166,7 +3179,7 @@ rows_c1zm = text/concat rows_c1zg [grows_itself]
 # that spec as a gate removes its own baseline worktree from under itself. On
 # kanso#1675 the baseline read the gate red before any mutation. The other
 # specs in tests/ that run `prove` carry no row for the same reason.
-rows_c = text/concat rows_c1zm [itself]
+rows_c = text/concat rows_c1zn [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

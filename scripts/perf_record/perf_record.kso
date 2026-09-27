@@ -349,8 +349,8 @@ expected_keys =
   text/concat (text/concat a b) compiler_watched
 
 fn kept_out pairs
-  keys = list/to_list (list/map pairs key_of)
-  list/to_list (list/select expected_keys (g -> missing? keys g))
+  seen_keys = list/to_list (list/map pairs key_of)
+  list/to_list (list/select expected_keys (g -> missing? seen_keys g))
 
 fn written pairs w t
   sized = [["text_bytes" (size_of t)]]

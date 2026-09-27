@@ -1,0 +1,5 @@
+empty: 0 0 true [] []
+small: 5 5 true [1 2 7 8 9] ["v2" "v4" "v1" "v3" "v5"]
+large: 12 12 true [1 2 3 4 5 6 7 8 9 10 11 12] ["v2" "v4" "v6" "v8" "v10" "v12" "v1" "v3" "v5" "v7" "v9" "v11"]
+mixed: 5 5 true [1 2 3 "a" "b"] ["a" "b" "c" 1 2]
+nested: 2 2 true ["inner" "outer"] [[1 2] { "y":25 "z":26 }]

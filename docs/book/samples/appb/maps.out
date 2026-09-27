@@ -2,5 +2,7 @@ literal { "a":1 "b":2 }
 put { "a":1 "b":2 "c":3 }
 at 2
 entries [entry "a" 1 entry "b" 2 entry "c" 3]
+keys ["a" "b" "c"]
+values [1 2 3]
 length 3
 empty {}

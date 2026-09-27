@@ -1357,6 +1357,8 @@ declare %KValue @k_b_entries(%KValue)
 declare %KValue @k_b_filter(%KValue, %KValue)
 declare %KValue @k_b_from_code(%KValue, ptr)
 declare %KValue @k_b_join(%KValue, %KValue)
+declare %KValue @k_b_keys(%KValue)
+declare %KValue @k_b_values(%KValue)
 declare %KValue @k_b_length(%KValue)
 declare %KValue @k_b_map(%KValue, %KValue)
 declare %KValue @k_b_push(%KValue, %KValue)
@@ -2037,7 +2039,7 @@ mod the_declares_table_is_the_scan_it_replaced {
     }
 }
 
-pub(crate) const BUILTIN_CALLS: [&str; 58] = [
+pub(crate) const BUILTIN_CALLS: [&str; 60] = [
     "effect",
     "net_port",
     "start",
@@ -2078,6 +2080,7 @@ pub(crate) const BUILTIN_CALLS: [&str; 58] = [
     "filter",
     "from_code",
     "join",
+    "keys",
     "length",
     "map",
     "push",
@@ -2096,6 +2099,7 @@ pub(crate) const BUILTIN_CALLS: [&str; 58] = [
     "sum",
     "to_float",
     "to_int",
+    "values",
 ];
 
 /// The bit builtins that have an inline twin. Each is one machine op on two

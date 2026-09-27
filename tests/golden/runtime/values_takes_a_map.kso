@@ -1,0 +1,6 @@
+pub fn opaque x
+  x
+
+pub play =
+  got = values (opaque 7)
+  print "{got}"

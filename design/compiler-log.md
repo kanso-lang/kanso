@@ -16830,3 +16830,79 @@ self-loop's arms again: `compile_instructions` 25,028,747 -> 25,065,813
 578,623,311 -> 578,623,312 moved by one instruction, which is the row the
 "three parts per billion" entry in STATUS.md is about, and nothing in this
 change reaches the interpreter.
+
+## 2026-09-27 — gavel: keys and values are builtins over maps
+
+Ruled by Clay: "add `keys` and `values` to the language as builtins over maps.
+`keys m` answers the map's keys as a list and `values m` answers its values as
+a list, both in the same key order `entries m` uses, so position i of each
+lines up with position i of the others." They go on every engine,
+byte-identical, and the alignment is pinned by a golden because the JSON
+encoder depends on it. The question was put in conversation on 2026-09-26 and
+never reached the ledger, so there is no entry to remove.
+
+Both are ambient, like `entries`, because the ruling spells them bare. An
+ambient name cannot be rebound, so six bindings in this repository that used
+one were renamed: `keys` in `scripts/perf_record`, `scripts/trend_gate` (twice,
+once as a parameter), `scripts/welfare` and the micro fixture
+`a_thunk_capture_survives_the_cohort`, and `values` in
+`scripts/render_differential`. kq, vse and kanso-json bind neither name.
+
+The interpreter reads both from the map's own ordered pairs, and the wasm
+engine reaches the interpreter's builtins, so they need nothing of their own
+there. The native runtime reads both from `k_map_sorted`, the view `entries`
+walks, as one list with no record per pair. The checker, inference and the
+beat analysis know them as list-answering, allocating builtins that take a map.
+Appendix B documents them beside `entries`, with the maps sample extended to
+print both, and the editor grammar and the site's highlighter name them.
+
+`keys_and_values_line_up_with_entries` in the micro corpus walks `keys`,
+`values` and `entries` together on an empty map, maps on both sides of the
+eight-entry change in how a map is held, keys put out of order, int keys
+beside string keys, and a map held as a value, and prints whether every
+position agrees. Watched red: with the native `values` reading the pairs in
+insertion order, three of the five maps printed `false`. That fault is the
+ratchet row "a values column read in insertion order". `keys_takes_a_map` and
+`values_takes_a_map` pin the refusal in the runtime corpus, worded as
+`entries`' is.
+
+## 2026-09-27 — the encoder writes a map from its two columns
+
+`encode_onto` wrote a map by building `entries m` and taking each record apart
+in `entry_onto`. It now asks `keys m` and `values m` and indexes both, so no
+record is built. The 2026-09-26 entry priced the records at about 140
+instructions a pair between building and reading them back. That was the
+ceiling, and walking two lists costs something of its own: the walk guards
+both lists where it guarded one and carries three arguments where it carried
+two, and each map now makes two builtin calls where it made one.
+
+Measured on the container against main's tree, one sitting:
+
+    runbench     1,108,021,083 -> 1,102,980,253    -5,040,830   -0.455%
+    livebench    1,666,506,956 -> 1,671,746,482    +5,239,526   +0.314%
+    oneshot         12,852,342 ->    12,865,904       +13,562   +0.106%
+    encodebench  2,417,003,643 -> 2,417,406,626      +402,983   +0.017%
+
+The other ten benchmarks are byte-identical. On runbench the two builtins cost
+136 instructions a map where `entries` cost 124, and the walk is about 7.5
+million cheaper. livebench encodes many small maps, where the second call is a
+larger share of the work, and it comes out behind. encodebench carries its own
+frozen copy of the library, so its move is the runtime's layout, not the
+encoder.
+
+Two shapes of the builtins were measured before this one. The first allocated
+the list header and the buffer separately and read runbench 1,105,810,963.
+Taking both from one allocation, as `entries` does, and making them doors
+read 1,105,429,763. The same single allocation on the C convention reads
+1,102,980,253, which is what lands: the walk keeps more live across the two
+calls than they save as doors, the way `at` measured when the doors were
+chosen.
+
+The cost goldens move where maps are written. Allocations rise, because each
+map takes two where it took one, and the bytes fall: run `allocs` 1,707,283 ->
+1,955,773 and `alloc_bytes` 346,368,114 -> 318,200,274, live 1,120,094 ->
+2,224,494 and 534,601,584 -> 409,411,184, oneshot 12,066 -> 14,827 and
+2,689,002 -> 2,376,026. `sh_rec` falls to what the decoder builds and `sh_buf`
+rises by the two lists. No arena peak moves. Two mem fixtures that encode maps
+move the same way. `front_end_visits` on the compile corpus rises 7,411 ->
+7,505 for the longer walk.

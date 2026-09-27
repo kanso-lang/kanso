@@ -84,7 +84,7 @@ broken = text/concat shallow odd
 
 held = text/concat boxes broken
 
-values = text/concat (text/concat numbers decimals) (text/concat texts held)
+samples = text/concat (text/concat numbers decimals) (text/concat texts held)
 
 # A record prints through the same path and carries its type's name, so the
 # same probe runs again with a type declared in front of it.
@@ -201,7 +201,7 @@ fn live n i
   running (works? n i)
 
 fn running true
-  swept plain values [] .> (a -> swept typed shaped a .> reported)
+  swept plain samples [] .> (a -> swept typed shaped a .> reported)
 
 fn running false
   io/write_err mute .> (_ -> os/exit 2)
@@ -216,7 +216,7 @@ fn reported found
   said found .> (_ -> os/exit (sound (length found)))
 
 fn said found
-  count = length values + length shaped
+  count = length samples + length shaped
   io/write "{count} values rendered, {length found} disagree\n"
     .> (_ -> io/write (text/join found ""))
 
