@@ -3159,6 +3159,18 @@ grows_itself = row
 
 rows_c1zm = text/concat rows_c1zg [grows_itself]
 
+# A map handed back to its loop unchanged threads the way a list does, so the
+# carry no longer walks its keys and values on every lap.
+map_threaded = row
+  "a map carried that could have threaded"
+  false
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_map_carried_that_could_have_threaded")
+  release
+
+rows_c1zo = text/concat rows_c1zm [map_threaded]
+
 # The ratchet naming each row as it starts has no row here. The spec that
 # watches it, a_clean_head_still_proves_its_row, runs `prove` itself, and
 # `prove` works in fixed directories -- /tmp/kanso-ratchet-base, one
@@ -3166,7 +3178,7 @@ rows_c1zm = text/concat rows_c1zg [grows_itself]
 # that spec as a gate removes its own baseline worktree from under itself. On
 # kanso#1675 the baseline read the gate red before any mutation. The other
 # specs in tests/ that run `prove` carry no row for the same reason.
-rows_c = text/concat rows_c1zm [itself]
+rows_c = text/concat rows_c1zo [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
