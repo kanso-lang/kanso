@@ -6,5 +6,7 @@ print "literal {base}"
   .> (_ -> print "put {grown}")
   .> (_ -> print "at {grown["b"]}")
   .> (_ -> print "entries {entries grown}")
+  .> (_ -> print "keys {keys grown}")
+  .> (_ -> print "values {values grown}")
   .> (_ -> print "length {length grown}")
   .> (_ -> print "empty {blank}")

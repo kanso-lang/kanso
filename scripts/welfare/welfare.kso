@@ -884,8 +884,8 @@ fn paid base held value reason false
   rounded = 1.0 * units / 100.0
   note = list/to_h [["floor" rounded] ["why" reason]]
   grown_history = push (history_of held) note
-  keys = [["baseline" base] ["floor" value] ["history" grown_history]]
-  written (list/to_h keys) value reason
+  fields = [["baseline" base] ["floor" value] ["history" grown_history]]
+  written (list/to_h fields) value reason
 
 fn written held value reason
   os/write_file floor_path "{json/encode held}\n"

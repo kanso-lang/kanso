@@ -1,0 +1,38 @@
+# `keys m` and `values m` are the two columns of `entries m`, in its order:
+# position i of each is the pair at position i of `entries m`. The JSON encoder
+# walks a map by indexing both lists, so a key that drifted from its value
+# would write a wrong document with nothing failing. The maps here sit on both
+# sides of the size where a map changes how it is held, put their keys out of
+# order, mix int and string keys, and hold a map as a value.
+fn at_home? k v (entry ek ev)
+  k == ek and v == ev
+
+# the bound on each list is written where its read is, so every read is proven
+# in range; a list that ran short of the others stops the walk as false
+fn lined_up? ks vs es i
+  return length ks == length es and length vs == length es if length es < i
+  return false if i < 1 or length ks < i or length vs < i
+  if (at_home? ks[i] vs[i] es[i]) (lined_up? ks vs es (i + 1)) false
+
+fn scattered m 0
+  m
+
+fn scattered m n
+  scattered (put m (n * 7 % 13) "v{n}") (n - 1)
+
+fn checked name m
+  ks = keys m
+  vs = values m
+  aligned = lined_up? ks vs (entries m) 1
+  "{name}: {length ks} {length vs} {aligned} {ks} {vs}"
+
+pub play =
+  small = scattered {} 5
+  large = scattered {} 12
+  mixed = put (put (put (put { 1:"a" } "b" 2) 3 "c") "a" 1) 2 "b"
+  nested = { "inner":[1 2] "outer":{ "y":25 "z":26 } }
+  print (checked "empty" {})
+  print (checked "small" small)
+  print (checked "large" large)
+  print (checked "mixed" mixed)
+  print (checked "nested" nested)

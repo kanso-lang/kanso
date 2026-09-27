@@ -502,4 +502,7 @@
 #
 # CI measured the typed map key at 1ab7904e. compile_allocs 14,240 -> 14,272,
 # a RISE of 32 (+0.2247%).
-compile_allocs=14272
+#
+# CI measured keys and values over maps: two more builtins and the encoder's
+# longer walk. compile_allocs 14,272 -> 14,288, a RISE of 16 (+0.1121%).
+compile_allocs=14288

@@ -56,10 +56,10 @@ fn a_number_back_in_range_is_the_same_number() {
 max = 9223372036854775807
 back = max + 1 - 1
 halved = max * 2 / 2
-keys = put {} back \"in\"
+table = put {} back \"in\"
 wide = 9223372036854775807.0
 print \"{back == max} {halved == max} {back < max} {back > max - 1}\"
-print \"{keys[max]} {length (put keys max \"again\")} {back == wide}\"
+print \"{table[max]} {length (put table max \"again\")} {back == wide}\"
 ";
     assert_eq!(interpreted(program), "true true false true\nin 1 false\n");
 }

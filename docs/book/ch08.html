@@ -579,11 +579,10 @@ test_roundtrip ... ok
   <span class="k">if</span> (<span class="f">length</span> xs <span class="o">==</span> <span class="n">0</span>) (<span class="f">text/append</span> acc <span class="s">"[]"</span>) (<span class="f">_encode_list</span> acc xs)
 
 <span class="k">fn</span> <span class="f">_encode_onto</span> acc m:<span class="t">map[string json]</span>
-  es <span class="o">=</span> <span class="f">entries</span> m
-  <span class="k">if</span> (<span class="f">length</span> es <span class="o">==</span> <span class="n">0</span>) (<span class="f">text/append</span> acc <span class="s">"\{}"</span>) (<span class="f">_encode_map</span> acc es)</code></pre>
+  <span class="f">_encode_map</span> acc (<span class="f">keys</span> m) (<span class="f">values</span> m)</code></pre>
 </div>
 
-<p>(the <code>false</code> and <code>float64</code> arms read exactly like their neighbors, and <code>_encode_list</code> and <code>_encode_map</code> walk their elements with a comma between each pair.) where the literal arms dispatch on a value, the last four dispatch on a <em>type</em>—<code>n:int</code>, <code>xs:[]json</code>—which is the other half of chapter 03. <code>text/append</code> is the builder from chapter 06: the accumulator owns its buffer and extends it in place when it can, so the fold of appends costs what one pass over the output costs, while every intermediate stays an ordinary value.</p>
+<p>(the <code>false</code> and <code>float64</code> arms read exactly like their neighbors, and <code>_encode_list</code> and <code>_encode_map</code> walk their elements with a comma between each pair. a map goes in as two lists, its keys and its values, which line up position by position, so the walk reads the <em>i</em>th of each.) where the literal arms dispatch on a value, the last four dispatch on a <em>type</em>—<code>n:int</code>, <code>xs:[]json</code>—which is the other half of chapter 03. <code>text/append</code> is the builder from chapter 06: the accumulator owns its buffer and extends it in place when it can, so the fold of appends costs what one pass over the output costs, while every intermediate stays an ordinary value.</p>
 
 <p>the one arm with real work is strings, and the work is <code>_escape_onto</code>: decode's escape path run in reverse. it dispatches on bytes, the way decode's scanner does, and it borrows decode's other habit too—one scan (<code>find2_below</code>: the first quote, backslash, or control byte) proves most strings need no escaping at all, and a proven-clean string is appended whole, in one copy. the sample carries the library's escape functions verbatim and quotes two awkward strings—one with a quote and a newline, one with a bell character (byte 7) in the middle:</p>
 

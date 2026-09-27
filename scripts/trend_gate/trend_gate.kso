@@ -717,8 +717,8 @@ fn present? _
 fn linkage theirs ours src
   rows = list/to_list (list/select (text/split src "\n") body?)
   gone = list/to_list (list/select rows (r -> moved? theirs ours (name_of r)))
-  keys = list/to_list (list/map gone key_of)
-  [keys (deduped (list/to_list (list/map gone name_of))) rows]
+  gone_keys = list/to_list (list/map gone key_of)
+  [gone_keys (deduped (list/to_list (list/map gone name_of))) rows]
 
 fn name_of row
   parts = text/split row " "
@@ -1053,8 +1053,8 @@ unclaimed = """
 fn name_line k
   "  {k}\n"
 
-fn each_line keys shape
-  text/join (list/to_list (list/map keys shape)) ""
+fn each_line lines shape
+  text/join (list/to_list (list/map lines shape)) ""
 
 fn unstated mute
   silenced mute (length mute == 0)
