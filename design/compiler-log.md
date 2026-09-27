@@ -17038,3 +17038,30 @@ Three things the attempt found, whichever shape is chosen later:
   own, and no copy of a file using a `builtin_` name compiles outside the
   standard library. Importing `std/json`, as the run program does, is the
   change that shape of library needs.
+
+## 2026-09-27 — two measurements after the map walk: a byte walk declined, and what the entry pass can still win
+
+Two readings taken on the container against main at bf652f93, one sitting
+each.
+
+`k_b_number_span` finds where a JSON number ends with a sixteen-byte
+classifier, at 72 instructions a call on the run program. Most numbers are
+short, so the span was tried with the first bytes walked one at a time and
+the classifier kept for longer ones. Walking eight bytes read runbench
+1,102,879,724 -> 1,124,259,778, +1.94%, and walking sixteen read
+1,119,352,348, +1.49%. The run program's numbers average 7.3 characters and
+run from 4 to 9, and the byte walk costs about 13 instructions a byte, so the
+classifier is already the cheaper read. Declined.
+
+The pass Clay asked to keep on the list, keeping an `entry` record out of
+memory when the callee only takes it apart, now has a measured bound. A
+program that walks a 64-key map through `entries` twenty thousand times, one
+record at a time into a function that destructures it, reads 95,904,950
+instructions. The same walk over `keys m` and `values m` reads 66,424,441.
+The difference, 23 instructions a pair, splits between `k_b_entries`
+building the records (29,439,999 against 12,779,997 for the two columns) and
+the walk taking them apart (66,103,521 against 53,283,014 in the program's own
+code). That is what the pass can recover for a user program that walks a map
+this way. The repository's own map walks in lib/json, kq and kanso-json now
+index the two columns directly. The two folds over `entries` in lib/list,
+`transform_keys` and `transform_values`, are the ones left.
