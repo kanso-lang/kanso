@@ -816,10 +816,10 @@
 # arms a program's own dispatch makes reachable. Machine-code size carries no
 # welfare term (ruled 2026-09-05); this vein is exact and watched on its own.
 jsonbench text=241064
-encodebench text=249432
+encodebench text=249448
 oneshot text=251480
 basket text=237096
-widebench text=250680
+widebench text=250648
 deepbench text=220152
 escapebench text=214472
 pendbench text=228008
@@ -827,5 +827,5 @@ indexbench text=214456
 scanbench text=312104
 digestbench text=236088
 readbench text=214888
-livebench text=252392
-runbench text=400776
+livebench text=252456
+runbench text=400824

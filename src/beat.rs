@@ -70,9 +70,13 @@ const SCALAR: Set = INT | FLOAT | BOOL;
 /// in-place — and no rewind follows it, because k_beat_pop keeps the region
 /// alive for a heap result. The adversarial tests below pin each case.
 ///
-/// Maps stay out: the first read caches a freshly allocated sorted view —
-/// an above-the-mark pointer — into the below-mark header. Instant dangle.
-const THREADED: Set = SCALAR | NONE | STR | BYTES | FN | REC | DESC | LIST;
+/// Maps qualify by the list argument. A put onto a below-mark map appends
+/// into spare capacity only the new header's length covers, and an in-place
+/// put cannot meet a threaded map for the reason an in-place push cannot. The
+/// one field a read writes into the header is the sorted view, and the view
+/// is malloc'd, so a rewind never frees what a below-mark header points at.
+/// Maps were kept out while the view lived in the arena.
+const THREADED: Set = SCALAR | NONE | STR | BYTES | FN | REC | DESC | LIST | MAP;
 
 /// One self-recursive group's fate under the analysis. `Beat` is the only
 /// verdict codegen acts on; the others exist so `report` can say why a loop
@@ -2582,16 +2586,17 @@ mod tests {
     }
 
     #[test]
-    fn map_threaded_loop_carries_the_map() {
-        // a map may never thread (its first read caches an above-mark sorted
-        // view into the below-mark header), so the carry evacuates it — the
-        // copy resets the cache, which keeps the rewind sound.
+    fn map_threaded_loop_is_a_beat() {
+        // the map is handed onward unchanged every iteration, so it threads
+        // the way a list does: its sorted view is malloc'd, so a read writes
+        // no arena pointer into the below-mark header, and nothing carries.
         let src = "fn go m n\n  spin m n 0\n\nmain =\n  prices = { \"a\":1 \"b\":2 }\n  print \"{go prices 3}\"\n\nfn spin m 0 acc\n  acc + length m\n\nfn spin m n acc\n  step = \"seen {n}\"\n  spin m (n - 1) (acc + length step)\n";
         let (program, inference) = compiled(src);
         let beats =
             super::beat_loops(&program, &inference, &crate::linear::in_place_pushes(&program));
 
-        assert_eq!(beats.carried.get(&("spin".to_string(), 3)), Some(&vec![0]));
+        assert!(beats.ids.contains_key(&("spin".to_string(), 3)));
+        assert_eq!(beats.carried.get(&("spin".to_string(), 3)), None);
     }
 
     #[test]

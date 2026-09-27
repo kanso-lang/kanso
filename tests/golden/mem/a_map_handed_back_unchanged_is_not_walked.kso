@@ -1,0 +1,26 @@
+# A loop that hands a map back to itself unchanged threads it, the way a list
+# is threaded: the map arrived before the loop's mark and nothing in a lap can
+# write into it, so a rewind cannot reach it and the carry has nothing to ask.
+# Until 2026-09-27 the map was carried instead, and each lap asked whether
+# every key and value survived the rewind: `survive_slots` counted 2 * 64
+# slots a lap, a thousand laps, for a map no lap could change.
+#
+# Each lap reads the map through `entries`, which sorts it into a view the
+# header keeps, and puts a key onto it. The view is malloc'd and the put
+# appends into spare room only the new map's length covers, which are the two
+# writes that could otherwise leave the threaded header pointing at freed
+# arena. The printed sum says both reads kept seeing the map that entered.
+fn filled m 0
+  m
+
+fn filled m n
+  filled (put m "k{n}" n) (n - 1)
+
+fn spin 0 acc _
+  acc
+
+fn spin n acc m
+  wider = put m "lap {n}" n
+  spin (n - 1) (acc + length (entries m) + length wider) m
+
+pub play = print (spin 1000 0 (filled {} 64))

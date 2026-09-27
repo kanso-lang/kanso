@@ -16929,3 +16929,112 @@ more for the runtime's two new functions and the walk: emitted_other_branches
 1,671,746,843, work_oneshot 12,866,228, work_encodebench 2,417,406,959.
 
 Welfare scores the trade 0.02 above the floor, and the floor moves to 90.26.
+
+## 2026-09-27 — a map handed back to its loop unchanged threads
+
+A beat loop decides, for each parameter a lap hands to the next, whether the
+value can cross the rewind by identity. A parameter handed back unchanged on
+every lap is *threaded*: it arrived before the loop's mark and nothing in a lap
+can write into it, so it crosses as it is and the carry never looks at it.
+Lists, records, strings and closures were threaded. Maps were carried, so every
+lap asked whether each key and each value survived the rewind, and the answer
+was yes every time.
+
+The reason maps were kept out was written beside the set: the first read of a
+map caches a sorted view in its header, and the view was allocated in the
+arena, so a below-mark header would have held a pointer the rewind freed. The
+view has lived in malloc'd storage since the view registry was built, for
+exactly that reason. The other write a lap can make is a put, and a put onto a
+shared map appends into spare room that only the new map's length covers,
+which is the argument that already admits lists. An in-place put needs the map
+to be unique, and a map handed onward has a second use.
+
+`THREADED` now includes `MAP`. Measured by CI over main after kanso#1683:
+
+    livebench    1,671,746,843 -> 1,667,464,002    -4,282,841   -0.256%
+    encodebench  2,417,406,959 -> 2,412,561,883    -4,845,076   -0.200%
+    widebench       27,375,107 ->    27,311,106       -64,001   -0.234%
+    runbench     1,102,979,416 -> 1,102,878,887      -100,529   -0.0091%
+
+Measured by CI against the tree before kanso#1683, the four read -0.289%,
+-0.197%, -0.234% and -0.0017%, and the container agreed to the instruction.
+The difference between the two sittings arrived with kanso#1683's encoder;
+what in it moves the saving was not isolated. The other ten benchmarks are
+byte-identical. The emitter writes three calls fewer in each of the four
+programs, the carry calls a map slot no longer needs, and the `.text` total
+moves 3,523,088 -> 3,523,184: encodebench 16 bytes larger, livebench 64,
+runbench 48, and widebench 32 smaller. A program built to show the shape
+walks a 64-key map through `entries` for twenty thousand laps and reads
+209,505,643 instructions on main and 95,905,706 threaded: half of it was
+`k_interior_survives` asking the same 128 slots the same question.
+
+`survive_slots` falls in every vein that carried a map: encode and live
+129,873 -> 0, run 108,671 -> 108,511. `evac_allocs` falls 38 -> 30 on encode
+and 32 -> 24 on live, and allocations fall by six on each. encode_carry_dedup
+and live_carry_dedup both read 71 -> 3: a dedup is a carried value found
+already copied this lap, and a map that is no longer carried is no longer
+found. The mem fixture a_map_walk_builds_no_scratch_pair reads
+survive_slots 32,004 -> 4.
+
+The new fixture a_map_handed_back_unchanged_is_not_walked threads a 64-key map
+through a thousand laps, reads it through `entries` every lap so its header
+keeps a real sorted view, and puts a key onto it every lap. It reads
+`survive_slots=4` and prints what both reads saw. On main's compiler every
+other counter is identical and `survive_slots` reads 256,004. The mutation "a
+map carried that could have threaded" takes `MAP` back out of the set, and the
+fixture's golden goes red.
+
+## 2026-09-27 — a JSON number read in one call, measured and declined
+
+Clay's note of 2026-09-27 cleared a fused number read inside lib/json: a
+`builtin_` name only the standard library can reach, with no new `text/`
+function. It was built two ways and both came out behind main, so neither
+lands.
+
+The first shape, `builtin_json_number cs p`, found the span and parsed the int
+or float in one runtime call, and handed back `entry end value`. Measured on
+the container against main at 95b5551d, one sitting:
+
+    runbench     1,108,021,083 -> 1,130,281,120   +22,260,037   +2.01%
+    oneshot         12,852,342 ->    13,093,567      +241,225   +1.88%
+    livebench    1,666,506,956 -> 1,666,436,776       -70,180   -0.004%
+    encodebench  2,417,003,643 -> 2,417,037,074       +33,431   +0.001%
+
+`k_b_json_number` read 48,853,530 instructions where `k_b_number_span` had read
+30,066,597, and the decoder around it did not shrink by the difference:
+parse_value rose 2,026,530 and array_open 1,453,914. Main's path allocates
+nothing per number. Its `text/to_int (text/slice cs start (p - 1))` reaches the
+fused slice door, which LLVM inlines into the decoder with the tags already
+known, and `parsed p v` travels back as two registers. The builtin's `entry`
+is an arena record. Taking it apart asks its shape and both field tags, arm by
+arm, and that dispatch costs about what the int parse it replaced cost.
+
+The second shape kept `text/number_span` and moved only the parse:
+`builtin_json_number cs p e` answers the value in the span `e` describes.
+
+    runbench     1,108,021,083 -> 1,114,633,978    +6,612,895   +0.60%
+    oneshot         12,852,342 ->    12,947,373       +95,031   +0.74%
+    livebench    1,666,506,956 -> 1,666,539,326       +32,370   +0.002%
+    encodebench  2,417,003,643 -> 2,417,306,302      +302,659   +0.013%
+
+It removes one dispatch on the span's sign and puts back a call that asks the
+tags again. So the span and the parse are already about as cheap apart as
+together, and what remains to win is in `k_b_number_span` itself, at 72
+instructions a number on runbench.
+
+Three things the attempt found, whichever shape is chosen later:
+
+- A field taken out of an `entry` the runtime built binds the top set, and the
+  top set includes a description. `json/decode` then read as a description,
+  and the raise check skips descriptions, so `json/encode (json/decode s)`
+  compiled with no err arm. Annotating the fields (`entry e:int n:int`) gave
+  the check back. The same gap is open to any program that returns a field of
+  a record `entries` built.
+- `builtin_` names are refused in lib/json when it is checked or tested where
+  it sits (`kanso test lib/json` in CI), because only files stamped `std/`
+  may use them. The attempt let a file in the directory `import "std/json"`
+  resolves to use them as well.
+- bench/make_jsonbench copies lib/json into the benchmark as a module of its
+  own, and no copy of a file using a `builtin_` name compiles outside the
+  standard library. Importing `std/json`, as the run program does, is the
+  change that shape of library needs.
