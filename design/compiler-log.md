@@ -16830,3 +16830,51 @@ self-loop's arms again: `compile_instructions` 25,028,747 -> 25,065,813
 578,623,311 -> 578,623,312 moved by one instruction, which is the row the
 "three parts per billion" entry in STATUS.md is about, and nothing in this
 change reaches the interpreter.
+
+## 2026-09-27 — a map handed back to its loop unchanged threads
+
+A beat loop decides, for each parameter a lap hands to the next, whether the
+value can cross the rewind by identity. A parameter handed back unchanged on
+every lap is *threaded*: it arrived before the loop's mark and nothing in a lap
+can write into it, so it crosses as it is and the carry never looks at it.
+Lists, records, strings and closures were threaded. Maps were carried, so every
+lap asked whether each key and each value survived the rewind, and the answer
+was yes every time.
+
+The reason maps were kept out was written beside the set: the first read of a
+map caches a sorted view in its header, and the view was allocated in the
+arena, so a below-mark header would have held a pointer the rewind freed. The
+view has lived in malloc'd storage since the view registry was built, for
+exactly that reason. The other write a lap can make is a put, and a put onto a
+shared map appends into spare room that only the new map's length covers,
+which is the argument that already admits lists. An in-place put needs the map
+to be unique, and a map handed onward has a second use.
+
+`THREADED` now includes `MAP`. Measured on the container against main at
+95b5551d, one sitting:
+
+    livebench    1,666,506,956 -> 1,661,695,584    -4,811,372   -0.289%
+    encodebench  2,417,003,643 -> 2,412,230,532    -4,773,111   -0.197%
+    widebench       27,374,746 ->    27,310,745       -64,001   -0.234%
+    runbench     1,108,021,083 -> 1,108,002,637       -18,446   -0.0017%
+
+The other ten benchmarks are byte-identical. A program built to show the shape
+walks a 64-key map through `entries` for twenty thousand laps and reads
+209,505,643 instructions on main and 95,905,706 threaded: half of it was
+`k_interior_survives` asking the same 128 slots the same question.
+
+`survive_slots` falls in every vein that carried a map: encode and live
+129,873 -> 0, run 108,671 -> 108,511. `evac_allocs` falls 38 -> 30 on encode
+and 32 -> 24 on live, and allocations fall by six on each. encode_carry_dedup
+and live_carry_dedup both read 71 -> 3: a dedup is a carried value found
+already copied this lap, and a map that is no longer carried is no longer
+found. The mem fixture a_map_walk_builds_no_scratch_pair reads
+survive_slots 32,004 -> 4.
+
+The new fixture a_map_handed_back_unchanged_is_not_walked threads a 64-key map
+through a thousand laps, reads it through `entries` every lap so its header
+keeps a real sorted view, and puts a key onto it every lap. It reads
+`survive_slots=4` and prints what both reads saw. On main's compiler every
+other counter is identical and `survive_slots` reads 256,004. The mutation "a
+map carried that could have threaded" takes `MAP` back out of the set, and the
+fixture's golden goes red.
