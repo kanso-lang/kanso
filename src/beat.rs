@@ -1545,12 +1545,14 @@ fn expr_allocates(
         "filter",
         "from_code",
         "join",
+        "keys",
         "map",
         "push",
         "put",
         "slice",
         "sort",
         "utf8",
+        "values",
     ];
     const PURE: &[&str] = &[
         "at",
@@ -2737,9 +2739,10 @@ mod tests {
         // so the cycle is not a beat: no bracket, no rewind, nothing to free.
         //
         // The two encoders were beats until 2026-09-25, for one allocation:
-        // the `entries` a nested map builds as it descends. That call is a
-        // region now, which reclaims it once per nested map, and the loops
-        // allocate nothing else an iteration outlives.
+        // the columns a nested map builds as it descends -- `entries` then,
+        // `keys` and `values` since 2026-09-27. That call is a region, which
+        // reclaims them once per nested map, and the loops allocate nothing
+        // else an iteration outlives.
         assert_eq!(
             licensed,
             Vec::<(String, usize)>::new(),
@@ -2750,8 +2753,8 @@ mod tests {
         let regions: Vec<usize> = loops.regions.iter().map(|(_, line, _)| *line).collect();
         assert_eq!(
             regions,
-            vec![64],
-            "the one region is the descent into a map, `encode_map acc (entries m)`"
+            vec![67],
+            "the one region is the descent into a map, `encode_map acc (keys m) (values m)`"
         );
     }
 

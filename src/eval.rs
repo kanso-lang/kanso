@@ -3502,6 +3502,29 @@ impl<'a> Interp<'a> {
                     .collect();
                 Ok(Value::List(Rc::new(list)))
             }
+            // The two columns of `entries`, in its order: position i of each
+            // is the pair at position i of `entries m`.
+            b"keys" => {
+                let [map] = arity(args, name, span)?;
+                let Value::Map(map_entries) = &map else {
+                    return Err(RuntimeError { message: "keys takes a map".to_string(), span });
+                };
+                let list = map_entries
+                    .iter()
+                    .map(|(key, _)| match key {
+                        MapKey::Int(n) => Value::int(n.clone()),
+                        MapKey::Str(s) => Value::Str(s.clone()),
+                    })
+                    .collect();
+                Ok(Value::List(Rc::new(list)))
+            }
+            b"values" => {
+                let [map] = arity(args, name, span)?;
+                let Value::Map(map_entries) = &map else {
+                    return Err(RuntimeError { message: "values takes a map".to_string(), span });
+                };
+                Ok(Value::List(Rc::new(map_entries.iter().map(|(_, v)| v.clone()).collect())))
+            }
             b"bytes" => {
                 let [text] = arity(args, name, span)?;
                 let Value::Str(text) = &text else {

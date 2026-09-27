@@ -14,9 +14,9 @@ const KEYWORDS = new Set(['fn', 'type']);
 const NULLARY = new Set(['true', 'false', 'none', 'err']);
 const BUILTINS = new Set([
   'args', 'at', 'bytes', 'char_code', 'chars', 'concat', 'entries', 'filter',
-  'from_code', 'if', 'join', 'length', 'map', 'print', 'push', 'put',
+  'from_code', 'if', 'join', 'keys', 'length', 'map', 'print', 'push', 'put',
   'random', 'read_file', 'slice', 'sleep', 'sort', 'stdin', 'sum',
-  'to_float', 'to_int', 'utf8', 'write_file',
+  'to_float', 'to_int', 'utf8', 'values', 'write_file',
 ]);
 
 function esc(text) {

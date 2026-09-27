@@ -16831,6 +16831,105 @@ self-loop's arms again: `compile_instructions` 25,028,747 -> 25,065,813
 "three parts per billion" entry in STATUS.md is about, and nothing in this
 change reaches the interpreter.
 
+## 2026-09-27 — gavel: keys and values are builtins over maps
+
+Ruled by Clay: "add `keys` and `values` to the language as builtins over maps.
+`keys m` answers the map's keys as a list and `values m` answers its values as
+a list, both in the same key order `entries m` uses, so position i of each
+lines up with position i of the others." They go on every engine,
+byte-identical, and the alignment is pinned by a golden because the JSON
+encoder depends on it. The question was put in conversation on 2026-09-26 and
+never reached the ledger, so there is no entry to remove.
+
+Both are ambient, like `entries`, because the ruling spells them bare. An
+ambient name cannot be rebound, so six bindings in this repository that used
+one were renamed: `keys` in `scripts/perf_record`, `scripts/trend_gate` (twice,
+once as a parameter), `scripts/welfare` and the micro fixture
+`a_thunk_capture_survives_the_cohort`, and `values` in
+`scripts/render_differential`. kq, vse and kanso-json bind neither name.
+
+The interpreter reads both from the map's own ordered pairs, and the wasm
+engine reaches the interpreter's builtins, so they need nothing of their own
+there. The native runtime reads both from `k_map_sorted`, the view `entries`
+walks, as one list with no record per pair. The checker, inference and the
+beat analysis know them as list-answering, allocating builtins that take a map.
+Appendix B documents them beside `entries`, with the maps sample extended to
+print both, and the editor grammar and the site's highlighter name them.
+
+`keys_and_values_line_up_with_entries` in the micro corpus walks `keys`,
+`values` and `entries` together on an empty map, maps on both sides of the
+eight-entry change in how a map is held, keys put out of order, int keys
+beside string keys, and a map held as a value, and prints whether every
+position agrees. Watched red: with the native `values` reading the pairs in
+insertion order, three of the five maps printed `false`. That fault is the
+ratchet row "a values column read in insertion order". `keys_takes_a_map` and
+`values_takes_a_map` pin the refusal in the runtime corpus, worded as
+`entries`' is.
+
+## 2026-09-27 — the encoder writes a map from its two columns
+
+`encode_onto` wrote a map by building `entries m` and taking each record apart
+in `entry_onto`. It now asks `keys m` and `values m` and indexes both, so no
+record is built. The 2026-09-26 entry priced the records at about 140
+instructions a pair between building and reading them back. That was the
+ceiling, and walking two lists costs something of its own: the walk guards
+both lists where it guarded one and carries three arguments where it carried
+two, and each map now makes two builtin calls where it made one.
+
+Measured by CI on the pull request's tree against main's goldens:
+
+    runbench     1,108,020,246 -> 1,102,979,416    -5,040,830   -0.455%
+    livebench    1,666,507,317 -> 1,671,746,843    +5,239,526   +0.314%
+    oneshot         12,852,666 ->    12,866,228       +13,562   +0.106%
+    encodebench  2,417,003,976 -> 2,417,406,959      +402,983   +0.017%
+
+The container's sitting agreed to the instruction on all four deltas. The
+other ten benchmarks are byte-identical. On runbench the two builtins cost 136
+instructions a map where `entries` cost 124, and the walk is about 7.5 million
+cheaper. livebench encodes many small maps, where the second call is a larger
+share of the work, and it comes out behind. encodebench carries its own frozen
+copy of the library, so its move is the runtime's layout, not the encoder.
+
+Two shapes of the builtins were measured before this one. The first allocated
+the list header and the buffer separately and read runbench 1,105,810,963.
+Taking both from one allocation, as `entries` does, and making them doors
+read 1,105,429,763. The same single allocation on the C convention reads
+1,102,980,253, which is what lands: the walk keeps more live across the two
+calls than they save as doors, the way `at` measured when the doors were
+chosen.
+
+The cost goldens move where maps are written. Allocations rise, because each
+map takes two where it took one, and the bytes fall: run_allocs 1,707,283 ->
+1,955,773 and `alloc_bytes` 346,368,114 -> 318,200,274, live_allocs 1,120,094
+-> 2,224,494 and 534,601,584 -> 409,411,184, oneshot_allocs 12,066 -> 14,827
+and 2,689,002 -> 2,376,026. `sh_rec` falls to what the decoder builds and
+`sh_buf` rises by the two lists: run_sh_buf 102,830,160 -> 118,845,840,
+live_sh_buf 71,980,528 -> 143,161,328, oneshot_sh_buf 977,680 -> 1,155,632. No
+arena peak moves. Two mem fixtures that encode maps move the same way:
+a_literal_appended_across_a_rewind_allocs 256 -> 376,
+a_literal_appended_across_a_rewind_sh_buf 6,240 -> 12,000,
+a_nested_map_gives_back_its_entries_allocs 18,028 -> 24,028 and
+a_nested_map_gives_back_its_entries_sh_buf 1,719,216 -> 2,295,216.
+
+The interpreter pays most. interp_instructions reads 578,623,312 ->
+589,693,399, +1.91%: `keys` and `values` each copy the map's column into a
+fresh list, and the walk's two index reads go through the interpreter's
+dispatch where one record pattern did. The compiler carries the new builtins
+and the longer walk: front_end_visits 7,411 -> 7,505, compile_instructions
+25,065,813 -> 25,156,469, entry_instructions 84,695,206 -> 84,771,442,
+library_instructions 85,221,557 -> 85,303,737, emit_instructions 29,835,995 ->
+29,838,551, codegen_instructions_dev 123,345,350 -> 123,362,462 and
+codegen_instructions_release 402,610,256 -> 402,739,766. compile_allocs
+14,272 -> 14,288 and compile_peak_bytes 710,281 -> 710,484; interp_allocs
+falls 899,769 -> 895,156 and interp_peak_bytes rises 720,417 -> 720,620. The
+emitter writes
+more for the runtime's two new functions and the walk: emitted_other_branches
+8,059 -> 8,078, emitted_other_lines 85,467 -> 85,534, text 3,510,608 ->
+3,523,088. The work rows are the four benchmarks above: work_livebench
+1,671,746,843, work_oneshot 12,866,228, work_encodebench 2,417,406,959.
+
+Welfare scores the trade 0.02 above the floor, and the floor moves to 90.26.
+
 ## 2026-09-27 — a map handed back to its loop unchanged threads
 
 A beat loop decides, for each parameter a lap hands to the next, whether the
@@ -16860,8 +16959,8 @@ to be unique, and a map handed onward has a second use.
 The container's sitting agreed to the instruction on all four deltas, and the
 other ten benchmarks are byte-identical. The emitter writes three calls fewer
 in each of the four programs, the carry calls a map slot no longer needs, and
-the `.text` total moves 3,510,608 -> 3,510,656: encodebench and livebench 16
-bytes larger, runbench 48 larger, widebench 32 smaller. A program built to show the shape
+the `.text` total moves 3,523,088 -> 3,523,184: encodebench 16 bytes larger,
+livebench 64, runbench 48, and widebench 32 smaller. A program built to show the shape
 walks a 64-key map through `entries` for twenty thousand laps and reads
 209,505,643 instructions on main and 95,905,706 threaded: half of it was
 `k_interior_survives` asking the same 128 slots the same question.
@@ -16881,3 +16980,58 @@ keeps a real sorted view, and puts a key onto it every lap. It reads
 other counter is identical and `survive_slots` reads 256,004. The mutation "a
 map carried that could have threaded" takes `MAP` back out of the set, and the
 fixture's golden goes red.
+
+## 2026-09-27 — a JSON number read in one call, measured and declined
+
+Clay's note of 2026-09-27 cleared a fused number read inside lib/json: a
+`builtin_` name only the standard library can reach, with no new `text/`
+function. It was built two ways and both came out behind main, so neither
+lands.
+
+The first shape, `builtin_json_number cs p`, found the span and parsed the int
+or float in one runtime call, and handed back `entry end value`. Measured on
+the container against main at 95b5551d, one sitting:
+
+    runbench     1,108,021,083 -> 1,130,281,120   +22,260,037   +2.01%
+    oneshot         12,852,342 ->    13,093,567      +241,225   +1.88%
+    livebench    1,666,506,956 -> 1,666,436,776       -70,180   -0.004%
+    encodebench  2,417,003,643 -> 2,417,037,074       +33,431   +0.001%
+
+`k_b_json_number` read 48,853,530 instructions where `k_b_number_span` had read
+30,066,597, and the decoder around it did not shrink by the difference:
+parse_value rose 2,026,530 and array_open 1,453,914. Main's path allocates
+nothing per number. Its `text/to_int (text/slice cs start (p - 1))` reaches the
+fused slice door, which LLVM inlines into the decoder with the tags already
+known, and `parsed p v` travels back as two registers. The builtin's `entry`
+is an arena record. Taking it apart asks its shape and both field tags, arm by
+arm, and that dispatch costs about what the int parse it replaced cost.
+
+The second shape kept `text/number_span` and moved only the parse:
+`builtin_json_number cs p e` answers the value in the span `e` describes.
+
+    runbench     1,108,021,083 -> 1,114,633,978    +6,612,895   +0.60%
+    oneshot         12,852,342 ->    12,947,373       +95,031   +0.74%
+    livebench    1,666,506,956 -> 1,666,539,326       +32,370   +0.002%
+    encodebench  2,417,003,643 -> 2,417,306,302      +302,659   +0.013%
+
+It removes one dispatch on the span's sign and puts back a call that asks the
+tags again. So the span and the parse are already about as cheap apart as
+together, and what remains to win is in `k_b_number_span` itself, at 72
+instructions a number on runbench.
+
+Three things the attempt found, whichever shape is chosen later:
+
+- A field taken out of an `entry` the runtime built binds the top set, and the
+  top set includes a description. `json/decode` then read as a description,
+  and the raise check skips descriptions, so `json/encode (json/decode s)`
+  compiled with no err arm. Annotating the fields (`entry e:int n:int`) gave
+  the check back. The same gap is open to any program that returns a field of
+  a record `entries` built.
+- `builtin_` names are refused in lib/json when it is checked or tested where
+  it sits (`kanso test lib/json` in CI), because only files stamped `std/`
+  may use them. The attempt let a file in the directory `import "std/json"`
+  resolves to use them as well.
+- bench/make_jsonbench copies lib/json into the benchmark as a module of its
+  own, and no copy of a file using a `builtin_` name compiles outside the
+  standard library. Importing `std/json`, as the run program does, is the
+  change that shape of library needs.

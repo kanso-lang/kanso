@@ -205,7 +205,11 @@ front_end_rounds=15
 # 2026-09-25, a literal divisor cannot fail: the fixpoint settles a parameter
 # that no longer carries a possible err a little sooner. front_end_visits
 # 7,416 -> 7,411, a FALL of 5 (-0.0674%).
-front_end_visits=7411
+#
+# 2026-09-27, the encoder writes a map from `keys` and `values`: the walk
+# guards two lists where it guarded one and passes three arguments where it
+# passed two. front_end_visits 7,411 -> 7,505, a RISE of 94 (+1.2684%).
+front_end_visits=7505
 # 2026-08-31 (the AST's identifiers are inline names): 728,030 -> 713,606, a
 # fall of 14,424, or 1.98%. Banked. The peak falls with the traffic because a
 # short name's bytes now live inside the AST node the allocator already gave
@@ -299,4 +303,7 @@ front_end_visits=7411
 #
 # CI measured the typed map key at 1ab7904e. compile_peak_bytes 708,672 ->
 # 710,281, a RISE of 1,609 (+0.2270%).
-compile_peak_bytes=710281
+#
+# CI measured keys and values over maps. compile_peak_bytes 710,281 ->
+# 710,484, a RISE of 203 (+0.0286%).
+compile_peak_bytes=710484

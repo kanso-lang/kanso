@@ -3,7 +3,7 @@ use crate::diag::{article, Diagnostic, Span};
 use crate::hash::{Map as HashMap, Set as HashSet};
 use num_traits::Zero;
 
-pub const BUILTINS: [&str; 61] = [
+pub const BUILTINS: [&str; 63] = [
     "annotate",
     "append",
     "args",
@@ -13,6 +13,8 @@ pub const BUILTINS: [&str; 61] = [
     "chars",
     "concat",
     "entries",
+    "keys",
+    "values",
     "find2",
     "find2_below",
     "number_span",
@@ -72,8 +74,10 @@ pub const BUILTINS: [&str; 61] = [
 /// three chain words are here because a chain step is written wherever an
 /// effect is, and importing a module to spell one would be a tax on the
 /// failure channel.
-pub const AMBIENT: [&str; 10] =
-    ["annotate", "bind", "effect", "entries", "if", "length", "print", "push", "put", "rescue"];
+pub const AMBIENT: [&str; 12] = [
+    "annotate", "bind", "effect", "entries", "if", "keys", "length", "print", "push", "put",
+    "rescue", "values",
+];
 
 /// What each builtin takes. `if` is absent: its count is checked where its
 /// branches are, because a guard form spells the same word with a different
@@ -87,7 +91,7 @@ pub const AMBIENT: [&str; 10] =
 /// `native backend: `length` takes 1 argument(s)` and no span, the page
 /// died at the call, and `kanso check` said ok. So the counts live here,
 /// beside the names, and every reader takes them from one place.
-pub const BUILTIN_ARITY: [(&str, usize); 65] = [
+pub const BUILTIN_ARITY: [(&str, usize); 67] = [
     ("accept", 1),
     ("annotate", 2),
     ("append", 2),
@@ -115,6 +119,7 @@ pub const BUILTIN_ARITY: [(&str, usize); 65] = [
     ("is_desc", 1),
     ("is_dir", 1),
     ("join", 2),
+    ("keys", 1),
     ("kill", 1),
     ("length", 1),
     ("list_dir", 1),
@@ -149,6 +154,7 @@ pub const BUILTIN_ARITY: [(&str, usize); 65] = [
     ("to_float", 1),
     ("to_int", 1),
     ("utf8", 1),
+    ("values", 1),
     ("wrap_err", 2),
     ("write", 1),
     ("write_err", 1),
@@ -2938,6 +2944,8 @@ fn builtin_demand(name: &str, index: usize) -> Option<&'static [LitKind]> {
     let table: &[(&str, &[&[LitKind]])] = &[
         ("length", &[&[Str, List, Map]]),
         ("entries", &[&[Map]]),
+        ("keys", &[&[Map]]),
+        ("values", &[&[Map]]),
         ("bytes", &[&[Str]]),
         ("to_bytes", &[&[List]]),
         ("char_code", &[&[Str]]),

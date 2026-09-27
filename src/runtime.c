@@ -7616,6 +7616,59 @@ K_DOORCC KValue k_b_entries(KValue mv) {
     KValue out; out.tag = K_LIST; out.payload = k_ptr(l); return out;
 }
 
+/* `keys` and `values` are the two columns of `entries`, read off the same
+   sorted view, so position i of each is the pair at position i of `entries`.
+   Each is one list and no record, which is the point of them: a walk that
+   wants both sides indexes two lists instead of building and taking apart a
+   record per pair. A value may be a failure, the way an element of any list
+   may be; a key never is.
+
+   The buffer and the list header come from one allocation, the way
+   `entries` takes its records, buffer and header, unless the free list holds
+   a buffer of exactly this size. The encoder asks both of every map it
+   writes, 248,490 maps a run on the run program, and two bumps where one
+   would do was a tenth of what each call cost.
+
+   They stay on the C convention where `entries` is a door. Measured both ways
+   on the run program: as doors the run read 1,105,429,763, and on the C
+   convention 1,102,980,253, because the encoder's walk keeps more live
+   across the two calls than they save by being doors. */
+static inline __attribute__((always_inline)) KValue k_map_column(KValue mv, int side, const char* refusal) {
+    if (!k_not_failure(mv)) return mv;
+    if (mv.tag != K_MAP) k_die(refusal);
+    KMap* m = k_as_map(mv);
+    long long n;
+    KValue* s = k_map_sorted(m, &n);
+    long long cap = n ? n : 1;
+    size_t buf_bytes = (sizeof(KBuf) + sizeof(KValue) * (size_t)cap + 15) & ~(size_t)15;
+    size_t list_bytes = (sizeof(KList) + 15) & ~(size_t)15;
+    int c = k_buf_class(cap);
+    KValue* items;
+    KList* l;
+    if (c >= 0 && k_buf_free[c]) {
+        items = k_buf(cap);
+        l = (KList*)k_alloc(list_bytes);
+    } else {
+        if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0))
+            k_stat_sh_buf += (long long)buf_bytes;
+        unsigned char* whole = (unsigned char*)k_alloc(buf_bytes + list_bytes);
+        KBuf* b = (KBuf*)whole;
+        k_buf_set_cap(b, cap, 0);
+        b->used = 0;
+        items = (KValue*)(b + 1);
+        l = (KList*)(whole + buf_bytes);
+    }
+    for (long long i = 0; i < n; i++) items[i] = s[i * 2 + side];
+    l->len = n;
+    l->items = items;
+    k_buf_of(items)->used = n;
+    KValue out; out.tag = K_LIST; out.payload = k_ptr(l); return out;
+}
+
+KValue k_b_keys(KValue mv) { return k_map_column(mv, 0, "keys takes a map"); }
+
+KValue k_b_values(KValue mv) { return k_map_column(mv, 1, "values takes a map"); }
+
 /* utf-8 helpers: kanso strings are opaque utf-8, positions are codepoints */
 static long k_cp_len(unsigned char b) {
     if (b < 0x80) return 1;

@@ -3159,6 +3159,19 @@ grows_itself = row
 
 rows_c1zm = text/concat rows_c1zg [grows_itself]
 
+# `keys` and `values` are the two columns of `entries`, in its order; the JSON
+# encoder indexes both, so a column read in another order writes a wrong
+# document with nothing failing.
+columns_line_up = row
+  "a values column read in insertion order"
+  false
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_values_column_read_in_insertion_order")
+  release
+
+rows_c1zn = text/concat rows_c1zm [columns_line_up]
+
 # A map handed back to its loop unchanged threads the way a list does, so the
 # carry no longer walks its keys and values on every lap.
 map_threaded = row
@@ -3169,7 +3182,7 @@ map_threaded = row
   (breaking "a_map_carried_that_could_have_threaded")
   release
 
-rows_c1zo = text/concat rows_c1zm [map_threaded]
+rows_c1zo = text/concat rows_c1zn [map_threaded]
 
 # The ratchet naming each row as it starts has no row here. The spec that
 # watches it, a_clean_head_still_proves_its_row, runs `prove` itself, and
