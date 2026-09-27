@@ -16949,18 +16949,21 @@ shared map appends into spare room that only the new map's length covers,
 which is the argument that already admits lists. An in-place put needs the map
 to be unique, and a map handed onward has a second use.
 
-`THREADED` now includes `MAP`. Measured by CI against main's goldens:
+`THREADED` now includes `MAP`. Measured by CI over main after kanso#1683:
 
-    livebench    1,666,507,317 -> 1,661,695,945    -4,811,372   -0.289%
-    encodebench  2,417,003,976 -> 2,412,230,865    -4,773,111   -0.197%
+    livebench    1,671,746,843 -> 1,667,464,002    -4,282,841   -0.256%
+    encodebench  2,417,406,959 -> 2,412,561,883    -4,845,076   -0.200%
     widebench       27,375,107 ->    27,311,106       -64,001   -0.234%
-    runbench     1,108,020,246 -> 1,108,001,800       -18,446   -0.0017%
+    runbench     1,102,979,416 -> 1,102,878,887      -100,529   -0.0091%
 
-The container's sitting agreed to the instruction on all four deltas, and the
-other ten benchmarks are byte-identical. The emitter writes three calls fewer
-in each of the four programs, the carry calls a map slot no longer needs, and
-the `.text` total moves 3,523,088 -> 3,523,184: encodebench 16 bytes larger,
-livebench 64, runbench 48, and widebench 32 smaller. A program built to show the shape
+Measured by CI against the tree before kanso#1683, the four read -0.289%,
+-0.197%, -0.234% and -0.0017%, and the container agreed to the instruction.
+The difference between the two sittings arrived with kanso#1683's encoder;
+what in it moves the saving was not isolated. The other ten benchmarks are
+byte-identical. The emitter writes three calls fewer in each of the four
+programs, the carry calls a map slot no longer needs, and the `.text` total
+moves 3,523,088 -> 3,523,184: encodebench 16 bytes larger, livebench 64,
+runbench 48, and widebench 32 smaller. A program built to show the shape
 walks a 64-key map through `entries` for twenty thousand laps and reads
 209,505,643 instructions on main and 95,905,706 threaded: half of it was
 `k_interior_survives` asking the same 128 slots the same question.
