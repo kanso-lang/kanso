@@ -7,9 +7,12 @@ is stale — say so.
 ## Waiting on Clay
 
 The decisions live in design/pending-gavels.md — the single ledger; this file
-only indexes it. **Blocking right now: one** — whether the wall's simultaneous-failure merge
-was meant to go, filed 2026-09-17. Its sibling, whether the wall survives the
-fused operators, was ruled on 2026-09-26: the wall goes. A third, whether
+only indexes it. **Blocking right now: zero.** The last blocking entry, whether
+the wall's simultaneous-failure merge was meant to go, closed on 2026-09-27 on a
+citation: kanso#783 removed the merge on purpose on 2026-08-06, and the log
+entry "the wall's merge went on purpose, the day it was measured" carries the
+measurement. Its sibling, whether the wall survives the fused operators, was
+ruled on 2026-09-26: the wall goes. A third, whether
 kanso#1513's fixed-temporary pin covers both codegen tiers or the release tier
 alone, was filed 2026-09-18 after sitting four hours in a session task list,
 which Clay does not read, instead of here, and was withdrawn the next day. The compile-term question before them was ruled the day it
@@ -45,10 +48,11 @@ kanso — sat here and was bounced on 2026-08-29: a performance question with no
 surface area is the implementer's, per the ledger's own charter, and the log
 carries the research mandate it left with.
 
-**Eight questions are waiting** — one blocking. It was filed 2026-09-17 out
-of one reading of a book sample, beside a second that was ruled on
-2026-09-26: whether its simultaneous-failure merge was meant to go. The ruled
-one asked whether the wall `>>` survives the fused operators, and it does not. A third
+**Seven questions are waiting** — zero blocking. The last two blocking entries
+were both about the wall `>>`, filed 2026-09-17 out of one reading of a book
+sample. Whether it survives the fused operators was ruled on 2026-09-26, and
+it does not. Whether its simultaneous-failure merge was meant to go closed on
+2026-09-27 on a citation, since kanso#783 had removed it on purpose. A third
 was filed 2026-09-18 and withdrawn on 2026-09-19 without being ruled: whether
 kanso#1513's fixed-temporary pin covers both codegen tiers or the release tier
 alone. It went on the ground this file's own ledger states in its opening — an
@@ -572,7 +576,7 @@ else. Chains that tested for `none` after an effect migrate.
     checked from here on two days and both refused by the tooling
   - whether an err gains readers a lambda callback can use
 
-**Eight questions wait in `design/pending-gavels.md`** — one blocking, seven
+**Seven questions wait in `design/pending-gavels.md`** — zero blocking, seven
 open — each with a recommendation. Recounted four times on 2026-09-16: the
 binding-position question joined Open with its measurement, the escape
 path's byte-position scan joined it, measured on 2026-09-15 and filed to
