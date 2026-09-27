@@ -1412,8 +1412,7 @@ fn alloc_groups<'a>(
         let mut changed = false;
         for d in &program.fns {
             let numbers = numeric_params(d);
-            let site =
-                Site { file: &d.file, mut_sites, regions, numbers: &numbers, grower: None };
+            let site = Site { file: &d.file, mut_sites, regions, numbers: &numbers, grower: None };
             if !allocating.contains(d.name.as_str())
                 && d.body.iter().any(|s| stmt_allocates(s, &fn_names, &allocating, false, &site))
             {
