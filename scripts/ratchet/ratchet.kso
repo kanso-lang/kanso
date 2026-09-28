@@ -3271,6 +3271,19 @@ token_word = row
 
 rows_c1zt = text/concat rows_c1zs [token_word]
 
+# A lazy binding read once, past a `return ... if`, inlines into its reader.
+# Stopping the rewrite at the guard leaves the reader naming nothing, and the
+# micro fixture fails on both engines.
+chain_guard = row
+  "a return hides the chain's reader"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_return_hides_the_chain_reader")
+  release
+
+rows_c1zu = text/concat rows_c1zt [chain_guard]
+
 # Pushing an err answers the err on every engine. Without the C push's item
 # test, a push the analysis does not own stores it, and the micro fixture
 # prints a list holding an err.
@@ -3292,9 +3305,9 @@ two_errs = row
   (breaking "two_failures_answer_the_first")
   release
 
-rows_c1zu = text/concat rows_c1zt [push_err two_errs]
+rows_c1zv = text/concat rows_c1zu [push_err two_errs]
 
-rows_c = text/concat rows_c1zu [itself]
+rows_c = text/concat rows_c1zv [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
