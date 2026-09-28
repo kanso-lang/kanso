@@ -6199,15 +6199,13 @@ impl<'a> Backend<'a> {
         // nothing reaches, the way a dispatcher's `fail` is.
         if branches_to(&f.out, "nomatch") {
             f.start_block("nomatch");
-            // no arm matched: the discriminator is the only possible failure here
+            // No arm matched, and the discriminator is the only possible
+            // failure here. A none is a value, not a failure (ruled
+            // 2026-07-24), so it is refused like any other value no arm takes.
             let disc_fail = f.tmp();
             f.line(&format!("{disc_fail} = extractvalue %KValue {dv}, 0"));
-            let is_err = f.tmp();
-            f.line(&format!("{is_err} = icmp eq i64 {disc_fail}, 5"));
-            let is_none = f.tmp();
-            f.line(&format!("{is_none} = icmp eq i64 {disc_fail}, 4"));
             let failing = f.tmp();
-            f.line(&format!("{failing} = or i1 {is_err}, {is_none}"));
+            f.line(&format!("{failing} = icmp eq i64 {disc_fail}, 5"));
             let ret_disc = f.label();
             let die = f.label();
             f.line(&format!("br i1 {failing}, label %{ret_disc}, label %{die}"));

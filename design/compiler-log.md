@@ -18075,3 +18075,85 @@ The row gets a second witness in the same spec: a four-parameter function and
 a seven-parameter one call each other three million times. Both take the
 cycle's flat twelve-word signature. On this branch the release binary prints
 18000000; with the mutation it dies on SIGSEGV, which is the row turning red.
+
+## 2026-09-28 — a none with no arm is refused natively
+
+A generated program handed `json/encode` a list holding the read of a missing
+key. The interpreter refused it, "no overload of `json/encode_onto` matches
+these arguments"; a dev build refused it with `append`'s message, and a
+release build died on SIGSEGV. Reduced, a function with an `int` arm and a
+`string` arm handed a none out of a list printed `got <none>` natively.
+
+A compiled dispatcher that matches no arm tests whether its discriminator is
+a failure, hands a failure on, and dies on anything else. That test read
+tag 5 or tag 4, err or none. The 2026-07-24 gavel made none a value and err
+the only failure, and the interpreter has refused a none with no arm since;
+this one test in the switch's no-match block was left behind. It now reads
+err alone.
+
+The runtime corpus fixture `a_none_with_no_arm_is_refused` pins the refusal on
+both engines and failed on the old compiler. The read goes through a list
+because the checker catches a missing key's read handed to the call directly.
+The ratchet row "a none hopped as a failure" puts tag 4 back into the test.
+
+Every dispatcher with a no-match block loses a compare and an `or`. The
+decoder's emitted lines read 5,731 -> 5,723, and every benchmark's emitted
+lines fall, runbench 28,192 -> 28,018. Machine code falls in total, 3,483,824
+-> 3,482,464, though scanbench's text grows 309,368 -> 309,624 and widebench's
+247,640 -> 247,656. The compile corpus's `recursion` program writes 281 lines
+where it wrote 283. CI will measure the instruction rows.
+
+## 2026-09-28 — a curried application counts as a caller
+
+A generated program mapped a list through `&f11 v63 v68`, where `f11` read its
+second parameter only as the head of an interpolation. The interpreter ran it;
+both native builds died with "a string builder starts from a string".
+
+A parameter read only as an interpolation's head, and handed over by every
+caller, is a string builder's accumulator, and each caller converts the seed
+it passes in. The linear analysis finds the callers by walking the program for
+call sites and for mentions as a value, and a mention as a value makes the
+question answer no. `&name` is neither an identifier nor a call head, and it
+has no children, so the walk passed it by unrecorded. With no caller in view
+the parameter qualified, and the partial application's wrapper converted an
+int.
+
+`&name` now counts as a mention as a value, as a bare name does. No benchmark
+curries a group, and the compile sweep reads every code vein unchanged.
+
+The micro fixture `a_curried_int_heads_an_interpolation` failed on the old
+compiler in both the corpus and its release build. The ratchet row "a curried
+group unseen as a value" takes `&name` back out of the walk.
+
+The same batch found a program where `math/sqrt` of a negative number made a
+NaN and `NaN < 9007199254740993.0` answered differently on the engines. How
+floats compare is the question the ledger already holds, so the generator
+stops taking square roots of differences.
+
+## 2026-09-28 — CI's rows for the none refusal and the curried caller
+
+CI measured 4592569d and these are its readings.
+
+Four rows rose, and the welfare sum still went up:
+
+- `work_encodebench` 2,331,707,572 -> 2,333,509,094 (+1,801,522, +0.077%)
+- `work_digestbench` 5,353,555 -> 5,365,936 (+12,381, +0.23%)
+- `work_basket` 29,538,470 -> 29,539,468 (+998)
+- `interp_instructions` 589,169,442 -> 589,172,984 (+3,542)
+
+The rest fell. runbench 1,071,881,800 -> 1,069,996,157 (-0.176%), livebench
+1,538,558,945 -> 1,537,193,790 (-0.089%), jsonbench 731,540,004 ->
+729,243,204, oneshot 12,564,988 -> 12,546,800, widebench 27,199,122 ->
+27,183,122, pendbench 179,484,260 -> 179,483,660 and scanbench 280,951 ->
+280,865. `codegen_instructions_dev` lands on 124,437,115 (-164,746),
+`codegen_instructions_release` on 408,038,099 (-342,160) and
+`emit_instructions` on 29,849,876 (-53,494).
+
+The no-match block lost a compare and an `or`: it compares the tag with
+the failure tag alone where it compared it with both failure and none. The
+shorter text in every dispatcher's tail is what the machine-code vein
+recorded, 3,483,824 -> 3,482,464. The runtime rows moved with it, and
+nothing here isolates which of the two fixes moved which row. No benchmark
+curries a group, so the builder fix is not expected to reach them.
+
+Welfare rose to 90.40, banked in the same commit.

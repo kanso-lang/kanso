@@ -3485,7 +3485,33 @@ link_dae = row
 
 rows_c1zzi = text/concat rows_c1zzh [link_dae]
 
-rows_c = text/concat rows_c1zzi [itself]
+# A none is a value. Hopped out of a dispatcher that matched no arm, as though
+# it were an err, it becomes the call's answer, and the runtime corpus reads
+# nothing where the refusal belongs.
+none_hop = row
+  "a none hopped as a failure"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_none_hopped_as_a_failure")
+  release
+
+rows_c1zzj = text/concat rows_c1zzi [none_hop]
+
+# A curried application hands a group on to be called from somewhere no call
+# site describes. Unseen as a value, it lets a parameter qualify as a string
+# builder, and the micro corpus dies natively converting an int.
+curried_unseen = row
+  "a curried group unseen as a value"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_curried_group_unseen_as_a_value")
+  release
+
+rows_c1zzk = text/concat rows_c1zzj [curried_unseen]
+
+rows_c = text/concat rows_c1zzk [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

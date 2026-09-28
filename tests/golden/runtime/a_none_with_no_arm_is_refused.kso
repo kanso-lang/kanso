@@ -1,0 +1,20 @@
+# A none is a value, not a failure (ruled 2026-07-24), so a function with no
+# arm for it refuses it. A compiled dispatcher that matched no arm let a none
+# through as though it were an err, and the call answered the none. The read
+# of a missing key goes through a list here because the checker catches it
+# when the call is handed the read directly. Found by a generated program on
+# 2026-09-28, as json/encode of a list holding a missing key's read.
+import "std/os"
+
+fn kind n:int
+  "i{n}"
+
+fn kind s:string
+  "s{s}"
+
+fn shown z
+  m = put {} "a" z
+  held = [m["b"]]
+  "got {kind held[1]}"
+
+pub play = os/args .> (a -> print (shown (length a)))

@@ -247,4 +247,4 @@
 defines=83
 calls=574
 branches=541
-lines=5731
+lines=5723
