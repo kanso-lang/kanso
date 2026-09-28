@@ -1,0 +1,21 @@
+# `"{p}"` calls render/to_string on the record, and so does `print`. Neither is
+# a call the inference walk sees, so an explicit `render/to_string 11` elsewhere
+# once proved the group's parameter an int. The compiled builds then passed it
+# as a raw word, and the record reached the renderer as its type's tag: `7`
+# where the interpreter printed `defs/pt 0 "11"`. Found by a generated program
+# on 2026-09-28. Every explicit call here passes an int, which is the case
+# that went wrong: a second explicit call with a string widens the parameter
+# and hides it.
+import "std/os"
+import "std/render"
+
+type pt
+  n
+  s
+
+fn shown z
+  label = render/to_string 11
+  p = pt z label
+  "{p}"
+
+pub play = os/args .> (a -> print (shown (length a)))
