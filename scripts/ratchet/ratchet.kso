@@ -3311,7 +3311,20 @@ runtime_source = row
 
 rows_c1zw = text/concat rows_c1zv [runtime_source]
 
-rows_c = text/concat rows_c1zw [itself]
+# A list renders in one pass into one buffer. Copying its text so far after
+# each element, as joining each element onto the rest did, turns the mem
+# fixture's allocation back into the square of the list's length.
+render_pass = row
+  "a list rendered by joining each element"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_list_rendered_by_joining_each_element")
+  release
+
+rows_c1zx = text/concat rows_c1zw [render_pass]
+
+rows_c = text/concat rows_c1zx [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

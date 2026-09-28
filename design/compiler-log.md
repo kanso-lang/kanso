@@ -17543,3 +17543,40 @@ direct write back, and the test failed in three sittings of three.
 
 A user meets this when two builds start in one fresh temp directory, as a
 `make -j` or a parallel test runner does on its first run.
+
+## 2026-09-28 — a list renders in one pass
+
+Generated programs that built a list of 20,000 small maps and printed it ran
+in 0.03 seconds interpreted, and both native builds were killed: the dev build
+by the twenty-second timeout and the release build by the kernel. Printing a
+list of 16,000 small ints natively took 1.2 seconds where 8,000 took 0.3. The
+native renderer built a container's text by joining each element's rendering
+onto everything before it, and `k_concat` copies both halves into a fresh
+arena string, so a list's text was copied once per element and every copy
+stayed in the arena until the next rewind. Rendering 1,000, 2,000 and 4,000
+small ints allocated 2,072,896, 8,190,448 and 32,294,448 bytes. The
+interpreter builds one `String`.
+
+`k_render_into` now writes a whole rendering into one growable buffer, with
+the same arms, the same order and the same cycle path as `k_render_at`, and
+`k_render_whole` makes it a string once. Lists, maps, records with fields,
+bytes and a nested err go through it. Scalars and top-level strings keep the
+paths they had. The buffer is malloc'd and freed in the one call, so a lazy
+cell forced during the walk cannot rewind it.
+
+The new mem fixture `a_long_list_renders_in_one_pass` renders 4,000 small ints
+and 500 two-key maps and prints the two lengths, `8001 10785`, on every
+engine. Before the change it allocated 38,215,552 bytes in 19,996 allocations,
+and after it 207,280 in 2,016. The ratchet row "a list rendered by joining
+each element" copies the list's text so far into an arena string after each
+element, and the fixture reads 21,825,120 bytes and goes red.
+
+Three existing mem fixtures print containers and fell with it:
+`build_cycle_allocs` 68 -> 18 and `build_cycle_alloc_bytes` 3,120 -> 784,
+`effect_push_shape_allocs` 79 -> 56 and `effect_push_shape_alloc_bytes`
+3,328 -> 2,544, and `fused_tally_allocs` 70 -> 65 and
+`fused_tally_alloc_bytes` 41,696 -> 41,536, with their `perm_allocs` and
+`sh_str` rows falling beside them. No benchmark prints a container, so the
+twelve cost veins agree. Every benchmark's `.text` fell 4,864 bytes, because
+the renderer's arms no longer inline a chain of concatenations, and the text
+total reads 3,534,272 -> 3,466,176.
