@@ -18075,3 +18075,30 @@ The row gets a second witness in the same spec: a four-parameter function and
 a seven-parameter one call each other three million times. Both take the
 cycle's flat twelve-word signature. On this branch the release binary prints
 18000000; with the mutation it dies on SIGSEGV, which is the row turning red.
+
+## 2026-09-28 — a none with no arm is refused natively
+
+A generated program handed `json/encode` a list holding the read of a missing
+key. The interpreter refused it, "no overload of `json/encode_onto` matches
+these arguments"; a dev build refused it with `append`'s message, and a
+release build died on SIGSEGV. Reduced, a function with an `int` arm and a
+`string` arm handed a none out of a list printed `got <none>` natively.
+
+A compiled dispatcher that matches no arm tests whether its discriminator is
+a failure, hands a failure on, and dies on anything else. That test read
+tag 5 or tag 4, err or none. The 2026-07-24 gavel made none a value and err
+the only failure, and the interpreter has refused a none with no arm since;
+this one test in the switch's no-match block was left behind. It now reads
+err alone.
+
+The runtime corpus fixture `a_none_with_no_arm_is_refused` pins the refusal on
+both engines and failed on the old compiler. The read goes through a list
+because the checker catches a missing key's read handed to the call directly.
+The ratchet row "a none hopped as a failure" puts tag 4 back into the test.
+
+Every dispatcher with a no-match block loses a compare and an `or`. The
+decoder's emitted lines read 5,731 -> 5,723, and every benchmark's emitted
+lines fall, runbench 28,192 -> 28,018. Machine code falls in total, 3,483,824
+-> 3,482,464, though scanbench's text grows 309,368 -> 309,624 and widebench's
+247,640 -> 247,656. The compile corpus's `recursion` program writes 281 lines
+where it wrote 283. CI will measure the instruction rows.

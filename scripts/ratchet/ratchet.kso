@@ -3485,7 +3485,20 @@ link_dae = row
 
 rows_c1zzi = text/concat rows_c1zzh [link_dae]
 
-rows_c = text/concat rows_c1zzi [itself]
+# A none is a value. Hopped out of a dispatcher that matched no arm, as though
+# it were an err, it becomes the call's answer, and the runtime corpus reads
+# nothing where the refusal belongs.
+none_hop = row
+  "a none hopped as a failure"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_none_hopped_as_a_failure")
+  release
+
+rows_c1zzj = text/concat rows_c1zzi [none_hop]
+
+rows_c = text/concat rows_c1zzj [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
