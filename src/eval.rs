@@ -3977,6 +3977,15 @@ impl<'a> Interp<'a> {
                 let [x] = arity(args, name, span)?;
                 match x {
                     Value::Int(n) => Ok(Value::Int(n)),
+                    // Every finite float rounds to an integer, and an int is
+                    // arbitrary precision, so 1e30 rounds to a thirty-one
+                    // digit number. `as i64` saturated it at int64's edge.
+                    // A non-finite one keeps the saturating answer for now.
+                    Value::Float(v) if v.is_finite() => {
+                        let whole = <BigInt as num_traits::FromPrimitive>::from_f64(v.round())
+                            .expect("a finite float is a whole number once rounded");
+                        Ok(Value::int(whole))
+                    }
                     Value::Float(v) => Ok(Value::int(v.round() as i64)),
                     other if is_failure(&other) => Ok(other),
                     other => Err(RuntimeError {
