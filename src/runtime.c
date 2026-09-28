@@ -3221,6 +3221,34 @@ static KValue k_both_or_either(KValue a, KValue b) {
 
 long long k_not_failure(KValue v) { return v.tag != K_ERR; }
 
+/* Every failing argument of a builtin answers together, merged the way two
+   failing operands of `+` are, before any argument is asked what it is: the
+   interpreter's call_builtin tests them all and merges what fails, where these
+   used to answer the first failing argument and, in push, to refuse a
+   non-list before looking at a failing item at all. Out of line and cold,
+   because the scan in front of it is the hot path and this runs only when an
+   argument has already failed. */
+static KValue k_failed_of(int n, const KValue* xs) {
+    KValue out = xs[0];
+    int have = 0;
+    for (int i = 0; i < n; i++) {
+        if (k_not_failure(xs[i])) continue;
+        out = have ? k_accumulate_failures(out, xs[i]) : xs[i];
+        have = 1;
+    }
+    return out;
+}
+
+__attribute__((noinline, cold)) static KValue k_failed2(KValue a, KValue b) {
+    KValue xs[2] = {a, b};
+    return k_failed_of(2, xs);
+}
+
+__attribute__((noinline, cold)) static KValue k_failed3(KValue a, KValue b, KValue c) {
+    KValue xs[3] = {a, b, c};
+    return k_failed_of(3, xs);
+}
+
 
 /* `any` is every value a slot may hold; the absence channel is disjoint */
 
@@ -4964,6 +4992,140 @@ static inline __attribute__((always_inline)) long long k_render_number(KValue v,
 
 KValue k_render(KValue v, long long quote) { return k_render_at(v, quote, 0); }
 
+/* A rendering is written into one buffer and made a string once. The
+   containers used to join each element's text onto everything before it, and
+   a join copies both halves into a fresh string, so a list's text was copied
+   once per element and left behind in the arena each time: 4,000 small ints
+   allocated 32,294,448 bytes to print 7,999, and a list of 20,000 maps
+   outgrew the machine. The interpreter builds one String. The buffer is
+   malloc'd and freed here, so a force inside the walk cannot rewind it. */
+typedef struct { char* p; long long len; long long cap; } KRenderBuf;
+
+static void k_rb_put(KRenderBuf* b, const char* s, long long n) {
+    if (b->len + n > b->cap) {
+        long long cap = b->cap ? b->cap : 64;
+        while (cap < b->len + n) cap *= 2;
+        char* p = realloc(b->p, (size_t)cap);
+        if (!p) { fputs("out of memory\n", stderr); exit(1); }
+        b->p = p;
+        b->cap = cap;
+    }
+    memcpy(b->p + b->len, s, (size_t)n);
+    b->len += n;
+}
+
+static void k_rb_lit(KRenderBuf* b, const char* s) { k_rb_put(b, s, (long long)strlen(s)); }
+
+/* Everything k_render_at answers for a value inside a container, in the same
+   order and with the same cycle path, appended rather than returned. */
+static void k_render_into(KRenderBuf* b, KValue v, long long quote) {
+    if (v.tag == K_SUB) { k_render_into(b, k_sub_base(v), quote); return; }
+    if (v.tag == K_THUNK) {
+        KThunk* cell = (KThunk*)(intptr_t)v.payload;
+        for (int d = 0; d < k_render_depth; d++)
+            if (k_render_path[d] == cell) { k_rb_lit(b, "<cycle>"); return; }
+        if (k_render_depth < K_RENDER_PATH_MAX) k_render_path[k_render_depth++] = cell;
+        k_render_into(b, k_force(v), quote);
+        if (k_render_depth > 0) k_render_depth--;
+        return;
+    }
+    char buf[64];
+    switch (v.tag) {
+        case K_INT:
+        case K_FLOAT:
+            k_rb_put(b, buf, k_render_number(v, buf));
+            return;
+        case K_TRUE: k_rb_lit(b, "true"); return;
+        case K_FALSE: k_rb_lit(b, "false"); return;
+        case K_NONE: k_rb_lit(b, "<none>"); return;
+        case K_DONE: k_rb_lit(b, "<done>"); return;
+        case K_ERR:
+            k_rb_lit(b, "err ");
+            k_render_into(b, k_err_inner(v), 1);
+            return;
+        case K_STR: {
+            KStr* s = k_as_str(v);
+            if (quote) k_rb_lit(b, "\"");
+            k_rb_put(b, s->data, s->len);
+            if (quote) k_rb_lit(b, "\"");
+            return;
+        }
+        case K_REC: {
+            KRec* r = k_as_rec(v);
+            if (r->nfields > 0) {
+                for (int d = 0; d < k_render_depth; d++)
+                    if (k_render_path[d] == r) { k_rb_lit(b, "<cycle>"); return; }
+                if (k_render_depth < K_RENDER_PATH_MAX) k_render_path[k_render_depth++] = r;
+                k_rb_lit(b, k_type_shown(r->type_id));
+                for (long long i = 0; i < r->nfields; i++) {
+                    k_rb_lit(b, " ");
+                    k_render_into(b, r->fields[i], 1);
+                }
+                k_render_depth--;
+                return;
+            }
+            k_rb_lit(b, k_type_shown(r->type_id));
+            return;
+        }
+        case K_DESC: k_rb_lit(b, "<io>"); return;
+        case K_LIST: {
+            KList* l = (KList*)(intptr_t)v.payload;
+            for (int d = 0; d < k_render_depth; d++)
+                if (k_render_path[d] == l) { k_rb_lit(b, "<cycle>"); return; }
+            if (k_render_depth < K_RENDER_PATH_MAX) k_render_path[k_render_depth++] = l;
+            k_rb_lit(b, "[");
+            for (long long i = 0; i < l->len; i++) {
+                if (i) k_rb_lit(b, " ");
+                k_render_into(b, l->items[i], 1);
+            }
+            if (k_render_depth > 0) k_render_depth--;
+            k_rb_lit(b, "]");
+            return;
+        }
+        case K_MAP: {
+            KMap* m = (KMap*)(intptr_t)v.payload;
+            long long n;
+            KValue* s = k_map_sorted(m, &n);
+            if (n == 0) { k_rb_lit(b, "{}"); return; }
+            for (int d = 0; d < k_render_depth; d++)
+                if (k_render_path[d] == m) { k_rb_lit(b, "<cycle>"); return; }
+            if (k_render_depth < K_RENDER_PATH_MAX) k_render_path[k_render_depth++] = m;
+            k_rb_lit(b, "{ ");
+            for (long long i = 0; i < n; i++) {
+                if (i) k_rb_lit(b, " ");
+                k_render_into(b, s[i * 2], 1);
+                k_rb_lit(b, ":");
+                k_render_into(b, s[i * 2 + 1], 1);
+            }
+            if (k_render_depth > 0) k_render_depth--;
+            k_rb_lit(b, " }");
+            return;
+        }
+        case K_BYTES: {
+            KBytes* by = (KBytes*)(intptr_t)v.payload;
+            k_rb_lit(b, "[");
+            for (long long i = 0; i < by->len; i++) {
+                if (i) k_rb_lit(b, " ");
+                k_rb_put(b, buf, k_itoa(buf, (long long)by->data[i]));
+            }
+            k_rb_lit(b, "]");
+            return;
+        }
+        case K_CLOSURE: case K_FNREF: k_rb_lit(b, "<fn>"); return;
+        default: k_rb_lit(b, "<value>"); return;
+    }
+}
+
+/* A container's whole rendering, made a string once. */
+static __attribute__((noinline)) KValue k_render_whole(KValue v) {
+    KRenderBuf b = {0, 0, 0};
+    k_render_into(&b, v, 1);
+    KValue out = k_str_n(b.p, b.len);
+    free(b.p);
+    return out;
+}
+
+
 static KValue k_render_at(KValue v, long long quote, int held) {
     if (v.tag == K_ERR && !held) return v;
     if (v.tag == K_SUB) return k_render_at(k_sub_base(v), quote, held);
@@ -4995,72 +5157,18 @@ static KValue k_render_at(KValue v, long long quote, int held) {
         case K_FALSE: return k_str("false");
         case K_NONE: return k_str("<none>");
         case K_DONE: return k_str("<done>");
-        case K_ERR: return k_concat(k_str("err "), k_render_at(k_err_inner(v), 1, 1));
+        case K_ERR: return k_render_whole(v);
         case K_STR:
             if (!quote) return v;
             return k_concat(k_concat(k_str("\""), v), k_str("\""));
-        case K_REC: {
-            KRec* r = k_as_rec(v);
-            if (r->nfields > 0) {
-                for (int d = 0; d < k_render_depth; d++)
-                    if (k_render_path[d] == r) return k_str("<cycle>");
-                if (k_render_depth < K_RENDER_PATH_MAX) k_render_path[k_render_depth++] = r;
-                KValue out = k_str(k_type_shown(r->type_id));
-                for (long long i = 0; i < r->nfields; i++) {
-                    out = k_concat(out, k_str(" "));
-                    out = k_concat(out, k_render_at(r->fields[i], 1, 1));
-                }
-                k_render_depth--;
-                return out;
-            }
-            return k_str(k_type_shown(r->type_id));
-        }
+        case K_REC:
+            if (k_as_rec(v)->nfields == 0) return k_str(k_type_shown(k_as_rec(v)->type_id));
+            return k_render_whole(v);
         case K_DESC: return k_str("<io>");
-        case K_LIST: {
-            KList* l = (KList*)(intptr_t)v.payload;
-            /* on the path like a record, so a cell holding this very list
-               says <cycle> where it comes round rather than printing the
-               list a second time */
-            for (int d = 0; d < k_render_depth; d++)
-                if (k_render_path[d] == l) return k_str("<cycle>");
-            if (k_render_depth < K_RENDER_PATH_MAX) k_render_path[k_render_depth++] = l;
-            KValue out = k_str("[");
-            for (long long i = 0; i < l->len; i++) {
-                if (i) out = k_concat(out, k_str(" "));
-                out = k_concat(out, k_render_at(l->items[i], 1, 1));
-            }
-            if (k_render_depth > 0) k_render_depth--;
-            return k_concat(out, k_str("]"));
-        }
-        case K_MAP: {
-            KMap* m = (KMap*)(intptr_t)v.payload;
-            long long n;
-            KValue* s = k_map_sorted(m, &n);
-            if (n == 0) return k_str("{}");
-            for (int d = 0; d < k_render_depth; d++)
-                if (k_render_path[d] == m) return k_str("<cycle>");
-            if (k_render_depth < K_RENDER_PATH_MAX) k_render_path[k_render_depth++] = m;
-            KValue out = k_str("{ ");
-            for (long long i = 0; i < n; i++) {
-                if (i) out = k_concat(out, k_str(" "));
-                out = k_concat(out, k_render_at(s[i * 2], 1, 1));
-                out = k_concat(out, k_str(":"));
-                out = k_concat(out, k_render_at(s[i * 2 + 1], 1, 1));
-            }
-            if (k_render_depth > 0) k_render_depth--;
-            return k_concat(out, k_str(" }"));
-        }
-        case K_BYTES: {
-            KBytes* b = (KBytes*)(intptr_t)v.payload;
-            KValue out = k_str("[");
-            char nbuf[8];
-            for (long long i = 0; i < b->len; i++) {
-                if (i) out = k_concat(out, k_str(" "));
-                snprintf(nbuf, sizeof nbuf, "%d", (int)b->data[i]);
-                out = k_concat(out, k_str(nbuf));
-            }
-            return k_concat(out, k_str("]"));
-        }
+        case K_LIST:
+        case K_MAP:
+        case K_BYTES:
+            return k_render_whole(v);
         case K_CLOSURE: case K_FNREF: return k_str("<fn>");
         default: return k_str("<value>");
     }
@@ -5571,8 +5679,7 @@ KValue k_b_net_read(KValue conn) {
 }
 
 KValue k_b_net_write(KValue conn, KValue text) {
-    if (!k_not_failure(conn)) return conn;
-    if (!k_not_failure(text)) return text;
+    if (__builtin_expect(!k_not_failure(conn) || !k_not_failure(text), 0)) return k_failed2(conn, text);
     if (conn.tag != K_INT || (text.tag != K_STR && text.tag != K_BYTES))
         k_die("net_write takes a connection and a string");
     return k_mkdesc(23, conn, text);
@@ -5585,16 +5692,14 @@ KValue k_b_net_close(KValue handle) {
 }
 
 KValue k_b_run(KValue cmd, KValue argv) {
-    if (!k_not_failure(cmd)) return cmd;
-    if (!k_not_failure(argv)) return argv;
+    if (__builtin_expect(!k_not_failure(cmd) || !k_not_failure(argv), 0)) return k_failed2(cmd, argv);
     if (cmd.tag != K_STR) k_die("run takes a command string");
     if (cmd.tag == K_STR && argv.tag != K_LIST) k_die("run takes a list of argument strings");
     return k_mkdesc(17, cmd, argv);
 }
 
 KValue k_b_start(KValue cmd, KValue argv) {
-    if (!k_not_failure(cmd)) return cmd;
-    if (!k_not_failure(argv)) return argv;
+    if (__builtin_expect(!k_not_failure(cmd) || !k_not_failure(argv), 0)) return k_failed2(cmd, argv);
     if (cmd.tag != K_STR) k_die("start takes a command string");
     if (cmd.tag == K_STR && argv.tag != K_LIST) k_die("start takes a list of argument strings");
     return k_mkdesc(26, cmd, argv);
@@ -5655,8 +5760,7 @@ KValue k_b_make_dir(KValue path) {
 }
 
 KValue k_b_write_file(KValue path, KValue content) {
-    if (!k_not_failure(path)) return path;
-    if (!k_not_failure(content)) return content;
+    if (__builtin_expect(!k_not_failure(path) || !k_not_failure(content), 0)) return k_failed2(path, content);
     if (path.tag != K_STR || (content.tag != K_STR && content.tag != K_BYTES))
         k_die("write_file takes a path and content strings");
     return k_mkdesc(5, path, content);
@@ -7451,9 +7555,7 @@ static inline void k_map_view_insert(KMap* m, KValue key, KValue val) {
 }
 
 KValue k_b_put_mut(KValue mv, KValue key, KValue val) {
-    if (!k_not_failure(mv)) return mv;
-    if (!k_not_failure(key)) return key;
-    if (!k_not_failure(val)) return val;
+    if (__builtin_expect(!k_not_failure(mv) || !k_not_failure(key) || !k_not_failure(val), 0)) return k_failed3(mv, key, val);
     if (mv.tag != K_MAP) k_die("put takes a map, a key, and a value");
     k_check_map_key(key);
     KMap* m = k_as_map(mv);
@@ -7503,9 +7605,7 @@ KValue k_b_put_mut(KValue mv, KValue key, KValue val) {
 }
 
 KValue k_b_put(KValue mv, KValue key, KValue val) {
-    if (!k_not_failure(mv)) return mv;
-    if (!k_not_failure(key)) return key;
-    if (!k_not_failure(val)) return val;
+    if (__builtin_expect(!k_not_failure(mv) || !k_not_failure(key) || !k_not_failure(val), 0)) return k_failed3(mv, key, val);
     if (mv.tag != K_MAP) k_die("put takes a map, a key, and a value");
     k_check_map_key(key);
     KMap* m = k_as_map(mv);
@@ -7809,8 +7909,7 @@ static void k_seq_into(KValue v, KValue* dst) {
 }
 
 KValue k_b_concat(KValue av, KValue bv) {
-    if (!k_not_failure(av)) return av;
-    if (!k_not_failure(bv)) return bv;
+    if (__builtin_expect(!k_not_failure(av) || !k_not_failure(bv), 0)) return k_failed2(av, bv);
     long long alen = k_seq_len(av), blen = k_seq_len(bv);
     long long n = alen + blen;
     KValue* items = k_buf(n ? n : 1);
@@ -8424,8 +8523,7 @@ static long k_split_find(const char* d, long len, const char* sep, long seplen, 
 }
 
 KValue k_b_split(KValue sv, KValue sepv) {
-    if (!k_not_failure(sv)) return sv;
-    if (!k_not_failure(sepv)) return sepv;
+    if (__builtin_expect(!k_not_failure(sv) || !k_not_failure(sepv), 0)) return k_failed2(sv, sepv);
     if (sv.tag != K_STR || sepv.tag != K_STR) k_die("split takes two strings");
     KStr* s = k_as_str(sv);
     KStr* sep = k_as_str(sepv);
@@ -8546,8 +8644,7 @@ static __attribute__((noinline, cold, preserve_most)) KValue k_b_at_rest(KValue 
 }
 
 KValue k_b_at(KValue container, KValue index) {
-    if (!k_not_failure(container)) return container;
-    if (!k_not_failure(index)) return index;
+    if (__builtin_expect(!k_not_failure(container) || !k_not_failure(index), 0)) return k_failed2(container, index);
     /* The STR arm is asked FIRST. `length s[i]` over text is the index this
        runtime meets most -- 690,000 calls on runbench, all of them from
        tally_4 -- and the LIST test in front of it was two instructions
@@ -8678,7 +8775,10 @@ __attribute__((noreturn, noinline, cold)) static void k_die_push_takes(KValue lv
 static KValue k_b_push_grow(KValue lv, KList* l, KValue item, int mutate);
 
 static KValue k_b_push_into_proven(KValue lv, KValue item, int mutate, int proven) {
-    if (!k_not_failure(lv)) return lv;
+    /* An err item is infectious like any argument: pushing one answers it.
+       Only the list was asked until 2026-09-28, so the compiled engines stored
+       the err as an element where the interpreter handed it on. */
+    if (__builtin_expect(!k_not_failure(lv) || !k_not_failure(item), 0)) return k_failed2(lv, item);
     if (lv.tag != K_LIST) k_die_push_takes(lv);
     KList* l = k_as_list(lv);
     if (mutate && !proven && !k_born_this_beat(l)) mutate = 0;
@@ -8795,7 +8895,7 @@ KValue k_b_push(KValue lv, KValue item) { return k_b_push_into(lv, item, 0); }
    everything else, so all nine cost goldens are byte-identical across this
    change. They cost nothing when nobody is counting. */
 KValue k_b_push_mut(KValue lv, KValue item) {
-    if (!k_not_failure(lv)) return lv;
+    if (__builtin_expect(!k_not_failure(lv) || !k_not_failure(item), 0)) return k_failed2(lv, item);
     if (lv.tag != K_LIST) k_die_push_takes(lv);
     KList* l = k_as_list(lv);
     KBuf* buf = k_buf_of(l->items);
@@ -9092,8 +9192,7 @@ static int k_number_byte(unsigned char c) {
 
 KValue k_b_number_span(KValue cs, KValue fromv) {
     if (K_COUNTING) k_stat_number_spans++;
-    if (!k_not_failure(cs)) return cs;
-    if (!k_not_failure(fromv)) return fromv;
+    if (__builtin_expect(!k_not_failure(cs) || !k_not_failure(fromv), 0)) return k_failed2(cs, fromv);
     if (cs.tag != K_BYTES || fromv.tag != K_INT) k_die("number_span takes bytes and a position");
     KBytes* by = k_as_bytes(cs);
     const unsigned char* d = by->data;
@@ -9170,8 +9269,7 @@ static inline __attribute__((always_inline)) KValue k_b_append_range(KValue acc,
    local rather than three times, because a store through `unsigned char*`
    aliases every field of the header it is stored into. */
 static KValue k_b_append_into(KValue acc, KValue x, int mutate) {
-    if (!k_not_failure(acc)) return acc;
-    if (!k_not_failure(x)) return x;
+    if (__builtin_expect(!k_not_failure(acc) || !k_not_failure(x), 0)) return k_failed2(acc, x);
     if (acc.tag != K_BYTES) k_die("append takes bytes and a string, bytes, or byte");
     KBytes* a = k_as_bytes(acc);
     if (x.tag == K_INT) {
@@ -9432,10 +9530,11 @@ __attribute__((noinline, cold)) KValue k_b_append_word_slow(KValue acc, const ch
    long way, so the two spellings cannot disagree. */
 KValue k_b_append_slice(KValue acc, KValue cs, KValue fromv, KValue tov,
                         long long mutate) {
-    if (!k_not_failure(acc)) return acc;
-    if (!k_not_failure(cs)) return cs;
-    if (!k_not_failure(fromv)) return fromv;
-    if (!k_not_failure(tov)) return tov;
+    if (__builtin_expect(!k_not_failure(acc) || !k_not_failure(cs) || !k_not_failure(fromv)
+                         || !k_not_failure(tov), 0)) {
+        KValue xs[4] = {acc, cs, fromv, tov};
+        return k_failed_of(4, xs);
+    }
     if (cs.tag != K_BYTES || fromv.tag != K_INT || tov.tag != K_INT) {
         return k_b_append_into(acc, k_b_slice(cs, fromv, tov), (int)mutate);
     }
@@ -9636,9 +9735,7 @@ static void k_slice_skip(KStr* s, long* at, long long* seen, long long next) {
 }
 
 KValue k_b_slice(KValue container, KValue fromv, KValue tov) {
-    if (!k_not_failure(container)) return container;
-    if (!k_not_failure(fromv)) return fromv;
-    if (!k_not_failure(tov)) return tov;
+    if (__builtin_expect(!k_not_failure(container) || !k_not_failure(fromv) || !k_not_failure(tov), 0)) return k_failed3(container, fromv, tov);
     if (fromv.tag != K_INT || tov.tag != K_INT) k_die("slice takes 1-based inclusive positions");
     long long from = fromv.payload, to = tov.payload;
     if (container.tag == K_BYTES) {
@@ -9766,8 +9863,7 @@ static void k_join_seed_count(KStr* os, KList* l, KStr* ss) {
 }
 
 KValue k_b_join(KValue lv, KValue sep) {
-    if (!k_not_failure(lv)) return lv;
-    if (!k_not_failure(sep)) return sep;
+    if (__builtin_expect(!k_not_failure(lv) || !k_not_failure(sep), 0)) return k_failed2(lv, sep);
     if (lv.tag != K_LIST || sep.tag != K_STR) k_die("join takes a list of strings and a separator");
     KList* l = k_as_list(lv);
     KStr* ss = k_as_str(sep);
@@ -9824,8 +9920,7 @@ KValue k_b_join(KValue lv, KValue sep) {
 }
 
 KValue k_b_map(KValue lv, KValue f) {
-    if (!k_not_failure(lv)) return lv;
-    if (!k_not_failure(f)) return f;
+    if (__builtin_expect(!k_not_failure(lv) || !k_not_failure(f), 0)) return k_failed2(lv, f);
     if (lv.tag != K_LIST) k_die("map takes a list");
     KList* l = k_as_list(lv);
     KValue* items = k_alloc(sizeof(KValue) * (l->len ? l->len : 1));
@@ -9834,8 +9929,7 @@ KValue k_b_map(KValue lv, KValue f) {
 }
 
 KValue k_b_filter(KValue lv, KValue f) {
-    if (!k_not_failure(lv)) return lv;
-    if (!k_not_failure(f)) return f;
+    if (__builtin_expect(!k_not_failure(lv) || !k_not_failure(f), 0)) return k_failed2(lv, f);
     if (lv.tag != K_LIST) k_die("filter takes a list");
     KList* l = k_as_list(lv);
     KValue* items = k_alloc(sizeof(KValue) * (l->len ? l->len : 1));

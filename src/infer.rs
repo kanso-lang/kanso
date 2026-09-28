@@ -472,6 +472,23 @@ pub fn infer(program: &Program) -> Inference {
     // alternates, and each sweep carries one flow the whole way instead of
     // one hop per round.
     let order = callee_first(program);
+    // `"{x}"` and `print x` call the render group on a value of any kind, and
+    // neither is a call site this walk visits. So its parameters start at
+    // every kind a value can be. Read from the explicit calls alone, a
+    // `render/to_string 11` elsewhere proved the parameter an int, the
+    // backend passed it as a raw word, and an interpolated record arrived as
+    // its tag. A failure is left out: an interpolation hands its err on
+    // rather than rendering it, so no frame of the group's joins its trace.
+    // So is a lazy cell, which the interpolation site forces before the call:
+    // forcing in the dispatcher instead cost every render a call.
+    for (i, decl) in fns.iter().enumerate() {
+        if decl.name == "render/to_string" {
+            for p in 0..decl.params.len() {
+                let at = ctx.param_starts[i] as usize + p;
+                ctx.params[at] |= TOP & !FAIL & !THUNK & !ctx.shadow[at];
+            }
+        }
+    }
     while ctx.changed && rounds < 200 {
         ctx.changed = false;
         rounds += 1;

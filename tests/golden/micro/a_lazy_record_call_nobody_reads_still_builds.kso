@@ -1,0 +1,20 @@
+# A function nobody calls, whose `list/drop` goes lazily to a parameter nobody
+# reads. The drop's group returns its record in two registers, and the lazy
+# cell's site returned that pair as a tagged value without boxing it: clang
+# refused the module with "defined with type '%parsed' but expected
+# '%KValue'", so a program the interpreter ran could not be built at all.
+# The analysis that matches a tail caller's return shape to its callee's
+# never reached a site in code no call reaches. Found by a generated program
+# on 2026-09-28.
+import "std/list"
+import "std/text"
+
+fn ignored _ _
+  text/to_int "12"
+
+fn never_called _ n
+  kept = [6 12 8]
+  dropped = list/drop kept 3
+  ignored dropped n
+
+pub play = print "{text/to_int "7"}"

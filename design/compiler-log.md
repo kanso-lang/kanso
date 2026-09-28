@@ -17608,3 +17608,248 @@ work rows rose by a few instructions each, and three fell:
 the runtime read `codegen_instructions_dev` 123,379,531 -> 123,384,276 and
 `codegen_instructions_release` 407,793,576 -> 407,709,792. Welfare nets the
 rows slightly upward and is banked.
+
+## 2026-09-28 — a builtin's failing arguments answer together, on every engine
+
+    fn pushed n
+      bad = text/to_int "x{n}"
+      "{push [1 2] bad}"
+
+The interpreter answers the err here and the compiled engines printed
+`[1 2 err ""x3" is not an integer"]`. The language makes an err infectious
+for every builtin, with named exceptions: `wrap_err`'s second argument, the
+three chain words, `effect`, and the err's own readers. The interpreter's
+`call_builtin` asks every argument before it dispatches and merges every one
+that fails. The C `push` asked only the list. `put`, `append`, `length`,
+`slice`, `join`, `keys`, arithmetic and interpolation were probed the same way
+and agree on one failing argument; a list or map literal holding an err keeps
+it as an element on every engine, which is right, because a literal is not an
+operation on its elements. It turned up in the same program generator as the
+two entries above, as a list printed with an err inside it where the
+interpreter stopped.
+
+Probing two failing arguments found the wider form of the same gap. The C
+builtins tested their arguments one at a time and answered the first that
+failed, where the interpreter merges them the way two failing operands of `+`
+are merged on both engines: `put no_map "a" bad` answered one reason natively
+and two interpreted. Records were fixed the same way on an earlier date and
+say so in `k_merge_rest`. Seventeen builtins in src/runtime.c tested two or
+three arguments in a row. Each now opens with one test of all of them, and a
+cold `k_failed2` or `k_failed3` merges what failed in argument order, which is
+the order the interpreter's reduce takes; `k_b_append_slice` merges four the
+same way. The test comes before every type test, so `push` no longer refuses a
+list that is not one before looking at a failing item.
+
+The in-place push twin sends an err item to the C. That test alone cost
+runbench 2,987,583 instructions, almost all of it in `array_open`, whose items
+are fields a pattern bound out of a `parsed` record, and a constructor handed
+an err answers the err, so a field never holds one. The emitter's sets
+already know that. Where they prove an item is no failure it writes
+`k_b_push_mut_known`, the twin without the test.
+
+CI's rows, against main's goldens after main took kanso#1697: runbench
+1,073,234,771 -> 1,071,327,029, -0.178%, jsonbench 732,477,366 -> 731,540,016,
+deepbench 364,866,387 -> 363,022,387 and widebench 27,311,115 -> 27,199,122, with livebench, encodebench,
+oneshot, indexbench, digestbench, readbench and scanbench falling by less. One
+test of every argument and one branch costs less than a branch per argument,
+and the push's test costs the decoder nothing, so the whole change reads as a
+fall; that was not isolated further. Three work rows rose: `work_basket`
+29,624,228 -> 29,692,076, `work_escapebench` 45,421,707 -> 45,427,707 and
+`work_pendbench` 179,495,846 -> 179,496,256. The compiler's side rose with the
+emitter's new choice and the runtime's longer builtins:
+`codegen_instructions_dev` 123,384,276 -> 124,598,724,
+`codegen_instructions_release` 407,709,792 -> 408,412,492 and
+`emit_instructions` 29,836,693 -> 29,840,267. No allocation counter moves in
+the twelve cost veins or the lazy tier. Welfare nets the trade upward and is
+banked.
+
+`k_b_push_mut_fast` is now the item test and a call to `k_b_push_mut_known`,
+which holds the push and is always inlined. The first version wrote the known
+twin as a second copy of the whole push, and the spec that reads the room test
+`2 * len + 2 <= capw` out of src/codegen.rs by its spelling found it twice and
+went red; the sweep it guards proves one spelling. Written once, the push keeps
+its one counting-build gate and `STATS_GATE_SITES` stays 10. A program that
+reaches the fast push now carries the known one too, so the emitted-code and
+compile goldens move. The keys the trend gate reads land at `emitted_lines`
+5,727 -> 5,731, `emitted_other_defines` 1,550 -> 1,556, `emitted_other_calls`
+10,666 -> 10,678, `emitted_other_branches` 8,078 -> 8,084,
+`emitted_other_lines` 85,511 -> 85,629, `text` 3,536,288 -> 3,574,000, and in
+the compile goldens `lines` 1,433 -> 1,453, `module_lines` 1,071 -> 1,086,
+`module_calls` 107 -> 109, `module_branches` 83 -> 84 and `module_defines`
+27 -> 28.
+
+Two micro fixtures. `pushing_an_err_hands_it_on` pushes an err onto a fresh
+literal, which the emitter writes in place, and onto a list read again
+afterwards, and prints `handed on handed on [3]`; main's native builds printed
+both lists with the err inside. `two_failing_arguments_merge` gives `put`,
+`push`, `slice` and `join` two failing arguments each and prints both reasons
+of each; main's native builds printed one. The ratchet row "a pushed err kept
+as an element" restores the list-only test in the two C pushes, and "two
+failures answer the first" makes the merge keep its first failure; each turns
+the micro corpus red.
+
+## 2026-09-28 — a list renders in one pass
+
+Generated programs that built a list of 20,000 small maps and printed it ran
+in 0.03 seconds interpreted, and both native builds were killed: the dev build
+by the twenty-second timeout and the release build by the kernel. Printing a
+list of 16,000 small ints natively took 1.2 seconds where 8,000 took 0.3. The
+native renderer built a container's text by joining each element's rendering
+onto everything before it, and `k_concat` copies both halves into a fresh
+arena string, so a list's text was copied once per element and every copy
+stayed in the arena until the next rewind. Rendering 1,000, 2,000 and 4,000
+small ints allocated 2,072,896, 8,190,448 and 32,294,448 bytes. The
+interpreter builds one `String`.
+
+`k_render_into` now writes a whole rendering into one growable buffer, with
+the same arms, the same order and the same cycle path as `k_render_at`, and
+`k_render_whole` makes it a string once. Lists, maps, records with fields,
+bytes and a nested err go through it. Scalars and top-level strings keep the
+paths they had. The buffer is malloc'd and freed in the one call, so a lazy
+cell forced during the walk cannot rewind it.
+
+The new mem fixture `a_long_list_renders_in_one_pass` renders 4,000 small ints
+and 500 two-key maps and prints the two lengths, `8001 10785`, on every
+engine. Before the change it allocated 38,215,552 bytes in 19,996 allocations,
+and after it 207,280 in 2,016. The ratchet row "a list rendered by joining
+each element" copies the list's text so far into an arena string after each
+element, and the fixture reads 21,825,120 bytes and goes red.
+
+Three existing mem fixtures print containers and fell with it:
+`build_cycle_allocs` 68 -> 18 and `build_cycle_alloc_bytes` 3,120 -> 784,
+`effect_push_shape_allocs` 79 -> 56 and `effect_push_shape_alloc_bytes`
+3,328 -> 2,544, and `fused_tally_allocs` 70 -> 65 and
+`fused_tally_alloc_bytes` 41,696 -> 41,536, with their `perm_allocs` and
+`sh_str` rows falling beside them. No benchmark prints a container, so the
+twelve cost veins agree. Every benchmark's `.text` fell 4,864 bytes, because
+the renderer's arms no longer inline a chain of concatenations, and the text
+total reads 3,536,288 -> 3,468,192 on main after kanso#1697.
+
+CI's rows, against main after kanso#1697. runbench 1,073,234,771 ->
+1,073,228,713 and basket 29,624,228 -> 29,456,544, with pendbench, scanbench,
+digestbench, livebench and five others falling by less. Four rows rose, by
+layout: `work_oneshot` 12,565,320 -> 12,565,341, `work_widebench` 27,311,115 ->
+27,311,143, `codegen_instructions_dev` 123,384,276 -> 123,408,461 and
+`codegen_instructions_release` 407,709,792 -> 407,745,282. Welfare nets the
+change upward and is banked.
+
+## 2026-09-28 — a lazy cell's site boxes a record returned in registers
+
+A generated program with a function nobody called failed its dev build:
+
+    fn ignored _ _
+      text/to_int "12"
+
+    fn never_called _ n
+      kept = [6 12 8]
+      dropped = list/drop kept 3
+      ignored dropped n
+
+clang refused the module with "'%t1' defined with type '%parsed' but expected
+'%KValue'". `ignored` never reads its first parameter, so `dropped` is lazy,
+and its cell's site tail-calls `list/drop`. That group returns its record in
+two registers as a `%parsed`. A tail call between groups whose return shapes
+differ is emitted as a call followed by `emit_ret`, which converts a
+`%KValue` failure into a `%parsed` for a caller that returns one, but did not
+convert the other way: the temp was never marked as a register-returned
+record, so `emit_ret` returned the pair as a tagged value. An ordinary caller
+never reaches that case, because the analysis that gives a tail caller its
+callee's return shape covers it. A lazy cell's site is made outside that
+analysis, and here the site sat in code no call reaches.
+
+The tail path now marks a `%parsed` result the way the non-tail call path
+already did, and `emit_ret` boxes a marked record when its own function
+returns a `%KValue`. The site calls `k_parsed_box` on the two words and
+returns the box.
+
+The micro fixture `a_lazy_record_call_nobody_reads_still_builds` is the
+program above with a `play` that prints `7`. On main the micro corpus went red
+on it, and it passes on every engine with the change. The ratchet row "a thunk
+site returns a record unboxed" drops the new mark, and the corpus goes red
+again. No benchmark carries such a site, so the emitted-code, text and cost
+goldens are unchanged.
+
+## 2026-09-28 — a float halfway between two shortest decimals takes the even digit
+
+A generated program printed `9007199254740993.0 * 0.1`. The interpreter
+printed `900719925474099.3` and both native builds printed
+`900719925474099.2`. The product is the double 0x1.999999999999ap+49, whose
+exact value is 900719925474099.25, so the two sixteen-digit decimals lie
+exactly as far from it on either side and both read back as the same double.
+The native renderer is ryū, which takes the even last digit on such a tie, as
+Python's `repr` and JavaScript's number-to-string do. The interpreter asks
+Rust's `{:e}` for its digits, and Rust takes the upper one.
+
+`render_float` now hands Rust's digits to `even_on_a_tie`. A tie can only be
+where the last digit is odd and the digits one below it also read back as the
+double, so only then does it ask for the double's exact expansion, and if that
+expansion is the lower digits followed by a single 5 it takes the lower, even
+digits. Every other float renders as before, with one extra comparison.
+
+A scratch harness parsed 18,000 doubles at run time, weighted toward ties by
+drawing large magnitudes with few fractional bits and dyadic fractions, and
+printed each on the interpreter and as a native build. With the change the two
+engines agree on all of them, and every line has the same significant digits
+as Python's `repr` of the same double. Before it, the engines disagreed on 11
+or 12 of each 1,500. The micro fixture
+`a_float_halfway_between_two_shortest_takes_the_even_digit` prints six such
+doubles, one of them negative, one below ten and one whose upper candidate is
+already even. The ratchet row "a float tie rounded up" keeps Rust's digit and
+the micro corpus goes red.
+
+## 2026-09-28 — the render group's parameter holds any value
+
+`"{p}"` and `print p` call `render/to_string` on a value of any kind. Neither
+is a call site the inference walk visits, so the group's parameter set came
+from the program's explicit calls alone. A program whose only explicit call
+was `render/to_string 11` proved that parameter an int. The backend then passed
+it as a raw word, and an interpolated record reached the renderer as its
+type's tag. This program printed `7` compiled and `defs/pt 0 "11"`
+interpreted:
+
+    fn shown z
+      label = render/to_string 11
+      p = pt z label
+      "{p}"
+
+The same proof put `llvm.assume` on the parameter's tag at the dispatcher's
+entry. Where the explicit calls all passed strings, a record broke that
+assumption, and release builds trapped, or read a list as `<value>`, instead
+of printing. The generated-program differential found ten such divergences in
+one batch of 800 once its programs began calling std/render, std/json,
+std/regexp and std/sha256. All ten came from this one cause.
+
+Inference now starts every parameter of the render group at every kind of
+value except a failure. An interpolation hands an err on rather than rendering
+it, and a first version that seeded the failure bits too added a "passed
+through render/to_string" frame to a compiled err's trace that the interpreter
+does not print; the runtime corpus caught it. An explicit call with an int no
+longer unboxes the parameter. Nothing measured calls the group that way.
+
+A lazy cell can reach an interpolation unforced. The first version kept the
+cell in the seed, so every render dispatcher forced its argument before
+`k_b_render_value`, and CI read that as pendbench +801,601 instructions and
+runbench +199,806 on the carrier. The seed now leaves the cell out, and the
+interpolation site forces its value before the call when the value's set can
+hold a cell, which is what `print` already did. Measured with callgrind on the
+carrier tree, pendbench reads 179,576,674 and runbench 1,071,415,117 with the
+seed and without it, the same to the instruction. The explicit calls still
+join the parameter's set as before, so a cell handed to `render/to_string` by
+name is forced where it always was.
+The micro fixture `an_interpolated_record_reaches_render_whole` fails on
+main, and the ratchet row "the render group typed from its calls" restores
+the old seeding and fails it again.
+
+The five changes in the entries above landed together, in kanso#1703, and
+CI measured them together against main after kanso#1697. runbench
+1,073,234,771 -> 1,071,321,405, -0.178%, basket 29,624,228 -> 29,524,392 and
+pendbench 179,495,846 -> 179,484,260, with jsonbench, deepbench, widebench and
+five others falling by less. One work row rose: `work_escapebench` 45,421,707
+-> 45,427,695. The compiler's rows rose with #1695's merged-failure tests,
+#1699's buffer renderer and #1702's seed: `compile_instructions` 25,118,657 ->
+25,158,386, `entry_instructions` 84,647,153 -> 84,775,453,
+`library_instructions` 85,180,219 -> 85,308,550, `emit_instructions`
+29,836,693 -> 29,872,742, `codegen_instructions_dev` 123,384,276 ->
+124,603,849 and `codegen_instructions_release` 407,709,792 -> 408,333,661.
+`interp_instructions` reads 589,865,923 -> 589,865,924. Welfare nets the
+combination upward and is banked.

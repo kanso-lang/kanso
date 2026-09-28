@@ -1034,16 +1034,31 @@ slow:
 ; that its fast path is thirteen instructions. jsonbench makes 1,459,800 of
 ; these a run at 59.7 apiece. Since the born-this-beat test came out of the
 ; fast arm the guard is four loads and two compares, so the whole thing fits
-; here: on the frontier with room, claim the slot and bump both lengths.
+; here: on the frontier with room, claim the slot and bump both lengths. An
+; err item goes to the C, which answers the err: pushing one hands it on, as
+; every builtin does. Where the emitter's sets prove the item is no err -- a
+; field a pattern bound, a literal, arithmetic that cannot fail -- it calls
+; `k_b_push_mut_known` directly and the item test is not written at all.
 define internal %KValue @k_b_push_mut_fast(%KValue %lv, %KValue %item) alwaysinline {
+  %itag = extractvalue %KValue %item, 0
+  %ierr = icmp eq i64 %itag, 5
+  br i1 %ierr, label %eslow, label %eknown
+eknown:
+  %kr = call %KValue @k_b_push_mut_known(%KValue %lv, %KValue %item)
+  ret %KValue %kr
+eslow:
+  %er = call %KValue @k_b_push_mut(%KValue %lv, %KValue %item)
+  ret %KValue %er
+}
+define internal %KValue @k_b_push_mut_known(%KValue %lv, %KValue %item) alwaysinline {
   %ltag = extractvalue %KValue %lv, 0
   %islist = icmp eq i64 %ltag, 9
   br i1 %islist, label %lstat, label %lslow
 lstat:
   %lso = load i32, ptr @k_stats_on
   %lcounting = icmp ne i32 %lso, 0
-  br i1 %lcounting, label %lslow, label %lshape
-lshape:
+  br i1 %lcounting, label %lslow, label %litem
+litem:
   %lpi = extractvalue %KValue %lv, 1
   %l = inttoptr i64 %lpi to ptr
   %llen = load i64, ptr %l
@@ -3946,6 +3961,7 @@ const DECLARES_CONTEXT_CALLS: &[&str] = &[
     "k_b_length_fast",
     "k_b_push_mut",
     "k_b_push_mut_fast",
+    "k_b_push_mut_known",
     "k_b_put_mut",
     "k_b_put_mut_fast",
     "k_b_slice",
@@ -5186,8 +5202,12 @@ impl<'a> Backend<'a> {
     fn render_interp(&self, f: &mut FnEmit, value: &str) -> (String, Set) {
         let mut fails = f.set_of(value) & ERR;
         let dispatchable = self.render_dispatchable(f, value);
-        let t = f.tmp();
         let value = self.as_value(f, value);
+        let value = match dispatchable {
+            true => self.maybe_force(f, value),
+            false => value,
+        };
+        let t = f.tmp();
         match dispatchable {
             true => {
                 f.line(&format!(
@@ -6638,11 +6658,17 @@ impl<'a> Backend<'a> {
     /// Return a KValue in the current function's ABI shape. A `%parsed`-returning
     /// function only reaches here with a failure (its record tails are built
     /// directly), so the failure's two words become the `%parsed`.
+    ///
+    /// A `%KValue` function can be handed a register-returned record to
+    /// return: a thunk site is emitted outside the analysis that gives a tail
+    /// caller its callee's return shape, so its tail call comes back `%parsed`
+    /// and is boxed here.
     fn emit_ret(&self, f: &mut FnEmit, value: &str) {
         let value = release_cells(f, value);
         if f.ret_ty == "%parsed" {
             self.emit_parsed_from_failure(f, &value);
         } else {
+            let value = self.as_value(f, &value);
             f.line(&format!("ret %KValue {value}"));
         }
     }
@@ -7955,11 +7981,20 @@ impl<'a> Backend<'a> {
                     } else {
                         // A %parsed function tail-calling a KValue failure helper:
                         // can't musttail across the type change, so call and wrap.
+                        // The other way round is a thunk site, a `%KValue` function
+                        // made outside the analysis that matches a tail caller's
+                        // shape to its callee's, calling a group that returns its
+                        // record in registers: emit_ret boxes it.
                         f.line(&format!(
                             "{t} = call tailcc {callee_ret} @{}({})",
                             dsym(name, n),
                             args_ir.join(", ")
                         ));
+                        if let Some(ty) = self.escape.returns_ty(name, n) {
+                            if callee_ret == "%parsed" {
+                                f.record_parsed(&t, ty, self.type_ids[ty]);
+                            }
+                        }
                         self.emit_ret(f, &t);
                     }
                     return Ok(());
@@ -9714,8 +9749,12 @@ impl<'a> Backend<'a> {
             ));
             let sym = if name == "push" && in_place {
                 // the twin claims the frontier slot itself; a grow, a full
-                // buffer or anything that is not a list falls to the C
-                "push_mut_fast"
+                // buffer or anything that is not a list falls to the C. An
+                // item the sets prove is no failure skips the err test.
+                match f.set_of(&emitted[1]) & FAIL == 0 {
+                    true => "push_mut_known",
+                    false => "push_mut_fast",
+                }
             } else if name == "put" && in_place {
                 // the twin writes the frontier pair itself where the map has
                 // no sorted view; everything else falls to the C by call

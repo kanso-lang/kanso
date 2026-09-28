@@ -1,0 +1,24 @@
+# Rendering a list is one pass over its elements. The native renderer built the
+# text by joining each element's rendering onto everything before it, and a
+# join copies both halves into a fresh string, so the list's text was copied
+# once per element: 4,000 small ints allocated 32,294,448 bytes to make 7,999
+# of text, and 20,000 maps outgrew the machine. The interpreter builds one
+# string. alloc_bytes pins the one pass: doubling this list doubles it.
+fn grow acc 0
+  acc
+
+fn grow acc n
+  grow (push acc (n % 7)) (n - 1)
+
+fn rows acc 0
+  acc
+
+fn rows acc n
+  rows (push acc { "a":n "b":[n] }) (n - 1)
+
+fn shown n
+  digits = "{grow [] n}"
+  maps = "{rows [] (n / 8)}"
+  "{length digits} {length maps}"
+
+pub play = print (shown 4000)

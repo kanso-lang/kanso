@@ -3333,7 +3333,82 @@ round_native = row
 
 rows_c1zx = text/concat rows_c1zw [round_exact round_native]
 
-rows_c = text/concat rows_c1zx [itself]
+# Pushing an err answers the err on every engine. Without the C push's item
+# test, a push the analysis does not own stores it, and the micro fixture
+# prints a list holding an err.
+push_err = row
+  "a pushed err kept as an element"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_pushed_err_kept_as_an_element")
+  release
+
+# A builtin's failing arguments merge. Answering the first alone is what the
+# C did, and the second micro fixture prints one reason where it wants two.
+two_errs = row
+  "two failures answer the first"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "two_failures_answer_the_first")
+  release
+
+rows_c1zy = text/concat rows_c1zx [push_err two_errs]
+
+# A list renders in one pass into one buffer. Copying its text so far after
+# each element, as joining each element onto the rest did, turns the mem
+# fixture's allocation back into the square of the list's length.
+render_pass = row
+  "a list rendered by joining each element"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "a_list_rendered_by_joining_each_element")
+  release
+
+rows_c1zz = text/concat rows_c1zy [render_pass]
+
+# A lazy cell's site that tail-calls a group returning its record in two
+# registers boxes the pair. Forgetting the pair came back as two words
+# returns it as a tagged value, and clang refuses the micro fixture.
+thunk_box = row
+  "a thunk site returns a record unboxed"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_thunk_site_returns_a_record_unboxed")
+  release
+
+rows_c1zza = text/concat rows_c1zz [thunk_box]
+
+# A double halfway between two shortest decimals prints the even last digit on
+# every engine. Keeping Rust's upper candidate in the interpreter makes the
+# micro fixture disagree across engines.
+float_tie = row
+  "a float tie rounded up"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_float_tie_rounded_up")
+  release
+
+rows_c1zzb = text/concat rows_c1zza [float_tie]
+
+# The render group is called by every interpolation, so its parameter holds
+# any value. Typed from the explicit calls alone, an int-only program passes
+# it a raw word, and the micro fixture prints a record as its tag.
+render_group = row
+  "the render group typed from its calls"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "the_render_group_typed_from_its_calls")
+  release
+
+rows_c1zzc = text/concat rows_c1zzb [render_group]
+
+rows_c = text/concat rows_c1zzc [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
