@@ -3369,7 +3369,22 @@ render_pass = row
 
 rows_c1zz = text/concat rows_c1zy [render_pass]
 
-rows_c = text/concat rows_c1zz [itself]
+rows_c = text/concat rows_c1zza [itself]
+
+# A lazy cell's site that tail-calls a group returning its record in two
+# registers boxes the pair. Forgetting the pair came back as two words
+# returns it as a tagged value, and clang refuses the micro fixture.
+thunk_box = row
+  "a thunk site returns a record unboxed"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_thunk_site_returns_a_record_unboxed")
+  release
+
+rows_c1zza = text/concat rows_c1zz [thunk_box]
+
+rows_c = text/concat rows_c1zza [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
