@@ -213,7 +213,10 @@ impl<'a> Mentions<'a> {
 
     fn walk(&mut self, e: &'a Expr, d: usize) {
         match e {
-            Expr::Ident(n, _, _) => {
+            // `&name` hands the group on to be called with arguments no call
+            // site here spells out, which is a mention as a value. It has no
+            // children, so the walk below would pass it by unrecorded.
+            Expr::Ident(n, _, _) | Expr::Partial(n, _) => {
                 self.bare.insert(n.as_str());
                 self.saw(n.as_str(), d);
             }

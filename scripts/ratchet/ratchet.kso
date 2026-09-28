@@ -3498,7 +3498,20 @@ none_hop = row
 
 rows_c1zzj = text/concat rows_c1zzi [none_hop]
 
-rows_c = text/concat rows_c1zzj [itself]
+# A curried application hands a group on to be called from somewhere no call
+# site describes. Unseen as a value, it lets a parameter qualify as a string
+# builder, and the micro corpus dies natively converting an int.
+curried_unseen = row
+  "a curried group unseen as a value"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_curried_group_unseen_as_a_value")
+  release
+
+rows_c1zzk = text/concat rows_c1zzj [curried_unseen]
+
+rows_c = text/concat rows_c1zzk [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

@@ -18102,3 +18102,30 @@ lines fall, runbench 28,192 -> 28,018. Machine code falls in total, 3,483,824
 -> 3,482,464, though scanbench's text grows 309,368 -> 309,624 and widebench's
 247,640 -> 247,656. The compile corpus's `recursion` program writes 281 lines
 where it wrote 283. CI will measure the instruction rows.
+
+## 2026-09-28 — a curried application counts as a caller
+
+A generated program mapped a list through `&f11 v63 v68`, where `f11` read its
+second parameter only as the head of an interpolation. The interpreter ran it;
+both native builds died with "a string builder starts from a string".
+
+A parameter read only as an interpolation's head, and handed over by every
+caller, is a string builder's accumulator, and each caller converts the seed
+it passes in. The linear analysis finds the callers by walking the program for
+call sites and for mentions as a value, and a mention as a value makes the
+question answer no. `&name` is neither an identifier nor a call head, and it
+has no children, so the walk passed it by unrecorded. With no caller in view
+the parameter qualified, and the partial application's wrapper converted an
+int.
+
+`&name` now counts as a mention as a value, as a bare name does. No benchmark
+curries a group, and the compile sweep reads every code vein unchanged.
+
+The micro fixture `a_curried_int_heads_an_interpolation` failed on the old
+compiler in both the corpus and its release build. The ratchet row "a curried
+group unseen as a value" takes `&name` back out of the walk.
+
+The same batch found a program where `math/sqrt` of a negative number made a
+NaN and `NaN < 9007199254740993.0` answered differently on the engines. How
+floats compare is the question the ledger already holds, so the generator
+stops taking square roots of differences.

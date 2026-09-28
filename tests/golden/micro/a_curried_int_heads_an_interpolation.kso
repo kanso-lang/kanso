@@ -1,0 +1,16 @@
+# A parameter read only as the head of an interpolation is a string builder's
+# accumulator when every caller hands it over, and a caller converts the seed
+# it passes in. A curried application was not counted as a caller at all, so
+# nothing stopped the parameter qualifying, and the application converted an
+# int: a compiled build died, "a string builder starts from a string", where
+# the interpreter printed the list. Found by a generated program on 2026-09-28.
+import "std/list"
+import "std/os"
+
+fn joined p q
+  "{p}:{q}"
+
+fn shown z
+  "{list/to_list (list/map [11 12] (&joined (z + 1)))}"
+
+pub play = os/args .> (a -> print (shown (length a)))
