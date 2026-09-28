@@ -3297,7 +3297,21 @@ seed_once = row
 
 rows_c1zv = text/concat rows_c1zu [seed_once]
 
-rows_c = text/concat rows_c1zv [itself]
+# Builds that compile the runtime at once each write its source under their own
+# name and rename it onto the shared one. Writing the shared path in place
+# truncates it under another build's clang, and the cold-runtime race answers
+# with clang's crash.
+runtime_source = row
+  "the runtime source written in place"
+  true
+  "cargo test --release --test concurrent_build builds_that_compile"
+  "specs (unit, golden, differential)"
+  (breaking "the_runtime_source_written_in_place")
+  no_setup
+
+rows_c1zw = text/concat rows_c1zv [runtime_source]
+
+rows_c = text/concat rows_c1zw [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
