@@ -1,0 +1,12 @@
+error[type]: no type is called `id`, so `either` cannot hold it
+  --> a_typeset_holds_no_type.kso:5:6
+   5 | type either id word
+            ^
+error[type]: no type is called `word`, so `either` cannot hold it
+  --> a_typeset_holds_no_type.kso:5:6
+   5 | type either id word
+            ^
+error[type]: no type is called `any`, so `loose` cannot hold it
+  --> a_typeset_holds_no_type.kso:7:6
+   7 | type loose any int
+            ^

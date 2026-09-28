@@ -1,0 +1,18 @@
+# A typeset's members are names of types, the way an annotation's are. Here
+# `id` and `word` were never declared and `any` is retired. Until 2026-09-28
+# nothing asked: the interpreter matched no value against the unknown
+# members, and both backends refused the whole program with `unknown type`.
+type either id word
+
+type loose any int
+
+fn kind _:either
+  "either"
+
+fn kind _:loose
+  "loose"
+
+fn kind _
+  "neither"
+
+pub play = print "{kind 3}"

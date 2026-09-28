@@ -3881,6 +3881,23 @@ fn check_annotation_names(
         }
     }
 
+    // A typeset's members are names of the same kind, and nothing asked about
+    // them either. `type either id word` with neither declared ran in the
+    // interpreter, where an unknown member matched nothing and a `_:either`
+    // arm was passed over, and both backends refused it with `unknown type`.
+    for ty in &program.types {
+        for member in &ty.members {
+            let retired = (member == "any").then(|| member.clone());
+            for name in undeclared_in(member, declared).into_iter().chain(retired) {
+                diags.push(Diagnostic::new(
+                    "type",
+                    format!("no type is called `{name}`, so `{}` cannot hold it", ty.name),
+                    ty.span,
+                ));
+            }
+        }
+    }
+
     // The typesets, borrowed from the list `declared` was built from.
     let annotating: HashSet<&str> =
         program.types.iter().filter(|t| !t.members.is_empty()).map(|t| t.name.as_str()).collect();

@@ -3705,7 +3705,20 @@ native_element_sub = row
 
 rows_c1zzza = text/concat rows_c1zzz [native_element_sub]
 
-rows_c = text/concat rows_c1zzza [itself]
+# A typeset's members name types. Left unchecked, `type either id word` with
+# neither declared passes `kanso check` and the error corpus holds a
+# diagnostic nobody raised.
+member_unchecked = row
+  "a typeset member left unchecked"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_typeset_member_left_unchecked")
+  no_setup
+
+rows_c1zzzb = text/concat rows_c1zzza [member_unchecked]
+
+rows_c = text/concat rows_c1zzzb [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

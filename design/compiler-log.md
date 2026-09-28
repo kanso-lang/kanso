@@ -18392,3 +18392,19 @@ where the interpreter would have refused, so an ordinary condition, join or
 `to_bytes` does not reach them, but what moved CI's reading has not been
 isolated. Welfare falls from 90.4026 to CI's reading under the 2026-09-13
 rule, and the history entry says why.
+
+## 2026-09-28 — a typeset's members name types
+
+The generated-program differential learned typesets over the two subtypes it
+declares, `type either id word`, and one program in its first two hundred
+declared the typeset without the subtypes. That program passed `kanso check`
+and ran in the interpreter, where an unknown member matched nothing and the
+`_:either` arm was passed over, while both native builds refused it with
+`unknown type id`. `type t any int` and `type t banana int` behaved the same
+way. The checker now asks of each member what it asks of an annotation and of
+a subtype's parent, and refuses `any` with the rest, as it does for a parent.
+
+The error fixture `a_typeset_holds_no_type` reported nothing on the old
+checker, and the ratchet row "a typeset member left unchecked" puts that back.
+The change is to the checker alone, so the runtime's text and the allocation
+counters cannot move from it. CI will measure the instruction rows.
