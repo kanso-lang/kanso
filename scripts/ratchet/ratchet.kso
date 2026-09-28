@@ -3214,7 +3214,19 @@ numa_option = row
 
 rows_c1zp = text/concat rows_c1zo [numa_count numa_option]
 
-rows_c = text/concat rows_c1zp [itself]
+# A call whose arguments are `keys m` and `values m` of one map builds both
+# lists in one runtime call and one allocation.
+columns_together = row
+  "a map's two columns asked for one at a time"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "the_two_columns_asked_apart")
+  release
+
+rows_c1zq = text/concat rows_c1zp [columns_together]
+
+rows_c = text/concat rows_c1zq [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

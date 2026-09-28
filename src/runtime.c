@@ -7633,6 +7633,14 @@ K_DOORCC KValue k_b_entries(KValue mv) {
    on the run program: as doors the run read 1,105,429,763, and on the C
    convention 1,102,980,253, because the encoder's walk keeps more live
    across the two calls than they save by being doors. */
+/* Position i of one column of a map's sorted view, `side` 0 for the keys and
+   1 for the values, into `items`. `keys`, `values` and the fused call that
+   builds both all read through here, so the order they share is written once. */
+static inline __attribute__((always_inline)) void k_column_into(KValue* items, KMap* m, KValue* s, long long n, int side) {
+    (void)m;
+    for (long long i = 0; i < n; i++) items[i] = s[i * 2 + side];
+}
+
 static inline __attribute__((always_inline)) KValue k_map_column(KValue mv, int side, const char* refusal) {
     if (!k_not_failure(mv)) return mv;
     if (mv.tag != K_MAP) k_die(refusal);
@@ -7658,7 +7666,7 @@ static inline __attribute__((always_inline)) KValue k_map_column(KValue mv, int 
         items = (KValue*)(b + 1);
         l = (KList*)(whole + buf_bytes);
     }
-    for (long long i = 0; i < n; i++) items[i] = s[i * 2 + side];
+    k_column_into(items, m, s, n, side);
     l->len = n;
     l->items = items;
     k_buf_of(items)->used = n;
@@ -7668,6 +7676,45 @@ static inline __attribute__((always_inline)) KValue k_map_column(KValue mv, int 
 KValue k_b_keys(KValue mv) { return k_map_column(mv, 0, "keys takes a map"); }
 
 KValue k_b_values(KValue mv) { return k_map_column(mv, 1, "values takes a map"); }
+
+/* `keys m` and `values m` asked side by side, as one call. The emitter writes
+   this where a call's arguments name both columns of the same map, which is
+   how the JSON encoder hands a map to its walk. Both lists come from one
+   allocation, and the map is tested and its sorted view found once. The keys
+   are the answer and the values go to `*values`. Each buffer carries its own
+   capacity in its header, so either can be outgrown and handed to the free
+   list without taking the other with it. */
+KValue k_b_columns(KValue mv, KValue* values) {
+    if (!k_not_failure(mv)) { *values = mv; return mv; }
+    if (mv.tag != K_MAP) k_die("keys takes a map");
+    KMap* m = k_as_map(mv);
+    long long n;
+    KValue* s = k_map_sorted(m, &n);
+    long long cap = n ? n : 1;
+    size_t buf_bytes = (sizeof(KBuf) + sizeof(KValue) * (size_t)cap + 15) & ~(size_t)15;
+    size_t list_bytes = (sizeof(KList) + 15) & ~(size_t)15;
+    size_t one = buf_bytes + list_bytes;
+    if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0))
+        k_stat_sh_buf += 2 * (long long)buf_bytes;
+    unsigned char* whole = (unsigned char*)k_alloc(2 * one);
+    KList* lists[2];
+    for (int side = 0; side < 2; side++) {
+        unsigned char* at = whole + (size_t)side * one;
+        KBuf* b = (KBuf*)at;
+        k_buf_set_cap(b, cap, 0);
+        b->used = n;
+        KValue* items = (KValue*)(b + 1);
+        k_column_into(items, m, s, n, side);
+        KList* l = (KList*)(at + buf_bytes);
+        l->len = n;
+        l->items = items;
+        lists[side] = l;
+    }
+    KValue v; v.tag = K_LIST; v.payload = k_ptr(lists[1]);
+    *values = v;
+    KValue k; k.tag = K_LIST; k.payload = k_ptr(lists[0]);
+    return k;
+}
 
 /* utf-8 helpers: kanso strings are opaque utf-8, positions are codepoints */
 static long k_cp_len(unsigned char b) {

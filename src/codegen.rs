@@ -1359,6 +1359,7 @@ declare %KValue @k_b_from_code(%KValue, ptr)
 declare %KValue @k_b_join(%KValue, %KValue)
 declare %KValue @k_b_keys(%KValue)
 declare %KValue @k_b_values(%KValue)
+declare %KValue @k_b_columns(%KValue, ptr)
 declare %KValue @k_b_length(%KValue)
 declare %KValue @k_b_map(%KValue, %KValue)
 declare %KValue @k_b_push(%KValue, %KValue)
@@ -2119,6 +2120,16 @@ fn bit_twin(name: &str) -> &'static str {
         "bit_shl" => "bit_shl_fast",
         "bit_shr" => "bit_shr_fast",
         other => unreachable!("bit_twin asked for `{other}`, which BIT_TWINS does not hold"),
+    }
+}
+
+/// The map a call `keys m` or `values m` (named by `which`) reads, when its
+/// argument is a plain name.
+fn column_of<'e>(e: &'e Expr, which: &str) -> Option<&'e str> {
+    let Expr::App { head, args, piped: false, .. } = e else { return None };
+    match (&**head, args.as_slice()) {
+        (Expr::Ident(h, _, _), [Expr::Ident(m, _, _)]) if h.as_str() == which => Some(m.as_str()),
+        _ => None,
     }
 }
 
@@ -6984,7 +6995,27 @@ impl<'a> Backend<'a> {
 
     fn emit_fn_body(&mut self, f: &mut FnEmit, body: &[Stmt]) -> Result<(), String> {
         let last = body.len() - 1;
+        let mut values_bound: Option<usize> = None;
         for (i, stmt) in body.iter().enumerate() {
+            if values_bound == Some(i) {
+                continue;
+            }
+            // `ks = keys m` straight after which `vs = values m`: both lists
+            // from one call, the way `both_columns` does it for arguments.
+            if let Some(next) = self.columns_bound(f, body, i) {
+                let (
+                    Stmt::Bind { pattern: Pattern::Var(ks_name, _), expr },
+                    Stmt::Bind { pattern: Pattern::Var(vs_name, _), .. },
+                ) = (stmt, &body[next])
+                else {
+                    unreachable!("columns_bound matched two bindings")
+                };
+                let (ks, vs) = self.emit_columns(f, expr)?;
+                f.bind(ks_name, &ks);
+                f.bind(vs_name, &vs);
+                values_bound = Some(next);
+                continue;
+            }
             match stmt {
                 Stmt::Set { .. } => unreachable!("`set` parses only inside `build`"),
                 Stmt::Bind { pattern: Pattern::Var(name, _), expr }
@@ -8885,6 +8916,77 @@ impl<'a> Backend<'a> {
         }
     }
 
+    /// Where a call's arguments are `keys m` and then `values m` of the same
+    /// local name, the two positions, so both lists can come from one runtime
+    /// call. Only the builtins themselves: a program that declares `keys` or
+    /// `values`, or binds either name, is calling something else.
+    fn both_columns(&self, f: &FnEmit, args: &[Expr]) -> Option<(usize, usize)> {
+        // The shape is asked first because it is almost never there: every
+        // call the emitter writes comes through here, and the declarations
+        // are walked only for a call that already has the pair.
+        let (keys_at, map) =
+            args.iter().enumerate().find_map(|(at, a)| Some((at, column_of(a, "keys")?)))?;
+        let values_at = args
+            .iter()
+            .enumerate()
+            .skip(keys_at + 1)
+            .find(|(_, a)| column_of(a, "values") == Some(map))?
+            .0;
+        self.columns_are_the_builtins(f, map).then_some((keys_at, values_at))
+    }
+
+    /// Whether `keys` and `values` here are the builtins and `map` a local:
+    /// a program that declares or binds either name calls its own function.
+    fn columns_are_the_builtins(&self, f: &FnEmit, map: &str) -> bool {
+        let declared = |name: &str| {
+            f.lookup(name).is_some() || self.program.fns.iter().any(|d| d.name == name)
+        };
+        f.lookup(map).is_some() && !declared("keys") && !declared("values")
+    }
+
+    /// Where statement `i` binds `keys m` to a name and the next binds
+    /// `values m` to another, both strict, the index of the second. The first
+    /// name must not be `m`, or the second statement reads the new binding.
+    fn columns_bound(&self, f: &FnEmit, body: &[Stmt], i: usize) -> Option<usize> {
+        let (
+            Stmt::Bind { pattern: Pattern::Var(ks, _), expr: first },
+            Some(Stmt::Bind { pattern: Pattern::Var(_, _), expr: second }),
+        ) = (body.get(i)?, body.get(i + 1))
+        else {
+            return None;
+        };
+        let map = column_of(first, "keys")?;
+        if column_of(second, "values") != Some(map) || ks.as_str() == map {
+            return None;
+        }
+        let lazy = |at: usize| self.demand.is_lazy_bind(&f.group.clone(), f.arity, at);
+        if lazy(i) || lazy(i + 1) || !self.columns_are_the_builtins(f, map) {
+            return None;
+        }
+        Some(i + 1)
+    }
+
+    /// `keys m` and `values m` in one call, for `both_columns`.
+    fn emit_columns(
+        &mut self,
+        f: &mut FnEmit,
+        keys_call: &Expr,
+    ) -> Result<(String, String), String> {
+        let Expr::App { args, .. } = keys_call else { unreachable!("both_columns matched a call") };
+        let m = self.emit_expr(f, &args[0])?;
+        let m = self.maybe_force(f, m);
+        let set = infer::builtin_set("keys", &[f.set_of(&m)]);
+        let slot = f.tmp();
+        f.line(&format!("{slot} = alloca %KValue, align 8"));
+        let ks = f.tmp();
+        f.line(&format!("{ks} = call %KValue @k_b_columns(%KValue {m}, ptr {slot})"));
+        let vs = f.tmp();
+        f.line(&format!("{vs} = load %KValue, ptr {slot}, align 8"));
+        f.record(&ks, set);
+        f.record(&vs, set);
+        Ok((ks, vs))
+    }
+
     fn emit_call_rest(
         &mut self,
         f: &mut FnEmit,
@@ -9265,13 +9367,26 @@ impl<'a> Backend<'a> {
             f.line("call void @k_beat_push()");
         }
         let mut emitted = Vec::new();
-        let mut iter = args.iter();
+        let skip = usize::from(first.is_some());
+        let columns = self.both_columns(f, &args[skip..]).map(|(k, v)| (k + skip, v + skip));
+        let mut values_of_the_pair: Option<String> = None;
+        let mut iter = args.iter().enumerate();
         if let Some(first_value) = first {
             emitted.push(first_value);
             iter.next();
         }
-        for arg in iter {
-            emitted.push(self.emit_expr(f, arg)?);
+        for (at, arg) in iter {
+            match columns {
+                Some((keys_at, _)) if at == keys_at => {
+                    let (ks, vs) = self.emit_columns(f, arg)?;
+                    values_of_the_pair = Some(vs);
+                    emitted.push(ks);
+                }
+                Some((_, values_at)) if at == values_at => {
+                    emitted.push(values_of_the_pair.take().expect("the keys came first"));
+                }
+                _ => emitted.push(self.emit_expr(f, arg)?),
+            }
         }
         // std wrappers reach natives through the builtin_ prefix — and the
         // prefix BYPASSES group dispatch entirely, or a bare clone named
