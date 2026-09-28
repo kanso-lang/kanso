@@ -150,7 +150,12 @@ fn compile_parsed_entry(
         .collect();
     let mut diags = check::resolve_markers(&mut program, &all_markers);
     diags.extend(check::check_typesets(&program, &all_type_names));
-    diags.extend(check::check_file_shadow(&program, &extern_globals, &shadowable));
+    diags.extend(check::check_file_shadow(
+        &program,
+        &extern_globals,
+        &shadowable,
+        &Default::default(),
+    ));
     diags.sort_by_key(|d| (d.span.line, d.span.col));
     if !diags.is_empty() {
         return Err(diag::render(&diags, file, source));
@@ -358,7 +363,12 @@ fn compile_one(file: &str, source: &str, drop_unused: bool) -> Result<ast::Progr
     all_type_names.extend(dep_program.types.iter().map(|t| t.name.clone()));
     let mut diags = check::resolve_markers(&mut program, &all_markers);
     diags.extend(check::check_typesets(&program, &all_type_names));
-    diags.extend(check::check_file_shadow(&program, &extern_globals, &shadowable));
+    diags.extend(check::check_file_shadow(
+        &program,
+        &extern_globals,
+        &shadowable,
+        &Default::default(),
+    ));
     if drop_unused {
         diags.retain(|d| d.kind != "unused");
     }
@@ -455,7 +465,12 @@ pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String>
     all_type_names.extend(dep_program.types.iter().map(|t| t.name.clone()));
     let mut diags = check::resolve_markers(&mut program, &all_markers);
     diags.extend(check::check_typesets(&program, &all_type_names));
-    diags.extend(check::check_file_shadow(&program, &extern_globals, &shadowable));
+    diags.extend(check::check_file_shadow(
+        &program,
+        &extern_globals,
+        &shadowable,
+        &Default::default(),
+    ));
     diags.sort_by_key(|d| (d.span.line, d.span.col));
     if !diags.is_empty() {
         return Err(diag::render(&diags, file, source));
@@ -3776,6 +3791,9 @@ fn compile_module_loaded(
         all_markers.extend(check::marker_names(program));
         all_type_names.extend(program.types.iter().map(|t| t.name.clone()));
     }
+    // The module's own types, before the imports' join them: an annotation
+    // may name a type any file of the module declares.
+    let module_types: crate::hash::Set<String> = all_type_names.clone();
     all_names.extend(check::declared_names(&dep_program).into_iter().map(Name::new));
     all_markers.extend(check::marker_names(&dep_program));
     all_type_names.extend(dep_program.types.iter().map(|t| t.name.clone()));
@@ -3797,7 +3815,14 @@ fn compile_module_loaded(
         };
         let mut diags = check::resolve_markers(program, &all_markers);
         diags.extend(check::check_typesets(program, &all_type_names));
-        diags.extend(check::check_file_shadow(program, &extern_globals, &shadowable));
+        let sibling_types: crate::hash::Set<&str> =
+            module_types.iter().map(String::as_str).collect();
+        diags.extend(check::check_file_shadow(
+            program,
+            &extern_globals,
+            &shadowable,
+            &sibling_types,
+        ));
         diags.sort_by_key(|d| (d.span.line, d.span.col));
         if !diags.is_empty() {
             return Err(diag::render(&diags, file, source));

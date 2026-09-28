@@ -3766,7 +3766,19 @@ wrapper_pattern = row
 
 rows_c1zzzf = text/concat rows_c1zzze [wrapper_pattern]
 
-rows_c = text/concat rows_c1zzzf [itself]
+# A module's files share their types. Counting only the annotating file's
+# own, an annotation naming the next file's type is refused as naming none.
+sibling_types = row
+  "a sibling file's type left undeclared"
+  true
+  "cargo test --release --test sibling_types"
+  "specs (unit, golden, differential)"
+  (breaking "a_sibling_type_left_undeclared")
+  no_setup
+
+rows_c1zzzg = text/concat rows_c1zzzf [sibling_types]
+
+rows_c = text/concat rows_c1zzzg [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

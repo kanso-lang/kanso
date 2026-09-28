@@ -2103,7 +2103,7 @@ pub fn declared_names(program: &Program) -> HashSet<&str> {
 /// Per-file checks: canonical order plus name resolution against this file's
 /// globals extended with the rest of the module.
 pub fn check_file(program: &Program, extern_globals: &HashSet<&str>) -> Vec<Diagnostic> {
-    check_file_shadow(program, extern_globals, &HashSet::default())
+    check_file_shadow(program, extern_globals, &HashSet::default(), &HashSet::default())
 }
 
 /// Bare-enrolled imports (synthetic clones) are shadowable: a local binding
@@ -2113,6 +2113,7 @@ pub fn check_file_shadow(
     program: &Program,
     extern_globals: &HashSet<&str>,
     shadowable: &HashSet<String>,
+    sibling_types: &HashSet<&str>,
 ) -> Vec<Diagnostic> {
     let mut diags = Vec::new();
     check_type_order(program, &mut diags);
@@ -2124,8 +2125,16 @@ pub fn check_file_shadow(
     check_field_conflicts(program, &mut diags);
     // One set, read by the annotation walk and by the resolver. Built twice
     // it cost a second HashSet on every compile, which compile_allocs saw.
-    let declared_type_names: HashSet<&str> =
-        program.types.iter().map(|t| t.name.as_str()).collect();
+    //
+    // A module's files share their types, so a type the next file declares is
+    // as declared as one this file does. Until 2026-09-28 only this file's
+    // counted, and `p:pt` with `pt` declared beside it was refused.
+    let declared_type_names: HashSet<&str> = program
+        .types
+        .iter()
+        .map(|t| t.name.as_str())
+        .chain(sibling_types.iter().copied())
+        .collect();
     check_annotation_names(program, &declared_type_names, &mut diags);
     let mut globals = collect_globals(program, &mut diags);
     globals.extend(extern_globals.iter().copied());

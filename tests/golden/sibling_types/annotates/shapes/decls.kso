@@ -1,0 +1,4 @@
+type pt
+  n
+
+type tag pt
