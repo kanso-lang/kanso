@@ -8680,6 +8680,11 @@ static KValue k_b_push_grow(KValue lv, KList* l, KValue item, int mutate);
 static KValue k_b_push_into_proven(KValue lv, KValue item, int mutate, int proven) {
     if (!k_not_failure(lv)) return lv;
     if (lv.tag != K_LIST) k_die_push_takes(lv);
+    /* An err is infectious here as it is for every builtin: pushing one
+       answers it, the way the interpreter's call_builtin does. Only the list
+       was asked until 2026-09-28, so the compiled engines stored the err as an
+       element where the interpreter handed it on. */
+    if (!k_not_failure(item)) return item;
     KList* l = k_as_list(lv);
     if (mutate && !proven && !k_born_this_beat(l)) mutate = 0;
     KBuf* buf = k_buf_of(l->items);
@@ -8797,6 +8802,7 @@ KValue k_b_push(KValue lv, KValue item) { return k_b_push_into(lv, item, 0); }
 KValue k_b_push_mut(KValue lv, KValue item) {
     if (!k_not_failure(lv)) return lv;
     if (lv.tag != K_LIST) k_die_push_takes(lv);
+    if (!k_not_failure(item)) return item;
     KList* l = k_as_list(lv);
     KBuf* buf = k_buf_of(l->items);
     if (buf->used == l->len && l->len < k_buf_cap(buf)) {

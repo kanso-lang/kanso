@@ -17404,3 +17404,52 @@ walk over every byte value at every position of tokens of four to seven
 bytes, and a million random tokens: 1,005,632 cases, none wrong. With the
 control bound written 31 it reports 11,517 wrong, which is the ratchet row
 "a token flag one byte short of the control range".
+
+## 2026-09-28 — pushing an err hands it on, on every engine
+
+    fn pushed n
+      bad = text/to_int "x{n}"
+      "{push [1 2] bad}"
+
+The interpreter answers the err here and the compiled engines printed
+`[1 2 err ""x3" is not an integer"]`. The language makes an err infectious
+for every builtin, with named exceptions: `wrap_err`'s second argument, the
+three chain words, `effect`, and the err's own readers. The interpreter's
+`call_builtin` asks every argument before it dispatches. The C `push` asked
+only the list. `put`, `append`, `length`, `slice`, `join`, `keys`,
+arithmetic and interpolation were probed the same way and agree; a list or
+map literal holding an err keeps it as an element on every engine, which is
+right, because a literal is not an operation on its elements. It turned up
+in the same program generator as the two entries above, as a list printed
+with an err inside it where the interpreter stopped.
+
+`k_b_push_into_proven` and `k_b_push_mut` now return an err item after the
+list's own tests, so a failing list still answers first, as it does for
+`put`. The in-place twin sends an err item to the C. That test cost runbench
+2,987,583 instructions, almost all of it in `array_open`, whose items are
+fields a pattern bound out of a `parsed` record, and a constructor handed an
+err answers the err, so a field never holds one. The emitter's sets already
+know that. Where they prove an item is no failure it writes
+`k_b_push_mut_known`, the twin without the test, and the cost falls to
+97,329: runbench 1,073,236,089 -> 1,073,333,418, +0.009%, livebench +425,
+oneshot +460 and encodebench +14,455, measured on the container.
+
+`STATS_GATE_SITES` is 11: the second twin carries the counting build's gate
+like the first. Five programs declare both twins, so `emitted_golden_others`
+moves by a define, a call, five branches and 43 lines in basket,
+escapebench, scanbench, digestbench and runbench, and by five lines in the
+others, which is the longer twin. runbench's `.text` grows 401,752 ->
+401,928. No allocation counter moves in the twelve cost veins or the lazy
+tier.
+
+The fixture is `pushing_an_err_hands_it_on`: one push onto a fresh literal,
+which the emitter writes in place, and one onto a list read again
+afterwards, each handed to a group with an `(err _)` arm. It prints
+`handed on handed on [3]` on every engine and printed both lists with the
+err inside on main's native builds. The ratchet row "a pushed err kept as an
+element" deletes the two C tests and the native builds print the lists
+again.
+
+Left as found: when both of a builtin's arguments are errs, the interpreter
+merges their reasons and the C answers the first. That applies to `put` as
+much as to `push`, and was not probed further here.

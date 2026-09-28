@@ -1,0 +1,22 @@
+# An err is infectious for builtins, and `push` is one: pushing an err answers
+# the err rather than a list holding it. The compiled engines checked only the
+# list, so they printed `[1 2 err ...]` where the interpreter handed the
+# failure on. Both pushes are here, the one onto a fresh literal, which the
+# emitter writes in place, and the one onto a list read again afterwards. Found
+# by a generated program on 2026-09-28.
+import "std/text"
+
+fn told (err _)
+  "handed on"
+
+fn told xs
+  "{xs}"
+
+fn pushed n
+  bad = text/to_int "x{n}"
+  kept = [n]
+  fresh = push [1 2] bad
+  shared = push kept bad
+  "{told fresh} {told shared} {kept}"
+
+pub play = print (pushed 3)

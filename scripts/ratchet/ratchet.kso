@@ -3271,7 +3271,20 @@ token_word = row
 
 rows_c1zt = text/concat rows_c1zs [token_word]
 
-rows_c = text/concat rows_c1zt [itself]
+# Pushing an err answers the err on every engine. Without the C push's item
+# test, a push the analysis does not own stores it, and the micro fixture
+# prints a list holding an err.
+push_err = row
+  "a pushed err kept as an element"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_pushed_err_kept_as_an_element")
+  release
+
+rows_c1zu = text/concat rows_c1zt [push_err]
+
+rows_c = text/concat rows_c1zu [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

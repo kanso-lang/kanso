@@ -54,7 +54,7 @@ pub fn counters_wanted() -> bool {
 
 /// How many `k_stats_on` gates DECLARES carries. Pinned so that adding one
 /// without teaching `index_declares` about it fails the build.
-pub const STATS_GATE_SITES: usize = 10;
+pub const STATS_GATE_SITES: usize = 11;
 
 const DECLARES: &str = r#"%KValue = type { i64, i64 }
 %parsed = type { i64, i64 }
@@ -1034,8 +1034,53 @@ slow:
 ; that its fast path is thirteen instructions. jsonbench makes 1,459,800 of
 ; these a run at 59.7 apiece. Since the born-this-beat test came out of the
 ; fast arm the guard is four loads and two compares, so the whole thing fits
-; here: on the frontier with room, claim the slot and bump both lengths.
+; here: on the frontier with room, claim the slot and bump both lengths. An
+; err item goes to the C, which answers the err: pushing one hands it on, as
+; every builtin does, and a tag known at the site folds the test away.
 define internal %KValue @k_b_push_mut_fast(%KValue %lv, %KValue %item) alwaysinline {
+  %ltag = extractvalue %KValue %lv, 0
+  %islist = icmp eq i64 %ltag, 9
+  br i1 %islist, label %lstat, label %lslow
+lstat:
+  %lso = load i32, ptr @k_stats_on
+  %lcounting = icmp ne i32 %lso, 0
+  br i1 %lcounting, label %lslow, label %lshape
+lshape:
+  %itag = extractvalue %KValue %item, 0
+  %ierr = icmp eq i64 %itag, 5
+  br i1 %ierr, label %lslow, label %litem
+litem:
+  %lpi = extractvalue %KValue %lv, 1
+  %l = inttoptr i64 %lpi to ptr
+  %llen = load i64, ptr %l
+  %itemspp = getelementptr i8, ptr %l, i64 8
+  %items = load ptr, ptr %itemspp
+  %lbuf = getelementptr i8, ptr %items, i64 -16
+  %lcap = load i64, ptr %lbuf
+  %lusedp = getelementptr i8, ptr %lbuf, i64 8
+  %lused = load i64, ptr %lusedp
+  %lfront = icmp eq i64 %lused, %llen
+  br i1 %lfront, label %lroom, label %lslow
+lroom:
+  %llen2 = shl i64 %llen, 1
+  %lneed = add i64 %llen2, 2
+  %lfits = icmp sle i64 %lneed, %lcap
+  br i1 %lfits, label %lwrite, label %lslow
+lwrite:
+  %lslot = getelementptr %KValue, ptr %items, i64 %llen
+  store %KValue %item, ptr %lslot
+  %llen1 = add i64 %llen, 1
+  store i64 %llen1, ptr %lusedp
+  store i64 %llen1, ptr %l
+  ret %KValue %lv
+lslow:
+  %lr = call %KValue @k_b_push_mut(%KValue %lv, %KValue %item)
+  ret %KValue %lr
+}
+; The same push where the emitter's sets prove the item is no err: a field
+; a pattern bound, a literal, arithmetic that cannot fail. The item test is
+; the only difference, and the decoder pays it once an element otherwise.
+define internal %KValue @k_b_push_mut_known(%KValue %lv, %KValue %item) alwaysinline {
   %ltag = extractvalue %KValue %lv, 0
   %islist = icmp eq i64 %ltag, 9
   br i1 %islist, label %lstat, label %lslow
@@ -3946,6 +3991,7 @@ const DECLARES_CONTEXT_CALLS: &[&str] = &[
     "k_b_length_fast",
     "k_b_push_mut",
     "k_b_push_mut_fast",
+    "k_b_push_mut_known",
     "k_b_put_mut",
     "k_b_put_mut_fast",
     "k_b_slice",
@@ -9714,8 +9760,12 @@ impl<'a> Backend<'a> {
             ));
             let sym = if name == "push" && in_place {
                 // the twin claims the frontier slot itself; a grow, a full
-                // buffer or anything that is not a list falls to the C
-                "push_mut_fast"
+                // buffer or anything that is not a list falls to the C. An
+                // item the sets prove is no failure skips the err test.
+                match f.set_of(&emitted[1]) & FAIL == 0 {
+                    true => "push_mut_known",
+                    false => "push_mut_fast",
+                }
             } else if name == "put" && in_place {
                 // the twin writes the frontier pair itself where the map has
                 // no sorted view; everything else falls to the C by call
