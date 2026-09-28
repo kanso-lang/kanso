@@ -17644,12 +17644,12 @@ Three existing mem fixtures print containers and fell with it:
 `sh_str` rows falling beside them. No benchmark prints a container, so the
 twelve cost veins agree. Every benchmark's `.text` fell 4,864 bytes, because
 the renderer's arms no longer inline a chain of concatenations, and the text
-total reads 3,534,272 -> 3,466,176.
+total reads 3,536,288 -> 3,468,192 on main after kanso#1697.
 
-CI's rows. runbench 1,073,235,252 -> 1,073,229,607 and basket 29,624,219 ->
-29,456,535, with pendbench, scanbench, digestbench and five others falling by
-less, and
-`codegen_instructions_release` 407,793,576 -> 407,661,694. Three rows rose by
-layout: `work_encodebench` 2,338,075,511 -> 2,338,075,754, `work_oneshot`
-12,565,397 -> 12,565,992 and `codegen_instructions_dev` 123,379,531 ->
-123,399,011. Welfare nets the change upward and is banked.
+CI's rows, against main after kanso#1697. runbench 1,073,234,771 ->
+1,073,228,713 and basket 29,624,228 -> 29,456,544, with pendbench, scanbench,
+digestbench, livebench and five others falling by less. Four rows rose, by
+layout: `work_oneshot` 12,565,320 -> 12,565,341, `work_widebench` 27,311,115 ->
+27,311,143, `codegen_instructions_dev` 123,384,276 -> 123,408,461 and
+`codegen_instructions_release` 407,709,792 -> 407,745,282. Welfare nets the
+change upward and is banked.
