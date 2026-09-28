@@ -18129,3 +18129,31 @@ The same batch found a program where `math/sqrt` of a negative number made a
 NaN and `NaN < 9007199254740993.0` answered differently on the engines. How
 floats compare is the question the ledger already holds, so the generator
 stops taking square roots of differences.
+
+## 2026-09-28 — CI's rows for the none refusal and the curried caller
+
+CI measured 4592569d and these are its readings.
+
+Four rows rose, and the welfare sum still went up:
+
+- `work_encodebench` 2,331,707,572 -> 2,333,509,094 (+1,801,522, +0.077%)
+- `work_digestbench` 5,353,555 -> 5,365,936 (+12,381, +0.23%)
+- `work_basket` 29,538,470 -> 29,539,468 (+998)
+- `interp_instructions` 589,169,442 -> 589,172,984 (+3,542)
+
+The rest fell. runbench 1,071,881,800 -> 1,069,996,157 (-0.176%), livebench
+1,538,558,945 -> 1,537,193,790 (-0.089%), jsonbench 731,540,004 ->
+729,243,204, oneshot 12,564,988 -> 12,546,800, widebench 27,199,122 ->
+27,183,122, pendbench 179,484,260 -> 179,483,660 and scanbench 280,951 ->
+280,865. `codegen_instructions_dev` lands on 124,437,115 (-164,746),
+`codegen_instructions_release` on 408,038,099 (-342,160) and
+`emit_instructions` on 29,849,876 (-53,494).
+
+The no-match block lost a compare and an `or`: it compares the tag with
+the failure tag alone where it compared it with both failure and none. The
+shorter text in every dispatcher's tail is what the machine-code vein
+recorded, 3,483,824 -> 3,482,464. The runtime rows moved with it, and
+nothing here isolates which of the two fixes moved which row. No benchmark
+curries a group, so the builder fix is not expected to reach them.
+
+Welfare rose to 90.40, banked in the same commit.
