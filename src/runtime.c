@@ -4992,6 +4992,140 @@ static inline __attribute__((always_inline)) long long k_render_number(KValue v,
 
 KValue k_render(KValue v, long long quote) { return k_render_at(v, quote, 0); }
 
+/* A rendering is written into one buffer and made a string once. The
+   containers used to join each element's text onto everything before it, and
+   a join copies both halves into a fresh string, so a list's text was copied
+   once per element and left behind in the arena each time: 4,000 small ints
+   allocated 32,294,448 bytes to print 7,999, and a list of 20,000 maps
+   outgrew the machine. The interpreter builds one String. The buffer is
+   malloc'd and freed here, so a force inside the walk cannot rewind it. */
+typedef struct { char* p; long long len; long long cap; } KRenderBuf;
+
+static void k_rb_put(KRenderBuf* b, const char* s, long long n) {
+    if (b->len + n > b->cap) {
+        long long cap = b->cap ? b->cap : 64;
+        while (cap < b->len + n) cap *= 2;
+        char* p = realloc(b->p, (size_t)cap);
+        if (!p) { fputs("out of memory\n", stderr); exit(1); }
+        b->p = p;
+        b->cap = cap;
+    }
+    memcpy(b->p + b->len, s, (size_t)n);
+    b->len += n;
+}
+
+static void k_rb_lit(KRenderBuf* b, const char* s) { k_rb_put(b, s, (long long)strlen(s)); }
+
+/* Everything k_render_at answers for a value inside a container, in the same
+   order and with the same cycle path, appended rather than returned. */
+static void k_render_into(KRenderBuf* b, KValue v, long long quote) {
+    if (v.tag == K_SUB) { k_render_into(b, k_sub_base(v), quote); return; }
+    if (v.tag == K_THUNK) {
+        KThunk* cell = (KThunk*)(intptr_t)v.payload;
+        for (int d = 0; d < k_render_depth; d++)
+            if (k_render_path[d] == cell) { k_rb_lit(b, "<cycle>"); return; }
+        if (k_render_depth < K_RENDER_PATH_MAX) k_render_path[k_render_depth++] = cell;
+        k_render_into(b, k_force(v), quote);
+        if (k_render_depth > 0) k_render_depth--;
+        return;
+    }
+    char buf[64];
+    switch (v.tag) {
+        case K_INT:
+        case K_FLOAT:
+            k_rb_put(b, buf, k_render_number(v, buf));
+            return;
+        case K_TRUE: k_rb_lit(b, "true"); return;
+        case K_FALSE: k_rb_lit(b, "false"); return;
+        case K_NONE: k_rb_lit(b, "<none>"); return;
+        case K_DONE: k_rb_lit(b, "<done>"); return;
+        case K_ERR:
+            k_rb_lit(b, "err ");
+            k_render_into(b, k_err_inner(v), 1);
+            return;
+        case K_STR: {
+            KStr* s = k_as_str(v);
+            if (quote) k_rb_lit(b, "\"");
+            k_rb_put(b, s->data, s->len);
+            if (quote) k_rb_lit(b, "\"");
+            return;
+        }
+        case K_REC: {
+            KRec* r = k_as_rec(v);
+            if (r->nfields > 0) {
+                for (int d = 0; d < k_render_depth; d++)
+                    if (k_render_path[d] == r) { k_rb_lit(b, "<cycle>"); return; }
+                if (k_render_depth < K_RENDER_PATH_MAX) k_render_path[k_render_depth++] = r;
+                k_rb_lit(b, k_type_shown(r->type_id));
+                for (long long i = 0; i < r->nfields; i++) {
+                    k_rb_lit(b, " ");
+                    k_render_into(b, r->fields[i], 1);
+                }
+                k_render_depth--;
+                return;
+            }
+            k_rb_lit(b, k_type_shown(r->type_id));
+            return;
+        }
+        case K_DESC: k_rb_lit(b, "<io>"); return;
+        case K_LIST: {
+            KList* l = (KList*)(intptr_t)v.payload;
+            for (int d = 0; d < k_render_depth; d++)
+                if (k_render_path[d] == l) { k_rb_lit(b, "<cycle>"); return; }
+            if (k_render_depth < K_RENDER_PATH_MAX) k_render_path[k_render_depth++] = l;
+            k_rb_lit(b, "[");
+            for (long long i = 0; i < l->len; i++) {
+                if (i) k_rb_lit(b, " ");
+                k_render_into(b, l->items[i], 1);
+            }
+            if (k_render_depth > 0) k_render_depth--;
+            k_rb_lit(b, "]");
+            return;
+        }
+        case K_MAP: {
+            KMap* m = (KMap*)(intptr_t)v.payload;
+            long long n;
+            KValue* s = k_map_sorted(m, &n);
+            if (n == 0) { k_rb_lit(b, "{}"); return; }
+            for (int d = 0; d < k_render_depth; d++)
+                if (k_render_path[d] == m) { k_rb_lit(b, "<cycle>"); return; }
+            if (k_render_depth < K_RENDER_PATH_MAX) k_render_path[k_render_depth++] = m;
+            k_rb_lit(b, "{ ");
+            for (long long i = 0; i < n; i++) {
+                if (i) k_rb_lit(b, " ");
+                k_render_into(b, s[i * 2], 1);
+                k_rb_lit(b, ":");
+                k_render_into(b, s[i * 2 + 1], 1);
+            }
+            if (k_render_depth > 0) k_render_depth--;
+            k_rb_lit(b, " }");
+            return;
+        }
+        case K_BYTES: {
+            KBytes* by = (KBytes*)(intptr_t)v.payload;
+            k_rb_lit(b, "[");
+            for (long long i = 0; i < by->len; i++) {
+                if (i) k_rb_lit(b, " ");
+                k_rb_put(b, buf, k_itoa(buf, (long long)by->data[i]));
+            }
+            k_rb_lit(b, "]");
+            return;
+        }
+        case K_CLOSURE: case K_FNREF: k_rb_lit(b, "<fn>"); return;
+        default: k_rb_lit(b, "<value>"); return;
+    }
+}
+
+/* A container's whole rendering, made a string once. */
+static __attribute__((noinline)) KValue k_render_whole(KValue v) {
+    KRenderBuf b = {0, 0, 0};
+    k_render_into(&b, v, 1);
+    KValue out = k_str_n(b.p, b.len);
+    free(b.p);
+    return out;
+}
+
+
 static KValue k_render_at(KValue v, long long quote, int held) {
     if (v.tag == K_ERR && !held) return v;
     if (v.tag == K_SUB) return k_render_at(k_sub_base(v), quote, held);
@@ -5023,72 +5157,18 @@ static KValue k_render_at(KValue v, long long quote, int held) {
         case K_FALSE: return k_str("false");
         case K_NONE: return k_str("<none>");
         case K_DONE: return k_str("<done>");
-        case K_ERR: return k_concat(k_str("err "), k_render_at(k_err_inner(v), 1, 1));
+        case K_ERR: return k_render_whole(v);
         case K_STR:
             if (!quote) return v;
             return k_concat(k_concat(k_str("\""), v), k_str("\""));
-        case K_REC: {
-            KRec* r = k_as_rec(v);
-            if (r->nfields > 0) {
-                for (int d = 0; d < k_render_depth; d++)
-                    if (k_render_path[d] == r) return k_str("<cycle>");
-                if (k_render_depth < K_RENDER_PATH_MAX) k_render_path[k_render_depth++] = r;
-                KValue out = k_str(k_type_shown(r->type_id));
-                for (long long i = 0; i < r->nfields; i++) {
-                    out = k_concat(out, k_str(" "));
-                    out = k_concat(out, k_render_at(r->fields[i], 1, 1));
-                }
-                k_render_depth--;
-                return out;
-            }
-            return k_str(k_type_shown(r->type_id));
-        }
+        case K_REC:
+            if (k_as_rec(v)->nfields == 0) return k_str(k_type_shown(k_as_rec(v)->type_id));
+            return k_render_whole(v);
         case K_DESC: return k_str("<io>");
-        case K_LIST: {
-            KList* l = (KList*)(intptr_t)v.payload;
-            /* on the path like a record, so a cell holding this very list
-               says <cycle> where it comes round rather than printing the
-               list a second time */
-            for (int d = 0; d < k_render_depth; d++)
-                if (k_render_path[d] == l) return k_str("<cycle>");
-            if (k_render_depth < K_RENDER_PATH_MAX) k_render_path[k_render_depth++] = l;
-            KValue out = k_str("[");
-            for (long long i = 0; i < l->len; i++) {
-                if (i) out = k_concat(out, k_str(" "));
-                out = k_concat(out, k_render_at(l->items[i], 1, 1));
-            }
-            if (k_render_depth > 0) k_render_depth--;
-            return k_concat(out, k_str("]"));
-        }
-        case K_MAP: {
-            KMap* m = (KMap*)(intptr_t)v.payload;
-            long long n;
-            KValue* s = k_map_sorted(m, &n);
-            if (n == 0) return k_str("{}");
-            for (int d = 0; d < k_render_depth; d++)
-                if (k_render_path[d] == m) return k_str("<cycle>");
-            if (k_render_depth < K_RENDER_PATH_MAX) k_render_path[k_render_depth++] = m;
-            KValue out = k_str("{ ");
-            for (long long i = 0; i < n; i++) {
-                if (i) out = k_concat(out, k_str(" "));
-                out = k_concat(out, k_render_at(s[i * 2], 1, 1));
-                out = k_concat(out, k_str(":"));
-                out = k_concat(out, k_render_at(s[i * 2 + 1], 1, 1));
-            }
-            if (k_render_depth > 0) k_render_depth--;
-            return k_concat(out, k_str(" }"));
-        }
-        case K_BYTES: {
-            KBytes* b = (KBytes*)(intptr_t)v.payload;
-            KValue out = k_str("[");
-            char nbuf[8];
-            for (long long i = 0; i < b->len; i++) {
-                if (i) out = k_concat(out, k_str(" "));
-                snprintf(nbuf, sizeof nbuf, "%d", (int)b->data[i]);
-                out = k_concat(out, k_str(nbuf));
-            }
-            return k_concat(out, k_str("]"));
-        }
+        case K_LIST:
+        case K_MAP:
+        case K_BYTES:
+            return k_render_whole(v);
         case K_CLOSURE: case K_FNREF: return k_str("<fn>");
         default: return k_str("<value>");
     }
