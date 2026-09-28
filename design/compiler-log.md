@@ -17405,7 +17405,7 @@ bytes, and a million random tokens: 1,005,632 cases, none wrong. With the
 control bound written 31 it reports 11,517 wrong, which is the ratchet row
 "a token flag one byte short of the control range".
 
-## 2026-09-28 — pushing an err hands it on, on every engine
+## 2026-09-28 — a builtin's failing arguments answer together, on every engine
 
     fn pushed n
       bad = text/to_int "x{n}"
@@ -17415,44 +17415,56 @@ The interpreter answers the err here and the compiled engines printed
 `[1 2 err ""x3" is not an integer"]`. The language makes an err infectious
 for every builtin, with named exceptions: `wrap_err`'s second argument, the
 three chain words, `effect`, and the err's own readers. The interpreter's
-`call_builtin` asks every argument before it dispatches. The C `push` asked
-only the list. `put`, `append`, `length`, `slice`, `join`, `keys`,
-arithmetic and interpolation were probed the same way and agree; a list or
-map literal holding an err keeps it as an element on every engine, which is
-right, because a literal is not an operation on its elements. It turned up
-in the same program generator as the two entries above, as a list printed
-with an err inside it where the interpreter stopped.
+`call_builtin` asks every argument before it dispatches and merges every one
+that fails. The C `push` asked only the list. `put`, `append`, `length`,
+`slice`, `join`, `keys`, arithmetic and interpolation were probed the same way
+and agree on one failing argument; a list or map literal holding an err keeps
+it as an element on every engine, which is right, because a literal is not an
+operation on its elements. It turned up in the same program generator as the
+two entries above, as a list printed with an err inside it where the
+interpreter stopped.
 
-`k_b_push_into_proven` and `k_b_push_mut` now return an err item after the
-list's own tests, so a failing list still answers first, as it does for
-`put`. The in-place twin sends an err item to the C. That test cost runbench
-2,987,583 instructions, almost all of it in `array_open`, whose items are
-fields a pattern bound out of a `parsed` record, and a constructor handed an
-err answers the err, so a field never holds one. The emitter's sets already
-know that. Where they prove an item is no failure it writes
-`k_b_push_mut_known`, the twin without the test, and the cost falls to
-97,329: runbench 1,073,236,089 -> 1,073,333,418, +0.009%, livebench +425,
-oneshot +460 and encodebench +14,455, measured on the container.
+Probing two failing arguments found the wider form of the same gap. The C
+builtins tested their arguments one at a time and answered the first that
+failed, where the interpreter merges them the way two failing operands of `+`
+are merged on both engines: `put no_map "a" bad` answered one reason natively
+and two interpreted. Records were fixed the same way on an earlier date and
+say so in `k_merge_rest`. Seventeen builtins in src/runtime.c tested two or
+three arguments in a row. Each now opens with one test of all of them, and a
+cold `k_failed2` or `k_failed3` merges what failed in argument order, which is
+the order the interpreter's reduce takes; `k_b_append_slice` merges four the
+same way. The test comes before every type test, so `push` no longer refuses a
+list that is not one before looking at a failing item.
+
+The in-place push twin sends an err item to the C. That test alone cost
+runbench 2,987,583 instructions, almost all of it in `array_open`, whose items
+are fields a pattern bound out of a `parsed` record, and a constructor handed
+an err answers the err, so a field never holds one. The emitter's sets
+already know that. Where they prove an item is no failure it writes
+`k_b_push_mut_known`, the twin without the test.
+
+Measured on the container against main at 30f528ab, all of it together:
+runbench 1,073,236,089 -> 1,071,359,678, -0.175%, livebench -16,094, oneshot
+-5,874 and encodebench -20,254. One test of every argument and one branch
+costs less than a branch per argument, and the push twin's test costs the
+decoder nothing, so the whole change reads as a fall. That was not isolated
+further. No allocation counter moves in the twelve cost veins or the lazy
+tier.
 
 `STATS_GATE_SITES` is 11: the second twin carries the counting build's gate
-like the first. Five programs declare both twins, so `emitted_golden_others`
-moves by a define, a call, five branches and 43 lines in basket,
-escapebench, scanbench, digestbench and runbench, and by five lines in the
-others, which is the longer twin. Summed, the keys the trend gate reads
-land at `emitted_lines` 5,727 -> 5,732, `emitted_other_defines` 1,550 ->
-1,555, `emitted_other_calls` 10,666 -> 10,671, `emitted_other_branches`
-8,078 -> 8,104 and `emitted_other_lines` 85,511 -> 85,770, and `text` 3,534,272
--> 3,534,672, runbench's own `.text` 401,752 -> 401,928. No allocation
-counter moves in the twelve cost veins or the lazy tier.
+like the first. Five programs declare both twins, so the emitted-code goldens
+move, and every program's `.text` grows 2,672 bytes. The keys the trend gate
+reads land at `emitted_lines` 5,727 -> 5,732, `emitted_other_defines` 1,550 ->
+1,555, `emitted_other_calls` 10,666 -> 10,671, `emitted_other_branches` 8,078
+-> 8,104, `emitted_other_lines` 85,511 -> 85,770, and `text` 3,534,272 ->
+3,571,680.
 
-The fixture is `pushing_an_err_hands_it_on`: one push onto a fresh literal,
-which the emitter writes in place, and one onto a list read again
-afterwards, each handed to a group with an `(err _)` arm. It prints
-`handed on handed on [3]` on every engine and printed both lists with the
-err inside on main's native builds. The ratchet row "a pushed err kept as an
-element" deletes the two C tests and the native builds print the lists
-again.
-
-Left as found: when both of a builtin's arguments are errs, the interpreter
-merges their reasons and the C answers the first. That applies to `put` as
-much as to `push`, and was not probed further here.
+Two micro fixtures. `pushing_an_err_hands_it_on` pushes an err onto a fresh
+literal, which the emitter writes in place, and onto a list read again
+afterwards, and prints `handed on handed on [3]`; main's native builds printed
+both lists with the err inside. `two_failing_arguments_merge` gives `put`,
+`push`, `slice` and `join` two failing arguments each and prints both reasons
+of each; main's native builds printed one. The ratchet row "a pushed err kept
+as an element" restores the list-only test in the two C pushes, and "two
+failures answer the first" makes the merge keep its first failure; each turns
+the micro corpus red.

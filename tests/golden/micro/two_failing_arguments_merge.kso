@@ -1,0 +1,25 @@
+# Every failing argument of a builtin answers together, merged the way two
+# failing operands of `+` are, and before any argument is asked what it is.
+# The compiled engines answered the first failing argument, and `push` refused
+# a list that was not one before it looked at a failing item. Found by a
+# generated program on 2026-09-28.
+import "std/text"
+
+fn told (err r)
+  "{r}"
+
+fn told x
+  "kept {x}"
+
+fn failing n
+  no_map = text/to_int "m{n}"
+  no_list = text/to_int "l{n}"
+  bad = text/to_int "x{n}"
+  worse = text/to_int "y{n}"
+  put_both = told (put no_map "a" bad)
+  push_both = told (push no_list bad)
+  slice_two = told (text/slice bad 1 worse)
+  join_both = told (text/join no_list bad)
+  "{put_both}\n{push_both}\n{slice_two}\n{join_both}"
+
+pub play = print (failing 3)

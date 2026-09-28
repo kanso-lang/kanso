@@ -3282,7 +3282,17 @@ push_err = row
   (breaking "a_pushed_err_kept_as_an_element")
   release
 
-rows_c1zu = text/concat rows_c1zt [push_err]
+# A builtin's failing arguments merge. Answering the first alone is what the
+# C did, and the second micro fixture prints one reason where it wants two.
+two_errs = row
+  "two failures answer the first"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "two_failures_answer_the_first")
+  release
+
+rows_c1zu = text/concat rows_c1zt [push_err two_errs]
 
 rows_c = text/concat rows_c1zu [itself]
 
