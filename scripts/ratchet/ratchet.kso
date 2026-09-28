@@ -3271,7 +3271,20 @@ token_word = row
 
 rows_c1zt = text/concat rows_c1zs [token_word]
 
-rows_c = text/concat rows_c1zt [itself]
+# A lazy binding read once, past a `return ... if`, inlines into its reader.
+# Stopping the rewrite at the guard leaves the reader naming nothing, and the
+# micro fixture fails on both engines.
+chain_guard = row
+  "a return hides the chain's reader"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_return_hides_the_chain_reader")
+  release
+
+rows_c1zu = text/concat rows_c1zt [chain_guard]
+
+rows_c = text/concat rows_c1zu [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

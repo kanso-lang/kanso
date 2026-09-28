@@ -1449,67 +1449,21 @@ fn coll_arg_use(e: &ast::Expr, name: &str, shorts: &crate::hash::Map<Name, Name>
     any_child(e, |c| coll_arg_use(c, name, shorts))
 }
 
+/// Every read of `name` becomes `replacement`, wherever it sits. The walk is
+/// `walk_children_mut` rather than a list of forms written out here, because
+/// the list this used to be had no arm for a guard: `inline_single_use_chains`
+/// counts uses with `for_each_child`, which does descend into one, so a chain
+/// whose only reader sat after a `return ... if ...` was removed and the reader
+/// left naming nothing. The interpreter answered "unknown name" and the native
+/// backend refused the program.
 fn substitute_ident(e: &mut ast::Expr, name: &str, replacement: &ast::Expr) {
-    use ast::Expr;
-    if let Expr::Ident(n, _, _) = e {
+    if let ast::Expr::Ident(n, _, _) = e {
         if n == name {
             *e = replacement.clone();
             return;
         }
     }
-    match e {
-        Expr::App { head, args, .. } => {
-            substitute_ident(head, name, replacement);
-            for a in args {
-                substitute_ident(a, name, replacement);
-            }
-        }
-        Expr::Lambda { body, .. } => substitute_ident(body, name, replacement),
-        Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
-            for stmt in stmts {
-                match stmt {
-                    ast::Stmt::Bind { expr, .. }
-                    | ast::Stmt::Expr(expr)
-                    | ast::Stmt::Set { value: expr, .. } => {
-                        substitute_ident(expr, name, replacement)
-                    }
-                }
-            }
-        }
-        Expr::Join { lhs: a, rhs: b, .. } => {
-            substitute_ident(a, name, replacement);
-            substitute_ident(b, name, replacement);
-        }
-        Expr::List(items, _) => {
-            for i in items {
-                substitute_ident(i, name, replacement);
-            }
-        }
-        Expr::MapLit(pairs, _) => {
-            for (k, v) in pairs {
-                substitute_ident(k, name, replacement);
-                substitute_ident(v, name, replacement);
-            }
-        }
-        Expr::Index { base, index, .. } => {
-            substitute_ident(base, name, replacement);
-            substitute_ident(index, name, replacement);
-        }
-        Expr::Field { base, .. } => substitute_ident(base, name, replacement),
-        Expr::Upcast { expr, .. } => substitute_ident(expr, name, replacement),
-        Expr::BinOp { lhs, rhs, .. } => {
-            substitute_ident(lhs, name, replacement);
-            substitute_ident(rhs, name, replacement);
-        }
-        Expr::Str(parts, _) => {
-            for p in parts {
-                if let ast::TemplatePart::Interp(inner) = p {
-                    substitute_ident(inner, name, replacement);
-                }
-            }
-        }
-        _ => {}
-    }
+    walk_children_mut(e, &mut |child| substitute_ident(child, name, replacement));
 }
 
 fn fuse_expr(
@@ -4039,12 +3993,11 @@ fn replace_shape(e: &mut ast::Expr, shape: &str, name: &str) {
     walk_children_mut(e, &mut |c| replace_shape(c, shape, name));
 }
 
-/// Every direct sub-expression, mutably. NOT the mirror of `for_each_child`
-/// it was described as: there is no arm here for a lambda, a block, a build or
-/// a guard, so a walk built on this stops at the edge of all four. Its four
-/// callers are desugar passes that run before those forms carry anything this
-/// would need to reach; a fifth caller that needs the whole tree wants a walk
-/// with the missing arms, and `inline::for_each_child_mut` is one.
+/// Every direct sub-expression, mutably, and the mirror of `for_each_child`:
+/// it has an arm for every form that holds an expression, the lambda, block,
+/// build and guard included. A comment here said it lacked those four after
+/// they had been added, and `substitute_ident` relies on the walk reaching a
+/// guard's statements.
 fn walk_children_mut(e: &mut ast::Expr, f: &mut dyn FnMut(&mut ast::Expr)) {
     use ast::Expr;
     match e {
