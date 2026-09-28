@@ -17501,3 +17501,12 @@ on main and 585,064,811 here, +198,295. The per-function difference is
 about 130,000 in the allocator's slow path at an unchanged number of
 allocations, and an iterator frame that changed places. CI's row is the one
 the golden takes.
+
+CI's rows, read with main's kanso#1693 already merged in. `interp_instructions`
+589,692,595 -> 589,865,923, +173,328, where the container read +198,295. Four
+compile-side rows fell: `compile_instructions` 25,156,193 -> 25,118,657,
+`entry_instructions` 84,770,509 -> 84,647,153, `library_instructions`
+85,302,811 -> 85,180,219 and `emit_instructions` 29,850,334 -> 29,836,693.
+None of those four runs the interpreter's writes, so they moved with the
+compiler binary's layout, and the mechanism was not isolated. Welfare nets
+the trade upward and is banked.
