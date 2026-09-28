@@ -3867,9 +3867,12 @@ fn check_annotation_names(
     // until 2026-09-28 nothing asked whether it named one. `type blob bytes`
     // passed `kanso check`; the interpreter then refused every construction
     // at run time, and both backends refused the program with `unknown type`.
+    // `any` is a built-in name only so that its retirement can be reported
+    // where an annotation uses it; as a parent it names nothing either.
     for ty in &program.types {
         let Some(parent) = &ty.parent else { continue };
-        for name in undeclared_in(parent, declared) {
+        let retired = (parent == "any").then(|| parent.clone());
+        for name in undeclared_in(parent, declared).into_iter().chain(retired) {
             diags.push(Diagnostic::new(
                 "type",
                 format!("no type is called `{name}`, so `{}` has nothing to wrap", ty.name),

@@ -1602,13 +1602,10 @@ impl<'a> Interp<'a> {
                 Value::True => self.eval_tail(early, env, frame),
                 Value::False => self.eval_stmts_flow(rest, env, frame),
                 bad if is_failure(&bad) => Ok(Flow::Done(bad)),
-                other => Err(RuntimeError {
-                    message: format!(
-                        "an if condition is true or false, got {}",
-                        render(self, &other, false)
-                    ),
-                    span: *span,
-                }),
+                other => match self.wrapped_condition(other, *span)? {
+                    true => self.eval_tail(early, env, frame),
+                    false => self.eval_stmts_flow(rest, env, frame),
+                },
             };
         }
         let Expr::App { head, args, span, piped } = expr else {
@@ -1674,13 +1671,10 @@ impl<'a> Interp<'a> {
                 Value::True => self.eval_tail(&args[1], env, frame),
                 Value::False => self.eval_tail(&args[2], env, frame),
                 bad if is_failure(&bad) => Ok(Flow::Done(bad)),
-                other => Err(RuntimeError {
-                    message: format!(
-                        "an if condition is true or false, got {}",
-                        render(self, &other, false)
-                    ),
-                    span: *span,
-                }),
+                other => match self.wrapped_condition(other, *span)? {
+                    true => self.eval_tail(&args[1], env, frame),
+                    false => self.eval_tail(&args[2], env, frame),
+                },
             };
         }
         let mut values = Vec::with_capacity(args.len());
@@ -2078,13 +2072,10 @@ impl<'a> Interp<'a> {
                         Value::True => self.force_thunk(self.eval(&args[1], env, frame)?),
                         Value::False => self.force_thunk(self.eval(&args[2], env, frame)?),
                         bad if is_failure(&bad) => Ok(bad),
-                        other => Err(RuntimeError {
-                            message: format!(
-                                "an if condition is true or false, got {}",
-                                render(self, &other, false)
-                            ),
-                            span: *span,
-                        }),
+                        other => match self.wrapped_condition(other, *span)? {
+                            true => self.force_thunk(self.eval(&args[1], env, frame)?),
+                            false => self.force_thunk(self.eval(&args[2], env, frame)?),
+                        },
                     };
                 }
                 let lazy_if = matches!(&callee, Value::FnRef(name) if &**name == "if");
@@ -2133,13 +2124,10 @@ impl<'a> Interp<'a> {
                     Value::True => self.eval(early, env, frame),
                     Value::False => self.eval_stmts(rest, env, frame),
                     bad if is_failure(&bad) => Ok(bad),
-                    other => Err(RuntimeError {
-                        message: format!(
-                            "an if condition is true or false, got {}",
-                            render(self, &other, false)
-                        ),
-                        span: *span,
-                    }),
+                    other => match self.wrapped_condition(other, *span)? {
+                        true => self.eval(early, env, frame),
+                        false => self.eval_stmts(rest, env, frame),
+                    },
                 }
             }
             Expr::Join { lhs, rhs, span } => {
@@ -4180,6 +4168,23 @@ impl<'a> Interp<'a> {
         }
     }
 
+    /// A condition that is neither true nor false can still be a subtype of
+    /// bool, which is a condition like the bool it wraps. Only the arm that
+    /// would refuse asks, so a plain bool pays nothing for it.
+    fn wrapped_condition(&self, other: Value, span: Span) -> Result<bool, RuntimeError> {
+        match sub_base(other.clone()) {
+            Value::True => Ok(true),
+            Value::False => Ok(false),
+            _ => Err(RuntimeError {
+                message: format!(
+                    "an if condition is true or false, got {}",
+                    render(self, &other, false)
+                ),
+                span,
+            }),
+        }
+    }
+
     fn builtin_if(&self, args: Vec<Value>, span: Span) -> EvalResult {
         let [cond, then_branch, else_branch] = arity(args, "if", span)?;
         let cond = self.force(cond)?;
@@ -4187,13 +4192,10 @@ impl<'a> Interp<'a> {
             Value::True => self.force(then_branch),
             Value::False => self.force(else_branch),
             bad if is_failure(&bad) => Ok(bad),
-            other => Err(RuntimeError {
-                message: format!(
-                    "an if condition is true or false, got {}",
-                    render(self, &other, false)
-                ),
-                span,
-            }),
+            other => match self.wrapped_condition(other, span)? {
+                true => self.force(then_branch),
+                false => self.force(else_branch),
+            },
         }
     }
 

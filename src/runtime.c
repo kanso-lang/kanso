@@ -4828,6 +4828,20 @@ KValue k_sub_wrap(long long type_id, KValue inner) {
     KValue v; v.tag = K_SUB; v.payload = k_ptr(s); return v;
 }
 
+/* Two parents that are not one tag: `bool` is either of two, and `some` is
+   any value that is neither none nor a failure. They sit below every
+   -(tag + 1), which is what the other primitives are. */
+#define K_WANT_BOOL (-100)
+#define K_WANT_SOME (-101)
+
+/* Whether a value that wraps nothing is the primitive a negative want
+   names. */
+static int k_want_prim(KValue v, long long want_id) {
+    if (want_id == K_WANT_BOOL) return v.tag == K_TRUE || v.tag == K_FALSE;
+    if (want_id == K_WANT_SOME) return v.tag != K_NONE && k_not_failure(v);
+    return v.tag == -(want_id + 1);
+}
+
 /* Chain match for dispatch: 0 = exact, +1 per parent hop; -1 = no match.
    want_id >= 0 names a declared type; want_id < 0 encodes a primitive tag
    as -(tag + 1), so annotated primitive params accept wrapped values. */
@@ -4839,7 +4853,7 @@ long long k_sub_depth(KValue v, long long want_id) {
         v = s->inner;
         depth++;
     }
-    if (want_id < 0 && v.tag == -(want_id + 1)) return depth;
+    if (want_id < 0 && k_want_prim(v, want_id)) return depth;
     if (want_id >= 0 && v.tag == K_REC
         && ((KRec*)(intptr_t)v.payload)->type_id == want_id) return depth;
     return -1;
@@ -4902,7 +4916,7 @@ KValue k_upcast(KValue v, long long want, const char* tyname) {
             cur = sb->inner;
             continue;
         }
-        if (want < 0 && cur.tag == -(want + 1)) return cur;
+        if (want < 0 && k_want_prim(cur, want)) return cur;
         if (want >= 0 && cur.tag == K_REC
             && ((KRec*)(intptr_t)cur.payload)->type_id == want) return cur;
         fprintf(stderr, "%serror[runtime]:%s `:%s` widens; this value is not %s %s\n",
@@ -6735,6 +6749,13 @@ static KValue k_schedule(KDesc* join) {
 /* Exported (not static): the codegen prelude's inline k_truthy calls this on
    its cold path, so the die message lives in exactly one place. */
 long long k_truthy_bad(KValue v) {
+    /* A subtype of bool is a condition like the bool it wraps; the inline
+       test sees only the wrapper's tag, so it lands here. */
+    if (v.tag == K_SUB) {
+        KValue b = k_sub_base(v);
+        if (b.tag == K_TRUE) return 1;
+        if (b.tag == K_FALSE) return 0;
+    }
     k_die_got("an if condition is true or false", v);
     return 0;
 }

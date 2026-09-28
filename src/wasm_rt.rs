@@ -1085,9 +1085,14 @@ pub extern "C" fn rt_truthy(h: u32) -> u32 {
     match operand(h) {
         Value::True => 1,
         Value::False => 0,
-        other => {
-            die(format!("an if condition is true or false, got {}", render_demanded(&other, false)))
-        }
+        other => match eval::sub_base(other.clone()) {
+            Value::True => 1,
+            Value::False => 0,
+            _ => die(format!(
+                "an if condition is true or false, got {}",
+                render_demanded(&other, false)
+            )),
+        },
     }
 }
 

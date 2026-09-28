@@ -6334,6 +6334,7 @@ impl<'a> Backend<'a> {
             "bool" => format!("call i64 @k_check_bool(%KValue {value})"),
             "err" => format!("call i64 @k_check_tag(%KValue {value}, i64 {K_ERR})"),
             "none" => format!("call i64 @k_check_tag(%KValue {value}, i64 {K_NONE})"),
+            "done" if subs => format!("call i64 @k_check_sub_tag(%KValue {value}, i64 {K_DONE})"),
             "done" => format!("call i64 @k_check_tag(%KValue {value}, i64 {K_DONE})"),
             // `some` is any value that is not none, and a failure is not a
             // value: without this arm the backend refused the annotation
@@ -6367,6 +6368,11 @@ impl<'a> Backend<'a> {
             "int" => -1,
             "float64" => -2,
             "string" => -7,
+            "err" => -(K_ERR + 1),
+            "done" => -(K_DONE + 1),
+            // the runtime's K_WANT_BOOL and K_WANT_SOME: neither is one tag
+            "bool" => -100,
+            "some" => -101,
             other => match self.type_ids.get(other) {
                 Some(id) => *id,
                 None => return Err(format!("native backend: unknown type `{other}`")),
