@@ -7633,6 +7633,14 @@ K_DOORCC KValue k_b_entries(KValue mv) {
    on the run program: as doors the run read 1,105,429,763, and on the C
    convention 1,102,980,253, because the encoder's walk keeps more live
    across the two calls than they save by being doors. */
+/* Position i of one column of a map's sorted view, `side` 0 for the keys and
+   1 for the values, into `items`. `keys`, `values` and the fused call that
+   builds both all read through here, so the order they share is written once. */
+static inline __attribute__((always_inline)) void k_column_into(KValue* items, KMap* m, KValue* s, long long n, int side) {
+    (void)m;
+    for (long long i = 0; i < n; i++) items[i] = s[i * 2 + side];
+}
+
 static inline __attribute__((always_inline)) KValue k_map_column(KValue mv, int side, const char* refusal) {
     if (!k_not_failure(mv)) return mv;
     if (mv.tag != K_MAP) k_die(refusal);
@@ -7658,7 +7666,7 @@ static inline __attribute__((always_inline)) KValue k_map_column(KValue mv, int 
         items = (KValue*)(b + 1);
         l = (KList*)(whole + buf_bytes);
     }
-    for (long long i = 0; i < n; i++) items[i] = s[i * 2 + side];
+    k_column_into(items, m, s, n, side);
     l->len = n;
     l->items = items;
     k_buf_of(items)->used = n;
@@ -7696,7 +7704,7 @@ KValue k_b_columns(KValue mv, KValue* values) {
         k_buf_set_cap(b, cap, 0);
         b->used = n;
         KValue* items = (KValue*)(b + 1);
-        for (long long i = 0; i < n; i++) items[i] = s[i * 2 + side];
+        k_column_into(items, m, s, n, side);
         KList* l = (KList*)(at + buf_bytes);
         l->len = n;
         l->items = items;
