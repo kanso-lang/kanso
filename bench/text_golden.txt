@@ -818,14 +818,14 @@
 jsonbench text=237944
 encodebench text=246408
 oneshot text=248552
-basket text=234216
+basket text=234232
 widebench text=247656
 deepbench text=217144
 escapebench text=211464
-pendbench text=225064
+pendbench text=225176
 indexbench text=211448
 scanbench text=309624
 digestbench text=233000
 readbench text=211880
 livebench text=249480
-runbench text=398584
+runbench text=398632

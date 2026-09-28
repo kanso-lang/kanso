@@ -1,0 +1,16 @@
+# A list literal keeps an err in place, and `text/join` answers the first item
+# that fails. Inference typed the join as text, so a release build called the
+# `string` arm with the err where the interpreter hands it on, and this printed
+# [5 5]. Found by a generated program on 2026-09-28.
+import "std/os"
+import "std/text"
+
+fn five _:string
+  5
+
+fn shown z
+  bad = text/to_float "1 "
+  j = text/join ["{bad}" "{z}"] ","
+  "{[(five j) (five "a")]}"
+
+pub play = os/args .> (a -> print (shown (length a)))

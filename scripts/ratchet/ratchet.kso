@@ -3511,7 +3511,59 @@ curried_unseen = row
 
 rows_c1zzk = text/concat rows_c1zzj [curried_unseen]
 
-rows_c = text/concat rows_c1zzk [itself]
+# An err interpolated into a string is handed on as it is. Handed to a program's
+# own `render/to_string` group instead, it comes back with a hop the program
+# never wrote, and the runtime corpus reads a trace line the interpreter does
+# not print.
+interp_err_hop = row
+  "an interpolated err handed to the group"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "an_interpolated_err_handed_to_the_group")
+  release
+
+rows_c1zzl = text/concat rows_c1zzk [interp_err_hop]
+
+# The same at `print`: told its argument cannot be an err, the site hands one to
+# the group, and the printed fixture gains the same trace line.
+print_err_hop = row
+  "a printed err handed to the group"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_printed_err_handed_to_the_group")
+  release
+
+rows_c1zzm = text/concat rows_c1zzl [print_err_hop]
+
+# `text/join` answers the first item that fails, and a list literal can keep
+# one. Typed as text in the emitter, a guard reads `length` of the err as a
+# number and the runtime corpus returns where the interpreter hands it on.
+join_read_as_text = row
+  "a joined list read as text"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_joined_list_read_as_text")
+  release
+
+rows_c1zzn = text/concat rows_c1zzm [join_read_as_text]
+
+# The same answer inferred as text: a release build calls a `string` arm with
+# the err, and the micro corpus prints a number where the interpreter prints
+# the err.
+join_inferred_as_text = row
+  "a joined list inferred as text"
+  true
+  "cargo test --release --test golden micro_corpus_survives_a_release_build"
+  "specs (unit, golden, differential)"
+  (breaking "a_joined_list_inferred_as_text")
+  release
+
+rows_c1zzo = text/concat rows_c1zzn [join_inferred_as_text]
+
+rows_c = text/concat rows_c1zzo [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

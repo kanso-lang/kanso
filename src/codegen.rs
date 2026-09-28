@@ -9847,7 +9847,13 @@ impl<'a> Backend<'a> {
             let t = f.tmp();
             f.line(&format!("{t} = call %KValue @k_b_{sym}({})", args_ir.join(", ")));
             let arg_sets: Vec<Set> = emitted.iter().map(|e| f.set_of(e)).collect();
-            f.record(&t, infer::builtin_set(name, &arg_sets));
+            // `join` answers the first item that fails, and a list literal is
+            // where an item can: inference admits it the same way.
+            let read = match name {
+                "join" if arg_sets[0] & LIST != 0 => self.inference.stored_fails,
+                _ => 0,
+            };
+            f.record(&t, infer::builtin_set(name, &arg_sets) | read);
             return Ok(t);
         }
         Err(format!("native backend: `{name}` is not yet supported"))
