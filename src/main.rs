@@ -35,7 +35,12 @@ const ARENA_EAGER_COMMIT: i32 = 4;
 #[cfg(not(target_arch = "wasm32"))]
 const PURGE_DELAY: i32 = 15;
 
-/// Two options, both set before the first allocation, both for a reason a
+/// mimalloc's `mi_option_use_numa_nodes`, seventeenth in the same enum and
+/// read from the same header by the same spec.
+#[cfg(not(target_arch = "wasm32"))]
+const USE_NUMA_NODES: i32 = 16;
+
+/// Three options, all set before the first allocation, each for a reason a
 /// counter could not see.
 ///
 /// **Reserve the first arena without committing it.**
@@ -88,10 +93,23 @@ const PURGE_DELAY: i32 = 15;
 /// differently moves all three rows by the same small amount, which is the
 /// shape that was seen. Three does not divide 13, so that is a suspect
 /// rather than an answer.
+///
+/// **One NUMA node, so the host's topology is not read.** Asked how many nodes
+/// it may spread over, mimalloc counts them itself: it formats
+/// `/sys/devices/system/node/node1`, asks `access` whether that exists, and
+/// goes on to `node2` until one does not. The first ask comes from the first
+/// allocation of the interpreter's own thread, inside the frame
+/// `interp_instructions` counts, and costs about 750 instructions on a
+/// one-node machine and that again for every further node. On a machine with
+/// more than one, every thread then asks the kernel which node it is running
+/// on, and places its memory by the answer. None of that is the compiler's
+/// work, and a runner with two nodes would read a different row. Telling
+/// mimalloc there is one node answers the question without the probe.
 #[cfg(not(target_arch = "wasm32"))]
 extern "C" fn set_the_allocator_before_it_runs() {
     unsafe { libmimalloc_sys::mi_option_set(ARENA_EAGER_COMMIT, 0) };
     unsafe { libmimalloc_sys::mi_option_set(PURGE_DELAY, -1) };
+    unsafe { libmimalloc_sys::mi_option_set(USE_NUMA_NODES, 1) };
 }
 
 #[cfg(not(target_arch = "wasm32"))]

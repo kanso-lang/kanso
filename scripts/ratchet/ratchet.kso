@@ -3191,6 +3191,29 @@ rows_c1zo = text/concat rows_c1zn [map_threaded]
 # that spec as a gate removes its own baseline worktree from under itself. On
 # kanso#1675 the baseline read the gate red before any mutation. The other
 # specs in tests/ that run `prove` carry no row for the same reason.
+# mimalloc counts the host's NUMA nodes the first time a thread allocates, and
+# the interpreter's thread is the first, so the count's probe landed inside
+# the frame the interpreter row counts. The compiler now tells it there is one.
+numa_count = row
+  "the NUMA node count left to the host"
+  true
+  interp_gate
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_numa_count_left_to_the_host")
+  release
+
+# The same option by position in the vendored header, pinned like the two
+# beside it.
+numa_option = row
+  "the NUMA option named one past the one that matters"
+  true
+  "cargo test --release --test the_allocator_option_is_the_one_the_header_names"
+  "specs (unit, golden, differential)"
+  (breaking "a_numa_option_off_by_one")
+  no_setup
+
+rows_c1zp = text/concat rows_c1zo [numa_count numa_option]
+
 # A call whose arguments are `keys m` and `values m` of one map builds both
 # lists in one runtime call and one allocation.
 columns_together = row
@@ -3201,9 +3224,9 @@ columns_together = row
   (breaking "the_two_columns_asked_apart")
   release
 
-rows_c1zp = text/concat rows_c1zo [columns_together]
+rows_c1zq = text/concat rows_c1zp [columns_together]
 
-rows_c = text/concat rows_c1zp [itself]
+rows_c = text/concat rows_c1zq [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
