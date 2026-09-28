@@ -18285,5 +18285,5 @@ answer an index, so the unwrap moved to the arm that refuses, where it retries
 with the base values, and an index that succeeds never reaches it. Read here
 on the interpreter corpus with the gate's command: 621,041,261 on main,
 622,369,927 with the unwrap at the top (+1,328,666, the size of CI's reading)
-and 621,128,974 with it in the refusing arm (+87,713). The golden keeps main's
-row until CI measures the new code.
+and 621,128,974 with it in the refusing arm (+87,713). CI then measured
+cf21501e: `interp_instructions` lands on 589,244,942, +71,958 over main.
