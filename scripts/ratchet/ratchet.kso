@@ -3226,6 +3226,18 @@ columns_together = row
 
 rows_c1zq = text/concat rows_c1zp [columns_together]
 
+# The cost-goldens job copies the profile of every gate that reads itself
+# twice, so a row that reads apart between runs can be diffed afterwards.
+interp_profile = row
+  "the interpreter's profiles left on the runner"
+  true
+  "cargo test --release --test every_second_reading_leaves_the_job"
+  "specs (unit, golden, differential)"
+  (breaking "the_interp_profile_left_behind")
+  no_setup
+
+rows_c1zr = text/concat rows_c1zq [interp_profile]
+
 # A shared token's escape scan is decided once, when its slot fills. Marking
 # every token clean writes a quote raw into the micro fixture; scanning a
 # clean one anyway puts the scans back into `find2_calls`.
@@ -3245,7 +3257,7 @@ token_skip = row
   (breaking "a_clean_token_scanned_anyway")
   benchmarks
 
-rows_c1zs = text/concat rows_c1zq [token_clean token_skip]
+rows_c1zs = text/concat rows_c1zr [token_clean token_skip]
 
 rows_c = text/concat rows_c1zs [itself]
 
