@@ -17404,3 +17404,49 @@ walk over every byte value at every position of tokens of four to seven
 bytes, and a million random tokens: 1,005,632 cases, none wrong. With the
 control bound written 31 it reports 11,517 wrong, which is the ratchet row
 "a token flag one byte short of the control range".
+
+## 2026-09-28 — a lazy chain read past a return keeps its reader
+
+This program failed on every engine:
+
+    fn tail_sum n
+      rest = list/drop [12 4 13 28] 3
+      return n if n > 17
+      list/sum rest
+
+The interpreter answered `unknown name `rest`` at run time, and both native
+builds refused it with "`rest` as a bare value is not yet supported". It
+turned up in the first two hundred programs of a generator written this
+session, which builds small modules of bindings, list and map calls, and
+countdown loops whose counts depend on `os/args` so that nothing folds at
+compile time, then runs each one on the interpreter and as dev and release
+builds and compares the output, stderr and exit code. The generator is a
+scratch tool and is not in the tree.
+
+The cause is in enumerable fusion. `inline_single_use_chains` takes a binding
+whose value is an adapter (`drop`, `map`, `reject`, `select` or `take`) and
+whose name is read once, as the collection of a later list call, and inlines
+it into that reader so the chain can fuse whole. It counts readers with
+`for_each_child`, which descends into every form. The rewrite,
+`substitute_ident`, listed the forms it descended into, and the list had no
+guard. `return x if c` is a guard whose statements are the rest of the body,
+so a reader after it was counted, the binding was removed, and the reader was
+never rewritten. `substitute_ident` now walks with `walk_children_mut`, which
+has an arm for every form. That walk's doc comment said it had no arm for a
+lambda, a block, a build or a guard; it has all four, and the comment and the
+one in src/inline.rs that repeated it are corrected.
+
+The fixture is `a_lazy_chain_read_after_a_return_keeps_its_name`, which
+prints `28 20` on every engine and failed on main with the two messages
+above. The ratchet row "a return hides the chain's reader" puts the stop at a
+guard back, and the interpreter answers `unknown name `rest`` again.
+
+No program that ran before takes a different rewrite: the only form added to
+the walk is the guard, and a reader under one was the failing case.
+`fuse_expr` has the same gap and was left alone, so a chain written after a
+`return` is not fused. That costs speed but not correctness.
+
+CI's rows. Three compile-side rows fell and none rose: `compile_instructions`
+25,156,469 -> 25,156,193, `entry_instructions` 84,771,442 -> 84,770,509 and
+`library_instructions` 85,303,737 -> 85,302,811. They fell with the change,
+and what in it they read was not isolated.

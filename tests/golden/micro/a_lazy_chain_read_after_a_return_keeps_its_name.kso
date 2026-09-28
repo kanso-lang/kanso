@@ -1,0 +1,14 @@
+# A binding whose value is a list adapter, read once past a `return ... if`.
+# Enumerable fusion inlines such a binding into its one reader so the chain
+# fuses whole. The count of readers descended into the guard and the rewrite
+# of them did not, so the binding was removed and its reader left naming
+# nothing: the interpreter answered "unknown name `rest`" and the native
+# backend refused the program. Found by a generated program on 2026-09-28.
+import "std/list"
+
+fn tail_sum n
+  rest = list/drop [12 4 13 28] 3
+  return n if n > 17
+  list/sum rest
+
+pub play = print "{tail_sum 4} {tail_sum 20}"
