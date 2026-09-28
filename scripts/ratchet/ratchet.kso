@@ -3297,6 +3297,20 @@ seed_once = row
 
 rows_c1zv = text/concat rows_c1zu [seed_once]
 
+# Builds that compile the runtime at once each write its source under their own
+# name and rename it onto the shared one. Writing the shared path in place
+# truncates it under another build's clang, and the cold-runtime race answers
+# with clang's crash.
+runtime_source = row
+  "the runtime source written in place"
+  true
+  "cargo test --release --test concurrent_build builds_that_compile"
+  "specs (unit, golden, differential)"
+  (breaking "the_runtime_source_written_in_place")
+  no_setup
+
+rows_c1zw = text/concat rows_c1zv [runtime_source]
+
 # Pushing an err answers the err on every engine. Without the C push's item
 # test, a push the analysis does not own stores it, and the micro fixture
 # prints a list holding an err.
@@ -3318,9 +3332,9 @@ two_errs = row
   (breaking "two_failures_answer_the_first")
   release
 
-rows_c1zw = text/concat rows_c1zv [push_err two_errs]
+rows_c1zx = text/concat rows_c1zw [push_err two_errs]
 
-rows_c = text/concat rows_c1zw [itself]
+rows_c = text/concat rows_c1zx [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
