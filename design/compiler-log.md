@@ -18238,3 +18238,52 @@ most. The runtime rows pay the tag test at each render site that can see an
 err, on every render and not only when an err arrives. The compiler rows pay
 for emitting the test and for the join rule. Welfare falls to the floor's new
 reading, 90.4026, under the 2026-09-13 rule, and the history entry says why.
+
+## 2026-09-28 — a map index takes an int or a string, through a subtype
+
+A generated program tallied a list that held a none, so `list/tally` read
+`m[none]`. The interpreter refused the index; both native builds answered a
+miss and went on to refuse the `put` that followed, with a different message.
+The interpreter indexes a map by an int or a string and refuses anything
+else. The compiled index compared any key against the map's and answered none
+when nothing matched. It now refuses what the interpreter refuses.
+
+Checking that turned up a second disagreement, inside the interpreter. Every
+builtin reads through a subtype to its base value, `at` and `put` among them,
+and a compiled index does the same for a map. The interpreter's own index
+syntax did not: it refused a subtype of int as a position and as a map key,
+while `put` had just stored under that key. A compiled build refused the
+position too. Both engines now read an index through a subtype, as `at`
+does. The unwrap sits in the interpreter's `index_value`, which the browser's
+runtime calls for its own indexes, so the wasm engine reads the same way; with
+the unwrap at the index expression alone, the wasm engine differential caught
+the browser still refusing. The compiled path reaches `k_b_at` again through a pointer: called
+directly, clang copied its arms into the cold path, 1,200 bytes of text in
+every benchmark, where the pointer costs 80.
+
+The runtime corpus fixture `a_map_indexed_by_a_none_is_refused` printed a
+none on the old compiler. The micro fixture `a_subtype_indexes_as_its_base`
+stopped in the interpreter and died in a release build. Three ratchet rows put
+each piece back: "a map indexed by any key", "a native index blind to
+subtypes" and "an interpreted index blind to subtypes".
+
+Every benchmark's text grows 80 bytes, so `text` lands on 3,483,760.
+Emitted code is unchanged. CI will measure the instruction rows.
+
+## 2026-09-28 — CI's rows for the map index, and the interpreter's share moved
+
+CI measured f3f9ee7f. The compiled rows barely moved, most of them down:
+`work_basket` 29,539,476 -> 29,464,215, runbench 1,070,399,215 ->
+1,070,397,871, encodebench, oneshot and livebench a few hundred lower.
+`codegen_instructions_dev` lands on 124,437,898 (+783) and
+`codegen_instructions_release` on 408,038,589 (+490).
+
+`interp_instructions` rose 589,172,984 -> 590,486,008, +1,313,024. That commit
+unwrapped a subtype at the top of `index_value`, so every index in the
+interpreter paid for the question. A subtype matches none of the arms that
+answer an index, so the unwrap moved to the arm that refuses, where it retries
+with the base values, and an index that succeeds never reaches it. Read here
+on the interpreter corpus with the gate's command: 621,041,261 on main,
+622,369,927 with the unwrap at the top (+1,328,666, the size of CI's reading)
+and 621,128,974 with it in the refusing arm (+87,713). CI then measured
+cf21501e: `interp_instructions` lands on 589,244,942, +71,958 over main.

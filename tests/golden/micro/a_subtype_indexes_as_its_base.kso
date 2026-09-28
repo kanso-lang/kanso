@@ -1,0 +1,16 @@
+# An index is `at` written as syntax, and `at` reads through a subtype to its
+# base value, as every builtin does. The interpreter's index did not: it
+# refused a subtype of int as a position and as a map key, while `put` took
+# the same key and a compiled build read the map with it. Found on
+# 2026-09-28 beside a map indexed by a none.
+import "std/os"
+
+type id int
+
+type word string
+
+fn shown z
+  m = put { "a":1 } (id z) 5
+  "{m[id z]} {[7 8][id 2]} {"ab"[id 1]} {m[word "a"]}"
+
+pub play = os/args .> (a -> print (shown (length a)))
