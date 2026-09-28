@@ -4710,14 +4710,6 @@ pub fn index_value(container: Value, index: Value, span: Span) -> EvalResult {
     if is_failure(&index) {
         return Ok(index);
     }
-    // An index is `at` written as syntax, and `at`, like every builtin, reads
-    // through a subtype to its base value. Here rather than at each caller,
-    // because the browser's runtime calls this too.
-    let base_of = |v: Value| match v {
-        Value::Sub { .. } => sub_base(v),
-        other => other,
-    };
-    let (container, index) = (base_of(container), base_of(index));
     match (&container, &index) {
         (Value::List(items), Value::Int(i)) => {
             let idx = usize::try_from(i).ok();
@@ -4743,6 +4735,18 @@ pub fn index_value(container: Value, index: Value, span: Span) -> EvalResult {
         (Value::Map(entries), Value::Int(_) | Value::Str(_)) => {
             let key = map_key(index, span)?;
             Ok(entries.get(&key).cloned().unwrap_or(Value::NoneV))
+        }
+        // An index is `at` written as syntax, and `at`, like every builtin,
+        // reads through a subtype to its base value. A subtype matches none of
+        // the arms above, so it is unwrapped here, where the reads that do
+        // match never pay for the question. Here rather than at each caller,
+        // because the browser's runtime calls this too.
+        (Value::Sub { .. }, _) | (_, Value::Sub { .. }) => {
+            let base_of = |v: Value| match v {
+                Value::Sub { .. } => sub_base(v),
+                other => other,
+            };
+            index_value(base_of(container), base_of(index), span)
         }
         (base, _) => Err(RuntimeError {
             message: format!(

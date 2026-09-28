@@ -18269,3 +18269,21 @@ subtypes" and "an interpreted index blind to subtypes".
 
 Every benchmark's text grows 80 bytes, so `text` lands on 3,483,760.
 Emitted code is unchanged. CI will measure the instruction rows.
+
+## 2026-09-28 — CI's rows for the map index, and the interpreter's share moved
+
+CI measured f3f9ee7f. The compiled rows barely moved, most of them down:
+`work_basket` 29,539,476 -> 29,464,215, runbench 1,070,399,215 ->
+1,070,397,871, encodebench, oneshot and livebench a few hundred lower.
+`codegen_instructions_dev` lands on 124,437,898 (+783) and
+`codegen_instructions_release` on 408,038,589 (+490).
+
+`interp_instructions` rose 589,172,984 -> 590,486,008, +1,313,024. That commit
+unwrapped a subtype at the top of `index_value`, so every index in the
+interpreter paid for the question. A subtype matches none of the arms that
+answer an index, so the unwrap moved to the arm that refuses, where it retries
+with the base values, and an index that succeeds never reaches it. Read here
+on the interpreter corpus with the gate's command: 621,041,261 on main,
+622,369,927 with the unwrap at the top (+1,328,666, the size of CI's reading)
+and 621,128,974 with it in the refusing arm (+87,713). The golden keeps main's
+row until CI measures the new code.

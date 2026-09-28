@@ -4,8 +4,8 @@
 # key, and the micro fixture a_subtype_indexes_as_its_base stops where a
 # compiled build prints.
 set -e
-old='    let (container, index) = (base_of(container), base_of(index));'
+old='        (Value::Sub { .. }, _) | (_, Value::Sub { .. }) => {'
 [ "$(grep -cxF "$old" src/eval.rs)" -eq 1 ]
-sed -i.bak 's#^    let (container, index) = (base_of(container), base_of(index));$#    let _ = \&base_of;#' src/eval.rs
+sed -i.bak 's#^        (Value::Sub { .. }, _) | (_, Value::Sub { .. }) => {$#        (Value::Sub { .. }, _) | (_, Value::Sub { .. }) if false => {#' src/eval.rs
 rm -f src/eval.rs.bak
 ! grep -qxF "$old" src/eval.rs
