@@ -17209,9 +17209,17 @@ encoder that walks `entries`, so it never reaches the fused call, and its
 move is the runtime's layout. The allocation counts return to what they were
 before kanso#1683 put the encoder on two columns: run_allocs 1,955,773 ->
 1,707,283, live_allocs 2,224,488 -> 1,120,088 and oneshot_allocs 14,827 ->
-12,066. Bytes do not move, because the one allocation is the size of the two
-it replaces. The mem fixture a_nested_map_gives_back_its_entries reads 24,028
--> 18,028 allocations and a_literal_appended_across_a_rewind 376 -> 256.
+12,066. On the benchmarks the bytes do not move, because the one
+allocation is the size of the two it replaces. The mem fixture
+a_literal_appended_across_a_rewind reads 376 -> 256 allocations, and
+a_nested_map_gives_back_its_entries 24,028 -> 18,028, with three counters
+worse. `keys` and `values` each take a buffer off the free list when one of
+exactly their capacity is there, and `k_b_columns` always allocates its
+block, so where that fixture reused a buffer it now allocates one:
+a_nested_map_gives_back_its_entries_buf_reuse 2 -> 1,
+a_nested_map_gives_back_its_entries_alloc_bytes 3,528,856 -> 3,529,000 and
+a_nested_map_gives_back_its_entries_sh_buf 2,295,216 -> 2,295,360, the 144
+bytes of the buffer it no longer finds on the list.
 
 The new fixture a_maps_two_columns_are_one_allocation encodes a thousand
 two-key maps and reads allocs=3022, where main's compiler reads 4022. The
@@ -17221,5 +17229,5 @@ two_bound_columns_are_one_allocation, walks a thousand three-key maps through
 the binding form and reads 9008 allocations, 10008 with the mutation applied.
 No benchmark in this repository binds the columns this way, so it moves none
 of them. Every benchmark's `.text` grows by 544 bytes, the
-runtime's new function, and the three programs that encode lose one call from
+runtime's new function, and the text total reads 3,523,184 -> 3,530,992, and the three programs that encode lose one call from
 their emitted code.
