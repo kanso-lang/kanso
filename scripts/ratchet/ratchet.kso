@@ -3311,6 +3311,28 @@ runtime_source = row
 
 rows_c1zw = text/concat rows_c1zv [runtime_source]
 
+# A finite float rounds to the integer it is, however large, on the
+# interpreter; a compiled build refuses one past int64. Restoring the
+# saturating cast answers int64's edge interpreted, and restoring llround
+# answers LLONG_MIN compiled, for 1e30 and for infinity alike.
+round_exact = row
+  "a large float rounds to int64's edge"
+  true
+  "cargo test --release --test a_float_past_int64_rounds_exactly"
+  "specs (unit, golden, differential)"
+  (breaking "a_large_float_rounds_to_int64s_edge")
+  no_setup
+
+round_native = row
+  "a large float rounds through llround"
+  true
+  "cargo test --release --test a_float_past_int64_rounds_exactly"
+  "specs (unit, golden, differential)"
+  (breaking "a_large_float_rounds_through_llround")
+  no_setup
+
+rows_c1zx = text/concat rows_c1zw [round_exact round_native]
+
 # Pushing an err answers the err on every engine. Without the C push's item
 # test, a push the analysis does not own stores it, and the micro fixture
 # prints a list holding an err.
@@ -3332,9 +3354,9 @@ two_errs = row
   (breaking "two_failures_answer_the_first")
   release
 
-rows_c1zx = text/concat rows_c1zw [push_err two_errs]
+rows_c1zy = text/concat rows_c1zx [push_err two_errs]
 
-rows_c = text/concat rows_c1zx [itself]
+rows_c = text/concat rows_c1zy [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
