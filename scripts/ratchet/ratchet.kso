@@ -3226,7 +3226,19 @@ columns_together = row
 
 rows_c1zq = text/concat rows_c1zp [columns_together]
 
-rows_c = text/concat rows_c1zq [itself]
+# The cost-goldens job copies the profile of every gate that reads itself
+# twice, so a row that reads apart between runs can be diffed afterwards.
+interp_profile = row
+  "the interpreter's profiles left on the runner"
+  true
+  "cargo test --release --test every_second_reading_leaves_the_job"
+  "specs (unit, golden, differential)"
+  (breaking "the_interp_profile_left_behind")
+  no_setup
+
+rows_c1zr = text/concat rows_c1zq [interp_profile]
+
+rows_c = text/concat rows_c1zr [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

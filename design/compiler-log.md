@@ -17238,3 +17238,36 @@ No benchmark in this repository binds the columns this way, so it moves none
 of them. Every benchmark's `.text` grows by 544 bytes, the
 runtime's new function, and the text total reads 3,523,184 -> 3,530,992, and the three programs that encode lose one call from
 their emitted code.
+
+## 2026-09-28 — the interpreter's profiles leave the job with the compile rows'
+
+The cost-goldens job uploads the callgrind profiles its gates count, so that
+a row reading apart between two runners can be diffed afterwards; the job
+itself can only compare two readings taken on one machine. The copy step
+named `compile entry library` and nothing else. The interpreter row writes
+`/tmp/cg.interp` and a second reading, `/tmp/cg.interp2`, under the same
+naming, and so does start-up, and neither left the runner.
+
+The interpreter row is the one STATUS.md's "A welfare counter reads three
+parts per billion" row is about. Its six-instruction difference between two
+jobs on one commit has never been explained, and the row's last paragraph
+names the allocator's page commits as the place to look next. That look
+needs two profiles from two runners, and until now the next occurrence
+would have left none.
+
+The copy loop now reads `compile entry library interp startup`. The spec
+every_second_reading_leaves_the_job reads scripts/gates/ off disk, collects
+each name written both as `/tmp/cg.X` and `/tmp/cg.X2`, and asserts the loop
+names exactly that set. Run against the old loop it failed with "the gates
+read ["interp", "startup"] twice and the artifact step does not copy them".
+The ratchet row "the interpreter's profiles left on the runner" puts the old
+loop back and turns that spec red.
+
+Two host reads in mimalloc's start-up were checked on the way and ruled out
+for this row. `unix_detect_thp` scans `/sys/kernel/mm/transparent_hugepage/enabled`
+and `unix_detect_overcommit` reads `/proc/sys/vm/overcommit_memory`, and both
+contents vary by host. Both run in `_mi_prim_mem_init` at process load,
+outside `run_interpreted_on_stack`, which is the row's anchor. The overcommit
+answer is consulted again inside the anchor, in the arena's commit path, but
+it is one branch on a boolean that reads true for both `0` and `1`, the
+two settings a runner is likely to carry. No counter moves in this change.

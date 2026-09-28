@@ -708,11 +708,19 @@ jobs:
       # identical glibc and rustc, all three rows thirteen apart, and the one
       # thing that differed was the runner's CPU model. Keeping the profiles
       # makes that comparison possible offline, once.
+      #
+      # The interpreter and start-up rows went uncopied until 2026-09-28,
+      # though both take a second reading under the same naming, and the
+      # interpreter row is the one STATUS.md's "A welfare counter reads three
+      # parts per billion" row is about. Every profile a gate writes beside a
+      # second reading of itself is copied here, and
+      # tests/every_second_reading_leaves_the_job.rs reads the gates off disk
+      # and holds this list to that.
       - name: the profiles this job counted
         if: always()
         run: |
           mkdir -p /tmp/profiles
-          for n in compile entry library; do
+          for n in compile entry library interp startup; do
             if [ -f "/tmp/cg.$n" ]; then cp "/tmp/cg.$n" "/tmp/profiles/cg.$n"; fi
             if [ -f "/tmp/cg.${n}2" ]; then cp "/tmp/cg.${n}2" "/tmp/profiles/cg.$n.again"; fi
           done
