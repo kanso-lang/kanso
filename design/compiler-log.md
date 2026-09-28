@@ -17096,3 +17096,30 @@ does not cover the builder. Declined. The patch is not kept on a branch. The
 jsonbench builder had to import `std/json` rather than copy lib/json for this
 to compile at all, the same change the fused number parse needed on
 2026-09-27; neither is on main.
+
+## 2026-09-28 — what the entry pass would win on a program that walks maps
+
+The pass kept on the list on 2026-09-27 would rewrite a walk over
+`entries m` into the two-column walk kanso#1683 gave lib/json by hand. Its
+payoff on a real program was measured by doing that rewrite by hand on
+encodebench's frozen encoder, which is the one program in the benchmarks
+written the way a user writes a map walk: `encode_map acc (entries m)`, an
+index walk over the list, and `entry_onto acc (entry k v)` taking each record
+apart. The rewritten copy passes `keys m` and `values m`, indexes both, and
+hands `k` and `v` to `entry_onto` as two arguments. Built with main's compiler
+at dd5c9c2d, without counters, one sitting:
+
+    encodebench  2,412,860,215 -> 2,388,794,164   -24,066,051   -1.00%
+
+livebench already measured the same trade from the other side. It encodes
+many small maps, and the lib/json encoder moved onto the two columns in
+kanso#1683 read +0.314% there, because each map pays for two calls where it
+paid for one. A pass sees neither a map's size nor how many maps a program
+will write, so it would have to choose one shape for both. The pass stays on
+the list with that trade written down beside it. A rewrite that duplicates the
+map expression into two calls also needs the expression to be a name. And
+where a map holds a failure as a value, `entries` puts the failure in the
+list in place of that pair's record, while `keys` still lists the key and
+`values` lists the failure, so the callee would be handed a key it never saw
+before. The pass would need a proof that the map holds no failure before it
+could fire.
