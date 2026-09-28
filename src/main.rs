@@ -2171,8 +2171,17 @@ fn cached_object(profile: &str, source: &str, opt: &[&str]) -> std::io::Result<s
     if object.exists() {
         return Ok(object);
     }
+    // The source is written under this process's name and renamed onto the
+    // shared one. Writing the shared path directly truncated it under any
+    // clang another build had reading it, and clang died of SIGBUS. A rename
+    // replaces the directory entry and leaves an open file whole, and every
+    // writer's bytes are the same, so whichever file a clang opens is the
+    // runtime. The path clang is given stays the shared one.
     let c_path = std::env::temp_dir().join(format!("kanso_runtime_{profile}_{key}.c"));
-    std::fs::write(&c_path, source)?;
+    let c_staging =
+        std::env::temp_dir().join(format!("kanso_runtime_{profile}_{key}_{}.c", pid_tag()));
+    std::fs::write(&c_staging, source)?;
+    std::fs::rename(&c_staging, &c_path)?;
     let staging =
         std::env::temp_dir().join(format!("kanso_runtime_{profile}_{key}_{}.o", pid_tag()));
     // `-Werror=unknown-attributes` is the belt to the probe's braces: clang 18

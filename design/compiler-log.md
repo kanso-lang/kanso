@@ -17511,6 +17511,39 @@ None of those four runs the interpreter's writes, and what moved them was
 not isolated. Welfare nets
 the trade upward and is banked.
 
+## 2026-09-28 — builds that compile the runtime at once each get the whole file
+
+The generated programs, built six at a time into a fresh temp directory,
+lost six of their first sixteen builds to "cannot invoke clang: clang failed
+on the runtime". clang had crashed in its lexer or died of SIGBUS reading
+`kanso_runtime_dev_<key>.c`. The runtime is compiled once per option set and
+cached in the temp directory, and every build that found no cached object
+wrote the C source to that one shared path with `fs::write`. That truncates
+the file, and clang maps its input, so a second build's write pulled the
+file out from under the first build's clang. The object was already staged
+under the process's own name and renamed into place. The source was not.
+
+`tests/concurrent_build.rs` closed the same race for the program's IR on an
+earlier day, and its two tests never reached this one, because the suite's
+temp directory holds a runtime object from its first build and a cached
+object skips the write. The source is now written under the process's name
+and renamed onto the shared path, and clang is still given the shared path.
+A rename replaces the directory entry and leaves a file another clang has
+open whole, and every writer's bytes are the same, so whichever file a clang
+opens is the runtime.
+
+The new test, `builds_that_compile_the_runtime_at_once_all_answer`, gives
+each of three rounds a temp directory of its own and starts eight builds
+150 ms apart, so each compiles the runtime cold and their writes fall inside
+each other's compiles. Started all at once, the eight wrote before any clang
+read, and the test passed on main. Staggered, it failed in five sittings of
+five on main, in the first round each time, and passes in five of five with
+the fix. The ratchet row "the runtime source written in place" puts the
+direct write back, and the test failed in three sittings of three.
+
+A user meets this when two builds start in one fresh temp directory, as a
+`make -j` or a parallel test runner does on its first run.
+
 ## 2026-09-28 — a large float rounds to the integer it is
 
     f = text/to_float "1e30"
