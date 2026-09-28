@@ -229,10 +229,10 @@ basket defines=96 calls=730 branches=542 lines=5404
 widebench defines=116 calls=719 branches=516 lines=6330
 deepbench defines=42 calls=170 branches=144 lines=1730
 escapebench defines=17 calls=48 branches=30 lines=533
-pendbench defines=61 calls=403 branches=289 lines=2976
+pendbench defines=61 calls=404 branches=289 lines=2977
 scanbench defines=233 calls=1912 branches=1527 lines=14812
 indexbench defines=17 calls=54 branches=26 lines=573
 digestbench defines=114 calls=551 branches=413 lines=4579
 readbench defines=19 calls=51 branches=23 lines=611
 livebench defines=112 calls=736 branches=639 lines=6939
-runbench defines=503 calls=3897 branches=2818 lines=28177
+runbench defines=503 calls=3898 branches=2818 lines=28178

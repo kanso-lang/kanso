@@ -17608,3 +17608,45 @@ work rows rose by a few instructions each, and three fell:
 the runtime read `codegen_instructions_dev` 123,379,531 -> 123,384,276 and
 `codegen_instructions_release` 407,793,576 -> 407,709,792. Welfare nets the
 rows slightly upward and is banked.
+
+## 2026-09-28 — the render group's parameter holds any value
+
+`"{p}"` and `print p` call `render/to_string` on a value of any kind. Neither
+is a call site the inference walk visits, so the group's parameter set came
+from the program's explicit calls alone. A program whose only explicit call
+was `render/to_string 11` proved that parameter an int. The backend then passed
+it as a raw word, and an interpolated record reached the renderer as its
+type's tag. This program printed `7` compiled and `defs/pt 0 "11"`
+interpreted:
+
+    fn shown z
+      label = render/to_string 11
+      p = pt z label
+      "{p}"
+
+The same proof put `llvm.assume` on the parameter's tag at the dispatcher's
+entry. Where the explicit calls all passed strings, a record broke that
+assumption, and release builds trapped, or read a list as `<value>`, instead
+of printing. The generated-program differential found ten such divergences in
+one batch of 800 once its programs began calling std/render, std/json,
+std/regexp and std/sha256. All ten came from this one cause.
+
+Inference now starts every parameter of the render group at every kind of
+value except a failure. An interpolation hands an err on rather than rendering
+it, and a first version that seeded the failure bits too added a "passed
+through render/to_string" frame to a compiled err's trace that the interpreter
+does not print; the runtime corpus caught it. An explicit call with an int no
+longer unboxes the parameter. Nothing measured calls the group that way.
+
+A lazy cell can reach an interpolation unforced, and the seed includes one, so
+a dispatcher whose explicit calls never passed a cell now forces its argument
+before `k_b_render_value`. runbench and pendbench each gain that one call:
+`bench/emitted_golden_others.txt` reads runbench calls 3,897 -> 3,898 and
+pendbench 403 -> 404, and `bench/text_golden.txt` reads runbench text 401,896
+-> 402,472 and pendbench 228,888 -> 229,080. The trend gate's sums land at
+`emitted_other_calls` 10,666 -> 10,668, `emitted_other_lines` 85,511 -> 85,513
+and `text` 3,536,288 -> 3,537,056. CI's rows will say what the work rows make
+of it.
+The micro fixture `an_interpolated_record_reaches_render_whole` fails on
+main, and the ratchet row "the render group typed from its calls" restores
+the old seeding and fails it again.
