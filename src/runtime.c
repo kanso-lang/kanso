@@ -4828,6 +4828,20 @@ KValue k_sub_wrap(long long type_id, KValue inner) {
     KValue v; v.tag = K_SUB; v.payload = k_ptr(s); return v;
 }
 
+/* Two parents that are not one tag: `bool` is either of two, and `some` is
+   any value that is neither none nor a failure. They sit below every
+   -(tag + 1), which is what the other primitives are. */
+#define K_WANT_BOOL (-100)
+#define K_WANT_SOME (-101)
+
+/* Whether a value that wraps nothing is the primitive a negative want
+   names. */
+static int k_want_prim(KValue v, long long want_id) {
+    if (want_id == K_WANT_BOOL) return v.tag == K_TRUE || v.tag == K_FALSE;
+    if (want_id == K_WANT_SOME) return v.tag != K_NONE && k_not_failure(v);
+    return v.tag == -(want_id + 1);
+}
+
 /* Chain match for dispatch: 0 = exact, +1 per parent hop; -1 = no match.
    want_id >= 0 names a declared type; want_id < 0 encodes a primitive tag
    as -(tag + 1), so annotated primitive params accept wrapped values. */
@@ -4839,7 +4853,7 @@ long long k_sub_depth(KValue v, long long want_id) {
         v = s->inner;
         depth++;
     }
-    if (want_id < 0 && v.tag == -(want_id + 1)) return depth;
+    if (want_id < 0 && k_want_prim(v, want_id)) return depth;
     if (want_id >= 0 && v.tag == K_REC
         && ((KRec*)(intptr_t)v.payload)->type_id == want_id) return depth;
     return -1;
@@ -4902,7 +4916,7 @@ KValue k_upcast(KValue v, long long want, const char* tyname) {
             cur = sb->inner;
             continue;
         }
-        if (want < 0 && cur.tag == -(want + 1)) return cur;
+        if (want < 0 && k_want_prim(cur, want)) return cur;
         if (want >= 0 && cur.tag == K_REC
             && ((KRec*)(intptr_t)cur.payload)->type_id == want) return cur;
         fprintf(stderr, "%serror[runtime]:%s `:%s` widens; this value is not %s %s\n",
@@ -6735,6 +6749,13 @@ static KValue k_schedule(KDesc* join) {
 /* Exported (not static): the codegen prelude's inline k_truthy calls this on
    its cold path, so the die message lives in exactly one place. */
 long long k_truthy_bad(KValue v) {
+    /* A subtype of bool is a condition like the bool it wraps; the inline
+       test sees only the wrapper's tag, so it lands here. */
+    if (v.tag == K_SUB) {
+        KValue b = k_sub_base(v);
+        if (b.tag == K_TRUE) return 1;
+        if (b.tag == K_FALSE) return 0;
+    }
     k_die_got("an if condition is true or false", v);
     return 0;
 }
@@ -7881,6 +7902,12 @@ KValue k_b_to_bytes(KValue lv, const char* origin) {
         KValue item = l->items[i];
         if (!k_not_failure(item)) return item;
         if (item.tag != K_INT || item.payload < 0 || item.payload > 255) {
+            /* a subtype of int is an int wherever one goes */
+            KValue b = k_sub_base(item);
+            if (item.tag == K_SUB && b.tag == K_INT && b.payload >= 0 && b.payload <= 255) {
+                data[i] = (unsigned char)b.payload;
+                continue;
+            }
             return k_err(k_str("to_bytes takes byte values (0-255)"), origin);
         }
         data[i] = (unsigned char)item.payload;
@@ -9879,6 +9906,45 @@ static void k_join_seed_count(KStr* os, KList* l, KStr* ss) {
     k_str_seed_count(os, chars);
 }
 
+/* A join whose list holds something other than a string from position `from`
+   on. A subtype of string is a string wherever one goes, so this finishes the
+   walk reading through wrappers and builds the answer from their base
+   strings; anything else is refused as before. Out of line, so a join of
+   plain strings keeps its loop. */
+static __attribute__((noinline, cold)) KValue k_join_wrapped(KList* l, KStr* ss, long long from) {
+    for (long long i = from; i < l->len; i++) {
+        if (l->items[i].tag == K_THUNK) {
+            l->items[i] = k_force(l->items[i]);
+            k_note_if_carried(l->items[i]);
+        }
+        if (!k_not_failure(l->items[i])) return l->items[i];
+        if (k_sub_base(l->items[i]).tag != K_STR) k_die("join takes a list of strings");
+    }
+    long total = 0;
+    for (long long i = 0; i < l->len; i++) {
+        total += k_as_str(k_sub_base(l->items[i]))->len;
+        if (i) total += ss->len;
+    }
+    char* data = k_alloc(total + 1);
+    long at = 0;
+    for (long long i = 0; i < l->len; i++) {
+        if (i) {
+            memcpy(data + at, ss->data, (size_t)ss->len);
+            at += ss->len;
+        }
+        KStr* is = k_as_str(k_sub_base(l->items[i]));
+        memcpy(data + at, is->data, (size_t)is->len);
+        at += is->len;
+    }
+    data[total] = 0;
+    KStr* os = k_alloc(sizeof(KStr));
+    os->len = total;
+    os->data = data;
+    os->cap = 0;
+    KValue out; out.tag = K_STR; out.payload = k_ptr(os);
+    return out;
+}
+
 KValue k_b_join(KValue lv, KValue sep) {
     if (__builtin_expect(!k_not_failure(lv) || !k_not_failure(sep), 0)) return k_failed2(lv, sep);
     if (lv.tag != K_LIST || sep.tag != K_STR) k_die("join takes a list of strings and a separator");
@@ -9899,7 +9965,7 @@ KValue k_b_join(KValue lv, KValue sep) {
             k_note_if_carried(l->items[i]);
         }
         if (!k_not_failure(l->items[i])) return l->items[i];
-        if (l->items[i].tag != K_STR) k_die("join takes a list of strings");
+        if (l->items[i].tag != K_STR) return k_join_wrapped(l, ss, i);
         total += k_as_str(l->items[i])->len;
         if (i) total += ss->len;
     }

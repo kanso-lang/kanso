@@ -1,0 +1,27 @@
+# A builtin reads through a subtype to its base value. The generic call does
+# that for every argument, but a few builtins are written out by the compiler
+# ahead of it: `bytes` bound to a name, and `utf8`, `append`, `to_int` and
+# `to_float` over a `slice`. A native build handed each of them the wrapper.
+# `json/encode` of a subtype of string crashed through the first, and every
+# slice refused. Found on 2026-09-28 by the generated-program differential.
+import "std/json"
+import "std/os"
+import "std/text"
+
+type id int
+
+type word string
+
+fn width s
+  bs = text/bytes s
+  length bs
+
+fn shown z
+  w = word "a{z}bc"
+  cut = text/utf8 (text/slice (text/bytes "xyz") (id 2) (id 3))
+  n = text/to_int (text/slice (word "12{z}") 1 2)
+  x = text/to_float (text/slice (word "1.5{z}") (id 1) 3)
+  more = text/utf8 (text/append (text/bytes "<") (text/slice w 1 2))
+  "{json/encode w} {width w} {cut} {n} {x} {more}"
+
+pub play = os/args .> (a -> print (shown (length a)))

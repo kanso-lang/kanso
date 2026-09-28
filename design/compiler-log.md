@@ -18287,3 +18287,108 @@ on the interpreter corpus with the gate's command: 621,041,261 on main,
 622,369,927 with the unwrap at the top (+1,328,666, the size of CI's reading)
 and 621,128,974 with it in the refusing arm (+87,713). CI then measured
 cf21501e: `interp_instructions` lands on 589,244,942, +71,958 over main.
+
+## 2026-09-28 — the builtins the compiler writes out read through a subtype
+
+The generator now declares a subtype of int and one of string in a third of
+its programs and wraps some of their values, and a probe written while
+adding that found `json/encode (word "x")` crashing both native builds. The
+encoder binds `bs = text/bytes s`, and the compiler writes that binding out
+itself: a proven string gets its byte view built in the frame, reading the
+string's header directly. A subtype carries its own tag whatever it wraps,
+so the view read a wrapper as a string, and the program died.
+
+Every builtin reads through a subtype to its base value. The generic call
+path unwraps each argument before it calls one, in any program that
+declares a subtype. Five builtins are written out ahead of that path and
+skipped it: `bytes` bound to a name, and `utf8`, `append`, `to_int` and
+`to_float` over a `slice`. The four slice doors refused a subtype as the
+sliced value or as a position, with `slice`'s own message, where the
+interpreter answered. Each door now unwraps what it reads, through the same
+program-wide test, so a program without a subtype emits what it did. No
+benchmark declares one.
+
+A door's accumulator is left alone. It is a byte builder, and nothing can
+wrap one: `type blob bytes` passed `kanso check`, and the interpreter then
+refused every construction at run time while both native builds refused the
+program with `unknown type`. A subtype's parent is now checked the way an
+annotation is, and a name no type answers to is refused before anything
+runs.
+
+The micro fixture `a_fused_builtin_reads_through_a_subtype` goes through
+each door. Taking the unwrap out of any one of them alone turns it red, and
+the old compiler crashed on the first. The error fixture
+`a_subtype_wraps_no_type` passed `kanso check` before. Two ratchet rows put
+the pieces back: "a fused builtin blind to subtypes" and "a subtype's parent
+left unchecked".
+
+A native build also refused to build three subtypes the interpreter builds:
+of `bool`, of `some` and of `done`, each with `unknown type`. A subtype's
+constructor tells the runtime its parent as one tag, and none of those three
+had one it would take: `bool` is either of two tags and `some` is any value
+that is neither none nor a failure. The runtime now takes a code for each of
+those two, and `done` and `err` take their tags. A `_:done` arm in a program
+that declares a subtype asks through the chain the way `_:int` does, so a
+subtype of done reaches it.
+
+Building one turned up a disagreement no engine had with another. A subtype
+of bool refused to be a condition anywhere: `if`, `and`, `or`, `not`, a
+guard and a predicate all said a condition is true or false, and that they
+had got true. The book says a wrapper flows wherever its parent flows, and
+this is a place a bool flows. All three engines now read a condition
+through a subtype. Each asks only on the arm that would have refused, so a
+plain bool pays nothing: the interpreter in five places that shared one
+message, the browser's runtime in one, and a native build in the cold path
+its inline test already falls to.
+
+The micro fixture `a_subtype_of_bool_is_a_condition` builds all three
+subtypes and uses the bool one in every condition. The old compiler stopped
+in the interpreter and did not build natively. Five ratchet rows put the
+pieces back: "a native subtype of bool unbuilt", "a native wrapped condition
+refused", "an interpreted wrapped condition refused", "a browser wrapped
+condition refused" and "a native done arm blind to subtypes". The first cut
+of the fixture reached the `done` arm only through an arm for the subtype
+itself, and its mutation stayed green; the fixture now has a group whose
+only typed arm is `_:done`.
+
+The same principle reaches an element. `text/join` refused a list of
+subtypes of string as not a list of strings, and `text/to_bytes` refused a
+list of subtypes of int as not byte values, on every engine: each read its
+elements' tags and not through a wrapper. Each now reads through one where it
+would have refused. A native join that meets a wrapped piece finishes out of
+line, so a join of plain strings keeps its loop. The micro fixture
+`a_list_of_subtypes_joins` stopped on every engine on the old compiler, and
+two ratchet rows put it back one engine family at a time: "an interpreted
+element blind to subtypes" and "a native element blind to subtypes". Each of
+the four places, taken out alone, turns the fixture red.
+
+A parent named `any` is refused with the rest. `any` is a built-in name only
+so its retirement can be reported where an annotation uses it; `type
+whatever any` passed `kanso check`, and every engine refused it when it ran.
+
+The runtime's new cold paths cost every benchmark 1,040 bytes of text, so
+`text` lands on 3,498,320 (runbench 399,752). Most of it is
+`k_join_wrapped`, 606 bytes where it was compiled alone; the rest is the
+unwrap added to `k_truthy_bad`, `k_b_to_bytes`, `k_sub_ctor`, `k_upcast` and
+`k_sub_depth`. None of those paths runs in a benchmark, which declares no
+subtype, and the allocation counters and emitted code are unchanged. CI will
+measure the instruction rows.
+
+## 2026-09-28 — CI's rows for subtypes that flow where their parents flow
+
+CI measured 85ba563c. The run rows rose by a few hundred instructions each:
+`work_encodebench` lands on 2,333,509,024 (+427), `work_oneshot` on
+12,547,122 (+490), `work_livebench` on 1,537,194,063 (+322) and
+`work_runbench` on 1,070,398,557 (+686). `codegen_instructions_dev` lands on
+124,446,589 (+8,691) and `codegen_instructions_release` on 408,099,854
+(+61,265), for the runtime's larger text. The compiler's own rows fell a
+little: `compile_instructions` 25,258,516, `emit_instructions` 29,850,464,
+`entry_instructions` 85,075,845, `library_instructions` 85,601,964.
+
+`interp_instructions` lands on 589,912,212, +667,270 over main. On this
+host's toolchain the same comparison reads the other way: 620,525,766 on
+cf70637a and 619,931,329 on this branch, 594,437 lower. The added arms sit
+where the interpreter would have refused, so an ordinary condition, join or
+`to_bytes` does not reach them, but what moved CI's reading has not been
+isolated. Welfare falls from 90.4026 to CI's reading under the 2026-09-13
+rule, and the history entry says why.

@@ -1,0 +1,19 @@
+# A subtype flows wherever its parent flows, and that includes being an
+# element. `text/join` read a list of subtypes of string and refused it as
+# not a list of strings, and `text/to_bytes` refused a list of subtypes of
+# int as not byte values, on every engine. Found on 2026-09-28 while
+# teaching the generated-program differential subtypes.
+import "std/os"
+import "std/text"
+
+type id int
+
+type word string
+
+fn shown z
+  joined = text/join [(word "a") "é" (word "b{z}")] "-"
+  alone = text/join [(word "q")] ""
+  bytes = text/utf8 (text/to_bytes [(id 65) (id (z + 66)) 67])
+  "{joined} {alone} {bytes}"
+
+pub play = os/args .> (a -> print (shown (length a)))

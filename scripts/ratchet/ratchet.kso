@@ -3600,7 +3600,112 @@ interp_index_sub = row
 
 rows_c1zzr = text/concat rows_c1zzq [interp_index_sub]
 
-rows_c = text/concat rows_c1zzr [itself]
+# A builtin the compiler writes out ahead of the generic call reads through a
+# subtype. Blind to them, a slice refuses a subtype as a position and the
+# micro corpus dies in a release build.
+fused_sub = row
+  "a fused builtin blind to subtypes"
+  true
+  "cargo test --release --test golden micro_corpus_survives_a_release_build"
+  "specs (unit, golden, differential)"
+  (breaking "a_fused_builtin_blind_to_subtypes")
+  release
+
+rows_c1zzs = text/concat rows_c1zzr [fused_sub]
+
+# A subtype's parent names a type. Left unchecked, `type blob bytes` passes
+# `kanso check` and the error corpus holds a diagnostic nobody raised.
+parent_unchecked = row
+  "a subtype's parent left unchecked"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_subtype_parent_left_unchecked")
+  no_setup
+
+rows_c1zzt = text/concat rows_c1zzs [parent_unchecked]
+
+# A native build builds a subtype of bool. Without the parent's code it is an
+# unknown type, and the micro corpus does not build.
+native_bool_sub = row
+  "a native subtype of bool unbuilt"
+  true
+  "cargo test --release --test golden micro_corpus_survives_a_release_build"
+  "specs (unit, golden, differential)"
+  (breaking "a_native_subtype_of_bool_unbuilt")
+  release
+
+rows_c1zzu = text/concat rows_c1zzt [native_bool_sub]
+
+# A condition reads through a subtype of bool on every engine. Each of the
+# three refusing it on its own turns the fixture red where it runs.
+native_wrapped_cond = row
+  "a native wrapped condition refused"
+  true
+  "cargo test --release --test golden micro_corpus_survives_a_release_build"
+  "specs (unit, golden, differential)"
+  (breaking "a_native_wrapped_condition_refused")
+  release
+
+rows_c1zzv = text/concat rows_c1zzu [native_wrapped_cond]
+
+interp_wrapped_cond = row
+  "an interpreted wrapped condition refused"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "an_interpreted_wrapped_condition_refused")
+  release
+
+rows_c1zzw = text/concat rows_c1zzv [interp_wrapped_cond]
+
+browser_wrapped_cond = row
+  "a browser wrapped condition refused"
+  true
+  "cargo test --release --test wasm_engine {wasm_corpus}"
+  "specs (unit, golden, differential)"
+  (breaking "a_browser_wrapped_condition_refused")
+  with_blob
+
+wasm_corpus = "the_wasm_engine_agrees_with_the_golden_corpus"
+
+rows_c1zzx = text/concat rows_c1zzw [browser_wrapped_cond]
+
+# A `_:done` arm asks through the chain in a program that declares a subtype.
+# Asking the tag alone, a subtype of done falls past it.
+native_done_sub = row
+  "a native done arm blind to subtypes"
+  true
+  "cargo test --release --test golden micro_corpus_survives_a_release_build"
+  "specs (unit, golden, differential)"
+  (breaking "a_native_done_arm_blind_to_subtypes")
+  release
+
+rows_c1zzy = text/concat rows_c1zzx [native_done_sub]
+
+# An element reads through a subtype where `join` and `to_bytes` would refuse
+# it. Blind to them, each engine refuses a list of subtypes.
+interp_element_sub = row
+  "an interpreted element blind to subtypes"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "an_interpreted_element_blind_to_subtypes")
+  release
+
+rows_c1zzz = text/concat rows_c1zzy [interp_element_sub]
+
+native_element_sub = row
+  "a native element blind to subtypes"
+  true
+  "cargo test --release --test golden micro_corpus_survives_a_release_build"
+  "specs (unit, golden, differential)"
+  (breaking "a_native_element_blind_to_subtypes")
+  release
+
+rows_c1zzza = text/concat rows_c1zzz [native_element_sub]
+
+rows_c = text/concat rows_c1zzza [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

@@ -5258,6 +5258,21 @@ impl<'a> Backend<'a> {
         t
     }
 
+    /// A builtin sees a subtype's value as its parent's, and the generic call
+    /// path unwraps every argument before it calls one. The fused doors and the
+    /// frame-held view emit their builtin themselves, ahead of that path, so
+    /// each argument they read goes through here. Only a program that declares
+    /// a subtype can hand one over, so only that program pays.
+    fn unsub(&self, f: &mut FnEmit, value: String) -> String {
+        if self.sub_parents.is_empty() {
+            return value;
+        }
+        let t = f.tmp();
+        f.line(&format!("{t} = call %KValue @k_unsub(%KValue {value})"));
+        f.record(&t, f.set_of(&value));
+        t
+    }
+
     fn maybe_force(&self, f: &mut FnEmit, value: String) -> String {
         // A deferred self-reference is a thunk that no lazy-bind count knows
         // about, so the cheap exit has to admit it too.
@@ -6319,6 +6334,7 @@ impl<'a> Backend<'a> {
             "bool" => format!("call i64 @k_check_bool(%KValue {value})"),
             "err" => format!("call i64 @k_check_tag(%KValue {value}, i64 {K_ERR})"),
             "none" => format!("call i64 @k_check_tag(%KValue {value}, i64 {K_NONE})"),
+            "done" if subs => format!("call i64 @k_check_sub_tag(%KValue {value}, i64 {K_DONE})"),
             "done" => format!("call i64 @k_check_tag(%KValue {value}, i64 {K_DONE})"),
             // `some` is any value that is not none, and a failure is not a
             // value: without this arm the backend refused the annotation
@@ -6352,6 +6368,11 @@ impl<'a> Backend<'a> {
             "int" => -1,
             "float64" => -2,
             "string" => -7,
+            "err" => -(K_ERR + 1),
+            "done" => -(K_DONE + 1),
+            // the runtime's K_WANT_BOOL and K_WANT_SOME: neither is one tag
+            "bool" => -100,
+            "some" => -101,
             other => match self.type_ids.get(other) {
                 Some(id) => *id,
                 None => return Err(format!("native backend: unknown type `{other}`")),
@@ -7102,6 +7123,7 @@ impl<'a> Backend<'a> {
                     // and the counting build takes it too: the header is not an
                     // arena byte, and k_stat_sh_bytes has nothing to count.
                     let v = self.emit_expr(f, &args[0])?;
+                    let v = self.unsub(f, v);
                     let arg_sets = [f.set_of(&v)];
                     let t = f.tmp();
                     if arg_sets[0] == STR {
@@ -9209,7 +9231,8 @@ impl<'a> Backend<'a> {
                         let mut parts = Vec::new();
                         for a in inner_args {
                             let v = self.emit_expr(f, a)?;
-                            parts.push(self.maybe_force(f, v));
+                            let v = self.maybe_force(f, v);
+                            parts.push(self.unsub(f, v));
                         }
                         let sets: Vec<Set> = parts.iter().map(|e| f.set_of(e)).collect();
                         let sliced = infer::builtin_set("slice", &sets);
@@ -9256,7 +9279,8 @@ impl<'a> Backend<'a> {
                         let mut parts = Vec::new();
                         for a in inner_args {
                             let v = self.emit_expr(f, a)?;
-                            parts.push(self.maybe_force(f, v));
+                            let v = self.maybe_force(f, v);
+                            parts.push(self.unsub(f, v));
                         }
                         let sets: Vec<Set> = parts.iter().map(|e| f.set_of(e)).collect();
                         let sliced = infer::builtin_set("slice", &sets);
@@ -9301,7 +9325,8 @@ impl<'a> Backend<'a> {
                         let mut parts = Vec::new();
                         for a in inner_args {
                             let v = self.emit_expr(f, a)?;
-                            parts.push(self.maybe_force(f, v));
+                            let v = self.maybe_force(f, v);
+                            parts.push(self.unsub(f, v));
                         }
                         let sets: Vec<Set> = parts.iter().map(|e| f.set_of(e)).collect();
                         let sliced = infer::builtin_set("slice", &sets);

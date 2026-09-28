@@ -1,0 +1,9 @@
+# A subtype names its parent the way an annotation names a type. `bytes` is
+# a builtin's name and not a type's, and `any` is retired. Until 2026-09-28
+# nothing asked: the interpreter refused every construction at run time, and
+# both backends refused the whole program with `unknown type`.
+type blob bytes
+
+type whatever any
+
+pub play = print "{blob 3} {whatever 4}"

@@ -1,0 +1,8 @@
+error[type]: no type is called `bytes`, so `blob` has nothing to wrap
+  --> a_subtype_wraps_no_type.kso:5:6
+   5 | type blob bytes
+            ^
+error[type]: no type is called `any`, so `whatever` has nothing to wrap
+  --> a_subtype_wraps_no_type.kso:7:6
+   7 | type whatever any
+            ^

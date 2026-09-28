@@ -1,0 +1,46 @@
+# A subtype flows wherever its parent flows, and a bool flows into a
+# condition. Every engine refused a subtype of bool there, saying a condition
+# is true or false and that it got true. A native build also refused to build
+# a subtype of bool, of `some` or of `done` at all, where the interpreter
+# built each one. Found on 2026-09-28 while teaching the generated-program
+# differential subtypes.
+import "std/list"
+import "std/os"
+
+type flag bool
+
+type fin done
+
+type thing some
+
+fn early b
+  return "early" if b
+  "late"
+
+fn kind _:fin
+  "fin"
+
+fn kind _:done
+  "done"
+
+fn kind _
+  "other"
+
+fn over _:done
+  "over"
+
+fn over _
+  "other"
+
+fn shown z
+  yes = flag (z == 0)
+  no = flag (z > 0)
+  picked = if yes "then" "else"
+  both = yes and no
+  either = no or yes
+  count = list/count [1 2 3] (x -> flag (x > 1))
+  held = thing [z 1]
+  ended = "{kind (fin done)} {over (fin done)}"
+  "{picked} {both} {either} {not no} {early yes} {count} {ended} {held}"
+
+pub play = os/args .> (a -> print (shown (length a)))
