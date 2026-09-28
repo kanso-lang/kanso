@@ -3106,7 +3106,8 @@ impl<'a> Interp<'a> {
                 .map(|(_, l, c)| (*l, *c))
                 .collect()
         });
-        sites.contains(&(span.line as usize, span.col as usize))
+        let at = (span.line as usize, span.col as usize);
+        sites.contains(&at)
     }
 
     /// Take a container's contents where the analysis proved nobody else will

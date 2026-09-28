@@ -85,11 +85,7 @@ pub fn moved_writes(program: &Program) -> HashSet<(std::sync::Arc<str>, usize, u
     out
 }
 
-fn walk_for_moved(
-    decl: &FnDecl,
-    e: &Expr,
-    out: &mut HashSet<(std::sync::Arc<str>, usize, usize)>,
-) {
+fn walk_for_moved(decl: &FnDecl, e: &Expr, out: &mut HashSet<(std::sync::Arc<str>, usize, usize)>) {
     if let Expr::App { head, args, span, .. } = e {
         let writes = match head.as_ref() {
             Expr::Ident(n, _, _) => match n.as_str() {
