@@ -79,6 +79,58 @@ of `1e308` is a 309-digit int and round of `inf` is smaller.
    nothing, but they are numbers the program did not ask for, and on the
    interpreter they are smaller than round of a large finite float.
 
+### Is a NaN equal to itself, and is -0.0 equal to 0.0?
+
+**Cited:** the search of design/compiler-log.md, design/log/compiler-log-archive.md
+and design/*.md for `total_cmp`, "total order", "negative zero", `-0.0` and
+NaN found no ruling on how floats compare. The archive's 2026-09-08 gavel,
+"an infinite or nan float renders as inf, -inf and nan", settles how such a
+float prints and nothing about how it compares. The 2026-08-02 entry "a whole
+number and a fractional one compare exactly" (kanso#689) settles an int
+against a float, and its code sends NaN to a fallback without a rule behind
+it. `docs/book` and `docs/spec.html` do not mention either case.
+
+**The question.** A generated program on 2026-09-28 printed a map holding
+`nan == nan` and got `1` from the interpreter and `0` from both native builds.
+The two engines compare floats differently, and neither is consistent with
+itself:
+
+- The interpreter orders floats by Rust's `f64::total_cmp`, which ranks bit
+  patterns. `nan == nan` is true and NaN ranks above `inf`, but only for a
+  NaN whose sign bit is clear. `inf - inf` on x86 produces a NaN with the
+  sign bit set. That NaN is not equal to `text/to_float "nan"`, and it sorts
+  below `-inf`, although both print `nan`. ARM's default NaN has the other
+  sign, so there the same subtraction makes a NaN that ranks last, and the
+  interpreter's answer depends on the machine. `-0.0 == 0.0` is false and
+  `-0.0 < 0.0` is true, while `-0.0 == 0` is true, so equality is not
+  transitive across 0, 0.0 and -0.0.
+- The native runtime uses C's `==` for equality, so `nan == nan` is false and
+  `-0.0 == 0.0` is true. Its ordering answers "equal" for any pair involving a
+  NaN, so `nan >= nan` and `nan <= nan` are true while `nan == nan` is false.
+  It ranks an int above every NaN, where the interpreter ranks it below a
+  positive one.
+- Sorting a list of `inf - inf`, `nan`, `1.0` and `-inf` gives
+  `[nan -inf 1.0 nan]` on the interpreter and `[-inf 1.0 nan nan]` natively.
+  `list/min [nan 1.0]` is `1.0` on the interpreter and `nan` natively.
+
+The interpreter is the oracle, but here its answer changes with the host, so
+copying it into the runtime would copy that too. The native runtime changes
+under every answer below, and the interpreter under the first two.
+
+1. **One NaN, ranked last; zero has one value.** Every NaN equals every NaN
+   and ranks above `inf`. `-0.0` equals and ranks with `0.0`, and still
+   prints `-0.0`. Equality stays reflexive, which list and map equality lean
+   on (`[x] == [x]`), and transitive across ints and floats. Sorting has one
+   answer on every host. This is the recommendation.
+2. **IEEE 754.** NaN equals nothing, itself included, and every ordering
+   against it is false; `-0.0 == 0.0`. This is what C and Rust's operators do.
+   The cost is that `[x] == [x]` is false for a list holding a NaN, and
+   `list/sort` needs its own rule for elements that are neither less nor
+   greater.
+3. **The bit order the interpreter has today.** No work on the oracle, but
+   the answer changes with the host and with how a NaN was made, and `-0.0`
+   equals `0` without equalling `0.0`.
+
 ### Where does a golden live that pins ONE engine's answer where another refuses?
 
 **Cited:** the differential law as this file and CLAUDE.md state it -- a feature

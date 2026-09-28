@@ -48,7 +48,7 @@ kanso — sat here and was bounced on 2026-08-29: a performance question with no
 surface area is the implementer's, per the ledger's own charter, and the log
 carries the research mandate it left with.
 
-**Eight questions are waiting** — zero blocking. The last two blocking entries
+**Nine questions are waiting** — zero blocking. The last two blocking entries
 were both about the wall `>>`, filed 2026-09-17 out of one reading of a book
 sample. Whether it survives the fused operators was ruled on 2026-09-26, and
 it does not. Whether its simultaneous-failure merge was meant to go closed on
@@ -88,7 +88,7 @@ entry cites the search behind it and proposes an answer, and a sitting can be a
 yes or a no rather than a fresh design conversation. On 2026-08-29 every
 remaining question was ruled in one pass.
 
-**The eight open, not blocking** — where a golden lives that pins ONE engine's
+**The nine open, not blocking** — where a golden lives that pins ONE engine's
 answer where another refuses, filed 2026-09-18 when the interpreter's integer
 boundary turned out to have nowhere in the corpus to be pinned, since native
 refuses past int64 and the micro corpus runs both engines and requires them to
@@ -104,7 +104,9 @@ to a fixed page so code growth stops moving the compile rows, filed 2026-09-16
 with a recommendation to decline it, the second measured decision in two days
 found sitting in the log with no entry to go to; and what `math/round` answers
 for NaN and the infinities, filed 2026-09-28 with a recommendation that each be
-an err on every engine. The maps parse's share
+an err on every engine; and whether a NaN equals itself and -0.0 equals 0.0,
+filed 2026-09-28 when a generated program found the two engines comparing
+floats differently, with a recommendation of one NaN ranked last and one zero. The maps parse's share
 of the compile row's drift left this list ruled on 2026-09-15 and built the
 same night, kanso#1439. The assert hako left it by being built — `lib/expect`,
 kanso#1233, 2026-09-03.
@@ -578,8 +580,10 @@ else. Chains that tested for `none` after an effect migrate.
     checked from here on two days and both refused by the tooling
   - whether an err gains readers a lambda callback can use
 
-**Eight questions wait in `design/pending-gavels.md`** — zero blocking, eight
-open — each with a recommendation. Recounted on 2026-09-28, when what
+**Nine questions wait in `design/pending-gavels.md`** — zero blocking, nine
+open — each with a recommendation. Recounted twice on 2026-09-28: whether a
+NaN equals itself joined Open from a generated program the engines disagreed
+on, and before it what
 `math/round` answers for NaN and the infinities joined Open, left by the fix
 that made a finite float round to the integer it is. Recounted four times on 2026-09-16: the
 binding-position question joined Open with its measurement, the escape
