@@ -3369,7 +3369,7 @@ render_pass = row
 
 rows_c1zz = text/concat rows_c1zy [render_pass]
 
-rows_c = text/concat rows_c1zza [itself]
+rows_c = text/concat rows_c1zzb [itself]
 
 # A lazy cell's site that tail-calls a group returning its record in two
 # registers boxes the pair. Forgetting the pair came back as two words
@@ -3384,7 +3384,23 @@ thunk_box = row
 
 rows_c1zza = text/concat rows_c1zz [thunk_box]
 
-rows_c = text/concat rows_c1zza [itself]
+rows_c = text/concat rows_c1zzb [itself]
+
+# A double halfway between two shortest decimals prints the even last digit on
+# every engine. Keeping Rust's upper candidate in the interpreter makes the
+# micro fixture disagree across engines.
+float_tie = row
+  "a float tie rounded up"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_float_tie_rounded_up")
+  release
+
+rows_c1zzb = text/concat rows_c1zza
+rows_c1zza [float_tie]
+
+rows_c = text/concat rows_c1zzb [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

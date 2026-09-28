@@ -1,0 +1,22 @@
+# Each of these doubles lies exactly halfway between the two shortest decimals
+# that read back as it: 900719925474099.25 between ...099.2 and ...099.3. The
+# native renderer takes the even last digit, as Python and JavaScript do, and
+# the interpreter took the upper one, so the engines printed different numbers
+# for one value. Found by a generated program on 2026-09-28 that multiplied
+# 9007199254740993.0 by 0.1. The floats are parsed at run time so that no
+# engine renders them while compiling.
+import "std/list"
+import "std/os"
+import "std/text"
+
+fn shown z
+  p = text/slice "x" 1 z
+  xs = ["900719925474099.25" "154695648437968.625" "251672386411472.125"]
+  ws = ["-954326185162685.25" "1.04755401611328125" "202966595231446.375"]
+  ys = list/to_list (list/map xs (s -> "{text/to_float "{s}{p}"}"))
+  vs = list/to_list (list/map ws (s -> "{text/to_float "{s}{p}"}"))
+  a = text/join ys " "
+  b = text/join vs " "
+  "{a}\n{b}"
+
+pub play = os/args .> (a -> print (shown (length a)))
