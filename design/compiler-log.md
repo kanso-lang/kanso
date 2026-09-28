@@ -18021,3 +18021,41 @@ link on the old compiler, and `micro_corpus_survives_a_release_build`
 reports it. The ratchet row "a release link that runs deadargelim" takes the
 arguments out of the link and fails it. Every release row moves with the
 pipeline, and CI measures them.
+
+## 2026-09-28 — CI's rows for the six fixes, and what the release pipeline costs
+
+CI measured the branch at 343cf85b. The release link's new pipeline moves
+the benchmark rows, and building each benchmark twice with compilers that
+differ only in that flag isolates it. On the container, with the flag and
+without it:
+
+    digestbench     5,245,751 ->     5,353,208   +107,457   +2.05%
+    livebench   1,536,072,993 -> 1,538,558,598   +2,485,605 +0.16%
+    runbench    1,071,321,892 -> 1,071,882,637   +560,745   +0.05%
+    encodebench 2,338,054,964 -> 2,331,707,225   -6,347,739 -0.27%
+
+CI's rows moved by the same amounts to within a few hundred instructions:
+work_digestbench lands on 5,353,555, work_livebench on 1,538,558,945,
+work_runbench on 1,071,881,800 and encodebench on 2,331,707,572. The smaller
+rows are work_basket at 29,538,470 (+14,078), work_oneshot at 12,564,988
+(+6,627), work_deepbench at 363,026,387 (+4,000) and work_scanbench at
+280,951 (+24). They were not built twice, so their share of the pipeline is
+not separated from the other five fixes.
+
+The release codegen row reads the pipeline too:
+codegen_instructions_release lands on 408,380,259 (+46,598). The dev row
+does not use it and reads 124,601,861 (-1,988).
+
+The compiler's own rows rose. compile_instructions lands on 25,256,527
+(+98,141), entry_instructions on 85,069,514 (+294,061), library_instructions
+on 85,595,593 (+287,043) and emit_instructions on 29,903,370 (+30,628).
+compile_allocs lands on 14,306 (+18) and compile_peak_bytes on 711,396
+(+912). The interpreted run's memory moved with them: interp_allocs lands on
+895,189 (+33) and interp_peak_bytes on 721,532 (+912), while
+interp_instructions fell to 589,169,442 (-696,482). These arrived with the
+branch and were not taken apart; the lib/list guard and the inference bit
+are the two changes the front end reads.
+
+Welfare fell by 0.0034, from 90.3989 to 90.3955. Every change here makes an
+engine agree with the interpreter or makes a release build link, so the floor
+takes the fall under the 2026-09-13 rule, and the history entry says so.

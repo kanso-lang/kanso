@@ -310,4 +310,4 @@ front_end_visits=7523
 #
 # CI measured keys and values over maps. compile_peak_bytes 710,281 ->
 # 710,484, a RISE of 203 (+0.0286%).
-compile_peak_bytes=710484
+compile_peak_bytes=711396
