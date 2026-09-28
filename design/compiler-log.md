@@ -18435,3 +18435,18 @@ lands on 25,234,727 (-23,789), `entry_instructions` on 85,008,062 (-67,783),
 rows, the text and the allocation counters did not move. What in the change
 moved the interpreter's row has not been isolated. The sum rose, and the floor
 holds it.
+
+## 2026-09-28 — a pattern that takes a wrapper apart is refused
+
+A constructor pattern naming a wrapper never matched on any engine. For
+`type id int`, an arm `fn size (id n)` was passed over by `size (id 3)` on the
+interpreter and on both native builds, and the value fell to the next arm; for
+`type tag pt`, `(tag p)` did the same, and a tagged record fell to the record's
+own arm. The engines agreed, so the generated-program differential, which has
+declared those arms since it learned subtypes, could not see it. A wrapper has
+no fields of its own, the same as a typeset, and the checker already refuses a
+typeset taken apart. It now refuses a wrapper taken apart the same way, and
+names `x:id` as the arm that takes one. No such pattern appears in lib, kq or
+vse. The error fixture `a_wrapper_pattern_never_matches` reported nothing on
+the old checker, and the row "a wrapper pattern left unchecked" puts that back.
+CI will measure the instruction rows.

@@ -1,0 +1,8 @@
+error[type]: `id` is a wrapper with no fields of its own, so this arm can never match; write `x:id` to take one
+  --> a_wrapper_pattern_never_matches.kso:13:13
+  13 | fn size (id n)
+                   ^
+error[type]: `tag` is a wrapper with no fields of its own, so this arm can never match; write `x:tag` to take one
+  --> a_wrapper_pattern_never_matches.kso:16:14
+  16 | fn size (tag p)
+                    ^

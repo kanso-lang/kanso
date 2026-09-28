@@ -3814,6 +3814,7 @@ fn check_annotation_names(
         p: &Pattern,
         declared: &HashSet<&str>,
         annotating: &HashSet<&str>,
+        wrapping: &HashSet<&str>,
         diags: &mut Vec<Diagnostic>,
     ) {
         match p {
@@ -3855,8 +3856,21 @@ fn check_annotation_names(
                         other_span(&fields[0]),
                     ));
                 }
+                // A wrapper has no fields of its own either: `(id n)` for
+                // `type id int` took no value apart on any engine, and the arm
+                // was passed over in silence, where `n:id` takes it.
+                if wrapping.contains(ty.as_str()) && !fields.is_empty() {
+                    diags.push(Diagnostic::new(
+                        "type",
+                        format!(
+                            "`{ty}` is a wrapper with no fields of its own, so this arm \
+                             can never match; write `x:{ty}` to take one"
+                        ),
+                        other_span(&fields[0]),
+                    ));
+                }
                 for f in fields {
-                    patterns(f, declared, annotating, diags);
+                    patterns(f, declared, annotating, wrapping, diags);
                 }
             }
             _ => {}
@@ -3933,13 +3947,15 @@ fn check_annotation_names(
     // The typesets, borrowed from the list `declared` was built from.
     let annotating: HashSet<&str> =
         program.types.iter().filter(|t| !t.members.is_empty()).map(|t| t.name.as_str()).collect();
+    let wrapping: HashSet<&str> =
+        program.types.iter().filter(|t| t.parent.is_some()).map(|t| t.name.as_str()).collect();
     for decl in &program.fns {
         for param in &decl.params {
-            patterns(param, declared, &annotating, diags);
+            patterns(param, declared, &annotating, &wrapping, diags);
         }
         for stmt in &decl.body {
             if let Stmt::Bind { pattern, .. } = stmt {
-                patterns(pattern, declared, &annotating, diags);
+                patterns(pattern, declared, &annotating, &wrapping, diags);
             }
         }
     }

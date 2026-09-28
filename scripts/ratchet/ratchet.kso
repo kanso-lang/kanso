@@ -3753,7 +3753,20 @@ cycle_unchecked = row
 
 rows_c1zzze = text/concat rows_c1zzzd [cycle_unchecked]
 
-rows_c = text/concat rows_c1zzze [itself]
+# A wrapper has no fields of its own. Left unchecked, a pattern that takes one
+# apart passes `kanso check` and the error corpus holds a diagnostic nobody
+# raised.
+wrapper_pattern = row
+  "a wrapper pattern left unchecked"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_wrapper_pattern_left_unchecked")
+  no_setup
+
+rows_c1zzzf = text/concat rows_c1zzze [wrapper_pattern]
+
+rows_c = text/concat rows_c1zzzf [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
