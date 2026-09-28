@@ -3563,7 +3563,44 @@ join_inferred_as_text = row
 
 rows_c1zzo = text/concat rows_c1zzn [join_inferred_as_text]
 
-rows_c = text/concat rows_c1zzo [itself]
+# A map is indexed by an int or a string. Indexed by any key, a none answers a
+# miss natively, and the runtime corpus prints where the interpreter refuses.
+map_any_key = row
+  "a map indexed by any key"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_map_indexed_by_any_key")
+  release
+
+rows_c1zzp = text/concat rows_c1zzo [map_any_key]
+
+# An index reads through a subtype to its base value, as `at` does. Blind to
+# subtypes, a compiled build refuses a subtype of int as a position, and the
+# micro corpus dies in a release build.
+native_index_sub = row
+  "a native index blind to subtypes"
+  true
+  "cargo test --release --test golden micro_corpus_survives_a_release_build"
+  "specs (unit, golden, differential)"
+  (breaking "a_native_index_blind_to_subtypes")
+  release
+
+rows_c1zzq = text/concat rows_c1zzp [native_index_sub]
+
+# The same in the interpreter, which the micro corpus reads beside a compiled
+# build.
+interp_index_sub = row
+  "an interpreted index blind to subtypes"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "an_interpreted_index_blind_to_subtypes")
+  release
+
+rows_c1zzr = text/concat rows_c1zzq [interp_index_sub]
+
+rows_c = text/concat rows_c1zzr [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

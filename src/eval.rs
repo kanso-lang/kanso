@@ -4748,6 +4748,18 @@ pub fn index_value(container: Value, index: Value, span: Span) -> EvalResult {
             let key = map_key(index, span)?;
             Ok(entries.get(&key).cloned().unwrap_or(Value::NoneV))
         }
+        // An index is `at` written as syntax, and `at`, like every builtin,
+        // reads through a subtype to its base value. A subtype matches none of
+        // the arms above, so it is unwrapped here, where the reads that do
+        // match never pay for the question. Here rather than at each caller,
+        // because the browser's runtime calls this too.
+        (Value::Sub { .. }, _) | (_, Value::Sub { .. }) => {
+            let base_of = |v: Value| match v {
+                Value::Sub { .. } => sub_base(v),
+                other => other,
+            };
+            index_value(base_of(container), base_of(index), span)
+        }
         (base, _) => Err(RuntimeError {
             message: format!(
                 "indexing takes a list or string with a 1-based position, or a map with a key{}",

@@ -1,0 +1,13 @@
+# A map is indexed by an int or a string, and anything else is refused. A
+# compiled build compared any key against the map's own and answered a miss,
+# so a none that reached `m[k]` read back as a none where the interpreter
+# stopped. Found by a generated program on 2026-09-28, as `list/tally` over a
+# list holding a none.
+import "std/list"
+import "std/os"
+
+pub fn shown z
+  k = list/first (list/take [z] 0)
+  "{{ "a":1 }[k]}"
+
+pub play = os/args .> (a -> print (shown (length a)))
