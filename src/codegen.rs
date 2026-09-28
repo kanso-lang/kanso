@@ -6638,11 +6638,17 @@ impl<'a> Backend<'a> {
     /// Return a KValue in the current function's ABI shape. A `%parsed`-returning
     /// function only reaches here with a failure (its record tails are built
     /// directly), so the failure's two words become the `%parsed`.
+    ///
+    /// A `%KValue` function can be handed a register-returned record to
+    /// return: a thunk site is emitted outside the analysis that gives a tail
+    /// caller its callee's return shape, so its tail call comes back `%parsed`
+    /// and is boxed here.
     fn emit_ret(&self, f: &mut FnEmit, value: &str) {
         let value = release_cells(f, value);
         if f.ret_ty == "%parsed" {
             self.emit_parsed_from_failure(f, &value);
         } else {
+            let value = self.as_value(f, &value);
             f.line(&format!("ret %KValue {value}"));
         }
     }
@@ -7955,11 +7961,20 @@ impl<'a> Backend<'a> {
                     } else {
                         // A %parsed function tail-calling a KValue failure helper:
                         // can't musttail across the type change, so call and wrap.
+                        // The other way round is a thunk site, a `%KValue` function
+                        // made outside the analysis that matches a tail caller's
+                        // shape to its callee's, calling a group that returns its
+                        // record in registers: emit_ret boxes it.
                         f.line(&format!(
                             "{t} = call tailcc {callee_ret} @{}({})",
                             dsym(name, n),
                             args_ir.join(", ")
                         ));
+                        if let Some(ty) = self.escape.returns_ty(name, n) {
+                            if callee_ret == "%parsed" {
+                                f.record_parsed(&t, ty, self.type_ids[ty]);
+                            }
+                        }
                         self.emit_ret(f, &t);
                     }
                     return Ok(());

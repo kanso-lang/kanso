@@ -17543,3 +17543,39 @@ direct write back, and the test failed in three sittings of three.
 
 A user meets this when two builds start in one fresh temp directory, as a
 `make -j` or a parallel test runner does on its first run.
+
+## 2026-09-28 — a lazy cell's site boxes a record returned in registers
+
+A generated program with a function nobody called failed its dev build:
+
+    fn ignored _ _
+      text/to_int "12"
+
+    fn never_called _ n
+      kept = [6 12 8]
+      dropped = list/drop kept 3
+      ignored dropped n
+
+clang refused the module with "'%t1' defined with type '%parsed' but expected
+'%KValue'". `ignored` never reads its first parameter, so `dropped` is lazy,
+and its cell's site tail-calls `list/drop`. That group returns its record in
+two registers as a `%parsed`. A tail call between groups whose return shapes
+differ is emitted as a call followed by `emit_ret`, which converts a
+`%KValue` failure into a `%parsed` for a caller that returns one, but did not
+convert the other way: the temp was never marked as a register-returned
+record, so `emit_ret` returned the pair as a tagged value. An ordinary caller
+never reaches that case, because the analysis that gives a tail caller its
+callee's return shape covers it. A lazy cell's site is made outside that
+analysis, and here the site sat in code no call reaches.
+
+The tail path now marks a `%parsed` result the way the non-tail call path
+already did, and `emit_ret` boxes a marked record when its own function
+returns a `%KValue`. The site calls `k_parsed_box` on the two words and
+returns the box.
+
+The micro fixture `a_lazy_record_call_nobody_reads_still_builds` is the
+program above with a `play` that prints `7`. On main the micro corpus went red
+on it, and it passes on every engine with the change. The ratchet row "a thunk
+site returns a record unboxed" drops the new mark, and the corpus goes red
+again. No benchmark carries such a site, so the emitted-code, text and cost
+goldens are unchanged.
