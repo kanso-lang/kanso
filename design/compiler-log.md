@@ -17066,49 +17066,6 @@ this way. The repository's own map walks in lib/json, kq and kanso-json now
 index the two columns directly. The two folds over `entries` in lib/list,
 `transform_keys` and `transform_values`, are the ones left.
 
-<<<<<<< HEAD
-## 2026-09-28 — the allocator is told there is one NUMA node
-
-`interp_instructions` counts inside `kanso::run_interpreted_on_stack`, the
-interpreter's own thread. Profiling only that frame on main at dd5c9c2d, and
-listing what in it could depend on the machine, found mimalloc counting the
-host's NUMA nodes. It does that the first time any thread allocates, and the
-interpreter's thread is the first to ask for the node it runs on. The count
-formats `/sys/devices/system/node/node1` with its own `snprintf` and asks
-`access` whether it exists, then `node2`, until one does not. On this
-one-node container that is one probe. A machine with two nodes makes two, and
-from then on every thread asks the kernel which node it is on and places its
-memory by the answer.
-
-The 2026-09-15 rule says a counter reads the code under test and nothing
-else, and that external state is put into a known state before it is
-measured. The constructor that already sets mimalloc's arena commit and purge
-delay now also sets `mi_option_use_numa_nodes` to 1, which answers the count
-without the probe. The option is named by its position in the vendored
-header, like the other two, and the spec that reads the header pins it.
-
-Measured with the gate's own anchor and exclusions on this container, twice
-each and byte-identical: 586,670,957 on main, 586,670,153 with the option
-set, 804 fewer. The container's rustc is not the one the golden names, so
-the golden takes CI's row, which fell by the same 804: 589,693,399 ->
-589,692,595. No compile row moved, since the main thread's probe happens
-before `kanso::main`, where those rows begin counting. Welfare banks the rise.
-
-This does not explain the six instructions two CI jobs read apart on one
-commit, the row STATUS.md carries as "A welfare counter reads three parts per
-billion". Each further node costs the probe again, about 800 instructions,
-so a difference in node count would read in hundreds, not six. The other host reads the anchor makes were
-checked in the same pass. `/proc/sys/vm/overcommit_memory` is read before
-the anchor, and mimalloc treats 0 and 1 the same. The transparent-hugepage
-setting is read before the anchor and changes nothing unless an option asks
-for huge pages. The clock is read through the syscall under valgrind rather
-than the vDSO, so its cost does not depend on the host's clocksource.
-
-Two ratchet rows: "the NUMA node count left to the host" deletes the call and
-turns `interp_instructions` red, which on this container reads 586,670,957
-again, and "the NUMA option named one past the one that matters" turns the
-header spec red.
-=======
 ## 2026-09-28 — a map written from where it holds its pairs, measured and declined
 
 On the run program at dd5c9c2d, `keys` and `values` cost 33,552,813
@@ -17166,4 +17123,45 @@ list in place of that pair's record, while `keys` still lists the key and
 `values` lists the failure, so the callee would be handed a key it never saw
 before. The pass would need a proof that the map holds no failure before it
 could fire.
->>>>>>> origin/main
+
+## 2026-09-28 — the allocator is told there is one NUMA node
+
+`interp_instructions` counts inside `kanso::run_interpreted_on_stack`, the
+interpreter's own thread. Profiling only that frame on main at dd5c9c2d, and
+listing what in it could depend on the machine, found mimalloc counting the
+host's NUMA nodes. It does that the first time any thread allocates, and the
+interpreter's thread is the first to ask for the node it runs on. The count
+formats `/sys/devices/system/node/node1` with its own `snprintf` and asks
+`access` whether it exists, then `node2`, until one does not. On this
+one-node container that is one probe. A machine with two nodes makes two, and
+from then on every thread asks the kernel which node it is on and places its
+memory by the answer.
+
+The 2026-09-15 rule says a counter reads the code under test and nothing
+else, and that external state is put into a known state before it is
+measured. The constructor that already sets mimalloc's arena commit and purge
+delay now also sets `mi_option_use_numa_nodes` to 1, which answers the count
+without the probe. The option is named by its position in the vendored
+header, like the other two, and the spec that reads the header pins it.
+
+Measured with the gate's own anchor and exclusions on this container, twice
+each and byte-identical: 586,670,957 on main, 586,670,153 with the option
+set, 804 fewer. The container's rustc is not the one the golden names, so
+the golden takes CI's row, which fell by the same 804: 589,693,399 ->
+589,692,595. No compile row moved, since the main thread's probe happens
+before `kanso::main`, where those rows begin counting. Welfare banks the rise.
+
+This does not explain the six instructions two CI jobs read apart on one
+commit, the row STATUS.md carries as "A welfare counter reads three parts per
+billion". Each further node costs the probe again, about 800 instructions,
+so a difference in node count would read in hundreds, not six. The other host reads the anchor makes were
+checked in the same pass. `/proc/sys/vm/overcommit_memory` is read before
+the anchor, and mimalloc treats 0 and 1 the same. The transparent-hugepage
+setting is read before the anchor and changes nothing unless an option asks
+for huge pages. The clock is read through the syscall under valgrind rather
+than the vDSO, so its cost does not depend on the host's clocksource.
+
+Two ratchet rows: "the NUMA node count left to the host" deletes the call and
+turns `interp_instructions` red, which on this container reads 586,670,957
+again, and "the NUMA option named one past the one that matters" turns the
+header spec red.
