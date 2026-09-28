@@ -17510,3 +17510,54 @@ compile-side rows fell: `compile_instructions` 25,156,193 -> 25,118,657,
 None of those four runs the interpreter's writes, and what moved them was
 not isolated. Welfare nets
 the trade upward and is banked.
+
+## 2026-09-28 — a large float rounds to the integer it is
+
+    f = text/to_float "1e30"
+    math/round f
+
+The interpreter printed `9223372036854775807` and both native builds printed
+`-9223372036854775808`. Neither is the answer. A kanso int has no width, so
+the rounded value is `1000000000000000019884624838656`, the integer the
+double 1e30 holds exactly. The interpreter cast the rounded float with
+`as i64`, which saturates at the edge of the range. The runtime called
+`llround`, which returns LLONG_MIN for any float it cannot hold, so the two
+engines were wrong in opposite directions. A generated program found it by
+rounding a float it had parsed from a string built at run time.
+
+The interpreter now converts a finite rounded float to a `BigInt` and answers
+that. A compiled build holds an int in 64 bits, so `k_b_round` refuses a
+float past the range with the message its arithmetic already gives on
+overflow, "integer overflow (int64 native build; spec int is arbitrary
+precision)". The differential law allows that shape: an engine that cannot
+hold a value declines it with a diagnostic and does not answer something
+else. Inside the range the runtime rounds with `round` and converts, so
+`-2.5` is `-3` and `9.2e18` is `9200000000000000000` on every engine.
+
+The three non-finite floats are not settled by this entry. NaN answers 0 and
+the infinities answer the ends of int64 on every engine, which is what the
+interpreter's saturating cast did. The runtime now matches it, where before it
+answered LLONG_MIN for all three. Whether round of NaN should answer at all is
+a question about the language, and it has gone to Clay as the
+design/pending-gavels.md entry "What does `math/round` answer for NaN and the
+infinities?".
+
+The spec is `tests/a_float_past_int64_rounds_exactly.rs`. It stages a module
+whose float is parsed from text joined at run time, so nothing folds. It pins
+the interpreter's answers for 1e30 and -9.3e18, the compiled refusal for both,
+and one output for each engine on 9.2e18, -2.5, inf, -inf and nan. On main
+all three tests failed. Two ratchet rows cover it:
+
+- "a large float rounds to int64's edge" takes the interpreter's finite arm
+  away, and the interpreted test fails.
+- "a large float rounds through llround" puts `llround` back in the runtime,
+  and the compiled and agreement tests fail.
+
+The runtime's `k_b_round` is 144 bytes longer, and every benchmark carries it,
+so each row of `bench/text_golden.txt` rose by 144: jsonbench 241,944,
+encodebench 250,392, oneshot 252,584, basket 237,976, widebench 251,624,
+deepbench 221,032, escapebench 215,352, pendbench 228,888, indexbench
+215,336, scanbench 312,984, digestbench 236,968, readbench 215,768, livebench
+253,544 and runbench 401,896. The `text` key the trend gate reads is their
+sum, 3,534,272 -> 3,536,288. No benchmark calls `round`, so no counter the
+objective weighs reads the new code.
