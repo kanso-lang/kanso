@@ -17295,19 +17295,23 @@ compiled in the release build's hot unit, and `hot_source` declares both.
 program it reads 3,017,526 -> 2,253,156; on encodebench 4,200,475 ->
 803,275; on livebench 6,031,610 -> 2,634,410; on oneshot 31,847 -> 23,354.
 
-Two counters are worse, both by the flag byte: each filled slot adds one
-permanent byte, and 632 slots fill on every benchmark. perm_live_bytes and
-perm_peak_bytes read 15,168 -> 15,800 on the decode, encode, live and oneshot
-veins, and on the run program perm_live_bytes 15,168 -> 15,800 and
-perm_peak_bytes 31,568 -> 32,200. The mem fixture a_short_token_is_shared
-reads perm_live_bytes and perm_peak_bytes 120 -> 125. Every benchmark's
-`.text` grows by 144 to 288 bytes.
+The flag costs one permanent byte for each slot that fills, and 632 fill on
+every benchmark, so the permanent-byte counters are worse on every vein that
+carries them: perm_live_bytes 15,168 -> 15,800 and perm_peak_bytes 15,168 ->
+15,800; encode_perm_live_bytes 15,168 -> 15,800 and encode_perm_peak_bytes
+15,168 -> 15,800; live_perm_live_bytes 15,168 -> 15,800 and
+live_perm_peak_bytes 15,168 -> 15,800; oneshot_perm_live_bytes 15,168 ->
+15,800 and oneshot_perm_peak_bytes 15,168 -> 15,800; run_perm_live_bytes
+15,168 -> 15,800 and run_perm_peak_bytes 31,568 -> 32,200. The mem fixture
+reads a_short_token_is_shared_perm_live_bytes 120 -> 125 and
+a_short_token_is_shared_perm_peak_bytes 120 -> 125. Every benchmark's
+`.text` grows by 144 to 288 bytes, and text 3,530,992 -> 3,533,600.
 
 Measured by CI: runbench 1,092,089,764 -> 1,073,245,339 (-1.73%), livebench
 1,619,897,540 -> 1,536,099,047 (-5.17%), encodebench 2,412,230,725 ->
 2,338,087,271 (-3.07%) and oneshot 12,747,861 -> 12,575,988 (-1.35%).
-jsonbench, which decodes and writes nothing, reads 732,450,238 ->
-732,487,894, 37,656 more. It fills the same 632 slots, and the only code
+jsonbench, which decodes and writes nothing, reads work_jsonbench
+732,450,238 -> 732,487,894, 37,656 more. It fills the same 632 slots, and the only code
 this change adds to its path is the walk each fill makes over its token's
 bytes to set the flag. The build rows are worse too:
 codegen_instructions_release 402,637,018 -> 407,792,416 (+1.28%) and
