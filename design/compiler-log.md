@@ -18478,3 +18478,11 @@ declares. An import's types are not added, so a bare name from another module
 is refused as before. `tests/sibling_types.rs` runs a two-file module on both
 engines, and the row "a sibling file's type left undeclared" puts the old set
 back.
+
+The first way of doing it merged the module's type names into each file's set,
+and CI read `compile_allocs` 14,306 -> 14,337 on that head: a copy of every name
+for the module, then a set per file grown by all of them. Each file now asks its
+own set and then the module's, which is never copied, and the imports' names
+sit in a set of their own for the typeset check that reads both. On this
+container, where main reads the golden's 14,306, that reads 14,308. The two
+left are the second set's table. CI will measure the rest.

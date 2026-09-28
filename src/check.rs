@@ -192,7 +192,7 @@ pub fn check(program: &mut Program, require_entry: bool) -> Vec<Diagnostic> {
     let markers = marker_names(program);
     let type_names = program.types.iter().map(|t| t.name.clone()).collect();
     let mut diags = resolve_markers(program, &markers);
-    diags.extend(check_typesets(program, &type_names));
+    diags.extend(check_typesets(program, &type_names, &HashSet::default()));
     diags.extend(check_file(program, &HashSet::default()));
     if require_entry {
         check_entry(program, &mut diags);
@@ -2062,7 +2062,11 @@ const TYPESET_BUILTINS: [&str; 6] = ["bool", "done", "float64", "int", "none", "
 
 /// A multi-member field typeset enumerates concrete types: each member must
 /// name a declared type or a builtin type word.
-pub fn check_typesets(program: &Program, type_names: &HashSet<String>) -> Vec<Diagnostic> {
+pub fn check_typesets(
+    program: &Program,
+    type_names: &HashSet<String>,
+    more_type_names: &HashSet<String>,
+) -> Vec<Diagnostic> {
     let mut diags = Vec::new();
     for ty in &program.types {
         for (field, tys, span) in &ty.fields {
@@ -2071,7 +2075,8 @@ pub fn check_typesets(program: &Program, type_names: &HashSet<String>) -> Vec<Di
             }
             for member in tys {
                 let known = TYPESET_BUILTINS.contains(&member.as_str())
-                    || type_names.contains(member.as_str());
+                    || type_names.contains(member.as_str())
+                    || more_type_names.contains(member.as_str());
                 if !known {
                     diags.push(Diagnostic::new(
                         "name",
@@ -2113,7 +2118,7 @@ pub fn check_file_shadow(
     program: &Program,
     extern_globals: &HashSet<&str>,
     shadowable: &HashSet<String>,
-    sibling_types: &HashSet<&str>,
+    sibling_types: &HashSet<String>,
 ) -> Vec<Diagnostic> {
     let mut diags = Vec::new();
     check_type_order(program, &mut diags);
@@ -2125,17 +2130,13 @@ pub fn check_file_shadow(
     check_field_conflicts(program, &mut diags);
     // One set, read by the annotation walk and by the resolver. Built twice
     // it cost a second HashSet on every compile, which compile_allocs saw.
-    //
+    let own_type_names: HashSet<&str> = program.types.iter().map(|t| t.name.as_str()).collect();
     // A module's files share their types, so a type the next file declares is
     // as declared as one this file does. Until 2026-09-28 only this file's
-    // counted, and `p:pt` with `pt` declared beside it was refused.
-    let declared_type_names: HashSet<&str> = program
-        .types
-        .iter()
-        .map(|t| t.name.as_str())
-        .chain(sibling_types.iter().copied())
-        .collect();
-    check_annotation_names(program, &declared_type_names, &mut diags);
+    // counted, and `p:pt` with `pt` declared beside it was refused. Asked of
+    // both sets in turn rather than merged, which cost an allocation per name.
+    let declared_type_names = TypeNames { own: &own_type_names, siblings: sibling_types };
+    check_annotation_names(program, declared_type_names, &mut diags);
     let mut globals = collect_globals(program, &mut diags);
     globals.extend(extern_globals.iter().copied());
     let fn_arities = Arities::of(program);
@@ -2151,7 +2152,7 @@ pub fn check_file_shadow(
         .map(|t| (t.name.as_str(), t.fields.len()))
         .collect();
     let declared =
-        Declared { fn_arities: &fn_arities, type_arity: &type_arity, types: &declared_type_names };
+        Declared { fn_arities: &fn_arities, type_arity: &type_arity, types: declared_type_names };
     // One vector of locals for the whole file. Every body leaves it empty, and
     // a fresh one per declaration grew from nothing each time.
     let mut locals = Vec::new();
@@ -3802,9 +3803,22 @@ fn check_retired_any(program: &Program, diags: &mut Vec<Diagnostic>) {
 const BUILT_IN_TYPES: [&str; 9] =
     ["int", "float64", "string", "bool", "none", "done", "err", "some", "any"];
 
+/// The type names a file may use: its own, and in a module every other file's.
+#[derive(Clone, Copy)]
+struct TypeNames<'a> {
+    own: &'a HashSet<&'a str>,
+    siblings: &'a HashSet<String>,
+}
+
+impl TypeNames<'_> {
+    fn contains(&self, name: &str) -> bool {
+        self.own.contains(name) || self.siblings.contains(name)
+    }
+}
+
 /// The names in an annotation that no type answers to. A qualified name is
 /// the import resolver's to answer for.
-fn undeclared_in(ty: &str, declared: &HashSet<&str>) -> Vec<String> {
+fn undeclared_in(ty: &str, declared: TypeNames) -> Vec<String> {
     annotation_names(ty)
         .into_iter()
         .filter(|n| {
@@ -3814,14 +3828,10 @@ fn undeclared_in(ty: &str, declared: &HashSet<&str>) -> Vec<String> {
         .collect()
 }
 
-fn check_annotation_names(
-    program: &Program,
-    declared: &HashSet<&str>,
-    diags: &mut Vec<Diagnostic>,
-) {
+fn check_annotation_names(program: &Program, declared: TypeNames, diags: &mut Vec<Diagnostic>) {
     fn patterns(
         p: &Pattern,
-        declared: &HashSet<&str>,
+        declared: TypeNames,
         types: &crate::hash::Map<&str, &crate::ast::TypeDecl>,
         diags: &mut Vec<Diagnostic>,
     ) {
@@ -4330,7 +4340,7 @@ struct Declared<'a> {
     /// Every declared type name, records and subtypes and typesets alike.
     /// An upcast's target is a name this walk already reaches, so asking
     /// whether a type answers to it costs the lookup and no traversal.
-    types: &'a HashSet<&'a str>,
+    types: TypeNames<'a>,
 }
 
 struct Resolver<'a> {
