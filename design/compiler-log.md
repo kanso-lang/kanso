@@ -17089,7 +17089,9 @@ header, like the other two, and the spec that reads the header pins it.
 Measured with the gate's own anchor and exclusions on this container, twice
 each and byte-identical: 586,670,957 on main, 586,670,153 with the option
 set, 804 fewer. The container's rustc is not the one the golden names, so
-the golden takes CI's row.
+the golden takes CI's row, which fell by the same 804: 589,693,399 ->
+589,692,595. No compile row moved, since the main thread's probe happens
+before `kanso::main`, where those rows begin counting. Welfare banks the rise.
 
 This does not explain the six instructions two CI jobs read apart on one
 commit, the row STATUS.md carries as "A welfare counter reads three parts per
