@@ -17445,3 +17445,8 @@ No program that ran before takes a different rewrite: the only form added to
 the walk is the guard, and a reader under one was the failing case.
 `fuse_expr` has the same gap and was left alone, so a chain written after a
 `return` is not fused. That costs speed but not correctness.
+
+CI's rows. Three compile-side rows fell and none rose: `compile_instructions`
+25,156,469 -> 25,156,193, `entry_instructions` 84,771,442 -> 84,770,509 and
+`library_instructions` 85,303,737 -> 85,302,811. They fell with the change,
+and what in it they read was not isolated.
