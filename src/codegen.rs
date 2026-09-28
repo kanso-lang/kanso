@@ -54,7 +54,7 @@ pub fn counters_wanted() -> bool {
 
 /// How many `k_stats_on` gates DECLARES carries. Pinned so that adding one
 /// without teaching `index_declares` about it fails the build.
-pub const STATS_GATE_SITES: usize = 11;
+pub const STATS_GATE_SITES: usize = 10;
 
 const DECLARES: &str = r#"%KValue = type { i64, i64 }
 %parsed = type { i64, i64 }
@@ -1036,50 +1036,20 @@ slow:
 ; fast arm the guard is four loads and two compares, so the whole thing fits
 ; here: on the frontier with room, claim the slot and bump both lengths. An
 ; err item goes to the C, which answers the err: pushing one hands it on, as
-; every builtin does, and a tag known at the site folds the test away.
+; every builtin does. Where the emitter's sets prove the item is no err -- a
+; field a pattern bound, a literal, arithmetic that cannot fail -- it calls
+; `k_b_push_mut_known` directly and the item test is not written at all.
 define internal %KValue @k_b_push_mut_fast(%KValue %lv, %KValue %item) alwaysinline {
-  %ltag = extractvalue %KValue %lv, 0
-  %islist = icmp eq i64 %ltag, 9
-  br i1 %islist, label %lstat, label %lslow
-lstat:
-  %lso = load i32, ptr @k_stats_on
-  %lcounting = icmp ne i32 %lso, 0
-  br i1 %lcounting, label %lslow, label %lshape
-lshape:
   %itag = extractvalue %KValue %item, 0
   %ierr = icmp eq i64 %itag, 5
-  br i1 %ierr, label %lslow, label %litem
-litem:
-  %lpi = extractvalue %KValue %lv, 1
-  %l = inttoptr i64 %lpi to ptr
-  %llen = load i64, ptr %l
-  %itemspp = getelementptr i8, ptr %l, i64 8
-  %items = load ptr, ptr %itemspp
-  %lbuf = getelementptr i8, ptr %items, i64 -16
-  %lcap = load i64, ptr %lbuf
-  %lusedp = getelementptr i8, ptr %lbuf, i64 8
-  %lused = load i64, ptr %lusedp
-  %lfront = icmp eq i64 %lused, %llen
-  br i1 %lfront, label %lroom, label %lslow
-lroom:
-  %llen2 = shl i64 %llen, 1
-  %lneed = add i64 %llen2, 2
-  %lfits = icmp sle i64 %lneed, %lcap
-  br i1 %lfits, label %lwrite, label %lslow
-lwrite:
-  %lslot = getelementptr %KValue, ptr %items, i64 %llen
-  store %KValue %item, ptr %lslot
-  %llen1 = add i64 %llen, 1
-  store i64 %llen1, ptr %lusedp
-  store i64 %llen1, ptr %l
-  ret %KValue %lv
-lslow:
-  %lr = call %KValue @k_b_push_mut(%KValue %lv, %KValue %item)
-  ret %KValue %lr
+  br i1 %ierr, label %eslow, label %eknown
+eknown:
+  %kr = call %KValue @k_b_push_mut_known(%KValue %lv, %KValue %item)
+  ret %KValue %kr
+eslow:
+  %er = call %KValue @k_b_push_mut(%KValue %lv, %KValue %item)
+  ret %KValue %er
 }
-; The same push where the emitter's sets prove the item is no err: a field
-; a pattern bound, a literal, arithmetic that cannot fail. The item test is
-; the only difference, and the decoder pays it once an element otherwise.
 define internal %KValue @k_b_push_mut_known(%KValue %lv, %KValue %item) alwaysinline {
   %ltag = extractvalue %KValue %lv, 0
   %islist = icmp eq i64 %ltag, 9
@@ -1087,8 +1057,8 @@ define internal %KValue @k_b_push_mut_known(%KValue %lv, %KValue %item) alwaysin
 lstat:
   %lso = load i32, ptr @k_stats_on
   %lcounting = icmp ne i32 %lso, 0
-  br i1 %lcounting, label %lslow, label %lshape
-lshape:
+  br i1 %lcounting, label %lslow, label %litem
+litem:
   %lpi = extractvalue %KValue %lv, 1
   %l = inttoptr i64 %lpi to ptr
   %llen = load i64, ptr %l
