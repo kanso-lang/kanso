@@ -2599,7 +2599,8 @@ One did not, and what it cost is the point.
 
 The HTML was left unmerged. A script then rewrote the file for an unrelated
 reason — renumbering a section — which wrote the working tree's contents back
-out, markers included, and the commit went in with `and `>>>>>>> origin/main` sitting in the published page.
+out, markers included, and the commit went in with `<<<<<<< HEAD`, `=======`
+and `>>>>>>> origin/main` sitting in the published page.
 
 **All three page gates then ran on that tree and all three passed.**
 `golden_prose` reads the `data-golden` spans and there were none in the hunk.
@@ -17608,7 +17609,6 @@ the runtime read `codegen_instructions_dev` 123,379,531 -> 123,384,276 and
 `codegen_instructions_release` 407,793,576 -> 407,709,792. Welfare nets the
 rows slightly upward and is banked.
 
-<<<<<<< HEAD
 ## 2026-09-28 — a builtin's failing arguments answer together, on every engine
 
     fn pushed n
@@ -17732,3 +17732,109 @@ layout: `work_oneshot` 12,565,320 -> 12,565,341, `work_widebench` 27,311,115 ->
 27,311,143, `codegen_instructions_dev` 123,384,276 -> 123,408,461 and
 `codegen_instructions_release` 407,709,792 -> 407,745,282. Welfare nets the
 change upward and is banked.
+
+## 2026-09-28 — a lazy cell's site boxes a record returned in registers
+
+A generated program with a function nobody called failed its dev build:
+
+    fn ignored _ _
+      text/to_int "12"
+
+    fn never_called _ n
+      kept = [6 12 8]
+      dropped = list/drop kept 3
+      ignored dropped n
+
+clang refused the module with "'%t1' defined with type '%parsed' but expected
+'%KValue'". `ignored` never reads its first parameter, so `dropped` is lazy,
+and its cell's site tail-calls `list/drop`. That group returns its record in
+two registers as a `%parsed`. A tail call between groups whose return shapes
+differ is emitted as a call followed by `emit_ret`, which converts a
+`%KValue` failure into a `%parsed` for a caller that returns one, but did not
+convert the other way: the temp was never marked as a register-returned
+record, so `emit_ret` returned the pair as a tagged value. An ordinary caller
+never reaches that case, because the analysis that gives a tail caller its
+callee's return shape covers it. A lazy cell's site is made outside that
+analysis, and here the site sat in code no call reaches.
+
+The tail path now marks a `%parsed` result the way the non-tail call path
+already did, and `emit_ret` boxes a marked record when its own function
+returns a `%KValue`. The site calls `k_parsed_box` on the two words and
+returns the box.
+
+The micro fixture `a_lazy_record_call_nobody_reads_still_builds` is the
+program above with a `play` that prints `7`. On main the micro corpus went red
+on it, and it passes on every engine with the change. The ratchet row "a thunk
+site returns a record unboxed" drops the new mark, and the corpus goes red
+again. No benchmark carries such a site, so the emitted-code, text and cost
+goldens are unchanged.
+
+## 2026-09-28 — a float halfway between two shortest decimals takes the even digit
+
+A generated program printed `9007199254740993.0 * 0.1`. The interpreter
+printed `900719925474099.3` and both native builds printed
+`900719925474099.2`. The product is the double 0x1.999999999999ap+49, whose
+exact value is 900719925474099.25, so the two sixteen-digit decimals lie
+exactly as far from it on either side and both read back as the same double.
+The native renderer is ryū, which takes the even last digit on such a tie, as
+Python's `repr` and JavaScript's number-to-string do. The interpreter asks
+Rust's `{:e}` for its digits, and Rust takes the upper one.
+
+`render_float` now hands Rust's digits to `even_on_a_tie`. A tie can only be
+where the last digit is odd and the digits one below it also read back as the
+double, so only then does it ask for the double's exact expansion, and if that
+expansion is the lower digits followed by a single 5 it takes the lower, even
+digits. Every other float renders as before, with one extra comparison.
+
+A scratch harness parsed 18,000 doubles at run time, weighted toward ties by
+drawing large magnitudes with few fractional bits and dyadic fractions, and
+printed each on the interpreter and as a native build. With the change the two
+engines agree on all of them, and every line has the same significant digits
+as Python's `repr` of the same double. Before it, the engines disagreed on 11
+or 12 of each 1,500. The micro fixture
+`a_float_halfway_between_two_shortest_takes_the_even_digit` prints six such
+doubles, one of them negative, one below ten and one whose upper candidate is
+already even. The ratchet row "a float tie rounded up" keeps Rust's digit and
+the micro corpus goes red.
+
+## 2026-09-28 — the render group's parameter holds any value
+
+`"{p}"` and `print p` call `render/to_string` on a value of any kind. Neither
+is a call site the inference walk visits, so the group's parameter set came
+from the program's explicit calls alone. A program whose only explicit call
+was `render/to_string 11` proved that parameter an int. The backend then passed
+it as a raw word, and an interpolated record reached the renderer as its
+type's tag. This program printed `7` compiled and `defs/pt 0 "11"`
+interpreted:
+
+    fn shown z
+      label = render/to_string 11
+      p = pt z label
+      "{p}"
+
+The same proof put `llvm.assume` on the parameter's tag at the dispatcher's
+entry. Where the explicit calls all passed strings, a record broke that
+assumption, and release builds trapped, or read a list as `<value>`, instead
+of printing. The generated-program differential found ten such divergences in
+one batch of 800 once its programs began calling std/render, std/json,
+std/regexp and std/sha256. All ten came from this one cause.
+
+Inference now starts every parameter of the render group at every kind of
+value except a failure. An interpolation hands an err on rather than rendering
+it, and a first version that seeded the failure bits too added a "passed
+through render/to_string" frame to a compiled err's trace that the interpreter
+does not print; the runtime corpus caught it. An explicit call with an int no
+longer unboxes the parameter. Nothing measured calls the group that way.
+
+A lazy cell can reach an interpolation unforced, and the seed includes one, so
+a dispatcher whose explicit calls never passed a cell now forces its argument
+before `k_b_render_value`. runbench and pendbench each gain that one call:
+`bench/emitted_golden_others.txt` reads runbench calls 3,897 -> 3,898 and
+pendbench 403 -> 404, and `bench/text_golden.txt` reads runbench text 401,896
+-> 402,472 and pendbench 228,888 -> 229,080. The trend gate's sums land at
+`emitted_other_calls` 10,666 -> 10,668, `emitted_other_lines` 85,511 -> 85,513
+and `text` 3,536,288 -> 3,537,056. CI's rows will say what the work rows make
+of it.
+The micro fixture `an_interpolated_record_reaches_render_whole` fails on
+main, and the ratchet row "the render group typed from its calls" restores
+the old seeding and fails it again.
