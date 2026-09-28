@@ -3705,7 +3705,55 @@ native_element_sub = row
 
 rows_c1zzza = text/concat rows_c1zzz [native_element_sub]
 
-rows_c = text/concat rows_c1zzza [itself]
+# A typeset's members name types. Left unchecked, `type either id word` with
+# neither declared passes `kanso check` and the error corpus holds a
+# diagnostic nobody raised.
+member_unchecked = row
+  "a typeset member left unchecked"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_typeset_member_left_unchecked")
+  no_setup
+
+rows_c1zzzb = text/concat rows_c1zzza [member_unchecked]
+
+# A typeset inside a typeset is read through. With the declared member lists
+# a native build has no test for the inner typeset, and the micro corpus
+# disagrees with the interpreter.
+native_nested_set = row
+  "a native typeset read member by member"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_native_typeset_read_member_by_member")
+  release
+
+rows_c1zzzc = text/concat rows_c1zzzb [native_nested_set]
+
+browser_nested_set = row
+  "a browser typeset read member by member"
+  true
+  "cargo test --release --test wasm_engine {wasm_corpus}"
+  "specs (unit, golden, differential)"
+  (breaking "a_browser_typeset_read_member_by_member")
+  with_blob
+
+rows_c1zzzd = text/concat rows_c1zzzc [browser_nested_set]
+
+# A typeset that reaches itself names no set. Left unchecked, the error
+# corpus holds a diagnostic nobody raised.
+cycle_unchecked = row
+  "a typeset cycle left unchecked"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_typeset_cycle_left_unchecked")
+  no_setup
+
+rows_c1zzze = text/concat rows_c1zzzd [cycle_unchecked]
+
+rows_c = text/concat rows_c1zzze [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

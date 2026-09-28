@@ -506,10 +506,8 @@ impl<'a> WasmBackend<'a> {
             Pattern::Annotated { name, ty, .. } => {
                 let members: Vec<String> = self
                     .program
-                    .types
-                    .iter()
-                    .find(|t| t.name == *ty && !t.members.is_empty())
-                    .map(|t| t.members.clone())
+                    .flat_typesets()
+                    .remove(ty.as_str())
                     .unwrap_or_else(|| vec![ty.to_string()]);
                 // one member is the plain check; several OR together
                 let ok = ctx.body.local();
