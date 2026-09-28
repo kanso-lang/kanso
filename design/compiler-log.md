@@ -17303,6 +17303,19 @@ perm_peak_bytes 31,568 -> 32,200. The mem fixture a_short_token_is_shared
 reads perm_live_bytes and perm_peak_bytes 120 -> 125. Every benchmark's
 `.text` grows by 144 to 288 bytes.
 
+Measured by CI: runbench 1,092,089,764 -> 1,073,245,339 (-1.73%), livebench
+1,619,897,540 -> 1,536,099,047 (-5.17%), encodebench 2,412,230,725 ->
+2,338,087,271 (-3.07%) and oneshot 12,747,861 -> 12,575,988 (-1.35%).
+jsonbench, which decodes and writes nothing, reads 732,450,238 ->
+732,487,894, 37,656 more. It fills the same 632 slots, and the only code
+this change adds to its path is the walk each fill makes over its token's
+bytes to set the flag. The build rows are worse too:
+codegen_instructions_release 402,637,018 -> 407,792,416 (+1.28%) and
+codegen_instructions_dev 123,375,537 -> 123,380,276. That delta arrived with
+the change and was not taken apart here; every emitted call to the scanner
+now carries the pointer test, and the release build inlines the scanner at
+each of them.
+
 The micro fixture a_short_token_with_a_quote_is_still_escaped slices four
 tokens out of one string twice, so the second of each is the shared one, and
 writes them as a list and as map keys. Three of them hold a quote, a
