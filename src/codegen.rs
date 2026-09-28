@@ -2123,6 +2123,16 @@ fn bit_twin(name: &str) -> &'static str {
     }
 }
 
+/// The map a call `keys m` or `values m` (named by `which`) reads, when its
+/// argument is a plain name.
+fn column_of<'e>(e: &'e Expr, which: &str) -> Option<&'e str> {
+    let Expr::App { head, args, piped: false, .. } = e else { return None };
+    match (&**head, args.as_slice()) {
+        (Expr::Ident(h, _, _), [Expr::Ident(m, _, _)]) if h.as_str() == which => Some(m.as_str()),
+        _ => None,
+    }
+}
+
 /// The count a builtin the native backend emits a direct call for takes.
 /// Membership is this file's business — which builtins get a C entry rather
 /// than an inline expansion — and the count is `check`'s, so this asks each
@@ -8911,35 +8921,27 @@ impl<'a> Backend<'a> {
     /// call. Only the builtins themselves: a program that declares `keys` or
     /// `values`, or binds either name, is calling something else.
     fn both_columns(&self, f: &FnEmit, args: &[Expr]) -> Option<(usize, usize)> {
-        let column = |e: &Expr, which: &str| -> Option<String> {
-            match e {
-                Expr::App { head, args, piped: false, .. } if args.len() == 1 => {
-                    match (&**head, &args[0]) {
-                        (Expr::Ident(h, _, _), Expr::Ident(m, _, _)) if h.as_str() == which => {
-                            Some(m.as_str().to_string())
-                        }
-                        _ => None,
-                    }
-                }
-                _ => None,
-            }
-        };
-        let declared = |name: &str| {
-            f.lookup(name).is_some() || self.program.fns.iter().any(|d| d.name == name)
-        };
-        if declared("keys") || declared("values") {
-            return None;
-        }
-        let keys_at = args.iter().position(|a| column(a, "keys").is_some())?;
-        let map = column(&args[keys_at], "keys")?;
-        f.lookup(&map)?;
+        // The shape is asked first because it is almost never there: every
+        // call the emitter writes comes through here, and the declarations
+        // are walked only for a call that already has the pair.
+        let (keys_at, map) =
+            args.iter().enumerate().find_map(|(at, a)| Some((at, column_of(a, "keys")?)))?;
         let values_at = args
             .iter()
             .enumerate()
             .skip(keys_at + 1)
-            .find(|(_, a)| column(a, "values").as_deref() == Some(map.as_str()))?
+            .find(|(_, a)| column_of(a, "values") == Some(map))?
             .0;
-        Some((keys_at, values_at))
+        self.columns_are_the_builtins(f, map).then_some((keys_at, values_at))
+    }
+
+    /// Whether `keys` and `values` here are the builtins and `map` a local:
+    /// a program that declares or binds either name calls its own function.
+    fn columns_are_the_builtins(&self, f: &FnEmit, map: &str) -> bool {
+        let declared = |name: &str| {
+            f.lookup(name).is_some() || self.program.fns.iter().any(|d| d.name == name)
+        };
+        f.lookup(map).is_some() && !declared("keys") && !declared("values")
     }
 
     /// Where statement `i` binds `keys m` to a name and the next binds
@@ -8953,15 +8955,12 @@ impl<'a> Backend<'a> {
         else {
             return None;
         };
-        let lazy = |at: usize| self.demand.is_lazy_bind(&f.group.clone(), f.arity, at);
-        if lazy(i) || lazy(i + 1) {
+        let map = column_of(first, "keys")?;
+        if column_of(second, "values") != Some(map) || ks.as_str() == map {
             return None;
         }
-        let args = [first.clone(), second.clone()];
-        let (0, 1) = self.both_columns(f, &args)? else { return None };
-        let Expr::App { args: inner, .. } = first else { return None };
-        let Expr::Ident(m, _, _) = &inner[0] else { return None };
-        if ks.as_str() == m.as_str() {
+        let lazy = |at: usize| self.demand.is_lazy_bind(&f.group.clone(), f.arity, at);
+        if lazy(i) || lazy(i + 1) || !self.columns_are_the_builtins(f, map) {
             return None;
         }
         Some(i + 1)
