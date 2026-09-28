@@ -17327,3 +17327,46 @@ backslash and a tab. The ratchet row "every short token counted clean" marks
 every slot clean, and the fixture's output then carries the three bytes raw.
 The row "a clean token scanned anyway" disables the early return; no output
 changes, and the run vein's find2_calls goes back up.
+
+## 2026-09-28 — escaping a string in one runtime call, measured and declined
+
+The JSON writer escapes a string in Kanso: `escape_onto` scans for the first
+quote, backslash or byte below a space, appends the clean run, writes the
+escape through `esc_byte`, and scans again. The run program meets 4,562
+escapes a document, 410,580 a run, and the profile put roughly 150
+instructions on each. A builtin, `json_escape acc s`, reachable only from the
+standard library, was built to do the whole string in C: one copy when
+nothing needs escaping, otherwise the escaped bytes built on the stack and
+appended once. It agreed with the Kanso writer byte for byte on every escape
+class, on the interpreter and native, and on a string long enough to leave
+the stack buffer.
+
+Measured on the container against the clean-token branch (runbench
+1,073,246,176): with `escape_onto` forwarding every string to the builtin,
+runbench read 1,167,077,693 (+8.74%) and livebench +27.15%. With the Kanso
+clean path kept and the builtin taking only strings that need escaping,
+runbench read 1,101,016,491 (+2.59%) and livebench +8.03%. Declined.
+
+The profile of the first shape says where it lost. The scan the builtin
+calls is `k_b_find2_below_raw`, which a release build keeps as bitcode in
+the hot unit so that the program can inline it; the runtime is machine code,
+so the builtin called it out of line, 59,870,070 instructions of it. Its
+appends went through `k_b_append_fit` and libc's memcpy, another 74 million.
+The Kanso writer reaches the same scan and the same append inlined at each
+call site. A C writer would have to live in the hot unit to compete, beside
+the scanners and beat helpers that are there for the same reason.
+
+Two things were needed to build it at all and are worth knowing. The
+jsonbench generator copies lib/json into a user module, where a `builtin_`
+name is refused, so a builtin called from lib/json has to be routed through
+std in that copy. And a call to a std function that only forwards to a
+builtin is rewritten to the builtin at the caller's site, where the
+linearity analysis has recorded nothing; the builtin has to be named at the
+site that owns the builder for its in-place form to be chosen.
+
+A smaller change inside the Kanso writer was tried the same day: each of the
+seven short escapes written as a two-byte literal, `text/append acc "\\n"`,
+which the emitter turns into one word write at a site that owns its builder,
+where `esc_pair` made two byte appends. The output was unchanged on both
+engines. runbench read 1,080,796,269 against 1,073,246,176 (+0.70%) and
+livebench fell 0.33%. Declined, since the run program is the larger term.
