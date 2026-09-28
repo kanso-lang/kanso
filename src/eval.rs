@@ -3581,12 +3581,18 @@ impl<'a> Interp<'a> {
                             }
                         },
                         bad if is_failure(bad) => return Ok(bad.clone()),
-                        _ => {
-                            return Ok(err_value(
-                                Value::Str("to_bytes takes byte values (0-255)".to_string()),
-                                origin_at(frame, span),
-                            ))
-                        }
+                        // a subtype of int is an int wherever one goes
+                        other => match sub_base(other.clone()) {
+                            Value::Int(n) if u8::try_from(&n).is_ok() => {
+                                raw.push(u8::try_from(&n).expect("asked"))
+                            }
+                            _ => {
+                                return Ok(err_value(
+                                    Value::Str("to_bytes takes byte values (0-255)".to_string()),
+                                    origin_at(frame, span),
+                                ))
+                            }
+                        },
                     }
                 }
                 Ok(Value::Bytes(Rc::new(raw)))
@@ -3732,12 +3738,16 @@ impl<'a> Interp<'a> {
                     match &item {
                         Value::Str(s) => parts.push(s.clone()),
                         bad if is_failure(bad) => return Ok(item.clone()),
-                        _ => {
-                            return Err(RuntimeError {
-                                message: "join takes a list of strings".to_string(),
-                                span,
-                            })
-                        }
+                        // a subtype of string is a string wherever one goes
+                        _ => match sub_base(item) {
+                            Value::Str(s) => parts.push(s),
+                            _ => {
+                                return Err(RuntimeError {
+                                    message: "join takes a list of strings".to_string(),
+                                    span,
+                                })
+                            }
+                        },
                     }
                 }
                 Ok(Value::Str(parts.join(sep)))

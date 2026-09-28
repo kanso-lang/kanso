@@ -7902,6 +7902,12 @@ KValue k_b_to_bytes(KValue lv, const char* origin) {
         KValue item = l->items[i];
         if (!k_not_failure(item)) return item;
         if (item.tag != K_INT || item.payload < 0 || item.payload > 255) {
+            /* a subtype of int is an int wherever one goes */
+            KValue b = k_sub_base(item);
+            if (item.tag == K_SUB && b.tag == K_INT && b.payload >= 0 && b.payload <= 255) {
+                data[i] = (unsigned char)b.payload;
+                continue;
+            }
             return k_err(k_str("to_bytes takes byte values (0-255)"), origin);
         }
         data[i] = (unsigned char)item.payload;
@@ -9883,6 +9889,45 @@ static void k_join_seed_count(KStr* os, KList* l, KStr* ss) {
     k_str_seed_count(os, chars);
 }
 
+/* A join whose list holds something other than a string from position `from`
+   on. A subtype of string is a string wherever one goes, so this finishes the
+   walk reading through wrappers and builds the answer from their base
+   strings; anything else is refused as before. Out of line, so a join of
+   plain strings keeps its loop. */
+static __attribute__((noinline, cold)) KValue k_join_wrapped(KList* l, KStr* ss, long long from) {
+    for (long long i = from; i < l->len; i++) {
+        if (l->items[i].tag == K_THUNK) {
+            l->items[i] = k_force(l->items[i]);
+            k_note_if_carried(l->items[i]);
+        }
+        if (!k_not_failure(l->items[i])) return l->items[i];
+        if (k_sub_base(l->items[i]).tag != K_STR) k_die("join takes a list of strings");
+    }
+    long total = 0;
+    for (long long i = 0; i < l->len; i++) {
+        total += k_as_str(k_sub_base(l->items[i]))->len;
+        if (i) total += ss->len;
+    }
+    char* data = k_alloc(total + 1);
+    long at = 0;
+    for (long long i = 0; i < l->len; i++) {
+        if (i) {
+            memcpy(data + at, ss->data, (size_t)ss->len);
+            at += ss->len;
+        }
+        KStr* is = k_as_str(k_sub_base(l->items[i]));
+        memcpy(data + at, is->data, (size_t)is->len);
+        at += is->len;
+    }
+    data[total] = 0;
+    KStr* os = k_alloc(sizeof(KStr));
+    os->len = total;
+    os->data = data;
+    os->cap = 0;
+    KValue out; out.tag = K_STR; out.payload = k_ptr(os);
+    return out;
+}
+
 KValue k_b_join(KValue lv, KValue sep) {
     if (__builtin_expect(!k_not_failure(lv) || !k_not_failure(sep), 0)) return k_failed2(lv, sep);
     if (lv.tag != K_LIST || sep.tag != K_STR) k_die("join takes a list of strings and a separator");
@@ -9903,7 +9948,7 @@ KValue k_b_join(KValue lv, KValue sep) {
             k_note_if_carried(l->items[i]);
         }
         if (!k_not_failure(l->items[i])) return l->items[i];
-        if (l->items[i].tag != K_STR) k_die("join takes a list of strings");
+        if (l->items[i].tag != K_STR) return k_join_wrapped(l, ss, i);
         total += k_as_str(l->items[i])->len;
         if (i) total += ss->len;
     }
