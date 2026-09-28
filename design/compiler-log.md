@@ -17580,3 +17580,11 @@ Three existing mem fixtures print containers and fell with it:
 twelve cost veins agree. Every benchmark's `.text` fell 4,864 bytes, because
 the renderer's arms no longer inline a chain of concatenations, and the text
 total reads 3,534,272 -> 3,466,176.
+
+CI's rows. runbench 1,073,235,252 -> 1,073,229,607 and basket 29,624,219 ->
+29,456,535, with pendbench, scanbench, digestbench and five others falling by
+less, and
+`codegen_instructions_release` 407,793,576 -> 407,661,694. Three rows rose by
+layout: `work_encodebench` 2,338,075,511 -> 2,338,075,754, `work_oneshot`
+12,565,397 -> 12,565,992 and `codegen_instructions_dev` 123,379,531 ->
+123,399,011. Welfare nets the change upward and is banked.
