@@ -17507,6 +17507,6 @@ CI's rows, read with main's kanso#1693 already merged in. `interp_instructions`
 compile-side rows fell: `compile_instructions` 25,156,193 -> 25,118,657,
 `entry_instructions` 84,770,509 -> 84,647,153, `library_instructions`
 85,302,811 -> 85,180,219 and `emit_instructions` 29,850,334 -> 29,836,693.
-None of those four runs the interpreter's writes, so they moved with the
-compiler binary's layout, and the mechanism was not isolated. Welfare nets
+None of those four runs the interpreter's writes, and what moved them was
+not isolated. Welfare nets
 the trade upward and is banked.
