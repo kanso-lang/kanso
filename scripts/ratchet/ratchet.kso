@@ -3284,6 +3284,19 @@ chain_guard = row
 
 rows_c1zu = text/concat rows_c1zt [chain_guard]
 
+# An accumulator whose seed the caller still reads is copied on the first lap
+# and extended in place after it. Asking the holder count nothing leaves every
+# lap copying, and the spec's allocation difference returns to 161,356.
+seed_once = row
+  "a shared seed copied every lap"
+  true
+  "cargo test --release --test a_shared_seed_is_copied_once"
+  "specs (unit, golden, differential)"
+  (breaking "a_shared_seed_copied_every_lap")
+  no_setup
+
+rows_c1zv = text/concat rows_c1zu [seed_once]
+
 # Pushing an err answers the err on every engine. Without the C push's item
 # test, a push the analysis does not own stores it, and the micro fixture
 # prints a list holding an err.
@@ -3305,9 +3318,9 @@ two_errs = row
   (breaking "two_failures_answer_the_first")
   release
 
-rows_c1zv = text/concat rows_c1zu [push_err two_errs]
+rows_c1zw = text/concat rows_c1zv [push_err two_errs]
 
-rows_c = text/concat rows_c1zv [itself]
+rows_c = text/concat rows_c1zw [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
