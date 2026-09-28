@@ -18423,4 +18423,5 @@ native build produced a program. The checker refuses it, which the error
 fixture `a_typeset_holds_itself` pins and the row "a typeset cycle left
 unchecked" puts back.
 
-CI will measure the instruction rows.
+No benchmark declares a typeset, and the counter sweep reads the twelve cost
+veins and the lazy tier unchanged. CI will measure the instruction rows.
