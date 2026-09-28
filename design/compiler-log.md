@@ -17204,6 +17204,13 @@ declaration on every call the emitter wrote and cloned two expressions for
 every pair of adjacent bindings; it now asks the shape first and the
 declarations only for a call or pair that has it. Welfare banks the rise.
 
+Both column paths then came to copy through one helper, `k_column_into`,
+because the ratchet row "a values column read in insertion order" finds the
+copy loop by its text and refused to apply to two copies of it. The
+benchmarks' machine code is byte-identical, and the child tree that compiles
+the runtime reads codegen_instructions_dev 123,375,584 -> 123,375,537 and
+codegen_instructions_release 402,636,866 -> 402,637,018.
+
 The other ten benchmarks are byte-identical. encodebench carries a frozen
 encoder that walks `entries`, so it never reaches the fused call, and its
 move is the runtime's layout. The allocation counts return to what they were
