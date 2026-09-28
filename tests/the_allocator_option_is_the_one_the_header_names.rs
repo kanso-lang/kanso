@@ -93,6 +93,7 @@ fn the_number_the_compiler_uses(constant: &str) -> usize {
 const OPTIONS: &[(&str, &str)] = &[
     ("ARENA_EAGER_COMMIT", "mi_option_arena_eager_commit"),
     ("PURGE_DELAY", "mi_option_purge_delay"),
+    ("USE_NUMA_NODES", "mi_option_use_numa_nodes"),
 ];
 
 #[test]
