@@ -68,6 +68,14 @@ fn a_short_scan_tail_answers_like_the_byte_walk() {
 #define K_COUNTING 0
 static long long k_stat_find2_calls = 0;
 
+/* The below-scanner asks whether its bytes are a shared token known to be
+   clean. The strings here live in their own pages, never in the store, so
+   the store only has to exist for the scanner to compile. */
+typedef struct {{ char* data; int len; int cap; }} KStr;
+typedef struct {{ KStr s; char data[8]; }} KToken;
+static KToken k_token_store[4096];
+static unsigned char k_token_clean[4096];
+
 {window}
 {find2}
 {below}
