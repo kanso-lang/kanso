@@ -3369,8 +3369,6 @@ render_pass = row
 
 rows_c1zz = text/concat rows_c1zy [render_pass]
 
-rows_c = text/concat rows_c1zzc [itself]
-
 # A lazy cell's site that tail-calls a group returning its record in two
 # registers boxes the pair. Forgetting the pair came back as two words
 # returns it as a tagged value, and clang refuses the micro fixture.
@@ -3384,8 +3382,6 @@ thunk_box = row
 
 rows_c1zza = text/concat rows_c1zz [thunk_box]
 
-rows_c = text/concat rows_c1zzc [itself]
-
 # A double halfway between two shortest decimals prints the even last digit on
 # every engine. Keeping Rust's upper candidate in the interpreter makes the
 # micro fixture disagree across engines.
@@ -3397,10 +3393,7 @@ float_tie = row
   (breaking "a_float_tie_rounded_up")
   release
 
-rows_c1zzb = text/concat rows_c1zza
-rows_c1zza [float_tie]
-
-rows_c = text/concat rows_c1zzc [itself]
+rows_c1zzb = text/concat rows_c1zza [float_tie]
 
 # The render group is called by every interpolation, so its parameter holds
 # any value. Typed from the explicit calls alone, an int-only program passes
@@ -3413,9 +3406,7 @@ render_group = row
   (breaking "the_render_group_typed_from_its_calls")
   release
 
-rows_c1zzc = text/concat rows_c1zzb
-rows_c1zzb
-rows_c1zzb [render_group]
+rows_c1zzc = text/concat rows_c1zzb [render_group]
 
 rows_c = text/concat rows_c1zzc [itself]
 
