@@ -1992,15 +1992,9 @@ impl<'a> Interp<'a> {
             Expr::Index { base, index, strict, span } => {
                 let container = self.force_thunk(self.eval(base, env, frame)?)?;
                 let key = self.force_thunk(self.eval(index, env, frame)?)?;
-                // An index is `at` written as syntax, and `at`, like every
-                // builtin, reads through a subtype to its base value.
-                let base_of = |v: Value| match v {
-                    Value::Sub { .. } => sub_base(v),
-                    other => other,
-                };
                 // the sigil is the choice of channel (ruled 2026-09-16): the
                 // read settles a box holding the element or the miss
-                match index_value(base_of(container), base_of(key.clone()), *span)? {
+                match index_value(container, key.clone(), *span)? {
                     Value::NoneV if *strict => Ok(Value::Desc(Rc::new(Desc::Settled(err_value(
                         Value::Str(format!("missing index {}", render(self, &key, true))),
                         origin_at(frame, *span),
@@ -4716,6 +4710,14 @@ pub fn index_value(container: Value, index: Value, span: Span) -> EvalResult {
     if is_failure(&index) {
         return Ok(index);
     }
+    // An index is `at` written as syntax, and `at`, like every builtin, reads
+    // through a subtype to its base value. Here rather than at each caller,
+    // because the browser's runtime calls this too.
+    let base_of = |v: Value| match v {
+        Value::Sub { .. } => sub_base(v),
+        other => other,
+    };
+    let (container, index) = (base_of(container), base_of(index));
     match (&container, &index) {
         (Value::List(items), Value::Int(i)) => {
             let idx = usize::try_from(i).ok();

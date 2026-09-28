@@ -18254,7 +18254,10 @@ and a compiled index does the same for a map. The interpreter's own index
 syntax did not: it refused a subtype of int as a position and as a map key,
 while `put` had just stored under that key. A compiled build refused the
 position too. Both engines now read an index through a subtype, as `at`
-does. The compiled path reaches `k_b_at` again through a pointer: called
+does. The unwrap sits in the interpreter's `index_value`, which the browser's
+runtime calls for its own indexes, so the wasm engine reads the same way; with
+the unwrap at the index expression alone, the wasm engine differential caught
+the browser still refusing. The compiled path reaches `k_b_at` again through a pointer: called
 directly, clang copied its arms into the cold path, 1,200 bytes of text in
 every benchmark, where the pointer costs 80.
 
