@@ -5207,18 +5207,55 @@ impl<'a> Backend<'a> {
             true => self.maybe_force(f, value),
             false => value,
         };
-        let t = f.tmp();
         match dispatchable {
             true => {
-                f.line(&format!(
-                    "{t} = call tailcc %KValue @{}(%KValue {value})",
-                    dsym(RENDER_GROUP, 1)
-                ));
+                let rendered = self.render_through_group(f, &value, fails != 0);
                 fails |= ERR;
+                (rendered, fails)
             }
-            false => f.line(&format!("{t} = call %KValue @k_render(%KValue {value}, i64 0)")),
+            false => {
+                let t = f.tmp();
+                f.line(&format!("{t} = call %KValue @k_render(%KValue {value}, i64 0)"));
+                (t, fails)
+            }
         }
-        (t, fails)
+    }
+
+    /// `value` rendered by the ambient `render/to_string` group. An err is
+    /// handed on as it is, without the call: the interpreter returns it from
+    /// an interpolation or a `print` before anything renders, and handed to
+    /// the group it came back carrying `render/to_string` as a hop the
+    /// program never wrote.
+    fn render_through_group(&self, f: &mut FnEmit, value: &str, may_be_err: bool) -> String {
+        let call = |f: &mut FnEmit| {
+            let t = f.tmp();
+            f.line(&format!(
+                "{t} = call tailcc %KValue @{}(%KValue {value})",
+                dsym(RENDER_GROUP, 1)
+            ));
+            t
+        };
+        if !may_be_err {
+            return call(f);
+        }
+        let tag = f.tmp();
+        f.line(&format!("{tag} = extractvalue %KValue {value}, 0"));
+        let failing = f.tmp();
+        f.line(&format!("{failing} = icmp eq i64 {tag}, 5"));
+        let render = f.label();
+        let merge = f.label();
+        let from = f.cur_label.clone();
+        f.line(&format!("br i1 {failing}, label %{merge}, label %{render}"));
+        f.start_block(&render);
+        let rendered = call(f);
+        let rendered_from = f.cur_label.clone();
+        f.line(&format!("br label %{merge}"));
+        f.start_block(&merge);
+        let t = f.tmp();
+        f.line(&format!(
+            "{t} = phi %KValue [ {value}, %{from} ], [ {rendered}, %{rendered_from} ]"
+        ));
+        t
     }
 
     fn maybe_force(&self, f: &mut FnEmit, value: String) -> String {
@@ -9502,11 +9539,8 @@ impl<'a> Backend<'a> {
                 0 => emitted[0].clone(),
                 _ => {
                     let forced = self.maybe_force(f, emitted[0].clone());
-                    let r = f.tmp();
-                    f.line(&format!(
-                        "{r} = call tailcc %KValue @{}(%KValue {forced})",
-                        dsym("render/to_string", 1)
-                    ));
+                    let may_be_err = f.set_of(&emitted[0]) & ERR != 0;
+                    let r = self.render_through_group(f, &forced, may_be_err);
                     f.record(&r, STR | (f.set_of(&forced) & FAIL) | ERR);
                     r
                 }
@@ -9813,7 +9847,13 @@ impl<'a> Backend<'a> {
             let t = f.tmp();
             f.line(&format!("{t} = call %KValue @k_b_{sym}({})", args_ir.join(", ")));
             let arg_sets: Vec<Set> = emitted.iter().map(|e| f.set_of(e)).collect();
-            f.record(&t, infer::builtin_set(name, &arg_sets));
+            // `join` answers the first item that fails, and a list literal is
+            // where an item can: inference admits it the same way.
+            let read = match name {
+                "join" if arg_sets[0] & LIST != 0 => self.inference.stored_fails,
+                _ => 0,
+            };
+            f.record(&t, infer::builtin_set(name, &arg_sets) | read);
             return Ok(t);
         }
         Err(format!("native backend: `{name}` is not yet supported"))

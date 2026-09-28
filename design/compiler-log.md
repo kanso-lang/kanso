@@ -18157,3 +18157,84 @@ nothing here isolates which of the two fixes moved which row. No benchmark
 curries a group, so the builder fix is not expected to reach them.
 
 Welfare rose to 90.40, banked in the same commit.
+
+## 2026-09-28 — an interpolated err is handed on without a hop
+
+A generated program interpolated a record built with an err in one of its
+fields, which makes the record that err. The interpreter's trace said where
+the err was born and nothing else. Both native builds added `passed through
+render/to_string`.
+
+A program that gives `render/to_string` an arm of its own sends every record
+it interpolates or prints through that group, so the arm is found. A compiled
+build sent the err there too. In this program the group's dispatcher tested
+for a failure before its arms and handed the err on with a hop. In others
+the err reaches the arm that renders any value, which answers it unchanged,
+and the traces agree. Which shape a program gets was read off the emitted
+code and not traced to its cause. The interpreter's template returns an err
+before it renders anything, and `print` does the same.
+
+Both sites now test the tag when the value can be an err and hand an err on
+without the call. The runtime corpus fixtures
+`an_interpolated_err_is_not_a_hop` and `a_printed_err_is_not_a_hop` failed on
+the old compiler. The ratchet rows "an interpolated err handed to the group"
+and "a printed err handed to the group" put each site back.
+
+The compiled rendering tests the tag at each render site that can see an err.
+Four benchmarks carry such a site. The machine-code vein reads basket's text
+234,216 -> 234,232, pendbench's 225,064 -> 225,176 and runbench's 398,584 ->
+398,632, a total of 3,482,464 -> 3,482,640. Emitted branches rise by 8 on
+basket, 4 on deepbench, 14 on pendbench and 10 on runbench, so
+`emitted_other_branches` lands on 8,120 and `emitted_other_lines` on 85,349.
+The compile corpus's module gains the same test once: `module_branches`
+lands on 85 and `module_lines` on 1,093. CI will measure the instruction
+rows.
+
+## 2026-09-28 — a joined list can answer the err a literal kept
+
+Two generated programs printed a record natively where the interpreter
+reached the endpoint with an err, and a third lost a hop from its trace. All
+three joined a list literal that held an err and then asked `length j > 0` in
+a return guard.
+
+A list literal keeps a failing item in place, and `text/join` answers the
+first item that fails. kanso#1705 made element reads and `at` admit what a
+literal can keep. `join` reads every item too and was left out, so both
+inference and the emitter typed its answer as text. The guard then took
+`length` of the err as a number, compared its payload with 0, and took the
+early return. Handed to a function whose only arm takes a string, a release
+build called that arm with the err.
+
+`join` now answers the whole-program bit when its argument can be a list, in
+inference and in the emitter, which keeps a set of its own for each builtin
+call. A program whose literals never fail keeps the bit empty and pays
+nothing, and the compile sweep reads every code vein unchanged.
+
+The runtime corpus fixture `a_joined_err_fails_a_guard` covers the emitter's
+half: without it the guard returns 7. The micro fixture
+`a_joined_err_reaches_an_arm_as_an_err` covers inference's half: without it a
+release build prints `[5 5]` where the interpreter prints the err. The ratchet
+rows "a joined list read as text" and "a joined list inferred as text" put
+each half back.
+
+`builtin_sum` also answers a failing item, but nothing a program writes
+reaches it: `list/sum` is a fold. It is left as it is.
+
+## 2026-09-28 — CI's rows for the render hop and the joined list
+
+CI measured 5ba0cb30 and these are its readings. Every row that moved rose:
+
+- `work_pendbench` 179,483,660 -> 181,091,559 (+1,607,899, +0.90%)
+- `work_runbench` 1,069,996,157 -> 1,070,399,215 (+403,058, +0.038%)
+- `work_basket` 29,539,468 -> 29,539,476 (+8)
+- `work_deepbench` 363,026,387 -> 363,026,388 (+1)
+- `compile_instructions` 25,256,527 -> 25,258,611 (+2,084)
+- `entry_instructions` 85,069,514 -> 85,075,870 (+6,356)
+- `library_instructions` 85,595,593 -> 85,601,973 (+6,380)
+- `emit_instructions` 29,849,876 -> 29,850,742 (+866)
+
+pendbench's emitted branches rose most, 14, and its instruction row rose
+most. The runtime rows pay the tag test at each render site that can see an
+err, on every render and not only when an err arrives. The compiler rows pay
+for emitting the test and for the join rule. Welfare falls to the floor's new
+reading, 90.4026, under the 2026-09-13 rule, and the history entry says why.

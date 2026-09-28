@@ -59,6 +59,9 @@ pub struct Inference {
     /// miss; the checker's none question and the bang's respell both read
     /// it. See `Fact`.
     pub proven: crate::hash::Set<crate::diag::Span>,
+    /// ERR when some list or map literal holds a failure as an element, which
+    /// every read of an item then has to admit. See `Ctx::stored_fails`.
+    pub stored_fails: Set,
 }
 
 impl Inference {
@@ -569,6 +572,7 @@ pub fn infer(program: &Program) -> Inference {
         returns: ctx.returns,
         type_fields: ctx.type_fields,
         proven: ctx.proven,
+        stored_fails: ctx.stored_fails,
     }
 }
 
@@ -1584,8 +1588,11 @@ fn eval_call<'a>(
         }
         return out | piped_bits;
     }
+    // `join` reads every item and answers the first that fails, so like an
+    // element read it answers what a literal can have kept.
     let read = match name.strip_prefix("builtin_").unwrap_or(name) {
         "at" if arg_sets.first().is_some_and(|s| s & (LIST | MAP) != 0) => ctx.stored_fails,
+        "join" if arg_sets.first().is_some_and(|s| s & LIST != 0) => ctx.stored_fails,
         _ => 0,
     };
     builtin_set(name, arg_sets) | read | piped_bits

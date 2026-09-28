@@ -1,0 +1,15 @@
+# A list literal keeps an err in place, and `text/join` answers the first item
+# that fails. A compiled build typed the join as text, so the guard below took
+# `length` of the err as a number, compared its payload, and returned 7 where
+# the interpreter hands the err on. Found by a generated program on
+# 2026-09-28.
+import "std/os"
+import "std/text"
+
+pub fn shown z
+  bad = text/to_float "1 "
+  j = text/join ["{bad}" "{z}"] ","
+  return 7 if length j > 0
+  "no"
+
+pub play = os/args .> (a -> print (shown (length a)))
