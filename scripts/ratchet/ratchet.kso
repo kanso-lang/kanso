@@ -3259,7 +3259,19 @@ token_skip = row
 
 rows_c1zs = text/concat rows_c1zr [token_clean token_skip]
 
-rows_c = text/concat rows_c1zs [itself]
+# The token's clean flag is three bit tests on one padded word; the spec lifts
+# them and sweeps every byte at every position against a byte walk.
+token_word = row
+  "a token flag one byte short of the control range"
+  false
+  "cargo test --release --test a_token_flag_agrees_with_the_byte_walk"
+  "specs (unit, golden, differential)"
+  (breaking "a_token_flag_one_byte_short")
+  no_setup
+
+rows_c1zt = text/concat rows_c1zs [token_word]
+
+rows_c = text/concat rows_c1zt [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

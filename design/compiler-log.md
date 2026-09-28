@@ -17370,3 +17370,37 @@ which the emitter turns into one word write at a site that owns its builder,
 where `esc_pair` made two byte appends. The output was unchanged on both
 engines. runbench read 1,080,796,269 against 1,073,246,176 (+0.70%) and
 livebench fell 0.33%. Declined, since the run program is the larger term.
+
+## 2026-09-28 — a shared token's clean flag is asked of one word
+
+kanso#1690 gave each shared token a byte saying whether JSON escapes anything
+in it, decided when its slot fills by walking the token's bytes. A token is
+four to seven bytes, so the walk is now three bit tests on one word: the
+token is copied over eight bytes of 'A', which none of the tests flags, and
+the word is asked for a zero byte after an xor with the quote, the same
+after an xor with the backslash, and a byte below 32.
+
+On the container every benchmark saves about 10,500 instructions, 632 fills
+at about 17 a fill: runbench 1,073,246,176 -> 1,073,236,089, livebench
+1,536,098,686 -> 1,536,087,507, encodebench 2,338,086,938 -> 2,338,075,178
+and oneshot 12,575,664 -> 12,565,073. No allocation counter moves. The
+word test is longer code than the loop: each benchmark's `.text` grows 48
+bytes, and text 3,533,600 -> 3,534,272.
+
+Measured by CI: runbench 1,073,245,339 -> 1,073,235,252, livebench
+1,536,099,047 -> 1,536,087,868, encodebench 2,338,087,271 -> 2,338,075,511,
+oneshot 12,575,988 -> 12,565,397 and jsonbench 732,487,894 -> 732,477,366.
+codegen_instructions_dev reads 123,380,276 -> 123,379,531, and
+codegen_instructions_release 407,792,416 -> 407,793,576, 1,160 more.
+
+kq's path rows rose 173,547 and 172,260 when kq#123 pinned kanso#1690, about
+71 instructions for each of the 2,433 slots its documents fill. The walk was
+about 17 of those, so most of that rise is something else, and it was not
+taken apart here.
+
+The spec a_token_flag_agrees_with_the_byte_walk lifts the lines from the
+padded word to the flag out of src/runtime.c and compares them with a byte
+walk over every byte value at every position of tokens of four to seven
+bytes, and a million random tokens: 1,005,632 cases, none wrong. With the
+control bound written 31 it reports 11,517 wrong, which is the ratchet row
+"a token flag one byte short of the control range".
