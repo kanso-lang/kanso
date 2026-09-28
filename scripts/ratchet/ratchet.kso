@@ -2049,7 +2049,8 @@ one_trap = row
 rows_b1ot = text/concat rows_b1kt [one_trap]
 
 # A nine-word arm keeps its tail calls on x86-64. The mutation narrows at
-# eight, and a release build decoding 300,000 keys overflows its stack.
+# eight, and a release build running a three-million-step cycle through a
+# twelve-word arm overflows its stack.
 nine_words = row
   "a nine-word arm narrowed on x86"
   true

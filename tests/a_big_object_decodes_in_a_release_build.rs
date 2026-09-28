@@ -46,3 +46,46 @@ fn an_object_of_300_000_keys_decodes() {
     assert!(run.status.success(), "the release binary failed: {:?}", run.status);
     assert_eq!(String::from_utf8_lossy(&run.stdout), "keys 300000\n");
 }
+
+/// A loop that crosses into a twelve-word arm runs in one frame too.
+///
+/// The object above stopped being a witness once the release link dropped
+/// `deadargelim` (2026-09-28): with its callers' signatures left whole, the
+/// backend turns the narrowed call back into a sibling call, and 300,000 keys
+/// decode in one frame even with arms narrowed at eight words. Here a
+/// four-parameter function and a seven-parameter one call each other three
+/// million times. Both take the cycle's flat twelve-word signature, so narrowing
+/// at eight takes the tail call away from both, and the binary dies on SIGSEGV.
+#[cfg(target_arch = "x86_64")]
+#[test]
+fn a_cycle_through_a_twelve_word_arm_runs_in_one_frame() {
+    use std::process::Command;
+
+    let dir = std::env::temp_dir().join(format!("kanso_wide_cycle_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("defs")).expect("a scratch directory");
+    std::fs::write(
+        dir.join("defs/defs.kso"),
+        "import \"std/os\"\n\n\
+         fn narrow 0 acc _ _\n  acc\n\n\
+         fn narrow n acc s t\n  wide n acc s t \"x\" [n] { \"k\":n }\n\n\
+         fn wide n acc s t u xs m\n  \
+         k = length s + length t + length u + length xs + length m\n  \
+         narrow (n - 1) (acc + k) s t\n\n\
+         fn shown z\n  \"{narrow (z + 3000000) 0 \"ab\" \"c\"}\"\n\n\
+         pub play = os/args .> (a -> print (shown (length a)))\n",
+    )
+    .expect("the module writes");
+    std::fs::write(dir.join("main.kso"), "import \"./defs\"\n\ndefs/play\n")
+        .expect("the entry writes");
+    let build = Command::new(env!("CARGO_BIN_EXE_kanso"))
+        .args(["build", "main.kso", "--release"])
+        .current_dir(&dir)
+        .output()
+        .expect("kanso runs");
+    assert!(build.status.success(), "{}", String::from_utf8_lossy(&build.stderr));
+    let run = Command::new(dir.join("main")).current_dir(&dir).output().expect("the binary runs");
+    let _ = std::fs::remove_dir_all(&dir);
+    assert!(run.status.success(), "the release binary failed: {:?}", run.status);
+    assert_eq!(String::from_utf8_lossy(&run.stdout), "18000000\n");
+}

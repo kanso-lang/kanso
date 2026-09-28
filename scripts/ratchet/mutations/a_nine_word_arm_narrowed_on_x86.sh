@@ -3,8 +3,10 @@
 # call into every arm of up to twelve argument words, the registers that
 # convention passes in, so the JSON decoder's nine-word `obj_key_end` loop runs
 # in one frame. This mutation narrows at eight, as arm64 must, and a
-# 300,000-key object overflows the stack; the witness is
-# a_big_object_decodes_in_a_release_build.
+# 300,000-key object overflowed the stack. Since the release link dropped
+# deadargelim (2026-09-28) the object decodes in one frame even so, and the
+# witness is the second test in a_big_object_decodes_in_a_release_build: a
+# three-million-step cycle through a twelve-word arm, which dies on SIGSEGV.
 #
 # It once changed `TAILCC_WIDEST`'s x86-64 value instead. Since the release
 # path on a clang with preserve_none narrows at `PRESERVE_NONE_REGISTERS`,

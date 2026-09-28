@@ -18059,3 +18059,19 @@ are the two changes the front end reads.
 Welfare fell by 0.0034, from 90.3989 to 90.3955. Every change here makes an
 engine agree with the interpreter or makes a release build link, so the floor
 takes the fall under the 2026-09-13 rule, and the history entry says so.
+
+## 2026-09-28 — the nine-word row's witness, after deadargelim left the link
+
+CI's ratchet reported "a nine-word arm narrowed on x86" blind on this branch.
+The mutation narrows tail-call arms at eight words, and its witness decoded a
+300,000-key object in a release build, which overflowed the stack with the
+arms narrowed. Built on the container with the mutation, the object decodes.
+With the mutation and the release pipeline flag both removed, it overflows
+again, so dropping `deadargelim` from the link is what closed the witness. The
+likely mechanism is that the decoder's callers keep their full signatures, so
+the backend makes the narrowed call a sibling call; that was not checked.
+
+The row gets a second witness in the same spec: a four-parameter function and
+a seven-parameter one call each other three million times. Both take the
+cycle's flat twelve-word signature. On this branch the release binary prints
+18000000; with the mutation it dies on SIGSEGV, which is the row turning red.
