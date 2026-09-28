@@ -18425,3 +18425,13 @@ unchecked" puts back.
 
 No benchmark declares a typeset, and the counter sweep reads the twelve cost
 veins and the lazy tier unchanged. CI will measure the instruction rows.
+
+## 2026-09-28 — CI's rows for typesets that agree across engines
+
+CI measured a8f6c98f. The compiler's own rows fell: `compile_instructions`
+lands on 25,234,727 (-23,789), `entry_instructions` on 85,008,062 (-67,783),
+`library_instructions` on 85,534,966 (-66,998) and `emit_instructions` on
+29,849,695 (-769). `interp_instructions` rose 32,493 to 589,944,705. The run
+rows, the text and the allocation counters did not move. What in the change
+moved the interpreter's row has not been isolated. The sum rose, and the floor
+holds it.
