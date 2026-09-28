@@ -17673,7 +17673,7 @@ reaches the fast push now carries the known one too, so the emitted-code and
 compile goldens move. The keys the trend gate reads land at `emitted_lines`
 5,727 -> 5,731, `emitted_other_defines` 1,550 -> 1,556, `emitted_other_calls`
 10,666 -> 10,678, `emitted_other_branches` 8,078 -> 8,084,
-`emitted_other_lines` 85,511 -> 85,629, `text` 3,534,272 -> 3,571,984, and in
+`emitted_other_lines` 85,511 -> 85,629, `text` 3,536,288 -> 3,574,000, and in
 the compile goldens `lines` 1,433 -> 1,453, `module_lines` 1,071 -> 1,086,
 `module_calls` 107 -> 109, `module_branches` 83 -> 84 and `module_defines`
 27 -> 28.
