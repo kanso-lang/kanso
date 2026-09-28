@@ -187,11 +187,11 @@ fn rewrite(expr: &mut Expr, alias: &HashMap<String, HashMap<usize, String>>) {
     for_each_child_mut(expr, &mut |child| rewrite(child, alias));
 }
 
-/// Every direct sub-expression, mutably. `lib::walk_children_mut` says it
-/// mirrors `for_each_child` and does not — it has no arm for a lambda, a
-/// block, a build or a guard, so a wrapper called inside any of those would
-/// stop being inlined. Handing the children to a callback is what removes the
-/// vector this used to return per node; the coverage is unchanged.
+/// Every direct sub-expression, mutably. This was written when
+/// `lib::walk_children_mut` had no arm for a lambda, a block, a build or a
+/// guard; it has all four now, so the two walks cover the same forms. Handing
+/// the children to a callback is what removes the vector this used to return
+/// per node.
 fn for_each_child_mut(expr: &mut Expr, f: &mut dyn FnMut(&mut Expr)) {
     fn stmt_expr(s: &mut Stmt) -> &mut Expr {
         match s {
