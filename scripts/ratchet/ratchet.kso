@@ -2049,7 +2049,8 @@ one_trap = row
 rows_b1ot = text/concat rows_b1kt [one_trap]
 
 # A nine-word arm keeps its tail calls on x86-64. The mutation narrows at
-# eight, and a release build decoding 300,000 keys overflows its stack.
+# eight, and a release build running a three-million-step cycle through a
+# twelve-word arm overflows its stack.
 nine_words = row
   "a nine-word arm narrowed on x86"
   true
@@ -3408,7 +3409,83 @@ render_group = row
 
 rows_c1zzc = text/concat rows_c1zzb [render_group]
 
-rows_c = text/concat rows_c1zzc [itself]
+# An integer written as text past int64 is refused by a compiled build, with
+# arithmetic's own diagnostic. Answering an err value again lets a program
+# catch it, and std/json turns it into "invalid number".
+int_refused = row
+  "an overflowing integer answered as an err"
+  true
+  "cargo test --release --test an_integer_past_int64_is_refused_natively"
+  "specs (unit, golden, differential)"
+  (breaking "an_overflowing_integer_answered_as_an_err")
+  no_setup
+
+rows_c1zzd = text/concat rows_c1zzc [int_refused]
+
+# A cycle of an empty list ends at once. Without its guard the cycle wraps
+# and asks again forever, and the spec finds no answer inside its deadline.
+empty_cycle = row
+  "an empty cycle that wraps forever"
+  true
+  "cargo test --release --test an_empty_cycle_ends"
+  "specs (unit, golden, differential)"
+  (breaking "an_empty_cycle_that_wraps_forever")
+  release
+
+rows_c1zze = text/concat rows_c1zzd [empty_cycle]
+
+# An unhandled err's reason is written by its length. Printed as a C string,
+# a reason holding a NUL stops there, and the runtime corpus reads it cut.
+nul_reason = row
+  "an err reason printed as a C string"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "an_err_reason_printed_as_a_c_string")
+  release
+
+rows_c1zzf = text/concat rows_c1zze [nul_reason]
+
+# A list literal keeps a failing item, so an element read can answer an err.
+# Typed as never failing, the read lets a compiled build call on with no test
+# of the err, and the runtime corpus reads a trace with a hop missing.
+element_err = row
+  "an element read that never fails"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "an_element_read_that_never_fails")
+  release
+
+rows_c1zzg = text/concat rows_c1zzf [element_err]
+
+# A zero divisor answers a value. Typed as an err, it lets a compiled build
+# compute on the string as though it were a number, and the runtime corpus
+# reads a number where the refusal of `*` belongs.
+zero_divisor = row
+  "a zero divisor answered as an err"
+  true
+  "cargo test --release --test golden runtime_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_zero_divisor_answered_as_an_err")
+  release
+
+rows_c1zzh = text/concat rows_c1zzg [zero_divisor]
+
+# A release link runs LLVM 19's pipeline without dead-argument elimination.
+# With the pass back, a program declaring a subtype beside std/regexp fails to
+# link, and the micro corpus's release build reports it.
+link_dae = row
+  "a release link that runs deadargelim"
+  true
+  "cargo test --release --test golden micro_corpus_survives_a_release_build"
+  "specs (unit, golden, differential)"
+  (breaking "a_release_link_that_runs_deadargelim")
+  release
+
+rows_c1zzi = text/concat rows_c1zzh [link_dae]
+
+rows_c = text/concat rows_c1zzi [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

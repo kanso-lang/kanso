@@ -209,7 +209,11 @@ front_end_rounds=15
 # 2026-09-27, the encoder writes a map from `keys` and `values`: the walk
 # guards two lists where it guarded one and passes three arguments where it
 # passed two. front_end_visits 7,411 -> 7,505, a RISE of 94 (+1.2684%).
-front_end_visits=7505
+#
+# 2026-09-28, a cycle of an empty list ends: `next` on a cycled view gains a
+# guard, and lib/list is in the corpus's imports. front_end_visits 7,505 ->
+# 7,523, a RISE of 18 (+0.2398%).
+front_end_visits=7523
 # 2026-08-31 (the AST's identifiers are inline names): 728,030 -> 713,606, a
 # fall of 14,424, or 1.98%. Banked. The peak falls with the traffic because a
 # short name's bytes now live inside the AST node the allocator already gave
@@ -306,4 +310,4 @@ front_end_visits=7505
 #
 # CI measured keys and values over maps. compile_peak_bytes 710,281 ->
 # 710,484, a RISE of 203 (+0.0286%).
-compile_peak_bytes=710484
+compile_peak_bytes=711396

@@ -67,9 +67,23 @@ fn selected(key: &str, paths: &[&str]) -> String {
         text.push_str("\n/* a line this branch added */\n");
         std::fs::write(&held, text).expect("the file writes");
     }
-    git(&tree, &["config", "user.email", "spec@kanso.invalid"]);
-    git(&tree, &["config", "user.name", "spec"]);
-    git(&tree, &["commit", "--quiet", "-a", "-m", "the branch"]);
+    // The identity rides on the command. A worktree shares the repository's
+    // config, so `git config` here wrote it into the checkout under test, and
+    // every commit made there afterwards was authored by this spec.
+    git(
+        &tree,
+        &[
+            "-c",
+            "user.email=spec@kanso.invalid",
+            "-c",
+            "user.name=spec",
+            "commit",
+            "--quiet",
+            "-a",
+            "-m",
+            "the branch",
+        ],
+    );
 
     let done = Command::new(env!("CARGO_BIN_EXE_kanso"))
         .arg("run")
