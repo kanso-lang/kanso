@@ -17838,3 +17838,9 @@ of it.
 The micro fixture `an_interpolated_record_reaches_render_whole` fails on
 main, and the ratchet row "the render group typed from its calls" restores
 the old seeding and fails it again.
+
+The five changes in the entries above landed together, in one carrier pull
+request. On the combined tree `bench/emitted_golden_others.txt` sums to
+`emitted_other_calls` 10,666 -> 10,680 and `emitted_other_lines` 85,511 ->
+85,631: #1695's push test and #1702's forced render argument, each counted in
+its own entry, added together.
