@@ -17438,9 +17438,12 @@ oneshot +460 and encodebench +14,455, measured on the container.
 like the first. Five programs declare both twins, so `emitted_golden_others`
 moves by a define, a call, five branches and 43 lines in basket,
 escapebench, scanbench, digestbench and runbench, and by five lines in the
-others, which is the longer twin. runbench's `.text` grows 401,752 ->
-401,928. No allocation counter moves in the twelve cost veins or the lazy
-tier.
+others, which is the longer twin. Summed, the keys the trend gate reads
+land at `emitted_lines` 5,727 -> 5,732, `emitted_other_defines` 1,550 ->
+1,555, `emitted_other_calls` 10,666 -> 10,671, `emitted_other_branches`
+8,078 -> 8,104 and `emitted_other_lines` 85,511 -> 85,770, and `text` 3,534,272
+-> 3,534,672, runbench's own `.text` 401,752 -> 401,928. No allocation
+counter moves in the twelve cost veins or the lazy tier.
 
 The fixture is `pushing_an_err_hands_it_on`: one push onto a fresh literal,
 which the emitter writes in place, and one onto a list read again
