@@ -5202,8 +5202,12 @@ impl<'a> Backend<'a> {
     fn render_interp(&self, f: &mut FnEmit, value: &str) -> (String, Set) {
         let mut fails = f.set_of(value) & ERR;
         let dispatchable = self.render_dispatchable(f, value);
-        let t = f.tmp();
         let value = self.as_value(f, value);
+        let value = match dispatchable {
+            true => self.maybe_force(f, value),
+            false => value,
+        };
+        let t = f.tmp();
         match dispatchable {
             true => {
                 f.line(&format!(

@@ -479,11 +479,13 @@ pub fn infer(program: &Program) -> Inference {
     // backend passed it as a raw word, and an interpolated record arrived as
     // its tag. A failure is left out: an interpolation hands its err on
     // rather than rendering it, so no frame of the group's joins its trace.
+    // So is a lazy cell, which the interpolation site forces before the call:
+    // forcing in the dispatcher instead cost every render a call.
     for (i, decl) in fns.iter().enumerate() {
         if decl.name == "render/to_string" {
             for p in 0..decl.params.len() {
                 let at = ctx.param_starts[i] as usize + p;
-                ctx.params[at] |= TOP & !FAIL & !ctx.shadow[at];
+                ctx.params[at] |= TOP & !FAIL & !THUNK & !ctx.shadow[at];
             }
         }
     }

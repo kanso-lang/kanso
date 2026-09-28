@@ -17826,21 +17826,19 @@ through render/to_string" frame to a compiled err's trace that the interpreter
 does not print; the runtime corpus caught it. An explicit call with an int no
 longer unboxes the parameter. Nothing measured calls the group that way.
 
-A lazy cell can reach an interpolation unforced, and the seed includes one, so
-a dispatcher whose explicit calls never passed a cell now forces its argument
-before `k_b_render_value`. runbench and pendbench each gain that one call:
-`bench/emitted_golden_others.txt` reads runbench calls 3,897 -> 3,898 and
-pendbench 403 -> 404, and `bench/text_golden.txt` reads runbench text 401,896
--> 402,472 and pendbench 228,888 -> 229,080. The trend gate's sums land at
-`emitted_other_calls` 10,666 -> 10,668, `emitted_other_lines` 85,511 -> 85,513
-and `text` 3,536,288 -> 3,537,056. CI's rows will say what the work rows make
-of it.
+A lazy cell can reach an interpolation unforced. The first version kept the
+cell in the seed, so every render dispatcher forced its argument before
+`k_b_render_value`, and CI read that as pendbench +801,601 instructions and
+runbench +199,806 on the carrier. The seed now leaves the cell out, and the
+interpolation site forces its value before the call when the value's set can
+hold a cell, which is what `print` already did. Measured with callgrind on the
+carrier tree, pendbench reads 179,576,674 and runbench 1,071,415,117 with the
+seed and without it, the same to the instruction. The explicit calls still
+join the parameter's set as before, so a cell handed to `render/to_string` by
+name is forced where it always was.
 The micro fixture `an_interpolated_record_reaches_render_whole` fails on
 main, and the ratchet row "the render group typed from its calls" restores
 the old seeding and fails it again.
 
-The five changes in the entries above landed together, in one carrier pull
-request. On the combined tree `bench/emitted_golden_others.txt` sums to
-`emitted_other_calls` 10,666 -> 10,680 and `emitted_other_lines` 85,511 ->
-85,631: #1695's push test and #1702's forced render argument, each counted in
-its own entry, added together.
+The five changes in the entries above landed together, in kanso#1703, and
+CI measured them together.
