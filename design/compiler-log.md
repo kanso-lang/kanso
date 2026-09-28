@@ -17503,7 +17503,7 @@ move, and every program's `.text` grows 2,672 bytes. The keys the trend gate
 reads land at `emitted_lines` 5,727 -> 5,732, `emitted_other_defines` 1,550 ->
 1,555, `emitted_other_calls` 10,666 -> 10,671, `emitted_other_branches` 8,078
 -> 8,104, `emitted_other_lines` 85,511 -> 85,770, and `text` 3,534,272 ->
-3,571,680.
+3,572,080.
 
 Two micro fixtures. `pushing_an_err_hands_it_on` pushes an err onto a fresh
 literal, which the emitter writes in place, and onto a list read again
