@@ -2556,12 +2556,7 @@ fn emit_ir_for(
             .iter()
             .filter_map(|t| t.parent.clone().map(|p| (t.name.clone(), p)))
             .collect(),
-        typesets: program
-            .types
-            .iter()
-            .filter(|t| !t.members.is_empty())
-            .map(|t| (t.name.clone(), t.members.clone()))
-            .collect(),
+        typesets: program.flat_typesets(),
         group_by_name: group_indices_by_name(program),
         cycle_reached: cycle_reached(program),
         kept_out: kept_out(program),

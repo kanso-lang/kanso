@@ -1,0 +1,15 @@
+# A typeset that reaches itself through its members names no set. The
+# interpreter asked its members forever and overflowed its stack, and
+# neither native build produced a program. Found on 2026-09-28 beside
+# nested typesets, which every engine now reads through.
+type loop_a int loop_b
+
+type loop_b loop_a string
+
+fn size _:loop_a
+  "a"
+
+fn size _
+  "n"
+
+pub play = print "{size 3}"

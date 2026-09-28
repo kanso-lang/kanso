@@ -479,6 +479,48 @@ pub struct Program {
     pub root: String,
 }
 
+impl Program {
+    /// Each typeset's members with any member that is itself a typeset
+    /// replaced by that typeset's own members, in first-seen order. The
+    /// interpreter asks the members one at a time and so reads a nested
+    /// typeset through; a compiled check ORs a test per member, and a
+    /// typeset has no test of its own. A member already reached is skipped,
+    /// so the walk ends even where the checker has refused a cycle.
+    pub fn flat_typesets(&self) -> crate::hash::Map<String, Vec<String>> {
+        let sets: crate::hash::Map<&str, &Vec<String>> = self
+            .types
+            .iter()
+            .filter(|t| !t.members.is_empty())
+            .map(|t| (t.name.as_str(), &t.members))
+            .collect();
+        fn walk<'a>(
+            name: &'a str,
+            sets: &crate::hash::Map<&'a str, &'a Vec<String>>,
+            seen: &mut Vec<&'a str>,
+            out: &mut Vec<String>,
+        ) {
+            for member in sets[name].iter() {
+                if seen.contains(&member.as_str()) {
+                    continue;
+                }
+                seen.push(member);
+                if sets.contains_key(member.as_str()) {
+                    walk(member, sets, seen, out);
+                } else {
+                    out.push(member.clone());
+                }
+            }
+        }
+        sets.keys()
+            .map(|&name| {
+                let (mut seen, mut out) = (vec![name], Vec::new());
+                walk(name, &sets, &mut seen, &mut out);
+                (name.to_string(), out)
+            })
+            .collect()
+    }
+}
+
 /// `pub name` re-exports an imported pub (or, when `name` is an import's
 /// qualifier, that module's whole surface); `pub theirs:yours` renames on
 /// the way out. Re-exported names join this module's own surface.

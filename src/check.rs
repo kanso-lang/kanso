@@ -3898,6 +3898,38 @@ fn check_annotation_names(
         }
     }
 
+    // A typeset may hold another typeset, and every engine reads the inner
+    // one's members through it. One that reaches itself that way names no
+    // set at all: the interpreter asked its members forever and overflowed
+    // its stack, and neither backend built the program.
+    let sets: crate::hash::Map<&str, &Vec<String>> = program
+        .types
+        .iter()
+        .filter(|t| !t.members.is_empty())
+        .map(|t| (t.name.as_str(), &t.members))
+        .collect();
+    for ty in program.types.iter().filter(|t| !t.members.is_empty()) {
+        let mut stack: Vec<&str> = ty.members.iter().map(String::as_str).collect();
+        let mut seen: Vec<&str> = Vec::new();
+        while let Some(member) = stack.pop() {
+            if member == ty.name {
+                diags.push(Diagnostic::new(
+                    "type",
+                    format!("`{}` holds itself through its members, so it names no set", ty.name),
+                    ty.span,
+                ));
+                break;
+            }
+            if seen.contains(&member) {
+                continue;
+            }
+            seen.push(member);
+            if let Some(inner) = sets.get(member) {
+                stack.extend(inner.iter().map(String::as_str));
+            }
+        }
+    }
+
     // The typesets, borrowed from the list `declared` was built from.
     let annotating: HashSet<&str> =
         program.types.iter().filter(|t| !t.members.is_empty()).map(|t| t.name.as_str()).collect();

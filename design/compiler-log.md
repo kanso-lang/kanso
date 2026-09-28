@@ -18393,7 +18393,7 @@ where the interpreter would have refused, so an ordinary condition, join or
 isolated. Welfare falls from 90.4026 to CI's reading under the 2026-09-13
 rule, and the history entry says why.
 
-## 2026-09-28 — a typeset's members name types
+## 2026-09-28 — a typeset's members name types, and a typeset inside one is read through
 
 The generated-program differential learned typesets over the two subtypes it
 declares, `type either id word`, and one program in its first two hundred
@@ -18403,8 +18403,24 @@ and ran in the interpreter, where an unknown member matched nothing and the
 `unknown type id`. `type t any int` and `type t banana int` behaved the same
 way. The checker now asks of each member what it asks of an annotation and of
 a subtype's parent, and refuses `any` with the rest, as it does for a parent.
-
 The error fixture `a_typeset_holds_no_type` reported nothing on the old
 checker, and the ratchet row "a typeset member left unchecked" puts that back.
-The change is to the checker alone, so the runtime's text and the allocation
-counters cannot move from it. CI will measure the instruction rows.
+
+Probing the same shape by hand found that a typeset may hold another typeset
+on one engine only. With `type small int string` and `type wide float64
+small`, the interpreter answered that an int is a `wide`, since it asks each
+member in turn and a member that is a typeset asks its own. Both native builds
+and the browser's engine OR a test per member, a typeset has no test of its
+own, and they answered no. The interpreter is the oracle, so the compiled
+engines now take each typeset's members with any inner typeset's members put
+in its place. The micro fixture `a_typeset_holds_a_typeset` covers an int, a
+string, a record and a subtype reached that way, and two ratchet rows put the
+old member lists back, one per engine family.
+
+A typeset that reaches itself through its members names no set: the
+interpreter asked its members until it overflowed its stack, and neither
+native build produced a program. The checker refuses it, which the error
+fixture `a_typeset_holds_itself` pins and the row "a typeset cycle left
+unchecked" puts back.
+
+CI will measure the instruction rows.

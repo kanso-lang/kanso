@@ -1,0 +1,33 @@
+# A typeset may hold another typeset, and a value of any inner member is a
+# value of the outer one. The interpreter read `wide` through `small` and
+# `either`; both native builds tested each member alone, found no test for a
+# typeset, and passed an int, a string, a record and an `id` over. Found on
+# 2026-09-28 while teaching the generated-program differential typesets.
+import "std/list"
+import "std/os"
+
+type id int
+
+type word string
+
+type either id word
+
+type pt
+  n
+
+type small int string
+
+type wide either float64 pt small
+
+fn size _:wide
+  "wide"
+
+fn size _
+  "narrow"
+
+fn shown z
+  xs = [z "s" 1.5 true (pt 1) (id z) (word "q") [z]]
+  text = list/to_list (list/map xs size)
+  "{text}"
+
+pub play = os/args .> (a -> print (shown (length a)))
