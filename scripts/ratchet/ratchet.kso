@@ -3757,7 +3757,7 @@ rows_c1zzze = text/concat rows_c1zzzd [cycle_unchecked]
 # apart passes `kanso check` and the error corpus holds a diagnostic nobody
 # raised.
 wrapper_pattern = row
-  "a wrapper pattern left unchecked"
+  "a pattern that can never match left unchecked"
   true
   "cargo test --release --test golden error_corpus"
   "specs (unit, golden, differential)"

@@ -3813,8 +3813,7 @@ fn check_annotation_names(
     fn patterns(
         p: &Pattern,
         declared: &HashSet<&str>,
-        annotating: &HashSet<&str>,
-        wrapping: &HashSet<&str>,
+        types: &crate::hash::Map<&str, &crate::ast::TypeDecl>,
         diags: &mut Vec<Diagnostic>,
     ) {
         match p {
@@ -3846,31 +3845,13 @@ fn check_annotation_names(
             // `program.types` does not hold, so the obvious check calls a
             // correct program wrong. Measured that way too.
             Pattern::Ctor { ty, fields, .. } => {
-                if annotating.contains(ty.as_str()) && !fields.is_empty() {
-                    diags.push(Diagnostic::new(
-                        "type",
-                        format!(
-                            "`{ty}` is a typeset — it only annotates, so this arm \
-                             can never match"
-                        ),
-                        other_span(&fields[0]),
-                    ));
-                }
-                // A wrapper has no fields of its own either: `(id n)` for
-                // `type id int` took no value apart on any engine, and the arm
-                // was passed over in silence, where `n:id` takes it.
-                if wrapping.contains(ty.as_str()) && !fields.is_empty() {
-                    diags.push(Diagnostic::new(
-                        "type",
-                        format!(
-                            "`{ty}` is a wrapper with no fields of its own, so this arm \
-                             can never match; write `x:{ty}` to take one"
-                        ),
-                        other_span(&fields[0]),
-                    ));
+                if !fields.is_empty() {
+                    if let Some(why) = ctor_never_matches(ty, fields.len(), types) {
+                        diags.push(Diagnostic::new("type", why, other_span(&fields[0])));
+                    }
                 }
                 for f in fields {
-                    patterns(f, declared, annotating, wrapping, diags);
+                    patterns(f, declared, types, diags);
                 }
             }
             _ => {}
@@ -3945,20 +3926,71 @@ fn check_annotation_names(
     }
 
     // The typesets, borrowed from the list `declared` was built from.
-    let annotating: HashSet<&str> =
-        program.types.iter().filter(|t| !t.members.is_empty()).map(|t| t.name.as_str()).collect();
-    let wrapping: HashSet<&str> =
-        program.types.iter().filter(|t| t.parent.is_some()).map(|t| t.name.as_str()).collect();
+    let types: crate::hash::Map<&str, &crate::ast::TypeDecl> =
+        program.types.iter().map(|t| (t.name.as_str(), t)).collect();
     for decl in &program.fns {
         for param in &decl.params {
-            patterns(param, declared, &annotating, &wrapping, diags);
+            patterns(param, declared, &types, diags);
         }
         for stmt in &decl.body {
             if let Stmt::Bind { pattern, .. } = stmt {
-                patterns(pattern, declared, &annotating, &wrapping, diags);
+                patterns(pattern, declared, &types, diags);
             }
         }
     }
+}
+
+/// Why a pattern that takes `ty` apart into `taken` fields can never match, or
+/// nothing when it can. Every engine passed such an arm over in silence, so the
+/// value fell to the next arm and the program answered something else.
+///
+/// A wrapper is taken apart through what it wraps: `(sale_price c)` binds the
+/// one field of the `money` a sale price wraps. So the question is asked of
+/// the record at the bottom of the chain, and a chain that ends at `int`,
+/// `string` or a typeset ends at something with no fields to take. An
+/// enrolled clone is left alone, since its fields are its module's to know,
+/// and so is a chain that runs in a circle, which construction refuses.
+fn ctor_never_matches(
+    ty: &str,
+    taken: usize,
+    types: &crate::hash::Map<&str, &crate::ast::TypeDecl>,
+) -> Option<String> {
+    let decl = *types.get(ty)?;
+    if !decl.members.is_empty() {
+        return Some(format!(
+            "`{ty}` is a typeset — it only annotates, so this arm can never match"
+        ));
+    }
+    let mut root = decl;
+    let mut hops = 0;
+    while let Some(parent) = &root.parent {
+        hops += 1;
+        if hops > types.len() {
+            return None;
+        }
+        match types.get(parent.as_str()) {
+            Some(next) if next.members.is_empty() => root = next,
+            _ => {
+                return Some(format!(
+                    "`{ty}` wraps `{parent}`, which has no fields, so this arm can never \
+                     match; write `x:{ty}` to take one"
+                ))
+            }
+        }
+    }
+    if decl.synthetic || root.synthetic {
+        return None;
+    }
+    let have = root.fields.len();
+    (have != taken).then(|| {
+        let noun = if have == 1 { "field" } else { "fields" };
+        let whose = if root.name == ty {
+            format!("`{ty}` has")
+        } else {
+            format!("`{ty}` wraps `{}`, which has", root.name)
+        };
+        format!("{whose} {have} {noun} and this arm takes {taken}, so it can never match")
+    })
 }
 
 /// The names an annotation mentions, whatever shape holds them. The parser

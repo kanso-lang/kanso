@@ -1,22 +1,26 @@
-# A wrapper has no fields of its own, so a pattern that takes one apart can
-# never match. `(id n)` for `type id int` and `(tag p)` for a wrapper of a
-# record were passed over in silence on every engine, and the value fell to
-# the next arm. Found on 2026-09-28 while teaching the generated-program
-# differential subtypes; `n:id` is the arm that takes one.
+# A pattern that takes a value apart can never match when the value has a
+# different number of fields, and a wrapper is taken apart through the record
+# it wraps. Every engine passed each of these arms over in silence, so the
+# value fell to the next arm. Found on 2026-09-28 while teaching the
+# generated-program differential subtypes; `n:id` is the arm that takes one.
 type id int
 
 type pt
   n
+  s
 
 type tag pt
 
 fn size (id n)
   "id {n}"
 
+fn size (pt n)
+  "pt {n}"
+
 fn size (tag p)
-  "tag {p.n}"
+  "tag {p}"
 
 fn size _
   "other"
 
-pub play = print "{size (id 3)} {size (tag (pt 4))}"
+pub play = print "{size (id 3)} {size (pt 4 "a")} {size (tag (pt 5 "b"))}"
