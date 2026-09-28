@@ -8625,8 +8625,25 @@ static __attribute__((noinline, cold, preserve_most)) KValue k_b_at_wide_miss(ui
     return one;
 }
 
+KValue k_b_at(KValue container, KValue index);
 static __attribute__((noinline, cold, preserve_most)) KValue k_b_at_rest(KValue container, KValue index) {
+    /* An index reads through a subtype to its base value, as every builtin
+       does, so a subtype of int is a position and one of string is a key. */
+    if (container.tag == K_SUB || index.tag == K_SUB) {
+        /* Called through a pointer the optimiser cannot see through: a direct
+           call let clang copy k_b_at's arms into this cold path, 1,200 bytes
+           of text in every program that indexes. */
+        KValue (*volatile again)(KValue, KValue) = k_b_at;
+        return again(k_sub_base(container), k_sub_base(index));
+    }
     if (container.tag == K_MAP) {
+        /* A map is indexed by an int or a string. Anything else, a none
+           among them, is refused as the interpreter refuses it, where the
+           search below would answer a miss. */
+        if (index.tag != K_INT && index.tag != K_STR) {
+            k_die_index(container);
+            return k_none();
+        }
         KMap* m = k_as_map(container);
         long long n;
         KValue* s = k_map_sorted(m, &n);

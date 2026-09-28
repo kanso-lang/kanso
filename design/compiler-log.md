@@ -18238,3 +18238,31 @@ most. The runtime rows pay the tag test at each render site that can see an
 err, on every render and not only when an err arrives. The compiler rows pay
 for emitting the test and for the join rule. Welfare falls to the floor's new
 reading, 90.4026, under the 2026-09-13 rule, and the history entry says why.
+
+## 2026-09-28 — a map index takes an int or a string, through a subtype
+
+A generated program tallied a list that held a none, so `list/tally` read
+`m[none]`. The interpreter refused the index; both native builds answered a
+miss and went on to refuse the `put` that followed, with a different message.
+The interpreter indexes a map by an int or a string and refuses anything
+else. The compiled index compared any key against the map's and answered none
+when nothing matched. It now refuses what the interpreter refuses.
+
+Checking that turned up a second disagreement, inside the interpreter. Every
+builtin reads through a subtype to its base value, `at` and `put` among them,
+and a compiled index does the same for a map. The interpreter's own index
+syntax did not: it refused a subtype of int as a position and as a map key,
+while `put` had just stored under that key. A compiled build refused the
+position too. Both engines now read an index through a subtype, as `at`
+does. The compiled path reaches `k_b_at` again through a pointer: called
+directly, clang copied its arms into the cold path, 1,200 bytes of text in
+every benchmark, where the pointer costs 80.
+
+The runtime corpus fixture `a_map_indexed_by_a_none_is_refused` printed a
+none on the old compiler. The micro fixture `a_subtype_indexes_as_its_base`
+stopped in the interpreter and died in a release build. Three ratchet rows put
+each piece back: "a map indexed by any key", "a native index blind to
+subtypes" and "an interpreted index blind to subtypes".
+
+Every benchmark's text grows 80 bytes, so `text` lands on 3,483,760.
+Emitted code is unchanged. CI will measure the instruction rows.
