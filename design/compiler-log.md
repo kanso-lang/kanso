@@ -17841,4 +17841,15 @@ main, and the ratchet row "the render group typed from its calls" restores
 the old seeding and fails it again.
 
 The five changes in the entries above landed together, in kanso#1703, and
-CI measured them together.
+CI measured them together against main after kanso#1697. runbench
+1,073,234,771 -> 1,071,321,405, -0.178%, basket 29,624,228 -> 29,524,392 and
+pendbench 179,495,846 -> 179,484,260, with jsonbench, deepbench, widebench and
+five others falling by less. One work row rose: `work_escapebench` 45,421,707
+-> 45,427,695. The compiler's rows rose with #1695's merged-failure tests,
+#1699's buffer renderer and #1702's seed: `compile_instructions` 25,118,657 ->
+25,158,386, `entry_instructions` 84,647,153 -> 84,775,453,
+`library_instructions` 85,180,219 -> 85,308,550, `emit_instructions`
+29,836,693 -> 29,872,742, `codegen_instructions_dev` 123,384,276 ->
+124,603,849 and `codegen_instructions_release` 407,709,792 -> 408,333,661.
+`interp_instructions` reads 589,865,923 -> 589,865,924. Welfare nets the
+combination upward and is banked.
