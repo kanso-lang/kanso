@@ -3238,7 +3238,28 @@ interp_profile = row
 
 rows_c1zr = text/concat rows_c1zq [interp_profile]
 
-rows_c = text/concat rows_c1zr [itself]
+# A shared token's escape scan is decided once, when its slot fills. Marking
+# every token clean writes a quote raw into the micro fixture; scanning a
+# clean one anyway puts the scans back into `find2_calls`.
+token_clean = row
+  "every short token counted clean"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "every_short_token_counted_clean")
+  release
+
+token_skip = row
+  "a clean token scanned anyway"
+  true
+  (gating "run_counters")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "a_clean_token_scanned_anyway")
+  benchmarks
+
+rows_c1zs = text/concat rows_c1zr [token_clean token_skip]
+
+rows_c = text/concat rows_c1zs [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

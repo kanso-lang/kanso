@@ -1440,7 +1440,13 @@ static void k_frozen_note(const char* lo, size_t n) {
    copy. See `k_token_miss`. */
 #define K_TOKEN_BITS 12
 typedef struct { KStr s; char data[8]; } KToken;
-static KToken k_token_store[1 << K_TOKEN_BITS];
+KToken k_token_store[1 << K_TOKEN_BITS];
+/* Whether a filled slot's bytes hold no quote, no backslash and nothing below
+   a space, which is everything the JSON writer escapes. Decided once, when the
+   slot fills, so `k_b_find2_below_raw` can answer "not found" for a shared
+   token without scanning it. Both arrays have external linkage because the
+   hot unit reads them; see `hot_source` in main.rs. */
+unsigned char k_token_clean[1 << K_TOKEN_BITS];
 static inline int k_token_holds(const void* p) {
     return (uintptr_t)((const char*)p - (const char*)k_token_store) < sizeof(k_token_store);
 }
@@ -8024,9 +8030,16 @@ static __attribute__((noinline, cold, preserve_most)) KValue k_token_miss(const 
     if (bad.tag == K_ERR) return bad;
     if (k_token_key[slot] != 0) slot ^= 1;
     if (k_token_key[slot] == 0) {
-        /* Its bytes count as permanent the moment the slot is filled. */
-        k_perm_live += (long long)sizeof(KToken);
+        /* Its bytes count as permanent the moment the slot is filled, and so
+           does its byte in k_token_clean. */
+        k_perm_live += (long long)sizeof(KToken) + 1;
         if (k_perm_live > k_perm_peak) k_perm_peak = k_perm_live;
+        unsigned char clean = 1;
+        for (long long i = 0; i < len; i++) {
+            unsigned char c = (unsigned char)data[i];
+            if (c == '"' || c == '\\' || c < 32) clean = 0;
+        }
+        k_token_clean[slot] = clean;
         KStr* ps = &k_token_store[slot].s;
         ps->len = (int)len;
         ps->data = k_token_store[slot].data;
@@ -9492,6 +9505,18 @@ K_DOORCC KValue k_b_append_rendered(KValue acc, KValue v, long long mutate) {
 __attribute__((always_inline)) long long k_b_find2_below_raw(const unsigned char* d, long long len,
                               long long from, long long a, long long b,
                               long long floor_v) {
+    /* The JSON writer's scan, over a shared token already known to hold none
+       of the three. The decoder hands the writer the same few hundred keys on
+       every document, and the run program scans 942,750 strings a run
+       through this door. The byte triple is a literal at every emitted site,
+       so the test folds away everywhere else. A view that starts inside a token reads the whole
+       token's flag, which is safe: a clean token has no dirty sub-range.
+       `find2_calls` is counted after this, so it counts scans, and a skip
+       that stops firing shows there. */
+    if (a == 34 && b == 92 && floor_v == 32) {
+        uintptr_t off = (uintptr_t)((const char*)d - (const char*)k_token_store);
+        if (off < sizeof(k_token_store) && k_token_clean[off / sizeof(KToken)]) return len + 1;
+    }
     if (K_COUNTING) k_stat_find2_calls++;
     long long p = from < 1 ? 0 : from - 1;
     unsigned char ca = (unsigned char)(a & 0xff);

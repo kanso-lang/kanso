@@ -17271,3 +17271,59 @@ outside `run_interpreted_on_stack`, which is the row's anchor. The overcommit
 answer is consulted again inside the anchor, in the arena's commit path, but
 it is one branch on a boolean that reads true for both `0` and `1`, the
 two settings a runner is likely to carry. No counter moves in this change.
+
+## 2026-09-28 — a clean short token skips the JSON writer's scan
+
+`escape_onto` asks `text/find2_below bs 1 34 92 32` of every string it writes,
+the position of the first quote, backslash or byte below a space, and the run
+program asks it 942,750 times a run. The decoder hands out every token of
+four to seven bytes as one shared permanent string (the short-token cache,
+`k_token_miss`), so the writer was scanning the same few hundred clean tokens
+again on every document.
+
+A slot now carries a byte, `k_token_clean`, written once when the slot fills:
+one when the token holds none of the three, zero otherwise. The scan's first
+act, when its three bytes are 34, 92 and 32, is to ask whether its pointer
+lies inside the token store and, if it does, whether that slot is clean; a
+clean slot answers "not found" without reading the bytes. The byte triple is
+a literal at every emitted call, so the test folds away at the other sites.
+The flag and the store have external linkage now, because the scan is
+compiled in the release build's hot unit, and `hot_source` declares both.
+
+`find2_calls` is counted after the early return, so it now counts scans, and
+764,370 of the run program's return without reading a byte. On the run
+program it reads 3,017,526 -> 2,253,156; on encodebench 4,200,475 ->
+803,275; on livebench 6,031,610 -> 2,634,410; on oneshot 31,847 -> 23,354.
+
+The flag costs one permanent byte for each slot that fills, and 632 fill on
+every benchmark, so the permanent-byte counters are worse on every vein that
+carries them: perm_live_bytes 15,168 -> 15,800 and perm_peak_bytes 15,168 ->
+15,800; encode_perm_live_bytes 15,168 -> 15,800 and encode_perm_peak_bytes
+15,168 -> 15,800; live_perm_live_bytes 15,168 -> 15,800 and
+live_perm_peak_bytes 15,168 -> 15,800; oneshot_perm_live_bytes 15,168 ->
+15,800 and oneshot_perm_peak_bytes 15,168 -> 15,800; run_perm_live_bytes
+15,168 -> 15,800 and run_perm_peak_bytes 31,568 -> 32,200. The mem fixture
+reads a_short_token_is_shared_perm_live_bytes 120 -> 125 and
+a_short_token_is_shared_perm_peak_bytes 120 -> 125. Every benchmark's
+`.text` grows by 144 to 288 bytes, and text 3,530,992 -> 3,533,600.
+
+Measured by CI: runbench 1,092,089,764 -> 1,073,245,339 (-1.73%), livebench
+1,619,897,540 -> 1,536,099,047 (-5.17%), encodebench 2,412,230,725 ->
+2,338,087,271 (-3.07%) and oneshot 12,747,861 -> 12,575,988 (-1.35%).
+jsonbench, which decodes and writes nothing, reads work_jsonbench
+732,450,238 -> 732,487,894, 37,656 more. It fills the same 632 slots, and the only code
+this change adds to its path is the walk each fill makes over its token's
+bytes to set the flag. The build rows are worse too:
+codegen_instructions_release 402,637,018 -> 407,792,416 (+1.28%) and
+codegen_instructions_dev 123,375,537 -> 123,380,276. That delta arrived with
+the change and was not taken apart here; every emitted call to the scanner
+now carries the pointer test, and the release build inlines the scanner at
+each of them.
+
+The micro fixture a_short_token_with_a_quote_is_still_escaped slices four
+tokens out of one string twice, so the second of each is the shared one, and
+writes them as a list and as map keys. Three of them hold a quote, a
+backslash and a tab. The ratchet row "every short token counted clean" marks
+every slot clean, and the fixture's output then carries the three bytes raw.
+The row "a clean token scanned anyway" disables the early return; no output
+changes, and the run vein's find2_calls goes back up.
