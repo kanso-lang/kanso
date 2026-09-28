@@ -18373,3 +18373,22 @@ unwrap added to `k_truthy_bad`, `k_b_to_bytes`, `k_sub_ctor`, `k_upcast` and
 `k_sub_depth`. None of those paths runs in a benchmark, which declares no
 subtype, and the allocation counters and emitted code are unchanged. CI will
 measure the instruction rows.
+
+## 2026-09-28 — CI's rows for subtypes that flow where their parents flow
+
+CI measured 85ba563c. The run rows rose by a few hundred instructions each:
+`work_encodebench` lands on 2,333,509,024 (+427), `work_oneshot` on
+12,547,122 (+490), `work_livebench` on 1,537,194,063 (+322) and
+`work_runbench` on 1,070,398,557 (+686). `codegen_instructions_dev` lands on
+124,446,589 (+8,691) and `codegen_instructions_release` on 408,099,854
+(+61,265), for the runtime's larger text. The compiler's own rows fell a
+little: `compile_instructions` 25,258,516, `emit_instructions` 29,850,464,
+`entry_instructions` 85,075,845, `library_instructions` 85,601,964.
+
+`interp_instructions` lands on 589,912,212, +667,270 over main. On this
+host's toolchain the same comparison reads the other way: 620,525,766 on
+cf70637a and 619,931,329 on this branch, 594,437 lower. The added arms sit
+where the interpreter would have refused, so an ordinary condition, join or
+`to_bytes` does not reach them, but what moved CI's reading has not been
+isolated. Welfare falls from 90.4026 to CI's reading under the 2026-09-13
+rule, and the history entry says why.
