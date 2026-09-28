@@ -18219,3 +18219,22 @@ each half back.
 
 `builtin_sum` also answers a failing item, but nothing a program writes
 reaches it: `list/sum` is a fold. It is left as it is.
+
+## 2026-09-28 — CI's rows for the render hop and the joined list
+
+CI measured 5ba0cb30 and these are its readings. Every row that moved rose:
+
+- `work_pendbench` 179,483,660 -> 181,091,559 (+1,607,899, +0.90%)
+- `work_runbench` 1,069,996,157 -> 1,070,399,215 (+403,058, +0.038%)
+- `work_basket` 29,539,468 -> 29,539,476 (+8)
+- `work_deepbench` 363,026,387 -> 363,026,388 (+1)
+- `compile_instructions` 25,256,527 -> 25,258,611 (+2,084)
+- `entry_instructions` 85,069,514 -> 85,075,870 (+6,356)
+- `library_instructions` 85,595,593 -> 85,601,973 (+6,380)
+- `emit_instructions` 29,849,876 -> 29,850,742 (+866)
+
+pendbench's emitted branches rose most, 14, and its instruction row rose
+most. The runtime rows pay the tag test at each render site that can see an
+err, on every render and not only when an err arrives. The compiler rows pay
+for emitting the test and for the join rule. Welfare falls to the floor's new
+reading, 90.4026, under the 2026-09-13 rule, and the history entry says why.
