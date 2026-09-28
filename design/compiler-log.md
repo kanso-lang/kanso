@@ -17557,13 +17557,20 @@ decoder nothing, so the whole change reads as a fall. That was not isolated
 further. No allocation counter moves in the twelve cost veins or the lazy
 tier.
 
-`STATS_GATE_SITES` is 11: the second twin carries the counting build's gate
-like the first. Five programs declare both twins, so the emitted-code goldens
-move, and every program's `.text` grows 2,672 bytes. The keys the trend gate
-reads land at `emitted_lines` 5,727 -> 5,732, `emitted_other_defines` 1,550 ->
-1,555, `emitted_other_calls` 10,666 -> 10,671, `emitted_other_branches` 8,078
--> 8,104, `emitted_other_lines` 85,511 -> 85,770, and `text` 3,534,272 ->
-3,572,080.
+`k_b_push_mut_fast` is now the item test and a call to `k_b_push_mut_known`,
+which holds the push and is always inlined. The first version wrote the known
+twin as a second copy of the whole push, and the spec that reads the room test
+`2 * len + 2 <= capw` out of src/codegen.rs by its spelling found it twice and
+went red; the sweep it guards proves one spelling. Written once, the push keeps
+its one counting-build gate and `STATS_GATE_SITES` stays 10. A program that
+reaches the fast push now carries the known one too, so the emitted-code and
+compile goldens move. The keys the trend gate reads land at `emitted_lines`
+5,727 -> 5,731, `emitted_other_defines` 1,550 -> 1,556, `emitted_other_calls`
+10,666 -> 10,678, `emitted_other_branches` 8,078 -> 8,084,
+`emitted_other_lines` 85,511 -> 85,629, `text` 3,534,272 -> 3,571,984, and in
+the compile goldens `lines` 1,433 -> 1,453, `module_lines` 1,071 -> 1,086,
+`module_calls` 107 -> 109, `module_branches` 83 -> 84 and `module_defines`
+27 -> 28.
 
 Two micro fixtures. `pushing_an_err_hands_it_on` pushes an err onto a fresh
 literal, which the emitter writes in place, and onto a list read again
