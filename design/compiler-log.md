@@ -18485,4 +18485,14 @@ for the module, then a set per file grown by all of them. Each file now asks its
 own set and then the module's, which is never copied, and the imports' names
 sit in a set of their own for the typeset check that reads both. On this
 container, where main reads the golden's 14,306, that reads 14,308. The two
-left are the second set's table. CI will measure the rest.
+left are the second set's table.
+
+CI measured the head with both changes in it. Five rows rose and none fell.
+`compile_instructions` lands on 25,246,986 (+12,259), `entry_instructions` on
+85,060,383 (+52,321) and `library_instructions` on 85,586,846 (+51,880).
+`compile_allocs` lands on 14,308 (+2) and `interp_allocs` on 895,191 (+2), the
+interpreter's run passing through the same check. The run rows, the codegen
+rows, the text and the lazy tier did not move. Which of the two checks the
+instruction rows paid for has not been isolated. Welfare fell from 90.40233 to
+90.40222, and the floor follows it under the 2026-09-13 rule, since both are
+gaps in the checker for the language as ruled.
