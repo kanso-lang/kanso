@@ -17238,3 +17238,42 @@ No benchmark in this repository binds the columns this way, so it moves none
 of them. Every benchmark's `.text` grows by 544 bytes, the
 runtime's new function, and the text total reads 3,523,184 -> 3,530,992, and the three programs that encode lose one call from
 their emitted code.
+
+## 2026-09-28 — a clean short token skips the JSON writer's scan
+
+`escape_onto` asks `text/find2_below bs 1 34 92 32` of every string it writes,
+the position of the first quote, backslash or byte below a space, and the run
+program asks it 942,750 times a run. The decoder hands out every token of
+four to seven bytes as one shared permanent string (the short-token cache,
+`k_token_miss`), so the writer was scanning the same few hundred clean tokens
+again on every document.
+
+A slot now carries a byte, `k_token_clean`, written once when the slot fills:
+one when the token holds none of the three, zero otherwise. The scan's first
+act, when its three bytes are 34, 92 and 32, is to ask whether its pointer
+lies inside the token store and, if it does, whether that slot is clean; a
+clean slot answers "not found" without reading the bytes. The byte triple is
+a literal at every emitted call, so the test folds away at the other sites.
+The flag and the store have external linkage now, because the scan is
+compiled in the release build's hot unit, and `hot_source` declares both.
+
+`find2_calls` is counted after the early return, so it now counts scans, and
+764,370 of the run program's return without reading a byte. On the run
+program it reads 3,017,526 -> 2,253,156; on encodebench 4,200,475 ->
+803,275; on livebench 6,031,610 -> 2,634,410; on oneshot 31,847 -> 23,354.
+
+Two counters are worse, both by the flag byte: each filled slot adds one
+permanent byte, and 632 slots fill on every benchmark. perm_live_bytes and
+perm_peak_bytes read 15,168 -> 15,800 on the decode, encode, live and oneshot
+veins, and on the run program perm_live_bytes 15,168 -> 15,800 and
+perm_peak_bytes 31,568 -> 32,200. The mem fixture a_short_token_is_shared
+reads perm_live_bytes and perm_peak_bytes 120 -> 125. Every benchmark's
+`.text` grows by 144 to 288 bytes.
+
+The micro fixture a_short_token_with_a_quote_is_still_escaped slices four
+tokens out of one string twice, so the second of each is the shared one, and
+writes them as a list and as map keys. Three of them hold a quote, a
+backslash and a tab. The ratchet row "every short token counted clean" marks
+every slot clean, and the fixture's output then carries the three bytes raw.
+The row "a clean token scanned anyway" disables the early return; no output
+changes, and the run vein's find2_calls goes back up.

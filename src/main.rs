@@ -2100,6 +2100,8 @@ fn hot_source_of(runtime: &str) -> String {
         ("typedef struct { KBlock* block;", " KMark;\n"),
         ("#define K_BEAT_MAX ", "\n"),
         ("typedef struct { char* data; size_t cap; size_t used; } KCarryBuf;", "} KCarry;\n"),
+        ("#define K_TOKEN_BITS ", "\n"),
+        ("typedef struct { KStr s; char data[8]; } KToken;", "\n"),
     ] {
         out.push_str(hot_text(runtime, start, end));
     }
@@ -2118,6 +2120,8 @@ fn hot_source_of(runtime: &str) -> String {
         "extern int k_buf_dirty;\n",
         "extern KCarry k_carries[K_BEAT_MAX];\n",
         "extern long long k_live_block_bytes;\n",
+        "extern KToken k_token_store[1 << K_TOKEN_BITS];\n",
+        "extern unsigned char k_token_clean[1 << K_TOKEN_BITS];\n",
         "void k_beat_push_deep(void);\n",
         "void k_beat_rewind_slow(KMark* m);\n",
         "__attribute__((noreturn, noinline)) void k_die(const char* msg);\n",

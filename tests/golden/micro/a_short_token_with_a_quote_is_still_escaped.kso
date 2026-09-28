@@ -1,0 +1,24 @@
+# A decoded token of four to seven bytes is shared, and whether it needs
+# escaping is decided once, when it is first made. Each token here is sliced
+# out of the same bytes twice, so the second of each is the shared one, and a
+# quote, a backslash or a control character in it must still be escaped.
+import "std/io"
+import "std/json"
+import "std/text"
+
+source = text/bytes "ab\"cd|ef\\gh|ij\tkl|mnop"
+
+fn token from to
+  text/utf8 (text/slice source from to)
+
+fn tokens _
+  [(token 1 5) (token 7 11) (token 13 17) (token 19 22)]
+
+fn keyed ts
+  put (put (put (put {} ts[1] 1) ts[2] 2) ts[3] 3) ts[4] 4
+
+fn shown _
+  ts = tokens 0
+  "{json/encode ts} {json/encode (keyed ts)}"
+
+pub play = io/write "{shown 0}\n{shown 0}\n"
