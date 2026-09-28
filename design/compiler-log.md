@@ -17561,3 +17561,17 @@ deepbench 221,032, escapebench 215,352, pendbench 228,888, indexbench
 253,544 and runbench 401,896. The `text` key the trend gate reads is their
 sum, 3,534,272 -> 3,536,288. No benchmark calls `round`, so no counter the
 objective weighs reads the new code.
+
+CI's rows moved by layout alone, since no benchmark calls `round`. Eleven
+work rows rose by a few instructions each, and three fell:
+`work_basket` 29,624,219 -> 29,624,228, `work_deepbench` 364,866,369 ->
+364,866,387, `work_encodebench` 2,338,075,511 -> 2,338,076,351,
+`work_escapebench` 45,421,689 -> 45,421,707, `work_indexbench` 2,428,510 ->
+2,428,528, `work_livebench` 1,536,087,868 -> 1,536,088,596, `work_pendbench`
+179,495,828 -> 179,495,846, `work_readbench` 4,578,301 -> 4,578,310,
+`work_scanbench` 281,695 -> 281,713 and `work_widebench` 27,311,106 ->
+27,311,115, where `work_oneshot` fell 12,565,397 -> 12,565,320 and
+`work_runbench` 1,073,235,252 -> 1,073,234,771. The child tree that compiles
+the runtime read `codegen_instructions_dev` 123,379,531 -> 123,384,276 and
+`codegen_instructions_release` 407,793,576 -> 407,709,792. Welfare nets the
+rows slightly upward and is banked.
