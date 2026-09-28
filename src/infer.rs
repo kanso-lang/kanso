@@ -76,6 +76,12 @@ struct Ctx<'a> {
     /// is emitted as a thunk in a storing position, so every container read
     /// has to admit one; no other program does, and none pays for it.
     defers_into_containers: bool,
+    /// ERR when some list or map literal holds a failure as an element. A
+    /// literal keeps a failing item in place, where `push`, `put` and a
+    /// constructor hand the failure on instead, so a literal is the one way
+    /// an err gets inside a container and every element read has to admit
+    /// what one holds. A program whose literals never fail keeps this empty.
+    stored_fails: Set,
     program: &'a Program,
     demand: crate::demand::DemandInfo<'a>,
     /// (name, arity) of the decl currently being walked, for lazy-bind lookup.
@@ -425,6 +431,7 @@ pub fn infer(program: &Program) -> Inference {
     let mut ctx = Ctx {
         consts: literal_consts(program),
         defers_into_containers,
+        stored_fails: 0,
         program,
         demand: crate::phase::watched("infer/demand", || crate::demand::analyze(program)),
         current: ("", 0),
@@ -1075,14 +1082,16 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut Env<'a>) -> Set {
         Expr::Ident(name, _, _) => ident_set(ctx, name, env),
         Expr::List(items, _) => {
             for item in items {
-                let _ = eval_expr(ctx, item, env);
+                let s = eval_expr(ctx, item, env);
+                store_fails(ctx, s);
             }
             LIST
         }
         Expr::MapLit(pairs, _) => {
             for (k, v) in pairs {
                 let _ = eval_expr(ctx, k, env);
-                let _ = eval_expr(ctx, v, env);
+                let s = eval_expr(ctx, v, env);
+                store_fails(ctx, s);
             }
             MAP
         }
@@ -1125,7 +1134,7 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut Env<'a>) -> Set {
                     true => THUNK,
                     false => 0,
                 };
-                out |= (TOP & !FAIL & !THUNK) | deferred;
+                out |= (TOP & !FAIL & !THUNK) | deferred | ctx.stored_fails;
             }
             out
         }
@@ -1148,10 +1157,12 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut Env<'a>) -> Set {
                 // int op int stays int; any float operand widens the other,
                 // so the result is float
                 "+" | "-" | "*" => fails | numeric_result(a, b),
-                // Division fails only on a zero divisor, so one written as a
-                // nonzero literal adds no err of its own.
+                // A zero divisor answers a value, not a failure (ruled
+                // 2026-08-10): `divide_by_zero` over a string where some arm
+                // names the math failure types, the bare string where none
+                // does. One written as a nonzero literal cannot be zero.
                 "/" | "%" if nonzero_literal(rhs) => fails | numeric_result(a, b),
-                "/" | "%" => fails | ERR | numeric_result(a, b),
+                "/" | "%" => fails | STR | REC | numeric_result(a, b),
                 // the bitwise three answer a whole number; every remaining
                 // operator compares, and a comparison answers true or false
                 "&" | "|" | "^" => fails | INT,
@@ -1392,6 +1403,25 @@ pub fn literal_consts(program: &Program) -> Consts<'_> {
     consts
 }
 
+/// A literal item that can fail widens what every element read answers. Which
+/// declarations read an element is not tracked, so the widening wakes them
+/// all; it can happen at most twice in a program, once per failure bit.
+fn store_fails(ctx: &mut Ctx<'_>, item: Set) {
+    // Read back out, the item is an err value rather than a raise: the
+    // literal ended the raise by keeping it, and the per-call check reads
+    // RAISED, which a read of a list the program built must not answer.
+    let fails = match item & FAIL {
+        0 => 0,
+        _ => ERR,
+    };
+    if ctx.stored_fails | fails != ctx.stored_fails {
+        ctx.stored_fails |= fails;
+        ctx.changed = true;
+        ctx.dirty.fill(true);
+        ctx.dirty_next.fill(true);
+    }
+}
+
 fn widen_param(ctx: &mut Ctx<'_>, decl: usize, param: usize, set: Set) {
     let at = ctx.param_starts[decl] as usize + param;
     let set = set & !ctx.shadow[at];
@@ -1554,7 +1584,11 @@ fn eval_call<'a>(
         }
         return out | piped_bits;
     }
-    builtin_set(name, arg_sets) | piped_bits
+    let read = match name.strip_prefix("builtin_").unwrap_or(name) {
+        "at" if arg_sets.first().is_some_and(|s| s & (LIST | MAP) != 0) => ctx.stored_fails,
+        _ => 0,
+    };
+    builtin_set(name, arg_sets) | read | piped_bits
 }
 
 /// What a description's execution hands a bound continuation, syntactically:

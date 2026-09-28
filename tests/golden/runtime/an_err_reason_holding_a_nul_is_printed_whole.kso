@@ -1,0 +1,7 @@
+# The reason reads `"<NUL>" is not an integer`. A compiled build printed an
+# unhandled err's reason with %s, which stops at the first NUL, so it wrote
+# only the opening quote where the interpreter wrote the whole reason. Found
+# by a generated program on 2026-09-28.
+import "std/text"
+
+pub play = print "{text/to_int (text/from_code 0)}"

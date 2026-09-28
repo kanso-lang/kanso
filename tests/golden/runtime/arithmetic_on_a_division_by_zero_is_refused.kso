@@ -1,0 +1,15 @@
+# A zero divisor answers a value, the text "division by zero" (ruled
+# 2026-08-10), and `*` is not defined on text. Inference still typed the
+# answer as an err, so a compiled build took the function below to be skipped
+# for it and treated `p` as an integer: it multiplied the string's address and
+# printed the number. Found by a generated program on 2026-09-28.
+import "std/os"
+
+fn scaled _ p
+  p * 9 + 1
+
+fn shown z
+  quotient = 4 / z
+  "{scaled 10 quotient}"
+
+pub play = os/args .> (a -> print (shown (length a)))

@@ -310,6 +310,7 @@ pub fn next (cursor at source)
   if (at < 1 or length source < at) done (step source[at] onward)
 
 pub fn next (cycled at source)
+  return done if length source == 0
   onward = cycled (at + 1) source
   return next (cycled 1 source) if at < 1 or length source < at
   step source[at] onward

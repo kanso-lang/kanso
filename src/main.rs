@@ -1416,6 +1416,131 @@ fn lld_links_lto() -> bool {
     answer
 }
 
+/// LLVM 19's `lto<O3>` pipeline, as `opt -print-pipeline-passes` writes it,
+/// with `deadargelim` taken out.
+///
+/// Dead-argument elimination judges the words of a two-word return one at a
+/// time, by what the callers read, and keeps a function's arguments whole
+/// when its body makes a `musttail` call but not its return. A function whose
+/// callers read only the tag loses the second word while its `musttail`
+/// callee keeps both, the two disagree, and the verifier aborts the link. A
+/// program declaring a subtype and calling std/regexp met it in 2026-09-28's
+/// generated programs, in the library's predicates. Which functions it strikes
+/// depends on what inlining did first, so the emitter cannot steer around it:
+/// writing the calls between functions as plain `tail` calls cost the run
+/// program 1.82%, and giving each such function a kept caller cost 5.1%.
+///
+/// Handed to lld unchanged, this pipeline links runbench byte for byte as the
+/// default does; without the pass the run program reads 1,071,975,512 against
+/// 1,071,414,767, +0.052%.
+const LTO_O3_WITHOUT_DEADARGELIM: &str = concat!(
+    "cross-dso-cfi,openmp-opt,globaldce<vfe-linkage-unit-visibility>,inferatt",
+    "rs,function<eager-inv>(callsite-splitting),pgo-icall-prom,ipsccp,called-",
+    "value-propagation,cgscc(function-attrs),rpo-function-attrs,globalsplit,w",
+    "holeprogramdevirt,globalopt,function(mem2reg),constmerge,function<eager-",
+    "inv>(instcombine<max-iterations=1;no-use-loop-info;no-verify-fixpoint>,a",
+    "ggressive-instcombine),cgscc(inline<only-mandatory>,inline),globalopt,op",
+    "enmp-opt,globaldce<vfe-linkage-unit-visibility>,cgscc(argpromotion),func",
+    "tion<eager-inv>(instcombine<max-iterations=1;no-use-loop-info;no-verify-",
+    "fixpoint>,constraint-elimination,jump-threading,sroa<modify-cfg>,tailcal",
+    "lelim),cgscc(function-attrs),require<globals-aa>,function(invalidate<aa>",
+    "),cgscc(openmp-opt-cgscc),function<eager-inv>(loop-mssa(licm<allowspecul",
+    "ation>),gvn<>,memcpyopt,dse,move-auto-init,mldst-motion<no-split-footer-",
+    "bb>,loop(indvars,loop-deletion,loop-unroll-full),loop-distribute,loop-ve",
+    "ctorize<no-interleave-forced-only;no-vectorize-forced-only;>,infer-align",
+    "ment,loop-unroll<O3>,transform-warning,sroa<preserve-cfg>,instcombine<ma",
+    "x-iterations=1;no-use-loop-info;no-verify-fixpoint>,simplifycfg<bonus-in",
+    "st-threshold=1;forward-switch-cond;switch-range-to-icmp;switch-to-lookup",
+    ";no-keep-loops;hoist-common-insts;sink-common-insts;speculate-blocks;sim",
+    "plify-cond-branch;no-speculate-unpredictables>,sccp,instcombine<max-iter",
+    "ations=1;no-use-loop-info;no-verify-fixpoint>,bdce,slp-vectorizer,vector",
+    "-combine,infer-alignment,instcombine<max-iterations=1;no-use-loop-info;n",
+    "o-verify-fixpoint>,loop-mssa(licm<allowspeculation>),alignment-from-assu",
+    "mptions,jump-threading),lowertypetests,lowertypetests,function(loop-sink",
+    ",div-rem-pairs,simplifycfg<bonus-inst-threshold=1;no-forward-switch-cond",
+    ";switch-range-to-icmp;no-switch-to-lookup;keep-loops;hoist-common-insts;",
+    "no-sink-common-insts;speculate-blocks;simplify-cond-branch;speculate-unp",
+    "redictables>),elim-avail-extern,globaldce<vfe-linkage-unit-visibility>,c",
+    "g-profile,function(annotation-remarks),verify",
+);
+
+/// The arguments that run the link's optimization as `LTO_O3_WITHOUT_DEADARGELIM`
+/// says, or none.
+///
+/// The pipeline is LLVM 19's, and another release's default may differ, so
+/// it is used only when clang says it is 19 and a one-line LTO program links
+/// with it through lld. Elsewhere the link keeps its own default. The answer
+/// is remembered under clang's identity, as `lld_links_lto`'s is.
+fn lto_pipeline_args() -> Vec<String> {
+    if lld_args().is_empty() {
+        return Vec::new();
+    }
+    let Some(clang) = tool_identity("clang") else {
+        return Vec::new();
+    };
+    let key = format!("{clang}|{}", LTO_O3_WITHOUT_DEADARGELIM)
+        .bytes()
+        .fold(0xcbf29ce484222325u64, |h, b| (h ^ b as u64).wrapping_mul(0x100000001b3));
+    let path = std::env::temp_dir().join(format!("kanso_lto_pipeline_answer_{}", hex16(key)));
+    let answer = match std::fs::read(&path).ok().as_deref() {
+        Some(b"1") => true,
+        Some(b"0") => false,
+        _ => {
+            let answer = lto_pipeline_probe();
+            let staged = std::env::temp_dir().join(format!(
+                "kanso_lto_pipeline_answer_{}_{}",
+                hex16(key),
+                pid_tag()
+            ));
+            if std::fs::write(&staged, if answer { b"1" } else { b"0" }).is_ok() {
+                let _ = std::fs::rename(&staged, &path);
+            }
+            answer
+        }
+    };
+    match answer {
+        true => {
+            vec!["-Xlinker".to_string(), format!("--lto-newpm-passes={LTO_O3_WITHOUT_DEADARGELIM}")]
+        }
+        false => Vec::new(),
+    }
+}
+
+fn lto_pipeline_probe() -> bool {
+    let dir = std::env::temp_dir();
+    let c = dir.join(format!("kanso_lto_pipeline_probe_{}.c", pid_tag()));
+    let ll = dir.join(format!("kanso_lto_pipeline_probe_{}.ll", pid_tag()));
+    let out = dir.join(format!("kanso_lto_pipeline_probe_{}", pid_tag()));
+    // The pipeline string is LLVM 19's, so another major version is asked
+    // with the preprocessor: a status, where reading `--version` would drain
+    // a pipe. Output thrown away rather than read, for the reason
+    // `preserve_none_probe` gives.
+    let quiet = |cmd: &mut std::process::Command| {
+        cmd.stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    };
+    let ok = std::fs::write(&c, "#if __clang_major__ != 19\n#error\n#endif\n").is_ok()
+        && std::fs::write(&ll, "define i32 @main() {\n  ret i32 0\n}\n").is_ok()
+        && quiet(std::process::Command::new("clang").arg("-fsyntax-only").arg(&c))
+        && quiet(
+            std::process::Command::new("clang")
+                .args(["-O1", "-flto", "-Wno-override-module"])
+                .args(lld_args())
+                .arg("-Xlinker")
+                .arg(format!("--lto-newpm-passes={LTO_O3_WITHOUT_DEADARGELIM}"))
+                .arg(&ll)
+                .arg("-o")
+                .arg(&out),
+        );
+    let _ = std::fs::remove_file(&c);
+    let _ = std::fs::remove_file(&ll);
+    let _ = std::fs::remove_file(&out);
+    ok
+}
+
 /// The arguments that put a link in lld, or none.
 ///
 /// lld links on every hardware thread by default, which a user's build wants
@@ -1684,6 +1809,8 @@ fn release_clang(stem: &str, ll_path: &str) -> std::io::Result<std::process::Exi
         .arg("-flto")
         // lld where it can take the LTO link: `lld_links_lto` says why.
         .args(lld_args())
+        // and LLVM 19's own link pipeline without one pass: `lto_pipeline_args`.
+        .args(lto_pipeline_args())
         // Eight times clang's default of 250. The run program spends one
         // instruction in ten on `push`, `pop` and `ret` -- 215,229,225 of
         // 2,185,625,151 in the binary's own code -- and the functions paying

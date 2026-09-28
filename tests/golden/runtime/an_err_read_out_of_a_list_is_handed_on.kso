@@ -1,0 +1,25 @@
+# A list literal keeps a failing item in place, so reading the element back
+# can answer the err. Inference said an element read never fails, so a
+# compiled build called `items` with no test of its first argument and told
+# the optimizer it held bytes: `items` did not appear in the trace, and a
+# release build was free to do anything with the err. Found by a generated
+# program on 2026-09-28 that encoded such a list with std/json.
+import "std/os"
+import "std/text"
+
+fn failing n
+  return err "no bytes for this one" if n > 0
+  n
+
+fn one acc x:int
+  text/append acc x
+
+fn items acc xs i
+  return acc if i < 1 or length xs < i
+  items (one acc xs[i]) xs (i + 1)
+
+fn shown n
+  xs = [(failing n) 3]
+  items (one [] xs[1]) xs 2
+
+pub play = os/args .> (a -> print "{shown (1 + length a)}")

@@ -10048,14 +10048,13 @@ static __attribute__((noinline, cold, preserve_most)) KValue k_b_to_int_slow(con
     int range = errno == ERANGE;
     if (copy != small) free(copy);
     if (!whole) return k_not_a_number(data, len, "\" is not an integer", "bytes are not an integer", origin);
-    if (range) {
-        /* strtoll saturates while consuming every digit — without this check
-           an overflowing literal decodes as a silently wrong value. Loud
-           limit beats quiet lie until native bignum tiering ships. */
-        KValue str = k_str_n(data, len);
-        return k_err(k_concat(k_concat(k_str("\""), str),
-            k_str("\" overflows this engine's integers")), origin);
-    }
+    /* strtoll saturates while consuming every digit, and the interpreter
+       answers the whole integer. A value this build cannot hold is refused
+       with the diagnostic arithmetic gives on overflow. An err here was a
+       value a program could catch and carry on from, and std/json caught it
+       and answered "invalid number" for a well-formed document. */
+    if (range)
+        k_die("integer overflow (int64 native build; spec int is arbitrary precision)");
     return k_int(n);
 }
 
@@ -11154,8 +11153,10 @@ static void k_report_trace(KErrBox* box) {
         fprintf(stderr, "%s\n", k_c_off());
     }
     if (box->cause) {
-        KValue cr = k_render(box->cause->reason, 1);
-        fprintf(stderr, "%s  caused by: %s%s\n", k_c_dim(), k_cstr(k_as_str(cr)), k_c_off());
+        KStr* cs = k_as_str(k_render(box->cause->reason, 1));
+        fprintf(stderr, "%s  caused by: ", k_c_dim());
+        fwrite(cs->data, 1, cs->len, stderr);
+        fprintf(stderr, "%s\n", k_c_off());
         k_report_trace(box->cause);
     }
 }
@@ -11184,8 +11185,13 @@ static int k_exit_status(KValue e) {
 
 static void k_report_err(KValue e, const char* reached) {
     KValue r = k_render(k_err_inner(e), 1);
-    fprintf(stderr, "%serror[endpoint]:%s unhandled err reached %s: %s\n",
-            k_c_err(), k_c_off(), reached, k_cstr(k_as_str(r)));
+    /* The reason is written by its length: a reason can hold a NUL, as
+       `text/to_int (text/from_code 0)`'s does, and %s stopped there. */
+    KStr* why = k_as_str(r);
+    fprintf(stderr, "%serror[endpoint]:%s unhandled err reached %s: ",
+            k_c_err(), k_c_off(), reached);
+    fwrite(why->data, 1, why->len, stderr);
+    fputc('\n', stderr);
     k_report_trace(k_err_box(e));
 }
 

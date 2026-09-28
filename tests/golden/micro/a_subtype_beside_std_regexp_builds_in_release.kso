@@ -1,0 +1,14 @@
+# Declaring a subtype changes how the run's type tests are written, and that
+# was enough to leave some of std/regexp's predicates read only for their
+# tag. A release build's link let dead-argument elimination narrow those
+# predicates' two-word return to one word while each still ended in a
+# `musttail` call returning two, and the verifier aborted the link. Found by a
+# generated program on 2026-09-28.
+import "std/regexp"
+
+type pt
+  n
+
+type tg pt
+
+pub play = print "{regexp/find "a" "b"}"

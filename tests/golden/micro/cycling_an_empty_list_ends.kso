@@ -1,0 +1,13 @@
+# A cycle of an empty list has no element to repeat, so it ends at once. Its
+# `next` wrapped back to the first position and asked again, forever, on every
+# engine; a release build ran out of memory first. Found by a generated
+# program on 2026-09-28 that took four elements of `list/cycle []`.
+import "std/list"
+import "std/os"
+
+fn shown z
+  none_left = list/to_list (list/take (list/cycle (list/take [1 2] z)) 4)
+  some = list/to_list (list/take (list/cycle [7 8]) 5)
+  "{none_left} {some}"
+
+pub play = os/args .> (a -> print (shown (length a)))

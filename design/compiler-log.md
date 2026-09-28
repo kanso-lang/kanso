@@ -17853,3 +17853,171 @@ five others falling by less. One work row rose: `work_escapebench` 45,421,707
 124,603,849 and `codegen_instructions_release` 407,709,792 -> 408,333,661.
 `interp_instructions` reads 589,865,923 -> 589,865,924. Welfare nets the
 combination upward and is banked.
+
+## 2026-09-28 — an integer written as text past int64 is refused natively
+
+A generated program decoded the JSON document `12345678901234567890`. The
+interpreter answered the integer. Both native builds answered
+`json/parse_failure 1 "invalid number"`, and the program went down its err
+path. The document is well-formed. The runtime's `k_b_to_int_slow` saw
+strtoll report ERANGE and answered an err value, `"..." overflows this
+engine's integers`, and std/json's number reader turned any failing `to_int`
+into "invalid number".
+
+An err is a value a program can catch and carry on from, so it is a
+divergence rather than a refusal. Arithmetic past int64 and `math/round` of a
+float past it both refuse with `integer overflow (int64 native build; spec
+int is arbitrary precision)`, and `to_int` now does the same. The interpreter
+is unchanged. The spec `an_integer_past_int64_is_refused_natively` reads
+`text/to_int` and `json/decode` past both ends of int64 on each engine and at
+both ends of the range, and its compiled half failed on the old runtime. The
+ratchet row "an overflowing integer answered as an err" puts the err back.
+No benchmark reads an integer this long. The refusal is shorter than the err
+it replaced, and each benchmark's text falls 1,568 bytes; runbench reads
+399,912 -> 398,344.
+
+## 2026-09-28 — a cycle of an empty list ends
+
+A generated program took four elements of `list/cycle []`. The interpreter and
+a dev build ran until the generator's twenty-second limit stopped them, and a
+release build was killed for memory first. `next` on a `cycled` view wraps
+back to the first position when it runs past the end, and with no first
+position it wrapped and asked again, forever. It now answers `done` when the
+list is empty.
+
+The micro fixture `cycling_an_empty_list_ends` prints an empty cycle and a
+two-element one on every engine. The spec `an_empty_cycle_ends` runs the empty
+case on the interpreter and a compiled build under a ten-second deadline, so
+the old library fails it rather than hanging it, and the ratchet row "an
+empty cycle that wraps forever" removes the guard and watches it fail.
+The guard is one more line of lib/list for every program to check. The
+modules compile row reads `module_visits` 2,656 -> 2,674, and the corpus the
+compile gates check imports lib/list too, so `front_end_visits` reads
+7,505 -> 7,523.
+
+## 2026-09-28 — an err's reason is printed whole when it holds a NUL
+
+A generated program called `text/to_int` on `text/from_code 0`, a string of
+one NUL. Both engines answer an err whose reason is `"<NUL>" is not an
+integer`, and the interpreter's endpoint printed all of it. A compiled build
+printed only `""`, because `k_report_err` wrote the reason with `%s`, which
+stops at the first NUL. The reason and its cause are now written by their
+length. The runtime corpus fixture
+`an_err_reason_holding_a_nul_is_printed_whole` pins the bytes, and the
+ratchet row "an err reason printed as a C string" puts the `%s` back and fails
+it.
+
+## 2026-09-28 — an element read can answer an err a list literal kept
+
+A generated program encoded, with std/json, a list holding an interpolation
+of a failed decode. Both engines ended at the same err, but the interpreter's
+trace read `text/utf8 ← json/encode_items ← json/encode_onto ← json/fail` and
+a compiled build's read `json/encode_onto ← json/fail`.
+
+The reduction is a list literal with a failing item, read back by index:
+
+    xs = [(failing n) 3]
+    items (one [] xs[1]) xs 2
+
+A literal keeps a failing item in place. `push`, `put` and a record
+constructor hand the failure on instead, so a literal is the one way an err
+gets inside a container. Inference typed every element read as never failing,
+so `one`'s parameter never held an err and `one` never answered one. The
+compiled `items` was then called with no test of its first argument, under an
+`llvm.assume` that the argument held bytes. The err went in anyway. `items`
+was left out of the trace, and in a release build the assume makes the rest of
+the call undefined.
+
+Inference now keeps `stored_fails`, set to ERR the first time a list or map
+literal's item can fail. Every element read, and `at` on a list or map,
+answers it. The bit is ERR. The per-call check reads RAISED, and a value read
+out of a list the program built is an err value, which that check has no
+business refusing. Stored as RAISED, it refused lib/json and lib/list the
+moment any program's literal could fail. The first widening wakes every
+declaration, which can happen once in a program.
+
+No benchmark's literal can fail. The compile sweep read `machine_code` and
+`emitted_code` AGREED and the compile corpus's visits unchanged at 7,523, so
+their emitted code is the same. The instruction rows come from CI. The runtime corpus fixture
+`an_err_read_out_of_a_list_is_handed_on` pins the trace on both engines, and
+the ratchet row "an element read that never fails" takes the bits out of the
+read and fails it.
+
+## 2026-09-28 — a zero divisor's answer is typed as the value it is
+
+A generated program divided 4 by a count that was zero and passed the answer
+to a function that multiplied it. The interpreter refused with "`*` is not
+defined for these values". Both native builds printed 1257052925032705 and
+exited 0.
+
+The 2026-08-10 gavel made division by zero a value: the text "division by
+zero", wrapped in `divide_by_zero` under `math_failure` where some arm names
+those types. Inference still typed a division by anything but a nonzero
+literal as `numeric | ERR`. A dispatcher skips a failure before any arm runs,
+so the function's parameter was taken to hold only numbers, and the compiled
+body multiplied the string's address.
+
+Division and modulo now answer `numeric | STR | REC`, which is what the value
+is: the bare string, or the subtype, which inference types as a record. The
+compile sweep read `machine_code` and `emitted_code` AGREED, so no
+benchmark's emitted code changed. The front end's visits are unchanged at
+7,523.
+
+The runtime corpus fixture `arithmetic_on_a_division_by_zero_is_refused` pins
+the refusal on both engines; the old compiler printed a number. The ratchet
+row "a zero divisor answered as an err" puts ERR back and fails it.
+
+## 2026-09-28 — a release link runs LLVM 19's pipeline without dead-argument elimination
+
+A generated program failed its release build with LLVM's verifier reporting
+"cannot guarantee tail call due to mismatched return types" inside std/regexp.
+It reduces to a program that declares a subtype and calls `regexp/find`:
+
+    type pt
+      n
+
+    type tg pt
+
+    pub play = print "{regexp/find "a" "b"}"
+
+Without the `tg` line it links. The interpreter and a dev build were never
+affected.
+
+The link runs `deadargelim` after it has internalized every function. The
+pass judges the two words of a `%KValue` return one at a time, by what the
+callers read. When a function's last act is a `musttail` call, the pass keeps
+its arguments whole, and not its return. Four of lib/regexp's predicates are
+read only for their tag, so their return was narrowed to one word, while each
+still ended in a `musttail` call to a function returning two. Declaring a
+subtype changes how type tests are written across the program, which is
+enough to change which calls are inlined before the pass runs.
+
+Three fixes were built and measured on runbench, whose release build reads
+1,071,414,767 instructions on main:
+
+    musttail between functions written as tail     1,090,923,305   +1.82%
+    each musttail caller given a kept caller        1,125,908,319   +5.09%
+    the link's pipeline without deadargelim         1,071,975,512   +0.052%
+
+A rule read off the emitted module cannot pick out the edges the pass will
+break, because inlining and tail-recursion elimination change them first. A
+function that tail-calls itself becomes a loop, and one that was a `musttail`
+target stops being one once its caller is inlined. The first fix above tried
+exactly that rule and the link still failed. The second made every such
+function's return live through an extra caller, which cost each of them the
+inliner's bonus for a function with one caller.
+
+The third is in. `opt -passes='lto<O3>' -print-pipeline-passes` writes the
+pipeline lld runs by default. Handed back to lld through
+`--lto-newpm-passes`, it links runbench byte for byte as the default does.
+With `deadargelim` removed it is `LTO_O3_WITHOUT_DEADARGELIM` in src/main.rs.
+It is used only where clang's `__clang_major__` is 19 and a one-line program links
+with it through lld, and the answer is cached under clang's identity as the
+lld probe's is. Any other toolchain keeps its own default, and the defect
+with it.
+
+The micro fixture `a_subtype_beside_std_regexp_builds_in_release` fails to
+link on the old compiler, and `micro_corpus_survives_a_release_build`
+reports it. The ratchet row "a release link that runs deadargelim" takes the
+arguments out of the link and fails it. Every release row moves with the
+pipeline, and CI measures them.
