@@ -1,0 +1,25 @@
+# An err handed to `print` reaches the endpoint as it is. With an arm of the
+# program's own in `render/to_string`, a compiled build rendered what it
+# printed through that group and handed it the err as well; the group passed
+# the err on, and the trace gained a `render/to_string` hop the program never
+# wrote. A record built with an err in a field is that err. Found by a
+# generated program on 2026-09-28.
+import "std/os"
+import "std/regexp"
+import "std/render"
+import "std/text"
+
+pub type pt
+  n
+  s
+
+pub fn to_string (pt _ s)
+  "pt:{length s}"
+
+pub fn shown z
+  found = "{regexp/find "a|b" "q"}"
+  bad = text/utf8 (text/to_bytes [169 z])
+  return render/to_string (pt 19 found) if z > 99
+  pt z bad
+
+pub play = os/args .> (a -> print (shown (length a)))

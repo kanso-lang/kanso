@@ -1,0 +1,2 @@
+error[endpoint]: unhandled err reached the executor: "invalid utf-8"
+  born in text/utf8 at std/text/text.kso:95
