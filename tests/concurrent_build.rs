@@ -124,6 +124,54 @@ fn many_builds_of_one_program_all_answer() {
     );
 }
 
+/// The runtime is compiled once per option set and cached in the temp
+/// directory, and the same race was left open there: every process wrote the
+/// runtime's C source to one shared path with `fs::write`, which truncates the
+/// file under any clang already reading it. clang maps its input, so the
+/// reader died of SIGBUS and the build said "clang failed on the runtime".
+/// Found on 2026-09-28 by generated programs built six at a time, where six of
+/// the first sixteen builds failed that way.
+///
+/// The suite never saw it because its temp directory holds a runtime object
+/// from the first build of the run, and a cached object skips the write. So
+/// each round here gets a temp directory of its own, and every racer compiles
+/// the runtime cold. Three rounds, because whether two writes overlap a read
+/// is the race; before the fix this failed in every sitting it was run.
+#[test]
+fn builds_that_compile_the_runtime_at_once_all_answer() {
+    let mark = std::process::id() + 2;
+    for round in 0..3 {
+        let temp = std::env::temp_dir().join(format!("kanso-cold-runtime-{mark}-{round}"));
+        let _ = std::fs::remove_dir_all(&temp);
+        std::fs::create_dir_all(&temp).expect("a temp directory of its own");
+        let root = temp.join("program");
+        a_program_in(&root, mark);
+        let racers: Vec<_> = (0..8)
+            .map(|_| {
+                let racer = run(&root).env("TMPDIR", &temp).spawn().expect("kanso starts");
+                std::thread::sleep(std::time::Duration::from_millis(150));
+                racer
+            })
+            .collect();
+        let answers: Vec<String> = racers
+            .into_iter()
+            .map(|r| {
+                let done = r.wait_with_output().expect("kanso finishes");
+                match done.status.success() {
+                    true => String::from_utf8_lossy(&done.stdout).into_owned(),
+                    false => String::from_utf8_lossy(&done.stderr).into_owned(),
+                }
+            })
+            .collect();
+        let _ = std::fs::remove_dir_all(&temp);
+        assert!(
+            answers.iter().all(|a| *a == format!("{}\n", mark + 1)),
+            "round {round}: a build that compiled the runtime alongside seven \
+             others did not produce the program: {answers:#?}"
+        );
+    }
+}
+
 fn ir_files(dir: &std::path::Path) -> std::collections::HashSet<String> {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return std::collections::HashSet::new();
