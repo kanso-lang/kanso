@@ -5286,6 +5286,7 @@ fn render_float(x: f64) -> String {
     let exp_form = format!("{:e}", x.abs());
     let (mant, exp) = exp_form.split_once('e').expect("LowerExp has an e");
     let digits: String = mant.chars().filter(|c| c.is_ascii_digit()).collect();
+    let digits = even_on_a_tie(x.abs(), digits, exp);
     let k = digits.len() as i32;
     let x10: i32 = exp.parse().expect("exponent parses");
     let p = k.max(15);
@@ -5304,6 +5305,37 @@ fn render_float(x: f64) -> String {
     }
     let zeros = "0".repeat((-x10 - 1) as usize);
     format!("{sign}0.{zeros}{digits}")
+}
+
+/// The shortest digits for `x`, taking the even last digit when two
+/// candidates of that length lie exactly as far from `x`. Rust's `{:e}` takes
+/// the upper one, so 900719925474099.25 printed `...099.3` here and
+/// `...099.2` natively, where ryū takes the even digit as Python and
+/// JavaScript do. Only an odd last digit whose neighbour below also reads back
+/// as `x` can be such a tie, so the exact expansion is asked for there alone.
+fn even_on_a_tie(x: f64, digits: String, exp: &str) -> String {
+    let last = digits.as_bytes()[digits.len() - 1];
+    if last.is_multiple_of(2) {
+        return digits;
+    }
+    let mut below = digits.clone().into_bytes();
+    let at = below.len() - 1;
+    below[at] -= 1;
+    let below = String::from_utf8(below).expect("ascii digits");
+    let read_back = format!("{}.{}e{exp}", &below[..1], &below[1..]).parse::<f64>();
+    if read_back != Ok(x) {
+        return digits;
+    }
+    // The tie: x's exact expansion is `below` followed by a single 5.
+    let exact = format!("{:.800e}", x);
+    let (mant, exact_exp) = exact.split_once('e').expect("LowerExp has an e");
+    let exact_digits: String = mant.chars().filter(|c| c.is_ascii_digit()).collect();
+    let exact_digits = exact_digits.trim_end_matches('0');
+    if exact_exp == exp && exact_digits == format!("{below}5") {
+        below
+    } else {
+        digits
+    }
 }
 
 /// Transparency: a subtype value IS its base wherever machinery (builtins,

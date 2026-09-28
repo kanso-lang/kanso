@@ -17543,3 +17543,31 @@ direct write back, and the test failed in three sittings of three.
 
 A user meets this when two builds start in one fresh temp directory, as a
 `make -j` or a parallel test runner does on its first run.
+
+## 2026-09-28 — a float halfway between two shortest decimals takes the even digit
+
+A generated program printed `9007199254740993.0 * 0.1`. The interpreter
+printed `900719925474099.3` and both native builds printed
+`900719925474099.2`. The product is the double 0x1.999999999999ap+49, whose
+exact value is 900719925474099.25, so the two sixteen-digit decimals lie
+exactly as far from it on either side and both read back as the same double.
+The native renderer is ryū, which takes the even last digit on such a tie, as
+Python's `repr` and JavaScript's number-to-string do. The interpreter asks
+Rust's `{:e}` for its digits, and Rust takes the upper one.
+
+`render_float` now hands Rust's digits to `even_on_a_tie`. A tie can only be
+where the last digit is odd and the digits one below it also read back as the
+double, so only then does it ask for the double's exact expansion, and if that
+expansion is the lower digits followed by a single 5 it takes the lower, even
+digits. Every other float renders as before, with one extra comparison.
+
+A scratch harness parsed 18,000 doubles at run time, weighted toward ties by
+drawing large magnitudes with few fractional bits and dyadic fractions, and
+printed each on the interpreter and as a native build. With the change the two
+engines agree on all of them, and every line has the same significant digits
+as Python's `repr` of the same double. Before it, the engines disagreed on 11
+or 12 of each 1,500. The micro fixture
+`a_float_halfway_between_two_shortest_takes_the_even_digit` prints six such
+doubles, one of them negative, one below ten and one whose upper candidate is
+already even. The ratchet row "a float tie rounded up" keeps Rust's digit and
+the micro corpus goes red.

@@ -3311,7 +3311,20 @@ runtime_source = row
 
 rows_c1zw = text/concat rows_c1zv [runtime_source]
 
-rows_c = text/concat rows_c1zw [itself]
+# A double halfway between two shortest decimals prints the even last digit on
+# every engine. Keeping Rust's upper candidate in the interpreter makes the
+# micro fixture disagree across engines.
+float_tie = row
+  "a float tie rounded up"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_float_tie_rounded_up")
+  release
+
+rows_c1zx = text/concat rows_c1zw [float_tie]
+
+rows_c = text/concat rows_c1zx [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
