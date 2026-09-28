@@ -17065,3 +17065,34 @@ code). That is what the pass can recover for a user program that walks a map
 this way. The repository's own map walks in lib/json, kq and kanso-json now
 index the two columns directly. The two folds over `entries` in lib/list,
 `transform_keys` and `transform_values`, are the ones left.
+
+## 2026-09-28 — a map written from where it holds its pairs, measured and declined
+
+On the run program at dd5c9c2d, `keys` and `values` cost 33,552,813
+instructions between them: 248,490 calls each, about 67 a call, for maps that
+average three pairs. Most of that is the call and the list header rather than
+the pairs. So the encoder was tried without the lists. Two builtins reachable
+only from the standard library, `builtin_map_key m i` and
+`builtin_map_value m i`, read position i of the map's sorted view, and
+`encode_map` walked positions 1 to `length m` with them. The interpreter got
+a cursor so that a walk over a map held as a B-tree steps from the last
+position read instead of counting from the front each time.
+
+Runbench read 1,102,879,724 -> 1,120,437,275, +1.59%, livebench +3.29% and
+oneshot +0.91%. Encodebench, whose frozen encoder still walks `entries`, read
+-0.007%. Two things paid for it. The reads cost as much as the lists did:
+34,614,540 instructions for the two builtins, about 23 a call, against
+33,552,813. And the encoder's output builder lost its region. Section 157 of
+the compiler page puts a mark on a recursive descent whose argument
+allocates, and `keys m` and `values m` were those arguments. With no
+allocation on the descent there is no region, `k_region_pop` fell from
+10,685,070 to nothing and `held_peak_bytes` from 197,704 to 0, and the
+builder grew in the arena instead: 1,080 grows through `k_copy_cold` for
+24,318,630 instructions. `length m` on a map also went through the call,
+4,977,969 more.
+
+Emitting the two reads inline could save about 22 million of the 34, which
+does not cover the builder. Declined. The patch is not kept on a branch. The
+jsonbench builder had to import `std/json` rather than copy lib/json for this
+to compile at all, the same change the fused number parse needed on
+2026-09-27; neither is on main.
