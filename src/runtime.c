@@ -10143,7 +10143,26 @@ KValue k_b_bit_shr(KValue a, KValue b) {
 KValue k_b_round(KValue v) {
     if (!k_not_failure(v)) return v;
     if (v.tag == K_INT) return v;
-    if (v.tag == K_FLOAT) return k_int((long long)llround(k_as_f(v)));
+    if (v.tag == K_FLOAT) {
+        double x = k_as_f(v);
+        /* A finite float past int64 rounds to an integer this build cannot
+           hold, the same refusal arithmetic makes. llround answered LLONG_MIN
+           for all of them. A non-finite one answers what the interpreter's
+           saturating cast does: NaN 0, and the sign's end of the range. */
+        if (x != x) return k_int(0);
+        if (x >= 9223372036854775807.0) {
+            if (isinf(x)) return k_int(9223372036854775807LL);
+            k_die("integer overflow (int64 native build; spec int is arbitrary precision)");
+        }
+        if (x < -9223372036854775808.0) {
+            if (isinf(x)) return k_int(-9223372036854775807LL - 1);
+            k_die("integer overflow (int64 native build; spec int is arbitrary precision)");
+        }
+        double r = round(x);
+        if (r >= 9223372036854775807.0 || r < -9223372036854775808.0)
+            k_die("integer overflow (int64 native build; spec int is arbitrary precision)");
+        return k_int((long long)r);
+    }
     k_die_got("round takes a number", v);
     return k_none();
 }
