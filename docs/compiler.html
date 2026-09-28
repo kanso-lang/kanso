@@ -3601,6 +3601,22 @@ welfare                      77.37         82.09</code></pre>
 
 <p>Once the generator learned to build lists of maps, four programs in six hundred finished interpreted and timed out or were killed as native builds. Printing a list joined each element's text onto everything before it, and each join copied the whole string into the arena, so the cost grew with the square of the output: 4,000 small ints allocated 32 megabytes to print eight thousand characters. The native renderer now writes a whole container into one buffer and makes it a string once, as the interpreter always has. A memory fixture renders 4,000 ints and 500 maps and allocates 207,280 bytes, where it allocated 38,215,552 before.</p>
 
+<h2 id="randomprograms3"><span class="sec-num">167</span>five more disagreements</h2>
+
+<p>The generator kept running after section 166, and five more programs found places where the engines disagreed.</p>
+
+<p><code>math/round</code> of <code>1e30</code> printed int64's largest value on the interpreter and its smallest on both native builds. A kanso int has no width, so the interpreter now answers the integer the double holds exactly, and a native build refuses a float past int64 with the diagnostic arithmetic already gives on overflow. What NaN and the infinities should answer is a question for the ledger, and until it is ruled they answer what the interpreter always did.</p>
+
+<p><code>push [1 2] bad</code>, where <code>bad</code> is an err, stopped with the err on the interpreter and printed a list holding it natively. Every builtin's arguments are infectious in this language, and the C <code>push</code> asked only whether its list had failed. Probing the other builtins with two failing arguments found a wider form of the same gap: seventeen of them answered the first failure where the interpreter merges all of them. Each now tests all of its arguments at once and merges what failed in argument order.</p>
+
+<p>A function nobody called failed its dev build with a clang type error. A lazy binding's cell tail-called a group that returns its record in two registers, and the path for that tail call returned the pair as though it were one tagged value. An ordinary caller never reaches the case, because the analysis that sizes a tail caller's return covers it; a lazy cell's site is built outside that analysis.</p>
+
+<p><code>9007199254740993.0 * 0.1</code> printed <code>...099.3</code> interpreted and <code>...099.2</code> natively. The double lies exactly halfway between those two shortest decimals. The native renderer takes the even digit, as Python and JavaScript do, and the interpreter now does the same.</p>
+
+<p>The last came from a batch that began calling std/render, std/json and std/regexp, and it accounted for all ten divergences in that batch. Interpolation calls <code>render/to_string</code> on a value of any kind, but inference typed that group's parameter from the program's explicit calls. A program whose only explicit call passed an int had its interpolated records arrive at the renderer as their type's tag, and one whose calls all passed strings put a false assumption about the tag into release builds, which trapped. The group's parameters now start out holding any value.</p>
+
+<p>Each fix has a golden that fails on the code before it and a ratchet row that restores the old code and watches the golden fail again.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>
