@@ -204,6 +204,8 @@ pub struct Site {
     /// The (line, column) of every push in this file that writes in place,
     /// gathered on the first question; see `Interp::writes_in_place`.
     in_place: std::cell::OnceCell<Set<(usize, usize)>>,
+    /// The same for `linear::moved_writes`; see `Interp::moved_here`.
+    moved: std::cell::OnceCell<Set<(usize, usize)>>,
 }
 
 pub type Frame = Option<Rc<Site>>;
@@ -214,6 +216,7 @@ fn frame_of(decl: &FnDecl) -> Frame {
         hako: Rc::from(crate::provenance::package_of(&decl.file)),
         file: decl.file.clone(),
         in_place: std::cell::OnceCell::new(),
+        moved: std::cell::OnceCell::new(),
     }))
 }
 
@@ -1370,6 +1373,9 @@ pub struct Interp<'a> {
     /// an `Interp` and evaluates nothing, and that route is a weighed welfare
     /// term. The analysis is not cheap and must not run for a check.
     in_place: std::cell::OnceCell<crate::hash::Set<(std::sync::Arc<str>, usize, usize)>>,
+    /// `linear::moved_writes`, built the first time a write's value has no
+    /// holder but the name that moves it. Lazy for the reason `in_place` is.
+    moved: std::cell::OnceCell<crate::hash::Set<(std::sync::Arc<str>, usize, usize)>>,
     /// One entry per non-local name this run has evaluated. Filled on first
     /// sight rather than at construction, because `kanso check` makes an
     /// `Interp` and evaluates nothing, and that route is a weighed welfare
@@ -1474,6 +1480,7 @@ impl<'a> Interp<'a> {
             knots: RefCell::new(Map::default()),
             cycles: std::cell::OnceCell::new(),
             in_place: std::cell::OnceCell::new(),
+            moved: std::cell::OnceCell::new(),
             names: RefCell::new(Map::default()),
             slots: RefCell::new(Vec::new()),
             generation: next_generation(),
@@ -3083,6 +3090,25 @@ impl<'a> Interp<'a> {
         sites.contains(&(span.line as usize, span.col as usize))
     }
 
+    /// Whether a write whose value has exactly one other holder may take it.
+    ///
+    /// Asked only where `writes_in_place` said no and the count says the
+    /// argument and one binding hold the value. `linear::moved_writes` proves
+    /// that binding is the name this write moves, which nothing reads again,
+    /// so the count is the rest of the proof `in_place_pushes` could not make
+    /// from the callers.
+    fn moved_here(&self, span: Span, frame: &Frame) -> bool {
+        let Some(site) = frame else { return false };
+        let sites = site.moved.get_or_init(|| {
+            let all = self.moved.get_or_init(|| crate::linear::moved_writes(self.program));
+            all.iter()
+                .filter(|(file, _, _)| **file == *site.file)
+                .map(|(_, l, c)| (*l, *c))
+                .collect()
+        });
+        sites.contains(&(span.line as usize, span.col as usize))
+    }
+
     /// Take a container's contents where the analysis proved nobody else will
     /// read them.
     ///
@@ -3459,7 +3485,10 @@ impl<'a> Interp<'a> {
                     });
                 }
                 let Value::List(items) = list else { unreachable!("checked just above") };
-                let mut next = match self.writes_in_place(span, frame) {
+                let alone = Rc::strong_count(&items) == 2;
+                let mut next = match self.writes_in_place(span, frame)
+                    || (alone && self.moved_here(span, frame))
+                {
                     true => Self::taken_in_place(&items),
                     false => taken_to_grow(items, 1),
                 };
@@ -3475,7 +3504,10 @@ impl<'a> Interp<'a> {
                     });
                 };
                 let key = map_key(key, span)?;
-                let mut next = match self.writes_in_place(span, frame) {
+                let alone = Rc::strong_count(&entries) == 2;
+                let mut next = match self.writes_in_place(span, frame)
+                    || (alone && self.moved_here(span, frame))
+                {
                     true => Self::taken_in_place(&entries),
                     false => taken(entries),
                 };
@@ -3739,7 +3771,10 @@ impl<'a> Interp<'a> {
                     Value::Bytes(more) => more.len(),
                     _ => 1,
                 };
-                let mut out = match self.writes_in_place(span, frame) {
+                let alone = Rc::strong_count(&items) == 2;
+                let mut out = match self.writes_in_place(span, frame)
+                    || (alone && self.moved_here(span, frame))
+                {
                     true => Self::taken_in_place(&items),
                     false => taken_to_grow(items, grows_by),
                 };

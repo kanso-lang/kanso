@@ -3271,7 +3271,20 @@ token_word = row
 
 rows_c1zt = text/concat rows_c1zs [token_word]
 
-rows_c = text/concat rows_c1zt [itself]
+# An accumulator whose seed the caller still reads is copied on the first lap
+# and extended in place after it. Asking the holder count nothing leaves every
+# lap copying, and the spec's allocation difference returns to 161,356.
+seed_once = row
+  "a shared seed copied every lap"
+  true
+  "cargo test --release --test a_shared_seed_is_copied_once"
+  "specs (unit, golden, differential)"
+  (breaking "a_shared_seed_copied_every_lap")
+  no_setup
+
+rows_c1zu = text/concat rows_c1zt [seed_once]
+
+rows_c = text/concat rows_c1zu [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

@@ -58,6 +58,67 @@ fn in_place_pushes_with(
     out
 }
 
+/// Write sites whose container argument is a name read once, on every path,
+/// in the declaration that holds it: a parameter or a local that the write
+/// moves. `in_place_pushes` proves more, that every caller hands that name a
+/// value nobody else holds; this proves only the half a frame can see.
+///
+/// The interpreter asks it where the stronger proof failed. Its values count
+/// their holders, and a moved name's binding is one of them, so a count of two
+/// at the write (the argument and that binding) says nobody else can read the
+/// value. A loop whose seed is also read by its caller then copies once, on
+/// its first lap, where it used to copy on every lap: 40,000 pushes onto a
+/// shared seed took 8.4 seconds interpreted and 5 milliseconds compiled.
+///
+/// No `Analysis` is built: the question is local, and building one is the
+/// fixpoint over the whole program the interpreter otherwise avoids.
+pub fn moved_writes(program: &Program) -> HashSet<(std::sync::Arc<str>, usize, usize)> {
+    let mut out = HashSet::default();
+    for decl in real_fns(program) {
+        for stmt in &decl.body {
+            let e = match stmt {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
+            };
+            walk_for_moved(decl, e, &mut out);
+        }
+    }
+    out
+}
+
+fn walk_for_moved(
+    decl: &FnDecl,
+    e: &Expr,
+    out: &mut HashSet<(std::sync::Arc<str>, usize, usize)>,
+) {
+    if let Expr::App { head, args, span, .. } = e {
+        let writes = match head.as_ref() {
+            Expr::Ident(n, _, _) => match n.as_str() {
+                "push" | "append" | "builtin_append" => args.len() == 2,
+                "put" => args.len() == 3,
+                _ => false,
+            },
+            _ => false,
+        };
+        if writes {
+            if let Some(Expr::Ident(var, _, _)) = args.first() {
+                let named = decl.params.iter().any(|p| matches!(p, Pattern::Var(n, _) if n == var))
+                    || bound_in(&decl.body, var).is_some();
+                if named && effective_uses(var, &decl.body) <= 1 {
+                    out.insert((decl.file.clone(), span.line as usize, span.col as usize));
+                }
+            }
+        }
+    }
+    for child in child_exprs(e) {
+        // A lambda may run after the frame that mentions the name once has
+        // read it again, or more than once, so no write inside one is moved.
+        if matches!(child, Expr::Lambda { .. }) {
+            continue;
+        }
+        walk_for_moved(decl, child, out);
+    }
+}
+
 /// The declarations an analysis may reason from.
 ///
 /// Importing a qualified name enrolls a bare-named clone of the same

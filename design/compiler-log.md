@@ -17404,3 +17404,54 @@ walk over every byte value at every position of tokens of four to seven
 bytes, and a million random tokens: 1,005,632 cases, none wrong. With the
 control bound written 31 it reports 11,517 wrong, which is the ratchet row
 "a token flag one byte short of the control range".
+
+## 2026-09-28 — the interpreter copies a shared seed once, not once a lap
+
+    fn grow acc 0
+      acc
+
+    fn grow acc n
+      grow (push acc n) (n - 1)
+
+    fn shown n
+      sd = [1]
+      "{length (grow sd n)} {sd}"
+
+At 40,000 laps this took 8.4 seconds interpreted and 5 milliseconds as a dev
+build, and doubling the laps quadrupled the interpreted time. It came from
+the same program generator as the entry above, as a run the interpreter did
+not finish inside twenty seconds where both native builds did.
+
+`linear::in_place_pushes` proves a write may go in place when every caller
+hands the accumulator a value nobody else holds. `shown` reads `sd` again
+after the loop, so the proof fails for the parameter, and a failed proof
+covers every lap: the interpreter copied the whole list on each one. The
+compiled engine was never affected, because a native list buffer records the
+length of its newest owner and a push compares that at run time.
+
+The interpreter now does the same thing its own way. `linear::moved_writes`
+proves the local half of the question: the write's container is a name its
+function reads once on every path, outside any lambda. It builds no
+`Analysis`, because the question does not need the whole-program fixpoint.
+Where `writes_in_place` says no, `push`, `put` and `append` take the value in
+place when the site is in that set and `Rc::strong_count` reads two: the
+argument and the binding of the name being moved. The first lap reads three,
+because the caller's `sd` holds the list too, and copies. Every lap after
+that reads two. The same 40,000 laps take 35 milliseconds, and `sd` still
+prints `[1]`.
+
+The spec is `a_shared_seed_is_copied_once`: three builders, one each for
+`push`, `put` and `append`, each seeded from a name `run` prints after the
+loop. It pins the output, with the three seeds unchanged, and the difference
+in `interp_allocs` between 300 and 600 laps. That difference is 3,647 now and
+161,356 with the new condition switched off, which is the ratchet row "a
+shared seed copied every lap".
+
+The interpreted corpus has no loop of this shape: `interp_allocs` is 895,156
+and `interp_peak_bytes` 720,630 with and without the change. Its instruction
+count, profiled on the container with the gate's anchor, reads 584,866,516
+on main and 585,064,811 here, +198,295. The per-function difference is
++45,766 in `call_builtin`, which is the holder count read at every write,
+about 130,000 in the allocator's slow path at an unchanged number of
+allocations, and an iterator frame that changed places. CI's row is the one
+the golden takes.
