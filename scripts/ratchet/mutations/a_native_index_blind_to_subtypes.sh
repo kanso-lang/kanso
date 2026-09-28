@@ -4,8 +4,8 @@
 # position, and the micro fixture a_subtype_indexes_as_its_base dies where
 # the interpreter prints.
 set -e
-old='    if (container.tag == K_SUB || index.tag == K_SUB)'
+old='    if (container.tag == K_SUB || index.tag == K_SUB) {'
 [ "$(grep -cxF "$old" src/runtime.c)" -eq 1 ]
-sed -i.bak 's#^    if (container.tag == K_SUB || index.tag == K_SUB)$#    if (0)#' src/runtime.c
+sed -i.bak 's#^    if (container.tag == K_SUB || index.tag == K_SUB) {$#    if (0) {#' src/runtime.c
 rm -f src/runtime.c.bak
 ! grep -qxF "$old" src/runtime.c
