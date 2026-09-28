@@ -6985,7 +6985,27 @@ impl<'a> Backend<'a> {
 
     fn emit_fn_body(&mut self, f: &mut FnEmit, body: &[Stmt]) -> Result<(), String> {
         let last = body.len() - 1;
+        let mut values_bound: Option<usize> = None;
         for (i, stmt) in body.iter().enumerate() {
+            if values_bound == Some(i) {
+                continue;
+            }
+            // `ks = keys m` straight after which `vs = values m`: both lists
+            // from one call, the way `both_columns` does it for arguments.
+            if let Some(next) = self.columns_bound(f, body, i) {
+                let (
+                    Stmt::Bind { pattern: Pattern::Var(ks_name, _), expr },
+                    Stmt::Bind { pattern: Pattern::Var(vs_name, _), .. },
+                ) = (stmt, &body[next])
+                else {
+                    unreachable!("columns_bound matched two bindings")
+                };
+                let (ks, vs) = self.emit_columns(f, expr)?;
+                f.bind(ks_name, &ks);
+                f.bind(vs_name, &vs);
+                values_bound = Some(next);
+                continue;
+            }
             match stmt {
                 Stmt::Set { .. } => unreachable!("`set` parses only inside `build`"),
                 Stmt::Bind { pattern: Pattern::Var(name, _), expr }
@@ -8922,8 +8942,37 @@ impl<'a> Backend<'a> {
         Some((keys_at, values_at))
     }
 
+    /// Where statement `i` binds `keys m` to a name and the next binds
+    /// `values m` to another, both strict, the index of the second. The first
+    /// name must not be `m`, or the second statement reads the new binding.
+    fn columns_bound(&self, f: &FnEmit, body: &[Stmt], i: usize) -> Option<usize> {
+        let (
+            Stmt::Bind { pattern: Pattern::Var(ks, _), expr: first },
+            Some(Stmt::Bind { pattern: Pattern::Var(_, _), expr: second }),
+        ) = (body.get(i)?, body.get(i + 1))
+        else {
+            return None;
+        };
+        let lazy = |at: usize| self.demand.is_lazy_bind(&f.group.clone(), f.arity, at);
+        if lazy(i) || lazy(i + 1) {
+            return None;
+        }
+        let args = [first.clone(), second.clone()];
+        let (0, 1) = self.both_columns(f, &args)? else { return None };
+        let Expr::App { args: inner, .. } = first else { return None };
+        let Expr::Ident(m, _, _) = &inner[0] else { return None };
+        if ks.as_str() == m.as_str() {
+            return None;
+        }
+        Some(i + 1)
+    }
+
     /// `keys m` and `values m` in one call, for `both_columns`.
-    fn emit_columns(&mut self, f: &mut FnEmit, keys_call: &Expr) -> Result<(String, String), String> {
+    fn emit_columns(
+        &mut self,
+        f: &mut FnEmit,
+        keys_call: &Expr,
+    ) -> Result<(String, String), String> {
         let Expr::App { args, .. } = keys_call else { unreachable!("both_columns matched a call") };
         let m = self.emit_expr(f, &args[0])?;
         let m = self.maybe_force(f, m);

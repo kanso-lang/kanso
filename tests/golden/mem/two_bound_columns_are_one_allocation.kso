@@ -1,0 +1,23 @@
+# The same as a_maps_two_columns_are_one_allocation, with the two columns
+# bound to names first: `ks = keys m` and, on the next line, `vs = values m`
+# take both lists from one call. Each of the thousand maps is walked once,
+# and each walk allocates one block for its two lists.
+import "std/list"
+
+fn row i
+  { "a":i "b":i "c":i }
+
+fn weighed m
+  ks = keys m
+  vs = values m
+  length ks + summed vs 1 0
+
+fn summed vs i acc
+  return acc if i < 1 or length vs < i
+  summed vs (i + 1) (acc + vs[i])
+
+maps = list/map (list/take list/naturals 1000) row
+
+total = list/sum (list/map maps weighed)
+
+pub play = print "{total}"

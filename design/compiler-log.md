@@ -17137,9 +17137,13 @@ header, so either one outgrown later goes to the free list alone. The
 interpreter is unchanged: the two builtins mean the same thing, and only the
 native engine asks for them together.
 
-The match is on the builtins themselves. A program that declares `keys` or
-`values`, or binds either name locally, calls its own function and gets no
-fusion.
+The same holds for two bindings in a row, `ks = keys m` and then
+`vs = values m`, which is how kq's pretty-printer and the alignment micro
+golden write it. Both bindings have to be strict, since a lazy one would be
+forced early, and the first name must not be `m` itself, or the second line
+would read the new binding. The match is on the builtins themselves. A
+program that declares `keys` or `values`, or binds either name locally, calls
+its own function and gets no fusion.
 
 Measured on the container against main at dd5c9c2d, one sitting:
 
@@ -17160,6 +17164,10 @@ it replaces. The mem fixture a_nested_map_gives_back_its_entries reads 24,028
 The new fixture a_maps_two_columns_are_one_allocation encodes a thousand
 two-key maps and reads allocs=3022, where main's compiler reads 4022. The
 mutation "a map's two columns asked for one at a time" stops the match and
-turns the mem vein red. Every benchmark's `.text` grows by 544 bytes, the
+turns the mem vein red. A second fixture,
+two_bound_columns_are_one_allocation, walks a thousand three-key maps through
+the binding form and reads 9008 allocations, 10008 with the mutation applied.
+No benchmark in this repository binds the columns this way, so it moves none
+of them. Every benchmark's `.text` grows by 544 bytes, the
 runtime's new function, and the three programs that encode lose one call from
 their emitted code.
