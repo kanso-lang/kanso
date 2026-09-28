@@ -1359,6 +1359,7 @@ declare %KValue @k_b_from_code(%KValue, ptr)
 declare %KValue @k_b_join(%KValue, %KValue)
 declare %KValue @k_b_keys(%KValue)
 declare %KValue @k_b_values(%KValue)
+declare %KValue @k_b_columns(%KValue, ptr)
 declare %KValue @k_b_length(%KValue)
 declare %KValue @k_b_map(%KValue, %KValue)
 declare %KValue @k_b_push(%KValue, %KValue)
@@ -8885,6 +8886,59 @@ impl<'a> Backend<'a> {
         }
     }
 
+    /// Where a call's arguments are `keys m` and then `values m` of the same
+    /// local name, the two positions, so both lists can come from one runtime
+    /// call. Only the builtins themselves: a program that declares `keys` or
+    /// `values`, or binds either name, is calling something else.
+    fn both_columns(&self, f: &FnEmit, args: &[Expr]) -> Option<(usize, usize)> {
+        let column = |e: &Expr, which: &str| -> Option<String> {
+            match e {
+                Expr::App { head, args, piped: false, .. } if args.len() == 1 => {
+                    match (&**head, &args[0]) {
+                        (Expr::Ident(h, _, _), Expr::Ident(m, _, _)) if h.as_str() == which => {
+                            Some(m.as_str().to_string())
+                        }
+                        _ => None,
+                    }
+                }
+                _ => None,
+            }
+        };
+        let declared = |name: &str| {
+            f.lookup(name).is_some() || self.program.fns.iter().any(|d| d.name == name)
+        };
+        if declared("keys") || declared("values") {
+            return None;
+        }
+        let keys_at = args.iter().position(|a| column(a, "keys").is_some())?;
+        let map = column(&args[keys_at], "keys")?;
+        f.lookup(&map)?;
+        let values_at = args
+            .iter()
+            .enumerate()
+            .skip(keys_at + 1)
+            .find(|(_, a)| column(a, "values").as_deref() == Some(map.as_str()))?
+            .0;
+        Some((keys_at, values_at))
+    }
+
+    /// `keys m` and `values m` in one call, for `both_columns`.
+    fn emit_columns(&mut self, f: &mut FnEmit, keys_call: &Expr) -> Result<(String, String), String> {
+        let Expr::App { args, .. } = keys_call else { unreachable!("both_columns matched a call") };
+        let m = self.emit_expr(f, &args[0])?;
+        let m = self.maybe_force(f, m);
+        let set = infer::builtin_set("keys", &[f.set_of(&m)]);
+        let slot = f.tmp();
+        f.line(&format!("{slot} = alloca %KValue, align 8"));
+        let ks = f.tmp();
+        f.line(&format!("{ks} = call %KValue @k_b_columns(%KValue {m}, ptr {slot})"));
+        let vs = f.tmp();
+        f.line(&format!("{vs} = load %KValue, ptr {slot}, align 8"));
+        f.record(&ks, set);
+        f.record(&vs, set);
+        Ok((ks, vs))
+    }
+
     fn emit_call_rest(
         &mut self,
         f: &mut FnEmit,
@@ -9265,13 +9319,26 @@ impl<'a> Backend<'a> {
             f.line("call void @k_beat_push()");
         }
         let mut emitted = Vec::new();
-        let mut iter = args.iter();
+        let skip = usize::from(first.is_some());
+        let columns = self.both_columns(f, &args[skip..]).map(|(k, v)| (k + skip, v + skip));
+        let mut values_of_the_pair: Option<String> = None;
+        let mut iter = args.iter().enumerate();
         if let Some(first_value) = first {
             emitted.push(first_value);
             iter.next();
         }
-        for arg in iter {
-            emitted.push(self.emit_expr(f, arg)?);
+        for (at, arg) in iter {
+            match columns {
+                Some((keys_at, _)) if at == keys_at => {
+                    let (ks, vs) = self.emit_columns(f, arg)?;
+                    values_of_the_pair = Some(vs);
+                    emitted.push(ks);
+                }
+                Some((_, values_at)) if at == values_at => {
+                    emitted.push(values_of_the_pair.take().expect("the keys came first"));
+                }
+                _ => emitted.push(self.emit_expr(f, arg)?),
+            }
         }
         // std wrappers reach natives through the builtin_ prefix — and the
         // prefix BYPASSES group dispatch entirely, or a bare clone named

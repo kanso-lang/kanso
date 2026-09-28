@@ -1,0 +1,15 @@
+# A call whose arguments are `keys m` and then `values m` of the same map
+# takes both lists from one runtime call, which tests the map and finds its
+# sorted view once and allocates the two lists together. The encoder hands
+# every map to its walk that way, so writing a thousand maps allocates a
+# thousand pairs of lists in a thousand allocations, where it took two
+# thousand.
+import "std/json"
+import "std/list"
+
+fn row i
+  { "a":i "b":i }
+
+doc = list/to_list (list/map (list/take list/naturals 1000) (i -> row i))
+
+pub play = print "{length (json/encode doc)}"

@@ -7669,6 +7669,45 @@ KValue k_b_keys(KValue mv) { return k_map_column(mv, 0, "keys takes a map"); }
 
 KValue k_b_values(KValue mv) { return k_map_column(mv, 1, "values takes a map"); }
 
+/* `keys m` and `values m` asked side by side, as one call. The emitter writes
+   this where a call's arguments name both columns of the same map, which is
+   how the JSON encoder hands a map to its walk. Both lists come from one
+   allocation, and the map is tested and its sorted view found once. The keys
+   are the answer and the values go to `*values`. Each buffer carries its own
+   capacity in its header, so either can be outgrown and handed to the free
+   list without taking the other with it. */
+KValue k_b_columns(KValue mv, KValue* values) {
+    if (!k_not_failure(mv)) { *values = mv; return mv; }
+    if (mv.tag != K_MAP) k_die("keys takes a map");
+    KMap* m = k_as_map(mv);
+    long long n;
+    KValue* s = k_map_sorted(m, &n);
+    long long cap = n ? n : 1;
+    size_t buf_bytes = (sizeof(KBuf) + sizeof(KValue) * (size_t)cap + 15) & ~(size_t)15;
+    size_t list_bytes = (sizeof(KList) + 15) & ~(size_t)15;
+    size_t one = buf_bytes + list_bytes;
+    if (__builtin_expect(K_COUNTING && k_stats_on > 0, 0))
+        k_stat_sh_buf += 2 * (long long)buf_bytes;
+    unsigned char* whole = (unsigned char*)k_alloc(2 * one);
+    KList* lists[2];
+    for (int side = 0; side < 2; side++) {
+        unsigned char* at = whole + (size_t)side * one;
+        KBuf* b = (KBuf*)at;
+        k_buf_set_cap(b, cap, 0);
+        b->used = n;
+        KValue* items = (KValue*)(b + 1);
+        for (long long i = 0; i < n; i++) items[i] = s[i * 2 + side];
+        KList* l = (KList*)(at + buf_bytes);
+        l->len = n;
+        l->items = items;
+        lists[side] = l;
+    }
+    KValue v; v.tag = K_LIST; v.payload = k_ptr(lists[1]);
+    *values = v;
+    KValue k; k.tag = K_LIST; k.payload = k_ptr(lists[0]);
+    return k;
+}
+
 /* utf-8 helpers: kanso strings are opaque utf-8, positions are codepoints */
 static long k_cp_len(unsigned char b) {
     if (b < 0x80) return 1;

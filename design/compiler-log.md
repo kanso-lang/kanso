@@ -17123,3 +17123,43 @@ list in place of that pair's record, while `keys` still lists the key and
 `values` lists the failure, so the callee would be handed a key it never saw
 before. The pass would need a proof that the map holds no failure before it
 could fire.
+
+## 2026-09-28 — a map's two columns in one call
+
+The encoder hands a map to its walk as `encode_map acc (keys m) (values m)`.
+Each of the two builtins tested the map, found its sorted view and made an
+allocation for its list, about 67 instructions a call on maps of three pairs,
+so a map cost two of everything before a byte of it was written. Where a
+call's arguments are `keys m` and then `values m` of the same local name, the
+emitter now makes one runtime call, `k_b_columns`, which does the tests once
+and builds both lists from one allocation. Each list keeps its own buffer
+header, so either one outgrown later goes to the free list alone. The
+interpreter is unchanged: the two builtins mean the same thing, and only the
+native engine asks for them together.
+
+The match is on the builtins themselves. A program that declares `keys` or
+`values`, or binds either name locally, calls its own function and gets no
+fusion.
+
+Measured on the container against main at dd5c9c2d, one sitting:
+
+    runbench     1,102,879,724 -> 1,092,090,601   -10,789,123   -0.978%
+    livebench    1,667,463,641 -> 1,619,897,179   -47,566,462   -2.853%
+    oneshot         12,865,904 ->    12,747,537      -118,367   -0.920%
+    encodebench  2,412,561,550 -> 2,412,230,392      -331,158   -0.014%
+
+The other ten benchmarks are byte-identical. encodebench carries a frozen
+encoder that walks `entries`, so it never reaches the fused call, and its
+move is the runtime's layout. The allocation counts return to what they were
+before kanso#1683 put the encoder on two columns: run_allocs 1,955,773 ->
+1,707,283, live_allocs 2,224,488 -> 1,120,088 and oneshot_allocs 14,827 ->
+12,066. Bytes do not move, because the one allocation is the size of the two
+it replaces. The mem fixture a_nested_map_gives_back_its_entries reads 24,028
+-> 18,028 allocations and a_literal_appended_across_a_rewind 376 -> 256.
+
+The new fixture a_maps_two_columns_are_one_allocation encodes a thousand
+two-key maps and reads allocs=3022, where main's compiler reads 4022. The
+mutation "a map's two columns asked for one at a time" stops the match and
+turns the mem vein red. Every benchmark's `.text` grows by 544 bytes, the
+runtime's new function, and the three programs that encode lose one call from
+their emitted code.

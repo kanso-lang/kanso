@@ -3191,7 +3191,19 @@ rows_c1zo = text/concat rows_c1zn [map_threaded]
 # that spec as a gate removes its own baseline worktree from under itself. On
 # kanso#1675 the baseline read the gate red before any mutation. The other
 # specs in tests/ that run `prove` carry no row for the same reason.
-rows_c = text/concat rows_c1zo [itself]
+# A call whose arguments are `keys m` and `values m` of one map builds both
+# lists in one runtime call and one allocation.
+columns_together = row
+  "a map's two columns asked for one at a time"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "the_two_columns_asked_apart")
+  release
+
+rows_c1zp = text/concat rows_c1zo [columns_together]
+
+rows_c = text/concat rows_c1zp [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
