@@ -3863,6 +3863,21 @@ fn check_annotation_names(
         }
     }
 
+    // A subtype names its parent the way an annotation names a type, and
+    // until 2026-09-28 nothing asked whether it named one. `type blob bytes`
+    // passed `kanso check`; the interpreter then refused every construction
+    // at run time, and both backends refused the program with `unknown type`.
+    for ty in &program.types {
+        let Some(parent) = &ty.parent else { continue };
+        for name in undeclared_in(parent, declared) {
+            diags.push(Diagnostic::new(
+                "type",
+                format!("no type is called `{name}`, so `{}` has nothing to wrap", ty.name),
+                ty.span,
+            ));
+        }
+    }
+
     // The typesets, borrowed from the list `declared` was built from.
     let annotating: HashSet<&str> =
         program.types.iter().filter(|t| !t.members.is_empty()).map(|t| t.name.as_str()).collect();
