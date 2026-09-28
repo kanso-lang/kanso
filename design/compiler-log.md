@@ -17065,3 +17065,61 @@ code). That is what the pass can recover for a user program that walks a map
 this way. The repository's own map walks in lib/json, kq and kanso-json now
 index the two columns directly. The two folds over `entries` in lib/list,
 `transform_keys` and `transform_values`, are the ones left.
+
+## 2026-09-28 — a map written from where it holds its pairs, measured and declined
+
+On the run program at dd5c9c2d, `keys` and `values` cost 33,552,813
+instructions between them: 248,490 calls each, about 67 a call, for maps that
+average three pairs. Most of that is the call and the list header rather than
+the pairs. So the encoder was tried without the lists. Two builtins reachable
+only from the standard library, `builtin_map_key m i` and
+`builtin_map_value m i`, read position i of the map's sorted view, and
+`encode_map` walked positions 1 to `length m` with them. The interpreter got
+a cursor so that a walk over a map held as a B-tree steps from the last
+position read instead of counting from the front each time.
+
+Runbench read 1,102,879,724 -> 1,120,437,275, +1.59%, livebench +3.29% and
+oneshot +0.91%. Encodebench, whose frozen encoder still walks `entries`, read
+-0.007%. Two things paid for it. The reads cost as much as the lists did:
+34,614,540 instructions for the two builtins, about 23 a call, against
+33,552,813. And the encoder's output builder lost its region. Section 157 of
+the compiler page puts a mark on a recursive descent whose argument
+allocates, and `keys m` and `values m` were those arguments. With no
+allocation on the descent there is no region, `k_region_pop` fell from
+10,685,070 to nothing and `held_peak_bytes` from 197,704 to 0, and the
+builder grew in the arena instead: 1,080 grows through `k_copy_cold` for
+24,318,630 instructions. `length m` on a map also went through the call,
+4,977,969 more.
+
+Emitting the two reads inline could save about 22 million of the 34, which
+does not cover the builder. Declined. The patch is not kept on a branch. The
+jsonbench builder had to import `std/json` rather than copy lib/json for this
+to compile at all, the same change the fused number parse needed on
+2026-09-27; neither is on main.
+
+## 2026-09-28 — what the entry pass would win on a program that walks maps
+
+The pass kept on the list on 2026-09-27 would rewrite a walk over
+`entries m` into the two-column walk kanso#1683 gave lib/json by hand. Its
+payoff on a real program was measured by doing that rewrite by hand on
+encodebench's frozen encoder, which is the one program in the benchmarks
+written the way a user writes a map walk: `encode_map acc (entries m)`, an
+index walk over the list, and `entry_onto acc (entry k v)` taking each record
+apart. The rewritten copy passes `keys m` and `values m`, indexes both, and
+hands `k` and `v` to `entry_onto` as two arguments. Built with main's compiler
+at dd5c9c2d, without counters, one sitting:
+
+    encodebench  2,412,860,215 -> 2,388,794,164   -24,066,051   -1.00%
+
+livebench already measured the same trade from the other side. It encodes
+many small maps, and the lib/json encoder moved onto the two columns in
+kanso#1683 read +0.314% there, because each map pays for two calls where it
+paid for one. A pass sees neither a map's size nor how many maps a program
+will write, so it would have to choose one shape for both. The pass stays on
+the list with that trade written down beside it. A rewrite that duplicates the
+map expression into two calls also needs the expression to be a name. And
+where a map holds a failure as a value, `entries` puts the failure in the
+list in place of that pair's record, while `keys` still lists the key and
+`values` lists the failure, so the callee would be handed a key it never saw
+before. The pass would need a proof that the map holds no failure before it
+could fire.
