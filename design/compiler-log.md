@@ -17187,12 +17187,22 @@ would read the new binding. The match is on the builtins themselves. A
 program that declares `keys` or `values`, or binds either name locally, calls
 its own function and gets no fusion.
 
-Measured on the container against main at dd5c9c2d, one sitting:
+Measured by CI against main's goldens:
 
-    runbench     1,102,879,724 -> 1,092,090,601   -10,789,123   -0.978%
-    livebench    1,667,463,641 -> 1,619,897,179   -47,566,462   -2.853%
-    oneshot         12,865,904 ->    12,747,537      -118,367   -0.920%
-    encodebench  2,412,561,550 -> 2,412,230,392      -331,158   -0.014%
+    runbench     1,102,878,887 -> 1,092,089,764   -10,789,123   -0.978%
+    livebench    1,667,464,002 -> 1,619,897,540   -47,566,462   -2.853%
+    oneshot         12,866,228 ->    12,747,861      -118,367   -0.920%
+    encodebench  2,412,561,883 -> 2,412,230,725      -331,158   -0.014%
+
+The container's sitting against dd5c9c2d agreed to the instruction on all
+four deltas. The compile side moves by the emitter's new work and the
+runtime's new function: emit_instructions 29,838,551 -> 29,850,334,
+codegen_instructions_dev 123,362,462 -> 123,375,584 and
+codegen_instructions_release 402,739,766 -> 402,636,866. The first push
+read emit_instructions 30,078,705, because the match walked every
+declaration on every call the emitter wrote and cloned two expressions for
+every pair of adjacent bindings; it now asks the shape first and the
+declarations only for a call or pair that has it. Welfare banks the rise.
 
 The other ten benchmarks are byte-identical. encodebench carries a frozen
 encoder that walks `entries`, so it never reaches the fused call, and its
