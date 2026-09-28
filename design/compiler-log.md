@@ -17093,8 +17093,8 @@ the golden takes CI's row.
 
 This does not explain the six instructions two CI jobs read apart on one
 commit, the row STATUS.md carries as "A welfare counter reads three parts per
-billion". Every runner seen so far has one node, and a second node would cost
-hundreds of instructions, not six. The other host reads the anchor makes were
+billion". Each further node costs the probe again, about 800 instructions,
+so a difference in node count would read in hundreds, not six. The other host reads the anchor makes were
 checked in the same pass. `/proc/sys/vm/overcommit_memory` is read before
 the anchor, and mimalloc treats 0 and 1 the same. The transparent-hugepage
 setting is read before the anchor and changes nothing unless an option asks
