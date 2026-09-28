@@ -17582,13 +17582,21 @@ an err answers the err, so a field never holds one. The emitter's sets
 already know that. Where they prove an item is no failure it writes
 `k_b_push_mut_known`, the twin without the test.
 
-Measured on the container against main at 30f528ab, all of it together:
-runbench 1,073,236,089 -> 1,071,359,678, -0.175%, livebench -16,094, oneshot
--5,874 and encodebench -20,254. One test of every argument and one branch
-costs less than a branch per argument, and the push twin's test costs the
-decoder nothing, so the whole change reads as a fall. That was not isolated
-further. No allocation counter moves in the twelve cost veins or the lazy
-tier.
+CI's rows, against main's goldens: runbench 1,073,235,252 -> 1,071,327,293,
+-0.178%, jsonbench 732,477,366 -> 731,540,016, deepbench 364,866,369 ->
+363,022,369 and widebench 27,311,106 -> 27,199,113, with livebench, encodebench,
+oneshot, indexbench, digestbench, readbench and scanbench falling by less. One
+test of every argument and one branch costs less than a branch per argument,
+and the push's test costs the decoder nothing, so the whole change reads as a
+fall; that was not isolated further. Three work rows rose: `work_basket`
+29,624,219 -> 29,692,067, `work_escapebench` 45,421,689 -> 45,427,689 and
+`work_pendbench` 179,495,828 -> 179,496,238. The compiler's side rose with the
+emitter's new choice and the runtime's longer builtins:
+`codegen_instructions_dev` 123,379,531 -> 124,593,977,
+`codegen_instructions_release` 407,793,576 -> 408,389,622 and
+`emit_instructions` 29,836,693 -> 29,840,267. No allocation counter moves in
+the twelve cost veins or the lazy tier. Welfare nets the trade upward and is
+banked.
 
 `k_b_push_mut_fast` is now the item test and a call to `k_b_push_mut_known`,
 which holds the push and is always inlined. The first version wrote the known
