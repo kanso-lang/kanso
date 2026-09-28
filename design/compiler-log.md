@@ -18462,3 +18462,19 @@ The error fixture `a_wrapper_pattern_never_matches` holds all three shapes and
 reported nothing on the old checker. The row "a pattern that can never match
 left unchecked" takes the new question out and leaves the typeset's, and turns
 that fixture red. CI will measure the instruction rows.
+
+## 2026-09-28 — an annotation may name a type the next file declares
+
+A module's files share their declarations: a function one file declares is
+called from the next, and a record one file declares is built there. An
+annotation was the exception. The checker asked only the annotating file's own
+types, so `p:pt` with `pt` declared in the file beside it was refused as naming
+no type, and since every engine runs the same checker, every engine refused it.
+It had been so since the check arrived in kanso#716 on 2026-08-02. The generated-
+program differential splits each program across two files of one module, and
+found it the first time it wrote `q:tg` in one file with `tg` declared in the
+other. Each file's check now counts the types every file of the module
+declares. An import's types are not added, so a bare name from another module
+is refused as before. `tests/sibling_types.rs` runs a two-file module on both
+engines, and the row "a sibling file's type left undeclared" puts the old set
+back.
