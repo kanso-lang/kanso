@@ -1,1 +1,4 @@
 error[type]: `shape` is a typeset — it only annotates (module a_widening_to_a_typeset)
+  --> a_widening_to_a_typeset.kso:14:20
+  14 | pub play = print "{(circle 1):shape}"
+                          ^

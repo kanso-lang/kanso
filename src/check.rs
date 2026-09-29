@@ -461,6 +461,7 @@ fn check_per_node<'a>(
         state.shadowable.clear();
         state.own = !crate::ast::has_slash(&decl.name);
         state.file = Some(&decl.file);
+        let (first, first_named) = (diags.len(), state.named_diags.len());
         for p in &decl.params {
             collect_pattern_names(p, &mut state.bound);
         }
@@ -506,6 +507,17 @@ fn check_per_node<'a>(
         }
         for (base, seen) in &state.open {
             judge_cooccurrence(base, seen, program, diags);
+        }
+        // This walk reads the merged program, which holds every file of a
+        // module, and a diagnostic that names no file is printed with the
+        // module's name and no location. Everything said here is about the
+        // declaration in hand, so it is placed in that declaration's file.
+        // Until 2026-09-29 a build block's refusal in a module said which
+        // module and nothing else.
+        for d in diags[first..].iter_mut().chain(&mut state.named_diags[first_named..]) {
+            if d.file.is_none() {
+                d.file = Some(std::sync::Arc::clone(&decl.file));
+            }
         }
         if state.shadowable.is_empty() {
             continue;

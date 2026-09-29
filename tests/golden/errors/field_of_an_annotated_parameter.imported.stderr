@@ -1,0 +1,8 @@
+error[name]: `money` has no field `text` (module field_of_an_annotated_parameter)
+  --> field_of_an_annotated_parameter.kso:20:6
+  20 |   "{m.text}"
+            ^
+error[name]: `money` has no field `width` (module field_of_an_annotated_parameter)
+  --> field_of_an_annotated_parameter.kso:23:10
+  23 |   "{c} {r.width}"
+                ^

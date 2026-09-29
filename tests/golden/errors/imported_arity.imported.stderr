@@ -1,1 +1,4 @@
 error[arity]: no 2-argument arm of `list/spread` (arms take 1) (module imported_arity)
+  --> imported_arity.kso:3:34
+   3 | pub play = print "{list/to_list (list/spread 1 5)}"
+                                        ^

@@ -18675,3 +18675,23 @@ loop through a record declared in the other file and reads them back on both
 engines; all three constants were refused on the old checker. The row "a knot
 of a sibling file's type refused" puts the file's own types back and turns it
 red.
+
+## 2026-09-29 — a module's diagnostics say where they are
+
+A module is checked as one merged program, and a diagnostic raised there is
+printed with the module's name. Where the check knew which file the
+declaration came from, it said so, and the location and source line followed.
+The walk that reads each declaration's statements did not say, so what it
+raised printed `(module m)` and nothing else. That walk raises the build
+block's refusals and a share of the arity, name, none and type diagnostics. The
+same program run as one file with `kanso play` printed the file, line and
+column, so the location was lost only on the way through a module. The
+differential found it when a generated build block was refused and the report
+gave no place to look. Every diagnostic the walk raises for a declaration is now
+placed in that declaration's file, unless the check that raised it already
+named one. Through an import, 47 fixtures of the error corpus gain their
+location and quoted line, and nothing else in any of them changes. The row "a
+module diagnostic left without its file" takes the file away again and turns
+the corpus red. The checks that run after the walk are untouched: through an
+import, 26 of the corpus's diagnostics still carry no location, most of them
+effect, naming and exhaustiveness refusals.

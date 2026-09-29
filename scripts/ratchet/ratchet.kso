@@ -3911,7 +3911,19 @@ sibling_knot = row
 
 rows_c1zzzr = text/concat rows_c1zzzq [sibling_knot]
 
-rows_c = text/concat rows_c1zzzr [itself]
+# The walk reads the merged module. A diagnostic it raises without the file of
+# the declaration it is about prints the module's name and no location.
+module_file = row
+  "a module diagnostic left without its file"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_module_diagnostic_left_without_its_file")
+  no_setup
+
+rows_c1zzzs = text/concat rows_c1zzzr [module_file]
+
+rows_c = text/concat rows_c1zzzs [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

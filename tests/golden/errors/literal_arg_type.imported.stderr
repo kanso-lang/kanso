@@ -1,1 +1,4 @@
 error[type]: no arm of `twice` takes a string here (arms take int) (module literal_arg_type)
+  --> literal_arg_type.kso:4:26
+   4 | pub play = print "{twice "a string"}"
+                                ^
