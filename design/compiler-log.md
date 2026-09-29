@@ -19745,3 +19745,11 @@ corpus stayed green, because the set already reached past strings here; the
 row pins the argument instead. The lazy subtype fixture from the previous
 entry also reads `length` through a lazy binding now, which died on the old
 code with "length takes a list, string, or map".
+
+Two older mutations patched lines these two entries rewrote, and CI's ratchet
+shard said one of them no longer applied. "A subtype handed to a builtin
+whole" checked for the unwrap's argument by its old name, and "a join that
+never adopts its seed" matched the adoption's test on `value` where it now
+reads `raw`. A dry run of all 370 mutation scripts against this tree found
+those two and no others. Both are respelled for the new lines, and each turned
+the micro corpus red again on a release build.
