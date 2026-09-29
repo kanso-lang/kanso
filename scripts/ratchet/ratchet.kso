@@ -4345,7 +4345,29 @@ after_full = "the_program_after_one_that_ran_out_of_memory_runs"
 
 rows_c1zzzzq = text/concat rows_c1zzzzp [dead_run_held]
 
-rows_c = text/concat rows_c1zzzzq [itself]
+# A string built onto itself grows where it stands on the wasm engine, and only
+# a builder a previous join handed over is taken: a literal seed is shared.
+string_join_copied = row
+  "a string join copied every lap in wasm"
+  true
+  "cargo test --release --test wasm_engine {built_onto_itself}"
+  "specs (unit, golden, differential)"
+  (breaking "a_string_join_copied_every_lap_in_wasm")
+  with_blob
+
+seed_taken = row
+  "a seed taken by a string join in wasm"
+  true
+  "cargo test --release --test wasm_engine {built_onto_itself}"
+  "specs (unit, golden, differential)"
+  (breaking "a_seed_taken_by_a_string_join_in_wasm")
+  with_blob
+
+built_onto_itself = "a_string_built_onto_itself_grows_where_it_stands"
+
+rows_c1zzzzr = text/concat rows_c1zzzzq [string_join_copied seed_taken]
+
+rows_c = text/concat rows_c1zzzzr [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

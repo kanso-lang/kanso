@@ -82,6 +82,9 @@ thread_local! {
     static CONSTS: Held<std::collections::HashMap<u32, u32>> =
         Held::new(std::collections::HashMap::new());
     static ARGS: Held<Vec<u32>> = const { Held::new(Vec::new()) };
+    /// Handles holding a string a builder join may take: a join handed
+    /// straight to a call, which nothing but the callee's parameter holds.
+    static OWNED: Held<crate::hash::Set<u32>> = Held::new(crate::hash::Set::default());
     static TYPES: Held<Vec<(String, Vec<String>)>> = const { Held::new(Vec::new()) };
     static ERROR: Held<String> = const { Held::new(String::new()) };
     static PRINTS: Held<String> = const { Held::new(String::new()) };
@@ -105,6 +108,7 @@ pub fn release() {
     REG.with(|r| r.renew(Vec::new()));
     ARGS.with(|a| a.renew(Vec::new()));
     CONSTS.with(|c| c.renew(std::collections::HashMap::new()));
+    OWNED.with(|o| o.renew(crate::hash::Set::default()));
 }
 
 pub fn load(program: Program, lits: &[Lit], types: Vec<(String, Vec<String>)>) {
@@ -138,6 +142,7 @@ pub fn load(program: Program, lits: &[Lit], types: Vec<(String, Vec<String>)>) {
     });
     ARGS.with(|a| a.renew(Vec::new()));
     CONSTS.with(|c| c.renew(std::collections::HashMap::new()));
+    OWNED.with(|o| o.renew(crate::hash::Set::default()));
 }
 
 pub fn take_error() -> String {
@@ -1216,6 +1221,62 @@ fn map_or_filter(name: &str, list_h: u32, closure_h: u32) -> u32 {
         }
     }
     push(Slot::V(Value::List(Rc::new(out))))
+}
+
+/// A template at a builder join: its first part is the builder. An owned
+/// builder is taken out of its handle and the rest is appended to it, which is
+/// what keeps a string built one piece a lap from being copied every lap and
+/// every copy kept. A builder that is not owned is rendered like any
+/// template. The result is owned when the join is handed straight to a call,
+/// since then the callee's parameter is the only thing holding it.
+#[no_mangle]
+pub extern "C" fn rt_template_mut(n: u32, as_arg: u32) -> u32 {
+    let first = ARGS.with(|a| {
+        let a = a.borrow();
+        a[a.len() - n as usize]
+    });
+    let owned = OWNED.with(|o| o.borrow_mut().remove(&first));
+    let taken = match owned {
+        true => REG.with(|r| match &mut r.borrow_mut()[first as usize] {
+            Slot::V(Value::Str(s)) => Some(std::mem::take(s)),
+            _ => None,
+        }),
+        false => None,
+    };
+    let result = match taken {
+        Some(mut out) => {
+            let handles = pop_args(n);
+            let mut failed = None;
+            for &h in &handles[1..] {
+                let v = value_of(h);
+                if matches!(v, Value::ErrV(_)) {
+                    failed = Some(h);
+                    break;
+                }
+                match with_interp(|i| i.render_interpolated(v.clone())) {
+                    Ok(Ok(s)) => out.push_str(&s),
+                    Ok(Err(err)) => {
+                        failed = Some(push(Slot::V(err)));
+                        break;
+                    }
+                    Err(fault) => die(fault.message),
+                }
+            }
+            match failed {
+                // the err is the answer; the builder goes back where it was
+                Some(h) => {
+                    REG.with(|r| r.borrow_mut()[first as usize] = Slot::V(Value::Str(out)));
+                    h
+                }
+                None => push(Slot::V(Value::Str(out))),
+            }
+        }
+        None => rt_template(n),
+    };
+    if as_arg != 0 && matches!(slot(result), Slot::V(Value::Str(_))) {
+        OWNED.with(|o| o.borrow_mut().insert(result));
+    }
+    result
 }
 
 /// Demands a cell at the HANDLE level. `forced` answers a Value, and a bind
