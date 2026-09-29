@@ -19589,3 +19589,34 @@ CI measured two rows moved: `interp_instructions` fell 979,398 to 590,224,412
 and `emit_instructions` fell 9 to 29,998,670. Neither path runs the browser
 backend, and no mechanism for either was isolated. Welfare reports neither a
 fall nor a rise, and the floor is unchanged.
+
+## 2026-09-29 — a builtin forces a lazy argument before it unwraps a subtype
+
+Native fuzz seed 377235 printed `["a" "b"]` under `--interp` and died with
+`split takes two strings` as a native binary. Reduced, it is a function that
+binds a `type word string` value and hands it to `text/split`:
+
+    fn shown z
+      w = made z
+      parts = text/split w " "
+      "{parts}"
+
+`text/split`'s first arm, `split _ ""`, ignores its first parameter, so the
+demand analysis makes `w` lazy and the native backend binds it as a thunk.
+In a program that declares a subtype, the generic builtin path unwraps each
+argument with `k_unsub` before the call, and forces each one after. The
+unwrap tests the tag for `K_SUB` and finds a thunk, so it passes the thunk
+through. The force then yields the `word`, and `k_b_split` refuses a value
+that is not a string. Under `KANSO_STRICT=1`, which turns laziness off, the
+native binary agreed with the interpreter, and that is what placed the fault
+in the thunk.
+
+The path now forces each argument before it unwraps it. The force is the
+same gated one the call makes afterwards, so it emits nothing for a value
+whose set proves it cannot be a thunk, and only a program that declares a
+subtype reaches the loop at all.
+
+`a_lazy_subtype_reaches_a_builtin_as_its_parent` is the reduced program in
+the micro corpus. The mutation "a lazy subtype unwrapped before it is forced"
+hands the unforced value to the unwrap again, and the micro corpus went red
+on it with the native run printing nothing. It is a ratchet row.
