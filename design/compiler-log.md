@@ -19472,3 +19472,10 @@ group whose caller reads the builder again after handing it in, so the second
 program shaped that way built nothing in place, and the draft's spec passed
 with the clearing removed. It was taken out rather than kept without a program
 that needs it.
+
+CI measured five rows moved. `compile_instructions` rose to 25,273,256
+(+62,614), `entry_instructions` to 83,541,295 (+224,640) and
+`library_instructions` to 84,080,555 (+225,535). `emit_instructions` fell to
+29,924,532 (-15,574) and `interp_instructions` to 590,139,166 (-978,977). No
+mechanism for any of the five was isolated. Welfare reports neither a fall
+nor a rise, and the floor is unchanged.
