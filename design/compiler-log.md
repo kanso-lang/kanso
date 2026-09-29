@@ -18989,6 +18989,44 @@ interpreter. The old interpreter failed both. The rows "a builtin partial
 answering nothing" and "a constructor partial answering nothing" put each
 answer back to nothing and turn their spec red.
 
+## 2026-09-29 — the runtime calls a closure in words
+
+A partial over a lambda of three or four parameters is finished by the
+runtime: `k_partial_apply` hands the held and fresh arguments to `k_call3` or
+`k_call4`, which call the lambda from C. With `f = (a b c -> a + b + c + n)`
+and `k = &f 1 2`, `k 4` printed 8 on the interpreter and "`+` is not defined
+for these values" on both native builds. A lambda called directly takes the
+emitted fast path, which calls it from IR, and agreed.
+
+C and the emitted body disagreed about where the third argument was. A KValue
+is two words, and x86-64 C hands a struct to the stack whole once it no
+longer fits the argument registers that are left. The environment and two
+KValues fill five of the six, so C put the third on the stack. The lambda is
+defined in IR taking KValues, which LLVM splits into words and assigns one at
+a time, so it read the first half of the third argument from the sixth
+register. The same split happens under `preserve_none` and under the plain C
+convention, and on arm64 it reaches the fourth argument. `k_call3` and
+`k_call4` now pass each argument as its two words, which both sides lay out
+the same way. A group handed out as a value takes no environment, fills its
+registers two words at a time, and was never torn.
+
+The generated-program differential found it in batch 110, at seed 340100, on
+a generator that writes groups of up to nine parameters; the partial there is
+over the closure native builds for a partial over a group of nine. It
+predates this week. The micro sample
+`a_lambda_finished_through_a_partial_keeps_its_arguments` finishes lambdas of
+three and four through a partial and says by its digits which argument landed
+where; the old runtime failed it. The row "a closure called with its
+arguments as structs" puts `k_call3`'s struct call back and turns the micro
+corpus red.
+
+
+CI priced it. Passing words moves the runtime's layout and nothing the
+benchmarks call: `work_runbench` lands on 1,088,405,358 (+462),
+`work_livebench` on 1,537,391,389 (+511), and `text` on 3,505,264 (+224, 16
+bytes a benchmark). `work_encodebench`, `work_oneshot` and both codegen tiers
+fall. The floor moves by what it costs, under the rule for the language.
+
 ## 2026-09-29 — a call through a group value names the group in the trace
 
 When a group turns down a failing argument, the interpreter adds the group's

@@ -4116,6 +4116,18 @@ ctor_partial = row
 
 rows_c1zzzzj = text/concat rows_c1zzzzf [partial_of_builtin ctor_partial]
 
+# The runtime calls a closure of three or four arguments in words, so a
+# partial over such a lambda hands it the arguments it was given.
+closure_words = row
+  "a closure called with its arguments as structs"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_closure_called_with_its_arguments_as_structs")
+  release
+
+rows_c1zzzzi = text/concat rows_c1zzzzj [closure_words]
+
 # A call through a group value, or a partial over a group, that turns down a
 # failing argument names the group in the trace, as a direct call does.
 # Native and the browser answered the failure before entering the group and
@@ -4154,7 +4166,7 @@ hop_browser_partial = row
 
 hops = [hop_value hop_partial hop_browser hop_browser_partial]
 
-rows_c1zzzzd = text/concat rows_c1zzzzj hops
+rows_c1zzzzd = text/concat rows_c1zzzzi hops
 
 # text/to_bytes keeps its frame like the other wrappers whose builtin can
 # birth an err, so a rescue in the caller's module reaches its callback.

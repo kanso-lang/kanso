@@ -1,0 +1,22 @@
+# A partial over a lambda of three or four parameters is finished by the
+# runtime, which calls the lambda from C. C handed the third argument to the
+# stack whole once the environment and two arguments had filled five of six
+# registers, while the lambda read half of it from the sixth register, so
+# `k 3` below answered "`+` is not defined for these values" on native. The
+# digits say which argument landed where.
+fn three n
+  f = (a b c -> a * 100 + b * 10 + c + n)
+  k = &f 1 2
+  k 3
+
+fn four n
+  f = (a b c d -> a * 1000 + b * 100 + c * 10 + d + n)
+  k = &f 1 2
+  k 3 4
+
+fn spelled n
+  f = (a b c -> "{a}{b}{c}{n}")
+  k = &f "x"
+  k "y" "z"
+
+pub play = print "{three 0} {four 0} {spelled 0}"
