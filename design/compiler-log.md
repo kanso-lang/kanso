@@ -19839,8 +19839,9 @@ the micro corpus holds all three with the subtype on either side. The
 mutation "a subtype refused at a bitwise operator" takes the unwrap out, and
 the micro corpus went red on it naming the fixture. It is a ratchet row.
 
-CI measured the cost. The unwrap adds 368 bytes to every benchmark's runtime
-text. `run_instructions` rose 861, to 1,088,405,064, and
+CI measured the cost. The unwrap adds 368 bytes to every benchmark's runtime,
+so `text`, the sum over the fourteen binaries, rose 5,152 to 3,544,688.
+`work_runbench` rose 861, to 1,088,405,064, and
 `codegen_instructions_release` rose 875, to 408,227,046;
 `codegen_instructions_dev` fell 202, to 124,468,626. No mechanism for the
 instruction rows was isolated beyond the text growth. Welfare fell by less
