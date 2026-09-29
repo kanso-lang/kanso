@@ -18885,6 +18885,27 @@ needs both: whether it fitted on the way in, and whether it was spilled on the
 way out. The floor falls by what the fix costs, under the rule for building
 the language as ruled.
 
+## 2026-09-29 — a partial widens its group's parameters
+
+Inference sets each group's parameters from what reaches them. A bare mention
+of a group hands it out as a value, and since nothing can see what a value is
+later called with, a mention widens every parameter to anything. A partial
+hands the group out too, and it widened nothing. With `k = &f1 (id 11)` and
+the one direct call `f1 16 (id 19)`, inference read `f1`'s first parameter as
+an int, and native compiled `f1` for an int there. The subtype `k` held came
+back out through `return p2 if 20 > p3` as its box's address:
+`139790436380720` on native and `11` on the interpreter. A partial now widens
+its group's parameters as a mention does. kanso#1717 considered this change
+for held errs and set it aside because both lowerings already answered those.
+A held value of a type the direct calls never pass is a case they do not
+cover. The generated-program differential found it in batch 105, at seed
+324658, and main carries it.
+
+lib and the benchmarks hold no partials, so no runtime row can move. The micro
+sample `a_partial_widens_its_group` printed the address on the old compiler.
+The row "a partial leaving its group narrow" takes the widening back out and
+turns the micro corpus red on both native builds.
+
 ## 2026-09-29 — a partial over a partial runs when it is full
 
 `h = &g p` holds one of `g`'s three arguments and `&h 3` holds one more, so
@@ -18910,6 +18931,14 @@ all four, and old native printed `<fn>` for the wrapped one. The rows "a
 partial over a partial taking nothing", "a native partial answering nothing"
 and "a browser partial answering nothing" each put one engine's answer back,
 and each turns its corpus red.
+
+CI measured what the native runtime's extra branch costs. Release codegen rose
+114,479 to 408,187,514 in `codegen_instructions_release`, and dev codegen rose
+3,832 to 124,465,602 in `codegen_instructions_dev`, since `k_callee_arity` is
+runtime C that every build compiles. `work_runbench` rose 201 to 1,088,404,896.
+Emitting fell 335 and every benchmark's text shrank 480 bytes. The meta welfare
+fell by 0.00006, and the floor comes down by that much under the 2026-09-13
+rule, because this is the language answering the same on every engine.
 
 ## 2026-09-29 — a call through a group value names the group in the trace
 
@@ -18940,3 +18969,4 @@ builds printed no hop for either. The rows "a group value naming nothing", "a
 partial held in a nameless closure", "a browser group value naming nothing"
 and "a browser partial held in a nameless closure" each put one change back
 and turn their corpus red.
+
