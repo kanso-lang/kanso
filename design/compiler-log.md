@@ -19291,3 +19291,22 @@ pins the trace. The row "a wide partial held in a closure" now puts the
 closure back for every partial over a group, since the width test it used to
 flip is gone, and "a nine-wide group refused as a value" restores the eight
 cap on group values.
+
+## 2026-09-29 — five changes land together in kanso#1728
+
+kanso#1720, #1723, #1724, #1725 and #1727 each chained their ratchet rows off
+the same link, so they were merged onto one branch and CI measured the
+combined tree once. Against main after kanso#1719 the compile rows land on
+`compile_instructions` 25,190,367, `entry_instructions` 83,264,869 and
+`library_instructions` 83,803,133. The round ruling measured alone on its own
+branch put +195,722 on the first of those, which is about all of the
+combined rise of 190,056. `codegen_instructions_dev` lands on 124,480,756 and
+`emit_instructions` on 29,940,526. The runtime rows moved by layout:
+`work_livebench` 1,537,390,983, `work_oneshot` 12,744,441 and `work_runbench`
+1,088,405,545. `text` lands on 3,534,608, 2,160 bytes more in every
+benchmark; #1723 and #1725 are the two carried changes that edit the runtime,
+and which of them the bytes came with was not isolated.
+`codegen_instructions_release`, `work_encodebench`, `compile_allocs` and
+`interp_allocs` fell. Every change carried is language correctness, and the
+round ruling is the language itself, so the floor moves to what the tree
+scores, 90.32455.
