@@ -18496,3 +18496,120 @@ rows, the text and the lazy tier did not move. Which of the two checks the
 instruction rows paid for has not been isolated. Welfare fell from 90.40233 to
 90.40222, and the floor follows it under the 2026-09-13 rule, since both are
 gaps in the checker for the language as ruled.
+
+## 2026-09-28 — an annotation and its constructor are one shape
+
+Two arms of one group that take the same values are refused as overlapping,
+and the check compared them shape by shape: two annotations, two constructor
+patterns, two binders. `_:pt` and `(pt a b)` fell between those cases. The
+constructor pattern names every field and tests none, so it takes every `pt`,
+as the annotation does, and a group holding both passed `kanso check` with one
+arm that could never run. For a record, every engine ran whichever came first.
+For an err, `_:err` ranks above `(err _)`, so the annotation ran whichever came
+first. The same held one level down, with `(pt _:pt _)` beside
+`(pt (pt a b) _)`. The check now reads a constructor pattern whose fields are
+all binders as the annotation of its type. The error fixture
+`an_annotation_and_its_constructor_overlap` holds the three shapes and reported
+nothing on the old checker. The row "an annotation and its constructor read as
+two shapes" puts the old reading back and turns it red. No program in lib, kq,
+vse or kanso-json changes its verdict.
+
+## 2026-09-28 — a typeset arm behind a wider one is refused
+
+Two arms that name typesets rank alike, so wherever both match, every engine
+runs the one written first. When every member of the later arm's typeset is a
+member of the earlier one's, the later arm can never run, and nothing said so.
+With `type wide id tag word` and `type narrow id word`, an arm for `wide`
+above an arm for `narrow` passed `kanso check`, and all three engines sent an
+`id` to `wide`. Written the other way round, both arms run. The overlap check
+now asks, of two arms whose other parameters are the same shape, whether the
+earlier typeset holds every member of the later one, reading both through
+their nested typesets. When the two hold the same members the message says
+so; otherwise it says to put the narrower arm first. An arm naming a member
+type is left alone: `_:id` ranks above any typeset and runs whatever the
+order, and a one-member `type short id` is a subtype, which ranks the same
+way. The error fixture `a_typeset_arm_behind_a_wider_one` reported nothing on
+the old checker, and the row "a typeset arm left behind a wider one" turns it
+red. No program in lib, kq, vse or kanso-json changes its verdict.
+
+## 2026-09-29 — an arm other arms answer first is refused
+
+An arm can also never run when no single arm matches it and several together
+take everything it would. A literal and a member type rank above `bool` and
+above a typeset, so arms for `true` and `false` leave nothing for `_:bool`, and
+arms for `id` and `word` leave nothing for `_:both` when `both` holds those
+two. Both passed `kanso check`, in either order, on every engine. The overlap
+check now asks, of a `bool` or typeset parameter, whether each of its values
+is taken first by another arm whose other parameters are the same shape: a
+literal, an arm naming the member or binding every field of it, or an earlier
+typeset arm holding it. `none` joined the same family from the other side. It
+is the one value of its type, so `none` and `_:none` take the same thing, and
+the literal ranks first. The error fixture `an_arm_other_arms_answer_first`
+holds the three shapes and reported nothing on the old checker. The rows "a
+literal and its annotation read as two shapes" and "an arm other arms answer
+first left unchecked" each turn it red.
+
+The overlap check runs over the whole module after the files are merged, and
+its diagnostics named no file, so on the imported path they printed with the
+module suffix and no location. They name the arm's file now. An existing
+diagnostic reads the same with the location added under it, and the two new
+fixtures carry `.imported.stderr` goldens for that path. No program in lib,
+kq, vse or kanso-json changes its verdict.
+
+## 2026-09-29 — the overlap check compares an arm with its own group
+
+The first head of this change measured on CI with `compile_instructions` at
+27,111,795 (+1,864,809), `entry_instructions` at 96,068,317 (+11,007,934) and
+`library_instructions` at 96,836,451 (+11,249,605). The new question about
+members looked at every declaration in the module for each arm, so it compared
+each pair of declarations, and the entry and library rows check a module that
+merges the standard library. The overlap check already did the same through its
+look back over every earlier declaration. It now sorts the declarations once by
+name, arity and place in the source, walks each group of two or more arms, and
+puts its reports back in source order. On this container, against a build of
+main, and with the list and constructor questions below included, `kanso
+check` of the entry corpus fell from 87,978,846 instructions to 85,815,077, of
+the library corpus from 88,474,145 to 86,280,224 and of the compile corpus from
+26,801,090 to 26,646,425, with `compile_allocs` unchanged at 14,308. Those are
+this machine's readings of the three corpora, not CI's rows.
+
+CI then measured the head with all of it in. `compile_instructions` lands on
+25,063,964 (-183,022), `entry_instructions` on 82,820,894 (-2,239,489),
+`library_instructions` on 83,314,567 (-2,272,279) and `interp_instructions` on
+589,942,740 (-1,965). One row rose: `emit_instructions` lands on 29,854,360
+(+4,665). The emitter did not change, and what moved the row has not been
+isolated. The allocation rows did not move. Welfare rose from 90.40222 to
+90.40601 and the floor holds it.
+
+## 2026-09-29 — a list arm reads no element type
+
+A list arm asks only whether its argument is a list, and a map arm whether it
+is a map, whatever the annotation says they hold. The micro fixture
+`a_group_told_apart_by_kind_alone` pins that, and it is how every engine
+dispatches. The overlap check compared two list annotations by their spelling,
+so `_:[]int` beside `_:[]string` passed `kanso check`, and all three engines
+sent `["a"]` to the first. The check now compares two annotations by what an
+arm can test: an effect, a list, a map, or the type named. Effects were already
+read that way. The error fixture `a_list_arm_reads_no_element_type` holds a
+list pair and a map pair and reported nothing on the old checker, and the row
+"a list arm read by its element type" turns it red. No program in lib, kq, vse
+or kanso-json changes its verdict.
+
+## 2026-09-29 — an arm below one that takes its values is refused
+
+Two constructor patterns of one type rank alike, and so do an annotation and a
+constructor pattern of its type, so wherever both match, every engine runs the
+one written first. `(pt n _)` above `(pt 1 _)` sends `pt 1 2` to the first, and
+the second never runs. `_:pt` above `(pt 1 _)`, `(pt _:int _)` above
+`(pt 3 _)`, and `_:err` above `(err (woe a))` do the same. Written the other
+way round, both arms run. The overlap check now asks whether an earlier arm
+takes every value a later one does, position by position. Inside a constructor
+a binder takes any field, since a field never holds an err, and an annotation
+takes a literal of its type. At the top a binder ranks below every type and a
+literal above it, so those pairs are left to the ranking rule. One exception:
+`(err _)` ranks below every named reason, so written first it still leaves
+`(err (woe a))` its errs. The error fixture
+`an_arm_written_below_one_that_takes_it` holds three dead arms beside one live
+one and reported nothing on the old checker. The row "an arm below one that
+takes it left unchecked" turns it red. No program in lib, kq, vse or
+kanso-json changes its verdict.

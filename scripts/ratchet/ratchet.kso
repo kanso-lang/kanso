@@ -3778,7 +3778,80 @@ sibling_types = row
 
 rows_c1zzzg = text/concat rows_c1zzzf [sibling_types]
 
-rows_c = text/concat rows_c1zzzg [itself]
+# `_:pt` and `(pt a b)` take the same values. Read as two shapes, a group
+# holding both passes `kanso check` and one of its arms never runs.
+constructor_overlap = row
+  "an annotation and its constructor read as two shapes"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "an_annotation_and_its_constructor_read_apart")
+  no_setup
+
+rows_c1zzzh = text/concat rows_c1zzzg [constructor_overlap]
+
+# Typeset arms rank alike, so the first written wins. Left unchecked, one whose
+# members all sit in an earlier arm's typeset passes `kanso check` and never
+# runs.
+typeset_behind = row
+  "a typeset arm left behind a wider one"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_typeset_arm_left_behind_a_wider_one")
+  no_setup
+
+rows_c1zzzi = text/concat rows_c1zzzh [typeset_behind]
+
+# `none` is the one value of its type. Read apart from `_:none`, a group
+# holding both passes `kanso check` and the annotated arm never runs.
+literal_overlap = row
+  "a literal and its annotation read as two shapes"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_literal_and_its_annotation_read_apart")
+  no_setup
+
+rows_c1zzzj = text/concat rows_c1zzzi [literal_overlap]
+
+# Literals and member types rank above `bool` and a typeset. Left unchecked,
+# an arm whose every value another arm takes first passes `kanso check`.
+answered_first = row
+  "an arm other arms answer first left unchecked"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "an_arm_other_arms_answer_left_unchecked")
+  no_setup
+
+rows_c1zzzk = text/concat rows_c1zzzj [answered_first]
+
+# A list arm asks only whether its argument is a list. Compared by element
+# type, `_:[]int` beside `_:[]string` passes `kanso check` and one never runs.
+list_kind = row
+  "a list arm read by its element type"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "a_list_arm_read_by_its_element_type")
+  no_setup
+
+rows_c1zzzl = text/concat rows_c1zzzk [list_kind]
+
+# Constructor patterns of one type rank alike and the first written wins. Left
+# unchecked, `(pt 1 _)` below `(pt n _)` passes `kanso check` and never runs.
+below_wider = row
+  "an arm below one that takes it left unchecked"
+  true
+  "cargo test --release --test golden error_corpus"
+  "specs (unit, golden, differential)"
+  (breaking "an_arm_below_one_that_takes_it_left_unchecked")
+  no_setup
+
+rows_c1zzzm = text/concat rows_c1zzzl [below_wider]
+
+rows_c = text/concat rows_c1zzzm [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

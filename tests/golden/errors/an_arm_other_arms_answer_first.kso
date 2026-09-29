@@ -1,0 +1,47 @@
+# An arm can never run when every value it admits is taken first by other
+# arms. A literal and a member type rank above `bool` and above a typeset, so
+# arms for `true` and `false` leave nothing for `_:bool`, and arms for each
+# member leave nothing for the typeset, whatever the order. `none` is the one
+# value of its type, so `none` and `_:none` take the same thing. Every engine
+# agreed and nothing refused any of these. Found on 2026-09-29 while probing
+# the overlap check.
+type id int
+
+type word string
+
+type both id word
+
+fn gone none
+  "none"
+
+fn gone _:none
+  "annotated"
+
+fn gone _
+  "other"
+
+fn truth true
+  "yes"
+
+fn truth false
+  "no"
+
+fn truth _:bool
+  "bool"
+
+fn truth _
+  "other"
+
+fn kind _:both
+  "both"
+
+fn kind _:id
+  "id"
+
+fn kind _:word
+  "word"
+
+fn kind _
+  "other"
+
+pub play = print "{gone none} {truth true} {kind (id 1)} {kind (word "a")}"

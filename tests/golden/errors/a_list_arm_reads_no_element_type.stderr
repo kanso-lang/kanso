@@ -1,0 +1,8 @@
+error[dispatch]: overlapping overloads of `sum` are illegal
+  --> a_list_arm_reads_no_element_type.kso:9:4
+   9 | fn sum _:[]string
+          ^
+error[dispatch]: overlapping overloads of `count` are illegal
+  --> a_list_arm_reads_no_element_type.kso:18:4
+  18 | fn count _:map[string string]
+          ^

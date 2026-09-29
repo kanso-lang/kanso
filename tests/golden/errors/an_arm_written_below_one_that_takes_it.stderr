@@ -1,0 +1,12 @@
+error[dispatch]: an arm of this group written above takes every value this one does, so this arm can never run; put it above that one
+  --> an_arm_written_below_one_that_takes_it.kso:17:4
+  17 | fn first (pt 1 _)
+          ^
+error[dispatch]: an arm of this group written above takes every value this one does, so this arm can never run; put it above that one
+  --> an_arm_written_below_one_that_takes_it.kso:29:4
+  29 | fn inner (pt 3 _)
+          ^
+error[dispatch]: an arm of this group written above takes every value this one does, so this arm can never run; put it above that one
+  --> an_arm_written_below_one_that_takes_it.kso:38:4
+  38 | fn why (err (woe a))
+          ^

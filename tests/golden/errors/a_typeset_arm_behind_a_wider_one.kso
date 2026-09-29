@@ -1,0 +1,30 @@
+# Two arms naming typesets rank alike, so wherever both match, the one written
+# first runs. When every member of the later arm's typeset is a member of the
+# earlier one's, the later arm can never run. Every engine agreed and nothing
+# refused it. Found on 2026-09-28 while probing the overlap check with
+# typesets. Written the other way round, both arms run.
+type id int
+
+type tag string
+
+type word string
+
+type wide id tag word
+
+type same id tag word
+
+type narrow id word
+
+fn kind _:wide
+  "wide"
+
+fn kind _:same
+  "same"
+
+fn kind _:narrow
+  "narrow"
+
+fn kind _
+  "other"
+
+pub play = print "{kind (id 1)} {kind (tag "a")} {kind (word "b")}"

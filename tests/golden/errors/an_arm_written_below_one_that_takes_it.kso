@@ -1,0 +1,44 @@
+# Two constructor patterns of one type rank alike, and so do an annotation and
+# a constructor pattern of its type, so the one written first wins wherever
+# both match. When the earlier arm takes every value the later one does, the
+# later one never runs: `(pt n _)` above `(pt 1 _)` sends `pt 1 2` to the
+# first. Every engine agreed and nothing refused it. Found on 2026-09-29 while
+# probing the overlap check. Written the other way round, both arms run.
+type pt
+  a
+  b
+
+type woe
+  at
+
+fn first (pt n _)
+  "any {n}"
+
+fn first (pt 1 _)
+  "one"
+
+fn first _
+  "other"
+
+fn inner (pt _:int _)
+  "int"
+
+fn inner (pt (pt a _) 2)
+  "nested {a}"
+
+fn inner (pt 3 _)
+  "three"
+
+fn inner _
+  "other"
+
+fn why _:err
+  "err"
+
+fn why (err (woe a))
+  "woe {a}"
+
+fn why _
+  "other"
+
+pub play = print "{first (pt 1 2)} {inner (pt 3 4)} {why (err (woe 1))}"

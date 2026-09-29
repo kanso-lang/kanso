@@ -1,0 +1,8 @@
+error[dispatch]: `same` and `wide` hold the same types, and the arm for `wide` comes first, so this arm can never run
+  --> a_typeset_arm_behind_a_wider_one.kso:21:4
+  21 | fn kind _:same
+          ^
+error[dispatch]: every member of `narrow` is a member of `wide`, and the arm for `wide` comes first, so this arm can never run; put it above that one
+  --> a_typeset_arm_behind_a_wider_one.kso:24:4
+  24 | fn kind _:narrow
+          ^
