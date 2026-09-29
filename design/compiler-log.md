@@ -19664,3 +19664,92 @@ arrived with it; no mechanism was isolated. `work_runbench` fell 1,342 to
 rose 210 to 2,333,703,939, `work_livebench` 133 to 1,537,391,116,
 `work_jsonbench` 4 to 758,833,558 and `work_basket` 1 to 29,464,216.
 Welfare holds at the floor, 90.32.
+
+## 2026-09-29 — a builtin forces a lazy argument before it unwraps a subtype
+
+Native fuzz seed 377235 printed `["a" "b"]` under `--interp` and died with
+`split takes two strings` as a native binary. Reduced, it is a function that
+binds a `type word string` value and hands it to `text/split`:
+
+    fn shown z
+      w = made z
+      parts = text/split w " "
+      "{parts}"
+
+`text/split`'s first arm, `split _ ""`, ignores its first parameter, so the
+demand analysis makes `w` lazy and the native backend binds it as a thunk.
+In a program that declares a subtype, the generic builtin path unwraps each
+argument with `k_unsub` before the call, and forces each one after. The
+unwrap tests the tag for `K_SUB` and finds a thunk, so it passes the thunk
+through. The force then yields the `word`, and `k_b_split` refuses a value
+that is not a string. Under `KANSO_STRICT=1`, which turns laziness off, the
+native binary agreed with the interpreter, and that is what placed the fault
+in the thunk.
+
+The path now forces each argument before it unwraps it. The force is the
+same gated one the call makes afterwards, so it emits nothing for a value
+whose set proves it cannot be a thunk, and only a program that declares a
+subtype reaches the loop at all.
+
+`a_lazy_subtype_reaches_a_builtin_as_its_parent` is the reduced program in
+the micro corpus. The mutation "a lazy subtype unwrapped before it is forced"
+hands the unforced value to the unwrap again, and the micro corpus went red
+on it with the native run printing nothing. It is a ratchet row.
+
+CI measured this change and the next entry's together, on a tree carrying
+kanso#1732. One row moved: `emit_instructions` rose 1,607 from the figure
+kanso#1732 leaves, to 29,998,671. The benchmarks declare no subtype, so the
+loop this entry changes emits nothing for them, and no mechanism for the rise
+was isolated. Welfare reports neither a fall nor a rise, and the floor is
+unchanged.
+
+## 2026-09-29 — a builder's first join asks about a lazy seed as it arrived
+
+The generator gained a string-join loop whose first arm ignores its
+accumulator, and native fuzz seed 522907 died with "a string builder was
+expected here" where the interpreter printed the string. Reduced:
+
+    fn grow _ 98
+      "far"
+
+    fn grow acc 0
+      acc
+
+    fn grow acc n
+      grow "{acc}{n % 3}" (n - 1)
+
+    fn shown _
+      first = grow [] 3
+      second = grow first 4
+      "{second}"
+
+The first arm makes `first` lazy, so it reaches the second loop as a thunk.
+The loop's entry converts a string seed into a builder, and since kanso#1732
+it leaves any other seed as it came, a thunk included. The first join then
+forced the thunk and asked about the forced value. The first loop's list seed
+had put more than strings in the parameter's set, so the join called
+`k_b_adopt` with the forced value, a finished string. `k_b_adopt` passes a
+string through as the builder, and the append refused it for having no room.
+
+The join now hands `k_b_adopt` the seed as it arrived, and asks whether that
+may be something other than a string. A lazy seed is not a string, so its
+rendering is copied into a builder of its own. The first loop's string is not
+written through, and a seed the first arm ignores is still never run.
+
+`a_lazy_seed_starts_a_second_builder` in the micro corpus runs the reduced
+program and `grow skipped 98` on a binding that would fail if it ran. The
+mutation "a lazy seed taken for a builder" hands `k_b_adopt` the forced value
+again, and the micro corpus went red on it with the native run printing
+nothing. A first attempt mutated only the question the join asks, and the
+corpus stayed green, because the set already reached past strings here; the
+row pins the argument instead. The lazy subtype fixture from the previous
+entry also reads `length` through a lazy binding now, which died on the old
+code with "length takes a list, string, or map".
+
+Two older mutations patched lines these two entries rewrote, and CI's ratchet
+shard said one of them no longer applied. "A subtype handed to a builtin
+whole" checked for the unwrap's argument by its old name, and "a join that
+never adopts its seed" matched the adoption's test on `value` where it now
+reads `raw`. A dry run of all 370 mutation scripts against this tree found
+those two and no others. Both are respelled for the new lines, and each turned
+the micro corpus red again on a release build.

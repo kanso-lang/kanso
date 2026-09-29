@@ -7570,18 +7570,21 @@ impl<'a> Backend<'a> {
                     let piece = match part {
                         TemplatePart::Lit(s) => self.str_const(f, s),
                         TemplatePart::Interp(inner) => {
-                            let value = self.emit_expr(f, inner)?;
-                            let value = self.maybe_force(f, value);
+                            let raw = self.emit_expr(f, inner)?;
+                            let value = self.maybe_force(f, raw.clone());
                             let (t, failed) = self.render_interp(f, &value);
                             fails |= failed;
                             // the builder, which a seed that was not a string
                             // becomes only here, rendered; a value the sets
-                            // prove is a string is the builder already
-                            match joins_builder && i == 0 && f.set_of(&value) & !STR != 0 {
+                            // prove is a string is the builder already. A seed
+                            // that arrived lazily is asked about as it arrived:
+                            // the entry left the thunk unconverted, so what it
+                            // forces to is a finished string and not a builder.
+                            match joins_builder && i == 0 && f.set_of(&raw) & !STR != 0 {
                                 true => {
                                     let adopted = f.tmp();
                                     f.line(&format!(
-                                        "{adopted} = call %KValue @k_b_adopt(%KValue {value}, %KValue {t})"
+                                        "{adopted} = call %KValue @k_b_adopt(%KValue {raw}, %KValue {t})"
                                     ));
                                     adopted
                                 }
@@ -9672,10 +9675,16 @@ impl<'a> Backend<'a> {
         // declares a subtype can hand one over, so only that program pays.
         // A type's constructor comes through here too and must see the value
         // it wraps, so only a real builtin's arguments are unwrapped.
+        // A lazy binding holding a subtype's value is a thunk until forced,
+        // and a thunk is not a K_SUB, so the unwrap would pass it through and
+        // the builtin would meet the subtype after its own force. Forcing
+        // first is what the later force would do anyway; the gated force
+        // emits nothing when the set proves the value cannot be a thunk.
         if !shadows && !self.sub_parents.is_empty() && crate::check::builtin_arity(name).is_some() {
             for e in emitted.iter_mut() {
+                let forced = self.maybe_force(f, e.clone());
                 let t = f.tmp();
-                f.line(&format!("{t} = call %KValue @k_unsub(%KValue {e})"));
+                f.line(&format!("{t} = call %KValue @k_unsub(%KValue {forced})"));
                 *e = t;
             }
         }

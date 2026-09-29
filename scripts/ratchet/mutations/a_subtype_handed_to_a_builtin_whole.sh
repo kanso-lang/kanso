@@ -8,7 +8,7 @@
 # corpus reads the two engines apart.
 set -e
 f=src/codegen.rs
-grep -q 'k_unsub(%KValue {e})' src/codegen.rs
+grep -q 'k_unsub(%KValue {forced})' src/codegen.rs
 line='        if !shadows && !self.sub_parents.is_empty() && crate::check::builtin_arity(name).is_some() {'
 [ "$(grep -cxF "$line" "$f")" -eq 1 ] || {
   echo "the builtin unwrap's test moved; this mutation needs rewriting" >&2

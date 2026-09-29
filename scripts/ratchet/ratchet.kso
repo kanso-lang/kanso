@@ -4454,7 +4454,31 @@ merged_stamp = row
 
 rows_c1zzzzw = text/concat rows_c1zzzzs [merged_stamp]
 
-rows_c = text/concat rows_c1zzzzw [itself]
+# A builtin in a program that declares a subtype unwraps its arguments, and
+# a lazy one is forced before the unwrap looks at it.
+lazy_sub = row
+  "a lazy subtype unwrapped before it is forced"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_lazy_subtype_unwrapped_before_it_is_forced")
+  release
+
+rows_c1zzzzv = text/concat rows_c1zzzzw [lazy_sub]
+
+# A seed bound lazily reaches a builder loop's first join as a thunk, and the
+# join asks about it as it arrived.
+lazy_seed = row
+  "a lazy seed taken for a builder"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "a_lazy_seed_taken_for_a_builder")
+  release
+
+rows_c1zzzzx = text/concat rows_c1zzzzv [lazy_seed]
+
+rows_c = text/concat rows_c1zzzzx [itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 

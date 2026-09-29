@@ -8,9 +8,9 @@
 set -e
 f=src/codegen.rs
 grep -q 'k_b_adopt' src/codegen.rs
-grep -qF '                            match joins_builder && i == 0 && f.set_of(&value) & !STR != 0 {' "$f" || {
+grep -qF '                            match joins_builder && i == 0 && f.set_of(&raw) & !STR != 0 {' "$f" || {
   echo "the adoption's test moved; this mutation needs rewriting" >&2
   exit 1
 }
-sed -i 's/^                            match joins_builder && i == 0 && f.set_of(&value) & !STR != 0 {$/                            match false \&\& joins_builder \&\& i == 0 \&\& f.set_of(\&value) \& !STR != 0 {/' "$f"
+sed -i 's/^                            match joins_builder && i == 0 && f.set_of(&raw) & !STR != 0 {$/                            match false \&\& joins_builder \&\& i == 0 \&\& f.set_of(\&raw) \& !STR != 0 {/' "$f"
 grep -qF 'match false && joins_builder && i == 0' "$f"
